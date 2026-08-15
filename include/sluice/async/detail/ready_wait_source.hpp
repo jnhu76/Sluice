@@ -43,6 +43,7 @@
 #include <sluice/async/async_io_context.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -58,6 +59,17 @@ class ReadyWaitSource final : public BackendWaitSource {
     }
 
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
+        // Phase G: the one-argument form is the unbounded entry; the bounded
+        // variant carries the deadline-driven park cap (see below).
+        return wait_for_change(observed, std::chrono::nanoseconds::max());
+    }
+
+    // Phase G review P1b: cv.wait_for is a native bounded transport —
+    // truthfully report the capability (BackendWaitSource contract).
+    bool supports_bounded_wait() const noexcept override { return true; }
+
+    BackendWakeReason wait_for_change(BackendWaitToken observed,
+                                      std::chrono::nanoseconds max_park) noexcept override {
         std::unique_lock<std::mutex> lk(mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         // Issue #67 seam: announce the imminent park so a test can observe the
@@ -75,10 +87,21 @@ class ReadyWaitSource final : public BackendWaitSource {
             c->fetch_add(1, std::memory_order_relaxed);
         }
 #endif
-        ready_cv_.wait(lk, [&] {
-            return ready_epoch_ != observed.progress_generation ||
-                   control_epoch_ != observed.control_generation;
-        });
+        // Phase G (bounded park): the deadline-driven cap bounds the physical
+        // park so the Scheduler's E11 timer pump re-drains before an active
+        // deadline expires. The unbounded sentinel (nanoseconds::max()) keeps
+        // the classic infinite park.
+        if (max_park == std::chrono::nanoseconds::max()) {
+            ready_cv_.wait(lk, [&] {
+                return ready_epoch_ != observed.progress_generation ||
+                       control_epoch_ != observed.control_generation;
+            });
+        } else {
+            ready_cv_.wait_for(lk, max_park, [&] {
+                return ready_epoch_ != observed.progress_generation ||
+                       control_epoch_ != observed.control_generation;
+            });
+        }
         // A control generation advance wins the reason (the control plane may
         // race real readiness; the caller re-polls before returning).
         if (control_epoch_ != observed.control_generation) {

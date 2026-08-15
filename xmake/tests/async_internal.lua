@@ -208,6 +208,15 @@ sluice_internal_async_test("select_suspended_test")
 -- seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 sluice_internal_async_test("select_multi_worker_test")
 
+-- phase_g_backend_progress_wake_test — Phase G backend-ready progress wake
+-- integration (docs/design/phase-g-backend-progress-wake.md): the unified
+-- MW-S2 backend-domain park with the Scheduler wake bridge, the deadline-
+-- driven unbounded wake-domain park, and the E9-LIFE-8 termination-
+-- convergence corrective (not-last idle worker signals the domain).
+-- Deterministic (test clock + PhaseTag causal seams); NO sleep_for.
+-- Gated to x86_64 (fiber_ctx::supported).
+sluice_internal_async_test("phase_g_backend_progress_wake_test")
+
 -- select_registration_rollback_test — E13 P7 registration-failure rollback
 -- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
 -- real running Fiber; the controller-only synthetic registration-failure seam

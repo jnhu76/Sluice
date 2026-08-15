@@ -23,6 +23,7 @@
 #include "queue_detail.hpp"  // QueueWaitCtx (shared with queue_port.cpp; non-installed)
 
 #include <utility>
+#include <cstdio>   // Phase G park-window forensics dump (internal testing)
 #include <cstdlib>  // std::abort (E12-F Category B fail-fast)
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
@@ -374,6 +375,25 @@ void Scheduler::signal_wake_locked() {
         ++wake_epoch_;
     }
     wake_cv_.notify_all();
+    // Phase G (P5-CORRECTIVE bridge): a Scheduler wake-domain publication
+    // (routing, flag/select/waitqueue resolution, deadline pump, external
+    // wake handle, termination) must ALSO reach the MW-S2 progress
+    // participant when it is parked in the BACKEND domain (ctx_.wait_one()).
+    // interrupt_backend_waiters is the existing control seam: it bumps the
+    // backend wait source's control epoch and wakes the park — no fabricated
+    // readiness, no Completion publication, no I/O cancellation (AGENTS.md
+    // §13.2: state first, then notify; the wake is advisory, persistent state
+    // is authoritative). The atomic gate keeps the cost at one load when no
+    // backend participant is parked; the commit-to-park window is closed by
+    // the D4-RM14 arm_committed_wait handshake (the arm runs in the same
+    // critical section that sets the gate), and the D4-RM13 invocation-level
+    // control baseline keeps the interrupt one-shot per wait_one() (no
+    // busy-spin). Lock order: wake_mtx_ is released before the wait-source
+    // mutex is taken; the wait source is a leaf that never acquires Scheduler
+    // locks (design docs/design/phase-g-backend-progress-wake.md §4).
+    if (backend_wait_active_.load(std::memory_order_acquire)) {
+        ctx_.interrupt_backend_waiters();
+    }
 }
 
 // TSA-SUPPRESS-001: park_on_wake_source uses std::unique_lock + cv.wait
@@ -382,13 +402,17 @@ void Scheduler::signal_wake_locked() {
 // lock fact (wake_epoch_ is protected by wake_mtx_) is already independently
 // accepted and proven in E9.  Suppression is attached to the smallest exact
 // function.
-void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+void Scheduler::park_on_wake_source(WorkerState* ws,
+                                    bool bounded_backend_observation) SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     // Park the calling Worker on the SCHEDULER wake domain (ADR §9.4.5).
-    // Record the observed epoch under wake_mtx_, then cv.wait_for with a
-    // BOUNDED timeout. The timeout is LOAD-BEARING in MIXED-WAKE: it is the
-    // observation-return path for backend readiness, which does NOT directly
-    // signal the Scheduler wake source in the E9 baseline (E9-LIFE-8,
-    // ADR §9.4.7.1). It is NOT "defense in depth only."
+    // Record the observed epoch under wake_mtx_, then cv.wait with a bounded
+    // timeout. Phase G: the timeout is DEADLINE-DRIVEN (the earliest active
+    // deadline, uncapped) so no periodic wake exists without an active
+    // deadline. The E9 2ms bounded observation interval remains ONLY when
+    // `bounded_backend_observation` is set — the MW-S2 MIXED-WAKE park for a
+    // NON-split-wait (reference/legacy) backend, whose poll-driven readiness
+    // is observed through that interval (it is their progress path; split-wait
+    // backends park the progress participant in ctx_.wait_one() instead).
     //
     // E9-CORRECTIVE (Section 10 data-race fix): the predicate no longer
     // inspects ws->local_runnable (a std::deque protected by inbox_mtx_,
@@ -417,42 +441,222 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
         sluice_async_test::PhaseTag::scheduler_park_commit);
 #endif
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Phase G park-window forensics: snapshot the classify-authority
+    // persistent state BEFORE the wake-domain baseline is recorded.
+    // Gated OFF by default (the snapshot locks shift park timing and made a
+    // seam-driven regression flaky); only the forensics case arms it.
+    // global_mtx_ must never be acquired while holding wake_mtx_ (one-way
+    // order), so this snapshot runs first; ctx_.outstanding() takes
+    // access_mtx_ (also one-way vs wake_mtx_) — both released before the
+    // baseline below.
+    ParkLedgerRecord forensics_rec{};
+    if (park_forensics_enabled_.load(std::memory_order_acquire)) {
+        {
+            LockGuard glk(global_mtx_);
+            forensics_rec.waiting_registered =
+                waiting_size_.size() + waiting_void_.size() +
+                waiting_ready_.size() +
+                static_cast<std::size_t>(waiting_waitq_count_) +
+                static_cast<std::size_t>(waiting_select_count_);
+            forensics_rec.external_wake_possible =
+                external_wake_possible_locked();
+        }
+        const BackendWaitToken forensics_tok = ctx_.backend_wait_token_for_test();
+        forensics_rec.ready_generation = forensics_tok.progress_generation;
+        forensics_rec.control_generation = forensics_tok.control_generation;
+        forensics_rec.backend_outstanding = ctx_.outstanding();
+    }
+    forensics_rec.worker_id = ws->id;
+    forensics_rec.idle_workers = idle_workers_.load(std::memory_order_acquire);
+    forensics_rec.backend_wait_active =
+        backend_wait_active_.load(std::memory_order_acquire);
+    forensics_rec.ready_flag_bounded = bounded_backend_observation;
+    forensics_rec.global_terminate =
+        global_terminate_.load(std::memory_order_acquire);
+    // Per-worker classify evidence (Phase G review P2a): the classification
+    // THIS worker last trusted — its own classify pair, not a Scheduler-global
+    // last-writer value that another worker's classify could have overwritten
+    // between this worker's decision and its park commit.
+    forensics_rec.last_classify =
+        ws->last_classify.load(std::memory_order_relaxed);
+    forensics_rec.classify_seq =
+        ws->classify_seq.load(std::memory_order_relaxed);
+#endif
+
+    // G1 repair (PR #108 §8.3 conditions 1+4 — the arm→recheck closure):
+    // the park commit used to record its wake-epoch baseline AFTER an
+    // unlocked classify, so a runnable publication landing in the
+    // check-then-arm window was consumed by the baseline and the worker
+    // slept trusting a stale "someone else will run it" (the deterministic
+    // stranded-runnable stall). The commit is now an ARM-then-RECHECK
+    // handshake under the state authority (the Tokio Notify::enable
+    // discipline cited in design §8.3): while holding global_mtx_ — the
+    // same domain every runnable/route publication serializes under —
+    // (a) REFUSE to park when unguarded progress remains (a runnable
+    //     ticket anywhere in the run domain, or accepted backend work, with
+    //     NO active observer: no running fiber, no backend-domain
+    //     participant, no admission in flight). The refusing worker
+    //     re-loops and BECOMES the observer (its loop-top steals the
+    //     runnable — including one stranded on a terminated worker's
+    //     queue — or elects as the MW-S2 participant);
+    // (b) otherwise record the baseline under the NESTED wake_mtx_
+    //     (global→wake is the accepted order): a publication after this
+    //     point advances the wake epoch past the baseline and the cv
+    //     predicate observes it; a publication before it was visible to
+    //     the (a) recheck — no consumed-signal window remains.
+    // The cv.wait below runs with BOTH locks released; the predicate
+    // (epoch / terminate / own inbox) is unchanged from E9.
+    //
+    // R4 (persistent-state backstop, final form after the adversarial
+    // review): the idle-dance condition is checked HERE, at the COMMIT
+    // recheck, against the worker's OWN dance contribution — NOT in the cv
+    // predicate and NOT as a bare count comparison. Two rejected drafts
+    // show why: (1) a predicate term observes the dancer's own count, so
+    // the dancer's park becomes a no-op and it re-dances immediately; (2)
+    // a bare commit-time `idle_workers_ > 0` refusal self-triggers the
+    // same way, and each re-dance erases the count (last-idle store(0)),
+    // so a woken sleeper always starts its dance from zero, emits its own
+    // not-last signal, and wakes its peer — the wake-park-wake chain never
+    // damps (the Live-mw_s3 resident livelock). Exempting the worker's
+    // own contribution restores the pre-G1 damping: a counted dancer
+    // SLEEPS holding its count, so the woken sleeper's fetch_add reaches
+    // the last-idle threshold immediately and its cycle ends in either
+    // termination or a SILENT park (no further signal). Meanwhile a
+    // worker that has not danced (contribution 0) refuses behind ANY live
+    // count: the recheck and the dance serialize under global_mtx_ (the
+    // dancer's fetch_add and not-last signal both hold it), so the dance
+    // is either visible here (refuse; re-loop and converge the dance) or
+    // its signal advances the epoch past the baseline being recorded
+    // (predicate wake) — the E9-LIFE-8 absorbed-baseline window stays
+    // closed with persistent state.
+    {
+        LockGuard glk(global_mtx_);
+        const unsigned own_dance =
+            ws->idle_dance_contributed_.load(std::memory_order_acquire);
+        if (unguarded_progress_pending_locked() ||
+            idle_workers_.load(std::memory_order_acquire) > own_dance) {
+            // Persistent progress with no observer, or an unfinished idle
+            // dance this worker has not contributed to: parking here is
+            // the G1 violation (stranded progress) or the E9-LIFE-8
+            // violation (a dance count this sleeper's baseline would
+            // absorb, leaving the convergence one short forever). Do not
+            // record a baseline; the caller's re-loop makes this worker
+            // the observer (steal / elect) or the next dance contributor.
+            // SIGNAL the wake domain first: the refusing worker may not
+            // itself be able to act on the progress (e.g. it is not the
+            // lowest-id electable worker for the MW-S2 participant) — the
+            // signal wakes a parked sibling that can (invariant B: a
+            // progress publication must wake or elect an observer; without
+            // the signal a non-electable refuser would spin between
+            // refuse and re-loop while the only electable worker sleeps
+            // on a stale classification).
+            signal_wake_locked();
+            ws->park_domain = WorkerState::ParkDomain::None;
+            return;
+        }
+        LockGuard wlk(wake_mtx_);
+        ws->observed_epoch = wake_epoch_;  // arm UNDER the state authority
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Baseline point: the wake epoch this park will trust. Publications
+        // that advanced the epoch BEFORE this line are consumed by the
+        // baseline (the predicate compares against it); the ledger preserves
+        // what the worker believed so a stall can state the exact violation.
+        forensics_rec.epoch_at_commit = wake_epoch_;
+        if (park_forensics_enabled_.load(std::memory_order_acquire)) {
+            std::lock_guard<std::mutex> plk(park_ledger_mtx_);
+            // Monotonic sequence: total parks ever recorded + 1 (ring wraps).
+            forensics_rec.park_seq = park_ledger_total_ + 1;
+            ++park_ledger_total_;
+            park_ledger_[park_ledger_next_] = forensics_rec;
+            park_ledger_next_ = (park_ledger_next_ + 1) % kParkLedgerCapacity;
+            if (park_ledger_count_ < kParkLedgerCapacity) ++park_ledger_count_;
+        }
+#endif
+    }
     std::unique_lock<Mutex> lk(wake_mtx_);
-    ws->observed_epoch = wake_epoch_;  // recorded AFTER any seam publication
-    // E11 I6 (Deadline Park Liveness): bound the wake wait by the earliest
-    // active deadline so an active deadline cannot park a Worker indefinitely
-    // past it. Read the deadline from the LOCK-FREE atomic cache
-    // (earliest_active_deadline_) — NOT under global_mtx_ — to avoid a
-    // wake_mtx_->global_mtx_ lock-order inversion (signal_wake_locked takes them
-    // in the opposite order). A stale cache read is safe: it only changes the
-    // park timeout slightly; the worker loop's pump_deadlines_locked
-    // re-establishes the authoritative deadline set under global_mtx_ on every
-    // iteration, so liveness (I6) holds even if the cache briefly lags. If the
-    // deadline is already due, use a near-zero timeout so the loop re-drains +
-    // pumps the timer promptly. Production default is the E9 2ms backstop.
+    // Phase G timeout policy: bound the wake wait by the earliest active
+    // deadline so an active deadline cannot park a Worker indefinitely past
+    // it (E11 I6), and by the bounded observation interval only when this
+    // park must observe poll-driven backend readiness (non-split-wait
+    // MIXED-WAKE). With no deadline and no backend observation the park is
+    // unbounded — no periodic wake, no CPU tax. Read the deadline from the
+    // LOCK-FREE atomic cache (earliest_active_deadline_) — NOT under
+    // global_mtx_ — to avoid a wake_mtx_->global_mtx_ lock-order inversion
+    // (signal_wake_locked takes them in the opposite order). A stale cache
+    // read is safe: it only changes the park timeout slightly; the worker
+    // loop's pump_deadlines_locked re-establishes the authoritative deadline
+    // set under global_mtx_ on every iteration, so liveness (I6) holds even
+    // if the cache briefly lags.
     static constexpr auto kParkBackstop = std::chrono::milliseconds(2);
     static constexpr auto kTestParkPoll = std::chrono::milliseconds(1);
-    auto wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     deadline_t earliest = earliest_active_deadline_.load(std::memory_order::acquire);
+    // Phase G termination-convergence note: this unbounded park is sound ONLY
+    // because every quiescence-observation path wakes the domain — the
+    // worker_loop idle dance signals the wake source when it is NOT the last
+    // idle worker (the not-last signal). Without that signal, a Live-mw_s3
+    // resident park's idle_workers_ reset can erase the last worker's
+    // termination count between its classify and fetch_add, and with no
+    // timeout nobody would re-check: the run would never terminate after the
+    // final work completed (E9-LIFE-8 bounded-timeout convergence removed;
+    // st16_multi_worker_owner_routing deterministic hang).
+    if (earliest == kNoDeadline && !bounded_backend_observation) {
+        // No deadline and no backend observation: unbounded park (epoch /
+        // terminate / runnable predicate only). No periodic wake exists.
+        // R4 note: the idle-dance backstop is enforced at the park COMMIT
+        // (above), not here — see the R4 redesign comment there.
+        wake_cv_.wait(lk, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+            if (wake_epoch_ != ws->observed_epoch ||
+                global_terminate_.load(std::memory_order_acquire)) {
+                return true;
+            }
+            // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The
+            // deque is protected by inbox_mtx (route_runnable_locked pushes
+            // under it); reading it under wake_mtx_ alone was a data race.
+            // Acquire inbox_mtx for the read. This closes the lost-wake
+            // window where a runnable publication advanced the epoch BEFORE
+            // observed_epoch was recorded (the parked Worker would otherwise
+            // wait for the timeout, opening a steal window).
+            // route_runnable_locked also signals the epoch, so the epoch
+            // clause usually fires first; this is the authoritative backstop
+            // for the routed-but-epoch-already-observed case.
+            std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
+            return !ws->local_runnable.empty();
+        });
+        ws->park_domain = WorkerState::ParkDomain::None;
+        return;
+    }
+    deadline_t now_ticks = clock_now_unlocked();
+    auto wake_deadline = std::chrono::steady_clock::time_point::max();
     if (earliest != kNoDeadline) {
-        deadline_t now_ticks = clock_now_unlocked();
         if (earliest <= now_ticks) {
             wake_deadline = std::chrono::steady_clock::now();
         } else {
             deadline_t remaining = earliest - now_ticks;
-            if (test_clock_mode_.load(std::memory_order::acquire)) {
+            if (test_clock_mode_.load(std::memory_order_acquire)) {
                 // Test mode: the clock is logical; cap at a short poll so
                 // advance_clock()'s pump drives expiry deterministically.
                 wake_deadline = std::chrono::steady_clock::now() + kTestParkPoll;
-            } else {
-                // Production: compute the actual remaining time to the earliest
-                // deadline, capped at the E9 2ms backstop. Avoids a fixed 1ms
-                // poll that would cause ~1000 wakeups/s per active deadline.
+            } else if (bounded_backend_observation) {
+                // E9 MIXED-WAKE observation interval: cap the re-drain at the
+                // 2ms interval so poll-driven backend readiness is observed
+                // promptly (reference/legacy backends only — see the function
+                // comment). Avoids a fixed 1ms poll (~1000 wakeups/s).
                 auto delay = std::min(std::chrono::milliseconds(remaining),
                                       kParkBackstop);
                 wake_deadline = std::chrono::steady_clock::now() + delay;
+            } else {
+                // Production, deadline-driven: park exactly until the earliest
+                // deadline (uncapped) so the timer pump runs in time; no
+                // periodic wake exists between now and the deadline.
+                wake_deadline = std::chrono::steady_clock::now() +
+                                std::chrono::milliseconds(remaining);
             }
         }
+    } else {
+        // Bounded backend observation with no active deadline: the E9 2ms
+        // observation interval (reference/legacy MIXED-WAKE only).
+        wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     }
     wake_cv_.wait_until(lk, wake_deadline, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
         if (wake_epoch_ != ws->observed_epoch ||
@@ -473,6 +677,168 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
     });
     ws->park_domain = WorkerState::ParkDomain::None;
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+void Scheduler::dump_park_forensics_for_test(const char* tag) {
+    // Phase G park-window forensics (G1 BLOCKED instrumentation). Called by
+    // a forensics test's watchdog when a bounded wait for progress expired —
+    // the run is presumed stalled with worker(s) parked. Each domain lock is
+    // taken separately (no nesting): global_mtx_ (worker list, admission,
+    // waiting sets) -> wake_mtx_ (epoch, per-worker baselines) ->
+    // park_ledger_mtx_ (ring). Cross-thread diagnostic fields
+    // (WorkerState::park_domain / current / loop_exit_reason / loop_exited /
+    // last_classify) are atomics — Phase G review P2a: a "best-effort" racy
+    // read is still UB; the forensics facility must itself be race-free or
+    // its evidence is worthless under sanitizers.
+    std::fprintf(stderr, "=== park-forensics[%s] begin ===\n", tag);
+
+    // Domain 1: scheduler-global state.
+    std::vector<WorkerState*> worker_ptrs;
+    const char* admission = "none";
+    std::size_t w_size = 0, w_void = 0, w_ready = 0, w_waitq = 0, w_select = 0;
+    std::size_t pending_spawn = 0;
+    {
+        LockGuard glk(global_mtx_);
+        worker_ptrs.reserve(workers_.size());
+        for (const std::unique_ptr<WorkerState>& w : workers_) {
+            worker_ptrs.push_back(w.get());
+        }
+        if (admission_ == AdmissionState::candidate) {
+            admission = "candidate";
+        } else if (admission_ == AdmissionState::committed) {
+            admission = "committed";
+        }
+        w_size = waiting_size_.size();
+        w_void = waiting_void_.size();
+        w_ready = waiting_ready_.size();
+        w_waitq = waiting_waitq_count_;
+        w_select = waiting_select_count_;
+        pending_spawn = pending_spawn_.size();
+    }
+
+    // Domain 2: wake domain.
+    std::uint64_t wake_epoch_now = 0;
+    {
+        LockGuard wlk(wake_mtx_);
+        wake_epoch_now = wake_epoch_;
+    }
+
+    // Backend domain (wait source snapshot; no access_mtx_).
+    const BackendWaitToken tok = ctx_.backend_wait_token_for_test();
+    const std::size_t outstanding = ctx_.outstanding();
+
+    std::fprintf(stderr,
+                 "[park-forensics] wake_epoch=%llu token=(ready=%llu,ctrl=%llu) "
+                 "outstanding=%zu admission=%s idle_workers=%u terminate=%d "
+                 "backend_wait_active=%d\n",
+                 static_cast<unsigned long long>(wake_epoch_now),
+                 static_cast<unsigned long long>(tok.progress_generation),
+                 static_cast<unsigned long long>(tok.control_generation),
+                 outstanding, admission, idle_workers_.load(std::memory_order_acquire),
+                 global_terminate_.load(std::memory_order_acquire) ? 1 : 0,
+                 backend_wait_active_.load(std::memory_order_acquire) ? 1 : 0);
+    std::fprintf(stderr,
+                 "[park-forensics] waiting: size=%zu void=%zu ready=%zu waitq=%zu "
+                 "select=%zu running_fibers=%ld pending_spawn=%zu\n",
+                 w_size, w_void, w_ready, w_waitq, w_select,
+                 static_cast<long>(running_fiber_count_.load(std::memory_order_acquire)),
+                 pending_spawn);
+
+    // Per-worker baselines (observed_epoch under wake_mtx_; park_domain /
+    // current / loop_exit_reason / loop_exited / last_classify are atomic —
+    // see the function comment).
+    {
+        LockGuard wlk(wake_mtx_);
+        static const char* kExitName[] = {
+            "(live)", "mw_s1_terminate_observed", "mw_s2_no_progress_terminate",
+            "e14f1_last_idle_terminate", "last_idle_terminate",
+            "final_park_terminate",
+        };
+        for (WorkerState* w : worker_ptrs) {
+            const auto domain_raw =
+                w->park_domain.load(std::memory_order_acquire);
+            const char* domain = "None";
+            if (domain_raw == WorkerState::ParkDomain::Scheduler) {
+                domain = "SCHEDULER";
+            } else if (domain_raw == WorkerState::ParkDomain::Backend) {
+                domain = "Backend";
+            }
+            std::size_t local_runnable = 0;
+            {
+                std::lock_guard<std::mutex> ilk(w->inbox_mtx);
+                local_runnable = w->local_runnable.size();
+            }
+            // If the worker is inside a Fiber, its identity + state says
+            // WHERE it is blocked (await/waiting) — the parked-vs-running
+            // question the domain field cannot answer alone.
+            const Fiber* cur =
+                w->current.load(std::memory_order_acquire);
+            const char* fiber_state = "-";
+            if (cur != nullptr) {
+                switch (cur->state()) {
+                    case FiberState::created: fiber_state = "created"; break;
+                    case FiberState::runnable: fiber_state = "runnable"; break;
+                    case FiberState::running: fiber_state = "running"; break;
+                    case FiberState::waiting: fiber_state = "waiting"; break;
+                    case FiberState::done: fiber_state = "done"; break;
+                }
+            }
+            const auto exit_raw =
+                w->loop_exit_reason.load(std::memory_order_acquire);
+            const char* exit_name =
+                (exit_raw >= WorkerState::LoopExitReason::live &&
+                 exit_raw <= WorkerState::LoopExitReason::final_park_terminate)
+                    ? kExitName[static_cast<std::size_t>(exit_raw)]
+                    : "(unknown)";
+            const int cls = w->last_classify.load(std::memory_order_relaxed);
+            std::fprintf(stderr,
+                         "[park-forensics] worker id=%u domain=%s "
+                         "observed_epoch=%llu local_runnable=%zu "
+                         "current_fiber=%p fiber_state=%s exit_reason=%s "
+                         "loop_exited=%d last_classify=%d\n",
+                         w->id, domain,
+                         static_cast<unsigned long long>(w->observed_epoch),
+                         local_runnable,
+                         static_cast<const void*>(cur), fiber_state, exit_name,
+                         w->loop_exited.load(std::memory_order_acquire) ? 1 : 0,
+                         cls);
+        }
+    }
+
+    // Domain 3: the park ledger ring (oldest first when wrapped).
+    {
+        std::lock_guard<std::mutex> plk(park_ledger_mtx_);
+        static const char* kMwName[] = {"mw_s1", "mw_s2", "mw_s3", "quiescent"};
+        for (std::size_t i = 0; i < park_ledger_count_; ++i) {
+            const std::size_t idx =
+                (park_ledger_count_ < kParkLedgerCapacity)
+                    ? i
+                    : (park_ledger_next_ + i) % kParkLedgerCapacity;
+            const ParkLedgerRecord& r = park_ledger_[idx];
+            std::fprintf(stderr,
+                         "[park-forensics] ledger seq=%llu worker=%u "
+                         "epoch_at_commit=%llu ready=%llu ctrl=%llu "
+                         "outstanding=%zu waiting=%zu classify=%s "
+                         "classify_seq=%llu bounded=%d "
+                         "idle=%u term=%d extwake=%d bwait=%d\n",
+                         static_cast<unsigned long long>(r.park_seq), r.worker_id,
+                         static_cast<unsigned long long>(r.epoch_at_commit),
+                         static_cast<unsigned long long>(r.ready_generation),
+                         static_cast<unsigned long long>(r.control_generation),
+                         r.backend_outstanding, r.waiting_registered,
+                         (r.last_classify >= 0 && r.last_classify <= 3)
+                             ? kMwName[r.last_classify]
+                             : "?",
+                         static_cast<unsigned long long>(r.classify_seq),
+                         r.ready_flag_bounded ? 1 : 0, r.idle_workers,
+                         r.global_terminate ? 1 : 0,
+                         r.external_wake_possible ? 1 : 0,
+                         r.backend_wait_active ? 1 : 0);
+        }
+    }
+    std::fprintf(stderr, "=== park-forensics[%s] end ===\n", tag);
+}
+#endif
 
 bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -620,6 +986,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         global_terminate_.store(false, std::memory_order_release);
         in_coordinated_run_ = true;
         active_worker_count_.store(worker_count, std::memory_order_release);
+        live_loop_workers_ = worker_count;
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -638,6 +1005,16 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         g_worker = worker;
         worker->owner_scheduler = this; // E13 P5 caller-validation identity
         worker->active.store(true, std::memory_order_release);
+        worker->idle_dance_contributed_.store(0, std::memory_order_release);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Fresh invocation: the death evidence describes THIS invocation's
+        // thread only (a prior run's sticky loop_exited would misreport a
+        // live re-entered worker as dead — the dump and the reproducer's
+        // causal death observation both read it cross-thread).
+        worker->loop_exit_reason.store(WorkerState::LoopExitReason::live,
+                                       std::memory_order_relaxed);
+        worker->loop_exited.store(false, std::memory_order_relaxed);
+#endif
         worker_loop(worker, run_workers);
         worker->active.store(false, std::memory_order_release);
         g_worker = nullptr;
@@ -650,6 +1027,12 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
                 g_worker = worker;
                 worker->owner_scheduler = this; // E13 P5 caller-validation identity
                 worker->active.store(true, std::memory_order_release);
+                worker->idle_dance_contributed_.store(0, std::memory_order_release);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                worker->loop_exit_reason.store(
+                    WorkerState::LoopExitReason::live, std::memory_order_relaxed);
+                worker->loop_exited.store(false, std::memory_order_relaxed);
+#endif
                 worker_loop(worker, run_workers);
                 worker->active.store(false, std::memory_order_release);
                 g_worker = nullptr;
@@ -700,8 +1083,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
     //      before commit, Phase C release global_mtx_ + wait_one, Phase D
     //      reacquire + clear + reclassify).
     //      MW-S3 / QUIESCENT: contribute to coordinated termination.
-    //   5. No work and not elected: park briefly on inbox_cv.
+    //   5. No work and not elected: park on the unified wake source.
     while (true) {
+        // R4: conservative contribution reset (see the WorkerState field
+        // contract). Clearing here — rather than at every count erase —
+        // keeps the park-commit exemption sound in one place: an
+        // under-clear (the count was erased externally while this worker
+        // slept) only makes the next park commit treat the worker's own
+        // stale count as another dancer's (refuse once more, re-dance,
+        // converge); it can never suppress a needed refusal.
+        ws->idle_dance_contributed_.store(0, std::memory_order_release);
         // 1. Get a runnable Fiber.
         Fiber* f = nullptr;
         {
@@ -716,6 +1107,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             if (!pending_spawn_.empty()) {
                 f = pending_spawn_.front();
                 pending_spawn_.pop_front();
+                // Re-record the owner: a retire-seeded ticket carries its
+                // DEAD original owner (the retire moves the ticket, not the
+                // ownership record). Without this, the fiber's next wait
+                // resolution routes it back onto the terminated worker's
+                // inbox (route_runnable_locked), turning every retire-rescue
+                // into a stranded ticket that only a later steal happens to
+                // recover (adversarial-review finding: the route-to-dead-
+                // worker class G1 repairs must not survive as a designed-in
+                // extra hop).
+                fiber_owner_[f] = ws;
             }
         }
 
@@ -749,7 +1150,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             (void)drain_routed_completion_waits_locked();
             (void)wake_ready_flags_locked();
             (void)pump_deadlines_locked();
-            state = classify_locked(run_workers);
+            state = classify_locked(run_workers, ws);
         }
 
         // If drain produced routed work, the owning worker will pick it up
@@ -760,11 +1161,18 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             // drain to another worker, or another worker is running a Fiber).
             // This worker has no local runnable work (f was null at top), so it
             // must NOT busy-spin — that starves other workers on a contended
-            // core. Fall through to park on inbox_cv; the owning worker will
-            // notify when it routes work here, or the 1ms timeout re-checks.
+            // core. Fall through to the unified wake-domain park below; the
+            // owning worker's route signals the wake source (route_runnable
+            // publishes under global_mtx_ + signal_wake_locked), so the parked
+            // worker re-checks without polling.
             idle_workers_.store(0, std::memory_order_release);
-            if (global_terminate_.load(std::memory_order_acquire))
+            if (global_terminate_.load(std::memory_order_acquire)) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                ws->loop_exit_reason =
+                    WorkerState::LoopExitReason::mw_s1_terminate_observed;
+#endif
                 break;
+            }
             // Fall through to park (no continue).
         }
 
@@ -774,17 +1182,37 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             //
             // Phase A: under global_mtx_, elect this worker as candidate if
             //          no admission is in progress and this is the lowest-id
-            //          idle worker (deterministic election: worker 0).
+            //          ALIVE worker (deterministic election). G1 repair
+            //          (§8.3 "worker-0-only election"): the pre-fix
+            //          `ws->id == 0` restriction left a run with NO possible
+            //          participant once worker 0's thread had exited through
+            //          the no-progress terminate — the surviving workers
+            //          classify mw_s2, cannot elect, and park unguarded in
+            //          the wake domain while the backend completion has no
+            //          observer (the no-participant manifestation). The
+            //          election is now transferable: the lowest-id worker
+            //          whose thread is still in the loop claims it. With all
+            //          workers alive this remains worker 0 (unchanged
+            //          behavior for every existing test construction).
             bool elected = false;
             {
                 LockGuard lk(global_mtx_);
                 // Re-classify under the lock — state may have changed since
                 // the unlocked classify above.
-                if (classify_locked(run_workers) == MwState::mw_s2 &&
-                    admission_ == AdmissionState::none && ws->id == 0) {
-                    admission_ = AdmissionState::candidate;
-                    admission_owner_ = ws->id;
-                    elected = true;
+                if (classify_locked(run_workers, ws) == MwState::mw_s2 &&
+                    admission_ == AdmissionState::none) {
+                    unsigned lowest_alive = static_cast<unsigned>(-1);
+                    for (WorkerState* w : run_workers) {
+                        if (w->active.load(std::memory_order_acquire) &&
+                            w->id < lowest_alive) {
+                            lowest_alive = w->id;
+                        }
+                    }
+                    if (ws->id == lowest_alive) {
+                        admission_ = AdmissionState::candidate;
+                        admission_owner_ = ws->id;
+                        elected = true;
+                    }
                 }
             }
 
@@ -802,8 +1230,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 #endif
 
                 bool phase_b_committed = false;
+                // Phase G (E5-A2): level-triggered ready-flag waits are
+                // poll-observed — a bare flag store is a legal producer and the
+                // notify is only a promptness optimization (the park-time window
+                // can absorb it). Captured under global_mtx_ at the commit so
+                // the backend-domain park below stays bounded at the E9
+                // observation interval while such waits are registered.
+                bool ready_flag_observation = false;
                 {
                     LockGuard lk(global_mtx_);
+                    ready_flag_observation = !waiting_ready_.empty();
                     // Demoted by a concurrent route? Then abandon admission.
                     if (admission_ != AdmissionState::candidate || admission_owner_ != ws->id) {
                         // Another path cancelled us. Loop.
@@ -813,7 +1249,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     (void)drain_routed_completion_waits_locked();
                     (void)wake_ready_flags_locked();
                     (void)pump_deadlines_locked();
-                    MwState s2 = classify_locked(run_workers);
+                    MwState s2 = classify_locked(run_workers, ws);
                     if (s2 != MwState::mw_s2) {
                         // State changed (MW-S1 via routed work, or MW-S3 via
                         // outstanding drop). Cancel candidate; do NOT enter wait_one.
@@ -824,15 +1260,47 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     // Commit: this is the single MW-S2 progress participant.
                     admission_ = AdmissionState::committed;
                     phase_b_committed = true;
-                    // E9 MIXED-WAKE: capture the park-domain decision NOW (under
-                    // global_mtx_). If an external-wake-capable wait is registered,
-                    // the participant must NOT enter a backend-only ctx_.wait_one()
-                    // (external-ready cannot interrupt it). It parks on the
-                    // SCHEDULER wake domain instead, so external-ready can wake it.
-                    // Refinement map: TLA+ EnterPhysicalPark domain selection.
-                    ws->park_domain = external_wake_possible_locked()
-                                          ? WorkerState::ParkDomain::Scheduler
-                                          : WorkerState::ParkDomain::Backend;
+                    // Phase G (P5-CORRECTIVE): capture the park-domain decision
+                    // NOW (under global_mtx_). A SPLIT-WAIT backend (ThreadPool /
+                    // Uring — wait_source() != null) parks the participant in
+                    // ctx_.wait_one() for BOTH backend-only and MIXED-WAKE: its
+                    // own progress transport is prompt (ready epoch / ring fd),
+                    // and external-ready publications reach the park through the
+                    // interrupt bridge in signal_wake_locked (the E9 GAP-2
+                    // closure, now on the backend domain). A NON-split-wait
+                    // (reference/legacy) backend keeps the E9 rule: MIXED-WAKE
+                    // parks on the SCHEDULER wake domain (bounded observation),
+                    // backend-only parks in wait_one(). Refinement map: TLA+
+                    // EnterPhysicalPark domain selection.
+                    //
+                    // Phase G review P1b (PR #108): a FINITE backend-domain
+                    // park cap (an active deadline or a registered
+                    // level-triggered ready-flag wait) is honor-able ONLY when
+                    // the wait source implements the bounded transport
+                    // (BackendWaitSource::supports_bounded_wait) — the base
+                    // wait_for_change overload silently discards `max_park`.
+                    // When a bound is needed but unsupported, do NOT park in
+                    // the backend domain on the unbounded contract: fall back
+                    // to the SCHEDULER wake domain, whose cv timeout the
+                    // Scheduler itself bounds (the E9 observation interval for
+                    // MIXED-WAKE / poll-driven backends). Deadline liveness
+                    // (E11 I6) never depends on a capability the backend does
+                    // not truthfully expose.
+                    const bool split_wait = ctx_.has_split_wait_capability();
+                    const bool bounded_park_needed =
+                        ready_flag_observation ||
+                        earliest_active_deadline_.load(std::memory_order::acquire) !=
+                            kNoDeadline;
+                    const bool backend_park_ok =
+                        split_wait &&
+                        (!bounded_park_needed ||
+                         ctx_.has_bounded_split_wait_capability());
+                    ws->park_domain =
+                        backend_park_ok
+                            ? WorkerState::ParkDomain::Backend
+                            : (!split_wait && !external_wake_possible_locked()
+                                   ? WorkerState::ParkDomain::Backend
+                                   : WorkerState::ParkDomain::Scheduler);
                     // D4-RM14 (P0-1, commit-to-park handshake): register the
                     // mandatory control-observation baseline with the backend
                     // wait source NOW — under the admission authority, BEFORE
@@ -848,9 +1316,15 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     // drain_complete_ unreachable (shutdown liveness). The
                     // armed baseline makes the upcoming wait_one() observe the
                     // interrupt and return (register -> publish -> release ->
-                    // wait with the registered baseline).
+                    // wait with the registered baseline). Phase G: the arm now
+                    // also covers the MIXED-WAKE case (split-wait backends park
+                    // in the backend domain), and the bridge gate is set in the
+                    // same critical section so Scheduler wake publications
+                    // interrupt this park from the moment the commit is
+                    // exposed.
                     if (ws->park_domain == WorkerState::ParkDomain::Backend) {
                         ctx_.arm_backend_wait_commit();
+                        backend_wait_active_.store(true, std::memory_order_release);
                     }
                 }
 
@@ -868,7 +1342,14 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // signaled (external ready or routed work) — treat it as
                         // progress and re-drain.
                         ws->park_domain = WorkerState::ParkDomain::None; // reset before park
-                        park_on_wake_source(ws);
+                        // Phase G: this is the MIXED-WAKE park for a
+                        // NON-split-wait backend (reference/legacy) — its
+                        // poll-driven readiness is observed through the 2ms
+                        // bounded observation interval (the E9 behavior,
+                        // retained only for these backends). Split-wait
+                        // backends park in ctx_.wait_one() (the BACKEND
+                        // branch) and never take this path.
+                        park_on_wake_source(ws, /*bounded_backend_observation=*/true);
                         // Phase D: reacquire global_mtx_, clear admission, drain.
                         {
                             LockGuard lk(global_mtx_);
@@ -888,7 +1369,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         continue;
                     }
 
-                    // BACKEND domain: the E7 path. Backend progress only.
+                    // BACKEND domain: the unified progress park (backend-only
+                    // AND MIXED-WAKE for split-wait backends; backend-only for
+                    // non-split-wait backends). Backend progress is prompt via
+                    // the backend's own wait transport; Scheduler wake
+                    // publications reach this park through the bridge in
+                    // signal_wake_locked (gated by backend_wait_active_, which
+                    // was set at the commit above).
                     ws->park_domain = WorkerState::ParkDomain::Backend;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                     // D4-RM14 detector seam: the committed participant paused
@@ -905,7 +1392,61 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         *this,
                         sluice_async_test::PhaseTag::mw_s2_committed_before_wait_one);
 #endif
-                    auto wr = ctx_.wait_one();
+                    // Phase G (E11 deadline pump): bound the wait_one park by
+                    // the earliest active deadline so pump_deadlines_locked
+                    // re-drains in time — the MIXED-WAKE participant no longer
+                    // observes deadlines through the wake-domain park timeout.
+                    // No deadline -> unbounded park (the classic behavior).
+                    // Test clock mode -> the short real-time poll that drives
+                    // the logical-clock pump deterministically.
+                    // Phase G (E5-A2): while level-triggered ready-flag waits
+                    // are registered, cap the park at the E9 observation
+                    // interval (their poll-observed resolution; see the
+                    // capture at the Phase-B commit).
+                    auto max_park = std::chrono::nanoseconds::max();
+                    {
+                        deadline_t earliest =
+                            earliest_active_deadline_.load(std::memory_order::acquire);
+                        if (earliest != kNoDeadline) {
+                            if (test_clock_mode_.load(std::memory_order::acquire)) {
+                                max_park = std::chrono::milliseconds(1);
+                            } else {
+                                deadline_t now_ticks = clock_now_unlocked();
+                                if (earliest <= now_ticks) {
+                                    max_park = std::chrono::nanoseconds::zero();
+                                } else {
+                                    max_park = std::chrono::milliseconds(
+                                        earliest - now_ticks);
+                                }
+                            }
+                        }
+                        if (ready_flag_observation) {
+                            const auto observation =
+                                std::chrono::milliseconds(2);  // E9 interval
+                            if (max_park == std::chrono::nanoseconds::max() ||
+                                max_park > observation) {
+                                max_park = observation;
+                            }
+                        }
+                    }
+                    // Phase G review P1b (defensive clamp): a deadline can
+                    // become active between the Phase-B commit decision (which
+                    // routed this park to the backend domain only when the
+                    // wait source bounds its parks) and this max_park
+                    // computation. Never hand a finite cap to an unbounded
+                    // wait source — AsyncIoContext::wait_one rejects it
+                    // (not_supported), which would surface as a spurious
+                    // no-progress terminate. Park unbounded instead: the
+                    // deadline registration itself signals the wake domain,
+                    // the bridge (backend_wait_active_) interrupts this park,
+                    // and the re-drain re-decides the domain with the
+                    // deadline visible.
+                    if (max_park != std::chrono::nanoseconds::max() &&
+                        !ctx_.has_bounded_split_wait_capability()) {
+                        max_park = std::chrono::nanoseconds::max();
+                    }
+                    auto wr = ctx_.wait_one(max_park);
+                    backend_wait_active_.store(false, std::memory_order_release);
                     ws->park_domain = WorkerState::ParkDomain::None;
                     // E6/E7 reap semantics: wait_one()==0 means the backend made
                     // no progress this call. For FakeAsyncBackend this happens
@@ -932,7 +1473,22 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // A concurrent route may have published work after the
                         // Phase-D drain. Reclassify under the same authority
                         // used by spawn() before publishing termination.
-                        if (classify_locked(run_workers) == MwState::mw_s1) {
+                        if (classify_locked(run_workers, ws) == MwState::mw_s1) {
+                            continue;
+                        }
+                        // Phase G: an interrupted wait_one() while
+                        // external-wake-capable waits remain registered is a
+                        // re-evaluation signal from the wake bridge (an
+                        // external publication or a spurious wake), NOT a
+                        // no-progress boundary — stay resident and re-park
+                        // (the run must remain Live while external waits can
+                        // resolve). Pure control interrupts with NO external
+                        // waits (backend-only MW-S2: stop / close) keep the
+                        // terminate semantics below: the runtime driver
+                        // re-enters on the control epoch, and the stop
+                        // predicate converges the run at MW-S3 once the
+                        // outstanding I/O is reaped.
+                        if (external_wake_possible_locked()) {
                             continue;
                         }
                         // No backend progress: terminate this coordinated run. The
@@ -950,6 +1506,8 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // admission seam via the controller (test variant only).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                         sluice_async_test::release_all_phases(*this);
+                        ws->loop_exit_reason =
+                            WorkerState::LoopExitReason::mw_s2_no_progress_terminate;
 #endif
                         break;
                     }
@@ -965,12 +1523,22 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // state is MW-S3 or QUIESCENT (or MW-S2 non-participant): contribute
         // to coordinated termination. The last worker to go idle does a FINAL
         // re-check under global_mtx_ before setting global_terminate_.
+        bool ready_flag_observation = false;
         {
             LockGuard lk(global_mtx_);
+            // Phase G (E5-A2 level-triggered contract): a ready-flag wait
+            // (await_ready_flag) is POLL-OBSERVED — wake_ready_flags_locked
+            // resolves it in the drain; a bare flag store is a legal producer
+            // (the Scheduler "observes the persistent flag"), and the
+            // SchedulerWakeHandle notify is only a promptness optimization
+            // that the park-time window can absorb. While such waits are
+            // registered, the wake-domain park below MUST stay bounded at the
+            // E9 observation interval so the drain re-observes the flags.
+            ready_flag_observation = !waiting_ready_.empty();
             // Cancel any stale admission if we're terminating — wait_one is
             // undefined past run end. (admission_ should already be none here
             // for non-elected workers.)
-            MwState final_state = classify_locked(run_workers);
+            MwState final_state = classify_locked(run_workers, ws);
             // If real work appeared (MW-S1) or backend still outstanding (S2),
             // do not terminate.
             if (final_state == MwState::mw_s1 || final_state == MwState::mw_s2) {
@@ -999,9 +1567,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // Stop requested: fall through to the idle/terminate
                         // path (same as Drain MW-S3). The run returns to the
                         // caller; unrelated registrations remain for later.
+                        // G1 repair: converge against the LIVE loop count —
+                        // early-exited workers can never join the dance.
                         unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
-                        if (prev + 1 >= run_workers.size()) {
-                            MwState still = classify_locked(run_workers);
+                        ws->idle_dance_contributed_.store(1, std::memory_order_release);
+                        if (prev + 1 >= live_loop_workers_) {
+                            MwState still = classify_locked(run_workers, ws);
                             if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                                 global_terminate_.store(true, std::memory_order_release);
                                 for (WorkerState* worker : run_workers) {
@@ -1010,11 +1581,29 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                                 }
                                 signal_wake_locked();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                                sluice_async_test::release_all_phases(*this);
+                            sluice_async_test::release_all_phases(*this);
+                            ws->loop_exit_reason =
+                                WorkerState::LoopExitReason::e14f1_last_idle_terminate;
 #endif
-                                break;
+                            break;
                             }
                             idle_workers_.store(0, std::memory_order_release);
+                            // Phase G: the final re-check observed mw_s1/mw_s2 —
+                            // runnable work or backend progress EXISTS. Re-loop
+                            // (the top of the loop runs it / elects the MW-S2
+                            // participant) instead of falling through to a silent
+                            // park: with the Phase G unbounded park, a silent
+                            // park here deadlocks the run — the backend's ready
+                            // signal reaches only the wait source, and no worker
+                            // is parked in wait_one (deterministic stall:
+                            // final_backend_ready_request_drains_at_shutdown).
+                            continue;
+                        } else {
+                            // Phase G (E9-LIFE-8 termination convergence): not
+                            // the last idle worker — wake the domain so the
+                            // dance converges (see the plain idle path below
+                            // for the full race analysis).
+                            signal_wake_locked();
                         }
                     } else {
                         // Live: keep the run resident. Do NOT contribute to the
@@ -1025,10 +1614,15 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // Fall through to park_on_wake_source below.
                     }
                 } else {
+                    // G1 repair: converge against the LIVE loop count — an
+                    // early-exited worker (e.g. the MW-S2 no-progress
+                    // terminate) can never join the dance; counting it would
+                    // strand the survivors one short of last-idle forever.
                     unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
-                    if (prev + 1 >= run_workers.size()) {
+                    ws->idle_dance_contributed_.store(1, std::memory_order_release);
+                    if (prev + 1 >= live_loop_workers_) {
                         // All workers idle. Final re-check (global_mtx_ held).
-                        MwState still = classify_locked(run_workers);
+                        MwState still = classify_locked(run_workers, ws);
                         if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                             // Physical run termination. MW-S3 retains wait
                             // registrations logically; only quiescent is true
@@ -1049,16 +1643,51 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             // controller (test variant only).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                             sluice_async_test::release_all_phases(*this);
+                            ws->loop_exit_reason =
+                                WorkerState::LoopExitReason::last_idle_terminate;
 #endif
                             break;
                         }
                         idle_workers_.store(0, std::memory_order_release);
+                        // Phase G: the final re-check observed mw_s1/mw_s2 —
+                        // runnable work or backend progress EXISTS. Re-loop
+                        // (the loop top runs it / elects the MW-S2
+                        // participant) instead of falling through to a silent
+                        // park: with the Phase G unbounded park, a silent
+                        // park here deadlocks the run — the backend's ready
+                        // signal reaches only the wait source, and no worker
+                        // is parked in wait_one (deterministic stall:
+                        // final_backend_ready_request_drains_at_shutdown).
+                        continue;
+                    } else {
+                        // Phase G (E9-LIFE-8 termination convergence): this
+                        // worker observed quiescence/mw_s3 but is NOT the last
+                        // idle worker. Signal the wake source so the parked
+                        // workers re-run the dance and converge — the last
+                        // worker's re-check sets global_terminate_. Without
+                        // this signal, a Live-mw_s3 RESIDENT park (which resets
+                        // idle_workers_ below) can erase this count between
+                        // this worker's classify and its fetch_add; with the
+                        // Phase G unbounded park (no periodic timeout) nobody
+                        // would re-check and the run would never terminate
+                        // after the final work completed (deterministic hang:
+                        // st16_multi_worker_owner_routing). Persistent state
+                        // first, then notify (AGENTS.md §13.2); the dance
+                        // re-checks under global_mtx_, so the signal is
+                        // advisory only and coalesces safely (G-I3).
+                        signal_wake_locked();
                     }
                 }
             }
         }
 
-        if (global_terminate_.load(std::memory_order_acquire)) break;
+        if (global_terminate_.load(std::memory_order_acquire)) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            ws->loop_exit_reason =
+                WorkerState::LoopExitReason::final_park_terminate;
+#endif
+            break;
+        }
 
         // E9-CORRECTIVE seam A (ParkCandidate boundary, ADR §9.4.15): pause
         // the Worker right after it has decided to park (Live MW-S3 external
@@ -1076,10 +1705,87 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // periodic poll masking the external-wake gap (ADR §9.4). The wake
         // source's wake set now includes runnable publication (route_runnable
         // signals) and external-ready publication (SchedulerWakeHandle).
-        // The 2ms bounded timeout is LOAD-BEARING for MIXED-WAKE backend
-        // observation (E9-LIFE-8); it is the observation-return path.
-        park_on_wake_source(ws);
+        // Phase G: no MIXED-WAKE backend observation is needed from the
+        // wake-domain park — a split-wait backend parks its progress
+        // participant in ctx_.wait_one(), and a non-split-wait MIXED-WAKE
+        // park passes bounded_backend_observation=true at its own site. This
+        // park is therefore deadline-driven only (unbounded without an active
+        // deadline): no periodic wake, no 2ms CPU tax — EXCEPT while
+        // level-triggered ready-flag waits are registered (ready_flag_
+        // observation, captured under global_mtx_ above): those waits are
+        // poll-observed by contract (E5-A2), so the park stays bounded at the
+        // E9 observation interval until they resolve.
+        park_on_wake_source(ws, /*bounded_backend_observation=*/ready_flag_observation);
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Phase G review P2b — G1 deterministic reproducer seam: the worker
+        // just RETURNED from a wake-domain park and is about to re-enter the
+        // loop top (pop own inbox -> try_steal -> global_mtx_ drain -> classify).
+        // A test holding a worker HERE has the exact causal point the G1
+        // park-window violation needs: everything the worker is about to
+        // observe (a backend-ready publication, a route, a terminate flag) can
+        // be published deterministically BEFORE the re-check. This tag is
+        // deliberately EXCLUDED from release_all_phases (see async_test_control.cpp):
+        // a terminating sibling worker's release_all_phases must not silently
+        // destroy the reproducer's hold — the G1 stall scenarios are exactly
+        // runs where a terminated worker leaves a survivor behind. A test that
+        // arms this seam MUST release it (its own watchdog is the escape hatch).
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::worker_park_returned);
+#endif
     }
+
+    // G1 repair (§8.3 "terminate path strands queued runnables" / the
+    // runnable-ownership invariant): a worker leaving the loop must not
+    // strand tickets on its private queue. Move them to the pre-run domain
+    // (pending_spawn_) so the LIVE workers of this invocation — woken by the
+    // signal below, their loop tops drain pending_spawn_ — or, if none
+    // remain, the NEXT invocation's setup (which distributes pending_spawn_
+    // across its fresh participants and re-records owners) re-seeds them.
+    // Lock order global_mtx_ -> inbox_mtx is the spawn/steal order.
+    {
+        LockGuard glk(global_mtx_);
+        // G1 repair: this worker leaves the coordinated idle/termination
+        // dance — drop it from the live count so the survivors' convergence
+        // threshold shrinks (see the field contract in scheduler.hpp).
+        --live_loop_workers_;
+        // ...and retire the election-liveness fact in the SAME critical
+        // section (the run_impl thread lambda repeats the store after
+        // worker_loop returns — idempotent). Clearing `active` only there
+        // left a window where a survivor's MW-S2 election scan (R2) still
+        // saw this worker as the lowest-id ALIVE elector while it had
+        // already left the loop: the survivor refused to elect, refused to
+        // park, and signal-spun until the exiting thread finished its
+        // straight-line epilogue (bounded, but the two liveness predicates
+        // must move together).
+        ws->active.store(false, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
+            if (!ws->local_runnable.empty()) {
+                for (Fiber* f : ws->local_runnable) {
+                    pending_spawn_.push_back(f);
+                }
+                ws->local_runnable.clear();
+            }
+        }
+        // Signal UNCONDITIONALLY (inbox lock RELEASED first — the
+        // route_runnable_locked discipline; taking wake_mtx_ under inbox_mtx
+        // would invert the park predicate's wake→inbox edge): the departure
+        // itself is a wake-relevant publication — a survivor mid-idle-dance
+        // parked after counting itself (or parked via a delegation
+        // fall-through) must re-check the shrunk convergence threshold and
+        // the moved tickets.
+        signal_wake_locked();
+    }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Causal worker-death evidence (G1 reproducer): after this store the
+    // thread never touches WorkerState again (run_impl's thread lambda only
+    // clears `active` and TLS). A test observing loop_exited knows the
+    // worker's inbox residue is stranded unless a live participant re-seeds
+    // or steals it.
+    ws->loop_exited.store(true, std::memory_order_release);
+#endif
 }
 
 void Scheduler::run_next_on(WorkerState* ws, Fiber* fiber) {
@@ -1434,7 +2140,28 @@ bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
     return true;
 }
 
-Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers) const {
+Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers,
+                                              WorkerState* classify_ws) const {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Park-window forensics (Phase G review P2a): record the classification
+    // on the CALLING worker's own pair (value + monotonic sequence) so a park
+    // ledger record attributes the state the PARKING worker trusted. A
+    // Scheduler-global last-writer field mis-attributes when another worker
+    // classifies between this worker's classify and its park commit.
+    const MwState traced = classify_locked_impl(run_workers);
+    if (classify_ws != nullptr) {
+        classify_ws->last_classify.store(static_cast<int>(traced),
+                                         std::memory_order_relaxed);
+        classify_ws->classify_seq.fetch_add(1, std::memory_order_relaxed);
+    }
+    return traced;
+#else
+    (void)classify_ws;
+    return classify_locked_impl(run_workers);
+#endif
+}
+
+Scheduler::MwState Scheduler::classify_locked_impl(const WorkerSnapshot& run_workers) const {
     // Must be called with global_mtx_ held.
     bool any_runnable = !pending_spawn_.empty();
     if (!any_runnable) {
@@ -4914,6 +5641,39 @@ std::size_t Scheduler::runnable_count() const {
         total += w->local_runnable.size();
     }
     return total;
+}
+
+bool Scheduler::unguarded_progress_pending_locked() const {
+    // G1 repair: see the header contract. Observer checks first (cheap, the
+    // common parked-delegation case): while a fiber executes somewhere or
+    // the backend-domain participant exists, parked workers are delegating
+    // to a live observer and may sleep.
+    if (running_fiber_count_.load(std::memory_order_acquire) > 0 ||
+        backend_wait_active_.load(std::memory_order_acquire) ||
+        admission_ != AdmissionState::none) {
+        return false;
+    }
+    if (!pending_spawn_.empty()) {
+        return true;
+    }
+    const unsigned active_count =
+        active_worker_count_.load(std::memory_order_acquire);
+    // Queue-nonemptiness is the progress test, not per-fiber state: a ticket
+    // whose Fiber is not Runnable would be a drift/invariant breach
+    // (run_next_on fail-fasts at a LIVE owner; a TERMINATED owner never
+    // reaches that check, so a drifted ticket there would refuse-park the
+    // survivors indefinitely). Drift implies an upstream protocol breach;
+    // documented rather than defended here.
+    for (unsigned i = 0; i < active_count && i < workers_.size(); ++i) {
+        WorkerState* w = workers_[i].get();
+        std::lock_guard<std::mutex> ilk(w->inbox_mtx);
+        if (!w->local_runnable.empty()) {
+            return true;
+        }
+    }
+    // ctx_.outstanding() takes access_mtx_ — the accepted global→access
+    // order (classify_locked uses it under the same lock).
+    return ctx_.outstanding() > 0;
 }
 
 bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers) {

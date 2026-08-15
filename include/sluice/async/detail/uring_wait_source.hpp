@@ -98,6 +98,8 @@
 
 #include <atomic>
 #include <cerrno>    // errno / EINTR
+#include <chrono>
+#include <climits>   // INT_MAX (poll timeout clamp)
 #include <condition_variable>
 #include <cstdio>    // fprintf / fflush / stderr
 #include <cstdint>
@@ -145,6 +147,18 @@ class UringWaitSource final : public BackendWaitSource {
     }
 
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
+        // Phase G: the one-argument form is the unbounded entry; the bounded
+        // variant carries the deadline-driven park cap (see below).
+        return wait_for_change(observed, std::chrono::nanoseconds::max());
+    }
+
+    // Phase G review P1b: poll(2) with a finite timeout is a native bounded
+    // transport — truthfully report the capability (BackendWaitSource
+    // contract).
+    bool supports_bounded_wait() const noexcept override { return true; }
+
+    BackendWakeReason wait_for_change(BackendWaitToken observed,
+                                      std::chrono::nanoseconds max_park) noexcept override {
         for (;;) {
             {
                 std::unique_lock<std::mutex> lk(mtx_);
@@ -267,7 +281,25 @@ class UringWaitSource final : public BackendWaitSource {
             pfds[1].fd = control_fd_;
             pfds[1].events = POLLIN;
             pfds[1].revents = 0;
-            const int rc = poll_nolock_(pfds, 2, -1);
+            // Phase G (bounded park): the deadline-driven cap bounds the
+            // physical poll so the Scheduler's E11 timer pump re-drains before
+            // an active deadline expires. The unbounded sentinel
+            // (nanoseconds::max()) keeps the classic infinite kernel park;
+            // poll(2) takes milliseconds (int), so larger bounds are clamped.
+            int timeout_ms = -1;
+            if (max_park != std::chrono::nanoseconds::max()) {
+                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              max_park)
+                              .count();
+                if (ms < 0) {
+                    ms = 0;
+                }
+                if (ms > INT_MAX) {
+                    ms = INT_MAX;
+                }
+                timeout_ms = static_cast<int>(ms);
+            }
+            const int rc = poll_nolock_(pfds, 2, timeout_ms);
             {
                 std::unique_lock<std::mutex> lk(mtx_);
                 // Unregister: this waiter is no longer a parked participant

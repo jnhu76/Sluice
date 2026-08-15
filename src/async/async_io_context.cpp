@@ -205,6 +205,12 @@ std::size_t AsyncIoContext::poll() {
 }
 
 Result<std::size_t> AsyncIoContext::wait_one() {
+    // Phase G: the no-argument form is the unbounded entry; the bounded
+    // variant carries the deadline-driven park cap (see wait_one(max_park)).
+    return wait_one(std::chrono::nanoseconds::max());
+}
+
+Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) {
     // Issue #67 / D4: wait_calls counts the single external wait invocation
     // (I9). The blocking phase NEVER runs under access_mtx_: with a
     // split-wait-capable backend the call repeatedly
@@ -228,11 +234,30 @@ Result<std::size_t> AsyncIoContext::wait_one() {
         // the caller is the single documented driver (UringAsyncBackend).
         // ApplicationRuntime rejects such backends at build time so the
         // multi-participant production path never takes this fallback (D3).
+        // The Phase G bounded-park hint is not plumbed here: legacy backends
+        // have no split wait source to bound (the Scheduler never sends a
+        // bounded hint to them — non-split-wait backends keep the
+        // Scheduler-domain observation park).
+        (void)max_park;
         std::lock_guard<std::mutex> lk(access_mtx_);
         if (stats_) ++stats_->wait_calls;
         auto r = backend_->wait_one();
         if (r.has_value() && stats_) stats_->completed_ops += r.value();
         return r;
+    }
+    // Phase G review P1b (PR #108): a finite park cap is a REAL contract
+    // only when the wait source implements the bounded transport. A wait
+    // source that only provides the unbounded one-argument contract would
+    // silently discard `max_park` in the base wait_for_change overload and
+    // park indefinitely past the caller's deadline (the E11 liveness hole).
+    // Fail synchronously instead — no park, no accounting side effect, no
+    // silent fallback; the caller (the Scheduler) routes deadline-bound
+    // parks away from such backends via has_bounded_split_wait_capability()
+    // BEFORE reaching this point.
+    if (max_park != std::chrono::nanoseconds::max() &&
+        !ws->supports_bounded_wait()) {
+        return make_unexpected<std::size_t>(
+            IoError{IoError::Code::not_supported});
     }
     // wait_calls counts ONE external invocation (I9), not one loop iteration.
     // Account it once under access_mtx_ before entering the reap/park loop;
@@ -265,6 +290,19 @@ Result<std::size_t> AsyncIoContext::wait_one() {
     // degenerates to a fresh snapshot (unchanged behavior).
     const BackendWaitToken invocation_start = ws->consume_committed_wait();
     const std::uint64_t control_baseline = invocation_start.control_generation;
+    // Phase G (bounded park): the deadline-driven cap bounds the WHOLE
+    // invocation's physical parking — each internal iteration re-parks with
+    // the REMAINING budget, so a spurious re-loop can never push the total
+    // park past the deadline (the caller — the Scheduler's E11 timer pump —
+    // must re-drain in time). When the budget is exhausted the invocation
+    // terminates with a final poll and returns 0, exactly like a control
+    // interruption (the caller re-drains, pumps, and re-invokes with a fresh
+    // budget). The unbounded sentinel (nanoseconds::max()) keeps the classic
+    // infinite-park invocation.
+    const bool bounded_park = max_park != std::chrono::nanoseconds::max();
+    const auto park_deadline =
+        bounded_park ? std::chrono::steady_clock::now() + max_park
+                     : std::chrono::steady_clock::time_point{};
     for (;;) {
         BackendWaitToken token = ws->snapshot();
         // Refresh the progress baseline per internal loop; preserve the
@@ -298,7 +336,22 @@ Result<std::size_t> AsyncIoContext::wait_one() {
         // by poll; a signal between poll and park advances the epoch so the
         // predicate wait does not park (I5). Spurious wakes only re-check the
         // predicate and re-loop (I10).
-        if (ws->wait_for_change(token) == BackendWakeReason::progress) {
+        // Phase G: with a finite deadline hint the park is bounded by the
+        // invocation's REMAINING budget (see park_deadline above); when the
+        // budget is exhausted the call terminates with a final poll and
+        // returns 0 so the caller re-drains in time for the active deadline.
+        BackendWakeReason reason;
+        if (bounded_park) {
+            auto remaining = park_deadline - std::chrono::steady_clock::now();
+            if (remaining <= std::chrono::nanoseconds::zero()) {
+                reason = BackendWakeReason::interrupted;
+            } else {
+                reason = ws->wait_for_change(token, remaining);
+            }
+        } else {
+            reason = ws->wait_for_change(token);
+        }
+        if (reason == BackendWakeReason::progress) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             // D4-RM13 detector seam: pause AFTER wait_for_change reported
             // progress, BEFORE the next internal snapshot — the exact window
@@ -334,11 +387,51 @@ void AsyncIoContext::interrupt_backend_waiters() noexcept {
     // shutdown / admission close can re-evaluate. Pure control: no backend
     // state is consumed, so no access_mtx_ is taken; a backend without the
     // wait capability has no one to wake (no-op).
+    //
+    // Phase G (P5-CORRECTIVE bridge): this is ALSO the transport that carries
+    // Scheduler wake-domain publications (routing / flag / select / waitqueue
+    // / deadline / external wake handle) into a MW-S2 participant parked in
+    // wait_one() — Scheduler::signal_wake_locked calls this for every wake
+    // publication. The one-shot control epoch + D4-RM13 invocation baseline
+    // keep the interrupt one-shot per wait_one() invocation (no busy-spin),
+    // and the D4-RM14 armed commit baseline closes the commit-to-park window.
     if (backend_) {
         if (auto* ws = backend_->wait_source()) {
             ws->interrupt_all();
         }
     }
+}
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+BackendWaitToken AsyncIoContext::backend_wait_token_for_test() const noexcept {
+    // Phase G park-window forensics: snapshot() is the wait source's own
+    // observe-only, lock-guarded read (documented contract). No access_mtx_
+    // is taken — this runs from the forensics watchdog while the run is
+    // stalled.
+    if (backend_ != nullptr) {
+        if (BackendWaitSource* ws = backend_->wait_source()) {
+            return ws->snapshot();
+        }
+    }
+    return BackendWaitToken{};
+}
+#endif
+
+bool AsyncIoContext::has_split_wait_capability() const noexcept {
+    // Phase G: split-wait backends expose the observe-only readiness wait
+    // (BackendWaitSource). The Scheduler selects the MW-S2 park domain with
+    // this — see the header comment. Const and lock-free (the backend pointer
+    // and its wait_source are construction-stable).
+    return backend_ && backend_->wait_source() != nullptr;
+}
+
+bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
+    // Phase G review P1b: split wait AND a bounded physical park. The
+    // Scheduler may commit an MW-S2 participant to a FINITE-cap backend
+    // domain park (active deadline / ready-flag observation) only when this
+    // holds — see the header contract. Lock-free and construction-stable.
+    return backend_ && backend_->wait_source() != nullptr &&
+           backend_->wait_source()->supports_bounded_wait();
 }
 
 void AsyncIoContext::arm_backend_wait_commit() noexcept {
