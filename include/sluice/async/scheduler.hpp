@@ -218,8 +218,10 @@ struct WorkerState {
     std::atomic<LoopExitReason> loop_exit_reason{LoopExitReason::live};
     // Causal seam evidence (G1 reproducer): set at worker_loop RETURN —
     // after this store the thread will never touch WorkerState again (the
-    // run_impl thread lambda only clears `active`). A test waiting on this
-    // flag knows the worker is causally dead, not merely "wrote its exit
+    // run_impl thread lambda only clears `active`). Cleared when a fresh
+    // invocation's thread attaches, so it always describes the CURRENT
+    // worker thread, never a prior run's. A test waiting on this flag
+    // knows the worker is causally dead, not merely "wrote its exit
     // reason" (the exit-reason write precedes the final Phase-D drain).
     std::atomic<bool> loop_exited{false};
     // Per-worker classify evidence (Phase G review P2a): the LAST
@@ -1371,6 +1373,21 @@ private:
     // `sluice_async` target has no such fields, no such call sites, and no such
     // symbols. See tests/async_test_control_internal.hpp for the controller.
 
+    // G1 repair (PR #108 §8.3): true when persistent progress exists in the
+    // run domain but NO active observer would remain if the caller parked.
+    // Called under global_mtx_ at the wake-domain park commit (the
+    // arm→recheck closure in park_on_wake_source). Progress = a runnable
+    // ticket on ANY active participant's local queue or in pending_spawn_,
+    // or accepted backend work (ctx_.outstanding() > 0, including
+    // backend-ready-unreaped — the reap is progress owed to a waiter).
+    // NOT external-wake-capable waits: those are externally resolved by
+    // contract (their producers signal the wake domain) and a resident park
+    // while only they remain is the E9 Live design. Observer = a fiber
+    // currently executing, the MW-S2 participant parked in / committed to
+    // the backend-domain wait, or an admission in flight (the admission
+    // holder is cycling; if it abandons, it re-evaluates rather than park).
+    bool unguarded_progress_pending_locked() const SLUICE_REQUIRES(global_mtx_);
+
     // Get the current Worker's WorkerState (worker-local via TLS).
     static WorkerState* current_worker();
 
@@ -1481,6 +1498,17 @@ private:
     std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;
     bool in_coordinated_run_ = false;
+    // G1 repair (PR #108 §8.3 "participant disappearance"): participants of
+    // the CURRENT invocation whose worker_loop is still live. The idle-dance
+    // termination converges against THIS count, not the invocation snapshot
+    // size — a worker that exits its loop early (e.g. the MW-S2 no-progress
+    // terminate) can never join the dance, and counting it would leave the
+    // survivors permanently short of the "last idle worker": the run never
+    // terminates, run_live never returns, the driver never reaches its
+    // drain-complete evaluation, and drain() waits forever (the deterministic
+    // reproducer's post-steal residual stall). Guarded by global_mtx_; set at
+    // run_impl entry, decremented in the worker_loop exit retire block.
+    unsigned live_loop_workers_ SLUICE_GUARDED_BY(global_mtx_) = 0;
 
     // E9-CORRECTIVE: the current run invocation's lifetime policy. Set by
     // run_impl before worker_loop starts; read by worker_loop at the idle-
