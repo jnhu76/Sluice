@@ -231,7 +231,7 @@ the implementation head.
   pre-closeout coverage hole (a fixed-Drain Init making the Live properties
   vacuous) was found and fixed during the model update.
 - **Pre-existing test-infrastructure finding (recorded, not fixed — issue
-  candidate, NOT a Phase G regression)**: `tp_cancel_races_worker_terminal_
+  #110, NOT a Phase G regression)**: `tp_cancel_races_worker_terminal_
   exactly_one` (`tests/threadpool_backend_scheme_b_race_test.cpp`) can hang
   30s and abort its own watchdog under heavy parallel load (≈2/20 concurrent
   copies on an idle 20-core machine; bare `xmake test` / `-P 16` sweeps;
@@ -250,7 +250,7 @@ the implementation head.
   observable, or make `wait_paused` bounded with a steal-aware skip) and
   requires its own review — recorded as an application/load-triggered issue
   candidate under the freeze policy.
-- **Pre-existing ASan-timing flake (recorded, not fixed — issue candidate, NOT a
+- **Pre-existing ASan-timing flake (recorded, not fixed — issue #111, NOT a
   Phase G regression)**: `runnable_steal_test` hangs probabilistically under
   ASan (most often case `steal_steal_run_suspend_wake_resume_on_thief`,
   occasionally case 2; 40–60% standalone on this 20-core machine, effectively
@@ -267,7 +267,8 @@ the implementation head.
 - Reference backends (Fake/Sync) keep the bounded Scheduler-domain
   observation interval in MIXED-WAKE (their readiness is poll-driven and
   cannot self-notify). This is a documented reference-backend classification
-  (G4), not a production path.
+  (G4), not a production path. Application-triggered revisit anchor: issue
+  #112.
 - The bridge adds one atomic load to every Scheduler wake publication when no
   backend participant is parked, and a control-epoch bump + notify when one
   is parked (the prompt-wake cost that replaces the 2ms observation interval).
