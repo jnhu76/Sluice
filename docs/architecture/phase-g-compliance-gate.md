@@ -65,7 +65,7 @@ MW-S2 participant COMMITTED (E7 two-phase admission, unchanged):
 | park commit (wake domain) | parking worker | **G -> W (arm under state authority)** | none | n/a | **arm -> recheck protocol (R1): the epoch baseline is taken under `global_mtx_` AFTER the progress-predicate recheck; a publication in the arm window is either seen by the recheck or consumed by the baseline (Tokio `Notify::enable` discipline); a refused park signals an electable sleeper and re-loops** | unchanged |
 | MW-S2 election | lowest-id ACTIVE worker | G | none | n/a | **transferable election (R2): the participant is the lowest-id active worker, not hardcoded worker 0; a worker that refuses (progress pending) signals an electable sleeper** | unchanged |
 | worker terminate (loop exit) | exiting worker | **G -> I (inbox, released before signal)** | none | n/a | **terminate retire (R3): local runnables move to `pending_spawn_`, `live_loop_workers_` decrements, one unconditional `signal_wake_locked` AFTER the inbox lock is released (lock order stays G -> I then G -> W, never I -> W)** | stranded-runnable class eliminated |
-| park predicate | parking worker | G -> W (R1) / G (R4 backstop) | none | n/a | **idle backstop (R4): a park is refused while `idle_workers_ > 0` — persistent state, not a notification race** | unchanged |
+| park predicate | parking worker | G -> W (arm under state authority; R1+R4 recheck in one G section) | none | n/a | **idle backstop (R4, commit-time, contribution-aware): a park is refused while `idle_workers_ > own_dance_contribution` — checked in the SAME `global_mtx_` section that arms the baseline, NOT in the cv predicate and NOT as a bare count (a predicate term or bare count observes the dancer's own contribution: the dancer's park becomes a no-op, each re-dance erases the count, and the not-last wake chain never damps — the Live-mw_s3 resident livelock; final form after the adversarial review); a counted dancer sleeps holding its count, a non-dancer refuses behind any live count, and the refusal signals an electable sleeper** | unchanged |
 
 ### 1.2 Lock-order table (AGENTS.md §13.1; new edges bold)
 
@@ -136,13 +136,18 @@ wake handle / termination)
   protocol (existing); the D4-RM14 arm_committed_wait commit-to-park handshake
   (existing, now also MIXED); the D4-RM13 invocation-level control baseline
   (existing); the level-triggered ring/control fd (Uring, existing); and the
-  G1-repair arm-recheck protocol (R1) — the wake-domain park baseline is armed
-  under `global_mtx_` after the progress recheck, and every park refusal
-  (progress pending, non-lowest-id election refusal, idle-workers backstop)
+  G1-repair arm-recheck protocol (R1+R4) — the wake-domain park baseline is
+  armed under `global_mtx_` after a single recheck that refuses BOTH on
+  unguarded progress and on a live idle-dance count beyond the worker's own
+  contribution (`idle_workers_ > idle_dance_contributed_`). Every refusal
   emits `signal_wake_locked` before re-looping, so a park refusal can never
-  strand an electable sleeper. The progress predicate additionally treats a
-  positive `idle_workers_` as pending progress (R4), closing the
-  notification-absorbed-by-baseline window with persistent state.
+  strand an electable sleeper; because the dancer's fetch_add + not-last
+  signal serialize in the same domain as the recheck, a dance is either
+  visible at the recheck (refuse) or advances the epoch past the baseline
+  being recorded (predicate wake) — the
+  notification-absorbed-by-baseline window (E9-LIFE-8) is closed with
+  persistent state, while the counted dancer still sleeps holding its count
+  (the damping the bare-count form destroyed — see Gate 1's R4 row).
 - **Coalescing:** multiple backend-ready -> one or more epoch advances; the
   drain reaps all; 1:1 wake is never required (G-I3).
 - **Progress vs control distinction:** progress epoch (backend readiness) and
@@ -191,7 +196,8 @@ the implementation head.
 | Bounded-wait capability contract (PR #108 review P1b) | `SLUICE_TEST_FILTER=ctx_wait_one_bounded_cap_requires_capability xmake run async_io_context_split_wait_c2e_test` | PASS — a capability-less wait source receives a finite cap as synchronous `not_supported` (no park, no accounting), capability queries truthful, unbounded form unchanged |
 | Adjacent sanity | `application_runtime_test`, `async_io_context_split_wait_c2e_test`, `async_stats_wait_race_test` | PASS |
 | Clang Release full suite (AGENTS.md §16.1 — public headers changed) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test`, then the §8 parallel method (`xargs -P 16`, per-binary `timeout 300`); `sluice_copy_integration_test` exec's the `sluice-copy` CLI by a run-directory-relative path, so it must run with cwd = the build directory | **PASS (2026-08-15): all test binaries green** — `phase_g_backend_progress_wake_test` (both cases), `application_runtime_drain_starvation_test`, `sluice_copy_pipeline_stress_test`, `sluice_copy_pipeline_integration_test`, `sluice_copy_integration_test` individually re-verified; the initial sweep's two non-zero rows were runner artifacts (the `sluice-copy` CLI usage binary is not a test target; the copy-integration binary needs the build-dir cwd), and one real finding: the reproducer's submit-after-start placement lost the first-idle convergence race in Release (`no-participant-parked-pair` fail-closed) — fixed by the run-entry seam construction, then 5/5 pre-fix RED / 5/5 post-fix GREEN in Release |
-| ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | NOT EXECUTED (deferred) |
+| ASan/UBSan (AGENTS.md §16.2 — Fiber* ownership moves in the retire block) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test`, then the §8 parallel method (per-binary `timeout 420`) | **PASS (2026-08-15, the R4-redesign head): all binaries green, 0 AddressSanitizer reports, 0 UBSan `runtime error:` reports** |
+| CI failure triage + adversarial review rework | pushed head e50731c CI run 31863170949: `sluice_copy_pipeline_integration_test` survived the 420s hang watchdog on the hosted runner (164 binaries concurrent; no local reproduction — pinned 2-core/1-core ×16, full-suite oversubscription ×3). The adversarial audit (coderabbit code-reviewer agent over 31a6ce6..e50731c) independently flagged R4's predicate term as P2: a counted dancer's park observes its own count → no-op park → re-dance erases the count → the not-last wake chain never damps (the resident-state livelock shape matching the CI stall) | R4 reworked to the contribution-aware commit check (see Gate 1/3 rows); review P2 #2 fixed (loop-top pending_spawn_ drain re-records fiber_owner_, removing the route-to-dead-worker hop); P3 #3 fixed (retire clears `active` under global_mtx_ with the live-count decrement); P3 doc items fixed (gate §3.1 overclaim, §8.5 R4 rewrite, stale inbox_cv comments, api-reference vtable-ABI note); P3 #4 documented in-code (drifted-ticket limitation). Re-verification on the rework head: reproducer 20/20 Debug, stress families 6/6 each, 2-core pinned ×10, full Debug suite 165/165, ASan/UBSan clean |
 | TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | NOT EXECUTED (deferred) |
 | Real-liburing | `xmake f -m debug --toolchain=clang --with-liburing=true -y && xmake build -g test && xmake test -v` | NOT EXECUTED (deferred) |
 | Backend conformance | `python3 scripts/verify-backend-conformance.py` | NOT EXECUTED (deferred) |

@@ -1235,7 +1235,12 @@ silently parking unbounded past the caller's deadline; the capability query
 `AsyncIoContext::has_bounded_split_wait_capability()` composes split wait AND
 bounded transport for callers with a deadline obligation (the Scheduler's
 MW-S2 park-domain routing). The in-tree sources (ReadyWaitSource:
-`cv.wait_for`; UringWaitSource: poll timeout) report true.
+`cv.wait_for`; UringWaitSource: poll timeout) report true. Note for
+out-of-tree `BackendWaitSource` subclasses: `supports_bounded_wait()` is a
+NEW virtual inserted among the existing ones — source-compatible (the
+default returns false, preserving the pre-Phase-G behavior) but not
+layout/ABI-compatible; Sluice is an experimental library and does not
+promise vtable stability across releases.
 
 Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5) adds the
 protected two-stage **binding** helpers (`begin_binding` / `commit_binding` /

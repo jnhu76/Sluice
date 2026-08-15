@@ -649,14 +649,31 @@ short of last-idle forever, `run_live` never returns, and the driver never
 reaches its drain-complete evaluation). The retire signals the wake domain
 unconditionally, with the inbox lock released first (lock-order discipline).
 
-**R4 — Persistent-state park predicate (condition 4's general closure).**
-Both wake-domain park predicates additionally re-check
-`idle_workers_ > 0`: a counted dancer waiting for convergence is persistent
-state, so a sibling whose baseline absorbed the dancer's not-last signal
-returns from the park without sleeping, re-classifies, and either joins the
-dance (counting toward convergence) or observes progress. The same
-discipline already covered terminate/epoch/own-inbox; the dance count was
-the missing persistent term.
+**R4 — Persistent-state park backstop (condition 4's general closure;
+final form after the adversarial review).** The idle-dance condition is
+checked at the park COMMIT recheck — the same `global_mtx_` critical
+section as R1 — compared AGAINST the worker's own dance contribution
+(`WorkerState::idle_dance_contributed_`), never as a bare count and never
+in the cv predicate. Two rejected drafts show why: (1) a predicate term
+observes the dancer's own count, so the dancer's park becomes a no-op and
+it re-dances immediately; (2) a bare commit-time `idle_workers_ > 0`
+refusal self-triggers the same way, and each re-dance's last-idle
+`store(0)` erases the count, so a woken sleeper always starts its dance
+from zero, emits its own not-last signal, and wakes its peer — the
+wake-park-wake chain never damps (a 100%-CPU livelock in the Live-mw_s3
+resident state; the shape of the CI stall). Exempting the worker's own
+contribution restores the pre-G1 damping: a counted dancer SLEEPS holding
+its count, so the woken sleeper's `fetch_add` reaches the last-idle
+threshold immediately and its cycle ends in either termination or a
+SILENT park. Meanwhile a worker that has not danced (contribution 0)
+refuses behind ANY live count: the recheck and the dance serialize under
+`global_mtx_` (the dancer's fetch_add and not-last signal both hold it),
+so the dance is either visible at the recheck (refuse; re-loop and
+converge the dance) or its signal advances the epoch past the baseline
+being recorded (predicate wake) — the E9-LIFE-8 absorbed-baseline window
+stays closed with persistent state. The contribution flag is cleared
+conservatively at each loop-iteration top; an under-clear can only cause
+an extra refuse-and-redance cycle (convergence), never a missed refusal.
 
 **Why no backend→wake bridge is needed:** with R1+R2, any worker that finds
 unguarded backend progress refuses to park and becomes the observer (it
