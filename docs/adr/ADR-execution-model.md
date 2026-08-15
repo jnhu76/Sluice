@@ -1623,6 +1623,58 @@ NOT one physical wake primitive. Do not claim unified physical wake
 semantics. Future optimization to OS-multiplexed wake (eventfd-in-ring)
 belongs to E16/runtime hardening unless separately reprioritized.
 
+#### 9.4.7.2 Phase G amendment — split-wait backends park the backend domain in MIXED-WAKE (P5 discharged without a seam change)
+
+Phase G (backend-ready progress wake integration, closeout 2026-08-15)
+amends §9.4.7.1 for **split-wait production backends** — those whose
+`AsyncIoContext::wait_source()` exposes a `BackendWaitSource` with its own
+persistent progress epoch (ThreadPool `ReadyWaitSource`, real-liburing
+`UringWaitSource`) and truthful bounded-wait capability:
+
+```text
+MIXED-WAKE (split-wait backend):
+    MW-S2 participant parks in ctx_.wait_one() — the BACKEND domain —
+    for BOTH backend progress and external-ready wakes.
+    Backend progress: the wait source's own epoch (prompt; no interval).
+    External wake:    signal_wake_locked -> backend_wait_active_ (acquire)
+                      -> interrupt_backend_waiters() — control-epoch bump +
+                      the wait source's interrupt transport. The interrupted
+                      wait_one returns, the participant re-drains both
+                      domains and reclassifies. One-shot per invocation.
+```
+
+Consequences, recorded as amendments to §9.4.7.1's baseline:
+
+- The bounded observation interval is **no longer protocol authority** for
+  backend progress in MIXED-WAKE on split-wait backends. It survives only
+  as a condition-driven park cap (an active E11 deadline, or the E5-A2
+  poll resolution while level-triggered ready-flag waits are registered);
+  with neither, the park is the unbounded sentinel and the transports above
+  wake it. The E9 P2-04 latency/CPU tax is thereby resolved on the
+  production path.
+- The commit-to-park window is closed by the invocation-level control
+  baseline (D4-RM13) plus the armed floor (`arm_committed_wait` /
+  `consume_committed_wait`, D4-RM14): a stop or external wake between the
+  MW-S2 commit and the park entry is observed by that invocation.
+- **Reference poll-driven backends (Fake, Sync/Synthetic) keep §9.4.7.1
+  verbatim**: their readiness cannot self-notify, MIXED-WAKE still parks on
+  the Scheduler domain, and the bounded observation interval remains
+  protocol authority there (DIV-05 reference exemption, Phase G amended).
+- **P5 reservation discharged for split-wait backends without the rejected
+  seam change**: the bridge uses the wait sources' existing control-epoch
+  interrupt capability (already required for close/stop) rather than adding
+  an interruptible-`wait_one` requirement to the `AsyncBackend` interface.
+  P5 remains reserved (not implemented, not needed) for any future backend
+  that is neither split-wait nor poll-driven.
+- The lock-order property that motivated P3 is preserved: the bridge is
+  invoked from `signal_wake_locked` AFTER the wake-epoch publication, never
+  under `global_mtx_` together with a backend lock (no
+  backend-mtx → Scheduler-global-mtx edge).
+
+Evidence: `docs/architecture/phase-g-compliance-gate.md` (closeout rows),
+`tests/phase_g_closeout_test.cpp` (Cases A–D), `tests/phase_g_closeout_uring_test.cpp`
+(UR-G1..G7, real liburing), `spec/tla/e9_park_wake/` (bridge/control-epoch model).
+
 ### 9.4.8 Worker notification cardinality
 
 ```text

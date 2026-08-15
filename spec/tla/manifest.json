@@ -98,14 +98,14 @@
       "tiers": [
         "smoke"
       ],
-      "positive_gate_count": 2,
-      "negative_gate_count": 3,
+      "positive_gate_count": 4,
+      "negative_gate_count": 4,
       "reachability_gate_count": 0,
       "owner_docs": [
         "docs/history/closeout/e9-0-wake-source-topology-audit.md"
       ],
       "implementation_bindings": [],
-      "notes": "Liveness config + 3 buggy models (DrainParks, MixedSource, PrePark)."
+      "notes": "Phase G closeout (R1-R4 + bridge): split-wait safety/liveness + reference safety/liveness; buggy models DrainParks, MixedSource, PrePark, NoBridge (model-level M1)."
     },
     {
       "id": "e9-wake-handle-lifetime",
@@ -301,8 +301,8 @@
   "coverage_gaps": [
     {
       "id": "request-arena-lifecycle",
-      "status": "ACCEPTED FORMAL-DEBT GAP (AGENTS.md §17 path B: justified gap + revisit trigger)",
-      "protocol": "RequestArena / RequestSlot explicit-I/O request lifecycle — the load-bearing accepted-request protocol since Phase B.",
+      "status": "ACCEPTED FORMAL-DEBT GAP (AGENTS.md \u00a717 path B: justified gap + revisit trigger)",
+      "protocol": "RequestArena / RequestSlot explicit-I/O request lifecycle \u2014 the load-bearing accepted-request protocol since Phase B.",
       "scope_a_model_would_encode": [
         "five-stage admission (reserve -> prepare -> commit -> enqueue -> dispatch)",
         "Scheme-B enqueue/cancel arbitration (cancel-wins vs enqueue-wins, exactly one terminal)",
@@ -314,7 +314,7 @@
         "enqueue-in-flight pin and reap-ineligibility",
         "quiescent destruction conditions (accepted_outstanding==0, slot_in_use==0)"
       ],
-      "why_no_model_yet": "The smallest meaningful isolated protocol has not been modeled. Per AGENTS.md §17 ('Do not invent a model merely for ceremonial coverage. Model the smallest protocol that captures the load-bearing race.'), this gap is accepted as formal debt rather than a blocker. The protocol's correctness is currently established by the executable evidence below, not by a TLA+ abstraction.",
+      "why_no_model_yet": "The smallest meaningful isolated protocol has not been modeled. Per AGENTS.md \u00a717 ('Do not invent a model merely for ceremonial coverage. Model the smallest protocol that captures the load-bearing race.'), this gap is accepted as formal debt rather than a blocker. The protocol's correctness is currently established by the executable evidence below, not by a TLA+ abstraction.",
       "current_executable_evidence": [
         "deterministic RequestArena state-machine matrix (request_arena_test)",
         "request_lifecycle_scheme_b_test (Scheme-B enqueue/cancel arbitration, terminal winner, generation/reuse)",
@@ -333,7 +333,7 @@
         "tests/request_waiter_borrow_lease_test.cpp",
         "tests/threadpool_backend_scheme_b_race_test.cpp"
       ],
-      "not_covered_by_existing_suites": "No suite in this manifest binds request_arena.hpp/request_slot.hpp. The adjacent e7-publication/e8-ownership-transfer suites model Completion claim/publish CAS and ownership transfer (a different protocol — the publication object, not the slot lifecycle); e9-park-wake/e10-waitnode model Scheduler wake/wait-queue primitives; e16-application-runtime models the runtime epoch. None of these models the arena slot state machine, Scheme-B arbitration, generation/reuse, ready-ring, or reap-only publication. Do not read these adjacent suites as RequestArena coverage.",
+      "not_covered_by_existing_suites": "No suite in this manifest binds request_arena.hpp/request_slot.hpp. The adjacent e7-publication/e8-ownership-transfer suites model Completion claim/publish CAS and ownership transfer (a different protocol \u2014 the publication object, not the slot lifecycle); e9-park-wake/e10-waitnode model Scheduler wake/wait-queue primitives; e16-application-runtime models the runtime epoch. None of these models the arena slot state machine, Scheme-B arbitration, generation/reuse, ready-ring, or reap-only publication. Do not read these adjacent suites as RequestArena coverage.",
       "revisit_triggers": [
         "before materially changing RequestArena / RequestSlot lifecycle authority",
         "before changing generation/reuse rules",
@@ -344,7 +344,7 @@
       "owner_docs": [
         "docs/verification/formal-models.md"
       ],
-      "notes": "Recorded for issue #100 (audit umbrella #94). This is the consolidated, authoritative gap record; per-slice gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. Adding this entry does NOT create a model and does NOT claim formal verification of the C++ implementation (AGENTS.md §17)."
+      "notes": "Recorded for issue #100 (audit umbrella #94). This is the consolidated, authoritative gap record; per-slice gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. Adding this entry does NOT create a model and does NOT claim formal verification of the C++ implementation (AGENTS.md \u00a717)."
     }
   ]
 }

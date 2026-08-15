@@ -217,6 +217,22 @@ sluice_internal_async_test("select_multi_worker_test")
 -- Gated to x86_64 (fiber_ctx::supported).
 sluice_internal_async_test("phase_g_backend_progress_wake_test")
 
+-- phase_g_closeout_test — Phase G final closeout: deterministic causal
+-- proofs for the commit→park wake protocol (Cases A–D: notify before arm /
+-- after arm / while parked / backend-ready-vs-notify) and the ThreadPool
+-- TP-G1..G7 race matrix (docs/design/phase-g-backend-progress-wake.md §5).
+-- Unbounded-park constructions over the production split-wait backend;
+-- epoch + seam observations only; hang watchdogs exit fail-closed (rc 70).
+sluice_internal_async_test("phase_g_closeout_test")
+
+-- phase_g_closeout_uring_test — Phase G closeout UR-G1..G7 matrix on the
+-- REAL io_uring path (kernel CQE -> ring fd -> wait_one -> reap -> Scheduler
+-- route, control-eventfd bridge, CQE-vs-interrupt races, close_admission,
+-- quiescent teardown). Kernel-pended pipe reads gate the constructions
+-- deterministically (no CQE until the test writes). Stub builds run only the
+-- evidence-mode classification (required_modes=("real",)).
+sluice_internal_async_test("phase_g_closeout_uring_test")
+
 -- select_registration_rollback_test — E13 P7 registration-failure rollback
 -- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
 -- real running Fiber; the controller-only synthetic registration-failure seam

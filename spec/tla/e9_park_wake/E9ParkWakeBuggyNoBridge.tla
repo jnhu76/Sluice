@@ -1,4 +1,4 @@
-------------------------------- MODULE E9ParkWake -------------------------------
+------------------------------- MODULE E9ParkWakeBuggyNoBridge -------------------------------
 (*
   E9 Scheduler park-admission and unified wake-source protocol
   (sluice-CORE-E9), Model P3 (decoupled wake domains).
@@ -265,8 +265,7 @@ ParkAdmitted ==
    participant's wait_one returns). *)
 BridgeEffect(newWakeEpoch) ==
     /\ wakeEpoch' = newWakeEpoch
-    /\ bridgePending' = IF BridgeFiresFromParticipant THEN TRUE
-                        ELSE bridgePending
+    /\ bridgePending' = bridgePending   \* MUTANT: bridge disabled (M1)
 
 (* W8: external thread completes a Future. Publishes externalReady, then
    signals the wake source (and bridges into a parked participant). *)

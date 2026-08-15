@@ -2,7 +2,10 @@
 
 Narrow TLA+ model of the E9 park-admission and wake-source protocol,
 realizing the architecture decision in
-`docs/adr/ADR-execution-model.md` §9.4 (Model P3, decoupled wake domains).
+`docs/adr/ADR-execution-model.md` §9.4 (Model P3, decoupled wake domains),
+updated at the Phase G closeout (2026-08-15) to the R1–R4 G1-repair rules,
+the split-wait park domain, and the Scheduler→backend interrupt bridge
+(`docs/design/phase-g-backend-progress-wake.md`).
 
 The load-bearing E9 question:
 
@@ -11,75 +14,78 @@ When may an idle Scheduler Worker commit to parking, and which state
 publications create an obligation to wake parked Workers?
 ```
 
-Answer (P3): a Worker commits to park only after a globally-coordinated
-admission (drain persistent readiness → classify → observe wake epoch →
-validate before sleep). The wake epoch closes the commit-to-physical-wait
-window; **persistent state is the lost-wake authority** (E9-Inv3). There
-are two park domains — BACKEND (the E7 MW-S2 `ctx_.wait_one()` participant,
-at most one) and SCHEDULER (the wake source, any number of Workers). A
-Worker parks on the SCHEDULER domain whenever an external-wake-capable
-wait is registered; this is the MIXED-WAKE fix (the MW-S2 participant
-yields backend-wait privilege when external wake is possible).
+Answer (P3 + Phase G): a Worker commits to park only after a globally-
+coordinated admission (drain persistent readiness → classify → observe
+wake epoch → validate before sleep). There are two park domains —
+BACKEND (`ctx_.wait_one()`, at most one participant, the E7 MW-S2 rule)
+and SCHEDULER (the wake source, any number of Workers). **Phase G
+(P5-CORRECTIVE): a SPLIT-WAIT backend (ThreadPool / real io_uring) parks
+the MW-S2 participant in the BACKEND domain for BOTH backend-only and
+MIXED-WAKE** — its progress transport is prompt, and external Scheduler
+publications reach that park through the BRIDGE
+(`signal_wake_locked → interrupt_backend_waiters`, modeled as the
+one-shot `bridgePending` with the D4-RM14 commit-to-park persistence).
+A reference (non-split) backend keeps the E9 rule: MIXED-WAKE parks on
+the SCHEDULER domain with the bounded observation return (DIV-05,
+narrowed to reference backends). R1 refuses a scheduler-domain park
+commit beside unguarded progress (no observer); R2 makes the backend
+participant election transferable (lowest ALIVE worker); R3's retire
+never loses runnable work and publishes an unconditional wake;
+R4's first-counted idle park signals the domain (the E9-LIFE-8
+convergence obligation; the contribution-aware damping is abstracted
+to that obligation).
 
 ## Files
 
-- `E9ParkWake.tla`                 — the correct protocol (Model P3 +
-  RunMode, E9-CORRECTIVE).
-- `E9ParkWake.cfg`                 — TLC config (safety invariants).
-- `E9ParkWakeLiveness.cfg`         — TLC config (liveness properties
-  E9-LIFE-2/4/7 under `LivenessSpec`).
-- `E9ParkWakeBuggyDrainParks.tla/.cfg` — negative model C (E9-CORRECTIVE):
-  the shipped Drain-park defect. Park admission admits Drain+MW-S3+
-  external-wake, and LeavePark is signal-only (no observation return).
-  Produces a `Life2Buggy` counterexample reproducing the deterministic
-  Drain-mode hang.
-- `E9ParkWakeBuggyPrePark.tla/.cfg` — negative model A: lost external wake
-  (the producer publishes the ready flag but drops the signal; LeavePark
-  is signal-only). Produces an `Inv2NoLostWake` counterexample.
-- `E9ParkWakeBuggyMixedSource.tla/.cfg` — negative model B: blind
-  backend wait (the MW-S2 participant enters the BACKEND domain even when
-  external wake is possible). Produces an `Inv7StateForm` counterexample.
+- `E9ParkWake.tla`                 — the correct protocol (P3 + RunMode +
+  Phase G R1–R4 + bridge + terminate protocol).
+- `E9ParkWake.cfg`                 — TLC config (safety, `SplitWait=TRUE`).
+- `E9ParkWakeLiveness.cfg`         — TLC config (liveness Life2/4/7/8,
+  `SplitWait=TRUE`).
+- `E9ParkWakeReference.cfg`        — TLC config (safety, `SplitWait=FALSE`
+  — the reference/legacy E9 rule retained for Fake/Sync backends).
+- `E9ParkWakeReferenceLiveness.cfg`— TLC config (liveness, reference).
+- `E9ParkWakeBuggyNoBridge.tla/.cfg` — negative model (Phase G): the
+  model-level M1 mutation — wake publications advance `wakeEpoch` but
+  never set `bridgePending`. Produces an `Inv8BridgeReachesBackendPark`
+  counterexample (a parked participant that can never observe an
+  external publication).
+- `E9ParkWakeBuggyDrainParks.tla/.cfg` — negative model C (E9-CORRECTIVE,
+  historical): the shipped Drain-park defect. `Life2Buggy`
+  counterexample.
+- `E9ParkWakeBuggyPrePark.tla/.cfg` — negative model A (historical): lost
+  external wake. `Inv2NoLostWake` counterexample.
+- `E9ParkWakeBuggyMixedSource.tla/.cfg` — negative model B (historical):
+  blind backend wait. `Inv7StateForm` counterexample.
 - `README.md`                      — this file + refinement map.
 
-NOTE: BuggyPrePark and BuggyMixedSource predate E9-CORRECTIVE and do not
-model `runMode`/`runState`. Their correspondence to the original defects
-(lost wake, blind mixed-source) remains valid; they document different
-defects than BuggyDrainParks. They are kept; do not delete them.
+NOTE: BuggyPrePark and BuggyMixedSource predate E9-CORRECTIVE and model
+the pre-Phase-G protocol; their correspondence to the original defects
+remains valid. They are kept as historical negative controls; do not
+delete them.
 
 ## Running
 
 ```
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e9_park_wake/E9ParkWake.cfg \
-  spec/tla/e9_park_wake/E9ParkWake
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e9_park_wake/E9ParkWakeLiveness.cfg \
-  spec/tla/e9_park_wake/E9ParkWake
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e9_park_wake/E9ParkWakeBuggyDrainParks.cfg \
-  spec/tla/e9_park_wake/E9ParkWakeBuggyDrainParks
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e9_park_wake/E9ParkWakeBuggyPrePark.cfg \
-  spec/tla/e9_park_wake/E9ParkWakeBuggyPrePark
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e9_park_wake/E9ParkWakeBuggyMixedSource.cfg \
-  spec/tla/e9_park_wake/E9ParkWakeBuggyMixedSource
+bash scripts/formal/verify-e9-park-wake.sh
 ```
+
+(four positive gates + four negative gates; TLC runs in an isolated
+mktemp workspace — never in this directory.)
 
 ## Model domain (finite, exhaustive TLC)
 
 ```
 Workers = {W0, W1}
 Fibers  = {F0}   (one external-wait Fiber is the load-bearing proof)
+SplitWait ∈ {TRUE, FALSE}  (CONSTANT: production split-wait vs reference)
 ```
 
 `wakeEpoch` is modeled as a 1-bit toggle (`1 - wakeEpoch`) rather than a
-monotonic natural. Every invariant reasons about `wakeEpoch #
-observedEpoch[w]` ("did a wake-relevant publication happen after I
-observed?"), which a 1-bit toggle preserves exactly. A monotonic counter
-would make the state space infinite and TLC non-terminating. (Consequence:
-two benign publishes can flip parity back — this is why Inv2's authority
-is the PERSISTENT wake predicate, not the epoch parity.)
+monotonic natural. (Consequence: two benign publishes can flip parity
+back — this is why the park-return authority in this model is the
+PERSISTENT per-domain wake state, not the epoch parity; production's
+monotonic `wake_epoch_` makes "publication ⇒ returnable" literal.)
 
 ## State dimensions
 
@@ -87,263 +93,185 @@ is the PERSISTENT wake predicate, not the epoch parity.)
 runnableVisible, runningVisible          (global executable work)
 backendOutstanding, backendReady         (backend progress)
 externalWaitRegistered, externalReady    (external Future source)
-wakeEpoch                                (1-bit toggle; authority for the
-                                          commit-to-sleep window)
+wakeEpoch                                (1-bit toggle; commit-to-sleep
+                                          window authority)
 workerPhase[w] in {Active, ParkCandidate, ParkCommitted, Parked}
 observedEpoch[w]                         (epoch at commit)
 backendWaitParticipant                   (in {NONE, W0, W1})
+bridgePending                            [PHASE G] one-shot control wake
+                                          to the backend participant
+workerAlive[w]                           [R2/R3] thread-in-loop liveness
+idleCount                                [R4] counted idle parks (0..2)
+terminateFlag                            [R3] global_terminate_ publication
 runMode   in {Drain, Live}               [E9-CORRECTIVE: invocation policy]
 runState  in {Active, ReturnedStalled, ReturnedQuiescent, Shutdown}
                                           [E9-CORRECTIVE: invocation lifetime]
 ```
 
-Persistent state is kept SEPARATE from the wake signal/epoch. The wake
-notification is NOT the source of truth (E9-Inv3).
+Init explores BOTH run modes (the pre-closeout model fixed `runMode =
+"Drain"` with no mutator, leaving every Live-conditioned property
+vacuously true — fixed at the closeout).
 
-The `runMode`/`runState` axes (E9-CORRECTIVE) are the invocation/lifetime
-dimension that the original model omitted. `ClassifyGlobalState`
-(`GlobalClass`) is SEPARATE from `SelectIdleAction` (`ParkAdmitted`,
-`ReturnStalled`, `ReturnQuiescent`): the classifier is one authoritative
-taxonomy; runMode only selects the idle action after classification.
+## Results (2026-08-15 closeout, tla2tools from the repo bootstrap)
 
-## Results
-
-| model | distinct states | depth | result |
-|-------|----------------:|------:|--------|
-| `E9ParkWake` (correct, P3+RunMode) safety | 18456 | 25 | **all invariants PASS — no error** |
-| `E9ParkWakeLiveness` (Life2/4/7) | 18528 | 25 | **all temporal properties PASS** |
-| `E9ParkWakeBuggyDrainParks` (Drain-park defect) | 18528 | 11 | **`Life2Buggy` counterexample** (the hang) |
-| `E9ParkWakeBuggyPrePark` (lost wake) | 206 | 6 | **`Inv2NoLostWake` counterexample** |
-| `E9ParkWakeBuggyMixedSource` (blind backend) | 644 | 8 | **`Inv7StateForm` counterexample** |
+| model / config | result |
+|----------------|--------|
+| `E9ParkWake` safety, split-wait (14472 distinct states) | **all invariants PASS — no error, no deadlock** |
+| `E9ParkWake` liveness, split-wait | **Life2/4/7/8 PASS** |
+| `E9ParkWake` safety, reference (15376 distinct states) | **all invariants PASS** |
+| `E9ParkWake` liveness, reference | **Life2/4/7/8 PASS** |
+| `E9ParkWakeBuggyNoBridge` | **`Inv8BridgeReachesBackendPark` counterexample** |
+| `E9ParkWakeBuggyDrainParks` | **`Life2Buggy` counterexample** |
+| `E9ParkWakeBuggyPrePark` | **`Inv2NoLostWake` counterexample** |
+| `E9ParkWakeBuggyMixedSource` | **`Inv7StateForm` counterexample** |
 
 ### Correct-model safety invariants (all PASS)
 
-- **E9-Inv1** Park commit requires no executable work — STRUCTURAL
-  (FinalParkRecheckAndCommit precondition `~ExecutableWork`). Not a global
-  state invariant: work may become visible after a valid park (spec §12
-  warning). Inv2 catches the post-commit case.
-- **E9-Inv2** `Inv2NoLostWake`: if any persistent wake is due
-  (`PersistentWakeDue`), every parked Worker's `LeavePark` is enabled.
-  Authority = persistent state (not epoch parity, because of the toggle).
-- **E9-Inv3** Wake signal is not authority — structural (LeavePark and
-  the producers never erase persistent state via the signal path).
+- **E9-Inv2** `Inv2NoLostWake` (Phase G, domain-aware): a parked Worker is
+  returnable whenever ITS domain's wake authority owes a return — the
+  backend participant on `backendReady` (its own transport) or
+  `bridgePending` (the bridge); a scheduler-parked worker on
+  scheduler-domain persistent publications or the invocation end. A quiet
+  resident park is legal and stays.
 - **E9-Inv4** `Inv4ExternalReadyWakes`: registered external-ready while
-  parked ⇒ `LeavePark` enabled. (Sub-case of Inv2; stated for clarity.)
-- **E9-Inv6** `Inv6OneBackendParticipant`: `backendWaitParticipant` is
-  NONE or a single Worker (structural — single variable, not a set). At-
-  most-one backend participant is by construction; other Workers may park
-  in the SCHEDULER domain concurrently (P3).
-- **E9-Inv7** MIXED-WAKE no blind backend wait — TRANSITION OBLIGATION,
-  structural in EnterPhysicalPark's BACKEND-branch precondition
-  `~ExternalWakePossible`. The state form (`Inv7StateForm`) is NOT a true
-  invariant of the correct protocol (a Worker may lawfully enter BACKEND
-  before an external wait is registered, then a Fiber running on another
-  Worker may register one); it is kept ONLY so the BuggyMixedSource model
-  can prove the defect makes the blind wait REACHABLE.
-- **E9-Inv8/9/10** structural (shutdown advances the epoch; spurious wake
-  re-drains via LeavePark's persistent clauses; park state is never
-  conflated with quiescence — there is no Quiescent variable).
+  parked ⇒ returnable (sub-case of Inv2 + Inv8 for the participant).
+- **E9-Inv6** `Inv6OneBackendParticipant`: at most one backend
+  participant, and it is ALIVE (R2: a retired worker can never remain the
+  elected participant).
+- **E9-Inv7** MIXED-WAKE authority — structural in `EnterPhysicalPark`'s
+  BACKEND-branch precondition (`~ExternalWakePossible` at commit under
+  `~SplitWait`). Under `SplitWait` the mixed-wake BACKEND park is the
+  design; the blind-wait hazard is closed by Inv8 + Life7 instead.
+- **Inv8BridgeReachesBackendPark** [PHASE G]: while the backend
+  participant is parked and a scheduler-domain publication is due, the
+  one-shot control wake is still pending (consumed exactly by the
+  participant's own return). `backendReady` is excluded — it is the
+  backend domain's own transport.
+- **Inv9NoStrandedRunnable** [R1/R3, the G1 strand]: runnable work
+  always has a reachable observer — a live not-yet-parked Worker, the
+  backend participant, or an ended invocation. The deterministic
+  production reproducer is `phase_g_g1_stranded_runnable_park_stall_-
+  reproducer`.
+- **Inv10BackendProgressHasObserver** [R1, split-wait domain]: accepted
+  or ready backend work always has an observer. The REFERENCE domain is
+  exempt by design (its bounded observation return IS the observation
+  authority — DIV-05 narrowed to reference backends).
+- **InvLife1** scoped to the reference domain under SplitWait (the
+  Drain-MW-S3 park-return obligation is temporal there — Life2).
 
-### E9-LIFE run-lifetime properties (E9-CORRECTIVE, all PASS)
+### Liveness properties (all PASS)
 
-- **E9-LIFE-1** `InvLife1DrainNoMW3Park` (DECISION OBLIGATION): a Drain
-  run never STRANDS a Parked Worker under MW-S3 — every Parked Worker
-  has `LeavePark` enabled (bounded observation return).
-- **E9-LIFE-2** `Life2DrainMWS3Returns` (TEMPORAL): a Drain run that
-  reaches MW-S3 eventually ends (Stalled/Quiescent/Shutdown) or leaves
-  MW-S3 via legitimate progress. No producer/backend/shutdown fairness.
-- **E9-LIFE-3** `InvLife3LiveExternalParkAdmitted` (DECISION OBLIGATION):
-  in Live + MW-S3 + effective external wake, park IS admitted.
-- **E9-LIFE-4** `Life4LiveNonWakeableMWS3Returns` (TEMPORAL): Live +
-  MW-S3 without effective external wake ends the run or leaves MW-S3.
-- **E9-LIFE-5** `InvLife5QuiescenceClassifierDefined` (STATE INVARIANT):
-  `ReturnedQuiescent` implies no executable work, no backend, no wait
-  registration (quiescence is classifier-defined, not park-defined).
-- **E9-LIFE-6** (STRUCTURAL): no action mutates `runMode` because a wake
-  handle is created/copied/retained/signaled/invalidated.
-- **E9-LIFE-7** `Life7ExternalReadyEventuallyDrained` (TEMPORAL): after
-  Live + parked + external-ready published, externalReady is eventually
-  drained (or the run ends).
-- **E9-LIFE-8** (TRANSITION OBLIGATION): the SCHEDULER-domain bounded
-  observation park has an always-enabled `LeavePark` (the bounded
-  `wake_cv_` timeout returns regardless of a signal). This is the
-  authority for backend observation in MIXED-WAKE.
-- **E9-LIFE-9** (STRUCTURAL): the external producer is signal-only
-  (ExternalReadyPublish changes only `externalReady` + `wakeEpoch`).
-- **E9-LIFE-10** (STRUCTURAL): E7/E8 publication/ownership protocols
-  remain invariant (closed; E9 does not modify them).
+- **Life2** Drain MW-S3 eventually returns (no producer/backend
+  fairness).
+- **Life4** Live non-wakeable MW-S3 eventually returns.
+- **Life7** external-ready eventually drained after publication — under
+  `SplitWait` this is the BRIDGE's liveness obligation (the parked
+  participant may be the only Worker; the bridge is then the only
+  delivery path). The model-level M1 detector.
+- **Life8BackendReadyEventuallyObserved** [PHASE G]: the parked
+  participant eventually observes backend readiness (its own transport;
+  no periodic wake, no reverse bridge).
 
-### BuggyPrePark counterexample (lost wake)
+Fairness: LeavePark, ReturnStalled/Quiescent, Abandon, EnterPhysicalPark,
+both retire paths, election progress (Begin/Commit), and the unconditional
+loop-top drains (FairDrain). NO producer/backend/shutdown fairness is
+assumed for the return properties.
 
-```
-State 5: SuspendFiber registers the external wait.
-State 6-7: a Worker elects + commits + physically parks (externalReady
-           still FALSE at commit — admission preconditions met).
-State 8: ExternalReadyPublish sets externalReady=TRUE but does NOT
-        advance wakeEpoch (the signal is LOST).
-        => Inv2 violated: PersistentWakeDue is true (externalReady /\
-           externalWaitRegistered), but LeavePark is signal-only and the
-           signal was dropped — the parked Worker can never leave.
-```
+## Phase G refinements over the pre-closeout model
 
-This is the classic pre-park / lost-notification race: a publication that
-happens after the Worker committed to park but whose notification is
-lost. The correct model closes it by (a) LeavePark re-draining persistent
-state, and (b) the wake epoch being advanced by every wake-relevant
-producer.
+1. **SplitWait constant** — one model covers the production split-wait
+   rule (bridge + backend-domain mixed park) and the reference E9 rule
+   (scheduler-domain mixed park + bounded observation return).
+2. **bridgePending** — the bridge + D4-RM13 one-shot + D4-RM14
+   commit-to-park arm as one boolean: set by every wake publication while
+   a committed/parked participant exists, consumed exactly by the
+   participant's park return. A bump between the MW-S2 commit and the
+   physical park is still delivered to the FIRST park.
+3. **R1 refuse** — scheduler-domain park commits refuse beside unguarded
+   progress (evaluated excluding the committing Worker's own in-flight
+   admission, mirroring the production wake-domain park commit); the
+   refusal signals the domain.
+4. **R2 transferable election** — the BACKEND branch requires
+   `w = LowestAlive`.
+5. **R3 retire split** — `ParticipantNoProgressExit` (the interrupted
+   0-progress participant exit; the only legal exit beside outstanding
+   backend work — the E4/E5 caller-re-entry boundary) and
+   `RetireWorkerQuiescent`; both publish `terminateFlag`
+   (global_terminate_) and an unconditional wake, and never lose
+   runnable work.
+6. **R4 not-last signal** — the first counted idle park bundles the
+   domain signal (the E9-LIFE-8 convergence obligation).
+7. **Executor guards** — routing/draining actions require a live Active
+   Worker (they run inside worker loops); the external producer and the
+   backend's own readiness stay unguarded.
+8. **Init explores both run modes** (fixes the pre-closeout vacuity).
 
-### BuggyMixedSource counterexample (blind backend wait)
+## Refinement map (TLA+ → production; Phase G rows in bold)
 
-```
-State 4: SubmitBackend (backendOutstanding := TRUE).
-State 5: SuspendFiber registers the external wait (backendOutstanding
-           stays TRUE -> MIXED-WAKE).
-State 6-7: a Worker elects + commits + physically parks.
-State 8: EnterPhysicalPark chooses the BACKEND domain (defect: the
-           ~ExternalWakePossible guard is omitted), so
-           backendWaitParticipant = W0 while externalWaitRegistered = TRUE.
-        => Inv7StateForm violated: ExternalWakePossible /\
-           backendWaitParticipant # NONE. The MW-S2 participant is
-           blocked on backend progress only; an external-ready
-           publication cannot interrupt it (MIXED-WAKE strand).
-```
+| Formal concept/action | Production path | authority / domain |
+| --------------------- | --------------- | ------------------ |
+| `runMode` | `run(n)`→drain, `run_live(n)`→live | invocation lifetime |
+| `runState` | run-return classification | invocation lifetime |
+| `GlobalClass` | `Scheduler::classify_locked()` | global classifier |
+| `ParkAdmitted` | idle-action branch (incl. `~terminateFlag`) | idle-action selection |
+| `ReturnStalled` / `ReturnQuiescent` | run return paths (terminate publications) | run lifetime |
+| `wakeEpoch` | `Scheduler::wake_epoch_` (monotonic in production) | commit-to-sleep window |
+| `observedEpoch[w]` | `WorkerState::observed_epoch` | per-Worker park predicate |
+| **`bridgePending`** | **`interrupt_backend_waiters` control epoch + `arm_committed_wait` floor (D4-RM14) + one-shot baseline (D4-RM13)** | **the Phase G bridge** |
+| **`SplitWait`** | **`AsyncIoContext::has_split_wait_capability()` (wait_source() != null)** | **park-domain selection** |
+| **R1 refuse (commit + Abandon signal)** | **`unguarded_progress_pending_locked()` recheck at `park_on_wake_source` commit** | **progress-observer invariant** |
+| **R2 `LowestAlive`** | **MW-S2 Phase-A lowest-id alive election** | **transferable election** |
+| **R3 retires + `terminateFlag`** | **worker-loop exit retire + `global_terminate_` + unconditional `signal_wake_locked`** | **departure publication** |
+| **R4 `idleCount` + not-last signal** | **`idle_workers_` dance count + not-last `signal_wake_locked` (contribution-aware damping abstracted)** | **idle-dance convergence** |
+| `BeginParkCandidate`/`FinalParkRecheckAndCommit` | MW-S2 two-phase admission + park commit | admission |
+| `EnterPhysicalPark` | `park_on_wake_source` / `ctx_.wait_one()` | physical wait |
+| `LeavePark` | park return → re-drain → reclassify | wake observation |
+| `SignalWake` (BridgeEffect) | `signal_wake_locked` (+ bridge when gated) | wake-source signal |
+| `ExternalReadyPublish` | external publication + `SchedulerWakeHandle::notify()` | external persistent + signal |
+| `PublishRunnable` / drains | `route_runnable_locked` + drains (under `global_mtx_` + signal) | routing |
+| `BackendReadyPublish` | backend terminal → `signal_progress` (NO wake-epoch advance; no reverse bridge) | backend persistent |
+| `SubmitBackend` | `ctx_.submit_*` | backend op ingress |
+| `ShutdownSignal` | stop path terminate + wake | termination wake |
+| `backendWaitParticipant` | `admission_ == committed` + `admission_owner_` | at-most-one backend waiter |
+| `ExternalWakePossible` | `external_wake_possible_locked()` | external-wake-capability test |
 
-The correct model's EnterPhysicalPark BACKEND branch requires
-`~ExternalWakePossible`, forcing the participant onto the SCHEDULER
-domain (wake-epoch wakeable) whenever an external wait is registered.
-
-### BuggyDrainParks counterexample (E9-CORRECTIVE — the shipped hang)
-
-```
-State 1-3: PublishRunnable -> RunFiber -> SuspendFiber registers the
-            external wait (runMode = Drain).
-State 4-9:  the run reaches MW-S3 (externalWaitRegistered = TRUE,
-            no executable work, no backend outstanding).
-State 9-10: a Worker elects (BeginParkCandidateBuggy) + commits
-            (FinalParkRecheckAndCommitBuggy) + enters physical park
-            (EnterPhysicalParkBuggy). DEFECT: ParkAdmittedBuggy admits
-            the Drain+MW-S3+external-wake park; the EnterPhysicalPark
-            predicate has no Drain/MW-S3 idle-action re-selection.
-State 11:   both Workers Parked under MW-S3, no producer acts.
-            LeaveParkBuggy is signal-only -> not enabled (no wake due).
-            => Life2Buggy violated: the Drain run is stuck with Parked
-               workers under MW-S3 and NEVER reaches a terminal state.
-               This is the deterministic Drain-mode hang.
-```
-
-The correct model closes this by (a) `ParkAdmitted` admitting MW-S3 park
-ONLY in Live + effective external wake (Drain returns Stalled), (b)
-`EnterPhysicalPark` re-selecting the idle action (a Drain worker that
-finds MW-S3 at the physical wait returns to Active → ReturnStalled), and
-(c) `LeavePark` always-enabled (the bounded observation return,
-E9-LIFE-8), so no parked worker can be stranded.
-
-## Liveness (E9-CORRECTIVE — now in the gate cfg)
-
-`E9ParkWakeLiveness.cfg` checks the load-bearing temporal properties
-under `LivenessSpec`:
+### Physical wake sets per blocking action (Phase G)
 
 ```
-WF_vars(LeavePark(w))      -- a woken Worker eventually leaves park
-WF_vars(ReturnStalled)     -- the run eventually returns Stalled
-WF_vars(ReturnQuiescent)   -- the run eventually returns Quiescent
-WF_vars(AbandonParkCandidate(w))
-WF_vars(EnterPhysicalPark(w))  -- the bounded observation return
+SCHEDULER-domain park (park_on_wake_source):
+    wake epoch advance / terminateFlag (global_terminate_) / routed inbox;
+    bounded observation return ONLY for ~SplitWait reference parks
+    (the 2ms interval is the reference backends' MIXED-WAKE progress
+    authority — DIV-05 narrowed; split-wait parks are deadline-bounded
+    only).
+
+BACKEND-domain park (ctx_.wait_one, MW-S2; split-wait: backend-only AND
+mixed):
+    progress epoch / ring fd / ready cv (the backend's own transport);
+    the BRIDGE: control epoch + control eventfd, fired by every Scheduler
+    wake publication while the participant is committed/parked
+    (backend_wait_active_ gate).
 ```
-
-NO producer/backend/shutdown fairness is assumed for the Drain-return
-properties. `Life7ExternalReadyEventuallyDrained` is conditioned on
-externalReady having ALREADY been published (producer fairness is not
-used to make publication happen).
-
-## Refinement map (TLA+ → production, E9 spec §17, E9-CORRECTIVE extended)
-
-| Formal concept/action | Production path / proposed seam | authority / domain |
-| --------------------- | ------------------------------- | ------------------ |
-| `runMode` | explicit `RunMode{drain,live}` invocation policy; `run(n)`→drain, `run_live(n)`→live | invocation lifetime contract |
-| `runState` | invocation classification (the `run()` return path: Active→ all-idle final recheck sets `global_terminate_` and returns) | invocation lifetime |
-| `GlobalClass` (MW-S1/S2/S3/QUIESCENT) | `Scheduler::classify_locked()` (unchanged by runMode) | global classifier |
-| `SelectIdleAction` / `ParkAdmitted` | the worker-loop idle-action branch after `classify_locked`, gated by `run_mode` | idle-action selection |
-| `ReturnStalled` | Drain MW-S3 (and Live MW-S3 non-external) return/termination path | run lifetime |
-| `ReturnQuiescent` | true quiescence return path | run lifetime |
-| `wakeEpoch` | `Scheduler::wake_epoch_` (`std::atomic`, advanced under `wake_mtx_`) | wake-source authority (commit-to-sleep window) |
-| `observedEpoch[w]` | `WorkerState::observed_epoch` (recorded under `wake_mtx_` at commit) | per-Worker park predicate |
-| `BeginParkCandidate` | `worker_loop`: no-local-work branch → set `admission_ = candidate` under `global_mtx_` | E7 admission reused |
-| `FinalParkRecheckAndCommit` | E7 Phase-B re-drain + reclassify + (E9 NEW) record `observed_epoch` + epoch validation | commit decision |
-| `EnterPhysicalPark` | `park_on_wake_source(w)` (SCHEDULER domain) / `ctx_.wait_one()` (BACKEND domain); E9-CORRECTIVE: idle-action re-selection at the physical wait | physical wait |
-| `LeavePark` | `wake_cv_.wait_for` bounded-timeout return OR signal return → re-drain, reclassify, loop | wake observation |
-| `ObservationTimeout` | the bounded `wake_cv_.wait_for(... 2ms ...)` timeout — LOAD-BEARING for MIXED-WAKE backend observation (E9-LIFE-8) | bounded observation return |
-| `SignalWake` | `Scheduler::signal_wake_locked()` under `wake_mtx_`: `++wake_epoch_`; `wake_cv_.notify_all()` | wake-source signal |
-| `ExternalReadyPublish` | `Future::complete_with` (sets `ready_`) → `SchedulerWakeHandle::notify()` → `signal_wake_locked()` | external persistent + signal |
-| `DrainExternalReady` | `Scheduler::wake_ready_flags_locked()` (erases reg, `make_runnable`, `route_runnable_locked` by `WaitReg.owner`) | Scheduler drains |
-| `PublishRunnable` | existing `spawn`/`route_runnable_locked` + (E9 NEW) `signal_wake_locked()` | runnable publication + signal |
-| `BackendReadyPublish` | `ThreadPoolBackend`/`UringAsyncBackend` reap → `Completion` ready | backend persistent |
-| `DrainBackendReady` | `Scheduler::wake_ready_completions_locked()` (erases reg, `make_runnable`, route by `WaitReg.owner`) | Scheduler drains |
-| `EnterBackendWait` | E7 MW-S2 committed participant `ctx_.wait_one()` — unchanged when ~external-wake-capable | E7 backend wait |
-| `BackendWaitReturn` | `ctx_.wait_one()` return → re-drain | backend wake |
-| `SubmitBackend` | Fiber body `ctx_.submit_*` (sets `Completion` outstanding, `ctx_.outstanding()>0`) | backend op ingress |
-| `RunFiber`/`SuspendFiber`/`FinishFiber` | `run_next_on` / `await_*` / `fiber_entry_bridge` (E7/E8, unchanged) | Fiber lifecycle |
-| `ShutdownSignal` | `global_terminate_ = true` + (E9) `signal_wake_locked()` + `inbox_cv.notify_all()` | termination wake |
-| `backendWaitParticipant` | E7 `admission_ == committed` + `admission_owner_` (the single MW-S2 participant) | at-most-one backend waiter |
-| `ExternalWakePossible` | `!waiting_ready_.empty()` (a registered ready-flag wait) | external-wake-capability test |
-| `LatentExternalWork` | a `waiting_ready_` entry whose flag loads true (drained by `wake_ready_flags_locked`) | latent executable work |
-
-### External-producer boundary (E9 §18, mandatory review)
-
-The external producer touches ONLY:
-
-```
-Future::complete_with  (publishes ready_)
-SchedulerWakeHandle::notify  (signal_wake_locked: ++wake_epoch_, notify)
-```
-
-It MUST NOT call `make_runnable`, `route_runnable_locked`, push to
-`local_runnable`, erase a wait registration, or call any `AsyncIoContext`
-method. The weak/generation-invalidated wake handle (ADR §9.4.10) makes a
-post-Scheduler-destruction `notify()` a safe no-op.
-
-### Physical wake sets per blocking action (E9-CORRECTIVE §16)
-
-For every blocking action, the physical signal wake set is explicit:
-
-```
-SCHEDULER-domain bounded park (park_on_wake_source, wake_cv_.wait_for 2ms):
-    direct signal wake set:
-        wake epoch advance (route_runnable_locked / notify_external_wake)
-        shutdown (global_terminate_)
-    bounded observation return:
-        the 2ms wake_cv_ timeout (LOAD-BEARING for MIXED-WAKE backend
-        observation, E9-LIFE-8 / ADR §9.4.7.1)
-
-BACKEND-domain park (ctx_.wait_one, MW-S2 backend-only):
-    direct signal wake set:
-        backend CV (ThreadPoolBackend cv_) / io_uring CQE / Fake poll
-    (NOT the Scheduler wake source; backend readiness does not directly
-     signal wake_cv_ in the E9 baseline.)
-
-MIXED-WAKE (backendOutstanding + external wait registered):
-    the participant parks on the SCHEDULER domain (NOT backend wait_one),
-    so backend readiness is observed via the bounded observation return,
-    NOT a direct physical signal to wake_cv_.
-```
-
-The unification across disjoint wake domains is **post-observation drain +
-authoritative global reclassification**, NOT one physical wake primitive.
-Do NOT claim unified backend-to-wake_cv notification (ADR §9.4.7.1).
 
 ## What this model does NOT cover
 
-- E10 WaitNode / cancellation-safe wait queue (next frontier).
-- A backend-facing interruptible wait seam (P5; reserved as E9-B1 only if
-  P3 proves insufficient under the load-bearing tests).
+- E10 WaitNode / cancellation-safe wait queue (covered by e10_waitnode).
 - eventfd-in-ring (P6; deferred).
 - wake_one routing refinement (notify_all baseline; ADR §9.4.8).
 - Chase-Lev / lock-free deques (E16).
-- Timers (E11).
+- Timers (E11, e11_timer_wait).
+- The R4 contribution-aware damping refinement (anti-livelock
+  optimization; its convergence obligation is modeled, the damping
+  discipline is proven by the deterministic production tests).
+- E4/E5 caller re-entry after a no-progress return (the run-return
+  boundary is modeled; the caller's re-entry policy is out of scope).
 
 ## Reproducible verification
 
-The committed `.cfg` files reproduce the gate above from a fixed
-`tla2tools.jar`. No ad hoc flags. The E9 stability runner
-(`scripts/verify-e9-stability.sh`, added in E9-C) covers the production
-stress gates; the TLA+ gate is the formal correctness proof.
+The committed `.cfg` files reproduce the gate above from the repo
+bootstrap jar. The authoritative entry point is
+`scripts/formal/verify-e9-park-wake.sh` (also run by
+`python3 scripts/formal/verify.py smoke|all`); the TLA+ gate supplements,
+and does not replace, the deterministic production tests
+(`tests/phase_g_closeout_test.cpp`, `tests/phase_g_closeout_uring_test.cpp`,
+`tests/phase_g_backend_progress_wake_test.cpp`).

@@ -109,14 +109,15 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | Field | Value |
 |-------|-------|
 | ID | DIV-04 |
-| Status | Approved |
+| Status | Amended (Phase G, 2026-08-15) |
 | Introduced by | ADR-execution-model §9.4.1 P3; E9-CORRECTIVE |
-| Governing ADR | ADR-execution-model |
+| Governing ADR | ADR-execution-model (§9.4.7.2 Phase G amendment) |
 | Reason | Zig backend completion directly makes the waiting task runnable via the Io vtable. Sluice decouples: backend publishes to ready queue; Scheduler observes via poll/wait_one/2ms interval. This avoids a lock-ordering hazard (backend mtx → Scheduler global_mtx) and keeps the backend interface minimal. |
-| Benefit | No upward lock coupling; backend remains a simple leaf; Scheduler retains routing authority. |
-| Cost | Up to 2ms observation latency in MIXED-WAKE mode; no instant backend→Fiber resume. |
-| Current evidence | ADR §9.4.7.1 (2ms is protocol authority for MIXED-WAKE); `scheduler.hpp` worker loop (poll → wake_ready_completions_locked). |
-| Revisit trigger | Phase G roadmap (backend progress signal / unified wake); if latency-sensitive workloads require sub-ms backend wake. |
+| Amendment | The decoupling is PRESERVED, but Phase G narrowed its scope for split-wait production backends (ThreadPool, real io_uring): a Scheduler wake publication (`signal_wake_locked`) now reaches a participant parked in `ctx_.wait_one()` through `backend_wait_active_` -> `interrupt_backend_waiters()` — a control-epoch interrupt on the wait source, invoked after the wake-epoch publication and never under a backend lock. The backend still never calls into the Scheduler and never acquires `global_mtx_`; the upward direction is Scheduler→backend-park interrupt, not backend→Scheduler. Reference poll-driven backends (Fake, Sync/Synthetic) keep the original decoupled shape with the bounded observation interval. |
+| Benefit | No upward lock coupling (unchanged, including for the bridge); backend remains a simple leaf; Scheduler retains routing authority; MIXED-WAKE backend latency on production backends is now prompt (no observation interval as authority). |
+| Cost | Reference backends retain up to 2ms observation latency in MIXED-WAKE (poll-driven readiness cannot self-notify — intentional). The bridge adds one acquire-load to every Scheduler wake publication when no participant is parked, and a control-epoch bump + notify when one is. |
+| Current evidence | ADR-execution-model §9.4.7.2; `scheduler.cpp` `signal_wake_locked` bridge; `docs/architecture/phase-g-compliance-gate.md`; `tests/phase_g_closeout_test.cpp` (Cases A–D); `tests/phase_g_closeout_uring_test.cpp` (UR-G1..G7); `spec/tla/e9_park_wake/` (bridge model). |
+| Revisit trigger | A future backend that is neither split-wait nor poll-driven (P5 remains reserved for that case). |
 
 ---
 
@@ -125,14 +126,15 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | Field | Value |
 |-------|-------|
 | ID | DIV-05 |
-| Status | Approved |
+| Status | Amended (Phase G, 2026-08-15) |
 | Introduced by | ADR-execution-model §9.4.7.1 E9-CORRECTIVE |
-| Governing ADR | ADR-execution-model |
+| Governing ADR | ADR-execution-model (§9.4.7.2 Phase G amendment) |
 | Reason | In MIXED-WAKE mode (backend outstanding + external-wake-capable wait), the MW-S2 participant parks on the Scheduler domain (wake_cv_) with a 2ms timeout. Backend progress is observed when the timeout expires. This is the protocol authority for backend progress in this mode — not merely "defensive." |
-| Benefit | Avoids split-brain between backend cv and scheduler cv; single park point for mixed waits. |
-| Cost | 2ms worst-case latency for backend completion in MIXED-WAKE; periodic CPU wake even if no progress. |
-| Current evidence | ADR §9.4.7.1; scheduler worker loop implementation. |
-| Revisit trigger | If backend wake integration is designed (Phase G); if 2ms latency is unacceptable for a workload. |
+| Amendment | On split-wait production backends (ThreadPool, real io_uring), MIXED-WAKE now parks the participant in the BACKEND domain (`ctx_.wait_one()`) for both wake kinds, with external wakes delivered by the Scheduler interrupt bridge. The interval there is a CONDITION-DRIVEN park cap only — applied when an active deadline (E11 timer pump) or a registered level-triggered ready-flag wait (E5-A2 poll resolution) demands a bounded re-drain; with neither, the park is unbounded and event-driven (no fixed-interval latency or periodic CPU wake). The interval remains PROTOCOL AUTHORITY for reference poll-driven backends (Fake, Sync/Synthetic), which cannot self-notify readiness. |
+| Benefit | Single park point for mixed waits is preserved; production path gains prompt backend progress and prompt external wake; no busy-spin (the interrupt is one-shot per invocation). |
+| Cost | Reference backends keep the 2ms worst-case latency and periodic wake in MIXED-WAKE (documented reference exemption). |
+| Current evidence | ADR-execution-model §9.4.7.2; `scheduler.cpp` MW-S2 park-domain decision + `max_park` derivation (unbounded sentinel by default); `ready_wait_source.hpp` bounded-wait capability; `docs/architecture/phase-g-compliance-gate.md`; closeout causal tests. |
+| Revisit trigger | If a reference backend gains a self-notifying wait source; if a workload on a reference backend requires sub-2ms MIXED-WAKE latency (that would be an application-triggered foundation change per the freeze policy). |
 
 ---
 
@@ -289,8 +291,8 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | DIV-01 | Approved | Context shape |
 | DIV-02 | Implemented (Phase B reference; Phase E ThreadPool; Phase D Uring) | Operation storage ownership |
 | DIV-03 | Resolved (Phase E) | Backend execution model |
-| DIV-04 | Approved | Wake integration |
-| DIV-05 | Approved | Observation interval |
+| DIV-04 | Amended (Phase G) | Wake integration |
+| DIV-05 | Amended (Phase G) | Observation interval |
 | DIV-06 | Approved | Durability ops |
 | DIV-07 | Approved | Backend dispatch |
 | DIV-08 | Approved | Scope |

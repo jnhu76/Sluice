@@ -313,36 +313,71 @@ MW-S3: globally idle + no backend outstanding + unresolved waits → mode-depend
 QUIESCENT: no work, no waits → return
 ```
 
-### 4.3 Park domains (E9 P3)
+### 4.3 Park domains (E9 P3; Phase G split-wait amendment)
 
 ```text
 BACKEND domain:   ctx_.wait_one() — at most one worker (E7 rule)
-SCHEDULER domain: wake_cv_.wait_for(2ms) — any number of workers
+SCHEDULER domain: wake_cv_ park (bounded by the 2ms interval) — any number of workers
 
-MIXED-WAKE (backend outstanding + external-wake-capable wait registered):
-    → MW-S2 participant parks on SCHEDULER domain (NOT backend)
-    → backend progress observed by 2ms bounded observation interval
-    → external wake observed immediately via wake_cv_
+Production split-wait backends (ThreadPool ReadyWaitSource, real-liburing
+UringWaitSource — supports_bounded_wait()):
+    MIXED-WAKE parks the BACKEND domain for BOTH wake kinds. The MW-S2
+    commit arms the backend wait (arm_committed_wait), publishes
+    backend_wait_active_, and parks in ctx_.wait_one(max_park). External
+    Scheduler wakes reach the parked participant through the bridge:
+    signal_wake_locked -> backend_wait_active_ -> interrupt_backend_waiters
+    (control-epoch bump + notify). Backend progress arrives through the
+    wait source's own epoch. The 2ms interval applies ONLY when an active
+    deadline demands a bounded park cap; it is defense-in-depth, not the
+    authority, on this path.
+
+Reference poll-driven backends (Fake, Sync/Synthetic):
+    MIXED-WAKE retains the E9 P3 shape — the participant parks on the
+    SCHEDULER domain and observes backend progress by the bounded
+    observation interval. Their readiness cannot self-notify (poll-driven),
+    so the interval remains protocol authority there (DIV-05 reference
+    exemption, Phase G amended).
 ```
 
-### 4.4 The 2ms backstop
+### 4.4 The 2ms backstop (Phase G closeout verdict)
 
 The 2ms bounded observation interval in Scheduler-domain park is:
-- **Protocol authority** for backend progress observation in MIXED-WAKE mode
-  (per ADR §9.4.7.1 E9-CORRECTIVE)
+- **Protocol authority** for backend progress observation in MIXED-WAKE on
+  the reference poll-driven backends only (per ADR §9.4.7.1 E9-CORRECTIVE,
+  Phase G amendment)
 - **Defense-in-depth** for lost wakes in non-MIXED Scheduler-domain park
+- **Defense-in-depth, condition-driven only** for MIXED-WAKE on split-wait
+  production backends: the park cap applies only when a condition genuinely
+  demands a bounded re-drain — an active deadline (E11 timer pump) or a
+  registered level-triggered ready-flag wait (E5-A2 poll resolution, 2ms).
+  With neither present the park is the unbounded sentinel and progress /
+  bridge wakes it through the epoch / control-interrupt transport — there is
+  no fixed-interval polling tax on this path
 - NOT the primary wake mechanism for external producers (wake epoch is)
 - NOT a busy poll (it is a bounded timed wait on a condition variable)
 
-### 4.5 Backend completion → Scheduler wake
+### 4.5 Backend completion → Scheduler wake (Phase G as-built)
 
-In the current implementation:
-- Backend completion does **NOT** directly signal the Scheduler wake source
-- Backend readiness is observed by:
-  - `poll()` during MW-S1 (non-blocking, every worker loop iteration)
-  - `wait_one()` return during MW-S2 backend-domain park
-  - 2ms observation interval expiry during MIXED-WAKE Scheduler-domain park
+- On split-wait production backends, backend readiness signals the READY
+  domain (`ReadyWaitSource::signal_progress` / uring re-poll signal), and a
+  parked MW-S2 participant observes it through its `ctx_.wait_one()` park —
+  prompt, no observation interval.
+- External Scheduler wakes reach a parked backend participant through the
+  bridge: `signal_wake_locked` publishes the wake epoch, then (acquire-load
+  of `backend_wait_active_`) calls `interrupt_backend_waiters()` — a
+  control-epoch bump plus the wait source's interrupt transport (cv notify /
+  control-fd poll wake). The interrupted `wait_one` returns; the
+  participant re-drains both domains and reclassifies. One-shot by
+  construction: a later invocation snapshots the advanced control epoch and
+  parks normally (no busy-spin).
+- The MW-S2 commit-to-park window is closed by the D4-RM13 invocation-level
+  control baseline plus the armed floor (`arm_committed_wait` /
+  `consume_committed_wait`): a stop or external wake landing between the
+  commit and the park is observed by that invocation, not rebaselined away.
+- `poll()` during MW-S1 remains non-blocking; `Batch::await_one` and
+  op_helpers park through the same `ctx_.wait_one()` authority.
 - External producers signal via `SchedulerWakeHandle::notify()` → wake epoch
+  (and, if a participant is parked in the backend domain, the bridge above).
 - **Phase F1 (issue #98) identity route:** an arena-backed reap with a
   registered Scheduler waiter calls the Scheduler-owned `ReadyRoutingSink`
   with the by-value `ReadyEvent`; the sink only marks the record delivered
