@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # verify-e9-park-wake.sh — E9 park/wake protocol formal gate.
 #
-#   E9ParkWake (safety)          -> all invariants PASS
-#   E9ParkWakeLiveness           -> liveness PASS
-#   BuggyDrainParks              -> counterexample (liveness property violated)
-#   BuggyMixedSource             -> Inv7StateForm violated
-#   BuggyPrePark                 -> Inv2NoLostWake / Inv4ExternalReadyWakes violated
+#   E9ParkWake (safety, split-wait)     -> all invariants PASS
+#   E9ParkWake (liveness, split-wait)   -> liveness PASS
+#   E9ParkWake (reference safety)       -> non-split E9 rule PASS (DIV-05)
+#   BuggyDrainParks                     -> counterexample (liveness property violated)
+#   BuggyMixedSource                    -> Inv7StateForm violated
+#   BuggyPrePark                        -> Inv2NoLostWake / Inv4ExternalReadyWakes violated
+#   BuggyNoBridge (Phase G)             -> Inv8BridgeReachesBackendPark violated
+#                                         (model-level M1: bridge disabled)
 #
 # Source-safe: TLC runs in an isolated mktemp workspace.
 set -euo pipefail
@@ -84,14 +87,18 @@ expect_cex() {
 
 rc=0
 echo "=== E9 Park/Wake formal gate (workers=$workers) ==="
-expect_pass "E9ParkWake [safety]" E9ParkWake E9ParkWake.cfg safety || rc=1
-expect_pass "E9ParkWake [liveness]" E9ParkWake E9ParkWakeLiveness.cfg liveness || rc=1
+expect_pass "E9ParkWake [safety, split-wait]" E9ParkWake E9ParkWake.cfg safety || rc=1
+expect_pass "E9ParkWake [liveness, split-wait]" E9ParkWake E9ParkWakeLiveness.cfg liveness || rc=1
+expect_pass "E9ParkWake [safety, reference]" E9ParkWake E9ParkWakeReference.cfg reference || rc=1
+expect_pass "E9ParkWake [liveness, reference]" E9ParkWake E9ParkWakeReferenceLiveness.cfg ref_liveness || rc=1
 expect_cex "BuggyDrainParks" E9ParkWakeBuggyDrainParks \
   E9ParkWakeBuggyDrainParks.cfg buggy_drain || rc=1
 expect_fail "BuggyMixedSource" E9ParkWakeBuggyMixedSource \
   E9ParkWakeBuggyMixedSource.cfg Inv7StateForm buggy_mix || rc=1
 expect_fail "BuggyPrePark" E9ParkWakeBuggyPrePark \
   E9ParkWakeBuggyPrePark.cfg Inv2NoLostWake buggy_prepark || rc=1
+expect_fail "BuggyNoBridge" E9ParkWakeBuggyNoBridge \
+  E9ParkWakeBuggyNoBridge.cfg Inv8BridgeReachesBackendPark buggy_nobridge || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi
