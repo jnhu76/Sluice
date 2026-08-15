@@ -147,6 +147,35 @@ struct WorkerParkReturnSeam {
     }
 };
 
+// ---- Phase G G1 reproducer construction: run-entry seam. run_impl pauses
+// AFTER publishing the invocation topology (active_worker_count_ set,
+// pending_spawn_ distributed, terminate cleared) and BEFORE starting any
+// worker thread. A test can submit work while the seam holds: spawn()
+// routes the fiber onto a participant's inbox under the already-published
+// topology, so releasing the seam starts the workers with the ticket
+// already queued — the run cannot converge to a worker-exiting
+// last-idle terminate before the task runs (the Release-mode race a
+// submit-after-start construction loses; the G1 reproducer pins its parked
+// pair only when the task fiber runs inside the FIRST invocation).
+struct TopologyReadySeam {
+    static void arm(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(
+            s, PhaseTag::worker_topology_ready_before_start);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::worker_topology_ready_before_start);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::worker_topology_ready_before_start);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::worker_topology_ready_before_start);
+    }
+};
+
 // ---- E11 clock/timer control (was TimerCtl) ----
 // Routes through Scheduler::AsyncTestAccess (guarded accessor). The clock/
 // timer fields are dual-use production state; only the WRITE/observation

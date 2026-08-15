@@ -241,55 +241,73 @@ struct ForensicsRtGuard {
 // P2b: causal-seam construction replacing the yield-ordered high-probability
 // canary; NO behavioral fix in this change).
 //
-// The stall (design doc §8): worker 0 — the only worker allowed to elect
-// MW-S2 (ws->id == 0) — parks as the progress participant in ctx_.wait_one
-// (backend domain). request_stop interrupts it; the still-gated read yields
-// 0 progress, so worker 0 takes the mw_s2_no_progress_terminate exit and
+// The stall (design doc §8): the MW-S2 participant — pre-repair, the only
+// worker allowed to elect (ws->id == 0) — parks in ctx_.wait_one (backend
+// domain). request_stop interrupts it; the still-gated read yields
+// 0 progress, so it takes the mw_s2_no_progress_terminate exit and
 // its thread DIES. The gate is then released; the backend publishes
-// backend-ready to a wait source with no observer. Worker 1 (the survivor,
-// held at its post-park recheck seam) re-drains, REAPS the request, and
-// routes the task continuation to its OWNER — dead worker 0. The route
-// clears global_terminate_ and its wake signal is absorbed by worker 1's
-// own park baseline; worker 1 classifies mw_s1 ("someone will run it"),
-// trusts it, and parks UNBOUNDED in the wake domain. The runnable is
-// stranded on a dead worker's queue, no wake source remains, and drain()
-// waits forever. Every step below is causally observed — no yield, no
-// sleep-as-ordering (production-test-plan §1).
+// backend-ready to a wait source with no observer. The survivor (held at
+// its post-park recheck seam) re-drains, REAPS the request, and
+// routes the task continuation to its OWNER — the dead participant. The
+// route clears global_terminate_ and its wake signal is absorbed by the
+// survivor's own park baseline; the survivor classifies mw_s1 ("someone
+// will run it"), trusts it, and parks UNBOUNDED in the wake domain. The
+// runnable is stranded on a dead worker's queue, no wake source remains,
+// and drain() waits forever. Every step below is causally observed — no
+// yield, no sleep-as-ordering (production-test-plan §1). The construction
+// is ROLE-BASED (participant/survivor identified by park_domain at step
+// 1b): the run-entry seam places the fiber on worker 0's inbox, but worker
+// 1 may still steal it before worker 0's first pop, so the participant is
+// whichever worker ran the task fiber. PRE-REPAIR the stolen-fiber variant
+// fails closed at step (1) (a non-zero-id worker cannot elect — the
+// no-participant unguarded-park manifestation, also deterministic RED),
+// and POST-REPAIR the same construction must converge (GREEN) in every
+// interleaving: the strand either never forms (survivor == owner) or is
+// resolved by the park-commit recheck (the survivor steals it).
 //
 // Deterministic construction:
-//   1. Submit ONE task (first spawn -> worker 0; its await_completion
-//      registers owner=worker 0). The backend worker pauses mid-read at the
-//      running gate. Worker 0 elects MW-S2 and parks in ctx_.wait_one
-//      (wait_phase_entered fires). OBSERVE both flags.
-//   1b. Pin the parked pair BEFORE the stop: park_domain(0)==Backend (set
-//      at the MW-S2 commit, cleared only when wait_one returns) AND
-//      park_domain(1)==Scheduler (inside park_on_wake_source). Both are
-//      stable while the read is gated, so the stop wake is GUARANTEED to
+//   0. Hold run_impl at the run-entry seam (topology published, NO worker
+//      thread started), start the runtime, submit the task while held, then
+//      release. The submit routes the fiber onto worker 0's inbox under the
+//      published topology, so the FIRST invocation's workers start with the
+//      ticket already queued — the run can never converge to a worker-exiting
+//      last-idle terminate before the task runs (a plain submit-after-start
+//      loses exactly that race in Release builds and the parked pair below
+//      cannot form).
+//   1. The backend worker pauses mid-read at the running gate. The worker
+//      running the task fiber elects MW-S2 and parks in ctx_.wait_one
+//      (wait_phase_entered fires). OBSERVE both flags. (Worker 1 may still
+//      steal the fiber before worker 0's first pop — the roles below are
+//      identified by park_domain, not by id.)
+//   1b. Pin the parked pair BEFORE the stop: park_domain(participant)==Backend
+//      (set at the MW-S2 commit, cleared only when wait_one returns) AND
+//      park_domain(survivor)==Scheduler (inside park_on_wake_source). Both
+//      are stable while the read is gated, so the stop wake is GUARANTEED to
 //      route the survivor through its park return and into the held seam —
 //      without this pin a mid-cycle survivor instead exits on
 //      global_terminate_, the driver re-enters with fresh workers, and the
 //      scenario heals nondeterministically (observed as the old rc 124/134
-//      flake mix). A pin timeout is the no-participant manifestation (the
-//      task landed on worker 1, whose mw_s2 classify cannot elect) and
-//      fails closed with its own dump tag.
+//      flake mix). A pin timeout is a construction violation and fails
+//      closed with its own dump tag.
 //   2. ONLY NOW arm the worker_park_returned seam (arming earlier would
 //      catch the pre-submit quiescence park-returns of run #1 and wedge the
 //      setup; after the participant park the system is quiescent — the only
 //      future publications are this test's).
-//   3. rt.request_stop(). Worker 0's ARMED baseline observes the interrupt;
-//      the gated read reaps 0; worker 0 exits mw_s2_no_progress_terminate
-//      (loop_exited[0] becomes true — causally dead, its inbox residue is
-//      stranded unless a live participant re-seeds/steals it). Worker 1
-//      wakes from its wake-domain park and is HELD at the post-park recheck
-//      seam (excluded from release_all_phases — worker 0's exit path must
-//      not destroy the hold). OBSERVE both.
+//   3. rt.request_stop(). The participant's ARMED baseline observes the
+//      interrupt; the gated read reaps 0; the participant exits
+//      mw_s2_no_progress_terminate (loop_exited[participant] becomes true —
+//      causally dead, its inbox residue is stranded unless a live
+//      participant re-seeds/steals it). The survivor wakes from its
+//      wake-domain park and is HELD at the post-park recheck seam (excluded
+//      from release_all_phases — the participant's exit path must not
+//      destroy the hold). OBSERVE both.
 //   4. Release the backend gate; the read completes and publishes
 //      backend-ready (ready epoch advances). OBSERVE the ready publication
-//      (backend_wait_token) — no observer exists for it: worker 0 is dead,
-//      worker 1 is held.
-//   5. Release the seam: worker 1's loop-top drain reaps the request and
-//      routes the continuation to dead worker 0. OBSERVE the stranded
-//      state (backend-ready count 0, worker 0 runnable depth 1).
+//      (backend_wait_token) — no observer exists for it: the participant is
+//      dead, the survivor is held.
+//   5. Release the seam: the survivor's loop-top drain reaps the request and
+//      routes the continuation to the dead participant (owner). OBSERVE the
+//      stranded state (backend-ready count 0, participant runnable depth 1).
 //   6. Verdict: rt.drain() must converge within the watchdog. PRE-FIX it
 //      never does (deterministic RED): the watchdog dumps the park ledger +
 //      live state and exits fail-closed (rc 70). The G1 repair makes the
@@ -317,7 +335,6 @@ SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
         auto rt_result = builder.build();
         SLUICE_CHECK(rt_result.has_value());
         auto& rt = *rt_result.value();
-        SLUICE_CHECK(rt.start().has_value());
         ForensicsRtGuard rt_guard{&rt};
         Scheduler& sched = rt.test_scheduler_for_worker_topology();
         // Seam controller: registered before any worker can reach the
@@ -336,13 +353,6 @@ SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
         std::byte buf[1]{};
         sa::Completion<std::size_t> c;
         std::atomic<bool> task_done{false};
-        SLUICE_CHECK(rt.submit([&](sa::RuntimeTaskContext& rctx) {
-            auto sr = rctx.submit_read(sa::ReadOp{fd, buf, 1, 0}, c);
-            if (sr.has_value()) {
-                (void)rctx.await_completion(c);
-            }
-            task_done.store(true, std::memory_order_release);
-        }).has_value());
 
         // Fail-closed forensics exit: dump + gdb attach window + _Exit(70).
         // EVERY construction violation and stall verdict takes this path.
@@ -365,14 +375,53 @@ SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
         const auto setup_deadline =
             std::chrono::steady_clock::now() + kForensicsWait;
 
+        // (0) Deterministic work placement: hold run_impl at the run-entry
+        // seam — the invocation topology is published (active_worker_count_
+        // == 2, terminate cleared, next_spawn_worker_ reset) but NO worker
+        // thread has started — then start, submit the task while held, and
+        // release. The submit routes the fiber onto worker 0's inbox under
+        // the published topology (next_spawn_worker_ == 0), so the first
+        // invocation's workers start with the ticket already queued and the
+        // run can NEVER converge to a worker-exiting last-idle terminate
+        // before the task runs. A plain submit-after-start loses exactly
+        // that race in Release builds (observed: both workers idle, one
+        // exits last_idle_terminate, the late submit leaves the fiber for
+        // the single survivor, and the parked pair pinned below can never
+        // form — rc 70 no-participant-parked-pair).
+        stest::TopologyReadySeam::arm(sched);
+        SLUICE_CHECK(rt.start().has_value());
+        {
+            bool topology_paused = false;
+            while (std::chrono::steady_clock::now() < setup_deadline) {
+                if (stest::TopologyReadySeam::is_paused(sched)) {
+                    topology_paused = true;
+                    break;
+                }
+                std::this_thread::yield();
+            }
+            if (!topology_paused) {
+                fail_closed("topology-ready-never-paused",
+                            "run-entry seam never paused (driver did not "
+                            "reach the pre-start boundary)");
+            }
+        }
+        SLUICE_CHECK(rt.submit([&](sa::RuntimeTaskContext& rctx) {
+            auto sr = rctx.submit_read(sa::ReadOp{fd, buf, 1, 0}, c);
+            if (sr.has_value()) {
+                (void)rctx.await_completion(c);
+            }
+            task_done.store(true, std::memory_order_release);
+        }).has_value());
+        stest::TopologyReadySeam::release(sched);
+
         // (1) The backend worker is paused mid-read AND the MW-S2
-        // participant (worker 0 — the only elector) is parked in
-        // ctx_.wait_one (backend domain). "wait phase never entered" is
-        // itself a G1 manifestation: when the task fiber lands on worker 1
-        // (spawn/steal race at run startup), worker 1's mw_s2 classify
-        // cannot elect and BOTH workers park unguarded in the wake domain
-        // with no observer for the gated read — the same unguarded-park
-        // defect (design §8.3), reported fail-closed like the primary one.
+        // participant is parked in ctx_.wait_one (backend domain). "wait
+        // phase never entered" is itself a G1 manifestation: pre-repair,
+        // when the task fiber lands on a worker that cannot elect
+        // (ws->id != 0), its mw_s2 classify cannot elect and BOTH workers
+        // park unguarded in the wake domain with no observer for the gated
+        // read — the same unguarded-park defect (design §8.3), reported
+        // fail-closed like the primary one.
         if (!forensics_wait_flag(gate.paused, setup_deadline)) {
             fail_closed("gate-never-paused",
                         "running gate did not pause in time");
@@ -383,28 +432,43 @@ SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
                         "(unguarded-park G1 manifestation)");
         }
 
-        // (1b) Pin the parked configuration causally BEFORE the stop: the
-        // participant (worker 0) is INSIDE its backend-domain park
-        // (park_domain == Backend, set at the MW-S2 commit and cleared only
-        // when wait_one returns) and the survivor (worker 1) is INSIDE
-        // park_on_wake_source (park_domain == Scheduler, cleared only when
-        // the park returns). With the gated read and no pending publication
-        // both parks are stable, so the upcoming request_stop wake is
+        // (1b) Pin the parked configuration causally BEFORE the stop: ONE
+        // worker is INSIDE its backend-domain park (park_domain == Backend,
+        // set at the MW-S2 commit and cleared only when wait_one returns)
+        // and the OTHER is INSIDE park_on_wake_source (park_domain ==
+        // Scheduler, cleared only when the park returns). Both are stable
+        // while the read is gated, so the upcoming request_stop wake is
         // GUARANTEED to route the survivor through its park return and into
-        // the held seam — without this observation, a survivor caught
-        // mid-cycle exits on global_terminate_ instead, the driver re-enters
-        // with fresh workers, and the scenario heals nondeterministically.
-        // A timeout here is the no-participant manifestation (the task
-        // fiber landed on worker 1, whose mw_s2 classify cannot elect).
+        // the held seam. ROLE-BASED (post-G1-repair): with the transferable
+        // election and the spawn/steal placement race, the participant is
+        // whichever worker ran the task fiber — the strand forms on THAT
+        // worker when it dies (pre-fix variant A: participant == owner ==
+        // worker 0; the pre-fix stolen-fiber variant B fails closed earlier,
+        // at the step-(1) wait-phase check).
+        // Without this pin a mid-cycle survivor instead exits on
+        // global_terminate_, the driver re-enters with fresh workers, and
+        // the scenario heals nondeterministically (observed as the old
+        // rc 124/134 flake mix).
+        unsigned participant = 0;
+        unsigned survivor = 1;
         {
             const auto parked_deadline =
                 std::chrono::steady_clock::now() + kForensicsWait;
             bool parked_pair = false;
             while (std::chrono::steady_clock::now() < parked_deadline) {
-                if (AsyncTestAccess::worker_park_domain(sched, 0) ==
-                        sa::WorkerState::ParkDomain::Backend &&
-                    AsyncTestAccess::worker_park_domain(sched, 1) ==
-                        sa::WorkerState::ParkDomain::Scheduler) {
+                const auto d0 = AsyncTestAccess::worker_park_domain(sched, 0);
+                const auto d1 = AsyncTestAccess::worker_park_domain(sched, 1);
+                if (d0 == sa::WorkerState::ParkDomain::Backend &&
+                    d1 == sa::WorkerState::ParkDomain::Scheduler) {
+                    participant = 0;
+                    survivor = 1;
+                    parked_pair = true;
+                    break;
+                }
+                if (d1 == sa::WorkerState::ParkDomain::Backend &&
+                    d0 == sa::WorkerState::ParkDomain::Scheduler) {
+                    participant = 1;
+                    survivor = 0;
                     parked_pair = true;
                     break;
                 }
@@ -438,17 +502,18 @@ SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
         {
             const auto death_deadline =
                 std::chrono::steady_clock::now() + kForensicsWait;
-            bool w0_dead = false;
+            bool participant_dead = false;
             while (std::chrono::steady_clock::now() < death_deadline) {
-                if (AsyncTestAccess::worker_loop_exited(sched, 0)) {
-                    w0_dead = true;
+                if (AsyncTestAccess::worker_loop_exited(sched, participant)) {
+                    participant_dead = true;
                     break;
                 }
                 std::this_thread::yield();
             }
-            if (!w0_dead) {
+            if (!participant_dead) {
                 fail_closed("participant-never-died",
-                            "worker 0 did not reach the no-progress terminate");
+                            "the participant worker did not reach the "
+                            "no-progress terminate");
             }
         }
 
@@ -510,8 +575,9 @@ SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
                 // repair may resolve it before this observation completes.
                 std::fprintf(stderr,
                              "FORENSICS: stranded-runnable observed=%d "
-                             "(ready_count=%zu w0_runnable=%zu w1_runnable=%zu)\n",
-                             stranded ? 1 : 0,
+                             "(participant=%u survivor=%u ready_count=%zu "
+                             "w0_runnable=%zu w1_runnable=%zu)\n",
+                             stranded ? 1 : 0, participant, survivor,
                              raw->backend_ready_count_for_test(),
                              AsyncTestAccess::worker_local_runnable(sched, 0),
                              AsyncTestAccess::worker_local_runnable(sched, 1));
