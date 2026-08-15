@@ -236,6 +236,20 @@ struct WorkerState {
     enum class ParkDomain : unsigned char { None, Scheduler, Backend };
     std::atomic<ParkDomain> park_domain{ParkDomain::None};
 
+    // G1 repair R4 (idle-dance backstop): 1 while this worker's +1 is
+    // (believed to be) counted in Scheduler::idle_workers_ — set at the
+    // dance fetch_add, cleared conservatively at each loop-iteration top
+    // (an under-clear is safe: the park-commit check then treats the
+    // worker's own stale count as another dancer's, refusing once more and
+    // re-dancing toward convergence; it can never cause a MISSED refusal).
+    // The park commit compares idle_workers_ AGAINST this value so a
+    // counted dancer can sleep holding its count (the count's persistence
+    // is what damps the not-last wake chain) while a worker that never
+    // danced still refuses to park behind an unfinished dance (E9-LIFE-8
+    // closure). Plain production atomic; read under global_mtx_ at the
+    // park commit alongside idle_workers_.
+    std::atomic<unsigned> idle_dance_contributed_{0};
+
     // E13: owner Scheduler identity. Set exactly once when WorkerState is
     // attached to a Scheduler. Immutable by contract; not used for routing.
     Scheduler* owner_scheduler{nullptr};

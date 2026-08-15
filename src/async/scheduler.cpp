@@ -506,20 +506,51 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     //     predicate observes it; a publication before it was visible to
     //     the (a) recheck — no consumed-signal window remains.
     // The cv.wait below runs with BOTH locks released; the predicate
-    // (epoch / terminate / own inbox) is unchanged.
+    // (epoch / terminate / own inbox) is unchanged from E9.
+    //
+    // R4 (persistent-state backstop, final form after the adversarial
+    // review): the idle-dance condition is checked HERE, at the COMMIT
+    // recheck, against the worker's OWN dance contribution — NOT in the cv
+    // predicate and NOT as a bare count comparison. Two rejected drafts
+    // show why: (1) a predicate term observes the dancer's own count, so
+    // the dancer's park becomes a no-op and it re-dances immediately; (2)
+    // a bare commit-time `idle_workers_ > 0` refusal self-triggers the
+    // same way, and each re-dance erases the count (last-idle store(0)),
+    // so a woken sleeper always starts its dance from zero, emits its own
+    // not-last signal, and wakes its peer — the wake-park-wake chain never
+    // damps (the Live-mw_s3 resident livelock). Exempting the worker's
+    // own contribution restores the pre-G1 damping: a counted dancer
+    // SLEEPS holding its count, so the woken sleeper's fetch_add reaches
+    // the last-idle threshold immediately and its cycle ends in either
+    // termination or a SILENT park (no further signal). Meanwhile a
+    // worker that has not danced (contribution 0) refuses behind ANY live
+    // count: the recheck and the dance serialize under global_mtx_ (the
+    // dancer's fetch_add and not-last signal both hold it), so the dance
+    // is either visible here (refuse; re-loop and converge the dance) or
+    // its signal advances the epoch past the baseline being recorded
+    // (predicate wake) — the E9-LIFE-8 absorbed-baseline window stays
+    // closed with persistent state.
     {
         LockGuard glk(global_mtx_);
-        if (unguarded_progress_pending_locked()) {
-            // Persistent progress with no observer: parking here is the G1
-            // violation. Do not record a baseline; the caller's re-loop
-            // makes this worker the observer. SIGNAL the wake domain first:
-            // the refusing worker may not itself be able to act on the
-            // progress (e.g. it is not the lowest-id electable worker for
-            // the MW-S2 participant) — the signal wakes a parked sibling
-            // that can (invariant B: a progress publication must wake or
-            // elect an observer; without the signal a non-electable refuser
-            // would spin between refuse and re-loop while the only
-            // electable worker sleeps on a stale classification).
+        const unsigned own_dance =
+            ws->idle_dance_contributed_.load(std::memory_order_acquire);
+        if (unguarded_progress_pending_locked() ||
+            idle_workers_.load(std::memory_order_acquire) > own_dance) {
+            // Persistent progress with no observer, or an unfinished idle
+            // dance this worker has not contributed to: parking here is
+            // the G1 violation (stranded progress) or the E9-LIFE-8
+            // violation (a dance count this sleeper's baseline would
+            // absorb, leaving the convergence one short forever). Do not
+            // record a baseline; the caller's re-loop makes this worker
+            // the observer (steal / elect) or the next dance contributor.
+            // SIGNAL the wake domain first: the refusing worker may not
+            // itself be able to act on the progress (e.g. it is not the
+            // lowest-id electable worker for the MW-S2 participant) — the
+            // signal wakes a parked sibling that can (invariant B: a
+            // progress publication must wake or elect an observer; without
+            // the signal a non-electable refuser would spin between
+            // refuse and re-loop while the only electable worker sleeps
+            // on a stale classification).
             signal_wake_locked();
             ws->park_domain = WorkerState::ParkDomain::None;
             return;
@@ -572,19 +603,11 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     if (earliest == kNoDeadline && !bounded_backend_observation) {
         // No deadline and no backend observation: unbounded park (epoch /
         // terminate / runnable predicate only). No periodic wake exists.
-        // G1 repair (§13.2 persistent-state discipline): the predicate ALSO
-        // re-checks the idle-dance count. A counted dancer waiting for
-        // convergence is persistent state — a sibling whose park baseline
-        // absorbed the dancer's not-last signal would otherwise sleep
-        // through the convergence forever (the absorbed-corrective window
-        // the E9-LIFE-8 construction exposes). The count makes the wake
-        // re-derivable: the sleeper returns without waiting, re-classifies,
-        // and either joins the dance (counting toward convergence) or
-        // observes progress (mw_s1/mw_s2 re-loop resets the count).
+        // R4 note: the idle-dance backstop is enforced at the park COMMIT
+        // (above), not here — see the R4 redesign comment there.
         wake_cv_.wait(lk, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
             if (wake_epoch_ != ws->observed_epoch ||
-                global_terminate_.load(std::memory_order_acquire) ||
-                idle_workers_.load(std::memory_order_acquire) > 0) {
+                global_terminate_.load(std::memory_order_acquire)) {
                 return true;
             }
             // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The
@@ -637,8 +660,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     }
     wake_cv_.wait_until(lk, wake_deadline, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
         if (wake_epoch_ != ws->observed_epoch ||
-            global_terminate_.load(std::memory_order_acquire) ||
-            idle_workers_.load(std::memory_order_acquire) > 0) {
+            global_terminate_.load(std::memory_order_acquire)) {
             return true;
         }
         // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The deque
@@ -983,6 +1005,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         g_worker = worker;
         worker->owner_scheduler = this; // E13 P5 caller-validation identity
         worker->active.store(true, std::memory_order_release);
+        worker->idle_dance_contributed_.store(0, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         // Fresh invocation: the death evidence describes THIS invocation's
         // thread only (a prior run's sticky loop_exited would misreport a
@@ -1004,6 +1027,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
                 g_worker = worker;
                 worker->owner_scheduler = this; // E13 P5 caller-validation identity
                 worker->active.store(true, std::memory_order_release);
+                worker->idle_dance_contributed_.store(0, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 worker->loop_exit_reason.store(
                     WorkerState::LoopExitReason::live, std::memory_order_relaxed);
@@ -1059,8 +1083,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
     //      before commit, Phase C release global_mtx_ + wait_one, Phase D
     //      reacquire + clear + reclassify).
     //      MW-S3 / QUIESCENT: contribute to coordinated termination.
-    //   5. No work and not elected: park briefly on inbox_cv.
+    //   5. No work and not elected: park on the unified wake source.
     while (true) {
+        // R4: conservative contribution reset (see the WorkerState field
+        // contract). Clearing here — rather than at every count erase —
+        // keeps the park-commit exemption sound in one place: an
+        // under-clear (the count was erased externally while this worker
+        // slept) only makes the next park commit treat the worker's own
+        // stale count as another dancer's (refuse once more, re-dance,
+        // converge); it can never suppress a needed refusal.
+        ws->idle_dance_contributed_.store(0, std::memory_order_release);
         // 1. Get a runnable Fiber.
         Fiber* f = nullptr;
         {
@@ -1075,6 +1107,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             if (!pending_spawn_.empty()) {
                 f = pending_spawn_.front();
                 pending_spawn_.pop_front();
+                // Re-record the owner: a retire-seeded ticket carries its
+                // DEAD original owner (the retire moves the ticket, not the
+                // ownership record). Without this, the fiber's next wait
+                // resolution routes it back onto the terminated worker's
+                // inbox (route_runnable_locked), turning every retire-rescue
+                // into a stranded ticket that only a later steal happens to
+                // recover (adversarial-review finding: the route-to-dead-
+                // worker class G1 repairs must not survive as a designed-in
+                // extra hop).
+                fiber_owner_[f] = ws;
             }
         }
 
@@ -1119,8 +1161,10 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             // drain to another worker, or another worker is running a Fiber).
             // This worker has no local runnable work (f was null at top), so it
             // must NOT busy-spin — that starves other workers on a contended
-            // core. Fall through to park on inbox_cv; the owning worker will
-            // notify when it routes work here, or the 1ms timeout re-checks.
+            // core. Fall through to the unified wake-domain park below; the
+            // owning worker's route signals the wake source (route_runnable
+            // publishes under global_mtx_ + signal_wake_locked), so the parked
+            // worker re-checks without polling.
             idle_workers_.store(0, std::memory_order_release);
             if (global_terminate_.load(std::memory_order_acquire)) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1526,6 +1570,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // G1 repair: converge against the LIVE loop count —
                         // early-exited workers can never join the dance.
                         unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
+                        ws->idle_dance_contributed_.store(1, std::memory_order_release);
                         if (prev + 1 >= live_loop_workers_) {
                             MwState still = classify_locked(run_workers, ws);
                             if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
@@ -1574,6 +1619,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     // terminate) can never join the dance; counting it would
                     // strand the survivors one short of last-idle forever.
                     unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
+                    ws->idle_dance_contributed_.store(1, std::memory_order_release);
                     if (prev + 1 >= live_loop_workers_) {
                         // All workers idle. Final re-check (global_mtx_ held).
                         MwState still = classify_locked(run_workers, ws);
@@ -1703,6 +1749,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // dance — drop it from the live count so the survivors' convergence
         // threshold shrinks (see the field contract in scheduler.hpp).
         --live_loop_workers_;
+        // ...and retire the election-liveness fact in the SAME critical
+        // section (the run_impl thread lambda repeats the store after
+        // worker_loop returns — idempotent). Clearing `active` only there
+        // left a window where a survivor's MW-S2 election scan (R2) still
+        // saw this worker as the lowest-id ALIVE elector while it had
+        // already left the loop: the survivor refused to elect, refused to
+        // park, and signal-spun until the exiting thread finished its
+        // straight-line epilogue (bounded, but the two liveness predicates
+        // must move together).
+        ws->active.store(false, std::memory_order_release);
         {
             std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
             if (!ws->local_runnable.empty()) {
@@ -5602,6 +5658,12 @@ bool Scheduler::unguarded_progress_pending_locked() const {
     }
     const unsigned active_count =
         active_worker_count_.load(std::memory_order_acquire);
+    // Queue-nonemptiness is the progress test, not per-fiber state: a ticket
+    // whose Fiber is not Runnable would be a drift/invariant breach
+    // (run_next_on fail-fasts at a LIVE owner; a TERMINATED owner never
+    // reaches that check, so a drifted ticket there would refuse-park the
+    // survivors indefinitely). Drift implies an upstream protocol breach;
+    // documented rather than defended here.
     for (unsigned i = 0; i < active_count && i < workers_.size(); ++i) {
         WorkerState* w = workers_[i].get();
         std::lock_guard<std::mutex> ilk(w->inbox_mtx);
