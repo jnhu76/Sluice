@@ -37,6 +37,33 @@ resource bounds, shutdown/drain, and the public async API. Application
 code, examples, benchmarks, and documentation corrections remain open —
 they are not foundation changes.
 
+## Frozen: the behavioral contract, not the implementation shape
+
+What may not be weakened is the **invariant set**, not any particular
+mechanism. Concretely: the happens-before / routing / consume obligations
+between commit, arm, park, wake, and interrupt — for example, the
+Phase G routing invariant that once a waiter may already be in a
+backend-domain park, an external control wake must have a reliable route
+into that domain (today implemented as `backend_wait_active_` gating the
+interrupt bridge in `signal_wake_locked`).
+
+The implementation shape is NOT itself frozen. A future change may replace
+any concrete mechanism — the atomic flag, a data structure, a generation
+counter, a wait token, or a whole backend abstraction — provided the
+replacement re-proves the same evidence class under a normal `AGENTS.md`
+§8 gate plus one freeze trigger from the policy above:
+
+```text
+causal Cases A–D            (commit→arm/park→wake race closure)
+TP-G / UR-G matrices        (UR cases real-liburing, mode=real honesty)
+mutation gates              (bridge / refuse / armed-floor consume)
+formal-model invariants     (spec/tla/e9_park_wake)
+```
+
+Freeze the contract; do not treat accidental implementation as
+untouchable, and do not weaken the contract while refactoring the
+implementation.
+
 ## No Phase H
 
 No Phase H is planned. The next work item is an application using the
