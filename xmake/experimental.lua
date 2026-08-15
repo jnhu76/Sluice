@@ -58,6 +58,14 @@ if has_liburing then
         if has_config("with-uring-registered-files") then
             add_defines("SLUICE_URING_REGISTERED_FILES")
         end
+    -- Phase G closeout: the internal-testing variant compiles the SAME
+    -- src/async/*.cpp set, so the real-liburing UR-G scheduler-bridge tests
+    -- need the identical define + package threaded onto it (public, so the
+    -- internal-testing test TUs see SLUICE_HAS_LIBURING and link liburing).
+    -- Stub builds are unchanged (no liburing -> both variants stay stub).
+    target("sluice_async_internal_testing")
+        add_defines("SLUICE_HAS_LIBURING", {public = true})
+        add_packages("liburing", {public = true})
 end
 
 -- Dedicated real-liburing transport-failure/progress state-machine tests. This
