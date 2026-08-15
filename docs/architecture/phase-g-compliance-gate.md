@@ -3,11 +3,15 @@
 **Phase:** G (final async-foundation phase; roadmap "backend-ready wake
 integration")
 **Design:** `docs/design/phase-g-backend-progress-wake.md`
-**Status:** **G1 REPAIRED** — the park-window forensic finding (`docs/design/
-phase-g-backend-progress-wake.md` §8) closed by the four-mechanism repair R1–R4
-(§8.5 of the design; deterministic reproducer now GREEN). Phase G remains
-incomplete: G2–G7 are still deferred. Gate 4 rows below record only what was
-actually executed (2026-08-14 forensics head, 2026-08-15 G1-repair head).
+**Status:** **COMPLETE (2026-08-15 closeout, branch
+closeout-phase-g-foundation-freeze)** — G1 repaired by R1–R4 (§8.5 of the
+design; deterministic reproducer GREEN), G2–G7 closed by the closeout
+evidence: deterministic causal proofs (Cases A–D), the TP-G/UR-G race
+matrices (real liburing, `mode=real`), mutation evidence M1–M3, the updated
+`spec/tla/e9_park_wake` formal model (4 positive + 4 negative TLC gates), and
+the full validation matrix below. P2-04 RESOLVED, DIV-04/DIV-05 amended,
+ADR-execution-model §9.4.7.2 added. The async foundation is FROZEN
+(`foundation-freeze.md`); no Phase H is planned.
 **Authority:** ADR-execution-model §9.4.7/§9.4.7.1 (MIXED-WAKE; P5 seam
 reserved); AGENTS.md §4.4/§10/§13.1/§13.2/§14; Constitution AC-6 (polling
 justification), AC-7, AC-10, AC-13, AC-14, AC-15.
@@ -198,12 +202,16 @@ the implementation head.
 | Clang Release full suite (AGENTS.md §16.1 — public headers changed) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test`, then the §8 parallel method (`xargs -P 16`, per-binary `timeout 300`); `sluice_copy_integration_test` exec's the `sluice-copy` CLI by a run-directory-relative path, so it must run with cwd = the build directory | **PASS (2026-08-15): all test binaries green** — `phase_g_backend_progress_wake_test` (both cases), `application_runtime_drain_starvation_test`, `sluice_copy_pipeline_stress_test`, `sluice_copy_pipeline_integration_test`, `sluice_copy_integration_test` individually re-verified; the initial sweep's two non-zero rows were runner artifacts (the `sluice-copy` CLI usage binary is not a test target; the copy-integration binary needs the build-dir cwd), and one real finding: the reproducer's submit-after-start placement lost the first-idle convergence race in Release (`no-participant-parked-pair` fail-closed) — fixed by the run-entry seam construction, then 5/5 pre-fix RED / 5/5 post-fix GREEN in Release |
 | ASan/UBSan (AGENTS.md §16.2 — Fiber* ownership moves in the retire block) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test`, then the §8 parallel method (per-binary `timeout 420`) | **PASS (2026-08-15, the R4-redesign head): all binaries green, 0 AddressSanitizer reports, 0 UBSan `runtime error:` reports** |
 | CI failure triage + adversarial review rework | pushed head e50731c CI run 31863170949: `sluice_copy_pipeline_integration_test` survived the 420s hang watchdog on the hosted runner (164 binaries concurrent; no local reproduction — pinned 2-core/1-core ×16, full-suite oversubscription ×3). The adversarial audit (coderabbit code-reviewer agent over 31a6ce6..e50731c) independently flagged R4's predicate term as P2: a counted dancer's park observes its own count → no-op park → re-dance erases the count → the not-last wake chain never damps (the resident-state livelock shape matching the CI stall) | R4 reworked to the contribution-aware commit check (see Gate 1/3 rows); review P2 #2 fixed (loop-top pending_spawn_ drain re-records fiber_owner_, removing the route-to-dead-worker hop); P3 #3 fixed (retire clears `active` under global_mtx_ with the live-count decrement); P3 doc items fixed (gate §3.1 overclaim, §8.5 R4 rewrite, stale inbox_cv comments, api-reference vtable-ABI note); P3 #4 documented in-code (drifted-ticket limitation). Re-verification on the rework head: reproducer 20/20 Debug, stress families 6/6 each, 2-core pinned ×10, full Debug suite 165/165, ASan/UBSan clean |
-| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | NOT EXECUTED (deferred) |
-| Real-liburing | `xmake f -m debug --toolchain=clang --with-liburing=true -y && xmake build -g test && xmake test -v` | NOT EXECUTED (deferred) |
-| Backend conformance | `python3 scripts/verify-backend-conformance.py` | NOT EXECUTED (deferred) |
-| Formal models | `python3 scripts/formal/verify.py check` | NOT EXECUTED (deferred; e9_park_wake/e9_wake_handle_lifetime transport unchanged) |
-| Docs / architecture validation | `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py`, `git diff --check` | PASS — self-test PASS; link scan PASS (no broken links, no stale paths); architecture docs PASS; `git diff --check` clean (executed 2026-08-14, re-run on the review-fix head) |
-| Mutation evidence | per-mutation RED runs | NOT EXECUTED (deferred with G2–G7) |
+| Clang Debug full suite (liburing) — closeout | `xmake f -c -m debug --toolchain=clang --with-liburing=true -y && xmake build -g test`, then the §8 parallel method (`xargs -P 16`, per-binary `timeout 300`) | **167 binaries: 166/167 at -P 16; the single non-PASS is `threadpool_backend_scheme_b_race_test` rc 134 — its own watchdog aborting on a pre-existing test-gate protocol hole under parallel load (root-caused; see Known limits; production unchanged; standalone 6/6 green). Re-run at `-P 8`: 167/167 PASS.** |
+| Clang Release full suite (closeout) | AGENTS §16.1 bare config + §8 method (`xargs -P 16`, per-binary `timeout 300`) | **PASS (2026-08-16): all 165 binaries green** (the two `if has_liburing`-gated targets are excluded by the bare config and covered by the Debug(liburing) run) |
+| ASan+UBSan (closeout, AGENTS §16.2) | `xmake f -c -m asanubsan --toolchain=clang -y` (builds at `-j 12` after the mode churn), §8 method `-P 12`, per-binary `timeout 420` | **164/165 green, 0 AddressSanitizer reports, 0 UBSan `runtime error:` reports. The single non-PASS is `runnable_steal_test` (timeout) — a PRE-EXISTING ASan-timing probabilistic hang, reproduced on a fresh clean MASTER worktree (full-binary 4/10, case 3 3/10 standalone; no sanitizer report — it is a hang, not a detection); Debug/Release/TSan runs of the same binary are green; see Known limits.** |
+| TSan full suite (closeout, AGENTS §16.3) | `xmake f -c -m tsan --toolchain=clang -y && xmake build -g test`, §8 method `-P 16`, per-binary `timeout 600` | **PASS (2026-08-16): all 165 binaries green, 0 ThreadSanitizer reports** (includes the modified race classes: park/bridge races via the closeout Case A–D and TP-G tests) |
+| Real-liburing UR matrix (closeout) | `SLUICE_TEST_FILTER=phase_g_closeout_uring_*` on the Debug(liburing) build — every case prints an evidence-meta `mode=real\|stub` line and fails closed otherwise | **UR-G1..G7 GREEN, `mode=real` on all (kernel 7.1.8, liburing 2.14); stub-build classification case separately green on the stub config. M2U (uring armed-floor consume disabled) mutates RED.** |
+| Mutation evidence (closeout) | M1 = bridge disabled in `signal_wake_locked`; M2 = R1 park-commit refuse removed; M3 = armed-floor consume disabled (`ready_wait_source.hpp`); M2U = uring-side armed-floor consume disabled | **All RED on the mutated build with the intended detector failures (Case A/B bridge-skipped, park-refuse, prepark-epoch detectors), GREEN after revert; focused reruns of the full closeout suites after each revert** |
+| Formal models (closeout) | `python3 scripts/formal/verify.py check` + `bash scripts/formal/verify-e9-park-wake.sh` | **PASS: manifest check PASS; e9_park_wake 4 positive gates (split safety+liveness, reference safety+liveness) + 4 negative gates (bridge-disabled, no-refuse, reference-domain violations) all PASS** |
+| Backend conformance (closeout) | `python3 scripts/verify-backend-conformance.py` on the Debug(liburing) build | **PASS** |
+| Performance sanity (no fixed 2ms wake on split-wait) | wake-latency probe vs the Debug production libs: `ReadyWaitSource` parked `wait_for_change`, producer signals after 50ms, repeated ×3 | **transport overhead 170–184µs (park return ≈50.18ms after a 50.0ms scheduled signal) — far below any 2ms quantization; combined with the causal Case C / TP-G park tests and the `max_park` unbounded-sentinel derivation (no deadline, no ready-flag ⇒ `nanoseconds::max()`), the split-wait park is event-driven, not interval-driven** |
+| Docs / architecture validation (closeout) | `python3 scripts/check-doc-links.py --self-test`, `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py`, `git diff --check` | **PASS (2026-08-16): self-test PASS; scan PASS (0 broken, 0 stale) after fixing backticked branch-name paths; architecture docs PASS; `git diff --check` clean** |
 
 ---
 
@@ -215,11 +223,47 @@ the implementation head.
   to `pending_spawn_` + unconditional wake, and the `idle_workers_ > 0`
   predicate backstop. A timeout/cap re-arm was NOT used. Deterministic
   reproducer 28/28 GREEN; full Debug 165/165; TSan 0 reports.
-- **Formal-model debt (AGENTS.md §17)**: the `spec/tla/e9_park_wake` model
-  still encodes the pre-repair park/election/terminate rules. Updating it to
-  the R1–R4 rules is recorded as a G2 precondition in design §8.5 (justified
-  gap: the implementation carries a deterministic causal reproducer and TSan
-  evidence in the interim).
+- **Formal-model debt CLOSED (closeout)**: `spec/tla/e9_park_wake` now
+  encodes the R1–R4 rules plus the split-wait bridge and control epochs
+  (`bridgePending`, `workerAlive`, `terminateFlag`, domain-aware
+  `LeaveParkEnabled`); 4 positive + 4 negative TLC gates PASS
+  (`scripts/formal/verify-e9-park-wake.sh`; manifest counts updated). The
+  pre-closeout coverage hole (a fixed-Drain Init making the Live properties
+  vacuous) was found and fixed during the model update.
+- **Pre-existing test-infrastructure finding (recorded, not fixed — issue
+  candidate, NOT a Phase G regression)**: `tp_cancel_races_worker_terminal_
+  exactly_one` (`tests/threadpool_backend_scheme_b_race_test.cpp`) can hang
+  30s and abort its own watchdog under heavy parallel load (≈2/20 concurrent
+  copies on an idle 20-core machine; bare `xmake test` / `-P 16` sweeps;
+  standalone runs 6/6 green in ~4s). Root-caused by core dump + watchpoint
+  trace: the test's `BeforeWorkerDequeuePauseGate` protocol synchronizes the
+  worker's GATE EXIT (`exited=true`) but not the subsequent `pop_front`; a
+  worker descheduled between the two can pop the NEXT iteration's dispatch
+  entry without passing the pause gate (in cancel-win iterations the main
+  thread's drain/reap/reset never waits for the worker, so `submit(N+1)`'s
+  push can land before the deferred pop). The main thread then blocks in
+  `wait_paused` forever while the stolen op completes normally
+  (backend_ready, unreaped). Production code is UNCHANGED and behaves
+  correctly throughout (legal state transitions, exactly-once terminal,
+  correct accounting — verified in the trace); the file is identical to
+  master. Repair belongs to the test harness (make the post-gate pop
+  observable, or make `wait_paused` bounded with a steal-aware skip) and
+  requires its own review — recorded as an application/load-triggered issue
+  candidate under the freeze policy.
+- **Pre-existing ASan-timing flake (recorded, not fixed — issue candidate, NOT a
+  Phase G regression)**: `runnable_steal_test` hangs probabilistically under
+  ASan (most often case `steal_steal_run_suspend_wake_resume_on_thief`,
+  occasionally case 2; 40–60% standalone on this 20-core machine, effectively
+  100% under a -P 12 ASan sweep; Debug/Release/TSan runs of the same binary
+  are green). Reproduced on a fresh clean MASTER worktree (full-binary 4/10,
+  case 3 3/10 standalone) — pre-existing and load/ASan-timing dependent, with
+  no sanitizer report (it is a hang, not a detection). The closeout branch
+  changes no production source, and a clean-dir rebuild reproduces it at the
+  same rate (build corruption and ccache were ruled out: fresh-directory
+  rebuild behaves identically; ccache-served objects verified byte-identical
+  to direct compiles). Root-cause capture is pending (the hang window is
+  bursty; 0/9 captures in low-load windows) — recorded as a post-freeze issue
+  candidate requiring its own gated investigation.
 - Reference backends (Fake/Sync) keep the bounded Scheduler-domain
   observation interval in MIXED-WAKE (their readiness is poll-driven and
   cannot self-notify). This is a documented reference-backend classification

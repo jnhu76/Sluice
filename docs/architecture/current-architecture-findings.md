@@ -34,7 +34,7 @@ resolution notes below (see the Summary table). Open findings remain open.
 | P1-08, P1-09 | RequestKey-targeted cancellation and explicit disposition; exact wait/cancel lock design remains open | Phase C contract tests plus a focused later concurrency design before L1 lock changes |
 | P2-05 | Batch outcome origin distinguishes rejection from accepted completion | RESOLVED — Phase F2: `BatchResultOrigin` (`rejected` vs `accepted_and_completed`) on `BatchResult` (`tests/batch_result_origin_test.cpp`; ADR Decision 9) |
 | P2-01, P2-02 | Fixed persistent blocking workers and bounded queue | RESOLVED — Phase E (PR #64): persistent construction-time workers + bounded dispatch ring + directed stress evidence (see P2-01/P2-02 notes) |
-| P2-04 | Backend-ready progress signal remains a separate wake contract | Phase G wake design and causal tests |
+| P2-04 | Backend-ready progress signal remains a separate wake contract | RESOLVED — Phase G (2026-08-15): split-wait production backends park the MW-S2 participant in the backend domain for both wake kinds (progress epoch + Scheduler interrupt bridge); the 2ms interval is condition-driven-only there; reference poll-driven backends retain it intentionally (DIV-05 amended). See the P2-04 section and ADR §9.4.7.2 |
 
 The Accepted ADR is decision evidence only. It does not make an unchecked box,
 missing regression, or current backend defect resolved.
@@ -740,7 +740,25 @@ slots and intrusive ready list.
 
 ---
 
-## P2-04: 2ms Polling Latency/CPU Tax in MIXED-WAKE
+## P2-04: 2ms Polling Latency/CPU Tax in MIXED-WAKE — Resolved by Phase G
+
+**Status: RESOLVED (Phase G, 2026-08-15).** On split-wait production
+backends (ThreadPool, real io_uring), MIXED-WAKE now parks the MW-S2
+participant in the BACKEND domain for both wake kinds: backend progress
+arrives through the wait source's own epoch (prompt), and external wakes
+arrive through the Scheduler interrupt bridge (`signal_wake_locked` ->
+`backend_wait_active_` -> `interrupt_backend_waiters`, control-epoch bump,
+one-shot per invocation). The 2ms interval survives there only as a
+condition-driven park cap (active E11 deadline, or E5-A2 ready-flag poll
+resolution); with neither present the park is unbounded and event-driven —
+no fixed-interval latency or periodic CPU wake. Reference poll-driven
+backends (Fake, Sync/Synthetic) intentionally retain the bounded
+observation interval (DIV-05 reference exemption): their readiness cannot
+self-notify. See ADR-execution-model §9.4.7.2, `docs/architecture/
+phase-g-compliance-gate.md`, and the closeout causal tests
+(`tests/phase_g_closeout_test.cpp` Cases A–D).
+
+**Original finding (pre-Phase G, retained for history):**
 
 **Finding:** In MIXED-WAKE mode, backend progress is observed only when the 2ms
 timed wait expires. This adds up to 2ms latency to every backend completion in
@@ -854,7 +872,7 @@ with subsystem prefix in documentation.
 | P2-01 | P2 | Per-op thread creation | RESOLVED — Phase E (PR #64): fixed persistent workers, no per-op thread creation (see section note; DIV-03) |
 | P2-02 | P2 | workers_ monotonic growth | RESOLVED — Phase E (PR #64): fixed worker vector, no historical growth (see section note; DIV-12) |
 | P2-03 | P2 | Hot-path allocation | Reference-layer CLOSED (Phase B round 2: allocation-independent accepted terminal path — fixed RequestSlot array, pre-reserved terminal storage, publication binding in the slot record, construction-time bounded FIFO ring; the accepted submit → poll → reset path performs ZERO allocations under a counting + always-throw operator new); Phase E backend migration RESOLVED (PR #64: ThreadPool post-commit path allocation-free — phase-e gate Slice 12; see section note) |
-| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase G wake integration |
+| P2-04 | P2 | 2ms MIXED-WAKE latency | RESOLVED — Phase G: backend-domain MIXED-WAKE park + interrupt bridge on split-wait backends; condition-driven park cap only (see section note; ADR §9.4.7.2; DIV-04/DIV-05 amended) |
 | P2-05 | P2 | Batch conflates rejection with completion | RESOLVED — Phase F2 (`BatchResultOrigin`; `tests/batch_result_origin_test.cpp`) |
 | P3-01 | P3 | ThreadPoolBackend naming | Phase E decision (PR #64): name retained for API continuity (DIV-03); the backend is now genuinely bounded, so the misleading resource-model semantic is gone; a rename would require a separate API ADR |
 | P3-02 | P3 | Header claim-authority comment | RESOLVED — PR #61 corrected backend claim authority |

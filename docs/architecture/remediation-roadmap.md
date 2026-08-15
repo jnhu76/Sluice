@@ -7,10 +7,12 @@ architecture audit. A phase may not claim completion without its named evidence.
 governed by the current findings, divergence registry, Zig conformance map, and
 the Accepted
 [Unified Explicit I/O Request Contract](../adr/ADR-explicit-io-request-contract.md).
-Statuses below reflect the Phase-F closeout (F1 PR #105; F2 + F3 implemented
-on branch `feat/phase-f-remaining`, issue #98). Phase A–F are complete; the
-only remaining implementation work is Phase G (backend-ready wake
-integration).
+Statuses below reflect the Phase-G closeout (branch
+closeout-phase-g-foundation-freeze). **Phases A–G are COMPLETE (2026-08-15).
+The async foundation is FROZEN — see
+[foundation-freeze.md](foundation-freeze.md); no Phase H is planned.** Future
+foundation work is application-triggered only, through the freeze policy's
+entry conditions and a normal `AGENTS.md` §8 gate.
 
 **Ordering rule:** Stabilize bottom-layer request identity, admission, and reap
 before higher-layer Scheduler/Batch/wake migration. Do not make a persistent
@@ -557,7 +559,18 @@ closeout, `completion.hpp:113` — internal ordering mechanism consumed only by
 **Dependencies:** Phases C, D, and E for the backends selected into the unified
 production path. No wake-bridge dependency.
 
-## Phase G — backend-ready progress wake integration
+## Phase G — backend-ready progress wake integration — COMPLETE
+
+**Status:** COMPLETE (2026-08-15, closeout branch
+closeout-phase-g-foundation-freeze). Design
+`docs/design/phase-g-backend-progress-wake.md` implemented (R1–R4 park
+protocol, split-wait bridge); compliance gate
+`docs/architecture/phase-g-compliance-gate.md`; causal closeout matrices
+`tests/phase_g_closeout_test.cpp` (Cases A–D, TP-G1..G7) and
+`tests/phase_g_closeout_uring_test.cpp` (UR-G1..G7, real liburing); formal
+model `spec/tla/e9_park_wake/` (bridge/control-epoch, 4 positive + 4 negative
+TLC gates). P2-04 RESOLVED; DIV-04/DIV-05 amended; ADR-execution-model
+§9.4.7.2 records the amendment.
 
 **Change:**
 
@@ -609,7 +622,7 @@ current type is named `ThreadPoolBackend`.
 | P1-05 | B/C vocabulary and metrics |
 | P1-08, P1-09, P1-10 | B/C target semantics; focused lock design and F integration |
 | P2-05 | F (Batch origin flag — F2) |
-| P2-04, DIV-04, DIV-05 | G |
+| P2-04, DIV-04, DIV-05 | G — **RESOLVED/AMENDED in Phase G (2026-08-15): split-wait bridge + condition-driven park cap; reference exemption retained** |
 | DIV-02 target ownership | A; implementation B–E + D; revisit only on measured trigger |
 | DIV-13 public backend conformance | C, enforced for D/E and future backends |
 

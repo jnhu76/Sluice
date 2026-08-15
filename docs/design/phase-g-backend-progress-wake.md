@@ -1,7 +1,14 @@
 # Phase G — backend-ready progress wake integration (focused design)
 
-**Status:** Design (implementation target for the Phase G roadmap item)
-**Date:** 2026-08-14
+**Status:** IMPLEMENTED / COMPLETE (2026-08-15, closeout branch
+closeout-phase-g-foundation-freeze). Evidence of record:
+`docs/architecture/phase-g-compliance-gate.md` (Gate 4 executed rows),
+`tests/phase_g_closeout_test.cpp` (deterministic causal proofs Cases A–D +
+TP-G1..G7), `tests/phase_g_closeout_uring_test.cpp` (UR-G1..G7, real
+liburing, `mode=real`), and `spec/tla/e9_park_wake/` (R1–R4 + bridge model,
+4 positive + 4 negative TLC gates). The ADR amendment is
+ADR-execution-model §9.4.7.2.
+**Date:** 2026-08-14 (design), 2026-08-15 (implemented + closeout)
 **Authority:** ADR-execution-model §9.4.7 / §9.4.7.1 (MIXED-WAKE bounded
 observation park; the P5 seam explicitly reserved: "P5 is reserved if P3 proves
 insufficient under the formal gate or the load-bearing tests"); AGENTS.md §4.4
