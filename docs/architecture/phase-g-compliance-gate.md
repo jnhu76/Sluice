@@ -3,12 +3,11 @@
 **Phase:** G (final async-foundation phase; roadmap "backend-ready wake
 integration")
 **Design:** `docs/design/phase-g-backend-progress-wake.md`
-**Status:** **BLOCKED (G1)** — the implementation and instrumentation are in,
-but the park-window forensic finding (`docs/design/phase-g-backend-progress-wake.md`
-§8) proves the unbounded wake-domain park violates the park-window invariants
-(deterministic reproducer in `phase_g_backend_progress_wake_test`). Phase G is
-NOT complete; G2–G7 are deferred pending an approved fix design. Gate 4 rows
-below record only what was actually executed on 2026-08-14.
+**Status:** **G1 REPAIRED** — the park-window forensic finding (`docs/design/
+phase-g-backend-progress-wake.md` §8) closed by the four-mechanism repair R1–R4
+(§8.5 of the design; deterministic reproducer now GREEN). Phase G remains
+incomplete: G2–G7 are still deferred. Gate 4 rows below record only what was
+actually executed (2026-08-14 forensics head, 2026-08-15 G1-repair head).
 **Authority:** ADR-execution-model §9.4.7/§9.4.7.1 (MIXED-WAKE; P5 seam
 reserved); AGENTS.md §4.4/§10/§13.1/§13.2/§14; Constitution AC-6 (polling
 justification), AC-7, AC-10, AC-13, AC-14, AC-15.
@@ -63,6 +62,10 @@ MW-S2 participant COMMITTED (E7 two-phase admission, unchanged):
 | interrupted, no reap, external waits remain | participant (Phase D) | G (reclassify) | none | n/a | re-park (stay resident) — NEW rule | stop converges at MW-S3 via stop predicate |
 | interrupted, no reap, backend-only | participant (Phase D) | G | none | n/a | terminate run (unchanged; driver re-entry) | unchanged |
 | Scheduler wake publication -> bridge | signal_wake_locked (any producer) | W then B (leaf) | none | n/a | parked wait_one returns interrupted | control/stop semantics unchanged |
+| park commit (wake domain) | parking worker | **G -> W (arm under state authority)** | none | n/a | **arm -> recheck protocol (R1): the epoch baseline is taken under `global_mtx_` AFTER the progress-predicate recheck; a publication in the arm window is either seen by the recheck or consumed by the baseline (Tokio `Notify::enable` discipline); a refused park signals an electable sleeper and re-loops** | unchanged |
+| MW-S2 election | lowest-id ACTIVE worker | G | none | n/a | **transferable election (R2): the participant is the lowest-id active worker, not hardcoded worker 0; a worker that refuses (progress pending) signals an electable sleeper** | unchanged |
+| worker terminate (loop exit) | exiting worker | **G -> I (inbox, released before signal)** | none | n/a | **terminate retire (R3): local runnables move to `pending_spawn_`, `live_loop_workers_` decrements, one unconditional `signal_wake_locked` AFTER the inbox lock is released (lock order stays G -> I then G -> W, never I -> W)** | stranded-runnable class eliminated |
+| park predicate | parking worker | G -> W (R1) / G (R4 backstop) | none | n/a | **idle backstop (R4): a park is refused while `idle_workers_ > 0` — persistent state, not a notification race** | unchanged |
 
 ### 1.2 Lock-order table (AGENTS.md §13.1; new edges bold)
 
@@ -132,7 +135,14 @@ wake handle / termination)
 - **Lost-wake closure:** the snapshot -> poll -> wait_for_change epoch
   protocol (existing); the D4-RM14 arm_committed_wait commit-to-park handshake
   (existing, now also MIXED); the D4-RM13 invocation-level control baseline
-  (existing); the level-triggered ring/control fd (Uring, existing).
+  (existing); the level-triggered ring/control fd (Uring, existing); and the
+  G1-repair arm-recheck protocol (R1) — the wake-domain park baseline is armed
+  under `global_mtx_` after the progress recheck, and every park refusal
+  (progress pending, non-lowest-id election refusal, idle-workers backstop)
+  emits `signal_wake_locked` before re-looping, so a park refusal can never
+  strand an electable sleeper. The progress predicate additionally treats a
+  positive `idle_workers_` as pending progress (R4), closing the
+  notification-absorbed-by-baseline window with persistent state.
 - **Coalescing:** multiple backend-ready -> one or more epoch advances; the
   drain reaps all; 1:1 wake is never required (G-I3).
 - **Progress vs control distinction:** progress epoch (backend readiness) and
@@ -149,6 +159,13 @@ backend progress || runtime stop || close_admission || participant park
   wakes; participant re-drains, reaps remaining readiness, reaches MW-S3, and
   the stop predicate terminates the run; driver re-enters on the control
   epoch (unchanged).
+- A worker whose loop exits (`mw_s2_no_progress_terminate` or stop) now
+  retires before leaving (R3): its local runnables are handed to
+  `pending_spawn_` (globally recoverable — the Runnable-ownership invariant
+  of design §8.5), `live_loop_workers_` decrements under `global_mtx_`, and
+  one unconditional wake is published. Idle-dance convergence compares
+  against `live_loop_workers_`, so an exited participant no longer suppresses
+  the survivor's convergence.
 - The D4-RM14 armed baseline now also protects the MIXED commit-to-park
   window (previously the MIXED park had no backend arm; the stop-vs-commit
   race is closed for both domains).
@@ -166,12 +183,14 @@ the implementation head.
 |---|---|---|
 | Production libraries | `xmake build sluice_core sluice_async` (Clang Debug) | build ok (guarded forensics excluded from production) |
 | Internal-testing library | `xmake build sluice_async_internal_testing` | build ok |
-| Clang Debug full suite | clean rebuild, 165 debug binaries, parallel (`xargs -P 16`, per-binary `timeout 300` — the §8 method; bare `xmake test` has no per-binary timeout and hangs forever on the G1 stalls) | 162 PASS on the review-fix head. Non-PASS, all pre-existing G1-family: `phase_g_backend_progress_wake_test` rc 70 (the deterministic reproducer — EXPECTED RED while G1 BLOCKED), `application_runtime_drain_starvation_test` rc 134 (documented downstream abort, §8), `sluice_copy_pipeline_stress_test` rc 124 (timeout — the documented G1 stall family). No NEW failures vs the §8 baseline; the copy/pipeline integration binaries passed this run (the G1 manifestations are timing-dependent — the reason the deterministic reproducer exists). Note: `xmake test` itself stalls indefinitely on the G1-hanging binaries — CI runs it under `scripts/ci-hang-watchdog.sh 420` (fail-closed), and local evidence must use the per-binary timeout method |
+| Clang Debug full suite | clean rebuild, 165 debug binaries, parallel (`xargs -P 16`, per-binary `timeout 300` — the §8 method; bare `xmake test` has no per-binary timeout and hangs forever on a stalled binary) | **165/165 PASS on the G1-repair head (2026-08-15)**, including the previously G1-stalling family (`sluice_copy_pipeline_stress_test`, `sluice_copy_pipeline_integration_test`, `application_runtime_drain_starvation_test`). On the pre-repair forensics head (2026-08-14): 162 PASS, non-PASS all G1-family (reproducer rc 70 EXPECTED RED, drain starvation rc 134, copy stress rc 124 timeout) — the fix flips all four |
+| G1 deterministic reproducer (PR #108 review P2b; replaces the yield-ordered canary) | `SLUICE_TEST_FILTER=phase_g_g1_stranded_runnable_park_stall_reproducer`, per-binary `timeout 120`; construction holds run_impl at the run-entry seam (`worker_topology_ready_before_start`), submits the task while held, releases — the fiber is queued before any worker thread loops, so the run cannot converge before the task runs (a plain submit-after-start loses that race in Release builds) | pre-repair: 10/10 rc 70 on the original construction; on the seam construction, Release build pre-repair 5/5 rc 70 (5/5 the PRIMARY `stranded-runnable` dump) — post-repair (R1–R4): **5/5 GREEN (Release), 30/30 GREEN (Debug)**; the park-domain-pair pre-observation pins the interleaving before request_stop (role-based: participant/survivor by park_domain); any construction deviation fails closed EARLY with its own dump tag (uniform rc 70, no mid-stall teardown, caller resets the Completion before join) |
+| G1 repair targeted stress | `application_runtime_drain_starvation_test` ×9 (6 under TSan), `sluice_copy_pipeline_stress_test` ×6, `sluice_copy_pipeline_integration_test` ×13 | all PASS on the G1-repair head (pre-repair: drain starvation rc 134 abort, copy stress rc 124 timeout — both timing-dependent G1 manifestations) |
+| TSan full suite (AGENTS.md §16.3) | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test`, then the §8 parallel method (re-run after the run-entry seam change) | **PASS on the final head (2026-08-15): 0 ThreadSanitizer reports, 0 non-zero binaries across two full parallel sweeps** — the gate itself found and forced the repair of one lock-order inversion introduced by R3 (`inbox -> wake` edge vs the predicate's `wake -> inbox` edge; fixed by narrowing the inbox critical section and signaling after release). One earlier sweep produced a single rc 134 from `threadpool_backend_scheme_b_race_test` under 16-way parallel TSan load; not reproducible across 2 clean full sweeps + 14 focused re-runs (sequential and 8-way concurrent), 0 TSan reports — recorded as a load flake of that binary's watchdog diagnostics, not a scheduler finding. Modified race classes covered per §16.3: submit/dequeue, enqueued cancel/dequeue, backend-ready/reap, wake signal/wait, reset/reuse, shutdown worker wake |
 | Phase G regression | `SLUICE_TEST_FILTER=phase_g_quiescent_not_last_idle_signals_domain` ×30 | 30/30 PASS |
 | Bounded-wait capability contract (PR #108 review P1b) | `SLUICE_TEST_FILTER=ctx_wait_one_bounded_cap_requires_capability xmake run async_io_context_split_wait_c2e_test` | PASS — a capability-less wait source receives a finite cap as synchronous `not_supported` (no park, no accounting), capability queries truthful, unbounded form unchanged |
-| G1 deterministic reproducer (PR #108 review P2b; replaces the yield-ordered canary) | `SLUICE_TEST_FILTER=phase_g_g1_stranded_runnable_park_stall_reproducer` ×10 | EXPECTED RED while G1 BLOCKED: 10/10 rc 70, 10/10 the PRIMARY stranded-runnable construction (`stranded-runnable observed=1`, w0_runnable=1 on the dead worker, `g1-stranded-runnable-park-stall` dump) — the park-domain-pair pre-observation (participant Backend + survivor Scheduler) pins the interleaving before request_stop, so the survivor is always held at its post-park recheck; the no-participant manifestation (task landing on worker 1) fails closed EARLY (`no-participant-parked-pair`, also rc 70). The old rc 70 / rc 134 / rc 124 exit-mode competition is eliminated (uniform fail-closed, no mid-stall teardown, caller resets the Completion before join) |
 | Adjacent sanity | `application_runtime_test`, `async_io_context_split_wait_c2e_test`, `async_stats_wait_race_test` | PASS |
-| Clang Release full suite | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | NOT EXECUTED (deferred with G2–G7) |
+| Clang Release full suite (AGENTS.md §16.1 — public headers changed) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test`, then the §8 parallel method (`xargs -P 16`, per-binary `timeout 300`); `sluice_copy_integration_test` exec's the `sluice-copy` CLI by a run-directory-relative path, so it must run with cwd = the build directory | **PASS (2026-08-15): all test binaries green** — `phase_g_backend_progress_wake_test` (both cases), `application_runtime_drain_starvation_test`, `sluice_copy_pipeline_stress_test`, `sluice_copy_pipeline_integration_test`, `sluice_copy_integration_test` individually re-verified; the initial sweep's two non-zero rows were runner artifacts (the `sluice-copy` CLI usage binary is not a test target; the copy-integration binary needs the build-dir cwd), and one real finding: the reproducer's submit-after-start placement lost the first-idle convergence race in Release (`no-participant-parked-pair` fail-closed) — fixed by the run-entry seam construction, then 5/5 pre-fix RED / 5/5 post-fix GREEN in Release |
 | ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | NOT EXECUTED (deferred) |
 | TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | NOT EXECUTED (deferred) |
 | Real-liburing | `xmake f -m debug --toolchain=clang --with-liburing=true -y && xmake build -g test && xmake test -v` | NOT EXECUTED (deferred) |
@@ -184,15 +203,17 @@ the implementation head.
 
 ## Known limits / residual risk
 
-- **G1 BLOCKED (primary risk)**: the unbounded wake-domain park has an
-  un-closed commit-to-sleep window — see
-  `docs/design/phase-g-backend-progress-wake.md` §8 for the four violated
-  park-window invariants, the evidence-backed timeline, and the structural
-  contributors (worker-0-only MW-S2 election; backend completion not crossing
-  into the wake domain; terminate-path inbox stranding; no predicate backstop
-  for route-to-owner runnables). No behavioral fix is included in this change
-  (forensics only); a timeout/cap re-arm is explicitly not an acceptable
-  repair.
+- **G1 REPAIRED (was the primary risk)**: the unbounded wake-domain park's
+  commit-to-sleep window is closed by R1–R4 (design §8.5): arm-after-recheck
+  park commit, transferable lowest-active-id election, terminate-path retire
+  to `pending_spawn_` + unconditional wake, and the `idle_workers_ > 0`
+  predicate backstop. A timeout/cap re-arm was NOT used. Deterministic
+  reproducer 28/28 GREEN; full Debug 165/165; TSan 0 reports.
+- **Formal-model debt (AGENTS.md §17)**: the `spec/tla/e9_park_wake` model
+  still encodes the pre-repair park/election/terminate rules. Updating it to
+  the R1–R4 rules is recorded as a G2 precondition in design §8.5 (justified
+  gap: the implementation carries a deterministic causal reproducer and TSan
+  evidence in the interim).
 - Reference backends (Fake/Sync) keep the bounded Scheduler-domain
   observation interval in MIXED-WAKE (their readiness is poll-driven and
   cannot self-notify). This is a documented reference-backend classification

@@ -595,19 +595,105 @@ NOT fixed in this change):
 
 ### 8.4 Verdict
 
-**G1 BLOCKED.** The Phase G unbounded wake-domain park is NOT sound with the
-current classify/predicate/election protocol: the system can reach and
-permanently hold a state where work exists (a routed continuation on a
-worker queue), no worker is in the backend domain, every worker is parked
-unguarded in the wake domain, and no wake publication is pending. The E9
-2ms periodic re-classification previously masked these windows; removing it
-(Phase G's goal) exposed them. All G2–G7 work is deferred until the park
-window is closed by design (fix design must address 8.3's four conditions
-together; a timeout re-arm is explicitly NOT an acceptable repair).
+**G1 BLOCKED (superseded by §8.5 — the repair landed and is verified).** The
+Phase G unbounded wake-domain park was NOT sound with the pre-repair
+classify/predicate/election protocol: the system could reach and permanently
+hold a state where work exists (a routed continuation on a worker queue), no
+worker is in the backend domain, every worker is parked unguarded in the wake
+domain, and no wake publication is pending. The E9 2ms periodic
+re-classification previously masked these windows; removing it (Phase G's
+goal) exposed them.
 
-Residual open question for the fix design: worker 0's WorkerState carries
-the stranded runnable across the run boundary (its thread exited via
-`mw_s2_no_progress_terminate`); whether the re-entered run's fresh worker-0
-thread can also strand (loop-top pops before classify) or whether this
-instance exited before the route — the dump proves the stranded-runnable
-state, not the exact interleaving of run re-entry.
+Residual open question (resolved by the repair's retire + live-count): worker
+0's WorkerState carried the stranded runnable across the run boundary because
+the terminate path neither transferred inbox entries nor let the survivors'
+idle-dance converge against the shrunken participant set; both are now closed
+mechanically (below), so the run boundary no longer strands tickets.
+
+### 8.5 The G1 repair (PR #108 follow-up; addresses §8.3's four conditions together)
+
+The repair is four cooperating mechanisms, each mapped to the violated
+invariant it closes. No timeout re-arm is used anywhere.
+
+**R1 — Park-commit arm→recheck closure (conditions 1+4; the Tokio
+`Notify::enable` discipline).** `park_on_wake_source` records its
+`observed_epoch` baseline under a NESTED `global_mtx_ → wake_mtx_`
+acquisition (the accepted order), AFTER rechecking under `global_mtx_` — the
+domain every runnable/route publication serializes under — that no
+`unguarded_progress_pending_locked()`: a runnable ticket on ANY active
+participant's queue or in `pending_spawn_`, or accepted backend work, with NO
+active observer (no running fiber, no backend-domain participant, no
+admission in flight). A refusing worker does not park: it SIGNALS the wake
+domain (a non-electable refuser must wake the sleeping electable sibling —
+the progress-observer invariant) and re-loops, becoming the observer itself
+(steal — including from a terminated worker's queue — or MW-S2 election).
+Because publishers signal under `global_mtx_`, a publication before the
+recheck is SEEN by it and one after it advances the epoch past the
+just-recorded baseline: the check-then-arm window is closed.
+
+**R2 — Transferable MW-S2 election (the "worker-0-only election"
+contributor).** Phase A elects the LOWEST-ID worker whose loop is still live
+(`WorkerState::active`), not hard-coded worker 0: with all workers alive the
+behavior is unchanged (worker 0), but after the participant's thread exits
+through the no-progress terminate a survivor can elect — the no-participant
+manifestation heals instead of parking unguarded forever.
+
+**R3 — Terminate-path retire (the "terminate path strands queued runnables"
+contributor).** Every worker_loop exit funnels through a retire block that
+moves the worker's `local_runnable` to `pending_spawn_` (live workers'
+loop-top drains it; the next invocation's setup re-seeds and re-records
+owners) and decrements `live_loop_workers_` — the idle-dance convergence
+threshold is now the LIVE loop count, not the invocation snapshot size (the
+"participant disappearance" residual: a survivor could otherwise remain one
+short of last-idle forever, `run_live` never returns, and the driver never
+reaches its drain-complete evaluation). The retire signals the wake domain
+unconditionally, with the inbox lock released first (lock-order discipline).
+
+**R4 — Persistent-state park predicate (condition 4's general closure).**
+Both wake-domain park predicates additionally re-check
+`idle_workers_ > 0`: a counted dancer waiting for convergence is persistent
+state, so a sibling whose baseline absorbed the dancer's not-last signal
+returns from the park without sleeping, re-classifies, and either joins the
+dance (counting toward convergence) or observes progress. The same
+discipline already covered terminate/epoch/own-inbox; the dance count was
+the missing persistent term.
+
+**Why no backend→wake bridge is needed:** with R1+R2, any worker that finds
+unguarded backend progress refuses to park and becomes the observer (it
+elects into `wait_one`, whose snapshot→poll→park loop then reaps a
+ready-but-unobserved publication on entry); the observer invariant is
+self-restoring at the park boundary rather than requiring a reverse bridge.
+
+**Evidence (all on the repaired head):**
+- the deterministic reproducer (§8.1): pre-repair RED, post-repair GREEN on
+  an UNCHANGED scenario. After the initial 20+8 GREEN runs, a Release-build
+  sweep exposed a construction (not a repair) defect: a submit-after-start
+  placement races the workers' first idle convergence — in Release the
+  workers can go idle, one exits `last_idle_terminate`, and the late submit
+  leaves the fiber for the single survivor, so the parked pair the
+  reproducer pins can never form (fail-closed `no-participant-parked-pair`).
+  The construction now holds run_impl at the run-entry seam
+  (`worker_topology_ready_before_start`: topology published, no worker
+  thread started), submits while held, and releases — the fiber is queued on
+  worker 0's inbox before any thread loops, eliminating the convergence race
+  in every build mode. On this construction: pre-repair 5/5 rc 70 (5/5 the
+  PRIMARY `stranded-runnable` dump, Release build), post-repair 5/5 GREEN
+  (Release) and 30/30 GREEN (Debug), including the role-swapped
+  interleavings the transferable election admits;
+- `sluice_copy_pipeline_integration_test` ×13, `sluice_copy_pipeline_stress_test`
+  ×3+3, `application_runtime_drain_starvation_test` ×3+3 and 6/6 under TSan:
+  all PASS (pre-repair: recurring timeouts / SIGABRT / the §8 stall); the
+  four binaries also PASS a Release sweep;
+- full suite: 165/165 debug binaries PASS (parallel ×16, per-binary
+  timeout 300) — the three pre-repair G1-family failures are gone;
+- TSan: the full gate clean after the retire's inbox-scope fix (the one
+  finding TSan produced — an inbox_mtx→wake_mtx_ inversion introduced by an
+  early retire draft — was repaired; see the compliance gate's race rows).
+
+**Formal-model status (AGENTS §17):** the repair changes the modeled park
+commit rule, election, and termination convergence of `spec/tla/e9_park_wake`.
+Updating that model to R1–R4 and re-running TLC is recorded as a REQUIRED
+G2-entry obligation in the compliance gate (a justified coverage gap for
+THIS change: the implementation evidence is the deterministic reproducer —
+pre-repair RED, post-repair GREEN on an unchanged construction — plus the
+full-suite and TSan gates; the model update must land before G2).
