@@ -43,7 +43,26 @@ while kill -0 "$child" 2>/dev/null; do
             # stuck state, not the state during gdb's own attach.
             kill -STOP "$p" 2>/dev/null || continue
             bt="$OUT_DIR/hang-pid${p}.bt"
-            gdb -batch -p "$p" -ex "thread apply all bt" >"$bt" 2>&1
+            : >"$bt"
+            if command -v gdb >/dev/null 2>&1; then
+                gdb -batch -p "$p" -ex "thread apply all bt" >>"$bt" 2>&1
+            else
+                # gdb is not always present on the runner image (observed
+                # 2026-08-15: ubuntu-24.04 image shipped without gdb, the
+                # capture produced "gdb: command not found" and the hang had
+                # NO backtrace). Degrade to per-thread kernel state — enough
+                # to distinguish parked-in-futex from userspace spin, which
+                # is the first branch point of any hang triage.
+                echo "(gdb unavailable — /proc fallback)" >>"$bt"
+                for t in /proc/$p/task/*; do
+                    {
+                        echo "== thread ${t##*/} =="
+                        echo "state: $(cat "$t/stat" 2>/dev/null | cut -d' ' -f3)"
+                        echo "wchan: $(cat "$t/wchan" 2>/dev/null)"
+                        echo "syscall: $(cat "$t/syscall" 2>/dev/null | cut -c1-60)"
+                    } >>"$bt" 2>/dev/null
+                done
+            fi
             echo "[hang-watchdog]   backtrace -> $bt ($(wc -l <"$bt") lines)"
             # Print the capture into the job log so it is visible in the
             # Actions UI without an artifact download step.

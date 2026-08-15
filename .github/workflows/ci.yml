@@ -81,7 +81,12 @@ jobs:
         # printed in the log instead of a silent stall; a hang still fails
         # the job (fail-closed). ptrace_scope=0 lets gdb attach to the
         # orphaned test binaries (runner user has passwordless sudo).
+        # gdb is installed explicitly: the hosted image has shipped WITHOUT
+        # it (2026-08-15), which left a hang with no backtrace ("gdb:
+        # command not found"); the watchdog also carries a /proc per-thread
+        # fallback in case the install fails.
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq gdb
           sudo sysctl -w kernel.yama.ptrace_scope=0 || true
           bash scripts/ci-hang-watchdog.sh 420 xmake test -v
 
