@@ -2180,6 +2180,13 @@ public:
     // Internal-testing access surface. Reached only via the non-installed
     // test-support controller; not part of the public API.
     struct AsyncTestAccess {
+        // Post-freeze R1 (PR #114 review): TLS identity probe. Returns the
+        // raw g_worker slot value as read by Scheduler::current_worker() —
+        // a definition compiled in src/async/scheduler.cpp — so a test can
+        // prove the split's `inline thread_local` entity is ONE per-thread
+        // object shared across the scheduler implementation TUs. Pointer
+        // VALUE only; callers must not dereference it.
+        static WorkerState* tls_worker_probe() noexcept { return current_worker(); }
         // Phase G park-window forensics (G1 BLOCKED instrumentation): dump
         // the park ledger + live scheduler state for a stalled run. The
         // watchdog thread of a forensics test calls this on its bounded

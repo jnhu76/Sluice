@@ -13,6 +13,15 @@ sluice_internal_async_test("multi_worker_coord_test")
 -- reader, then verifies the admitted Fiber executes exactly once.
 sluice_internal_async_test("scheduler_worker_topology_race_test")
 
+-- Post-freeze R1 review (PR #114): direct verification that the scheduler
+-- split's ONE cross-TU linkage adaptation (g_worker became inline
+-- thread_local in src/async/scheduler_internal.hpp) preserves the identity
+-- contract — one per-thread entity shared across scheduler TUs, isolated
+-- per OS thread. The motion certificate cannot cover new glue (#113).
+-- Needs src/async on the include path for the non-installed header.
+sluice_internal_async_test("scheduler_tls_identity_test",
+                           {includedirs = {"include", "tests", "src/async"}})
+
 -- Issue #50 ApplicationRuntime regression. Drives the real Runtime submit /
 -- stop / drain / join path while its Scheduler is paused at initial topology
 -- publication, proving every admitted task reaches terminal execution.
