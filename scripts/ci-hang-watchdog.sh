@@ -32,13 +32,52 @@ echo "[hang-watchdog] budget=${TIMEOUT_SECS}s cmd: $*"
 child=$!
 deadline=$((SECONDS + TIMEOUT_SECS))
 
+# The watchdog must never treat itself or one of its ancestors as a
+# "survivor". pgrep -f matches full command lines, and an outer wrapper
+# (agent shell, CI dispatcher) can legitimately embed the build-path pattern
+# in its own arguments; freezing/killing it would kill the watchdog's session
+# (observed locally 2026-08-16 during an offline watchdog test). Walk our own
+# PPid chain once and skip those pids during survivor capture.
+self_ancestry=" $$"
+walk=$$
+while [ "$walk" -gt 1 ]; do
+    walk=$(awk '/^PPid:/{print $2}' "/proc/$walk/status" 2>/dev/null)
+    [ -z "$walk" ] && break
+    self_ancestry=" $walk$self_ancestry"
+done
+
 while kill -0 "$child" 2>/dev/null; do
     if [ "$SECONDS" -ge "$deadline" ]; then
         echo "[hang-watchdog] TIMEOUT after ${TIMEOUT_SECS}s — capturing survivors"
+        # Process-tree snapshot first: which test binaries are alive, their
+        # parentage (xmake -> test binary), state, and elapsed time. This is
+        # the minimum evidence to say WHO hung and for HOW LONG before the
+        # backtraces, without needing gdb.
+        echo "[hang-watchdog]   process tree (xmake/test procs):"
+        ps -e -o pid,ppid,stat,etime,comm,args --forest 2>/dev/null \
+            | grep -E 'xmake|_test|hang-watchdog' | grep -v grep \
+            | head -40 | sed 's/^/[hang-watchdog]     /'
         survivors=0
         for p in $(pgrep -f 'build/linux/x86_64/debug/.*_test' || true); do
+            case " $self_ancestry " in
+                *" $p "*) continue ;;
+            esac
             cmd=$(tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null || echo "unknown")
             echo "[hang-watchdog]   survivor pid=$p: $cmd"
+            if [ -r "/proc/$p/status" ]; then
+                ppid=$(awk '/^PPid:/{print $2}' "/proc/$p/status")
+                pstate=$(awk '/^State:/{print $2}' "/proc/$p/status")
+                # Elapsed seconds from /proc starttime (field 22 of stat,
+                # clock ticks) vs /proc/uptime; degrade to '?' on any gap.
+                st_ticks=$(awk '{print $22}' "/proc/$p/stat" 2>/dev/null)
+                up_secs=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)
+                if [ -n "$st_ticks" ] && [ -n "$up_secs" ]; then
+                    pelapsed=$(( up_secs - st_ticks / 100 ))
+                else
+                    pelapsed='?'
+                fi
+                echo "[hang-watchdog]     ppid=$ppid state=$pstate elapsed=${pelapsed}s"
+            fi
             # SIGSTOP first: freeze the process so the backtrace shows the
             # stuck state, not the state during gdb's own attach.
             kill -STOP "$p" 2>/dev/null || continue
