@@ -53,7 +53,7 @@ Why this workload exercises the load-bearing surface:
 transform stage (`reader.hpp`, `writer.hpp`, `copy.hpp`).
 
 **Foundation modules touched: NONE.** No file under `src/async/scheduler*.cpp`,
-`detail/request_arena.hpp`, backend sources, or `include/sluice/async/`
+`include/sluice/async/detail/request_arena.hpp`, backend sources, or `include/sluice/async/`
 headers should need edits. That is the pass/fail bar of this spike.
 
 ## 3. Expected friction points (record as evidence, do not pre-fix)
