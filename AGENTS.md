@@ -301,8 +301,9 @@ Never hide a baseline failure by:
 
 A repository-managed local pre-push gate catches deterministic mechanical
 failures — documentation link validation, architecture-doc structure, the
-backend-conformance manifest self-test, and whitespace damage — BEFORE a push
-consumes a GitHub CI round trip. It is developer tooling only and does NOT
+backend-conformance manifest self-test, mechanical facts (identifier
+near-miss, doc LOC/count/cross-reference claims), and whitespace damage —
+BEFORE a push consumes a GitHub CI round trip. It is developer tooling only and does NOT
 modify async/I/O production behavior or weaken GitHub CI.
 
 Architecture (one authority):
@@ -341,7 +342,7 @@ test suite, sanitizers, real-liburing, formal models, or fuzz loops — those
 remain CI or explicit developer gates. Conceptual split:
 
 ```text
-pre-push : docs, manifests, whitespace (pushed ranges)
+pre-push : docs, manifests, mechanical facts, whitespace (pushed ranges)
 CI       : build, full tests, sanitizers, real liburing, negative compile,
            conformance, formal verification
 ```
@@ -1042,6 +1043,8 @@ scripts/verify-request-arena-negative-compile.sh
 python3 scripts/check-doc-links.py --self-test
 python3 scripts/check-doc-links.py
 python3 scripts/verify-architecture-docs.py
+python3 scripts/gates/mechanical-facts.py --self-test
+python3 scripts/gates/mechanical-facts.py
 git diff --check
 ```
 
