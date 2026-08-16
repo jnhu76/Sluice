@@ -22,10 +22,11 @@ structure.
 - `lib/std/Io.zig` — `Io.Evented` compile-time platform dispatch (IoUring on
   Linux x86_64/aarch64, Kqueue on BSD/macOS, `void` elsewhere); `Group.cancel`
   / `Select.cancel` scoping.
-- `lib/std/Io/` directory layout (`Dir.zig`, `File.zig`, `IoUring.zig`,
-  `Kqueue.zig`, `Reader.zig`, `Writer.zig`, `Threaded.zig`, `net/`, `tty.zig`).
+- The "lib/std/Io" directory layout (Dir, File, IoUring, Kqueue, Reader,
+  Writer, Threaded, net/, tty — sibling modules behind the interface).
 - Sources: context7 index of `ziglang/zig` **master** (snippets above cite
-  `blob/master` paths) and the repo-structure listing of the GitHub mirror.
+  upstream paths at the master branch) and the repo-structure listing of the
+  GitHub mirror.
   The pre-freeze semantic map additionally pinned Codeberg master `89e0881f`
   (2026-08-11); no contradicting drift was observed between that anchor and
   the master snippets read today.
