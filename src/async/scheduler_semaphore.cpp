@@ -312,6 +312,4 @@ bool Scheduler::sem_release(WaitQueue& waiters,
     return true;
 }
 
-// ---- E12-C AsyncMutex admission / handoff (sluice-CORE-E12-C) ----
-
 }  // namespace sluice::async

@@ -1076,7 +1076,6 @@ bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
     return false;
 }
 
-// ---- E11 timer / deadline subsystem (sluice-CORE-E11) ----
 
 
 void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,

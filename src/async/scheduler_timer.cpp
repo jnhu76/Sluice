@@ -187,7 +187,6 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
     return false;
 }
 
-// ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
 
 
 std::size_t Scheduler::pump_deadlines_locked() {

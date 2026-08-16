@@ -41,7 +41,7 @@ Why this workload exercises the load-bearing surface:
 | error propagation | `Result<T>`/`IoError` end-to-end; no exceptions across the seam |
 | backend variance | same app on `ThreadPoolBackend` and real-liburing `UringAsyncBackend` |
 
-## 2. Which cppio APIs it uses (public surface only)
+## 2. Which Sluice APIs it uses (public surface only)
 
 `RuntimeBuilder` / `ApplicationRuntime` / `RuntimeTaskContext`
 (`application_runtime.hpp`); `Group`, `Future`, `Semaphore`, `Event`,

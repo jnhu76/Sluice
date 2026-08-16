@@ -1650,7 +1650,7 @@ namespace {
 // A RwWaitCtx-compatible layout with a valid mode value (read=0). Matches the
 // production RwWaitCtx layout so the grant's static_cast<RwWaitCtx*> reads a
 // well-formed mode byte. Production RwWaitCtx is in an anonymous namespace
-// inside scheduler.cpp; this test-local mirror keeps the seam header-stable.
+// inside scheduler_rwlock.cpp; this test-local mirror keeps the seam header-stable.
 struct ForgedRwWaitCtx {
     enum class Mode : std::uint8_t { read, write };
     Mode mode;

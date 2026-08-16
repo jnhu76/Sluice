@@ -339,13 +339,5 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
     owner = nullptr;
 }
 
-// ===========================================================================
-// E12-F AsyncRwLock private seams (sluice-CORE-E12-F).
-//
-// Writer-fair, phase-batched Read-Write Lock. ALL authoritative state
-// mutations occur under global_mtx_ (G) -> waiters_.mtx() (W). The unified
-// grant helper dispatches to reader batch or single writer grant based on
-// the queue head mode. Cancel and expiry perform head reconcile after unlink.
-// ===========================================================================
 
 }  // namespace sluice::async

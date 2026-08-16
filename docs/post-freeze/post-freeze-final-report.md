@@ -30,16 +30,16 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1114 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 505 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 402 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 317 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 351 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 721 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_park_wake.cpp` | 1113 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_timer.cpp` | 504 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 343 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 667 | rwlock waits, ForgedRwWaitCtx |
 | `src/async/scheduler_condition.cpp` | 264 | condition waits |
-| `src/async/scheduler_queue.cpp` | 456 | runnable queue, fiber routing |
+| `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` (kept) | 1952 | ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 1952 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -101,9 +101,9 @@ divergence (DIV-01..DIV-13) was re-litigated.
 | Gate | Command | Result |
 |---|---|---|
 | Baseline before split | full Clang Debug at `d9184de` (recorded pre-task) | 167/167 pass |
-| Debug build | `xmake f -m debug --toolchain=clang --with-liburing=true -y; xmake build sluice_core; sluice_async; sluice_async_internal_testing` | all green |
+| Debug build | `xmake f -m debug --toolchain=clang --with-liburing=true -y` then `xmake build sluice_core` / `xmake build sluice_async` / `xmake build sluice_async_internal_testing` (one target per command) | all green |
 | Debug tests | `xmake build -g test && xmake test -v` | **167/167 pass** |
-| Release build | `xmake f -m release --toolchain=clang --with-liburing=true -y` + same targets | all green |
+| Release build | `xmake f -m release --toolchain=clang --with-liburing=true -y` then the same three single-target builds | all green |
 | Release tests | `xmake build -g test && xmake test -v` | **167/167 pass** |
 | Docs gates | `check-doc-links.py`, `verify-architecture-docs.py`, `git diff --check` | PASS / OK / clean |
 | Skipped | TSan/ASan/UBSan, real-liburing functional run, formal TLC, negative-compile scripts | not a §16.3/§16.2 change class (no concurrency/ownership semantics touched — pure motion); re-run when the split's successor changes land |

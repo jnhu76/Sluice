@@ -397,6 +397,4 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
     (void)fiber_ctx::context_switch(&s);
 }
 
-// ---- E12-B Semaphore admission / release (sluice-CORE-E12-B) ----
-
 }  // namespace sluice::async

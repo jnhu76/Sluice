@@ -164,7 +164,9 @@ def check_doc_loc_claims(doc_paths, root=None):
             if not target.is_file():
                 errs.append(f"{doc.name}: LOC row references missing file '{path}'")
                 continue
-            actual = sum(1 for _ in target.open(errors="replace"))
+            # wc -l semantics: count newline bytes so a final unterminated
+            # line is not counted (docs quote wc -l, not editor line count).
+            actual = target.read_bytes().count(b"\n")
             if actual != claimed:
                 errs.append(
                     f"{doc.name}: claims '{path}' = {claimed} lines, wc -l = {actual}"
@@ -185,11 +187,15 @@ def documented_split_set(doc_paths):
     return seen
 
 
-def check_split_layout(doc_paths):
+def check_split_layout(doc_paths, root=None):
     # Layout authority is the as-built inventory table in the final report;
     # other docs (e.g. the audit's historical risk matrix) may legitimately
     # mention the same files without being completeness authorities.
-    actual = {str(p.relative_to(REPO)) for p in REPO.glob(SPLIT_GLOB_CPP)}
+    base = root or REPO
+    actual = {str(p.relative_to(base)) for p in base.glob(SPLIT_GLOB_CPP)}
+    # The RETAINED scheduler.cpp TU is part of the as-built inventory too
+    # (split-layout completeness covers it, not just the new scheduler_*.cpp).
+    actual.add("src/async/scheduler.cpp")
     actual |= {SPLIT_GLOB_HPP}
     documented = documented_split_set(
         [p for p in doc_paths if p.name == "post-freeze-final-report.md"]
@@ -254,7 +260,7 @@ def run_all():
     if not docs:
         return ["mechanical-facts: no fact docs found under docs/post-freeze/"]
     errs += check_doc_loc_claims(docs, root=REPO)
-    errs += check_split_layout(docs)
+    errs += check_split_layout(docs, root=REPO)
     errs += check_sha_references(docs)
     errs += check_tracker_refs(docs)
     return errs
@@ -285,10 +291,19 @@ def self_test():
         if not check_doc_loc_claims([doc], root=t):
             failures.append("self-test: LOC-claim detector failed to fire")
 
-        # C: layout mismatch (file missing).
+        # C: layout mismatch (file missing) — validated against THIS temp
+        # root, plus a clean control proving no false positives when the
+        # documented set equals the actual set.
         doc.write_text("|`src/async/scheduler_ghost.cpp`|10|\n")
-        if not check_split_layout([doc]):
+        if not check_split_layout([doc], root=t):
             failures.append("self-test: layout detector failed to fire")
+        (t / "src" / "async").mkdir(parents=True)
+        (t / "src" / "async" / "scheduler_one.cpp").write_text("int a;\n")
+        (t / "src" / "async" / "scheduler.cpp").write_text("int b;\n")
+        open(t / "src" / "async" / SPLIT_GLOB_HPP.split("/")[-1], "w").write("int c;\n")
+        doc.write_text("|`src/async/scheduler_one.cpp`|1|\n|`src/async/scheduler.cpp`|1|\n|`src/async/scheduler_internal.hpp`|1|\n")
+        if check_split_layout([doc], root=t):
+            failures.append("self-test: layout false positive on complete inventory")
 
         # E: unknown tracker ref.
         doc.write_text("see #99999\n")

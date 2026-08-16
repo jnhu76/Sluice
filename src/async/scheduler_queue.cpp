@@ -445,12 +445,60 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
 
 // ===========================================================================
 //
-// CONDITION-WAIT-PREPARE combined step + Condition notify/cancel. Mirrors the
-// E12-A/B/C seam discipline: the AsyncCondition passes its private Condition
-// queue + the bound Mutex's (waiters, owner) BY REFERENCE (it friends the
-// AsyncMutex solely for that). The Scheduler is the authoritative Mutex
-// state-machine executor: the prepare seam releases the bound Mutex via the ONE
-// accepted mutex_handoff_one_locked (no second handoff), and notify/cancel
-// touch ONLY Condition-queue state.
 
+
+// E12-E AsyncQueue private seams (sluice-CORE-E12-E).
+//
+// Blocking/timed wait admission + reconciliation. A QueuePort owns a producer
+// and a consumer WaitQueue (waiters_[2]); the Scheduler is the authoritative
+// resolution + publication executor, as for E12-A/B/C/D. Lock order:
+// G (global_mtx_) -> S (QueuePort::state_mtx_) -> exactly one role mtx();
+// the two role mutexes are NEVER held together.
+//
+// DESIGN (atomic reconciler commit, single suspend). The reconciler is the
+// OTHER role's fast-path success: e.g. a producer's try_push that commits an
+// item to the ring WAKES the consumer FIFO head via wake_wait_one_locked and,
+// in the SAME G + S + role.mtx() critical section, moves the just-committed
+// item into that specific consumer's out-lease (read via won->user()). The
+// consumer's admit did a SINGLE register + suspend; on wake its out-lease is
+// already non-empty (item granted) — no re-check loop, no per-node reuse
+// problem. The producer direction is symmetric: a consumer's try_pop that
+// opened a slot wakes the producer FIFO head and commits the producer's lease
+// into the freed slot. close() wakes every parked producer (closed outcome —
+// lease retained) and every parked consumer (pop remaining items, else
+// closed).
+//
+// Per-operation context: the admit caller stashes a QueueWaitCtx* on the
+// WaitNode (node.set_user) BEFORE registering. The ctx carries the producer
+// control pointer (push) or the consumer out-lease address (pop). The
+// reconciler reads won->user() after wake_one_locked returns the winner.
+//
+// Winner-before-publication: the resolve_(Woken) CAS + the resource commit +
+// timer retire all happen in the SAME G + S + role critical section, BEFORE
+// make_runnable/route_runnable_locked (publication). A woken Fiber observes
+// the final state on resume.
+//
+// E12-E Queue timer bookkeeping (Corrective-2 §8 supersession). The
+// non-template QueuePort owns TWO per-port counters that bracket a Queue
+// timed wait:
+//   - `active_wait_associations_` (incremented on every successful
+//     registration; decremented on every resolution path — inline admit,
+//     grant seam, queue_cancel, AND the pump-driven timer expiry).
+//   - `active_queue_timers_` (incremented at timer registration; decremented
+//     when the timer is consumed or retired).
+// `active_wait_associations_` is decremented manually at each resolution
+// site that can name the port (the four admit seams, the two grant seams,
+// queue_cancel). The pump_deadlines_locked path cannot otherwise reach the
+// port, so for a Queue-bound registration it uses the registration's
+// `owner_ctx_` to perform the `--active_wait_associations_` decrement.
+// `active_queue_timers_` is decremented via the on-resolve thunk installed
+// on the TimerRegistration (fired by pump on consume and by
+// retire_timer_for_node_locked on retire); this keeps the timer-counter
+// bookkeeping localized to the timer's ACTIVE->terminal transition.
+// Non-Queue waits leave the hook null and the Scheduler's default
+// `--waiting_waitq_count_` accounting applies unchanged.
+//
+// The §8 PreparedQueueTimer/prepare/activate/discard substrate is
+// SUPERSEDED by this minimal model (see docs/e12-queue-corrective-3.md).
+//
 }  // namespace sluice::async

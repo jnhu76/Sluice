@@ -112,7 +112,8 @@ public:
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // ---- E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13) ----
-    // TEST-ONLY. Defined in scheduler.cpp (where Control is complete).
+    // TEST-ONLY. Defined in scheduler_park_wake.cpp (Control is
+    // completed in scheduler_internal.hpp).
     // Arm/pause/release the notify callback at the exact boundary: validated
     // + lease held, immediately before notify_external_wake. The seam does
     // NOT modify Scheduler state; it only blocks the notifier thread so the
@@ -125,7 +126,7 @@ public:
 
 private:
     friend class Scheduler;
-    struct Control;  // shared control block (defined in scheduler.cpp)
+    struct Control;  // shared control block (completed in scheduler_internal.hpp)
     explicit SchedulerWakeHandle(std::shared_ptr<Control> ctrl) noexcept
         : control_(std::move(ctrl)) {}
     std::shared_ptr<Control> control_;
@@ -1383,7 +1384,7 @@ private:
     // been removed. The seams are now driven by a non-installed test controller
     // keyed on `Scheduler*`, reached ONLY through phase call sites compiled into
     // the `sluice_async_internal_testing` variant (guarded by
-    // SLUICE_ASYNC_INTERNAL_TESTING in scheduler.cpp). The production
+    // SLUICE_ASYNC_INTERNAL_TESTING in the scheduler_*.cpp TUs). The production
     // `sluice_async` target has no such fields, no such call sites, and no such
     // symbols. See tests/async_test_control_internal.hpp for the controller.
 
