@@ -1,0 +1,132 @@
+# Post-Freeze Structural Hygiene Final Report (R0 + R1)
+
+**Verdict: READY_FOR_APPLICATION_DESIGN**
+
+**Date:** 2026-08-16
+**Baseline SHA:** `d9184de` (master, merge of PR #109 — Phase G foundation freeze)
+**Head after this pass:** this report's commit (R1 split + docs)
+**Governing docs:** [structural-audit.md](structural-audit.md) (R0, committed
+`aaad4a2`), [zig-std-io-alignment.md](zig-std-io-alignment.md),
+[../architecture/foundation-freeze.md](../architecture/foundation-freeze.md)
+
+---
+
+## 1. Scope delivered
+
+| Item | Status |
+|---|---|
+| R0 LOC inventory + 12-dimension audit + risk matrix | done, committed `aaad4a2` |
+| Zig `std.Io` structural concept map (read from source via context7) | done, committed, link-fix amended |
+| Divergence classification (ALIGN_NOW / VALID_CPP_DIFFERENCE / DEFER_TO_APPLICATION_EVIDENCE) | done — SD-A1 executed; SD-1..SD-5 kept with rationale; PF-1..PF-3 deferred |
+| R1 surgical refactor: `scheduler.cpp` god-TU split | done, 9 TUs, pure code motion + certificate |
+| First application workload design | done — [../application/first-workload.md](../application/first-workload.md) (`sluice-pipeline`) |
+| Full test matrix Debug + Release | done, both green (§5) |
+
+## 2. R1 refactor — what changed
+
+`src/async/scheduler.cpp` (5864 lines, ten concepts) → concept TUs, matching
+the repository's established `select_event.cpp` / `select_timer.cpp` /
+`queue_port.cpp` pattern:
+
+| New TU | Lines | Domain |
+|---|---|---|
+| `scheduler_park_wake.cpp` | 1114 | park/wake, R1-R4 protocol, interrupt bridge |
+| `scheduler_timer.cpp` | 505 | deadline heap, clock, test-clock |
+| `scheduler_event.cpp` | 402 | SchedulerEvent wake targets |
+| `scheduler_semaphore.cpp` | 317 | semaphore waits |
+| `scheduler_mutex.cpp` | 351 | AsyncMutex waits |
+| `scheduler_rwlock.cpp` | 721 | rwlock waits, ForgedRwWaitCtx |
+| `scheduler_condition.cpp` | 264 | condition waits |
+| `scheduler_queue.cpp` | 456 | runnable queue, fiber routing |
+| `scheduler_internal.hpp` | 73 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
+| `scheduler.cpp` (kept) | 1952 | ctor/dtor, worker loop, steal, spawn/run, classification |
+
+**Pure-motion guarantee:** the split script asserted 21 ranges reassemble the
+original 5864 lines byte-exactly; `verify_split.py` certified 15/15 checks —
+each new TU body equals its concatenated HEAD segments; `scheduler.cpp` keeps
+its segments; the only new text is the uniform include block, the TLS
+`inline` keyword, and file-header comments. No function, statement, ordering,
+or guard was rewritten. No new abstraction, no virtual interface, no public
+API change; `scheduler_internal.hpp` is not installed.
+
+**One defect injected and repaired during this pass** (recorded for the
+audit trail, see §6): the uniform include block in the 8 new TUs initially
+misspelled the test seam macro (`SLUCE_…` instead of `SLUICE_…`), which made
+only the `sluice_async_internal_testing` build fail (`'sluice_async_test' has
+not been declared`) while production targets stayed green. Found by direct
+source inspection after the input-level debugging protocol proved the failure
+deterministic; fixed as a one-character repair per file; both gates re-run
+green afterwards.
+
+## 3. Zig alignment outcome
+
+Structural axis (file-per-concept) is now aligned where it was fixable
+without touching frozen semantics (SD-A1). Everything else is either a valid
+C++/Sluice difference with recorded rationale (SD-1..SD-5) or deferred to
+application evidence (PF-1 scheduler.hpp split, PF-2 process I/O, PF-3
+`sleep_for`/`Timeout` convenience). No Zig mechanism was imported; no frozen
+divergence (DIV-01..DIV-13) was re-litigated.
+
+## 4. Freeze verification — hard-stop conditions honored
+
+- No Phase G frozen invariant changed: behavioral surfaces enumerated in
+  `foundation-freeze.md` untouched (split is intra-`sluice_async`
+  implementation motion).
+- No scheduler/cancellation/backend redesign: state machines, lock domains,
+  wake protocol, and all `#if defined(SLUICE_ASYNC_INTERNAL_TESTING)` seam
+  bodies are byte-identical to `d9184de`.
+- No new public API: `include/sluice/` unchanged; `scheduler_internal.hpp`
+  lives in `src/` and is not installed.
+- No LOC-driven split of a coherent implementation: every other large file
+  audited KEEP with rationale (audit §5).
+
+## 5. Test matrix (actual commands and results)
+
+| Gate | Command | Result |
+|---|---|---|
+| Baseline before split | full Clang Debug at `d9184de` (recorded pre-task) | 167/167 pass |
+| Debug build | `xmake f -m debug --toolchain=clang --with-liburing=true -y; xmake build sluice_core; sluice_async; sluice_async_internal_testing` | all green |
+| Debug tests | `xmake build -g test && xmake test -v` | **167/167 pass** |
+| Release build | `xmake f -m release --toolchain=clang --with-liburing=true -y` + same targets | all green |
+| Release tests | `xmake build -g test && xmake test -v` | **167/167 pass** |
+| Docs gates | `check-doc-links.py`, `verify-architecture-docs.py`, `git diff --check` | PASS / OK / clean |
+| Skipped | TSan/ASan/UBSan, real-liburing functional run, formal TLC, negative-compile scripts | not a §16.3/§16.2 change class (no concurrency/ownership semantics touched — pure motion); re-run when the split's successor changes land |
+
+Debug configuration restored after the Release leg.
+
+## 6. Fault post-mortem: the "phantom compile failure"
+
+During R1 verification the `sluice_async_internal_testing` target failed with
+`'sluice_async_test' has not been declared` in the new TUs. The failure
+survived reboots, tmpfs copies, ccache bypass, both clang and gcc, and
+appeared to flip between TUs — which drove a long environment-level hunt
+(execve argv/envp capture, frozen `.ii` 20/20 determinism, wrapper
+interposition). The determinism result was the turning point, exactly as the
+input-first debugging protocol predicted: a deterministic failure means the
+trigger is in the **input** (source + argv), not the spawn environment.
+Direct inspection then found the `SLUCE_` typo above. The "flipping between
+TUs" was output ordering under `-j2` (all eight TUs were broken; whichever
+error surfaced last in the tail looked like "the" failure). Production
+targets were green because both guard spellings evaluate false without the
+define. Evidence preserved under `~/repro_artifacts/` (execve traces, env
+diffs, frozen `.ii`); no hardware fault was ever established (EDAC clean;
+machine halts were unrelated auto-suspend, since masked).
+
+## 7. Application readiness
+
+The foundation is frozen, audited, structurally aligned where cheap, and
+green on the full Debug+Release matrix. The recommended first workload is
+**`sluice-pipeline`** (bounded parallel file pipeline):
+streaming reads → bounded queue → parallel transform stage → writes, with
+deadlines, cancellation, and graceful shutdown exercised end-to-end. It
+stays inside the approved scope (file I/O only, DIV-08; no networking) and
+is designed to generate the seam evidence that PF-1..PF-3 triggers require.
+See [../application/first-workload.md](../application/first-workload.md).
+
+## 8. STOP
+
+**Foundation remains frozen. No Phase H.** This pass changed implementation
+file organization only; it authorizes nothing beyond application design.
+The next repository work is the `sluice-pipeline` workload design and its
+friction log — not scheduler, backend, cancellation, or public-API changes.
+PF-1..PF-3 are recorded triggers, not approved work.
