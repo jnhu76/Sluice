@@ -187,15 +187,32 @@ SLUICE_TEST_CASE(steal_steal_transfers_owner_no_duplicate) {
 //   - f1's body (on W1) sets wid_w1=1, then spins holding W1 BUSY while it
 //     spawn_on(f2, 1) — placing F2 on W1's local queue. Because W1 is
 //     running f1 (not popping), F2 sits runnable on W1's queue. W0 is idle
-//     (f0 completed immediately) and steals F2.
+//     (f0 completed) and steals F2.
 //   - The test observes f2_suspended, then spawns the setter to make
 //     flag_x ready; the readiness drain routes F2 (owner=W0) back to W0.
 //
-// Why this is race-free on the gate: F1 is popped by W1 itself before any
-// stealing can occur (W0 popping f0 is independent; W0 cannot steal F1
-// because W1 pops F1 first under its own inbox_mtx). Once F1 runs on W1
-// and is spinning, W1 is deterministically busy, and F2 (spawned-onto W1)
-// is stealable by W0 with no ambiguity.
+// WHY f0 MUST SPIN UNTIL f2_spawned (CI run 31945036160 regression proof):
+//   A worker that has COMMITTED to the unbounded wake-domain park never
+//   re-scans victim queues (its wait predicate checks only its own inbox),
+//   and spawn_on() notifies only the target worker's inbox_cv — it does not
+//   advance the wake epoch. If W0 finishes f0 and parks BEFORE f1 places F2
+//   on W1's queue, F2 is stranded forever (f2_suspended is never observed;
+//   the hang-watchdog kills the binary — exactly the CI failure, reproduced
+//   by construction via the park-forensics ledger). f0 spinning until
+//   f2_spawned keeps W0 inside user fiber code until F2 is already runnable
+//   on W1, so W0's first idle transition reaches the loop-top try_steal
+//   (pop own -> try_steal -> drain -> classify -> park) with F2 present.
+//   This also removes the older pop-vs-steal race on f1 itself: f2_spawned
+//   is set by f1's body, so f1 is provably RUNNING on W1 (not stealable) by
+//   the time W0 can steal anything.
+//   The post-suspend phase needs no extra gate: while F2's ready-flag wait
+//   is registered, the park stays bounded at the E5-A2 observation
+//   interval, so the later setter spawn is observed within one poll.
+//
+// Why the steal itself is race-free on the gate: F1 is popped by W1 itself
+// before any stealing can occur (W0 is pinned inside f0). Once F1 runs on
+// W1 and is spinning, W1 is deterministically busy, and F2 (spawned-onto
+// W1) is stealable by W0 with no ambiguity.
 SLUICE_TEST_CASE(steal_steal_run_suspend_wake_resume_on_thief) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -214,7 +231,10 @@ SLUICE_TEST_CASE(steal_steal_run_suspend_wake_resume_on_thief) {
 
     Fiber f0, f1, f2;
     f0.set_entry([&](Fiber&) {
-        // F0 completes immediately; W0 goes idle and steals F2 from W1.
+        // Hold W0 busy INSIDE user fiber code until F2 is already runnable
+        // on W1's queue. Releasing earlier lets W0 commit the unbounded
+        // park before F2 lands — F2 then strands (see the comment above).
+        while (!f2_spawned.load(std::memory_order_acquire)) {}
     });
     f1.set_entry([&](Fiber&) {
         unsigned me = Scheduler::current_worker_id();

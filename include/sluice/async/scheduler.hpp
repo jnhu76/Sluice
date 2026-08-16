@@ -112,7 +112,8 @@ public:
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // ---- E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13) ----
-    // TEST-ONLY. Defined in scheduler.cpp (where Control is complete).
+    // TEST-ONLY. Defined in scheduler_park_wake.cpp (Control is
+    // completed in scheduler_internal.hpp).
     // Arm/pause/release the notify callback at the exact boundary: validated
     // + lease held, immediately before notify_external_wake. The seam does
     // NOT modify Scheduler state; it only blocks the notifier thread so the
@@ -125,7 +126,7 @@ public:
 
 private:
     friend class Scheduler;
-    struct Control;  // shared control block (defined in scheduler.cpp)
+    struct Control;  // shared control block (completed in scheduler_internal.hpp)
     explicit SchedulerWakeHandle(std::shared_ptr<Control> ctrl) noexcept
         : control_(std::move(ctrl)) {}
     std::shared_ptr<Control> control_;
@@ -1383,7 +1384,7 @@ private:
     // been removed. The seams are now driven by a non-installed test controller
     // keyed on `Scheduler*`, reached ONLY through phase call sites compiled into
     // the `sluice_async_internal_testing` variant (guarded by
-    // SLUICE_ASYNC_INTERNAL_TESTING in scheduler.cpp). The production
+    // SLUICE_ASYNC_INTERNAL_TESTING in the scheduler_*.cpp TUs). The production
     // `sluice_async` target has no such fields, no such call sites, and no such
     // symbols. See tests/async_test_control_internal.hpp for the controller.
 
@@ -2180,6 +2181,13 @@ public:
     // Internal-testing access surface. Reached only via the non-installed
     // test-support controller; not part of the public API.
     struct AsyncTestAccess {
+        // Post-freeze R1 (PR #114 review): TLS identity probe. Returns the
+        // raw g_worker slot value as read by Scheduler::current_worker() —
+        // a definition compiled in src/async/scheduler.cpp — so a test can
+        // prove the split's `inline thread_local` entity is ONE per-thread
+        // object shared across the scheduler implementation TUs. Pointer
+        // VALUE only; callers must not dereference it.
+        static WorkerState* tls_worker_probe() noexcept { return current_worker(); }
         // Phase G park-window forensics (G1 BLOCKED instrumentation): dump
         // the park ledger + live scheduler state for a stalled run. The
         // watchdog thread of a forensics test calls this on its bounded

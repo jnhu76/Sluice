@@ -134,7 +134,25 @@ run_gate "backend-conformance manifest self-test" "${MANIFEST_REPRO}" \
     python3 scripts/tests/test_backend_conformance_manifest.py
 
 # ---------------------------------------------------------------------------
-# Gate 5: whitespace / conflict-marker damage across the PUSHED ranges.
+# Gate 5: mechanical facts (identifier near-miss, doc LOC claims, split
+# layout, SHA/tracker references) — self-test then repository scan.
+#
+# Added post-freeze (issue #113 / PR #114 review): AI-authored changes can be
+# semantically sound while getting spelling, counting, and cross-references
+# wrong; those facts are checked mechanically, not by re-review. The
+# self-test plants one violation per detector and requires each to fire
+# (fail-closed against a broken checker), then the real scan runs against
+# the working tree / committed docs.
+MECH_FACTS_SELFTEST_REPRO="python3 scripts/gates/mechanical-facts.py --self-test"
+run_gate "mechanical facts self-test" "${MECH_FACTS_SELFTEST_REPRO}" \
+    python3 scripts/gates/mechanical-facts.py --self-test
+
+MECH_FACTS_REPRO="python3 scripts/gates/mechanical-facts.py"
+run_gate "mechanical facts" "${MECH_FACTS_REPRO}" \
+    python3 scripts/gates/mechanical-facts.py
+
+# ---------------------------------------------------------------------------
+# Gate 6: whitespace / conflict-marker damage across the PUSHED ranges.
 #
 # `git diff --check` reports trailing whitespace, indentation with spaces
 # before tabs, and unresolved merge conflict markers.

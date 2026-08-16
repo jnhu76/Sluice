@@ -72,6 +72,32 @@ freeze is application-driven: foundation work happens only through the
 triggers above, each entering through a design/compliance gate under
 `AGENTS.md` §8 exactly as a phased change would.
 
+## Frozen behavioral semantics (explicit enumeration)
+
+Post-freeze structural work (e.g. the R0/R1 hygiene pass,
+`docs/post-freeze/structural-audit.md`) must demonstrate it changed **none** of
+the following. Each row names its frozen authority; the authority documents are
+the contract, this list is the index.
+
+| Frozen surface | Binding authority |
+|---|---|
+| Public sync core (`Reader`/`Writer`/`Result<T>`/`IoError`, short-reads, exact/all loop contracts, positional-I/O offset isolation, `flush` ≠ durability, `sync_data`/`sync_all` distinction) | `AGENTS.md` §9, `docs/sync-io-model.md` |
+| Public async API surface (headers under `include/sluice/async/`, `docs/api-reference.md`) | §16.1 gate discipline; any change needs explicit approval |
+| Operation state transitions (`free→…→completion-ready→free+generation`) and the five-stage submission transaction | `AGENTS.md` §10, `docs/adr/ADR-explicit-io-request-contract.md` |
+| Wakeup semantics: park/wake obligation, predicate protocol, split-wait bridge, MIXED-WAKE backstop | AC-6, `docs/design/phase-g-backend-progress-wake.md` |
+| Backend wait semantics: `backend_wait_active_` gating of the interrupt bridge; external control wake always has a route into a backend-domain park | Phase G closeout (PR #109), `spec/tla/e9_park_wake` |
+| Deadline behavior: monotonic `deadline_t`, `advance_clock`, `*_until`/`*_deadline` waits, timer-select reconcile | E11 deadline design, `docs/architecture/phase-g-compliance-gate.md` |
+| Interruption behavior: backend-owned interruption only; cancel intent never rewrites an ordinary result | `AGENTS.md` §11 |
+| Cancellation behavior: the seven distinct layers; pending/enqueued/running/kernel-owned dispositions; exactly-once terminal winner | `AGENTS.md` §11, ADR-cancel-request-epoch |
+| Concurrency invariants: lock-order tables, arena-leaf domain rules, wake-signal/predicate pairs, generation-safe reuse | `AGENTS.md` §13, AC-2/AC-14, per-phase gates |
+| Completion publication authority (only designated reap publishes) | AC-5/AC-13, `docs/adr/ADR-explicit-io-completion-authority.md` |
+| Resource bounds equations (arena capacity, worker counts, queue depths, wait-record pool as distinct resources) | AC-7, `AGENTS.md` §12 |
+| Shutdown semantics: quiescent destruction, explicit close→drain→reap lifecycle | `AGENTS.md` §14 |
+
+A refactor that keeps every row intact (pure code motion, full test matrix,
+diff audit) does not trip the freeze policy; the policy triggers apply only
+when a row's observable contract itself would change.
+
 ## Governing evidence
 
 - Phase G design: `docs/design/phase-g-backend-progress-wake.md`

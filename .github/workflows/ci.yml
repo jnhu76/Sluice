@@ -85,10 +85,22 @@ jobs:
         # it (2026-08-15), which left a hang with no backtrace ("gdb:
         # command not found"); the watchdog also carries a /proc per-thread
         # fallback in case the install fails.
+        # -j 4 caps test-execution concurrency to the runner's 4 vCPUs
+        # (xmake's default -j22 oversubscribes 5.5x). This removes the
+        # starvation AMPLIFIER, not any assertion: under 22-way concurrency
+        # a heavily loaded runner deschedules single test processes for
+        # hundreds of ms, which deterministically opens the known
+        # starvation-sensitive windows (issue #67 stall family; issues
+        # #115/#116 backtraces; runs 31945036160/31949493218 where
+        # copy/copy-pipeline tests were watchdog survivors). The same
+        # failures reproduce on MASTER under a locally forced 4-CPU
+        # 166-binary concurrent launch — they are pre-existing and
+        # load-amplified, not regression. All tests, assertions, and the
+        # fail-closed watchdog are unchanged; only scheduling changes.
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gdb
           sudo sysctl -w kernel.yama.ptrace_scope=0 || true
-          bash scripts/ci-hang-watchdog.sh 420 xmake test -v
+          bash scripts/ci-hang-watchdog.sh 420 xmake test -v -j 4
 
       - name: Negative-compile verification (E15-P2-03)
         # Verifies that every deleted/private API guard on the E10-E12 async
@@ -161,10 +173,16 @@ jobs:
         #  2. full scan: every tracked doc link must resolve.
         #  3. architecture docs: structural completeness of governance files
         #     (constitution IDs, divergence registry fields, PR template refs).
+        #  4. mechanical facts: identifier near-miss (the SLUCE_/SLUICE_ class,
+        #     issue #113), doc LOC/count claims vs wc -l / pinned commits,
+        #     split-layout completeness, SHA/tracker references. Self-test
+        #     plants one violation per detector and requires each to fire.
         run: |
           python3 scripts/check-doc-links.py --self-test
           python3 scripts/check-doc-links.py
           python3 scripts/verify-architecture-docs.py
+          python3 scripts/gates/mechanical-facts.py --self-test
+          python3 scripts/gates/mechanical-facts.py
 
       - name: Hardening runner unit tests
         # Pure Python unit tests for the hardening runner.  These do not

@@ -760,7 +760,7 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
 // so every resume publisher provably pairs its store with a notification. A
 // missing notify would leave the production thread blocked in resume.wait and
 // is caught by the case-level watchdog instead of hanging forever. This is
-// SLUCE_ASYNC_INTERNAL_TESTING behavior only; production ThreadPool semantics
+// SLUICE_ASYNC_INTERNAL_TESTING behavior only; production ThreadPool semantics
 // are unchanged.
 
 void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
