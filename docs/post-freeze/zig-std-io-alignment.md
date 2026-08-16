@@ -3,8 +3,9 @@
 **Status:** COMPLETE (2026-08-16)
 **Baseline SHA:** `d9184de`
 **Companion:** `docs/architecture/zig-io-conformance-map.md` — the pre-freeze
-**semantic** conformance map (reconciled 2026-08-13 against Codeberg master
-`89e0881f`). This document adds the **structural / conceptual-ownership**
+**semantic** conformance map (reconciled 2026-08-13, anchored to
+upstream Codeberg master commit `89e0881f`). This document adds the
+**structural / conceptual-ownership**
 axis requested by the post-freeze hygiene task. Where a row's semantics are
 already classified there, this document cites it and classifies only the
 structure.
@@ -24,12 +25,18 @@ structure.
   / `Select.cancel` scoping.
 - The "lib/std/Io" directory layout (Dir, File, IoUring, Kqueue, Reader,
   Writer, Threaded, net/, tty — sibling modules behind the interface).
-- Sources: context7 index of `ziglang/zig` **master** (snippets above cite
-  upstream paths at the master branch) and the repo-structure listing of the
-  GitHub mirror.
-  The pre-freeze semantic map additionally pinned Codeberg master `89e0881f`
-  (2026-08-11); no contradicting drift was observed between that anchor and
-  the master snippets read today.
+- Sources and SNAPSHOT PIN (post-freeze review item): the snippets above
+  were read from the context7 index of `ziglang/zig` master on 2026-08-16.
+  Upstream anchor: Codeberg `ziglang/zig` master — the structural read is
+  pinned to upstream master `99e540dc39ba45365eaa82db0459a0d7acc251eb`
+  (2026-08-16T12:14+02:00), re-anchored on 2026-08-16 with no structural
+  drift observed in the files cited above. The pre-freeze semantic map
+  pinned upstream Codeberg master `89e0881f` (2026-08-11); no contradicting
+  drift was observed between that anchor and the snippets read for this
+  document. The GitHub `ziglang/zig` mirror is frozen since 2025-11-27
+  (upstream commit 738d2be9d6b6, "README: migrated to codeberg") and was
+  used only for its (still-accurate) directory listing; it is not a live
+  upstream reference.
 
 ### 1.1 The Zig structural model (as-read, condensed)
 

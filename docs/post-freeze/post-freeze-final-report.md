@@ -18,7 +18,7 @@
 | R0 LOC inventory + 12-dimension audit + risk matrix | done, committed `aaad4a2` |
 | Zig `std.Io` structural concept map (read from source via context7) | done, committed, link-fix amended |
 | Divergence classification (ALIGN_NOW / VALID_CPP_DIFFERENCE / DEFER_TO_APPLICATION_EVIDENCE) | done — SD-A1 executed; SD-1..SD-5 kept with rationale; PF-1..PF-3 deferred |
-| R1 surgical refactor: `scheduler.cpp` god-TU split | done, 9 TUs, pure code motion + certificate |
+| R1 surgical refactor: `scheduler.cpp` god-TU split | done, 9 TUs; moved bodies byte-identical (certificate), cross-TU glue separately verified (§2) |
 | First application workload design | done — [../application/first-workload.md](../application/first-workload.md) (`sluice-pipeline`) |
 | Full test matrix Debug + Release | done, both green (§5) |
 
@@ -28,26 +28,42 @@
 the repository's established `select_event.cpp` / `select_timer.cpp` /
 `queue_port.cpp` pattern:
 
-| New TU | Lines | Domain |
+| File | Lines | Domain |
 |---|---|---|
-| `scheduler_park_wake.cpp` | 1114 | park/wake, R1-R4 protocol, interrupt bridge |
-| `scheduler_timer.cpp` | 505 | deadline heap, clock, test-clock |
-| `scheduler_event.cpp` | 402 | SchedulerEvent wake targets |
-| `scheduler_semaphore.cpp` | 317 | semaphore waits |
-| `scheduler_mutex.cpp` | 351 | AsyncMutex waits |
-| `scheduler_rwlock.cpp` | 721 | rwlock waits, ForgedRwWaitCtx |
-| `scheduler_condition.cpp` | 264 | condition waits |
-| `scheduler_queue.cpp` | 456 | runnable queue, fiber routing |
-| `scheduler_internal.hpp` | 73 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `scheduler.cpp` (kept) | 1952 | ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler_park_wake.cpp` | 1114 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_timer.cpp` | 505 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 402 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 317 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 351 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 721 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_condition.cpp` | 264 | condition waits |
+| `src/async/scheduler_queue.cpp` | 456 | runnable queue, fiber routing |
+| `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
+| `src/async/scheduler.cpp` (kept) | 1952 | ctor/dtor, worker loop, steal, spawn/run, classification |
 
-**Pure-motion guarantee:** the split script asserted 21 ranges reassemble the
-original 5864 lines byte-exactly; `verify_split.py` certified 15/15 checks —
-each new TU body equals its concatenated HEAD segments; `scheduler.cpp` keeps
-its segments; the only new text is the uniform include block, the TLS
-`inline` keyword, and file-header comments. No function, statement, ordering,
-or guard was rewritten. No new abstraction, no virtual interface, no public
-API change; `scheduler_internal.hpp` is not installed.
+Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
+(LOC claims must equal `wc -l`), so the inventory cannot silently drift.
+
+**Proof boundary (review-corrected wording):** this is a behavior-preserving
+structural split, NOT pure code motion. Two proofs cover two different
+surfaces:
+
+- *Moved implementation bodies — byte-identical:* the split script asserted
+  21 ranges reassemble the original 5864 lines byte-exactly;
+  `verify_split.py` certified 15/15 checks — each new TU body equals its
+  concatenated HEAD segments; `scheduler.cpp` keeps its segments. No
+  function, statement, ordering, or guard was rewritten.
+- *New cross-TU glue — NOT covered by the motion certificate, verified
+  separately:* the uniform include block (where the #113 `SLUCE_` typo
+  lived), the `inline thread_local` linkage form of `g_worker`, the now
+  shared `SchedulerWakeHandle::Control` definition, and the file-header
+  comments. `g_worker`'s cross-TU identity and per-thread isolation are
+  directly verified by `tests/scheduler_tls_identity_test.cpp`; identifier
+  near-misses in new text are caught mechanically by
+  `scripts/gates/mechanical-facts.py`.
+
+No new abstraction, no virtual interface, no public API change;
+`scheduler_internal.hpp` is not installed.
 
 **One defect injected and repaired during this pass** (recorded for the
 audit trail, see §6): the uniform include block in the 8 new TUs initially
@@ -123,7 +139,37 @@ stays inside the approved scope (file I/O only, DIV-08; no networking) and
 is designed to generate the seam evidence that PF-1..PF-3 triggers require.
 See [../application/first-workload.md](../application/first-workload.md).
 
-## 8. STOP
+## 8. Review reconciliation (PR #114 review round)
+
+The review requested seven items before merge; all are addressed here.
+
+| Review item | Resolution |
+|---|---|
+| CI red (BLOCKER) | Root-caused: pre-existing park-before-spawn stranding window (issue #115), NOT a split regression — moved bodies are byte-identical to `d9184de`. Proven by construction with the park-forensics ledger (reproducer hangs pre-fix, `timeout` exit 124). `runnable_steal_test` now closes the window deterministically (f0 holds its worker until the victim queue actually holds the stealable fiber); validated 50/50 focused, 5/5 single-CPU pinned, 3/3 full binary. |
+| 73 vs 72 LOC claim | Fixed to 72 (`wc -l`); the table is now machine-enforced by the mechanical gate. |
+| "pure code motion" overstated | Replaced by the §2 proof boundary: moved bodies byte-identical (certificate) vs new cross-TU glue (separately verified). |
+| Motion certificate does not cover new glue | `scripts/gates/mechanical-facts.py` mechanically checks new-text classes (identifier near-miss — the exact #113 defect class; its first repository scan caught the pre-existing `SLUCE_` comment in `threadpool_backend.cpp`, now fixed). Wired into `scripts/gates/pre-push.sh` and CI "Documentation verification". |
+| `g_worker` cross-TU identity | Directly verified by `tests/scheduler_tls_identity_test.cpp` via the guarded `AsyncTestAccess::tls_worker_probe()` (read in the `scheduler.cpp` TU, written in the test TU; per-thread isolation asserted). |
+| Zig alignment pin | `zig-std-io-alignment.md` §1 now pins upstream Codeberg master `99e540dc39ba45365eaa82db0459a0d7acc251eb` (2026-08-16), keeps the `89e0881f` (2026-08-11) lineage, and notes the GitHub mirror is frozen since 2025-11-27. |
+| Audit layout vs as-built | `structural-audit.md` §6 annotated with the as-built delta (`scheduler_queue.cpp`, `scheduler_internal.hpp`) and snapshot markers (`at d9184de`) so its historical LOC claims verify against the pinned commit, not the moving tree. |
+
+Review-round gate matrix (2026-08-16, all actually executed):
+
+| Gate | Result |
+|---|---|
+| Clang Debug: 3 libs + `-g test` + `xmake test -v` | **168/168 pass** (was 167; +1 = `scheduler_tls_identity_test`) |
+| Clang Release: same targets and tests | **168/168 pass** |
+| `runnable_steal_test` focused case | 50/50; single-CPU `taskset` pin 5/5; full binary 3/3 |
+| Negative-compile probes (completion-authority, request-arena) | pass / pass |
+| `check-doc-links.py`, `verify-architecture-docs.py`, `git diff --check` | PASS / OK / clean |
+| `mechanical-facts.py` main + `--self-test` | OK / all detectors fired |
+
+Release configuration restored to Debug afterwards. TSan not re-run: this
+round changes a test's gating, a guarded test-only header seam, docs, and
+scripts — no production concurrency semantics moved (the scheduler bodies
+remain byte-identical to `d9184de`; see §2 proof boundary).
+
+## 9. STOP
 
 **Foundation remains frozen. No Phase H.** This pass changed implementation
 file organization only; it authorizes nothing beyond application design.

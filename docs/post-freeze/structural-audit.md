@@ -47,10 +47,10 @@ Buckets (production vs test separated; totals at `d9184de`):
 
 | File | LOC | Churn¹ | Decision |
 |---|---:|---:|---|
-| `src/async/scheduler.cpp` | 5864 | 59 | **SPLIT** (R1) |
-| `include/sluice/async/scheduler.hpp` | 2768 | 56 | **DEFER** (candidate recorded, §5.2) |
-| `src/async/uring_backend.cpp` | 1823 | 24 | **KEEP** (§5.3) |
-| `src/async/select.cpp` | 1529 | 18 | **KEEP** (§5.4) |
+| `src/async/scheduler.cpp` | 5864 | 59 | **SPLIT** (R1) — snapshot at `d9184de` |
+| `include/sluice/async/scheduler.hpp` | 2768 | 56 | **DEFER** (candidate recorded, §5.2) — snapshot at `d9184de` |
+| `src/async/uring_backend.cpp` | 1823 | 24 | **KEEP** (§5.3) — snapshot at `d9184de` |
+| `src/async/select.cpp` | 1529 | 18 | **KEEP** (§5.4) — snapshot at `d9184de` |
 
 ¹ `git log --oneline --follow -- <file> | wc -l` — commit count over the file's
 lifetime, dominated by Phases E–G.
@@ -59,8 +59,8 @@ lifetime, dominated by Phases E–G.
 
 | File | LOC | Churn | Decision |
 |---|---:|---:|---|
-| `include/sluice/async/detail/request_arena.hpp` | 1189 | 14 | **KEEP** (§5.5) |
-| `src/async/threadpool_backend.cpp` | 1037 | 24 | **KEEP** (§5.6) |
+| `include/sluice/async/detail/request_arena.hpp` | 1189 | 14 | **KEEP** (§5.5) — snapshot at `d9184de` |
+| `src/async/threadpool_backend.cpp` | 1037 | 24 | **KEEP** (§5.6) — snapshot at `d9184de` |
 
 ### Production 750–1000 LOC (checked, no action)
 
@@ -223,8 +223,24 @@ src/async/
     scheduler_semaphore.cpp    # sem_* implementation
     scheduler_rwlock.cpp       # rwlock_* + RwWaitCtx/ForgedRwWaitCtx
     scheduler_event.cpp        # event_* + await_event_wait*
+    scheduler_queue.cpp        # runnable queue + fiber routing (as-built
+                               # extraction from the planned scheduler.cpp
+                               # remainder, on conceptual-ownership grounds)
+    scheduler_internal.hpp     # as-built non-installed carrier for the two
+                               # cross-TU entities (g_worker inline TLS,
+                               # SchedulerWakeHandle::Control) — see final
+                               # report §2 proof boundary
     (select.cpp, select_event.cpp, select_timer.cpp, queue_port.cpp unchanged)
 ```
+
+As-built delta from this plan (post-freeze review reconciliation): the two
+entries above were added during execution; the "no header change" stop
+condition below means no INSTALLED/public header change — the non-installed
+`src/async/scheduler_internal.hpp` was required so that the moved TUs share
+exactly one program-wide `g_worker`/`Control` definition. The audit-time
+target layout omitted both; the final report §2 inventory table is the
+as-built authority and is machine-checked by
+`scripts/gates/mechanical-facts.py`.
 
 Out of scope (Stop conditions respected): no scheduler redesign, no new
 abstraction, no virtual interface, no header change, no public API change, no
