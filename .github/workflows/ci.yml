@@ -47,6 +47,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: scripts/gates/mechanical-facts.py verifies pinned-SHA
+          # claims in docs/post-freeze (e.g. LOC rows snapshotted at the PR
+          # baseline d9184de) via `git show <sha>:<path>` and fails closed when
+          # a referenced SHA is missing from the object store. The default
+          # shallow checkout (fetch-depth: 1) lacks those baseline commits and
+          # failed the gate on its first CI execution (PR #117, run
+          # 31956975489). Provide the history the gate requires instead of
+          # weakening the gate.
+          fetch-depth: 0
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
