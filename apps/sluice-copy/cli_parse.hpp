@@ -22,6 +22,7 @@ struct CliArgs {
     std::size_t pipeline_depth = 1;     // Version A default; >1 enables Version B
     unsigned workers = 1;
     SyncPolicy sync = SyncPolicy::none;
+    bool atomic = true;                 // Version C default: temp file + rename
     bool help = false;
 };
 

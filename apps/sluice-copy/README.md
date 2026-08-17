@@ -12,6 +12,15 @@ Two copy modes share one implementation:
 - **Version B** (`--pipeline-depth N`, N > 1): a bounded reusable-buffer
   pipeline — up to N reads outstanding at once with a single ordered writer.
 
+Two output modes:
+
+- **Version C** (the default): safe atomic output — the copy lands in a
+  uniquely-named temp file in the destination's directory and the destination
+  is replaced by a single `rename()`. A failure anywhere before the rename
+  leaves an existing destination completely untouched.
+- **`--no-atomic`**: the original direct-write output (a mid-copy failure may
+  leave a partial destination).
+
 ## Build & run
 
 ```sh
@@ -31,6 +40,8 @@ sluice-copy [options] <source> <destination>
                                  outstanding reads, ordered single writer)
   --workers <count>        ApplicationRuntime worker count (default 1)
   --sync none|data|all     durability policy applied after copy (default none)
+  --no-atomic              direct destination write (old Version A/B output);
+                           default is the Version C temp+rename safe path
   --help                   show this help
 ```
 
@@ -162,18 +173,59 @@ after data copy:
 
 ## Known limitation
 
-**On a mid-copy failure the destination may be left partial or truncated.**
-sluice-copy does not use a temporary file + rename. Safe, atomic output is a
-Version C feature.
+**With `--no-atomic`, a mid-copy failure may leave the destination partial or
+truncated.** This is the old Version A/B output path, kept for comparison; it
+is not the default.
 
-### Durability scope (`--sync`)
+## Version C — atomicity and durability scope (default output mode)
 
-`sync=all` (and `sync=data`) apply `fsync` / `fdatasync` to the **destination
-file descriptor only**. They do NOT fsync the parent directory, so a crash
-after the copy may still lose the directory entry (or the rename) — directory
-entry durability, safe creation, and temp-file + rename are Version C
-features. This app does not preserve ACLs, ownership, xattrs, or other
-metadata beyond the file contents.
+Destination lifecycle (`safe_output.{hpp,cpp}`):
+
+```
+validate source (regular file) + destination (if it exists: regular file,
+    not the same inode as the source)
+mkstemp("<dst_dir>/.sluice-copy.tmp.XXXXXX")      # same filesystem
+fchmod(temp, src_mode & 0777)
+pipelined copy src -> temp fd                     # Version A/B engine
+sync policy (data/all) applies to the TEMP fd     # copy task, before rename
+close(temp)
+rename(temp, dst)                                 # the atomic replacement
+--sync data|all only: fsync(dst_dir)              # make the rename durable
+```
+
+Guaranteed:
+
+- an existing destination is **never** visible with partial content — every
+  failure before the rename leaves it byte-identical to before;
+- cancellation, read/write/sync errors, temp cleanup failures: destination
+  untouched, temp file unlinked;
+- the rename is atomic within one filesystem (the temp file is created in the
+  destination's own directory).
+
+NOT guaranteed (documented scope):
+
+- `--sync none`: no durability claim at all. The rename is still atomic, but a
+  crash may lose the new content or revert to the old file;
+- metadata preservation is **permission bits only** (`src_mode & 0777`; the
+  setuid/setgid/sticky bits are deliberately dropped, umask is not applied).
+  Owner, group, timestamps, ACLs, and xattrs are NOT preserved;
+- a **symlink destination**: the symlink's *target* is validated (and rejected
+  if it is the source itself), but the rename replaces the LINK with the new
+  regular file — the target is never written through;
+- with `--sync data|all`, a *directory* fsync failure is reported as exit 2
+  **after** the rename already happened: the destination holds the new
+  content; only the crash-durability of the rename is missing;
+- no recursive copy, no reflink, no sparse handling, no delta transfer.
+
+## Durability scope (`--sync`)
+
+In the default (Version C) output mode, `sync=data` / `sync=all` apply
+`fdatasync` / `fsync` to the **temp file** before the rename and `fsync` the
+**parent directory** after it, so both the copied data and the replacement
+itself survive a crash. With `--no-atomic` the sync applies to the destination
+file descriptor only (no directory fsync — the old behavior). `--sync none`
+makes no durability claim in either mode. This app does not preserve ACLs,
+ownership, xattrs, or other metadata beyond the permission bits.
 
 ## What this app proves
 
@@ -191,13 +243,10 @@ metadata beyond the file contents.
 
 ## Not implemented in this slice
 
-- temporary-file safe output, parent-directory fsync, atomic replacement
-  (Version C);
-- safe creation / permission preservation for new destinations, metadata
-  preservation (ACL/owner/xattr);
-- a symlink policy for the final path component (the destination is opened
-  normally; O_NOFOLLOW / symlink handling is a Version C / security-mode
-  decision, not enforced here);
+- owner/group/timestamp/ACL/xattr preservation (Version C preserves permission
+  bits only);
+- O_NOFOLLOW-style symlink rejection for the final destination component
+  (a symlink destination is atomically replaced — see Version C scope);
 - progress display;
 - directory traversal (see `sluice-mirror-mini`, a later app);
 - io_uring production backend;
@@ -227,6 +276,9 @@ The Version B test family (all in the default `xmake test` group):
   integration and fault injection;
 - `sluice_copy_cli_parse_test` / `sluice_copy_file_domain_test` — CLI parsing
   and the regular-file input domain;
+- `sluice_copy_safe_output_test` — Version C safe output: input domain, temp
+  placement + permission preservation, commit/discard cleanup, rename-failure
+  path, fault-injected and real-backend atomic flows;
 - hardening `python3 scripts/hardening.py --version-b` — the Version B
   nightly gate (Debug soak rounds, required TSan and ASan+UBSan target sets,
   final Debug).
