@@ -1,5 +1,5 @@
 // M1-A Runtime cooperative Completion-wait tests.
-// Design: docs/design/m1-runtime-io-await-race.md (Candidate A — winner).
+// Design: docs/history/implementation-plans/m1-runtime-io-await-race.md (Candidate A — winner).
 //
 // Covers the public RuntimeTaskContext::await_completion capability:
 //   - unresolved Completion<size_t/void>: task suspends, resumes exactly once

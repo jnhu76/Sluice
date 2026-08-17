@@ -208,7 +208,7 @@ Concrete backends (each independently abortable):
 - **UringAsyncBackend** (016F job 020B): real async io_uring — many SQEs in
   flight, CQEs reaped in `poll`/`wait_one`. Reuses the build gate from 013
   (`SLUICE_HAS_LIBURING`).
-  **Validated separately** under `docs/io-uring-liburing-validation.md` (014C);
+  **Validated separately** under `docs/verification/io-uring-liburing-validation.md` (014C);
   its promotion has its own abort conditions.
 
 This mirrors how sluice already keeps the POSIX backend behind `IoContext`: the
@@ -638,5 +638,5 @@ DEPS       : liburing optional (job 020B only); nothing else added.
 - Next jobs (blocked behind the sync-first gate): `../history/implementation-plans/async-next-jobs.md` (016F).
 - io_uring spike: `../history/implementation-plans/io-uring-spike.md` (013).
 - io_uring spike readiness gate (prior): `../history/implementation-plans/io-uring-readiness-gate.md` (012D).
-- liburing validation runbook: `../io-uring-liburing-validation.md` (014C).
+- liburing validation runbook: `../verification/io-uring-liburing-validation.md` (014C).
 - IoContext (the blocking seam this parallels): `../history/implementation-plans/design-io-context.md` (009).

@@ -34,7 +34,7 @@ asynchronous I/O from a Runtime task was impossible without a forbidden
 substitute (busy-poll, condition_variable on the Worker, std::future, raw
 Scheduler access). Resolved in M1-A by adding
 `RuntimeTaskContext::await_completion` (Candidate A of the horse race,
-`docs/design/m1-runtime-io-await-race.md`), which delegates to the already-
+`docs/history/implementation-plans/m1-runtime-io-await-race.md`), which delegates to the already-
 audited `Scheduler::await_completion_*` primitive. Core change: a private
 `Scheduler*` in the production context + 2 public overloads.
 

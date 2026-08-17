@@ -251,7 +251,7 @@ to the backend.
 - `RuntimeTaskContext::await_completion` returns `Result<void>`; new
   `RuntimeTaskContext::cancel_waiter(Completion&) -> Result<bool>` — the
   production waiter-cancel caller (Issue #98 F1 item 4). Public API changes
-  are documented in `docs/api-reference.md` and the compliance gate.
+  are documented in `docs/reference/api.md` and the compliance gate.
 
 ---
 

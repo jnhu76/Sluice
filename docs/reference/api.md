@@ -2,7 +2,7 @@
 
 Public, stable-ish APIs as of v0.1-mvp. "Stable-ish" means removing or silently re-semanticizing these would break consumers; treat as frozen across minor work, change only with deliberate deprecation.
 
-For internal details and experimental APIs, see `docs/api-audit.md`.
+For internal details and experimental APIs, see `docs/history/archive/api-audit.md`.
 
 ## Error model
 
@@ -1766,4 +1766,4 @@ Authority: submit-time errors stay synchronous (from `submit_*`); completion
 errors stay terminal results in the `Completion`. Zero per-op allocation, zero
 extra copies, one suspend + one resume per unresolved await, supports multiple
 simultaneously outstanding `Completion`s. See
-`docs/design/m1-runtime-io-await-race.md`.
+`docs/history/implementation-plans/m1-runtime-io-await-race.md`.

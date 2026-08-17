@@ -63,7 +63,7 @@ class FileReader final : public Reader {
 
     // Positional read (sluice-CORE-018S): pread at an explicit byte offset.
     // Does NOT move the shared file cursor. Returns bytes read (0 == EOF at
-    // that offset). See docs/sync-io-model.md (Positional I/O semantics).
+    // that offset). See docs/reference/sync-io-model.md (Positional I/O semantics).
     Result<std::size_t> read_at(std::uint64_t offset, std::span<std::byte> dst);
     // Positional vector read (sluice-CORE-018S): preadv at an explicit byte
     // offset. Same stop-on-short + skip-empty semantics as read_vec. Does NOT
@@ -133,7 +133,7 @@ class FileWriter final : public Writer, public SyncableWriter {
     // Positional write (sluice-CORE-018S): pwrite at an explicit byte offset.
     // Does NOT move the shared file cursor. Returns bytes written (0 on
     // non-empty input is invalid_state/backend failure — surfaced by callers).
-    // See docs/sync-io-model.md (Positional I/O semantics).
+    // See docs/reference/sync-io-model.md (Positional I/O semantics).
     Result<std::size_t> write_at(std::uint64_t offset, std::span<const std::byte> src);
     // Positional vector write (sluice-CORE-018S): pwritev at an explicit byte
     // offset. Same stop-on-short + skip-empty semantics as write_vec. Does NOT

@@ -294,7 +294,7 @@ public API change beyond the reference method below.
    reference backend previously had NO admission-close surface at all, so no
    shared close evidence could exist; the C2e shared suite requires both
    backends to expose the same lifecycle control. It is documented on the
-   method and in `docs/api-reference.md`; the close/drain semantics are
+   method and in `docs/reference/api.md`; the close/drain semantics are
    unchanged from the C2e-start design.
 
 2. **Backend admission transaction domain (B1; ADR §"Commit / accept"

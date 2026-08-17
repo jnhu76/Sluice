@@ -1,6 +1,6 @@
 // E16 ApplicationRuntime lifecycle tests.
 // ADR: docs/adr/ADR-application-runtime.md (Accepted).
-// Design: docs/design/e16-application-runtime.md.
+// Design: docs/history/implementation-plans/e16-application-runtime.md.
 //
 // Tests the basic lifecycle: construct → start → submit → request_stop →
 // drain → join → Stopped. Uses FakeAsyncBackend for deterministic I/O.

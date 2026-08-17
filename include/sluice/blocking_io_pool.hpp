@@ -2,7 +2,7 @@
 //
 // A bounded pool of fixed std::thread workers that executes blocking callables.
 // This is the production sync execution helper (see docs/adr/ADR-024S §G9 and
-// docs/io/sync-backend-taxonomy.md). It is NOT an async runtime, NOT a fiber
+// docs/architecture/sync-backend-taxonomy.md). It is NOT an async runtime, NOT a fiber
 // scheduler, NOT a P2300 executor, and NOT one-thread-per-operation.
 //
 // Concurrency model:

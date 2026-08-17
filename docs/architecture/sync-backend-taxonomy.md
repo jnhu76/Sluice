@@ -7,7 +7,7 @@ to `async-runtime` instead. It exists so future work does not create a "backend
 zoo" — every new backend must justify itself against this taxonomy.
 
 Companion to `docs/adr/ADR-024S-sync-runtime-contract.md` (the contract) and
-`docs/io/sync-error-semantics.md` (the partial-I/O table).
+`docs/reference/sync-error-semantics.md` (the partial-I/O table).
 
 ## Decision statement
 

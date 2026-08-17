@@ -1,6 +1,6 @@
 // sluice::async::ApplicationRuntime — E16 implementation.
 // ADR: docs/adr/ADR-application-runtime.md (Accepted).
-// Design: docs/design/e16-application-runtime.md.
+// Design: docs/history/implementation-plans/e16-application-runtime.md.
 #include <sluice/async/application_runtime.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -69,7 +69,7 @@ Result<RequestHandle> RuntimeTaskContext::submit_sync_all_request(SyncAllOp op,
 // Scheduler::await_completion_* primitive (one suspend + one resume per
 // unresolved await; already-ready returns inline under the Scheduler's
 // registration critical section). The Scheduler* is private; task code never
-// sees raw Scheduler authority. See docs/design/m1-runtime-io-await-race.md.
+// sees raw Scheduler authority. See docs/history/implementation-plans/m1-runtime-io-await-race.md.
 //
 // Precondition: `c` must be outstanding (a prior submit_* marked it so). The
 // underlying Scheduler primitive has no idle check of its own: it registers

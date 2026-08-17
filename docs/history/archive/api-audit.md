@@ -1,5 +1,11 @@
 # Public API surface audit
 
+> **Historical note (2026-08-18):**
+> Status: Historical. Point-in-time audit at the v0.1-mvp tag + 015A–015C;
+> the surface has since grown (async runtime, explicit I/O, backends,
+> ApplicationRuntime). The current public contract is
+> `docs/reference/api.md`. This audit is not current authority.
+
 **Status: SLUICE-CORE-015D.** Audit of the public header surface as of the
 v0.1-mvp tag + 015A–015C additions. Goal: before future async work begins,
 record what is stable, what is experimental, what is internal, and what is

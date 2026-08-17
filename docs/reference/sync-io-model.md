@@ -8,8 +8,8 @@ surface. Existing behavior (v0.1) is recorded as-is; new positional helpers
 **[NEW]** where they extend the surface. Implementation follows the code sessions
 (phases 4–5); this doc fixes the contract first.
 
-Companion docs: architecture in `docs/sync-io-architecture.md`; durability in
-`docs/sync-durability-model.md`; planning/gaps in `docs/history/closeout/sync-io-model-gap-audit.md`.
+Companion docs: architecture in `docs/architecture/sync-io-architecture.md`; durability in
+`docs/architecture/sync-durability-model.md`; planning/gaps in `docs/history/closeout/sync-io-model-gap-audit.md`.
 
 ## Reader semantics
 
@@ -158,8 +158,8 @@ these blocking contracts.
 
 ## Cross-links
 
-- Architecture: `docs/sync-io-architecture.md`.
-- Durability contract: `docs/sync-durability-model.md`.
+- Architecture: `docs/architecture/sync-io-architecture.md`.
+- Durability contract: `docs/architecture/sync-durability-model.md`.
 - Gaps this contract closes (G1/G2/G3): `docs/history/closeout/sync-io-model-gap-audit.md` §2.
 - Jobs that realize the [NEW] pieces: `docs/history/implementation-plans/sync-io-next-jobs.md` (018S positional, 019S helpers).
 - Existing readv/writev note: `docs/history/implementation-plans/design-readv-writev.md`.

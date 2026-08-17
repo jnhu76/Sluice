@@ -4,7 +4,7 @@
 // This is NOT a duplicate implementation. It wraps the production
 // sluice::BlockingIoPool (include/sluice/blocking_io_pool.hpp) and exposes the
 // fire-and-forget shape the W1-W4 benches already use (void submit, wait_all,
-// shutdown, thread_count). Per docs/io/sync-backend-taxonomy.md §2.6, benches
+// shutdown, thread_count). Per docs/architecture/sync-backend-taxonomy.md §2.6, benches
 // do not re-implement the pool.
 //
 // The void submit() drops the returned Task (fire-and-forget); wait_all() joins

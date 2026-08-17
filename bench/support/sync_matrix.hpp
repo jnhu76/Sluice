@@ -3,7 +3,7 @@
 // This is SEPARATE from bench/bench_common.hpp (the single-stream CSV shape),
 // because the matrix requires concurrency columns (streams, pool_threads,
 // threads_used) and derived columns (mbps, ops_per_sec, total_ms) per
-// docs/sync-bench-methodology.md §4. The single-stream BenchResult is locked by
+// docs/verification/sync-bench-methodology.md §4. The single-stream BenchResult is locked by
 // tests/bench_csv_test.cpp and must not change.
 //
 // All state here is caller-owned (no globals): each bench target constructs its

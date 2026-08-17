@@ -81,8 +81,8 @@ the contract, this list is the index.
 
 | Frozen surface | Binding authority |
 |---|---|
-| Public sync core (`Reader`/`Writer`/`Result<T>`/`IoError`, short-reads, exact/all loop contracts, positional-I/O offset isolation, `flush` ≠ durability, `sync_data`/`sync_all` distinction) | `AGENTS.md` §9, `docs/sync-io-model.md` |
-| Public async API surface (headers under `include/sluice/async/`, `docs/api-reference.md`) | §16.1 gate discipline; any change needs explicit approval |
+| Public sync core (`Reader`/`Writer`/`Result<T>`/`IoError`, short-reads, exact/all loop contracts, positional-I/O offset isolation, `flush` ≠ durability, `sync_data`/`sync_all` distinction) | `AGENTS.md` §9, `docs/reference/sync-io-model.md` |
+| Public async API surface (headers under `include/sluice/async/`, `docs/reference/api.md`) | §16.1 gate discipline; any change needs explicit approval |
 | Operation state transitions (`free→…→completion-ready→free+generation`) and the five-stage submission transaction | `AGENTS.md` §10, `docs/adr/ADR-explicit-io-request-contract.md` |
 | Wakeup semantics: park/wake obligation, predicate protocol, split-wait bridge, MIXED-WAKE backstop | AC-6, `docs/design/phase-g-backend-progress-wake.md` |
 | Backend wait semantics: `backend_wait_active_` gating of the interrupt bridge; external control wake always has a route into a backend-domain park | Phase G closeout (PR #109), `spec/tla/e9_park_wake` |
