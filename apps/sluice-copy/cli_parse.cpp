@@ -39,6 +39,10 @@ int usage(const char* prog) {
         "                          <= %zu, buffer_size*depth <= %zu bytes)\n"
         "  --workers <count>       runtime workers (default 1; <= %u)\n"
         "  --sync none|data|all    durability after copy (default none)\n"
+        "  --no-atomic             write the destination directly (old Version A/B\n"
+        "                          behavior; a failure may leave a partial file).\n"
+        "                          The default is Version C: copy to a temp file in\n"
+        "                          the destination directory, then rename atomically\n"
         "  --help                  show this help\n",
         prog, static_cast<std::size_t>(kMaxBufferSize),
         static_cast<std::size_t>(kMaxPipelineDepth),
@@ -99,6 +103,10 @@ int parse_args(int argc, char** argv, CliArgs& args) {
         } else if (a == "--sync") {
             const char* v = next("--sync");
             if (!v || !parse_sync(v, args.sync)) return usage(argv[0]);
+        } else if (a == "--no-atomic") {
+            args.atomic = false;
+        } else if (a == "--atomic") {
+            args.atomic = true;  // explicit no-op: atomic is the default
         } else if (a.size() > 2 && a[0] == '-' && a[1] == '-') {
             std::fprintf(stderr, "%s: unknown option %s\n", argv[0], a.c_str());
             return usage(argv[0]);
