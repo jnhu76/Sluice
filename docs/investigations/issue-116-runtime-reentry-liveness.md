@@ -349,6 +349,18 @@ known concurrent-starvation flake classes on record):
   CPU-pinned — passes 10/10. This is the #115-family steal-stranding
   flake (Scheduler-level; no ApplicationRuntime in that test; this
   change's production delta cannot execute there).
+- `phase_g_closeout_tp_g5_close_admission_while_parked` failed once in a
+  GitHub CI run of this branch (exit 70 after the test's ~5.3 s bounded
+  spin: the gated worker's terminal publication did not land within the
+  bound). Same head re-ran green. Locally reproduced ONLY under forced
+  4-CPU contention (3 spinners + 4-16 concurrent copies): with-seam
+  binary 1/24, without-seam binary 0/32, master 0/8 — statistically
+  indistinguishable (~2% load-amplified rate), and the seam notify_all
+  runs on the PARKING participant thread, not the gated worker whose
+  terminal publication the spin waits for. Pre-existing load-amplified
+  flake of the raw-layer construction (ci.yml documents the same class:
+  "failures reproduce on MASTER under a locally forced 4-CPU ... launch —
+  pre-existing and load-amplified"), not a regression of this change.
 
 Mechanical/documentation gates: executed individually (table above);
 `bash scripts/gates/pre-push.sh` reproduces the same set.
