@@ -27,6 +27,21 @@ sluice_internal_async_test("scheduler_tls_identity_test",
 -- publication, proving every admitted task reaches terminal execution.
 sluice_internal_async_test("application_runtime_worker_topology_test")
 
+-- Issue #116 deterministic merge-gate regression: an external wake
+-- publication interrupting a parked MW-S2 participant (with accepted I/O
+-- outstanding) must not strand the runtime driver between invocations.
+-- Pre-fix: 1/1 deterministic hang (fail-closed exit 70 + forensics dump).
+sluice_internal_async_test("issue116_interrupt_reevaluation_regression_test",
+                           {platform_gate = {"linux"}})
+
+-- Issue #116 liveness forensics reproducer (investigation Phase 2). Probabilistic
+-- copy-pipeline starvation stress with an in-process watchdog that dumps the
+-- race-free Runtime/Scheduler/backend state and exits 42 on a permanent stall.
+-- Diagnosis tooling for docs/investigations/issue-116-runtime-reentry-liveness.md;
+-- the deterministic merge-gate regression is separate.
+sluice_internal_async_test("issue116_liveness_forensics_test",
+                           {platform_gate = {"linux"}})
+
 -- E15-P2-02 Group::async_threaded exception-safety regression. Uses the
 -- test_set_tasks_throw_on_nth() seam (only available under
 -- SLUICE_ASYNC_INTERNAL_TESTING) to force tasks_ push_back to throw, proving

@@ -8,6 +8,7 @@
 #include <sluice/async/scheduler.hpp>
 
 #include <cassert>
+#include <cstdio>
 #include <exception>
 
 namespace sluice::async {
@@ -709,6 +710,35 @@ void ApplicationRuntime::driver_main() {
             continue;
         }
 
+        // Issue #116 (invocation-boundary lost re-entry): run_live may return
+        // at an interrupted MW-S2 no-progress boundary while accepted I/O is
+        // still outstanding — the Scheduler's caller-owned re-entry contract
+        // (phase-g closeout TP-G5) transfers the observation obligation to
+        // THIS caller at that boundary. control_epoch_ cannot observe backend
+        // progress, so parking on runtime_cv_ with outstanding > 0 strands
+        // the obligation permanently: no participant remains to poll, the
+        // backend's terminal is recorded into a ready-ring nobody reaps, the
+        // suspended task never resumes, and drain_complete_ is unreachable.
+        // Re-enter immediately instead. The next invocation re-elects the
+        // MW-S2 participant and parks in ctx_.wait_one() — a true park whose
+        // own wake protocol (ready/control epochs) is closed — so this is not
+        // a poll loop: each re-entry consumes one control interrupt (D4-RM13
+        // one-shot baseline), and between interrupts the driver is parked
+        // inside wait_one, not spinning here.
+        //
+        // Park-handshake closure (INV-R3): the check runs under lifecycle_mtx_
+        // — the same domain that guards the park below. While outstanding==0,
+        // a NEW obligation can appear only via submit/start/stop/terminal
+        // publication, every one of which bumps control_epoch_ under this
+        // mutex and wakes the parked driver; backend-side progress cannot
+        // create a Runtime-visible obligation from zero (it needs an accepted
+        // op, and accepting is a submit). No check-to-park window remains.
+        if (io_ctx_ && io_ctx_->outstanding() > 0) {
+            driver_state_ = DriverState::in_run_live;
+            lk.unlock();
+            continue;
+        }
+
         // Not done yet: park on persistent CV predicate (P1-07).
         runtime_cv_.wait(lk, [this] {
             return driver_exit_requested_ ||
@@ -797,5 +827,56 @@ bool ApplicationRuntime::is_runtime_task() const noexcept {
     // and current_fiber_tag() returns nullptr ≠ this, correctly returning false.
     return current_fiber_tag() == this;
 }
+
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+void ApplicationRuntime::test_dump_forensics(const char* tag) {
+    // Issue #116 liveness forensics (investigation Phase 2). Called by a
+    // forensics watchdog on its bounded-timeout path, where the run is
+    // presumed permanently stalled: the driver is parked between invocations
+    // (lifecycle_mtx_ uncontended) and Scheduler workers have exited (every
+    // Scheduler lock uncontended). Each domain is still read under its own
+    // lock so the dump is race-free even when that presumption is wrong.
+    // Absent from the installed production build.
+    static const char* kStateName[] = {"Constructed", "Starting", "Running",
+                                       "Stopping",   "Draining", "Stopped",
+                                       "StartFailed", "Fatal"};
+    static const char* kDriverName[] = {"not_started", "barrier_wait",
+                                        "in_run_live", "between_invocations",
+                                        "drained_wait", "exited"};
+    State s;
+    DriverState ds;
+    std::uint64_t ctrl, obs;
+    std::size_t admitted, terminal;
+    bool drain_done, stop;
+    {
+        std::lock_guard lk(lifecycle_mtx_);
+        s = state_;
+        ds = driver_state_;
+        ctrl = control_epoch_;
+        obs = observed_epoch_;
+        admitted = admitted_count_;
+        terminal = terminal_count_;
+        drain_done = drain_complete_;
+        stop = stop_requested_;
+    }
+    std::fprintf(stderr,
+                 "[issue116-forensics] runtime %s: state=%s driver=%s "
+                 "control_epoch=%lu observed_epoch=%lu admitted=%zu "
+                 "terminal=%zu drain_complete=%d stop_requested=%d\n",
+                 tag, kStateName[static_cast<int>(s)],
+                 kDriverName[static_cast<int>(ds)],
+                 static_cast<unsigned long>(ctrl),
+                 static_cast<unsigned long>(obs), admitted, terminal,
+                 (int)drain_done, (int)stop);
+    if (io_ctx_) {
+        std::fprintf(stderr,
+                     "[issue116-forensics] io %s: accepted_outstanding=%zu\n",
+                     tag, io_ctx_->outstanding());
+    }
+    if (sched_) {
+        Scheduler::AsyncTestAccess::dump_park_forensics(*sched_, tag);
+    }
+}
+#endif  // SLUICE_ASYNC_INTERNAL_TESTING
 
 }  // namespace sluice::async
