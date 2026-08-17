@@ -36,14 +36,14 @@ registration pattern (app sources compiled into test targets) lives in
 
 - `RuntimeBuilder` / `ApplicationRuntime` / `RuntimeTaskContext`
   (`include/sluice/async/application_runtime.hpp`):
-  `submit_read/write/sync_data/sync_all` (+ `_request` identity variants),
+  the submit_read / submit_write / submit_sync_data / submit_sync_all set (+ `_request` identity variants),
   `await_completion`, `cancel_waiter`, `cancel_token`. **No spawn capability,
   no public timer/sleep, no file-readiness wait.**
 - `ThreadPoolBackend` — real syscalls, configurable
   `ThreadPoolConfig{request_capacity, worker_count}`.
 - `FakeAsyncBackend` — public header; deterministic fault injection
-  (`auto_bytes/auto_error/auto_eof/auto_short_then_full`,
-  `complete_oldest_*`). Usable by tests only (apps use ThreadPoolBackend).
+  (auto_bytes, auto_error, auto_eof,
+  auto_short_then_full, complete_oldest_*). Usable by tests only (apps use ThreadPoolBackend).
 - Positional `ReadOp{fd,dst,len,offset}` / `WriteOp` — `pread`/`pwrite`
   semantics; offset-based backward scanning works without mutating a shared
   file offset.
@@ -53,7 +53,7 @@ registration pattern (app sources compiled into test targets) lives in
 - App structure: `main.cpp` + `cli_parse.{hpp,cpp}` + `<tool>_task.{hpp,cpp}`
   (+ focused local modules); app-local RAII helpers; **public headers only**;
   no `SLUICE_ASYNC_INTERNAL_TESTING`; no `src/` includes.
-- Tests: `tests/<app>_<topic>_test.cpp` using `tests/harness.hpp`
+- Tests: one tests/sluice_<app>_<topic>_test.cpp file per topic, using tests/harness.hpp
   (`SLUICE_TEST_CASE` / `SLUICE_CHECK`, exact-name `SLUICE_TEST_FILTER`),
   registered in `xmake/tests/async.lua` with app sources compiled in.
 - Resource limits: fixed `kMax*` constants validated in the public task entry
@@ -92,7 +92,7 @@ tests/sluice_tail_scan_test.cpp             (last-N backward scan)
 tests/sluice_tail_integration_test.cpp      (real files + follow + cancel)
 ```
 
-No `apps/common/`, no shared header outside app dirs; small duplication is
+No apps/common directory, no shared header outside app dirs; small duplication is
 preferred over speculative abstraction (brief §5).
 
 ---

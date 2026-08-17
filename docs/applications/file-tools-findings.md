@@ -61,7 +61,7 @@ All four build and pass their suites in Debug and Release, use ONLY
   + per-line emit;
 - GNU grep's 12 ms is its kwset Boyer-Moore **skip loop** (it does not
   touch every byte) — a different algorithm class, not an I/O difference;
-- sluice-copy perf profile: top entries are `pthread_mutex_lock/unlock`
+- sluice-copy perf profile: top entries are pthread_mutex_lock + pthread_mutex_unlock
   (≈16%), `clock_gettime` (4.4%), `pthread_cond_wait` — the async
   control-plane (arena/admission/queue coordination), not application
   logic. No single app-level hotspot.
@@ -147,13 +147,13 @@ the README formulas claim.
 | abstraction | apps using it | status |
 |---|---|---|
 | bounded line assembler (carry + newline split + long-line drop) | grep, tail | **repeated (2)** — recorded, NOT promoted |
-| strict CLI decimal parser + caps | all 4 | repeated (4) — a `apps/support/` extraction is justified NEXT round if a 5th app appears; still not core |
+| strict CLI decimal parser + caps | all 4 | repeated (4) — an apps/support extraction is justified NEXT round if a 5th app appears; still not core |
 | task-terminal slot + done_cv runner | copy, hash, grep | repeated (3) — strongest foundation candidate (see #4 above), needs its own design issue |
 | safe temp+rename output | copy | single app — app-local |
 
 ## DO NOT PROMOTE YET
 
-Per the track rules: no `include/sluice/apps/`, no shared framework, no
+Per the track rules: nothing new under include, no shared framework, no
 core promotion from this round. The four candidates above each need a
 separate design issue with a second real consumer's evidence first.
 
