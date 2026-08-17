@@ -1617,6 +1617,17 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     // was observed, so no worker is stranded in a pause before the backend
     // (and its worker thread) is destroyed. The case-level Watchdog catches a
     // genuinely stuck worker.
+    //
+    // resume(kIters) may exceed the highest generation actually armed (an
+    // early break leaves later generations never armed). Safe here and ONLY
+    // here, because this is TERMINAL cleanup: no generation is armed after
+    // this point, a never-armed generation has no parked worker to release,
+    // and the shutdown path returns before the gate check. Do NOT copy this
+    // tail-resume into a loop that submits afterwards — resumed_at >= N
+    // pre-releases a future gen-N pause (the worker would publish paused_at
+    // and proceed without holding), silently destroying the gate's forced
+    // pre-dequeue window (see the pre-release constraint on
+    // resume_dequeue_gate_generation).
     probe.set(CasePhase::resume);
     resume_dequeue_gate_generation(gate, static_cast<std::uint64_t>(kIters));
     if (last_paused_gen != 0) {
@@ -1836,6 +1847,9 @@ SLUICE_TEST_CASE(tp_dequeue_gate_generation_blocks_cross_iteration_theft) {
     // Tail cleanup (every path): release both gates idempotently, wait for
     // the ACK of the highest generation whose pause was observed, drain, and
     // reset whatever became ready so no Completion destructs outstanding.
+    // resume(gate, 2) may exceed the highest armed generation on an early
+    // failure path — terminal cleanup only; nothing is armed afterwards (see
+    // the pre-release constraint on resume_dequeue_gate_generation).
     probe.set(CasePhase::resume);
     resume_threadpool_gate(hold);
     resume_dequeue_gate_generation(gate, 2);

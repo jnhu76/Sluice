@@ -322,6 +322,14 @@ class ThreadPoolBackend : public AsyncBackend {
         // store would not release the generation wait — the stall is caught
         // by the case watchdog, never silently mis-synchronized).
         //
+        // Disarm constraint (review follow-up): do NOT disarm or swap the
+        // gate pointer while a generation visit is in flight (between arming
+        // a generation and observing its ACK). The ACK publisher re-loads the
+        // gate pointer, so an in-flight swap silently drops the ACK and
+        // wait_dequeue_gate_ack stalls until the case watchdog. Disarming
+        // between fully ACKed visits is fine; legacy gen-0 visits carry no
+        // ACK obligation and may disarm after observing `exited`.
+        //
         //   test:  arm(N)                      -> submit iteration N
         //   worker: pauses                     -> publishes paused_at >= N
         //   test:  observes paused_at >= N     -> races cancel vs dequeue
@@ -895,8 +903,18 @@ inline void wait_dequeue_gate_paused(ThreadPoolBackend::BeforeWorkerDequeuePause
 // Resume generation `generation` (idempotent, monotonic). This is the ONLY
 // way to release a generation-armed pause; resume_threadpool_gate's boolean
 // store would not release the worker's resumed_at wait.
-inline void resume_dequeue_gate_generation(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
-                                           std::uint64_t generation) noexcept {
+//
+// Pre-release constraint (review follow-up): do NOT publish a resume for a
+// generation that will be armed LATER on this gate. A pre-satisfied
+// `resumed_at >= N` makes the worker's gen-N pause a NON-HOLD — it still
+// publishes `paused_at >= N` but proceeds without blocking, so the gate no
+// longer forces the pre-dequeue window and the race loses its determinism.
+// Releasing an already-past generation (an idempotent high-water resume
+// above the highest ACKed generation) is safe ONLY as terminal cleanup,
+// where no further generation is ever armed.
+inline void resume_dequeue_gate_generation(
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+    std::uint64_t generation) noexcept {
     dequeue_gate_detail::publish_max_(gate.resumed_at, generation);
     gate.resumed_at.notify_all();
 }
