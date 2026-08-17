@@ -1,0 +1,289 @@
+# Issue #115 — Runnable-Publication / Parked-Worker Liveness: Investigation
+
+**Status:** RUNNABLE_WAKE_ROOT_CAUSE_FIXED
+**Baseline master SHA:** `fbb3ea074db8c7c2aafc3c5e4599166e2381f458` (post #119)
+**Fix branch:** `fix/issue-115-runnable-publication-wake`
+**Compliance gate:** `docs/architecture/issue-115-runnable-publication-wake-gate.md`
+**Classification:** post-freeze evidence-derived correctness fix (Issue #115)
+
+---
+
+## 1. Executive summary
+
+`Scheduler::spawn()` and `Scheduler::spawn_on()` are NEW runnable publications,
+but they published only the queue state and a target-inbox notification.
+No production path ever waits on `inbox_cv` (grep proof: only the declaration
+at `include/sluice/async/scheduler.hpp` and `notify` call sites exist — every
+park is on the unified Scheduler wake domain `wake_cv_` or the backend
+`wait_one` domain), and neither site advanced `wake_epoch_`. A worker already
+committed to the unbounded wake-domain park therefore slept through the
+publication: the predicate checks epoch / terminate / the worker's OWN inbox
+only. A ticket queued on a busy worker with all steal-capable peers parked is
+stranded permanently (no deadline, no poll).
+
+**Repair (Candidate A):** both sites now run the canonical
+`route_runnable_locked` publication tail — queue membership under
+`global_mtx_`→`inbox_mtx_`, inbox released, then `signal_wake_locked()` under
+`global_mtx_` (global→wake is the accepted order; the inbox→wake edge is
+never taken, which is the inversion the park predicate's wake→inbox read
+forbids).
+
+## 2. Defect adjudication (Phase 1)
+
+Classification: **PRODUCTION_RUNNABLE_WAKE_DEFECT** — proven mechanically on
+master, no probabilistic sampling needed:
+
+1. `src/async/scheduler.cpp` (pre-fix) `spawn()`/`spawn_on()`: push +
+   `inbox_cv.notify_one()`, no `signal_wake_locked()`.
+2. `inbox_cv` has no waiter in the entire production tree.
+3. `park_on_wake_source` predicate (`src/async/scheduler_park_wake.cpp`):
+   `wake_epoch_ != observed_epoch || global_terminate_ || own inbox non-empty`.
+4. The G1 park-commit refusal (`unguarded_progress_pending_locked`) closes only
+   the pre-commit window and only when NO observer exists; with the target
+   worker running a Fiber (the #115 premise) the refusal never fires.
+
+Independent historical corroboration: the comment block in
+`tests/runnable_steal_test.cpp` (`steal_steal_run_suspend_wake_resume_on_thief`,
+"WHY f0 MUST SPIN UNTIL f2_spawned") documents this exact strand as the CI
+failure shape and works around it by holding the future thief inside user
+fiber code until after the publication — i.e. the suite has been paying a
+workaround tax for this frozen defect.
+
+## 3. Exact pre-fix interleaving (Phase 1)
+
+```text
+W1: pops F1, enters user code, blocks (running observer; cannot drain queue)
+W0: no local work; drain/classify -> mw_s1 (F1 running) -> park commit:
+        G: unguarded_progress_pending? running_fiber_count>0 -> false (pass)
+        wake_mtx_: baseline observed_epoch := E
+publisher (any thread / a fiber on W1):
+        spawn(F2) -> G -> inbox(W1): push F2; owner := W1
+        inbox_cv.notify_one()        [inert: no waiter]
+        [no wake_epoch_ advance]     [missing RP-2 wake obligation]
+W0: wake_cv_.wait predicate: E==E, !terminate, own inbox empty -> SLEEPS
+F2: Runnable + stealable + owner busy + all steal-capable peers asleep
+    -> permanent strand
+```
+
+Pre-commit/post-commit distinction (required by the brief): the G1 refusal
+protects `runnable visible -> worker attempts park` (and only with no
+observer). It cannot protect `worker committed park -> runnable published
+afterwards`; that direction's only transport is the wake-epoch advance —
+which the two publication sites omitted.
+
+## 4. Runnable publication path audit (Phase 2)
+
+All queue publications live in `src/async/scheduler.cpp` (verified: no other
+TU touches `local_runnable` outside comments/predicate reads).
+
+| Publication path | Persistent state | Queue / owner | G held | inbox notify | wake epoch | Parked peer may need it? |
+|---|---|---|---|---|---|---|
+| `spawn()` | local_runnable push + fiber_owner_ | RR target | yes | yes (dead) | **MISSING → bypass** | **YES** (target busy) |
+| `spawn_on()` | same | explicit worker | yes | yes (dead) | **MISSING → bypass** | **YES** |
+| `route_runnable_locked()` | local_runnable push | owner / RR | yes | yes (dead) | yes | yes (canonical) |
+| `publish_waiting_fiber_runnable_locked()` | → route_runnable_locked | owner | yes | inherited | yes | yes |
+| Completion drain (reap → route) | → route_runnable_locked | owner | yes | inherited | yes | yes |
+| `wake_ready_flags_locked()` | → route_runnable_locked | owner | yes | inherited | yes | yes |
+| WaitQueue wake/cancel (`wake_wait_one_locked`, `cancel_wait`) | → publish_waiting… | owner | yes | inherited | yes | yes |
+| Timer expiry (`pump_deadlines_locked` / `advance_clock`) | route + `signal_wake_locked` | owner | yes | inherited | yes | yes |
+| Event / Mutex / Semaphore / Condition / RwLock wakes | → publish_waiting… | owner | yes | inherited | yes | yes |
+| Select publication (`select_publish_locked`) | `route_runnable_locked` | caller owner | yes | inherited | yes | yes |
+| Worker-loop epilogue rescue | move to pending_spawn_ + signal | pre-run domain | yes | no | yes | yes |
+| `try_steal()` | MOVE ticket + owner transfer | thief | yes | yes (dead) | no — not needed | no: thief is live and self-executing (MOVE, not publication) |
+| `run()` initial distribute | MOVE pending→inboxes | first-N RR | yes | yes (dead) | no — not needed | no: worker threads do not exist yet |
+| `route_runnable()` (unlocked variant) | local_runnable push | owner | no | yes (dead) | no | **UNUSED — zero callers** (legacy; left untouched, flagged for follow-up cleanup) |
+
+Conclusion: `spawn()`/`spawn_on()` were the only NEW-publication wake bypasses.
+MOVEs (steal, distribute) legitimately carry no new obligation.
+
+## 5. Deterministic reproducer (Phase 3)
+
+`tests/issue115_runnable_publication_wake_test.cpp` (internal-testing variant;
+registered in `xmake/tests/async_internal.lua`). One narrow test seam added:
+`PhaseTag::scheduler_park_baseline_recorded` — pauses the parking worker
+AFTER the baseline is recorded and BEFORE it takes `wake_mtx_` to enter
+`cv.wait`, with no locks held (the exact mirror of the existing pre-baseline
+`scheduler_park_commit` seam; included in `release_all_phases`). A publication
+issued under this hold is strictly post-commit: the cv predicate is its only
+possible transport.
+
+Construction (cases A/B): W1 runs F1 blocked on a std::condition_variable
+rendezvous (running observer, no busy-spin); W0 (pinned to finish its trivial
+F0 only after F1 started, so it can never steal F1) commits its park and is
+held at the seam; the coordinator then publishes F2 onto busy W1 — case A via
+**production `spawn()`** (round-robin deterministically positioned on W1: F0
+consumed slot 0 with a filler spawn through the same production path), case B
+via `spawn_on(f2, 1)` — and releases the seam. Case C targets an idle/parked
+worker (normal-delivery guard: own-inbox backstop + epoch signal coexist,
+exactly-once).
+
+Watchdogs are bounded (10 s), fail-closed, and rescue the run via the
+production external-wake handle so a pre-fix failure reports cleanly instead
+of hanging. No sleep-ordering anywhere.
+
+## 6. Chosen repair (Phase 4)
+
+**Candidate A** — publish the Scheduler wake after queue insertion, mirroring
+`route_runnable_locked` byte-for-byte in protocol (not shared code: the
+spawn sites have no admission-demotion / terminate-clear semantics, and
+route's are load-bearing there; a shared helper would couple two different
+publications' G-scope side effects for zero invariant gain — Candidate B
+rejected as over-abstraction for a two-site correction).
+
+Candidates C (victim re-scan in the park predicate) and D (periodic timeout)
+rejected per the brief: C expands the wake predicate to O(N) inbox locks under
+`wake_mtx_` (the exact lock-order expansion the E9-CORRECTIVE predicate
+redesign removed) and hides polling semantics; D masks the correctness bug.
+
+## 7. Lock-order proof (RP-3)
+
+```text
+accepted edges (unchanged):  global -> inbox, global -> wake, global -> access,
+                             wake -> own-inbox (predicate read)
+forbidden edge:              inbox -> wake   (would cycle with the predicate)
+fix shape:                   G held; inbox taken INSIDE G, released;
+                             signal_wake_locked takes wake under G; notify after.
+```
+
+`signal_wake_locked` also calls `interrupt_backend_waiters` with `wake_mtx_`
+already released and `global_mtx_` still held — the wait source is a leaf that
+never acquires Scheduler locks (Phase-G design §4), so no new edge appears.
+
+## 8. Why the wake cannot be lost (RP-1/RP-2 argument)
+
+`std::condition_variable::wait(lk, pred)` is `while (!pred()) wait(lk)`
+(cppreference): the predicate is evaluated BEFORE the first block and after
+every wake. The predicate's authority is `wake_epoch_` under `wake_mtx_`.
+For W0 parked on baseline E and a publication of F2 after the commit:
+
+* publication stores queue state (under G→inbox, released), then advances
+  `wake_epoch_` E→E+1 (under wake_mtx_), then notifies;
+* if W0 is already in `cv.wait`: the notify (or any later notify / spurious
+  wake) re-evaluates the predicate → `E+1 != E` → returns;
+* if W0 has not entered `cv.wait` yet: the predicate is false→true at entry
+  (epoch read under `wake_mtx_` sees the advanced value) → never blocks;
+* therefore no interleaving of the post-commit publication with the physical
+  wait can lose the wake. The proof uses no timeout, no fair scheduling, no
+  periodic wake, and no assumption that the busy owner ever finishes.
+
+## 9. Backend-wait bridge impact (Phase 5)
+
+`signal_wake_locked`'s tail interrupts a parked MW-S2 participant when
+`backend_wait_active_`. With the fix, a spawn during a backend park is such an
+interrupt. Correct by construction: runnable work means the Scheduler must
+re-evaluate; the participant's Phase-D drain re-classifies (mw_s1) and the
+loop-top runs/steals the new ticket. One-shot per `wait_one` (D4-RM13),
+commit-to-park handshake (D4-RM14) untouched; each interrupt maps to a real
+publication (no interrupt→re-enter→same-interrupt loop: re-parking requires a
+fresh classify, and the classify observes the consumed publication's state).
+Phase-G suites re-run green (§11).
+
+## 10. Fiber ownership invariants (Phase 7)
+
+Unchanged: created→runnable exactly-once (`make_runnable` guard);
+`fiber_owner_` recorded in the same inbox critical section; no duplicate
+ticket (E7-T2 guard retained); steal remains MOVE + owner transfer;
+`suspend_switch_pending` restrictions untouched. Owner SELECTION (RR) is
+unchanged — the fix is wake transport only. Verified by the full E8 suite
+(`runnable_steal_test` 3/3 standalone) and the 168/168 Debug gate.
+
+## 11. Evidence
+
+```text
+Baseline (master fbb3ea0, pre-change):   Clang Debug ......... 167/167 PASS
+Pre-fix reproducer (fix branch + seam + tests only):
+    issue115_spawn_wakes_parked_peer_busy_target       3/3 FAIL (progressed) [strand]
+    issue115_spawn_on_wakes_parked_peer_busy_target    3/3 FAIL (progressed) [strand]
+    issue115_spawn_on_idle_target_delivers_once        FAIL (same mechanism)
+Post-fix:
+    issue115_runnable_publication_wake_test            5/5 full runs PASS
+    runnable_steal_test standalone                     3/3 PASS
+    Clang Debug  xmake test -v ........................ 168/168 PASS (rc=0)
+    Clang Release xmake test -v ........................ 168/168 PASS (rc=0)
+    TSan: full suite 168/168 rc=0; focused race binaries
+        (issue115, runnable_steal, phase_g_backend_progress_wake,
+        phase_g_closeout, multi_worker_coord, scheduler_worker_topology_race,
+        application_runtime_worker_topology) 7/7 rc=0, 0 ThreadSanitizer
+        warnings — covers the modified race classes: spawn-publication vs
+        park commit/baseline, publish vs steal, wake signal vs parked waiter
+    ASan+UBSan: full suite 168/168 rc=0; runnable_steal_test repeated
+        samples 0/15 failures (the #111 historical exposure shape)
+    Phase-G focused (Debug + TSan): phase_g_backend_progress_wake_test,
+        phase_g_closeout_test — green (bridge/deadline/park-convergence
+        invariants intact)
+Mechanical: git diff --check clean; check-doc-links self-test + run PASS;
+    verify-architecture-docs PASS; mechanical-facts self-test + run PASS
+    (after live count rows updated: default-gate targets 167→168,
+    scheduler.cpp 1952→1975, scheduler_park_wake.cpp 1144→1153);
+    verify-completion-authority / verify-request-arena negative-compile
+    probes PASS (12 + 6 cases)
+```
+
+## 12. Stress evidence (Phase 10)
+
+Hostile scheduling on this WSL2 box — 24-way oversubscription (12 ×
+runnable_steal_test + 12 × issue115 binary in parallel, `timeout` guarded),
+Debug layout, signal temporarily disabled via a two-line probe edit to
+reproduce the pre-fix production behavior (edit reverted; diff re-verified
+marker-free and binaries re-run green):
+
+```text
+pre-fix  : issue115 binary 12/12 FAIL (rc=1 — the watchdog fail-closed on the
+           strand under every schedule; the seam-forced interleaving is
+           schedule-independent)
+           runnable_steal_test 0/12 hangs (the suite's in-test workaround —
+           f0 spinning until f2_spawned — closes the window by construction;
+           the historical CI flake family was probabilistic and this sample
+           did not hit it)
+post-fix : 24/24 rc=0, zero watchdog activations, zero hangs
+```
+
+Stress is evidence, not proof: the deterministic seam reproducer (§5) is the
+correctness proof.
+
+## 12a. Performance sanity (Phase 11)
+
+Per-spawn added work: one `wake_mtx_` critical section (`++wake_epoch_`), one
+`wake_cv_.notify_all()` (waiter-bounded), one acquire load of
+`backend_wait_active_` (the bridge's no-participant fast path). This is the
+identical traffic class `route_runnable_locked` already emits on every wait
+resolution, so spawn-rate wake traffic is bounded by the same worker-count
+coalescing as routes; `signal_wake_locked` invokes nothing that publishes
+runnables (no recursive wake loop), and a woken worker that finds nothing to
+do re-classifies once and re-parks (the R4 damping analysis is unchanged —
+spawn now behaves exactly like a route publication).
+
+Empirical: full issue115 binary (three park/steal constructions) 0.56 s wall
+post-fix vs 10.5 s+ per failing case pre-fix (watchdog); full Debug suite
+6.4 s/168 tests post-fix vs 6.7 s/167 baseline. No wake storm, no idle
+busy-spin observable.
+
+## 13. Residual risk
+
+* **Pre-commit absorbed window (symmetric with the canonical route path):** a
+  publication that completes entirely BEFORE a thief's baseline record, while
+  the ticket's owner is a running fiber, lets the thief park with the epoch
+  absorbed; progress then relies on the cooperative discipline (the running
+  owner drains its queue when its Fiber yields/completes). This is the
+  pre-existing, accepted `route_runnable_locked` semantics — `spawn` now
+  matches it exactly; closing it would require re-defining the G1 observer
+  exemption (a stealing-model redesign, out of scope per the brief).
+* **Dead-code wake bypass retained:** the unused unlocked
+  `Scheduler::route_runnable()` (zero callers) keeps its notify-only shape.
+  Flagged for a follow-up hygiene change; deleting it here would widen the
+  diff without affecting any reachable behavior.
+* **`inbox_cv` notifications are inert** in every publication path (no
+  waiter). Retained verbatim to minimize the diff; documented at the two
+  changed sites.
+
+## 14. Issue #111 relationship
+
+The #111 family (`runnable_steal_test` ASan hang) was historically dodged by
+the f0-spin workaround documented in T3's comment — the same interleaving this
+fix removes the need for. The deterministic #115 failure (publication after a
+committed unbounded park onto a busy owner, no wake epoch) explains that
+family's mechanism: under ASan timing the workaround's spin window itself
+could still lose to the park commit before `f2_spawned` was observed.
+Classification: **ISSUE_111_SAME_ROOT_CAUSE** (administrative
+close/supersede of #111 by #115 is indicated after merge; not done in this
+patch per the brief).
