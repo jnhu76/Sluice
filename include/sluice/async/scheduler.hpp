@@ -288,13 +288,18 @@ public:
 
     // Enqueue a Fiber as runnable. Round-robin assignment to a Worker (E7-B
     // refines). E7-A: assigns to worker 0 (single-worker compatible).
+    // Issue #115: an active-run publication advances the Scheduler wake
+    // epoch (same obligation as every runnable publication) so a worker
+    // already parked on the wake domain observes the new ticket even when
+    // the assigned target worker is busy inside a Fiber.
     void spawn(Fiber& fiber) noexcept;
 
     // E8 test seam: spawn `fiber` directly onto worker `worker_id`'s
     // local_runnable. Narrow deterministic-test hook (mirrors the E7-T11
     // admission seam discipline); exposes no public production contract.
     // Used by E8 tests to place a victim on a specific worker without the
-    // round-robin nondeterminism of spawn(). Records the owner.
+    // round-robin nondeterminism of spawn(). Records the owner. Publishes
+    // the same Scheduler wake obligation as spawn() (Issue #115).
     void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
 
     // Run the scheduler with `worker_count` worker threads until global idle
@@ -1401,6 +1406,17 @@ private:
     // currently executing, the MW-S2 participant parked in / committed to
     // the backend-domain wait, or an admission in flight (the admission
     // holder is cycling; if it abandons, it re-evaluates rather than park).
+    // Issue #115 follow-up — CHECK PRIORITY: the runnable-ticket checks
+    // (pending_spawn_ / any local queue) run BEFORE the observer exemption.
+    // A runnable ticket is never delegatable to a running Fiber: a running
+    // Fiber is an observer for ITSELF, not for another ticket queued behind
+    // it, and a publication landing entirely before the park's G-section is
+    // invisible to the wake epoch (its signal is absorbed by the baseline
+    // the park records under the same G-section) — this recheck is that
+    // publication's only transport. The observer exemption therefore covers
+    // only accepted backend work and resident waits, whose designated
+    // observer is the MW-S2 participant (its bridge wakes on backend
+    // progress).
     bool unguarded_progress_pending_locked() const SLUICE_REQUIRES(global_mtx_);
 
     // Get the current Worker's WorkerState (worker-local via TLS).

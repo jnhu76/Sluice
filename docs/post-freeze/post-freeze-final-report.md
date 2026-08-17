@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1144 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1155 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 504 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
@@ -39,14 +39,24 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_condition.cpp` | 264 | condition waits |
 | `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 1952 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 1986 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
 Post-freeze corrective deltas update the count here with their attribution:
 `scheduler_park_wake.cpp` 1113 → 1144 (2026-08-17, Issue #116 — test-only
 `SLUICE_ASYNC_INTERNAL_TESTING` forensics extension of
-`dump_park_forensics_for_test`; production park/wake behavior unchanged).
+`dump_park_forensics_for_test`; production park/wake behavior unchanged);
+`scheduler_park_wake.cpp` 1144 → 1153 and `scheduler.cpp` 1952 → 1975
+(2026-08-17, Issue #115 — test-only post-baseline park seam in the
+internal-testing variant + the spawn/spawn_on runnable-publication wake
+signal, a post-freeze evidence-derived correctness fix; see
+`docs/investigations/issue-115-runnable-publication-wake.md`);
+`scheduler.cpp` 1975 → 1986 and `scheduler_park_wake.cpp` 1153 → 1155
+(2026-08-17, Issue #115 review round 2 — G1 park-commit refusal priority:
+runnable tickets refuse unconditionally, the observer exemption covers only
+backend work / resident waits; header contract + park comment refreshed;
+same investigation doc §6a).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

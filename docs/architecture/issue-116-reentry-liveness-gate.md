@@ -212,7 +212,7 @@ mechanically by `scripts/gates/mechanical-facts.py` from the xmake lua
 registrations and equal to the `running.test` line count of
 `xmake test -v`):
 
-| `test:default-gate-targets` | 167 | (166 baseline master + 2 new issue116 tests − 1 forensics test moved OUT of the default gate) |
+| `test:default-gate-targets` | 168 | (166 baseline master + 2 new issue116 tests − 1 forensics test moved OUT of the default gate + 1 issue115 test; live cross-reference — this row tracks the current mechanical count, see `scripts/gates/mechanical-facts.py`) |
 
 ```text
 Sanitizers: TSan full group — pass, 0 warnings (a test-side seam-disarm

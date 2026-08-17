@@ -253,12 +253,14 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // handshake under the state authority (the Tokio Notify::enable
     // discipline cited in design §8.3): while holding global_mtx_ — the
     // same domain every runnable/route publication serializes under —
-    // (a) REFUSE to park when unguarded progress remains (a runnable
-    //     ticket anywhere in the run domain, or accepted backend work, with
-    //     NO active observer: no running fiber, no backend-domain
-    //     participant, no admission in flight). The refusing worker
-    //     re-loops and BECOMES the observer (its loop-top steals the
-    //     runnable — including one stranded on a terminated worker's
+    // (a) REFUSE to park when unguarded progress remains: a runnable
+    //     ticket anywhere in the run domain (ALWAYS — never delegatable
+    //     to a running Fiber: the owner may sit in an unbounded fiber
+    //     execution and no one else is awake to steal; Issue #115), or
+    //     accepted backend work with NO active observer (no backend-
+    //     domain participant, no admission in flight). The refusing
+    //     worker re-loops and BECOMES the observer (its loop-top steals
+    //     the runnable — including one stranded on a terminated worker's
     //     queue — or elects as the MW-S2 participant);
     // (b) otherwise record the baseline under the NESTED wake_mtx_
     //     (global→wake is the accepted order): a publication after this
@@ -334,6 +336,15 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         }
 #endif
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Issue #115 causal seam: the baseline is committed and NO lock is held.
+    // A publication issued while paused here is strictly post-commit — the
+    // cv predicate is its only possible transport (an epoch advance fires it
+    // at wait entry; anything else is the #115 strand). Complements seam B
+    // (scheduler_park_commit), which pauses strictly PRE-baseline.
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_park_baseline_recorded);
+#endif
     std::unique_lock<Mutex> lk(wake_mtx_);
     // Phase G timeout policy: bound the wake wait by the earliest active
     // deadline so an active deadline cannot park a Worker indefinitely past
