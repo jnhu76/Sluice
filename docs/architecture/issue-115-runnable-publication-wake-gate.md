@@ -66,7 +66,12 @@ No state machine changes. `FiberState created->runnable` exactly-once
 queue membership under `global_mtx_`→`inbox_mtx_` (unchanged order). The fix
 appends the canonical wake publication (`signal_wake_locked()`) after the
 inbox critical section releases, exactly mirroring `route_runnable_locked`
-(`src/async/scheduler.cpp`). Authority table (unchanged domains):
+(`src/async/scheduler.cpp`). Round 2 changes the G1 park-commit REFUSAL
+CONDITION's check priority inside `unguarded_progress_pending_locked()`
+(runnable tickets refuse unconditionally; the observer exemption covers only
+backend work / resident waits) — a wake-obligation refinement, not a lifecycle
+transition: no new FiberState, no new queue, no ownership change. Authority
+table (unchanged domains):
 
 | Domain | Authority | Fix interaction |
 |---|---|---|
@@ -106,14 +111,19 @@ Lost-wake closure (`std::condition_variable::wait(lock, pred)` ≡
 `while(!pred()) wait(lock)`; cppreference): the predicate reads
 `wake_epoch_ != observed_epoch` under `wake_mtx_`. A publication that lands
 after the baseline advances the epoch past it — the predicate fires at wait
-entry or on notify; a publication that lands before the baseline is visible to
-the G1 commit recheck when no observer exists (refusal path). The residual
-pre-commit window — publication fully before the baseline while a running
-fiber exists (observer exemption) — is the delegation model the canonical
-route path already accepts: the running owner drains its queue when the Fiber
-yields/completes (cooperative discipline); it is symmetric with
-`route_runnable_locked`, documented as residual risk (investigation §13), not
-a regression introduced here.
+entry or on notify; a publication that lands before the baseline is visible
+to the G1 commit recheck — the round-2 repair makes that visibility
+UNCONDITIONAL for runnable tickets: `unguarded_progress_pending_locked()`
+scans `pending_spawn_` and every active participant's queue BEFORE the
+observer exemption, so a publication landing entirely before the park
+G-section (its epoch signal about to be absorbed by the baseline) refuses
+the park and the refuser steals the ticket. Both sides of the baseline are
+closed; the observer exemption now delegates only accepted backend work and
+resident waits to the MW-S2 participant (Phase-D bridge design, unchanged).
+Proof: Case D (`issue115_absorbed_publication_refuses_park`, existing
+pre-baseline `scheduler_park_commit` seam) — 3/3 FAIL on the round-1 HEAD,
+PASS post-repair with the ticket stolen and executed exactly once by the
+former parker.
 
 Lock order (no inversion; the forbidden edge is inbox→wake, held by the park
 predicate's wake→inbox):
@@ -140,15 +150,19 @@ Deterministic reproducer (pre-fix): issue115 A/B 3/3 FAIL (progressed)  [strand,
                                     seam-forced]
                                     issue115 C FAIL (progressed)        [same
                                     mechanism; not seam-forced — inv. §11]
+Round 2 (on round-1 HEAD):          issue115 D 3/3 FAIL (progressed)    [strand,
+                                    seam-forced pre-baseline; G1 exemption
+                                    short-circuits the queue scan]
 Post-fix Clang Debug:               xmake test -v .................... 168/168 PASS (rc=0)
 Post-fix Clang Release:             xmake test -v .................... 168/168 PASS (rc=0)
-Post-fix reproducer:                5/5 full-binary runs PASS (all cases; 0.56 s wall)
+Post-fix reproducer (A+B+C+D):      5/5 full-binary runs PASS
 runnable_steal_test standalone:     3/3 PASS; ASan+UBSan repeated samples 0/15 failures
 TSan:                               full suite 168/168 rc=0; focused race binaries
                                     7/7 rc=0 with 0 ThreadSanitizer warnings
-ASan+UBSan:                         full suite 168/168 rc=0
+ASan+UBSan:                         full suite rc=0, 0 failures, 0 diagnostics
 Stress (24-way oversubscription):   pre-fix probe 12/12 reproducer FAIL / post-fix
-                                    24/24 rc=0 (investigation §12)
+                                    24/24 rc=0 (investigation §12); round-2 stress
+                                    24 parallel full-binary runs 0/24 failures
 Mechanical gates:                   git diff --check, check-doc-links (+self-test),
                                     verify-architecture-docs, mechanical-facts
                                     (+self-test), negative-compile probes (12+6)
@@ -166,5 +180,6 @@ created. (Zig baseline audit: memory `zig-baseline-and-audit-2026-08`.)
 This is a post-freeze evidence-derived correctness fix: it changes no frozen
 row's contract — it makes `spawn`/`spawn_on` satisfy the wakeup-semantics
 obligation (`foundation-freeze.md` "Wakeup semantics" row, AC-6) that the
-canonical publication path already carries. No new phase, no topology change,
-no stealing-model change.
+canonical publication path already carries, and (round 2) makes the G1
+park-commit refusal honor that same obligation for pre-baseline
+publications. No new phase, no topology change, no stealing-model change.
