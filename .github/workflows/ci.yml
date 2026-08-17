@@ -1,35 +1,26 @@
-# Repository-level CI gate.
+# Repository-level pull-request CI.
 #
-# Generic by design: it knows nothing about E13, P7, Select or any specific
-# test name. It drives the project's unified build/test entry points
-# (xmake.lua test group) so adding a future Queue/Channel/Socket test only
-# touches xmake.lua, never this workflow.
+# Policy:
+#   - Linux Clang Debug is the primary correctness/governance gate.
+#   - Linux Clang Release proves the optimized production build + runtime suite.
+#   - Sanitizers, long stress loops, and the heavyweight Phase C1 aggregate
+#     backend-conformance runner stay as explicit developer/nightly evidence;
+#     they are intentionally not paid on every PR.
 #
-# Scope of the first version: a single required job — Linux Clang Debug.
-# No OS/compiler matrix, no sanitizers, no long stability loops, no TLA+.
-# Sanitizer/stability evidence stays in local/nightly runs; this is the PR
-# merge gate.
-#
-# Trigger policy (per project decision): runs on pull_request only, plus
-# manual workflow_dispatch. It does NOT run on pushes to master. The
-# required status check that guards a merge is therefore the pull_request
-# run on the PR head.
-#
-# Decisions verified against Context7 (GitHub Actions + xmake-docs) and the
-# setup-xmake action README; see PR description for the doc citations.
+# The fast deterministic repository validators are delegated to the same
+# scripts/gates/pre-push.sh entry point developers run locally. This avoids
+# repeating the individual Python validators in YAML while keeping CI
+# authoritative for those checks.
 name: ci
 
 on:
   pull_request:
   workflow_dispatch:
 
-# Cancel superseded runs on the same PR/ref so an older CI run does not
-# block or waste runners when a new commit is pushed.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Minimal permissions: the gate only needs to read the repo contents.
 permissions:
   contents: read
 
@@ -37,204 +28,107 @@ jobs:
   linux-clang-debug:
     name: Linux Clang Debug
     runs-on: ubuntu-latest
-    # 60-minute budget: the Phase C1 aggregate gate (run with --no-build) still
-    # launches ~21 evidence subprocesses, each with an internal 600s cap, so
-    # the job needs headroom beyond the build/test steps. The gate is
-    # fail-closed — a hung target fails the gate; the larger budget lets the
-    # gate finish attributing failures instead of being killed mid-report.
-    timeout-minutes: 60
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history: scripts/gates/mechanical-facts.py verifies pinned-SHA
-          # claims in docs/post-freeze (e.g. LOC rows snapshotted at the PR
-          # baseline d9184de) via `git show <sha>:<path>` and fails closed when
-          # a referenced SHA is missing from the object store. The default
-          # shallow checkout (fetch-depth: 1) lacks those baseline commits and
-          # failed the gate on its first CI execution (PR #117, run
-          # 31956975489). Provide the history the gate requires instead of
-          # weakening the gate.
+          # mechanical-facts.py validates historical pinned-SHA claims, so the
+          # Debug governance gate needs the full object history.
           fetch-depth: 0
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
-          # Pin to a known-good release line. 'latest' resolves to the newest
-          # stable xmake at run time; the build is not sensitive to a patch
-          # version, and pinning avoids drift without freezing on one build.
           xmake-version: latest
 
       - name: Configure (Clang, debug)
-        # -y answers config prompts non-interactively in CI.
         run: xmake f -m debug --toolchain=clang -y
 
       - name: Build production libraries
-        # Build the real production targets explicitly. Some tests link the
-        # internal-testing variant; building the production libs alone does
-        # not prove the production surface (warning-as-error, Clang
-        # thread-safety analysis, normal linking) still compiles.
         run: |
           xmake build sluice_core
           xmake build sluice_async
 
       - name: Build test targets
-        # Builds every target in the unified 'test' group (xmake.lua).
         run: xmake build -g test
 
       - name: Run tests (bounded hang watchdog)
-        # xmake test returns non-zero if any test fails (suitable for CI).
-        # -v keeps the per-test output visible in the Actions log. The
-        # watchdog (issue #67: sluice_copy_pipeline_stress_test can stall on
-        # the hosted runner) turns a rare hang into a gdb all-thread capture
-        # printed in the log instead of a silent stall; a hang still fails
-        # the job (fail-closed). ptrace_scope=0 lets gdb attach to the
-        # orphaned test binaries (runner user has passwordless sudo).
-        # gdb is installed explicitly: the hosted image has shipped WITHOUT
-        # it (2026-08-15), which left a hang with no backtrace ("gdb:
-        # command not found"); the watchdog also carries a /proc per-thread
-        # fallback in case the install fails.
-        # -j 4 caps test-execution concurrency to the runner's 4 vCPUs
-        # (xmake's default -j22 oversubscribes 5.5x). This removes the
-        # starvation AMPLIFIER, not any assertion: under 22-way concurrency
-        # a heavily loaded runner deschedules single test processes for
-        # hundreds of ms, which deterministically opens the known
-        # starvation-sensitive windows (issue #67 stall family; issues
-        # #115/#116 backtraces; runs 31945036160/31949493218 where
-        # copy/copy-pipeline tests were watchdog survivors). The same
-        # failures reproduce on MASTER under a locally forced 4-CPU
-        # 166-binary concurrent launch — they are pre-existing and
-        # load-amplified, not regression. All tests, assertions, and the
-        # fail-closed watchdog are unchanged; only scheduling changes.
+        # Debug keeps the forensic path: a rare hosted-runner hang should fail
+        # closed and leave an actionable all-thread trace instead of a timeout.
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gdb
           sudo sysctl -w kernel.yama.ptrace_scope=0 || true
           bash scripts/ci-hang-watchdog.sh 420 xmake test -v -j 4
 
-      - name: Negative-compile verification (E15-P2-03)
-        # Verifies that every deleted/private API guard on the E10-E12 async
-        # synchronization primitives compiles-away (not just missing headers).
-        run: bash scripts/verify-async-api-negative-compile.sh
-
-      - name: Identity-authority negative-compile (E16-C2-T4)
-        # Verifies that the Fiber-local Runtime execution-identity WRITE path
-        # (Fiber::set_execution_tag, Scheduler::set_current_fiber_execution_tag)
-        # is unreachable from ordinary (non-friend) application code — a
-        # STRUCTURAL authority proof at the installed-header level. Previously
-        # this script existed but was not wired into CI, so the claim "public
-        # setter authority enforced by a negative-compile gate" was not actually
-        # exercised by the merge gate.
-        run: bash scripts/verify-async-identity-negative-compile.sh
-
-      - name: Completion-authority negative-compile (P0-03)
-        # ADR-explicit-io-completion-authority — proves the publication
-        # mutators (try_claim_for_backend, publish_from_reap,
-        # rollback_claim_before_accept, reap_seq) are structurally unreachable
-        # from ordinary application code. This is the merge-gate evidence that
-        # P0-03 stays resolved: without it, a future commit could silently
-        # re-expose the mutators and still merge.
-        # CXX is pinned to clang++ to match the required Linux Clang Debug gate.
+      - name: Structural API authority gates
+        # These are cheap compile-time invariants and remain merge-enforced.
+        # They catch accidental re-exposure of private/deleted authority that
+        # ordinary runtime tests cannot prove structurally.
         env:
           CXX: clang++
-        run: bash scripts/verify-completion-authority-negative-compile.sh
+        run: |
+          bash scripts/verify-async-api-negative-compile.sh
+          bash scripts/verify-async-identity-negative-compile.sh
+          bash scripts/verify-completion-authority-negative-compile.sh
+          bash scripts/verify-request-arena-negative-compile.sh
+          bash scripts/verify-request-handle-authority-negative-compile.sh
+          bash scripts/verify-external-backend-authority-negative-compile.sh
 
-      - name: RequestArena slot-authority negative-compile (Phase B)
-        # ADR-explicit-io-request-contract (Phase B) — proves the RequestSlot
-        # lifecycle fields (state, generation, enqueue pin, terminal result,
-        # waiter registration, publication binding) are structurally
-        # unreachable from ordinary application code: every transition is owned
-        # by RequestArena under the leaf slot-lifecycle mutex. Previously this
-        # script existed but was not wired into CI, so the slot-authority claim
-        # was not actually exercised by the merge gate.
-        # CXX is pinned to clang++ to match the required Linux Clang Debug gate.
-        env:
-          CXX: clang++
-        run: bash scripts/verify-request-arena-negative-compile.sh
-
-      - name: RequestHandle authority negative-compile (Phase F3)
-        # ADR-public-request-handle — proves the public RequestHandle is
-        # construction-controlled (non-forgeable): ordinary application code
-        # cannot manufacture a valid handle, read its private identity
-        # components, or flip validity. Mirrors the completion/arena authority
-        # gates so the non-forgeability claim is merge-enforced.
-        # CXX is pinned to clang++ to match the required Linux Clang Debug gate.
-        env:
-          CXX: clang++
-        run: bash scripts/verify-request-handle-authority-negative-compile.sh
-
-      - name: Build and run acceptance consumers
-        # Proves the public async-foundation surface is usable from consumers
-        # that see only the installed public headers. Build AND execute: a
-        # runtime behavioral regression must fail CI, not merely a compile error.
+      - name: Public acceptance consumers
+        # Build + execute consumers against the public production surface.
         run: |
           xmake build public_api_acceptance
           xmake run public_api_acceptance
           xmake build async_foundation_quickstart
           xmake run async_foundation_quickstart
 
-      - name: Documentation verification
-        # Link checker. Validates ONLY git-tracked Markdown (via `git ls-files`)
-        # so generated/gitignored files under docs/ never enter the scan set —
-        # this is what makes the gate safe to enforce in CI where local build
-        # artifacts could otherwise leak in.
-        #  1. --self-test: negative tests that the checker actually catches
-        #     broken/stale links and excludes untracked files.
-        #  2. full scan: every tracked doc link must resolve.
-        #  3. architecture docs: structural completeness of governance files
-        #     (constitution IDs, divergence registry fields, PR template refs).
-        #  4. mechanical facts: identifier near-miss (the SLUCE_/SLUICE_ class,
-        #     issue #113), doc LOC/count claims vs wc -l / pinned commits,
-        #     split-layout completeness, SHA/tracker references. Self-test
-        #     plants one violation per detector and requires each to fire.
+      - name: Repository mechanical gates
+        # One fast entry point for doc links, architecture structure,
+        # backend-conformance manifest attribution self-test, mechanical facts,
+        # and git diff --check. This replaces the duplicated Python invocations
+        # that previously appeared as several CI steps.
+        run: bash scripts/gates/pre-push.sh </dev/null
+
+  linux-clang-release:
+    name: Linux Clang Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # Release does not run historical/doc governance, so the default
+        # shallow checkout is sufficient and avoids unnecessary transfer.
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Configure (Clang, release)
+        run: xmake f -m release --toolchain=clang -y
+
+      - name: Build optimized production + tests
+        # Keep this job intentionally narrow: optimized codegen/linking plus
+        # the real runtime suite. No Python governance, negative-compile probes,
+        # sanitizers, documentation scans, or package installation.
         run: |
-          python3 scripts/check-doc-links.py --self-test
-          python3 scripts/check-doc-links.py
-          python3 scripts/verify-architecture-docs.py
-          python3 scripts/gates/mechanical-facts.py --self-test
-          python3 scripts/gates/mechanical-facts.py
+          xmake build sluice_core
+          xmake build sluice_async
+          xmake build -g test
 
-      - name: Hardening runner unit tests
-        # Pure Python unit tests for the hardening runner.  These do not
-        # require xmake or a C++ build; they validate runner logic
-        # (heartbeat scheduling, failure detail parsing, reporting,
-        # timeout escalation, verdict calculation, etc.) independently.
-        # This is also the discovery harness for the Phase C1 manifest self-test
-        # (scripts/tests/test_backend_conformance_manifest.py), which proves the
-        # aggregate gate's per-backend RESULT ATTRIBUTION is isolated: one
-        # backend's failure cannot contaminate another's verdict.
-        run: python3 -m unittest discover -v scripts/tests
+      - name: Run optimized tests
+        # Release only needs a hard fail-closed budget, not Debug's expensive
+        # gdb forensic path. GNU timeout keeps this step dependency-free and
+        # kills a stuck test process group after a short grace period.
+        run: timeout --signal=TERM --kill-after=10s 300s xmake test -v -j 4
 
-      - name: Phase C1 backend-conformance aggregate gate
-        # The Phase C1 "ruler": drives the shared conformance suite once PER
-        # registered backend (each in its own subprocess via SLUICE_TEST_FILTER)
-        # plus the lifecycle / backend-specific / authority / external-admission
-        # evidence, and classifies each backend honestly from its own run +
-        # stable [conformance-meta] lines. Must exit 0 (Fake/ThreadPool
-        # ELIGIBLE, Uring NOT CONFORMING is expected before Phase D).
-        # This was previously only implied by the hardening step; the gate is
-        # now an explicit merge blocker so a result-attribution or isolation
-        # regression cannot slip through as "runner unit tests pass".
-        run: python3 scripts/verify-backend-conformance.py --no-build
-
-      - name: Phase C1 manifest + attribution self-test
-        # Pure-data self-test for the conformance manifest (closed profiles /
-        # layers / statuses, mandatory coverage, helper well-definedness) AND
-        # the aggregate gate's per-backend attribution/isolation regression
-        # suite. Runs standalone (same module, different entry point) so the
-        # attribution invariants are enforced even when the xmake-driven gate
-        # step is skipped.
-        run: python3 scripts/tests/test_backend_conformance_manifest.py
-
-      - name: External-backend authority negative-compile (Phase C1)
-        # Closes the narrower Phase C1 gap that AsyncBackend protected
-        # publication helpers (try_claim / publish) are inaccessible to
-        # non-derived ordinary code. The probe's positive control also proves
-        # a DERIVED backend can still reach both helpers (private using
-        # declarations), so a protected->private regression fails the gate.
-        # The gate's external_admission layer depends on this probe passing;
-        # running it explicitly makes the merge blocker visible by name rather
-        # than only via the aggregate gate.
-        env:
-          CXX: clang++
-        run: bash scripts/verify-external-backend-authority-negative-compile.sh
+      - name: Release public smoke
+        # Small production-surface smoke after the full optimized test suite.
+        run: |
+          xmake build public_api_acceptance
+          xmake run public_api_acceptance
+          xmake build async_foundation_quickstart
+          xmake run async_foundation_quickstart
