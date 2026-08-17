@@ -74,6 +74,14 @@ inbox critical section releases, exactly mirroring `route_runnable_locked`
 | wake domain | `wake_mtx_` / `wake_epoch_` / `wake_cv_` | two more publishers of the SAME advance (idempotent, coalescing-safe) |
 | backend park bridge | `backend_wait_active_` gate + `interrupt_backend_waiters` | reached through the existing `signal_wake_locked` tail (see Gate 3) |
 
+Shutdown semantics: unchanged. `signal_wake_locked` only advances the wake
+epoch / notifies / conditionally bridges — it never sets or clears
+`global_terminate_`, so the two new publishers add no shutdown obligation. A
+spawn issued under terminate (or with no active run) still takes the
+`pending_spawn_` branch exactly as before: no inbox publication, no wake
+signal, deferred to the next `run()` distribution and the terminating drain.
+Quiescent-destruction rules are untouched (no accepted-I/O path is involved).
+
 ## Gate 2 — Resource and Failure Model
 
 No new state, containers, threads, or allocation. Per-spawn added cost: one
@@ -128,8 +136,10 @@ re-park requires a fresh classify. Verified by the Phase-G suites (§Evidence).
 
 ```text
 Baseline (pre-fix master fbb3ea0):  Clang Debug xmake test -v ......... 167/167 PASS
-Deterministic reproducer (pre-fix): issue115 A/B 3/3 FAIL (progressed)  [strand]
-                                    issue115 C FAIL (same mechanism)   [strand]
+Deterministic reproducer (pre-fix): issue115 A/B 3/3 FAIL (progressed)  [strand,
+                                    seam-forced]
+                                    issue115 C FAIL (progressed)        [same
+                                    mechanism; not seam-forced — inv. §11]
 Post-fix Clang Debug:               xmake test -v .................... 168/168 PASS (rc=0)
 Post-fix Clang Release:             xmake test -v .................... 168/168 PASS (rc=0)
 Post-fix reproducer:                5/5 full-binary runs PASS (all cases; 0.56 s wall)

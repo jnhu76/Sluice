@@ -124,11 +124,14 @@ of hanging. No sleep-ordering anywhere.
 ## 6. Chosen repair (Phase 4)
 
 **Candidate A** — publish the Scheduler wake after queue insertion, mirroring
-`route_runnable_locked` byte-for-byte in protocol (not shared code: the
-spawn sites have no admission-demotion / terminate-clear semantics, and
-route's are load-bearing there; a shared helper would couple two different
-publications' G-scope side effects for zero invariant gain — Candidate B
-rejected as over-abstraction for a two-site correction).
+the `route_runnable_locked` publication protocol (state first, inbox lock
+released, then the wake signal). Not byte-identical: the retained legacy
+`inbox_cv.notify_one()` fires after the release where route notifies inside
+the inbox critical section — equivalent for a cv with no waiter. Not shared
+code either: the spawn sites have no admission-demotion / terminate-clear
+semantics, and route's are load-bearing there; a shared helper would couple
+two different publications' G-scope side effects for zero invariant gain —
+Candidate B rejected as over-abstraction for a two-site correction.
 
 Candidates C (victim re-scan in the park predicate) and D (periodic timeout)
 rejected per the brief: C expands the wake predicate to O(N) inbox locks under
@@ -194,7 +197,12 @@ Baseline (master fbb3ea0, pre-change):   Clang Debug ......... 167/167 PASS
 Pre-fix reproducer (fix branch + seam + tests only):
     issue115_spawn_wakes_parked_peer_busy_target       3/3 FAIL (progressed) [strand]
     issue115_spawn_on_wakes_parked_peer_busy_target    3/3 FAIL (progressed) [strand]
-    issue115_spawn_on_idle_target_delivers_once        FAIL (same mechanism)
+    issue115_spawn_on_idle_target_delivers_once        FAIL (progressed)*
+    (* A/B are seam-forced deterministic: the publication is held until W0's
+    park baseline is recorded. C arms no seam — its pre-fix failure requires
+    W1 to have parked before the coordinator's spawn, near-certain at the
+    1 ms wait_flag granularity but not forced by construction; the 12/12
+    pre-fix stress failures in §12 corroborate the mechanism.)
 Post-fix:
     issue115_runnable_publication_wake_test            5/5 full runs PASS
     runnable_steal_test standalone                     3/3 PASS
