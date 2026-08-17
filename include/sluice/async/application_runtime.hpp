@@ -6,7 +6,7 @@
 // start / submit / request_stop / drain / join / shutdown contract.
 //
 // ADR: docs/adr/ADR-application-runtime.md (Accepted 2026-07-29).
-// Design: docs/design/e16-application-runtime.md.
+// Design: docs/history/implementation-plans/e16-application-runtime.md.
 // Formal: spec/tla/e16_application_runtime/.
 //
 // Non-copyable, non-movable. Constructed on the heap via RuntimeBuilder::build()
@@ -45,7 +45,7 @@ class ApplicationRuntime;
 // Valid only during one RuntimeTaskFn invocation; delegates I/O to the
 // Runtime-owned AsyncIoContext. No spawn capability in E16 v1.
 //
-// M1-A (docs/design/m1-runtime-io-await-race.md): added a cooperative
+// M1-A (docs/history/implementation-plans/m1-runtime-io-await-race.md): added a cooperative
 // Completion wait (await_completion) so a task can suspend until a submitted,
 // caller-owned Completion reaches a terminal result. This is the application-
 // discovered Runtime I/O wait gap (M1-API-GAP-1). The capability is backed by

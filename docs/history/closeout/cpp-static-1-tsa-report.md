@@ -1,5 +1,10 @@
 # CPP-STATIC-1 — Final Report
 
+> **Historical note (2026-08-18):**
+> Status: Historical closeout. The pilot TSA substrate this report landed is
+> now part of production (`include/sluice/async/thread_annotations.hpp` and
+> the annotated headers); see `docs/verification/` for current gates.
+
 **Branch:** `feat/cpp-static-1-tsa` (from `E10-waitnode-wait-queue` @ `6c05069`)
 **Date:** 2026-07-09 (history corrective 2026-07-10)
 **Status:** ✅ COMPLETE — pilot scope proven, gated, committed

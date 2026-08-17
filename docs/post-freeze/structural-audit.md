@@ -21,7 +21,7 @@ Phase G is closed and the foundation is frozen by
 
 | Frozen surface | Authority |
 |---|---|
-| Synchronous core contract (`Reader`/`Writer`/`Result<T>`/`IoError`, buffering, copy, WAL, durability) | `docs/sync-io-model.md`, AC-1..AC-7 |
+| Synchronous core contract (`Reader`/`Writer`/`Result<T>`/`IoError`, buffering, copy, WAL, durability) | `docs/reference/sync-io-model.md`, AC-1..AC-7 |
 | Request identity & lifecycle (`RequestKey`, RequestArena/RequestSlot, generation) | `docs/adr/ADR-explicit-io-request-contract.md`, AC-2/AC-14 |
 | Completion publication authority | `docs/adr/ADR-explicit-io-completion-authority.md`, AC-5/AC-13 |
 | Backend wait/park/wake + interrupt bridge (R1–R4, `backend_wait_active_` gating) | `docs/design/phase-g-backend-progress-wake.md`, `docs/architecture/phase-g-compliance-gate.md` |
@@ -30,7 +30,7 @@ Phase G is closed and the foundation is frozen by
 | Deadline/timeout semantics (`deadline_t`, `advance_clock`, `*_until` waits) | E11 deadline design |
 | Resource bounds (arena capacity, worker counts, queue depths as distinct resources) | AC-7, §12 |
 | Shutdown/drain semantics (quiescent destruction, explicit lifecycle) | `AGENTS.md` §14 |
-| Public async API (`AsyncIoContext`, `Completion<T>`, `ApplicationRuntime`, primitives) | `include/sluice/async/`, `docs/api-reference.md` |
+| Public async API (`AsyncIoContext`, `Completion<T>`, `ApplicationRuntime`, primitives) | `include/sluice/async/`, `docs/reference/api.md` |
 
 Any R1 refactor must be a **code motion between translation units** that leaves
 every row above untouched; verification is the full test matrix plus diff

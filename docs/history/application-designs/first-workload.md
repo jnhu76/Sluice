@@ -1,5 +1,14 @@
 # First Application Workload (Post-Freeze Design)
 
+> **Historical note (2026-08-18):**
+> Status: Historical / Superseded. This `sluice-pipeline` design was never
+> implemented; the first application round chose single-purpose file tools
+> instead, which met the same public-layer-only validation goal.
+> Superseded by:
+> - `docs/applications/file-tools-plan.md`
+> - `docs/applications/file-tools-findings.md`
+> This document is not current authority.
+
 **Status:** DESIGN (2026-08-16) — not implemented in the R0/R1 pass
 **Purpose:** validate that a real application can live entirely on the
 public/application layer without entering Foundation internals

@@ -47,7 +47,7 @@ struct SchedulerWakeHandle::Control {
     // NOT reference counting. Control::mtx does not extend Scheduler object
     // ownership. A stale handle may survive Scheduler destruction; its later
     // notify() observes alive=false and returns false (a safe no-op). See
-    // docs/spec/e9_wake_handle_lifetime/ for the TLA+ proof.
+    // spec/tla/e9_wake_handle_lifetime/ for the TLA+ proof.
     Mutex mtx;
     Scheduler* scheduler SLUICE_GUARDED_BY(mtx){nullptr};
     bool alive SLUICE_GUARDED_BY(mtx){false};

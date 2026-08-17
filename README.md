@@ -1,224 +1,249 @@
 # Sluice
 
-An experimental C++20 I/O control-flow library built around explicit
-capabilities, pluggable backends, and backend-neutral `Reader` / `Writer`
-semantics.
+Sluice is an experimental C++20 explicit-I/O runtime: application code states
+**what** I/O it wants through backend-neutral public APIs, and pluggable
+backends decide **how** each operation executes.
 
-**Current status:** v0.1.0 — Runtime Foundation (E10–E15) complete.
-Synchronous core, async runtime, and synchronization primitives are
-production-ready. E16 Application Runtime is the next proposed phase.
+[中文说明](README.zh-CN.md)
 
-## Why Sluice
+![Sluice high-level architecture](docs/assets/architecture/sluice-high-level-layered-view.png)
 
-Most C++ I/O ties you to a specific backend — POSIX files, sockets, memory —
-before you've written a line of business logic. Sluice flips that: you code
-against abstract `Reader`/`Writer` interfaces, and the backend is a **pluggable
-capability** you choose at the edges of your program.
+*In the diagram, `network` and `external-memory data structures` are future
+workload directions, not implemented capability. `ThreadPoolBackend (portable)`
+describes its `std::thread` / no-liburing implementation strategy, not completed
+cross-platform validation — see [Project status](#project-status).*
 
-This means:
+## What is Sluice?
 
-- **Test with deterministic fault injection** (`FaultReader`/`FaultWriter`) — no filesystem, no mocking framework.
-- **Benchmark with stats-collecting wrappers** (`ObservedReader`/`ObservedWriter`) — zero-copy pass-through that counts bytes and calls.
-- **Swap backends without changing call sites** — POSIX files today, io_uring tomorrow, in-memory for tests, all through the same `copy_all` primitive.
+Two C++20 libraries built around one idea: application I/O intent should not
+be coupled to backend execution.
 
-The library is inspired by Zig's `std.Io` but adapted for C++20 idioms. It is
-**not** a port — it's a C++ take on the same explicit-capability philosophy.
+- **`sluice_core`** — the synchronous core. `Result<T>` / `IoError` error
+  model, `Reader` / `Writer` interfaces with buffered, fault-injecting, and
+  observing wrappers, `copy_all`, POSIX file and positional I/O, durability
+  (`sync_data` / `sync_all`), a WAL record format, and the bounded
+  `BlockingIoPool` helper.
+- **`sluice_async`** — the opt-in async runtime. An M:N fiber `Scheduler`,
+  cooperative synchronization primitives (`Event`, `Semaphore`, `AsyncMutex`,
+  `AsyncCondition`, `AsyncQueue`, `AsyncRwLock`, `Select`), cancellation
+  primitives, `Future` / `Group` / `Batch`, and the explicit-I/O layer:
+  caller-owned `Completion<T>` operations, `ThreadPoolBackend`, and the
+  `ApplicationRuntime` lifecycle layer.
 
-## Build boundaries
+I/O failures are represented as values (`Result<T>` / `IoError`) rather than
+being reported through the I/O API as exceptions. Ordinary C++ exceptions
+from value construction, allocation, or user code remain ordinary C++
+exceptions. The design is inspired by Zig's `std.Io`, adapted to C++20 idioms
+— it is not a port.
 
-| Library | Description | Default |
-|---------|-------------|---------|
-| `sluice_core` | Synchronous core: Result, Reader/Writer, copy, file I/O, WAL, BlockingIoPool | Always builds |
-| `sluice_async` | Async runtime: Scheduler, Fiber, synchronization primitives, Completion, Future/Group/Batch | Opt-in; built explicitly or as a dependency of async tests/examples |
-| `sluice_async_internal_testing` | Test-only variant with deterministic causal seams | Test-only |
-| `sluice_experimental_uring` | Optional io_uring code (stub without liburing) | Off by default |
+## Why explicit I/O?
 
-## 5-minute synchronous example
+```text
+Application code expresses I/O intent
+        ↓
+Public Sluice API owns the operation semantics
+        ↓
+The backend decides how the operation executes
+```
+
+- **Backend-neutral surface** — replacing `ThreadPoolBackend` with another
+  compatible backend does not require rewriting the operation-level application
+  logic.
+- **Explicit operations** — reads, writes, and syncs are positional op
+  descriptors submitted through public APIs.
+- **Explicit results** — every operation resolves to a caller-owned
+  `Completion<T>` / `Result<T>`; I/O failure is a value you handle.
+- **Caller-owned buffers** — buffers and Completions stay alive and
+  address-stable for the documented request lifetime.
+- **Cooperative cancellation** — cancellation is explicit and cooperative; a
+  real syscall result is never rewritten into "canceled".
+- **Bounded resources** — request capacity, worker counts, and queue depths
+  are explicit bounds, not accidental growth.
+
+The same ask-versus-execute split drives testing: `MemoryIoContext` and
+`FakeAsyncBackend` give deterministic in-memory and fault-injection tests
+without a filesystem or a mock framework.
+
+## Quick start
+
+Current validation is Linux/WSL-centric. You need
+[xmake](https://xmake.io) and a C++20 compiler (Clang recommended). The
+synchronous core is POSIX-oriented and contains macOS-compatible code paths,
+but broader non-Linux portability evidence is still incomplete.
+
+```bash
+git clone https://github.com/jnhu76/Sluice.git
+cd Sluice
+xmake f -m release -y
+xmake build sluice-copy        # or: sluice-hash, sluice-grep, sluice-tail
+```
+
+### Synchronous core
 
 ```cpp
-// In-memory round-trip: no filesystem, no setup.
+// In-memory round trip: no filesystem, no setup.
 #include <sluice/memory_io_context.hpp>
 #include <sluice/copy.hpp>
+
+#include <cstddef>
 #include <cstdio>
+#include <string_view>
+#include <vector>
+
+std::vector<std::byte> to_bytes(std::string_view s) {
+    const auto* p = reinterpret_cast<const std::byte*>(s.data());
+    return {p, p + s.size()};
+}
 
 int main() {
     sluice::MemoryIoContext ctx;
+    ctx.seed("input.txt", to_bytes("hello world"));
 
-    auto r = ctx.open_reader("hello world");
-    auto w = ctx.open_writer();
+    auto r = ctx.open_reader("input.txt");
+    auto w = ctx.open_writer("output.txt");
+    if (!r.has_value() || !w.has_value()) return 1;
 
-    sluice::copy_all(*r, *w);
+    auto copied = sluice::copy_all(*r.value(), *w.value());
+    if (!copied.has_value()) return 2;
 
-    auto bytes = w->take_bytes();
-    std::printf("%s\n", bytes.data());  // prints: hello world
+    auto bytes = static_cast<sluice::MemoryWriter&>(*w.value()).take();
+    std::printf("copied %llu bytes: %.*s\n",
+                static_cast<unsigned long long>(copied.value()),
+                int(bytes.size()),
+                reinterpret_cast<const char*>(bytes.data()));
 }
 ```
 
-## 5-minute asynchronous example
+### Asynchronous runtime
 
 ```cpp
-// Async runtime: submit an op, poll for completion, read the result.
-// (examples/async_foundation_quickstart.cpp — builds against public headers)
-#include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
-#include <sluice/async/fake_backend.hpp>
+// A runtime task writes a file through the real backend, then clean shutdown.
+#include <sluice/async/application_runtime.hpp>
+#include <sluice/async/threadpool_backend.hpp>
+
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cstddef>
 #include <cstdio>
 #include <memory>
 
 int main() {
-    // FakeAsyncBackend is a deterministic test backend: auto_bytes(n) makes
-    // the next poll() complete each outstanding op with n bytes.
-    auto backend = std::make_unique<sluice::async::FakeAsyncBackend>();
-    sluice::async::FakeAsyncBackend* raw = backend.get();
-    raw->auto_bytes(8);
+    using namespace sluice::async;
 
-    sluice::async::AsyncIoContext ctx(std::move(backend));
+    RuntimeBuilder builder;
+    builder.backend(std::make_unique<ThreadPoolBackend>()).workers(1);
+    auto built = builder.build();
+    if (!built.has_value()) return 1;
+    ApplicationRuntime& rt = *built.value();
 
-    // submit_read against a caller-owned Completion.
-    sluice::async::Completion<std::size_t> c;
-    std::byte buf[8]{};
-    if (!ctx.submit_read(sluice::async::ReadOp{0, buf, 8, 0}, c).has_value())
-        return 1;
+    if (!rt.start().has_value()) return 2;
 
-    // poll() reaps completions non-blockingly; returns count reaped.
-    if (ctx.poll() != 1) return 2;
+    int fd = ::open("/tmp/sluice-quickstart.txt",
+                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        (void)rt.shutdown();
+        return 3;
+    }
 
-    // The op result is read from the Completion after it is ready — NOT from
-    // wait_one()/poll() return values.
-    if (!c.ready()) return 3;
-    auto r = c.result();
-    if (!r.has_value() || r.value() != 8) return 4;
+    auto task = rt.submit([fd](RuntimeTaskContext& ctx) {
+        static constexpr char msg[] = "hello explicit I/O\n";
+        Completion<std::size_t> done;
+        if (!ctx.submit_write(WriteOp{fd,
+                                      reinterpret_cast<const std::byte*>(msg),
+                                      sizeof msg - 1, /*offset=*/0},
+                              done)
+                 .has_value())
+            return;
+        (void)ctx.await_completion(done);  // task suspends until the op is ready
+        auto n = done.result();            // Result<std::size_t>: I/O errors are values
+        if (n.has_value()) std::printf("wrote %zu bytes\n", n.value());
+    });
+    if (!task.has_value()) {
+        ::close(fd);
+        (void)rt.shutdown();
+        return 4;
+    }
 
-    std::printf("async quickstart: read %zu bytes\n", r.value());
+    rt.request_stop();
+    auto drained = rt.drain();
+    if (!drained.has_value()) {
+        (void)rt.shutdown();
+        ::close(fd);
+        return 5;
+    }
+
+    auto joined = rt.join();
+    ::close(fd);
+    if (!joined.has_value()) return 6;
     return 0;
 }
 ```
 
-## Implemented capabilities
+More runnable programs under [examples/](examples/) — for example
+`examples/runtime_acceptance.cpp` exercises the full runtime lifecycle against
+public headers only.
 
-### Synchronous core (`sluice_core`)
+## What you can build today
 
-- `Result<T>` / `IoError` error model
-- `Reader` / `Writer` + `BufferedReader` / `BufferedWriter` / `ObservedReader` / `ObservedWriter` / `FaultReader` / `FaultWriter`
-- `copy_all` with `CopyStrategy` (Scratch / BufferedFirst / Auto)
-- `FileReader` / `FileWriter` (POSIX, positional I/O, vector I/O)
-- `BlockingIoContext` / `MemoryIoContext` factory abstraction
-- `BlockingIoPool` (bounded OS-thread execution helper)
-- `SyncableWriter` (`sync_data` / `sync_all`)
-- WAL record format
+Real applications, built only on Sluice public headers (no test seams, no
+private source includes):
 
-### Async runtime (`sluice_async`)
+- [`sluice-copy`](apps/sluice-copy/README.md) — bounded asynchronous safe file
+  copy (temp file + atomic rename, optional durability)
+- [`sluice-hash`](apps/sluice-hash/README.md) — bounded streaming SHA-256
+- [`sluice-grep`](apps/sluice-grep/README.md) — bounded streaming literal search
+- [`sluice-tail`](apps/sluice-tail/README.md) — backward last-N scan + follow
+  mode with clean Ctrl-C cancellation
 
-- `Scheduler` (M:N fiber scheduler, multi-worker, work stealing)
-- `Fiber` (context-switch, x86_64 Linux)
-- `WaitNode` / `WaitQueue` (E10), `TimerRegistration` / deadline (E11)
-- `Event` (E12-A), `Semaphore` (E12-B), `AsyncMutex` (E12-C)
-- `AsyncCondition` (E12-D), `AsyncQueue<T>` (E12-E), `AsyncRwLock` (E12-F)
-- `Select` (E13) — multi-arm Event/Timer select
-- `CancelToken` / `CancelState` / `CancelGuard` (cancellation primitives)
-- `Future<T>` (E28), `Group` (E29), `Batch` (E30)
-- `Completion<T>` / `AsyncIoContext` / `AsyncBackend`
-- `FakeAsyncBackend` (deterministic test vehicle)
-- `ThreadPoolBackend` (portable, std::thread)
-
-### Experimental
-
-- `UringAsyncBackend` — Linux 6.1+ io_uring with liburing 2.14 (the current exact audited baseline; build-gated behind `--with-liburing`; stub without liburing). Remains experimental; non-Linux builds use the unsupported stub.
-
-## Build and test
-
-```bash
-xmake f -m debug                  # configure (debug mode)
-xmake build sluice_core           # build synchronous core
-xmake build sluice_async          # build async runtime
-xmake build -g test               # build all tests
-xmake test                        # run all tests
-```
-
-Enable experimental io_uring (requires liburing):
-
-```bash
-xmake f --with-liburing=true
-xmake build -g experimental
-```
-
-### Sanitizers
-
-```bash
-xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test
-xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
-```
-
-## Verification model
-
-- **Acceptance** — `public_api_acceptance` (public-only compile+run probe); `async_foundation_quickstart` (async foundation consumer); future E16 runtime acceptance consumer
-- **Unit / component** — `xmake test -v` (per-slice test binaries)
-- **Deterministic causal tests** — `SLUICE_ASYNC_INTERNAL_TESTING` phase seams
-- **Sanitizer gates** — ASan, UBSan, TSan
-- **Formal models** — TLA+ specs under `spec/tla/` (per-suite directory)
-
-For the full verification matrix, see [`docs/verification/README.md`](docs/verification/README.md).
-
-## Project layout
-
-```
-include/sluice/          Public headers (core + async)
-src/                     Implementation (core + async)
-apps/                    Real user-facing programs (see Applications below)
-tests/                   Correctness tests (one binary per slice)
-examples/                Capability demonstrations
-bench/                   Microbenchmarks (CSV output)
-docs/                    Architecture, design, history, roadmap, verification
-  architecture/          Current architecture documents
-  design/                Active proposed designs
-  adr/                   Accepted Architecture Decisions
-  applications/          Application-track plans and findings
-  history/               Closeout records, implementation plans, formal designs, reviews
-  verification/          Verification matrix and scripts
-  roadmap/               Active future work
-scripts/                 Build/analysis helpers
-xmake/                   Build configuration
-```
-
-## Applications
-
-`apps/` holds real command-line programs built entirely on the public
-headers (no test seams, no `src/` includes) — distinct from `examples/`,
-which are capability demonstrations:
-
-- `sluice-copy` — bounded asynchronous safe file copy (temp file + atomic
-  rename, optional durability)
-- `sluice-hash` — bounded streaming SHA-256 file hashing
-- `sluice-grep` — bounded streaming literal search
-- `sluice-tail` — bounded last-N + follow-mode tailing with clean Ctrl-C
-  cancellation
-
-Build one with `xmake build sluice-copy` (etc.); each has its own README
-with CLI, semantics, resource bounds, and measured behavior. The
-application-track evidence lives in
+The application track includes measured performance, memory bounds, sanitizer
+evidence, and comparisons with system tools — see
 [docs/applications/file-tools-findings.md](docs/applications/file-tools-findings.md).
 
-## Known limitations
+## Backends
 
-- `Evented` execution strategy requires x86_64 Linux with `fiber_ctx::supported`.
-- `io_uring` requires Linux + liburing (build-gated, off by default).
-- Real-liburing validation and non-Linux portability evidence remain limited.
-- `AsyncQueue<T>` v1 has no public wait-epoch cancellation API.
-- Vector I/O semantics are conservative (stop on EOF, error, or first positive short result).
+- `ThreadPoolBackend` — the default real backend: a fixed pool of persistent
+  blocking-I/O workers implemented with `std::thread`; it has no liburing
+  dependency.
+- `UringAsyncBackend` — experimental Linux io_uring; build-gated behind
+  `--with-liburing`, off by default.
+- `FakeAsyncBackend` — a deterministic testing backend for exact, scripted
+  completion behavior.
 
-## Documentation links
+Backend internals, conformance evidence, and the io_uring runbook live under
+[docs/architecture/](docs/architecture/) and [docs/verification/](docs/verification/).
 
+## Project status
+
+- **Latest tagged release:** `v0.1.0` — the runtime foundation: synchronous
+  core, async scheduler and fiber runtime, and the synchronization primitives.
+- **Current development (master, beyond the tag):** the explicit-I/O request
+  lifecycle across backends, the `ApplicationRuntime` layer, and the first
+  real applications (copy / hash / grep / tail, merged 2026-08).
+- **Experimental:** `UringAsyncBackend` — real-liburing validation evidence
+  remains environment-dependent.
+- **Not implemented:** networking and external-memory data structures
+  (KV / B+ tree / LSM). They are future workload directions — evidence
+  generators for API pressure, not current capability — see
+  [docs/applications/README.md](docs/applications/README.md).
+
+Sluice is research-quality experimental software: platform support is
+Linux-centric (x86_64 for the fiber scheduler), and no performance claims are
+made beyond the measured application evidence.
+
+## Documentation
+
+- [Developer documentation hub](docs/README.md) — how Sluice works and how to
+  change it
 - [Architecture overview](docs/architecture/overview.md)
-- [Async runtime](docs/architecture/async-runtime.md)
-- [Async synchronization](docs/architecture/async-synchronization.md)
-- [Async I/O foundation](docs/architecture/async-io-foundation.md)
-- [Public API reference](docs/api-reference.md)
-- [Chinese API reference](docs/api-reference-zh.md)
-- [Verification matrix](docs/verification/README.md)
-- [Roadmap](docs/roadmap/README.md)
-- [Changelog](docs/changelog.md)
+- [API reference (canonical, English)](docs/reference/api.md)
+- [Reference index](docs/reference/README.md) — includes the Chinese companion
+  reference and its synchronization rules
+- [Applications: what real workloads taught us](docs/applications/README.md)
+- [Verification matrix](docs/verification/README.md) — sanitizers,
+  deterministic causal tests, formal models
+- [Roadmap](docs/roadmap/README.md) · [Changelog](docs/changelog.md)
 
 ## License
 
-See `LICENSE` for details.
+Sluice is licensed under the [MIT License](LICENSE).

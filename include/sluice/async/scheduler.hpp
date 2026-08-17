@@ -93,7 +93,7 @@ class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (se
 //
 // Refinement map: TLA+ ExternalReadyPublish (the signal half) ->
 // SchedulerWakeHandle::notify -> Scheduler::signal_wake_locked. Callback
-// lifetime: docs/spec/e9_wake_handle_lifetime/.
+// lifetime: spec/tla/e9_wake_handle_lifetime/.
 class SchedulerWakeHandle {
 public:
     SchedulerWakeHandle() = default;

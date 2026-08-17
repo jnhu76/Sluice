@@ -57,7 +57,7 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
 
 * **E16 Application Runtime**
 
-  * 架构设计：`docs/design/e16-application-runtime.md`；
+  * 架构设计：`docs/history/implementation-plans/e16-application-runtime.md`；
   * ADR 状态：**Accepted**（2026-07-29 升级，`docs/adr/ADR-application-runtime.md`）；
   * **已实现** — `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext` 位于
     `include/sluice/async/application_runtime.hpp` 与 `src/async/application_runtime.cpp`，
@@ -71,6 +71,17 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
   > 历史上下文：本节早期文本（"尚未实现 / ADR Proposed / 实现未授权"）记录的是
   > Milestone 0 阶段的真实状态。随着 ADR Accepted、production 实现与完整验证落地，
   > 该状态已过时，故在此更新为当前事实，而非改写历史（详见 §3 末尾的状态转换记录）。
+
+* **File-tools 应用轨道（第一轮 application-driven development，2026-08-18 合并，PR #122）**
+
+  * 四个真实 CLI 应用：`sluice-copy`（Version C：临时文件 + 原子 rename + 目录持久化）、
+    `sluice-hash`（流式 SHA-256）、`sluice-grep`（流式字面量搜索）、
+    `sluice-tail`（向后 last-N + follow）；
+  * 全部仅使用 `include/sluice/*` 公共头文件，无测试接缝、无 `src/` 包含；
+  * 计划与实测证据（性能、内存上界、sanitizer、与系统工具对比）：
+    `docs/applications/file-tools-plan.md`、`docs/applications/file-tools-findings.md`；
+  * 已知遗留：`sluice-grep` 相对 grep/ugrep 的差距是 matcher 算法级别
+    （SIMD/kwset 一类），V1 明确不修，作为后续候选记录。
 
 ## 尚未完成
 
@@ -105,7 +116,7 @@ E16 Application Runtime 最初完成了架构设计和 ADR 撰写，实现随后
 
 ### 已存在
 
-* **设计文档** — `docs/design/e16-application-runtime.md`（2461 行，含完整架构、API 定义、验收契约 A1-A20、变异测试矩阵）；
+* **设计文档** — `docs/history/implementation-plans/e16-application-runtime.md`（2461 行，含完整架构、API 定义、验收契约 A1-A20、变异测试矩阵）；
 * **ADR** — `docs/adr/ADR-application-runtime.md`（736 行，状态：**Proposed**）；
 * **基础组件** — `Scheduler`、`Group`、`Future`、`Completion<T>`、`AsyncIoContext`、`AsyncBackend`、`FakeAsyncBackend`、`ThreadPoolBackend`、全 E10-E15 同步原语。
 
@@ -222,7 +233,7 @@ PR #48 multi-worker suspend-before-switch）全部完成。**Milestone 0 — COM
 后续工作进入 **Milestone 1 — Small Application Validation Suite（ACTIVE）**，
 首个 reference app 为 `apps/sluice-copy` Version A（见 §4.1）。M1-A 同时关闭
 应用发现的 Runtime I/O wait API 缺口（`RuntimeTaskContext::await_completion`），
-记录于 `docs/design/m1-runtime-io-await-race.md` 与 App Feedback Ledger。
+记录于 `docs/history/implementation-plans/m1-runtime-io-await-race.md` 与 App Feedback Ledger。
 
 ---
 
@@ -1272,7 +1283,7 @@ clean stop/drain/shutdown
 
 M1-A 同时关闭应用发现的 Runtime I/O wait API 缺口
 （`RuntimeTaskContext::await_completion`，见
-`docs/design/m1-runtime-io-await-race.md`）。API 竞争候选 A/B/C 的结论与
+`docs/history/implementation-plans/m1-runtime-io-await-race.md`）。API 竞争候选 A/B/C 的结论与
 winner 记录在该设计文档与 App Feedback Ledger 中。
 
 Version A 通过后，再增加 bounded pipeline。

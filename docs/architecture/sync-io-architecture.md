@@ -9,8 +9,8 @@ sync model **is** — the backend taxonomy, the execution-model (runtime) taxono
 what is borrowed from Zig `std.Io`, and what is explicitly not borrowed. It sits
 above the planning layer (historical: `docs/history/closeout/sync-io-model-gap-audit.md`, gaps G1–G7;
 `docs/history/implementation-plans/sync-io-next-jobs.md`, job cards 017S–023S) and below the per-topic contract
-docs (`docs/sync-io-model.md` primitive contract, `docs/sync-durability-model.md`,
-`docs/sync-bench-methodology.md`).
+docs (`docs/reference/sync-io-model.md` primitive contract, `docs/architecture/sync-durability-model.md`,
+`docs/verification/sync-bench-methodology.md`).
 
 This is the blocking-first companion to the async design (`docs/adr/ADR-async-io-
 model.md`, 016D). Async implementation is blocked behind the sync-first gate
@@ -167,7 +167,7 @@ G3 Derived helper closeout      → read_exact/write_all + positional _at varian
                                    vector-all advancement correctness. (job 019S)
 G4 No durability POLICY         → document flush/sync_data/sync_all semantics +
                                    benchmark sync-policy names. (job 020S,
-                                   docs/sync-durability-model.md)
+                                   docs/architecture/sync-durability-model.md)
 G5 No bounded pool/concurrency  → BlockingIoPool execution model (NOT a backend).
                                    (job 021S)
 G6 Stats lack multi-stream/lat  → active-streams + per-cell concurrency fields.
@@ -194,9 +194,9 @@ must be **defined** before it is run, against an engineered baseline.
 
 ## 9. Cross-links
 
-- Primitive contract: `docs/sync-io-model.md`.
-- Durability model: `docs/sync-durability-model.md`.
-- Bench methodology: `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md`.
+- Primitive contract: `docs/reference/sync-io-model.md`.
+- Durability model: `docs/architecture/sync-durability-model.md`.
+- Bench methodology: `docs/verification/sync-bench-methodology.md`, `docs/verification/sync-bench-matrix.md`.
 - Optimization notes: `docs/history/closeout/sync-optimization-notes.md`.
 - Planning layer (gaps + jobs): `docs/history/closeout/sync-io-model-gap-audit.md`, `docs/history/implementation-plans/sync-io-next-jobs.md` (017S–023S).
 - Sync-first readiness gate (blocks async): `docs/history/closeout/sync-before-async-readiness-gate.md`.

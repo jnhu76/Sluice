@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased — documentation information-architecture reorientation
+
+Documentation-only change; no production library behavior changed.
+
+### Changed
+
+- **Reader-model split** — root `README.md` / `README.zh-CN.md` rewritten for
+  library users (what Sluice is, explicit I/O, quick start, applications,
+  status); `docs/README.md` rewritten as the contributor/agent documentation
+  hub (role routing, authority hierarchy, directory map). The async quickstart
+  now uses `RuntimeBuilder` / `ApplicationRuntime` / `ThreadPoolBackend`
+  instead of `FakeAsyncBackend`, and both README samples compile and run.
+- **Architecture image** — committed the canonical layered-view asset at
+  `docs/assets/architecture/sluice-high-level-layered-view.png`; both READMEs
+  reference it. Future workload directions shown in the image (networking,
+  external-memory data structures) are labeled as not-implemented everywhere
+  they appear.
+- **API reference canonicalized** — docs/api-reference.md →
+  `docs/reference/api.md`, docs/api-reference-zh.md →
+  `docs/reference/api.zh-CN.md`, with a new `docs/reference/README.md`;
+  docs/sync-io-model.md and docs/io/sync-error-semantics.md joined them
+  under `docs/reference/`.
+- **docs/application/ eliminated** — the unimplemented `sluice-pipeline`
+  design moved to `docs/history/application-designs/first-workload.md` with a
+  Historical/Superseded banner; `docs/applications/` is now the only
+  application namespace and gained a README (workload-driven development
+  entrypoint).
+- **Root cleanup** — docs/io/, docs/testing/, docs/slices/, docs/issue-47/,
+  and the sync/bench/liburing-validation root docs moved to
+  their semantics-owned namespaces (`architecture/`, `reference/`,
+  `verification/`, `history/issues/`, `history/closeout/`); the stale
+  duplicate TLA+ spec document (the pre-migration leftover at the former
+  legacy spec location) was deleted — the canonical copy already lives at
+  `docs/verification/formal/`, completing the recorded formal-assets
+  migration.
+- **Implemented designs historicalized** — the E16 application runtime design
+  and the M1-A await-API horse-race record moved from `docs/design/` to
+  `docs/history/implementation-plans/` with banners; `docs/design/README.md`
+  no longer lists E16 as Proposed.
+- **Status drift fixed** — README no longer claims "E16 is the next proposed
+  phase" (E16 is Accepted + implemented); ADR index no longer claims
+  L1 `Completion<T>`/`AsyncIoContext` "not yet implemented"; project status
+  distinguishes the `v0.1.0` tag from master; README no longer references a
+  nonexistent `LICENSE` file (no license is declared).
+- **Stale source-comment paths repaired** — doc-path references in public
+  headers, sources, benches, and tests updated to the moved/actual locations
+  (comment-only changes; no code changes).
+
+## Unreleased — file-tools application track (PR #122)
+
+### Added
+
+- `sluice-tail` — bounded backward last-N scan + follow mode with clean
+  SIGINT cancellation (`apps/sluice-tail/`).
+- `sluice-grep` — bounded streaming literal search (`apps/sluice-grep/`).
+- `sluice-hash` — bounded streaming SHA-256 (`apps/sluice-hash/`).
+- `sluice-copy` Version C — safe output via temp file + atomic rename +
+  directory durability.
+- Application-track evidence: `docs/applications/file-tools-plan.md`,
+  `docs/applications/file-tools-findings.md` (measured performance, memory
+  bounds, sanitizer evidence, system-tool comparisons). Known deferral:
+  `sluice-grep` matcher algorithm (SIMD/kwset-class) — algorithmic gap,
+  recorded as backlog, not fixed in V1.
+
 ## Unreleased — Phase C2e close / drain / reset / destruction (Issue #68 rows 15–16)
 
 ### Changed
@@ -146,7 +210,7 @@ library behavior or unit-test behavior changed.
 
 ### Changed
 
-- **API reference accuracy** — `docs/api-reference.md` Async Runtime section
+- **API reference accuracy** — `docs/reference/api.md` Async Runtime section
   rewritten to match installed public headers exactly. Test-only seams
   (`spawn_on`, `advance_clock`, `shutting_down_for_test`) marked as NOT user API.
 - **Async quickstart** — new `examples/async_foundation_quickstart.cpp` (public

@@ -752,6 +752,29 @@ def is_known_moved(ref: str, doc_path: Path | None = None,
     return None
 
 
+def strip_code_fences(text: str) -> str:
+    """Blank out fenced code blocks while preserving character positions.
+
+    GitHub does not render markdown links inside fenced code, and C++ lambda
+    syntax (``[capture](args)``) otherwise false-positives as a markdown link.
+    Fence marker lines and fenced content become spaces (newlines preserved)
+    so line/offset arithmetic stays exact.
+    """
+    out: list[str] = []
+    in_fence = False
+    for line in text.splitlines(keepends=True):
+        body, sep, _ = line.partition("\n")
+        if body.lstrip().startswith("```"):
+            in_fence = not in_fence
+            out.append(" " * len(body) + sep)
+            continue
+        if in_fence:
+            out.append(" " * len(body) + sep)
+        else:
+            out.append(line)
+    return "".join(out)
+
+
 def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     """Check a single Markdown file.
 
@@ -768,13 +791,16 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
         broken.append(f"{path}: cannot read: {e}")
         return broken, stale, historical, envcond
 
-    line_of = lambda pos: text[: pos].count("\n") + 1
+    # Links and backtick refs inside fenced code blocks are code, not
+    # documentation references (GitHub does not render them as links).
+    scan_text = strip_code_fences(text)
+    line_of = lambda pos: scan_text[: pos].count("\n") + 1
 
     # --- Markdown links ---
     # Markdown links are ALWAYS treated as paths — never skipped by the
     # NON_PATH_PATTERNS heuristic. A markdown link [text](target) is an
     # explicit link; its target must resolve.
-    for m in MD_LINK_RE.finditer(text):
+    for m in MD_LINK_RE.finditer(scan_text):
         ref = m.group(2).strip()
         resolved = resolve_ref(path, ref, from_backtick=False)
         if resolved is None:
@@ -810,7 +836,7 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     # avoid false positives on code identifiers.
     # Lines with <!-- old-path-ok --> are explicit allowlisted quotes.
     lines = text.splitlines()
-    for m in BACKTICK_PATH_RE.finditer(text):
+    for m in BACKTICK_PATH_RE.finditer(scan_text):
         ref = m.group(1).strip()
         lineno = text[: m.start()].count("\n")
         if "<!-- old-path-ok -->" in lines[lineno]:
@@ -939,22 +965,40 @@ def self_test() -> int:
         print("SELF-TEST PASS: broken markdown link detected")
     tmp1.unlink()
 
-    # --- Test 2: deliberately stale moved-path reference ---
+    # --- Test 2: lambda-looking code inside a fenced block is NOT a link ---
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as f:
+        f.write("```cpp\n")
+        f.write('rt.submit([&fd](RuntimeTaskContext& ctx) { return 0; });\n')
+        f.write("```\n")
+        f.write("[good](README.md)\n")
+        tmp2 = Path(f.name)
+
+    b, s, _, _ = check_file(tmp2)
+    if any("RuntimeTaskContext" in x for x in b + s):
+        print("SELF-TEST FAIL: lambda in fenced code flagged as a link")
+        failures += 1
+    else:
+        print("SELF-TEST PASS: fenced code lambda not flagged as a link")
+    tmp2.unlink()
+
+    # --- Test 3: deliberately stale moved-path reference ---
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as f:
         f.write("[stale](docs/e12-event.md)\n")
-        tmp2 = Path(f.name)
+        tmp3 = Path(f.name)
 
-    b, s, _, _ = check_file(tmp2)
+    b, s, _, _ = check_file(tmp3)
     if not any("docs/e12-event.md" in x for x in s):
         print("SELF-TEST FAIL: stale moved path not detected")
         failures += 1
     else:
         print("SELF-TEST PASS: stale moved path detected")
-    tmp2.unlink()
+    tmp3.unlink()
 
-    # --- Test 3: doc-relative old name (formerly masked by NON_PATH_PATTERNS) ---
+    # --- Test 4: doc-relative old name (formerly masked by NON_PATH_PATTERNS) ---
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as f:

@@ -125,7 +125,7 @@ Use the following order:
 2. Accepted ADRs and active subsystem design/closeout documents under `docs/`.
 3. `docs/architecture/architecture-constitution.md`.
 4. This `AGENTS.md`.
-5. Public headers under `include/sluice/` and `docs/api-reference.md`.
+5. Public headers under `include/sluice/` and `docs/reference/api.md`.
 6. Production implementation under `src/`.
 7. Contract, regression, death, negative-compile, causal, and formal tests.
 8. `xmake.lua` for target membership, dependencies, feature gates, and test names.
@@ -961,7 +961,7 @@ Public API changes require explicit approval and updates to:
 
 - public headers;
 - contract tests;
-- `docs/api-reference.md`;
+- `docs/reference/api.md`;
 - examples;
 - README text where affected;
 - negative-compile tests where authority changes.

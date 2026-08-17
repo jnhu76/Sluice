@@ -39,7 +39,7 @@ bool SchedulerWakeHandle::notify() noexcept {
     // member destruction happen strictly after any validated callback
     // returns. This closes the snapshot-before-callback UAF window where
     // a previously-released lease let the destructor destroy members
-    // between snapshot and callback. See docs/spec/e9_wake_handle_lifetime/.
+    // between snapshot and callback. See spec/tla/e9_wake_handle_lifetime/.
     LockGuard lk(control_->mtx);
     if (!control_->alive || control_->scheduler == nullptr) {
         return false;  // post-destruction / unbound: no-op

@@ -2,7 +2,7 @@
 
 v0.1-mvp 以来的公开、准稳定 API。"准稳定"意味着删除或静默重新语义化会破坏使用者；视为在小版本间冻结，仅在有计划的弃用时更改。
 
-内部细节和实验性 API 见 `docs/api-audit.md`。
+内部细节和实验性 API 见 `docs/history/archive/api-audit.md`。
 
 ## 错误模型
 

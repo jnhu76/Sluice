@@ -555,7 +555,7 @@ Breaking:           NO (public submit_* signatures unchanged; ADR Decision 7)
 ABI:                Completion<T> gains a binding transient state (internal enum); no public
                     layout change visible to callers; IoError::Code gains three enumerators
                     (enum value addition; existing codes unchanged)
-Documentation:      docs/api-reference.md (IoError table updated; Completion binding note);
+Documentation:      docs/reference/api.md (IoError table updated; Completion binding note);
                     this design doc; phase-b-compliance-gate.md
 New public surface: NONE (no RequestHandle; no public RequestKey; the ReadySink is an
                     internal detail of the reference backends for Phase B — a future ADR will

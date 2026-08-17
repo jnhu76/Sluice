@@ -1,5 +1,12 @@
 # M1-A — Runtime I/O Await API Race
 
+> **Historical note (2026-08-18):**
+> Status: Historical / Implemented. Candidate A shipped as the
+> `ApplicationRuntime` await API. Current authority:
+> `include/sluice/async/application_runtime.hpp` and
+> `docs/reference/api.md`. This record is preserved as the decision evidence
+> for the first application-driven foundation API change.
+
 Status: **Accepted (Candidate A wins)** — 2026-07-30.
 Branch: `feat/m1-sluice-copy-version-a`.
 

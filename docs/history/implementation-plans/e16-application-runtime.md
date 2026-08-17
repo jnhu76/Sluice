@@ -1,5 +1,11 @@
 # E16 Application Runtime Architecture
 
+> **Historical note (2026-08-18):**
+> Status: Historical / Implemented. This design was accepted and implemented.
+> Current authority: `docs/adr/ADR-application-runtime.md` (Accepted
+> 2026-07-29) and `include/sluice/async/application_runtime.hpp`. The status
+> block below records the pre-acceptance state and is retained as history.
+
 ```text
 STATUS: Proposed — design only. Implementation unauthorized.
 BASELINE_SHA: ba7eb62563ca7c8af19e264ddb05a5a88a2fd7a7

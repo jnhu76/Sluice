@@ -1,11 +1,16 @@
 # Design Documents
 
-This directory indexes design documents that are **active** — under review,
-approved but not started, or draft proposals for future work.
+This directory primarily indexes design documents that are **active** — under
+review, approved but not started, or draft proposals for future work.
+
+A small set of completed `phase-*` design-of-record documents intentionally
+remain here because repository compliance gates still anchor those exact paths.
+They are retained for gate stability and traceability; their presence here does
+**not** make them active proposals.
 
 ## Status rules
 
-A design document is active only when:
+An active design document is one of:
 
 - **Proposed** — under review, not yet binding.
 - **Accepted and awaiting implementation** — approved but not started.
@@ -13,10 +18,15 @@ A design document is active only when:
 - **Decision — intentional defer** — a scope decision retained until a
   documented revisit trigger fires; it does not authorize implementation.
 
-Completed implementation designs are **not** kept here. They are historical
-records under `docs/history/implementation-plans/` (implementation designs),
+Completed implementation designs are normally moved to historical records under
+`docs/history/implementation-plans/` (implementation designs),
 `docs/history/formal-design/` (formal models that guided implementation), or
 `docs/history/closeout/` (subsystem closeout reports).
+
+**Exception:** completed `docs/design/phase-*` design-of-record files may stay in
+place when a compliance/mechanical gate explicitly depends on their path. Such
+files are completed records, not active future work, and should be paired with
+the corresponding architecture compliance/closeout evidence.
 
 ## Current active designs
 
@@ -27,17 +37,16 @@ The following future-phase proposals may exist:
 
 | Design | Status | Related ADR |
 |--------|--------|-------------|
-| [E16 Application Runtime](e16-application-runtime.md) | Proposed | [ADR-application-runtime](../adr/ADR-application-runtime.md) |
 | [Selectable / awaitable composability](selectable-async-composability-decision.md) | Decision — intentional defer (issue #99); no production work authorized | [ADR-async-io-model](../adr/ADR-async-io-model.md), [ADR-execution-model](../adr/ADR-execution-model.md) |
 | Fuzz infrastructure | Not yet proposed | — |
 
 If no actual design document exists for a row above, it is a placeholder for
 future discussion and **must not** be presented as accepted or planned.
 
-## Completed designs (moved to history)
+## Completed designs
 
-These subsystems were designed and implemented in E10–E15. Their design
-documents are historical:
+Most completed designs live under `docs/history/`; gate-pinned phase records are
+listed at their retained path.
 
 | Subsystem | Design location | Closeout |
 |-----------|----------------|----------|
@@ -51,12 +60,12 @@ documents are historical:
 | E12-F AsyncRwLock | `docs/history/implementation-plans/e12-rwlock.md` | `docs/history/closeout/e10-e12-api-semantic-closure.md` |
 | E13 Select | `docs/history/implementation-plans/e13-select-*.md` | `docs/history/closeout/e13-select-p7-rollback-closeout.md` |
 | E14 Threaded/Evented Parity | `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md` | — |
-| Phase E — Bounded Blocking-I/O Backend | `docs/design/phase-e-bounded-threadpool-backend.md` | `docs/architecture/phase-e-compliance-gate.md` |
+| Phase E — Bounded Blocking-I/O Backend | `docs/design/phase-e-bounded-threadpool-backend.md` (gate-pinned completed record) | `docs/architecture/phase-e-compliance-gate.md` |
 
 ## Navigation
 
 - **Current architecture** — `docs/architecture/`
-- **Public API contract** — `docs/api-reference.md`
+- **Public API contract** — `docs/reference/api.md`
 - **Active ADRs** — `docs/adr/README.md`
 - **Historical design docs** — `docs/history/implementation-plans/`, `docs/history/formal-design/`
 - **Historical closeout records** — `docs/history/closeout/`

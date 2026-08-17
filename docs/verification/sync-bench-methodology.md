@@ -28,7 +28,7 @@ made or implied.** Results are per-workload, per-machine, per-parameter.
 
 ## 2. Modes (execution models)
 
-Every workload supports the relevant modes (see `docs/sync-bench-matrix.md`):
+Every workload supports the relevant modes (see `docs/verification/sync-bench-matrix.md`):
 
 ```text
 blocking_sequential        one caller thread, serial jobs
@@ -49,15 +49,15 @@ here on the blocking side):
 - **W1 — many independent writes.** `streams` writers, each writing
   `blocks_per_stream` blocks of `block_size`. `file_layout` =
   `many_files` | `one_file_many_offsets` (the latter exercises positional I/O,
-  job 018S). `sync_policy` from `docs/sync-durability-model.md`.
+  job 018S). `sync_policy` from `docs/architecture/sync-durability-model.md`.
 - **W2 — many independent reads.** `streams` readers reading pre-written files.
 - **W3 — many copy streams.** `streams` independent reader→writer copies,
   `bytes_per_stream` with `buffer_size`.
 - **W4 — durability / sync policy.** Like W1 but the variable of interest is
   `sync_policy`; blocking "overlap" is via pool workers (see
-  `docs/sync-durability-model.md` §5).
+  `docs/architecture/sync-durability-model.md` §5).
 
-Full parameter tables are in `docs/sync-bench-matrix.md`.
+Full parameter tables are in `docs/verification/sync-bench-matrix.md`.
 
 ## 4. CSV output fields
 
@@ -92,16 +92,16 @@ required `streams`/`pool_threads`/`threads_used` columns provide).
 - Each run records: workload, mode, all parameters, machine info, sluice build
   (debug/release, sanitizer mode if any).
 - Results notes live under docs/history/closeout/results/ (per the convention in
-  docs/io-uring-liburing-validation.md).
+  docs/verification/io-uring-liburing-validation.md).
 - Sanitizer runs (ASan/TSan) are for correctness of the pool/concurrency code,
   NOT for performance numbers (sanitizers skew timing).
 ```
 
 ## 7. Cross-links
 
-- Matrix (workloads × modes × parameters × metrics × decision questions): `docs/sync-bench-matrix.md`.
-- Architecture (modes defined): `docs/sync-io-architecture.md` §3.
-- Durability policy names: `docs/sync-durability-model.md` §4.
+- Matrix (workloads × modes × parameters × metrics × decision questions): `docs/verification/sync-bench-matrix.md`.
+- Architecture (modes defined): `docs/architecture/sync-io-architecture.md` §3.
+- Durability policy names: `docs/architecture/sync-durability-model.md` §4.
 - Existing single-stream methodology: `docs/history/implementation-plans/bench-methodology.md`, `docs/history/implementation-plans/bench-decision-matrix.md`.
 - Optimization notes (observations → future work): `docs/history/closeout/sync-optimization-notes.md`.
 - Jobs: `docs/history/implementation-plans/sync-io-next-jobs.md` (022S matrix, 023S optimization).

@@ -3,6 +3,27 @@
 Sluice is organized into two production libraries plus a test-only variant and
 optional experimental code.
 
+```text
+Applications & Workloads          apps/ — public headers only, no test seams
+        ↑ expresses I/O intent
+Public API Surface                include/sluice/ + docs/reference/
+        ↑ backend-neutral operations
+Synchronous Core                  sluice_core (Reader/Writer, Result, copy, WAL)
+Async Runtime                     sluice_async (Scheduler, Fiber, primitives,
+                                  Completion, ApplicationRuntime)
+        ↓ execution ownership
+Backends & System Capabilities    AsyncBackend public extension point;
+                                  ThreadPoolBackend (default real backend),
+                                  UringAsyncBackend (experimental),
+                                  FakeAsyncBackend/SyncBackend (testing)
+```
+
+A rendered version of this layered view (including the future workload
+directions — networking and external-memory data structures, which are **not**
+implemented capability) is the canonical asset
+[`docs/assets/architecture/sluice-high-level-layered-view.png`](../assets/architecture/sluice-high-level-layered-view.png).
+Application-driven development context: `docs/applications/README.md`.
+
 ## Build boundaries
 
 ```
@@ -34,9 +55,11 @@ sluice_async (opt-in, separate static library)
 ├── Group (E29)
 ├── Batch (E30)
 ├── Completion<T> / AsyncIoContext
-├── AsyncBackend (internal boundary)
+├── ApplicationRuntime / RuntimeBuilder / RuntimeTaskContext
+│   (lifecycle layer: build → start → submit → stop → drain → join; ADR-application-runtime)
+├── AsyncBackend (public backend extension point; trusted backend-author API)
 │   ├── FakeAsyncBackend (deterministic test vehicle)
-│   ├── ThreadPoolBackend (portable, std::thread)
+│   ├── ThreadPoolBackend (fixed persistent blocking-I/O worker pool)
 │   └── UringAsyncBackend (experimental, liburing-gated)
 └── EventedWaitPolicy / ThreadedWaitPolicy
 
@@ -63,7 +86,8 @@ sluice_experimental_uring ← depends on sluice_core, optional liburing
 
 | Category | Examples |
 |----------|----------|
-| **Public runtime capability** | Scheduler, Fiber, Event, Semaphore, AsyncMutex, AsyncCondition, AsyncQueue, AsyncRwLock, Select, Future, Group, Batch, CancellationToken |
+| **Public runtime capability** | Scheduler, Fiber, Event, Semaphore, AsyncMutex, AsyncCondition, AsyncQueue, AsyncRwLock, Select, Future, Group, Batch, CancellationToken, ApplicationRuntime, AsyncIoContext |
+| **Public backend extension point** | AsyncBackend and its backend wait/capability hooks |
 | **Internal scheduler substrate** | WaitNode, WaitQueue, TimerRegistration, Mutex (TSA-annotated) |
 | **Test-only seam** | SLUICE_ASYNC_INTERNAL_TESTING phase seams, FakeAsyncBackend held-pending mode |
 | **Experimental backend** | UringAsyncBackend, UringWriteBatch |
@@ -79,11 +103,17 @@ sluice_experimental_uring ← depends on sluice_core, optional liburing
 - Destructors must not invent unreportable I/O success.
 - Destruction with live waiters or outstanding registrations is a contract violation.
 
-## Platform restrictions
+## Platform status
 
-- POSIX (Linux, macOS, WSL).
-- `Evented` execution strategy requires x86_64 Linux with `fiber_ctx::supported`.
+Current validation is Linux/WSL-centric.
+
+- The synchronous core is POSIX-oriented and contains Linux/macOS-compatible
+  code paths, but broader non-Linux portability evidence is still incomplete.
+- `Evented` execution requires x86_64 Linux with `fiber_ctx::supported`.
 - io_uring requires Linux + liburing (build-gated, off by default).
+
+See the roadmap and verification documents for the current portability evidence;
+do not infer support solely from a code path compiling conditionally.
 
 ## Verification layers
 

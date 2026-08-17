@@ -2,7 +2,7 @@
 
 **Status: SYNC-IO-COMPLETE Phase 9 (sync doc reconciliation).** The blocking
 W1–W4 benchmark matrix: workloads × modes × parameters × metrics × decision
-questions. Companion to `docs/sync-bench-methodology.md` (which defines *how* to
+questions. Companion to `docs/verification/sync-bench-methodology.md` (which defines *how* to
 run); this defines *what* cells exist and *what questions* they answer. **No
 universal performance claim.** Results are per-workload, per-machine,
 per-parameter.
@@ -25,7 +25,7 @@ blocking_thread_per_stream   one worker per stream (strong/expensive baseline)
 sync_uring_spike             build-gated comparison row only (NOT async, NOT default)
 ```
 
-See `docs/sync-io-architecture.md` §3 for definitions.
+See `docs/architecture/sync-io-architecture.md` §3 for definitions.
 
 ## 3. Parameters per workload
 
@@ -63,12 +63,12 @@ streams
 pool_threads
 block_size
 blocks_per_stream
-sync_policy            (the variable of interest — see docs/sync-durability-model.md §4)
+sync_policy            (the variable of interest — see docs/architecture/sync-durability-model.md §4)
 ```
 
 ## 4. Metrics
 
-Primary (required CSV columns per `docs/sync-bench-methodology.md` §4):
+Primary (required CSV columns per `docs/verification/sync-bench-methodology.md` §4):
 ```text
 total_bytes, total_ops, total_ms, mbps, ops_per_sec, threads_used
 ```
@@ -131,10 +131,10 @@ Record the chosen cells under `docs/results/` with full parameters.
 
 ## 7. Cross-links
 
-- Methodology (how to run): `docs/sync-bench-methodology.md`.
-- Architecture (modes): `docs/sync-io-architecture.md` §3.
-- Durability policy names: `docs/sync-durability-model.md` §4.
-- Positional I/O contract (Q3 dependency): `docs/sync-io-model.md` (Positional I/O semantics).
+- Methodology (how to run): `docs/verification/sync-bench-methodology.md`.
+- Architecture (modes): `docs/architecture/sync-io-architecture.md` §3.
+- Durability policy names: `docs/architecture/sync-durability-model.md` §4.
+- Positional I/O contract (Q3 dependency): `docs/reference/sync-io-model.md` (Positional I/O semantics).
 - Optimization notes (observations → future work): `docs/history/closeout/sync-optimization-notes.md`.
 - Existing single-stream matrix: `docs/history/implementation-plans/bench-decision-matrix.md`.
 - Jobs: `docs/history/implementation-plans/sync-io-next-jobs.md` (022S builds the matrix, 023S tunes).

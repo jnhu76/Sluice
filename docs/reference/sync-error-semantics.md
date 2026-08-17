@@ -45,6 +45,6 @@ cursor-independence, and `BlockingIoPool` submit-after-shutdown rejection.
 
 - **Physical persistence guarantee:** `fsync`/`fdatasync` reflect the
   OS/filesystem contract; they do NOT prove bytes hit non-volatile media. See
-  `docs/sync-durability-model.md`. Not a sync-runtime bug — an OS-level limit.
+  `docs/architecture/sync-durability-model.md`. Not a sync-runtime bug — an OS-level limit.
 - **Cancellation of in-flight syscalls:** out of scope (N4). A blocking call runs
   to kernel completion.

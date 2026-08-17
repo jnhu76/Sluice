@@ -141,7 +141,7 @@ caller uses `acknowledged()` (only tests). `request` / `is_requested` / `rearm`
   one token), T-CANCEL-FUTURE-5 (public `Future<T>` consumer), plus the
   updated single-shot / protection slices. The rearm and clear+request cases
   fail on the pre-fix implementation (RED) and pass after (GREEN).
-- `docs/api-reference.md` updated for the new `acknowledge`/`acknowledged`
+- `docs/reference/api.md` updated for the new `acknowledge`/`acknowledged`
   signatures.
 - CancelProtection / recancel family reclassification (DIV-11) re-verified in
   `docs/architecture/divergence-registry.md` and

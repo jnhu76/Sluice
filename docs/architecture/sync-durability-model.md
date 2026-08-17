@@ -83,7 +83,7 @@ this doc fixes the *names and meanings*.
 
 For W4, "overlapped durability" on the blocking side is represented by **worker
 threads** in `BlockingIoPool` (the execution model, not an I/O backend — see
-`docs/sync-io-architecture.md` §3): one stream's fsync can overlap another
+`docs/architecture/sync-io-architecture.md` §3): one stream's fsync can overlap another
 stream's writes because they run on different pool workers. This is the
 **engineered blocking baseline**, not async overlap. The distinction is recorded
 so that future async W4 (true event-driven overlapped sync) is compared against
@@ -113,8 +113,8 @@ Avoid physical-disk durability claims. Test API behavior and error propagation.
 
 ## 8. Cross-links
 
-- Architecture: `docs/sync-io-architecture.md`.
-- Primitive contract: `docs/sync-io-model.md`.
+- Architecture: `docs/architecture/sync-io-architecture.md`.
+- Primitive contract: `docs/reference/sync-io-model.md`.
 - Existing durability design: `docs/history/implementation-plans/design-flush-sync-durability.md`, `docs/history/implementation-plans/design-wal-durability.md`.
-- Bench methodology (uses these policy names): `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md`.
+- Bench methodology (uses these policy names): `docs/verification/sync-bench-methodology.md`, `docs/verification/sync-bench-matrix.md`.
 - Job that baselines this: `docs/history/implementation-plans/sync-io-next-jobs.md` (020S).

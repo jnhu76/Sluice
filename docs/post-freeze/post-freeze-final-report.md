@@ -19,7 +19,7 @@
 | Zig `std.Io` structural concept map (read from source via context7) | done, committed, link-fix amended |
 | Divergence classification (ALIGN_NOW / VALID_CPP_DIFFERENCE / DEFER_TO_APPLICATION_EVIDENCE) | done — SD-A1 executed; SD-1..SD-5 kept with rationale; PF-1..PF-3 deferred |
 | R1 surgical refactor: `scheduler.cpp` god-TU split | done, 9 TUs; moved bodies byte-identical (certificate), cross-TU glue separately verified (§2) |
-| First application workload design | done — [../application/first-workload.md](../application/first-workload.md) (`sluice-pipeline`) |
+| First application workload design | done — [../history/application-designs/first-workload.md](../history/application-designs/first-workload.md) (`sluice-pipeline`) |
 | Full test matrix Debug + Release | done, both green (§5) |
 
 ## 2. R1 refactor — what changed
@@ -151,7 +151,7 @@ streaming reads → bounded queue → parallel transform stage → writes, with
 deadlines, cancellation, and graceful shutdown exercised end-to-end. It
 stays inside the approved scope (file I/O only, DIV-08; no networking) and
 is designed to generate the seam evidence that PF-1..PF-3 triggers require.
-See [../application/first-workload.md](../application/first-workload.md).
+See [../history/application-designs/first-workload.md](../history/application-designs/first-workload.md).
 
 ## 8. Review reconciliation (PR #114 review round)
 

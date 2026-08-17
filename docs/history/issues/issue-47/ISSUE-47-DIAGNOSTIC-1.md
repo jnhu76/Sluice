@@ -1,5 +1,9 @@
 # ISSUE-47-DIAGNOSTIC-1 — classify the multi-worker abnormal termination
 
+> **Historical note (2026-08-18):**
+> Status: Historical — closed corrective record (issue #47). Live issue
+> investigations live under `docs/investigations/`.
+
 **Status:** `ISSUE-47-CORRECTIVE: PASS`
 **Failure class:** **C4 — direct SIGSEGV inside a worker thread, caused by a
 corrupted Fiber context (the saved entry pointer is garbage).**

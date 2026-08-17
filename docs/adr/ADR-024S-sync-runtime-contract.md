@@ -2,7 +2,7 @@
 
 **Status:** Accepted (sluice-CORE-024S, sync-runtime merge-readiness).
 **Authority:** ADR (sync runtime contract)
-**Supersedes:** none. **Supplemented by:** `docs/io/sync-error-semantics.md`,
+**Supersedes:** none. **Supplemented by:** `docs/reference/sync-error-semantics.md`,
 `docs/history/closeout/sync-runtime-bench-notes.md`, `docs/history/reviews/024S-sync-runtime-merge-readiness.md`.
 
 ## Context
@@ -33,8 +33,8 @@ The sync runtime's contract is fixed as follows.
 | G5 | `write_all(src)` loops across short `write_some` until `src` is fully written; **zero progress on non-empty `src` → `IoError::invalid_state`** (treated as a broken backend, not an infinite loop); a writer returning more than asked → `invalid_state`. Empty `src` is an immediate success. |
 | G6 | **Positional I/O (`read_at`/`write_at`/`*_vec_at`/`read_at_exact`/`write_at_all`) does not mutate the shared file offset.** The underlying `pread`/`pwrite` advance their own per-call offset argument; the fd's cursor is untouched. |
 | G7 | **EINTR is retried**, never propagated. All blocking syscalls pass through `detail::retry_on_eintr`, which loops only on `errno == EINTR`. |
-| G8 | Durability ops (`SyncableWriter::sync_data`/`sync_all` → `fdatasync`/`fsync`) surface OS/filesystem success or failure via `Result<void>`. They do **not** overclaim physical-media persistence beyond the OS/filesystem contract (see `docs/sync-durability-model.md`). |
-| G9 | `BlockingIoPool` (production: `sluice::BlockingIoPool`, `include/sluice/blocking_io_pool.hpp`) is a **bounded OS-thread execution helper for blocking work, NOT an async runtime.** It runs callables on a fixed number of `std::thread` workers (NOT one thread per operation). It exposes task return values via a returned future-like handle, surfaces task exceptions, rejects submissions after `shutdown()`, and is bounded (backpressure / `try_submit` rejection). It is not selectable as an `IoContext`, implements no completion model, and has no dependency relationship with the I/O types. See `docs/io/sync-backend-taxonomy.md` for the full backend boundary. |
+| G8 | Durability ops (`SyncableWriter::sync_data`/`sync_all` → `fdatasync`/`fsync`) surface OS/filesystem success or failure via `Result<void>`. They do **not** overclaim physical-media persistence beyond the OS/filesystem contract (see `docs/architecture/sync-durability-model.md`). |
+| G9 | `BlockingIoPool` (production: `sluice::BlockingIoPool`, `include/sluice/blocking_io_pool.hpp`) is a **bounded OS-thread execution helper for blocking work, NOT an async runtime.** It runs callables on a fixed number of `std::thread` workers (NOT one thread per operation). It exposes task return values via a returned future-like handle, surfaces task exceptions, rejects submissions after `shutdown()`, and is bounded (backpressure / `try_submit` rejection). It is not selectable as an `IoContext`, implements no completion model, and has no dependency relationship with the I/O types. See `docs/architecture/sync-backend-taxonomy.md` for the full backend boundary. |
 | G10 | Errors are `Result<T>` / `IoError` (codes: `eof`, `canceled`, `interrupted`, `would_block`, `no_space`, `permission_denied`, `invalid_state`, `backend_error`). `errno` is mapped verbatim where the syscall returns `-1`; `errno == 0` maps to `backend_error` (never a real success). |
 | G11 | `BlockingIoPool::submit` / `try_submit` after `shutdown()` is **rejected** (`IoError::invalid_state`), NOT a silent no-op. Production pool callers must handle the rejection; silent drops hid bugs (the pre-024S bench pool was a no-op, recorded as a known behavior change). |
 

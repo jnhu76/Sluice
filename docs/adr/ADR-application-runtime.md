@@ -20,7 +20,7 @@ Today a consumer must manually compose `AsyncIoContext` → `Scheduler` →
 `Group(Scheduler&)` → `Group::await()` → `Scheduler::run_live()`. This manual
 composition has gaps: no unified start, no admission control, no runtime-level
 cancellation, no startup rollback, no drain/join separation, and no destructor
-contract. See `docs/design/e16-application-runtime.md` §3 for the full problem
+contract. See `docs/history/implementation-plans/e16-application-runtime.md` §3 for the full problem
 statement.
 
 The load-bearing production constraints that shape any solution:
@@ -119,7 +119,7 @@ The Runtime **never calls `Group::await()` while the driver exists** — `await(
 would call `run_live(1,...)` itself (`group.cpp:57-72`), violating "only the
 driver drives the Scheduler" and forcing single-worker.
 
-Evidence: `docs/design/e16-application-runtime.md` §8.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §8.
 
 ## 4. Lifecycle decision
 
@@ -158,7 +158,7 @@ snapshotted before resource close (components do not exist at `Stopped`).
 
 Restart is **not** supported. A Stopped Runtime may not be restarted.
 
-Evidence: `docs/design/e16-application-runtime.md` §10, §11, §19.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §10, §11, §19.
 
 ## 5. Admission decision
 
@@ -194,7 +194,7 @@ Runtime-owned child tasks. External capture of `ApplicationRuntime&` by a task
 body is treated as ordinary concurrent external `submit()`. A restricted
 `RuntimeTaskContext::spawn()` is a future extension.
 
-Evidence: `docs/design/e16-application-runtime.md` §13.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §13.
 
 ## 6. Cancellation decision
 
@@ -212,7 +212,7 @@ model, `cancel.hpp:14`): tasks observe the token at cancel points (`check_cancel
 does not observe cancellation can prevent `drain()` from returning (matching
 `group.hpp:69-76`).
 
-Evidence: `docs/design/e16-application-runtime.md` §14, §15.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §14, §15.
 
 ## 7. Drain/join/terminal-close decision
 
@@ -304,7 +304,7 @@ All three are idempotent via `close_state == Closed`.
 owned by the same Runtime (detected via the Fiber-local execution tag, §9).
 `request_stop()` is worker-safe.
 
-Evidence: `docs/design/e16-application-runtime.md` §16, §17.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §16, §17.
 
 ## 8. Destructor decision
 
@@ -326,7 +326,7 @@ This matches existing contracts:
 Rationale: hidden blocking in a destructor is an anti-pattern (AGENTS.md §7).
 `shutdown()` returns `Result`, enabling error reporting.
 
-Evidence: `docs/design/e16-application-runtime.md` §10, §18.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §10, §18.
 
 ## 9. Consequences — required private PROPOSED seams/prerequisites
 
@@ -376,7 +376,7 @@ PROPOSED/unimplemented.
    E16 implementation; the remaining four foundation seams (1–4) and the full
    E16 production surface remain unauthorized (design §13.5, §28).
 
-Evidence: `docs/design/e16-application-runtime.md` §8, §13.5, §16, §18, §21.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §8, §13.5, §16, §18, §21.
 
 ## 10. Error-model decision
 
@@ -474,7 +474,7 @@ Decisions:
 - Task function receives `RuntimeTaskContext&` (exposes `cancel_token()` + I/O
   submission; no `spawn`) — resolves Q6.
 
-Evidence: `docs/design/e16-application-runtime.md` §21.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §21.
 
 ## 12. Consequences
 
@@ -541,14 +541,14 @@ The Runtime creates the backend internally. **Rejected**: cannot inject
 deterministic backends for testing; requires internal backend creation hooks
 that weaken production guarantees.
 
-Evidence: `docs/design/e16-application-runtime.md` §7.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §7.
 
 ### Alternative B — Backend injected into Runtime (without builder)
 
 Backend injected at construction. **Rejected in favor of C**: lacks
 construct/start separation and config validation point.
 
-Evidence: `docs/design/e16-application-runtime.md` §7.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §7.
 
 ### Alternative D — Caller-driven single-worker Runtime
 
@@ -557,7 +557,7 @@ no background driver. **Rejected as the default**: makes `start()`
 non-operational, removes parallelism, collapses `drain()` into execution. May be
 documented as a future deterministic/manual variant.
 
-Evidence: `docs/design/e16-application-runtime.md` §7.6.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §7.6.
 
 ### Structured child submission
 
@@ -566,7 +566,7 @@ structured-concurrency model out of scope for A0. `RuntimeTaskContext` exposes
 cancellation + I/O submission but no `spawn` (P1-04); the child-admission
 contract is removed. A future `spawn()` is a possible extension.
 
-Evidence: `docs/design/e16-application-runtime.md` §13.4, §21.5.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §13.4, §21.5.
 
 ### Ordinary `thread_local` for worker-call detection
 
@@ -598,7 +598,7 @@ Replaced by the Fiber-local execution-identity seam (§9).
 
 A real public consumer target covering: construct, start, submit, request_stop,
 drain, join, safe destruction. Must not be a unit-test binary renamed "acceptance."
-Acceptance contracts A1–A20 in `docs/design/e16-application-runtime.md` §22,
+Acceptance contracts A1–A20 in `docs/history/implementation-plans/e16-application-runtime.md` §22,
 including: normal lifecycle; submit-after-stop; stop-wins-pre-commit / driver
 spawn failure; outstanding-I/O drain; concurrent join/shutdown owner election;
 destructor misuse; task-throws (terminal guard bridge); outstanding-I/O keeps
@@ -625,7 +625,7 @@ Constructed/Starting/StartFailed**; **`unique_ptr` ownership return**.
 
 ### Mutation testing
 
-Mutations (killing tests in `docs/design/e16-application-runtime.md` §24),
+Mutations (killing tests in `docs/history/implementation-plans/e16-application-runtime.md` §24),
 including: allow submit after admission closes; omit root cancellation
 publication; **publish state=Stopping before root cancellation then allow close
 (P1-01)**; return from drain with one admitted task alive; forget to join the
@@ -700,7 +700,7 @@ The repository has demonstrated capacity for this
 discipline). **ADR acceptance remains blocked until the required model exists and
 passes.**
 
-Evidence: `docs/design/e16-application-runtime.md` §25.
+Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §25.
 
 ## 16. Open human decisions
 
@@ -745,9 +745,9 @@ Prerequisites satisfied:
 
 ## 18. References
 
-- Design document: `docs/design/e16-application-runtime.md`
+- Design document: `docs/history/implementation-plans/e16-application-runtime.md`
 - Execution model ADR: `docs/adr/ADR-execution-model.md`
 - Async I/O model ADR: `docs/adr/ADR-async-io-model.md`
 - Sync runtime contract ADR: `docs/adr/ADR-024S-sync-runtime-contract.md`
-- API reference: `docs/api-reference.md`
+- API reference: `docs/reference/api.md`
 - Repository instructions: `AGENTS.md`

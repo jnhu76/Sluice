@@ -83,7 +83,7 @@ Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
     // block outlives the Scheduler's stack locals. A handle's notify() detects
     // post-destruction via the Control::alive flag (protected by Control::mtx,
     // the callback lease) and returns false without any Scheduler dereference.
-    // See Control below and docs/spec/e9_wake_handle_lifetime/.
+    // See Control below and spec/tla/e9_wake_handle_lifetime/.
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
 
     // Phase F1 P1-2: preallocate the WaitRecord pool to exactly
