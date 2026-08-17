@@ -1,215 +1,217 @@
 # Sluice
 
-一个实验性的 C++20 I/O 控制流库，围绕显式能力、可插拔后端和后端无关的
-`Reader` / `Writer` 语义构建。
+Sluice 是一个实验性的 C++20 explicit-I/O 运行时：应用代码通过后端无关的
+公开 API 表达**想要什么** I/O，由可插拔的后端决定每个操作**如何**执行。
 
-**当前状态：** v0.1.0 — Runtime Foundation (E10–E15) 已完成。
-同步核心、异步运行时和同步原语已可生产。E16 Application Runtime 是下一个提议阶段。
+[English](README.md)
 
-## 为什么选择 Sluice
+![Sluice 高层架构](docs/assets/architecture/sluice-high-level-layered-view.png)
 
-大多数 C++ I/O 在你编写任何业务逻辑之前就把你绑定到了特定后端——POSIX
-文件、socket、内存。Sluice 反其道而行：你面向抽象的 `Reader`/`Writer`
-接口编程，后端是你在程序边缘选择的**可插拔能力**。
+*图中 `network` 与 `external-memory data structures` 属于未来的工作负载
+方向，不是已实现的能力——见[项目状态](#项目状态)。*
 
-这意味着：
+## Sluice 是什么？
 
-- **用确定性故障注入测试**（`FaultReader`/`FaultWriter`）——无需文件系统，无需 mock 框架。
-- **用统计收集包装器做基准测试**（`ObservedReader`/`ObservedWriter`）——零拷贝透传，统计字节数和调用次数。
-- **不改调用点就能切换后端**——今天用 POSIX 文件，明天用 io_uring，测试用内存，全部通过同一个 `copy_all` 原语。
+围绕一个想法构建的两个 C++20 库：应用 I/O 意图不应与后端执行方式耦合。
 
-库受 Zig `std.Io` 启发，但适配了 C++20 风格。它**不是**移植——而是对同一显式能力哲学的 C++ 实现。
+- **`sluice_core`** —— 同步核心。`Result<T>` / `IoError` 错误模型，
+  `Reader` / `Writer` 接口及缓冲、故障注入、观测包装器，`copy_all`，
+  POSIX 文件与位置型 I/O，持久化（`sync_data` / `sync_all`），WAL 记录
+  格式，以及有界的 `BlockingIoPool` 辅助器。
+- **`sluice_async`** —— 可选的异步运行时。M:N fiber `Scheduler`，协作式
+  同步原语（`Event`、`Semaphore`、`AsyncMutex`、`AsyncCondition`、
+  `AsyncQueue`、`AsyncRwLock`、`Select`），取消原语，
+  `Future` / `Group` / `Batch`，以及 explicit-I/O 层：调用者持有的
+  `Completion<T>` 操作、`ThreadPoolBackend` 和 `ApplicationRuntime`
+  生命周期层。
 
-## 构建边界
+错误是值（`Result<T>`），绝不是异常。设计受 Zig `std.Io` 启发并适配
+C++20 惯用法——它不是移植。
 
-| 库 | 描述 | 默认 |
-|---------|-------------|---------|
-| `sluice_core` | 同步核心：Result、Reader/Writer、copy、文件 I/O、WAL、BlockingIoPool | 始终构建 |
-| `sluice_async` | 异步运行时：Scheduler、Fiber、同步原语、Completion、Future/Group/Batch | 可选；显式构建或作为 async tests/examples 的依赖 |
-| `sluice_async_internal_testing` | 测试专用变体，包含确定性因果接缝 | 仅测试 |
-| `sluice_experimental_uring` | 可选 io_uring 代码（无 liburing 时为 stub） | 默认关闭 |
+## 为什么选择 explicit I/O？
 
-## 5 分钟同步示例
+```text
+应用代码表达 I/O 意图
+        ↓
+Sluice 公开 API 拥有操作语义
+        ↓
+后端决定操作如何执行
+```
+
+- **后端无关接口** —— 用其他后端替换 `ThreadPoolBackend` 不需要改写
+  应用代码。
+- **显式操作** —— 读、写、同步都是以位置型操作描述符形式经公开 API
+  提交的。
+- **显式结果** —— 每个操作都解析为调用者持有的
+  `Completion<T>` / `Result<T>`；失败是需要处理的值。
+- **调用者持有缓冲区** —— 缓冲区与 Completion 在文档声明的请求生命周期
+  内保持存活且地址稳定。
+- **协作式取消** —— 取消是显式且协作式的；真实的 syscall 结果绝不会被
+  改写成"已取消"。
+- **有界资源** —— 请求容量、worker 数量、队列深度都是显式上界，而非
+  意外增长。
+
+同样的"表达 vs 执行"分离也用于测试：`MemoryIoContext` 与
+`FakeAsyncBackend` 提供确定性的内存与故障注入测试，无需文件系统，也
+无需 mock 框架。
+
+## 快速开始
+
+需要 Linux（同步核心也可在 macOS/WSL 使用）、[xmake](https://xmake.io)
+和 C++20 编译器（推荐 Clang）。
+
+```bash
+git clone https://github.com/jnhu76/Sluice.git
+cd Sluice
+xmake f -m release -y
+xmake build sluice-copy        # 或 sluice-hash、sluice-grep、sluice-tail
+```
+
+### 同步核心
 
 ```cpp
 // 内存往返：无需文件系统，无需配置。
 #include <sluice/memory_io_context.hpp>
 #include <sluice/copy.hpp>
+
+#include <cstddef>
 #include <cstdio>
+#include <string_view>
+#include <vector>
+
+std::vector<std::byte> to_bytes(std::string_view s) {
+    const auto* p = reinterpret_cast<const std::byte*>(s.data());
+    return {p, p + s.size()};
+}
 
 int main() {
     sluice::MemoryIoContext ctx;
+    ctx.seed("input.txt", to_bytes("hello world"));
 
-    auto r = ctx.open_reader("hello world");
-    auto w = ctx.open_writer();
+    auto r = ctx.open_reader("input.txt");
+    auto w = ctx.open_writer("output.txt");
+    if (!r.has_value() || !w.has_value()) return 1;
 
-    sluice::copy_all(*r, *w);
+    auto copied = sluice::copy_all(*r.value(), *w.value());
+    if (!copied.has_value()) return 2;
 
-    auto bytes = w->take_bytes();
-    std::printf("%s\n", bytes.data());  // 输出: hello world
+    auto bytes = static_cast<sluice::MemoryWriter&>(*w.value()).take();
+    std::printf("copied %llu bytes: %.*s\n",
+                static_cast<unsigned long long>(copied.value()),
+                int(bytes.size()),
+                reinterpret_cast<const char*>(bytes.data()));
 }
 ```
 
-## 5 分钟异步示例
+### 异步运行时
 
 ```cpp
-// 异步运行时：提交一个操作，轮询完成，读取结果。
-// (examples/async_foundation_quickstart.cpp — 针对公共头文件构建)
-#include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
-#include <sluice/async/fake_backend.hpp>
-#include <cstddef>
+// 一个运行时任务通过真实后端写文件，随后干净关闭。
+#include <sluice/async/application_runtime.hpp>
+#include <sluice/async/threadpool_backend.hpp>
+
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cstdio>
 #include <memory>
 
 int main() {
-    // FakeAsyncBackend 是确定性测试后端：auto_bytes(n) 使下一次 poll()
-    // 以 n 字节完成每个未完成的操作。
-    auto backend = std::make_unique<sluice::async::FakeAsyncBackend>();
-    sluice::async::FakeAsyncBackend* raw = backend.get();
-    raw->auto_bytes(8);
+    using namespace sluice::async;
 
-    sluice::async::AsyncIoContext ctx(std::move(backend));
+    int fd = ::open("/tmp/sluice-quickstart.txt",
+                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) return 1;
 
-    // 针对调用者拥有的 Completion 提交读取。
-    sluice::async::Completion<std::size_t> c;
-    std::byte buf[8]{};
-    if (!ctx.submit_read(sluice::async::ReadOp{0, buf, 8, 0}, c).has_value())
-        return 1;
+    RuntimeBuilder builder;
+    builder.backend(std::make_unique<ThreadPoolBackend>()).workers(1);
+    auto built = builder.build();
+    if (!built.has_value()) return 2;
+    ApplicationRuntime& rt = *built.value();
 
-    // poll() 非阻塞地收割完成；返回收割数量。
-    if (ctx.poll() != 1) return 2;
+    if (!rt.start().has_value()) return 3;
 
-    // 操作结果在 Completion 就绪后从中读取——而不是从 wait_one()/poll() 返回值读取。
-    if (!c.ready()) return 3;
-    auto r = c.result();
-    if (!r.has_value() || r.value() != 8) return 4;
+    auto task = rt.submit([&fd](RuntimeTaskContext& ctx) {
+        static constexpr char msg[] = "hello explicit I/O\n";
+        Completion<std::size_t> done;
+        if (!ctx.submit_write(WriteOp{fd,
+                                      reinterpret_cast<const std::byte*>(msg),
+                                      sizeof msg - 1, /*offset=*/0},
+                              done)
+                 .has_value())
+            return;
+        (void)ctx.await_completion(done);  // 任务挂起，直到操作就绪
+        auto n = done.result();            // Result<std::size_t>：错误是值
+        if (n.has_value()) std::printf("wrote %zu bytes\n", n.value());
+        ::close(fd);
+    });
+    if (!task.has_value()) return 4;
 
-    std::printf("async quickstart: 读取 %zu 字节\n", r.value());
+    rt.request_stop();               // 关闭准入，发布停止
+    if (!rt.drain().has_value()) return 5;  // 等待任务与未完成 I/O
+    if (!rt.join().has_value()) return 6;   // join 驱动线程，释放资源
     return 0;
 }
 ```
 
-## 已实现能力
+更多可运行程序见 [examples/](examples/)——例如
+`examples/runtime_acceptance.cpp` 仅依赖公开头文件即可走完整个运行时
+生命周期。
 
-### 同步核心（`sluice_core`）
+## 今天能构建什么
 
-- `Result<T>` / `IoError` 错误模型
-- `Reader` / `Writer` + `BufferedReader` / `BufferedWriter` / `ObservedReader` / `ObservedWriter` / `FaultReader` / `FaultWriter`
-- `copy_all` 及 `CopyStrategy`（Scratch / BufferedFirst / Auto）
-- `FileReader` / `FileWriter`（POSIX、位置型 I/O、向量 I/O）
-- `BlockingIoContext` / `MemoryIoContext` 工厂抽象
-- `BlockingIoPool`（有界 OS 线程执行助手）
-- `SyncableWriter`（`sync_data` / `sync_all`）
-- WAL 记录格式
+完全构建在 Sluice 公开头文件之上的真实应用（无测试接缝、不包含私有
+源码）：
 
-### 异步运行时（`sluice_async`）
+- [`sluice-copy`](apps/sluice-copy/README.md) —— 有界异步安全文件复制
+  （临时文件 + 原子 rename，可选持久化）
+- [`sluice-hash`](apps/sluice-hash/README.md) —— 有界流式 SHA-256
+- [`sluice-grep`](apps/sluice-grep/README.md) —— 有界流式字面量搜索
+- [`sluice-tail`](apps/sluice-tail/README.md) —— 向后 last-N 扫描 +
+  follow 模式，Ctrl-C 干净取消
 
-- `Scheduler`（M:N fiber 调度器、多工作线程、工作窃取）
-- `Fiber`（上下文切换，x86_64 Linux）
-- `WaitNode` / `WaitQueue`（E10）、`TimerRegistration` / deadline（E11）
-- `Event`（E12-A）、`Semaphore`（E12-B）、`AsyncMutex`（E12-C）
-- `AsyncCondition`（E12-D）、`AsyncQueue<T>`（E12-E）、`AsyncRwLock`（E12-F）
-- `Select`（E13）— 多臂 Event/Timer select
-- `CancelToken` / `CancelState` / `CancelGuard`（取消原语）
-- `Future<T>`（E28）、`Group`（E29）、`Batch`（E30）
-- `Completion<T>` / `AsyncIoContext` / `AsyncBackend`
-- `FakeAsyncBackend`（确定性测试工具）
-- `ThreadPoolBackend`（可移植，std::thread）
-
-### 实验性
-
-- `UringAsyncBackend` — Linux io_uring（通过 `--with-liburing` 构建门控；无 liburing 时为 stub）。仍为实验性；real-liburing 和非 Linux 验证证据有限。
-
-## 构建与测试
-
-```bash
-xmake f -m debug                  # 配置（debug 模式）
-xmake build sluice_core           # 构建同步核心
-xmake build sluice_async          # 构建异步运行时
-xmake build -g test               # 构建所有测试
-xmake test                        # 运行所有测试
-```
-
-启用实验性 io_uring（需要 liburing）：
-
-```bash
-xmake f --with-liburing=true
-xmake build -g experimental
-```
-
-### Sanitizer
-
-```bash
-xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test
-xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
-```
-
-## 验证模型
-
-- **验收** — `public_api_acceptance`（公共头文件编译+运行探测）；`async_foundation_quickstart`（异步基础消费者）；未来的 E16 运行时验收消费者
-- **单元/组件** — `xmake test -v`（每个 slice 的测试二进制）
-- **确定性因果测试** — `SLUICE_ASYNC_INTERNAL_TESTING` 阶段接缝
-- **Sanitizer 门控** — ASan、UBSan、TSan
-- **形式化模型** — TLA+ 规范，位于 `spec/tla/`（按套件目录组织）
-
-完整验证矩阵见 [`docs/verification/README.md`](docs/verification/README.md)。
-
-## 项目结构
-
-```
-include/sluice/          公开头文件（core + async）
-src/                     实现（core + async）
-apps/                    真实面向用户的程序（见下方“应用程序”）
-tests/                   正确性测试（每个 slice 一个二进制）
-examples/                能力演示示例
-bench/                   微基准测试（CSV 输出）
-docs/                    架构、设计、历史、路线图、验证
-  architecture/          当前架构文档
-  design/                活跃提议设计
-  adr/                   已接受的架构决策
-  applications/          应用轨道计划与实践报告
-  history/               收尾记录、实现计划、形式化设计、审查
-  verification/          验证矩阵和脚本
-  roadmap/               活跃未来工作
-scripts/                 构建/分析辅助工具
-xmake/                   构建配置
-```
-
-## 应用程序
-
-`apps/` 下的程序完全构建在公开头文件之上（无测试缝隙、不包含
-`src/`），与 `examples/`（能力演示）相区分：
-
-- `sluice-copy` —— 有界异步安全文件复制（临时文件 + 原子 rename，可选持久化）
-- `sluice-hash` —— 有界流式 SHA-256 文件哈希
-- `sluice-grep` —— 有界流式字面量搜索
-- `sluice-tail` —— 有界 last-N + follow 模式尾部跟踪（Ctrl-C 干净取消）
-
-使用 `xmake build sluice-copy` 等命令构建；每个应用有自己的 README
-（CLI、语义、资源上界与实测行为）。应用轨道的实践证据见
+应用轨道包含实测性能、内存上界、sanitizer 证据以及与系统工具的对比
+——见
 [docs/applications/file-tools-findings.md](docs/applications/file-tools-findings.md)。
 
-## 已知限制
+## 后端
 
-- `Evented` 执行策略需要 x86_64 Linux 且 `fiber_ctx::supported`。
-- `io_uring` 需要 Linux + liburing（构建门控，默认关闭）。
-- real-liburing 验证和非 Linux 可移植性证据仍然有限。
-- `AsyncQueue<T>` v1 没有公开的 wait-epoch 取消 API。
-- 向量 I/O 语义保守（在 EOF、错误或第一个正短结果时停止）。
+- `ThreadPoolBackend` —— 可移植的默认真实后端：基于 `std::thread` 的
+  固定持久阻塞 I/O worker 池。
+- `UringAsyncBackend` —— 实验性 Linux io_uring；由 `--with-liburing`
+  构建门控，默认关闭。
+- `FakeAsyncBackend` —— 确定性测试后端，提供精确、可编排的完成行为。
 
-## 文档链接
+后端内部机制、一致性证据与 io_uring runbook 见
+[docs/architecture/](docs/architecture/) 与
+[docs/verification/](docs/verification/)。
 
+## 项目状态
+
+- **最新 tag 发布：** `v0.1.0` —— 运行时基础：同步核心、异步调度器与
+  fiber 运行时、同步原语。
+- **当前开发（master，超出 tag）：** 跨后端的 explicit-I/O 请求生命周期、
+  `ApplicationRuntime` 层，以及第一批真实应用（copy / hash / grep /
+  tail，2026-08 合并）。
+- **实验性：** `UringAsyncBackend` —— real-liburing 验证证据仍依赖环境。
+- **未实现：** 网络与外存数据结构（KV / B+ tree / LSM）。它们是未来的
+  工作负载方向——用于产生 API 压力的证据生成器，不是当前能力——见
+  [docs/applications/README.md](docs/applications/README.md)。
+
+Sluice 是研究质量的实验性软件：平台支持以 Linux 为中心（fiber 调度器
+需要 x86_64），除实测应用证据外不做任何性能声明。
+
+## 文档
+
+- [开发者文档枢纽](docs/README.md) —— Sluice 如何工作、如何修改
 - [架构概览](docs/architecture/overview.md)
-- [异步运行时](docs/architecture/async-runtime.md)
-- [异步同步](docs/architecture/async-synchronization.md)
-- [异步 I/O 基础](docs/architecture/async-io-foundation.md)
-- [公开 API 参考](docs/api-reference-zh.md)
-- [英文 API 参考](docs/api-reference.md)
-- [验证矩阵](docs/verification/README.md)
-- [路线图](docs/roadmap/README.md)
-- [变更日志](docs/changelog.md)
+- [API 参考（中文）](docs/reference/api.zh-CN.md) ·
+  [API Reference (English)](docs/reference/api.md)
+- [应用轨道：真实工作负载带来的发现](docs/applications/README.md)
+- [验证矩阵](docs/verification/README.md) —— sanitizer、确定性因果
+  测试、形式化模型
+- [路线图](docs/roadmap/README.md) · [变更日志](docs/changelog.md)
 
 ## 许可证
 
-详见 `LICENSE`。
+尚未声明许可证；在添加之前，仓库所有者保留所有权利。
