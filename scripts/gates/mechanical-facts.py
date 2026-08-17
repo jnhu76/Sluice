@@ -53,6 +53,8 @@ KNOWN_TRACKER_REFS = {
     109, 110, 111, 112,                # Phase G closeout / freeze / known limits
     113, 114, 115,                      # phantom-fault post-mortem / hygiene PR /
                                        # parked-worker stranding observation
+    116,                                # runtime lost re-entry liveness (fixed
+                                       # 2026-08-17; corrective note in this report)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")
