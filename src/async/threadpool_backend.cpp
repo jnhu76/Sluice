@@ -603,17 +603,40 @@ void ThreadPoolBackend::worker_loop() {
                 work_cv_.wait(lk, [&] { return stopping_ || !dispatch_.empty(); });
                 if (stopping_ && dispatch_.empty()) return;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                std::uint64_t dequeue_gate_generation = 0;
                 if (before_dequeue_gate_.load(std::memory_order_acquire) != nullptr) {
                     // Gate B: release work_mtx_ while paused so the test can
                     // safely call cancel/dispatch_size_for_test. The request
                     // stays on the ring; pop_front happens only after resume.
                     lk.unlock();
-                    wait_before_dequeue_pause_();
+                    // Issue #110: the visit's generation (0 = legacy
+                    // single-visit bool protocol) is acked only AFTER this
+                    // cycle's dequeue decision below.
+                    dequeue_gate_generation = wait_before_dequeue_pause_();
+                    // Issue #110 regression seam: optional single-visit hold
+                    // in the exact post-resume / pre-pop window (the old
+                    // protocol published `exited` here). No-op when disarmed.
+                    wait_post_resume_pre_pop_hold_();
                     lk.lock();
-                    if (stopping_ && dispatch_.empty()) return;
+                    if (stopping_ && dispatch_.empty()) {
+                        ack_dequeue_gate_generation_(dequeue_gate_generation);
+                        return;
+                    }
                 }
-#endif
+                // Issue #110 ACK linearization point: publish the ACK after
+                // pop_front has decided this cycle's consume (entry popped, or
+                // ring observed empty — e.g. cancel won and removed it). After
+                // this decision the worker continuation can consume another
+                // entry only by re-entering work_cv_ wait -> gate check ->
+                // pop, so a test that waits for the ACK before arming
+                // generation N+1 cannot have N+1's dispatch entry stolen
+                // without its own gate observation.
+                const bool popped = dispatch_.pop_front(h);
+                ack_dequeue_gate_generation_(dequeue_gate_generation);
+                if (!popped) continue;  // spurious / raced
+#else
                 if (!dispatch_.pop_front(h)) continue;  // spurious / raced
+#endif
                 // Dequeue + mark_running form ONE coordinated ownership transfer
                 // under work_mtx_: there is no external window where the request
                 // is popped but not running (design §4.2; ADR §10.4). A stale
@@ -777,8 +800,48 @@ void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
     g->exited.notify_one();
 }
 
-void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
+std::uint64_t ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
     auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return 0;
+    const std::uint64_t generation = g->armed.load(std::memory_order_acquire);
+    if (generation == 0) {
+        // Legacy single-visit bool protocol (single-shot test cases; never
+        // rearmed — see the struct comment in the header). Behavior is
+        // byte-identical to the pre-#110 seam.
+        g->exited.store(false, std::memory_order_release);
+        g->paused.store(true, std::memory_order_release);
+        g->paused.notify_one();
+        g->resume.wait(false, std::memory_order_acquire);
+        g->exited.store(true, std::memory_order_release);
+        g->exited.notify_one();
+        return 0;
+    }
+    // Issue #110 generation handshake: publish the pause for THIS generation
+    // (monotonic max + notify — atomic::wait permits spurious wakes, so the
+    // consumer re-checks in a predicate loop), then block until the test
+    // resumes THIS generation or later (a resume of an older generation must
+    // not release this visit; the pre-#110 boolean carried no such identity).
+    dequeue_gate_detail::publish_max_(g->paused_at, generation);
+    g->paused_at.notify_all();
+    std::uint64_t seen = g->resumed_at.load(std::memory_order_acquire);
+    while (seen < generation) {
+        g->resumed_at.wait(seen, std::memory_order_acquire);
+        seen = g->resumed_at.load(std::memory_order_acquire);
+    }
+    return generation;
+}
+
+void ThreadPoolBackend::ack_dequeue_gate_generation_(
+    std::uint64_t generation) noexcept {
+    if (generation == 0) return;  // legacy single-visit protocol: no ACK
+    auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    dequeue_gate_detail::publish_max_(g->acked_at, generation);
+    g->acked_at.notify_all();
+}
+
+void ThreadPoolBackend::wait_post_resume_pre_pop_hold_() noexcept {
+    auto* g = post_resume_pre_pop_hold_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);

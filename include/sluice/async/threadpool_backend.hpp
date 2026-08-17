@@ -294,7 +294,60 @@ class ThreadPoolBackend : public AsyncBackend {
         // every production-path access.
         std::atomic<bool> exited{true};
     };
+    // Issue #110: the {paused, resume, exited} booleans below carry NO
+    // iteration identity. `exited` proves only that the worker left the pause
+    // gate — NOT that it consumed (or observed empty) the dispatch entry of
+    // the current test iteration. A test that rearms the booleans and submits
+    // iteration N+1 after observing `exited == true` can race the still
+    // descheduled iteration-N worker continuation (between gate exit and
+    // pop_front), which then consumes N+1's dispatch entry WITHOUT visiting
+    // the re-armed gate — a permanent wait_paused stall (the #110 defect).
+    // The bool trio therefore supports SINGLE-VISIT use only (arm once, pause
+    // once, resume once, never rearm the same gate object); multi-iteration
+    // protocols MUST use the generation handshake fields below.
     struct BeforeWorkerDequeuePauseGate {
+        // Legacy single-visit bool protocol (single-shot cases only).
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+
+        // Issue #110 generation-scoped handshake (multi-iteration race loop).
+        // All four are monotonic for the life of the gate object — never
+        // reset, so no ABA-style false observation is possible. The test is
+        // the sole writer of `armed`/`resumed_at`; the (single) worker is the
+        // sole writer of `paused_at`/`acked_at`. `armed == 0` (the initial
+        // value) selects the legacy bool path in the production seam; a test
+        // that arms a generation MUST resume it ONLY through
+        // resume_dequeue_gate_generation (a legacy resume_threadpool_gate
+        // store would not release the generation wait — the stall is caught
+        // by the case watchdog, never silently mis-synchronized).
+        //
+        //   test:  arm(N)                      -> submit iteration N
+        //   worker: pauses                     -> publishes paused_at >= N
+        //   test:  observes paused_at >= N     -> races cancel vs dequeue
+        //   test:  resume(N)
+        //   worker: crosses THIS cycle's pop_front decision
+        //                                   -> publishes acked_at >= N  (the ACK)
+        //   test:  waits acked_at >= N         -> ONLY THEN arms N+1
+        //
+        // The ACK is published after the dequeue decision of the pausing
+        // cycle: once popped (or observed empty), that worker continuation
+        // can consume another entry only by re-entering work_cv_ wait ->
+        // gate check -> pop, so it cannot steal iteration N+1's entry
+        // without visiting the N+1 gate.
+        std::atomic<std::uint64_t> armed{0};
+        std::atomic<std::uint64_t> paused_at{0};
+        std::atomic<std::uint64_t> resumed_at{0};
+        std::atomic<std::uint64_t> acked_at{0};
+    };
+    // Issue #110 deterministic regression seam (single visit): a plain bool
+    // pause placed between the BeforeWorkerDequeuePauseGate resume-wait
+    // returning and the worker re-taking work_mtx_ / pop_front — the EXACT
+    // post-gate / pre-dequeue window in which the old bool protocol already
+    // published `exited == true`. Held with work_mtx_ released so the test
+    // can submit/cancel/inspect. Used only by the cross-generation theft
+    // regression; null (no-op) everywhere else.
+    struct PostResumePrePopHoldGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
         std::atomic<bool> exited{true};
@@ -361,6 +414,11 @@ class ThreadPoolBackend : public AsyncBackend {
     }
     void set_before_dequeue_pause_gate(BeforeWorkerDequeuePauseGate* gate) noexcept {
         before_dequeue_gate_.store(gate, std::memory_order_release);
+    }
+    // Issue #110: arm the post-resume/pre-pop hold seam (single visit; disarm
+    // by storing nullptr between gate generations). Test-only.
+    void set_post_resume_pre_pop_hold_gate(PostResumePrePopHoldGate* gate) noexcept {
+        post_resume_pre_pop_hold_gate_.store(gate, std::memory_order_release);
     }
     void set_running_pause_gate(WorkerRunningPauseGate* gate) noexcept {
         running_gate_.store(gate, std::memory_order_release);
@@ -668,7 +726,18 @@ class ThreadPoolBackend : public AsyncBackend {
     // Deterministic pause helpers (see the public gate setters above). Each
     // helper is a no-op when the corresponding gate is disarmed.
     void wait_after_enqueue_before_push_pause_(bool inside_work_mtx) noexcept;
-    void wait_before_dequeue_pause_() noexcept;
+    // Issue #110: returns the generation this visit observed (0 = legacy
+    // single-visit bool protocol, or the gate disappeared). The caller MUST
+    // pass that generation to ack_dequeue_gate_generation_ AFTER this
+    // dispatch cycle's dequeue decision, closing the #110 protocol hole.
+    std::uint64_t wait_before_dequeue_pause_() noexcept;
+    // Issue #110: publish the dequeue-boundary ACK for `generation` (monotonic
+    // max + notify_all). No-op for generation 0 (legacy visits never ack).
+    void ack_dequeue_gate_generation_(std::uint64_t generation) noexcept;
+    // Issue #110 regression seam: single-visit bool pause between the
+    // dequeue-gate resume-wait returning and the worker re-taking work_mtx_ /
+    // pop_front. No-op when the hold gate is disarmed.
+    void wait_post_resume_pre_pop_hold_() noexcept;
     void wait_running_pause_() noexcept;
     void wait_terminal_publication_pause_() noexcept;
     void wait_before_enqueue_lock_pause_() noexcept;
@@ -731,6 +800,7 @@ class ThreadPoolBackend : public AsyncBackend {
     // production sluice_async; see the public setter declarations above.
     std::atomic<AfterArenaEnqueueBeforeDispatchPushPauseGate*> after_enqueue_before_push_gate_{nullptr};
     std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
+    std::atomic<PostResumePrePopHoldGate*> post_resume_pre_pop_hold_gate_{nullptr};
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
     std::atomic<BeforeEnqueueLockPauseGate*> before_enqueue_lock_gate_{nullptr};
@@ -784,6 +854,65 @@ void rearm_threadpool_gate(Gate& gate) noexcept {
     gate.paused.store(false, std::memory_order_release);
     gate.resume.store(false, std::memory_order_release);
     gate.exited.store(true, std::memory_order_release);
+}
+
+// Issue #110: generation-scoped handshake for BeforeWorkerDequeuePauseGate
+// (see the struct's field comment for the full protocol). These are the ONLY
+// supported test-side operations on a generation-armed gate. All
+// publications use monotonic max (C++20 has no atomic fetch_max — P0493 is
+// C++26 — so the max is a compare_exchange_weak loop), and every publication
+// a waiter can block on is paired with notify_all: atomic::wait permits
+// spurious unblocking, so every consumer below re-checks the value in a
+// predicate loop (never trusts a single wake).
+namespace dequeue_gate_detail {
+inline void publish_max_(std::atomic<std::uint64_t>& a, std::uint64_t v) noexcept {
+    std::uint64_t cur = a.load(std::memory_order_relaxed);
+    while (cur < v &&
+           !a.compare_exchange_weak(cur, v, std::memory_order_release,
+                                    std::memory_order_relaxed)) {
+    }
+}
+}  // namespace dequeue_gate_detail
+
+// Arm generation `generation` (strictly increasing per gate object; never
+// reset). MUST be called BEFORE the submit whose dispatch entry the worker
+// will meet at this gate visit. Nobody waits on `armed`, so no notify.
+inline void arm_dequeue_gate_generation(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+                                        std::uint64_t generation) noexcept {
+    dequeue_gate_detail::publish_max_(gate.armed, generation);
+}
+
+// Block (zero-CPU) until the worker has paused for `generation` or later.
+inline void wait_dequeue_gate_paused(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+                                     std::uint64_t generation) noexcept {
+    std::uint64_t seen = gate.paused_at.load(std::memory_order_acquire);
+    while (seen < generation) {
+        gate.paused_at.wait(seen, std::memory_order_acquire);
+        seen = gate.paused_at.load(std::memory_order_acquire);
+    }
+}
+
+// Resume generation `generation` (idempotent, monotonic). This is the ONLY
+// way to release a generation-armed pause; resume_threadpool_gate's boolean
+// store would not release the worker's resumed_at wait.
+inline void resume_dequeue_gate_generation(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+                                           std::uint64_t generation) noexcept {
+    dequeue_gate_detail::publish_max_(gate.resumed_at, generation);
+    gate.resumed_at.notify_all();
+}
+
+// Block (zero-CPU) until the worker has published the dequeue-boundary ACK
+// for `generation` or later: the pausing cycle's pop_front decision is
+// complete, so that worker continuation can no longer consume a dispatch
+// entry without re-entering the gate. ONLY AFTER this returns may the test
+// arm generation N+1 (the #110 invariant).
+inline void wait_dequeue_gate_ack(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+                                  std::uint64_t generation) noexcept {
+    std::uint64_t seen = gate.acked_at.load(std::memory_order_acquire);
+    while (seen < generation) {
+        gate.acked_at.wait(seen, std::memory_order_acquire);
+        seen = gate.acked_at.load(std::memory_order_acquire);
+    }
 }
 #endif
 

@@ -21,6 +21,17 @@
 //      BEFORE bookkeeping and AFTER record_terminal, so this case FAILS pre-fix
 //      and passes after the bookkeeping reorder.
 //
+// Issue #110: the multi-iteration race case
+// (tp_cancel_races_worker_terminal_exactly_one) uses the generation-scoped
+// BeforeWorkerDequeuePauseGate handshake — arm(N) -> paused(N) -> resume(N) ->
+// ACK(N) published only after the worker's pop_front decision — so a
+// generation-N worker continuation can never consume iteration N+1's dispatch
+// entry without generation N+1's gate observation (the pre-#110 `exited` bool
+// fired pre-pop and licensed exactly that theft).
+// tp_dequeue_gate_generation_blocks_cross_iteration_theft is the deterministic
+// issue-#110 regression (PostResumePrePopHoldGate holds the exact pre-pop
+// window).
+//
 // Links sluice_async_internal_testing (the seams are guarded by
 // SLUICE_ASYNC_INTERNAL_TESTING; production sluice_async has no seams).
 #include "death_test_runner_posix.hpp"
@@ -77,8 +88,9 @@ constexpr auto kDrainDeadline = std::chrono::seconds(5);
 // gate is armed; a case with no gate leaves them null and only case/phase print.
 enum class CasePhase : std::uint8_t {
     setup,       submit,    wait_paused, inspect,
-    resume,      wait_exited, barrier,   join_canceler,
-    drain,       reset,     teardown,    done,
+    resume,      wait_exited, wait_ack,  barrier,
+    join_canceler, drain,   reset,       teardown,
+    done,
 };
 
 inline const char* phase_name(CasePhase p) noexcept {
@@ -89,6 +101,7 @@ inline const char* phase_name(CasePhase p) noexcept {
     case CasePhase::inspect:      return "inspect";
     case CasePhase::resume:       return "resume";
     case CasePhase::wait_exited:  return "wait_exited";
+    case CasePhase::wait_ack:     return "wait_ack";
     case CasePhase::barrier:      return "barrier";
     case CasePhase::join_canceler:return "join_canceler";
     case CasePhase::drain:        return "drain";
@@ -129,6 +142,21 @@ struct PhaseProbe {
         gate_paused = &paused;
         gate_resume = &resume;
         gate_exited = &exited;
+    }
+    // Issue #110: generation-handshake binding (the BeforeWorkerDequeuePauseGate
+    // seq triple) for watchdog diagnostics of generation-protocol cases. A case
+    // may bind BOTH this and the bool triple (e.g. the hold gate's bools); the
+    // watchdog prints whichever slots are bound. Reads ONLY atomics.
+    const std::atomic<std::uint64_t>* gate_paused_at = nullptr;
+    const std::atomic<std::uint64_t>* gate_resumed_at = nullptr;
+    const std::atomic<std::uint64_t>* gate_acked_at = nullptr;
+    void bind_dequeue_generation_gate(
+        const std::atomic<std::uint64_t>& paused_at,
+        const std::atomic<std::uint64_t>& resumed_at,
+        const std::atomic<std::uint64_t>& acked_at) noexcept {
+        gate_paused_at = &paused_at;
+        gate_resumed_at = &resumed_at;
+        gate_acked_at = &acked_at;
     }
 };
 
@@ -343,6 +371,20 @@ private:
                          probe_->gate_resume->load(std::memory_order_acquire),
                          probe_->gate_exited->load(std::memory_order_acquire));
         }
+        if (probe_->gate_paused_at != nullptr) {
+            // Issue #110 generation handshake state: a stall with
+            // resumed_at >= paused_at > acked_at is a worker parked between
+            // its resume and the dequeue-boundary ACK — the exact window the
+            // old bool protocol mis-labeled as `exited`.
+            std::fprintf(stderr,
+                         "  gate: paused_at=%llu resumed_at=%llu acked_at=%llu\n",
+                         static_cast<unsigned long long>(
+                             probe_->gate_paused_at->load(std::memory_order_acquire)),
+                         static_cast<unsigned long long>(
+                             probe_->gate_resumed_at->load(std::memory_order_acquire)),
+                         static_cast<unsigned long long>(
+                             probe_->gate_acked_at->load(std::memory_order_acquire)));
+        }
         std::abort();
     }
 
@@ -433,6 +475,23 @@ void wait_paused(Gate& gate, PhaseProbe& probe) {
     probe.set(CasePhase::wait_paused);
     gate.paused.wait(false, std::memory_order_acquire);
     probe.set(CasePhase::inspect);
+}
+
+// Issue #110: phase-attributed generation-handshake waits for the
+// BeforeWorkerDequeuePauseGate (the blocking predicate loops live in the
+// internal-testing header; these wrappers only advance the probe so a
+// watchdog stall is attributed to wait_paused vs wait_ack).
+void wait_dequeue_paused_gen(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+                             std::uint64_t generation, PhaseProbe& probe) {
+    probe.set(CasePhase::wait_paused);
+    wait_dequeue_gate_paused(gate, generation);
+    probe.set(CasePhase::inspect);
+}
+
+void wait_dequeue_ack_gen(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
+                          std::uint64_t generation, PhaseProbe& probe) {
+    probe.set(CasePhase::wait_ack);
+    wait_dequeue_gate_ack(gate, generation);
 }
 
 // Drain outstanding ops through the real reaper with a bounded total time.
@@ -1328,13 +1387,26 @@ SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
 }
 
 // ---- C2b rows 6/7 (ThreadPool): cancel races the worker terminal winner ----
-// Genuine causal two-thread TSan evidence: BeforeWorkerDequeuePauseGate holds
-// the worker in the pre-dequeue window on EVERY iteration, so the op is
-// provably `enqueued` when the barrier releases. The barrier then releases the
-// canceler and the worker-gate resume together, so cancel and dequeue race for
-// the single terminal transition under the backend's work_mtx_ arbitration.
+// Genuine causal two-thread TSan evidence: the generation-scoped
+// BeforeWorkerDequeuePauseGate handshake (issue #110) holds the worker in the
+// pre-dequeue window on EVERY iteration, so the op is provably `enqueued`
+// when the barrier releases. The barrier then releases the canceler and the
+// worker-gate resume together, so cancel and dequeue race for the single
+// terminal transition under the backend's work_mtx_ arbitration.
 // This closes the "worker already finished before the canceler started" hole:
-// the race is forced, not probabilistic. Each iteration asserts the exactly-one
+// the race is forced, not probabilistic. Each iteration owns an unambiguous
+// causal generation (1..kIters, monotonic, never reset):
+//   arm(N) -> submit N -> paused(N) -> [barrier] cancel ‖ resume(N)
+//   -> ACK(N) (published only after the worker's pop_front decision for the
+//      pausing cycle) -> ONLY THEN arm(N+1)
+// The ACK wait closes the #110 cross-iteration hole: the pre-#110 protocol
+// treated the gate's `exited` bool as iteration completion, but `exited`
+// fires BEFORE pop_front — so after a cancel-won iteration the descheduled
+// worker continuation could consume iteration N+1's freshly pushed dispatch
+// entry without visiting the re-armed gate, stalling wait_paused forever.
+// After ACK(N) the worker continuation can consume another entry only by
+// re-entering work_cv_ wait -> gate check -> pop, so iteration N+1 always
+// gets its own gate observation. Each iteration asserts the exactly-one
 // winner contract end to end:
 //   - exactly one publication (poll total == 1), one ready Completion
 //   - the result is EITHER canceled OR the real 1-byte success
@@ -1348,9 +1420,11 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     // #93 review: gate before watchdog, bind before thread start. Thread
     // creation publishes the non-atomic probe pointer writes; reverse
     // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
-    // alive across the watchdog's diagnostic atomic reads.
+    // alive across the watchdog's diagnostic atomic reads. The bool binding
+    // stays for legacy diagnostics; the seq triple is the live protocol.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
-    probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    probe.bind_dequeue_generation_gate(gate.paused_at, gate.resumed_at,
+                                       gate.acked_at);
     Watchdog wd(kWatchdog, probe);
     constexpr std::size_t kIters = 64;
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
@@ -1375,11 +1449,19 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     // Completion before breaking out of the iteration scope. The gate is also
     // resumed so the worker is never stranded, and the gate-exit is awaited so
     // the next iteration (or the final backend destruction) sees a stable gate.
-    auto cleanup_iteration = [&](Completion<std::size_t>& c) noexcept {
+    auto cleanup_iteration = [&](Completion<std::size_t>& c,
+                                 std::uint64_t gen) noexcept {
         probe.set(CasePhase::resume);
-        resume_threadpool_gate(gate);
-        probe.set(CasePhase::wait_exited);
-        gate.exited.wait(false, std::memory_order_acquire);
+        resume_dequeue_gate_generation(gate, gen);
+        // Wait for the ACK only when the worker actually visited this
+        // generation: a submit-reject path created no dispatch entry, so no
+        // visit — and no ACK — can ever occur for it. When a visit did occur,
+        // the resume above guarantees the worker reaches its dequeue decision
+        // and publishes the ACK.
+        if (gate.paused_at.load(std::memory_order_acquire) >= gen) {
+            probe.set(CasePhase::wait_ack);
+            wait_dequeue_gate_ack(gate, gen);
+        }
         if (!drain_bounded(backend,
                            std::chrono::steady_clock::now() + kDrainDeadline,
                            probe)) {
@@ -1397,22 +1479,34 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     // Sets the failure message and cleans up the iteration. The caller MUST
     // follow with an explicit `break` (or an `if (fail_msg != nullptr) break`
     // after an inner loop) — no control-flow is hidden in the helper.
-    auto fail_iteration = [&](const char* msg, Completion<std::size_t>& c) {
+    auto fail_iteration = [&](const char* msg, Completion<std::size_t>& c,
+                              std::uint64_t gen) {
         fail_msg = msg;
-        cleanup_iteration(c);
+        cleanup_iteration(c, gen);
     };
 
+    // Highest generation whose pause this test observed; the final safety
+    // block waits for ITS ack (a submit-reject iteration never visits).
+    std::uint64_t last_paused_gen = 0;
     for (std::size_t iter = 0; iter < kIters && fail_msg == nullptr; ++iter) {
+        // Iteration N's causal generation: strictly increasing, never reset.
+        const std::uint64_t gen = static_cast<std::uint64_t>(iter) + 1;
         probe.note_iteration(iter);  // progress checkpoint for the watchdog
         Completion<std::size_t> c;
+        // Arm the gate for THIS iteration before creating its dispatch entry,
+        // so the entry can only be consumed through a visit that observes
+        // this generation (the #110 invariant).
+        arm_dequeue_gate_generation(gate, gen);
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
-            // Submit rejected: c is idle, nothing to clean up.
+            // Submit rejected: c is idle, nothing to clean up. The worker
+            // never visits gen, so no ACK is expected for it.
             fail_msg = "submit must succeed on a drained backend";
             break;
         }
         // Force the worker into the pre-dequeue window so the op is provably
         // `enqueued` before the race is released.
-        wait_paused(gate, probe);
+        wait_dequeue_paused_gen(gate, gen, probe);
+        last_paused_gen = gen;
         // Barrier synchronizes TWO threads: the main thread (which resumes the
         // worker gate) and the canceler. Both release together AFTER the worker
         // is confirmed paused, so cancel and dequeue genuinely race. The
@@ -1437,24 +1531,21 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         } catch (...) {
             // Thread creation can fail under heavy concurrency load. The gate
             // is resumed inside cleanup_iteration so the worker is not stranded.
-            fail_iteration("canceler thread creation failed under load", c);
+            fail_iteration("canceler thread creation failed under load", c, gen);
             break;
         }
         sync.arrive_and_wait();
         probe.set(CasePhase::resume);
-        resume_threadpool_gate(gate);
+        resume_dequeue_gate_generation(gate, gen);
         probe.set(CasePhase::join_canceler);
         canceler.join();
-        // Wait for the worker to leave the gate before the next iteration arms
-        // it again (the gate struct is reused).
-        probe.set(CasePhase::wait_exited);
-        gate.exited.wait(false, std::memory_order_acquire);
-        // Re-arm the gate for the next iteration. Safe only AFTER exited was
-        // observed true: a production thread reaches resume.wait() only after
-        // setting exited=false, so resetting resume=false here cannot drop a
-        // wake under a still-waiting epoch.
-        probe.set(CasePhase::reset);
-        rearm_threadpool_gate(gate);
+        // #110: wait for the dequeue-boundary ACK of THIS generation before
+        // the next iteration may exist. The pre-#110 protocol waited only for
+        // the gate `exited` bool (published BEFORE pop_front) and then
+        // rearmed — the exact hole that let the N continuation steal N+1's
+        // dispatch entry. No rearm step exists anymore: arming N+1 above IS
+        // the arm, and it is reachable only after this ACK.
+        wait_dequeue_ack_gen(gate, gen, probe);
 
         // Drain through the real reaper, counting publications. The loop
         // condition is `!c.ready()` (not just `outstanding() > 0`) so the
@@ -1467,7 +1558,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         while (!c.ready()) {
             if (std::chrono::steady_clock::now() >= deadline) {
                 fail_iteration("drain must complete within the bounded deadline",
-                               c);
+                               c, gen);
                 break;
             }
             published += backend.poll();
@@ -1476,22 +1567,22 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         if (fail_msg != nullptr) break;
 
         if (published != 1) {
-            fail_iteration("exactly one publication per iteration", c);
+            fail_iteration("exactly one publication per iteration", c, gen);
             break;
         }
         if (!c.ready()) {
-            fail_iteration("Completion must be ready after drain", c);
+            fail_iteration("Completion must be ready after drain", c, gen);
             break;
         }
         if (c.result().has_value()) {
             if (c.result().value() != 1) {
-                fail_iteration("real result must be the 1 seeded byte", c);
+                fail_iteration("real result must be the 1 seeded byte", c, gen);
                 break;
             }
             ++success_total;
         } else {
             if (c.result().error().code != IoError::Code::canceled) {
-                fail_iteration("non-success result must be canceled", c);
+                fail_iteration("non-success result must be canceled", c, gen);
                 break;
             }
             ++canceled_total;
@@ -1521,13 +1612,243 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         }
     }
 
-    // Safety: ensure the gate is resumed and the worker has exited it before
-    // the backend (and its worker thread) is destroyed. The case-level Watchdog
-    // catches a genuinely stuck worker.
+    // Safety: idempotently release any gate visit (kIters is the high-water
+    // generation) and wait for the ACK of the highest generation whose pause
+    // was observed, so no worker is stranded in a pause before the backend
+    // (and its worker thread) is destroyed. The case-level Watchdog catches a
+    // genuinely stuck worker.
     probe.set(CasePhase::resume);
-    resume_threadpool_gate(gate);
-    probe.set(CasePhase::wait_exited);
-    gate.exited.wait(false, std::memory_order_acquire);
+    resume_dequeue_gate_generation(gate, static_cast<std::uint64_t>(kIters));
+    if (last_paused_gen != 0) {
+        wait_dequeue_ack_gen(gate, last_paused_gen, probe);
+    }
+
+    probe.set(CasePhase::teardown);
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- Issue #110: cross-iteration pause-gate protocol regression -------------
+// Deterministic proof of the #110 invariant:
+//
+//   a generation-N worker continuation cannot consume generation N+1's
+//   dispatch entry without generation N+1's gate observation
+//
+// via the two causal properties of the fixed protocol:
+//   1. the dequeue-boundary ACK is HONEST — it is unpublished while the
+//      worker is provably pre-pop (held by PostResumePrePopHoldGate in the
+//      exact window where the pre-#110 protocol already showed
+//      `exited == true`, which is what licensed the theft);
+//   2. after ACK(1), arming + submitting generation 2 forces the SAME worker
+//      continuation through the gen-2 gate: paused_at reaches 2 while the
+//      gen-2 entry is still on the dispatch ring (not consumed pre-gate).
+//
+// Pre-fix shape (the old bool protocol): after resume the test observed
+// exited==true while the worker was still pre-pop, rearmed, and submitted
+// N+1; the descheduled continuation then popped N+1 directly (this case's
+// dispatch_size would read 0 / wait_paused(gen 2) would stall forever). The
+// post-fix protocol makes that shape inexpressible: arming N+1 requires
+// wait_dequeue_gate_ack(N) first, and the ACK is published only after the
+// pop decision. Every wait below is a blocking atomic wait — no sleep, no
+// timeout, no yield loop, no timing assumption. (This libstdc++ exposes
+// atomic::wait/notify but not atomic::wait_for; the negative probe therefore
+// uses a helper thread blocked in the ACK wait, whose completion is causally
+// — not temporally — bounded.)
+SLUICE_TEST_CASE(tp_dequeue_gate_generation_blocks_cross_iteration_theft) {
+    PhaseProbe probe;
+    probe.name = "tp_dequeue_gate_generation_blocks_cross_iteration_theft";
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    ThreadPoolBackend::PostResumePrePopHoldGate hold;
+    probe.bind_dequeue_generation_gate(gate.paused_at, gate.resumed_at,
+                                       gate.acked_at);
+    probe.bind_gate(hold.paused, hold.resume, hold.exited);
+    Watchdog wd(kWatchdog, probe);
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_before_dequeue_pause_gate(&gate);
+    backend.set_post_resume_pre_pop_hold_gate(&hold);
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("J");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0xAA}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c1;
+    Completion<std::size_t> c2;
+    const char* fail_msg = nullptr;
+    std::uint64_t syscalls_before = 0;
+    // CORE 1b helper: blocked in the gen-1 ACK wait. Its completion is
+    // causally bounded — it can finish only after ACK(1), and ACK(1) requires
+    // the hold release this thread alone performs — so "not finished before
+    // the release" is deterministic, with no timeout and no timing read.
+    std::atomic<bool> ack_waiter_done{false};
+    std::thread ack_waiter;
+
+    // --- generation 1: cancel wins; the worker is held pre-pop --------------
+    arm_dequeue_gate_generation(gate, 1);
+    if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c1).has_value()) {
+        fail_msg = "gen-1 submit must succeed";
+    } else {
+        wait_dequeue_paused_gen(gate, 1, probe);
+        syscalls_before = backend.syscall_count_for_test();
+        backend.cancel(c1);  // worker held in the gate: enqueued cancel wins
+        if (backend.dispatch_size_for_test() != 0) {
+            fail_msg = "cancel must remove the gen-1 dispatch entry";
+        } else {
+            resume_dequeue_gate_generation(gate, 1);
+            // The worker is now deterministically parked in the hold — the
+            // exact post-resume/pre-pop window (old protocol: exited==true).
+            wait_paused(hold, probe);
+            // CORE 1 (deterministic): no ACK may exist while the worker is
+            // provably pre-pop. Single worker; it is parked in hold.resume;
+            // only this thread releases it.
+            if (gate.acked_at.load(std::memory_order_acquire) != 0) {
+                fail_msg = "no ACK may be published before the dequeue decision";
+            } else {
+                // CORE 1b: the would-be iteration-2 publisher (a consumer
+                // blocked in the ACK wait) cannot proceed while the worker is
+                // held. Deterministic by construction: the helper sets its
+                // done flag strictly after ACK(1) is observable, and no ACK
+                // can exist before the hold release.
+                try {
+                    ack_waiter = std::thread([&] {
+                        wait_dequeue_gate_ack(gate, 1);
+                        ack_waiter_done.store(true, std::memory_order_release);
+                    });
+                } catch (...) {
+                    fail_msg = "ack-waiter thread creation failed";
+                }
+                if (fail_msg == nullptr &&
+                    (gate.acked_at.load(std::memory_order_acquire) != 0 ||
+                     ack_waiter_done.load(std::memory_order_acquire))) {
+                    fail_msg = "the ACK waiter may not finish before the hold release";
+                }
+            }
+        }
+    }
+
+    // Release the hold: the worker crosses the pop boundary (ring is empty —
+    // cancel removed the gen-1 entry) and publishes ACK(1); only now can the
+    // blocked helper finish. The join is causal, not timed.
+    probe.set(CasePhase::resume);
+    resume_threadpool_gate(hold);
+    if (ack_waiter.joinable()) {
+        probe.set(CasePhase::wait_ack);
+        ack_waiter.join();
+    }
+
+    if (fail_msg == nullptr) {
+        // The helper's completed join above IS the gen-1 ACK wait.
+        // Gen-1 cleanup through the real reaper; exactly one publication.
+        probe.set(CasePhase::drain);
+        std::size_t published = 0;
+        const auto deadline = std::chrono::steady_clock::now() + kDrainDeadline;
+        while (!c1.ready()) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                fail_msg = "gen-1 drain must complete within the deadline";
+                break;
+            }
+            published += backend.poll();
+            if (!c1.ready()) std::this_thread::yield();
+        }
+        if (fail_msg == nullptr && published != 1) {
+            fail_msg = "exactly one publication for gen 1";
+        } else if (fail_msg == nullptr && !c1.ready()) {
+            fail_msg = "gen-1 Completion must be ready after drain";
+        } else if (fail_msg == nullptr &&
+                   (c1.result().has_value() ||
+                    c1.result().error().code != IoError::Code::canceled)) {
+            fail_msg = "gen-1 winner must be canceled";
+        } else if (fail_msg == nullptr &&
+                   backend.syscall_count_for_test() != syscalls_before) {
+            fail_msg = "canceled gen-1 op must not execute a syscall";
+        } else if (fail_msg == nullptr && stats.canceled_ops != 1) {
+            fail_msg = "gen-1 cancel must tally exactly one canceled op";
+        }
+        if (fail_msg == nullptr) {
+            c1.reset();
+        }
+    }
+
+    // --- generation 2: the SAME continuation must pass the gen-2 gate -------
+    if (fail_msg == nullptr) {
+        backend.set_post_resume_pre_pop_hold_gate(nullptr);  // single-use seam
+        probe.set(CasePhase::submit);
+        arm_dequeue_gate_generation(gate, 2);
+        if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c2).has_value()) {
+            fail_msg = "gen-2 submit must succeed";
+        } else {
+            wait_dequeue_paused_gen(gate, 2, probe);
+            // CORE 2 (deterministic): the gen-2 entry is still on the ring AT
+            // the gen-2 gate — it was not consumed by the gen-1 continuation
+            // (the theft). Under the old protocol this wait_paused stalled
+            // forever because no worker would visit the re-armed gate.
+            if (backend.dispatch_size_for_test() != 1) {
+                fail_msg = "gen-1 continuation must not consume the gen-2 entry";
+            } else if (backend.syscall_count_for_test() != syscalls_before) {
+                fail_msg = "no syscall may run before the gen-2 release";
+            } else if (backend.outstanding() != 1) {
+                fail_msg = "the gen-2 op must be the one outstanding request";
+            } else {
+                resume_dequeue_gate_generation(gate, 2);
+                wait_dequeue_ack_gen(gate, 2, probe);
+                // Ordinary worker winner from here: the real result verbatim.
+                probe.set(CasePhase::drain);
+                std::size_t published = 0;
+                const auto deadline =
+                    std::chrono::steady_clock::now() + kDrainDeadline;
+                while (!c2.ready()) {
+                    if (std::chrono::steady_clock::now() >= deadline) {
+                        fail_msg = "gen-2 drain must complete within the deadline";
+                        break;
+                    }
+                    published += backend.poll();
+                    if (!c2.ready()) std::this_thread::yield();
+                }
+                if (fail_msg == nullptr && published != 1) {
+                    fail_msg = "exactly one publication for gen 2";
+                } else if (fail_msg == nullptr && !c2.ready()) {
+                    fail_msg = "gen-2 Completion must be ready after drain";
+                } else if (fail_msg == nullptr &&
+                           (!c2.result().has_value() || c2.result().value() != 1)) {
+                    fail_msg = "gen-2 real result must win verbatim (1 byte)";
+                } else if (fail_msg == nullptr &&
+                           backend.syscall_count_for_test() !=
+                               syscalls_before + 1) {
+                    fail_msg = "exactly one syscall for the gen-2 winner";
+                } else if (fail_msg == nullptr && stats.canceled_ops != 1) {
+                    fail_msg = "the gen-2 ordinary winner must not tally a cancel";
+                } else if (fail_msg == nullptr && backend.outstanding() != 0) {
+                    fail_msg = "outstanding must be zero after the gen-2 drain";
+                }
+                if (fail_msg == nullptr) {
+                    c2.reset();
+                    if (backend.arena_slot_in_use() != 0) {
+                        fail_msg = "slots must be released after both resets";
+                    }
+                }
+            }
+        }
+    }
+
+    // Tail cleanup (every path): release both gates idempotently, wait for
+    // the ACK of the highest generation whose pause was observed, drain, and
+    // reset whatever became ready so no Completion destructs outstanding.
+    probe.set(CasePhase::resume);
+    resume_threadpool_gate(hold);
+    resume_dequeue_gate_generation(gate, 2);
+    const std::uint64_t observed =
+        gate.paused_at.load(std::memory_order_acquire);
+    if (observed >= 1) {
+        wait_dequeue_ack_gen(gate, observed, probe);
+    }
+    (void)drain_bounded(backend,
+                        std::chrono::steady_clock::now() + kDrainDeadline,
+                        probe);
+    if (c1.ready()) c1.reset();
+    if (c2.ready()) c2.reset();
 
     probe.set(CasePhase::teardown);
     ::close(fd);
