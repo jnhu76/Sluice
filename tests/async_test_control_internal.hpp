@@ -64,6 +64,19 @@ enum class PhaseTag : unsigned char {
     scheduler_park_candidate,
     // E9-CORRECTIVE: worker paused at park commit boundary (pre-wake_cv.wait).
     scheduler_park_commit,
+    // Issue #115 deterministic reproducer: worker paused AFTER the wake-epoch
+    // baseline is recorded (the G1 arm handshake under global_mtx_ + wake_mtx_)
+    // and BEFORE it takes wake_mtx_ to enter cv.wait — with NO locks held.
+    // This is the exact mirror of scheduler_park_commit: a publication issued
+    // while this seam holds lands strictly AFTER the baseline, so it can only
+    // be observed through the cv predicate (wake_epoch_ != observed_epoch),
+    // never absorbed into the baseline. Post-fix runnable publication advances
+    // the epoch and the predicate fires at wait entry; pre-fix nothing does
+    // and the worker sleeps into the #115 strand. Included in
+    // release_all_phases (unlike worker_park_returned): a paused worker here
+    // holds no locks and its park has not begun, so a terminating sibling's
+    // release lets it proceed to a predicate that observes global_terminate_.
+    scheduler_park_baseline_recorded,
     // Phase G review P2b (G1 deterministic reproducer): worker paused
     // immediately AFTER park_on_wake_source returns in worker_loop — it has
     // woken from a wake-domain park and is about to re-enter the loop top

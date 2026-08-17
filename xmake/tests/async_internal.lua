@@ -262,6 +262,16 @@ sluice_internal_async_test("select_multi_worker_test")
 -- Gated to x86_64 (fiber_ctx::supported).
 sluice_internal_async_test("phase_g_backend_progress_wake_test")
 
+-- Issue #115 deterministic causal regression: runnable publication onto a
+-- BUSY worker's queue (production spawn() + spawn_on()) must advance the
+-- Scheduler wake epoch (RP-1/RP-2). The scheduler_park_baseline_recorded
+-- seam holds the parked worker strictly post-baseline, so the publication's
+-- only possible transport is the cv predicate. Pre-fix: permanent strand,
+-- bounded watchdog fail-closes then rescues via the external wake handle.
+-- Deterministic (seam + bounded watchdogs); NO sleep-ordering. Gated to
+-- x86_64 (fiber_ctx::supported).
+sluice_internal_async_test("issue115_runnable_publication_wake_test")
+
 -- phase_g_closeout_test — Phase G final closeout: deterministic causal
 -- proofs for the commit→park wake protocol (Cases A–D: notify before arm /
 -- after arm / while parked / backend-ready-vs-notify) and the ThreadPool

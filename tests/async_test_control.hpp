@@ -126,6 +126,29 @@ struct SchedulerParkSeam {
     }
 };
 
+// ---- Issue #115 reproducer: post-baseline park seam ----
+// Pauses a worker AFTER its wake-epoch baseline is recorded and BEFORE it
+// enters cv.wait (no locks held). A runnable publication issued while this
+// seam holds lands strictly after the baseline, so its ONLY possible transport
+// to the sleeping worker is the wake-epoch advance the cv predicate checks.
+struct SchedulerParkBaselineSeam {
+    static void arm(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::scheduler_park_baseline_recorded);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::scheduler_park_baseline_recorded);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::scheduler_park_baseline_recorded);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s,
+                                   PhaseTag::scheduler_park_baseline_recorded);
+    }
+};
+
 // ---- Phase G review P2b: post-park recheck seam (G1 deterministic
 // reproducer). Pauses a worker immediately AFTER its wake-domain park
 // returns, BEFORE the loop-top re-drain/classify. Excluded from

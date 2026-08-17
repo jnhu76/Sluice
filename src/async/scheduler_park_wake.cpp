@@ -334,6 +334,15 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         }
 #endif
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Issue #115 causal seam: the baseline is committed and NO lock is held.
+    // A publication issued while paused here is strictly post-commit — the
+    // cv predicate is its only possible transport (an epoch advance fires it
+    // at wait entry; anything else is the #115 strand). Complements seam B
+    // (scheduler_park_commit), which pauses strictly PRE-baseline.
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_park_baseline_recorded);
+#endif
     std::unique_lock<Mutex> lk(wake_mtx_);
     // Phase G timeout policy: bound the wake wait by the earliest active
     // deadline so an active deadline cannot park a Worker indefinitely past
