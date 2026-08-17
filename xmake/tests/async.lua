@@ -419,3 +419,167 @@ do
             add_tests("sluice_copy_file_domain_test")
     end
 end
+
+-- sluice-copy Version C safe-output tests (file-tools track Phase B). Drives
+-- the SAME safe_output.cpp module the CLI uses over real temp directories:
+-- input domain, temp placement + permission preservation, commit/discard
+-- cleanup, rename-failure path, fault-injected and real-backend atomic flows.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_safe_output_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/safe_output.cpp") then
+        target("sluice_copy_safe_output_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/safe_output.cpp",
+                      app_dir .. "/copy_task.cpp")
+            add_tests("sluice_copy_safe_output_test")
+    end
+end
+
+-- sluice-hash tests (file-tools track Phase C). Same app-sources-into-test
+-- pattern as sluice-copy: SHA-256 NIST vectors + streaming invariance; CLI
+-- parsing; fault injection (FakeAsyncBackend); real-file integration
+-- (ThreadPoolBackend). Registrations stay explicit (literal add_tests) so
+-- scripts/gates/mechanical-facts.py mirrors the default-gate size exactly.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-hash"
+    if os.isfile(app_dir .. "/hash_task.cpp") then
+        target("sluice_hash_sha256_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_hash_sha256_test.cpp",
+                      app_dir .. "/sha256.cpp")
+            add_tests("sluice_hash_sha256_test")
+        target("sluice_hash_cli_parse_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_hash_cli_parse_test.cpp",
+                      app_dir .. "/cli_parse.cpp")
+            add_tests("sluice_hash_cli_parse_test")
+        target("sluice_hash_fault_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_hash_fault_test.cpp",
+                      app_dir .. "/hash_task.cpp", app_dir .. "/sha256.cpp")
+            add_tests("sluice_hash_fault_test")
+        target("sluice_hash_integration_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_hash_integration_test.cpp",
+                      app_dir .. "/hash_task.cpp", app_dir .. "/sha256.cpp")
+            add_tests("sluice_hash_integration_test")
+    end
+end
+
+-- sluice-grep tests (file-tools track Phase D): matcher boundary semantics
+-- (cross-buffer patterns/lines, final line, long-line policy), CLI parsing,
+-- FakeAsyncBackend fault injection, real-file integration. Explicit literal
+-- add_tests for the mechanical-facts mirror (see the sluice-hash note).
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-grep"
+    if os.isfile(app_dir .. "/grep_task.cpp") then
+        target("sluice_grep_matcher_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_grep_matcher_test.cpp",
+                      app_dir .. "/matcher.cpp")
+            add_tests("sluice_grep_matcher_test")
+        target("sluice_grep_cli_parse_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_grep_cli_parse_test.cpp",
+                      app_dir .. "/cli_parse.cpp")
+            add_tests("sluice_grep_cli_parse_test")
+        target("sluice_grep_fault_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_grep_fault_test.cpp",
+                      app_dir .. "/grep_task.cpp", app_dir .. "/matcher.cpp")
+            add_tests("sluice_grep_fault_test")
+        target("sluice_grep_integration_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_grep_integration_test.cpp",
+                      app_dir .. "/grep_task.cpp", app_dir .. "/matcher.cpp")
+            add_tests("sluice_grep_integration_test")
+    end
+end
+
+-- sluice-tail tests (file-tools track Phase E): engine last-N + follow +
+-- truncation (real files, real backend, bounded CV waits, request_stop
+-- termination); CLI parsing. Explicit literal add_tests (see the sluice-hash
+-- note).
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-tail"
+    if os.isfile(app_dir .. "/tail_task.cpp") then
+        target("sluice_tail_scan_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_tail_scan_test.cpp",
+                      app_dir .. "/tail_task.cpp")
+            add_tests("sluice_tail_scan_test")
+        target("sluice_tail_cli_parse_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_tail_cli_parse_test.cpp",
+                      app_dir .. "/cli_parse.cpp")
+            add_tests("sluice_tail_cli_parse_test")
+    end
+end
+
+-- sluice-tail CLI end-to-end integration: fork/exec the REAL sluice-tail
+-- binary (depends on the app target; runs from the binary directory like
+-- the sluice-copy CLI tests) — finite tail, exit codes, and the SIGINT
+-- follow-termination path.
+do
+    local R = SLUICE_ROOT
+    local cli_src = R .. "tests/sluice_tail_cli_integration_test.cpp"
+    if os.isfile(cli_src) and os.isfile(R .. "apps/sluice-tail/main.cpp") then
+        target("sluice_tail_cli_integration_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async", "sluice-tail")
+            add_includedirs(R .. "include")
+            add_files(cli_src)
+            add_tests("sluice_tail_cli_integration_test")
+    end
+end

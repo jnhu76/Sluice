@@ -165,19 +165,39 @@ For the full verification matrix, see [`docs/verification/README.md`](docs/verif
 ```
 include/sluice/          Public headers (core + async)
 src/                     Implementation (core + async)
+apps/                    Real user-facing programs (see Applications below)
 tests/                   Correctness tests (one binary per slice)
-examples/                Runnable examples
+examples/                Capability demonstrations
 bench/                   Microbenchmarks (CSV output)
 docs/                    Architecture, design, history, roadmap, verification
   architecture/          Current architecture documents
   design/                Active proposed designs
   adr/                   Accepted Architecture Decisions
+  applications/          Application-track plans and findings
   history/               Closeout records, implementation plans, formal designs, reviews
   verification/          Verification matrix and scripts
   roadmap/               Active future work
 scripts/                 Build/analysis helpers
 xmake/                   Build configuration
 ```
+
+## Applications
+
+`apps/` holds real command-line programs built entirely on the public
+headers (no test seams, no `src/` includes) — distinct from `examples/`,
+which are capability demonstrations:
+
+- `sluice-copy` — bounded asynchronous safe file copy (temp file + atomic
+  rename, optional durability)
+- `sluice-hash` — bounded streaming SHA-256 file hashing
+- `sluice-grep` — bounded streaming literal search
+- `sluice-tail` — bounded last-N + follow-mode tailing with clean Ctrl-C
+  cancellation
+
+Build one with `xmake build sluice-copy` (etc.); each has its own README
+with CLI, semantics, resource bounds, and measured behavior. The
+application-track evidence lives in
+[docs/applications/file-tools-findings.md](docs/applications/file-tools-findings.md).
 
 ## Known limitations
 

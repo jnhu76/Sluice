@@ -160,19 +160,35 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 ```
 include/sluice/          公开头文件（core + async）
 src/                     实现（core + async）
+apps/                    真实面向用户的程序（见下方“应用程序”）
 tests/                   正确性测试（每个 slice 一个二进制）
-examples/                可运行示例
+examples/                能力演示示例
 bench/                   微基准测试（CSV 输出）
 docs/                    架构、设计、历史、路线图、验证
   architecture/          当前架构文档
   design/                活跃提议设计
   adr/                   已接受的架构决策
+  applications/          应用轨道计划与实践报告
   history/               收尾记录、实现计划、形式化设计、审查
   verification/          验证矩阵和脚本
   roadmap/               活跃未来工作
 scripts/                 构建/分析辅助工具
 xmake/                   构建配置
 ```
+
+## 应用程序
+
+`apps/` 下的程序完全构建在公开头文件之上（无测试缝隙、不包含
+`src/`），与 `examples/`（能力演示）相区分：
+
+- `sluice-copy` —— 有界异步安全文件复制（临时文件 + 原子 rename，可选持久化）
+- `sluice-hash` —— 有界流式 SHA-256 文件哈希
+- `sluice-grep` —— 有界流式字面量搜索
+- `sluice-tail` —— 有界 last-N + follow 模式尾部跟踪（Ctrl-C 干净取消）
+
+使用 `xmake build sluice-copy` 等命令构建；每个应用有自己的 README
+（CLI、语义、资源上界与实测行为）。应用轨道的实践证据见
+[docs/applications/file-tools-findings.md](docs/applications/file-tools-findings.md)。
 
 ## 已知限制
 
