@@ -30,7 +30,7 @@ structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 |--------|-------|
 | `.tla` files | 79 |
 | `.cfg` files | 174 |
-| Model directories under `docs/spec/` | 14 |
+| Model directories under `docs/spec/` | 14 | <!-- old-path-ok -->
 | Loose files in `spec/tla/` | 3 (BlockingIoPool) |
 | Verifiers in `scripts/` (root) | 7 |
 | Verifiers in `tools/formal/` | 2 | <!-- old-path-ok -->
@@ -42,7 +42,7 @@ structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 |--------|-------|
 | `.tla` files | 79 |
 | `.cfg` files | 174 |
-| Model directories under `docs/spec/` | 0 |
+| Model directories under `docs/spec/` | 0 | <!-- old-path-ok -->
 | Loose files in `spec/tla/` | 0 (all packaged) |
 | Verifiers in `scripts/` (root) | 0 |
 | Verifiers in `tools/formal/` | 0 | <!-- old-path-ok -->
