@@ -1755,15 +1755,16 @@ std::size_t Scheduler::runnable_count() const {
 }
 
 bool Scheduler::unguarded_progress_pending_locked() const {
-    // G1 repair: see the header contract. Observer checks first (cheap, the
-    // common parked-delegation case): while a fiber executes somewhere or
-    // the backend-domain participant exists, parked workers are delegating
-    // to a live observer and may sleep.
-    if (running_fiber_count_.load(std::memory_order_acquire) > 0 ||
-        backend_wait_active_.load(std::memory_order_acquire) ||
-        admission_ != AdmissionState::none) {
-        return false;
-    }
+    // G1 repair: see the header contract. Issue #115 follow-up: the runnable
+    // checks come FIRST — a running Fiber is an observer for ITSELF, never
+    // for another runnable ticket queued behind it on some worker's queue.
+    // When a stealable ticket exists, the last steal-capable worker MUST
+    // refuse the park (re-loop, steal, become the executor): a publication
+    // that landed entirely before this worker's park G-section is invisible
+    // to the wake epoch (its signal is consumed by the baseline the park is
+    // about to record), so this recheck is that publication's ONLY transport.
+    // Ordering the observer exemption first would strand the ticket until
+    // the busy owner happens to drain it — the #115 final state.
     if (!pending_spawn_.empty()) {
         return true;
     }
@@ -1781,6 +1782,16 @@ bool Scheduler::unguarded_progress_pending_locked() const {
         if (!w->local_runnable.empty()) {
             return true;
         }
+    }
+    // Observer checks (the parked-delegation case): no runnable ticket
+    // remains, so accepted backend work and resident waits may delegate to a
+    // live observer — a fiber executing somewhere, the MW-S2 participant
+    // parked in / committed to the backend-domain wait (its bridge covers
+    // backend progress), or an admission in flight.
+    if (running_fiber_count_.load(std::memory_order_acquire) > 0 ||
+        backend_wait_active_.load(std::memory_order_acquire) ||
+        admission_ != AdmissionState::none) {
+        return false;
     }
     // ctx_.outstanding() takes access_mtx_ — the accepted global→access
     // order (classify_locked uses it under the same lock).

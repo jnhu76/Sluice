@@ -1406,6 +1406,17 @@ private:
     // currently executing, the MW-S2 participant parked in / committed to
     // the backend-domain wait, or an admission in flight (the admission
     // holder is cycling; if it abandons, it re-evaluates rather than park).
+    // Issue #115 follow-up — CHECK PRIORITY: the runnable-ticket checks
+    // (pending_spawn_ / any local queue) run BEFORE the observer exemption.
+    // A runnable ticket is never delegatable to a running Fiber: a running
+    // Fiber is an observer for ITSELF, not for another ticket queued behind
+    // it, and a publication landing entirely before the park's G-section is
+    // invisible to the wake epoch (its signal is absorbed by the baseline
+    // the park records under the same G-section) — this recheck is that
+    // publication's only transport. The observer exemption therefore covers
+    // only accepted backend work and resident waits, whose designated
+    // observer is the MW-S2 participant (its bridge wakes on backend
+    // progress).
     bool unguarded_progress_pending_locked() const SLUICE_REQUIRES(global_mtx_);
 
     // Get the current Worker's WorkerState (worker-local via TLS).
