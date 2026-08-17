@@ -362,4 +362,110 @@ SLUICE_TEST_CASE(issue115_spawn_on_idle_target_delivers_once) {
                  wid_f0.load(std::memory_order_acquire));  // the other worker
 }
 
+// ---- Test D: pre-baseline publication must REFUSE the park (G1) -------------
+// The other half of #115: the publication lands entirely BEFORE the park's
+// baseline record — while the parking worker sits at the park-commit seam
+// (strictly pre-baseline, no locks held). Its wake signal (epoch E -> E+1)
+// is then CONSUMED by the baseline the worker records on resume (baseline =
+// E+1; the cv predicate compares against it and never fires), so the ONLY
+// remaining transport is the G1 persistent-state recheck under global_mtx_.
+// That recheck must not be short-circuited by the observer exemption: a
+// running Fiber (F1 on busy W1) is an observer for ITSELF, not for another
+// runnable ticket (F2) queued behind it. Deterministic by construction: the
+// seam holds W0 at the commit boundary with the publication strictly before
+// the baseline; current-HEAD strands (watchdog rescue fails the case), the
+// fixed G1 refuses the park -> re-loop -> steal -> F2 executes exactly once.
+SLUICE_TEST_CASE(issue115_absorbed_publication_refuses_park) {
+    if constexpr (!sa::fiber_ctx::supported) return;
+
+    sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    stest::ControllerGuard ctrl(sched);
+
+    Rendezvous hold_f1;
+    Rendezvous f0_until_f1_started;
+    std::atomic<bool> f1_started{false};
+    std::atomic<bool> f2_ran{false};
+    std::atomic<int> f2_runs{0};
+    std::atomic<unsigned> wid_f0{static_cast<unsigned>(-1)};
+    std::atomic<unsigned> wid_f1{static_cast<unsigned>(-1)};
+    std::atomic<unsigned> wid_f2{static_cast<unsigned>(-1)};
+
+    Fiber f0, f1, f2;
+    f0.set_entry([&](Fiber&) {
+        wid_f0.store(Scheduler::current_worker_id(), std::memory_order_release);
+        // Pin the roles (see test A): stay a running observer on W0 until F1
+        // has STARTED on W1 (popped + Running, unstealable), so W0's later
+        // steal attempt provably fails against an empty W1 queue.
+        f0_until_f1_started.wait();
+    });
+    f1.set_entry([&](Fiber&) {
+        wid_f1.store(Scheduler::current_worker_id(), std::memory_order_release);
+        f1_started.store(true, std::memory_order_release);
+        hold_f1.wait();  // W1 stays a running observer; cannot drain its queue
+    });
+    f2.set_entry([&](Fiber&) {
+        wid_f2.store(Scheduler::current_worker_id(), std::memory_order_release);
+        f2_runs.fetch_add(1, std::memory_order_acq_rel);
+        f2_ran.store(true, std::memory_order_release);
+    });
+
+    FiberStack s0, s1, s2;
+    SLUICE_CHECK(sched.init_fiber(f0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(f1, s1.base(), s1.size()));
+    SLUICE_CHECK(sched.init_fiber(f2, s2.base(), s2.size()));
+    // Pre-run spawns -> pending_spawn_; run(2) distributes f0->W0, f1->W1.
+    sched.spawn(f0);
+    sched.spawn(f1);
+
+    // Arm the PRE-baseline park-commit seam: whoever commits a wake-domain
+    // park pauses BEFORE the G1 recheck / baseline record, holding no locks.
+    stest::SchedulerParkSeam::arm_commit(sched);
+
+    std::thread runner([&] { sched.run(2); });
+
+    // W1 is inside F1 (running observer), held on the test rendezvous.
+    SLUICE_CHECK(wait_flag(f1_started, kWatchdog));
+    f0_until_f1_started.release();  // W0 finishes F0, fails its steal, parks
+
+    // W0 sits at the park-commit boundary: post last-steal, pre everything.
+    stest::SchedulerParkSeam::wait_commit_paused(sched);
+
+    // THE LOAD-BEARING PUBLICATION: strictly BEFORE the baseline, onto busy
+    // W1. Its epoch signal will be absorbed by the baseline W0 is about to
+    // record; the G1 persistent-state recheck is the only transport left.
+    sched.spawn_on(f2, /*worker_id=*/1);
+
+    // Release the commit boundary: W0 runs the G1 recheck. It MUST see F2 on
+    // W1's queue, REFUSE the park, re-loop, and steal F2 (the absorbed epoch
+    // cannot help it; no other wake source exists in this shape).
+    stest::SchedulerParkSeam::release_commit(sched);
+
+    const bool progressed = wait_flag(f2_ran, kWatchdog);
+    if (!progressed) {
+        // Absorbed-baseline strand reproduced: F2 runnable on busy W1's
+        // queue, steal-capable W0 asleep, epoch consumed by its baseline.
+        // Fail-closed evidence, then rescue through the EXTERNAL wake API.
+        sched.make_wake_handle().notify();
+        hold_f1.release();
+        SLUICE_CHECK(wait_flag(f2_ran, kWatchdog));
+    } else {
+        hold_f1.release();
+    }
+    runner.join();
+
+    SLUICE_CHECK(progressed);  // the G1 refusal alone must progress F2
+    SLUICE_CHECK(f2_runs.load() == 1);
+    SLUICE_CHECK(f2.state() == FiberState::done);
+    SLUICE_CHECK(f0.state() == FiberState::done);
+    SLUICE_CHECK(f1.state() == FiberState::done);
+    const unsigned parked = wid_f0.load(std::memory_order_acquire);
+    const unsigned busy = wid_f1.load(std::memory_order_acquire);
+    const unsigned ran_on = wid_f2.load(std::memory_order_acquire);
+    SLUICE_CHECK(busy != parked);       // roles pinned: F1 on the other worker
+    SLUICE_CHECK(ran_on == parked);     // the refuser re-looped and STOLE F2
+    SLUICE_CHECK(ran_on != busy);       // the busy owner never drained it
+    SLUICE_CHECK(sched.owner_id_of(f2) == ran_on);  // steal transferred owner
+}
+
 SLUICE_MAIN()
