@@ -263,11 +263,28 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
     if (participant_count != 0 &&
         !global_terminate_.load(std::memory_order_acquire)) {
         unsigned target = next_spawn_worker_++ % participant_count;
-        std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
-        workers_[target]->local_runnable.push_back(&fiber);
-        // E8: record the initial runnable owner (ADR §9.3.5.1 ownerRecord;
-        // production realization of the TLA+ ownerRecord[f]).
-        fiber_owner_[&fiber] = workers_[target].get();
+        {
+            std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
+            workers_[target]->local_runnable.push_back(&fiber);
+            // E8: record the initial runnable owner (ADR §9.3.5.1 ownerRecord;
+            // production realization of the TLA+ ownerRecord[f]).
+            fiber_owner_[&fiber] = workers_[target].get();
+        }
+        // Issue #115 (RP-1/RP-2): spawning onto a participant's queue is a NEW
+        // runnable publication and MUST publish the Scheduler wake obligation,
+        // exactly like route_runnable_locked. The target may be busy inside a
+        // Fiber and unable to drain its queue; without the wake-epoch advance
+        // every other worker already committed to the unbounded wake-domain
+        // park sleeps through the publication (inbox_cv has no waiter — all
+        // parks are on wake_cv_/wait_one — so the notify below is inert) and
+        // the stealable ticket strands. State first, then wake: queue
+        // membership is published above and the inbox lock is RELEASED before
+        // the signal (the park predicate holds wake_mtx_ while inspecting an
+        // inbox — never invert that edge). Safe under global_mtx_:
+        // signal_wake_locked only acquires wake_mtx_.
+        signal_wake_locked();
+        // Legacy transport retained (harmless): no production path waits on
+        // inbox_cv; the wake authority is the epoch advanced above.
         workers_[target]->inbox_cv.notify_one();
     } else {
         pending_spawn_.push_back(&fiber);
@@ -299,9 +316,15 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
         return;
     }
     WorkerState* tgt = workers_[worker_id].get();
-    std::lock_guard<std::mutex> wlk(tgt->inbox_mtx);
-    tgt->local_runnable.push_back(&fiber);
-    fiber_owner_[&fiber] = tgt;
+    {
+        std::lock_guard<std::mutex> wlk(tgt->inbox_mtx);
+        tgt->local_runnable.push_back(&fiber);
+        fiber_owner_[&fiber] = tgt;
+    }
+    // Issue #115: same wake obligation as spawn()/route_runnable_locked — the
+    // explicit target can be a BUSY worker that cannot drain its queue, and a
+    // parked steal-capable peer must observe the publication (see spawn()).
+    signal_wake_locked();
     tgt->inbox_cv.notify_one();
 }
 

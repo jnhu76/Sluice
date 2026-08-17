@@ -288,13 +288,18 @@ public:
 
     // Enqueue a Fiber as runnable. Round-robin assignment to a Worker (E7-B
     // refines). E7-A: assigns to worker 0 (single-worker compatible).
+    // Issue #115: an active-run publication advances the Scheduler wake
+    // epoch (same obligation as every runnable publication) so a worker
+    // already parked on the wake domain observes the new ticket even when
+    // the assigned target worker is busy inside a Fiber.
     void spawn(Fiber& fiber) noexcept;
 
     // E8 test seam: spawn `fiber` directly onto worker `worker_id`'s
     // local_runnable. Narrow deterministic-test hook (mirrors the E7-T11
     // admission seam discipline); exposes no public production contract.
     // Used by E8 tests to place a victim on a specific worker without the
-    // round-robin nondeterminism of spawn(). Records the owner.
+    // round-robin nondeterminism of spawn(). Records the owner. Publishes
+    // the same Scheduler wake obligation as spawn() (Issue #115).
     void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
 
     // Run the scheduler with `worker_count` worker threads until global idle
