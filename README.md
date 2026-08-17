@@ -9,8 +9,9 @@ backends decide **how** each operation executes.
 ![Sluice high-level architecture](docs/assets/architecture/sluice-high-level-layered-view.png)
 
 *In the diagram, `network` and `external-memory data structures` are future
-workload directions, not implemented capability — see
-[Project status](#project-status).*
+workload directions, not implemented capability. `ThreadPoolBackend (portable)`
+describes its `std::thread` / no-liburing implementation strategy, not completed
+cross-platform validation — see [Project status](#project-status).*
 
 ## What is Sluice?
 
@@ -29,8 +30,11 @@ be coupled to backend execution.
   caller-owned `Completion<T>` operations, `ThreadPoolBackend`, and the
   `ApplicationRuntime` lifecycle layer.
 
-Errors are values (`Result<T>`), never exceptions. The design is inspired by
-Zig's `std.Io`, adapted to C++20 idioms — it is not a port.
+I/O failures are represented as values (`Result<T>` / `IoError`) rather than
+being reported through the I/O API as exceptions. Ordinary C++ exceptions
+from value construction, allocation, or user code remain ordinary C++
+exceptions. The design is inspired by Zig's `std.Io`, adapted to C++20 idioms
+— it is not a port.
 
 ## Why explicit I/O?
 
@@ -43,11 +47,12 @@ The backend decides how the operation executes
 ```
 
 - **Backend-neutral surface** — replacing `ThreadPoolBackend` with another
-  backend does not rewrite application code.
+  compatible backend does not require rewriting the operation-level application
+  logic.
 - **Explicit operations** — reads, writes, and syncs are positional op
   descriptors submitted through public APIs.
 - **Explicit results** — every operation resolves to a caller-owned
-  `Completion<T>` / `Result<T>`; failure is a value you handle.
+  `Completion<T>` / `Result<T>`; I/O failure is a value you handle.
 - **Caller-owned buffers** — buffers and Completions stay alive and
   address-stable for the documented request lifetime.
 - **Cooperative cancellation** — cancellation is explicit and cooperative; a
@@ -61,8 +66,10 @@ without a filesystem or a mock framework.
 
 ## Quick start
 
-Requires Linux (the synchronous core also works on macOS/WSL),
-[xmake](https://xmake.io), and a C++20 compiler (Clang recommended).
+Current validation is Linux/WSL-centric. You need
+[xmake](https://xmake.io) and a C++20 compiler (Clang recommended). The
+synchronous core is POSIX-oriented and contains macOS-compatible code paths,
+but broader non-Linux portability evidence is still incomplete.
 
 ```bash
 git clone https://github.com/jnhu76/Sluice.git
@@ -117,25 +124,29 @@ int main() {
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cstddef>
 #include <cstdio>
 #include <memory>
 
 int main() {
     using namespace sluice::async;
 
-    int fd = ::open("/tmp/sluice-quickstart.txt",
-                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return 1;
-
     RuntimeBuilder builder;
     builder.backend(std::make_unique<ThreadPoolBackend>()).workers(1);
     auto built = builder.build();
-    if (!built.has_value()) return 2;
+    if (!built.has_value()) return 1;
     ApplicationRuntime& rt = *built.value();
 
-    if (!rt.start().has_value()) return 3;
+    if (!rt.start().has_value()) return 2;
 
-    auto task = rt.submit([&fd](RuntimeTaskContext& ctx) {
+    int fd = ::open("/tmp/sluice-quickstart.txt",
+                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        (void)rt.shutdown();
+        return 3;
+    }
+
+    auto task = rt.submit([fd](RuntimeTaskContext& ctx) {
         static constexpr char msg[] = "hello explicit I/O\n";
         Completion<std::size_t> done;
         if (!ctx.submit_write(WriteOp{fd,
@@ -145,15 +156,26 @@ int main() {
                  .has_value())
             return;
         (void)ctx.await_completion(done);  // task suspends until the op is ready
-        auto n = done.result();            // Result<std::size_t>: errors are values
+        auto n = done.result();            // Result<std::size_t>: I/O errors are values
         if (n.has_value()) std::printf("wrote %zu bytes\n", n.value());
-        ::close(fd);
     });
-    if (!task.has_value()) return 4;
+    if (!task.has_value()) {
+        ::close(fd);
+        (void)rt.shutdown();
+        return 4;
+    }
 
-    rt.request_stop();               // close admission, publish stop
-    if (!rt.drain().has_value()) return 5;  // wait for tasks + outstanding I/O
-    if (!rt.join().has_value()) return 6;   // join driver, release resources
+    rt.request_stop();
+    auto drained = rt.drain();
+    if (!drained.has_value()) {
+        (void)rt.shutdown();
+        ::close(fd);
+        return 5;
+    }
+
+    auto joined = rt.join();
+    ::close(fd);
+    if (!joined.has_value()) return 6;
     return 0;
 }
 ```
@@ -180,8 +202,9 @@ evidence, and comparisons with system tools — see
 
 ## Backends
 
-- `ThreadPoolBackend` — the portable default real backend: a fixed pool of
-  persistent blocking-I/O workers over `std::thread`.
+- `ThreadPoolBackend` — the default real backend: a fixed pool of persistent
+  blocking-I/O workers implemented with `std::thread`; it has no liburing
+  dependency.
 - `UringAsyncBackend` — experimental Linux io_uring; build-gated behind
   `--with-liburing`, off by default.
 - `FakeAsyncBackend` — a deterministic testing backend for exact, scripted
@@ -213,8 +236,9 @@ made beyond the measured application evidence.
 - [Developer documentation hub](docs/README.md) — how Sluice works and how to
   change it
 - [Architecture overview](docs/architecture/overview.md)
-- [API reference (English)](docs/reference/api.md) ·
-  [API reference (中文)](docs/reference/api.zh-CN.md)
+- [API reference (canonical, English)](docs/reference/api.md)
+- [Reference index](docs/reference/README.md) — includes the Chinese companion
+  reference and its synchronization rules
 - [Applications: what real workloads taught us](docs/applications/README.md)
 - [Verification matrix](docs/verification/README.md) — sanitizers,
   deterministic causal tests, formal models
@@ -222,5 +246,4 @@ made beyond the measured application evidence.
 
 ## License
 
-No license has been declared yet; the repository owner retains all rights
-until one is added.
+Sluice is licensed under the [MIT License](LICENSE).

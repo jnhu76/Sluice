@@ -8,7 +8,9 @@ Sluice 是一个实验性的 C++20 explicit-I/O 运行时：应用代码通过�
 ![Sluice 高层架构](docs/assets/architecture/sluice-high-level-layered-view.png)
 
 *图中 `network` 与 `external-memory data structures` 属于未来的工作负载
-方向，不是已实现的能力——见[项目状态](#项目状态)。*
+方向，不是已实现的能力。`ThreadPoolBackend (portable)` 表示它采用
+`std::thread`、不依赖 liburing 的实现策略，并不表示跨平台验证已经完成——
+见[项目状态](#项目状态)。*
 
 ## Sluice 是什么？
 
@@ -25,8 +27,9 @@ Sluice 是一个实验性的 C++20 explicit-I/O 运行时：应用代码通过�
   `Completion<T>` 操作、`ThreadPoolBackend` 和 `ApplicationRuntime`
   生命周期层。
 
-错误是值（`Result<T>`），绝不是异常。设计受 Zig `std.Io` 启发并适配
-C++20 惯用法——它不是移植。
+I/O 失败通过值（`Result<T>` / `IoError`）表达，而不是由 I/O API 通过异常
+报告。值构造、内存分配或用户代码自身产生的普通 C++ 异常仍遵循普通 C++
+语义。设计受 Zig `std.Io` 启发并适配 C++20 惯用法——它不是移植。
 
 ## 为什么选择 explicit I/O？
 
@@ -38,27 +41,28 @@ Sluice 公开 API 拥有操作语义
 后端决定操作如何执行
 ```
 
-- **后端无关接口** —— 用其他后端替换 `ThreadPoolBackend` 不需要改写
-  应用代码。
+- **后端无关接口** —— 用另一个兼容后端替换 `ThreadPoolBackend` 时，不需要
+  改写操作层的应用逻辑。
 - **显式操作** —— 读、写、同步都是以位置型操作描述符形式经公开 API
   提交的。
 - **显式结果** —— 每个操作都解析为调用者持有的
-  `Completion<T>` / `Result<T>`；失败是需要处理的值。
+  `Completion<T>` / `Result<T>`；I/O 失败是需要处理的值。
 - **调用者持有缓冲区** —— 缓冲区与 Completion 在文档声明的请求生命周期
   内保持存活且地址稳定。
 - **协作式取消** —— 取消是显式且协作式的；真实的 syscall 结果绝不会被
-  改写成"已取消"。
+  改写成“已取消”。
 - **有界资源** —— 请求容量、worker 数量、队列深度都是显式上界，而非
   意外增长。
 
-同样的"表达 vs 执行"分离也用于测试：`MemoryIoContext` 与
+同样的“表达 vs 执行”分离也用于测试：`MemoryIoContext` 与
 `FakeAsyncBackend` 提供确定性的内存与故障注入测试，无需文件系统，也
 无需 mock 框架。
 
 ## 快速开始
 
-需要 Linux（同步核心也可在 macOS/WSL 使用）、[xmake](https://xmake.io)
-和 C++20 编译器（推荐 Clang）。
+当前验证以 Linux/WSL 为主。你需要 [xmake](https://xmake.io) 和 C++20
+编译器（推荐 Clang）。同步核心面向 POSIX，也包含兼容 macOS 的代码路径，
+但更广泛的非 Linux 可移植性证据仍不完整。
 
 ```bash
 git clone https://github.com/jnhu76/Sluice.git
@@ -113,25 +117,29 @@ int main() {
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cstddef>
 #include <cstdio>
 #include <memory>
 
 int main() {
     using namespace sluice::async;
 
-    int fd = ::open("/tmp/sluice-quickstart.txt",
-                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return 1;
-
     RuntimeBuilder builder;
     builder.backend(std::make_unique<ThreadPoolBackend>()).workers(1);
     auto built = builder.build();
-    if (!built.has_value()) return 2;
+    if (!built.has_value()) return 1;
     ApplicationRuntime& rt = *built.value();
 
-    if (!rt.start().has_value()) return 3;
+    if (!rt.start().has_value()) return 2;
 
-    auto task = rt.submit([&fd](RuntimeTaskContext& ctx) {
+    int fd = ::open("/tmp/sluice-quickstart.txt",
+                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        (void)rt.shutdown();
+        return 3;
+    }
+
+    auto task = rt.submit([fd](RuntimeTaskContext& ctx) {
         static constexpr char msg[] = "hello explicit I/O\n";
         Completion<std::size_t> done;
         if (!ctx.submit_write(WriteOp{fd,
@@ -141,15 +149,26 @@ int main() {
                  .has_value())
             return;
         (void)ctx.await_completion(done);  // 任务挂起，直到操作就绪
-        auto n = done.result();            // Result<std::size_t>：错误是值
+        auto n = done.result();            // Result<std::size_t>：I/O 错误是值
         if (n.has_value()) std::printf("wrote %zu bytes\n", n.value());
-        ::close(fd);
     });
-    if (!task.has_value()) return 4;
+    if (!task.has_value()) {
+        ::close(fd);
+        (void)rt.shutdown();
+        return 4;
+    }
 
-    rt.request_stop();               // 关闭准入，发布停止
-    if (!rt.drain().has_value()) return 5;  // 等待任务与未完成 I/O
-    if (!rt.join().has_value()) return 6;   // join 驱动线程，释放资源
+    rt.request_stop();
+    auto drained = rt.drain();
+    if (!drained.has_value()) {
+        (void)rt.shutdown();
+        ::close(fd);
+        return 5;
+    }
+
+    auto joined = rt.join();
+    ::close(fd);
+    if (!joined.has_value()) return 6;
     return 0;
 }
 ```
@@ -176,8 +195,8 @@ int main() {
 
 ## 后端
 
-- `ThreadPoolBackend` —— 可移植的默认真实后端：基于 `std::thread` 的
-  固定持久阻塞 I/O worker 池。
+- `ThreadPoolBackend` —— 默认真实后端：使用 `std::thread` 实现固定数量、
+  持久存在的阻塞 I/O worker，不依赖 liburing。
 - `UringAsyncBackend` —— 实验性 Linux io_uring；由 `--with-liburing`
   构建门控，默认关闭。
 - `FakeAsyncBackend` —— 确定性测试后端，提供精确、可编排的完成行为。
@@ -205,8 +224,8 @@ Sluice 是研究质量的实验性软件：平台支持以 Linux 为中心（fib
 
 - [开发者文档枢纽](docs/README.md) —— Sluice 如何工作、如何修改
 - [架构概览](docs/architecture/overview.md)
-- [API 参考（中文）](docs/reference/api.zh-CN.md) ·
-  [API Reference (English)](docs/reference/api.md)
+- [API 参考（英文 canonical）](docs/reference/api.md)
+- [Reference 索引](docs/reference/README.md) —— 包含中文伴随版以及同步维护规则
 - [应用轨道：真实工作负载带来的发现](docs/applications/README.md)
 - [验证矩阵](docs/verification/README.md) —— sanitizer、确定性因果
   测试、形式化模型
@@ -214,4 +233,4 @@ Sluice 是研究质量的实验性软件：平台支持以 Linux 为中心（fib
 
 ## 许可证
 
-尚未声明许可证；在添加之前，仓库所有者保留所有权利。
+Sluice 采用 [MIT License](LICENSE)。
