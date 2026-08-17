@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1113 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1144 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 504 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
@@ -43,6 +43,10 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
+Post-freeze corrective deltas update the count here with their attribution:
+`scheduler_park_wake.cpp` 1113 → 1144 (2026-08-17, Issue #116 — test-only
+`SLUICE_ASYNC_INTERNAL_TESTING` forensics extension of
+`dump_park_forensics_for_test`; production park/wake behavior unchanged).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

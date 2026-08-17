@@ -457,6 +457,12 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
     const char* admission = "none";
     std::size_t w_size = 0, w_void = 0, w_ready = 0, w_waitq = 0, w_select = 0;
     std::size_t pending_spawn = 0;
+    // Issue #116 liveness forensics: the coordinated-run / convergence /
+    // obligation counters a stalled-run classification argument needs. Same
+    // domain (global_mtx_) as the fields above; printed with Domain 1.
+    unsigned active_workers = 0, live_loop = 0, idle_now = 0;
+    std::size_t running_fibers = 0;
+    bool global_term = false, in_run = false;
     {
         LockGuard glk(global_mtx_);
         worker_ptrs.reserve(workers_.size());
@@ -474,7 +480,32 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
         w_waitq = waiting_waitq_count_;
         w_select = waiting_select_count_;
         pending_spawn = pending_spawn_.size();
+        active_workers = active_worker_count_.load(std::memory_order_acquire);
+        live_loop = static_cast<unsigned>(live_loop_workers_);
+        idle_now = idle_workers_.load(std::memory_order_acquire);
+        running_fibers = running_fiber_count_.load(std::memory_order_acquire);
+        global_term = global_terminate_.load(std::memory_order_acquire);
+        in_run = in_coordinated_run_;
     }
+    // Wait-registry domain (leaf, taken separately — no nesting with G): the
+    // identity-waiter obligation counts classify_locked cannot see directly.
+    std::size_t wait_live = 0, wait_delivered = 0;
+    {
+        LockGuard rlk(wait_registry_mtx_);
+        wait_live = wait_record_live_count_;
+        for (WaitRecord* r = wait_delivered_head_; r != nullptr;
+             r = r->next_delivered) {
+            ++wait_delivered;
+        }
+    }
+    std::fprintf(stderr,
+                 "[park-forensics] run: active_workers=%u live_loop=%u "
+                 "idle=%u running_fibers=%zu terminate=%d in_coordinated=%d "
+                 "pending_spawn=%zu wait_live=%zu wait_delivered_pending=%zu\n",
+                 active_workers, live_loop, idle_now, running_fibers,
+                 global_term ? 1 : 0, in_run ? 1 : 0, pending_spawn, wait_live,
+                 wait_delivered);
+    std::fflush(stderr);
 
     // Domain 2: wake domain.
     std::uint64_t wake_epoch_now = 0;

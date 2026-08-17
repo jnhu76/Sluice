@@ -278,6 +278,15 @@ public:
     // reference remains owned by this Runtime and is valid only before terminal
     // close. Absent from the installed production build.
     Scheduler& test_scheduler_for_worker_topology() noexcept { return *sched_; }
+
+    // Issue #116 liveness forensics: race-free dump of the Runtime lifecycle /
+    // driver / control-epoch state at a permanent stall, followed by the
+    // Scheduler park-forensics dump. Called by a forensics test's watchdog on
+    // its bounded-timeout path (the run is presumed stalled: the driver is
+    // parked between invocations and workers have exited, so lifecycle_mtx_
+    // and every Scheduler lock are uncontended). Absent from the installed
+    // production build.
+    void test_dump_forensics(const char* tag);
 #endif
 
 private:

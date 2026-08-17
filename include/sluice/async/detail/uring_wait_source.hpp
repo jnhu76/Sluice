@@ -168,6 +168,10 @@ class UringWaitSource final : public BackendWaitSource {
                 // state deterministically. One-way latch; disarm by null.
                 if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
                     f->store(true, std::memory_order_release);
+                    // atomic::wait consumers: persistent state first, then
+                    // the notify — wait() re-checks the value atomically, so
+                    // the store+notify pair cannot lose the wake.
+                    f->notify_all();
                 }
 #endif
                 // Epoch check FIRST (a bump before this point is a wake we

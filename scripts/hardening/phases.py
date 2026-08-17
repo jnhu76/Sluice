@@ -112,6 +112,7 @@ VERSION_B_REQUIRED_SOAK_COMMANDS: List[str] = [
     "integration",
     "error-drains",
     "scripted-controller",
+    "forensics",
 ]
 VERSION_B_REQUIRED_TSAN_TARGETS: List[str] = VERSION_B_TSAN_SET
 VERSION_B_REQUIRED_ASANUBSAN_TARGETS: List[str] = VERSION_B_SET
@@ -874,9 +875,11 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
     (the 16-contract suite), real-file integration (full 100003-byte tiny-
     buffer workload on round 1 and every FULL_N_INTERVAL-th round; reduced
     N=10007 on intermediate rounds to avoid burning ~400k thread lifecycles
-    per round), fault-injection error drains, and scripted-backend controller
-    tests. Failures are sticky; the loop only stops early on 3 consecutive
-    unrecovered failures or an exhausted budget.
+    per round), fault-injection error drains, scripted-backend controller
+    tests, and the issue-116 liveness forensics round (out of the default
+    xmake test gate; driven here under the hardening soak with its own
+    in-process 20s watchdog). Failures are sticky; the loop only stops early
+    on 3 consecutive unrecovered failures or an exhausted budget.
     """
     if not ctx.baseline_ok:
         _log(ctx, "[version-b-soak][SKIP] baseline build failed")
@@ -919,6 +922,8 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
             ("error-drains", ["xmake", "run", "sluice_copy_fault_test"], None),
             ("scripted-controller",
              ["xmake", "run", "scripted_backend_test"], None),
+            ("forensics",
+             ["xmake", "run", "issue116_liveness_forensics_test"], None),
         ]
         for name, cmd, env in round_cmds:
             if ctx.remaining_seconds() < per_cmd:

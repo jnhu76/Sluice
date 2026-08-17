@@ -77,6 +77,10 @@ class ReadyWaitSource final : public BackendWaitSource {
         // deterministically. One-way latch; disarmed by setting a null pointer.
         if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
             f->store(true, std::memory_order_release);
+            // atomic::wait consumers: persistent state first, then the
+            // notify — wait() re-checks the value atomically, so the
+            // store+notify pair cannot lose the wake.
+            f->notify_all();
         }
         // D4-RM14 (P0-1) re-entry counter: counts EVERY wait_for_change entry
         // (monotonic — no reset race). The commit-to-park detector uses it to
