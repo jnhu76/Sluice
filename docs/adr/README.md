@@ -33,7 +33,7 @@ Architecture Decision Records for Sluice.
 - **Supersedes:** none
 - **Superseded by:** none
 - **Current authority?** Yes — defines G1-G11 guarantees and N1-N9 non-goals for the synchronous I/O layer.
-- **Implementation:** Jobs 017S–023S complete. See `docs/sync-io-architecture.md` and `docs/sync-io-model.md`.
+- **Implementation:** Jobs 017S–023S complete. See `docs/architecture/sync-io-architecture.md` and `docs/reference/sync-io-model.md`.
 - **Verification:** `tests/sync_contract_negative_test.cpp`
 
 ### ADR-async-io-model (016D): Async I/O Model
@@ -45,7 +45,9 @@ Architecture Decision Records for Sluice.
   authority; ADR-explicit-io-request-contract identifies a limited
   supersession scope. ADR-execution-model extends it.
 - **Current authority?** Yes — defines the three-layer L0/L1/L2 async model.
-- **Implementation:** Deferred behind sync-first readiness gate. L1 (Completion<T>, AsyncIoContext) not yet implemented.
+- **Implementation:** Implemented. L0/L1/L2 landed with the async runtime; the
+  request/publication portions are further governed by
+  ADR-explicit-io-completion-authority and ADR-explicit-io-request-contract.
 
 ### ADR-explicit-io-completion-authority: Completion Publication Authority
 
@@ -113,12 +115,12 @@ Architecture Decision Records for Sluice.
 - **Superseded by:** none
 - **Current authority?** Yes — accepted and implemented.
 - **Decides:** the architecture of the E16 Application Runtime layer — ownership, lifecycle, admission, cancellation, drain/join, destructor, restartability, error model, and public-surface direction.
-- **Design document:** `docs/design/e16-application-runtime.md`
+- **Design document:** `docs/history/implementation-plans/e16-application-runtime.md`
 - **Implementation:** Landed; see `include/sluice/async/application_runtime.hpp`,
   `src/async/application_runtime.cpp`, and the `application_runtime_*` tests.
 
 ## Historical notes
 
-- ADR-024S supplemented by `docs/io/sync-error-semantics.md`, `docs/history/closeout/sync-runtime-bench-notes.md`.
+- ADR-024S supplemented by `docs/reference/sync-error-semantics.md`, `docs/history/closeout/sync-runtime-bench-notes.md`.
 - ADR-async-io-model rests on `docs/history/implementation-plans/async-problem-statement.md`, `docs/history/implementation-plans/async-source-inventory.md`, `docs/history/implementation-plans/async-design-alternatives.md` (all historical).
 - ADR-execution-model governs the PHASE E job sequence in `docs/history/implementation-plans/zig-stdio-migration-jobs.md` (historical).

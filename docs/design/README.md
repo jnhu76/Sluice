@@ -27,7 +27,6 @@ The following future-phase proposals may exist:
 
 | Design | Status | Related ADR |
 |--------|--------|-------------|
-| [E16 Application Runtime](e16-application-runtime.md) | Proposed | [ADR-application-runtime](../adr/ADR-application-runtime.md) |
 | [Selectable / awaitable composability](selectable-async-composability-decision.md) | Decision — intentional defer (issue #99); no production work authorized | [ADR-async-io-model](../adr/ADR-async-io-model.md), [ADR-execution-model](../adr/ADR-execution-model.md) |
 | Fuzz infrastructure | Not yet proposed | — |
 
@@ -56,7 +55,7 @@ documents are historical:
 ## Navigation
 
 - **Current architecture** — `docs/architecture/`
-- **Public API contract** — `docs/api-reference.md`
+- **Public API contract** — `docs/reference/api.md`
 - **Active ADRs** — `docs/adr/README.md`
 - **Historical design docs** — `docs/history/implementation-plans/`, `docs/history/formal-design/`
 - **Historical closeout records** — `docs/history/closeout/`

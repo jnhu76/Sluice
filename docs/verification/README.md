@@ -152,5 +152,9 @@ bug-free.
 
 | Topic | Document |
 |-------|----------|
-| Formal models | `spec/tla/` |
-| io_uring validation | `docs/history/archive/liburing-validation-2026-07-03.md` |
+| Formal models | `spec/tla/` (inventory: `spec/tla/manifest.json`) |
+| Formal model documentation | [`formal-models.md`](formal-models.md), [`formal/`](formal/) |
+| io_uring / liburing validation runbook | [`io-uring-liburing-validation.md`](io-uring-liburing-validation.md) |
+| Local hardening gate | [`hardening.md`](hardening.md) |
+| Sync benchmark methodology (W1–W4) | [`sync-bench-methodology.md`](sync-bench-methodology.md) |
+| Sync benchmark matrix | [`sync-bench-matrix.md`](sync-bench-matrix.md) |

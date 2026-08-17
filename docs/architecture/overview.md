@@ -3,6 +3,26 @@
 Sluice is organized into two production libraries plus a test-only variant and
 optional experimental code.
 
+```text
+Applications & Workloads          apps/ — public headers only, no test seams
+        ↑ expresses I/O intent
+Public API Surface                include/sluice/ + docs/reference/
+        ↑ backend-neutral operations
+Synchronous Core                  sluice_core (Reader/Writer, Result, copy, WAL)
+Async Runtime                     sluice_async (Scheduler, Fiber, primitives,
+                                  Completion, ApplicationRuntime)
+        ↓ execution ownership
+Backends & System Capabilities    ThreadPoolBackend (default real backend),
+                                  UringAsyncBackend (experimental),
+                                  FakeAsyncBackend/SyncBackend (testing)
+```
+
+A rendered version of this layered view (including the future workload
+directions — networking and external-memory data structures, which are **not**
+implemented capability) is the canonical asset
+[`docs/assets/architecture/sluice-high-level-layered-view.png`](../assets/architecture/sluice-high-level-layered-view.png).
+Application-driven development context: `docs/applications/README.md`.
+
 ## Build boundaries
 
 ```
@@ -34,6 +54,8 @@ sluice_async (opt-in, separate static library)
 ├── Group (E29)
 ├── Batch (E30)
 ├── Completion<T> / AsyncIoContext
+├── ApplicationRuntime / RuntimeBuilder / RuntimeTaskContext
+│   (lifecycle layer: build → start → submit → stop → drain → join; ADR-application-runtime)
 ├── AsyncBackend (internal boundary)
 │   ├── FakeAsyncBackend (deterministic test vehicle)
 │   ├── ThreadPoolBackend (portable, std::thread)
@@ -63,7 +85,7 @@ sluice_experimental_uring ← depends on sluice_core, optional liburing
 
 | Category | Examples |
 |----------|----------|
-| **Public runtime capability** | Scheduler, Fiber, Event, Semaphore, AsyncMutex, AsyncCondition, AsyncQueue, AsyncRwLock, Select, Future, Group, Batch, CancellationToken |
+| **Public runtime capability** | Scheduler, Fiber, Event, Semaphore, AsyncMutex, AsyncCondition, AsyncQueue, AsyncRwLock, Select, Future, Group, Batch, CancellationToken, ApplicationRuntime |
 | **Internal scheduler substrate** | WaitNode, WaitQueue, TimerRegistration, Mutex (TSA-annotated) |
 | **Test-only seam** | SLUICE_ASYNC_INTERNAL_TESTING phase seams, FakeAsyncBackend held-pending mode |
 | **Experimental backend** | UringAsyncBackend, UringWriteBatch |

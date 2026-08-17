@@ -13,10 +13,26 @@ The following phases are **complete** and no longer active:
 - **E13 Select** — multi-arm Event/Timer select with deterministic causal tests
 - **E14 Threaded/Evented parity** — semantic parity between Threaded and Evented execution strategies
 - **E15 Runtime Foundation** — Mutex noexcept/fail-fast, Queue production implementation, cross-primitive closure, Future/Group/Batch
-- **E16 Application Runtime** — `ApplicationRuntime` / `RuntimeTaskContext` lifecycle layer ([ADR-application-runtime](../adr/ADR-application-runtime.md), Accepted; `api-reference.md` §`sluice::async::ApplicationRuntime`)
+- **E16 Application Runtime** — `ApplicationRuntime` / `RuntimeTaskContext` lifecycle layer ([ADR-application-runtime](../adr/ADR-application-runtime.md), Accepted; `docs/reference/api.md` §`sluice::async::ApplicationRuntime`)
 - **Sync runtime** — positional I/O, BlockingIoPool, W1–W4 benchmarks (ADR-024S)
+- **File-tools application track** — first application-driven round: `sluice-copy` (Version C), `sluice-hash`, `sluice-grep`, `sluice-tail` on public headers only ([applications](../applications/README.md), PR #122)
 
 ## Future work
+
+### Application-driven candidates (from the file-tools round)
+
+- **Status:** Backlog — evidence recorded, no design authorized.
+- `sluice-grep` matcher algorithm (SIMD/kwset-class) — the measured gap is
+  algorithmic, not runtime overhead
+  ([findings](../applications/file-tools-findings.md)).
+
+### Next workload directions
+
+- **Status:** Not started; evidence generators, not committed capability.
+- Network server/client workloads — the evidence source for any networking
+  API discussion ([applications](../applications/README.md)).
+- External-memory data structures (KV / B+ tree / LSM / storage-engine
+  components).
 
 ### v0.1.x hardening / bug hunt
 
