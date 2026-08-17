@@ -16,6 +16,10 @@ of those facts is the wrong tool; this gate checks them mechanically:
      resolve to real git objects.
   E. tracker references — #NNN references in docs/post-freeze/ must be in
      the explicit KNOWN_TRACKER_REFS registry (offline, deterministic).
+  F. test totals — ``test:default-gate-targets`` rows in docs/post-freeze/
+     must equal the mechanically counted default-`xmake test` gate size
+     (the ``running.test`` line count of a Linux Clang Debug run),
+     derived from the xmake lua registration constructs, not hand-typed.
 
 Fail-closed: exits non-zero on the first category with findings, printing
 the exact reproduction. --self-test plants violations in a temp dir and
@@ -137,7 +141,9 @@ def check_identifier_near_miss(canon, files=None):
 def check_doc_loc_claims(doc_paths, root=None):
     """Verify ``path`` | NNN | rows. If the row's line pins a commit SHA
     (historical snapshot claim), verify the line count AT that commit via
-    `git show`; otherwise verify against the current tree."""
+    `git show`; otherwise verify against the current tree. Rows with the
+    virtual ``test:`` path prefix are test-total claims handled by
+    check_test_total_claims, not file LOC claims."""
     errs = []
     for doc in doc_paths:
         for line in doc.read_text(errors="replace").splitlines():
@@ -145,6 +151,8 @@ def check_doc_loc_claims(doc_paths, root=None):
             if not m:
                 continue
             path, claimed = m.group(1).strip(), int(m.group(2))
+            if path.startswith("test:"):
+                continue  # verified by check_test_total_claims
             sha_m = SHA_RE.search(line)
             if sha_m:
                 sha = sha_m.group(0)
@@ -249,9 +257,183 @@ def check_tracker_refs(doc_paths):
     return errs
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# F. Test-total claims — the "NNN/NNN" test totals quoted in gate/evidence
+#    docs are derived mechanically, never hand-typed. The virtual-path row
+#      | `test:default-gate-targets` | NNN |
+#    must equal the number of tests registered into the default `xmake test`
+#    gate (Linux semantics: every current platform_gate includes linux).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Virtual row path reserved for the default-gate test-target count.
+TEST_TOTAL_ROW = "test:default-gate-targets"
+
+# Registration constructs used by xmake.lua / xmake/tests/*.lua. Mirrored
+# here so a registration change (add/remove/rename) that the docs do not
+# follow fails the gate instead of drifting silently.
+ONE_FILE_TARGET_RE = re.compile(
+    r'sluice_one_file_target\(\s*"(\w+)",\s*"(\w+)",\s*(.*?),\s*"([^"]+)"')
+WRAPPER_TEST_RE = re.compile(
+    r'sluice_(?:internal_async|production_async|one_file)_test\(\s*"([A-Za-z0-9_]+)"')
+ADD_TESTS_RE = re.compile(r'add_tests\(\s*"([A-Za-z0-9_]+)"')
+
+
+def _strip_lua_comments(text):
+    """Remove -- line comments while preserving "--" inside string literals
+    (only occurrence in the tree: xmake.lua's "--hardened" flag string).
+    The test lua files contain no --[[ ]] block comments today."""
+    out = []
+    in_str = False
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if in_str:
+            out.append(ch)
+            if ch == '"':
+                in_str = False
+            i += 1
+            continue
+        if text.startswith("--", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j + 1
+            continue
+        if ch == '"':
+            in_str = True
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _strip_liburing_guards(text):
+    """Drop `if has_liburing ...` / `if has_config("with-liburing") ...` blocks
+    (and their contents): those registrations exist only in real-liburing
+    builds, while the mechanically counted default gate is the stub build
+    (e.g. uring_submit_failure_test). Nested if/do/end are depth-counted so an
+    inner guard inside a target block does not swallow the target's own
+    add_tests."""
+    lines = text.splitlines(keepends=True)
+    out = []
+    depth = 0
+    in_guard = False
+    for ln in lines:
+        if not in_guard:
+            m = re.match(
+                r"\s*if\s+(?:has_liburing\b|has_config\s*\(\s*\"with-liburing\")",
+                ln)
+            if m:
+                in_guard = True
+                depth = 1
+                continue
+            out.append(ln)
+            continue
+        depth += len(re.findall(r"\b(?:then|do)\b", ln))
+        depth -= len(re.findall(r"\bend\b", ln))
+        if depth <= 0:
+            in_guard = False
+    return "".join(out)
+
+
+def _registered_test_names(text):
+    """All test names one lua source registers into the default gate."""
+    clean = _strip_liburing_guards(_strip_lua_comments(text))
+    names = set()
+    # Name tables: `local <tbl> = { "a", "b", ... }` (core.lua `tests`).
+    tables = {}
+    for m in re.finditer(r"local\s+(\w+)\s*=\s*\{(.*?)\}", clean, re.S):
+        tables[m.group(1)] = [
+            it.strip().strip('"') for it in m.group(2).split(",") if it.strip()
+        ]
+    # ipairs loops expanding sluice_one_file_target (core.lua: `t .. "_test"`).
+    for m in re.finditer(
+            r"for\s*_,\s*(\w+)\s+in\s+ipairs\(\s*(\w+)\s*\)\s*do", clean):
+        var, tbl = m.group(1), m.group(2)
+        items = tables.get(tbl)
+        if items is None:
+            continue
+        body = clean[m.end():]
+        cut = body.find("\nend")
+        if cut >= 0:
+            body = body[:cut]
+        for tm in ONE_FILE_TARGET_RE.finditer(body):
+            kind, group, name_arg, subdir = tm.groups()
+            if group != "test":
+                continue
+            if name_arg.strip().startswith(var + " .. "):
+                suffix = name_arg.split('"', 2)[1]
+                for item in items:
+                    names.add(item + suffix)
+            else:
+                names.add(name_arg.strip().strip('"'))
+    # Plain sluice_one_file_target / wrapper calls / explicit add_tests.
+    for m in ONE_FILE_TARGET_RE.finditer(clean):
+        kind, group, name_arg, subdir = m.groups()
+        if group == "test" and ".." not in name_arg:
+            names.add(name_arg.strip().strip('"'))
+    for m in WRAPPER_TEST_RE.finditer(clean):
+        names.add(m.group(1))
+    for m in ADD_TESTS_RE.finditer(clean):
+        names.add(m.group(1))
+    return names
+
+
+def default_gate_test_count(root=None):
+    """Mechanical count of tests registered into the default `xmake test`
+    gate (the number of `running.test` lines a Linux Clang Debug stub
+    `xmake test -v` executes). Scans xmake.lua plus every lua file under
+    xmake/ (helpers.lua contributes nothing: its add_tests calls take a
+    variable name, which the literal regexes ignore)."""
+    base = Path(root) if root else REPO
+    sources = []
+    if (base / "xmake.lua").is_file():
+        sources.append((base / "xmake.lua").read_text(errors="replace"))
+    xmake_dir = base / "xmake"
+    if xmake_dir.is_dir():
+        for f in sorted(xmake_dir.glob("*.lua")):
+            sources.append(f.read_text(errors="replace"))
+    test_dir = xmake_dir / "tests"
+    if test_dir.is_dir():
+        for f in sorted(test_dir.glob("*.lua")):
+            sources.append(f.read_text(errors="replace"))
+    names = set()
+    for s in sources:
+        names |= _registered_test_names(s)
+    return len(names)
+
+
+def check_test_total_claims(doc_paths, root=None):
+    errs = []
+    expected = default_gate_test_count(root)
+    for doc in doc_paths:
+        for line in doc.read_text(errors="replace").splitlines():
+            m = LOC_ROW_RE.search(line)
+            if not m:
+                continue
+            path, claimed = m.group(1).strip(), int(m.group(2))
+            if path != TEST_TOTAL_ROW:
+                continue
+            if claimed != expected:
+                errs.append(
+                    f"{doc.name}: claims default-gate test targets = {claimed}, "
+                    f"mechanical count = {expected} (Linux Clang Debug "
+                    f"`xmake test -v` `running.test` lines)"
+                )
+    return errs
+
+
 def fact_docs(root_dir=None):
     d = root_dir or FACT_DOCS_DIR
     return sorted(p for p in d.glob("*.md")) if d.is_dir() else []
+
+
+# Issue-116 fix docs carry test-total rows too; only check_test_total_claims
+# sees them (the other detectors keep their documented docs/post-freeze
+# scope — these docs quote e.g. `run_live#1` tokens that are not tracker
+# references and would trip the tracker-ref detector).
+TEST_TOTAL_EXTRA_DOCS = [
+    "docs/investigations/issue-116-runtime-reentry-liveness.md",
+    "docs/architecture/issue-116-reentry-liveness-gate.md",
+]
 
 
 def run_all():
@@ -265,6 +447,12 @@ def run_all():
     errs += check_split_layout(docs, root=REPO)
     errs += check_sha_references(docs)
     errs += check_tracker_refs(docs)
+    total_docs = list(docs)
+    for rel in TEST_TOTAL_EXTRA_DOCS:
+        p = REPO / rel
+        if p.is_file():
+            total_docs.append(p)
+    errs += check_test_total_claims(total_docs, root=REPO)
     return errs
 
 
@@ -312,6 +500,35 @@ def self_test():
         if not check_tracker_refs([doc]):
             failures.append("self-test: tracker-ref detector failed to fire")
 
+        # F: test-total claim mismatch. Minimal lua tree exercising every
+        # registration construct (wrapper, explicit target, ipairs loop,
+        # out-of-gate target without add_tests).
+        (t / "xmake" / "tests").mkdir(parents=True)
+        (t / "xmake.lua").write_text("includes('xmake/tests/t1.lua')\n")
+        (t / "xmake" / "tests" / "t1.lua").write_text(
+            'sluice_production_async_test("alpha_test")\n'
+            'target("beta_test")\n'
+            '    add_tests("beta_test")\n'
+            'end\n'
+            'target("off_gate_test")\n'
+            '    -- no add_tests: out of the default gate\n'
+            'end\n'
+            'local names = { "gamma", "delta" }\n'
+            'for _, n in ipairs(names) do\n'
+            '    sluice_one_file_target("binary", "test", n .. "_test", '
+            '"tests", "sluice_core")\n'
+            'end\n'
+        )
+        if default_gate_test_count(t) != 4:
+            failures.append("self-test: test-count parser mismatch "
+                            "(expected 4 registered targets)")
+        doc.write_text("|`test:default-gate-targets`|3|\n")
+        if not check_test_total_claims([doc], root=t):
+            failures.append("self-test: test-total detector failed to fire")
+        doc.write_text("|`test:default-gate-targets`|4|\n")
+        if check_test_total_claims([doc], root=t):
+            failures.append("self-test: test-total false positive on correct count")
+
         # Clean control: no false positives on canonical text.
         doc.write_text("Refs #109 and #113.\n|`docs/r.md`|2|\n")
         (t / "src" / "a.cpp").write_text("#define SLUICE_CANON_MACRO 1\n")
@@ -340,7 +557,7 @@ def main():
         print("reproduce: python3 scripts/gates/mechanical-facts.py")
         return 1
     print("mechanical-facts: OK (near-miss scan, LOC claims, split layout, "
-          "SHA refs, tracker refs)")
+          "SHA refs, tracker refs, test totals)")
     return 0
 
 

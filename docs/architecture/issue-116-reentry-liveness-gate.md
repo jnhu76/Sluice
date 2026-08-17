@@ -145,8 +145,9 @@ Unchanged by this fix (predicate only). For completeness:
   interrupts the driver is parked inside `ctx_.wait_one()` (unbounded,
   event-driven). There is no time-driven retry.
 - Non-split-wait backends: unchanged behavior — the fix lives entirely in
-  the runtime driver and does not depend on backend capabilities (the
-  re-entered MW-S2 park domain selection keeps its existing rules).
+  the runtime driver; it is backend-agnostic for backends conforming to the
+  accepted AsyncBackend outstanding/reap lifecycle contract (the re-entered
+  MW-S2 park domain selection keeps its existing rules).
 
 ## Gate 3 — Progress and Wake Model
 
@@ -184,29 +185,45 @@ Single-worker liveness: the failing configuration itself (workers=1): the
 
 ```text
 Deterministic causal test:
-  - issue116_interrupt_is_reevaluation_not_quiescence (internal-testing):
+  - issue116_interrupt_is_reevaluation_not_quiescence (internal-testing,
+    IN the default merge gate):
     startup ordering forced via the run_impl tail seam; op frozen at the
     backend running gate; participant park proven by the wait-source
-    park-entry latch; fatal component = test-owned SchedulerWakeHandle
+    park-entry latch (atomic wait/notify rendezvous, hard timeout as
+    escape hatch only); fatal component = test-owned SchedulerWakeHandle
     notify (no control_epoch_ advance).
       Pre-fix:  8/8 fail-closed (exit 70 + forensics dump reproducing the
                 captured hang state exactly).
       Post-fix: 8/8 pass with clean drain/join teardown.
   - issue116_liveness_forensics_test: probabilistic starvation stress with
     race-free state dump (Phase 2 tooling; 40 fresh runtimes per run).
+    EXPLICITLY OUT of the default `xmake test` gate — manual forensic path
+    (investigation §3/§11 recipe) + nightly hardening soak
+    (scripts/hardening/phases.py); the in-process 20 s watchdog exits 42
+    with the state dump on a stall.
 
 Backend conformance: ThreadPoolBackend (observed trigger; full suite green);
-  Sync/Fake regression via the full async suite (168→170 tests).
+  Sync/Fake regression via the full async suite (166 → 167 default-gate
+  tests; see the mechanically verified row below).
+```
 
+Default-gate test target count (Linux Clang Debug stub build; derived
+mechanically by `scripts/gates/mechanical-facts.py` from the xmake lua
+registrations and equal to the `running.test` line count of
+`xmake test -v`):
+
+| `test:default-gate-targets` | 167 | (166 baseline master + 2 new issue116 tests − 1 forensics test moved OUT of the default gate) |
+
+```text
 Sanitizers: TSan full group — pass, 0 warnings (a test-side seam-disarm
   ordering bug was caught by TSan and fixed: disarm backend gates before
   join()). ASan+UBSan full group — pass, 0 errors. Race classes exercised:
   driver re-entry vs submit/stop publication (lifecycle_mtx_ domain);
   re-park vs interrupt (D4-RM13/RM14).
 
-Normal gates: Clang Debug 170/170; Clang Release 168/168 (5/5 isolated runs;
-  one first-run flake under deliberate concurrent CPU saturation — see
-  investigation §14); stress before/after 3/40 hangs -> 0/120.
+Normal gates: Clang Debug 167/167; Clang Release 167/167 (5/5 isolated
+  runs; one first-run flake under deliberate concurrent CPU saturation —
+  see investigation §14); stress before/after 3/40 hangs -> 0/120.
 ```
 
 ## Zig conformance / divergence

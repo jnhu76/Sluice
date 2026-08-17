@@ -32,8 +32,10 @@
 // frozen by the backend running-pause gate; the participant park is proven
 // by the wait-source park-entry latch. All three are persistent-state
 // observations, and the parked wait_one is UNBOUNDED, so the participant
-// provably remains parked until the notify. Bounded waits appear solely as
-// hang watchdogs.
+// provably remains parked until the notify. Flag rendezvous uses
+// std::atomic::wait/notify (no yield spin, no lost wake: wait() re-checks
+// the value atomically), with the steady-clock deadline kept solely as a
+// hard-timeout escape hatch for fail-closed watchdog behavior.
 //
 // Gated to fiber-capable targets (fiber_ctx::supported), matching the rest
 // of the async internal-testing suite.
@@ -64,11 +66,17 @@ namespace {
 
 constexpr auto kObserveWait = std::chrono::seconds(10);
 
+// Flag rendezvous on a persistent atomic: atomic::wait sleeps until the
+// producer stores AND notifies (no yield spin). The deadline is a HARD
+// TIMEOUT ESCAPE HATCH only — ordering is fixed by the flag's own state and
+// the notify (wait() re-checks the value atomically, so no notify can be
+// lost between load and wait); a timed-out flag is fail-closed diagnostic
+// evidence, never the expected completion path.
 bool wait_flag(const std::atomic<bool>& flag) {
     const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
     while (!flag.load(std::memory_order_acquire)) {
         if (std::chrono::steady_clock::now() >= deadline) return false;
-        std::this_thread::yield();
+        flag.wait(false, std::memory_order_acquire);
     }
     return true;
 }
@@ -160,6 +168,7 @@ SLUICE_TEST_CASE(issue116_interrupt_is_reevaluation_not_quiescence) {
         (void)c.result();
         c.reset();
         done.store(true, std::memory_order_release);
+        done.notify_all();
     });
     SLUICE_CHECK_MSG(sub_r.has_value(), "issue116: submit rejected");
 

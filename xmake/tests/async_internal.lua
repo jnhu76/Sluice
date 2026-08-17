@@ -38,9 +38,30 @@ sluice_internal_async_test("issue116_interrupt_reevaluation_regression_test",
 -- copy-pipeline starvation stress with an in-process watchdog that dumps the
 -- race-free Runtime/Scheduler/backend state and exits 42 on a permanent stall.
 -- Diagnosis tooling for docs/investigations/issue-116-runtime-reentry-liveness.md;
--- the deterministic merge-gate regression is separate.
-sluice_internal_async_test("issue116_liveness_forensics_test",
-                           {platform_gate = {"linux"}})
+-- the deterministic merge-gate regression is the target above.
+--
+-- EXPLICITLY OUT of the default `xmake test` merge gate: probabilistic
+-- diagnostic tooling is not deterministic correctness evidence. The target
+-- is built with `xmake build -g test` and runs on demand (no add_tests
+-- registration, so `xmake test` never executes it):
+--
+--   SLUICE_TEST_FILTER=issue116_pipeline_forensics_starvation \
+--   xmake run issue116_liveness_forensics_test
+--
+-- plus the CPU-starvation recipe in the file header / investigation §3/§11.
+-- The nightly hardening soak also drives it (scripts/hardening/phases.py).
+do
+    local p = R .. "tests/issue116_liveness_forensics_test.cpp"
+    if os.isfile(p) and is_plat("linux") then
+        target("issue116_liveness_forensics_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(p)
+    end
+end
 
 -- E15-P2-02 Group::async_threaded exception-safety regression. Uses the
 -- test_set_tasks_throw_on_nth() seam (only available under

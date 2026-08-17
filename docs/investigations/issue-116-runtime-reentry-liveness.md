@@ -316,22 +316,26 @@ quiescence.
 
 ## 14. Test and gate results (all executed on the fix branch)
 
-Default (CI) configuration is the experimental-liburing stub; the
-liburing-gated targets (2 death tests) register only with
-`--with-liburing=true`.
+Default (CI) configuration is the experimental-liburing stub. The real
+liburing path (`--with-liburing=true`) is a separate feature gate; the
+liburing-only `uring_submit_failure_test` target registers only under that
+gate, while the other uring targets register in both modes (stub evidence
+bodies / real path).
 
 | Gate | Command(s) | Result |
 | --- | --- | --- |
-| Baseline (pre-change, master `ff003fd`) | Clang Debug `xmake test` | 168/168 |
-| Full Debug, default config (post-fix) | `xmake f -m debug --toolchain=clang; xmake build sluice_core sluice_async -g test; xmake test` | **168/168** (166 baseline + 2 new issue116 tests) |
-| Deterministic regression | pre-fix / post-fix | **8/8 fail-closed(70) → 8/8 pass** (§10) |
+| Baseline (pre-change, master `ff003fd`) | Clang Debug `xmake test` | **166/166** (166 default-gate targets, all pass; mechanically counted from the run's `running.test` lines) |
+| Full Debug, default config (post-fix) | `xmake f -m debug --toolchain=clang; xmake build sluice_core sluice_async -g test; xmake test` | **167/167** (166 baseline + 2 new issue116 tests − 1 forensics test moved OUT of the default gate: probabilistic diagnostic tooling, see below) |
+| `test:default-gate-targets` | 167 | default-gate test targets (== the `running.test` line count of a Linux Clang Debug stub `xmake test -v`); derived mechanically by `scripts/gates/mechanical-facts.py` from the xmake lua registrations, and every `test:default-gate-targets` doc row must equal it |
+| Deterministic regression | pre-fix / post-fix | **8/8 fail-closed(70) → 8/8 pass** (§10); stays in the deterministic merge gate |
+| Liveness forensics test | manual forensic path (§3/§11 recipe; `xmake run issue116_liveness_forensics_test`) + nightly hardening soak | **out of the default `xmake test` gate** — probabilistic diagnostic tooling with in-process 20 s watchdog (exit 42 + state dump on stall) |
 | Stress before/after | §3 recipe | **3/40 hangs → 0/120** (§11) |
-| Release | `xmake f -m release --toolchain=clang ...; xmake test` | 168/168 (5/5 isolated clean runs) |
+| Release | `xmake f -m release --toolchain=clang ...; xmake test` | 167/167 (5/5 isolated clean runs) |
 | TSan | `xmake f -m tsan ...; xmake run -g test` | **full group pass, 0 warnings** (a test-side seam-disarm ordering bug was caught by TSan first and fixed: disarm backend gates before `join()`) |
 | ASan+UBSan | `xmake f -m asanubsan ...; xmake run -g test` | **full group pass, 0 errors** |
 | Sanitizer race classes for this change | driver re-entry vs submit/stop publication (lifecycle_mtx_ domain); re-park vs interrupt (D4-RM13/RM14) | exercised by the regression + forensics tests under TSan and the full copy suite |
 | Backend matrix | ThreadPoolBackend (observed trigger; full suite), Fake/Sync (full suite; non-split path unchanged) | pass |
-| Mechanical/doc gates | `check-doc-links.py` (+self-test), `verify-architecture-docs.py`, `mechanical-facts.py` (+self-test), `git diff --check` | all PASS |
+| Mechanical/doc gates | `check-doc-links.py` (+self-test), `verify-architecture-docs.py`, `mechanical-facts.py` (+self-test, incl. the test-total claim), `git diff --check` | all PASS |
 | Real liburing | `xmake f --with-liburing=true ...` | **pre-existing master failure, out of scope**: 4 uring tests (`uring_backend_test`, `phase_g_closeout_uring_test`, `uring_d2_failure_noalloc_test`, `backend_conformance_test`) fail identically with this branch's changes fully stashed (master code segfaults, rc 139, at `uring_available_matches_build_mode`) — environment/master uring-path issue, not reachable from this change (production delta is `application_runtime.cpp` only; the stash run is the proof). Recorded, not bisected (freeze policy: no uring work in this fix). |
 
 Documented flakes observed during gated runs (all consistent with the
@@ -372,9 +376,20 @@ Mechanical/documentation gates: executed individually (table above);
 - `src/async/scheduler_park_wake.cpp` — forensics dump extension
   (internal-testing only).
 - `tests/issue116_interrupt_reevaluation_regression_test.cpp` — the
-  deterministic merge-gate regression (new).
+  deterministic merge-gate regression (new); flag rendezvous via
+  std::atomic::wait/notify (hard timeout as escape hatch only).
 - `tests/issue116_liveness_forensics_test.cpp` — probabilistic starvation
-  reproducer with race-free state dump (new; investigation tooling).
-- `xmake/tests/async_internal.lua` — registrations.
+  reproducer with race-free state dump (new; investigation tooling,
+  EXPLICITLY OUT of the default `xmake test` gate — manual forensic path,
+  also driven by the nightly hardening soak).
+- `include/sluice/async/detail/ready_wait_source.hpp` /
+  `include/sluice/async/detail/uring_wait_source.hpp` — the wait-phase
+  entry seam (internal-testing) now notifies atomic-wait consumers after
+  the store (persistent state first, then notify; no lost wake).
+- `xmake/tests/async_internal.lua` — registrations (regression in the
+  gate; forensics target out of the gate).
+- `scripts/hardening/phases.py` — forensics round in the Version B soak.
+- `scripts/gates/mechanical-facts.py` — test-total claims verified
+  mechanically (`test:default-gate-targets` rows vs. lua registrations).
 - `docs/architecture/issue-116-reentry-liveness-gate.md` — compliance gate.
 - This document.

@@ -13,12 +13,21 @@
 // exits 42 so an outer harness can count hangs WITH evidence:
 //
 //   SLUICE_TEST_FILTER=issue116_pipeline_forensics_starvation \
+//   xmake run issue116_liveness_forensics_test    # plain run (no starvation)
+//
+//   # CPU-starvation recipe from the investigation §3/§11:
+//   SLUICE_TEST_FILTER=issue116_pipeline_forensics_starvation \
 //   taskset -c 0-3 <binary>   # 3 CPU spinners on CPUs 0-3 alongside
 //
+// GATE STATUS: this file is EXPLICITLY OUT of the default `xmake test`
+// merge gate — it is probabilistic diagnostic tooling, not deterministic
+// correctness evidence. The target is built with `xmake build -g test` and
+// runs on demand as above; the nightly hardening soak drives it too
+// (scripts/hardening/phases.py). The deterministic merge-gate regression is
+// `tests/issue116_interrupt_reevaluation_regression_test.cpp`.
+//
 // This file is internal-testing only: it uses test_dump_forensics and the
-// ThreadPoolBackend *_for_test accessors. It is diagnosis tooling for the
-// investigation, NOT the deterministic merge-gate regression (that lands
-// after the interleaving is proven; see the investigation report).
+// ThreadPoolBackend *_for_test accessors.
 #include "harness.hpp"
 
 #include <sluice/async/application_runtime.hpp>
@@ -296,6 +305,11 @@ SLUICE_TEST_CASE(issue116_pipeline_forensics_starvation) {
 
     RoundWatchdog watchdog;
     int round = 0;
+    // The last round's file size: the destination file holds ONLY the last
+    // round's copy (the fd is truncated once at open, and each round rewrites
+    // it from offset 0), so the byte check below must verify exactly this
+    // many bytes — the source prefix of that length — and nothing more.
+    std::uint64_t last_round_size = 0;
     // The same edge-size-per-depth matrix as the integration test's
     // pipeline_integration_edge_sizes_per_depth (the captured CI hang family):
     // sizes 0, 1, B-1, B, B+1, depth*B, depth*B+1, 3*depth*B+7 across depths
@@ -311,6 +325,7 @@ SLUICE_TEST_CASE(issue116_pipeline_forensics_starvation) {
                                    static_cast<std::uint64_t>(kBuf) * depth * 3 + 7}) {
             ++round;
             const std::uint64_t file_size = size;
+            last_round_size = file_size;
             auto backend = std::make_unique<ThreadPoolBackend>();
             ThreadPoolBackend* raw_be = backend.get();
 
@@ -381,9 +396,14 @@ SLUICE_TEST_CASE(issue116_pipeline_forensics_starvation) {
         }
     }
 
-    // Verify the last round's destination bytes. Exact-read loops: a regular
-    // file read() may legitimately return short; comparing the raw return
-    // against len would misreport a correct copy.
+    // Verify the LAST round's destination bytes EXACTLY. The destination
+    // holds only the last round's copy — the first `last_round_size` bytes
+    // of the source — so the check must cover exactly that span and nothing
+    // beyond it. A read failure (premature EOF, short copy, I/O error) is a
+    // HARD failure: this check must never silently stop early, because an
+    // early stop would false-pass a truncated or wrong copy. Exact-read
+    // loops: a regular file read() may legitimately return short; comparing
+    // the raw return against len would misreport a correct copy.
     {
         std::vector<std::byte> a(kBuffer), b(kBuffer);
         std::uint64_t off = 0;
@@ -398,11 +418,17 @@ SLUICE_TEST_CASE(issue116_pipeline_forensics_starvation) {
             }
             return true;
         };
-        while (off < kFileSize) {
+        while (off < last_round_size) {
             std::size_t len = static_cast<std::size_t>(
-                std::min<std::uint64_t>(kBuffer, kFileSize - off));
-            if (!read_exact(src_fd, a.data(), len)) break;
-            if (!read_exact(dst_fd, b.data(), len)) break;
+                std::min<std::uint64_t>(kBuffer, last_round_size - off));
+            if (!read_exact(src_fd, a.data(), len)) {
+                SLUICE_FAIL("source read ended early during byte verification");
+            }
+            if (!read_exact(dst_fd, b.data(), len)) {
+                SLUICE_FAIL(
+                    "destination read ended early — copied bytes are missing "
+                    "(false-pass prevented)");
+            }
             SLUICE_CHECK(std::memcmp(a.data(), b.data(), len) == 0);
             off += len;
         }
