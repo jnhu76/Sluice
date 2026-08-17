@@ -103,9 +103,12 @@ int main(int argc, char** argv) {
         open_fds.push_back(fd);
     }
 
-    // Sink: print each match with the documented prefix rules. stdout is
-    // line-buffered enough for a pipe consumer: we fflush per file so a
-    // downstream reader sees progress without unbounded buffering.
+    // Sink: print each match with the documented prefix rules. When stdout
+    // is a TTY every line is flushed immediately (interactive use); to a
+    // pipe/file the output is stdio-buffered and flushed once after the
+    // scan (GNU grep's convention — 1M+ write syscalls would dominate a
+    // high-match-density scan).
+    const bool line_flush = ::isatty(STDOUT_FILENO);
     auto sink = [&](const std::string& path, std::uint64_t line_no,
                     std::string_view line) {
         if (prefix_name) std::fwrite(path.data(), 1, path.size(), stdout);
@@ -113,6 +116,7 @@ int main(int argc, char** argv) {
         if (args.line_numbers) std::printf("%llu:", static_cast<unsigned long long>(line_no));
         std::fwrite(line.data(), 1, line.size(), stdout);
         std::fputc('\n', stdout);
+        if (line_flush) std::fflush(stdout);
     };
 
     auto results =

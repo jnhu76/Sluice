@@ -134,6 +134,9 @@ source); directories/FIFOs are rejected.
 ## Known limitations / intentionally NOT implemented
 
 - `-F` reopen-by-name rotation tracking (descriptor-follow only);
+- byte-exact final-newline parity: a final line without a trailing `\n` is
+  emitted WITH a newline added (GNU tail preserves the missing newline);
+  line-for-line content is identical, byte streams are not;
 - multiple files (`tail a b c`) and `-q`/`-v` headers;
 - `+N` start-offset syntax, byte modes (`-c`), PID death watching (`--pid`);
 - inotify/file-event wakeup (bounded polling only — the timer/readiness

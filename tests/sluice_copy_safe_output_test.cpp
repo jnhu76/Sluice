@@ -261,8 +261,10 @@ SLUICE_TEST_CASE(safe_output_commit_rename_failure_unlinks_temp) {
     SLUICE_CHECK(::mkdir(dst.c_str(), 0755) == 0);
     SLUICE_CHECK(::mkdir((dst + "/keep").c_str(), 0755) == 0);
 
-    auto r = commit_atomic_copy(o, dst, SyncPolicy::none);
+    SafeCommitStage stage = SafeCommitStage::none;
+    auto r = commit_atomic_copy(o, dst, SyncPolicy::none, &stage);
     SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(stage == SafeCommitStage::rename);
     SLUICE_CHECK(r.error().os_errno == EISDIR || r.error().os_errno == ENOTEMPTY);
     SLUICE_CHECK(count_temp_files(dir) == 0);
     // The directory destination is untouched.

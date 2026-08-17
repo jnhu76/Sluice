@@ -332,4 +332,161 @@ SLUICE_TEST_CASE(tail_follow_truncation_detected) {
     SLUICE_CHECK(r.value().truncation_detected);
 }
 
+// ---------------------------------------------------------------------------
+// Review-required regressions (PR #122 review)
+// ---------------------------------------------------------------------------
+
+SLUICE_TEST_CASE(tail_follow_long_line_reports_diagnostic) {
+    // Review finding #1: an over-cap line appended during FOLLOW used to be
+    // silently dropped; the documented policy (plan §3.4 / README) is
+    // "reported to stderr and skipped" in BOTH phases.
+    TempPath f("followlong");
+    f.write_all("seed\n");
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::vector<std::string> lines;
+    std::size_t seen = 0;
+    std::string diag;
+
+    TailOptions o = default_opts();
+    o.follow = true;
+    // Initial tail = ORDERING ANCHOR: delivering "seed" proves the task
+    // already snapshotted the size, so the append below is follow data.
+    o.lines = 1;
+    o.max_line_bytes = 100;
+    o.poll_interval_ms = kMinPollMs;
+
+    TailEngine engine(
+        f.fd, o,
+        [&](std::string_view l) {
+            std::lock_guard<std::mutex> lk(mtx);
+            lines.emplace_back(l);
+            ++seen;
+            cv.notify_all();
+        },
+        [&](std::string_view m) {
+            std::lock_guard<std::mutex> lk(mtx);
+            diag.append(m);
+            cv.notify_all();
+        });
+    SLUICE_CHECK(engine.start().has_value());
+    struct EngineGuard {
+        TailEngine& e;
+        ~EngineGuard() {
+            e.request_stop();
+            (void)e.wait();
+        }
+    } guard{engine};
+
+    {
+        std::unique_lock<std::mutex> lk(mtx);
+        SLUICE_CHECK(cv.wait_for(lk, std::chrono::seconds(5),
+                                 [&] { return seen >= 1; }));
+        SLUICE_CHECK(lines.size() == 1 && lines[0] == "seed");
+    }
+
+    // A normal short line plus an over-cap line: the short one is delivered,
+    // the long one is reported and skipped.
+    std::string append = "short\n" + std::string(400, 'x') + "\n";
+    SLUICE_CHECK(::pwrite(f.fd, append.data(), append.size(), 5) ==
+                 static_cast<ssize_t>(append.size()));
+
+    {
+        std::unique_lock<std::mutex> lk(mtx);
+        SLUICE_CHECK(cv.wait_for(lk, std::chrono::seconds(5), [&] {
+            return seen >= 2 &&
+                   diag.find("max-line-bytes") != std::string::npos;
+        }));
+        SLUICE_CHECK(lines.size() == 2 && lines[1] == "short");
+    }
+
+    engine.request_stop();
+    auto r = engine.wait();
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(!r.value().error.has_value());
+    SLUICE_CHECK(r.value().dropped_long_lines);
+    SLUICE_CHECK(r.value().lines_emitted == 2);
+}
+
+SLUICE_TEST_CASE(tail_follow_no_duplicate_when_file_grows_during_tail) {
+    // Review finding #2: the initial-tail forward pass can advance PAST the
+    // size snapshot when the file grows mid-scan; follow must continue from
+    // the pass's final offset, not the stale snapshot, or bytes already
+    // emitted by the tail are re-emitted (duplicates).
+    TempPath f("growrace");
+    // 3000 lines (~230 KB): with a 4096-byte buffer the forward pass over
+    // the last 2000 lines takes ~55 reads, leaving a wide window for the
+    // append below to land mid-pass.
+    std::string seed;
+    for (int i = 1; i <= 3000; ++i)
+        seed += "grow-line-" + std::to_string(i) + "\n";
+    f.write_all(seed);
+    const std::uint64_t seed_size = seed.size();
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::vector<std::string> lines;
+    std::size_t seen = 0;
+
+    TailOptions o = default_opts();  // buffer 4096
+    o.follow = true;
+    o.lines = 2000;
+    o.poll_interval_ms = kMinPollMs;
+
+    TailEngine engine(
+        f.fd, o,
+        [&](std::string_view l) {
+            std::lock_guard<std::mutex> lk(mtx);
+            lines.emplace_back(l);
+            ++seen;
+            cv.notify_all();
+        },
+        nullptr);
+    SLUICE_CHECK(engine.start().has_value());
+    struct EngineGuard {
+        TailEngine& e;
+        ~EngineGuard() {
+            e.request_stop();
+            (void)e.wait();
+        }
+    } guard{engine};
+
+    // Wait until the forward pass is partway through the initial tail...
+    {
+        std::unique_lock<std::mutex> lk(mtx);
+        SLUICE_CHECK(cv.wait_for(lk, std::chrono::seconds(5),
+                                 [&] { return seen >= 1; }));
+    }
+    // ...then append a unique line mid-pass (races the pass's final reads).
+    std::string extra = "TAILRACE-UNIQUE\n";
+    SLUICE_CHECK(::pwrite(f.fd, extra.data(), extra.size(),
+                          static_cast<off_t>(seed_size)) ==
+                 static_cast<ssize_t>(extra.size()));
+    // Wait for the append to be delivered by follow.
+    {
+        std::unique_lock<std::mutex> lk(mtx);
+        SLUICE_CHECK(cv.wait_for(lk, std::chrono::seconds(5), [&] {
+            for (auto& l : lines)
+                if (l == "TAILRACE-UNIQUE") return true;
+            return false;
+        }));
+    }
+
+    engine.request_stop();
+    auto r = engine.wait();
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(!r.value().error.has_value());
+
+    // Exactly-once: 2000 initial-tail lines + 1 appended line (whichever
+    // path delivered the append — forward overrun or follow — it must appear
+    // once, never twice).
+    std::size_t hits = 0;
+    for (auto& l : lines)
+        if (l == "TAILRACE-UNIQUE") ++hits;
+    SLUICE_CHECK(hits == 1);
+    SLUICE_CHECK(r.value().lines_emitted == lines.size());
+    SLUICE_CHECK(lines.size() == 2001);
+}
+
 SLUICE_MAIN()

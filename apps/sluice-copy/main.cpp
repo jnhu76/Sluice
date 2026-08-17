@@ -123,14 +123,25 @@ int main(int argc, char** argv) {
         // Sync already applied to the temp fd by the copy task; now close +
         // rename + (per policy) fsync the parent directory. The destination
         // is either fully replaced or fully untouched.
-        auto commit = sluice_copy::commit_atomic_copy(oc, args.dst, args.sync);
+        sluice_copy::SafeCommitStage stage = sluice_copy::SafeCommitStage::none;
+        auto commit = sluice_copy::commit_atomic_copy(oc, args.dst, args.sync,
+                                                      &stage);
         if (!commit.has_value()) {
             IoError e = commit.error();
-            std::fprintf(stderr,
-                         "%s: atomic commit failed (destination %s): %s%s%s\n",
+            // Truthful per-stage message: only a directory-fsync failure
+            // occurs AFTER the rename replaced the destination.
+            const char* dst_state =
+                (stage == sluice_copy::SafeCommitStage::dir_sync)
+                    ? "destination already replaced; rename durability NOT "
+                      "guaranteed"
+                    : "destination untouched";
+            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %s%s%s\n",
                          argv[0],
-                         e.os_errno ? "may already be replaced" : "untouched",
-                         sluice_copy::cli::code_name(e.code),
+                         stage == sluice_copy::SafeCommitStage::close ? "close"
+                         : stage == sluice_copy::SafeCommitStage::rename
+                             ? "rename"
+                             : "directory fsync",
+                         dst_state, sluice_copy::cli::code_name(e.code),
                          e.os_errno ? " (" : "",
                          e.os_errno ? std::strerror(e.os_errno) : "");
             return 2;

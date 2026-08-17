@@ -250,6 +250,14 @@ struct TailTask {
         }
         std::uint64_t size = static_cast<std::uint64_t>(st.st_size);
 
+        // `off` is shared by both phases: phase 1's forward pass advances it
+        // past the SNAPSHOT size when the file grows mid-scan (a read that
+        // starts below the snapshot EOF legally returns bytes beyond it), and
+        // follow must continue from where phase 1 actually STOPPED — starting
+        // it at the stale snapshot would re-emit those already-delivered
+        // bytes (duplicate lines, review finding #2).
+        std::uint64_t off = size;
+
         // ---- Phase 1: last-N. ----
         if (options.lines > 0) {
             auto start_r = find_last_lines_offset(ctx, size, options.lines);
@@ -265,7 +273,7 @@ struct TailTask {
             LineAssembler asmbl(options.max_line_bytes);
             std::vector<std::string> lines;
             Completion<std::size_t> rc;
-            std::uint64_t off = start_r.value();
+            off = start_r.value();
             while (off < size) {
                 auto rr = read_at(ctx, rc, off);
                 if (!rr.has_value()) {
@@ -280,18 +288,18 @@ struct TailTask {
             }
             asmbl.finish(lines);
             emit(lines, r);
-            r.dropped_long_lines = asmbl.dropped_long;
-            if (asmbl.dropped_long)
+            if (asmbl.dropped_long) {
+                r.dropped_long_lines = true;
                 diag_msg("line longer than --max-line-bytes skipped\n");
+            }
         }
 
         if (!options.follow) return;  // finite tail: done
 
-        // ---- Phase 2: follow. ----
+        // ---- Phase 2: follow (continues from phase 1's final offset). ----
         LineAssembler asmbl(options.max_line_bytes);
         std::vector<std::string> lines;
         Completion<std::size_t> rc;
-        std::uint64_t off = size;
         const auto slice = std::chrono::milliseconds(50);
         while (true) {
             if (ctx.cancel_token().is_requested()) {
@@ -307,6 +315,13 @@ struct TailTask {
             if (n > 0) {
                 asmbl.feed(buffer.data(), n, lines);
                 emit(lines, r);
+                // Same long-line policy as the initial tail (plan §3.4 /
+                // README): report and skip, never silently drop.
+                if (asmbl.dropped_long) {
+                    r.dropped_long_lines = true;
+                    diag_msg("line longer than --max-line-bytes skipped\n");
+                    asmbl.dropped_long = false;
+                }
                 off += n;
                 continue;
             }

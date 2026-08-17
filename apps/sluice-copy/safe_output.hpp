@@ -76,25 +76,40 @@ SafeOpenOutcome open_atomic_copy(const std::string& src_path,
 // Human-readable message for a failed outcome (CLI diagnostics).
 const char* safe_open_failure_message(SafeOpenFailure f);
 
+// Which stage of commit_atomic_copy failed — the CLI message depends on it
+// truthfully: close/rename failures leave the destination UNTOUCHED; only a
+// directory-fsync failure happens after the rename already replaced it.
+enum class SafeCommitStage : std::uint8_t {
+    none,      // success (or not called)
+    close,     // close(temp_fd) failed; destination untouched, temp unlinked
+    rename,    // rename failed; destination untouched, temp unlinked
+    dir_sync,  // post-rename fsync of the parent directory failed; the
+               // destination ALREADY holds the new content — only the
+               // crash-durability of the rename is missing
+};
+
 // Commit the atomic replacement. Takes ownership of `o.temp_fd` and
 // `o.temp_path`: on EVERY return path (success or error) the temp fd is
 // closed and, unless the rename succeeded, the temp file is unlinked. The
 // caller must have finished writing (and applying the sync policy) to the
-// temp fd beforehand.
+// temp fd beforehand. When `stage` is non-null it receives the failing
+// stage (SafeCommitStage::none on success).
 //
 //   1. close(temp_fd)                       — flush the descriptor
 //   2. rename(temp_path, dst_path)          — the atomic replacement
 //   3. sync != none: fsync(dst_dir)         — make the rename durable
 //
 // Failure semantics:
-//   * close/rename failure: destination untouched, temp unlinked, error
-//     returned (os_errno set);
-//   * directory-open/fsync failure (step 3): the rename ALREADY HAPPENED —
-//     the destination now holds the new content. The error is returned so the
-//     caller can report the missing durability; the temp no longer exists.
+//   * close/rename failure (stage close/rename): destination untouched,
+//     temp unlinked, error returned (os_errno set);
+//   * directory-open/fsync failure (stage dir_sync): the rename ALREADY
+//     HAPPENED — the destination now holds the new content. The error is
+//     returned so the caller can report the missing durability; the temp no
+//     longer exists.
 sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
                                         const std::string& dst_path,
-                                        SyncPolicy sync);
+                                        SyncPolicy sync,
+                                        SafeCommitStage* stage = nullptr);
 
 // Best-effort cleanup for a copy that will not be committed: close the temp
 // fd and unlink the temp file. Never touches the destination. Idempotent

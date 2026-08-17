@@ -154,7 +154,9 @@ const char* safe_open_failure_message(SafeOpenFailure f) {
 
 sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
                                         const std::string& dst_path,
-                                        SyncPolicy sync) {
+                                        SyncPolicy sync,
+                                        SafeCommitStage* stage) {
+    if (stage) *stage = SafeCommitStage::none;
     // Close the temp fd on every path (its data was already synced by the
     // copy task's SyncPolicy; close itself may still report an error).
     int fd = o.temp_fd;
@@ -162,6 +164,7 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
     bool closed_ok = (fd < 0) || (::close(fd) == 0);
 
     if (!closed_ok) {
+        if (stage) *stage = SafeCommitStage::close;
         IoError e = sluice::from_errno_value(errno);
         ::unlink(o.temp_path.c_str());
         o.temp_path.clear();
@@ -170,6 +173,7 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
 
     // The atomic replacement. Failure leaves the destination untouched.
     if (::rename(o.temp_path.c_str(), dst_path.c_str()) != 0) {
+        if (stage) *stage = SafeCommitStage::rename;
         IoError e = sluice::from_errno_value(errno);
         ::unlink(o.temp_path.c_str());
         o.temp_path.clear();
@@ -184,11 +188,13 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
     if (sync != SyncPolicy::none) {
         int dir_fd = ::open(o.dst_dir.c_str(), O_RDONLY | O_DIRECTORY);
         if (dir_fd < 0) {
+            if (stage) *stage = SafeCommitStage::dir_sync;
             return sluice::make_unexpected<void>(
                 sluice::from_errno_value(errno));
         }
         ScopedFd dir_guard(dir_fd);
         if (::fsync(dir_fd) != 0) {
+            if (stage) *stage = SafeCommitStage::dir_sync;
             return sluice::make_unexpected<void>(
                 sluice::from_errno_value(errno));
         }
