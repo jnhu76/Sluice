@@ -16,6 +16,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 |----------|-----------|---------------|-------------------|
 | blocking-io-pool | BlockingIoPool | `spec/tla/blocking_io_pool/` | `scripts/formal/verify-blocking-io-pool.sh` |
 | d1-uring-poison | D1 io_uring Poison/Recovery | `spec/tla/d1_uring_poison/` | `scripts/formal/verify-d1-uring-poison.sh` |
+| request-arena | RequestArena/RequestSlot explicit-I/O lifecycle | `spec/tla/request_arena/` | `scripts/formal/verify-request-arena.sh` |
 | e7-publication | E7 Publication | `spec/tla/e7_publication/` | `scripts/formal/verify-e7-publication.sh` |
 | e7-multiworker-progress | E7 MultiWorker Progress | `spec/tla/e7_multiworker_progress/` | `scripts/formal/verify-e7-multiworker-progress.sh` |
 | e8-ownership-transfer | E8 Ownership Transfer | `spec/tla/e8_ownership_transfer/` | `scripts/formal/verify-e8-ownership-transfer.sh` |
@@ -62,27 +63,35 @@ silently passing (audit #94/#100 review hardening, 2026-08-14).
 
 ### `request-arena-lifecycle` — RequestArena / RequestSlot explicit-I/O lifecycle
 
-No TLA+ suite binds the RequestArena / RequestSlot lifecycle
-(`include/sluice/async/detail/request_arena.hpp`, `request_slot.hpp`) — the
-load-bearing accepted-request protocol since Phase B. A future model would
-encode the five-stage admission (reserve → prepare → commit → enqueue →
-dispatch), Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once,
-generation increment before reuse, the ready-ring FIFO, reap-only Completion
-publication, borrow-through-reap, the enqueue-in-flight pin, and the quiescent-
-destruction conditions.
+**Status (2026-08-18 formal audit): PARTIALLY MODELED.** The `request-arena`
+suite now binds the slot lifecycle
+(`include/sluice/async/detail/request_arena.hpp`, `request_slot.hpp`) with the
+smallest single-slot model: five-stage admission (reserve → prepare → commit →
+enqueue → dispatch), Scheme-B enqueue/cancel arbitration, terminal-winner
+exactly-once, generation increment before reuse, reap-only Completion
+publication gated on the acknowledged enqueue pin, borrow-through-reap, the
+running-cancel intent verbatim law (ADR Decision 11), and the quiescent-
+destruction conditions. Negative models NEG-RA-1..6, wrong-property controls,
+and reachability witnesses W1–W5 gate the abstraction (see the suite README
+for the property → C++ regression bridge).
+
+**Residual (still unmodeled, executable-evidence scope):** ready-ring reap
+ORDER across two or more simultaneously backend_ready slots (ADR Decision 9
+backend-known order), multi-slot free-list/accounting interference, and the
+backend admission transaction around commit (Completion
+`idle → binding → outstanding`, AGENTS.md §4.3). A capacity-2 suite variant
+is the recorded follow-up; trigger: any change to the ready-ring ordering
+rule.
 
 **Not covered by adjacent suites.** The e7-publication / e8-ownership-transfer
-suites model the Completion claim/publish CAS and ownership transfer (the
-*publication object*, a different protocol from the slot lifecycle);
-e9-park-wake / e10-waitnode model Scheduler wake / wait-queue primitives;
-e16-application-runtime models the runtime epoch. None models the arena slot
-state machine, Scheme-B arbitration, generation/reuse, ready-ring, or
-reap-only publication — do not read those suites as RequestArena coverage.
+suites model runnable tickets and ownership transfer; e9-park-wake /
+e10-waitnode model Scheduler wake / wait-queue primitives; e16-application-
+runtime models the runtime epoch. Do not read those suites as RequestArena
+coverage.
 
-**Current executable evidence instead of a model:**
-`tests/request_arena_test.cpp` (state-machine matrix),
-`tests/request_lifecycle_scheme_b_test.cpp` (Scheme-B arbitration, terminal
-winner, generation/reuse),
+**Current executable evidence:** `tests/request_arena_test.cpp`
+(state-machine matrix), `tests/request_lifecycle_scheme_b_test.cpp` (Scheme-B
+arbitration, terminal winner, generation/reuse),
 `tests/request_waiter_borrow_lease_test.cpp` (register-vs-reap,
 cancel_waiter-vs-reap, borrow-through-reap), the per-backend C2b/C2c/C2d/C2e
 integration rows on Fake + ThreadPool, 8–13 single-point production mutation
@@ -90,11 +99,13 @@ executions per C2 class, and the arena death tests. Per-slice gap notes also
 appear in the Phase C2c / C2d / E compliance gates.
 
 **Revisit triggers:** before materially changing RequestArena / RequestSlot
-lifecycle authority; before changing generation/reuse rules; before introducing
-a second waiter or multi-wait abstraction into the arena; before splitting the
-terminal-winner or reap-only-publication authority across a second domain; or
-when a future concurrency defect demonstrates the existing executable evidence
-does not distinguish the faulty protocol.
+lifecycle authority; before changing the ready-ring FIFO ordering rule
+(Decision 9) — the trigger for the capacity-2 order model; before changing
+generation/reuse rules; before introducing a second waiter or multi-wait
+abstraction into the arena; before splitting the terminal-winner or
+reap-only-publication authority across a second domain; or when a future
+concurrency defect demonstrates the existing executable evidence does not
+distinguish the faulty protocol.
 
 ## Navigation
 

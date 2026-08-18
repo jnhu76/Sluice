@@ -275,3 +275,25 @@ bootstrap jar. The authoritative entry point is
 and does not replace, the deterministic production tests
 (`tests/phase_g_closeout_test.cpp`, `tests/phase_g_closeout_uring_test.cpp`,
 `tests/phase_g_backend_progress_wake_test.cpp`).
+
+
+## Audit note (2026-08-18): reference-config gate strength
+
+`LeaveParkEnabled` contains an unconditional `~SplitWait` disjunct for
+scheduler-domain parks. This is INTENTIONAL: it models the E9-era bounded
+observation rule (the reference topology's parks are timeout-bounded, so a
+parked worker always eventually returns regardless of signals — the
+"MIXED-WAKE progress authority" narrowed under DIV-05). Consequences, which
+anyone citing these gates must know:
+
+- `E9ParkWakeReference.cfg` safety gates (`Inv2NoLostWake`, `Inv4ExternalReadyWakes`,
+  `InvLife1DrainNoMW3Park`) and `E9ParkWakeReferenceLiveness.cfg` (Life2/Life4)
+  are SATISFIED LARGELY BY THE TIMEOUT, not by signal-correctness: a lost wake
+  cannot strand a worker whose park is bounded. Do not cite the reference
+  gates as lost-wake proofs.
+- The load-bearing no-lost-wake evidence is the SplitWait=TRUE gates
+  (`E9ParkWake.cfg` / `E9ParkWakeLiveness.cfg`), where the park is unbounded
+  and only the bridge/epoch/persistent-state machinery returns the worker.
+- `FairObservationTimeout == WF(EnterPhysicalPark)` is a legacy label: under
+  SplitWait=TRUE there is no observation timeout; read it as
+  "committed park entry eventually happens".

@@ -12,15 +12,16 @@
         "smoke"
       ],
       "positive_gate_count": 6,
-      "negative_gate_count": 0,
+      "negative_gate_count": 2,
       "reachability_gate_count": 0,
       "owner_docs": [
         "docs/verification/formal/blocking-io-pool-tla-spec.md"
       ],
       "implementation_bindings": [
-        "src/core/blocking_io_pool.cpp"
+        "src/blocking_io_pool.cpp",
+        "include/sluice/detail/blocking_io_pool_impl.hpp"
       ],
-      "notes": "COVERAGE GAP: no negative model. Liveness checked via FairSpec temporal property."
+      "notes": "Protocol: bounded blocking-I/O worker pool (submit/dequeue/complete/get/shutdown). Liveness checked via FairSpec temporal property; negative models gate worker-bound and shutdown-drain regressions. (Audit fix: binding was the dangling src/core/blocking_io_pool.cpp.)"
     },
     {
       "id": "d1-uring-poison",
@@ -42,6 +43,25 @@
       "notes": "Phase D1 P0-D bounded physical ledger, permanent poison recovery, and exact control-reference quiescence. Negative configs kill masked-slot identity, premature original-CQE publication, and post-poison transport submission."
     },
     {
+      "id": "request-arena",
+      "spec_dir": "spec/tla/request_arena",
+      "verifier": "scripts/formal/verify-request-arena.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 2,
+      "negative_gate_count": 6,
+      "reachability_gate_count": 5,
+      "owner_docs": [
+        "docs/verification/formal/cpp-model-coverage.md"
+      ],
+      "implementation_bindings": [
+        "include/sluice/async/detail/request_arena.hpp",
+        "include/sluice/async/detail/request_slot.hpp"
+      ],
+      "notes": "Protocol: RequestArena/RequestSlot explicit-I/O accepted-request lifecycle (five-stage admission, Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once, running-cancel intent verbatim law, reap-only publication gated on the acknowledged enqueue pin, generation advance before reuse, borrow-through-reap). Closes the former request-arena-lifecycle formal-debt gap with the smallest single-slot model (e13 FAULT-constant negatives NEG-RA-1..6, wrong-property controls, witnesses W1-W5; residual multi-slot ready-ring ORDER scope recorded in the coverage gap)."
+    },
+    {
       "id": "e7-publication",
       "spec_dir": "spec/tla/e7_publication",
       "verifier": "scripts/formal/verify-e7-publication.sh",
@@ -51,13 +71,11 @@
       "positive_gate_count": 1,
       "negative_gate_count": 1,
       "reachability_gate_count": 0,
-      "owner_docs": [
-        "docs/history/closeout/e7-publication.md"
-      ],
+      "owner_docs": [],
       "implementation_bindings": [
         "src/async/scheduler.cpp"
       ],
-      "notes": "E7 runnable-publication protocol. Buggy model expects InvDoneNoTicket violation."
+      "notes": "Protocol: runnable-ticket publication (exactly one ticket per runnable fiber; the Phase-5 duplicate-publication defect class). Buggy model expects InvDoneNoTicket violation. (Audit fix: dangling owner_doc docs/history/closeout/e7-publication.md removed — no such file exists; see docs/verification/formal/cpp-model-coverage.md for the current mapping.)"
     },
     {
       "id": "e7-multiworker-progress",
@@ -88,8 +106,12 @@
       "owner_docs": [
         "docs/history/closeout/e8-formal-corrective/audit.md"
       ],
-      "implementation_bindings": [],
-      "notes": "BuggyOwner model expects a named invariant violation."
+      "implementation_bindings": [
+        "src/async/scheduler.cpp",
+        "src/async/scheduler_park_wake.cpp",
+        "include/sluice/async/scheduler.hpp"
+      ],
+      "notes": "Protocol: runnable-ownership transfer (fiber_owner_/execWorker/waitOwner triple authority, work stealing). BuggyOwner model expects the named InvLocalMatchesOwner violation (verifier asserts the exact name)."
     },
     {
       "id": "e9-park-wake",
@@ -104,8 +126,11 @@
       "owner_docs": [
         "docs/history/closeout/e9-0-wake-source-topology-audit.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Phase G closeout (R1-R4 + bridge): split-wait safety/liveness + reference safety/liveness; buggy models DrainParks, MixedSource, PrePark, NoBridge (model-level M1)."
+      "implementation_bindings": [
+        "src/async/scheduler_park_wake.cpp",
+        "src/async/scheduler.cpp"
+      ],
+      "notes": "Protocol: scheduler/backend wake convergence (park domains, wake epoch, split-wait bridge, R1-R4). Phase G closeout (R1-R4 + bridge): split-wait safety/liveness + reference safety/liveness; buggy models DrainParks, MixedSource, PrePark, NoBridge (model-level M1). AUDIT NOTE: the reference (SplitWait=FALSE) gates are satisfied largely by the E9 bounded-observation timeout (DIV-05), not by signal-correctness — the load-bearing no-lost-wake evidence is the SplitWait=TRUE gates; see README."
     },
     {
       "id": "e9-wake-handle-lifetime",
@@ -118,8 +143,11 @@
       "negative_gate_count": 1,
       "reachability_gate_count": 0,
       "owner_docs": [],
-      "implementation_bindings": [],
-      "notes": "Liveness config + BuggySnapshot model."
+      "implementation_bindings": [
+        "src/async/scheduler_park_wake.cpp",
+        "src/async/scheduler.cpp"
+      ],
+      "notes": "Protocol: wake-handle notify-vs-destructor lease (Control mutex lifetime). Liveness config + BuggySnapshot model; verifier asserts the named LifeInv4DestroyedNoCallback violation."
     },
     {
       "id": "e10-waitnode",
@@ -134,8 +162,12 @@
       "owner_docs": [
         "docs/history/closeout/e10-waitnode-wait-queue.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Safety + liveness correct models, BuggyNoWinner negative model expects InvNoDoubleCompletion violation."
+      "implementation_bindings": [
+        "include/sluice/async/wait_node.hpp",
+        "include/sluice/async/wait_queue.hpp",
+        "src/async/scheduler_park_wake.cpp"
+      ],
+      "notes": "Protocol: WaitNode terminal-resolution winner (exactly-once resolve, single scheduler publication). Safety + liveness correct models, BuggyNoWinner negative model expects InvNoDoubleCompletion violation."
     },
     {
       "id": "e11-timer-wait",
@@ -168,8 +200,10 @@
       "owner_docs": [
         "docs/history/closeout/e12-event.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Safety + liveness correct, 4 negative models, wrong-property gate, compile-probe gate."
+      "implementation_bindings": [
+        "src/async/scheduler_event.cpp"
+      ],
+      "notes": "Protocol: manual-reset event set-drain / reset epoch isolation. Safety + liveness correct, 4 negative models, wrong-property gate, compile-probe gate."
     },
     {
       "id": "e12-semaphore",
@@ -184,8 +218,10 @@
       "owner_docs": [
         "docs/history/closeout/e12-semaphore.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Safety-only. 7 negative models (NEG-SEM-1..7), wrong-property gate, compile-probe gate."
+      "implementation_bindings": [
+        "src/async/scheduler_semaphore.cpp"
+      ],
+      "notes": "Protocol: semaphore permit conservation / FIFO transfer / admission recheck. Safety-only (release is a synchronous transfer in the C++; see suite README). 7 negative models (NEG-SEM-1..7), wrong-property gate, compile-probe gate."
     },
     {
       "id": "e12-async-mutex",
@@ -200,8 +236,10 @@
       "owner_docs": [
         "docs/history/closeout/e12-async-mutex.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Safety-only. 11 negative models (NEG-M1..M11), wrong-property gate, compile-probe gate."
+      "implementation_bindings": [
+        "src/async/scheduler_mutex.cpp"
+      ],
+      "notes": "Protocol: async mutex FIFO handoff (owner commit before publication, no-barging admission closure). Safety-only. 11 negative models (NEG-M1..M11), wrong-property gate, compile-probe gate."
     },
     {
       "id": "e12-async-condition",
@@ -216,8 +254,10 @@
       "owner_docs": [
         "docs/history/closeout/e12-condition.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Safety-only. 10 negative models (NEG-C1..C10), 2 reachability witnesses, wrong-property gate, compile-probe gate."
+      "implementation_bindings": [
+        "src/async/scheduler_condition.cpp"
+      ],
+      "notes": "Protocol: condition-variable lost-notification closure + unified reacquire/ordinary FIFO. Safety-only. 10 negative models (NEG-C1..C10), 2 reachability witnesses, wrong-property gate, compile-probe gate."
     },
     {
       "id": "e12-queue",
@@ -232,8 +272,10 @@
       "owner_docs": [
         "docs/history/closeout/e12-queue.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Safety-only. Model A (12 invariants) + Model B (7 invariants), 7 negative models, wrong-property gate, 8 reachability/non-vacuity scenes (R1..R8) covering the B3/B6 drain-on-close topology."
+      "implementation_bindings": [
+        "src/async/queue_port.cpp"
+      ],
+      "notes": "Protocol: bounded MPMC queue lease move + close/drain topology (B1-B7). Safety-only. Model A (12 invariants) + Model B (7 invariants), 7 negative models, wrong-property gate, 8 reachability/non-vacuity scenes (R1..R8) covering the B3/B6 drain-on-close topology."
     },
     {
       "id": "e12-rwlock",
@@ -243,13 +285,15 @@
         "smoke"
       ],
       "positive_gate_count": 1,
-      "negative_gate_count": 1,
+      "negative_gate_count": 2,
       "reachability_gate_count": 0,
       "owner_docs": [
         "docs/history/closeout/e12-cross-primitive-terminal-audit.md"
       ],
-      "implementation_bindings": [],
-      "notes": "COVERAGE GAP: only 1 negative model (ReaderBypass). No reconcile-after-cancel negative."
+      "implementation_bindings": [
+        "src/async/scheduler_rwlock.cpp"
+      ],
+      "notes": "Protocol: rwlock writer-fair FIFO reconcile (unlock/cancel/expire head-prefix grant). Negative models: ReaderBypass (admission barging) and NoReconcile (release drops grant-from-head, stranding a grantable head — closes the audit-found reconcile-coverage gap; InvNoStrandedGrantableHead also gives RW4 its first invariant)."
     },
     {
       "id": "e13-select-core",
@@ -264,8 +308,12 @@
       "owner_docs": [
         "docs/history/formal-design/e13-select-formal-core-design.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Layered formal core (PR #17). Contract + Central + Adapter + root positive models. R1-R12 causal reachability witnesses. No negative models (covered by e13-select-safety)."
+      "implementation_bindings": [
+        "src/async/select.cpp",
+        "src/async/select_event.cpp",
+        "src/async/select_timer.cpp"
+      ],
+      "notes": "Layered formal core (PR #17) — protocol: multi-arm select winner linearization. Contract + Central + Adapter + root positive models. R1-R12 causal reachability witnesses. No negative models (covered by e13-select-safety)."
     },
     {
       "id": "e13-select-safety",
@@ -280,8 +328,12 @@
       "owner_docs": [
         "docs/history/formal-design/e13-select-formal-safety-design.md"
       ],
-      "implementation_bindings": [],
-      "notes": "Layered formal safety (PR #18). Multi-layer safety aggregates, multi-group non-interference, widened-domain refinement, Contract NEG-C1..C9, Central NEG-S1..S7, Event/Timer/Accounting NEG-E1..E6/T1..T5/A1..A4, MG NEG-MG1, restoration checks, per-law non-vacuity witnesses, PR #17 regression."
+      "implementation_bindings": [
+        "src/async/select.cpp",
+        "src/async/select_event.cpp",
+        "src/async/select_timer.cpp"
+      ],
+      "notes": "Layered formal safety (PR #18) — protocol: select winner/loser finalization + restoration. Multi-layer safety aggregates, multi-group non-interference, widened-domain refinement, Contract NEG-C1..C9, Central NEG-S1..S7, Event/Timer/Accounting NEG-E1..E6/T1..T5/A1..A4, MG NEG-MG1, restoration checks, per-law non-vacuity witnesses, PR #17 regression."
     },
     {
       "id": "e16-application-runtime",
@@ -293,35 +345,42 @@
       "positive_gate_count": 3,
       "negative_gate_count": 6,
       "reachability_gate_count": 10,
-      "owner_docs": [],
-      "implementation_bindings": [],
-      "notes": "E16 Application Runtime lifecycle. Saturated epoch token (E0/E1). Safety + liveness (Live1/Live2/Live3/Live5/Live6) + wide-domain. NEG-E16-1 BoundaryWake (temporal), NEG-E16-2 StopClose, NEG-E16-3 StartupAbort, NEG-E16-4 CloseOwner, NEG-E16-5 EarlyCloseBeforeDrain, NEG-E16-6 DirectStoppedWithResources. Reachability witnesses R2,R3,R11-R15,R17,R18,R19 all REACH (10 scenes). R17 REACH after the C3 corrective unblocked the Running/Draining path (the previous 'NOT-REACH / latent model defect' note was stale; the verifier already reached it). R19 (E16-POST-MERGE-CORRECTIVE-2) witnesses the production-reachable post-stop admission-commit path enabled by removing the admission_open guard on SubmitGroupCommit. See spec/tla/e16_application_runtime/README.md."
+      "owner_docs": [
+        "docs/adr/ADR-application-runtime.md",
+        "docs/history/implementation-plans/e16-application-runtime.md"
+      ],
+      "implementation_bindings": [
+        "src/async/application_runtime.cpp"
+      ],
+      "notes": "Protocol: ApplicationRuntime lifecycle (start/stop/drain/close ownership, driver epoch wake). Saturated epoch token (E0/E1). Safety + liveness (Live1/Live2/Live3/Live5/Live6) + wide-domain. NEG-E16-1 BoundaryWake (temporal), NEG-E16-2 StopClose, NEG-E16-3 StartupAbort, NEG-E16-4 CloseOwner, NEG-E16-5 EarlyCloseBeforeDrain, NEG-E16-6 DirectStoppedWithResources. Reachability witnesses R2,R3,R11-R15,R17,R18,R19 all REACH (10 scenes). R17 REACH after the C3 corrective unblocked the Running/Draining path (the previous 'NOT-REACH / latent model defect' note was stale; the verifier already reached it). R19 (E16-POST-MERGE-CORRECTIVE-2) witnesses the production-reachable post-stop admission-commit path enabled by removing the admission_open guard on SubmitGroupCommit. See spec/tla/e16_application_runtime/README.md."
     }
   ],
   "coverage_gaps": [
     {
       "id": "request-arena-lifecycle",
-      "status": "ACCEPTED FORMAL-DEBT GAP (AGENTS.md \u00a717 path B: justified gap + revisit trigger)",
-      "protocol": "RequestArena / RequestSlot explicit-I/O request lifecycle \u2014 the load-bearing accepted-request protocol since Phase B.",
+      "status": "PARTIALLY MODELED (request-arena suite, formal audit 2026-08-18) — residual multi-slot scope remains executable-evidence debt",
+      "protocol": "RequestArena / RequestSlot explicit-I/O request lifecycle — the load-bearing accepted-request protocol since Phase B.",
       "scope_a_model_would_encode": [
-        "five-stage admission (reserve -> prepare -> commit -> enqueue -> dispatch)",
-        "Scheme-B enqueue/cancel arbitration (cancel-wins vs enqueue-wins, exactly one terminal)",
-        "terminal-winner exactly-once (first valid backend-ready wins)",
-        "generation increment before slot reuse; stale-key rejection",
-        "ready-ring FIFO preserving backend-known terminal order",
-        "reap-only Completion publication (single leaf-domain pass)",
-        "borrow-through-reap (fd/buffer borrow ends at completion-ready publication)",
-        "enqueue-in-flight pin and reap-ineligibility",
-        "quiescent destruction conditions (accepted_outstanding==0, slot_in_use==0)"
+        "five-stage admission (reserve -> prepare -> commit -> enqueue -> dispatch): MODELED",
+        "Scheme-B enqueue/cancel arbitration (cancel-wins vs enqueue-wins, exactly one terminal): MODELED (witnesses W1/W2)",
+        "terminal-winner exactly-once (first valid backend-ready wins): MODELED (NEG-RA-1)",
+        "generation increment before slot reuse; stale-key rejection: MODELED (NEG-RA-2/4, W4)",
+        "ready-ring FIFO preserving backend-known terminal order ACROSS SLOTS: NOT MODELED (residual — single-slot model cannot express ring order; see why_no_model_yet)",
+        "reap-only Completion publication (single leaf-domain pass): MODELED (NEG-RA-3)",
+        "borrow-through-reap (fd/buffer borrow ends at completion-ready publication): MODELED (InvBorrowWindow)",
+        "enqueue-in-flight pin and reap-ineligibility: MODELED (NEG-RA-5, liveness)",
+        "running-cancel intent verbatim law (Decision 11): MODELED (NEG-RA-6, W3)",
+        "quiescent destruction conditions (accepted_outstanding==0, slot_in_use==0): MODELED (Destroy guards)"
       ],
-      "why_no_model_yet": "The smallest meaningful isolated protocol has not been modeled. Per AGENTS.md \u00a717 ('Do not invent a model merely for ceremonial coverage. Model the smallest protocol that captures the load-bearing race.'), this gap is accepted as formal debt rather than a blocker. The protocol's correctness is currently established by the executable evidence below, not by a TLA+ abstraction.",
+      "why_no_model_yet": "The single-slot load-bearing core is now modeled (suite request-arena, 2026-08-18 formal audit; smallest-model rule of AGENTS.md section 17). The residual gap is deliberately open: ready-ring FIFO ORDER across >=2 simultaneous backend_ready slots multiplies the state space for a property whose load-bearing content (per-slot order preservation between terminal winner and reap publication) is already covered by the single-slot model plus executable evidence. Modeling it requires a capacity-2 suite variant; do not read the current suite as multi-slot coverage.",
       "current_executable_evidence": [
         "deterministic RequestArena state-machine matrix (request_arena_test)",
         "request_lifecycle_scheme_b_test (Scheme-B enqueue/cancel arbitration, terminal winner, generation/reuse)",
         "request_waiter_borrow_lease_test (register-vs-reap, cancel_waiter-vs-reap, borrow-through-reap)",
         "per-backend C2 integration tests (C2b/C2c/C2d/C2e rows on Fake + ThreadPool)",
         "8-13 single-point production mutation executions per C2 class",
-        "death tests (fail-fast rollback, stale handle, live pin, open registration)"
+        "death tests (fail-fast rollback, stale handle, live pin, open registration)",
+        "FORMAL: spec/tla/request_arena (positive safety + liveness + NEG-RA-1..6 + W1..W5)"
       ],
       "implementation_bindings": [
         "include/sluice/async/detail/request_arena.hpp",
@@ -333,18 +392,20 @@
         "tests/request_waiter_borrow_lease_test.cpp",
         "tests/threadpool_backend_scheme_b_race_test.cpp"
       ],
-      "not_covered_by_existing_suites": "No suite in this manifest binds request_arena.hpp/request_slot.hpp. The adjacent e7-publication/e8-ownership-transfer suites model Completion claim/publish CAS and ownership transfer (a different protocol \u2014 the publication object, not the slot lifecycle); e9-park-wake/e10-waitnode model Scheduler wake/wait-queue primitives; e16-application-runtime models the runtime epoch. None of these models the arena slot state machine, Scheme-B arbitration, generation/reuse, ready-ring, or reap-only publication. Do not read these adjacent suites as RequestArena coverage.",
+      "not_covered_by_existing_suites": "The request-arena suite covers the single-slot lifecycle core. NOT covered by any model: (a) ready-ring reap ORDER across two or more simultaneously backend_ready slots (ADR Decision 9 backend-known order); (b) multi-slot interference on the free list / accounting under concurrency; (c) the backend admission transaction around commit (Completion idle->binding->outstanding publication — Completion authority, AGENTS.md 4.3). These remain executable-evidence scope. Adjacent suites do not cover them: e7/e8 model runnable tickets/ownership, e9/e10 scheduler wake/wait-queue, e16 the runtime epoch.",
       "revisit_triggers": [
         "before materially changing RequestArena / RequestSlot lifecycle authority",
+        "before changing the ready-ring FIFO ordering rule (Decision 9) — this is the trigger for the capacity-2 order model",
         "before changing generation/reuse rules",
         "before introducing a second waiter or multi-wait abstraction into the arena",
         "before splitting the terminal-winner or reap-only-publication authority across a second domain",
         "when a future concurrency defect demonstrates that the existing executable evidence does not distinguish the faulty protocol"
       ],
       "owner_docs": [
-        "docs/verification/formal-models.md"
+        "docs/verification/formal-models.md",
+        "docs/verification/formal/cpp-model-coverage.md"
       ],
-      "notes": "Recorded for issue #100 (audit umbrella #94). This is the consolidated, authoritative gap record; per-slice gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. Adding this entry does NOT create a model and does NOT claim formal verification of the C++ implementation (AGENTS.md \u00a717)."
+      "notes": "Formerly the consolidated ACCEPTED FORMAL-DEBT record for issue #100 (audit umbrella #94). The 2026-08-18 C++/TLA+ realignment audit re-judged the debt per its own revisit policy and extracted the smallest single-slot model rather than extending the debt. This entry is RETAINED (not deleted) because the multi-slot ready-ring-order scope is still unmodeled; per-suite gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. The suite does NOT claim formal verification of the C++ implementation (AGENTS.md section 17)."
     }
   ]
 }
