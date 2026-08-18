@@ -1,4 +1,4 @@
-------------------------------- MODULE BlockingIoPool -------------------------------
+------------------------------- MODULE BlockingIoPoolBuggyUnboundedDequeue -------------------------------
 (*
   TLA+ specification of the production sluice::BlockingIoPool (sluice-CORE-024S).
 
@@ -118,7 +118,9 @@ TrySubmit(t) ==
    but still bound concurrent in-flight work by NumWorkers. *)
 Dequeue ==
     /\ Len(queue) > 0
-    /\ Cardinality(inFlight) < NumWorkers
+    \* BUG (NEG-BIP-1): the in-flight worker bound check is dropped; workers
+    \* admit more concurrent tasks than the configured worker count.
+    /\ TRUE
     /\ LET t == Head(queue)
        IN  /\ queue' = Tail(queue)
            /\ inFlight' = inFlight \cup {t}

@@ -74,8 +74,6 @@ VARIABLES
     admissionPhase,
     \* @type: [Node -> BOOLEAN]  -- was SET observed at admission? (E3)
     admissionSawSet,
-    \* @type: [Node -> 0..1]     -- woken by a SetEvent DRAIN (not admission)? (E6)
-    wokenBySetDrain,
 
     \* ---- H1: global Event protocol owner / phase ----
     \* @type: {"Idle","SetDrain"}  -- abstract serialization owner (global_mtx_)
@@ -117,7 +115,7 @@ ASSUME /\ Nodes # {}
        /\ MaxGen \in 1..10
 
 Vars == <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
-          admissionPhase, admissionSawSet, wokenBySetDrain,
+          admissionPhase, admissionSawSet,
           protoPhase, resetGeneration, registrationGeneration,
           activeSetGen, wakeEpochGen,
           resolutionCause>>
@@ -142,7 +140,6 @@ Init ==
     /\ eventSet = "UNSET"
     /\ admissionPhase = [n \in Nodes |-> "NoAdmission"]
     /\ admissionSawSet = [n \in Nodes |-> FALSE]
-    /\ wokenBySetDrain = [n \in Nodes |-> 0]
     /\ protoPhase = "Idle"
     /\ resetGeneration = 0
     /\ registrationGeneration = [n \in Nodes |-> 0]
@@ -164,7 +161,7 @@ Register(n) ==
     /\ admissionPhase' = [admissionPhase EXCEPT ![n] = "AdmissionOpen"]
     /\ registrationGeneration' = [registrationGeneration EXCEPT ![n] = resetGeneration]
     /\ UNCHANGED <<resolvedCount, wakeDispatched, eventSet,
-                   admissionSawSet, wokenBySetDrain,
+                   admissionSawSet,
                    protoPhase, resetGeneration, activeSetGen,
                    wakeEpochGen, resolutionCause>>
 
@@ -182,7 +179,7 @@ AdmissionWake(n) ==
     /\ admissionPhase' = [admissionPhase EXCEPT ![n] = "NoAdmission"]
     /\ admissionSawSet' = [admissionSawSet EXCEPT ![n] = TRUE]
     /\ resolutionCause' = [resolutionCause EXCEPT ![n] = "AdmissionSet"]
-    /\ UNCHANGED <<eventSet, wokenBySetDrain,
+    /\ UNCHANGED <<eventSet,
                   protoPhase, resetGeneration, registrationGeneration,
                   activeSetGen, wakeEpochGen>>
 
@@ -195,7 +192,6 @@ CommitSuspend(n) ==
     /\ admissionPhase' = [admissionPhase EXCEPT ![n] = "Suspended"]
     /\ admissionSawSet' = [admissionSawSet EXCEPT ![n] = FALSE]
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
-                  wokenBySetDrain,
                   protoPhase, resetGeneration, registrationGeneration,
                   activeSetGen, wakeEpochGen,
                   resolutionCause>>
@@ -213,7 +209,7 @@ StartSet ==
     /\ eventSet' = "SET"
     /\ activeSetGen' = resetGeneration
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
-                  admissionPhase, admissionSawSet, wokenBySetDrain,
+                  admissionPhase, admissionSawSet,
                   resetGeneration, registrationGeneration, wakeEpochGen,
                   resolutionCause>>
 
@@ -229,7 +225,6 @@ DrainOne(n) ==
     /\ linked' = [linked EXCEPT ![n] = FALSE]
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
-    /\ wokenBySetDrain' = [wokenBySetDrain EXCEPT ![n] = wokenBySetDrain[n] + 1]
     /\ wakeEpochGen' = [wakeEpochGen EXCEPT ![n] = activeSetGen]
     /\ resolutionCause' = [resolutionCause EXCEPT ![n] = "SetBroadcast"]
     /\ UNCHANGED <<eventSet, admissionPhase, admissionSawSet,
@@ -247,7 +242,7 @@ FinishSet ==
     /\ protoPhase' = "Idle"
     /\ activeSetGen' = NoGen
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
-                  admissionPhase, admissionSawSet, wokenBySetDrain,
+                  admissionPhase, admissionSawSet,
                   resetGeneration, registrationGeneration,
                   wakeEpochGen, resolutionCause>>
 
@@ -266,7 +261,7 @@ ResetEvent ==
     /\ eventSet' = "UNSET"
     /\ resetGeneration' = resetGeneration + 1
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
-                  admissionPhase, admissionSawSet, wokenBySetDrain,
+                  admissionPhase, admissionSawSet,
                   protoPhase, registrationGeneration, activeSetGen,
                   wakeEpochGen, resolutionCause>>
 
@@ -280,7 +275,7 @@ ResolveCancel(n) ==
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
     /\ resolutionCause' = [resolutionCause EXCEPT ![n] = "Cancel"]
-    /\ UNCHANGED <<eventSet, admissionPhase, admissionSawSet, wokenBySetDrain,
+    /\ UNCHANGED <<eventSet, admissionPhase, admissionSawSet,
                   protoPhase, resetGeneration, registrationGeneration,
                   activeSetGen, wakeEpochGen>>
 

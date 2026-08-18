@@ -113,14 +113,17 @@ echo "=== E12-F AsyncRwLock formal gate (TLC2, workers=$WORKERS) ==="
 echo
 rc=0
 
-# Correct model: 10 invariants
-expect_pass "E12RwLock [10 invariants]" \
+# Correct model: 11 invariants
+expect_pass "E12RwLock [11 invariants]" \
             E12RwLock E12RwLock.cfg E12RwLock.safety || rc=1
 
 # Negative: reader bypasses writer
 expect_fail "NEG ReaderBypass" \
             E12RwLockNegReaderBypass E12RwLockNegReaderBypass.cfg \
             NoReaderBarging E12RwLockNeg1 || rc=1
+expect_fail "NEG NoReconcile (release strands grantable head)" \
+            E12RwLockNegNoReconcile E12RwLockNegNoReconcile.cfg \
+            InvNoStrandedGrantableHead E12RwLockNeg2 || rc=1
 
 echo
 echo "=== gate ${rc}-ed (0 = all expected verdicts) ==="

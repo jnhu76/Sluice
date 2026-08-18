@@ -56,11 +56,36 @@ expect_pass() {
   echo "FAIL  $label (expected PASS)"; tail -20 "$out"; return 1
 }
 
+# Negative gates (2026-08-18 formal audit): single-mutation buggy models must
+# violate their NAMED invariant — the suite previously had zero negatives, so
+# no gate sensitivity was ever checked.
+named_violation() { grep -Eq "Invariant $2 is violated" "$1"; }
+
+expect_fail() {
+  local label="$1" model="$2" cfg="$3" expected="$4" tag="$5"
+  local out="$outroot/$tag.out"
+  run_tlc "$model" "$cfg" "$tag"
+  if ! launched "$out"; then echo "FAIL  $label (no launch)"; tail -20 "$out"; return 1; fi
+  if passed "$out"; then echo "FAIL  $label (expected $expected violation, model passed)"; return 1; fi
+  if ! named_violation "$out" "$expected"; then
+    echo "FAIL  $label (expected $expected, got another failure)"
+    tail -12 "$out"
+    return 1
+  fi
+  echo "CEX   $label ($expected violated, as expected)"
+}
+
 rc=0
 echo "=== BlockingIoPool formal gate (workers=$workers) ==="
 expect_pass "BlockingIoPool [safety]" BlockingIoPool BlockingIoPool.cfg safety || rc=1
 expect_pass "BlockingIoPool [liveness]" BlockingIoPool \
   BlockingIoPool_liveness.cfg liveness || rc=1
+expect_fail "NEG-BIP-1 unbounded dequeue" \
+  BlockingIoPoolBuggyUnboundedDequeue \
+  BlockingIoPoolBuggyUnboundedDequeue.cfg WorkerBoundInvariant neg1 || rc=1
+expect_fail "NEG-BIP-2 shutdown discards queued work" \
+  BlockingIoPoolBuggyShutdownDiscardsQueued \
+  BlockingIoPoolBuggyShutdownDiscardsQueued.cfg NoLostAcceptedTask neg2 || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi

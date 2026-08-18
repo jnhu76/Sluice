@@ -48,10 +48,10 @@ the single-winner linearization. A concurrent `ResolveCancel(n)` observes
 
 ## Results
 
-**NOTE — TLA+ tooling limitation.** This environment has no `tla2tools.jar`
-(the E9 README expects it at `/tmp/tla2tools.jar`) and no network to fetch it.
-**TLC was NOT executed here.** The `.cfg` files are reproducible from a fixed
-jar exactly as the E7/E8/E9 models are; running them is:
+**Execution (2026-08-18 audit).** The suite is gated by
+`scripts/formal/verify-e10-waitnode.sh` (locked jar via
+`scripts/formal/resolve-jar.sh`); the historical "TLC was NOT executed" note
+below described the original authoring environment only. Reproduce by hand:
 
 ```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC \
@@ -202,3 +202,19 @@ The committed `.cfg` files reproduce the gate from a fixed `tla2tools.jar`
 (jar not present in this environment; no network). The production stress gates
 (e10_wait_queue_test C12, e10_scheduler_wait_test C10c) ARE executed and pass —
 see the final report §M for exact counts.
+
+## Audit notes (2026-08-18)
+
+- The gate conjunction was pruned: `InvNoTerminalResurrection` (tautology,
+  admitted in its own comment) and `InvTerminalNotLinked` (implied by
+  `InvLinkedImpliesRegistered`) no longer count as checked invariants.
+- `FairResolve` puts weak fairness on the wake/cancel RESOLVERS, which are
+  caller-thread actions in C++ (not scheduler-owned). `EventualResolution` is
+  therefore a CONDITIONAL property: it holds when a resolver is eventually
+  invoked — the Scheduler does not auto-resolve stranded registrations
+  (`wait_queue.hpp` documents this). Read it as exactly-once-on-resolution,
+  not as stranded-wait liveness.
+- The negative's README framing as a CONCURRENT race is stricter than the
+  current C++ (all resolvers serialize under `global_mtx_` + queue mutex;
+  the `resolve_` CAS is defense-in-depth). The defect class remains real:
+  a refactor that ignores the terminal state on a sequential second resolve.

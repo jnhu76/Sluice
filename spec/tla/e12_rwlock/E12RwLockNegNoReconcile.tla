@@ -1,4 +1,4 @@
-------------------------------- MODULE E12RwLock -------------------------------
+------------------------------- MODULE E12RwLockNegNoReconcile -------------------------------
 \* sluice::async::AsyncRwLock -- writer-fair phase-batched RwLock SAFETY model
 \* (E12-F, authority docs/e12-rwlock.md).
 \*
@@ -119,7 +119,7 @@ WriteQueue(e) ==
 UnlockRead(e) ==
     /\ e \in grantedReaders
     /\ activeReaders > 0
-    /\ IF activeReaders - 1 = 0 /\ Len(queue) > 0
+    /\ IF FALSE \* BUG (NEG-RW2): last-reader unlock drops the head reconcile
        THEN \* reconcile: grant from head
             /\ LET prefix == ReaderPrefixLen(queue)
                IN IF prefix > 0
@@ -154,7 +154,7 @@ UnlockRead(e) ==
 \* UnlockWrite: release write lock
 UnlockWrite(e) ==
     /\ writerOwner = e
-    /\ IF Len(queue) > 0
+    /\ IF FALSE \* BUG (NEG-RW2): writer unlock drops the head reconcile
        THEN LET prefix == ReaderPrefixLen(queue)
             IN IF prefix > 0
                THEN \* grant reader prefix
