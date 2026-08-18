@@ -87,6 +87,65 @@ COVERAGE_GAP_FILE_FIELDS = [
     "owner_docs",
 ]
 
+# Suite-level file-list fields whose referenced paths must exist (audit
+# finding: `blocking-io-pool` bound `src/core/blocking_io_pool.cpp`, which has
+# never existed at that path — `check` validated only coverage_gaps file
+# fields, so a dangling suite binding passed silently).
+SUITE_FILE_FIELDS = [
+    "implementation_bindings",
+    "owner_docs",
+]
+
+
+def _check_repo_paths(
+    paths: object, where: str, field: str, errors: list[str]
+) -> None:
+    """Validate that every entry of a file-list field is an existing repo file."""
+    if not isinstance(paths, list):
+        errors.append(f"{where}: '{field}' must be an array")
+        return
+    for p in paths:
+        if not isinstance(p, str) or not p:
+            errors.append(f"{where}: '{field}' entries must be non-empty strings")
+            continue
+        candidate = (REPO_ROOT / p).resolve()
+        try:
+            candidate.relative_to(REPO_ROOT.resolve())
+        except ValueError:
+            errors.append(f"{where}: '{field}' path escapes REPO_ROOT: {p}")
+            continue
+        if not candidate.is_file():
+            errors.append(f"{where}: '{field}' file not found: {p}")
+
+
+def _check_suite_bindings(manifest: dict) -> list[str]:
+    """Validate per-suite implementation_bindings / owner_docs.
+
+    Every suite must either bind at least one concrete repo file or carry a
+    non-empty `binding_rationale` explaining why it is protocol-level /
+    cross-file (AGENTS.md §17 evidence discipline: a suite that nobody can map
+    to real code is unauditable). All referenced files must exist.
+    """
+    errors: list[str] = []
+    for s in manifest.get("suites", []):
+        sid = s.get("id", "?")
+        where = f"suite '{sid}'"
+        for field in SUITE_FILE_FIELDS:
+            if field not in s:
+                continue
+            _check_repo_paths(s.get(field), where, field, errors)
+        bindings = s.get("implementation_bindings")
+        rationale = s.get("binding_rationale")
+        has_bindings = isinstance(bindings, list) and len(bindings) > 0
+        has_rationale = isinstance(rationale, str) and rationale.strip() != ""
+        if not has_bindings and not has_rationale:
+            errors.append(
+                f"{where}: implementation_bindings is empty and no "
+                f"binding_rationale is given — bind concrete C++ files or "
+                f"explain why the suite is protocol-level"
+            )
+    return errors
+
 
 def _check_coverage_gaps(manifest: dict) -> list[str]:
     """Validate the optional top-level `coverage_gaps` structure.
@@ -221,6 +280,17 @@ def cmd_doctor(manifest: dict) -> int:
         rc = 1
     else:
         print("OK    coverage_gaps schema valid (or absent)")
+
+    # Suite-level implementation_bindings / owner_docs (formal audit finding:
+    # dangling bindings passed silently before this check existed).
+    binding_errors = _check_suite_bindings(manifest)
+    if binding_errors:
+        print(f"FAIL  suite bindings ({len(binding_errors)} error(s)):")
+        for e in binding_errors:
+            print(f"      {e}")
+        rc = 1
+    else:
+        print("OK    suite implementation_bindings/owner_docs valid")
 
     # Verifiers exist and are executable
     for s in manifest.get("suites", []):
@@ -371,6 +441,16 @@ def cmd_check(manifest: dict) -> int:
         rc = 1
     else:
         print("OK    coverage_gaps schema valid (or absent)")
+
+    # 1c. Suite implementation_bindings / owner_docs point at real files.
+    binding_errors = _check_suite_bindings(manifest)
+    if binding_errors:
+        print(f"FAIL  suite bindings ({len(binding_errors)} error(s)):")
+        for e in binding_errors:
+            print(f"      {e}")
+        rc = 1
+    else:
+        print("OK    suite implementation_bindings/owner_docs valid")
 
     # 2. Every .tla belongs to a suite
     suite_dirs = {s.get("spec_dir", "") for s in manifest["suites"]}
