@@ -1,5 +1,15 @@
 // sluice-grep — streaming literal line matcher implementation.
 //
+// Platform scope: deliberately Linux/glibc. The fast-scan paths use GNU
+// extensions (`memrchr`, guarded by `_GNU_SOURCE`; the bench ladder also
+// uses `memmem`) that are NOT POSIX — per POSIX.1-2008 only forward
+// `memchr` is standard. Sluice's CI and application track are Linux-only
+// today, so this dependency is accepted and documented here rather than
+// papered over with a portable-but-slower fallback; a non-glibc port would
+// substitute a reverse newline scan and re-run the differential oracle
+// (tests/sluice_grep_matcher_differential_test.cpp). Do not silently widen
+// or narrow this scope.
+//
 // V2 attribution-driven scan (docs/verification/performance-attribution.md):
 // the V1 shape (split every line, then std::search each line) pays a
 // per-byte quadratic-ish scan and re-derives search state per line. V2 scans

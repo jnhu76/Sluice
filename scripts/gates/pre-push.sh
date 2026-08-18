@@ -3,7 +3,8 @@
 #
 # PURPOSE
 #   Catch deterministic mechanical failures — documentation link validation,
-#   architecture-doc structure, the backend-conformance manifest self-test, and
+#   architecture-doc structure, the backend-conformance manifest self-test,
+#   mechanical facts, performance-evidence structural validation, and
 #   whitespace damage — BEFORE a push consumes a GitHub CI round trip. This is
 #   developer tooling only.
 #
@@ -150,6 +151,29 @@ run_gate "mechanical facts self-test" "${MECH_FACTS_SELFTEST_REPRO}" \
 MECH_FACTS_REPRO="python3 scripts/gates/mechanical-facts.py"
 run_gate "mechanical facts" "${MECH_FACTS_REPRO}" \
     python3 scripts/gates/mechanical-facts.py
+
+# ---------------------------------------------------------------------------
+# Gate 5b: performance-evidence machine enforcement.
+#
+# docs/verification/performance-engineering.md requires performance claims
+# to be backed by machine-readable artifacts, not prose. Two self-tests
+# prove the instrument works (runner pure logic; validator detectors fire
+# on planted violations), then the committed evidence artifacts under
+# docs/results/performance-attribution/ are structurally validated: git SHA
+# + dirty state (+ provenance note when dirty), release build, environment
+# fingerprint, workload params, raw samples, and statistics consistent with
+# the samples. Absolute speed thresholds deliberately stay out of gates.
+PERF_RUNNER_SELFTEST_REPRO="python3 scripts/bench/perf-attribution.py self-test"
+run_gate "perf-attribution runner self-test" "${PERF_RUNNER_SELFTEST_REPRO}" \
+    python3 scripts/bench/perf-attribution.py self-test
+
+PERF_EVIDENCE_SELFTEST_REPRO="python3 scripts/bench/perf-evidence-validate.py --self-test"
+run_gate "perf evidence validator self-test" "${PERF_EVIDENCE_SELFTEST_REPRO}" \
+    python3 scripts/bench/perf-evidence-validate.py --self-test
+
+PERF_EVIDENCE_REPRO="python3 scripts/bench/perf-evidence-validate.py"
+run_gate "performance evidence artifacts" "${PERF_EVIDENCE_REPRO}" \
+    python3 scripts/bench/perf-evidence-validate.py
 
 # ---------------------------------------------------------------------------
 # Gate 6: whitespace / conflict-marker damage across the PUSHED ranges.

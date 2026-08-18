@@ -18,8 +18,11 @@
 // (scripts/bench/perf-attribution.py) against the real binary.
 //
 // CSV to stdout, one row per (stage, workload): min/median/max ns over the
-// measured iterations plus a stage-defined `matches` cross-check value.
-// Results are environment-sensitive — no universal performance claim.
+// measured iterations plus a stage-defined `matches` cross-check value and
+// the raw per-iteration samples in run order (`ns_samples`). The median is
+// the true mathematical median (mean of the two middle samples for an even
+// iteration count), not an upper-middle pick that silently biases even-iter
+// runs. Results are environment-sensitive — no universal performance claim.
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -294,20 +297,37 @@ std::uint64_t stage_l4_sluice(const std::string& path, const std::string& pat,
 
 // ---------------------------------------------------------------------------
 
+// True mathematical median of the sorted samples: middle element for odd n,
+// mean of the two middle elements for even n (arbitrary --iters must not
+// silently bias the reported median upward).
+double median_sorted(const std::vector<std::uint64_t>& sorted) {
+    const std::size_t n = sorted.size();
+    if (n % 2 == 1) return static_cast<double>(sorted[n / 2]);
+    return (static_cast<double>(sorted[n / 2 - 1]) +
+            static_cast<double>(sorted[n / 2])) /
+           2.0;
+}
+
 void emit_row(const std::string& stage, const std::string& wl,
               std::size_t bytes, const std::vector<std::uint64_t>& ns,
               std::uint64_t matches) {
     std::vector<std::uint64_t> sorted = ns;
     std::sort(sorted.begin(), sorted.end());
+    const double med = median_sorted(sorted);
     // bytes/ns is GB/s (1 byte/ns == 1 GB/s).
-    double gbps = static_cast<double>(bytes) /
-                  static_cast<double>(sorted[sorted.size() / 2]);
-    std::printf("%s,%s,%zu,%zu,%llu,%llu,%llu,%.3f,%llu\n", stage.c_str(),
+    double gbps = static_cast<double>(bytes) / med;
+    // Raw samples in run order (not sorted): evidence artifacts must preserve
+    // the per-iteration distribution, not just the derived statistics.
+    std::string samples;
+    for (std::size_t i = 0; i < ns.size(); ++i) {
+        if (i != 0) samples += ';';
+        samples += std::to_string(ns[i]);
+    }
+    std::printf("%s,%s,%zu,%zu,%llu,%.1f,%llu,%.3f,%llu,%s\n", stage.c_str(),
                 wl.c_str(), bytes, sorted.size(),
-                (unsigned long long)sorted.front(),
-                (unsigned long long)sorted[sorted.size() / 2],
+                (unsigned long long)sorted.front(), med,
                 (unsigned long long)sorted.back(), gbps,
-                (unsigned long long)matches);
+                (unsigned long long)matches, samples.c_str());
 }
 
 struct Config {
@@ -380,7 +400,8 @@ int main(int argc, char** argv) {
     }
 
     std::printf(
-        "stage,workload,bytes,iters,ns_min,ns_med,ns_max,gbps_med,matches\n");
+        "stage,workload,bytes,iters,ns_min,ns_med,ns_max,gbps_med,matches,"
+        "ns_samples\n");
 
     const MemStage mem_stages[] = {
         {"L0_sum", stage_l0_sum},
