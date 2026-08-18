@@ -100,6 +100,23 @@ inline std::uint64_t count_newlines(const char* p, std::size_t n) {
     return count;
 }
 
+// Anchor offset within a non-empty pattern: the byte with the lowest
+// estimated text frequency, which the chunk scan memchr's for. Shared by
+// line_contains and LineMatcher so the one-shot and streaming paths cannot
+// disagree on anchor choice (they must scan for the same byte).
+std::size_t pick_anchor(std::string_view pat) {
+    std::size_t anchor = 0;
+    int best = byte_freq_score(static_cast<unsigned char>(pat[0]));
+    for (std::size_t i = 1; i < pat.size(); ++i) {
+        int sc = byte_freq_score(static_cast<unsigned char>(pat[i]));
+        if (sc < best) {
+            best = sc;
+            anchor = i;
+        }
+    }
+    return anchor;
+}
+
 // First occurrence of `pat` (non-empty) in hay[pos, hay.size()); npos if
 // none. Anchor strategy: memchr for the pattern's rarest byte, memcmp the
 // whole pattern at each candidate. Worst case is O(n*m) memcmps (peaks on
@@ -129,41 +146,30 @@ std::size_t fast_find(std::string_view hay, std::size_t pos,
 }  // namespace
 
 // Literal substring test (std::search semantics; empty needle => true).
+// An empty pattern matches every line; a non-empty pattern containing '\n'
+// never matches (one line never contains a newline).
 bool line_contains(std::string_view line, std::string_view pattern) {
     if (pattern.empty()) return true;
     if (pattern.size() > line.size()) return false;
     if (pattern.find('\n') != std::string_view::npos) return false;
-    std::size_t anchor = 0;
-    int best = byte_freq_score(static_cast<unsigned char>(pattern[0]));
-    for (std::size_t i = 1; i < pattern.size(); ++i) {
-        int sc = byte_freq_score(static_cast<unsigned char>(pattern[i]));
-        if (sc < best) {
-            best = sc;
-            anchor = i;
-        }
-    }
-    return fast_find(line, 0, pattern, anchor) != std::string_view::npos;
+    return fast_find(line, 0, pattern, pick_anchor(pattern)) !=
+           std::string_view::npos;
 }
 
 LineMatcher::LineMatcher(std::string pattern, std::size_t max_line_bytes)
     : pattern_(std::move(pattern)),
-      max_line_bytes_(max_line_bytes),
+      // A zero cap is clamped to 1. Zero itself cannot retain any line, and
+      // the over-cap sampler in scan_complete_region strides by
+      // max_line_bytes_ — a zero stride would never advance the scan. The
+      // degenerate 1-byte cap preserves the drop-everything behavior without
+      // the non-advancing loop.
+      max_line_bytes_(max_line_bytes ? max_line_bytes : 1),
       anchor_off_(0),
       pattern_has_nl_(pattern_.find('\n') != std::string::npos) {
     // Reserve the carry's full budget up front so steady-state feeding never
     // allocates (the buffer only grows up to max_line_bytes_).
     carry_.reserve(max_line_bytes_ + 1);
-    if (!pattern_.empty()) {
-        int best = byte_freq_score(static_cast<unsigned char>(pattern_[0]));
-        for (std::size_t i = 1; i < pattern_.size(); ++i) {
-            int sc =
-                byte_freq_score(static_cast<unsigned char>(pattern_[i]));
-            if (sc < best) {
-                best = sc;
-                anchor_off_ = i;
-            }
-        }
-    }
+    if (!pattern_.empty()) anchor_off_ = pick_anchor(pattern_);
 }
 
 void LineMatcher::feed(const std::uint8_t* data, std::size_t len,
@@ -276,15 +282,20 @@ void LineMatcher::scan_complete_region(const char* p, std::size_t i,
     // every line longer than the cap (any M+1 consecutive byte offsets
     // contain a multiple of M), so 2 libc calls per cap-window replace a
     // full per-line length walk. Skipped entirely when no complete line can
-    // exceed the cap.
+    // exceed the cap. The backward scan starts at the previous sample's line
+    // start (`floor`, monotonic): the last '\n' before a later sample point
+    // can only be at or after the last '\n' before an earlier one, so each
+    // sample scans its own window instead of rescanning from `i`.
     if (region_len > max_line_bytes_) {
+        std::size_t floor = i;
         for (std::size_t s = i; s < end; s += max_line_bytes_) {
-            const void* prev = memrchr(p + i, '\n', s - i);
+            const void* prev = memrchr(p + floor, '\n', s - floor);
             std::size_t ls =
                 prev == nullptr
-                    ? i
+                    ? floor
                     : static_cast<std::size_t>(
                           static_cast<const char*>(prev) - p) + 1;
+            floor = ls;
             const void* nxt = std::memchr(p + s, '\n', end - s);
             std::size_t le =
                 nxt == nullptr

@@ -35,7 +35,9 @@ struct MatchEvent {
 class LineMatcher {
 public:
     // `max_line_bytes` is the inclusive cap on a retained line (the
-    // terminating '\n' does not count toward it).
+    // terminating '\n' does not count toward it). A zero cap is clamped to
+    // 1 (zero can retain nothing and would otherwise produce a
+    // non-advancing over-cap scan).
     LineMatcher(std::string pattern, std::size_t max_line_bytes);
 
     // Feed the next chunk. Complete matching lines are appended to `out` in
@@ -76,7 +78,9 @@ private:
     bool dropped_long_ = false;
 };
 
-// Literal substring test (std::search semantics; empty needle => true).
+// Literal substring test (std::search semantics): an empty pattern returns
+// true for every line; a non-empty pattern containing '\n' returns false (a
+// single line never contains a newline).
 bool line_contains(std::string_view line, std::string_view pattern);
 
 }  // namespace sluice_grep

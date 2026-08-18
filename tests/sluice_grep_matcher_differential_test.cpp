@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -138,7 +139,9 @@ bool run_one_case(const std::string& pattern, const std::string& data,
                   std::size_t chunk, std::size_t cap, std::string* err) {
     std::vector<MatchEvent> got, want;
     LineMatcher m(pattern, cap);
-    RefMatcher r{pattern, cap, {}, 0, false, false};
+    // Mirror the documented ctor policy (matcher.hpp): a zero cap is
+    // clamped to 1 by the implementation, so the reference must clamp too.
+    RefMatcher r{pattern, cap ? cap : 1, {}, 0, false, false};
     for (std::size_t i = 0; i < data.size(); i += chunk) {
         std::size_t n = std::min(chunk, data.size() - i);
         m.feed(reinterpret_cast<const std::uint8_t*>(data.data()) + i, n,
@@ -211,7 +214,7 @@ std::string gen_pattern(Rng& rng) {
         "this-pattern-is-longer-than-most-lines-in-the-pool",
         "aaaa",
     };
-    return pats[rng.below(17)];
+    return pats[rng.below(std::size(pats))];
 }
 
 }  // namespace
@@ -291,6 +294,29 @@ SLUICE_TEST_CASE(matcher_differential_boundary_fixed_cases) {
                                             std::to_string(chunk) + ": " + err);
                 return;
             }
+        }
+    }
+    SLUICE_CHECK(true);
+}
+
+SLUICE_TEST_CASE(matcher_differential_sparse_far_match) {
+    // Multi-kilobyte newline-terminated filler with ONE distant match, fed
+    // as a single chunk: the occurrence→line resolution must jump backward
+    // over thousands of lines (memrchr) and the over-cap sampler must
+    // stride with a positive cap. Caps 0 (ctor-clamped), 4, and 1 MiB.
+    std::string data;
+    for (int ln = 0; ln < 300; ++ln)
+        data += "filler line with no target bytes here\n";
+    data += "the distant needle line\n";
+    for (int ln = 0; ln < 300; ++ln)
+        data += "more filler without the pattern\n";
+    const std::string pat = "needle";
+    for (std::size_t cap : {std::size_t(0), std::size_t(4),
+                            std::size_t(1) << 20}) {
+        std::string err;
+        if (!run_one_case(pat, data, data.size(), cap, &err)) {
+            SLUICE_CHECK_MSG(false, "cap=" + std::to_string(cap) + ": " + err);
+            return;
         }
     }
     SLUICE_CHECK(true);
