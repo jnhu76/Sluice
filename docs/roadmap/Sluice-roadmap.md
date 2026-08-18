@@ -1363,7 +1363,7 @@ Observability scaffolding可以提前加入 small app，但架构级性能优化
 * broad networking；
 * 无数据支持的大规模性能重写。
 
-### plugin framework 非目标的精确边界（2026-08 澄清）
+## plugin framework 非目标的精确边界（2026-08 澄清）
 
 **Composable mechanisms ≠ dynamic plugin framework。** 现有的组合示例是
 `AsyncBackend` 与 experimental io_uring backend；未来的 policy（stack、

@@ -61,15 +61,16 @@ GB/s medians):
 
 | workload | V1 | V2 | Δ |
 |---|---|---|---|
-| sparse rare patterns (qz9/1b_z/16b/64b/rare1st/rep) | 0.85–1.81 | 2.41–4.29 | 2.4–2.9× |
-| binary | 1.28 | 3.42 | 2.7× |
-| dense common anchor (`the` all densities, `e`) | 0.74–0.98 | 0.78–1.05 | ≈1.05× |
-| short lines | 0.42 | 0.49 | 1.2× |
-| long / huge lines | 4.71 / 4.95 | 5.03 / 4.84 | ≈0.98–1.07× |
+| sparse rare patterns (qz9/1b_z/16b/64b/rare1st/rep) | 0.89–1.92 | 2.43–4.54 | 2.4–3.1× |
+| binary | 1.27 | 3.53 | 2.8× |
+| dense common anchor (`the` all densities, `e`) | 0.74–0.94 | 0.79–1.08 | ≈1.1× |
+| short lines | 0.42 | 0.51 | 1.2× |
+| long / huge lines | 5.53 / 5.91 | 5.58 / 5.30 | ≈0.90–1.01× |
 
-L6 CLI (1 GiB, fresh process): sluice-grep 1.7–1.8 GB/s on sparse patterns
-(vs V1 ~1.2 GB/s), byte-identical output to GNU grep/rg on every text
-workload (runner records per-tool md5s). Cold-first-run in a fresh process
+L6 CLI (1 GiB, fresh process): sluice-grep 1.9–2.1 GB/s on sparse patterns
+(vs V1 ~1.2 GB/s; binary rows run at 1.86 GB/s), byte-identical output to
+GNU grep/rg on every workload including binary (competitors run with `-a`
+text-mode parity and LC_ALL=C; runner records per-tool md5s). Cold-first-run in a fresh process
 measures ~2× the in-process steady-state engine on this host
 (fresh-process/runtime-cold, page-cache state not guaranteed cold;
 read-path page faults + host load). Sluice-owned symbols account for
@@ -106,7 +107,7 @@ Interpretation (measure first, optimize later — brief §21):
   SHA-NI-capable implementation is app-local, see F3);
 - grep's 65× gap was algorithmic (SIMD/kwset) and out of scope for V1 by
   explicit rule (§23 no SIMD grep). The attribution round (V2 matcher)
-  recovered 2.4–2.9× on sparse patterns and ~3× on binary — the remaining
+  recovered 2.4–3.1× on sparse patterns and 2.8× on binary — the remaining
   gap vs GNU grep/rg is the algorithm class (skip loops that do not touch
   every byte) plus this host's cold-process read path;
 - tail -n 10 is faster than coreutils; the 100k-lines case is 6.8× slower
@@ -117,7 +118,7 @@ Interpretation (measure first, optimize later — brief §21):
 
 | App | main bottleneck | owner | evidence |
 |---|---|---|---|
-| grep | V1 per-line `std::search`; V2 fixed sparse/binary (~3×), dense-anchor rows now emit-bound; remaining gap is skip-loop algorithm class | APP | ladder L2/L4, perf (Sluice symbols <2% of sampled userspace symbols — non-exclusion wording per attribution corrective) |
+| grep | V1 per-line `std::search`; V2 fixed sparse/binary (2.4–3.1×/2.8×), dense-anchor rows now emit-bound; remaining gap is skip-loop algorithm class | APP | ladder L2/L4, perf (Sluice symbols <2% of sampled userspace symbols — non-exclusion wording per attribution corrective) |
 | hash | portable SHA-256 (no SHA-NI): 3.2× instructions vs OpenSSL | APP | prior perf: 70 G instr vs 21.6 G |
 | tail | bounded reverse-scan assembler vs memcpy ring (large-N) | APP | prior table (6.8× at 100k) |
 | copy | V3 atomic copy at 1.1–1.3× `cp`; async coordination (mutex/cond/clock) is a visible but small share — see re-verification note below | APP (meets bar); CORE coordination re-measured | perf: mutex ~16% |

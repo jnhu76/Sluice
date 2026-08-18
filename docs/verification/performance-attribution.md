@@ -124,9 +124,11 @@ python, WSL classification, workload input/output filesystem mounts
 - Release (or explicitly labeled optimized) builds only for performance
   data; Debug is for correctness.
 - Same bytes for every tool compared (one seeded generator).
-- Competitor runs (GNU grep, ripgrep) state that semantics differ; the
-  comparison separates *algorithm class* from *runtime overhead*, it is
-  not a leaderboard.
+- Competitor output semantics are unified, not assumed: GNU grep/ripgrep
+  run with `-a` (text-mode) under `LC_ALL=C`, so every tool implements the
+  same line-output contract and byte-equality is machine-checked per row;
+  the remaining comparison gap separates *algorithm class* from *runtime
+  overhead*, it is not a leaderboard.
 - Exit-code semantics are honored, not fought: 0 = match, 1 = no match
   (legitimate data for every grep-family tool — never an infrastructure
   failure), 2 = tool error (row flagged `tool_error`, invalid as
@@ -182,9 +184,14 @@ scripts/bench/perf-attribution.py self-test  # hermetic runner logic tests
 scripts/bench/perf-evidence-validate.py      # artifact structure gate
 ```
 
-GNU grep is invoked as `/usr/bin/grep -F` deliberately — a shell alias
-(e.g. to ugrep) must never silently change the competitor. `perf`
-subcommand accepts `--requests N` to emit per-request normalized ratios.
+GNU grep is invoked as `/usr/bin/grep -F -a` deliberately — a shell alias
+(e.g. to ugrep) must never silently change the competitor, and `-a`
+(--text) forces text-mode line-output semantics on binary workloads
+(ripgrep gets the same `-a`); without it both competitors short-circuit to
+"Binary file matches" and stop being comparable. All timed commands run
+under `LC_ALL=C`. `perf` subcommand accepts `--requests N` to emit
+per-request normalized ratios and `--exit-semantics` to declare how its
+child's exit status must be classified.
 
 ## Round 1 evidence (sluice-grep, 2026-08)
 
@@ -193,9 +200,14 @@ Canonical artifacts: `docs/results/performance-attribution/`
 matcher, measured with the same instrument as the candidate via the
 measurement-instrument-only overlay described in its provenance note;
 `round1-grep-v2-ladder.json`, `round1-grep-v2-cli.json`,
-`round1-grep-v2-perf.json` at the candidate). Baseline and candidate
-were re-measured on the same machine in one session for this document;
-earlier same-session numbers from the development log are superseded by
+`round1-grep-v2-perf.json` at the candidate, clean tree). All four were
+re-measured in one session with the schema-2 runner after review round 3
+hardened the evidence contract: every artifact binds the measured
+executable (path + sha256 + size + mtime), CLI competitors run with `-a`
+text-mode parity (byte-identical outputs on every workload including
+binary), and perf artifacts classify the child's exit status
+(`exit_semantics`). Earlier numbers, including same-session numbers from
+the development log and the pre-hardening artifacts, are superseded by
 these artifacts.
 
 Environment (from the artifacts' fingerprints): WSL2, kernel
@@ -210,11 +222,11 @@ median and the raw samples live in the artifacts.
 
 | workload class | V1 | V2 | speedup |
 |---|---|---|---|
-| sparse rare patterns (qz9, 1b_z, 16b, 64b, rare1st, rep) | 0.85–1.93 | 2.52–4.74 | **2.5–3.1×** |
-| binary | 1.26 | 3.66 | 2.9× |
-| dense/common anchor (`the` all densities, 1b_e) | 0.76–1.00 | 0.84–1.14 | ≈1.1× |
-| short lines | 0.42 | 0.54 | 1.3× |
-| long / huge lines | 5.48 / 5.94 | 6.06 / 5.72 | ≈0.96–1.10× (parity) |
+| sparse rare patterns (qz9, 1b_z, 16b, 64b, rare1st, rep) | 0.89–1.92 | 2.43–4.54 | **2.4–3.1×** |
+| binary | 1.27 | 3.53 | 2.8× |
+| dense/common anchor (`the` all densities, 1b_e) | 0.74–0.94 | 0.79–1.08 | ≈1.1× |
+| short lines | 0.42 | 0.51 | 1.2× |
+| long / huge lines | 5.53 / 5.91 | 5.58 / 5.30 | ≈0.90–1.01× (parity) |
 
 V1's dominant gap was **APP**: per-line `std::search` + per-line state. V2
 scans the chunk's complete-line region once for occurrences (anchor memchr +
@@ -223,28 +235,28 @@ misses so huge-line work stays linear), and counts newlines with a
 borrow-free SWAR pass fused into the cursor. Dense/common-anchor patterns
 retain the emit cost of one `std::string` per matched line (API-bound) and
 remain an APP follow-up (Boyer-Moore/kwset-class skip or SIMD candidate
-filters, PF-004) rather than proof of runtime overhead — ripgrep still
-beats us on those rows while GNU grep reaches parity exactly where
-output materialization dominates (see CLI table); that is the documented
-algorithm-class gap, not runtime evidence.
+filters, PF-004) rather than proof of runtime overhead — on the
+output-dominated rows ripgrep and GNU grep stay ahead by measured 1.3–1.6×
+(see CLI table); that is the documented algorithm-class gap, not runtime
+evidence.
 
 ### Ladder attribution (256 MiB, sparse qz9 row, GB/s medians)
 
 | stage | V1 | V2 |
 |---|---|---|
-| L0_memchr_nl | 7.2 | 7.2 |
-| L1_line_std / L1_chunk_anchor | 1.99 | 25.1 |
-| L2_matcher | 1.89 | 8.4 |
-| L3_pread | 1.66 | 5.8 |
-| L4_sluice | 1.55 | 4.5 |
+| L0_memchr_nl | 7.2 | 7.4 |
+| L1_line_std / L1_chunk_anchor | 2.0 | 24.8 |
+| L2_matcher | 1.9 | 8.2 |
+| L3_pread | 1.7 | 5.7 |
+| L4_sluice | 1.5 | 4.2 |
 
 **Algorithm (L2 − L1)** collapsed with the V2 scan (V1: L2 ≈ L1; V2: L2
-runs at ~1/3 of the raw anchor scan, 8.4 vs 25.1 GB/s — the residual is
+runs at ~1/3 of the raw anchor scan, 8.2 vs 24.8 GB/s — the residual is
 line-assembly and event cost, APP). **I/O (L3 − L2)** ≈ tmpfs page-cache `pread` copy
 (~10 GB/s ceiling on this host, APP/PLATFORM). **Sluice core increment
 (L4 − L3)** — the aggregate measure, wording per the ladder section
-above — is **45–60 ms/GiB on sparse/binary rows** at 1 MiB chunks, and
-larger (≈ 78–104 ms/GiB on dense-anchor rows including `1b_e`, ≈ 132
+above — is **48–67 ms/GiB on sparse/binary rows** at 1 MiB chunks, and
+larger (≈ 107–150 ms/GiB on dense-anchor rows including `1b_e`, ≈ 146
 ms/GiB on short lines) where more per-line events flow through the engine. The increment
 is therefore NOT a workload-independent constant; characterizing what it
 scales with (requests at fixed bytes vs match-event count) is precisely
@@ -254,9 +266,9 @@ decompositions of this number are hypotheses, not findings.
 
 **Recorded anomaly (not hidden):** `normal__p_qz9__d_0` shows an
 anomalously slow L3 in both the V1 and V2 same-session artifacts
-(2.55 GB/s vs ~2.9–6.2 GB/s across the other rows' L3 in V2 — `rep`
-and binary sit at the low end of that spread), which makes its
-L4 − L3 negative (−189 ms/GiB). The row is retained in the artifacts and
+(2.56 GB/s in V2 vs 5.74 GB/s for its nearest sibling `qz9__d_s`; 1.18
+vs 1.65 GB/s in V1), which makes its
+L4 − L3 negative (−186 ms/GiB). The row is retained in the artifacts and
 excluded from increment claims pending investigation.
 
 **Fresh-process effect:** a fresh process's FIRST engine call measures
@@ -275,29 +287,31 @@ on the symbol share.
 Every iteration is a fresh process for EVERY tool (symmetric); workload
 files are page-cache-hot by construction of the matrix (generated once,
 then read repeatedly). State: fresh-process/runtime-cold per iteration,
-page-cache-hot. Outputs are byte-identical across all three tools on
-every text workload (per-tool md5 recorded), except binary inputs where
-GNU grep/rg short-circuit ("binary file") — a documented semantics
-difference, not a defect. Exit codes 0/1 (match/no-match) occurred as
-data; no tool-error rows were recorded.
+page-cache-hot. Competitors run with `-a` (text-mode) and `LC_ALL=C`, so
+all three tools implement the same output contract; outputs are
+byte-identical across all three tools on **every** workload including
+binary (per-tool md5 recorded, `outputs_equal` true — the validator
+rejects a false value as non-comparable evidence). Exit codes 0/1
+(match/no-match) occurred as data; no tool-error rows were recorded.
 
 | workload | sluice-grep | GNU grep | rg | notes |
 |---|---|---|---|---|
-| qz9 sparse | 0.51 s (2.1 GB/s) | 0.12 s | 0.14 s | outputs 1.2 KB; search-dominated |
-| 16b sparse | 0.53 s (2.0) | 0.13 s | 0.15 s | outputs 1.1 KB |
-| `e` (naturally dense) | 2.42 s (0.44) | 1.95 s | 2.00 s | **outputs 1.07 GB ≈ input; output-materialization-dominated** |
-| `the` sparse | 2.68 s (0.40) | 2.43 s | 1.83 s | outputs 901 MB |
-| `the` all-lines | 2.80 s (0.38) | 2.49 s | 1.92 s | outputs 1.07 GB |
-| long lines | 1.31 s (0.82) | 0.88 s | 0.84 s | outputs 1.07 GB |
-| binary | 0.62 s (1.73) | 0.002 s | 0.003 s | GNU grep/rg short-circuit on binary; semantics difference |
+| qz9 sparse | 0.52 s (2.1 GB/s) | 0.11 s | 0.14 s | outputs 1.2 KB; search-dominated |
+| 16b sparse | 0.55 s (1.9) | 0.11 s | 0.14 s | outputs 1.1 KB |
+| `e` (naturally dense) | 2.43 s (0.44) | 1.80 s | 1.92 s | **outputs 1.07 GB ≈ input; output-materialization-dominated** |
+| `the` sparse | 2.59 s (0.41) | 1.92 s | 1.73 s | outputs 901 MB |
+| `the` all-lines | 2.84 s (0.38) | 2.11 s | 1.97 s | outputs 1.07 GB |
+| long lines | 1.33 s (0.81) | 0.84 s | 1.00 s | outputs 1.07 GB |
+| binary | 0.58 s (1.86) | 0.28 s | 0.14 s | identical 4.9 KB outputs under `-a` parity |
 
 Dense-output reading (methodology: search work vs output/materialization
 work vs filesystem work): on rows whose output approaches the input size,
 every tool pays a ~1 GiB write+read materialization cost and the field
-converges — GNU grep is 1.1–1.25× ahead there and ripgrep ~1.4×, versus
-~4× gaps on search-dominated sparse rows; the runner records
-`output_bytes` per row so this never has to be inferred. On sparse rows
-the remaining gap to GNU grep/rg is the algorithm class.
+converges — on the dense/output rows GNU grep stays ~1.35× and ripgrep
+~1.3–1.5× ahead, and on long lines GNU grep ~1.6×, versus ~4.7–5.2× (GNU)
+and ~3.7–4.0× (rg) gaps on search-dominated sparse rows; the runner
+records `output_bytes` per row so this never has to be inferred. On sparse
+rows the remaining gap to GNU grep/rg is the algorithm class.
 
 The remaining gap vs GNU grep/rg on sparse rows is the **algorithm
 class** (kwset skip loop / SIMD candidate filters that do not touch every
@@ -307,8 +321,9 @@ measurement.
 ### perf stat (candidate, 1 GiB sparse qz9, 1024 × 1 MiB requests)
 
 `round1-grep-v2-perf.json` (divisor `params.requests` = 1024; per-request
-ratios in `derived`): ~424k cycles/request, ~1.7M instructions/request,
-~6.3k cache-misses/request, 0.41 page-faults/request. On this host `perf` runs with user-space-only
+ratios in `derived`; child exit 0 under `exit_semantics` grep-family):
+~425k cycles/request, ~1.7M instructions/request,
+~5.8k cache-misses/request, 0.41 page-faults/request. On this host `perf` runs with user-space-only
 counters (perf_event_paranoid; events reported with a `:u` modifier —
 preserved verbatim in the artifact's `raw` field), so kernel-side time
 (syscalls, scheduling) is NOT captured; context-switch/migration counts

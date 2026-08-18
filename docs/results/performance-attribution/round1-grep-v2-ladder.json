@@ -1,15 +1,18 @@
 {
   "env": {
-    "time": "2026-08-18T14:25:05+0800",
+    "time": "2026-08-18T19:30:50+0800",
     "git": {
-      "sha": "86496156d4e0ed1aa6c01ecfbe687e529bb2bb65",
+      "sha": "7e1248680b41b5ca27a702d6f856ca67685f5f0c",
       "dirty": false,
       "branch": "perf/performance-attribution"
     },
     "build": {
       "mode": "release",
       "compiler": "clang++",
-      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+      "plat": "linux",
+      "arch": "x86_64",
+      "toolchain": "clang"
     },
     "system": {
       "kernel": "6.18.33.2-microsoft-standard-WSL2",
@@ -35,12 +38,21 @@
       "ripgrep": "ripgrep 15.1.0"
     }
   },
+  "schema": 2,
   "kind": "ladder",
+  "binary": {
+    "path": "/home/hoo/Projects/perf-performance-attribution/build/linux/x86_64/release/grep_attribution_bench",
+    "sha256": "c236facf31860fbdaf0353aa798242d244d619951bf10936d78eb79aac213baf",
+    "size": 216160,
+    "mtime": 1787052418.8837988
+  },
   "params": {
     "bytes": 268435456,
     "iters": 5,
     "warmup": 1,
-    "buffer_size": 1048576
+    "buffer_size": 1048576,
+    "stages": null,
+    "workloads": null
   },
   "rows": [
     {
@@ -48,17 +60,17 @@
       "workload": "normal__p_qz9__d_0",
       "bytes": 268435517,
       "iters": 5,
-      "ns_min": 36356419,
-      "ns_med": 36541124.0,
-      "ns_max": 36734175,
-      "gbps_med": 7.346,
+      "ns_min": 35961507,
+      "ns_med": 36180699.0,
+      "ns_max": 36692201,
+      "gbps_med": 7.419,
       "matches": 24003060712,
       "ns_samples": [
-        36595990,
-        36541124,
-        36734175,
-        36377049,
-        36356419
+        36180699,
+        36040540,
+        36692201,
+        36190178,
+        35961507
       ]
     },
     {
@@ -66,17 +78,17 @@
       "workload": "normal__p_qz9__d_0",
       "bytes": 268435517,
       "iters": 5,
-      "ns_min": 35968285,
-      "ns_med": 37187754.0,
-      "ns_max": 37592080,
-      "gbps_med": 7.218,
+      "ns_min": 35904639,
+      "ns_med": 36060350.0,
+      "ns_max": 36345770,
+      "gbps_med": 7.444,
       "matches": 4193741,
       "ns_samples": [
-        37592080,
-        37467340,
-        37187754,
-        35968285,
-        36255646
+        35935202,
+        36060350,
+        36188585,
+        36345770,
+        35904639
       ]
     },
     {
@@ -84,1151 +96,1151 @@
       "workload": "normal__p_qz9__d_0",
       "bytes": 268435517,
       "iters": 5,
-      "ns_min": 131386322,
-      "ns_med": 132018605.0,
-      "ns_max": 133393660,
-      "gbps_med": 2.033,
-      "matches": 0,
-      "ns_samples": [
-        131386322,
-        132018605,
-        132582245,
-        131436047,
-        133393660
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_qz9__d_0",
-      "bytes": 268435517,
-      "iters": 5,
-      "ns_min": 9707458,
-      "ns_med": 10029376.0,
-      "ns_max": 10532271,
-      "gbps_med": 26.765,
-      "matches": 0,
-      "ns_samples": [
-        10532271,
-        10016090,
-        10029376,
-        10373947,
-        9707458
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_qz9__d_0",
-      "bytes": 268435517,
-      "iters": 5,
-      "ns_min": 96046983,
-      "ns_med": 99015545.0,
-      "ns_max": 99108184,
-      "gbps_med": 2.711,
-      "matches": 0,
-      "ns_samples": [
-        96046983,
-        96239091,
-        99085872,
-        99108184,
-        99015545
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_qz9__d_0",
-      "bytes": 268435517,
-      "iters": 5,
-      "ns_min": 30855249,
-      "ns_med": 31397389.0,
-      "ns_max": 31637780,
-      "gbps_med": 8.55,
-      "matches": 0,
-      "ns_samples": [
-        31397389,
-        31454247,
-        31637780,
-        30855249,
-        31110819
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_qz9__d_0",
-      "bytes": 268435517,
-      "iters": 5,
-      "ns_min": 30569290,
-      "ns_med": 31155685.0,
-      "ns_max": 34587497,
-      "gbps_med": 8.616,
-      "matches": 0,
-      "ns_samples": [
-        30569290,
-        31151006,
-        31155685,
-        31260586,
-        34587497
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_qz9__d_0",
-      "bytes": 268435517,
-      "iters": 5,
-      "ns_min": 102341074,
-      "ns_med": 105314418.0,
-      "ns_max": 107985450,
-      "gbps_med": 2.549,
-      "matches": 0,
-      "ns_samples": [
-        105314418,
-        103509495,
-        107985450,
-        102341074,
-        105612218
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_qz9__d_0",
-      "bytes": 268435517,
-      "iters": 5,
-      "ns_min": 57524519,
-      "ns_med": 57957870.0,
-      "ns_max": 58615741,
-      "gbps_med": 4.632,
-      "matches": 0,
-      "ns_samples": [
-        58615741,
-        57957870,
-        57920493,
-        57524519,
-        57963946
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 36201492,
-      "ns_med": 36453295.0,
-      "ns_max": 37087231,
-      "gbps_med": 7.364,
-      "matches": 24002795310,
-      "ns_samples": [
-        36803478,
-        36201492,
-        37087231,
-        36453295,
-        36336721
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 36667045,
-      "ns_med": 37527025.0,
-      "ns_max": 37774850,
-      "gbps_med": 7.153,
-      "matches": 4194501,
-      "ns_samples": [
-        36667045,
-        37774850,
-        37701960,
-        37527025,
-        37477840
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 135258578,
-      "ns_med": 136022502.0,
-      "ns_max": 137666563,
-      "gbps_med": 1.973,
-      "matches": 3,
-      "ns_samples": [
-        135258578,
-        135764328,
-        137666563,
-        136022502,
-        136198631
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 10643144,
-      "ns_med": 10681175.0,
-      "ns_max": 11008624,
-      "gbps_med": 25.132,
-      "matches": 3,
-      "ns_samples": [
-        11008624,
-        10667490,
-        10643144,
-        10681175,
-        10792009
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 98241481,
-      "ns_med": 100243530.0,
-      "ns_max": 103383623,
-      "gbps_med": 2.678,
-      "matches": 3,
-      "ns_samples": [
-        101522995,
-        98681957,
-        98241481,
-        103383623,
-        100243530
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 31567054,
-      "ns_med": 31861598.0,
-      "ns_max": 32183075,
-      "gbps_med": 8.425,
-      "matches": 3,
-      "ns_samples": [
-        32183075,
-        32000776,
-        31861598,
-        31567054,
-        31641386
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 31182707,
-      "ns_med": 31693212.0,
-      "ns_max": 32057659,
-      "gbps_med": 8.47,
-      "matches": 3,
-      "ns_samples": [
-        31781235,
-        31453065,
-        31693212,
-        32057659,
-        31182707
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 45323227,
-      "ns_med": 45960178.0,
-      "ns_max": 46442734,
-      "gbps_med": 5.841,
-      "matches": 3,
-      "ns_samples": [
-        45323227,
-        46123211,
-        45960178,
-        46442734,
-        45616760
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_qz9__d_s",
-      "bytes": 268435471,
-      "iters": 5,
-      "ns_min": 58531800,
-      "ns_med": 60103485.0,
-      "ns_max": 62968233,
-      "gbps_med": 4.466,
-      "matches": 3,
-      "ns_samples": [
-        61333274,
-        60103485,
-        59969578,
-        58531800,
-        62968233
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 37020513,
-      "ns_med": 37535932.0,
-      "ns_max": 39515057,
-      "gbps_med": 7.151,
-      "matches": 24002888783,
-      "ns_samples": [
-        39515057,
-        37746806,
-        37535932,
-        37020513,
-        37209977
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 37395191,
-      "ns_med": 37643628.0,
-      "ns_max": 38028605,
-      "gbps_med": 7.131,
-      "matches": 4193840,
-      "ns_samples": [
-        37733832,
-        37643628,
-        38028605,
-        37438465,
-        37395191
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 168372507,
-      "ns_med": 171358355.0,
-      "ns_max": 171976710,
-      "gbps_med": 1.567,
-      "matches": 3435328,
-      "ns_samples": [
-        168372507,
-        171976710,
-        171358355,
-        170479625,
-        171429305
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 204944320,
-      "ns_med": 207114032.0,
-      "ns_max": 213723248,
-      "gbps_med": 1.296,
-      "matches": 6961657,
-      "ns_samples": [
-        204944320,
-        206468865,
-        210426045,
-        207114032,
-        213723248
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 382950188,
-      "ns_med": 387136594.0,
-      "ns_max": 417121244,
-      "gbps_med": 0.693,
-      "matches": 6961657,
-      "ns_samples": [
-        413832345,
-        417121244,
-        382950188,
-        387136594,
-        384395366
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 268757928,
-      "ns_med": 269194682.0,
-      "ns_max": 273743194,
-      "gbps_med": 0.997,
-      "matches": 3435328,
-      "ns_samples": [
-        269194682,
-        270569486,
-        268757928,
-        268778083,
-        273743194
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 339950032,
-      "ns_med": 343806147.0,
-      "ns_max": 344287390,
-      "gbps_med": 0.781,
-      "matches": 3435328,
-      "ns_samples": [
-        344287390,
-        342101810,
-        344002542,
-        339950032,
-        343806147
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 281591231,
-      "ns_med": 282661936.0,
-      "ns_max": 290357094,
-      "gbps_med": 0.95,
-      "matches": 3435328,
-      "ns_samples": [
-        281978794,
-        281591231,
-        282661936,
-        290357094,
-        286551676
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_the__d_0",
-      "bytes": 268435502,
-      "iters": 5,
-      "ns_min": 306858701,
-      "ns_med": 308482197.0,
-      "ns_max": 311339581,
-      "gbps_med": 0.87,
-      "matches": 3435328,
-      "ns_samples": [
-        307040658,
-        309588343,
-        308482197,
-        306858701,
-        311339581
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 36305082,
-      "ns_med": 37275194.0,
-      "ns_max": 43835928,
-      "gbps_med": 7.201,
-      "matches": 24002699339,
-      "ns_samples": [
-        43835928,
-        37369534,
-        36818949,
-        36305082,
-        37275194
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 36243755,
-      "ns_med": 36455411.0,
-      "ns_max": 39523005,
-      "gbps_med": 7.363,
-      "matches": 4194640,
-      "ns_samples": [
-        36243755,
-        36800570,
-        36455411,
-        36318872,
-        39523005
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 160716704,
-      "ns_med": 161230449.0,
-      "ns_max": 165847942,
-      "gbps_med": 1.665,
-      "matches": 3434964,
-      "ns_samples": [
-        165847942,
-        164226319,
-        160716704,
-        161209289,
-        161230449
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 197462222,
-      "ns_med": 201967163.0,
-      "ns_max": 207131248,
-      "gbps_med": 1.329,
-      "matches": 6956010,
-      "ns_samples": [
-        201967163,
-        200268170,
-        207131248,
-        204134412,
-        197462222
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 372374303,
-      "ns_med": 372723078.0,
-      "ns_max": 376768544,
-      "gbps_med": 0.72,
-      "matches": 6956010,
-      "ns_samples": [
-        372693765,
-        372723078,
-        376768544,
-        372374303,
-        375448675
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 263186610,
-      "ns_med": 264907192.0,
-      "ns_max": 268095846,
-      "gbps_med": 1.013,
-      "matches": 3434964,
-      "ns_samples": [
-        264907192,
-        268095846,
-        265546288,
-        263546932,
-        263186610
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 343504850,
-      "ns_med": 347479063.0,
-      "ns_max": 349746231,
-      "gbps_med": 0.773,
-      "matches": 3434964,
-      "ns_samples": [
-        347479063,
-        346368514,
-        343504850,
-        347721384,
-        349746231
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 280619161,
-      "ns_med": 283797404.0,
-      "ns_max": 291233727,
-      "gbps_med": 0.946,
-      "matches": 3434964,
-      "ns_samples": [
-        290586988,
-        280619161,
-        291233727,
-        283797404,
-        282519340
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_the__d_s",
-      "bytes": 268435492,
-      "iters": 5,
-      "ns_min": 306319719,
-      "ns_med": 309854461.0,
-      "ns_max": 313124612,
-      "gbps_med": 0.866,
-      "matches": 3434964,
-      "ns_samples": [
-        306319719,
-        309854461,
-        313124612,
-        311773386,
-        308409300
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 34990750,
-      "ns_med": 36018091.0,
-      "ns_max": 37942571,
-      "gbps_med": 7.453,
-      "matches": 24002938324,
-      "ns_samples": [
-        37942571,
-        34990750,
-        35304822,
-        36018091,
-        36440220
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 34780456,
-      "ns_med": 35674762.0,
-      "ns_max": 35965920,
-      "gbps_med": 7.525,
-      "matches": 4194107,
-      "ns_samples": [
-        35722052,
-        35358746,
-        35965920,
-        35674762,
-        34780456
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 72875370,
-      "ns_med": 75093114.0,
-      "ns_max": 75383931,
-      "gbps_med": 3.575,
-      "matches": 4177079,
-      "ns_samples": [
-        75374633,
-        75383931,
-        75093114,
-        74965449,
-        72875370
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 134631736,
-      "ns_med": 135475283.0,
-      "ns_max": 138252480,
-      "gbps_med": 1.981,
-      "matches": 24333141,
-      "ns_samples": [
-        138252480,
-        134947371,
-        134631736,
-        136288354,
-        135475283
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 123030253,
-      "ns_med": 124386894.0,
-      "ns_max": 125968889,
-      "gbps_med": 2.158,
-      "matches": 24333141,
-      "ns_samples": [
-        124666912,
-        124386894,
-        123456570,
-        123030253,
-        125968889
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 196177169,
-      "ns_med": 196842506.0,
-      "ns_max": 204460974,
-      "gbps_med": 1.364,
-      "matches": 4177079,
-      "ns_samples": [
-        204460974,
-        198360238,
-        196177169,
-        196478985,
-        196842506
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 288930181,
-      "ns_med": 292948703.0,
-      "ns_max": 299299946,
-      "gbps_med": 0.916,
-      "matches": 4177079,
-      "ns_samples": [
-        292948703,
-        288930181,
-        295916029,
-        299299946,
-        290443725
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 213635347,
-      "ns_med": 215680480.0,
-      "ns_max": 217228660,
-      "gbps_med": 1.245,
-      "matches": 4177079,
-      "ns_samples": [
-        215654971,
-        215680480,
-        216470246,
-        213635347,
-        217228660
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_1b_e__d_0",
-      "bytes": 268435487,
-      "iters": 5,
-      "ns_min": 232330021,
-      "ns_med": 235156960.0,
-      "ns_max": 236657798,
-      "gbps_med": 1.142,
-      "matches": 4177079,
-      "ns_samples": [
-        236657798,
-        232330021,
-        235156960,
-        236359836,
-        234589126
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 34119296,
-      "ns_med": 35426466.0,
-      "ns_max": 36390853,
-      "gbps_med": 7.577,
-      "matches": 24003215105,
-      "ns_samples": [
-        36390853,
-        35426466,
-        34119296,
-        35262229,
-        35467713
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 34328308,
-      "ns_med": 34727200.0,
-      "ns_max": 36209892,
-      "gbps_med": 7.73,
-      "matches": 4194458,
-      "ns_samples": [
-        34328308,
-        34727200,
-        34453164,
-        35508613,
-        36209892
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 127777089,
-      "ns_med": 128321450.0,
-      "ns_max": 130062441,
-      "gbps_med": 2.092,
-      "matches": 4,
-      "ns_samples": [
-        130027293,
-        128321450,
-        128207788,
-        127777089,
-        130062441
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 9769447,
-      "ns_med": 9916088.0,
-      "ns_max": 9993988,
-      "gbps_med": 27.071,
-      "matches": 4,
-      "ns_samples": [
-        9769447,
-        9929444,
-        9916088,
-        9809264,
-        9993988
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 9849811,
-      "ns_med": 9935225.0,
-      "ns_max": 10044234,
-      "gbps_med": 27.019,
-      "matches": 4,
-      "ns_samples": [
-        9849811,
-        10044234,
-        9879719,
-        9935225,
-        9951787
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 30236983,
-      "ns_med": 30925092.0,
-      "ns_max": 32704735,
-      "gbps_med": 8.68,
-      "matches": 4,
-      "ns_samples": [
-        32704735,
-        31645110,
-        30925092,
-        30665844,
-        30236983
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 30451183,
-      "ns_med": 30566735.0,
-      "ns_max": 31390044,
-      "gbps_med": 8.782,
-      "matches": 4,
-      "ns_samples": [
-        30810081,
-        30566735,
-        30451183,
-        30523302,
-        31390044
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 43184966,
-      "ns_med": 43262104.0,
-      "ns_max": 43909706,
-      "gbps_med": 6.205,
-      "matches": 4,
-      "ns_samples": [
-        43909706,
-        43184966,
-        43262104,
-        43206237,
-        43542356
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_1b_z__d_s",
-      "bytes": 268435459,
-      "iters": 5,
-      "ns_min": 55430833,
-      "ns_med": 57012160.0,
-      "ns_max": 57290004,
-      "gbps_med": 4.708,
-      "matches": 4,
-      "ns_samples": [
-        57012160,
-        57165861,
-        57290004,
-        55430833,
-        55994354
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 34853867,
-      "ns_med": 35320202.0,
-      "ns_max": 35572887,
-      "gbps_med": 7.6,
-      "matches": 24002678017,
-      "ns_samples": [
-        35320202,
-        35572887,
-        35058450,
-        34853867,
-        35510888
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 34713899,
-      "ns_med": 35054683.0,
-      "ns_max": 35924731,
-      "gbps_med": 7.658,
-      "matches": 4194565,
-      "ns_samples": [
-        34889697,
-        34713899,
-        35924731,
-        35403441,
-        35054683
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 128035073,
-      "ns_med": 131107232.0,
-      "ns_max": 133763220,
-      "gbps_med": 2.047,
-      "matches": 5,
-      "ns_samples": [
-        128035073,
-        131107232,
-        130477139,
-        133763220,
-        131364389
-      ]
-    },
-    {
-      "stage": "L1_chunk_anchor",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 10259898,
-      "ns_med": 10398363.0,
-      "ns_max": 10622433,
-      "gbps_med": 25.815,
-      "matches": 5,
-      "ns_samples": [
-        10398363,
-        10259898,
-        10622433,
-        10294995,
-        10537590
-      ]
-    },
-    {
-      "stage": "L1_chunk_memmem",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 31755445,
-      "ns_med": 32669357.0,
-      "ns_max": 33899687,
-      "gbps_med": 8.217,
-      "matches": 5,
-      "ns_samples": [
-        33899687,
-        32524215,
-        31755445,
-        32669357,
-        33673564
-      ]
-    },
-    {
-      "stage": "L2_matcher",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 30384105,
-      "ns_med": 30549221.0,
-      "ns_max": 30806585,
-      "gbps_med": 8.787,
-      "matches": 5,
-      "ns_samples": [
-        30806585,
-        30507341,
-        30549221,
-        30384105,
-        30554542
-      ]
-    },
-    {
-      "stage": "L2e_matcher_emit",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 30288452,
-      "ns_med": 30432117.0,
-      "ns_max": 30672699,
-      "gbps_med": 8.821,
-      "matches": 5,
-      "ns_samples": [
-        30419092,
-        30432117,
-        30672699,
-        30645555,
-        30288452
-      ]
-    },
-    {
-      "stage": "L3_pread_matcher",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 43050708,
-      "ns_med": 43711335.0,
-      "ns_max": 44076116,
-      "gbps_med": 6.141,
-      "matches": 5,
-      "ns_samples": [
-        43879618,
-        43711335,
-        43543103,
-        43050708,
-        44076116
-      ]
-    },
-    {
-      "stage": "L4_sluice",
-      "workload": "normal__p_16b__d_s",
-      "bytes": 268435466,
-      "iters": 5,
-      "ns_min": 55638236,
-      "ns_med": 56710461.0,
-      "ns_max": 57077815,
-      "gbps_med": 4.733,
-      "matches": 5,
-      "ns_samples": [
-        56710461,
-        56080213,
-        56863200,
-        57077815,
-        55638236
-      ]
-    },
-    {
-      "stage": "L0_sum",
-      "workload": "normal__p_64b__d_s",
-      "bytes": 268435484,
-      "iters": 5,
-      "ns_min": 34747284,
-      "ns_med": 35769293.0,
-      "ns_max": 37762377,
-      "gbps_med": 7.505,
-      "matches": 24002737346,
-      "ns_samples": [
-        35769293,
-        35300864,
-        37762377,
-        36907851,
-        34747284
-      ]
-    },
-    {
-      "stage": "L0_memchr_nl",
-      "workload": "normal__p_64b__d_s",
-      "bytes": 268435484,
-      "iters": 5,
-      "ns_min": 35603806,
-      "ns_med": 35689283.0,
-      "ns_max": 36489595,
-      "gbps_med": 7.521,
-      "matches": 4194754,
-      "ns_samples": [
-        36489595,
-        35603806,
-        35615970,
-        35689283,
-        36025013
-      ]
-    },
-    {
-      "stage": "L1_line_std",
-      "workload": "normal__p_64b__d_s",
-      "bytes": 268435484,
-      "iters": 5,
-      "ns_min": 130086803,
-      "ns_med": 132086047.0,
-      "ns_max": 132574240,
+      "ns_min": 131516482,
+      "ns_med": 132117427.0,
+      "ns_max": 134518258,
       "gbps_med": 2.032,
       "matches": 0,
       "ns_samples": [
-        132086047,
-        131715722,
-        130086803,
-        132311455,
-        132574240
+        134518258,
+        132368980,
+        131857094,
+        131516482,
+        132117427
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 9765505,
+      "ns_med": 10100606.0,
+      "ns_max": 10571569,
+      "gbps_med": 26.576,
+      "matches": 0,
+      "ns_samples": [
+        10495912,
+        9765505,
+        10571569,
+        9968534,
+        10100606
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 95925901,
+      "ns_med": 96735965.0,
+      "ns_max": 97338574,
+      "gbps_med": 2.775,
+      "matches": 0,
+      "ns_samples": [
+        96384445,
+        97338574,
+        96735965,
+        96865438,
+        95925901
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 31095278,
+      "ns_med": 31396840.0,
+      "ns_max": 31678161,
+      "gbps_med": 8.55,
+      "matches": 0,
+      "ns_samples": [
+        31095278,
+        31235077,
+        31678161,
+        31396840,
+        31458653
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 31189823,
+      "ns_med": 31447163.0,
+      "ns_max": 31673992,
+      "gbps_med": 8.536,
+      "matches": 0,
+      "ns_samples": [
+        31189823,
+        31381178,
+        31447163,
+        31673992,
+        31586892
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 101788934,
+      "ns_med": 105029711.0,
+      "ns_max": 106023430,
+      "gbps_med": 2.556,
+      "matches": 0,
+      "ns_samples": [
+        106023430,
+        102143105,
+        105029711,
+        101788934,
+        105601812
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 57530061,
+      "ns_med": 58616800.0,
+      "ns_max": 58801239,
+      "gbps_med": 4.579,
+      "matches": 0,
+      "ns_samples": [
+        57530061,
+        58063438,
+        58616800,
+        58773429,
+        58801239
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 36026525,
+      "ns_med": 36306252.0,
+      "ns_max": 36447253,
+      "gbps_med": 7.394,
+      "matches": 24002795310,
+      "ns_samples": [
+        36432222,
+        36026525,
+        36035924,
+        36447253,
+        36306252
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 35839889,
+      "ns_med": 36278254.0,
+      "ns_max": 37993413,
+      "gbps_med": 7.399,
+      "matches": 4194501,
+      "ns_samples": [
+        37993413,
+        36022526,
+        36278254,
+        36287794,
+        35839889
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 130547947,
+      "ns_med": 132018635.0,
+      "ns_max": 133273390,
+      "gbps_med": 2.033,
+      "matches": 3,
+      "ns_samples": [
+        130547947,
+        130772876,
+        132694256,
+        133273390,
+        132018635
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 9980701,
+      "ns_med": 10825614.0,
+      "ns_max": 12455085,
+      "gbps_med": 24.796,
+      "matches": 3,
+      "ns_samples": [
+        12455085,
+        10810823,
+        11317177,
+        9980701,
+        10825614
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 99419788,
+      "ns_med": 102137582.0,
+      "ns_max": 106399297,
+      "gbps_med": 2.628,
+      "matches": 3,
+      "ns_samples": [
+        99419788,
+        102499693,
+        102137582,
+        100510929,
+        106399297
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 32238980,
+      "ns_med": 32583201.0,
+      "ns_max": 32722197,
+      "gbps_med": 8.238,
+      "matches": 3,
+      "ns_samples": [
+        32309756,
+        32238980,
+        32607952,
+        32583201,
+        32722197
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 32276546,
+      "ns_med": 33750669.0,
+      "ns_max": 34606795,
+      "gbps_med": 7.953,
+      "matches": 3,
+      "ns_samples": [
+        32276546,
+        33245206,
+        33750669,
+        34135334,
+        34606795
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 45602621,
+      "ns_med": 46735187.0,
+      "ns_max": 46786553,
+      "gbps_med": 5.744,
+      "matches": 3,
+      "ns_samples": [
+        45602621,
+        46786553,
+        46756280,
+        46735187,
+        46051983
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 59106905,
+      "ns_med": 63481029.0,
+      "ns_max": 64852880,
+      "gbps_med": 4.229,
+      "matches": 3,
+      "ns_samples": [
+        64852880,
+        64527177,
+        63481029,
+        60249127,
+        59106905
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 36829672,
+      "ns_med": 37290302.0,
+      "ns_max": 37457677,
+      "gbps_med": 7.199,
+      "matches": 24002888783,
+      "ns_samples": [
+        37310757,
+        37290302,
+        36829672,
+        37081478,
+        37457677
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 36428424,
+      "ns_med": 37256232.0,
+      "ns_max": 40600285,
+      "gbps_med": 7.205,
+      "matches": 4193840,
+      "ns_samples": [
+        37353712,
+        36442933,
+        40600285,
+        36428424,
+        37256232
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 167779929,
+      "ns_med": 172457890.0,
+      "ns_max": 172969749,
+      "gbps_med": 1.557,
+      "matches": 3435328,
+      "ns_samples": [
+        168661336,
+        167779929,
+        172533602,
+        172969749,
+        172457890
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 205124511,
+      "ns_med": 206527791.0,
+      "ns_max": 208461206,
+      "gbps_med": 1.3,
+      "matches": 6961657,
+      "ns_samples": [
+        205124511,
+        206538681,
+        208461206,
+        206337689,
+        206527791
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 378657635,
+      "ns_med": 381330690.0,
+      "ns_max": 383156535,
+      "gbps_med": 0.704,
+      "matches": 6961657,
+      "ns_samples": [
+        378657635,
+        383156535,
+        380807826,
+        381361556,
+        381330690
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 272939295,
+      "ns_med": 276242952.0,
+      "ns_max": 287083530,
+      "gbps_med": 0.972,
+      "matches": 3435328,
+      "ns_samples": [
+        287083530,
+        273213531,
+        276242952,
+        278814505,
+        272939295
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 348695649,
+      "ns_med": 353732876.0,
+      "ns_max": 357203662,
+      "gbps_med": 0.759,
+      "matches": 3435328,
+      "ns_samples": [
+        348745262,
+        348695649,
+        357203662,
+        355760180,
+        353732876
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 292004086,
+      "ns_med": 293875578.0,
+      "ns_max": 296059244,
+      "gbps_med": 0.913,
+      "matches": 3435328,
+      "ns_samples": [
+        296059244,
+        293158694,
+        293875578,
+        295219552,
+        292004086
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 319467641,
+      "ns_med": 322765415.0,
+      "ns_max": 325785033,
+      "gbps_med": 0.832,
+      "matches": 3435328,
+      "ns_samples": [
+        322765415,
+        323178325,
+        319467641,
+        320042037,
+        325785033
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 37068742,
+      "ns_med": 37293306.0,
+      "ns_max": 37617441,
+      "gbps_med": 7.198,
+      "matches": 24002699339,
+      "ns_samples": [
+        37293306,
+        37456112,
+        37068742,
+        37091199,
+        37617441
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 37186395,
+      "ns_med": 37379885.0,
+      "ns_max": 37486485,
+      "gbps_med": 7.181,
+      "matches": 4194640,
+      "ns_samples": [
+        37486485,
+        37430873,
+        37330643,
+        37186395,
+        37379885
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 169316009,
+      "ns_med": 171371599.0,
+      "ns_max": 179534422,
+      "gbps_med": 1.566,
+      "matches": 3434964,
+      "ns_samples": [
+        179534422,
+        172349155,
+        169316009,
+        171371599,
+        171019072
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 203737460,
+      "ns_med": 203962204.0,
+      "ns_max": 205062951,
+      "gbps_med": 1.316,
+      "matches": 6956010,
+      "ns_samples": [
+        204201137,
+        205062951,
+        203737460,
+        203770542,
+        203962204
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 371359373,
+      "ns_med": 375576084.0,
+      "ns_max": 385588850,
+      "gbps_med": 0.715,
+      "matches": 6956010,
+      "ns_samples": [
+        371359373,
+        385588850,
+        377518440,
+        371708512,
+        375576084
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 270075824,
+      "ns_med": 272484820.0,
+      "ns_max": 273850580,
+      "gbps_med": 0.985,
+      "matches": 3434964,
+      "ns_samples": [
+        270075824,
+        271064604,
+        273850580,
+        273551086,
+        272484820
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 347673017,
+      "ns_med": 351360759.0,
+      "ns_max": 354663154,
+      "gbps_med": 0.764,
+      "matches": 3434964,
+      "ns_samples": [
+        354663154,
+        353846138,
+        351360759,
+        347839233,
+        347673017
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 290804731,
+      "ns_med": 295450636.0,
+      "ns_max": 296679138,
+      "gbps_med": 0.909,
+      "matches": 3434964,
+      "ns_samples": [
+        295450636,
+        295818398,
+        296679138,
+        290804731,
+        291063407
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 320846017,
+      "ns_med": 322159828.0,
+      "ns_max": 326238365,
+      "gbps_med": 0.833,
+      "matches": 3434964,
+      "ns_samples": [
+        322159828,
+        320846017,
+        324898871,
+        326238365,
+        320998971
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 36727041,
+      "ns_med": 36829042.0,
+      "ns_max": 37082915,
+      "gbps_med": 7.289,
+      "matches": 24002938324,
+      "ns_samples": [
+        36877270,
+        37082915,
+        36727041,
+        36807245,
+        36829042
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 35581969,
+      "ns_med": 36979922.0,
+      "ns_max": 41305156,
+      "gbps_med": 7.259,
+      "matches": 4194107,
+      "ns_samples": [
+        36899363,
+        35581969,
+        36979922,
+        41305156,
+        38455126
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 76208535,
+      "ns_med": 76620842.0,
+      "ns_max": 78387961,
+      "gbps_med": 3.503,
+      "matches": 4177079,
+      "ns_samples": [
+        76576002,
+        76208535,
+        76620842,
+        77125195,
+        78387961
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 137822766,
+      "ns_med": 140049945.0,
+      "ns_max": 141225022,
+      "gbps_med": 1.917,
+      "matches": 24333141,
+      "ns_samples": [
+        141225022,
+        140417403,
+        140049945,
+        138659616,
+        137822766
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 124773649,
+      "ns_med": 126135317.0,
+      "ns_max": 127542260,
+      "gbps_med": 2.128,
+      "matches": 24333141,
+      "ns_samples": [
+        127542260,
+        126924731,
+        126135317,
+        124773649,
+        125436655
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 198987818,
+      "ns_med": 200601467.0,
+      "ns_max": 206052011,
+      "gbps_med": 1.338,
+      "matches": 4177079,
+      "ns_samples": [
+        198987818,
+        206052011,
+        202538243,
+        199827912,
+        200601467
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 295678488,
+      "ns_med": 300317480.0,
+      "ns_max": 301740089,
+      "gbps_med": 0.894,
+      "matches": 4177079,
+      "ns_samples": [
+        301338249,
+        300317480,
+        297431001,
+        301740089,
+        295678488
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 218992584,
+      "ns_med": 221640332.0,
+      "ns_max": 223117426,
+      "gbps_med": 1.211,
+      "matches": 4177079,
+      "ns_samples": [
+        219930475,
+        222336798,
+        223117426,
+        218992584,
+        221640332
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 246529910,
+      "ns_med": 249004836.0,
+      "ns_max": 252359750,
+      "gbps_med": 1.078,
+      "matches": 4177079,
+      "ns_samples": [
+        249004836,
+        246529910,
+        247277589,
+        252359750,
+        249136369
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 36618918,
+      "ns_med": 37291200.0,
+      "ns_max": 37556783,
+      "gbps_med": 7.198,
+      "matches": 24003215105,
+      "ns_samples": [
+        37291200,
+        37361581,
+        37556783,
+        36856649,
+        36618918
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 36048982,
+      "ns_med": 36242832.0,
+      "ns_max": 37018673,
+      "gbps_med": 7.407,
+      "matches": 4194458,
+      "ns_samples": [
+        36219183,
+        37018673,
+        36468678,
+        36242832,
+        36048982
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 137972507,
+      "ns_med": 148386675.0,
+      "ns_max": 155312527,
+      "gbps_med": 1.809,
+      "matches": 4,
+      "ns_samples": [
+        147506660,
+        137972507,
+        152913467,
+        155312527,
+        148386675
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 10216190,
+      "ns_med": 11173395.0,
+      "ns_max": 11529229,
+      "gbps_med": 24.025,
+      "matches": 4,
+      "ns_samples": [
+        11260194,
+        10216190,
+        11529229,
+        11173395,
+        10302919
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 10365127,
+      "ns_med": 10855679.0,
+      "ns_max": 11058066,
+      "gbps_med": 24.728,
+      "matches": 4,
+      "ns_samples": [
+        11058066,
+        10365127,
+        10912707,
+        10782779,
+        10855679
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 32125576,
+      "ns_med": 32913061.0,
+      "ns_max": 33232700,
+      "gbps_med": 8.156,
+      "matches": 4,
+      "ns_samples": [
+        32125576,
+        32599866,
+        33072925,
+        32913061,
+        33232700
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 32361564,
+      "ns_med": 32909084.0,
+      "ns_max": 34704448,
+      "gbps_med": 8.157,
+      "matches": 4,
+      "ns_samples": [
+        32909084,
+        32361564,
+        32781420,
+        33121653,
+        34704448
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 44914401,
+      "ns_med": 45822958.0,
+      "ns_max": 46571344,
+      "gbps_med": 5.858,
+      "matches": 4,
+      "ns_samples": [
+        45203521,
+        45822958,
+        44914401,
+        45842019,
+        46571344
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 58737852,
+      "ns_med": 59731054.0,
+      "ns_max": 59988507,
+      "gbps_med": 4.494,
+      "matches": 4,
+      "ns_samples": [
+        58737852,
+        59731054,
+        59826959,
+        59988507,
+        59214412
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 36373031,
+      "ns_med": 36522580.0,
+      "ns_max": 36866158,
+      "gbps_med": 7.35,
+      "matches": 24002678017,
+      "ns_samples": [
+        36866158,
+        36399896,
+        36522580,
+        36373031,
+        36773738
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 36695646,
+      "ns_med": 36782205.0,
+      "ns_max": 37367930,
+      "gbps_med": 7.298,
+      "matches": 4194565,
+      "ns_samples": [
+        36731000,
+        36695646,
+        36782205,
+        36844684,
+        37367930
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 133007207,
+      "ns_med": 133693859.0,
+      "ns_max": 133810971,
+      "gbps_med": 2.008,
+      "matches": 5,
+      "ns_samples": [
+        133019137,
+        133693859,
+        133713198,
+        133810971,
+        133007207
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 10608373,
+      "ns_med": 11177704.0,
+      "ns_max": 11709702,
+      "gbps_med": 24.015,
+      "matches": 5,
+      "ns_samples": [
+        11709702,
+        11101156,
+        10608373,
+        11389350,
+        11177704
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 34333072,
+      "ns_med": 34607477.0,
+      "ns_max": 38224421,
+      "gbps_med": 7.757,
+      "matches": 5,
+      "ns_samples": [
+        34333072,
+        34607477,
+        34515749,
+        38224421,
+        35435997
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 32319967,
+      "ns_med": 32382157.0,
+      "ns_max": 32597657,
+      "gbps_med": 8.29,
+      "matches": 5,
+      "ns_samples": [
+        32382157,
+        32597657,
+        32415305,
+        32347365,
+        32319967
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 32436375,
+      "ns_med": 32704471.0,
+      "ns_max": 32971105,
+      "gbps_med": 8.208,
+      "matches": 5,
+      "ns_samples": [
+        32956130,
+        32971105,
+        32650610,
+        32436375,
+        32704471
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 45815334,
+      "ns_med": 46203364.0,
+      "ns_max": 46559780,
+      "gbps_med": 5.81,
+      "matches": 5,
+      "ns_samples": [
+        45815334,
+        46190247,
+        46559780,
+        46203364,
+        46427045
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 59125823,
+      "ns_med": 59366051.0,
+      "ns_max": 61003308,
+      "gbps_med": 4.522,
+      "matches": 5,
+      "ns_samples": [
+        59294637,
+        59366051,
+        59125823,
+        61003308,
+        59666943
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 36899677,
+      "ns_med": 37045227.0,
+      "ns_max": 37340416,
+      "gbps_med": 7.246,
+      "matches": 24002737346,
+      "ns_samples": [
+        36922404,
+        37047582,
+        37340416,
+        37045227,
+        36899677
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 36869665,
+      "ns_med": 37129701.0,
+      "ns_max": 37469963,
+      "gbps_med": 7.23,
+      "matches": 4194754,
+      "ns_samples": [
+        36869665,
+        37129701,
+        37014514,
+        37469963,
+        37188863
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 133455304,
+      "ns_med": 134882147.0,
+      "ns_max": 136132830,
+      "gbps_med": 1.99,
+      "matches": 0,
+      "ns_samples": [
+        134580949,
+        133455304,
+        136132830,
+        135751843,
+        134882147
       ]
     },
     {
@@ -1236,17 +1248,17 @@
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
       "iters": 5,
-      "ns_min": 9472267,
-      "ns_med": 9831686.0,
-      "ns_max": 10875790,
-      "gbps_med": 27.303,
+      "ns_min": 10608539,
+      "ns_med": 10888437.0,
+      "ns_max": 11060872,
+      "gbps_med": 24.653,
       "matches": 0,
       "ns_samples": [
-        10875790,
-        9991092,
-        9831686,
-        9784907,
-        9472267
+        10608539,
+        11060872,
+        10888437,
+        11022393,
+        10787920
       ]
     },
     {
@@ -1254,17 +1266,17 @@
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
       "iters": 5,
-      "ns_min": 11157910,
-      "ns_med": 11447756.0,
-      "ns_max": 11927727,
-      "gbps_med": 23.449,
+      "ns_min": 11801530,
+      "ns_med": 12569165.0,
+      "ns_max": 13343001,
+      "gbps_med": 21.357,
       "matches": 0,
       "ns_samples": [
-        11447756,
-        11441454,
-        11157910,
-        11927727,
-        11501830
+        11801530,
+        12371366,
+        12783657,
+        13343001,
+        12569165
       ]
     },
     {
@@ -1272,17 +1284,17 @@
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
       "iters": 5,
-      "ns_min": 30912789,
-      "ns_med": 31307265.0,
-      "ns_max": 31396663,
-      "gbps_med": 8.574,
+      "ns_min": 32206753,
+      "ns_med": 32502043.0,
+      "ns_max": 32867356,
+      "gbps_med": 8.259,
       "matches": 0,
       "ns_samples": [
-        31382820,
-        30912789,
-        31396663,
-        30932280,
-        31307265
+        32375502,
+        32867356,
+        32206753,
+        32502043,
+        32721215
       ]
     },
     {
@@ -1290,17 +1302,17 @@
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
       "iters": 5,
-      "ns_min": 30728175,
-      "ns_med": 31010496.0,
-      "ns_max": 31788830,
-      "gbps_med": 8.656,
+      "ns_min": 32118421,
+      "ns_med": 32527922.0,
+      "ns_max": 32718249,
+      "gbps_med": 8.252,
       "matches": 0,
       "ns_samples": [
-        31010496,
-        30728175,
-        31788830,
-        30964708,
-        31525894
+        32718249,
+        32527922,
+        32118421,
+        32684871,
+        32494598
       ]
     },
     {
@@ -1308,17 +1320,17 @@
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
       "iters": 5,
-      "ns_min": 44338808,
-      "ns_med": 44630207.0,
-      "ns_max": 44981748,
-      "gbps_med": 6.015,
+      "ns_min": 44888800,
+      "ns_med": 45788318.0,
+      "ns_max": 46859358,
+      "gbps_med": 5.863,
       "matches": 0,
       "ns_samples": [
-        44338808,
-        44630207,
-        44464690,
-        44943787,
-        44981748
+        46859358,
+        46291113,
+        45721441,
+        44888800,
+        45788318
       ]
     },
     {
@@ -1326,17 +1338,17 @@
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
       "iters": 5,
-      "ns_min": 56324396,
-      "ns_med": 56674637.0,
-      "ns_max": 58931059,
-      "gbps_med": 4.736,
+      "ns_min": 57873568,
+      "ns_med": 59192144.0,
+      "ns_max": 61935365,
+      "gbps_med": 4.535,
       "matches": 0,
       "ns_samples": [
-        56324396,
-        58931059,
-        56652961,
-        56923559,
-        56674637
+        58066802,
+        59192144,
+        57873568,
+        59260731,
+        61935365
       ]
     },
     {
@@ -1344,17 +1356,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 34022022,
-      "ns_med": 35116675.0,
-      "ns_max": 35510587,
-      "gbps_med": 7.644,
+      "ns_min": 36885828,
+      "ns_med": 37224857.0,
+      "ns_max": 37686661,
+      "gbps_med": 7.211,
       "matches": 24002971821,
       "ns_samples": [
-        34022022,
-        35051987,
-        35116675,
-        35308569,
-        35510587
+        37224857,
+        36885828,
+        37686661,
+        37582823,
+        36973559
       ]
     },
     {
@@ -1362,17 +1374,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 35625587,
-      "ns_med": 36013802.0,
-      "ns_max": 36404051,
-      "gbps_med": 7.454,
+      "ns_min": 37607707,
+      "ns_med": 37914732.0,
+      "ns_max": 40351148,
+      "gbps_med": 7.08,
       "matches": 4194551,
       "ns_samples": [
-        35625587,
-        36013802,
-        35807980,
-        36404051,
-        36021727
+        40351148,
+        37607707,
+        37750202,
+        38485529,
+        37914732
       ]
     },
     {
@@ -1380,17 +1392,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 128453774,
-      "ns_med": 130522182.0,
-      "ns_max": 136882080,
-      "gbps_med": 2.057,
+      "ns_min": 132924327,
+      "ns_med": 134000199.0,
+      "ns_max": 139237981,
+      "gbps_med": 2.003,
       "matches": 4,
       "ns_samples": [
-        128453774,
-        136882080,
-        134183785,
-        129791368,
-        130522182
+        132924327,
+        134000199,
+        136086483,
+        133427679,
+        139237981
       ]
     },
     {
@@ -1398,17 +1410,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 9669064,
-      "ns_med": 9982876.0,
-      "ns_max": 10472235,
-      "gbps_med": 26.89,
+      "ns_min": 10692657,
+      "ns_med": 11164336.0,
+      "ns_max": 11602400,
+      "gbps_med": 24.044,
       "matches": 4,
       "ns_samples": [
-        9669064,
-        10472235,
-        9982876,
-        9701467,
-        10076024
+        11164336,
+        10692657,
+        11602400,
+        11310126,
+        10725341
       ]
     },
     {
@@ -1416,17 +1428,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 20774915,
-      "ns_med": 22073305.0,
-      "ns_max": 22245986,
-      "gbps_med": 12.161,
+      "ns_min": 22314121,
+      "ns_med": 22723106.0,
+      "ns_max": 22971649,
+      "gbps_med": 11.813,
       "matches": 4,
       "ns_samples": [
-        21892478,
-        22245986,
-        22073305,
-        22091258,
-        20774915
+        22971649,
+        22441935,
+        22723106,
+        22314121,
+        22945675
       ]
     },
     {
@@ -1434,17 +1446,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 30496449,
-      "ns_med": 30655615.0,
-      "ns_max": 31383518,
-      "gbps_med": 8.756,
+      "ns_min": 32415514,
+      "ns_med": 33227716.0,
+      "ns_max": 34408139,
+      "gbps_med": 8.079,
       "matches": 4,
       "ns_samples": [
-        30496449,
-        30693648,
-        30519324,
-        30655615,
-        31383518
+        32415514,
+        32815439,
+        33227716,
+        34408139,
+        33507468
       ]
     },
     {
@@ -1452,17 +1464,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 30528763,
-      "ns_med": 30659071.0,
-      "ns_max": 31432241,
-      "gbps_med": 8.756,
+      "ns_min": 31948290,
+      "ns_med": 32864059.0,
+      "ns_max": 33301653,
+      "gbps_med": 8.168,
       "matches": 4,
       "ns_samples": [
-        30659071,
-        30625020,
-        30528763,
-        31009133,
-        31432241
+        32864059,
+        32936235,
+        31948290,
+        32722301,
+        33301653
       ]
     },
     {
@@ -1470,17 +1482,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 43609610,
-      "ns_med": 43839736.0,
-      "ns_max": 44342074,
-      "gbps_med": 6.123,
+      "ns_min": 44911187,
+      "ns_med": 45223130.0,
+      "ns_max": 46501257,
+      "gbps_med": 5.936,
       "matches": 4,
       "ns_samples": [
-        43806617,
-        43839736,
-        43609610,
-        44342074,
-        43935826
+        45223130,
+        44911187,
+        45838149,
+        45131622,
+        46501257
       ]
     },
     {
@@ -1488,17 +1500,17 @@
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
       "iters": 5,
-      "ns_min": 56271860,
-      "ns_med": 56839089.0,
-      "ns_max": 57889918,
-      "gbps_med": 4.723,
+      "ns_min": 59109428,
+      "ns_med": 59670090.0,
+      "ns_max": 60824537,
+      "gbps_med": 4.499,
       "matches": 4,
       "ns_samples": [
-        56839089,
-        56271860,
-        56987773,
-        56666368,
-        57889918
+        59109428,
+        60824537,
+        59670090,
+        60232085,
+        59360501
       ]
     },
     {
@@ -1506,17 +1518,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 35230449,
-      "ns_med": 35455190.0,
-      "ns_max": 35826994,
-      "gbps_med": 7.571,
+      "ns_min": 36687999,
+      "ns_med": 37240549.0,
+      "ns_max": 37662701,
+      "gbps_med": 7.208,
       "matches": 24002572985,
       "ns_samples": [
-        35230449,
-        35270357,
-        35826994,
-        35684921,
-        35455190
+        37662701,
+        37240549,
+        37190445,
+        37458399,
+        36687999
       ]
     },
     {
@@ -1524,17 +1536,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 36245566,
-      "ns_med": 37687983.0,
-      "ns_max": 37832651,
-      "gbps_med": 7.123,
+      "ns_min": 36799720,
+      "ns_med": 36998328.0,
+      "ns_max": 37568225,
+      "gbps_med": 7.255,
       "matches": 4193790,
       "ns_samples": [
-        37711035,
-        37212552,
-        37687983,
-        37832651,
-        36245566
+        37295352,
+        37568225,
+        36799720,
+        36810602,
+        36998328
       ]
     },
     {
@@ -1542,17 +1554,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 236440363,
-      "ns_med": 242313258.0,
-      "ns_max": 245915848,
-      "gbps_med": 1.108,
+      "ns_min": 248345482,
+      "ns_med": 250853964.0,
+      "ns_max": 252568400,
+      "gbps_med": 1.07,
       "matches": 5,
       "ns_samples": [
-        242313258,
-        243983892,
-        242208568,
-        236440363,
-        245915848
+        251507907,
+        250853964,
+        252568400,
+        250295541,
+        248345482
       ]
     },
     {
@@ -1560,17 +1572,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 51576662,
-      "ns_med": 52370091.0,
-      "ns_max": 52928531,
-      "gbps_med": 5.126,
+      "ns_min": 53283587,
+      "ns_med": 54449818.0,
+      "ns_max": 54961307,
+      "gbps_med": 4.93,
       "matches": 5,
       "ns_samples": [
-        52928531,
-        52727828,
-        51576662,
-        51905681,
-        52370091
+        54212725,
+        53283587,
+        54961307,
+        54750412,
+        54449818
       ]
     },
     {
@@ -1578,17 +1590,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 25112153,
-      "ns_med": 25333388.0,
-      "ns_max": 25451835,
-      "gbps_med": 10.596,
+      "ns_min": 25738921,
+      "ns_med": 26223721.0,
+      "ns_max": 26509099,
+      "gbps_med": 10.236,
       "matches": 5,
       "ns_samples": [
-        25219829,
-        25451835,
-        25365599,
-        25333388,
-        25112153
+        26001652,
+        26509099,
+        25738921,
+        26391287,
+        26223721
       ]
     },
     {
@@ -1596,17 +1608,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 74097062,
-      "ns_med": 75020814.0,
-      "ns_max": 75397591,
-      "gbps_med": 3.578,
+      "ns_min": 75816638,
+      "ns_med": 77232303.0,
+      "ns_max": 84272108,
+      "gbps_med": 3.476,
       "matches": 5,
       "ns_samples": [
-        74097062,
-        74626909,
-        75242627,
-        75397591,
-        75020814
+        75816638,
+        84272108,
+        81919223,
+        77232303,
+        76053481
       ]
     },
     {
@@ -1614,17 +1626,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 72656209,
-      "ns_med": 72857785.0,
-      "ns_max": 74770565,
-      "gbps_med": 3.684,
+      "ns_min": 75757170,
+      "ns_med": 76636375.0,
+      "ns_max": 76984653,
+      "gbps_med": 3.503,
       "matches": 5,
       "ns_samples": [
-        74770565,
-        74375386,
-        72857785,
-        72656209,
-        72787059
+        76934650,
+        75971062,
+        75757170,
+        76636375,
+        76984653
       ]
     },
     {
@@ -1632,17 +1644,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 90364002,
-      "ns_med": 91535577.0,
-      "ns_max": 94070776,
-      "gbps_med": 2.933,
+      "ns_min": 95196363,
+      "ns_med": 95692167.0,
+      "ns_max": 96639381,
+      "gbps_med": 2.805,
       "matches": 5,
       "ns_samples": [
-        92005412,
-        91122388,
-        90364002,
-        91535577,
-        94070776
+        95196363,
+        95506175,
+        95692167,
+        96639381,
+        96561211
       ]
     },
     {
@@ -1650,17 +1662,17 @@
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 104846001,
-      "ns_med": 106418902.0,
-      "ns_max": 108283736,
-      "gbps_med": 2.522,
+      "ns_min": 110128292,
+      "ns_med": 110585611.0,
+      "ns_max": 113787783,
+      "gbps_med": 2.427,
       "matches": 5,
       "ns_samples": [
-        107139725,
-        108283736,
-        106418902,
-        104846001,
-        105320661
+        110589711,
+        110562963,
+        113787783,
+        110128292,
+        110585611
       ]
     },
     {
@@ -1668,17 +1680,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 35375823,
-      "ns_med": 35840163.0,
-      "ns_max": 36516891,
-      "gbps_med": 7.49,
+      "ns_min": 36452663,
+      "ns_med": 36548750.0,
+      "ns_max": 36801574,
+      "gbps_med": 7.345,
       "matches": 24005004829,
       "ns_samples": [
-        35840163,
-        35632014,
-        36034246,
-        35375823,
-        36516891
+        36548750,
+        36720586,
+        36801574,
+        36452663,
+        36476193
       ]
     },
     {
@@ -1686,17 +1698,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 35861254,
-      "ns_med": 36365100.0,
-      "ns_max": 36724420,
-      "gbps_med": 7.382,
+      "ns_min": 35689690,
+      "ns_med": 36652827.0,
+      "ns_max": 36922112,
+      "gbps_med": 7.324,
       "matches": 4194396,
       "ns_samples": [
-        35861254,
-        36724420,
-        36640469,
-        36365100,
-        36172872
+        36715696,
+        36652827,
+        35903081,
+        35689690,
+        36922112
       ]
     },
     {
@@ -1704,17 +1716,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 162070789,
-      "ns_med": 164079307.0,
-      "ns_max": 166100239,
-      "gbps_med": 1.636,
+      "ns_min": 168891441,
+      "ns_med": 170618152.0,
+      "ns_max": 171184905,
+      "gbps_med": 1.573,
       "matches": 3442780,
       "ns_samples": [
-        166037115,
-        164079307,
-        162980407,
-        162070789,
-        166100239
+        170618152,
+        170637379,
+        171184905,
+        169373305,
+        168891441
       ]
     },
     {
@@ -1722,17 +1734,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 197631367,
-      "ns_med": 198949517.0,
-      "ns_max": 199488710,
-      "gbps_med": 1.349,
+      "ns_min": 205453729,
+      "ns_med": 207067651.0,
+      "ns_max": 209503303,
+      "gbps_med": 1.296,
       "matches": 6993326,
       "ns_samples": [
-        198949517,
-        198212132,
-        199488710,
-        197631367,
-        198953674
+        209220956,
+        207067651,
+        205453729,
+        205497640,
+        209503303
       ]
     },
     {
@@ -1740,17 +1752,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 375269883,
-      "ns_med": 380207598.0,
-      "ns_max": 386317413,
-      "gbps_med": 0.706,
+      "ns_min": 378290664,
+      "ns_med": 380730242.0,
+      "ns_max": 382687794,
+      "gbps_med": 0.705,
       "matches": 6993326,
       "ns_samples": [
-        380207598,
-        380992425,
-        375269883,
-        376421506,
-        386317413
+        380730242,
+        382687794,
+        378290664,
+        381095099,
+        379890941
       ]
     },
     {
@@ -1758,17 +1770,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 265373794,
-      "ns_med": 266438218.0,
-      "ns_max": 271850736,
-      "gbps_med": 1.007,
+      "ns_min": 271044594,
+      "ns_med": 274275470.0,
+      "ns_max": 275218047,
+      "gbps_med": 0.979,
       "matches": 3442780,
       "ns_samples": [
-        271850736,
-        269262521,
-        266204202,
-        265373794,
-        266438218
+        271044594,
+        274275470,
+        274891726,
+        273406062,
+        275218047
       ]
     },
     {
@@ -1776,17 +1788,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 343033918,
-      "ns_med": 347155133.0,
-      "ns_max": 353725467,
-      "gbps_med": 0.773,
+      "ns_min": 349889381,
+      "ns_med": 353946874.0,
+      "ns_max": 357717093,
+      "gbps_med": 0.758,
       "matches": 3442780,
       "ns_samples": [
-        346029919,
-        352825904,
-        353725467,
-        347155133,
-        343033918
+        357717093,
+        353946874,
+        349889381,
+        352795512,
+        354976061
       ]
     },
     {
@@ -1794,17 +1806,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 281306380,
-      "ns_med": 285664007.0,
-      "ns_max": 287383256,
-      "gbps_med": 0.94,
+      "ns_min": 296037344,
+      "ns_med": 297284541.0,
+      "ns_max": 300093648,
+      "gbps_med": 0.903,
       "matches": 3442780,
       "ns_samples": [
-        281306380,
-        287383256,
-        284686930,
-        285664007,
-        286757045
+        300093648,
+        297284541,
+        297383294,
+        296824966,
+        296037344
       ]
     },
     {
@@ -1812,17 +1824,17 @@
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 306229585,
-      "ns_med": 307656888.0,
-      "ns_max": 310890706,
-      "gbps_med": 0.873,
+      "ns_min": 323861441,
+      "ns_med": 325765055.0,
+      "ns_max": 327970697,
+      "gbps_med": 0.824,
       "matches": 3442780,
       "ns_samples": [
-        306943154,
-        307656888,
-        306229585,
-        308211572,
-        310890706
+        325990604,
+        323861441,
+        327970697,
+        325447273,
+        325765055
       ]
     },
     {
@@ -1830,17 +1842,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 35830680,
-      "ns_med": 36343063.0,
-      "ns_max": 37778256,
-      "gbps_med": 7.386,
+      "ns_min": 36487198,
+      "ns_med": 36678990.0,
+      "ns_max": 37117206,
+      "gbps_med": 7.319,
       "matches": 24023463283,
       "ns_samples": [
-        35830680,
-        36010074,
-        37778256,
-        36343063,
-        36542144
+        37117206,
+        36594888,
+        36753254,
+        36487198,
+        36678990
       ]
     },
     {
@@ -1848,17 +1860,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 36505445,
-      "ns_med": 36845591.0,
-      "ns_max": 37099935,
-      "gbps_med": 7.285,
+      "ns_min": 36084655,
+      "ns_med": 36361963.0,
+      "ns_max": 37583146,
+      "gbps_med": 7.382,
       "matches": 4194527,
       "ns_samples": [
-        36845591,
-        36867629,
-        36505445,
-        37099935,
-        36602641
+        36134478,
+        36410838,
+        36361963,
+        36084655,
+        37583146
       ]
     },
     {
@@ -1866,17 +1878,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 157432454,
-      "ns_med": 161562705.0,
-      "ns_max": 164833408,
-      "gbps_med": 1.661,
+      "ns_min": 168272688,
+      "ns_med": 169006629.0,
+      "ns_max": 171269859,
+      "gbps_med": 1.588,
       "matches": 3511567,
       "ns_samples": [
-        157432454,
-        159143946,
-        164833408,
-        162201490,
-        161562705
+        169006629,
+        168272688,
+        168959287,
+        169048200,
+        171269859
       ]
     },
     {
@@ -1884,17 +1896,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 201559204,
-      "ns_med": 204154588.0,
-      "ns_max": 205652612,
-      "gbps_med": 1.315,
+      "ns_min": 206217212,
+      "ns_med": 206709478.0,
+      "ns_max": 208844296,
+      "gbps_med": 1.299,
       "matches": 7319750,
       "ns_samples": [
-        201559204,
-        204926063,
-        205652612,
-        204154588,
-        203070644
+        206511395,
+        208844296,
+        207851615,
+        206709478,
+        206217212
       ]
     },
     {
@@ -1902,17 +1914,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 385607716,
-      "ns_med": 387882099.0,
-      "ns_max": 397075632,
-      "gbps_med": 0.692,
+      "ns_min": 385427532,
+      "ns_med": 393406687.0,
+      "ns_max": 400195832,
+      "gbps_med": 0.682,
       "matches": 7319750,
       "ns_samples": [
-        397075632,
-        387006130,
-        387882099,
-        388305249,
-        385607716
+        385427532,
+        393406687,
+        400195832,
+        393586650,
+        385453317
       ]
     },
     {
@@ -1920,17 +1932,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 264640230,
-      "ns_med": 266703227.0,
-      "ns_max": 268353572,
-      "gbps_med": 1.006,
+      "ns_min": 271224516,
+      "ns_med": 273969308.0,
+      "ns_max": 274373343,
+      "gbps_med": 0.98,
       "matches": 3511567,
       "ns_samples": [
-        268353572,
-        266703227,
-        264640230,
-        266770561,
-        266665678
+        273969308,
+        274373343,
+        274036463,
+        271438299,
+        271224516
       ]
     },
     {
@@ -1938,17 +1950,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 346675749,
-      "ns_med": 347408773.0,
-      "ns_max": 351430663,
-      "gbps_med": 0.773,
+      "ns_min": 353456638,
+      "ns_med": 354584164.0,
+      "ns_max": 357388048,
+      "gbps_med": 0.757,
       "matches": 3511567,
       "ns_samples": [
-        346675749,
-        347402181,
-        347408773,
-        351430663,
-        350665242
+        354588263,
+        353498955,
+        354584164,
+        357388048,
+        353456638
       ]
     },
     {
@@ -1956,17 +1968,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 285245808,
-      "ns_med": 286901872.0,
-      "ns_max": 291854780,
-      "gbps_med": 0.936,
+      "ns_min": 295986094,
+      "ns_med": 298219231.0,
+      "ns_max": 300329124,
+      "gbps_med": 0.9,
       "matches": 3511567,
       "ns_samples": [
-        287397381,
-        285245808,
-        286901872,
-        291854780,
-        286838063
+        300329124,
+        298279146,
+        297548573,
+        295986094,
+        298219231
       ]
     },
     {
@@ -1974,17 +1986,17 @@
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
       "iters": 5,
-      "ns_min": 305851715,
-      "ns_med": 308645087.0,
-      "ns_max": 312632130,
-      "gbps_med": 0.87,
+      "ns_min": 323898694,
+      "ns_med": 326049271.0,
+      "ns_max": 326533794,
+      "gbps_med": 0.823,
       "matches": 3511567,
       "ns_samples": [
-        305851715,
-        309809181,
-        308565996,
-        308645087,
-        312632130
+        323898694,
+        324442264,
+        326049271,
+        326533794,
+        326417374
       ]
     },
     {
@@ -1992,17 +2004,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 36245235,
-      "ns_med": 36543669.0,
-      "ns_max": 36637979,
-      "gbps_med": 7.346,
+      "ns_min": 36507613,
+      "ns_med": 36829367.0,
+      "ns_max": 38409647,
+      "gbps_med": 7.289,
       "matches": 24211487308,
       "ns_samples": [
-        36543669,
-        36597932,
-        36637979,
-        36245235,
-        36310410
+        36518516,
+        38409647,
+        36829367,
+        36957531,
+        36507613
       ]
     },
     {
@@ -2010,17 +2022,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 35783580,
-      "ns_med": 36065481.0,
-      "ns_max": 36565961,
-      "gbps_med": 7.443,
+      "ns_min": 37053326,
+      "ns_med": 37246898.0,
+      "ns_max": 37458414,
+      "gbps_med": 7.207,
       "matches": 4194783,
       "ns_samples": [
-        36565961,
-        35949402,
-        35783580,
-        36267067,
-        36065481
+        37458414,
+        37246898,
+        37053326,
+        37075063,
+        37448966
       ]
     },
     {
@@ -2028,17 +2040,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 129727694,
-      "ns_med": 131459539.0,
-      "ns_max": 138405622,
-      "gbps_med": 2.042,
+      "ns_min": 133856906,
+      "ns_med": 134869825.0,
+      "ns_max": 137233792,
+      "gbps_med": 1.99,
       "matches": 4194783,
       "ns_samples": [
-        129740833,
-        129727694,
-        131459539,
-        138405622,
-        133366600
+        134742983,
+        133856906,
+        137233792,
+        135553803,
+        134869825
       ]
     },
     {
@@ -2046,17 +2058,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 242197838,
-      "ns_med": 245351382.0,
-      "ns_max": 248896123,
-      "gbps_med": 1.094,
+      "ns_min": 247312048,
+      "ns_med": 248048812.0,
+      "ns_max": 257088227,
+      "gbps_med": 1.082,
       "matches": 10604391,
       "ns_samples": [
-        245351382,
-        247998136,
-        248896123,
-        242197838,
-        243067314
+        249873488,
+        248048812,
+        247312048,
+        257088227,
+        248000749
       ]
     },
     {
@@ -2064,17 +2076,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 475932306,
-      "ns_med": 480325421.0,
-      "ns_max": 481956195,
-      "gbps_med": 0.559,
+      "ns_min": 478291733,
+      "ns_med": 478711519.0,
+      "ns_max": 481478641,
+      "gbps_med": 0.561,
       "matches": 10604391,
       "ns_samples": [
-        481956195,
-        480325421,
-        478579584,
-        475932306,
-        481826511
+        478291733,
+        481478641,
+        481030548,
+        478373541,
+        478711519
       ]
     },
     {
@@ -2082,17 +2094,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 272454339,
-      "ns_med": 273015218.0,
-      "ns_max": 276317385,
-      "gbps_med": 0.983,
+      "ns_min": 278715624,
+      "ns_med": 281698655.0,
+      "ns_max": 285151241,
+      "gbps_med": 0.953,
       "matches": 4194783,
       "ns_samples": [
-        273015218,
-        272454339,
-        272825462,
-        275099652,
-        276317385
+        280749503,
+        282305807,
+        281698655,
+        278715624,
+        285151241
       ]
     },
     {
@@ -2100,17 +2112,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 368319933,
-      "ns_med": 370250435.0,
-      "ns_max": 373036459,
-      "gbps_med": 0.725,
+      "ns_min": 375334803,
+      "ns_med": 377355975.0,
+      "ns_max": 379908900,
+      "gbps_med": 0.711,
       "matches": 4194783,
       "ns_samples": [
-        373036459,
-        370250435,
-        368319933,
-        370279161,
-        369162890
+        379908900,
+        378207951,
+        375601714,
+        377355975,
+        375334803
       ]
     },
     {
@@ -2118,17 +2130,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 291271611,
-      "ns_med": 293789688.0,
-      "ns_max": 297921905,
-      "gbps_med": 0.914,
+      "ns_min": 300864128,
+      "ns_med": 301461469.0,
+      "ns_max": 304416160,
+      "gbps_med": 0.89,
       "matches": 4194783,
       "ns_samples": [
-        297921905,
-        292866735,
-        294468644,
-        291271611,
-        293789688
+        301461469,
+        300864128,
+        300977983,
+        302744272,
+        304416160
       ]
     },
     {
@@ -2136,17 +2148,17 @@
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
       "iters": 5,
-      "ns_min": 313887591,
-      "ns_med": 317727421.0,
-      "ns_max": 318876084,
-      "gbps_med": 0.845,
+      "ns_min": 335784721,
+      "ns_med": 338935209.0,
+      "ns_max": 346323090,
+      "gbps_med": 0.792,
       "matches": 4194783,
       "ns_samples": [
-        313887591,
-        318427832,
-        318876084,
-        316336639,
-        317727421
+        346323090,
+        344890680,
+        338935209,
+        338058667,
+        335784721
       ]
     },
     {
@@ -2154,17 +2166,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 35748082,
-      "ns_med": 36109406.0,
-      "ns_max": 36552395,
-      "gbps_med": 7.434,
+      "ns_min": 36639748,
+      "ns_med": 36945849.0,
+      "ns_max": 37455021,
+      "gbps_med": 7.266,
       "matches": 23279718572,
       "ns_samples": [
-        36552395,
-        35748082,
-        36032349,
-        36363403,
-        36109406
+        37455021,
+        37065487,
+        36881687,
+        36945849,
+        36639748
       ]
     },
     {
@@ -2172,17 +2184,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 73290527,
-      "ns_med": 73882510.0,
-      "ns_max": 75006117,
-      "gbps_med": 3.633,
+      "ns_min": 75095954,
+      "ns_med": 75635477.0,
+      "ns_max": 76198439,
+      "gbps_med": 3.549,
       "matches": 17895864,
       "ns_samples": [
-        75006117,
-        74186235,
-        73290527,
-        73760518,
-        73882510
+        75802754,
+        75178103,
+        75095954,
+        75635477,
+        76198439
       ]
     },
     {
@@ -2190,17 +2202,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 376577577,
-      "ns_med": 380565459.0,
-      "ns_max": 384883513,
-      "gbps_med": 0.705,
+      "ns_min": 383963602,
+      "ns_med": 389237478.0,
+      "ns_max": 392918812,
+      "gbps_med": 0.69,
       "matches": 5740166,
       "ns_samples": [
-        377870366,
-        376577577,
-        382837017,
-        384883513,
-        380565459
+        390125249,
+        392918812,
+        384216668,
+        383963602,
+        389237478
       ]
     },
     {
@@ -2208,17 +2220,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 179248637,
-      "ns_med": 180837304.0,
-      "ns_max": 183913173,
-      "gbps_med": 1.484,
+      "ns_min": 182625229,
+      "ns_med": 184213039.0,
+      "ns_max": 185880950,
+      "gbps_med": 1.457,
       "matches": 6464929,
       "ns_samples": [
-        180722853,
-        179248637,
-        180837304,
-        181340326,
-        183913173
+        184213039,
+        185358961,
+        182625229,
+        184165205,
+        185880950
       ]
     },
     {
@@ -2226,17 +2238,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 359659665,
-      "ns_med": 366761550.0,
-      "ns_max": 370226787,
-      "gbps_med": 0.732,
+      "ns_min": 364590845,
+      "ns_med": 365410530.0,
+      "ns_max": 369589216,
+      "gbps_med": 0.735,
       "matches": 6464929,
       "ns_samples": [
-        368752102,
-        366761550,
-        360121646,
-        370226787,
-        359659665
+        365410530,
+        364775365,
+        367655357,
+        364590845,
+        369589216
       ]
     },
     {
@@ -2244,17 +2256,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 443314787,
-      "ns_med": 445607391.0,
-      "ns_max": 450323375,
-      "gbps_med": 0.602,
+      "ns_min": 458326981,
+      "ns_med": 459620223.0,
+      "ns_max": 466010746,
+      "gbps_med": 0.584,
       "matches": 5740166,
       "ns_samples": [
-        445607391,
-        443861401,
-        446117376,
-        443314787,
-        450323375
+        458563676,
+        458326981,
+        459620223,
+        463908218,
+        466010746
       ]
     },
     {
@@ -2262,17 +2274,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 543667506,
-      "ns_med": 546075890.0,
-      "ns_max": 550465236,
-      "gbps_med": 0.492,
+      "ns_min": 567059176,
+      "ns_med": 570403196.0,
+      "ns_max": 582894257,
+      "gbps_med": 0.471,
       "matches": 5740166,
       "ns_samples": [
-        547378977,
-        543667506,
-        550465236,
-        545440878,
-        546075890
+        582894257,
+        567059176,
+        567638392,
+        573672502,
+        570403196
       ]
     },
     {
@@ -2280,17 +2292,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 463794279,
-      "ns_med": 466066485.0,
-      "ns_max": 471896376,
-      "gbps_med": 0.576,
+      "ns_min": 486049509,
+      "ns_med": 487168112.0,
+      "ns_max": 491426135,
+      "gbps_med": 0.551,
       "matches": 5740166,
       "ns_samples": [
-        463794279,
-        471896376,
-        469466749,
-        466066485,
-        464783992
+        491426135,
+        487030501,
+        487168112,
+        486049509,
+        490110470
       ]
     },
     {
@@ -2298,17 +2310,17 @@
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
       "iters": 5,
-      "ns_min": 496997017,
-      "ns_med": 498963450.0,
-      "ns_max": 504105790,
-      "gbps_med": 0.538,
+      "ns_min": 521245107,
+      "ns_med": 523746611.0,
+      "ns_max": 544034875,
+      "gbps_med": 0.513,
       "matches": 5740166,
       "ns_samples": [
-        502588519,
-        496997017,
-        497930304,
-        498963450,
-        504105790
+        544034875,
+        525591191,
+        521245107,
+        523746611,
+        521665106
       ]
     },
     {
@@ -2316,17 +2328,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 35385066,
-      "ns_med": 35608815.0,
-      "ns_max": 35735509,
-      "gbps_med": 7.538,
+      "ns_min": 36562793,
+      "ns_med": 37009335.0,
+      "ns_max": 39047945,
+      "gbps_med": 7.253,
       "matches": 24220936953,
       "ns_samples": [
-        35608815,
-        35385066,
-        35570171,
-        35710380,
-        35735509
+        36562793,
+        36823471,
+        37009335,
+        37155376,
+        39047945
       ]
     },
     {
@@ -2334,17 +2346,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 10047811,
-      "ns_med": 10287000.0,
-      "ns_max": 10452276,
-      "gbps_med": 26.095,
+      "ns_min": 11707925,
+      "ns_med": 13117593.0,
+      "ns_max": 19494379,
+      "gbps_med": 20.464,
       "matches": 65404,
       "ns_samples": [
-        10452276,
-        10287000,
-        10047811,
-        10389736,
-        10273955
+        11707925,
+        11955175,
+        16099391,
+        19494379,
+        13117593
       ]
     },
     {
@@ -2352,17 +2364,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 11226622,
-      "ns_med": 11386268.0,
-      "ns_max": 11521767,
-      "gbps_med": 23.575,
+      "ns_min": 12115365,
+      "ns_med": 12845251.0,
+      "ns_max": 12987796,
+      "gbps_med": 20.898,
       "matches": 65404,
       "ns_samples": [
-        11386268,
-        11521767,
-        11305433,
-        11226622,
-        11399172
+        12853047,
+        12987796,
+        12647353,
+        12115365,
+        12845251
       ]
     },
     {
@@ -2370,17 +2382,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 201377318,
-      "ns_med": 203178951.0,
-      "ns_max": 205886306,
-      "gbps_med": 1.321,
+      "ns_min": 206647491,
+      "ns_med": 207121533.0,
+      "ns_max": 209204916,
+      "gbps_med": 1.296,
       "matches": 7108334,
       "ns_samples": [
-        201377318,
-        203178951,
-        205886306,
-        203190239,
-        203122446
+        208746160,
+        207086115,
+        209204916,
+        207121533,
+        206647491
       ]
     },
     {
@@ -2388,17 +2400,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 378043783,
-      "ns_med": 385042872.0,
-      "ns_max": 386148678,
-      "gbps_med": 0.697,
+      "ns_min": 379084725,
+      "ns_med": 383636007.0,
+      "ns_max": 384926212,
+      "gbps_med": 0.7,
       "matches": 7108334,
       "ns_samples": [
-        386125650,
-        385042872,
-        378043783,
-        386148678,
-        382376945
+        384902837,
+        383636007,
+        380685954,
+        379084725,
+        384926212
       ]
     },
     {
@@ -2406,17 +2418,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 19576866,
-      "ns_med": 19841925.0,
-      "ns_max": 20190492,
-      "gbps_med": 13.529,
+      "ns_min": 20893676,
+      "ns_med": 21334025.0,
+      "ns_max": 21522364,
+      "gbps_med": 12.583,
       "matches": 65404,
       "ns_samples": [
-        19929742,
-        19808360,
-        19576866,
-        19841925,
-        20190492
+        20893676,
+        21522364,
+        21152971,
+        21334025,
+        21411756
       ]
     },
     {
@@ -2424,17 +2436,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 44672506,
-      "ns_med": 45168799.0,
-      "ns_max": 45555450,
-      "gbps_med": 5.943,
+      "ns_min": 46787269,
+      "ns_med": 47081907.0,
+      "ns_max": 47866828,
+      "gbps_med": 5.701,
       "matches": 65404,
       "ns_samples": [
-        45168799,
-        44938847,
-        45555450,
-        44672506,
-        45192042
+        46787269,
+        46827011,
+        47376886,
+        47866828,
+        47081907
       ]
     },
     {
@@ -2442,17 +2454,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 32848018,
-      "ns_med": 33044425.0,
-      "ns_max": 33250691,
-      "gbps_med": 8.124,
+      "ns_min": 35878151,
+      "ns_med": 36389066.0,
+      "ns_max": 37597630,
+      "gbps_med": 7.377,
       "matches": 65404,
       "ns_samples": [
-        32993407,
-        33083381,
-        32848018,
-        33044425,
-        33250691
+        35878151,
+        36594531,
+        36389066,
+        36027080,
+        37597630
       ]
     },
     {
@@ -2460,17 +2472,17 @@
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
       "iters": 5,
-      "ns_min": 44027356,
-      "ns_med": 44301108.0,
-      "ns_max": 45433938,
-      "gbps_med": 6.059,
+      "ns_min": 47820540,
+      "ns_med": 48149159.0,
+      "ns_max": 48312232,
+      "gbps_med": 5.575,
       "matches": 65404,
       "ns_samples": [
-        45433938,
-        44165333,
-        44027356,
-        44301108,
-        44414428
+        48094970,
+        48149159,
+        48312232,
+        48181315,
+        47820540
       ]
     },
     {
@@ -2478,17 +2490,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 35179880,
-      "ns_med": 35870375.0,
-      "ns_max": 36069988,
-      "gbps_med": 7.488,
+      "ns_min": 37003804,
+      "ns_med": 37184106.0,
+      "ns_max": 37771889,
+      "gbps_med": 7.223,
       "matches": 24237205228,
       "ns_samples": [
-        36069988,
-        36003651,
-        35672406,
-        35179880,
-        35870375
+        37003804,
+        37281387,
+        37771889,
+        37184106,
+        37050110
       ]
     },
     {
@@ -2496,17 +2508,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 9714621,
-      "ns_med": 10109198.0,
-      "ns_max": 10656688,
-      "gbps_med": 26.568,
+      "ns_min": 10872131,
+      "ns_med": 11252315.0,
+      "ns_max": 12103677,
+      "gbps_med": 23.869,
       "matches": 1192,
       "ns_samples": [
-        10656688,
-        10109198,
-        9714621,
-        10196596,
-        9791649
+        10872131,
+        11300194,
+        12103677,
+        11252315,
+        11138690
       ]
     },
     {
@@ -2514,17 +2526,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 9494059,
-      "ns_med": 9783403.0,
-      "ns_max": 10623776,
-      "gbps_med": 27.453,
+      "ns_min": 10633819,
+      "ns_med": 11437819.0,
+      "ns_max": 12070233,
+      "gbps_med": 23.482,
       "matches": 1192,
       "ns_samples": [
-        9783403,
-        9659817,
-        10623776,
-        10123576,
-        9494059
+        11437819,
+        10743225,
+        12070233,
+        11628922,
+        10633819
       ]
     },
     {
@@ -2532,17 +2544,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 192455809,
-      "ns_med": 193327951.0,
-      "ns_max": 198306082,
-      "gbps_med": 1.389,
+      "ns_min": 198726724,
+      "ns_med": 199198823.0,
+      "ns_max": 202040330,
+      "gbps_med": 1.348,
       "matches": 7115978,
       "ns_samples": [
-        194496016,
-        198306082,
-        193327951,
-        193166370,
-        192455809
+        201032898,
+        199198823,
+        202040330,
+        198726724,
+        199005534
       ]
     },
     {
@@ -2550,17 +2562,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 378937688,
-      "ns_med": 383369104.0,
-      "ns_max": 385780998,
-      "gbps_med": 0.701,
+      "ns_min": 386452200,
+      "ns_med": 387100366.0,
+      "ns_max": 388915819,
+      "gbps_med": 0.694,
       "matches": 7115978,
       "ns_samples": [
-        385780998,
-        381947755,
-        378937688,
-        383369104,
-        385115975
+        386986472,
+        386452200,
+        387497750,
+        387100366,
+        388915819
       ]
     },
     {
@@ -2568,17 +2580,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 20520345,
-      "ns_med": 20873483.0,
-      "ns_max": 21138982,
-      "gbps_med": 12.867,
+      "ns_min": 22100867,
+      "ns_med": 22391478.0,
+      "ns_max": 23033742,
+      "gbps_med": 11.995,
       "matches": 1192,
       "ns_samples": [
-        20520345,
-        21127418,
-        20873483,
-        20703847,
-        21138982
+        22100867,
+        22885306,
+        22391478,
+        22289129,
+        23033742
       ]
     },
     {
@@ -2586,17 +2598,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 21634593,
-      "ns_med": 22013488.0,
-      "ns_max": 23431929,
-      "gbps_med": 12.201,
+      "ns_min": 23407182,
+      "ns_med": 23955254.0,
+      "ns_max": 24166368,
+      "gbps_med": 11.212,
       "matches": 1192,
       "ns_samples": [
-        22307463,
-        21818584,
-        23431929,
-        22013488,
-        21634593
+        23955254,
+        24166368,
+        23516798,
+        24094741,
+        23407182
       ]
     },
     {
@@ -2604,17 +2616,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 33498586,
-      "ns_med": 34142235.0,
-      "ns_max": 36214014,
-      "gbps_med": 7.867,
+      "ns_min": 35835504,
+      "ns_med": 36039434.0,
+      "ns_max": 37358518,
+      "gbps_med": 7.452,
       "matches": 1192,
       "ns_samples": [
-        33848767,
-        33498586,
-        34142235,
-        34648110,
-        36214014
+        35948317,
+        35835504,
+        37358518,
+        36039434,
+        36209756
       ]
     },
     {
@@ -2622,17 +2634,17 @@
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
       "iters": 5,
-      "ns_min": 46069425,
-      "ns_med": 46980651.0,
-      "ns_max": 47805153,
-      "gbps_med": 5.717,
+      "ns_min": 48827627,
+      "ns_med": 50675571.0,
+      "ns_max": 51628758,
+      "gbps_med": 5.3,
       "matches": 1192,
       "ns_samples": [
-        46980651,
-        47389596,
-        46069425,
-        47805153,
-        46719851
+        50675571,
+        51628758,
+        50753048,
+        48827627,
+        49707906
       ]
     },
     {
@@ -2640,17 +2652,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 35488231,
-      "ns_med": 36549166.0,
-      "ns_max": 38094138,
-      "gbps_med": 7.345,
+      "ns_min": 36461616,
+      "ns_med": 36667671.0,
+      "ns_max": 36879037,
+      "gbps_med": 7.321,
       "matches": 33621116033,
       "ns_samples": [
-        38094138,
-        35790762,
-        35488231,
-        36549166,
-        36652534
+        36461616,
+        36623079,
+        36667671,
+        36879037,
+        36816769
       ]
     },
     {
@@ -2658,17 +2670,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 42060746,
-      "ns_med": 43086663.0,
-      "ns_max": 43403214,
-      "gbps_med": 6.23,
+      "ns_min": 43217469,
+      "ns_med": 44128572.0,
+      "ns_max": 44255376,
+      "gbps_med": 6.083,
       "matches": 5065006,
       "ns_samples": [
-        43086663,
-        43118265,
-        43403214,
-        42312650,
-        42060746
+        44255376,
+        43217469,
+        43632390,
+        44128572,
+        44136571
       ]
     },
     {
@@ -2676,17 +2688,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 150729257,
-      "ns_med": 153099553.0,
-      "ns_max": 159824609,
-      "gbps_med": 1.753,
+      "ns_min": 160642927,
+      "ns_med": 162614452.0,
+      "ns_max": 163221788,
+      "gbps_med": 1.651,
       "matches": 25,
       "ns_samples": [
-        159824609,
-        150729257,
-        151309459,
-        155651687,
-        153099553
+        162614452,
+        162698622,
+        160642927,
+        163221788,
+        161461147
       ]
     },
     {
@@ -2694,17 +2706,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 20918939,
-      "ns_med": 21256206.0,
-      "ns_max": 21342823,
-      "gbps_med": 12.629,
+      "ns_min": 21959714,
+      "ns_med": 22027043.0,
+      "ns_max": 22553249,
+      "gbps_med": 12.187,
       "matches": 25,
       "ns_samples": [
-        20924911,
-        21288438,
-        21256206,
-        20918939,
-        21342823
+        21959714,
+        22553249,
+        22015310,
+        22027043,
+        22462481
       ]
     },
     {
@@ -2712,17 +2724,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 81655403,
-      "ns_med": 82930828.0,
-      "ns_max": 84213078,
-      "gbps_med": 3.237,
+      "ns_min": 83859017,
+      "ns_med": 84846785.0,
+      "ns_max": 89757626,
+      "gbps_med": 3.164,
       "matches": 25,
       "ns_samples": [
-        82930828,
-        81888290,
-        81655403,
-        84213078,
-        83256154
+        84846785,
+        84612892,
+        83859017,
+        85744116,
+        89757626
       ]
     },
     {
@@ -2730,17 +2742,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 41136273,
-      "ns_med": 42265759.0,
-      "ns_max": 42604910,
-      "gbps_med": 6.351,
+      "ns_min": 43644361,
+      "ns_med": 45017750.0,
+      "ns_max": 45507785,
+      "gbps_med": 5.963,
       "matches": 25,
       "ns_samples": [
-        41136273,
-        41497076,
-        42265759,
-        42339792,
-        42604910
+        45507785,
+        44706283,
+        43644361,
+        45372217,
+        45017750
       ]
     },
     {
@@ -2748,17 +2760,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 41839722,
-      "ns_med": 42473980.0,
-      "ns_max": 43284830,
-      "gbps_med": 6.32,
+      "ns_min": 44644445,
+      "ns_med": 45038858.0,
+      "ns_max": 45290818,
+      "gbps_med": 5.96,
       "matches": 25,
       "ns_samples": [
-        41839722,
-        42473980,
-        43057808,
-        43284830,
-        42438441
+        45290818,
+        45124184,
+        44644445,
+        45038858,
+        44919712
       ]
     },
     {
@@ -2766,17 +2778,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 59128360,
-      "ns_med": 59941358.0,
-      "ns_max": 63161815,
-      "gbps_med": 4.478,
+      "ns_min": 63368854,
+      "ns_med": 63992972.0,
+      "ns_max": 64673382,
+      "gbps_med": 4.195,
       "matches": 25,
       "ns_samples": [
-        63161815,
-        60609444,
-        59941358,
-        59128360,
-        59234374
+        63368854,
+        63718635,
+        63992972,
+        64338013,
+        64673382
       ]
     },
     {
@@ -2784,17 +2796,17 @@
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
       "iters": 5,
-      "ns_min": 71989826,
-      "ns_med": 73288912.0,
-      "ns_max": 75657145,
-      "gbps_med": 3.663,
+      "ns_min": 75381362,
+      "ns_med": 76076676.0,
+      "ns_max": 76499294,
+      "gbps_med": 3.528,
       "matches": 25,
       "ns_samples": [
-        71989826,
-        73360575,
-        75657145,
-        73244192,
-        73288912
+        75381362,
+        75556272,
+        76499294,
+        76120632,
+        76076676
       ]
     }
   ],
@@ -2802,139 +2814,139 @@
     {
       "workload": "normal__p_qz9__d_0",
       "bytes": 268435517,
-      "core_increment_ns": -47356548.0,
-      "core_increment_ms_per_gib": -189.4261489542889,
-      "core_overhead_ratio": -0.4496682306120706,
-      "core_share": -0.8170857210591073
+      "core_increment_ns": -46412911.0,
+      "core_increment_ms_per_gib": -185.65160181202722,
+      "core_overhead_ratio": -0.4419026821848534,
+      "core_share": -0.7918021966398712
     },
     {
       "workload": "normal__p_qz9__d_s",
       "bytes": 268435471,
-      "core_increment_ns": 14143307.0,
-      "core_increment_ms_per_gib": 56.57322483872471,
-      "core_overhead_ratio": 0.3077295958253251,
-      "core_share": 0.2353159221965249
+      "core_increment_ns": 16745842.0,
+      "core_increment_ms_per_gib": 66.98336425701284,
+      "core_overhead_ratio": 0.3583133624778264,
+      "core_share": 0.26379285691793053
     },
     {
       "workload": "normal__p_the__d_0",
       "bytes": 268435502,
-      "core_increment_ns": 25820261.0,
-      "core_increment_ms_per_gib": 103.28102630141694,
-      "core_overhead_ratio": 0.09134679173781644,
-      "core_share": 0.08370097610527585
+      "core_increment_ns": 28889837.0,
+      "core_increment_ms_per_gib": 115.55932819736597,
+      "core_overhead_ratio": 0.09830635535151547,
+      "core_share": 0.08950722616919783
     },
     {
       "workload": "normal__p_the__d_s",
       "bytes": 268435492,
-      "core_increment_ns": 26057057.0,
-      "core_increment_ms_per_gib": 104.22821402190723,
-      "core_overhead_ratio": 0.09181569892020577,
-      "core_share": 0.08409450332231944
+      "core_increment_ns": 26709192.0,
+      "core_increment_ms_per_gib": 106.83675367207482,
+      "core_overhead_ratio": 0.09040153834700156,
+      "core_share": 0.08290664967700442
     },
     {
       "workload": "normal__p_1b_e__d_0",
       "bytes": 268435487,
-      "core_increment_ns": 19476480.0,
-      "core_increment_ms_per_gib": 77.90591100311383,
-      "core_overhead_ratio": 0.09030246965325744,
-      "core_share": 0.08282331936932677
+      "core_increment_ns": 27364504.0,
+      "core_increment_ms_per_gib": 109.45800335935202,
+      "core_overhead_ratio": 0.12346355806758132,
+      "core_share": 0.10989547207026935
     },
     {
       "workload": "normal__p_1b_z__d_s",
       "bytes": 268435459,
-      "core_increment_ns": 13750056.0,
-      "core_increment_ms_per_gib": 55.00022338532461,
-      "core_overhead_ratio": 0.3178314212364706,
-      "core_share": 0.24117760140994482
+      "core_increment_ns": 13908096.0,
+      "core_increment_ms_per_gib": 55.63238337825967,
+      "core_overhead_ratio": 0.3035180749352759,
+      "core_share": 0.23284531359516944
     },
     {
       "workload": "normal__p_16b__d_s",
       "bytes": 268435466,
-      "core_increment_ns": 12999126.0,
-      "core_increment_ms_per_gib": 51.99650206297935,
-      "core_overhead_ratio": 0.2973857009857969,
-      "core_share": 0.2292191911471148
+      "core_increment_ns": 13162687.0,
+      "core_increment_ms_per_gib": 52.65074603860687,
+      "core_overhead_ratio": 0.28488590138155306,
+      "core_share": 0.22172077775562332
     },
     {
       "workload": "normal__p_64b__d_s",
       "bytes": 268435484,
-      "core_increment_ns": 12044430.0,
-      "core_increment_ms_per_gib": 48.177714974672725,
-      "core_overhead_ratio": 0.2698717037095526,
-      "core_share": 0.212518873301297
+      "core_increment_ns": 13403826.0,
+      "core_increment_ms_per_gib": 53.615298407488574,
+      "core_overhead_ratio": 0.2927346228354577,
+      "core_share": 0.2264460297298912
     },
     {
       "workload": "normal__p_rare1st__d_s",
       "bytes": 268435501,
-      "core_increment_ns": 12999353.0,
-      "core_increment_ms_per_gib": 51.997403283256006,
-      "core_overhead_ratio": 0.29651987411603026,
-      "core_share": 0.2287044572442039
+      "core_increment_ns": 14446960.0,
+      "core_increment_ms_per_gib": 57.78783031256004,
+      "core_overhead_ratio": 0.31945953320789605,
+      "core_share": 0.2421139301113841
     },
     {
       "workload": "normal__p_rep__d_s",
       "bytes": 268435495,
-      "core_increment_ns": 14883325.0,
-      "core_increment_ms_per_gib": 59.53329135062708,
-      "core_overhead_ratio": 0.16259606906722182,
-      "core_share": 0.13985602858409496
+      "core_increment_ns": 14893444.0,
+      "core_increment_ms_per_gib": 59.57376734474648,
+      "core_overhead_ratio": 0.155639113073905,
+      "core_share": 0.13467795552533504
     },
     {
       "workload": "normal__p_the__d_1pc",
       "bytes": 268435495,
-      "core_increment_ns": 21992881.0,
-      "core_increment_ms_per_gib": 87.97151121894272,
-      "core_overhead_ratio": 0.07698863161294241,
-      "core_share": 0.07148509218490177
+      "core_increment_ns": 28480514.0,
+      "core_increment_ms_per_gib": 113.92203944868594,
+      "core_overhead_ratio": 0.09580220318284226,
+      "core_share": 0.08742654733178794
     },
     {
       "workload": "normal__p_the__d_10pc",
       "bytes": 268435459,
-      "core_increment_ns": 21743215.0,
-      "core_increment_ms_per_gib": 86.97285902800256,
-      "core_overhead_ratio": 0.07578624303991993,
-      "core_share": 0.07044730635871096
+      "core_increment_ns": 27830040.0,
+      "core_increment_ms_per_gib": 111.32015875590028,
+      "core_overhead_ratio": 0.0933207422830488,
+      "core_share": 0.08535532042333566
     },
     {
       "workload": "normal__p_the__d_all",
       "bytes": 268435495,
-      "core_increment_ns": 23937733.0,
-      "core_increment_ms_per_gib": 95.75091808870133,
-      "core_overhead_ratio": 0.08147914640217052,
-      "core_share": 0.07534046927602135
+      "core_increment_ns": 37473740.0,
+      "core_increment_ms_per_gib": 149.8949382223158,
+      "core_overhead_ratio": 0.12430689774154852,
+      "core_share": 0.11056313715698979
     },
     {
       "workload": "short__p_the__d_s",
       "bytes": 268435456,
-      "core_increment_ns": 32896965.0,
-      "core_increment_ms_per_gib": 131.58786,
-      "core_overhead_ratio": 0.07058427511688595,
-      "core_share": 0.06593061074914405
+      "core_increment_ns": 36578499.0,
+      "core_increment_ms_per_gib": 146.313996,
+      "core_overhead_ratio": 0.07508393529665176,
+      "core_share": 0.06984006813936215
     },
     {
       "workload": "long__p_the__d_s",
       "bytes": 268436638,
-      "core_increment_ns": 11256683.0,
-      "core_increment_ms_per_gib": 45.02653373497321,
-      "core_overhead_ratio": 0.3406530148428971,
-      "core_share": 0.2540948411493455
+      "core_increment_ns": 11760093.0,
+      "core_increment_ms_per_gib": 47.04016486836507,
+      "core_overhead_ratio": 0.3231765552872393,
+      "core_share": 0.2442429575976602
     },
     {
       "workload": "huge__p_the__d_s",
       "bytes": 268581524,
-      "core_increment_ns": 12838416.0,
-      "core_increment_ms_per_gib": 51.3257353216552,
-      "core_overhead_ratio": 0.3760274041813607,
-      "core_share": 0.273270287378521
+      "core_increment_ns": 14636137.0,
+      "core_increment_ms_per_gib": 58.51270856104714,
+      "core_overhead_ratio": 0.40611450779165953,
+      "core_share": 0.28882036672068284
     },
     {
       "workload": "binary__p_the__d_s",
       "bytes": 268435472,
-      "core_increment_ns": 13347554.0,
-      "core_increment_ms_per_gib": 53.390212817695335,
-      "core_overhead_ratio": 0.22267687028378635,
-      "core_share": 0.1821224198279816
+      "core_increment_ns": 12083704.0,
+      "core_increment_ms_per_gib": 48.33481311902063,
+      "core_overhead_ratio": 0.1888286107418171,
+      "core_share": 0.1588358566034089
     }
   ],
-  "note": "V2 candidate for round-1 grep attribution, clean tree at commit 8649615 (V2 chunk-level matcher unchanged since 568991f; this branch adds only measurement instrument + docs). Same instrument and session as the V1 baseline artifact."
+  "note": "V2 candidate for round-1 grep attribution, clean tree at commit 7e12486 (V2 chunk-level matcher unchanged since 568991f). Re-measured with the schema-2 runner after review-round-3 evidence hardening (executable sha256 binding, -a competitor parity, exit classification); same instrument and session as the re-measured V1 baseline artifact."
 }

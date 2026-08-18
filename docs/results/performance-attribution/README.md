@@ -3,12 +3,15 @@
 Canonical, runner-produced performance-evidence artifacts
 (`scripts/bench/perf-attribution.py`). Never hand-created: every JSON here
 was produced by a real benchmark run and records its own git SHA, dirty
-state (+ provenance note when dirty), environment fingerprint, workload
-parameters, warmups/iterations, raw per-iteration samples, and derived
-statistics.
+state (+ provenance note when dirty), the sha256/size of the measured
+executable (schema 2: the git SHA says what was checked out, the binary
+hash says what ran), environment fingerprint, workload parameters,
+warmups/iterations, raw per-iteration samples, and derived statistics.
 
 Validate: `python3 scripts/bench/perf-evidence-validate.py` (runs in the
-pre-push gate and CI). Methodology:
+pre-push gate and CI; fail-closed on schema, executable provenance,
+non-comparable CLI outputs, and unclassified perf exit status).
+Methodology:
 [`docs/verification/performance-engineering.md`](../../verification/performance-engineering.md);
 round-1 case study:
 [`docs/verification/performance-attribution.md`](../../verification/performance-attribution.md).
@@ -19,10 +22,11 @@ round-1 case study:
 |----------|------------|
 | `round1-grep-v1-ladder.json` | V1 (per-line `std::search`) matcher ladder, 256 MiB, measured at baseline commit `b5657ae` with the measurement-instrument overlay described in its note |
 | `round1-grep-v2-ladder.json` | V2 (chunk-level anchor scan) matcher ladder, 256 MiB, same instrument, clean tree |
-| `round1-grep-v2-cli.json` | L6 CLI matrix (sluice-grep vs GNU grep vs ripgrep), 1 GiB, byte-equality + exit-code + output-size records |
+| `round1-grep-v2-cli.json` | L6 CLI matrix (sluice-grep vs GNU grep vs ripgrep), 1 GiB, byte-equality + exit-code + output-size records; competitors run with `-a` text-mode parity so binary rows are comparable |
 | `round1-grep-v2-perf.json` | `perf stat` counters for one sluice-grep CLI run (PMU counters are diagnostic evidence, not optimization authorization) |
 
 Baseline and candidate were measured on the same machine in the same
 session (fingerprint inside each artifact; the compare command warns on any
-material mismatch). See the case study for interpretation and its
-variance caveats.
+material mismatch). All four artifacts were re-measured with the schema-2
+runner after review round 3; pre-hardening numbers are superseded. See the
+case study for interpretation and its variance caveats.

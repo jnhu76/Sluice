@@ -1,15 +1,18 @@
 {
   "env": {
-    "time": "2026-08-18T18:29:08+0800",
+    "time": "2026-08-18T19:37:16+0800",
     "git": {
-      "sha": "43a55c026a373c51101046ad0f20088ca41db08b",
-      "dirty": false,
+      "sha": "7e1248680b41b5ca27a702d6f856ca67685f5f0c",
+      "dirty": true,
       "branch": "perf/performance-attribution"
     },
     "build": {
       "mode": "release",
       "compiler": "clang++",
-      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+      "plat": "linux",
+      "arch": "x86_64",
+      "toolchain": "clang"
     },
     "system": {
       "kernel": "6.18.33.2-microsoft-standard-WSL2",
@@ -35,38 +38,46 @@
       "ripgrep": "ripgrep 15.1.0"
     }
   },
+  "schema": 2,
   "kind": "perf",
+  "binary": {
+    "path": "build/linux/x86_64/release/sluice-grep",
+    "sha256": "cb4b3f2b4f414fb76c14a571cfb7fbd069b6540ec367f5c7d10bca60565797cc",
+    "size": 175040,
+    "mtime": 1787052423.0736353
+  },
   "cmd": [
     "build/linux/x86_64/release/sluice-grep",
     "qz9",
     "/tmp/perf-qz9-1g.bin"
   ],
   "child_exit_code": 0,
+  "exit_semantics": "grep-family",
   "counters": {
-    "task-clock": 635.57,
-    "cycles": 434183972.0,
-    "instructions": 1763458751.0,
-    "branches": 52649514.0,
-    "branch-misses": 196930.0,
-    "cache-misses": 6482297.0,
+    "task-clock": 546.47,
+    "cycles": 435187058.0,
+    "instructions": 1763453889.0,
+    "branches": 52648448.0,
+    "branch-misses": 186236.0,
+    "cache-misses": 5905498.0,
     "context-switches": 0.0,
     "cpu-migrations": 0.0,
     "page-faults": 421.0
   },
-  "raw": "635.57,msec,task-clock:u,635567296,100.00,,\n434183972,,cycles:u,635567296,100.00,,\n1763458751,,instructions:u,635567296,100.00,,\n52649514,,branches:u,635567296,100.00,,\n196930,,branch-misses:u,635567296,100.00,,\n6482297,,cache-misses:u,635567296,100.00,,\n0,,context-switches:u,635567296,100.00,,\n0,,cpu-migrations:u,635567296,100.00,,\n421,,page-faults:u,635567296,100.00,,",
+  "raw": "546.47,msec,task-clock:u,546472311,100.00,,\n435187058,,cycles:u,546472311,100.00,,\n1763453889,,instructions:u,546472311,100.00,,\n52648448,,branches:u,546472311,100.00,,\n186236,,branch-misses:u,546472311,100.00,,\n5905498,,cache-misses:u,546472311,100.00,,\n0,,context-switches:u,546472311,100.00,,\n0,,cpu-migrations:u,546472311,100.00,,\n421,,page-faults:u,546472311,100.00,,",
   "params": {
     "requests": 1024
   },
   "derived": {
-    "task-clock_per_request": 0.620673828125,
-    "cycles_per_request": 424007.78515625,
-    "instructions_per_request": 1722127.6865234375,
-    "branches_per_request": 51415.541015625,
-    "branch-misses_per_request": 192.314453125,
-    "cache-misses_per_request": 6330.3681640625,
+    "task-clock_per_request": 0.533662109375,
+    "cycles_per_request": 424987.361328125,
+    "instructions_per_request": 1722122.9384765625,
+    "branches_per_request": 51414.5,
+    "branch-misses_per_request": 181.87109375,
+    "cache-misses_per_request": 5767.087890625,
     "context-switches_per_request": 0.0,
     "cpu-migrations_per_request": 0.0,
     "page-faults_per_request": 0.4111328125
   },
-  "note": "perf stat counters for one sluice-grep CLI run (1 GiB sparse qz9 workload, 1024 x 1 MiB requests). User-space-only counters (:u) under perf_event_paranoid; PMU counters are diagnostic evidence, not optimization authorization."
+  "note": "perf stat counters for one sluice-grep CLI run (1 GiB sparse qz9 workload, 1024 x 1 MiB requests), clean tree at 7e12486. User-space-only counters (:u) under perf_event_paranoid; PMU counters are diagnostic evidence, not optimization authorization."
 }
