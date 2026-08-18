@@ -34,13 +34,16 @@
 #include "matcher.hpp"
 
 #include <sluice/async/threadpool_backend.hpp>
+#include <sluice/detail/posix_retry.hpp>
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -51,6 +54,15 @@ using sluice_grep::LineMatcher;
 using sluice_grep::MatchEvent;
 
 namespace {
+
+// Run-ending failure: a benchmark whose I/O or engine cross-check failed
+// must abort loudly, never emit a sentinel row (a silent ~0ULL `matches`
+// value or a skipped stage would corrupt the evidence).
+[[noreturn]] void bench_fatal(const char* what, int err) {
+    std::fprintf(stderr, "grep_attribution_bench: fatal: %s (errno=%d: %s)\n",
+                 what, err, std::strerror(err));
+    std::exit(3);
+}
 
 std::uint64_t now_ns() {
     return static_cast<std::uint64_t>(
@@ -239,7 +251,7 @@ std::uint64_t stage_l2e_matcher_emit(const std::string& data,
     // L2 + the CLI sink's formatting/write cost into a suppressed file
     // (the same stdio calls as apps/sluice-grep/main.cpp's sink).
     std::FILE* out = std::fopen("/dev/null", "w");
-    if (out == nullptr) return ~0ULL;
+    if (out == nullptr) bench_fatal("L2e fopen(/dev/null)", errno);
     std::uint64_t n = run_matcher_count(data, pat, max_line_bytes, out);
     std::fclose(out);
     return n;
@@ -250,18 +262,24 @@ std::uint64_t stage_l3_pread(const std::string& path, const std::string& pat,
                              std::size_t buffer_size,
                              std::size_t max_line_bytes) {
     int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) return ~0ULL;
+    if (fd < 0) bench_fatal("L3 open workload file", errno);
     std::vector<std::uint8_t> buf(buffer_size);
     LineMatcher m(pat, max_line_bytes);
     std::vector<MatchEvent> events;
     std::uint64_t count = 0;
     std::uint64_t off = 0;
     for (;;) {
-        ssize_t n =
-            ::pread(fd, buf.data(), buf.size(), static_cast<off_t>(off));
+        // Repository retry authority for interrupted blocking syscalls
+        // (include/sluice/detail/posix_retry.hpp); every other failure is
+        // a run-ending error, not a silent sentinel.
+        ssize_t n = sluice::detail::retry_on_eintr([&] {
+            return ::pread(fd, buf.data(), buf.size(),
+                           static_cast<off_t>(off));
+        });
         if (n < 0) {
+            int e = errno;
             ::close(fd);
-            return ~0ULL;
+            bench_fatal("L3 pread failed", e);
         }
         if (n == 0) break;
         events.clear();
@@ -281,7 +299,7 @@ std::uint64_t stage_l4_sluice(const std::string& path, const std::string& pat,
                               std::size_t buffer_size,
                               std::size_t max_line_bytes) {
     int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) return ~0ULL;
+    if (fd < 0) bench_fatal("L4 open workload file", errno);
     std::vector<sluice_grep::GrepInput> inputs;
     inputs.push_back(sluice_grep::GrepInput{path, fd});
     std::uint64_t count = 0;
@@ -289,9 +307,10 @@ std::uint64_t stage_l4_sluice(const std::string& path, const std::string& pat,
                          std::string_view) { ++count; };
     auto results = sluice_grep::grep_files(
         pat, std::move(inputs), buffer_size, max_line_bytes, 1, sink);
-    std::uint64_t engine = results.empty() ? ~0ULL : results[0].match_count;
     ::close(fd);
-    if (engine != count) return ~0ULL;  // sink/engine disagreement: invalid
+    if (results.empty()) bench_fatal("L4 engine returned no result", 0);
+    if (results[0].match_count != count)
+        bench_fatal("L4 sink/engine match-count disagreement", 0);
     return count;
 }
 
@@ -370,34 +389,84 @@ struct FileStage {
 
 }  // namespace
 
+// Whole-number decimal parse: rejects empty text, trailing garbage, and
+// overflow (strtoull would silently accept "5x", "-3", and wrap-arounds).
+bool parse_size(const char* s, std::size_t& out) {
+    if (s == nullptr || *s == '\0') return false;
+    std::size_t v = 0;
+    const std::size_t limit = std::numeric_limits<std::size_t>::max();
+    for (const char* p = s; *p != '\0'; ++p) {
+        if (*p < '0' || *p > '9') return false;
+        unsigned d = static_cast<unsigned>(*p - '0');
+        if (v > (limit - d) / 10) return false;
+        v = v * 10 + d;
+    }
+    out = v;
+    return true;
+}
+
+int usage_error(const char* argv0, const char* detail) {
+    std::fprintf(stderr,
+                 "usage: %s [--bytes N] [--iters N] [--warmup N] "
+                 "[--buffer-size N] [--max-line-bytes N] "
+                 "[--stages s1,s2] [--workloads w1,w2]\nerror: %s\n",
+                 argv0, detail);
+    return 2;
+}
+
 int main(int argc, char** argv) {
     Config cfg;
     for (int i = 1; i < argc; ++i) {
         std::string_view a = argv[i];
-        auto next = [&]() -> const char* { return ++i < argc ? argv[i] : ""; };
-        if (a == "--bytes")
-            cfg.bytes = std::strtoull(next(), nullptr, 10);
-        else if (a == "--iters")
-            cfg.iters = std::strtoull(next(), nullptr, 10);
-        else if (a == "--warmup")
-            cfg.warmup = std::strtoull(next(), nullptr, 10);
-        else if (a == "--buffer-size")
-            cfg.buffer_size = std::strtoull(next(), nullptr, 10);
-        else if (a == "--max-line-bytes")
-            cfg.max_line_bytes = std::strtoull(next(), nullptr, 10);
-        else if (a == "--stages")
-            cfg.stages = split_list(next());
-        else if (a == "--workloads")
-            cfg.workloads = split_list(next());
-        else {
-            std::fprintf(stderr,
-                         "usage: %s [--bytes N] [--iters N] [--warmup N] "
-                         "[--buffer-size N] [--max-line-bytes N] "
-                         "[--stages s1,s2] [--workloads w1,w2]\n",
-                         argv[0]);
-            return 2;
+        // Missing flag values are errors, not silent zeros (a zero --iters
+        // would later divide by a zero-width sample set).
+        auto next = [&](const char* opt) -> const char* {
+            if (i + 1 >= argc) {
+                std::string d = std::string(opt) + " requires a value";
+                std::exit(usage_error(argv[0], d.c_str()));
+            }
+            return argv[++i];
+        };
+        std::size_t v = 0;
+        if (a == "--bytes") {
+            if (!parse_size(next("--bytes"), v))
+                return usage_error(argv[0], "--bytes: invalid number");
+            cfg.bytes = v;
+        } else if (a == "--iters") {
+            if (!parse_size(next("--iters"), v))
+                return usage_error(argv[0], "--iters: invalid number");
+            cfg.iters = v;
+        } else if (a == "--warmup") {
+            if (!parse_size(next("--warmup"), v))
+                return usage_error(argv[0], "--warmup: invalid number");
+            cfg.warmup = v;
+        } else if (a == "--buffer-size") {
+            if (!parse_size(next("--buffer-size"), v))
+                return usage_error(argv[0], "--buffer-size: invalid number");
+            cfg.buffer_size = v;
+        } else if (a == "--max-line-bytes") {
+            if (!parse_size(next("--max-line-bytes"), v))
+                return usage_error(argv[0], "--max-line-bytes: invalid number");
+            cfg.max_line_bytes = v;
+        } else if (a == "--stages") {
+            cfg.stages = split_list(next("--stages"));
+        } else if (a == "--workloads") {
+            cfg.workloads = split_list(next("--workloads"));
+        } else {
+            return usage_error(argv[0], "unknown argument");
         }
     }
+    // Validate before any measurement: an empty sample set must never reach
+    // median_sorted/emit_row (sorted.front() on an empty vector), and a
+    // zero-byte workload makes gbps a division by zero.
+    if (cfg.bytes < 1)
+        return usage_error(argv[0], "--bytes must be >= 1");
+    if (cfg.iters < 1)
+        return usage_error(argv[0], "--iters must be >= 1");
+    if (cfg.buffer_size < 1)
+        return usage_error(argv[0], "--buffer-size must be >= 1");
+    if (cfg.max_line_bytes < 1)
+        return usage_error(argv[0], "--max-line-bytes must be >= 1");
 
     std::printf(
         "stage,workload,bytes,iters,ns_min,ns_med,ns_max,gbps_med,matches,"
@@ -423,22 +492,32 @@ int main(int argc, char** argv) {
 
         // File-backed stages share one temp file per workload (page-cache
         // hot; cold-cache runs are the runner's concern, not the ladder's).
+        // Materialization failure is a run-ending error: silently skipping
+        // the file-backed stages would publish an incomplete ladder as if
+        // it were complete.
         TempPath tp("sluice_grep_attr");
-        bool file_ok = false;
         {
             int wfd =
                 ::open(tp.str().c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
-            if (wfd >= 0) {
-                std::size_t off = 0;
-                while (off < data.size()) {
-                    ssize_t n =
-                        ::write(wfd, data.data() + off, data.size() - off);
-                    if (n <= 0) break;
-                    off += static_cast<std::size_t>(n);
+            if (wfd < 0) bench_fatal("open workload file", errno);
+            std::size_t off = 0;
+            while (off < data.size()) {
+                ssize_t n = sluice::detail::retry_on_eintr([&] {
+                    return ::write(wfd, data.data() + off, data.size() - off);
+                });
+                if (n < 0) {
+                    int e = errno;
+                    ::close(wfd);
+                    bench_fatal("write workload file", e);
                 }
-                ::close(wfd);
-                file_ok = off == data.size();
+                if (n == 0) {
+                    ::close(wfd);
+                    bench_fatal("workload write made zero progress", 0);
+                }
+                off += static_cast<std::size_t>(n);
             }
+            if (::close(wfd) != 0)
+                bench_fatal("close workload file", errno);
         }
 
         for (auto& s : mem_stages) {
@@ -453,21 +532,19 @@ int main(int argc, char** argv) {
             }
             emit_row(s.name, w.name, data.size(), ns, v);
         }
-        if (file_ok) {
-            for (auto& s : file_stages) {
-                if (!selected(cfg.stages, s.name)) continue;
-                std::vector<std::uint64_t> ns;
-                std::uint64_t matches = 0;
-                for (std::size_t r = 0; r < cfg.warmup + cfg.iters; ++r) {
-                    std::uint64_t t0 = now_ns();
-                    matches =
-                        s.fn(tp.str(), w.pattern, cfg.buffer_size,
-                             cfg.max_line_bytes);
-                    std::uint64_t t1 = now_ns();
-                    if (r >= cfg.warmup) ns.push_back(t1 - t0);
-                }
-                emit_row(s.name, w.name, data.size(), ns, matches);
+        for (auto& s : file_stages) {
+            if (!selected(cfg.stages, s.name)) continue;
+            std::vector<std::uint64_t> ns;
+            std::uint64_t matches = 0;
+            for (std::size_t r = 0; r < cfg.warmup + cfg.iters; ++r) {
+                std::uint64_t t0 = now_ns();
+                matches =
+                    s.fn(tp.str(), w.pattern, cfg.buffer_size,
+                         cfg.max_line_bytes);
+                std::uint64_t t1 = now_ns();
+                if (r >= cfg.warmup) ns.push_back(t1 - t0);
             }
+            emit_row(s.name, w.name, data.size(), ns, matches);
         }
     }
     std::fprintf(stderr, "note: results are environment-sensitive; scoped "

@@ -43,7 +43,8 @@ do
     local R = SLUICE_ROOT
     local app_dir = R .. "apps/sluice-grep"
     if os.isfile(R .. "bench/grep_attribution_bench.cpp") and
-       os.isfile(app_dir .. "/grep_task.cpp") then
+       os.isfile(app_dir .. "/grep_task.cpp") and
+       os.isfile(app_dir .. "/matcher.cpp") then
         target("grep_attribution_bench")
             set_kind("binary")
             set_default(false)
@@ -53,6 +54,7 @@ do
                             app_dir)
             add_files(R .. "bench/grep_attribution_bench.cpp",
                       app_dir .. "/grep_task.cpp", app_dir .. "/matcher.cpp")
+        target_end()
     end
     -- Workload file writer for CLI / competitor comparisons (runner helper).
     if os.isfile(R .. "bench/grep_workload_gen.cpp") then
@@ -62,5 +64,6 @@ do
             set_group("bench")
             add_includedirs(R .. "bench", R .. "bench/support")
             add_files(R .. "bench/grep_workload_gen.cpp")
+        target_end()
     end
 end
