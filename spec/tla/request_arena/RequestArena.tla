@@ -432,6 +432,13 @@ FaultDoubleTerminal ==
 \* accepted new occupant) to violate the accepted-terminal requirement;
 \* firing on pending/enqueued/running would be indistinguishable from the
 \* legitimate CancelPendingOrEnqueued outcome.
+\* Scope note (review nitpick): the rogue write ALSO breaks InvAccounting
+\* and InvBorrowWindow — a never-accepted occupant is promoted to an
+\* accepted-state representation with no accepted_outstanding accounting
+\* and no active borrow. That breakage is inherent to the modeled rogue
+\* write (the C++ leaf fail-fasts record_terminal on reserved/prepared for
+\* exactly this reason), not a separate fault; the cfg's named check stays
+\* InvTerminalRequiresAccepted, the stale-identity law.
 FaultStaleCancel ==
   /\ FaultActive("StaleCancel")
   /\ \E sg \in Gen : /\ committed[sg]
@@ -696,6 +703,16 @@ InvFreeClean ==
     /\ slotInUse = 0
     /\ acceptedOutstanding = 0
 
+\* Destruction quiescence (AC-13), CHECKED independently of the Destroy
+\* action guards (review nitpick): a destroyed arena is idle — free slot,
+\* no slot in use, no accepted outstanding. The Destroy guards enforce this
+\* on the transition; this invariant detects any future action that could
+\* corrupt quiescence after destruction without relying on those guards.
+InvDestroyQuiescent ==
+  destroyed => ( /\ state = "free"
+                 /\ slotInUse = 0
+                 /\ acceptedOutstanding = 0 )
+
 Inv ==
   /\ TypeOK
   /\ InvAccounting
@@ -715,6 +732,7 @@ Inv ==
   /\ InvReapRequiresBinding
   /\ InvCanceledTerminalSource
   /\ InvFreeClean
+  /\ InvDestroyQuiescent
 
 (***************************************************************************)
 (* Liveness — CONDITIONAL on Layer-B external progress obligations          *)

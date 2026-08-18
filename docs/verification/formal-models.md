@@ -66,8 +66,8 @@ silently passing (audit #94/#100 review hardening, 2026-08-14).
 **Status (2026-08-18 formal audit): PARTIALLY MODELED.** The `request-arena`
 suite now binds the slot lifecycle
 (`include/sluice/async/detail/request_arena.hpp`, `request_slot.hpp`) with the
-smallest single-slot model: five-stage admission (reserve → prepare → commit →
-enqueue → dispatch), Scheme-B enqueue/cancel arbitration, terminal-winner
+smallest single-slot model: five-stage admission (reserve → prepare →
+install binding → commit → enqueue → dispatch), Scheme-B enqueue/cancel arbitration, terminal-winner
 exactly-once, generation increment before reuse, reap-only Completion
 publication gated on the acknowledged enqueue pin, borrow-through-reap, the
 running-cancel intent verbatim law (ADR Decision 11), and the quiescent-
@@ -95,11 +95,13 @@ e10-waitnode model Scheduler wake / wait-queue primitives; e16-application-
 runtime models the runtime epoch. Do not read those suites as RequestArena
 coverage.
 
-**Current executable evidence:** `tests/request_arena_test.cpp`
-(state-machine matrix), `tests/request_lifecycle_scheme_b_test.cpp` (Scheme-B
-arbitration, terminal winner, generation/reuse),
-`tests/request_waiter_borrow_lease_test.cpp` (register-vs-reap,
-cancel_waiter-vs-reap, borrow-through-reap), the per-backend C2b/C2c/C2d/C2e
+**Current executable evidence:** `tests/request_lifecycle_scheme_b_test.cpp`
+(Scheme-B arbitration, terminal winner, generation/reuse, the
+`arena_mainline_state_transition_matrix` / `arena_illegal_transition_contract_errors`
+state-machine matrix, waiter exactly-once delivery, acquire-observer
+ordering), `tests/request_arena_test.cpp` (supporting state/accounting/
+borrow-lifecycle cases), `tests/request_waiter_borrow_lease_test.cpp`
+(register-vs-reap, cancel_waiter-vs-reap, borrow-through-reap), the per-backend C2b/C2c/C2d/C2e
 integration rows on Fake + ThreadPool, 8–13 single-point production mutation
 executions per C2 class, and the arena death tests. Per-slice gap notes also
 appear in the Phase C2c / C2d / E compliance gates.

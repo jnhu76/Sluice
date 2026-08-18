@@ -57,7 +57,7 @@ into this leaf model.
 
 | Gate | cfg | Expect |
 | ---- | --- | ------ |
-| Positive safety (17 invariants) | `RequestArena.cfg` | PASS |
+| Positive safety (18 invariants) | `RequestArena.cfg` | PASS |
 | Liveness (WF Enqueue + WF Reap) | `RequestArenaLiveness.cfg` | PASS |
 | NEG-RA-1 second terminal winner | `RequestArenaFaultDoubleTerminal.cfg` | `InvNoDoubleTerminal` violated |
 | NEG-RA-2 stale-generation cancel (causal old key) | `RequestArenaFaultStaleCancel.cfg` | `InvTerminalRequiresAccepted` violated |
@@ -94,7 +94,7 @@ as the restore gate.
 | `reap` (review C3 leaf-domain publication) | `Reap` |
 | `release_completed_binding` | `ReleaseCompleted` |
 | `close_admission` | `CloseAdmission` |
-| destructor quiescence (AC-13) | `Destroy` + guards |
+| destructor quiescence (AC-13) | `Destroy` + guards + `InvDestroyQuiescent` |
 | `slot_in_use_` / `accepted_outstanding_` (P1-05) | `slotInUse` / `acceptedOutstanding` |
 | `backend_ready_count_` + ready-ring linkage | `onRing` |
 | `BorrowMetadata::active` (I7/I18) | `borrowActive`, `InvBorrowWindow` |
@@ -109,11 +109,11 @@ Every load-bearing model property maps to existing executable regressions
 | Model property | C++ test |
 | -------------- | -------- |
 | Scheme-B arbitration (W1/W2), terminal winner, pin/noop | `tests/request_lifecycle_scheme_b_test.cpp` (`pending_cancel_wins_before_enqueue_then_enqueue_noop`, `exactly_one_terminal_winner`, `concurrent_submit_cancel_enqueue`) |
-| State machine + illegal transitions | `tests/request_arena_test.cpp`, scheme-b `arena_mainline_state_transition_matrix`, `arena_illegal_transition_contract_errors` |
-| Stale identity (W4, NEG-RA-2/4) | `generation_reuse_stale_attempts`, `arena_stale_handle_leaves_live_occupant_untouched`, `tests/request_arena_death_test.cpp` |
+| State machine + illegal transitions | `tests/request_lifecycle_scheme_b_test.cpp` (`arena_mainline_state_transition_matrix`, `arena_illegal_transition_contract_errors`); `tests/request_arena_test.cpp` (supporting: `arena_capacity_bounded`, `arena_stale_key_rejected`, `arena_accounting_tracks_slot_in_use_vs_accepted_outstanding`, `arena_borrow_lifecycle`) |
+| Stale identity (W4, NEG-RA-2/4) | `tests/request_lifecycle_scheme_b_test.cpp` (`generation_reuse_stale_attempts`, `arena_stale_handle_leaves_live_occupant_untouched`), `tests/request_arena_death_test.cpp` |
 | Running-cancel intent vs verbatim (W3, NEG-RA-6) | `tests/request_arena_cancel_intent_test.cpp` |
-| Waiter exactly-once delivery (W5) | `tests/request_waiter_borrow_lease_test.cpp` (`reap_wins_lease_over_wait_cancel`, `waiter_registration_cardinality`) |
-| Reap-only publication / acquire ordering | `acquire_observer_of_ready_sees_all_effects`, `tests/threadpool_backend_reap_test.cpp` |
+| Waiter exactly-once delivery (W5) | `tests/request_lifecycle_scheme_b_test.cpp` (`reap_wins_lease_over_wait_cancel`, `waiter_registration_cardinality`); `tests/request_waiter_borrow_lease_test.cpp` (supporting register-vs-reap / cancel_waiter-vs-reap) |
+| Reap-only publication / acquire ordering | `tests/request_lifecycle_scheme_b_test.cpp` (`acquire_observer_of_ready_sees_all_effects`); `tests/threadpool_backend_reap_test.cpp` (supporting) |
 | Close-admission vs in-flight submission | `close_admission_rejects_new_but_existing_reapable`, `close_admission_gates_reserve_not_inflight_prepared_slot` |
 | Cross-backend Scheme-B races | `tests/threadpool_backend_scheme_b_race_test.cpp`, `tests/backend_scheme_b_race_test.cpp` |
 
@@ -124,8 +124,11 @@ Every load-bearing model property maps to existing executable regressions
   ready-ring FIFO **order across slots** (ADR Decision 9's backend-known
   order) remain executable-evidence scope (`request_arena_test`,
   `reference_backend_arena_lifecycle_test`).
-- `MaxGen = 2` bounds the state space for TLC (three occupant generations);
-  it is not a protocol rule.
+- `MaxGen = 2` bounds the state space for TLC; it is not a protocol rule.
+  `Reserve` admits only generations 0 and 1 (`gen < MaxGen`), so the model
+  explores exactly two occupant generations with one full release/reuse
+  cycle; generation 2 is reached only as the terminal free state after the
+  second release and admits no further `Reserve`.
 - The backend admission transaction around commit (Completion
   `idle → binding → outstanding`, AGENTS.md §4.3) is a different protocol and
   is NOT modeled here.

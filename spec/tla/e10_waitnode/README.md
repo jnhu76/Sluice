@@ -48,29 +48,32 @@ the single-winner linearization. A concurrent `ResolveCancel(n)` observes
 
 ## Results
 
-**Execution (2026-08-18 audit).** The suite is gated by
-`scripts/formal/verify-e10-waitnode.sh` (locked jar via
-`scripts/formal/resolve-jar.sh`); the historical "TLC was NOT executed" note
-below described the original authoring environment only. Reproduce by hand:
+**Execution status: gated and green.** The authoritative reproduction path is
+the repository verifier (checksum-locked jar resolved via
+`scripts/formal/resolve-jar.sh`, isolated workspace):
 
 ```bash
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e10_waitnode/E10WaitNode.cfg spec/tla/e10_waitnode/E10WaitNode
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e10_waitnode/E10WaitNodeLiveness.cfg spec/tla/e10_waitnode/E10WaitNode
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e10_waitnode/E10WaitNodeBuggyNoWinner.cfg spec/tla/e10_waitnode/E10WaitNodeBuggyNoWinner
+python3 scripts/formal/verify.py suite e10-waitnode
+# or directly:
+bash scripts/formal/verify-e10-waitnode.sh
 ```
 
-Expected (by construction, pending actual TLC execution):
+Gate results (executed in the 2026-08-18 audit on the locked
+TLC 2.19 / tla2tools v1.7.4 jar):
+
 - `E10WaitNode` safety: all invariants PASS.
 - `E10WaitNode` liveness: `EventualResolution` PASS under `FairResolve`.
 - `E10WaitNodeBuggyNoWinner`: `InvNoDoubleCompletion` counterexample (a node
   reaches `resolvedCount = 2`).
 
-Because TLC could not be run, the authoritative proof of E10's safety is the
-**explicit state-transition table + linearization proof** below (§12 permits
-this when the formal framework is unavailable).
+Direct `java -cp ... tlc2.TLC` invocations against a hand-placed jar are a
+NON-authoritative fallback only — they bypass the jar checksum and the
+workspace isolation the verifier provides.
+
+The explicit state-transition table + linearization argument below is a
+supplementary hand-proof companion to the executed gate (historical note:
+the original authoring environment could not run TLC, which is no longer
+the case — see the verifier above).
 
 ## Refinement map (TLA+ → production)
 

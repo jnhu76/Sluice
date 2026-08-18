@@ -230,13 +230,19 @@ StarvationFree ==
 Linearizable ==
     getters \subseteq done
 
-(* Task conservation (audit 2026-08-18): an ACCEPTED task is always in exactly
-   one live protocol bucket — queued, in flight, or done. A shutdown that
-   discards queued work (or any path that drops an accepted task between
-   buckets) violates this. Replaces the vacuous Linearizable gate (which
-   Get's own guard already enforces and which therefore could never fail). *)
+(* Task conservation (audit 2026-08-18; review-hardened): an ACCEPTED task is
+   always in exactly one live protocol bucket — queued, in flight, or done.
+   Coverage: every submitted task is in some bucket. Exactly-one for the
+   queue: the queue never holds a task already in flight or done (Dequeue
+   and Complete move a task between buckets in one atomic step). A shutdown
+   that discards queued work, or any path that drops or duplicates an
+   accepted task between buckets, violates this. Replaces the vacuous
+   Linearizable gate (which Get's own guard already enforces and which
+   therefore could never fail). *)
 NoLostAcceptedTask ==
-    submitted \subseteq (inFlight \cup done \cup {queue[i] : i \in 1..Len(queue)})
+    /\ submitted \subseteq (inFlight \cup done \cup {queue[i] : i \in 1..Len(queue)})
+    /\ {queue[i] : i \in 1..Len(queue)} \cap inFlight = {}
+    /\ {queue[i] : i \in 1..Len(queue)} \cap done = {}
 
 (* --------------------------------------------------------------------------- *)
 (* Fairness (required for liveness checking)                                    *)
