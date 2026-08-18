@@ -50,6 +50,40 @@ All four build and pass their suites in Debug and Release, use ONLY
 | tail -n 10 | 7 ms | 6 ms | **0.86× (faster)** | backward positional scan |
 | tail -n 100000 | 9 ms | 61 ms | 6.8× | see below |
 
+### V2 grep update (performance-attribution round, 2026-08)
+
+The V1 grep numbers above predate the attribution round. The V2 matcher
+(`apps/sluice-grep/matcher.cpp`, chunk-level anchor-memchr scan with an
+incremental line cursor and a borrow-free SWAR newline count) removed the
+V1 per-line `std::search` shape. Same-session measurements at 256 MiB
+(`scripts/bench/perf-attribution.py` ladder, L4 = full engine,
+GB/s medians):
+
+| workload | V1 | V2 | Δ |
+|---|---|---|---|
+| sparse rare patterns (qz9/1b_z/16b/64b/rare1st/rep) | 0.89–1.92 | 2.43–4.54 | 2.4–3.1× |
+| binary | 1.27 | 3.53 | 2.8× |
+| dense common anchor (`the` all densities, `e`) | 0.74–0.94 | 0.79–1.08 | ≈1.1× |
+| short lines | 0.42 | 0.51 | 1.2× |
+| long / huge lines | 5.53 / 5.91 | 5.58 / 5.30 | ≈0.90–1.01× |
+
+L6 CLI (1 GiB, fresh process): sluice-grep 1.9–2.1 GB/s on sparse patterns
+(vs V1 ~1.2 GB/s; binary rows run at 1.86 GB/s), byte-identical output to
+GNU grep/rg on every workload including binary (competitors run with `-a`
+text-mode parity and LC_ALL=C; runner records per-tool md5s). Cold-first-run in a fresh process
+measures ~2× the in-process steady-state engine on this host
+(fresh-process/runtime-cold, page-cache state not guaranteed cold;
+read-path page faults + host load). Sluice-owned symbols account for
+<2% of sampled userspace symbols in that profile, but this alone does
+not exclude Core overhead mediated through libc, kernel scheduling,
+synchronization, or backend handoff; the effect is classified
+OS/environment because it reproduces independent of the runtime shape
+(also on ext4), not because of the symbol share. Semantic equivalence is proven by
+`tests/sluice_grep_matcher_differential_test.cpp` (V2 vs the frozen V1
+per-line reference on randomized inputs) plus the unchanged existing matcher
+suite. See `docs/verification/performance-attribution.md` for the framework
+and full tables.
+
 `perf stat` (hardware counters, user-space):
 
 - sha256sum: 11.0 G cycles, 21.6 G instructions, IPC 1.96 (OpenSSL
@@ -71,11 +105,40 @@ Interpretation (measure first, optimize later — brief §21):
 - copy at 1.1–1.3× of `cp` with atomic output is already competitive;
 - hash is compute-bound by the crypto implementation (swap-in of a
   SHA-NI-capable implementation is app-local, see F3);
-- grep's 65× gap is algorithmic (SIMD/kwset) and out of scope for V1 by
-  explicit rule (§23 no SIMD grep);
+- grep's 65× gap was algorithmic (SIMD/kwset) and out of scope for V1 by
+  explicit rule (§23 no SIMD grep). The attribution round (V2 matcher)
+  recovered 2.4–3.1× on sparse patterns and 2.8× on binary — the remaining
+  gap vs GNU grep/rg is the algorithm class (skip loops that do not touch
+  every byte) plus this host's cold-process read path;
 - tail -n 10 is faster than coreutils; the 100k-lines case is 6.8× slower
   because sluice forward-streams the retained lines through the bounded
   assembler while GNU tail memsets a chunk ring — acceptable, documented.
+
+## Application attribution table (2026-08 attribution round)
+
+| App | main bottleneck | owner | evidence |
+|---|---|---|---|
+| grep | V1 per-line `std::search`; V2 fixed sparse/binary (2.4–3.1×/2.8×), dense-anchor rows now emit-bound; remaining gap is skip-loop algorithm class | APP | ladder L2/L4, perf (Sluice symbols <2% of sampled userspace symbols — non-exclusion wording per attribution corrective) |
+| hash | portable SHA-256 (no SHA-NI): 3.2× instructions vs OpenSSL | APP | prior perf: 70 G instr vs 21.6 G |
+| tail | bounded reverse-scan assembler vs memcpy ring (large-N) | APP | prior table (6.8× at 100k) |
+| copy | V3 atomic copy at 1.1–1.3× `cp`; async coordination (mutex/cond/clock) is a visible but small share — see re-verification note below | APP (meets bar); CORE coordination re-measured | perf: mutex ~16% |
+
+### copy coordination re-verification (2026-08)
+
+The V1 finding attributed ~16% to `pthread_mutex_*` and 4.4% to
+`clock_gettime` in sluice-copy. Re-profiled on the current baseline
+(Release, 1 GiB tmpfs, Version C default, 3140 perf samples): the
+coordination class is confirmed — `pthread_mutex_lock+unlock` ≈ 14%,
+`pthread_cond_*` (wait/broadcast/signal/notify) ≈ 13%, `clock_gettime`
+(libc + vdso) ≈ 6%, plus Scheduler/ThreadPool worker machinery ≈ 10%.
+The async control plane (arena/admission/queue coordination + cond waits +
+deadline clocks) is ≈ 30% of sluice-copy wall time on this host. It is an
+accepted CORE observation: a potential future micro-optimization (e.g.
+deduped clock queries on undeadlined waits) is NOT pursued in the
+performance branch because it would touch Scheduler wait semantics and
+belongs to the formal branch per the optimization promotion rule.
+`pump_deadlines_locked` (1.2%) shows the no-deadline path touches the clock
+— the exact candidate a future CORE change would target.
 
 ## Memory behavior (bounded by configuration, not input)
 

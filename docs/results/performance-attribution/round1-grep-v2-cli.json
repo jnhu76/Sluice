@@ -1,0 +1,571 @@
+{
+  "env": {
+    "time": "2026-08-18T19:33:13+0800",
+    "git": {
+      "sha": "7e1248680b41b5ca27a702d6f856ca67685f5f0c",
+      "dirty": true,
+      "branch": "perf/performance-attribution"
+    },
+    "build": {
+      "mode": "release",
+      "compiler": "clang++",
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+      "plat": "linux",
+      "arch": "x86_64",
+      "toolchain": "clang"
+    },
+    "system": {
+      "kernel": "6.18.33.2-microsoft-standard-WSL2",
+      "platform": "x86_64",
+      "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+      "logical_cpus": 8,
+      "glibc": "glibc 2.43",
+      "python": "3.14.4"
+    },
+    "environment": {
+      "wsl": "WSL2"
+    },
+    "filesystem": {
+      "input": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      },
+      "output": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      }
+    },
+    "tools": {
+      "gnu_grep": "grep (GNU grep) 3.12",
+      "ripgrep": "ripgrep 15.1.0"
+    }
+  },
+  "schema": 2,
+  "kind": "cli",
+  "binary": {
+    "path": "/home/hoo/Projects/perf-performance-attribution/build/linux/x86_64/release/sluice-grep",
+    "sha256": "cb4b3f2b4f414fb76c14a571cfb7fbd069b6540ec367f5c7d10bca60565797cc",
+    "size": 175040,
+    "mtime": 1787052423.0736353
+  },
+  "workload_gen": {
+    "path": "/home/hoo/Projects/perf-performance-attribution/build/linux/x86_64/release/grep_workload_gen",
+    "sha256": "c3819b3f9c2834617c9afec83aa9eae447a806e40140bfd2f4c83bc3e03132e8",
+    "size": 39400,
+    "mtime": 1787052446.6739602
+  },
+  "params": {
+    "bytes": 1073741824,
+    "iters": 5,
+    "warmup": 1
+  },
+  "rows": [
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_qz9__d_s",
+      "pattern": "qz9",
+      "bytes": 1073741848,
+      "s_min": 0.48911776,
+      "s_med": 0.515046667,
+      "s_max": 0.529884218,
+      "s_samples": [
+        0.529884218,
+        0.515046667,
+        0.48911776,
+        0.489730029,
+        0.523956293
+      ],
+      "gbps_med": 2.0847467167475138,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d3747bd10fc12cdab8017b998a20cd6d",
+      "output_bytes": 1177,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_qz9__d_s",
+      "pattern": "qz9",
+      "bytes": 1073741848,
+      "s_min": 0.106971322,
+      "s_med": 0.108296676,
+      "s_max": 0.109954598,
+      "s_samples": [
+        0.108296676,
+        0.107410674,
+        0.109954598,
+        0.106971322,
+        0.108992237
+      ],
+      "gbps_med": 9.914818142710125,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d3747bd10fc12cdab8017b998a20cd6d",
+      "output_bytes": 1177,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_qz9__d_s",
+      "pattern": "qz9",
+      "bytes": 1073741848,
+      "s_min": 0.126861245,
+      "s_med": 0.138009745,
+      "s_max": 0.141361629,
+      "s_samples": [
+        0.141361629,
+        0.139237175,
+        0.138009745,
+        0.130391659,
+        0.126861245
+      ],
+      "gbps_med": 7.780188623636687,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d3747bd10fc12cdab8017b998a20cd6d",
+      "output_bytes": 1177,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741899,
+      "s_min": 2.458489423,
+      "s_med": 2.594111753,
+      "s_max": 2.72805663,
+      "s_samples": [
+        2.631269968,
+        2.458489423,
+        2.594111753,
+        2.560531909,
+        2.72805663
+      ],
+      "gbps_med": 0.413915051176286,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "351b9c84c9ffa417f0c11e5f2ff0d125",
+      "output_bytes": 900679193,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741899,
+      "s_min": 1.911012638,
+      "s_med": 1.917414901,
+      "s_max": 1.958616216,
+      "s_samples": [
+        1.937522505,
+        1.958616216,
+        1.913818721,
+        1.917414901,
+        1.911012638
+      ],
+      "gbps_med": 0.5599945522693109,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "351b9c84c9ffa417f0c11e5f2ff0d125",
+      "output_bytes": 900679193,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741899,
+      "s_min": 1.557056119,
+      "s_med": 1.728592007,
+      "s_max": 1.74656444,
+      "s_samples": [
+        1.557056119,
+        1.583221507,
+        1.728592007,
+        1.74656444,
+        1.737390198
+      ],
+      "gbps_med": 0.6211656045219698,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "351b9c84c9ffa417f0c11e5f2ff0d125",
+      "output_bytes": 900679193,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_the__d_all",
+      "pattern": "the",
+      "bytes": 1073741837,
+      "s_min": 2.72093438,
+      "s_med": 2.836687493,
+      "s_max": 3.000909571,
+      "s_samples": [
+        2.72093438,
+        2.782473139,
+        2.836687493,
+        3.000909571,
+        2.883618358
+      ],
+      "gbps_med": 0.3785196076937052,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "2b1d586d6266c9a686ad548f15291107",
+      "output_bytes": 1073741837,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_the__d_all",
+      "pattern": "the",
+      "bytes": 1073741837,
+      "s_min": 1.935839476,
+      "s_med": 2.112695466,
+      "s_max": 2.358600672,
+      "s_samples": [
+        2.213850452,
+        2.358600672,
+        2.112695466,
+        1.97343111,
+        1.935839476
+      ],
+      "gbps_med": 0.5082331335868925,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "2b1d586d6266c9a686ad548f15291107",
+      "output_bytes": 1073741837,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_the__d_all",
+      "pattern": "the",
+      "bytes": 1073741837,
+      "s_min": 1.745014335,
+      "s_med": 1.965850464,
+      "s_max": 2.053359321,
+      "s_samples": [
+        1.95558031,
+        2.053359321,
+        1.745014335,
+        1.965850464,
+        2.051874967
+      ],
+      "gbps_med": 0.5461971073909719,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "2b1d586d6266c9a686ad548f15291107",
+      "output_bytes": 1073741837,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_1b_e__d_0",
+      "pattern": "e",
+      "bytes": 1073741878,
+      "s_min": 2.312492852,
+      "s_med": 2.434270915,
+      "s_max": 2.467432911,
+      "s_samples": [
+        2.312492852,
+        2.467432911,
+        2.438362449,
+        2.434270915,
+        2.366216107
+      ],
+      "gbps_med": 0.4410938287039428,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f5987e45a91c1dd052f6503d748f15af",
+      "output_bytes": 1070646510,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_1b_e__d_0",
+      "pattern": "e",
+      "bytes": 1073741878,
+      "s_min": 1.73674607,
+      "s_med": 1.798356945,
+      "s_max": 1.825042166,
+      "s_samples": [
+        1.815218594,
+        1.825042166,
+        1.798356945,
+        1.745168308,
+        1.73674607
+      ],
+      "gbps_med": 0.5970682744520444,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f5987e45a91c1dd052f6503d748f15af",
+      "output_bytes": 1070646510,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_1b_e__d_0",
+      "pattern": "e",
+      "bytes": 1073741878,
+      "s_min": 1.853415464,
+      "s_med": 1.922961756,
+      "s_max": 1.93673884,
+      "s_samples": [
+        1.922961756,
+        1.853415464,
+        1.927038567,
+        1.892326235,
+        1.93673884
+      ],
+      "gbps_med": 0.558379216149112,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f5987e45a91c1dd052f6503d748f15af",
+      "output_bytes": 1070646510,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_16b__d_s",
+      "pattern": "QuiCk_br0wn_f0x!",
+      "bytes": 1073741831,
+      "s_min": 0.491274853,
+      "s_med": 0.553316039,
+      "s_max": 0.559282509,
+      "s_samples": [
+        0.559282509,
+        0.55544154,
+        0.553316039,
+        0.498442798,
+        0.491274853
+      ],
+      "gbps_med": 1.940557936727368,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "0ad8f22bdde696c5b577ef33b9733149",
+      "output_bytes": 1146,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_16b__d_s",
+      "pattern": "QuiCk_br0wn_f0x!",
+      "bytes": 1073741831,
+      "s_min": 0.105579871,
+      "s_med": 0.107762828,
+      "s_max": 0.110718895,
+      "s_samples": [
+        0.107762828,
+        0.108139434,
+        0.105579871,
+        0.107331199,
+        0.110718895
+      ],
+      "gbps_med": 9.963935161389788,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "0ad8f22bdde696c5b577ef33b9733149",
+      "output_bytes": 1146,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_16b__d_s",
+      "pattern": "QuiCk_br0wn_f0x!",
+      "bytes": 1073741831,
+      "s_min": 0.13376917,
+      "s_med": 0.138291412,
+      "s_max": 0.141216849,
+      "s_samples": [
+        0.135472181,
+        0.139964599,
+        0.141216849,
+        0.13376917,
+        0.138291412
+      ],
+      "gbps_med": 7.764342090888478,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "0ad8f22bdde696c5b577ef33b9733149",
+      "output_bytes": 1146,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "long__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073742110,
+      "s_min": 1.194436523,
+      "s_med": 1.331097786,
+      "s_max": 2.346211359,
+      "s_samples": [
+        1.331097786,
+        1.194436523,
+        1.243926841,
+        1.415720012,
+        2.346211359
+      ],
+      "gbps_med": 0.806659075909544,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "452350eed033c7723fd98520a8a1e187",
+      "output_bytes": 1073742110,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "long__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073742110,
+      "s_min": 0.74788105,
+      "s_med": 0.835039568,
+      "s_max": 0.999308004,
+      "s_samples": [
+        0.74788105,
+        0.990692144,
+        0.835039568,
+        0.999308004,
+        0.824503723
+      ],
+      "gbps_med": 1.2858577618923082,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "452350eed033c7723fd98520a8a1e187",
+      "output_bytes": 1073742110,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "long__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073742110,
+      "s_min": 0.798809164,
+      "s_med": 0.996482773,
+      "s_max": 1.026882893,
+      "s_samples": [
+        0.996482773,
+        0.816954929,
+        1.026882893,
+        0.798809164,
+        1.01530398
+      ],
+      "gbps_med": 1.077532034766044,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "452350eed033c7723fd98520a8a1e187",
+      "output_bytes": 1073742110,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "binary__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741867,
+      "s_min": 0.563757602,
+      "s_med": 0.578570738,
+      "s_max": 0.610234135,
+      "s_samples": [
+        0.581862197,
+        0.610234135,
+        0.578570738,
+        0.563757602,
+        0.569176081
+      ],
+      "gbps_med": 1.8558523556025401,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f06333832d66baf8a3e08e10c7c6cf31",
+      "output_bytes": 4876,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "binary__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741867,
+      "s_min": 0.27967995,
+      "s_med": 0.281062987,
+      "s_max": 0.28370079,
+      "s_samples": [
+        0.281062987,
+        0.279875137,
+        0.27967995,
+        0.2832594,
+        0.28370079
+      ],
+      "gbps_med": 3.8202891048048246,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f06333832d66baf8a3e08e10c7c6cf31",
+      "output_bytes": 4876,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "binary__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741867,
+      "s_min": 0.132127576,
+      "s_med": 0.134542517,
+      "s_max": 0.136782871,
+      "s_samples": [
+        0.136782871,
+        0.133680539,
+        0.135081158,
+        0.132127576,
+        0.134542517
+      ],
+      "gbps_med": 7.980688119577843,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f06333832d66baf8a3e08e10c7c6cf31",
+      "output_bytes": 4876,
+      "outputs_equal": true
+    }
+  ],
+  "note": "L6 CLI matrix, 1 GiB, clean tree at 7e12486. Competitors run with -a (text-mode parity: GNU grep/ripgrep otherwise short-circuit binary workloads) and LC_ALL=C; runner records per-tool output md5s and byte-equality."
+}

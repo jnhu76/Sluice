@@ -69,6 +69,7 @@ The following phases are **complete** and no longer active:
 
 ## Navigation
 
+- **Performance feedback ledger** — [`performance-feedback-ledger.md`](performance-feedback-ledger.md) (methodology: [`docs/verification/performance-engineering.md`](../verification/performance-engineering.md))
 - **Proposed designs** — `docs/design/README.md`
 - **Historical plans** — `docs/history/implementation-plans/`
 - **Active ADRs** — `docs/adr/README.md`

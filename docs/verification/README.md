@@ -158,3 +158,5 @@ bug-free.
 | Local hardening gate | [`hardening.md`](hardening.md) |
 | Sync benchmark methodology (W1–W4) | [`sync-bench-methodology.md`](sync-bench-methodology.md) |
 | Sync benchmark matrix | [`sync-bench-matrix.md`](sync-bench-matrix.md) |
+| Performance engineering methodology (governing) | [`performance-engineering.md`](performance-engineering.md) |
+| Performance attribution framework (APP/CORE ladder + grep round 1) | [`performance-attribution.md`](performance-attribution.md) |

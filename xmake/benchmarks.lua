@@ -34,3 +34,36 @@ sluice_one_file_target("binary", "bench", "async_writes_bench", "bench",
 -- FakeAsyncBackend to isolate framework overhead. Links sluice_async.
 sluice_one_file_target("binary", "bench", "bench_runtime_io_wait", "bench",
                       {"sluice_core", "sluice_async"})
+
+-- Grep performance-attribution ladder (docs/verification/
+-- performance-attribution.md): L0..L4 over identical deterministic
+-- workloads. Links the real sluice-grep engine (grep_task + matcher) for
+-- the L4 stage, so the ladder measures the exact production pipeline.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-grep"
+    if os.isfile(R .. "bench/grep_attribution_bench.cpp") and
+       os.isfile(app_dir .. "/grep_task.cpp") and
+       os.isfile(app_dir .. "/matcher.cpp") then
+        target("grep_attribution_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "bench", R .. "bench/support",
+                            app_dir)
+            add_files(R .. "bench/grep_attribution_bench.cpp",
+                      app_dir .. "/grep_task.cpp", app_dir .. "/matcher.cpp")
+        target_end()
+    end
+    -- Workload file writer for CLI / competitor comparisons (runner helper).
+    if os.isfile(R .. "bench/grep_workload_gen.cpp") then
+        target("grep_workload_gen")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_includedirs(R .. "bench", R .. "bench/support")
+            add_files(R .. "bench/grep_workload_gen.cpp")
+        target_end()
+    end
+end

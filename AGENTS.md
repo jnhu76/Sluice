@@ -1050,6 +1050,40 @@ git diff --check
 
 Use repository-authoritative script names from the current tree.
 
+### 16.7 Performance changes
+
+A **performance change** is any change whose stated purpose includes making something
+faster (Core, backend, Scheduler, app, or benchmark). Such changes are governed by
+`docs/verification/performance-engineering.md` (methodology) and enforced by
+`scripts/bench/perf-evidence-validate.py` (structure). Rules:
+
+- A Core performance change MUST NOT be authorized by an end-to-end application
+  comparison alone.
+- Every performance claim MUST identify: workload, competent baseline,
+  normalization/ownership domain (APP / Boundary / Core / environment /
+  benchmark artifact), before/after evidence from the same session, and the
+  applicable regression matrix.
+- PMU counters are diagnostic evidence, not optimization authorization.
+- A Core performance candidate requires either evidence of a Common Tax or
+  evidence of a material Cliff Weakness.
+- Specialized optimizations MUST evaluate optional placement (compile-time
+  policy / runtime backend / optional mechanism) before entering the default
+  Core.
+- Correctness, lifetime, ownership, request identity, cancellation,
+  wait/wake ordering, and shutdown semantics MUST NOT become optional plugins.
+- A concurrency-semantic optimization MUST additionally pass the architecture
+  compliance gate (§8) and the formal-model requirements (§17).
+- A microbenchmark gain is not sufficient evidence of success. Where
+  applicable, the gain must survive back up the funnel: microbenchmark →
+  normalized application → real application.
+- Performance evidence is Release-only, machine-readable (runner JSON under
+  `docs/results/performance-attribution/`), never hand-created, and
+  structurally validated by the pre-push/CI gate. "No performance claim
+  without benchmark + workload" (§21) remains in force.
+- Aggregate ladder increments (e.g. L4 − L3) prove a Core-owned cost exists;
+  they do NOT decompose it. Do not claim internal attribution (handoff, wake,
+  reap, ...) without a decomposition experiment.
+
 ---
 
 ## 17. Formal models and protocol evidence

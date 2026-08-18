@@ -86,8 +86,9 @@ jobs:
 
       - name: Repository mechanical gates
         # One fast entry point for doc links, architecture structure,
-        # backend-conformance manifest attribution self-test, mechanical facts,
-        # and git diff --check. This replaces the duplicated Python invocations
+        # backend-conformance manifest attribution self-test, mechanical
+        # facts, performance-evidence structural validation, and
+        # git diff --check. This replaces the duplicated Python invocations
         # that previously appeared as several CI steps.
         run: bash scripts/gates/pre-push.sh </dev/null
 

@@ -35,7 +35,9 @@ struct MatchEvent {
 class LineMatcher {
 public:
     // `max_line_bytes` is the inclusive cap on a retained line (the
-    // terminating '\n' does not count toward it).
+    // terminating '\n' does not count toward it). A zero cap is clamped to
+    // 1 (zero can retain nothing and would otherwise produce a
+    // non-advancing over-cap scan).
     LineMatcher(std::string pattern, std::size_t max_line_bytes);
 
     // Feed the next chunk. Complete matching lines are appended to `out` in
@@ -60,17 +62,25 @@ public:
     std::size_t pattern_size() const { return pattern_.size(); }
 
 private:
-    void match_carry(std::vector<MatchEvent>& out);
+    // V2 chunk scanner: process the complete-line region [i, end) of one
+    // feed buffer (see matcher.cpp). `p` is the feed base pointer; `i` is a
+    // line boundary; the carry is empty.
+    void scan_complete_region(const char* p, std::size_t i, std::size_t end,
+                              std::vector<MatchEvent>& out);
 
     std::string pattern_;
     std::size_t max_line_bytes_;
     std::string carry_;        // bytes of the current (incomplete) line
+    std::size_t anchor_off_ = 0;   // rarest-byte anchor within pattern_
+    bool pattern_has_nl_ = false;  // such a pattern can never match a line
     std::uint64_t line_no_ = 0;  // lines completed so far
     bool dropping_ = false;    // inside a too-long line (discard until '\n')
     bool dropped_long_ = false;
 };
 
-// Literal substring test (std::search semantics; empty needle => true).
+// Literal substring test (std::search semantics): an empty pattern returns
+// true for every line; a non-empty pattern containing '\n' returns false (a
+// single line never contains a newline).
 bool line_contains(std::string_view line, std::string_view pattern);
 
 }  // namespace sluice_grep

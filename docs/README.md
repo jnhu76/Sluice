@@ -54,7 +54,7 @@ historical documents are **evidence**, not automatic authority. Documents under
 | [`roadmap/`](roadmap/) | What is active future work? | Contributor |
 | [`history/`](history/README.md) | How did we get here? | Maintainer |
 | [`post-freeze/`](post-freeze/structural-audit.md) | Post-freeze structural-hygiene records (pinned by the mechanical-facts gate) | Maintainer |
-| [`results/`](results/) | Local validation result data (untracked artifacts land here) | Maintainer |
+| [`results/`](results/) | Committed benchmark/validation evidence artifacts | Maintainer |
 | [`templates/`](templates/) | Document templates used by the architecture gates | Contributor |
 
 ## Subsystem map
