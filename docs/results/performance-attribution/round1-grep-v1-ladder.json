@@ -1,0 +1,2940 @@
+{
+  "env": {
+    "time": "2026-08-18T14:17:19+0800",
+    "git": {
+      "sha": "b5657ae0a9183996125b8e8f4351a73a0105c4c8",
+      "dirty": true,
+      "branch": "HEAD"
+    },
+    "build": {
+      "mode": "release",
+      "compiler": "clang++",
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+    },
+    "system": {
+      "kernel": "6.18.33.2-microsoft-standard-WSL2",
+      "platform": "x86_64",
+      "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+      "logical_cpus": 8,
+      "glibc": "glibc 2.43",
+      "python": "3.14.4"
+    },
+    "environment": {
+      "wsl": "WSL2"
+    },
+    "filesystem": {
+      "input": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      },
+      "output": null
+    },
+    "tools": {
+      "gnu_grep": "grep (GNU grep) 3.12",
+      "ripgrep": "ripgrep 15.1.0"
+    }
+  },
+  "kind": "ladder",
+  "params": {
+    "bytes": 268435456,
+    "iters": 5,
+    "warmup": 1,
+    "buffer_size": 1048576
+  },
+  "rows": [
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 36474841,
+      "ns_med": 36672590.0,
+      "ns_max": 36889986,
+      "gbps_med": 7.32,
+      "matches": 24003060712,
+      "ns_samples": [
+        36704842,
+        36672590,
+        36672460,
+        36474841,
+        36889986
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 37360620,
+      "ns_med": 37810026.0,
+      "ns_max": 39673117,
+      "gbps_med": 7.1,
+      "matches": 4193741,
+      "ns_samples": [
+        37360620,
+        37810026,
+        37953168,
+        37598417,
+        39673117
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 132334404,
+      "ns_med": 133183823.0,
+      "ns_max": 139706739,
+      "gbps_med": 2.016,
+      "matches": 0,
+      "ns_samples": [
+        133183823,
+        132613569,
+        139706739,
+        133791418,
+        132334404
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 11284863,
+      "ns_med": 11491441.0,
+      "ns_max": 11611501,
+      "gbps_med": 23.36,
+      "matches": 0,
+      "ns_samples": [
+        11411708,
+        11535616,
+        11284863,
+        11611501,
+        11491441
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 96756559,
+      "ns_med": 97417943.0,
+      "ns_max": 99088617,
+      "gbps_med": 2.756,
+      "matches": 0,
+      "ns_samples": [
+        97139238,
+        99088617,
+        97417943,
+        98967071,
+        96756559
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 138171674,
+      "ns_med": 139470157.0,
+      "ns_max": 140324064,
+      "gbps_med": 1.925,
+      "matches": 0,
+      "ns_samples": [
+        138171674,
+        138721609,
+        139470157,
+        140095304,
+        140324064
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 137678724,
+      "ns_med": 138607230.0,
+      "ns_max": 139657686,
+      "gbps_med": 1.937,
+      "matches": 0,
+      "ns_samples": [
+        139118632,
+        138607230,
+        137678724,
+        138003456,
+        139657686
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 220492499,
+      "ns_med": 224322797.0,
+      "ns_max": 226992381,
+      "gbps_med": 1.197,
+      "matches": 0,
+      "ns_samples": [
+        226992381,
+        220492499,
+        224322797,
+        223814121,
+        226569004
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "iters": 5,
+      "ns_min": 171348667,
+      "ns_med": 171848228.0,
+      "ns_max": 175842489,
+      "gbps_med": 1.562,
+      "matches": 0,
+      "ns_samples": [
+        171389051,
+        171348667,
+        175842489,
+        172358514,
+        171848228
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 36495552,
+      "ns_med": 36815005.0,
+      "ns_max": 37110773,
+      "gbps_med": 7.291,
+      "matches": 24002795310,
+      "ns_samples": [
+        37110773,
+        36815005,
+        36661812,
+        37032062,
+        36495552
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 37050016,
+      "ns_med": 37470213.0,
+      "ns_max": 37809764,
+      "gbps_med": 7.164,
+      "matches": 4194501,
+      "ns_samples": [
+        37050016,
+        37526571,
+        37809764,
+        37432170,
+        37470213
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 132997162,
+      "ns_med": 134604756.0,
+      "ns_max": 138855735,
+      "gbps_med": 1.994,
+      "matches": 3,
+      "ns_samples": [
+        135429743,
+        132997162,
+        138855735,
+        134604756,
+        133585771
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 10948039,
+      "ns_med": 11504917.0,
+      "ns_max": 11916798,
+      "gbps_med": 23.332,
+      "matches": 3,
+      "ns_samples": [
+        10948039,
+        11504917,
+        11916798,
+        11637802,
+        11330573
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 97347679,
+      "ns_med": 100463494.0,
+      "ns_max": 101260382,
+      "gbps_med": 2.672,
+      "matches": 3,
+      "ns_samples": [
+        101058034,
+        97347679,
+        98427789,
+        100463494,
+        101260382
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 141480170,
+      "ns_med": 142377773.0,
+      "ns_max": 147472117,
+      "gbps_med": 1.885,
+      "matches": 3,
+      "ns_samples": [
+        147472117,
+        144991247,
+        141480170,
+        142377773,
+        141631631
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 138733294,
+      "ns_med": 139739504.0,
+      "ns_max": 140026390,
+      "gbps_med": 1.921,
+      "matches": 3,
+      "ns_samples": [
+        139739504,
+        138733294,
+        140026390,
+        138738720,
+        139853999
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 160123660,
+      "ns_med": 161514351.0,
+      "ns_max": 163360977,
+      "gbps_med": 1.662,
+      "matches": 3,
+      "ns_samples": [
+        161349749,
+        163360977,
+        161514351,
+        160123660,
+        163349761
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "iters": 5,
+      "ns_min": 171605514,
+      "ns_med": 173483412.0,
+      "ns_max": 175247995,
+      "gbps_med": 1.547,
+      "matches": 3,
+      "ns_samples": [
+        171605514,
+        175247995,
+        174720900,
+        173483412,
+        172581967
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 36569294,
+      "ns_med": 37725340.0,
+      "ns_max": 38140003,
+      "gbps_med": 7.116,
+      "matches": 24002888783,
+      "ns_samples": [
+        37725340,
+        37814473,
+        38140003,
+        36569294,
+        37248687
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 37366904,
+      "ns_med": 37801989.0,
+      "ns_max": 37950435,
+      "gbps_med": 7.101,
+      "matches": 4193840,
+      "ns_samples": [
+        37591194,
+        37801989,
+        37366904,
+        37827858,
+        37950435
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 169006741,
+      "ns_med": 169628635.0,
+      "ns_max": 171865791,
+      "gbps_med": 1.582,
+      "matches": 3435328,
+      "ns_samples": [
+        169006741,
+        169628635,
+        170078793,
+        169227785,
+        171865791
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 205309484,
+      "ns_med": 207619384.0,
+      "ns_max": 212419416,
+      "gbps_med": 1.293,
+      "matches": 6961657,
+      "ns_samples": [
+        206202065,
+        205309484,
+        208792166,
+        207619384,
+        212419416
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 398015162,
+      "ns_med": 401582502.0,
+      "ns_max": 408868648,
+      "gbps_med": 0.668,
+      "matches": 6961657,
+      "ns_samples": [
+        398015162,
+        398882414,
+        406135642,
+        408868648,
+        401582502
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 294882907,
+      "ns_med": 300672069.0,
+      "ns_max": 303648514,
+      "gbps_med": 0.893,
+      "matches": 3435328,
+      "ns_samples": [
+        299332099,
+        294882907,
+        303648514,
+        300672069,
+        302084217
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 378444490,
+      "ns_med": 381033289.0,
+      "ns_max": 382601185,
+      "gbps_med": 0.704,
+      "matches": 3435328,
+      "ns_samples": [
+        381609520,
+        381033289,
+        378444490,
+        382601185,
+        380334922
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 318615009,
+      "ns_med": 319140677.0,
+      "ns_max": 331209375,
+      "gbps_med": 0.841,
+      "matches": 3435328,
+      "ns_samples": [
+        318965068,
+        318615009,
+        319140677,
+        320291484,
+        331209375
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "iters": 5,
+      "ns_min": 344213467,
+      "ns_med": 348754759.0,
+      "ns_max": 350487436,
+      "gbps_med": 0.77,
+      "matches": 3435328,
+      "ns_samples": [
+        348357068,
+        350487436,
+        348754759,
+        349281862,
+        344213467
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 37243900,
+      "ns_med": 37450215.0,
+      "ns_max": 37747339,
+      "gbps_med": 7.168,
+      "matches": 24002699339,
+      "ns_samples": [
+        37450215,
+        37243900,
+        37483158,
+        37747339,
+        37411798
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 37809424,
+      "ns_med": 37874289.0,
+      "ns_max": 37996765,
+      "gbps_med": 7.088,
+      "matches": 4194640,
+      "ns_samples": [
+        37809424,
+        37883427,
+        37874289,
+        37863890,
+        37996765
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 170009380,
+      "ns_med": 172530619.0,
+      "ns_max": 180694620,
+      "gbps_med": 1.556,
+      "matches": 3434964,
+      "ns_samples": [
+        173045367,
+        170009380,
+        172530619,
+        171082632,
+        180694620
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 203576955,
+      "ns_med": 203855294.0,
+      "ns_max": 208002079,
+      "gbps_med": 1.317,
+      "matches": 6956010,
+      "ns_samples": [
+        204602538,
+        203797475,
+        203855294,
+        208002079,
+        203576955
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 400846799,
+      "ns_med": 402683353.0,
+      "ns_max": 410687488,
+      "gbps_med": 0.667,
+      "matches": 6956010,
+      "ns_samples": [
+        402683353,
+        400846799,
+        410687488,
+        408016711,
+        401607528
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 296605276,
+      "ns_med": 298217029.0,
+      "ns_max": 309128818,
+      "gbps_med": 0.9,
+      "matches": 3434964,
+      "ns_samples": [
+        297397400,
+        304459327,
+        309128818,
+        298217029,
+        296605276
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 378584784,
+      "ns_med": 381568815.0,
+      "ns_max": 383572911,
+      "gbps_med": 0.704,
+      "matches": 3434964,
+      "ns_samples": [
+        378584784,
+        383572911,
+        379726272,
+        381568815,
+        382518777
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 319857424,
+      "ns_med": 322956070.0,
+      "ns_max": 324790037,
+      "gbps_med": 0.831,
+      "matches": 3434964,
+      "ns_samples": [
+        321790933,
+        322956070,
+        323875063,
+        319857424,
+        324790037
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "iters": 5,
+      "ns_min": 345259147,
+      "ns_med": 353431839.0,
+      "ns_max": 358798602,
+      "gbps_med": 0.76,
+      "matches": 3434964,
+      "ns_samples": [
+        354592667,
+        345259147,
+        353431839,
+        350959637,
+        358798602
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 37397763,
+      "ns_med": 37805565.0,
+      "ns_max": 39653260,
+      "gbps_med": 7.1,
+      "matches": 24002938324,
+      "ns_samples": [
+        37805565,
+        37960272,
+        37800936,
+        39653260,
+        37397763
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 37930123,
+      "ns_med": 38317988.0,
+      "ns_max": 38546266,
+      "gbps_med": 7.005,
+      "matches": 4194107,
+      "ns_samples": [
+        38379487,
+        38546266,
+        38146129,
+        38317988,
+        37930123
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 74456874,
+      "ns_med": 75214289.0,
+      "ns_max": 75590821,
+      "gbps_med": 3.569,
+      "matches": 4177079,
+      "ns_samples": [
+        74870260,
+        75217655,
+        75214289,
+        75590821,
+        74456874
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 138716863,
+      "ns_med": 140214161.0,
+      "ns_max": 147937346,
+      "gbps_med": 1.914,
+      "matches": 24333141,
+      "ns_samples": [
+        140907944,
+        140214161,
+        138716863,
+        139370497,
+        147937346
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 128738788,
+      "ns_med": 129454600.0,
+      "ns_max": 130899957,
+      "gbps_med": 2.074,
+      "matches": 24333141,
+      "ns_samples": [
+        129231482,
+        129454600,
+        130427283,
+        130899957,
+        128738788
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 221323212,
+      "ns_med": 223289721.0,
+      "ns_max": 226571759,
+      "gbps_med": 1.202,
+      "matches": 4177079,
+      "ns_samples": [
+        223510367,
+        222952760,
+        221323212,
+        226571759,
+        223289721
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 318882921,
+      "ns_med": 320488983.0,
+      "ns_max": 325973127,
+      "gbps_med": 0.838,
+      "matches": 4177079,
+      "ns_samples": [
+        319090380,
+        325973127,
+        320506377,
+        318882921,
+        320488983
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 245872316,
+      "ns_med": 248432954.0,
+      "ns_max": 250569396,
+      "gbps_med": 1.081,
+      "matches": 4177079,
+      "ns_samples": [
+        248653526,
+        248432954,
+        247194050,
+        245872316,
+        250569396
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "iters": 5,
+      "ns_min": 264186243,
+      "ns_med": 267142446.0,
+      "ns_max": 271538866,
+      "gbps_med": 1.005,
+      "matches": 4177079,
+      "ns_samples": [
+        268891328,
+        271538866,
+        264186243,
+        264374703,
+        267142446
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 36586756,
+      "ns_med": 36728860.0,
+      "ns_max": 37176579,
+      "gbps_med": 7.309,
+      "matches": 24003215105,
+      "ns_samples": [
+        36586756,
+        36691855,
+        36728860,
+        37176579,
+        36872676
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 36956912,
+      "ns_med": 37488176.0,
+      "ns_max": 37678984,
+      "gbps_med": 7.161,
+      "matches": 4194458,
+      "ns_samples": [
+        37580805,
+        37678984,
+        37488176,
+        36956912,
+        37189083
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 132227738,
+      "ns_med": 134445260.0,
+      "ns_max": 139202344,
+      "gbps_med": 1.997,
+      "matches": 4,
+      "ns_samples": [
+        132227738,
+        134445260,
+        133856620,
+        134613750,
+        139202344
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 11019116,
+      "ns_med": 11676716.0,
+      "ns_max": 12114948,
+      "gbps_med": 22.989,
+      "matches": 4,
+      "ns_samples": [
+        11676716,
+        11019116,
+        12114948,
+        12089639,
+        11491181
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 11127558,
+      "ns_med": 11431836.0,
+      "ns_max": 11881940,
+      "gbps_med": 23.481,
+      "matches": 4,
+      "ns_samples": [
+        11881940,
+        11755829,
+        11127558,
+        11431836,
+        11385809
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 139287673,
+      "ns_med": 140310562.0,
+      "ns_max": 142133859,
+      "gbps_med": 1.913,
+      "matches": 4,
+      "ns_samples": [
+        142133859,
+        140608751,
+        140235502,
+        140310562,
+        139287673
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 136994673,
+      "ns_med": 137613386.0,
+      "ns_max": 144644483,
+      "gbps_med": 1.951,
+      "matches": 4,
+      "ns_samples": [
+        137613386,
+        141675087,
+        136994673,
+        144644483,
+        137373875
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 158914170,
+      "ns_med": 162789210.0,
+      "ns_max": 169522110,
+      "gbps_med": 1.649,
+      "matches": 4,
+      "ns_samples": [
+        164831444,
+        158914170,
+        160042124,
+        162789210,
+        169522110
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 173498445,
+      "ns_med": 174534218.0,
+      "ns_max": 177331041,
+      "gbps_med": 1.538,
+      "matches": 4,
+      "ns_samples": [
+        174534218,
+        175580626,
+        173498445,
+        177331041,
+        173551612
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 37196667,
+      "ns_med": 37537872.0,
+      "ns_max": 44016695,
+      "gbps_med": 7.151,
+      "matches": 24002678017,
+      "ns_samples": [
+        37537872,
+        37737796,
+        44016695,
+        37196667,
+        37497325
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 37578195,
+      "ns_med": 38270753.0,
+      "ns_max": 38842567,
+      "gbps_med": 7.014,
+      "matches": 4194565,
+      "ns_samples": [
+        38842567,
+        37837107,
+        37578195,
+        38270753,
+        38421047
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 135647168,
+      "ns_med": 135858731.0,
+      "ns_max": 144296073,
+      "gbps_med": 1.976,
+      "matches": 5,
+      "ns_samples": [
+        135647168,
+        135858731,
+        137871828,
+        144296073,
+        135843252
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 10558912,
+      "ns_med": 11356292.0,
+      "ns_max": 11480671,
+      "gbps_med": 23.638,
+      "matches": 5,
+      "ns_samples": [
+        11480671,
+        10681587,
+        11474969,
+        11356292,
+        10558912
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 35036282,
+      "ns_med": 35325016.0,
+      "ns_max": 35571078,
+      "gbps_med": 7.599,
+      "matches": 5,
+      "ns_samples": [
+        35036282,
+        35571078,
+        35214113,
+        35325016,
+        35522656
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 141000991,
+      "ns_med": 144832092.0,
+      "ns_max": 148100660,
+      "gbps_med": 1.853,
+      "matches": 5,
+      "ns_samples": [
+        141271319,
+        141000991,
+        145340466,
+        148100660,
+        144832092
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 139958952,
+      "ns_med": 147198204.0,
+      "ns_max": 148106066,
+      "gbps_med": 1.824,
+      "matches": 5,
+      "ns_samples": [
+        147332771,
+        148106066,
+        147198204,
+        145047508,
+        139958952
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 161041639,
+      "ns_med": 161956466.0,
+      "ns_max": 170435392,
+      "gbps_med": 1.657,
+      "matches": 5,
+      "ns_samples": [
+        161956466,
+        161041639,
+        165967742,
+        161695964,
+        170435392
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "iters": 5,
+      "ns_min": 170892092,
+      "ns_med": 175324131.0,
+      "ns_max": 176208483,
+      "gbps_med": 1.531,
+      "matches": 5,
+      "ns_samples": [
+        175324131,
+        176208483,
+        170892092,
+        172282981,
+        176004768
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 36892896,
+      "ns_med": 37089843.0,
+      "ns_max": 38624949,
+      "gbps_med": 7.237,
+      "matches": 24002737346,
+      "ns_samples": [
+        37089843,
+        37152614,
+        38624949,
+        37074303,
+        36892896
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 35732238,
+      "ns_med": 36959231.0,
+      "ns_max": 37354100,
+      "gbps_med": 7.263,
+      "matches": 4194754,
+      "ns_samples": [
+        36959231,
+        36642215,
+        37354100,
+        37348619,
+        35732238
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 135172418,
+      "ns_med": 135581008.0,
+      "ns_max": 136229411,
+      "gbps_med": 1.98,
+      "matches": 0,
+      "ns_samples": [
+        135581008,
+        135327285,
+        135979266,
+        135172418,
+        136229411
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 11821495,
+      "ns_med": 15153368.0,
+      "ns_max": 15853081,
+      "gbps_med": 17.715,
+      "matches": 0,
+      "ns_samples": [
+        15153368,
+        15159450,
+        15853081,
+        11821495,
+        11959951
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 13005908,
+      "ns_med": 13749414.0,
+      "ns_max": 14485256,
+      "gbps_med": 19.523,
+      "matches": 0,
+      "ns_samples": [
+        13749414,
+        13031237,
+        13005908,
+        13779813,
+        14485256
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 105632203,
+      "ns_med": 106982423.0,
+      "ns_max": 108501663,
+      "gbps_med": 2.509,
+      "matches": 0,
+      "ns_samples": [
+        105632203,
+        108501663,
+        107597292,
+        106490573,
+        106982423
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 106258193,
+      "ns_med": 107049376.0,
+      "ns_max": 107742752,
+      "gbps_med": 2.508,
+      "matches": 0,
+      "ns_samples": [
+        106258193,
+        107400151,
+        107742752,
+        107049376,
+        106299197
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 126820267,
+      "ns_med": 129445332.0,
+      "ns_max": 135426490,
+      "gbps_med": 2.074,
+      "matches": 0,
+      "ns_samples": [
+        130255934,
+        129445332,
+        128264882,
+        126820267,
+        135426490
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "iters": 5,
+      "ns_min": 137406900,
+      "ns_med": 139244041.0,
+      "ns_max": 151663116,
+      "gbps_med": 1.928,
+      "matches": 0,
+      "ns_samples": [
+        139244041,
+        137933781,
+        140470019,
+        137406900,
+        151663116
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 36023668,
+      "ns_med": 36795147.0,
+      "ns_max": 37059204,
+      "gbps_med": 7.295,
+      "matches": 24002971821,
+      "ns_samples": [
+        37059204,
+        36864821,
+        36781240,
+        36795147,
+        36023668
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 36866424,
+      "ns_med": 37016903.0,
+      "ns_max": 37179895,
+      "gbps_med": 7.252,
+      "matches": 4194551,
+      "ns_samples": [
+        37016903,
+        36866424,
+        37014768,
+        37179895,
+        37076797
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 134614534,
+      "ns_med": 135516657.0,
+      "ns_max": 141182257,
+      "gbps_med": 1.981,
+      "matches": 4,
+      "ns_samples": [
+        135516657,
+        138776280,
+        141182257,
+        134843264,
+        134614534
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 10920135,
+      "ns_med": 10933602.0,
+      "ns_max": 11486091,
+      "gbps_med": 24.551,
+      "matches": 4,
+      "ns_samples": [
+        10933602,
+        11461914,
+        10921187,
+        10920135,
+        11486091
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 22715099,
+      "ns_med": 23147228.0,
+      "ns_max": 23718745,
+      "gbps_med": 11.597,
+      "matches": 4,
+      "ns_samples": [
+        23147228,
+        23689247,
+        22715099,
+        23098094,
+        23718745
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 140409135,
+      "ns_med": 141078028.0,
+      "ns_max": 143682155,
+      "gbps_med": 1.903,
+      "matches": 4,
+      "ns_samples": [
+        140558098,
+        140409135,
+        143682155,
+        141459890,
+        141078028
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 139749067,
+      "ns_med": 141079982.0,
+      "ns_max": 143042088,
+      "gbps_med": 1.903,
+      "matches": 4,
+      "ns_samples": [
+        143042088,
+        139749067,
+        140418662,
+        141478623,
+        141079982
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 162700650,
+      "ns_med": 165303966.0,
+      "ns_max": 171214063,
+      "gbps_med": 1.624,
+      "matches": 4,
+      "ns_samples": [
+        162700650,
+        167603337,
+        171214063,
+        165303966,
+        163290936
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "iters": 5,
+      "ns_min": 172867258,
+      "ns_med": 176260250.0,
+      "ns_max": 178617864,
+      "gbps_med": 1.523,
+      "matches": 4,
+      "ns_samples": [
+        176736473,
+        176260250,
+        174185228,
+        172867258,
+        178617864
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 38204161,
+      "ns_med": 38423498.0,
+      "ns_max": 39894014,
+      "gbps_med": 6.986,
+      "matches": 24002572985,
+      "ns_samples": [
+        39894014,
+        38423498,
+        38204161,
+        38468489,
+        38207226
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 37541618,
+      "ns_med": 38577802.0,
+      "ns_max": 38810334,
+      "gbps_med": 6.958,
+      "matches": 4193790,
+      "ns_samples": [
+        38810334,
+        38601684,
+        38334261,
+        38577802,
+        37541618
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 251138826,
+      "ns_med": 252785076.0,
+      "ns_max": 256925490,
+      "gbps_med": 1.062,
+      "matches": 5,
+      "ns_samples": [
+        251138826,
+        252785076,
+        253978463,
+        251249870,
+        256925490
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 53992989,
+      "ns_med": 55371808.0,
+      "ns_max": 56649401,
+      "gbps_med": 4.848,
+      "matches": 5,
+      "ns_samples": [
+        56649401,
+        55371808,
+        53992989,
+        55074083,
+        55675998
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 26148387,
+      "ns_med": 26825035.0,
+      "ns_max": 27603058,
+      "gbps_med": 10.007,
+      "matches": 5,
+      "ns_samples": [
+        26613280,
+        27603058,
+        26826268,
+        26825035,
+        26148387
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 266238836,
+      "ns_med": 268021342.0,
+      "ns_max": 291206583,
+      "gbps_med": 1.002,
+      "matches": 5,
+      "ns_samples": [
+        266238836,
+        269143976,
+        268021342,
+        267318403,
+        291206583
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 269952532,
+      "ns_med": 274361820.0,
+      "ns_max": 290319635,
+      "gbps_med": 0.978,
+      "matches": 5,
+      "ns_samples": [
+        277335235,
+        269952532,
+        272541942,
+        274361820,
+        290319635
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 287646967,
+      "ns_med": 291372913.0,
+      "ns_max": 299061771,
+      "gbps_med": 0.921,
+      "matches": 5,
+      "ns_samples": [
+        294725719,
+        291372913,
+        289856443,
+        287646967,
+        299061771
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 309658540,
+      "ns_med": 314008094.0,
+      "ns_max": 315919650,
+      "gbps_med": 0.855,
+      "matches": 5,
+      "ns_samples": [
+        314897603,
+        314008094,
+        315919650,
+        313766894,
+        309658540
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 36895789,
+      "ns_med": 37230797.0,
+      "ns_max": 37422264,
+      "gbps_med": 7.21,
+      "matches": 24005004829,
+      "ns_samples": [
+        37422264,
+        37230797,
+        37252197,
+        36895789,
+        37127017
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 36794890,
+      "ns_med": 37068124.0,
+      "ns_max": 37885607,
+      "gbps_med": 7.242,
+      "matches": 4194396,
+      "ns_samples": [
+        37502485,
+        36794890,
+        37885607,
+        36947002,
+        37068124
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 169975876,
+      "ns_med": 172380352.0,
+      "ns_max": 179135353,
+      "gbps_med": 1.557,
+      "matches": 3442780,
+      "ns_samples": [
+        179135353,
+        172380352,
+        169975876,
+        171839123,
+        172509469
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 208858553,
+      "ns_med": 209560802.0,
+      "ns_max": 215313419,
+      "gbps_med": 1.281,
+      "matches": 6993326,
+      "ns_samples": [
+        208858553,
+        209560802,
+        209395865,
+        215313419,
+        211047936
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 404829527,
+      "ns_med": 407529146.0,
+      "ns_max": 411544982,
+      "gbps_med": 0.659,
+      "matches": 6993326,
+      "ns_samples": [
+        406202243,
+        407529146,
+        404829527,
+        411544982,
+        410745057
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 299349988,
+      "ns_med": 305166667.0,
+      "ns_max": 308727677,
+      "gbps_med": 0.88,
+      "matches": 3442780,
+      "ns_samples": [
+        300409490,
+        308716028,
+        308727677,
+        299349988,
+        305166667
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 381490645,
+      "ns_med": 383329486.0,
+      "ns_max": 384607388,
+      "gbps_med": 0.7,
+      "matches": 3442780,
+      "ns_samples": [
+        383329486,
+        382595966,
+        383446605,
+        384607388,
+        381490645
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 317536831,
+      "ns_med": 319438497.0,
+      "ns_max": 337917783,
+      "gbps_med": 0.84,
+      "matches": 3442780,
+      "ns_samples": [
+        318847427,
+        317536831,
+        319438497,
+        337917783,
+        330230380
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 351047570,
+      "ns_med": 354688316.0,
+      "ns_max": 358091369,
+      "gbps_med": 0.757,
+      "matches": 3442780,
+      "ns_samples": [
+        358091369,
+        354688316,
+        357064011,
+        353084564,
+        351047570
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 35937852,
+      "ns_med": 37418742.0,
+      "ns_max": 38323347,
+      "gbps_med": 7.174,
+      "matches": 24023463283,
+      "ns_samples": [
+        37565483,
+        37418742,
+        38323347,
+        35937852,
+        37065233
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 37716473,
+      "ns_med": 38011655.0,
+      "ns_max": 38919262,
+      "gbps_med": 7.062,
+      "matches": 4194527,
+      "ns_samples": [
+        38005909,
+        38011655,
+        37716473,
+        38629105,
+        38919262
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 167108241,
+      "ns_med": 171358967.0,
+      "ns_max": 177099712,
+      "gbps_med": 1.567,
+      "matches": 3511567,
+      "ns_samples": [
+        167427092,
+        171358967,
+        167108241,
+        177099712,
+        172090732
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 209221775,
+      "ns_med": 210237421.0,
+      "ns_max": 210951199,
+      "gbps_med": 1.277,
+      "matches": 7319750,
+      "ns_samples": [
+        210024718,
+        209221775,
+        210237421,
+        210951199,
+        210241868
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 411107903,
+      "ns_med": 416077192.0,
+      "ns_max": 417559459,
+      "gbps_med": 0.645,
+      "matches": 7319750,
+      "ns_samples": [
+        411107903,
+        417559459,
+        411600171,
+        416441359,
+        416077192
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 296199171,
+      "ns_med": 302802956.0,
+      "ns_max": 313399135,
+      "gbps_med": 0.887,
+      "matches": 3511567,
+      "ns_samples": [
+        302802956,
+        313399135,
+        299917554,
+        307111821,
+        296199171
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 380581835,
+      "ns_med": 384277170.0,
+      "ns_max": 388658900,
+      "gbps_med": 0.699,
+      "matches": 3511567,
+      "ns_samples": [
+        380581835,
+        388658900,
+        384277170,
+        384923235,
+        382201773
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 320283665,
+      "ns_med": 321232586.0,
+      "ns_max": 327028939,
+      "gbps_med": 0.836,
+      "matches": 3511567,
+      "ns_samples": [
+        321060981,
+        321232586,
+        327028939,
+        326746267,
+        320283665
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "iters": 5,
+      "ns_min": 346917875,
+      "ns_med": 349282238.0,
+      "ns_max": 353596442,
+      "gbps_med": 0.769,
+      "matches": 3511567,
+      "ns_samples": [
+        348756268,
+        346917875,
+        353596442,
+        349282238,
+        352265262
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 37102346,
+      "ns_med": 38039229.0,
+      "ns_max": 38563976,
+      "gbps_med": 7.057,
+      "matches": 24211487308,
+      "ns_samples": [
+        38563976,
+        38431271,
+        38039229,
+        37102346,
+        37109354
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 37611258,
+      "ns_med": 38226538.0,
+      "ns_max": 38984202,
+      "gbps_med": 7.022,
+      "matches": 4194783,
+      "ns_samples": [
+        38984202,
+        38622670,
+        38226538,
+        37611258,
+        37674258
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 137636806,
+      "ns_med": 138444565.0,
+      "ns_max": 145880486,
+      "gbps_med": 1.939,
+      "matches": 4194783,
+      "ns_samples": [
+        138444565,
+        137636806,
+        140269370,
+        138323084,
+        145880486
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 252062965,
+      "ns_med": 255569071.0,
+      "ns_max": 259008671,
+      "gbps_med": 1.05,
+      "matches": 10604391,
+      "ns_samples": [
+        257757624,
+        252062965,
+        254031045,
+        259008671,
+        255569071
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 509129259,
+      "ns_med": 514963303.0,
+      "ns_max": 519081952,
+      "gbps_med": 0.521,
+      "matches": 10604391,
+      "ns_samples": [
+        514963303,
+        514928754,
+        519081952,
+        514964772,
+        509129259
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 282651677,
+      "ns_med": 294137976.0,
+      "ns_max": 306953166,
+      "gbps_med": 0.913,
+      "matches": 4194783,
+      "ns_samples": [
+        297193951,
+        306953166,
+        294137976,
+        286926922,
+        282651677
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 378636454,
+      "ns_med": 388132862.0,
+      "ns_max": 391766583,
+      "gbps_med": 0.692,
+      "matches": 4194783,
+      "ns_samples": [
+        388132862,
+        391766583,
+        390486590,
+        382927762,
+        378636454
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 304692749,
+      "ns_med": 309799276.0,
+      "ns_max": 317617459,
+      "gbps_med": 0.866,
+      "matches": 4194783,
+      "ns_samples": [
+        309799276,
+        306431440,
+        304692749,
+        317617459,
+        311298526
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "iters": 5,
+      "ns_min": 330296529,
+      "ns_med": 334573377.0,
+      "ns_max": 342485439,
+      "gbps_med": 0.802,
+      "matches": 4194783,
+      "ns_samples": [
+        335575826,
+        334238137,
+        330296529,
+        334573377,
+        342485439
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 36187952,
+      "ns_med": 36354442.0,
+      "ns_max": 36454814,
+      "gbps_med": 7.384,
+      "matches": 23279718572,
+      "ns_samples": [
+        36354442,
+        36187952,
+        36252194,
+        36454814,
+        36407603
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 76217094,
+      "ns_med": 77599386.0,
+      "ns_max": 78047948,
+      "gbps_med": 3.459,
+      "matches": 17895864,
+      "ns_samples": [
+        77599386,
+        76217094,
+        77673560,
+        78047948,
+        76309296
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 392155307,
+      "ns_med": 394646451.0,
+      "ns_max": 400000781,
+      "gbps_med": 0.68,
+      "matches": 5740166,
+      "ns_samples": [
+        394646451,
+        399909838,
+        392155307,
+        393583986,
+        400000781
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 185145222,
+      "ns_med": 186759140.0,
+      "ns_max": 187795260,
+      "gbps_med": 1.437,
+      "matches": 6464929,
+      "ns_samples": [
+        187693469,
+        186391933,
+        187795260,
+        186759140,
+        185145222
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 388608814,
+      "ns_med": 392515870.0,
+      "ns_max": 414780673,
+      "gbps_med": 0.684,
+      "matches": 6464929,
+      "ns_samples": [
+        407513774,
+        392302619,
+        414780673,
+        388608814,
+        392515870
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 552256082,
+      "ns_med": 561432845.0,
+      "ns_max": 566394291,
+      "gbps_med": 0.478,
+      "matches": 5740166,
+      "ns_samples": [
+        566394291,
+        552680261,
+        561432845,
+        552256082,
+        565108872
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 660934731,
+      "ns_med": 678636644.0,
+      "ns_max": 679891357,
+      "gbps_med": 0.396,
+      "matches": 5740166,
+      "ns_samples": [
+        660934731,
+        679891357,
+        678680772,
+        678636644,
+        671660271
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 581303348,
+      "ns_med": 592518276.0,
+      "ns_max": 595296876,
+      "gbps_med": 0.453,
+      "matches": 5740166,
+      "ns_samples": [
+        581303348,
+        582218052,
+        592518276,
+        593646376,
+        595296876
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "iters": 5,
+      "ns_min": 618553621,
+      "ns_med": 631777915.0,
+      "ns_max": 636830499,
+      "gbps_med": 0.425,
+      "matches": 5740166,
+      "ns_samples": [
+        621709600,
+        618553621,
+        631777915,
+        632425357,
+        636830499
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 36836598,
+      "ns_med": 37030840.0,
+      "ns_max": 37281059,
+      "gbps_med": 7.249,
+      "matches": 24220936953,
+      "ns_samples": [
+        37281059,
+        37264588,
+        36957620,
+        36836598,
+        37030840
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 11116114,
+      "ns_med": 11584191.0,
+      "ns_max": 12005138,
+      "gbps_med": 23.173,
+      "matches": 65404,
+      "ns_samples": [
+        11740029,
+        11116114,
+        12005138,
+        11584191,
+        11567379
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 12451303,
+      "ns_med": 13078816.0,
+      "ns_max": 14193121,
+      "gbps_med": 20.525,
+      "matches": 65404,
+      "ns_samples": [
+        13078816,
+        14193121,
+        12937175,
+        12451303,
+        13199346
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 208269531,
+      "ns_med": 208391612.0,
+      "ns_max": 214654777,
+      "gbps_med": 1.288,
+      "matches": 7108334,
+      "ns_samples": [
+        214654777,
+        210416314,
+        208391612,
+        208368143,
+        208269531
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 408211106,
+      "ns_med": 413159063.0,
+      "ns_max": 416088755,
+      "gbps_med": 0.65,
+      "matches": 7108334,
+      "ns_samples": [
+        408211106,
+        414843303,
+        413159063,
+        412981182,
+        416088755
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 21539514,
+      "ns_med": 22175745.0,
+      "ns_max": 27336746,
+      "gbps_med": 12.105,
+      "matches": 65404,
+      "ns_samples": [
+        27336746,
+        24878567,
+        21539514,
+        22175745,
+        21882913
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 48849799,
+      "ns_med": 49656538.0,
+      "ns_max": 59617239,
+      "gbps_med": 5.406,
+      "matches": 65404,
+      "ns_samples": [
+        49656538,
+        48849799,
+        49156155,
+        50391125,
+        59617239
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 37103066,
+      "ns_med": 37528000.0,
+      "ns_max": 38082093,
+      "gbps_med": 7.153,
+      "matches": 65404,
+      "ns_samples": [
+        37103066,
+        37411477,
+        37748573,
+        38082093,
+        37528000
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "iters": 5,
+      "ns_min": 48793049,
+      "ns_med": 48984904.0,
+      "ns_max": 50984362,
+      "gbps_med": 5.48,
+      "matches": 65404,
+      "ns_samples": [
+        50984362,
+        48984904,
+        48793049,
+        49323829,
+        48901911
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 36617044,
+      "ns_med": 37202907.0,
+      "ns_max": 38187333,
+      "gbps_med": 7.219,
+      "matches": 24237205228,
+      "ns_samples": [
+        37701223,
+        38187333,
+        36617044,
+        37202907,
+        36731784
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 10599427,
+      "ns_med": 11048366.0,
+      "ns_max": 11283497,
+      "gbps_med": 24.31,
+      "matches": 1192,
+      "ns_samples": [
+        11283497,
+        11063245,
+        10599427,
+        11048366,
+        10946852
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 10653860,
+      "ns_med": 11182914.0,
+      "ns_max": 11314897,
+      "gbps_med": 24.017,
+      "matches": 1192,
+      "ns_samples": [
+        11314897,
+        11181111,
+        10653860,
+        11235035,
+        11182914
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 201147497,
+      "ns_med": 204234989.0,
+      "ns_max": 208405002,
+      "gbps_med": 1.315,
+      "matches": 7115978,
+      "ns_samples": [
+        201147497,
+        204234989,
+        205963853,
+        208405002,
+        203026206
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 409557401,
+      "ns_med": 411245487.0,
+      "ns_max": 415311141,
+      "gbps_med": 0.653,
+      "matches": 7115978,
+      "ns_samples": [
+        409557401,
+        409987867,
+        411245487,
+        413878840,
+        415311141
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 17406112,
+      "ns_med": 17938393.0,
+      "ns_max": 18422111,
+      "gbps_med": 14.972,
+      "matches": 1192,
+      "ns_samples": [
+        17435488,
+        18017104,
+        17406112,
+        18422111,
+        17938393
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 18806769,
+      "ns_med": 19052729.0,
+      "ns_max": 19421175,
+      "gbps_med": 14.097,
+      "matches": 1192,
+      "ns_samples": [
+        19421175,
+        18806769,
+        19052729,
+        19082547,
+        19051347
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 31494842,
+      "ns_med": 32313114.0,
+      "ns_max": 33083795,
+      "gbps_med": 8.312,
+      "matches": 1192,
+      "ns_samples": [
+        31494842,
+        31936585,
+        32313114,
+        32809462,
+        33083795
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "iters": 5,
+      "ns_min": 44971247,
+      "ns_med": 45186501.0,
+      "ns_max": 47738163,
+      "gbps_med": 5.944,
+      "matches": 1192,
+      "ns_samples": [
+        44971247,
+        47738163,
+        46157643,
+        45006222,
+        45186501
+      ]
+    },
+    {
+      "stage": "L0_sum",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 36371802,
+      "ns_med": 37284294.0,
+      "ns_max": 37959477,
+      "gbps_med": 7.2,
+      "matches": 33621116033,
+      "ns_samples": [
+        37362563,
+        36371802,
+        37284294,
+        37242010,
+        37959477
+      ]
+    },
+    {
+      "stage": "L0_memchr_nl",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 44940519,
+      "ns_med": 45315790.0,
+      "ns_max": 45790499,
+      "gbps_med": 5.924,
+      "matches": 5065006,
+      "ns_samples": [
+        45500844,
+        44959144,
+        45790499,
+        45315790,
+        44940519
+      ]
+    },
+    {
+      "stage": "L1_line_std",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 157581305,
+      "ns_med": 159708777.0,
+      "ns_max": 160480516,
+      "gbps_med": 1.681,
+      "matches": 25,
+      "ns_samples": [
+        158806888,
+        160480516,
+        160413851,
+        159708777,
+        157581305
+      ]
+    },
+    {
+      "stage": "L1_chunk_anchor",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 22356356,
+      "ns_med": 22670428.0,
+      "ns_max": 22746194,
+      "gbps_med": 11.841,
+      "matches": 25,
+      "ns_samples": [
+        22356356,
+        22715645,
+        22670428,
+        22746194,
+        22586238
+      ]
+    },
+    {
+      "stage": "L1_chunk_memmem",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 86743610,
+      "ns_med": 88146190.0,
+      "ns_max": 88870132,
+      "gbps_med": 3.045,
+      "matches": 25,
+      "ns_samples": [
+        87384539,
+        88405127,
+        88870132,
+        88146190,
+        86743610
+      ]
+    },
+    {
+      "stage": "L2_matcher",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 176118456,
+      "ns_med": 177604486.0,
+      "ns_max": 186546521,
+      "gbps_med": 1.511,
+      "matches": 25,
+      "ns_samples": [
+        186546521,
+        177604486,
+        176118456,
+        176276138,
+        182943329
+      ]
+    },
+    {
+      "stage": "L2e_matcher_emit",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 173876605,
+      "ns_med": 174634811.0,
+      "ns_max": 185800318,
+      "gbps_med": 1.537,
+      "matches": 25,
+      "ns_samples": [
+        185800318,
+        174279178,
+        177253954,
+        174634811,
+        173876605
+      ]
+    },
+    {
+      "stage": "L3_pread_matcher",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 195616518,
+      "ns_med": 199396579.0,
+      "ns_max": 204337148,
+      "gbps_med": 1.346,
+      "matches": 25,
+      "ns_samples": [
+        195616518,
+        204337148,
+        199396579,
+        199711972,
+        198866146
+      ]
+    },
+    {
+      "stage": "L4_sluice",
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "iters": 5,
+      "ns_min": 210143928,
+      "ns_med": 213233429.0,
+      "ns_max": 213509839,
+      "gbps_med": 1.259,
+      "matches": 25,
+      "ns_samples": [
+        213233429,
+        213373715,
+        213509839,
+        212474727,
+        210143928
+      ]
+    }
+  ],
+  "derived": [
+    {
+      "workload": "normal__p_qz9__d_0",
+      "bytes": 268435517,
+      "core_increment_ns": -52474569.0,
+      "core_increment_ms_per_gib": -209.89822830215817,
+      "core_overhead_ratio": -0.23392437015663636,
+      "core_share": -0.305354146567051
+    },
+    {
+      "workload": "normal__p_qz9__d_s",
+      "bytes": 268435471,
+      "core_increment_ns": 11969061.0,
+      "core_increment_ms_per_gib": 47.87624132470654,
+      "core_overhead_ratio": 0.07410524777454605,
+      "core_share": 0.0689925386065153
+    },
+    {
+      "workload": "normal__p_the__d_0",
+      "bytes": 268435502,
+      "core_increment_ns": 29614082.0,
+      "core_increment_ms_per_gib": 118.45630770092984,
+      "core_overhead_ratio": 0.09279319163692819,
+      "core_share": 0.08491377174296853
+    },
+    {
+      "workload": "normal__p_the__d_s",
+      "bytes": 268435492,
+      "core_increment_ns": 30475769.0,
+      "core_increment_ms_per_gib": 121.90305965152572,
+      "core_overhead_ratio": 0.0943650602386882,
+      "core_share": 0.08622813690534542
+    },
+    {
+      "workload": "normal__p_1b_e__d_0",
+      "bytes": 268435487,
+      "core_increment_ns": 18709492.0,
+      "core_increment_ms_per_gib": 74.83795935741315,
+      "core_overhead_ratio": 0.07531002509433592,
+      "core_share": 0.07003563933827274
+    },
+    {
+      "workload": "normal__p_1b_z__d_s",
+      "bytes": 268435459,
+      "core_increment_ns": 11745008.0,
+      "core_increment_ms_per_gib": 46.98003147495724,
+      "core_overhead_ratio": 0.07214856562053468,
+      "core_share": 0.06729344041865762
+    },
+    {
+      "workload": "normal__p_16b__d_s",
+      "bytes": 268435466,
+      "core_increment_ns": 13367665.0,
+      "core_increment_ms_per_gib": 53.47065800806277,
+      "core_overhead_ratio": 0.08253863109114766,
+      "core_share": 0.07624543708703738
+    },
+    {
+      "workload": "normal__p_64b__d_s",
+      "bytes": 268435484,
+      "core_increment_ns": 9798709.0,
+      "core_increment_ms_per_gib": 39.194831911660444,
+      "core_overhead_ratio": 0.07569766208332641,
+      "core_share": 0.07037076006721178
+    },
+    {
+      "workload": "normal__p_rare1st__d_s",
+      "bytes": 268435501,
+      "core_increment_ns": 10956284.0,
+      "core_increment_ms_per_gib": 43.825128653240306,
+      "core_overhead_ratio": 0.06627961969164127,
+      "core_share": 0.06215969851398713
+    },
+    {
+      "workload": "normal__p_rep__d_s",
+      "bytes": 268435495,
+      "core_increment_ns": 22635181.0,
+      "core_increment_ms_per_gib": 90.54071084567316,
+      "core_overhead_ratio": 0.07768457529887138,
+      "core_share": 0.07208470556176173
+    },
+    {
+      "workload": "normal__p_the__d_1pc",
+      "bytes": 268435495,
+      "core_increment_ns": 35249819.0,
+      "core_increment_ms_per_gib": 140.99925551473683,
+      "core_overhead_ratio": 0.11034931397138398,
+      "core_share": 0.09938252096243283
+    },
+    {
+      "workload": "normal__p_the__d_10pc",
+      "bytes": 268435459,
+      "core_increment_ns": 28049652.0,
+      "core_increment_ms_per_gib": 112.19860674608285,
+      "core_overhead_ratio": 0.08731882512068685,
+      "core_share": 0.08030655140270831
+    },
+    {
+      "workload": "normal__p_the__d_all",
+      "bytes": 268435495,
+      "core_increment_ns": 24774101.0,
+      "core_increment_ms_per_gib": 99.09638960265008,
+      "core_overhead_ratio": 0.07996823401227057,
+      "core_share": 0.07404683905856621
+    },
+    {
+      "workload": "short__p_the__d_s",
+      "bytes": 268435456,
+      "core_increment_ns": 39259639.0,
+      "core_increment_ms_per_gib": 157.038556,
+      "core_overhead_ratio": 0.06625895029776263,
+      "core_share": 0.06214151851129522
+    },
+    {
+      "workload": "long__p_the__d_s",
+      "bytes": 268436638,
+      "core_increment_ns": 11456904.0,
+      "core_increment_ms_per_gib": 45.82741420846172,
+      "core_overhead_ratio": 0.3052894905137497,
+      "core_share": 0.23388642345813315
+    },
+    {
+      "workload": "huge__p_the__d_s",
+      "bytes": 268581524,
+      "core_increment_ns": 12873387.0,
+      "core_increment_ms_per_gib": 51.465543245774,
+      "core_overhead_ratio": 0.3983951221785681,
+      "core_share": 0.28489453078033194
+    },
+    {
+      "workload": "binary__p_the__d_s",
+      "bytes": 268435472,
+      "core_increment_ns": 13836850.0,
+      "core_increment_ms_per_gib": 55.34739670103808,
+      "core_overhead_ratio": 0.06939361783132698,
+      "core_share": 0.06489062275502777
+    }
+  ],
+  "note": "V1 baseline for round-1 grep attribution. Measured code = commit b5657ae (V1 per-line matcher); the dirty overlay is measurement-instrument-only: bench/grep_attribution_bench.cpp (true-median + raw-samples instrument fix) and scripts/bench/perf-attribution.py (this runner), both from the candidate branch so baseline and candidate are measured by the SAME instrument. Production code under measurement is unmodified b5657ae."
+}

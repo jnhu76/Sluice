@@ -1,0 +1,68 @@
+{
+  "env": {
+    "time": "2026-08-18T18:06:45+0800",
+    "git": {
+      "sha": "86496156d4e0ed1aa6c01ecfbe687e529bb2bb65",
+      "dirty": true,
+      "branch": "perf/performance-attribution"
+    },
+    "build": {
+      "mode": "release",
+      "compiler": "clang++",
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+    },
+    "system": {
+      "kernel": "6.18.33.2-microsoft-standard-WSL2",
+      "platform": "x86_64",
+      "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+      "logical_cpus": 8,
+      "glibc": "glibc 2.43",
+      "python": "3.14.4"
+    },
+    "environment": {
+      "wsl": "WSL2"
+    },
+    "filesystem": {
+      "input": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      },
+      "output": null
+    },
+    "tools": {
+      "gnu_grep": "grep (GNU grep) 3.12",
+      "ripgrep": "ripgrep 15.1.0"
+    }
+  },
+  "kind": "perf",
+  "cmd": [
+    "build/linux/x86_64/release/sluice-grep",
+    "qz9",
+    "/tmp/perf-qz9-1g.bin"
+  ],
+  "counters": {
+    "task-clock": 596.24,
+    "cycles": 438477095.0,
+    "instructions": 1763457376.0,
+    "branches": 52649191.0,
+    "branch-misses": 195310.0,
+    "cache-misses": 5924401.0,
+    "context-switches": 0.0,
+    "cpu-migrations": 0.0,
+    "page-faults": 421.0
+  },
+  "raw": "596.24,msec,task-clock:u,596235541,100.00,,\n438477095,,cycles:u,596235541,100.00,,\n1763457376,,instructions:u,596235541,100.00,,\n52649191,,branches:u,596235541,100.00,,\n195310,,branch-misses:u,596235541,100.00,,\n5924401,,cache-misses:u,596235541,100.00,,\n0,,context-switches:u,596235541,100.00,,\n0,,cpu-migrations:u,596235541,100.00,,\n421,,page-faults:u,596235541,100.00,,",
+  "derived": {
+    "task-clock_per_request": 0.582265625,
+    "cycles_per_request": 428200.2880859375,
+    "instructions_per_request": 1722126.34375,
+    "branches_per_request": 51415.2255859375,
+    "branch-misses_per_request": 190.732421875,
+    "cache-misses_per_request": 5785.5478515625,
+    "context-switches_per_request": 0.0,
+    "cpu-migrations_per_request": 0.0,
+    "page-faults_per_request": 0.4111328125
+  },
+  "note": "perf stat counters for one sluice-grep CLI run (1 GiB sparse qz9 workload, 1024 x 1 MiB requests). PMU counters are diagnostic evidence, not optimization authorization."
+}

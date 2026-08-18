@@ -1,0 +1,408 @@
+{
+  "env": {
+    "time": "2026-08-18T17:58:57+0800",
+    "git": {
+      "sha": "86496156d4e0ed1aa6c01ecfbe687e529bb2bb65",
+      "dirty": false,
+      "branch": "perf/performance-attribution"
+    },
+    "build": {
+      "mode": "release",
+      "compiler": "clang++",
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+    },
+    "system": {
+      "kernel": "6.18.33.2-microsoft-standard-WSL2",
+      "platform": "x86_64",
+      "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+      "logical_cpus": 8,
+      "glibc": "glibc 2.43",
+      "python": "3.14.4"
+    },
+    "environment": {
+      "wsl": "WSL2"
+    },
+    "filesystem": {
+      "input": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      },
+      "output": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      }
+    },
+    "tools": {
+      "gnu_grep": "grep (GNU grep) 3.12",
+      "ripgrep": "ripgrep 15.1.0"
+    }
+  },
+  "kind": "cli",
+  "params": {
+    "bytes": 1073741824,
+    "iters": 5,
+    "warmup": 1
+  },
+  "rows": [
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_qz9__d_s",
+      "pattern": "qz9",
+      "bytes": 1073741848,
+      "s_min": 0.541830228,
+      "s_med": 0.566989005,
+      "s_max": 0.582893445,
+      "gbps_med": 1.8937613225850825,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d3747bd10fc12cdab8017b998a20cd6d",
+      "output_bytes": 1177,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_qz9__d_s",
+      "pattern": "qz9",
+      "bytes": 1073741848,
+      "s_min": 0.118842255,
+      "s_med": 0.123901505,
+      "s_max": 0.126893757,
+      "gbps_med": 8.666092054329768,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d3747bd10fc12cdab8017b998a20cd6d",
+      "output_bytes": 1177,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_qz9__d_s",
+      "pattern": "qz9",
+      "bytes": 1073741848,
+      "s_min": 0.124461633,
+      "s_med": 0.124854723,
+      "s_max": 0.130859154,
+      "gbps_med": 8.599929759965908,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d3747bd10fc12cdab8017b998a20cd6d",
+      "output_bytes": 1177,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741899,
+      "s_min": 2.420128114,
+      "s_med": 2.534140696,
+      "s_max": 2.76238427,
+      "gbps_med": 0.4237104517104523,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "351b9c84c9ffa417f0c11e5f2ff0d125",
+      "output_bytes": 900679193,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741899,
+      "s_min": 2.205678119,
+      "s_med": 2.567193082,
+      "s_max": 2.680437971,
+      "gbps_med": 0.4182552167690829,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "351b9c84c9ffa417f0c11e5f2ff0d125",
+      "output_bytes": 900679193,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741899,
+      "s_min": 1.739032297,
+      "s_med": 1.813495687,
+      "s_max": 1.931481349,
+      "gbps_med": 0.5920840654306999,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "351b9c84c9ffa417f0c11e5f2ff0d125",
+      "output_bytes": 900679193,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_the__d_all",
+      "pattern": "the",
+      "bytes": 1073741837,
+      "s_min": 2.5702422,
+      "s_med": 2.66050905,
+      "s_max": 2.990822052,
+      "gbps_med": 0.403585109774387,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "2b1d586d6266c9a686ad548f15291107",
+      "output_bytes": 1073741837,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_the__d_all",
+      "pattern": "the",
+      "bytes": 1073741837,
+      "s_min": 2.232330111,
+      "s_med": 2.321444294,
+      "s_max": 2.337724282,
+      "gbps_med": 0.46253181253377085,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "2b1d586d6266c9a686ad548f15291107",
+      "output_bytes": 1073741837,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_the__d_all",
+      "pattern": "the",
+      "bytes": 1073741837,
+      "s_min": 1.799822984,
+      "s_med": 1.954282879,
+      "s_max": 2.038535149,
+      "gbps_med": 0.5494300996739173,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "2b1d586d6266c9a686ad548f15291107",
+      "output_bytes": 1073741837,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_1b_e__d_0",
+      "pattern": "e",
+      "bytes": 1073741878,
+      "s_min": 2.117495014,
+      "s_med": 2.194452484,
+      "s_max": 2.239367896,
+      "gbps_med": 0.4892983037130095,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f5987e45a91c1dd052f6503d748f15af",
+      "output_bytes": 1070646510,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_1b_e__d_0",
+      "pattern": "e",
+      "bytes": 1073741878,
+      "s_min": 1.871254967,
+      "s_med": 1.96174901,
+      "s_max": 2.20998155,
+      "gbps_med": 0.5473390696396988,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f5987e45a91c1dd052f6503d748f15af",
+      "output_bytes": 1070646510,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_1b_e__d_0",
+      "pattern": "e",
+      "bytes": 1073741878,
+      "s_min": 1.709639415,
+      "s_med": 1.898477888,
+      "s_max": 1.976568142,
+      "gbps_med": 0.5655803972155614,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f5987e45a91c1dd052f6503d748f15af",
+      "output_bytes": 1070646510,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "normal__p_16b__d_s",
+      "pattern": "QuiCk_br0wn_f0x!",
+      "bytes": 1073741831,
+      "s_min": 0.533469322,
+      "s_med": 0.538939587,
+      "s_max": 0.557969398,
+      "gbps_med": 1.9923231785161106,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "0ad8f22bdde696c5b577ef33b9733149",
+      "output_bytes": 1146,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "normal__p_16b__d_s",
+      "pattern": "QuiCk_br0wn_f0x!",
+      "bytes": 1073741831,
+      "s_min": 0.117374026,
+      "s_med": 0.12138675,
+      "s_max": 0.131582298,
+      "gbps_med": 8.845626322477536,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "0ad8f22bdde696c5b577ef33b9733149",
+      "output_bytes": 1146,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "normal__p_16b__d_s",
+      "pattern": "QuiCk_br0wn_f0x!",
+      "bytes": 1073741831,
+      "s_min": 0.124984812,
+      "s_med": 0.125687699,
+      "s_max": 0.13025301,
+      "gbps_med": 8.542934905666463,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "0ad8f22bdde696c5b577ef33b9733149",
+      "output_bytes": 1146,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "long__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073742110,
+      "s_min": 1.105091,
+      "s_med": 1.255911398,
+      "s_max": 1.427435822,
+      "gbps_med": 0.8549505257376444,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "452350eed033c7723fd98520a8a1e187",
+      "output_bytes": 1073742110,
+      "outputs_equal": true
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "long__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073742110,
+      "s_min": 0.852051785,
+      "s_med": 0.889323903,
+      "s_max": 1.115515511,
+      "gbps_med": 1.2073689983794351,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "452350eed033c7723fd98520a8a1e187",
+      "output_bytes": 1073742110,
+      "outputs_equal": true
+    },
+    {
+      "tool": "rg",
+      "workload": "long__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073742110,
+      "s_min": 0.773040306,
+      "s_med": 0.846330057,
+      "s_max": 1.012547009,
+      "gbps_med": 1.2687037416656466,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "452350eed033c7723fd98520a8a1e187",
+      "output_bytes": 1073742110,
+      "outputs_equal": true
+    },
+    {
+      "tool": "sluice-grep",
+      "workload": "binary__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741867,
+      "s_min": 0.617228249,
+      "s_med": 0.65712958,
+      "s_max": 0.707430963,
+      "gbps_med": 1.6339880286624748,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "f06333832d66baf8a3e08e10c7c6cf31",
+      "output_bytes": 4876,
+      "outputs_equal": false
+    },
+    {
+      "tool": "gnugrep",
+      "workload": "binary__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741867,
+      "s_min": 0.001475732,
+      "s_med": 0.001616904,
+      "s_max": 0.001820487,
+      "gbps_med": 664.0727383938688,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "output_bytes": 0,
+      "outputs_equal": false
+    },
+    {
+      "tool": "rg",
+      "workload": "binary__p_the__d_s",
+      "pattern": "the",
+      "bytes": 1073741867,
+      "s_min": 0.002184997,
+      "s_med": 0.002259766,
+      "s_max": 0.002498394,
+      "gbps_med": 475.1562183872136,
+      "exit_codes": [
+        0
+      ],
+      "tool_error": false,
+      "output_md5": "6ae123c2e41cdb43d814f277f5c9ea17",
+      "output_bytes": 56,
+      "outputs_equal": false
+    }
+  ],
+  "note": "V2 CLI matrix, clean tree at 8649615, same session/host as the V1/V2 ladder artifacts."
+}
