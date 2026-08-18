@@ -102,7 +102,9 @@ lines, binary bytes), cache state (page-cache hot in-process).
 
 - wall time: min / median / max over ≥5 iterations after ≥1 warmup
   (median is the true mathematical median, including the even-iteration
-  case; raw per-iteration samples are recorded in every artifact);
+  case; timing-loop artifacts — ladder and CLI — record the raw
+  per-iteration samples; `perf` captures one run's counters plus the
+  verbatim perf output);
 - throughput (GB/s) against bytes scanned;
 - `perf stat` counters where available: cycles, instructions, branches,
   branch-misses, cache-misses, context-switches, cpu-migrations,
@@ -221,28 +223,29 @@ misses so huge-line work stays linear), and counts newlines with a
 borrow-free SWAR pass fused into the cursor. Dense/common-anchor patterns
 retain the emit cost of one `std::string` per matched line (API-bound) and
 remain an APP follow-up (Boyer-Moore/kwset-class skip or SIMD candidate
-filters, PF-004) rather than proof of runtime overhead — GNU grep/rg still
-beat us on those rows (see CLI table), which is the documented
-algorithm-class gap.
+filters, PF-004) rather than proof of runtime overhead — ripgrep still
+beats us on those rows while GNU grep reaches parity exactly where
+output materialization dominates (see CLI table); that is the documented
+algorithm-class gap, not runtime evidence.
 
 ### Ladder attribution (256 MiB, sparse qz9 row, GB/s medians)
 
 | stage | V1 | V2 |
 |---|---|---|
-| L0_memchr_nl | 7.3 | 7.2 |
+| L0_memchr_nl | 7.2 | 7.2 |
 | L1_line_std / L1_chunk_anchor | 1.99 | 25.1 |
 | L2_matcher | 1.89 | 8.4 |
 | L3_pread | 1.66 | 5.8 |
 | L4_sluice | 1.55 | 4.5 |
 
-**Algorithm (L2 − L1)** collapsed with the V2 scan (V1: L2 ≈ L1; V2: L2 is
-~3.4 GB/s below the raw anchor scan — the residual is line-assembly and
-event cost, APP). **I/O (L3 − L2)** ≈ tmpfs page-cache `pread` copy
+**Algorithm (L2 − L1)** collapsed with the V2 scan (V1: L2 ≈ L1; V2: L2
+runs at ~1/3 of the raw anchor scan, 8.4 vs 25.1 GB/s — the residual is
+line-assembly and event cost, APP). **I/O (L3 − L2)** ≈ tmpfs page-cache `pread` copy
 (~10 GB/s ceiling on this host, APP/PLATFORM). **Sluice core increment
 (L4 − L3)** — the aggregate measure, wording per the ladder section
 above — is **45–60 ms/GiB on sparse/binary rows** at 1 MiB chunks, and
-larger (≈ 87–104 ms/GiB on dense-anchor rows, ≈ 132 ms/GiB on short
-lines) where more per-line events flow through the engine. The increment
+larger (≈ 78–104 ms/GiB on dense-anchor rows including `1b_e`, ≈ 132
+ms/GiB on short lines) where more per-line events flow through the engine. The increment
 is therefore NOT a workload-independent constant; characterizing what it
 scales with (requests at fixed bytes vs match-event count) is precisely
 the pending Core Cost Decomposition / scaling-signature work (roadmap
@@ -251,13 +254,16 @@ decompositions of this number are hypotheses, not findings.
 
 **Recorded anomaly (not hidden):** `normal__p_qz9__d_0` shows an
 anomalously slow L3 in both the V1 and V2 same-session artifacts
-(2.55 GB/s vs ~6 GB/s for the other sparse rows in V2), which makes its
+(2.55 GB/s vs 2.5–6.1 GB/s across the other rows' L3 in V2 — `rep` and
+binary sit at the low end of that spread), which makes its
 L4 − L3 negative (−189 ms/GiB). The row is retained in the artifacts and
 excluded from increment claims pending investigation.
 
 **Fresh-process effect:** a fresh process's FIRST engine call measures
 ~2× the in-process steady state on this host (fresh-process/runtime-cold;
-page-cache state separately recorded — reproduced on ext4 too). Sluice
+page-cache state separately recorded — also observed on an ext4 run
+during the round-1 investigation, a development-log observation, not a
+canonical artifact; the committed artifacts record tmpfs only). Sluice
 symbols account for <2% of sampled userspace symbols in that profile, but
 this alone does not exclude Core overhead mediated through libc, kernel
 scheduling, synchronization, or backend handoff; the classification as

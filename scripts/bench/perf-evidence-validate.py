@@ -158,6 +158,11 @@ def check_ladder(art: dict) -> list[str]:
             continue
         if bytes_ < 1:
             errs.append(f"{where}: bytes < 1")
+        # A row may legitimately come from a filtered run, but it must not
+        # contradict the artifact-level iteration count.
+        if isinstance(params.get("iters"), int) and iters != params["iters"]:
+            errs.append(f"{where}: row iters {iters} != params.iters "
+                        f"{params['iters']}")
         if not (ns_min <= ns_med <= ns_max):
             errs.append(f"{where}: ns_min<=ns_med<=ns_max violated")
         if len(samples) != iters:
@@ -193,6 +198,15 @@ def check_cli(art: dict) -> list[str]:
     saw_outputs_equal = False
     for i, r in enumerate(rows):
         where = f"rows[{i}] ({r.get('tool')}/{r.get('workload')})"
+        try:
+            s_min, s_med, s_max = (float(r["s_min"]), float(r["s_med"]),
+                                   float(r["s_max"]))
+            samples = [float(s) for s in r["s_samples"]]
+            bytes_ = int(r["bytes"])
+        except (KeyError, TypeError, ValueError) as e:
+            errs.append(f"{where}: malformed numeric field ({e})")
+            samples = None
+            s_min = s_med = s_max = bytes_ = 0
         rcs = r.get("exit_codes")
         if not isinstance(rcs, list) or not rcs:
             errs.append(f"{where}: exit_codes missing")
@@ -213,6 +227,29 @@ def check_cli(art: dict) -> list[str]:
             saw_outputs_equal = True
             if not isinstance(r["outputs_equal"], bool):
                 errs.append(f"{where}: outputs_equal not bool")
+        # Timing statistics must be present, ordered, and consistent with
+        # the raw per-iteration samples (same class of check as the ladder;
+        # a hand-typed CLI table must not pass).
+        if samples is not None:
+            if not (s_min <= s_med <= s_max):
+                errs.append(f"{where}: s_min<=s_med<=s_max violated")
+            if isinstance(params.get("iters"), int) and \
+                    len(samples) != params["iters"]:
+                errs.append(f"{where}: {len(samples)} samples != params.iters "
+                            f"{params['iters']}")
+                continue
+            if abs(min(samples) - s_min) > 1e-12 or \
+                    abs(max(samples) - s_max) > 1e-12:
+                errs.append(f"{where}: s_min/s_max do not match raw samples")
+            srt = sorted(samples)
+            n = len(srt)
+            med = srt[n // 2] if n % 2 == 1 else (srt[n // 2 - 1] + srt[n // 2]) / 2
+            if abs(med - s_med) > 1e-9:
+                errs.append(f"{where}: s_med {s_med} != recomputed median {med}")
+            gbps = float(r.get("gbps_med", 0.0))
+            if s_med > 0 and not math.isclose(gbps, bytes_ / 1e9 / s_med,
+                                              rel_tol=1e-3, abs_tol=1e-3):
+                errs.append(f"{where}: gbps_med inconsistent with bytes/s_med")
     if not saw_outputs_equal:
         errs.append("rows: no outputs_equal differential check recorded")
     return errs
@@ -228,6 +265,12 @@ def check_perf(art: dict) -> list[str]:
             errs.append(f"counters.{k}: non-numeric {v!r}")
     if not isinstance(art.get("cmd"), list) or not art.get("cmd"):
         errs.append("cmd: measured command missing")
+    if not isinstance(art.get("raw"), str) or not art.get("raw"):
+        errs.append("raw: verbatim perf output missing (modifier state like "
+                    "':u' user-space-only counters is only visible there)")
+    if "derived" in art and not isinstance(art.get("params"), dict):
+        errs.append("derived: per-request ratios present but the divisor "
+                    "(params.requests) is not recorded")
     return errs
 
 
@@ -299,21 +342,42 @@ class ValidatorSelfTest(unittest.TestCase):
         art = _valid_ladder()
         art["kind"] = "cli"
         art["params"] = {"bytes": 1 << 30, "iters": 5, "warmup": 1}
+        samples = [1.0, 1.2, 1.1, 1.3, 1.15]
+        med = sorted(samples)[2]
         art["rows"] = [{"tool": "sluice-grep", "workload": "w",
-                        "pattern": "p", "bytes": 1 << 30, "s_min": 1.0,
-                        "s_med": 1.0, "s_max": 1.0, "gbps_med": 1.0,
+                        "pattern": "p", "bytes": 1 << 30,
+                        "s_min": min(samples), "s_med": med,
+                        "s_max": max(samples), "s_samples": samples,
+                        "gbps_med": (1 << 30) / 1e9 / med,
                         "exit_codes": [0], "tool_error": False,
                         "output_md5": "b" * 32, "output_bytes": 10,
                         "outputs_equal": True}]
         art.pop("derived")
         self.assertEqual(validate_artifact(art), [])
         art["kind"] = "perf"
-        art["rows"] = None
         art.pop("params")
         art["cmd"] = ["bin"]
         art["counters"] = {"cycles": 1.0}
+        art["raw"] = "1,,cycles:u"
         art.pop("rows")
         self.assertEqual(validate_artifact(art), [])
+
+    def _valid_cli(self):
+        art = _valid_ladder()
+        art["kind"] = "cli"
+        art["params"] = {"bytes": 1 << 30, "iters": 5, "warmup": 1}
+        samples = [1.0, 1.2, 1.1, 1.3, 1.15]
+        med = sorted(samples)[2]
+        art["rows"] = [{"tool": "gnugrep", "workload": "w", "pattern": "p",
+                        "bytes": 1 << 30, "s_min": min(samples),
+                        "s_med": med, "s_max": max(samples),
+                        "s_samples": samples,
+                        "gbps_med": (1 << 30) / 1e9 / med,
+                        "exit_codes": [0], "tool_error": False,
+                        "output_md5": "b" * 32, "output_bytes": 0,
+                        "outputs_equal": True}]
+        art.pop("derived")
+        return art
 
     def test_detectors_fire(self):
         # dirty tree without provenance note
@@ -349,25 +413,60 @@ class ValidatorSelfTest(unittest.TestCase):
         art["rows"][0]["gbps_med"] = 0.001
         self.assert_invalid(art, "gbps_med inconsistent")
         # tool-error exit code in evidence
-        art = _valid_ladder()
-        art["kind"] = "cli"
-        art["params"] = {"bytes": 1, "iters": 5, "warmup": 1}
-        art["rows"] = [{"tool": "gnugrep", "workload": "w", "pattern": "p",
-                        "bytes": 1, "s_min": 1.0, "s_med": 1.0, "s_max": 1.0,
-                        "gbps_med": 1.0, "exit_codes": [0, 2],
-                        "tool_error": True, "output_md5": "b" * 32,
-                        "output_bytes": 0, "outputs_equal": False}]
-        art.pop("derived")
+        art = self._valid_cli()
+        art["rows"][0]["exit_codes"] = [0, 2]
+        art["rows"][0]["tool_error"] = True
         self.assert_invalid(art, "tool-error exit codes")
+        # CLI timing fields must exist, be ordered, and match samples —
+        # a hand-typed table with no samples or broken ordering must fail
+        art = self._valid_cli()
+        del art["rows"][0]["s_samples"]
+        self.assert_invalid(art, "malformed numeric field")
+        art = self._valid_cli()
+        art["rows"][0]["s_min"] = 9.0
+        self.assert_invalid(art, "s_min<=s_med<=s_max violated")
+        art = self._valid_cli()
+        art["rows"][0]["s_med"] = 1.05  # not the median of the samples
+        self.assert_invalid(art, "recomputed median")
+        art = self._valid_cli()
+        art["rows"][0]["gbps_med"] = 0.001
+        self.assert_invalid(art, "gbps_med inconsistent")
+        # row iters contradicting the artifact-level params (filtered run
+        # posing as full) — ladder variant
+        art = _valid_ladder()
+        art["rows"][0]["iters"] = 3
+        art["rows"][0]["ns_samples"] = [1, 2, 3]
+        self.assert_invalid(art, "row iters 3 != params.iters 5")
         # perf artifact with no counters
         art = _valid_ladder()
         art["kind"] = "perf"
         art["cmd"] = ["bin"]
         art["counters"] = {}
+        art["raw"] = "x"
         art.pop("rows")
         art.pop("params")
         art.pop("derived")
         self.assert_invalid(art, "counters: empty")
+        # perf artifact without the verbatim raw output (modifier state
+        # like ':u' is only visible there)
+        art = _valid_ladder()
+        art["kind"] = "perf"
+        art["cmd"] = ["bin"]
+        art["counters"] = {"cycles": 1.0}
+        art.pop("rows")
+        art.pop("params")
+        art.pop("derived")
+        self.assert_invalid(art, "raw: verbatim perf output missing")
+        # derived per-request ratios without the recorded divisor
+        art = _valid_ladder()
+        art["kind"] = "perf"
+        art["cmd"] = ["bin"]
+        art["counters"] = {"cycles": 1.0}
+        art["raw"] = "1,,cycles:u"
+        art["derived"] = {"cycles_per_request": 0.5}
+        art.pop("rows")
+        art.pop("params")
+        self.assert_invalid(art, "divisor")
 
     def test_validate_path_reports_filename(self):
         with tempfile.TemporaryDirectory() as d:

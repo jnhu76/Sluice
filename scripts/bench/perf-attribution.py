@@ -144,7 +144,9 @@ def parse_mountinfo(text: str, path: str) -> dict | None:
 
     Returns {"mount_point":..., "type":...} or None. Field layout (see
     proc_pid_mountinfo(5)): fields 0..3 ids/root, field 4 mount point; after
-    the " - " separator the first field is the filesystem type.
+    the " - " separator the first field is the filesystem type. Octal
+    escapes (\\040 space, \\011 tab, \\012 newline, \\134 backslash) are
+    decoded before matching.
     """
     best = None
     norm = os.path.normpath(path)
@@ -155,7 +157,8 @@ def parse_mountinfo(text: str, path: str) -> dict | None:
         fields = left.split()
         if len(fields) < 5 or not right.split():
             continue
-        mp = fields[4].replace("\\040", " ").replace("\\011", "\t")
+        mp = (fields[4].replace("\\040", " ").replace("\\011", "\t")
+                      .replace("\\012", "\n").replace("\\134", "\\"))
         fstype = right.split()[0]
         if norm == mp or norm.startswith(mp.rstrip("/") + "/"):
             if best is None or len(mp) > len(best["mount_point"]):
@@ -303,6 +306,10 @@ def cmd_ladder(args) -> dict:
         "params": {
             "bytes": args.bytes, "iters": args.iters,
             "warmup": args.warmup, "buffer_size": args.buffer_size,
+            # Recorded so a filtered (subset) artifact can never pose as a
+            # full-matrix run.
+            "stages": args.stages or None,
+            "workloads": args.workloads or None,
         },
         "rows": rows,
         "derived": ladder_derived(rows),
@@ -390,6 +397,7 @@ def cmd_cli(args) -> dict:
                     "bytes": size,
                     "s_min": min(times), "s_med": median(times),
                     "s_max": max(times),
+                    "s_samples": times,
                     "gbps_med": size / 1e9 / median(times),
                     "exit_codes": classification["exit_codes"],
                     "tool_error": classification["tool_error"],
@@ -451,14 +459,26 @@ def cmd_perf(args) -> dict:
     if perf is None:
         sys.exit("perf not found in PATH")
     cmd = [perf, "stat", "-x,", "-e", ",".join(PERF_EVENTS), "--"] + args.cmd
-    out = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    # LC_ALL=C pins the CSV number format: a comma-decimal locale would make
+    # perf emit "596,24" for 596.24, indistinguishable from thousands
+    # separators at parse time. perf propagates the CHILD's exit status, and
+    # a no-match grep legitimately exits 1 — record it instead of raising.
+    env = dict(os.environ, LC_ALL="C")
+    out = subprocess.run(cmd, capture_output=True, text=True, env=env)
     counters = parse_perf_stat(out.stderr)
-    result = {"kind": "perf", "cmd": args.cmd, "counters": counters,
+    result = {"kind": "perf", "cmd": args.cmd,
+              "child_exit_code": out.returncode,
+              "counters": counters,
               "raw": out.stderr.strip()}
+    if out.returncode not in (0,) and out.returncode not in VALID_DATA_EXIT_CODES:
+        print(f"WARNING: measured command exited {out.returncode} (tool "
+              f"error); counters may not be valid evidence", file=sys.stderr)
     # Derived normalized ratios (ns/request, cycles/request, ...) exist only
-    # when the caller states the request count; PMU counters are diagnostic
-    # evidence, not optimization authorization.
+    # when the caller states the request count; the divisor is recorded so
+    # the ratios stay recomputable from the artifact. PMU counters are
+    # diagnostic evidence, not optimization authorization.
     if args.requests and args.requests > 0:
+        result["params"] = {"requests": args.requests}
         result["derived"] = {f"{k}_per_request": v / args.requests
                              for k, v in counters.items()}
     return result
@@ -472,11 +492,15 @@ def cmd_perf(args) -> dict:
 _COMPAT_FIELDS = [
     ("system.cpu", ("env", "system", "cpu")),
     ("system.kernel", ("env", "system", "kernel")),
+    ("system.logical_cpus", ("env", "system", "logical_cpus")),
+    ("system.glibc", ("env", "system", "glibc")),
     ("build.mode", ("env", "build", "mode")),
     ("build.compiler_version", ("env", "build", "compiler_version")),
     ("environment.wsl", ("env", "environment", "wsl")),
     ("filesystem.input.type", ("env", "filesystem", "input", "type")),
+    ("filesystem.output.type", ("env", "filesystem", "output", "type")),
     ("tools.gnu_grep", ("env", "tools", "gnu_grep")),
+    ("tools.ripgrep", ("env", "tools", "ripgrep")),
 ]
 
 
@@ -552,6 +576,20 @@ def cmd_compare(args) -> dict:
 # ---------------------------------------------------------------------------
 # self-test (hermetic; exercises this file's pure logic without building)
 # ---------------------------------------------------------------------------
+
+
+def _positive_int(s: str) -> int:
+    v = int(s)
+    if v < 1:
+        raise argparse.ArgumentTypeError(f"must be >= 1, got {v}")
+    return v
+
+
+def _nonneg_int(s: str) -> int:
+    v = int(s)
+    if v < 0:
+        raise argparse.ArgumentTypeError(f"must be >= 0, got {v}")
+    return v
 
 
 class RunnerSelfTest(unittest.TestCase):
@@ -645,8 +683,8 @@ def main() -> int:
 
     p = sub.add_parser("ladder", help="run grep_attribution_bench L0..L4")
     p.add_argument("--bytes", type=int, default=256 << 20)
-    p.add_argument("--iters", type=int, default=5)
-    p.add_argument("--warmup", type=int, default=1)
+    p.add_argument("--iters", type=_positive_int, default=5)
+    p.add_argument("--warmup", type=_nonneg_int, default=1)
     p.add_argument("--buffer-size", type=int, default=1 << 20)
     p.add_argument("--stages", default="")
     p.add_argument("--workloads", default="")
@@ -656,8 +694,8 @@ def main() -> int:
 
     p = sub.add_parser("cli", help="L6 CLI matrix vs GNU grep / rg")
     p.add_argument("--bytes", type=int, default=1 << 30)
-    p.add_argument("--iters", type=int, default=5)
-    p.add_argument("--warmup", type=int, default=1)
+    p.add_argument("--iters", type=_positive_int, default=5)
+    p.add_argument("--warmup", type=_nonneg_int, default=1)
     p.add_argument("--output", default="")
     p.add_argument("--keep-files", action="store_true")
     p.add_argument("--note", default="",

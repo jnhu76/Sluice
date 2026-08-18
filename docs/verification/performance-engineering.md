@@ -298,7 +298,8 @@ order:
 > Everything optional should be composable when the abstraction tax and
 > engineering economics justify it. Composable mechanisms are NOT a dynamic
 > plugin framework — `AsyncBackend` and the experimental io_uring backend
-> are the existing examples of composition; a generic `.so/.dll` plugin
+> are the existing examples of composition; a generic shared-object
+> (`.so` / `.dll`) plugin
 > loader remains a near-term non-goal (see the roadmap's explicit
 > non-goals).
 
@@ -319,7 +320,9 @@ runner-produced JSON (never hand-created; see the artifact README for
 provenance). The runner embeds the full environment fingerprint
 (git SHA + dirty, build, kernel/CPU/glibc, WSL state, filesystem mounts
 via `/proc/self/mountinfo`, tool versions), workload parameters, warmups,
-iterations, raw per-iteration samples, and derived statistics.
+iterations, raw per-iteration samples (timing-loop artifacts — ladder and
+CLI; `perf` captures a single run's counters plus the verbatim perf
+output), and derived statistics.
 
 `scripts/bench/perf-evidence-validate.py` structurally validates every
 committed artifact (fail-closed, self-tested) and runs in the pre-push gate
