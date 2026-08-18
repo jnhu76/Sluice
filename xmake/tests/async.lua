@@ -506,6 +506,18 @@ do
             add_files(R .. "tests/sluice_grep_matcher_test.cpp",
                       app_dir .. "/matcher.cpp")
             add_tests("sluice_grep_matcher_test")
+        -- Differential oracle: optimized matcher vs the frozen V1 reference
+        -- (per-line std::search) on randomized inputs — the semantics-freeze
+        -- proof for the performance-attribution optimization round.
+        target("sluice_grep_matcher_differential_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(R .. "tests/sluice_grep_matcher_differential_test.cpp",
+                      app_dir .. "/matcher.cpp")
+            add_tests("sluice_grep_matcher_differential_test")
         target("sluice_grep_cli_parse_test")
             set_kind("binary")
             set_default(false)
