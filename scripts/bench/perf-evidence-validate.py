@@ -8,6 +8,12 @@ speeds (no "must exceed X GB/s" thresholds on shared runners); it checks
 that an artifact records what a claim needs to be attributable and
 reproducible:
 
+  - artifact schema version (the runner and validator evolve together; a
+    stale-shape artifact fails loudly instead of silently);
+  - executable provenance: path + sha256 + size of the binary that actually
+    ran (the git SHA says what was checked out; the hash says what was
+    executed — a stale binary under a fresh checkout cannot pose as
+    evidence for that checkout);
   - baseline/candidate git SHA + dirty state (+ a provenance note when the
     tree was dirty, so a dirty measurement can never masquerade as clean);
   - build mode / compiler / environment fingerprint (CPU, kernel, WSL,
@@ -15,7 +21,15 @@ reproducible:
   - workload parameters, iterations, warmups;
   - raw per-iteration samples;
   - derived statistics consistent with the raw samples (min <= med <= max,
-    recomputed median within rounding tolerance).
+    recomputed median within rounding tolerance);
+  - CLI rows are semantically comparable evidence: outputs_equal must be
+    true and every competitor on the same workload must have produced the
+    same output hash (timing from runs with different output semantics is
+    not a speed comparison; deliberate semantics studies must mark rows
+    non_comparable, which excludes them from ratio evidence);
+  - perf artifacts record the measured command's exit status plus an
+    explicit exit_semantics classifier, and the status must be valid data
+    under that classifier.
 
 Usage:
   perf-evidence-validate.py                 # validate committed artifacts
@@ -41,10 +55,15 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE_DIR = REPO / "docs" / "results" / "performance-attribution"
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 MD5_RE = re.compile(r"^[0-9a-f]{32}$")
 VALID_DATA_EXIT_CODES = {0, 1}  # grep family: 0=match 1=no-match 2=error
 HEX40_TOLERANCE_MEDIAN = 1.0  # ns; %.1f rounding + mean-of-middle pair
 
+REQUIRED_SCHEMA = 2
+# Measured-command exit classifiers (runner --exit-semantics): which exit
+# codes still count as measurement data.
+EXIT_SEMANTICS = {"grep-family": {0, 1}, "strict-zero": {0}}
 
 _MISSING = object()
 
@@ -58,6 +77,26 @@ def _dig(obj, path, default=None):
     return cur
 
 
+def _check_binary_block(art: dict, key: str) -> list[str]:
+    """Validate an executable-provenance block (path/sha256/size/mtime)."""
+    errs = []
+    binp = art.get(key)
+    if not isinstance(binp, dict):
+        return [f"{key}: missing executable provenance "
+                f"(path/sha256/size/mtime)"]
+    if not isinstance(binp.get("path"), str) or not binp.get("path"):
+        errs.append(f"{key}.path: missing/empty")
+    sha = binp.get("sha256")
+    if not isinstance(sha, str) or not SHA256_RE.match(sha):
+        errs.append(f"{key}.sha256: expected 64-hex digest, got {sha!r}")
+    size = binp.get("size")
+    if not isinstance(size, int) or size < 1:
+        errs.append(f"{key}.size: expected positive int, got {size!r}")
+    if not isinstance(binp.get("mtime"), (int, float)):
+        errs.append(f"{key}.mtime: missing")
+    return errs
+
+
 def check_common(art: dict) -> list[str]:
     errs = []
     if not isinstance(art, dict):
@@ -65,6 +104,17 @@ def check_common(art: dict) -> list[str]:
     kind = art.get("kind")
     if kind not in ("ladder", "cli", "perf"):
         errs.append(f"kind: expected ladder|cli|perf, got {kind!r}")
+    if art.get("schema") != REQUIRED_SCHEMA:
+        errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
+                    f"{art.get('schema')!r} (re-measure with the current "
+                    f"runner so the artifact shape matches the validator)")
+    # The measured executable is part of the common contract for every
+    # kind: ladder/cli/perf all bind the binary that actually ran.
+    errs += _check_binary_block(art, "binary")
+    # Optional second provenance block (e.g. the CLI workload generator);
+    # validated with the same rules when present.
+    if "workload_gen" in art:
+        errs += _check_binary_block(art, "workload_gen")
     # The runner records the measurement timestamp inside the environment
     # fingerprint (it identifies when the environment was probed).
     if not isinstance(_dig(art, ("env", "time")), str) or \
@@ -139,9 +189,13 @@ def check_ladder(art: dict) -> list[str]:
     params = art.get("params")
     if not isinstance(params, dict):
         return ["params: missing (bytes/iters/warmup/buffer_size)"]
-    for k in ("bytes", "iters", "warmup"):
+    for k in ("bytes", "iters"):
         if not isinstance(params.get(k), int) or params.get(k, 0) < 1:
             errs.append(f"params.{k}: expected int >= 1")
+    # The runner allows a zero warmup (measurement only after warmup runs
+    # is not required); it must still be a non-negative integer.
+    if not isinstance(params.get("warmup"), int) or params.get("warmup", -1) < 0:
+        errs.append("params.warmup: expected int >= 0")
     rows = art.get("rows")
     if not isinstance(rows, list) or not rows:
         return errs + ["rows: empty"]
@@ -181,6 +235,13 @@ def check_ladder(art: dict) -> list[str]:
             errs.append(f"{where}: gbps_med inconsistent with bytes/ns_med")
     if not isinstance(art.get("derived"), list):
         errs.append("derived: missing core-increment metrics")
+    # A full-matrix run (no stage/workload filter) must carry its derived
+    # core-increment metrics; a filtered run may legitimately have none.
+    if params.get("stages") is None and params.get("workloads") is None:
+        d = art.get("derived")
+        if not isinstance(d, list) or not d:
+            errs.append("derived: full-matrix run has no core-increment "
+                        "metrics")
     return errs
 
 
@@ -189,9 +250,11 @@ def check_cli(art: dict) -> list[str]:
     params = art.get("params")
     if not isinstance(params, dict):
         return ["params: missing (bytes/iters/warmup)"]
-    for k in ("bytes", "iters", "warmup"):
+    for k in ("bytes", "iters"):
         if not isinstance(params.get(k), int) or params.get(k, 0) < 1:
             errs.append(f"params.{k}: expected int >= 1")
+    if not isinstance(params.get("warmup"), int) or params.get("warmup", -1) < 0:
+        errs.append("params.warmup: expected int >= 0")
     rows = art.get("rows")
     if not isinstance(rows, list) or not rows:
         return errs + ["rows: empty"]
@@ -225,8 +288,15 @@ def check_cli(art: dict) -> list[str]:
             errs.append(f"{where}: output_bytes missing/negative")
         if "outputs_equal" in r:
             saw_outputs_equal = True
-            if not isinstance(r["outputs_equal"], bool):
-                errs.append(f"{where}: outputs_equal not bool")
+            # Fail closed: a false outputs_equal means the competitors did
+            # not share one output contract (e.g. a binary-file
+            # short-circuit), so their timings are not comparable evidence.
+            # Only an explicitly marked non_comparable row may carry false,
+            # and such rows are excluded from ratio claims by policy.
+            if r["outputs_equal"] is not True and r.get("non_comparable") is not True:
+                errs.append(f"{where}: outputs_equal is false — timing is "
+                            f"not valid comparative evidence (deliberate "
+                            f"semantics studies must mark rows non_comparable)")
         # Timing statistics must be present, ordered, and consistent with
         # the raw per-iteration samples (same class of check as the ladder;
         # a hand-typed CLI table must not pass).
@@ -252,6 +322,18 @@ def check_cli(art: dict) -> list[str]:
                 errs.append(f"{where}: gbps_med inconsistent with bytes/s_med")
     if not saw_outputs_equal:
         errs.append("rows: no outputs_equal differential check recorded")
+    # Group check (independent of the runner's outputs_equal flag): every
+    # competitor on the same workload must have produced the same output
+    # bytes, verified from the raw per-row hashes themselves.
+    by_wl: dict = {}
+    for r in rows:
+        if isinstance(r, dict):
+            by_wl.setdefault(r.get("workload"), set()).add(r.get("output_md5"))
+    for wl, md5s in by_wl.items():
+        if len(md5s) > 1:
+            errs.append(f"rows: workload {wl!r} has {len(md5s)} distinct "
+                        f"output_md5 values — competitor outputs are not "
+                        f"byte-identical")
     return errs
 
 
@@ -268,6 +350,23 @@ def check_perf(art: dict) -> list[str]:
     if not isinstance(art.get("raw"), str) or not art.get("raw"):
         errs.append("raw: verbatim perf output missing (modifier state like "
                     "':u' user-space-only counters is only visible there)")
+    # The measured command's exit status is part of the evidence: perf still
+    # reports partial counters for a child that failed, so the artifact must
+    # record the status AND state how to classify it. Both are enforced
+    # fail-closed (the run that exits 2 is a tool error, not a measurement).
+    rc = art.get("child_exit_code")
+    if not isinstance(rc, int) or isinstance(rc, bool):
+        errs.append("child_exit_code: missing/non-int (perf must record the "
+                    "measured command's exit status)")
+    else:
+        sem = art.get("exit_semantics")
+        allowed = EXIT_SEMANTICS.get(sem) if isinstance(sem, str) else None
+        if allowed is None:
+            errs.append(f"exit_semantics: expected one of "
+                        f"{sorted(EXIT_SEMANTICS)}, got {sem!r}")
+        elif rc not in allowed:
+            errs.append(f"child_exit_code {rc} is invalid data under "
+                        f"exit_semantics {sem!r}")
     if "derived" in art and not isinstance(art.get("params"), dict):
         errs.append("derived: per-request ratios present but the divisor "
                     "(params.requests) is not recorded")
@@ -299,11 +398,18 @@ def validate_path(path: Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _valid_binary() -> dict:
+    return {"path": "/build/bin/grep_attribution_bench",
+            "sha256": "a" * 64, "size": 123456, "mtime": 1755475200.0}
+
+
 def _valid_ladder() -> dict:
     samples = [100, 120, 110, 130, 115]
     med = sorted(samples)[2]
     return {
+        "schema": 2,
         "kind": "ladder",
+        "binary": _valid_binary(),
         "env": {
             "time": "2026-08-18T00:00:00+0000",
             "git": {"sha": "a" * 40, "dirty": False, "branch": "perf/x"},
@@ -318,7 +424,7 @@ def _valid_ladder() -> dict:
             "tools": {"gnu_grep": "grep 3.11", "ripgrep": None},
         },
         "params": {"bytes": 1 << 28, "iters": 5, "warmup": 1,
-                   "buffer_size": 1 << 20},
+                   "buffer_size": 1 << 20, "stages": None, "workloads": None},
         "rows": [{
             "stage": "L4_sluice", "workload": "w", "bytes": 1 << 28,
             "iters": 5, "ns_min": min(samples), "ns_med": float(med),
@@ -358,6 +464,8 @@ class ValidatorSelfTest(unittest.TestCase):
         art.pop("params")
         art["cmd"] = ["bin"]
         art["counters"] = {"cycles": 1.0}
+        art["child_exit_code"] = 0
+        art["exit_semantics"] = "grep-family"
         art["raw"] = "1,,cycles:u"
         art.pop("rows")
         self.assertEqual(validate_artifact(art), [])
@@ -463,10 +571,65 @@ class ValidatorSelfTest(unittest.TestCase):
         art["cmd"] = ["bin"]
         art["counters"] = {"cycles": 1.0}
         art["raw"] = "1,,cycles:u"
+        art["child_exit_code"] = 0
+        art["exit_semantics"] = "grep-family"
         art["derived"] = {"cycles_per_request": 0.5}
         art.pop("rows")
         art.pop("params")
         self.assert_invalid(art, "divisor")
+        # stale/missing schema version
+        art = _valid_ladder()
+        del art["schema"]
+        self.assert_invalid(art, "schema: expected 2")
+        # missing executable provenance (the git-SHA-vs-stale-binary hole)
+        art = _valid_ladder()
+        del art["binary"]
+        self.assert_invalid(art, "binary: missing executable provenance")
+        # malformed binary digest
+        art = _valid_ladder()
+        art["binary"]["sha256"] = "deadbeef"
+        self.assert_invalid(art, "binary.sha256")
+        # outputs_equal false is not comparable evidence (binary-file
+        # short-circuit class), unless explicitly marked non_comparable
+        art = self._valid_cli()
+        art["rows"][0]["outputs_equal"] = False
+        self.assert_invalid(art, "outputs_equal is false")
+        art["rows"][0]["non_comparable"] = True
+        self.assertEqual(validate_artifact(art), [])
+        # group check: diverging output hashes within one workload
+        art = self._valid_cli()
+        row2 = dict(art["rows"][0])
+        row2["tool"] = "gnugrep"
+        row2["output_md5"] = "c" * 32
+        art["rows"].append(row2)
+        self.assert_invalid(art, "distinct output_md5")
+        # perf artifact without the measured command's exit status
+        art = _valid_ladder()
+        art["kind"] = "perf"
+        art["cmd"] = ["bin"]
+        art["counters"] = {"cycles": 1.0}
+        art["raw"] = "x"
+        art.pop("rows")
+        art.pop("params")
+        art.pop("derived")
+        self.assert_invalid(art, "child_exit_code: missing/non-int")
+        # exit status invalid under the declared semantics (2 = tool error)
+        art["child_exit_code"] = 2
+        art["exit_semantics"] = "grep-family"
+        self.assert_invalid(art, "invalid data under")
+        # unknown/missing semantics classifier
+        art["exit_semantics"] = "whatever"
+        self.assert_invalid(art, "exit_semantics")
+        # warmup must allow 0 (runner contract) but reject negatives
+        art = _valid_ladder()
+        art["params"]["warmup"] = 0
+        self.assertEqual(validate_artifact(art), [])
+        art["params"]["warmup"] = -1
+        self.assert_invalid(art, "params.warmup")
+        # full-matrix ladder without derived core-increment metrics
+        art = _valid_ladder()
+        art["derived"] = []
+        self.assert_invalid(art, "full-matrix")
 
     def test_validate_path_reports_filename(self):
         with tempfile.TemporaryDirectory() as d:
