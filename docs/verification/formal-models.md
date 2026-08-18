@@ -73,7 +73,13 @@ publication gated on the acknowledged enqueue pin, borrow-through-reap, the
 running-cancel intent verbatim law (ADR Decision 11), and the quiescent-
 destruction conditions. Negative models NEG-RA-1..6, wrong-property controls,
 and reachability witnesses W1–W5 gate the abstraction (see the suite README
-for the property → C++ regression bridge).
+for the property → C++ regression bridge). Authority layering (PR #125
+review P1): the liveness properties are CONDITIONAL on Layer-B external
+progress obligations (`WF(Enqueue)` = backend submit path,
+`WF(Reap)` = backend/runtime progress loop; all cfgs `CHECK_DEADLOCK FALSE`),
+and the Decision-11 confirmed-interruption provenance is a **backend
+obligation, not leaf-enforced** — the C++ `record_canceled` checks only slot
+state and exactly-once and has no production caller today.
 
 **Residual (still unmodeled, executable-evidence scope):** ready-ring reap
 ORDER across two or more simultaneously backend_ready slots (ADR Decision 9

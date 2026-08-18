@@ -57,9 +57,11 @@
       ],
       "implementation_bindings": [
         "include/sluice/async/detail/request_arena.hpp",
-        "include/sluice/async/detail/request_slot.hpp"
+        "include/sluice/async/detail/request_slot.hpp",
+        "src/async/threadpool_backend.cpp",
+        "src/async/uring_backend.cpp"
       ],
-      "notes": "Protocol: RequestArena/RequestSlot explicit-I/O accepted-request lifecycle (five-stage admission, Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once, running-cancel intent verbatim law, reap-only publication gated on the acknowledged enqueue pin, generation advance before reuse, borrow-through-reap). Closes the former request-arena-lifecycle formal-debt gap with the smallest single-slot model (e13 FAULT-constant negatives NEG-RA-1..6, wrong-property controls, witnesses W1-W5; residual multi-slot ready-ring ORDER scope recorded in the coverage gap)."
+      "notes": "Protocol: RequestArena/RequestSlot explicit-I/O accepted-request lifecycle (five-stage admission, Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once, running-cancel intent verbatim law, reap-only publication gated on the acknowledged enqueue pin, generation advance before reuse, borrow-through-reap). Closes the former request-arena-lifecycle formal-debt gap with the smallest single-slot model (e13 FAULT-constant negatives NEG-RA-1..6, wrong-property controls, witnesses W1-W5; residual multi-slot ready-ring ORDER scope recorded in the coverage gap). Authority layering (PR #125 review P1): the two detail headers are the Layer-A leaf-safety authority the model proves; the two backend files bind the Layer-B EXTERNAL obligations only — WF(Enqueue) is the submit-path obligation (enqueue_after_commit) and WF(Reap) is the progress-loop obligation (poll/wait_one/reaper call sites of arena_.reap), neither guaranteed by the arena leaf, and every cfg sets CHECK_DEADLOCK FALSE (no deadlock-freedom claim). RecordCanceledConfirmed is a BACKEND obligation: the leaf record_canceled checks only state/exactly-once (no provenance) and has NO production caller today — future backend obligation, exercised by tests and pinned adversarially by NEG-RA-6. NEG-RA-2's stale key is causal (committed and freed in an earlier generation racing the W4 reuse)."
     },
     {
       "id": "e7-publication",

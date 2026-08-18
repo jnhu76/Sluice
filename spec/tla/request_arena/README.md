@@ -19,6 +19,40 @@ section; TLA interleaving = mutex acquisition order):
 - `include/sluice/async/detail/request_arena.hpp`
 - `include/sluice/async/detail/request_slot.hpp`
 
+## Authority layering (PR #125 review P1)
+
+The model separates two authorities and never blurs them:
+
+- **Layer A — leaf safety (proven here).** Everything the arena leaf itself
+  enforces under its one mutex: admission staging, Scheme-B arbitration via
+  the arena's own `cancel()` entry, terminal exactly-once, generation
+  advance before reuse, pin/reap gating, borrow window, quiescent destroy.
+- **Layer B — external obligations (assumed here, owned by other code).**
+  - *Progress*: `WF(Enqueue)` is the **backend submit path's obligation**
+    (`ThreadPoolBackend::enqueue_after_commit` — mandatory noexcept
+    post-commit step); `WF(Reap)` is the **backend/runtime progress loop's
+    obligation** (`ThreadPoolBackend::poll`/`wait_one`,
+    `UringAsyncBackend` reaper paths call `arena_.reap`). The arena itself
+    cannot make anyone invoke enqueue or reap — the liveness properties are
+    CONDITIONAL on these obligations, and every cfg sets
+    `CHECK_DEADLOCK FALSE` because terminal states legitimately have no
+    enabled action: **this suite does not prove deadlock-freedom**.
+  - *Decision-11 provenance*: `RecordCanceledConfirmed` models the
+    **backend obligation** to call `record_canceled` only after a CONFIRMED
+    interruption. The C++ leaf `record_canceled(h)` is just
+    `record_terminal(err(canceled))` — it validates handle generation, slot
+    state, and exactly-once, but performs NO cancel-intent or provenance
+    check, and **no production backend currently calls it** (tests simulate
+    the confirming backend). `InvCanceledTerminalSource` is therefore an
+    environment-contract invariant: "IF callers honor the obligation THEN
+    no intent-only running cancel yields a canceled terminal" — the leaf
+    does not enforce the discipline, and NEG-RA-6 pins the ill-behaved
+    caller.
+
+A compositional RequestArena + backend-progress refinement is recorded as
+debt in `docs/verification/formal/cpp-model-coverage.md` rather than folded
+into this leaf model.
+
 ## Gates
 
 | Gate | cfg | Expect |
@@ -26,7 +60,7 @@ section; TLA interleaving = mutex acquisition order):
 | Positive safety (17 invariants) | `RequestArena.cfg` | PASS |
 | Liveness (WF Enqueue + WF Reap) | `RequestArenaLiveness.cfg` | PASS |
 | NEG-RA-1 second terminal winner | `RequestArenaFaultDoubleTerminal.cfg` | `InvNoDoubleTerminal` violated |
-| NEG-RA-2 stale-generation cancel | `RequestArenaFaultStaleCancel.cfg` | `InvTerminalRequiresAccepted` violated |
+| NEG-RA-2 stale-generation cancel (causal old key) | `RequestArenaFaultStaleCancel.cfg` | `InvTerminalRequiresAccepted` violated |
 | NEG-RA-3 publish without reap | `RequestArenaFaultDirectPublish.cfg` | `InvPublishedCompleteness` violated |
 | NEG-RA-4 no generation increment | `RequestArenaFaultNoGenIncrement.cfg` | `InvGenAdvanceOnFree` violated |
 | NEG-RA-5 reap ignores live pin | `RequestArenaFaultReapIgnoresPin.cfg` | `InvNoPinnedPublication` violated |
@@ -53,7 +87,7 @@ as the restore gate.
 | `enqueue` (Scheme-B outcomes, ADR Decision 5) | `Enqueue` (enqueued / terminal_noop pin ack) |
 | `mark_running` | `MarkRunning` |
 | `record_terminal` (verbatim winner) | `RecordTerminal` |
-| `record_canceled` (confirmed interruption only) | `RecordCanceledConfirmed` |
+| `record_canceled` — **backend obligation, not leaf-enforced; no production caller today** (leaf checks only state/exactly-once; see Authority layering) | `RecordCanceledConfirmed` |
 | `cancel` pending/enqueued (terminal_won) | `CancelPendingOrEnqueued` |
 | `cancel` running (`intent_recorded`, Decision 11) | `CancelRunningIntent` |
 | `register_waiter` / `cancel_waiter` | `RegisterWaiter` / `CancelWaiter` |
@@ -95,10 +129,12 @@ Every load-bearing model property maps to existing executable regressions
 - The backend admission transaction around commit (Completion
   `idle → binding → outstanding`, AGENTS.md §4.3) is a different protocol and
   is NOT modeled here.
-- Fairness: only `WF(Enqueue)` (mandatory noexcept post-commit step) and
-  `WF(Reap)` (level-triggered wait/progress paths). Backend/syscall
-  termination is an environment assumption, same boundary as the
-  blocking-io-pool suite.
+- Fairness: `WF(Enqueue)` = backend submit-path obligation,
+  `WF(Reap)` = backend/runtime progress-loop obligation — **external
+  Layer-B assumptions, NOT guarantees of the arena leaf** (see Authority
+  layering). Backend/syscall termination is likewise an environment
+  assumption, same boundary as the blocking-io-pool suite. `CHECK_DEADLOCK
+  FALSE` in every cfg: this suite does not claim deadlock-freedom.
 
 ## Reproduce
 

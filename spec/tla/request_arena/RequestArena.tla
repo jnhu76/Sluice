@@ -32,6 +32,26 @@
 (*   include/sluice/async/detail/request_arena.hpp                          *)
 (*   include/sluice/async/detail/request_slot.hpp                           *)
 (*                                                                          *)
+(* Authority layering (PR #125 review P1): this model separates two         *)
+(* authorities and must never blur them.                                    *)
+(*   Layer A — leaf safety (modeled, proven here): everything the arena     *)
+(*     leaf itself enforces under its one mutex — admission staging,        *)
+(*     Scheme-B arbitration via the arena's own cancel() entry, terminal    *)
+(*     exactly-once, generation advance, pin/reap gating, borrow window.    *)
+(*   Layer B — external obligations (ASSUMED here, owned by callers):       *)
+(*     - Progress: WF(Enqueue)/WF(Reap) below are obligations of the        *)
+(*       backend submit path and the backend/runtime progress loop          *)
+(*       (src/async/threadpool_backend.cpp enqueue_after_commit / poll /    *)
+(*       wait_one; src/async/uring_backend.cpp reaper paths). The arena     *)
+(*       itself cannot make anyone invoke enqueue or reap.                  *)
+(*     - Decision-11 provenance: RecordCanceledConfirmed models the BACKEND *)
+(*       obligation to call record_canceled only after a CONFIRMED          *)
+(*       interruption. The C++ leaf record_canceled()/record_terminal()     *)
+(*       checks only slot state and exactly-once — no cancel-intent or      *)
+(*       provenance check — and no production backend currently calls it    *)
+(*       (tests simulate the confirming backend; NEG-RA-6 pins the          *)
+(*       ill-behaved caller).                                               *)
+(*                                                                          *)
 (* Scope decisions (see README.md for the full mapping table):              *)
 (*   - ONE slot (capacity 1). The would_block admission path is exercised   *)
 (*     structurally (a busy slot admits nothing); multi-slot               *)
@@ -207,9 +227,22 @@ RecordTerminal ==
                   admissionClosed, destroyed, committed, published, freed,
                   intentSeen, waiterDelivered>>
 
-\* A backend that CONFIRMS a running interruption took effect may store the
-\* canceled terminal explicitly (ADR Decision 11) — this is the only running
-\* path to a canceled terminal.
+\* ENVIRONMENT/BACKEND OBLIGATION (Layer B, PR #125 review P1-2) — NOT a
+\* leaf-enforced capability. A backend that CONFIRMS a running interruption
+\* took effect may store the canceled terminal explicitly (ADR Decision 11)
+\* — this is the only running path to a canceled terminal. The guards below
+\* (running + live cancelIntent + source stamp "confirmed_interruption")
+\* model the WELL-BEHAVED caller the obligation permits. The C++ leaf
+\* record_canceled(h) is only record_terminal(err(canceled)): it validates
+\* handle generation and slot state and exactly-once, but does NOT check
+\* cancel_intent_ or any interruption provenance — any current-generation
+\* caller on an accepted slot could write it. No production backend calls
+\* record_canceled today; tests simulate the confirming backend, and
+\* FaultRunningCancelStores (NEG-RA-6) demonstrates the ill-behaved caller
+\* this invariant catches. Consequently InvCanceledTerminalSource is an
+\* environment-contract invariant: it proves "IF callers honor the
+\* obligation THEN no intent-only running cancel produces a canceled
+\* terminal" — it does NOT prove the leaf enforces the discipline.
 RecordCanceledConfirmed ==
   /\ ~terminalStored
   /\ state = "running"
@@ -332,9 +365,13 @@ ReleaseCompleted ==
                   published, cancelSource, intentSeen, waiterDelivered>>
 
 \* close_admission gates NEW acceptance at reserve; accepted requests run to
-\* their ordinary terminal (ADR Decision 15).
+\* their ordinary terminal (ADR Decision 15). Guarded by ~destroyed (PR #125
+\* review P2): a destroyed C++ object accepts no operations, so Destroy must
+\* be TERMINAL — post-destruction only stuttering is legal, never a further
+\* close_admission (formerly a TOO-BROAD spurious behavior).
 CloseAdmission ==
   /\ ~admissionClosed
+  /\ ~destroyed
   /\ admissionClosed' = TRUE
   /\ UNCHANGED <<state, gen, pin, terminalStored, terminalCanceled,
                   cancelIntent, regState, deliveryPresent, borrowActive,
@@ -344,7 +381,11 @@ CloseAdmission ==
 
 \* Quiescent destruction: every slot free (AC-13 / ADR Decision 15). The C++
 \* destructor fail-fasts otherwise; the model keeps destruction quiescent and
-\* the fault-free invariants make busy destruction unrepresentable.
+\* the fault-free invariants make busy destruction unrepresentable. Destroy
+\* is TERMINAL: with Reserve and CloseAdmission both guarded by ~destroyed,
+\* no action is enabled afterwards (every other action needs a non-free
+\* occupant or live protocol state), so destroyed ⇒ only stuttering — the
+\* behaviors of a C++ object that no longer exists.
 Destroy ==
   /\ ~destroyed
   /\ state = "free"
@@ -380,13 +421,23 @@ FaultDoubleTerminal ==
                   cancelSource, intentSeen, waiterDelivered>>
 
 \* F2: cancel resolves the slot but ignores the generation — a stale key
-\* terminalizes the CURRENT occupant (AGENTS 10.1). Fires on a
-\* reserved/prepared occupant to violate the accepted-terminal requirement.
+\* terminalizes the CURRENT occupant (AGENTS 10.1). The stale key must be
+\* CAUSAL (PR #125 review P2): sg was actually issued to a caller
+\* (committed[sg]) and its occupant already released (freed[sg]) — under the
+\* pre-fault invariants freed[sg] implies sg < gen, so the current occupant
+\* is precisely the W4 reuse chain: issued -> released -> generation reused
+\* -> old key arrives -> buggy validation accepts it against the new
+\* occupant. A fabricated sg that was never a real key would be a
+\* ceremonial mutant. Fires on a reserved/prepared occupant (a not-yet-
+\* accepted new occupant) to violate the accepted-terminal requirement;
+\* firing on pending/enqueued/running would be indistinguishable from the
+\* legitimate CancelPendingOrEnqueued outcome.
 FaultStaleCancel ==
   /\ FaultActive("StaleCancel")
-  /\ \E sg \in Gen : sg # gen
+  /\ \E sg \in Gen : /\ committed[sg]
+                      /\ freed[sg]
   /\ ~terminalStored
-  /\ state \in {"reserved", "prepared", "pending", "enqueued", "running"}
+  /\ state \in {"reserved", "prepared"}
   /\ terminalStored' = TRUE
   /\ terminalCanceled' = TRUE
   /\ state' = "backend_ready"
@@ -622,9 +673,15 @@ InvReleasePath ==
 InvReapRequiresBinding ==
   (published[gen] >= 1) => bindingInstalled
 
-\* A canceled terminal was written only by Scheme-B pending/enqueued cancel or
-\* a CONFIRMED running interruption — never by a running cancel that merely
-\* recorded intent (Decision 11 verbatim law).
+\* ENVIRONMENT-CONTRACT invariant (PR #125 review P1-2): a canceled terminal
+\* was written only by Scheme-B pending/enqueued cancel (leaf-enforced via
+\* the arena's own cancel() entry) or a CONFIRMED running interruption
+\* (caller discipline — see RecordCanceledConfirmed). The leaf API does not
+\* enforce the confirmed-interruption provenance; this law holds of the
+\* modeled environment in which callers honor the Decision-11 obligation,
+\* and NEG-RA-6 shows the violation an ill-behaved caller produces.
+\* Decision 11 verbatim law: a running cancel that merely recorded intent
+\* never yields "cancel_running".
 InvCanceledTerminalSource ==
   /\ \A g \in Gen : cancelSource[g] # "cancel_running"
   /\ terminalCanceled => cancelSource[gen] \in LegitimateCancelSources
@@ -660,29 +717,44 @@ Inv ==
   /\ InvFreeClean
 
 (***************************************************************************)
-(* Liveness.                                                                *)
+(* Liveness — CONDITIONAL on Layer-B external progress obligations          *)
+(* (PR #125 review P1-1). What is proven here is:                           *)
 (*                                                                          *)
-(* WF(Enqueue): the post-commit enqueue is the submit path's mandatory,     *)
-(* allocation-free, noexcept final step (AGENTS 10.2) — a committed submit  *)
-(* path always reaches it.                                                  *)
-(* WF(Reap):   reap is level-triggered from the context's wait/progress     *)
-(* paths (AGENTS 13.2 — pin acknowledgement must preserve or re-arm        *)
-(* readiness so no wake is lost).                                          *)
-(* Deliberately NOT assumed: backend/syscall termination (an accepted       *)
-(* request reaching a terminal is an environment assumption, as in the      *)
-(* blocking-io-pool suite) and scheduler worker fairness.                  *)
+(*   IF the backend submit path fairly executes the post-commit enqueue     *)
+(*      (WF(Enqueue): mandatory, allocation-free, noexcept — AGENTS 10.2;   *)
+(*      bound C++ site: ThreadPoolBackend::enqueue_after_commit)           *)
+(*   AND the backend/runtime progress loop fairly executes reap            *)
+(*      (WF(Reap): level-triggered from poll/wait_one/reaper paths,        *)
+(*      AGENTS 13.2; bound C++ sites: ThreadPoolBackend::poll/wait_one,    *)
+(*      UringAsyncBackend reaper)                                          *)
+(*   THEN the leaf protocol converges (no lost reap readiness, every       *)
+(*      pin acknowledged).                                                 *)
+(*                                                                          *)
+(* The arena leaf itself guarantees NEITHER: nothing inside                *)
+(* request_arena.hpp obliges anyone to call enqueue or reap. These are     *)
+(* assumptions about OTHER code, which is why every cfg sets               *)
+(* CHECK_DEADLOCK FALSE — terminal states (a destroyed arena, an idle free *)
+(* slot with no caller) legitimately have no enabled action, and           *)
+(* deadlock-freedom is NOT a claim of this leaf model. Also deliberately   *)
+(* NOT assumed: backend/syscall termination (an accepted request reaching  *)
+(* a terminal is an environment assumption, as in the blocking-io-pool     *)
+(* suite) and scheduler worker fairness. A compositional                  *)
+(* RequestArena + backend-progress refinement is recorded as debt in the   *)
+(* coverage matrix rather than stuffed into this leaf.                     *)
 (***************************************************************************)
 
 LivenessSpec == Spec /\ WF_vars(Enqueue) /\ WF_vars(Reap)
 
 \* An acked backend_ready ring entry is eventually published (no lost reap
-\* readiness; the pinned-head re-arm is level-triggered).
+\* readiness; the pinned-head re-arm is level-triggered) — CONDITIONAL on
+\* the WF(Reap) Layer-B obligation above.
 BackendReadyEventuallyPublished ==
   []( (state = "backend_ready" /\ ~pin /\ onRing) =>
         <>(state = "completion_ready") )
 
 \* A Scheme-B cancel-won pinned slot eventually gets its pin acknowledged
-\* (the submit path completes), unblocking reap.
+\* (the submit path completes), unblocking reap — CONDITIONAL on the
+\* WF(Enqueue) Layer-B obligation above.
 PinEventuallyAcknowledged ==
   []( (pin /\ state = "backend_ready") => <>(~pin) )
 

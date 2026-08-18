@@ -74,16 +74,26 @@ A non-zero TLC exit alone is NOT a pass for a negative gate.
 4. Update `docs/verification/formal-models.md`.
 5. Run `python3 scripts/formal/verify.py check`.
 
-## Future models
+## Governing principle
 
-The E16 Application Runtime lifecycle model will be added at:
+TLA+ serves the C++ design, never the reverse (AGENTS.md §17). The pipeline
+every suite in this tree follows:
 
 ```text
-spec/tla/e16_application_runtime/
-scripts/formal/verify-e16-application-runtime.sh
+C++ contract / production implementation
+    -> protocol extraction (the load-bearing race)
+    -> TLA+ abstraction (smallest model that captures it)
+    -> counterexample / negative mutant (named invariant)
+    -> C++ regression bridge (executable evidence)
 ```
 
-This is NOT in scope for the current consolidation task.
+A suite's `implementation_bindings` in `manifest.json` name the C++ files
+that own what the model actually proves; external obligations (progress
+fairness, caller discipline the leaf does not enforce) must be labeled as
+assumptions, not leaf guarantees. The suite inventory (all 19 suites,
+including `e16_application_runtime/` and `request_arena/`) is authoritative
+in `manifest.json`; per-suite status and debt live in
+`docs/verification/formal/cpp-model-coverage.md`.
 
 ## Important reminder
 
