@@ -145,7 +145,7 @@ synchronization riding on deadlines.
 - `wait_token` → blocks on a new test-only epoch observer
   (`ReadyWaitSource::wait_epoch_changed`): a zero-CPU observer whose predicate
   is the ACTUAL epoch pair (single source of truth — no second counter).
-  Review-round correction (§12): the observer parks on the SAME
+  Review-round correction (§11): the observer parks on the SAME
   `mtx_` + `ready_cv_` domain that `interrupt_all()`/`signal_progress()` use;
   the original dedicated observer cv/mutex pair had a lost-wake window.
 - Case A/B seam-pause → `stest::wait_paused` (blocking controller cv).
@@ -166,7 +166,7 @@ abort it prints case, phase, gate state, park domain (via a new non-blocking
 that lock), backend token, outstanding, backend-ready, prepark count, and pid,
 then `_Exit(70)`. The watchdog reads only lock-free atomics and non-blocking
 (try) reads — it can never deadlock behind the defect it is diagnosing
-(issue #86-B / #92 discipline). Review-round correction (§12): the backend
+(issue #86-B / #92 discipline). Review-round correction (§11): the backend
 token / outstanding / backend-ready reads are try-locks
 (`try_wait_token_for_test` / `try_outstanding_for_test` /
 `try_backend_ready_count_for_test`) printing `locked` when the leaf domain is
@@ -206,15 +206,23 @@ All changes are test-side or `SLUICE_ASYNC_INTERNAL_TESTING`-guarded:
 
 - `tests/phase_g_closeout_test.cpp` — the methodology fix (test only).
 - `include/sluice/async/detail/ready_wait_source.hpp` — prepark notify + epoch
-  observer channel, both under `SLUICE_ASYNC_INTERNAL_TESTING` (layout cost in
-  the internal-testing target accepted, AGENTS.md §15).
+  observer on the native `mtx_` + `ready_cv_` predicate domain + `try_snapshot`,
+  all under `SLUICE_ASYNC_INTERNAL_TESTING` (layout cost in the internal-testing
+  target accepted, AGENTS.md §15).
 - `include/sluice/async/threadpool_backend.hpp` —
-  `wait_epoch_changed_for_test` forwarding (guarded).
+  `wait_epoch_changed_for_test` + try-read forwarding (guarded).
+- `include/sluice/async/detail/request_arena.hpp` — `try_accepted_outstanding`
+  / `try_backend_ready_count` (guarded).
 - `include/sluice/async/scheduler.hpp` — `worker_park_domain_try`
   (guarded `AsyncTestAccess`).
-- `src/async/async_io_context.cpp` — `pause_after_wait_source_progress_`
-  made bidirectional (notify + blocking resume) like the issue #92
-  ThreadPool gates; the whole function is guarded.
+- `include/sluice/async/async_io_context.hpp` + `src/async/async_io_context.cpp`
+  — `pause_after_wait_source_progress_` made bidirectional (notify + blocking
+  resume) like the issue #92 ThreadPool gates, with the resume published only
+  through `resume_wait_source_progress_gate_for_test` (store + `notify_all`);
+  all guarded.
+- `tests/async_io_context_split_wait_c2e_test.cpp` and
+  `tests/phase_g_closeout_uring_test.cpp` — test-only consumers migrated to
+  the unified resume helper (test files; no production symbols).
 
 **Verification:** `nm -C build/.../debug/libsluice_async.a | grep
 wait_epoch_changed|worker_park_domain_try` → 0 matches; the production archive
@@ -247,6 +255,16 @@ handshake (requirement: a broken handshake must still fail boundedly):
 | TSan | `xmake f -m tsan --toolchain=clang -c -y; ...; xmake run -g test` | ALL PASS, 0 warnings |
 | Mechanical/docs | `git diff --check`; `check-doc-links.py`; `verify-architecture-docs.py`; `mechanical-facts.py` | all PASS |
 
+Review round (PR #128, rerun after the §11 fixes — same commands unless noted):
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Debug / Release / ASan+UBSan / TSan full | same commands as above | 181/181; 181/181; ALL PASS; ALL PASS, 0 warnings |
+| Contention recipe rerun | §3 recipe, 12×16 = 192 | **0/192 FAIL** |
+| C2e stress | D4-RM13 detector case: 100× isolated + 40× contended (2 spinners + 4 concurrent copies) | 0 failures |
+| Real-liburing closeout | `--with-liburing=true` build; `phase_g_closeout_uring_test` (UR-G5/D1: `phase_g_closeout_uring_g5_cqe_vs_control_interrupt`) | PASS |
+| M1 / M2 probes (§11.5) | standalone observer racer; resume-store negative compile | fixed observer 300,000 iterations, 0 lost wakes; pre-fix domain lost wake @17,230; `resume.store` fails to compile |
+
 ## 10. Remaining risks
 
 - The watchdog budget (30 s) is a deadlock safety net. A pathological
@@ -259,18 +277,18 @@ handshake (requirement: a broken handshake must still fail boundedly):
 - `phase_g_closeout_uring_test` (real liburing only, out of the default gate)
   shares the same observation helpers; its UR-G5/D1 `WaitSourceProgressPauseGate`
   resume publisher was migrated to the unified helper in the review round
-  (§12). Its yield-spin observation helpers (`wait_flag` deadlines) predate
+  (§11). Its yield-spin observation helpers (`wait_flag` deadlines) predate
   this methodology; a follow-up could apply the same blocking-handshake +
   case-watchdog treatment there.
 
-## 12. Review round (PR #128, 2026-08-19)
+## 11. Review round (PR #128, 2026-08-19)
 
 The draft PR review confirmed the root cause and the methodology direction and
 raised three findings on the new infrastructure itself; all three were
 verified as real and fixed (plus one additional latent test race the fix
 exposed).
 
-### 12.1 Epoch-observer lost wake (review P1)
+### 11.1 Epoch-observer lost wake (review P1)
 
 `ReadyWaitSource::wait_epoch_changed` parked on a dedicated
 `observer_mtx_`/`observer_cv_` pair while its predicate read epochs that are
@@ -286,7 +304,7 @@ Fix: the observer now parks on the native `mtx_` + `ready_cv_` predicate
 domain (the same protocol as the production `wait_for_change`); the dedicated
 observer mutex/cv pair and its notify sites were deleted.
 
-### 12.2 Pause-gate resume publishers not migrated (review P1)
+### 11.2 Pause-gate resume publishers not migrated (review P1)
 
 `pause_after_wait_source_progress_` blocks in `resume.wait(false)`, but the
 C2e D4-RM13 detector and the real-liburing UR-G5/D1 case still published the
@@ -304,7 +322,7 @@ structurally: a direct `gate.resume.store(...)` fails to compile. All three
 publishers (closeout D1, UR-G5/D1, C2e) were migrated, and the false comment
 was corrected.
 
-### 12.3 Watchdog diagnostic blocked on the diagnosed domain (review P1/P2)
+### 11.3 Watchdog diagnostic blocked on the diagnosed domain (review P1/P2)
 
 `diagnose_and_abort` read the backend token via the blocking
 `snapshot()`, and outstanding/backend-ready via the arena-locked counters —
@@ -317,7 +335,7 @@ guarantee. Fix: guarded try-reads (`ReadyWaitSource::try_snapshot`,
 domain is contended. Watchdog diagnostics prefer less information over losing
 the watchdog property.
 
-### 12.4 Exposed: C2e defensive-reset clobber race
+### 11.4 Exposed: C2e defensive-reset clobber race
 
 Migrating the C2e resume to store+notify exposed a latent race in the
 detector itself: the test reset the probe's `paused` flag AFTER releasing the
@@ -329,7 +347,7 @@ resume`, reproducible ~30% isolated, 12/12 under load). Fix: the defensive
 reset now runs BEFORE the gate release — while the participant is provably
 held in the gate, it cannot touch `ws->paused`, so the reset is race-free.
 
-### 12.5 Review-round evidence
+### 11.5 Review-round evidence
 
 - M1 mutation probe (standalone racer, observer vs one-shot
   `signal_progress`, both threads pinned to 2 contended CPUs): fixed observer
@@ -345,7 +363,7 @@ held in the gate, it cannot touch `ws->paused`, so the reset is race-free.
   TSan, and real-liburing `phase_g_closeout_uring_test` (UR-G5/D1) — see §9
   for the executed matrix of this round.
 
-## 13. Files changed
+## 12. Files changed
 
 - `tests/phase_g_closeout_test.cpp` — blocking handshakes, TP-G5/D1 baseline
   fixes, per-case watchdog with forensics, unique temp path; review round:
@@ -363,6 +381,6 @@ held in the gate, it cannot touch `ws->paused`, so the reset is race-free.
 - `src/async/async_io_context.cpp` — progress seam made bidirectional
   (guarded); resume-semantics comment corrected.
 - `tests/async_io_context_split_wait_c2e_test.cpp` — unified resume helper;
-  pre-release defensive reset (§12.4).
+  pre-release defensive reset (§11.4).
 - `tests/phase_g_closeout_uring_test.cpp` — UR-G5/D1 unified resume helper.
 - This document.
