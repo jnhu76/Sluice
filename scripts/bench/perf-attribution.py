@@ -430,12 +430,17 @@ def parse_perf_stat(stderr_text: str) -> dict:
         # Field layout is value[,unit],event,runtime,... — but the value may
         # itself carry thousands separators ("4,567"), so split-then-replace
         # is wrong. Locate the first field that is an event name; everything
-        # before the preceding unit field is the value.
-        idx = next((i for i, f in enumerate(fields) if f in PERF_EVENTS), None)
+        # before the preceding unit field is the value. Event names may
+        # carry a modifier suffix (":u" when perf_event_paranoid forces
+        # user-space-only counting, e.g. under WSL2); strip it for both the
+        # match and the canonical key.
+        idx = next((i for i, f in enumerate(fields)
+                    if f.split(":", 1)[0] in PERF_EVENTS), None)
         if idx is None or idx < 2:
             continue
+        name = fields[idx].split(":", 1)[0]
         try:
-            counters[fields[idx]] = float("".join(fields[: idx - 1]))
+            counters[name] = float("".join(fields[: idx - 1]))
         except ValueError:
             pass
     return counters
@@ -612,11 +617,16 @@ class RunnerSelfTest(unittest.TestCase):
     def test_parse_perf_stat(self):
         # Values may carry thousands separators ("4,567") in the CSV value
         # field; naive split-then-check-fields[2] drops such lines entirely.
+        # Event names may carry a ":u" modifier (user-space-only counters
+        # under perf_event_paranoid, e.g. WSL2) — the canonical unmodified
+        # name must still be recognized and used as the key.
         text = ("1.23,seconds,task-clock,100.0\n"
                 "4,567,,instructions,50.0\n"
+                "389384,,cycles:u,514668,100.00,,\n"
                 "garbage-line\n")
         c = parse_perf_stat(text)
-        self.assertEqual(c, {"task-clock": 1.23, "instructions": 4567.0})
+        self.assertEqual(c, {"task-clock": 1.23, "instructions": 4567.0,
+                             "cycles": 389384.0})
 
 
 def cmd_self_test(_args) -> int:
