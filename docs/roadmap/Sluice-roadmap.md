@@ -854,13 +854,40 @@ rename to final path
 
 ---
 
-# 9. Milestone 6 — Observability and Performance Baseline
+# 9. Milestone 6 — Performance Engineering Foundation
+
+> 2026-08 升级解读：原名 "Observability and Performance Baseline"。性能治理
+> 方法论（Bidirectional Performance Funnel、APP/Boundary/Core 归因、scaling
+> signature、microarchitecture drilldown、工程经济学、placement）已随
+> PR #126 落地为
+> `docs/verification/performance-engineering.md` 与
+> `docs/verification/performance-attribution.md`；本 milestone 余下的工作是
+> 把该基础设施扩展到 grep 之外的 workload，并建立回归语料。
 
 ## 原则
 
 在这一阶段之前，不进行大规模“性能优化”。
 
 首先建立可重复、可解释的基线。
+
+### 已落地（PR #126，2026-08）
+
+* 性能治理（Performance Change Gate，`AGENTS.md`）；
+* Bidirectional Performance Funnel（方法论主文档）；
+* workload signature 要求；
+* benchmark evidence schema + 结构校验器
+  （`scripts/bench/perf-evidence-validate.py`，pre-push/CI 强制）；
+* environment fingerprint（git/build/system/WSL/filesystem mountinfo/tools）；
+* 性能反馈台账（`docs/roadmap/performance-feedback-ledger.md`）；
+* 比率化指标（Core Increment / Core Overhead Ratio / Core Share）；
+* microarchitecture drilldown 分级（M0–M4，方法论文档 §6）；
+* round-1 grep canonical evidence（`../results/performance-attribution/`）。
+
+### 待做
+
+* 回归语料（regression corpus）：跨 workload 的 before/after 复跑与
+  结构化对比入库；
+* copy/hash/tail 等下一轮 workload 的 ladder 化。
 
 ## 9.1 Benchmark Layers
 
@@ -966,7 +993,13 @@ io_uring 只在真实 liburing 环境下纳入结果。
 
 ---
 
-# 10. Milestone 7 — Evidence-Driven I/O Optimization
+# 10. Milestone 7 — Evidence-Driven Optimization & Composability
+
+> 2026-08 升级解读：原名 "Evidence-Driven I/O Optimization"。保持证据驱动
+> 原则不变；新增 Core Cost Decomposition、Common Tax / Cliff Weakness、
+> placement 决策与 composability 边界（方法论文档
+> `docs/verification/performance-engineering.md`）。本节列出的全部条目都是
+> **记录在案的未来候选**，不是已批准的实现。
 
 ## 原则
 
@@ -986,25 +1019,34 @@ after measurement
 semantic regression gate
 ```
 
-不得因为某个技术“理论上更快”就直接重写架构。
+不得因为某个技术“理论上更快”就直接重写架构。进入 default Core 的变更
+另需 Common Tax 或 material Cliff Weakness 证据 + 工程经济学评估 +
+placement 决策（方法论文档 §8–§10）。
 
 ---
 
 ## 10.1 Backend Work Model
 
-当前 ThreadPoolBackend 的 operation/thread 模型应首先被应用级数据审视。
+> **当前事实（2026-08 更新）**：ThreadPoolBackend 已完成 bounded
+> persistent-worker 迁移（Phase E：固定持久 worker、构造期有界 dispatch
+> 存储、RequestArena/RequestSlot generation-safe 显式身份、有界
+> accepted-terminal 存储）。早期 roadmap 中“可能的 bounded worker pool /
+> persistent workers / operation queue / 减少 thread creation”等未来方向
+> 已按 as-built 现实完成，不再是候选。
 
-可能方向：
+因此 ThreadPoolBackend 剩余的有趣成本不在 thread 创建，而在（**假设，
+待分解实验证明**）：
 
-* bounded worker pool；
-* persistent workers；
-* operation queue；
-* completion queue；
-* batch reap；
-* reduced thread creation；
-* configurable queue depth。
+```text
+dispatch 路径
+handoff（submit → worker 可见）
+queueing
+wake/reap
+blocking worker 边界
+```
 
-只有在真实 workload 证明 thread-per-operation 是瓶颈时实施。
+在 Core Cost Decomposition（§10.8）给出数据之前，不得把上述任何一项
+当作已证结论。
 
 ---
 
@@ -1100,6 +1142,71 @@ semantic regression gate
 * 对 BlockingIoPool 和 ThreadPoolBackend 的真实比较。
 
 没有这些证据时，io_uring 继续保持 experimental。
+
+---
+
+## 10.8 Core Cost Decomposition（记录，未实现）
+
+round-1 的 ladder 只测得**聚合** Core increment（L4 − L3）；其内部构成
+（runtime 生命周期 / 准入 / submit / handoff / syscall / wait-wake / reap /
+Fiber resume）在分解实验完成前一律是假设。建议分解：
+
+```text
+C0 Runtime construction/start/stop/drain/join
+C1 task admission/scheduling
+C2 request submit → backend acceptance
+C3 backend dispatch → syscall → terminal publication
+C4 terminal publication → reap
+C5 wake/runnable publication
+C6 Fiber resume/context switch
+```
+
+第一个实验（buffer-size / request-count scaling）：
+
+```text
+same total bytes, buffer sizes: 256 KiB / 1 MiB / 4 MiB / 16 MiB
+derived: requests/GiB, Core ms/GiB, ns/request, cycles/request,
+         context-switch/request, syscall/request, wake/request
+hypothesis: 若 Core ms/GiB 随 request 数近似线性，则支持
+            per-request 固定成本假设
+```
+
+测量前不得宣称该结论。实验通过 ladder 的 `--buffer-size` 参数即可运行。
+
+## 10.9 Scheduler / Fiber Microbench（记录，未实现）
+
+未来 `scheduler_microbench` 候选：
+
+```text
+fiber_create_destroy
+fiber_spawn
+fiber_yield
+fiber_suspend_resume
+same_worker_resume
+cross_worker_resume
+work_steal
+completion_ready_inline
+completion_ready_after_park
+timer_park_wake
+```
+
+指标：ns/op、cycles/op、instructions/op、context-switch/op、
+cache-misses/op、（有意义处）DTLB-misses/op、page-faults/op、RSS/Fiber。
+未来的 Fiber stack/cache 工作必须由此 + 真实应用共同证明；
+方法论文档的 funnel（real app → … → placement）先于任何实现。
+
+## 10.10 Backend Comparison（记录，未实现）
+
+在 normalized APP、同 buffer、同 workload、同 runtime shape 下对比：
+
+```text
+direct blocking
+ThreadPoolBackend
+io_uring
+```
+
+（stackless 变体存在后可加入。）ThreadPoolBackend 是 portable fallback；
+其剩余成本假设见 §10.1，在 §10.8 分解前不得当作结论。
 
 ---
 
@@ -1255,6 +1362,16 @@ Observability scaffolding可以提前加入 small app，但架构级性能优化
 * hot worker resizing；
 * broad networking；
 * 无数据支持的大规模性能重写。
+
+### plugin framework 非目标的精确边界（2026-08 澄清）
+
+**Composable mechanisms ≠ dynamic plugin framework。** 现有的组合示例是
+`AsyncBackend` 与 experimental io_uring backend；未来的 policy（stack、
+allocation、scheduling、NUMA 等）优先采用编译期或构造期选择
+（方法论文档 §11 "Small Semantic Core + Composable Mechanisms"）。
+在单独批准的设计出现之前，不引入动态二进制插件（so/dll）加载器或 ABI 插件复杂度；
+正确性语义（request identity、Completion、cancellation、wait/wake、
+shutdown）永远不可选件化。
 
 ---
 

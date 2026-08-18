@@ -70,9 +70,14 @@ GB/s medians):
 L6 CLI (1 GiB, fresh process): sluice-grep 1.7–1.8 GB/s on sparse patterns
 (vs V1 ~1.2 GB/s), byte-identical output to GNU grep/rg on every text
 workload (runner records per-tool md5s). Cold-first-run in a fresh process
-measures ~2× the in-process steady-state engine on this host (read-path
-page faults + host load; Runtime symbols <2% even cold — OS/environment
-class, not a runtime defect). Semantic equivalence is proven by
+measures ~2× the in-process steady-state engine on this host
+(fresh-process/runtime-cold, page-cache state not guaranteed cold;
+read-path page faults + host load). Sluice-owned symbols account for
+<2% of sampled userspace symbols in that profile, but this alone does
+not exclude Core overhead mediated through libc, kernel scheduling,
+synchronization, or backend handoff; the effect is classified
+OS/environment because it reproduces independent of the runtime shape
+(also on ext4), not because of the symbol share. Semantic equivalence is proven by
 `tests/sluice_grep_matcher_differential_test.cpp` (V2 vs the frozen V1
 per-line reference on randomized inputs) plus the unchanged existing matcher
 suite. See `docs/verification/performance-attribution.md` for the framework
@@ -112,7 +117,7 @@ Interpretation (measure first, optimize later — brief §21):
 
 | App | main bottleneck | owner | evidence |
 |---|---|---|---|
-| grep | V1 per-line `std::search`; V2 fixed sparse/binary (~3×), dense-anchor rows now emit-bound; remaining gap is skip-loop algorithm class | APP | ladder L2/L4, perf (Runtime symbols <2%) |
+| grep | V1 per-line `std::search`; V2 fixed sparse/binary (~3×), dense-anchor rows now emit-bound; remaining gap is skip-loop algorithm class | APP | ladder L2/L4, perf (Sluice symbols <2% of sampled userspace symbols — non-exclusion wording per attribution corrective) |
 | hash | portable SHA-256 (no SHA-NI): 3.2× instructions vs OpenSSL | APP | prior perf: 70 G instr vs 21.6 G |
 | tail | bounded reverse-scan assembler vs memcpy ring (large-N) | APP | prior table (6.8× at 100k) |
 | copy | V3 atomic copy at 1.1–1.3× `cp`; async coordination (mutex/cond/clock) is a visible but small share — see re-verification note below | APP (meets bar); CORE coordination re-measured | perf: mutex ~16% |

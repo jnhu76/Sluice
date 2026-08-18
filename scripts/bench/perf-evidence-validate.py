@@ -65,8 +65,11 @@ def check_common(art: dict) -> list[str]:
     kind = art.get("kind")
     if kind not in ("ladder", "cli", "perf"):
         errs.append(f"kind: expected ladder|cli|perf, got {kind!r}")
-    if not isinstance(art.get("time"), str) or not art.get("time"):
-        errs.append("time: missing/empty timestamp")
+    # The runner records the measurement timestamp inside the environment
+    # fingerprint (it identifies when the environment was probed).
+    if not isinstance(_dig(art, ("env", "time")), str) or \
+            not _dig(art, ("env", "time")):
+        errs.append("env.time: missing/empty measurement timestamp")
 
     env = art.get("env")
     if not isinstance(env, dict):
@@ -258,8 +261,8 @@ def _valid_ladder() -> dict:
     med = sorted(samples)[2]
     return {
         "kind": "ladder",
-        "time": "2026-08-18T00:00:00+0000",
         "env": {
+            "time": "2026-08-18T00:00:00+0000",
             "git": {"sha": "a" * 40, "dirty": False, "branch": "perf/x"},
             "build": {"mode": "release", "compiler": "clang++",
                       "compiler_version": "clang 21"},
