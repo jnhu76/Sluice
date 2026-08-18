@@ -254,8 +254,8 @@ decompositions of this number are hypotheses, not findings.
 
 **Recorded anomaly (not hidden):** `normal__p_qz9__d_0` shows an
 anomalously slow L3 in both the V1 and V2 same-session artifacts
-(2.55 GB/s vs 2.5–6.1 GB/s across the other rows' L3 in V2 — `rep` and
-binary sit at the low end of that spread), which makes its
+(2.55 GB/s vs ~2.9–6.2 GB/s across the other rows' L3 in V2 — `rep`
+and binary sit at the low end of that spread), which makes its
 L4 − L3 negative (−189 ms/GiB). The row is retained in the artifacts and
 excluded from increment claims pending investigation.
 
