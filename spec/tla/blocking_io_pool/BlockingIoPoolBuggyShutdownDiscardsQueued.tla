@@ -1,4 +1,4 @@
-------------------------------- MODULE BlockingIoPool -------------------------------
+------------------------------- MODULE BlockingIoPoolBuggyShutdownDiscardsQueued -------------------------------
 (*
   TLA+ specification of the production sluice::BlockingIoPool (sluice-CORE-024S).
 
@@ -144,7 +144,10 @@ Get(t) ==
 Shutdown ==
     /\ accepting = TRUE
     /\ accepting' = FALSE
-    /\ UNCHANGED <<queue, inFlight, done, submitted, rejected, getters>>
+    \* BUG (NEG-BIP-2): shutdown-as-clear — queued ACCEPTED tasks are
+    \* discarded instead of drained, losing accepted work.
+    /\ queue' = <<>>
+    /\ UNCHANGED <<inFlight, done, submitted, rejected, getters>>
 
 (* --------------------------------------------------------------------------- *)
 (* Next-state relation                                                          *)

@@ -6,6 +6,14 @@
   (Woken) and records the "Reset" resolution cause. The correct ResetEvent is a
   pure state flip that NEVER touches a node.
 
+  AUDIT LABEL (2026-08-18): this is a GHOST-COUPLING PROBE, not a
+  refactor-realistic mutation -- no plausible edit of the two-line
+  event_reset (a flag store under global_mtx_) calls resolve_. It is retained
+  deliberately: it pins E5's invariant-to-cause coupling (InvResetNonResolution)
+  and would catch a future Reset implementation that routes through a
+  resolution helper. Do not cite it as evidence that a realistic Reset defect
+  exists; NEG-1/2/3 carry the realistic defect classes.
+
   Counterexample: a node that was Registered becomes terminal with
   resolutionCause = "Reset". Violated expected property: InvResetNonResolution
   (E5).

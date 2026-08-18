@@ -56,23 +56,33 @@ expect_pass() {
   echo "FAIL  $label (expected PASS)"; tail -20 "$out"; return 1
 }
 
-# BuggyOwner: a counterexample is expected for one of the safety invariants.
-# The cfg lists several invariants; TLC will report the first violated one.
-expect_cex() {
-  local label="$1" model="$2" cfg="$3" tag="$4"
+# BuggyOwner: the single-line StealRunnableBuggy mutation (ownerRecord not
+# transferred with the ticket) must violate the named steal-consistency
+# invariant InvLocalMatchesOwner — NOT just "some invariant". A different
+# regression surfacing another counterexample would otherwise still pass this
+# gate (formal-audit finding: the manifest claims a named-invariant gate).
+named_violation() { grep -Eq "Invariant $2 is violated" "$1"; }
+
+expect_fail() {
+  local label="$1" model="$2" cfg="$3" expected="$4" tag="$5"
   local out="$outroot/$tag.out"
   run_tlc "$model" "$cfg" "$tag"
   if ! launched "$out"; then echo "FAIL  $label (no launch)"; tail -20 "$out"; return 1; fi
-  if passed "$out"; then echo "FAIL  $label (expected counterexample, PASSED)"; return 1; fi
-  echo "CEX   $label (counterexample found)"; return 0
+  if passed "$out"; then echo "FAIL  $label (expected $expected violation, model passed)"; return 1; fi
+  if ! named_violation "$out" "$expected"; then
+    echo "FAIL  $label (expected $expected, got another failure)"
+    tail -12 "$out"
+    return 1
+  fi
+  echo "CEX   $label ($expected violated, as expected)"
 }
 
 rc=0
 echo "=== E8 Ownership Transfer formal gate (workers=$workers) ==="
 expect_pass "E8OwnershipTransfer" E8OwnershipTransfer \
   E8OwnershipTransfer.cfg correct || rc=1
-expect_cex "E8OwnershipTransferBuggyOwner" E8OwnershipTransferBuggyOwner \
-  E8OwnershipTransferBuggyOwner.cfg buggy || rc=1
+expect_fail "E8OwnershipTransferBuggyOwner" E8OwnershipTransferBuggyOwner \
+  E8OwnershipTransferBuggyOwner.cfg InvLocalMatchesOwner buggy || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi

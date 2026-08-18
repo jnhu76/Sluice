@@ -175,11 +175,14 @@ SumResolvedCount ==
 InvNoDuplicateSchedulerWake ==
     wakeDispatched = SumResolvedCount
 
+\* Audit 2026-08-18: InvNoTerminalResurrection (a self-confessed tautology)
+\* and InvTerminalNotLinked (implied by InvLinkedImpliesRegistered) were
+\* REMOVED from the gate conjunction — they counted as passing invariants but
+\* could never fail, overstating coverage. Their definitions remain above as
+\* documented structural notes.
 Inv ==
     /\ InvNoDoubleCompletion
-    /\ InvNoTerminalResurrection
     /\ InvLinkedImpliesRegistered
-    /\ InvTerminalNotLinked
     /\ InvNoDuplicateSchedulerWake
 
 (* =========================================================================

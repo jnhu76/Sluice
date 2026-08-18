@@ -184,3 +184,30 @@ funnels through `close_resources`, which destroys Group/Scheduler/AsyncIoContext
 before publishing Stopped). Fiber-local storage solves multiplexing correctness
 (the tag survives Fiber suspend/resume). Private write authority prevents
 application code from bypassing Runtime self-close detection.
+
+
+## Audit notes (2026-08-18, C++/TLA+ realignment)
+
+- **`Inv15RollbackComplete` is defined but deliberately NOT gated** (not in
+  `Inv` nor in the safety cfg). The README's invariant-reclassification list
+  previously omitted it. It restates `SubmitRollback`'s action effect
+  (rollback restores admitted/task_admitted), which no other action
+  contradicts — re-deriving it as a gate would be redundant with the
+  transition relation itself.
+- **`Live4CloseWaiterCompletes` is defined but NOT in `LifeProps`** — a Fatal
+  transition would falsify it. Intentional; now documented.
+- **`Inv14SubmitPublication` is weak**: it only asserts "some epoch bump ever
+  happened" after a submit publication; the unobserved-change coupling is
+  carried by Live1 instead. Do not cite Inv14 as a lost-wake proof.
+- Dead inventory: `NotReach_R1, R4..R10, R16` are defined but ungated
+  (scene loop covers R2,R3,R11..R15,R17..R19); the `exiting` driver state is
+  in the TypeOK domain but assigned by no action in both the model AND the
+  current C++ `DriverState` enum. Harmless; retained for enum parity.
+- Fairness boundary: `WF(TaskBodyExit)` / `WF(CompleteTaskIO)` are documented
+  environment assumptions (user task terminates; backend completes) — see the
+  in-model comment. `WF(ReapTaskIO)` abstracts over scheduler workers the
+  model does not contain; the #116 forced-re-entry disjunct of
+  `DriverReenterRunLive` is the compensating mirror.
+- The implementation binding is `src/async/application_runtime.cpp`
+  (manifest). The suite's R19 corrective matches the as-built
+  unlock-before-`Group::async` submit path exactly.

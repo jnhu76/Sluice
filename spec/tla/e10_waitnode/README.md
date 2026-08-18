@@ -48,29 +48,32 @@ the single-winner linearization. A concurrent `ResolveCancel(n)` observes
 
 ## Results
 
-**NOTE — TLA+ tooling limitation.** This environment has no `tla2tools.jar`
-(the E9 README expects it at `/tmp/tla2tools.jar`) and no network to fetch it.
-**TLC was NOT executed here.** The `.cfg` files are reproducible from a fixed
-jar exactly as the E7/E8/E9 models are; running them is:
+**Execution status: gated and green.** The authoritative reproduction path is
+the repository verifier (checksum-locked jar resolved via
+`scripts/formal/resolve-jar.sh`, isolated workspace):
 
 ```bash
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e10_waitnode/E10WaitNode.cfg spec/tla/e10_waitnode/E10WaitNode
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e10_waitnode/E10WaitNodeLiveness.cfg spec/tla/e10_waitnode/E10WaitNode
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/e10_waitnode/E10WaitNodeBuggyNoWinner.cfg spec/tla/e10_waitnode/E10WaitNodeBuggyNoWinner
+python3 scripts/formal/verify.py suite e10-waitnode
+# or directly:
+bash scripts/formal/verify-e10-waitnode.sh
 ```
 
-Expected (by construction, pending actual TLC execution):
+Gate results (executed in the 2026-08-18 audit on the locked
+TLC 2.19 / tla2tools v1.7.4 jar):
+
 - `E10WaitNode` safety: all invariants PASS.
 - `E10WaitNode` liveness: `EventualResolution` PASS under `FairResolve`.
 - `E10WaitNodeBuggyNoWinner`: `InvNoDoubleCompletion` counterexample (a node
   reaches `resolvedCount = 2`).
 
-Because TLC could not be run, the authoritative proof of E10's safety is the
-**explicit state-transition table + linearization proof** below (§12 permits
-this when the formal framework is unavailable).
+Direct `java -cp ... tlc2.TLC` invocations against a hand-placed jar are a
+NON-authoritative fallback only — they bypass the jar checksum and the
+workspace isolation the verifier provides.
+
+The explicit state-transition table + linearization argument below is a
+supplementary hand-proof companion to the executed gate (historical note:
+the original authoring environment could not run TLC, which is no longer
+the case — see the verifier above).
 
 ## Refinement map (TLA+ → production)
 
@@ -202,3 +205,19 @@ The committed `.cfg` files reproduce the gate from a fixed `tla2tools.jar`
 (jar not present in this environment; no network). The production stress gates
 (e10_wait_queue_test C12, e10_scheduler_wait_test C10c) ARE executed and pass —
 see the final report §M for exact counts.
+
+## Audit notes (2026-08-18)
+
+- The gate conjunction was pruned: `InvNoTerminalResurrection` (tautology,
+  admitted in its own comment) and `InvTerminalNotLinked` (implied by
+  `InvLinkedImpliesRegistered`) no longer count as checked invariants.
+- `FairResolve` puts weak fairness on the wake/cancel RESOLVERS, which are
+  caller-thread actions in C++ (not scheduler-owned). `EventualResolution` is
+  therefore a CONDITIONAL property: it holds when a resolver is eventually
+  invoked — the Scheduler does not auto-resolve stranded registrations
+  (`wait_queue.hpp` documents this). Read it as exactly-once-on-resolution,
+  not as stranded-wait liveness.
+- The negative's README framing as a CONCURRENT race is stricter than the
+  current C++ (all resolvers serialize under `global_mtx_` + queue mutex;
+  the `resolve_` CAS is defense-in-depth). The defect class remains real:
+  a refactor that ignores the terminal state on a sequential second resolve.
