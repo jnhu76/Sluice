@@ -144,9 +144,10 @@ synchronization riding on deadlines.
   after its fiber increment.
 - `wait_token` → blocks on a new test-only epoch observer
   (`ReadyWaitSource::wait_epoch_changed`): a zero-CPU observer whose predicate
-  re-reads the ACTUAL epoch pair (single source of truth — no second counter),
-  notified by the same `interrupt_all()`/`signal_progress()` that advance the
-  epochs.
+  is the ACTUAL epoch pair (single source of truth — no second counter).
+  Review-round correction (§12): the observer parks on the SAME
+  `mtx_` + `ready_cv_` domain that `interrupt_all()`/`signal_progress()` use;
+  the original dedicated observer cv/mutex pair had a lost-wake window.
 - Case A/B seam-pause → `stest::wait_paused` (blocking controller cv).
 - `RunDriver::join()` → blocking `done.wait(false)` (with `done.notify_all()`
   after the store).
@@ -165,7 +166,12 @@ abort it prints case, phase, gate state, park domain (via a new non-blocking
 that lock), backend token, outstanding, backend-ready, prepark count, and pid,
 then `_Exit(70)`. The watchdog reads only lock-free atomics and non-blocking
 (try) reads — it can never deadlock behind the defect it is diagnosing
-(issue #86-B / #92 discipline).
+(issue #86-B / #92 discipline). Review-round correction (§12): the backend
+token / outstanding / backend-ready reads are try-locks
+(`try_wait_token_for_test` / `try_outstanding_for_test` /
+`try_backend_ready_count_for_test`) printing `locked` when the leaf domain is
+contended; the blocking `snapshot()`/`outstanding()` reads would have defeated
+the watchdog property when the stall involves that domain.
 
 ### 5.3 Isolation hardening
 
@@ -251,19 +257,112 @@ handshake (requirement: a broken handshake must still fail boundedly):
   5 s deadlines were the actual correctness verdicts). The budget is
   configurable at one constant.
 - `phase_g_closeout_uring_test` (real liburing only, out of the default gate)
-  shares the same observation helpers but was not migrated here; it benefits
-  from the shared-seam notify additions and is unaffected by the guarded
-  changes. A follow-up could apply the same methodology there.
+  shares the same observation helpers; its UR-G5/D1 `WaitSourceProgressPauseGate`
+  resume publisher was migrated to the unified helper in the review round
+  (§12). Its yield-spin observation helpers (`wait_flag` deadlines) predate
+  this methodology; a follow-up could apply the same blocking-handshake +
+  case-watchdog treatment there.
 
-## 11. Files changed
+## 12. Review round (PR #128, 2026-08-19)
+
+The draft PR review confirmed the root cause and the methodology direction and
+raised three findings on the new infrastructure itself; all three were
+verified as real and fixed (plus one additional latent test race the fix
+exposed).
+
+### 12.1 Epoch-observer lost wake (review P1)
+
+`ReadyWaitSource::wait_epoch_changed` parked on a dedicated
+`observer_mtx_`/`observer_cv_` pair while its predicate read epochs that are
+mutated under `mtx_`, and `signal_progress()`/`interrupt_all()` notified
+`observer_cv_` without holding `observer_mtx_`. An epoch advance landing
+between the observer's predicate check and its park was notified before the
+park — the wake was lost and the observer slept until a later epoch change.
+The claim "a missed notification cannot lose the observation" only holds when
+the predicate state and the cv wait share one synchronization domain; they did
+not.
+
+Fix: the observer now parks on the native `mtx_` + `ready_cv_` predicate
+domain (the same protocol as the production `wait_for_change`); the dedicated
+observer mutex/cv pair and its notify sites were deleted.
+
+### 12.2 Pause-gate resume publishers not migrated (review P1)
+
+`pause_after_wait_source_progress_` blocks in `resume.wait(false)`, but the
+C2e D4-RM13 detector and the real-liburing UR-G5/D1 case still published the
+resume with a plain `store` — and the seam comment claimed a plain store
+releases the waiter. It does not: `atomic::wait` is woken only by a notifying
+atomic operation; a store racing the park leaves the consumer parked (the
+same store-without-notify defect class the prepark mutation already proved in
+§8). The green CI on those paths was scheduler luck, not evidence.
+
+Fix: `WaitSourceProgressPauseGate::resume` is now private
+(`AsyncIoContext` is the friend performing the wait), and the only publisher
+is `AsyncIoContext::resume_wait_source_progress_gate_for_test` (store +
+`notify_all`) — the issue #92 `resume_threadpool_gate` model, enforced
+structurally: a direct `gate.resume.store(...)` fails to compile. All three
+publishers (closeout D1, UR-G5/D1, C2e) were migrated, and the false comment
+was corrected.
+
+### 12.3 Watchdog diagnostic blocked on the diagnosed domain (review P1/P2)
+
+`diagnose_and_abort` read the backend token via the blocking
+`snapshot()`, and outstanding/backend-ready via the arena-locked counters —
+so a stall involving the `ReadyWaitSource` or `RequestArena` leaf domain would
+have stalled the watchdog inside its own diagnostic, defeating the `_Exit(70)`
+guarantee. Fix: guarded try-reads (`ReadyWaitSource::try_snapshot`,
+`RequestArena::try_accepted_outstanding`/`try_backend_ready_count`,
+`ThreadPoolBackend::try_wait_token_for_test`/`try_outstanding_for_test`/
+`try_backend_ready_count_for_test`); the diagnostic prints `locked` when a
+domain is contended. Watchdog diagnostics prefer less information over losing
+the watchdog property.
+
+### 12.4 Exposed: C2e defensive-reset clobber race
+
+Migrating the C2e resume to store+notify exposed a latent race in the
+detector itself: the test reset the probe's `paused` flag AFTER releasing the
+context pause gate. With the old plain-store resume the participant woke late,
+so the reset almost always won; with the deterministic immediate wake the
+participant could set the second-pause observation BEFORE the reset, which
+then clobbered the very flag the test waited for (`T1 never returned after
+resume`, reproducible ~30% isolated, 12/12 under load). Fix: the defensive
+reset now runs BEFORE the gate release — while the participant is provably
+held in the gate, it cannot touch `ws->paused`, so the reset is race-free.
+
+### 12.5 Review-round evidence
+
+- M1 mutation probe (standalone racer, observer vs one-shot
+  `signal_progress`, both threads pinned to 2 contended CPUs): fixed observer
+  — 300,000 iterations, zero lost wakes; pre-fix observer domain restored via
+  a shadow header — LOST WAKE at iteration 17,230 (epoch advanced and
+  `notify_all` fired; the observer never woke).
+- M2 structural rule probe: `gate.resume.store(true, ...)` in a test TU fails
+  to compile (`'resume' is a private member of ...WaitSourceProgressPauseGate`).
+- Contention recipe rerun (§3, 12×16 = 192): 0/192 FAIL.
+- C2e stress: D4-RM13 case 100× isolated + 40× contended (2 spinners, 4
+  concurrent copies) — 0 failures.
+- Full gates rerun after the review fixes: Debug 181/181, Release, ASan+UBSan,
+  TSan, and real-liburing `phase_g_closeout_uring_test` (UR-G5/D1) — see §9
+  for the executed matrix of this round.
+
+## 13. Files changed
 
 - `tests/phase_g_closeout_test.cpp` — blocking handshakes, TP-G5/D1 baseline
-  fixes, per-case watchdog with forensics, unique temp path.
+  fixes, per-case watchdog with forensics, unique temp path; review round:
+  try-read diagnostics, unified resume helper, observer-domain comment.
 - `include/sluice/async/detail/ready_wait_source.hpp` — prepark notify +
-  test-only epoch observer (guarded).
+  test-only epoch observer on the native wait domain + `try_snapshot`
+  (guarded).
 - `include/sluice/async/threadpool_backend.hpp` — `wait_epoch_changed_for_test`
-  (guarded).
+  + try-read forwards (guarded).
+- `include/sluice/async/detail/request_arena.hpp` — `try_accepted_outstanding`
+  / `try_backend_ready_count` (guarded).
 - `include/sluice/async/scheduler.hpp` — `worker_park_domain_try` (guarded).
+- `include/sluice/async/async_io_context.hpp` — pause gate: private `resume`
+  + `resume_wait_source_progress_gate_for_test` (guarded).
 - `src/async/async_io_context.cpp` — progress seam made bidirectional
-  (guarded).
+  (guarded); resume-semantics comment corrected.
+- `tests/async_io_context_split_wait_c2e_test.cpp` — unified resume helper;
+  pre-release defensive reset (§12.4).
+- `tests/phase_g_closeout_uring_test.cpp` — UR-G5/D1 unified resume helper.
 - This document.
