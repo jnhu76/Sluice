@@ -226,6 +226,17 @@ class ThreadPoolBackend : public AsyncBackend {
         ready_wait_.set_wait_prepark_counter(counter);
     }
 
+    // Test-only: zero-CPU blocking observer on the ACTUAL ready-wait epochs
+    // (ReadyWaitSource::wait_epoch_changed). Blocks until the control/progress
+    // epoch pair differs from `observed`; notified by the same
+    // interrupt_all()/signal_progress() that advance the epochs. The single
+    // source of truth remains the ReadyWaitSource epoch fields — this is only a
+    // notification channel, never a second counter. Compiled out of production
+    // sluice_async.
+    void wait_epoch_changed_for_test(BackendWaitToken observed) const noexcept {
+        ready_wait_.wait_epoch_changed(observed);
+    }
+
     // Test-only: resolve a Completion pointer to its current slot+generation.
     // Returns nullopt if the Completion is not bound to any slot.
     std::optional<detail::SlotHandle> handle_for_completion_for_test(

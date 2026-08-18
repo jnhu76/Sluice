@@ -89,6 +89,10 @@ class ReadyWaitSource final : public BackendWaitSource {
         // means the first wait parked THROUGH the interrupt — the mutant).
         if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
             c->fetch_add(1, std::memory_order_relaxed);
+            // atomic::wait consumers: notify after the increment so a test can
+            // block zero-CPU on this counter (persistent state first, then the
+            // notify — wait() re-checks the value atomically).
+            c->notify_all();
         }
 #endif
         // Phase G (bounded park): the deadline-driven cap bounds the physical
@@ -124,6 +128,9 @@ class ReadyWaitSource final : public BackendWaitSource {
             ++control_epoch_;
         }
         ready_cv_.notify_all();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        observer_cv_.notify_all();
+#endif
     }
 
     // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
@@ -164,6 +171,9 @@ class ReadyWaitSource final : public BackendWaitSource {
             ++ready_epoch_;
         }
         ready_cv_.notify_all();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        observer_cv_.notify_all();
+#endif
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -174,6 +184,23 @@ class ReadyWaitSource final : public BackendWaitSource {
     // entry. Observe-only; compiled out of production builds.
     void set_wait_prepark_counter(std::atomic<int>* counter) noexcept {
         prepark_counter_.store(counter, std::memory_order_release);
+    }
+    // Zero-CPU epoch observer for tests: blocks until the ACTUAL control/
+    // progress epoch pair differs from `observed`. The predicate re-reads
+    // snapshot() — the single source of truth stays the epoch fields; the
+    // observer mutex/cv below is only a notification channel, never a second
+    // counter. Notified by the same interrupt_all()/signal_progress() that
+    // advance the epochs, so a missed notification cannot lose the observation
+    // (the predicate re-checks persistent state on every wakeup). Compiled out
+    // of production builds; the layout cost in the internal-testing target is
+    // accepted and documented (AGENTS.md §15).
+    void wait_epoch_changed(BackendWaitToken observed) const noexcept {
+        std::unique_lock<std::mutex> lk(observer_mtx_);
+        observer_cv_.wait(lk, [&] {
+            const BackendWaitToken tok = snapshot();
+            return tok.progress_generation != observed.progress_generation ||
+                   tok.control_generation != observed.control_generation;
+        });
     }
 #endif
 
@@ -194,6 +221,12 @@ class ReadyWaitSource final : public BackendWaitSource {
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
     // D4-RM14: per-entry wait counter (see set_wait_prepark_counter).
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
+    // Test-only epoch-observer channel (see wait_epoch_changed). Guarded by
+    // observer_mtx_ only; lock order observer_mtx_ -> mtx_ (snapshot), never
+    // reversed, so the observer cannot deadlock interrupt_all/signal_progress.
+    // Both are mutable: wait_epoch_changed is a const observer.
+    mutable std::mutex observer_mtx_;
+    mutable std::condition_variable observer_cv_;
 #endif
 };
 

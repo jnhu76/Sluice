@@ -36,10 +36,19 @@
 // (see phase-g design §3.5 / SW E5-A2 capture at the Phase-B commit).
 //
 // Determinism policy (production-test-plan.md §1): NO sleep_for as ordering
-// proof. Causal seams (PhaseTag pauses), one-way park-entry markers, and
-// epoch observations only; bounded deadlines appear solely as hang
-// watchdogs. Mutation detectors (closeout M1/M2) hang in these constructions
-// and exit fail-closed (rc 70) via the watchdog.
+// proof and NO wall-clock deadline as a correctness verdict (issue #123).
+// Every correctness observation is a BLOCKING handshake — atomic::wait on a
+// store+notify latch (wait_phase_entered / prepark_entries / resumed /
+// progress-seam paused), the controller's cv wait_paused, or the
+// ReadyWaitSource test-only epoch observer (which re-reads the ACTUAL epoch,
+// so no second source of truth) — none of which depends on scheduler
+// latency. The ONE bounded element per case is a case-level watchdog: a
+// deadlock safety net that aborts fail-closed (rc 70) only on a genuine
+// no-progress stall (progress frozen for >= the full budget — the issue #101
+// model), printing case, phase, gate state, park domain, backend token,
+// outstanding, backend-ready, prepark count, and pid. Mutation detectors
+// (closeout M1/M2) hang in these constructions and exit fail-closed (rc 70)
+// via the watchdog.
 //
 // Gated to x86_64 (fiber_ctx::supported) for parity with the rest of E13.
 #include <sluice/async/async_io_context.hpp>
@@ -56,11 +65,15 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -81,8 +94,16 @@ using SelectKind = sa::SelectKind;
 
 namespace {
 
-constexpr auto kObserveWait = std::chrono::seconds(5);
-constexpr auto kJoinWatchdog = std::chrono::seconds(10);
+// The case-level watchdog budget. This is a deadlock safety net ONLY (see
+// CloseoutWatchdog): every correctness observation in this suite is a
+// blocking handshake, so a correct case converges in milliseconds even under
+// host-scheduler starvation; the budget exists solely to convert a GENUINE
+// protocol stall (progress frozen for the entire budget) into a bounded
+// fail-closed abort. It is deliberately generous so starvation — which pauses
+// progress for seconds and resumes — never reaches a full-budget freeze.
+constexpr auto kWatchdogSeconds = std::chrono::seconds(30);
+
+struct PGFixture;  // defined below; CloseoutProbe holds only a pointer.
 
 struct FiberStack {
     static constexpr std::size_t kBytes = 64 * 1024;
@@ -91,10 +112,11 @@ struct FiberStack {
     std::size_t size() const noexcept { return bytes.size(); }
 };
 
-// Shared construction-violation exit. A stall in a Phase-G closeout case is
-// the FAILURE verdict (the pre-fix/mutant manifestation); the scenario is
-// deliberately not recovered — teardown with a parked worker would only mask
-// the evidence (joinable-thread abort / shutdown hang).
+// Deterministic construction-verdict helper (test thread only, NOT the
+// watchdog): a wrong state at an observation point (e.g. a park domain that
+// is not Backend) is the FAILURE verdict. dump_park_forensics is safe here —
+// it runs on the test thread at a point where the workers are parked in
+// domains that hold no Scheduler global lock, so it cannot deadlock.
 [[noreturn]] void fail_closed(Scheduler& sched, const char* tag, const char* msg) {
     AsyncTestAccess::dump_park_forensics(sched, tag);
     std::fprintf(stderr, "PHASE-G-CLOSEOUT FAIL-CLOSED: %s (%s); pid=%d\n",
@@ -102,40 +124,62 @@ struct FiberStack {
     std::_Exit(70);
 }
 
-bool wait_flag(const std::atomic<bool>& flag) {
-    const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
+// ---------------------------------------------------------------------------
+// Case/phase attribution (see CloseoutWatchdog below, defined after
+// PGFixture/SelectWaiter so its forensics dump can dereference the fixture).
+// ---------------------------------------------------------------------------
+struct CloseoutProbe {
+    const char* name = nullptr;
+    PGFixture* fx = nullptr;
+    std::atomic<const char*> phase{nullptr};
+    std::atomic<std::uint64_t> progress_epoch{0};
+    const std::atomic<bool>* gate_paused = nullptr;
+    const std::atomic<bool>* gate_resume = nullptr;
+    const std::atomic<bool>* gate_exited = nullptr;
+
+    void set_phase(const char* p) noexcept {
+        phase.store(p, std::memory_order_release);
+        progress_epoch.fetch_add(1, std::memory_order_relaxed);
+    }
+    void bind_gate(const std::atomic<bool>& paused,
+                   const std::atomic<bool>& resume,
+                   const std::atomic<bool>& exited) noexcept {
+        gate_paused = &paused;
+        gate_resume = &resume;
+        gate_exited = &exited;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Blocking observation helpers (issue #123). All of them are zero-CPU
+// handshakes on state that is published with a matching notify — none depends
+// on scheduler latency, and none carries a wall-clock deadline. A genuine
+// stall (the state never changes) is bounded by the case watchdog, never by
+// a correctness deadline.
+// ---------------------------------------------------------------------------
+
+// One-way latch published with store+notify_all (the ready wait source's
+// wait_phase_flag and the progress seam's paused flag both do exactly that).
+void wait_flag(std::atomic<bool>& flag) {
     while (!flag.load(std::memory_order_acquire)) {
-        if (std::chrono::steady_clock::now() >= deadline) return false;
-        std::this_thread::yield();
+        flag.wait(false, std::memory_order_acquire);
     }
-    return true;
 }
 
-bool wait_count_at_least(const std::atomic<int>& counter, int value) {
-    const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
-    while (counter.load(std::memory_order_acquire) < value) {
-        if (std::chrono::steady_clock::now() >= deadline) return false;
-        std::this_thread::yield();
+// Monotonic counter incremented WITH a matching notify_all (prepark_entries
+// in ReadyWaitSource, resumed in the test fiber below).
+void wait_count_at_least(std::atomic<int>& counter, int value) {
+    int cur = counter.load(std::memory_order_acquire);
+    while (cur < value) {
+        counter.wait(cur, std::memory_order_acquire);
+        cur = counter.load(std::memory_order_acquire);
     }
-    return true;
 }
 
-bool wait_token(Scheduler& sched, std::uint64_t& observed,
-                std::uint64_t sa::BackendWaitToken::*field) {
-    const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
-    while (std::chrono::steady_clock::now() < deadline) {
-        const auto token = AsyncTestAccess::backend_wait_token(sched);
-        if (token.*field > observed) {
-            observed = token.*field;
-            return true;
-        }
-        std::this_thread::yield();
-    }
-    return false;
-}
-
-// run_live driver with a watchdog join. A run that never returns IS the
-// mutant/pre-fix verdict — fail closed rather than wedging the harness.
+// run_live driver. A run that never returns IS the mutant/pre-fix verdict —
+// the case-level watchdog bounds that and aborts fail-closed (rc 70) with
+// the forensic state; join() itself is a blocking handshake, never a
+// deadline.
 struct RunDriver {
     Scheduler& sched;
     std::thread th;
@@ -145,19 +189,12 @@ struct RunDriver {
         th = std::thread([this, workers] {
             sched.run_live(workers);
             done.store(true, std::memory_order_release);
+            done.notify_all();
         });
     }
-    void join_or_fail(const char* tag) {
-        if (done.load(std::memory_order_acquire)) {
-            th.join();
-            return;
-        }
-        const auto deadline = std::chrono::steady_clock::now() + kJoinWatchdog;
+    void join() {
         while (!done.load(std::memory_order_acquire)) {
-            if (std::chrono::steady_clock::now() >= deadline) {
-                fail_closed(sched, tag, "run_live never returned (lost wake)");
-            }
-            std::this_thread::yield();
+            done.wait(false, std::memory_order_acquire);
         }
         th.join();
     }
@@ -206,12 +243,36 @@ struct PGFixture {
     }
 };
 
+// One ReadyWaitSource epoch field advancing past `observed`. The blocking
+// channel is the ready-wait source's test-only epoch observer — notified by
+// the same interrupt_all()/signal_progress() that advance the ACTUAL epochs
+// (single source of truth; no second counter). If the epoch moves on the
+// other field first, the observer wakes, the loop re-checks our field, and
+// it re-blocks — still zero CPU.
+template <class T>
+void wait_token(PGFixture& f, T sa::BackendWaitToken::*field, T observed) {
+    for (;;) {
+        const auto token = f.raw->wait_source()->snapshot();
+        if (token.*field > observed) return;
+        f.raw->wait_epoch_changed_for_test(token);
+    }
+}
+
 // A one-byte seeded temp file; the gated read on it never completes until
-// resume_threadpool_gate.
+// resume_threadpool_gate. The path is unique per process and per instance
+// (pid + monotonic counter), following the Phase-G forensics temp-path
+// pattern — isolation hardening against concurrent suite processes sharing
+// the default-gate temp files (issue #123 requirement 6; the closeout
+// constructions are single-process deterministic proofs, but a shared fixed
+// path under parallel execution is a hygiene hazard).
 struct TempFile {
     int fd = -1;
     TempFile() {
-        fd = ::open(templ(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        path_ = (std::filesystem::temp_directory_path() /
+                 ("sluice_phase_g_closeout_" + std::to_string(::getpid()) +
+                  "_" + std::to_string(counter_++) + ".tmp"))
+                    .string();
+        fd = ::open(path_.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) {
             std::fprintf(stderr, "phase_g_closeout: temp open failed\n");
             std::exit(1);
@@ -222,12 +283,17 @@ struct TempFile {
             std::exit(1);
         }
     }
-    ~TempFile() { ::close(fd); }
+    ~TempFile() {
+        ::close(fd);
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+    }
     TempFile(const TempFile&) = delete;
     TempFile& operator=(const TempFile&) = delete;
 
   private:
-    static const char* templ() { return "/tmp/sluice_phase_g_closeout.tmp"; }
+    std::string path_;
+    static inline long counter_ = 0;
 };
 
 // The external-wake-possible fiber: parked in select() on an Event, which
@@ -246,6 +312,9 @@ struct SelectWaiter {
         fb.set_entry([this, &sched](Fiber&) {
             captured = sa::select(sched, sa::EventSelectCase{ev});
             resumed.fetch_add(1, std::memory_order_acq_rel);
+            // atomic::wait consumers: notify after the increment so the test
+            // can block zero-CPU on this counter (blocking handshake).
+            resumed.notify_all();
         });
     }
     void spawn_on_worker0(Scheduler& sched) {
@@ -255,6 +324,140 @@ struct SelectWaiter {
         }
         sched.spawn_on(fb, /*worker_id=*/0);
     }
+};
+
+// ---------------------------------------------------------------------------
+// The single bounded watchdog per case (issue #123).
+//
+// The case advances `phase` and bumps `progress_epoch` at every transition;
+// the watchdog treats a progress_epoch frozen for >= the full budget as a
+// genuine no-progress stall — the ONLY abort trigger (issue #101 model: a
+// case-total wall-clock deadline is NOT a liveness oracle; only a real
+// freeze is). It is a deadlock safety net ONLY: every correctness
+// observation in this suite is a blocking handshake (zero CPU, no
+// scheduler-latency dependency), so a correct case converges in
+// milliseconds even under host-scheduler starvation, and starvation — which
+// pauses progress for seconds and resumes — never reaches a full-budget
+// freeze. The watchdog reads ONLY lock-free atomics and non-blocking (try)
+// reads — it must never block behind the defect it is diagnosing (a stalled
+// worker may hold global_mtx_ at a causal seam).
+// ---------------------------------------------------------------------------
+class CloseoutWatchdog {
+  public:
+    explicit CloseoutWatchdog(std::chrono::seconds budget,
+                              const CloseoutProbe& probe)
+        : probe_(&probe),
+          budget_ms_(std::chrono::duration_cast<std::chrono::milliseconds>(
+              budget)) {
+        try {
+            thread_ = std::thread([this] { run(); });
+        } catch (...) {
+            // Fail-closed: the watchdog is the only bound on the blocking
+            // handshakes, so a thread-creation failure must fail the test
+            // rather than leave a genuine stall unbounded.
+            std::fprintf(stderr,
+                         "phase_g_closeout: watchdog thread creation failed; "
+                         "aborting (fail-closed: no unbounded blocking wait)\n");
+            std::abort();
+        }
+    }
+    ~CloseoutWatchdog() {
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            done_.store(true, std::memory_order_release);
+        }
+        cv_.notify_one();
+        if (thread_.joinable()) thread_.join();
+    }
+    CloseoutWatchdog(const CloseoutWatchdog&) = delete;
+    CloseoutWatchdog& operator=(const CloseoutWatchdog&) = delete;
+
+  private:
+    static constexpr auto kPollInterval = std::chrono::milliseconds(100);
+
+    void run() noexcept {
+        std::unique_lock<std::mutex> lk(mtx_);
+        auto last_progress_at = std::chrono::steady_clock::now();
+        auto last_epoch =
+            probe_->progress_epoch.load(std::memory_order_acquire);
+        while (true) {
+            const bool done = cv_.wait_until(
+                lk, std::chrono::steady_clock::now() + kPollInterval, [this] {
+                    return done_.load(std::memory_order_acquire);
+                });
+            if (done) return;
+            const auto now = std::chrono::steady_clock::now();
+            const auto epoch =
+                probe_->progress_epoch.load(std::memory_order_acquire);
+            if (epoch != last_epoch) {
+                last_epoch = epoch;
+                last_progress_at = now;
+            }
+            // Genuine stall: no phase transition for the ENTIRE budget.
+            if (now - last_progress_at >= budget_ms_) {
+                diagnose_and_abort(now, last_progress_at);
+            }
+        }
+    }
+
+    [[noreturn]] void diagnose_and_abort(
+        std::chrono::steady_clock::time_point now,
+        std::chrono::steady_clock::time_point last_progress_at) noexcept {
+        const char* ph = probe_->phase.load(std::memory_order_acquire);
+        const auto frozen = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - last_progress_at);
+        const auto total =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - start_);
+        std::fprintf(stderr,
+                     "PHASE-G-CLOSEOUT WATCHDOG: genuine no-progress stall "
+                     "(progress frozen for >= the full budget); aborting\n");
+        std::fprintf(stderr,
+                     "  case=%s phase=%s progress_epoch=%llu frozen=%lldms "
+                     "budget=%lldms total=%lldms pid=%d\n",
+                     probe_->name ? probe_->name : "?", ph ? ph : "?",
+                     static_cast<unsigned long long>(
+                         probe_->progress_epoch.load(std::memory_order_acquire)),
+                     static_cast<long long>(frozen.count()),
+                     static_cast<long long>(budget_ms_.count()),
+                     static_cast<long long>(total.count()),
+                     static_cast<int>(::getpid()));
+        if (probe_->gate_resume != nullptr) {
+            std::fprintf(stderr, "  gate: paused=%d resume=%d exited=%d\n",
+                         probe_->gate_paused->load(std::memory_order_acquire),
+                         probe_->gate_resume->load(std::memory_order_acquire),
+                         probe_->gate_exited->load(std::memory_order_acquire));
+        }
+        if (probe_->fx != nullptr) {
+            PGFixture& f = *probe_->fx;
+            const auto tok = f.raw->wait_source()->snapshot();
+            bool park_available = false;
+            const auto park = AsyncTestAccess::worker_park_domain_try(
+                f.sched, 0, park_available);
+            std::fprintf(
+                stderr,
+                "  wait_phase_entered=%d prepark=%d token=(ready=%llu,"
+                "ctrl=%llu) outstanding=%zu backend_ready=%zu "
+                "park_domain[0]=%d(%s)\n",
+                f.wait_phase_entered.load(std::memory_order_acquire) ? 1 : 0,
+                f.prepark_entries.load(std::memory_order_acquire),
+                static_cast<unsigned long long>(tok.progress_generation),
+                static_cast<unsigned long long>(tok.control_generation),
+                f.raw->outstanding(), f.raw->backend_ready_count_for_test(),
+                static_cast<int>(park), park_available ? "read" : "locked");
+        }
+        std::fflush(stderr);
+        std::_Exit(70);
+    }
+
+    const CloseoutProbe* probe_;
+    std::chrono::milliseconds budget_ms_;
+    std::chrono::steady_clock::time_point start_{
+        std::chrono::steady_clock::now()};
+    std::thread thread_;
+    std::mutex mtx_;
+    std::condition_variable cv_;
+    std::atomic<bool> done_{false};
 };
 
 }  // namespace
@@ -281,7 +484,8 @@ struct SelectWaiter {
 //      converges.
 // Verdict: fiber resumed exactly once with the Event winner; the run
 // returned; the Completion ready via a real reap. A participant that slept
-// through the pre-arm wake would hang at the watchdog (rc 70).
+// through the pre-arm wake would stall the blocking handshakes and the case
+// watchdog fires (rc 70).
 // ===========================================================================
 SLUICE_TEST_CASE(phase_g_closeout_case_a_notify_before_arm) {
     if constexpr (!sa::fiber_ctx::supported) return;
@@ -295,48 +499,47 @@ SLUICE_TEST_CASE(phase_g_closeout_case_a_notify_before_arm) {
     waiter.spawn_on_worker0(f.sched);
     stest::MwAdmissionSeam::arm(f.sched);
 
+    CloseoutProbe probe;
+    probe.name = "case-a-notify-before-arm";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    // Bounded pause observation (the facade's wait_paused blocks on the
-    // controller cv; a construction failure must not wedge the harness).
-    {
-        const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
-        while (!stest::is_paused(f.sched, stest::PhaseTag::mw_admission_phase_b)) {
-            if (std::chrono::steady_clock::now() >= deadline) {
-                fail_closed(f.sched, "case-a-seam-never-paused",
-                            "MW-S2 Phase-B seam never paused");
-            }
-            std::this_thread::yield();
-        }
-    }
+    // Blocking seam observation (zero-CPU controller-cv handshake): the
+    // worker is held at the MW-S2 Phase-B commit boundary, gate false, no
+    // commit. A construction failure (seam never paused) is bounded by the
+    // case watchdog, never by a correctness deadline.
+    probe.set_phase("seam-pause");
+    stest::MwAdmissionSeam::wait_paused(f.sched);
 
     // The bridge skips: the gate is false (no commit), so ev.set()'s signal
     // must NOT bump the control epoch.
-    const auto control_before =
-        AsyncTestAccess::backend_wait_token(f.sched).control_generation;
+    probe.set_phase("publish-pre-arm");
+    const auto control_before = f.raw->wait_source()->snapshot();
     waiter.ev.set();
-    const auto control_after =
-        AsyncTestAccess::backend_wait_token(f.sched).control_generation;
-    SLUICE_CHECK_MSG(control_after == control_before,
+    const auto control_after = f.raw->wait_source()->snapshot();
+    SLUICE_CHECK_MSG(control_after.control_generation ==
+                         control_before.control_generation,
                      "Case A: bridge must skip before the arm (gate false)");
 
     stest::MwAdmissionSeam::release(f.sched);
 
     // The re-drain consumes the wake: the fiber runs exactly once.
-    if (!wait_count_at_least(waiter.resumed, 1)) {
-        fail_closed(f.sched, "case-a-fiber-never-resumed",
-                    "re-drain never consumed the pre-arm wake");
-    }
+    probe.set_phase("observe-fiber-resumed");
+    wait_count_at_least(waiter.resumed, 1);
     // The worker re-classifies MW-S2 (read still gated) and parks unbounded
     // in the backend domain; only the gate release can complete the read.
-    if (!wait_count_at_least(f.prepark_entries, 1)) {
-        fail_closed(f.sched, "case-a-never-reparked",
-                    "participant never entered the backend park");
-    }
+    probe.set_phase("observe-repark");
+    wait_count_at_least(f.prepark_entries, 1);
     sa::resume_threadpool_gate(f.gate);
 
-    driver.join_or_fail("case-a-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(waiter.resumed.load(std::memory_order_acquire) == 1,
                      "fiber resumed exactly once");
@@ -378,49 +581,43 @@ SLUICE_TEST_CASE(phase_g_closeout_case_b_notify_after_arm_before_wait) {
     waiter.spawn_on_worker0(f.sched);
     stest::arm(f.sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
 
+    CloseoutProbe probe;
+    probe.name = "case-b-notify-after-arm-before-wait";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    {
-        const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
-        while (!stest::is_paused(f.sched,
-                                 stest::PhaseTag::mw_s2_committed_before_wait_one)) {
-            if (std::chrono::steady_clock::now() >= deadline) {
-                fail_closed(f.sched, "case-b-seam-never-paused",
-                            "committed seam never paused");
-            }
-            std::this_thread::yield();
-        }
-    }
+    probe.set_phase("seam-pause");
+    stest::wait_paused(f.sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
 
     // The bridge fires: gate==true at the notify, so the control epoch
     // advances BEFORE wait_one() ever runs.
-    std::uint64_t control = AsyncTestAccess::backend_wait_token(f.sched).control_generation;
+    probe.set_phase("publish-after-commit");
+    const auto token_before = f.raw->wait_source()->snapshot();
     f.wh.notify();
-    if (!wait_token(f.sched, control, &sa::BackendWaitToken::control_generation)) {
-        fail_closed(f.sched, "case-b-bridge-never-fired",
-                    "notify did not bump the control epoch (bridge disabled?)");
-    }
+    wait_token(f, &sa::BackendWaitToken::control_generation,
+               token_before.control_generation);
 
     stest::release(f.sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
 
     // The armed floor releases the first wait; the participant re-parks.
-    if (!wait_count_at_least(f.prepark_entries, 2)) {
-        fail_closed(f.sched, "case-b-parked-through-interrupt",
-                    "first wait parked through the armed-floor interrupt "
-                    "(D4-RM14 violation / mutation M2)");
-    }
+    probe.set_phase("observe-repark");
+    wait_count_at_least(f.prepark_entries, 2);
 
     // A second external publication through the same bridge resolves the
     // select; then real progress completes the scenario.
+    probe.set_phase("resolve-select");
     waiter.ev.set();
-    if (!wait_count_at_least(waiter.resumed, 1)) {
-        fail_closed(f.sched, "case-b-fiber-never-resumed",
-                    "select never resolved after the bridge wake");
-    }
+    wait_count_at_least(waiter.resumed, 1);
     sa::resume_threadpool_gate(f.gate);
 
-    driver.join_or_fail("case-b-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(waiter.resumed.load(std::memory_order_acquire) == 1,
                      "fiber resumed exactly once");
@@ -456,39 +653,40 @@ SLUICE_TEST_CASE(phase_g_closeout_case_c_notify_while_parked) {
     SelectWaiter waiter(f.sched);
     waiter.spawn_on_worker0(f.sched);
 
+    CloseoutProbe probe;
+    probe.name = "case-c-notify-while-parked";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    if (!wait_flag(f.wait_phase_entered)) {
-        fail_closed(f.sched, "case-c-never-parked",
-                    "participant never entered the backend park");
-    }
+    probe.set_phase("observe-park");
+    wait_flag(f.wait_phase_entered);
     if (AsyncTestAccess::worker_park_domain(f.sched, 0) !=
         sa::WorkerState::ParkDomain::Backend) {
         fail_closed(f.sched, "case-c-wrong-domain", "park domain not Backend");
     }
 
-    std::uint64_t control = AsyncTestAccess::backend_wait_token(f.sched).control_generation;
+    const auto token_before = f.raw->wait_source()->snapshot();
     f.wh.notify();
-    if (!wait_token(f.sched, control, &sa::BackendWaitToken::control_generation)) {
-        fail_closed(f.sched, "case-c-bridge-never-fired",
-                    "parked notify did not bump the control epoch");
-    }
+    wait_token(f, &sa::BackendWaitToken::control_generation,
+               token_before.control_generation);
     // The wake is consumed: the interrupted wait returns and the Live run
     // re-parks (external-wake-possible select wait still registered).
-    if (!wait_count_at_least(f.prepark_entries, 2)) {
-        fail_closed(f.sched, "case-c-lost-parked-wake",
-                    "parked participant never consumed the bridge wake");
-    }
+    probe.set_phase("observe-repark");
+    wait_count_at_least(f.prepark_entries, 2);
 
+    probe.set_phase("resolve-select");
     waiter.ev.set();
-    if (!wait_count_at_least(waiter.resumed, 1)) {
-        fail_closed(f.sched, "case-c-fiber-never-resumed",
-                    "select never resolved after the bridge wake");
-    }
+    wait_count_at_least(waiter.resumed, 1);
     sa::resume_threadpool_gate(f.gate);
 
-    driver.join_or_fail("case-c-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(waiter.resumed.load(std::memory_order_acquire) == 1,
                      "fiber resumed exactly once");
@@ -532,42 +730,44 @@ SLUICE_TEST_CASE(phase_g_closeout_case_d_ready_vs_notify_race) {
         SelectWaiter waiter(f.sched);
         waiter.spawn_on_worker0(f.sched);
 
+        CloseoutProbe probe;
+        probe.name = "case-d1-ready-vs-notify-progress-first";
+        probe.fx = &f;
+        probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+        CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+        probe.set_phase("run");
         RunDriver driver(f.sched);
         driver.start(1);
 
-        if (!wait_flag(f.wait_phase_entered)) {
-            fail_closed(f.sched, "case-d1-never-parked",
-                        "participant never entered the backend park");
-        }
+        probe.set_phase("observe-park");
+        wait_flag(f.wait_phase_entered);
         f.ctx.set_wait_source_progress_pause_gate_for_test(&pgate);
-        std::uint64_t progress =
-            AsyncTestAccess::backend_wait_token(f.sched).progress_generation;
+        // Baseline BEFORE the gate release: the release is the ONLY trigger
+        // for the terminal publication, so the advance is strictly after
+        // this baseline (the old code read the baseline AFTER the release —
+        // the same baseline-inversion race as TP-G5, issue #123).
+        const auto progress_before = f.raw->wait_source()->snapshot();
         sa::resume_threadpool_gate(f.gate);
-        if (!wait_token(f.sched, progress,
-                        &sa::BackendWaitToken::progress_generation)) {
-            fail_closed(f.sched, "case-d1-ready-never-published",
-                        "backend terminal never published progress");
-        }
-        if (!wait_flag(pgate.paused)) {
-            fail_closed(f.sched, "case-d1-progress-seam-never-paused",
-                        "participant never reported the in-window progress");
-        }
-        std::uint64_t control =
-            AsyncTestAccess::backend_wait_token(f.sched).control_generation;
+        wait_token(f, &sa::BackendWaitToken::progress_generation,
+                   progress_before.progress_generation);
+        // The participant is held AFTER the progress report, BEFORE the
+        // reaping poll (the seam's paused flag is published with notify —
+        // blocking observation).
+        wait_flag(pgate.paused);
+        const auto control_before = f.raw->wait_source()->snapshot();
         f.wh.notify();
-        if (!wait_token(f.sched, control,
-                        &sa::BackendWaitToken::control_generation)) {
-            fail_closed(f.sched, "case-d1-bridge-never-fired",
-                        "notify never bumped the control epoch");
-        }
+        wait_token(f, &sa::BackendWaitToken::control_generation,
+                   control_before.control_generation);
         pgate.resume.store(true, std::memory_order_release);
+        pgate.resume.notify_all();
 
+        probe.set_phase("resolve-select");
         waiter.ev.set();
-        if (!wait_count_at_least(waiter.resumed, 1)) {
-            fail_closed(f.sched, "case-d1-fiber-never-resumed",
-                        "select never resolved");
-        }
-        driver.join_or_fail("case-d1-run-never-returned");
+        wait_count_at_least(waiter.resumed, 1);
+        probe.set_phase("join");
+        driver.join();
+        probe.set_phase("verify");
         SLUICE_CHECK_MSG(c.ready(),
                          "D1: terminal consumed exactly once despite the race");
         SLUICE_CHECK_MSG(f.raw->backend_ready_count_for_test() == 0,
@@ -587,43 +787,38 @@ SLUICE_TEST_CASE(phase_g_closeout_case_d_ready_vs_notify_race) {
         SelectWaiter waiter(f.sched);
         waiter.spawn_on_worker0(f.sched);
 
+        CloseoutProbe probe;
+        probe.name = "case-d2-ready-vs-notify-notify-first";
+        probe.fx = &f;
+        probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+        CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+        probe.set_phase("run");
         RunDriver driver(f.sched);
         driver.start(1);
 
-        if (!wait_flag(f.wait_phase_entered)) {
-            fail_closed(f.sched, "case-d2-never-parked",
-                        "participant never entered the backend park");
-        }
-        std::uint64_t control =
-            AsyncTestAccess::backend_wait_token(f.sched).control_generation;
+        probe.set_phase("observe-park");
+        wait_flag(f.wait_phase_entered);
+        const auto control_before = f.raw->wait_source()->snapshot();
         f.wh.notify();
-        if (!wait_token(f.sched, control,
-                        &sa::BackendWaitToken::control_generation)) {
-            fail_closed(f.sched, "case-d2-bridge-never-fired",
-                        "notify never bumped the control epoch");
-        }
-        if (!wait_count_at_least(f.prepark_entries, 2)) {
-            fail_closed(f.sched, "case-d2-lost-parked-wake",
-                        "parked participant never consumed the bridge wake");
-        }
+        wait_token(f, &sa::BackendWaitToken::control_generation,
+                   control_before.control_generation);
+        wait_count_at_least(f.prepark_entries, 2);
         // The interrupt returned 0 (gated read: the final poll reaps
         // nothing); the Live run re-parked. NOW the terminal publishes —
-        // the re-park must consume it (no lost readiness).
-        std::uint64_t progress =
-            AsyncTestAccess::backend_wait_token(f.sched).progress_generation;
+        // the re-park must consume it (no lost readiness). Baseline BEFORE
+        // the release (same discipline as D1/TP-G5).
+        const auto progress_before = f.raw->wait_source()->snapshot();
         sa::resume_threadpool_gate(f.gate);
-        if (!wait_token(f.sched, progress,
-                        &sa::BackendWaitToken::progress_generation)) {
-            fail_closed(f.sched, "case-d2-ready-never-published",
-                        "backend terminal never published progress");
-        }
+        wait_token(f, &sa::BackendWaitToken::progress_generation,
+                   progress_before.progress_generation);
 
+        probe.set_phase("resolve-select");
         waiter.ev.set();
-        if (!wait_count_at_least(waiter.resumed, 1)) {
-            fail_closed(f.sched, "case-d2-fiber-never-resumed",
-                        "select never resolved");
-        }
-        driver.join_or_fail("case-d2-run-never-returned");
+        wait_count_at_least(waiter.resumed, 1);
+        probe.set_phase("join");
+        driver.join();
+        probe.set_phase("verify");
         SLUICE_CHECK_MSG(c.ready(),
                          "D2: re-parked participant consumed the terminal");
         SLUICE_CHECK_MSG(f.raw->backend_ready_count_for_test() == 0,
@@ -648,28 +843,33 @@ SLUICE_TEST_CASE(phase_g_closeout_tp_g1_ready_between_snapshot_and_park) {
     sa::Completion<std::size_t> c;
     SLUICE_CHECK(f.ctx.submit_read(sa::ReadOp{tmp.fd, buf, 1, 0}, c).has_value());
 
+    CloseoutProbe probe;
+    probe.name = "tp-g1-ready-between-snapshot-and-park";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
     // No fiber: pure backend-only MW-S2, unbounded park.
-    if (!wait_flag(f.wait_phase_entered)) {
-        fail_closed(f.sched, "tp-g1-never-parked",
-                    "participant never entered the park window");
-    }
+    probe.set_phase("observe-park");
+    wait_flag(f.wait_phase_entered);
     if (AsyncTestAccess::worker_park_domain(f.sched, 0) !=
         sa::WorkerState::ParkDomain::Backend) {
         fail_closed(f.sched, "tp-g1-wrong-domain", "park domain not Backend");
     }
-    // The terminal lands INSIDE the snapshot→park window.
-    std::uint64_t progress =
-        AsyncTestAccess::backend_wait_token(f.sched).progress_generation;
+    // The terminal lands INSIDE the snapshot→park window. Baseline BEFORE
+    // the release (the publication is strictly after it).
+    const auto progress_before = f.raw->wait_source()->snapshot();
     sa::resume_threadpool_gate(f.gate);
-    if (!wait_token(f.sched, progress, &sa::BackendWaitToken::progress_generation)) {
-        fail_closed(f.sched, "tp-g1-ready-never-published",
-                    "backend terminal never published progress");
-    }
+    wait_token(f, &sa::BackendWaitToken::progress_generation,
+               progress_before.progress_generation);
 
-    driver.join_or_fail("tp-g1-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(c.ready(), "TP-G1: in-window readiness consumed");
     SLUICE_CHECK_MSG(f.raw->backend_ready_count_for_test() == 0,
@@ -693,16 +893,23 @@ SLUICE_TEST_CASE(phase_g_closeout_tp_g2_multi_ready_coalesce) {
     SLUICE_CHECK(f.ctx.submit_read(sa::ReadOp{tmp.fd, &buf[1], 1, 1}, c2).has_value());
     SLUICE_CHECK(f.ctx.submit_read(sa::ReadOp{tmp.fd, &buf[2], 1, 2}, c3).has_value());
 
+    CloseoutProbe probe;
+    probe.name = "tp-g2-multi-ready-coalesce";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    if (!wait_flag(f.wait_phase_entered)) {
-        fail_closed(f.sched, "tp-g2-never-parked",
-                    "participant never entered the backend park");
-    }
+    probe.set_phase("observe-park");
+    wait_flag(f.wait_phase_entered);
     sa::resume_threadpool_gate(f.gate);
 
-    driver.join_or_fail("tp-g2-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(c1.ready() && c2.ready() && c3.ready(),
                      "TP-G2: every coalesced terminal produced its Completion");
@@ -731,39 +938,44 @@ SLUICE_TEST_CASE(phase_g_closeout_tp_g5_close_admission_while_parked) {
     sa::Completion<std::size_t> c;
     SLUICE_CHECK(f.ctx.submit_read(sa::ReadOp{tmp.fd, buf, 1, 0}, c).has_value());
 
+    CloseoutProbe probe;
+    probe.name = "tp-g5-close-admission-while-parked";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    if (!wait_flag(f.wait_phase_entered)) {
-        fail_closed(f.sched, "tp-g5-never-parked",
-                    "participant never entered the backend park");
-    }
+    probe.set_phase("observe-park");
+    wait_flag(f.wait_phase_entered);
     f.raw->close_admission();
 
     // The interrupted no-progress park terminates the run (no select wait —
-    // external wake not possible). A parked-forever run is the failure.
-    driver.join_or_fail("tp-g5-run-never-returned");
+    // external wake not possible). A parked-forever run is the failure
+    // (bounded by the case watchdog).
+    probe.set_phase("join");
+    driver.join();
 
     // The read completes with no observer; the caller re-enters and the
-    // first poll must reap the terminal.
+    // first poll must reap the terminal. Baseline BEFORE the gate release:
+    // the release is the ONLY trigger for the terminal publication, so the
+    // advance is strictly after this baseline. (The old code read the
+    // baseline AFTER the release — a publication landing in between made
+    // the observation wait for a second, never-coming advance: the
+    // reproduced TP-G5 flake under CPU contention, issue #123.)
+    probe.set_phase("observe-terminal-published");
+    const auto progress_before = f.raw->wait_source()->snapshot();
     sa::resume_threadpool_gate(f.gate);
-    {
-        std::uint64_t progress =
-            AsyncTestAccess::backend_wait_token(f.sched).progress_generation;
-        const auto deadline = std::chrono::steady_clock::now() + kObserveWait;
-        while (AsyncTestAccess::backend_wait_token(f.sched).progress_generation ==
-               progress) {
-            if (std::chrono::steady_clock::now() >= deadline) {
-                fail_closed(f.sched, "tp-g5-ready-never-published",
-                            "terminal never published after close");
-            }
-            std::this_thread::yield();
-        }
-    }
+    wait_token(f, &sa::BackendWaitToken::progress_generation,
+               progress_before.progress_generation);
 
+    probe.set_phase("reentry");
     RunDriver driver2(f.sched);
     driver2.start(1);
-    driver2.join_or_fail("tp-g5-reentry-never-returned");
+    driver2.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(c.ready(), "TP-G5: re-entry reaped the terminal exactly once");
     SLUICE_CHECK_MSG(f.raw->backend_ready_count_for_test() == 0,
@@ -790,29 +1002,29 @@ SLUICE_TEST_CASE(phase_g_closeout_tp_g6_bridge_no_fabrication) {
     SelectWaiter waiter(f.sched);
     waiter.spawn_on_worker0(f.sched);
 
+    CloseoutProbe probe;
+    probe.name = "tp-g6-bridge-no-fabrication";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    if (!wait_flag(f.wait_phase_entered)) {
-        fail_closed(f.sched, "tp-g6-never-parked",
-                    "participant never entered the backend park");
-    }
+    probe.set_phase("observe-park");
+    wait_flag(f.wait_phase_entered);
     constexpr int kNotifies = 3;
     for (int i = 0; i < kNotifies; ++i) {
-        std::uint64_t control =
-            AsyncTestAccess::backend_wait_token(f.sched).control_generation;
+        probe.set_phase("bridge-notify");
+        const auto token_before = f.raw->wait_source()->snapshot();
         f.wh.notify();
-        if (!wait_token(f.sched, control,
-                        &sa::BackendWaitToken::control_generation)) {
-            fail_closed(f.sched, "tp-g6-bridge-never-fired",
-                        "notify did not bump the control epoch");
-        }
+        wait_token(f, &sa::BackendWaitToken::control_generation,
+                   token_before.control_generation);
         // One interrupt = one wake = one re-park (one-shot epoch). The chain
         // of observations orders every interrupt before the next notify.
-        if (!wait_count_at_least(f.prepark_entries, 1 + i + 1)) {
-            fail_closed(f.sched, "tp-g6-lost-wake",
-                        "interrupted participant never re-parked");
-        }
+        probe.set_phase("observe-repark");
+        wait_count_at_least(f.prepark_entries, 1 + i + 1);
         SLUICE_CHECK_MSG(!c.ready(), "TP-G6: no fabricated Completion");
         SLUICE_CHECK_MSG(f.raw->backend_ready_count_for_test() == 0,
                          "TP-G6: no fabricated backend-ready");
@@ -823,13 +1035,13 @@ SLUICE_TEST_CASE(phase_g_closeout_tp_g6_bridge_no_fabrication) {
     }
 
     // The real progress path is the ONLY Completion publisher.
+    probe.set_phase("resolve-select");
     waiter.ev.set();
-    if (!wait_count_at_least(waiter.resumed, 1)) {
-        fail_closed(f.sched, "tp-g6-fiber-never-resumed",
-                    "select never resolved");
-    }
+    wait_count_at_least(waiter.resumed, 1);
     sa::resume_threadpool_gate(f.gate);
-    driver.join_or_fail("tp-g6-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(c.ready(), "TP-G6: Completion ready via real reap only");
     SLUICE_CHECK_MSG(f.raw->backend_ready_count_for_test() == 0,
@@ -859,16 +1071,23 @@ SLUICE_TEST_CASE(phase_g_closeout_tp_g7_wake_noalloc_probe) {
     sa::Completion<std::size_t> c;
     SLUICE_CHECK(f.ctx.submit_read(sa::ReadOp{tmp.fd, buf, 1, 0}, c).has_value());
 
+    CloseoutProbe probe;
+    probe.name = "tp-g7-wake-noalloc-probe";
+    probe.fx = &f;
+    probe.bind_gate(f.gate.paused, f.gate.resume, f.gate.exited);
+    CloseoutWatchdog wd(kWatchdogSeconds, probe);
+
+    probe.set_phase("run");
     RunDriver driver(f.sched);
     driver.start(1);
 
-    if (!wait_flag(f.wait_phase_entered)) {
-        fail_closed(f.sched, "tp-g7-never-parked",
-                    "participant never entered the backend park");
-    }
+    probe.set_phase("observe-park");
+    wait_flag(f.wait_phase_entered);
     sa::resume_threadpool_gate(f.gate);
 
-    driver.join_or_fail("tp-g7-run-never-returned");
+    probe.set_phase("join");
+    driver.join();
+    probe.set_phase("verify");
 
     SLUICE_CHECK_MSG(c.ready(), "TP-G7: terminal wake path converged");
     c.reset();

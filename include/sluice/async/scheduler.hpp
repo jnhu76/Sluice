@@ -2263,6 +2263,32 @@ public:
             return s.workers_[worker_id]->park_domain.load(
                 std::memory_order_acquire);
         }
+        // Issue #123: watchdog-safe park-domain read. A case-level watchdog
+        // MUST never block behind the defect it is diagnosing — a stalled
+        // worker may hold global_mtx_ at a causal seam (e.g. paused at
+        // mw_admission_phase_b), so a blocking read would deadlock the
+        // watchdog itself. This variant uses try_lock (non-blocking) and
+        // reports lock contention via `available`. Diagnostic-only. TSA is
+        // suppressed: the conditional try_lock/unlock pair cannot be
+        // expressed with the annotated RAII guards, and runtime safety comes
+        // from the try_lock/unlock pairing in the function body.
+        static WorkerState::ParkDomain worker_park_domain_try(
+            const Scheduler& s, unsigned worker_id,
+            bool& available) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+            if (!s.global_mtx_.try_lock()) {
+                available = false;
+                return WorkerState::ParkDomain::None;
+            }
+            available = true;
+            struct Unlock {
+                Mutex& mu;
+                ~Unlock() noexcept { mu.unlock(); }
+            } unlock{s.global_mtx_};
+            if (worker_id >= s.workers_.size())
+                return WorkerState::ParkDomain::None;
+            return s.workers_[worker_id]->park_domain.load(
+                std::memory_order_acquire);
+        }
         static int worker_last_classify(const Scheduler& s,
                                         unsigned worker_id) noexcept {
             LockGuard lk(s.global_mtx_);
