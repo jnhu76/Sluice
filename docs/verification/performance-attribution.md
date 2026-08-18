@@ -283,20 +283,21 @@ data; no tool-error rows were recorded.
 
 | workload | sluice-grep | GNU grep | rg | notes |
 |---|---|---|---|---|
-| qz9 sparse | 0.57 s (1.9 GB/s) | 0.12 s | 0.13 s | outputs 1.2 KB; search-dominated |
-| 16b sparse | 0.54 s (2.0) | 0.12 s | 0.13 s | outputs 1.1 KB |
-| `e` (naturally dense) | 2.19 s (0.49) | 1.96 s | 1.90 s | **outputs 1.07 GB ≈ input; output-materialization-dominated** |
-| `the` sparse | 2.53 s (0.42) | 2.57 s | 1.81 s | outputs 901 MB; ≈ GNU-grep parity, rg ahead |
-| `the` all-lines | 2.66 s (0.40) | 2.32 s | 1.95 s | outputs 1.07 GB |
-| long lines | 1.26 s (0.85) | 0.89 s | 0.85 s | outputs 1.07 GB |
-| binary | 0.66 s (1.63) | 0.002 s | 0.002 s | GNU grep/rg short-circuit on binary; semantics difference |
+| qz9 sparse | 0.51 s (2.1 GB/s) | 0.12 s | 0.14 s | outputs 1.2 KB; search-dominated |
+| 16b sparse | 0.53 s (2.0) | 0.13 s | 0.15 s | outputs 1.1 KB |
+| `e` (naturally dense) | 2.42 s (0.44) | 1.95 s | 2.00 s | **outputs 1.07 GB ≈ input; output-materialization-dominated** |
+| `the` sparse | 2.68 s (0.40) | 2.43 s | 1.83 s | outputs 901 MB |
+| `the` all-lines | 2.80 s (0.38) | 2.49 s | 1.92 s | outputs 1.07 GB |
+| long lines | 1.31 s (0.82) | 0.88 s | 0.84 s | outputs 1.07 GB |
+| binary | 0.62 s (1.73) | 0.002 s | 0.003 s | GNU grep/rg short-circuit on binary; semantics difference |
 
 Dense-output reading (methodology: search work vs output/materialization
 work vs filesystem work): on rows whose output approaches the input size,
-all tools pay a ~1 GiB write+read materialization cost and converge; the
-runner records `output_bytes` per row so this never has to be inferred.
-On search-dominated sparse rows the gap to GNU grep/rg is the algorithm
-class.
+every tool pays a ~1 GiB write+read materialization cost and the field
+converges — GNU grep is 1.1–1.25× ahead there and ripgrep ~1.4×, versus
+~4× gaps on search-dominated sparse rows; the runner records
+`output_bytes` per row so this never has to be inferred. On sparse rows
+the remaining gap to GNU grep/rg is the algorithm class.
 
 The remaining gap vs GNU grep/rg on sparse rows is the **algorithm
 class** (kwset skip loop / SIMD candidate filters that do not touch every
@@ -305,9 +306,9 @@ measurement.
 
 ### perf stat (candidate, 1 GiB sparse qz9, 1024 × 1 MiB requests)
 
-`round1-grep-v2-perf.json` (per-request ratios in `derived`): ~428k
-cycles/request, ~1.7M instructions/request, ~5.8k cache-misses/request,
-0.41 page-faults/request. On this host `perf` runs with user-space-only
+`round1-grep-v2-perf.json` (divisor `params.requests` = 1024; per-request
+ratios in `derived`): ~424k cycles/request, ~1.7M instructions/request,
+~6.3k cache-misses/request, 0.41 page-faults/request. On this host `perf` runs with user-space-only
 counters (perf_event_paranoid; events reported with a `:u` modifier —
 preserved verbatim in the artifact's `raw` field), so kernel-side time
 (syscalls, scheduling) is NOT captured; context-switch/migration counts

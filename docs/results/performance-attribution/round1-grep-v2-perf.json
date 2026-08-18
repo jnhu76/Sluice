@@ -1,9 +1,9 @@
 {
   "env": {
-    "time": "2026-08-18T18:06:45+0800",
+    "time": "2026-08-18T18:29:08+0800",
     "git": {
-      "sha": "86496156d4e0ed1aa6c01ecfbe687e529bb2bb65",
-      "dirty": true,
+      "sha": "43a55c026a373c51101046ad0f20088ca41db08b",
+      "dirty": false,
       "branch": "perf/performance-attribution"
     },
     "build": {
@@ -41,28 +41,32 @@
     "qz9",
     "/tmp/perf-qz9-1g.bin"
   ],
+  "child_exit_code": 0,
   "counters": {
-    "task-clock": 596.24,
-    "cycles": 438477095.0,
-    "instructions": 1763457376.0,
-    "branches": 52649191.0,
-    "branch-misses": 195310.0,
-    "cache-misses": 5924401.0,
+    "task-clock": 635.57,
+    "cycles": 434183972.0,
+    "instructions": 1763458751.0,
+    "branches": 52649514.0,
+    "branch-misses": 196930.0,
+    "cache-misses": 6482297.0,
     "context-switches": 0.0,
     "cpu-migrations": 0.0,
     "page-faults": 421.0
   },
-  "raw": "596.24,msec,task-clock:u,596235541,100.00,,\n438477095,,cycles:u,596235541,100.00,,\n1763457376,,instructions:u,596235541,100.00,,\n52649191,,branches:u,596235541,100.00,,\n195310,,branch-misses:u,596235541,100.00,,\n5924401,,cache-misses:u,596235541,100.00,,\n0,,context-switches:u,596235541,100.00,,\n0,,cpu-migrations:u,596235541,100.00,,\n421,,page-faults:u,596235541,100.00,,",
+  "raw": "635.57,msec,task-clock:u,635567296,100.00,,\n434183972,,cycles:u,635567296,100.00,,\n1763458751,,instructions:u,635567296,100.00,,\n52649514,,branches:u,635567296,100.00,,\n196930,,branch-misses:u,635567296,100.00,,\n6482297,,cache-misses:u,635567296,100.00,,\n0,,context-switches:u,635567296,100.00,,\n0,,cpu-migrations:u,635567296,100.00,,\n421,,page-faults:u,635567296,100.00,,",
+  "params": {
+    "requests": 1024
+  },
   "derived": {
-    "task-clock_per_request": 0.582265625,
-    "cycles_per_request": 428200.2880859375,
-    "instructions_per_request": 1722126.34375,
-    "branches_per_request": 51415.2255859375,
-    "branch-misses_per_request": 190.732421875,
-    "cache-misses_per_request": 5785.5478515625,
+    "task-clock_per_request": 0.620673828125,
+    "cycles_per_request": 424007.78515625,
+    "instructions_per_request": 1722127.6865234375,
+    "branches_per_request": 51415.541015625,
+    "branch-misses_per_request": 192.314453125,
+    "cache-misses_per_request": 6330.3681640625,
     "context-switches_per_request": 0.0,
     "cpu-migrations_per_request": 0.0,
     "page-faults_per_request": 0.4111328125
   },
-  "note": "perf stat counters for one sluice-grep CLI run (1 GiB sparse qz9 workload, 1024 x 1 MiB requests). PMU counters are diagnostic evidence, not optimization authorization."
+  "note": "perf stat counters for one sluice-grep CLI run (1 GiB sparse qz9 workload, 1024 x 1 MiB requests). User-space-only counters (:u) under perf_event_paranoid; PMU counters are diagnostic evidence, not optimization authorization."
 }
