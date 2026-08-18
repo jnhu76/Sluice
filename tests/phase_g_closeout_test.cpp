@@ -244,11 +244,13 @@ struct PGFixture {
 };
 
 // One ReadyWaitSource epoch field advancing past `observed`. The blocking
-// channel is the ready-wait source's test-only epoch observer — notified by
-// the same interrupt_all()/signal_progress() that advance the ACTUAL epochs
-// (single source of truth; no second counter). If the epoch moves on the
-// other field first, the observer wakes, the loop re-checks our field, and
-// it re-blocks — still zero CPU.
+// channel is the ready-wait source's test-only epoch observer — it parks on
+// the SAME mtx_ + ready_cv_ domain that interrupt_all()/signal_progress()
+// use to advance the ACTUAL epochs (single source of truth; no second
+// counter or notification channel — sharing the domain is what makes a
+// lost wake impossible). If the epoch moves on the other field first, the
+// observer wakes, the loop re-checks our field, and it re-blocks — still
+// zero CPU.
 template <class T>
 void wait_token(PGFixture& f, T sa::BackendWaitToken::*field, T observed) {
     for (;;) {
@@ -430,21 +432,50 @@ class CloseoutWatchdog {
         }
         if (probe_->fx != nullptr) {
             PGFixture& f = *probe_->fx;
-            const auto tok = f.raw->wait_source()->snapshot();
+            // Watchdog rule (issue #128 review): every read below is
+            // lock-free or a try-read — the watchdog must never block
+            // behind the stall it is diagnosing, so a contended leaf domain
+            // prints "locked" instead of waiting for the mutex.
+            const auto tok = f.raw->try_wait_token_for_test();
+            const auto outstanding = f.raw->try_outstanding_for_test();
+            const auto ready = f.raw->try_backend_ready_count_for_test();
             bool park_available = false;
             const auto park = AsyncTestAccess::worker_park_domain_try(
                 f.sched, 0, park_available);
-            std::fprintf(
-                stderr,
-                "  wait_phase_entered=%d prepark=%d token=(ready=%llu,"
-                "ctrl=%llu) outstanding=%zu backend_ready=%zu "
-                "park_domain[0]=%d(%s)\n",
-                f.wait_phase_entered.load(std::memory_order_acquire) ? 1 : 0,
-                f.prepark_entries.load(std::memory_order_acquire),
-                static_cast<unsigned long long>(tok.progress_generation),
-                static_cast<unsigned long long>(tok.control_generation),
-                f.raw->outstanding(), f.raw->backend_ready_count_for_test(),
-                static_cast<int>(park), park_available ? "read" : "locked");
+            char tok_buf[64];
+            char out_buf[40];
+            char ready_buf[48];
+            if (tok) {
+                std::snprintf(tok_buf, sizeof tok_buf, "(ready=%llu,ctrl=%llu)",
+                              static_cast<unsigned long long>(
+                                  tok->progress_generation),
+                              static_cast<unsigned long long>(
+                                  tok->control_generation));
+            } else {
+                std::snprintf(tok_buf, sizeof tok_buf, "(locked)");
+            }
+            if (outstanding) {
+                std::snprintf(out_buf, sizeof out_buf, "outstanding=%zu",
+                              *outstanding);
+            } else {
+                std::snprintf(out_buf, sizeof out_buf, "outstanding=locked");
+            }
+            if (ready) {
+                std::snprintf(ready_buf, sizeof ready_buf, "backend_ready=%zu",
+                              *ready);
+            } else {
+                std::snprintf(ready_buf, sizeof ready_buf,
+                              "backend_ready=locked");
+            }
+            std::fprintf(stderr,
+                         "  wait_phase_entered=%d prepark=%d token=%s %s %s "
+                         "park_domain[0]=%d(%s)\n",
+                         f.wait_phase_entered.load(std::memory_order_acquire)
+                                 ? 1
+                                 : 0,
+                         f.prepark_entries.load(std::memory_order_acquire),
+                         tok_buf, out_buf, ready_buf, static_cast<int>(park),
+                         park_available ? "read" : "locked");
         }
         std::fflush(stderr);
         std::_Exit(70);
@@ -759,8 +790,7 @@ SLUICE_TEST_CASE(phase_g_closeout_case_d_ready_vs_notify_race) {
         f.wh.notify();
         wait_token(f, &sa::BackendWaitToken::control_generation,
                    control_before.control_generation);
-        pgate.resume.store(true, std::memory_order_release);
-        pgate.resume.notify_all();
+        sa::AsyncIoContext::resume_wait_source_progress_gate_for_test(pgate);
 
         probe.set_phase("resolve-select");
         waiter.ev.set();

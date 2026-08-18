@@ -203,6 +203,22 @@ class ThreadPoolBackend : public AsyncBackend {
         return arena_.backend_ready_count();
     }
 
+    // Test-only try-reads for the case watchdog (issue #128 review): the
+    // blocking wait-source/arena reads above take the corresponding leaf
+    // locks, so a watchdog diagnosing a stall could otherwise block behind
+    // the very defect it is diagnosing. These try-lock variants return
+    // nullopt when the domain is contended; the caller reports "locked".
+    // Compiled out of production sluice_async.
+    std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept {
+        return ready_wait_.try_snapshot();
+    }
+    std::optional<std::size_t> try_outstanding_for_test() const noexcept {
+        return arena_.try_accepted_outstanding();
+    }
+    std::optional<std::size_t> try_backend_ready_count_for_test() const noexcept {
+        return arena_.try_backend_ready_count();
+    }
+
     // Test-only: wait-phase entry flag (issue #67 drain-starvation regression).
     // The ready wait domain stores `true` into the pointed-to atomic
     // immediately before it blocks in the ready-cv wait, so a test can
@@ -228,12 +244,11 @@ class ThreadPoolBackend : public AsyncBackend {
 
     // Test-only: zero-CPU blocking observer on the ACTUAL ready-wait epochs
     // (ReadyWaitSource::wait_epoch_changed). Blocks until the control/progress
-    // epoch pair differs from `observed`; notified by the same
-    // interrupt_all()/signal_progress() that advance the epochs. The single
-    // source of truth remains the ReadyWaitSource epoch fields — this is only a
-    // notification channel, never a second counter. Compiled out of production
-    // sluice_async.
-    void wait_epoch_changed_for_test(BackendWaitToken observed) const noexcept {
+    // epoch pair differs from `observed`, parking on the ready wait source's
+    // own mtx_ + ready_cv_ predicate domain (single source of truth — the
+    // epoch fields; no second notification channel). Compiled out of
+    // production sluice_async. Non-const: the observer parks on the cv.
+    void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept {
         ready_wait_.wait_epoch_changed(observed);
     }
 

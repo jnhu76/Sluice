@@ -47,6 +47,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 
 namespace sluice::async::detail {
 
@@ -128,9 +129,6 @@ class ReadyWaitSource final : public BackendWaitSource {
             ++control_epoch_;
         }
         ready_cv_.notify_all();
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        observer_cv_.notify_all();
-#endif
     }
 
     // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
@@ -171,9 +169,6 @@ class ReadyWaitSource final : public BackendWaitSource {
             ++ready_epoch_;
         }
         ready_cv_.notify_all();
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        observer_cv_.notify_all();
-#endif
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -186,21 +181,39 @@ class ReadyWaitSource final : public BackendWaitSource {
         prepark_counter_.store(counter, std::memory_order_release);
     }
     // Zero-CPU epoch observer for tests: blocks until the ACTUAL control/
-    // progress epoch pair differs from `observed`. The predicate re-reads
-    // snapshot() — the single source of truth stays the epoch fields; the
-    // observer mutex/cv below is only a notification channel, never a second
-    // counter. Notified by the same interrupt_all()/signal_progress() that
-    // advance the epochs, so a missed notification cannot lose the observation
-    // (the predicate re-checks persistent state on every wakeup). Compiled out
-    // of production builds; the layout cost in the internal-testing target is
-    // accepted and documented (AGENTS.md §15).
-    void wait_epoch_changed(BackendWaitToken observed) const noexcept {
-        std::unique_lock<std::mutex> lk(observer_mtx_);
-        observer_cv_.wait(lk, [&] {
-            const BackendWaitToken tok = snapshot();
-            return tok.progress_generation != observed.progress_generation ||
-                   tok.control_generation != observed.control_generation;
+    // progress epoch pair differs from `observed`. It parks on the SAME
+    // mtx_ + ready_cv_ domain that interrupt_all()/signal_progress() use:
+    // the predicate state and the park MUST share one synchronization
+    // domain — a dedicated observer cv parked on epochs mutated under a
+    // different mutex has a lost-wake window (the epoch advance + notify
+    // lands between the observer's predicate check and its park, and the
+    // notify is lost because the waiter is not yet parked). Sharing the
+    // production domain makes that window impossible by cv semantics: an
+    // epoch change can only happen under mtx_, which the parked observer
+    // holds while checking the predicate. Non-const like wait_for_change:
+    // it consumes (parks on) the cv. The predicate is the persistent epoch
+    // pair — the single source of truth, no second counter. Compiled out of
+    // production builds.
+    void wait_epoch_changed(BackendWaitToken observed) noexcept {
+        std::unique_lock<std::mutex> lk(mtx_);
+        ready_cv_.wait(lk, [&] {
+            return ready_epoch_ != observed.progress_generation ||
+                   control_epoch_ != observed.control_generation;
         });
+    }
+
+    // Watchdog-safe epoch read for tests: a try_lock variant of snapshot()
+    // for diagnostic paths that must never block behind the state they are
+    // diagnosing (a case watchdog may fire while a stalled thread holds this
+    // leaf domain). Returns nullopt when the domain is contended — callers
+    // report "locked", they must not retry or block. Compiled out of
+    // production builds.
+    std::optional<BackendWaitToken> try_snapshot() const noexcept {
+        std::unique_lock<std::mutex> lk(mtx_, std::try_to_lock);
+        if (!lk.owns_lock()) {
+            return std::nullopt;
+        }
+        return BackendWaitToken{ready_epoch_, control_epoch_};
     }
 #endif
 
@@ -221,12 +234,6 @@ class ReadyWaitSource final : public BackendWaitSource {
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
     // D4-RM14: per-entry wait counter (see set_wait_prepark_counter).
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
-    // Test-only epoch-observer channel (see wait_epoch_changed). Guarded by
-    // observer_mtx_ only; lock order observer_mtx_ -> mtx_ (snapshot), never
-    // reversed, so the observer cannot deadlock interrupt_all/signal_progress.
-    // Both are mutable: wait_epoch_changed is a const observer.
-    mutable std::mutex observer_mtx_;
-    mutable std::condition_variable observer_cv_;
 #endif
 };
 

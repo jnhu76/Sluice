@@ -597,11 +597,33 @@ public:
     // the internal-testing target is accepted and documented (AGENTS.md §15).
     struct WaitSourceProgressPauseGate {
         std::atomic<bool> paused{false};  // reached the pause point
-        std::atomic<bool> resume{false};  // test sets to release the loop
         std::atomic<bool> exited{false};  // pause exited (for RAII release)
+        // `resume` is private on purpose: the paused thread blocks in
+        // resume.wait(false), and ONLY a notifying atomic operation
+        // (notify_one/notify_all) wakes an atomic::wait consumer — a plain
+        // store of the value does not wake a consumer that is already parked
+        // (store-racing-the-park is exactly the lost-wake this gate exists
+        // to eliminate). Making the field private forces every publisher
+        // through resume_wait_source_progress_gate_for_test below, so the
+        // required store+notify pair cannot be forgotten at a call site
+        // (issue #92 resume_threadpool_gate model). AsyncIoContext is the
+        // friend performing the blocking wait (pause_after_wait_source_
+        // progress_).
+      private:
+        friend class AsyncIoContext;
+        std::atomic<bool> resume{false};  // released only via the helper below
     };
     void set_wait_source_progress_pause_gate_for_test(WaitSourceProgressPauseGate* gate) noexcept {
         wait_source_progress_gate_.store(gate, std::memory_order_release);
+    }
+    // The ONLY supported resume publisher (the structural rule above):
+    // release-store then notify_all. notify_all is a harmless no-op when no
+    // thread is in atomic::wait and does not rest on a single-waiter
+    // assumption.
+    static void resume_wait_source_progress_gate_for_test(
+        WaitSourceProgressPauseGate& gate) noexcept {
+        gate.resume.store(true, std::memory_order_release);
+        gate.resume.notify_all();
     }
 #endif
 
