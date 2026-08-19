@@ -105,6 +105,7 @@
 #include <cstdint>
 #include <exception> // std::terminate
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 
@@ -236,12 +237,18 @@ class UringWaitSource final : public BackendWaitSource {
                 // empty serialized poll done, epochs checked, eventfd drained,
                 // parked registration made, about to call poll(2)). A single
                 // bool cannot prove N waiters parked; the count does. The test
-                // waits for count == N using a bounded deadline ONLY as a hang
-                // watchdog, then drives the control wake — no sleep is ever the
+                // blocks on count == N with atomic::wait (the notify below
+                // pairs with the increment; a case-level watchdog bounds a
+                // genuine stall) — no sleep and no deadline is ever the
                 // ordering proof (AGENTS.md §13.3). One-way latch; disarm by
                 // null. Compiled out of production builds.
                 if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
                     c->fetch_add(1, std::memory_order_relaxed);
+                    // atomic::wait consumers: notify after the increment so a
+                    // test can block zero-CPU on this counter (persistent
+                    // state first, then the notify — wait() re-checks the
+                    // value atomically, so the pair cannot lose the wake).
+                    c->notify_all();
                 }
 #endif
             }
@@ -413,6 +420,12 @@ class UringWaitSource final : public BackendWaitSource {
             pending_wake_count_ = parked_count_;
         }
         wake_pollers_();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Epoch observers (wait_epoch_changed below) share this cv + mtx_
+        // domain: the notify pairs with the epoch publication above (a no-op
+        // when no observer is parked). Compiled out of production builds.
+        cv_.notify_all();
+#endif
     }
 
     // Real readiness publication: the caller must have published the request
@@ -429,6 +442,12 @@ class UringWaitSource final : public BackendWaitSource {
             pending_wake_count_ = parked_count_;
         }
         wake_pollers_();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Epoch observers (wait_epoch_changed below) share this cv + mtx_
+        // domain: the notify pairs with the epoch publication above (a no-op
+        // when no observer is parked). Compiled out of production builds.
+        cv_.notify_all();
+#endif
     }
 
     // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
@@ -502,6 +521,41 @@ class UringWaitSource final : public BackendWaitSource {
     }
     // Test-only: the live control fd (for the deterministic park probes).
     int control_fd_for_test() const noexcept { return control_fd_; }
+    // Zero-CPU epoch observer for tests (issue #129; the Uring twin of
+    // ReadyWaitSource::wait_epoch_changed): blocks until the ACTUAL control/
+    // progress epoch pair differs from `observed`. It parks on the SAME
+    // mtx_ + cv_ domain that interrupt_all()/signal_progress() publish the
+    // epochs under — the predicate state and the park MUST share one
+    // synchronization domain; a dedicated observer cv parked on epochs
+    // mutated under a different mutex has a lost-wake window (the epoch
+    // advance + notify lands between the observer's predicate check and its
+    // park). The cv is shared with the durable-broadcast gate: each parked
+    // waiter re-checks its own predicate, so a gate release that wakes the
+    // observer is spurious, never lost. The predicate is the persistent
+    // epoch pair — the single source of truth, no second counter. Compiled
+    // out of production builds.
+    void wait_epoch_changed(BackendWaitToken observed) noexcept {
+        std::unique_lock<std::mutex> lk(mtx_);
+        cv_.wait(lk, [&] {
+            return progress_epoch_ != observed.progress_generation ||
+                   control_epoch_ != observed.control_generation;
+        });
+    }
+
+    // Watchdog-safe epoch read for tests: a try_lock variant of snapshot()
+    // for diagnostic paths that must never block behind the state they are
+    // diagnosing — a paused control-wake gate holds mtx_ while spinning
+    // (pause_for_control_wake_final_reap_nolock_), so a case watchdog
+    // diagnosing that state must not wait for the leaf mutex. Returns
+    // nullopt when the domain is contended — callers report "locked", they
+    // must not retry or block. Compiled out of production builds.
+    std::optional<BackendWaitToken> try_snapshot() const noexcept {
+        std::unique_lock<std::mutex> lk(mtx_, std::try_to_lock);
+        if (!lk.owns_lock()) {
+            return std::nullopt;
+        }
+        return BackendWaitToken{progress_epoch_, control_epoch_};
+    }
 #endif
 
   private:
@@ -544,6 +598,11 @@ class UringWaitSource final : public BackendWaitSource {
                 std::memory_order_acquire)) {
             g->exited.store(false, std::memory_order_release);
             g->paused.store(true, std::memory_order_release);
+            // atomic::wait consumers: notify pairs with the store so a test
+            // can block zero-CPU on the paused flag. The resume side below
+            // stays a poll (yield-spin) — the pre-existing seam transport —
+            // so a plain resume store remains a legal publisher.
+            g->paused.notify_all();
             while (!g->resume.load(std::memory_order_acquire)) {
                 std::this_thread::yield();
             }

@@ -280,6 +280,7 @@ Review round (PR #128, rerun after the §11 fixes — same commands unless noted
   (§11). Its yield-spin observation helpers (`wait_flag` deadlines) predate
   this methodology; a follow-up could apply the same blocking-handshake +
   case-watchdog treatment there.
+  Addressed by the issue #129 follow-up (§13).
 
 ## 11. Review round (PR #128, 2026-08-19)
 
@@ -384,3 +385,61 @@ held in the gate, it cannot touch `ws->paused`, so the reset is race-free.
   pre-release defensive reset (§11.4).
 - `tests/phase_g_closeout_uring_test.cpp` — UR-G5/D1 unified resume helper.
 - This document.
+
+## 13. Follow-up (issue #129, 2026-08-19)
+
+The §10 remaining risk was closed out: `phase_g_closeout_uring_test` migrated
+to the same blocking-handshake + case-watchdog methodology as the ThreadPool
+closeout. The suite carries NO correctness deadline and NO yield-spin
+observation; the only bounded element per case is the `UringWatchdog` (the
+Uring twin of `CloseoutWatchdog`: genuine no-progress freeze for the full
+30 s budget → rc 70 with case/phase/gate/park-domain/token/outstanding/
+backend-ready/prepark forensics, all lock-free or try-reads).
+
+Uring-side seam work (all `SLUICE_ASYNC_INTERNAL_TESTING`-guarded; the
+production `sluice_async` build under `--with-liburing=true` compiles the
+seams out):
+
+- `UringWaitSource::wait_epoch_changed` — zero-CPU epoch observer parking on
+  the wait source's own `mtx_` + `cv_` domain (the cv is shared with the
+  durable-broadcast gate; each parked waiter re-checks its own predicate, so
+  a gate release that wakes the observer is spurious, never lost).
+  `interrupt_all()` / `signal_progress()` gained a guarded `cv_.notify_all()`
+  pairing with the epoch publication — the native transport for the wait
+  source is the eventfd, which a cv-parked observer cannot observe.
+- `UringWaitSource::try_snapshot` — watchdog-safe try-lock epoch read (a
+  paused control-wake gate holds `mtx_` while spinning).
+- prepark counter increment now publishes with a matching `notify_all`
+  (the §11.2 defect class: an `atomic::wait` consumer is woken only by a
+  notifying atomic operation).
+- control-wake gate `paused` flag publishes with `notify_all` (its resume
+  consumer stays a poll — the pre-existing seam transport — so the plain
+  `resume.store` publisher remains legal; noted at the call site).
+- `UringAsyncBackend` forwards the observer + try-reads
+  (`wait_epoch_changed_for_test`, `try_wait_token_for_test`,
+  `try_outstanding_for_test`, `try_backend_ready_count_for_test`), mirroring
+  the ThreadPoolBackend watchdog seam.
+
+Executed evidence (all commands run in this working tree, 2026-08-19):
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Real-liburing Debug baseline (pre-change) | `xmake f -m debug --toolchain=clang --with-liburing=true -c -y; xmake run phase_g_closeout_uring_test` | ALL PASS (0.65 s) |
+| Real-liburing Debug (post-change) | same | ALL PASS (0.60 s) |
+| Contention recipe | 3 spinners + 24 concurrent copies × 3 rounds (72 runs) | **0/72 fail** |
+| Mutation probe | drop the `signal_progress` epoch-observer notify → UR-G1 `wait_token(progress)` never wakes | `UringWatchdog` rc 70 at frozen=30 039 ms; forensics `token=(progress=1,ctrl=0)` — the epoch advanced but the observer was never notified (the exact injected defect) |
+| TSan real-liburing | `xmake f -m tsan --toolchain=clang --with-liburing=true -c -y; xmake build phase_g_closeout_uring_test; xmake run phase_g_closeout_uring_test` + 8 concurrent copies | ALL PASS, 0 warnings |
+| ASan+UBSan real-liburing | `xmake f -m asanubsan --toolchain=clang --with-liburing=true -c -y; xmake build phase_g_closeout_uring_test; xmake run phase_g_closeout_uring_test` | ALL PASS |
+| Production-guard proof | `xmake build sluice_async` under `--with-liburing=true` (no `SLUICE_ASYNC_INTERNAL_TESTING`) | build ok — seams compiled out |
+| Stub Debug full gate | `xmake f -m debug --toolchain=clang -c -y; xmake build sluice_core; xmake build sluice_async; xmake build -g test; xmake test -v` | 181/181 passed |
+
+Files changed (issue #129):
+
+- `tests/phase_g_closeout_uring_test.cpp` — blocking handshakes, per-case
+  `UringWatchdog` with forensics, baseline-before-trigger discipline.
+- `include/sluice/async/detail/uring_wait_source.hpp` — epoch observer +
+  `try_snapshot` (guarded); prepark/paused notify publication; guarded
+  `cv_.notify_all()` pairing in `interrupt_all`/`signal_progress`.
+- `include/sluice/async/uring_backend.hpp` — observer + try-read forwards
+  (guarded).
+- This document (§10 pointer + this section).
