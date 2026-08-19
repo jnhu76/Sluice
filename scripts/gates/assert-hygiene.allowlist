@@ -34,6 +34,20 @@
 # specializations share the same source line).
 include/sluice/async/completion.hpp | assert(false && "Completion::result() called before ready (L9)"); | L9 | Completion L9 tripwire: Debug assert over the Release typed fallback returning invalid_state (header contract §L9); per-site registration — other assert-family lines in this file are NOT exempt
 #
+# Site registrations for the async-primitive destructor tripwires
+# (ADR-async-primitive-lifetime-failfast, #135 phase 6): each assert is a
+# DIAGNOSTIC only — the semantic authority is the adjacent named T6
+# fail-fast, active in Debug AND Release and death-tested
+# (async_sync_lifetime_death_test / async_rwlock_death_test). Registered
+# because the destructor rewrites made the (unchanged) assert lines added
+# lines in the PR diff; per-site only — any other assert-family line in
+# these files is NOT exempt.
+include/sluice/async/async_mutex.hpp | assert(owner_ == nullptr && | diagnostic | ~AsyncMutex tripwire; authority is async_mutex_lifetime_fail_fast (Debug+Release, ADR-async-primitive-lifetime-failfast)
+include/sluice/async/async_rwlock.hpp | assert(active_readers_ == 0 && | diagnostic | ~AsyncRwLock readers tripwire; authority is async_rwlock_lifetime_fail_fast (Debug+Release, ADR-async-primitive-lifetime-failfast)
+include/sluice/async/async_rwlock.hpp | assert(!writer_active_ && | diagnostic | ~AsyncRwLock writer tripwire; authority is async_rwlock_lifetime_fail_fast (Debug+Release, ADR-async-primitive-lifetime-failfast)
+include/sluice/async/condition.hpp | assert(active_waits_.load(std::memory_order::acquire) == 0 && | diagnostic | ~AsyncCondition in-flight-wait tripwire; authority is async_condition_lifetime_fail_fast (Debug+Release, ADR-async-primitive-lifetime-failfast)
+include/sluice/async/wait_queue.hpp | assert(head_ == nullptr && | diagnostic | ~WaitQueue registered-waiters tripwire; authority is wait_queue_lifetime_fail_fast (Debug+Release, ADR-async-primitive-lifetime-failfast)
+#
 # Category 2 — pure diagnostics (assert observes an invariant proven
 # elsewhere; its failure changes no returned value or state transition).
 # No permanent entries; add per site with a written reason.

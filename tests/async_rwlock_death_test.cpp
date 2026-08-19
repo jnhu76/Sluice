@@ -7,20 +7,19 @@
 //   Reached through the PUBLIC API. Debug: assert() fires with a specific
 //   diagnostic. Release: trusts the caller (no recovery semantics). These
 //   cases are therefore DEBUG-ONLY: under NDEBUG the assertion is compiled
-//   out and the behavior is undefined-by-contract. The death-test child
+//   out and the behavior is undefined-by-contract.
 //   EXCEPTION (ADR-async-primitive-lifetime-failfast): the DESTRUCTION cases
 //   A4-A6 fail fast through named per-authority entries in BOTH Debug and
-//   Release; only the non-destruction misuse cases A1-A3 stay Debug-only.
-//   The death-test child
-//   still exercises the entry under NDEBUG but is NOT asserted to terminate
-//   in Release (the test is gated to !NDEBUG).
+//   Release; only the non-destruction misuse cases A1-A3 stay Debug-only
+//   (their death-test children are gated to !NDEBUG and are NOT asserted to
+//   terminate in Release).
 //
 //   A1  unlock_read with zero active readers (underflow)
 //   A2  unlock_write while unlocked (writer_active == false)
 //   A3  unlock_write by non-owner Fiber
 //   A4  destroy with active reader (active_readers_ > 0)
 //   A5  destroy with active writer (writer_active_ == true)
-//   A6  destroy with queued waiter (~WaitQueue asserts head_ == nullptr)
+//   A6  destroy with queued waiter (wait_queue_lifetime_fail_fast)
 //
 // Category B — internal linked-queue / authority corruption.
 //   Debug: assert(false) + diagnostic. Release: deterministic fail-fast

@@ -101,12 +101,30 @@ Per primitive authority, in BOTH Debug and Release (POSIX fork/exec harness,
 - control case: valid quiescent usage (lock/unlock, read/write lock
   cycles, wait/notify cycles drained) destroys normally (exit 0).
 
-`async_rwlock_death_test` cases A4 (active reader), A5 (active writer), and
-A6 (queued waiter) move from the Debug-only gate to the both-mode gate;
-`async_mutex_death_test` gains the mutex-owned destruction case; the
-`AsyncCondition` in-flight-wait destruction case joins the same binary
-(Condition is constructed over an `AsyncMutex`). `WaitQueue`'s authority is
-exercised through A6 (queued waiter) and the condition case.
+Actual test layout (this ADR's change):
+
+- **`async_sync_lifetime_death_test` (new binary)** carries the
+  `AsyncMutex` and `AsyncCondition` authorities:
+  - M1 — destroy `AsyncMutex` while a parked fiber owns it
+    (`async_mutex_lifetime_fail_fast`);
+  - C1 — destroy `AsyncCondition` while a `wait()` is in flight — the
+    fiber is parked inside the condition wait and `active_waits_ != 0`
+    (`async_condition_lifetime_fail_fast`);
+  - CTL — control: full lock/wait/notify/reacquire/unlock cycle, then
+    quiescent destruction of both objects, exit 0.
+- **`async_rwlock_death_test` (existing binary, gate change)**: cases A4
+  (active reader), A5 (active writer), and A6 (queued waiter) move from the
+  Debug-only gate to the both-mode gate; A4/A5 exercise
+  `async_rwlock_lifetime_fail_fast`, A6 exercises
+  `wait_queue_lifetime_fail_fast` directly (an `AsyncRwLock` destroyed with
+  a queued waiter reaches its `WaitQueue` member's destructor).
+- `async_mutex_death_test` is NOT involved: it tests the low-level
+  non-async `Mutex` acquisition boundary (a different authority,
+  `async_mutex_lock_fail_fast`) and is unchanged by this ADR.
+- C1 does NOT additionally prove `wait_queue_lifetime_fail_fast`: in C1 the
+  outer `~AsyncCondition` authority fires before its `WaitQueue` member's
+  destructor runs. The `WaitQueue` authority has its own both-mode case
+  (A6 above).
 
 ## 5. Consequences
 
@@ -118,3 +136,30 @@ exercised through A6 (queued waiter) and the condition case.
 - The failure-response taxonomy's T6 class (policy PR #147) gains these
   four named entries as canonical instances once both land (no text
   dependency in either direction).
+
+## 6. AGENTS.md §8 design-compliance record
+
+This ADR changes synchronization-primitive lifetime behavior, which triggers
+the §8 architecture compliance gate. Compact record (all other §8 fields are
+no-change):
+
+- **Gate 0 (state machine)**: every normal-path state transition of
+  AsyncMutex / AsyncRwLock / AsyncCondition / WaitQueue is unchanged. The
+  only state-machine change is the response to an INVALID lifetime terminal
+  state in a destructor: Debug-only assert → named fail-fast active in
+  Debug AND Release. No new states, no new legal transitions.
+- **Gate 1 (lock / atomic authority)**: no new lock-order edges and no
+  blocking cleanup. Each destructor check reads existing members under the
+  destruction context it already had; the fail-fast entry itself takes no
+  locks, allocates nothing, performs no I/O (`[[noreturn]] noexcept`,
+  terminates).
+- **Gate 2 (wake / progress)**: no new wake, publication, or progress
+  semantics. The fail-fast path never notifies, never publishes, never
+  routes — it terminates.
+- **Gate 3 (resource capacity)**: N/A — no queue, arena, worker, or
+  capacity model is touched; no allocation anywhere on the new path.
+- **Gate 4 (shutdown semantics)**: invalid destruction is a T6 named
+  fail-fast in Debug AND Release (AGENTS.md §14): **no drain, no cancel,
+  no wait, no allocation, no recovery — a destructor violation is
+  terminate-only.** Quiescent destruction remains side-effect-free and
+  silent.

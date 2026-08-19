@@ -798,7 +798,7 @@ public:
 | `registered race` | After registration, RESOURCE_WAKE / TIMER_EXPIRE / CANCEL compete through the single `WaitNode::resolve_` CAS. |
 | `FIFO waiter selection` | Waiters are selected in FIFO registration order. Does NOT guarantee strict completion order. |
 | `no barging` | `try_*` operations fail if a queued waiter has FIFO priority. |
-| `destroy` | Destructor. Requires waiters empty (debug assert). Does NOT cancel/wake/clean up. |
+| `destroy` | Destructor. Requires waiters empty — violation fails fast via named per-authority entries in Debug AND Release (ADR-async-primitive-lifetime-failfast). Does NOT cancel/wake/clean up. |
 | `close` | Monotonic Open→Closed (Queue only). Drains role FIFOs. |
 | `begin_teardown` | Irreversible operational→tearing_down (Queue only). Returns `QueueTeardownSession`. |
 

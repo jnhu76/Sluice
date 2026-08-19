@@ -53,7 +53,8 @@
 // Destruction contract: destroying Event while wait epochs remain registered is
 // a CALLER CONTRACT VIOLATION. The destructor does NOT cancel/wake/synthesize
 // RESOURCE_WAKE. Caller must ensure all waits are terminal before Event lifetime
-// ends. A debug assertion (~WaitQueue's existing assert) enforces this.
+// ends. ~WaitQueue enforces this via wait_queue_lifetime_fail_fast in
+// Debug AND Release (ADR-async-primitive-lifetime-failfast).
 #pragma once
 
 #include <atomic>
@@ -84,7 +85,9 @@ public:
     // AND the Select registry must be empty before the Event is destroyed.
     // The destructor does NOT cancel waiters, does NOT wake waiters, does NOT
     // unlink Select arms, and does NOT synthesize RESOURCE_WAKE. The
-    // underlying ~WaitQueue asserts empty in debug (caller must drain first).
+    // underlying ~WaitQueue fails fast via wait_queue_lifetime_fail_fast
+    // when waiters remain registered (caller must drain first; Debug AND
+    // Release).
     // The SelectPort assertion fires if Select arms remain registered (caller
     // contract violation). Recovery is unsafe because the intrusive arms may
     // point into caller frames that are being destroyed, so both Debug and

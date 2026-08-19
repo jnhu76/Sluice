@@ -65,9 +65,10 @@
 //
 // Destruction contract: destroying an AsyncCondition while any wait() call has
 // not returned (Condition node Registered OR a reacquire epoch in flight) is a
-// CALLER CONTRACT VIOLATION. The destructor debug-asserts active_waits_ == 0
-// (acquire load) and does NOT notify, cancel, force-reacquire, or release the
-// Mutex. A reacquire-phase destruction is caught by active_waits_ (the Condition
+// CALLER CONTRACT VIOLATION. The destructor fails fast via
+// detail::async_condition_lifetime_fail_fast in Debug AND Release (Debug
+// assert as tripwire) and does NOT notify, cancel, force-reacquire, or
+// release the Mutex. A reacquire-phase destruction is caught by active_waits_ (the Condition
 // queue being empty is insufficient because the reacquire node lives in the
 // Mutex's queue, not the Condition queue — docs §14). No cancel-all, no
 // wake-all. Release builds need no automatic recovery semantics.

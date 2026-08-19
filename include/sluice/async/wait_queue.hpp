@@ -124,12 +124,14 @@ public:
     // §10 destruction invariant: a queue MUST be empty when destroyed, OR its
     // owner must have explicitly resolved (cancelled) all registered waiters.
     // Destroying a queue with linked nodes would orphan them (their home_
-    // points to freed memory; §3 Q8). Debug asserts empty; release is a no-op
-    // (the nodes are caller-owned and remain valid, but their home_ becomes
-    // dangling — the caller contract is to drain first). The Scheduler does NOT
-    // auto-resolve waits on run termination (E10-CORRECTIVE C3); an unresolved
-    // registered wait is left for the caller, exactly as E9 treats a stranded
-    // waiting_ready_ flag (MW-S3 returns STALLED in Drain).
+    // points to freed memory; §3 Q8). A non-empty queue at destruction is a
+    // lifetime contract violation that fails fast via
+    // detail::wait_queue_lifetime_fail_fast in BOTH Debug and Release
+    // (ADR-async-primitive-lifetime-failfast; the Debug assert is a
+    // diagnostic tripwire only). The Scheduler does NOT auto-resolve waits
+    // on run termination (E10-CORRECTIVE C3); an unresolved registered wait
+    // is left for the caller, exactly as E9 treats a stranded waiting_ready_
+    // flag (MW-S3 returns STALLED in Drain).
     ~WaitQueue() {
         // head_ == null iff empty (tail_ maintained in lockstep). A non-empty
         // queue at destruction is a caller contract violation (§10).
