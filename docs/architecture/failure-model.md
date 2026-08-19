@@ -37,8 +37,10 @@ state invites the caller to "handle" corruption. Two defects of this shape are
 fixed in the remediation that introduced this document (the uring
 `try_wait_token_for_test` / `wait_epoch_changed_for_test` asserts, which fire
 when the ring has no wait source — an environment-availability condition, not a
-programmer error — and the `select.hpp` `index()` Release path, which had a
-Debug assert without its typed fallback).
+programmer error — and the `select.hpp` `index()` Release path, which lacked
+an explicit, documented typed fallback: the member default already made the
+Release path return 0, so the fix documented and named that behavior rather
+than changing it).
 
 ## 2. Taxonomy
 
@@ -223,33 +225,60 @@ Cross-checks that catch misclassification:
 ## 5. Allowlisted assert categories
 
 A NEW `assert(`, `#include <cassert>`, or `#include <assert.h>` line in
-`include/` or `src/` must be added to
+`include/` or `src/` must be registered as a SITE-LEVEL entry in
 `scripts/gates/assert-hygiene.allowlist` naming one of these categories:
 
-1. **Completion L9 pattern** — Debug tripwire layered on a Release path that
-   already returns the documented typed error; Release behavior is correct
-   without the assert.
-2. **Pure diagnostics** — the assert observes an invariant proven elsewhere
-   and its failure changes no returned value or state transition.
-3. **Internal-testing preconditions** — a precondition inside a
+1. **L9** — Completion L9 pattern: Debug tripwire layered on a Release path
+   that already returns the documented typed error; Release behavior is
+   correct without the assert.
+2. **diagnostic** — pure diagnostics: the assert observes an invariant proven
+   elsewhere and its failure changes no returned value or state transition.
+3. **testing** — internal-testing preconditions: a precondition inside a
    `SLUICE_ASYNC_INTERNAL_TESTING`-guarded seam that the test author fully
    controls, where a violation means the test itself is broken (NOT an
    environment-availability condition, which is T5 and must be typed).
 
-The allowlist entry format and enforcement are defined in the allowlist file
-header comment.
+An entry is `<path-glob> | <source-line-substring> | <category> | <reason>`:
+the exemption applies only when BOTH the path matches the glob AND the
+substring occurs in the added line. Whole-file exemption is deliberately
+unsupported — a new, unregistered assert-family line in an already-allowlisted
+file still fails the gate. The loader rejects malformed entries, unknown
+categories, and empty reasons (fail closed).
+
+Lines inside a preprocessor region provably active only under
+`SLUICE_ASYNC_INTERNAL_TESTING` are auto-allowed WITHOUT an entry
+(category 3 above). The detection is fail-closed under-allowing: only
+`#ifdef MACRO`, `#if defined(MACRO)`, and `&&`-conjunctions in which the
+macro appears positively (and never negated) qualify. `#ifndef`,
+`#if !defined(...)`, any `||` form, and any unprovable expression are treated
+as production code — an auto-allow must rest on a proof that the active
+branch implies the macro, never on a pattern match that happens to mention
+it. The `#else` branch of a testing guard is production; `#elif` is
+auto-allowed only when its own expression proves the macro.
 
 ## 6. Gate enforcement
 
 - `scripts/gates/assert-hygiene.py --self-test` — plants each violation shape
-  and requires every detector to fire (fail-closed against a broken checker).
-- `scripts/gates/assert-hygiene.py [-- <git-diff-args>...]` — scans ADDED lines
-  of the given diff (pushed ranges in hook mode; staged + working tree when
-  invoked manually) in `include/` and `src/` for the forbidden patterns and
-  fails on unallowlisted additions.
-- Wired as a gate in `scripts/gates/pre-push.sh`, which CI re-runs via the
-  "Repository mechanical gates" step. Fail-closed: no `|| true`, first failure
-  wins, reproduction command printed.
+  (including the adversarial guard polarities `#ifndef` / `#if !defined` /
+  `||` forms, the site-exemption escape — an unregistered assert in an
+  allowlisted file — and diff-parser traps such as an added `++iterator;`
+  line rendered as `+++iterator;`) and requires every detector to fire with
+  zero false positives.
+- `scripts/gates/assert-hygiene.py [-- <git-diff-args>...]` — scans ADDED
+  lines of the given diff in `include/` and `src/` for the forbidden
+  patterns and fails on additions that are neither guard-auto-allowed nor
+  covered by a registered site entry. The diff reader is a minimal
+  unified-diff state machine: file paths come only from `---`/`+++` header
+  pairs, so content lines that begin with `+` (or `+++`) inside a hunk are
+  content, not headers; new/deleted/rename/binary shapes are handled and an
+  unparseable shape fails the gate instead of misattributing lines.
+- Wired as a gate in `scripts/gates/pre-push.sh` with three range modes:
+  explicit `--range <base>..<head>` (CI), pushed ref-pair ranges (hook), and
+  staged + working tree (manual). CI passes the pull-request
+  `base..head` range explicitly (a clean checkout's `git diff HEAD` is
+  empty, so manual mode would scan nothing there) and echoes the scanned
+  range in the log. Fail-closed: no `|| true`, first failure wins,
+  reproduction command printed.
 - **Grandfathered**: pre-existing sites are not flagged (changed-lines only).
   The backlog of historical sites is tracked in issue #144; cleaning them is
   deliberate, reviewed work — never a drive-by bulk rewrite.

@@ -1,15 +1,28 @@
 # assert-hygiene allowlist — see AGENTS.md §9.2 and
 # docs/architecture/failure-model.md §5.
 #
-# Format: one fnmatch glob per line (matched against the repo-relative path);
-# an optional `# reason` documents WHY the path may add assert-family lines.
-# Blank lines and full-line comments are ignored.
+# SITE-LEVEL entries only. Whole-file exemption is deliberately unsupported:
+# an entry exempts exactly the registered added-line sites of one file, never
+# the file — a new, unregistered assert-family line in an allowlisted file
+# still fails the gate.
 #
-# Auto-allowed WITHOUT an entry here: added lines that sit inside an active
-# SLUICE_ASYNC_INTERNAL_TESTING preprocessor guard (category 3,
-# internal-testing preconditions) — detected mechanically in the new-file
-# content by scripts/gates/assert-hygiene.py. The #else/#elif branch of such
-# a guard is production code and is NOT auto-allowed.
+# Entry format (four '|' separated fields; full-line '#' comments only,
+# because a registered substring may itself contain '#', e.g. `#include`):
+#
+#     <path-glob> | <source-line-substring> | <category> | <reason>
+#
+#   path-glob              fnmatch glob against the repo-relative path
+#   source-line-substring  must occur as a substring of the stripped ADDED
+#                          line for the exemption to apply
+#   category               L9 | diagnostic | testing   (failure-model.md §5)
+#   reason                 non-empty written justification
+#
+# Auto-allowed WITHOUT an entry here: added lines that sit inside a
+# preprocessor region provably active only under
+# SLUICE_ASYNC_INTERNAL_TESTING (category 3, internal-testing preconditions).
+# Detection is fail-closed under-allowing: only #ifdef / #if defined(...) /
+# &&-conjunctions with the macro positive qualify; #ifndef, #if !defined,
+# any '||', and any unprovable form are treated as production code.
 #
 # The gate is changed-lines only: pre-existing sites elsewhere are
 # grandfathered (backlog: issue #144). This file is for NEW lines.
@@ -17,14 +30,14 @@
 # ---------------------------------------------------------------------------
 # Category 1 — Completion L9 pattern (Debug tripwire layered on a Release
 # path that already returns the documented typed error; Release is correct
-# without the assert):
-include/sluice/async/completion.hpp  # Completion L9: assert + Release invalid_state fallback (header contract §L9)
+# without the assert). The substring covers both result() sites (T and void
+# specializations share the same source line).
+include/sluice/async/completion.hpp | assert(false && "Completion::result() called before ready (L9)"); | L9 | Completion L9 tripwire: Debug assert over the Release typed fallback returning invalid_state (header contract §L9); per-site registration — other assert-family lines in this file are NOT exempt
 #
 # Category 2 — pure diagnostics (assert observes an invariant proven
 # elsewhere; its failure changes no returned value or state transition).
-# No permanent entries; add case-by-case with a written reason.
+# No permanent entries; add per site with a written reason.
 #
 # Category 3 — internal-testing preconditions inside guarded seams are
-# auto-allowed via guard detection; whole-file entries for seam headers that
-# are not self-guarded may be added here after PR
-# agent/internal-test-control-plane (#145) lands, if needed.
+# auto-allowed via guard detection; entries here only for seam code that
+# cannot self-guard (none currently).

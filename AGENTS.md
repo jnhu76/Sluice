@@ -323,6 +323,12 @@ without Git/Lefthook:
 bash scripts/gates/pre-push.sh
 ```
 
+The same script is what CI runs (`.github/workflows/ci.yml` "Repository
+mechanical gates" step), invoked with an explicit changed-lines range —
+`bash scripts/gates/pre-push.sh --range <base>..<head>` — because a clean CI
+checkout has an empty `git diff HEAD`, so the manual working-tree mode would
+silently scan nothing there.
+
 Dependency: `lefthook` >= 1.10.0 (language-neutral, no Node/npm). The 1.10.0
 floor is required because the configuration uses the `jobs:` key and the
 `use_stdin: true` option on the pre-push job; older releases only support the
@@ -520,10 +526,16 @@ class permits.
   fail-fast active in Debug AND Release, or a structural (compile-time) guarantee.
 - A new `assert(`, `#include <cassert>`, or `#include <assert.h>` line in `include/` or `src/` is
   legal only in one of the three allowlisted shapes (Completion L9 pattern; pure diagnostics;
-  internal-testing preconditions — see the taxonomy document §5), and must be registered in
-  `scripts/gates/assert-hygiene.allowlist` with that category as the reason. The changed-lines
-  gate `scripts/gates/assert-hygiene.py` (wired into `scripts/gates/pre-push.sh` and CI) fails
-  unregistered additions.
+  internal-testing preconditions — see the taxonomy document §5), and must be registered as a
+  site-level entry in `scripts/gates/assert-hygiene.allowlist` (path glob, source-line substring,
+  category, written reason). Exemptions are per site, never per file: an unregistered
+  assert-family line in an already-allowlisted file still fails. The changed-lines gate
+  `scripts/gates/assert-hygiene.py` fails unregistered additions; it runs inside
+  `scripts/gates/pre-push.sh` in three range modes — explicit `--range <base>..<head>` (used by
+  CI, which passes the pull-request range because a clean checkout's `git diff HEAD` is empty),
+  pushed ref-pair ranges (hook mode), and staged + working tree (manual mode). Guard-based
+  auto-allow is fail-closed under-allowing: only provably testing-positive preprocessor forms
+  qualify; `#ifndef`, `#if !defined(...)`, and any `||` form are production code.
 - Existing assert sites are grandfathered — the gate is changed-lines only. Grandfathering is not
   retroactive amnesty: existing code is evidence, not automatic architectural precedent. The
   historical backlog is inventoried in issue #144 and is reclassified only through reviewed change.
