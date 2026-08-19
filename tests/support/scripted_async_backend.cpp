@@ -21,6 +21,8 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <utility>
 
@@ -92,7 +94,16 @@ std::size_t apply_staged_locked(ScriptedBackendSharedState& s) {
 ScriptedAsyncBackend::ScriptedAsyncBackend(
     std::shared_ptr<ScriptedBackendSharedState> state)
     : state_(std::move(state)) {
-    assert(state_);
+    // T3 caller-contract check (AGENTS.md §9.2): a null shared state is a
+    // test-author bug with no recovery; the explicit guard fails closed in
+    // Debug AND Release with the real reason (the previous bare assert left
+    // Release test binaries a silent null dereference at first use).
+    if (!state_) {
+        std::fprintf(stderr,
+                     "ScriptedAsyncBackend: constructed with null shared "
+                     "state (controller missing?)\n");
+        std::abort();
+    }
 }
 
 ScriptedAsyncBackend::~ScriptedAsyncBackend() {
@@ -111,12 +122,19 @@ ScriptedAsyncBackend::~ScriptedAsyncBackend() {
     // terminates on the empty wait / shutdown boundary).
     state_->ready_wait.interrupt_all();
 
-    // Debug-only invariant: a well-behaved copy task drains everything before
-    // the Runtime tears down, so nothing should be outstanding at destruction.
-    // expect_no_outstanding() on the controller gives a more descriptive check.
-    assert(state_->size_ops.empty() && state_->void_ops.empty() &&
-           state_->staged_size.empty() && state_->staged_void.empty() &&
-           "ScriptedAsyncBackend destroyed with outstanding operations");
+    // T3 caller-contract check (AGENTS.md §9.2): a well-behaved task drains
+    // everything before the Runtime tears down, so nothing should be
+    // outstanding at destruction (expect_no_outstanding() on the controller
+    // gives a more descriptive check). The explicit guard fails closed in
+    // Debug AND Release; the previous bare assert let Release test binaries
+    // destroy-with-outstanding silently.
+    if (!(state_->size_ops.empty() && state_->void_ops.empty() &&
+          state_->staged_size.empty() && state_->staged_void.empty())) {
+        std::fprintf(stderr,
+                     "ScriptedAsyncBackend: destroyed with outstanding "
+                     "operations (use controller expect_no_outstanding())\n");
+        std::abort();
+    }
 }
 
 // ---------------------------------------------------------------------------

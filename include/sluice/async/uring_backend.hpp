@@ -298,7 +298,10 @@ class UringAsyncBackend : public AsyncBackend {
     void set_wait_poll_ring_fd_override_for_test(int fd) noexcept;
     void set_wait_poll_fn_for_test(detail::UringWaitSource::PollFn fn,
                                    void* ctx) noexcept;
-    void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept;
+    // Returns true = parked on the wait source's epoch domain until the
+    // observed token changed; false = no wait source (ring construction
+    // failed — typed T5 availability result, never an assert).
+    bool wait_epoch_changed_for_test(BackendWaitToken observed) noexcept;
     std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept;
     std::optional<std::size_t> try_outstanding_for_test() const noexcept;
     std::optional<std::size_t> try_backend_ready_count_for_test() const noexcept;

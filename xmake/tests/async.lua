@@ -330,6 +330,13 @@ sluice_internal_async_test("application_runtime_resource_test")
 -- sluice_async_internal_testing for the Fiber suspend/resume seam.
 sluice_internal_async_test("application_runtime_identity_test")
 
+-- PR-D (#135 Case B): failure-model high-risk reclassification regressions.
+-- Uring wait-source seams (T5 typed nullopt/false semantics under stub,
+-- no-ring, and real-ring environments) and the SelectResult::index() L9
+-- Release fallback. Links sluice_async_internal_testing for the seams and
+-- the guarded TestInit result constructor.
+sluice_internal_async_test("failure_model_high_risk_test")
+
 -- ScriptedAsyncBackend self-tests (sluice-copy Version B test infrastructure).
 -- Proves the deterministic, scriptable backend itself is correct before using
 -- it to test higher-level components. Links sluice_async (production).

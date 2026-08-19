@@ -278,10 +278,21 @@ struct URGFixture {
 // snapshot/wait during a progress-gate pause is safe.
 template <class T>
 void wait_token(URGFixture& f, T sa::BackendWaitToken::*field, T observed) {
+    // Ring-construction failure (kernel without io_uring): the fixture has no
+    // wait source and the epoch can never advance. Fail the observation
+    // explicitly instead of null-dereferencing f.ws or spinning into the case
+    // watchdog with a misleading stall report (T5, failure-model.md).
+    if (f.ws == nullptr) {
+        SLUICE_CHECK(false && "wait_token: backend has no wait source");
+        return;
+    }
     for (;;) {
         const auto token = f.ws->snapshot();
         if (token.*field > observed) return;
-        f.raw->wait_epoch_changed_for_test(token);
+        if (!f.raw->wait_epoch_changed_for_test(token)) {
+            SLUICE_CHECK(false && "wait_token: backend has no wait source");
+            return;
+        }
     }
 }
 
