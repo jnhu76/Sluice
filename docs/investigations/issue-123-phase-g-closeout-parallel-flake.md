@@ -275,12 +275,12 @@ Review round (PR #128, rerun after the §11 fixes — same commands unless noted
   5 s deadlines were the actual correctness verdicts). The budget is
   configurable at one constant.
 - `phase_g_closeout_uring_test` (real liburing only, out of the default gate)
-  shares the same observation helpers; its UR-G5/D1 `WaitSourceProgressPauseGate`
-  resume publisher was migrated to the unified helper in the review round
-  (§11). Its yield-spin observation helpers (`wait_flag` deadlines) predate
-  this methodology; a follow-up could apply the same blocking-handshake +
-  case-watchdog treatment there.
-  Addressed by the issue #129 follow-up (§13).
+  shared the yield-spin observation helpers (`wait_flag` deadlines) that
+  predated this methodology — its UR-G5/D1 `WaitSourceProgressPauseGate`
+  resume publisher had already been migrated to the unified helper in the
+  review round (§11). The issue #129 follow-up applied the same
+  blocking-handshake + case-watchdog treatment there, closing this risk
+  (§13).
 
 ## 11. Review round (PR #128, 2026-08-19)
 
@@ -443,3 +443,16 @@ Files changed (issue #129):
 - `include/sluice/async/uring_backend.hpp` — observer + try-read forwards
   (guarded).
 - This document (§10 pointer + this section).
+
+Review round (PR #130): the new wait-source forwards now assert on a
+missing wait source (a construction contract failure — distinct from the
+contention `nullopt` a watchdog reports as "locked") instead of silently
+no-op'ing; the re-park observations in UR-G3 / UR-G4 / UR-G5-D2 are
+baseline-relative (park counter baselined immediately before the release
+trigger, wait baseline+1) so a literal threshold can no longer be satisfied
+by a spurious pre-trigger re-park; `wait_token` documents the
+control-wake-gate lock-domain hazard (the gate spins holding the wait-source
+mutex — baseline and observe before it can fire; the context progress gate
+holds no lock); §10's second bullet reworded to record the risk as closed.
+Rerun after the fixes: real-liburing Debug ALL PASS; 3-spinner contention
+24 copies × 3 rounds = 0/72 fail; stub Debug full gate 181/181.

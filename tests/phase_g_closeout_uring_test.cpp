@@ -267,6 +267,15 @@ struct URGFixture {
 // observer is spurious, never lost. If the epoch moves on the other field
 // first, the observer wakes, the loop re-checks our field, and it re-blocks
 // — still zero CPU.
+//
+// Lock-domain hazard: the control-wake pause gate
+// (pause_for_control_wake_final_reap_nolock_) spins while HOLDING the
+// wait-source mutex, so a snapshot() or observer park issued while that gate
+// is paused blocks this test thread until the gate is resumed (bounded only
+// by the case watchdog). Callers must take the baseline and complete this
+// wait BEFORE that gate can fire (see UR-G4). The context-level progress
+// gate holds NO wait-source or context lock while paused (see UR-G5/D1), so
+// snapshot/wait during a progress-gate pause is safe.
 template <class T>
 void wait_token(URGFixture& f, T sa::BackendWaitToken::*field, T observed) {
     for (;;) {
@@ -631,8 +640,13 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g3_external_wake_while_poll_parked) {
 
     probe.set_phase("observe-park");
     wait_count_at_least(f.prepark_entries, 1);
-    // Baseline BEFORE the notify: the bridge is the ONLY control-epoch
-    // publisher here, so the advance is strictly after this baseline.
+    // Baselines BEFORE the notify (the bridge is the ONLY control-epoch
+    // publisher here, so the advance is strictly after this baseline). The
+    // re-park wait is baseline-relative: a literal threshold could be
+    // satisfied by a spurious pre-notify re-park (EINTR poll return) without
+    // the bridge wake ever being consumed.
+    const int prepark_before =
+        f.prepark_entries.load(std::memory_order_acquire);
     const auto control_before = f.ws->snapshot();
     f.wh.notify();
     probe.set_phase("observe-bridge-fired");
@@ -641,7 +655,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g3_external_wake_while_poll_parked) {
     // The wake is consumed: the interrupted poll returns and the Live run
     // re-parks (external-wake-possible select wait still registered).
     probe.set_phase("observe-repark");
-    wait_count_at_least(f.prepark_entries, 2);
+    wait_count_at_least(f.prepark_entries, prepark_before + 1);
 
     probe.set_phase("resolve-select");
     waiter.ev.set();
@@ -715,12 +729,16 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g4_external_wake_commit_to_wait) {
     // The gate consumer POLLS resume (yield-spin under the wait-source leaf
     // mutex — the pre-existing seam transport), so a plain store IS a legal
     // publisher here; atomic::wait wake rules (issue #128 §11.2) apply only
-    // to blocking consumers.
+    // to blocking consumers. Baseline the park counter immediately before
+    // the release trigger; the re-park wait is baseline-relative (a literal
+    // threshold must not rely on "no park happened before this point").
+    const int prepark_before =
+        f.prepark_entries.load(std::memory_order_acquire);
     cgate.resume.store(true, std::memory_order_release);
 
     // The interrupted first wait returns; the Live run re-parks at the poll.
     probe.set_phase("observe-repark");
-    wait_count_at_least(f.prepark_entries, 1);
+    wait_count_at_least(f.prepark_entries, prepark_before + 1);
     ws->set_control_wake_final_reap_pause_gate(nullptr);
 
     probe.set_phase("resolve-select");
@@ -828,13 +846,18 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g5_cqe_vs_control_interrupt) {
 
         probe.set_phase("observe-park");
         wait_count_at_least(f.prepark_entries, 1);
+        // Baselines BEFORE the notify; the re-park wait is baseline-relative
+        // (same discipline as UR-G3 — a literal threshold could be satisfied
+        // by a spurious pre-notify re-park without the wake being consumed).
+        const int prepark_before =
+            f.prepark_entries.load(std::memory_order_acquire);
         const auto control_before = f.ws->snapshot();
         f.wh.notify();
         probe.set_phase("observe-bridge-fired");
         wait_token(f, &sa::BackendWaitToken::control_generation,
                    control_before.control_generation);
         probe.set_phase("observe-repark");
-        wait_count_at_least(f.prepark_entries, 2);
+        wait_count_at_least(f.prepark_entries, prepark_before + 1);
         // Baseline BEFORE the release (the pipe write is the ONLY CQE
         // trigger, so the progress advance is strictly after it).
         const auto progress_before = f.ws->snapshot();
