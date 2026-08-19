@@ -9,9 +9,11 @@ local R = SLUICE_ROOT
 -- death_test_runner_posix.hpp; the child installs a deterministic terminate
 -- handler and the parent asserts the exact exit code. Category A cases are
 -- DEBUG-only (Release compiles out the assertions and trusts the caller per
--- the design contract); Category B cases are deterministic fail-fast in BOTH
--- Debug and Release (assert(false) + std::abort). POSIX-only: gated to
--- linux/macosx.
+-- the design contract) — EXCEPT the destruction cases A4-A6, which
+-- ADR-async-primitive-lifetime-failfast moved to named per-authority
+-- fail-fast in BOTH Debug and Release; Category B cases are deterministic
+-- fail-fast in BOTH Debug and Release (assert(false) + std::abort).
+-- POSIX-only: gated to linux/macosx.
 sluice_internal_async_test("async_rwlock_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- async_mutex_death_test — verifies the Mutex acquisition fail-fast
@@ -26,6 +28,17 @@ sluice_internal_async_test("async_rwlock_death_test", {platform_gate = {"linux",
 -- in this task (the harness is not implemented there); see
 -- tests/death_test_runner_posix.hpp.
 sluice_internal_async_test("async_mutex_death_test", {platform_gate = {"linux", "macosx"}})
+
+-- async_sync_lifetime_death_test — ADR-async-primitive-lifetime-failfast
+-- (issue #135 phase 6): destruction of AsyncMutex while owned (M1) and
+-- AsyncCondition with a wait() in flight (C1) must terminate through the
+-- named per-authority fail-fast boundary in BOTH Debug and Release; a full
+-- lock/wait/notify cycle followed by quiescent destruction is the control
+-- (CTL, exit 0). WaitQueue/AsyncRwLock authorities are covered by
+-- async_rwlock_death_test A4-A6 (moved to the both-mode gate by the same
+-- ADR). Runs in a forked child that re-execs this binary via
+-- death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
+sluice_internal_async_test("async_sync_lifetime_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- select_event_registry_death_test — E13 Select registry death tests (P2).
 -- Verifies identity-check assertions fire for duplicate-link, wrong-Event unlink,

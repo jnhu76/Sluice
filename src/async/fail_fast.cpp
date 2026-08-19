@@ -46,6 +46,20 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// ADR-async-primitive-lifetime-failfast entries (see fail_fast.hpp).
+[[noreturn]] void async_mutex_lifetime_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void async_rwlock_lifetime_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void async_condition_lifetime_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void wait_queue_lifetime_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission fail-fast. Unsupported target.
 [[noreturn]] void evented_admission_fail_fast() noexcept {
     std::terminate();

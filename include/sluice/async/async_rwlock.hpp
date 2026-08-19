@@ -38,7 +38,9 @@
 // Destruction contract: destroying an AsyncRwLock while readers/writer are
 // active or while wait epochs remain registered is a CALLER CONTRACT VIOLATION.
 // The destructor debug-asserts active_readers_ == 0, writer_active_ == false,
-// and does NOT cancel/wake/synthesize grants. ~WaitQueue asserts empty.
+// and fails fast via detail::async_rwlock_lifetime_fail_fast in Debug AND
+// Release (ADR-async-primitive-lifetime-failfast); it does NOT cancel/wake/
+// synthesize grants. ~WaitQueue enforces emptiness the same way.
 //
 // Explicitly excluded from v1:
 //   upgrade/downgrade, recursive/reentrant locking, optimistic reads,
@@ -48,6 +50,7 @@
 #include <cassert>
 #include <cstddef>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -76,10 +79,17 @@ public:
     // readers, no active writer) and its wait queue must be empty before
     // destruction. Does NOT cancel/wake/detach waiters.
     ~AsyncRwLock() {
-        assert(active_readers_ == 0 &&
-               "AsyncRwLock destroyed with active readers");
-        assert(!writer_active_ &&
-               "AsyncRwLock destroyed with active writer");
+        // ADR-async-primitive-lifetime-failfast: Debug tripwires + named
+        // fail-fast active in BOTH modes (Release previously passed
+        // silently). The underlying ~WaitQueue enforces the queued-waiter
+        // half with wait_queue_lifetime_fail_fast.
+        if (active_readers_ != 0 || writer_active_) {
+            assert(active_readers_ == 0 &&
+                   "AsyncRwLock destroyed with active readers");
+            assert(!writer_active_ &&
+                   "AsyncRwLock destroyed with active writer");
+            detail::async_rwlock_lifetime_fail_fast();
+        }
     }
 
     AsyncRwLock(const AsyncRwLock&) = delete;

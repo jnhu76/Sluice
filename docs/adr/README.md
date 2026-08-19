@@ -23,8 +23,19 @@ Architecture Decision Records for Sluice.
 | [ADR-execution-model](ADR-execution-model.md) | Dual Threaded/Evented Execution Model | **Accepted** | Async runtime | — | — |
 | [ADR-cancel-request-epoch](ADR-cancel-request-epoch.md) | Cancel Request Epoch (rearm semantics) | **Accepted** | Async runtime (T1 cooperative cancellation) | delivery-acknowledgement representation of the cancellation primitive described in ADR-execution-model | — |
 | [ADR-application-runtime](ADR-application-runtime.md) | Application Runtime Architecture | **Accepted** | Async runtime (E16) | — | — |
+| [ADR-async-primitive-lifetime-failfast](ADR-async-primitive-lifetime-failfast.md) | Async Primitive Destruction Fail-Fast | **Accepted** | Async sync primitives | the "Release trusts the caller" half of the E12 destruction contract for AsyncMutex/AsyncRwLock/AsyncCondition/WaitQueue | — |
 
 ## ADR details
+
+### ADR-async-primitive-lifetime-failfast: Async Primitive Destruction Fail-Fast
+
+- **Status:** Accepted
+- **Subsystem:** Async sync primitives
+- **Supersedes:** the "Release trusts the caller" half of the E12 destruction contract for AsyncMutex / AsyncRwLock / AsyncCondition / WaitQueue
+- **Superseded by:** none
+- **Current authority?** Yes — destruction in a forbidden state fails fast via named per-authority entries (`async_mutex_lifetime_fail_fast`, `async_rwlock_lifetime_fail_fast`, `async_condition_lifetime_fail_fast`, `wait_queue_lifetime_fail_fast`) in Debug AND Release; no hidden cleanup, no cancel-all, no implicit unlock.
+- **Implementation:** `include/sluice/async/detail/fail_fast.hpp`, destructor guards in the four headers.
+- **Verification:** `tests/async_sync_lifetime_death_test.cpp`, `tests/async_rwlock_death_test.cpp` (A4-A6, both modes).
 
 ### ADR-024S: Sync Runtime Contract
 

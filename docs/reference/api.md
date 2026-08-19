@@ -811,7 +811,7 @@ public:
 | Wake/notify | `set`, `release`, `notify_one`, `notify_all` | No | Yes |
 | Cancel | `cancel` (all primitives with cancel) | No | Yes |
 | Observation | `is_set`, `available`, `is_closed`, `capacity`, `size` | No | Yes |
-| Construction/destruction | ctors, dtors | No | Yes (constructors); destruction requires quiescence (empty WaitQueue, no active condition waits, no mutex owner) |
+| Construction/destruction | ctors, dtors | No | Yes (constructors); destruction requires quiescence (empty WaitQueue, no active condition waits, no mutex owner) — violations fail fast via named per-authority entries in Debug AND Release (ADR-async-primitive-lifetime-failfast) |
 
 ---
 

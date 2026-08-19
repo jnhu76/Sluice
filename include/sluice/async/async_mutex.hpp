@@ -55,7 +55,9 @@
 //
 // Destruction contract: destroying an AsyncMutex while it is owned or while
 // wait epochs remain registered is a CALLER CONTRACT VIOLATION. The destructor
-// debug-asserts owner_ == nullptr and does NOT cancel/wake/synthesize
+// debug-asserts owner_ == nullptr and fails fast via
+// detail::async_mutex_lifetime_fail_fast in Debug AND Release
+// (ADR-async-primitive-lifetime-failfast); it does NOT cancel/wake/synthesize
 // RESOURCE_WAKE and does NOT force-release ownership. Caller must ensure
 // unlocked + all waits terminal before AsyncMutex lifetime ends (~WaitQueue
 // asserts head_ == nullptr in debug). No cancel-all, no wake-all.
@@ -70,6 +72,7 @@
 
 #include <cassert>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -98,8 +101,14 @@ public:
     // ~WaitQueue asserts head_ == nullptr in debug (caller must drain first).
     // In release builds, no recovery/cancel-all protocol is required.
     ~AsyncMutex() {
-        assert(owner_ == nullptr &&
-               "AsyncMutex destroyed while locked (owner != NoOwner)");
+        // ADR-async-primitive-lifetime-failfast: Debug tripwire + named
+        // fail-fast active in BOTH modes (Release previously passed
+        // silently, leaving registered state referring to freed memory).
+        if (owner_ != nullptr) {
+            assert(owner_ == nullptr &&
+                   "AsyncMutex destroyed while locked (owner != NoOwner)");
+            detail::async_mutex_lifetime_fail_fast();
+        }
     }
 
     AsyncMutex(const AsyncMutex&) = delete;

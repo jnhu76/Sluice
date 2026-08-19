@@ -86,6 +86,7 @@
 #include <cstddef>
 
 #include <sluice/async/async_mutex.hpp>
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/wait_node.hpp>
 #include <sluice/async/wait_queue.hpp>
 
@@ -112,15 +113,25 @@ public:
         : mutex_(mutex), scheduler_(mutex.scheduler_) {}
 
     // Destruction contract: no wait() call may be in flight. The destructor
-    // debug-asserts active_waits_ == 0 (acquire load) and does NOT perform any
+    // debug-asserts active_waits_ == 0 (acquire load) and fails fast via
+    // detail::async_condition_lifetime_fail_fast in Debug AND Release
+    // (ADR-async-primitive-lifetime-failfast); it does NOT perform any
     // notify/cancel/force-reacquire/release. The underlying ~WaitQueue asserts
     // head_ == nullptr in debug (caller must drain first). A reacquire-phase
     // destruction is caught by active_waits_ (the Condition-queue-empty check
     // alone is insufficient — docs §14).
     ~AsyncCondition() {
-        assert(active_waits_.load(std::memory_order::acquire) == 0 &&
-               "AsyncCondition destroyed while a wait() call is in flight "
-               "(Condition epoch OR reacquire epoch)");
+        // ADR-async-primitive-lifetime-failfast: Debug tripwire + named
+        // fail-fast active in BOTH modes (Release previously passed
+        // silently). active_waits_ covers BOTH the Condition epoch and the
+        // reacquire epoch (docs §14); the underlying ~WaitQueue covers
+        // registered-but-not-yet-in-wait entries.
+        if (active_waits_.load(std::memory_order::acquire) != 0) {
+            assert(active_waits_.load(std::memory_order::acquire) == 0 &&
+                   "AsyncCondition destroyed while a wait() call is in flight "
+                   "(Condition epoch OR reacquire epoch)");
+            detail::async_condition_lifetime_fail_fast();
+        }
     }
 
     AsyncCondition(const AsyncCondition&) = delete;

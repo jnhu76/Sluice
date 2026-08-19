@@ -106,6 +106,7 @@
 // "who makes the fiber runnable" decision in scheduler code (§8).
 #pragma once
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/mutex.hpp>
 #include <sluice/async/thread_annotations.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -132,8 +133,14 @@ public:
     ~WaitQueue() {
         // head_ == null iff empty (tail_ maintained in lockstep). A non-empty
         // queue at destruction is a caller contract violation (§10).
-        assert(head_ == nullptr &&
-               "WaitQueue destroyed with registered waiters (resolve them first)");
+        // ADR-async-primitive-lifetime-failfast: Debug tripwire + named
+        // fail-fast active in BOTH modes — registered waiters would refer to
+        // freed memory; Release previously passed silently.
+        if (head_ != nullptr) {
+            assert(head_ == nullptr &&
+                   "WaitQueue destroyed with registered waiters (resolve them first)");
+            detail::wait_queue_lifetime_fail_fast();
+        }
     }
 
     WaitQueue(const WaitQueue&) = delete;
