@@ -2189,7 +2189,7 @@ private:
 public:
     // E13 P3 test-only instrumentation (Addendum E): counts the number of
     // times the Select timer pump branch reads reg.arm_ on an ACTIVE entry
-    // - i.e. the exact production dereference site, instrumented immediately
+    // — i.e. the exact production dereference site, instrumented immediately
     // before the load. Stale (RETIRED/CONSUMED) pops must observe a delta of
     // 0. Reachable only via AsyncTestAccess; absent in production.
     std::size_t select_timer_arm_load_count_{0};
@@ -2203,7 +2203,6 @@ public:
     struct AsyncTestAccess;
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };
-
 
 }  // namespace sluice::async
 
