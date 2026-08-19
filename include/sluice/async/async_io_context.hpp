@@ -586,45 +586,18 @@ public:
     // source (non-split-wait).
     BackendWaitToken backend_wait_token_for_test() const noexcept;
 
-    // Deterministic context-level pause (D4-RM13 detector seam): the
-    // inter-iteration control-wake detector
-    // (ctx_wait_one_inter_iteration_control_wake_not_lost in
-    // async_io_context_split_wait_c2e_test) pauses wait_one AFTER
-    // wait_for_change reports `progress` and BEFORE the next internal
-    // snapshot — the exact inter-iteration window where a control wake used
-    // to be absorbed into a fresh snapshot (rebaselined away), drained, and
-    // reparked forever. Compiled out of production builds; the layout cost in
-    // the internal-testing target is accepted and documented (AGENTS.md §15).
-    struct WaitSourceProgressPauseGate {
-        std::atomic<bool> paused{false};  // reached the pause point
-        std::atomic<bool> exited{false};  // pause exited (for RAII release)
-        // `resume` is private on purpose: the paused thread blocks in
-        // resume.wait(false), and ONLY a notifying atomic operation
-        // (notify_one/notify_all) wakes an atomic::wait consumer — a plain
-        // store of the value does not wake a consumer that is already parked
-        // (store-racing-the-park is exactly the lost-wake this gate exists
-        // to eliminate). Making the field private forces every publisher
-        // through resume_wait_source_progress_gate_for_test below, so the
-        // required store+notify pair cannot be forgotten at a call site
-        // (issue #92 resume_threadpool_gate model). AsyncIoContext is the
-        // friend performing the blocking wait (pause_after_wait_source_
-        // progress_).
-      private:
-        friend class AsyncIoContext;
-        std::atomic<bool> resume{false};  // released only via the helper below
-    };
-    void set_wait_source_progress_pause_gate_for_test(WaitSourceProgressPauseGate* gate) noexcept {
-        wait_source_progress_gate_.store(gate, std::memory_order_release);
-    }
-    // The ONLY supported resume publisher (the structural rule above):
-    // release-store then notify_all. notify_all is a harmless no-op when no
-    // thread is in atomic::wait and does not rest on a single-waiter
-    // assumption.
+    // Deterministic context-level pause (D4-RM13 detector seam; C4 / issue
+    // #135): the WaitSourceProgressPauseGate definition and the seam bodies
+    // moved to the NON-INSTALLED seam header
+    // src/async/async_io_context_test_seams.hpp (included at the bottom of
+    // this file under this same guard). Compiled out of production builds;
+    // the layout cost in the internal-testing target is accepted and
+    // documented (AGENTS.md §15).
+    struct WaitSourceProgressPauseGate;
+    void set_wait_source_progress_pause_gate_for_test(
+        WaitSourceProgressPauseGate* gate) noexcept;
     static void resume_wait_source_progress_gate_for_test(
-        WaitSourceProgressPauseGate& gate) noexcept {
-        gate.resume.store(true, std::memory_order_release);
-        gate.resume.notify_all();
-    }
+        WaitSourceProgressPauseGate& gate) noexcept;
 #endif
 
 private:
@@ -649,3 +622,12 @@ private:
 };
 
 }  // namespace sluice::async
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// C4 (issue #135): the complete internal-testing control plane for
+// AsyncIoContext lives in the NON-INSTALLED seam header
+// src/async/async_io_context_test_seams.hpp, resolved via the
+// internal-testing-only include path. Production TUs never compile this
+// include.
+#include "async_io_context_test_seams.hpp"
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)

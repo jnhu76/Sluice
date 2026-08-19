@@ -933,6 +933,18 @@ Prefer:
 - deterministic pause gates compiled only into the internal-testing target;
 - stable counters proving boundedness.
 
+The established mechanism for "outside installed production headers" (C4, issue #135)
+is the non-installed seam header under `src/async/` (for example
+`src/async/scheduler_test_access.hpp`, `src/async/threadpool_test_seams.hpp`): the
+installed header keeps only guarded declarations plus layout-bearing test members,
+and includes the seam header at its bottom under the same
+`SLUICE_ASYNC_INTERNAL_TESTING` guard. The seam include path (`src/async`) is public
+ONLY on the `sluice_async_internal_testing` target; production TUs never compile the
+include, carry no seam symbol, and their preprocessed output contains no seam code
+(verified by `nm` on the production archive and `clang -E` shape checks). New test
+control plane for an async class goes into a `src/async/*_test_seams.hpp` (or
+`*_test_access.hpp`) header, not inline into the installed header.
+
 Do not expose private queue mutation or RequestSlot mutation merely to simplify a test.
 
 ---
