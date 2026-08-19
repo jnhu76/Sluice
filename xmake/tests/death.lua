@@ -243,3 +243,30 @@ if os.isfile(p) and is_plat("linux", "macosx") then
         add_tests("uring_backend_c2e_death_test")
 end
 end
+
+-- failure_model_high_risk_death_test — PR-D (#135 Case B) death-test
+-- obligations for the ScriptedAsyncBackend fail-closed guards (T3 null
+-- shared state at construction; T6 non-quiescent destruction with accepted
+-- work outstanding — failure-model.md §3/§6). Both guards are explicit
+-- control flow active in Debug AND Release; each case runs in a forked child
+-- that re-execs this binary via death_test_runner_posix.hpp and reaches the
+-- named authority from the REAL constructor / REAL submit + destructor path
+-- (never a direct fail-fast call). SB-C is the clean-lifecycle control that
+-- must exit 0. Links the production sluice_async plus the test-support
+-- scripted backend (same wiring as scripted_backend_test). POSIX-only:
+-- gated to linux/macosx.
+do
+    local test_src = R .. "tests/failure_model_high_risk_death_test.cpp"
+    local support_src = R .. "tests/support/scripted_async_backend.cpp"
+    if os.isfile(test_src) and os.isfile(support_src)
+       and is_plat("linux", "macosx") then
+        target("failure_model_high_risk_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(test_src, support_src)
+            add_tests("failure_model_high_risk_death_test")
+    end
+end

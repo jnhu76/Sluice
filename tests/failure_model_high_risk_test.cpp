@@ -21,10 +21,10 @@
 //
 //   3. ScriptedAsyncBackend fail-closed guards: the positive control is the
 //      existing scripted_backend_test binary (clean construct/submit/drain/
-//      destroy in both modes). The abort paths cannot run in this
-//      cooperative harness; they are verified by the manual probe recorded
-//      in the PR description (Debug AND Release abort with the named
-//      reason).
+//      destroy in both modes). The fail-fast paths (T3 null shared state,
+//      T6 destroy-with-outstanding) are death-tested by the separate
+//      failure_model_high_risk_death_test binary via the real object paths
+//      in Debug AND Release — they cannot run in this cooperative harness.
 #include "async_test_control.hpp"
 #include "harness.hpp"
 

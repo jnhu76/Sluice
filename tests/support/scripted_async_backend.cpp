@@ -20,10 +20,8 @@
 #include "scripted_async_backend.hpp"
 
 #include <algorithm>
-#include <cassert>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <utility>
 
 namespace sluice::async {
@@ -91,18 +89,43 @@ std::size_t apply_staged_locked(ScriptedBackendSharedState& s) {
 // ScriptedAsyncBackend: construction / destruction
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// T3 named fail-fast authority (AGENTS.md §9.2,
+// docs/architecture/failure-model.md §3/§5): constructing the backend without
+// a shared state is a test-author contract violation with no recovery
+// channel. Same contract as the production detail::fail_fast.hpp family
+// ([[noreturn]] noexcept; no allocation, locking, I/O, parameters, or state
+// recovery; terminates). Test-support code: deliberately NOT added to the
+// production family header. Death-tested (Debug AND Release) by
+// failure_model_high_risk_death_test SB-A via the real constructor path.
+[[noreturn]] void scripted_backend_state_fail_fast() noexcept {
+    std::terminate();
+}
+
+// T6 named fail-fast authority: destroying the backend while scripted
+// operations are still outstanding (pending or staged) is a lifetime
+// contract violation — the caller contract is to drain everything before
+// teardown (the controller's expect_no_outstanding() is the descriptive,
+// non-fatal check for the same condition). Same family contract as above;
+// no hidden cleanup, no drain attempt. Death-tested (Debug AND Release) by
+// failure_model_high_risk_death_test SB-B via the real destructor path.
+[[noreturn]] void scripted_backend_non_quiescent_destruction_fail_fast()
+    noexcept {
+    std::terminate();
+}
+
+}  // namespace
+
 ScriptedAsyncBackend::ScriptedAsyncBackend(
     std::shared_ptr<ScriptedBackendSharedState> state)
     : state_(std::move(state)) {
     // T3 caller-contract check (AGENTS.md §9.2): a null shared state is a
-    // test-author bug with no recovery; the explicit guard fails closed in
-    // Debug AND Release with the real reason (the previous bare assert left
-    // Release test binaries a silent null dereference at first use).
+    // test-author bug with no recovery; the named fail-fast is active in
+    // Debug AND Release (the previous bare assert left Release test binaries
+    // a silent null dereference at first use).
     if (!state_) {
-        std::fprintf(stderr,
-                     "ScriptedAsyncBackend: constructed with null shared "
-                     "state (controller missing?)\n");
-        std::abort();
+        scripted_backend_state_fail_fast();
     }
 }
 
@@ -122,18 +145,18 @@ ScriptedAsyncBackend::~ScriptedAsyncBackend() {
     // terminates on the empty wait / shutdown boundary).
     state_->ready_wait.interrupt_all();
 
-    // T3 caller-contract check (AGENTS.md §9.2): a well-behaved task drains
-    // everything before the Runtime tears down, so nothing should be
-    // outstanding at destruction (expect_no_outstanding() on the controller
-    // gives a more descriptive check). The explicit guard fails closed in
-    // Debug AND Release; the previous bare assert let Release test binaries
+    // T6 lifetime-contract check (AGENTS.md §9.2,
+    // docs/architecture/failure-model.md §6): destroying a backend with
+    // accepted work still outstanding — pending or staged — is a lifetime
+    // violation, not an ordinary caller-contract slip: the caller contract
+    // is to drain everything before teardown (the controller's
+    // expect_no_outstanding() gives the descriptive non-fatal check for the
+    // same condition). The named fail-fast is active in Debug AND Release;
+    // the previous bare assert let Release test binaries
     // destroy-with-outstanding silently.
     if (!(state_->size_ops.empty() && state_->void_ops.empty() &&
           state_->staged_size.empty() && state_->staged_void.empty())) {
-        std::fprintf(stderr,
-                     "ScriptedAsyncBackend: destroyed with outstanding "
-                     "operations (use controller expect_no_outstanding())\n");
-        std::abort();
+        scripted_backend_non_quiescent_destruction_fail_fast();
     }
 }
 
