@@ -87,10 +87,28 @@ jobs:
       - name: Repository mechanical gates
         # One fast entry point for doc links, architecture structure,
         # backend-conformance manifest attribution self-test, mechanical
-        # facts, performance-evidence structural validation, and
-        # git diff --check. This replaces the duplicated Python invocations
-        # that previously appeared as several CI steps.
-        run: bash scripts/gates/pre-push.sh </dev/null
+        # facts, performance-evidence structural validation, and the
+        # changed-lines gates (git diff --check + assert-hygiene).
+        #
+        # The changed-lines scan range is passed EXPLICITLY: a clean CI
+        # checkout has an empty `git diff HEAD`, so the script's manual
+        # working-tree mode would silently scan nothing. For pull requests
+        # the range is the PR base..head pair; a workflow_dispatch run has
+        # no PR range and scans the checked-out commit (an explicit choice,
+        # never a silent empty scan). The selected range is echoed so the
+        # log shows exactly what was scanned.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          else
+            RANGE="HEAD~1..HEAD"
+          fi
+          echo "changed-lines gates scan range: ${RANGE}"
+          bash scripts/gates/pre-push.sh --range "$RANGE"
 
   linux-clang-release:
     name: Linux Clang Release

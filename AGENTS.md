@@ -323,6 +323,12 @@ without Git/Lefthook:
 bash scripts/gates/pre-push.sh
 ```
 
+The same script is what CI runs (`.github/workflows/ci.yml` "Repository
+mechanical gates" step), invoked with an explicit changed-lines range —
+`bash scripts/gates/pre-push.sh --range <base>..<head>` — because a clean CI
+checkout has an empty `git diff HEAD`, so the manual working-tree mode would
+silently scan nothing there.
+
 Dependency: `lefthook` >= 1.10.0 (language-neutral, no Node/npm). The 1.10.0
 floor is required because the configuration uses the `jobs:` key and the
 `use_stdin: true` option on the pre-push job; older releases only support the
@@ -500,6 +506,42 @@ real syscall error.
 
 Reference/synthetic backends may retain an explicitly registered descriptor-validation divergence.
 Do not silently extend that exemption to real syscall backends.
+
+### 9.2 Failure-response model and assert authority
+
+The authoritative failure taxonomy (classes T1–T7) and mechanical decision rules live in
+`docs/architecture/failure-model.md`. This section states the binding rules for the `assert()`
+family; the taxonomy document explains how to classify a failure and which response mechanism each
+class permits.
+
+- `NDEBUG` is not semantic authority. The Release build defines `NDEBUG`, and a public header's
+  `assert()` also compiles away for every downstream consumer that defines it. An invariant that
+  matters only inside `assert()` is therefore not enforced in Release and not enforced for
+  consumers at all.
+- `assert()` MUST NOT be the sole enforcement for: correctness of an I/O result; liveness or
+  progress; ownership or borrow lifetime; object lifetime or destruction contracts; request
+  lifecycle transitions; Completion binding or publication; Scheduler routing or wake; backend
+  submission, dispatch, or reap; or resource accounting. If a condition is reachable at runtime by
+  any input, thread interleaving, or environment, its enforcement must be a typed result, a named
+  fail-fast active in Debug AND Release, or a structural (compile-time) guarantee.
+- A new `assert(`, `#include <cassert>`, or `#include <assert.h>` line in `include/` or `src/` is
+  legal only in one of the three allowlisted shapes (Completion L9 pattern; pure diagnostics;
+  internal-testing preconditions — see the taxonomy document §5), and must be registered as a
+  site-level entry in `scripts/gates/assert-hygiene.allowlist` (path glob, source-line substring,
+  category, written reason). Exemptions are per site, never per file: an unregistered
+  assert-family line in an already-allowlisted file still fails. The changed-lines gate
+  `scripts/gates/assert-hygiene.py` fails unregistered additions; it runs inside
+  `scripts/gates/pre-push.sh` in three range modes — explicit `--range <base>..<head>` (used by
+  CI, which passes the pull-request range because a clean checkout's `git diff HEAD` is empty),
+  pushed ref-pair ranges (hook mode), and staged + working tree (manual mode). Guard-based
+  auto-allow is fail-closed under-allowing: only provably testing-positive preprocessor forms
+  qualify; `#ifndef`, `#if !defined(...)`, and any `||` form are production code.
+- Existing assert sites are grandfathered — the gate is changed-lines only. Grandfathering is not
+  retroactive amnesty: existing code is evidence, not automatic architectural precedent. The
+  historical backlog is inventoried in issue #144 and is reclassified only through reviewed change.
+- This section restricts the `assert()` family only. It does not restrict ordinary freestanding
+  headers such as `<cstdint>` or `<cstddef>`, and it does not affect `static_assert`
+  (compile-time, `NDEBUG`-independent) or `[[nodiscard]]`.
 
 ---
 
@@ -1061,6 +1103,8 @@ python3 scripts/check-doc-links.py
 python3 scripts/verify-architecture-docs.py
 python3 scripts/gates/mechanical-facts.py --self-test
 python3 scripts/gates/mechanical-facts.py
+python3 scripts/gates/assert-hygiene.py --self-test
+python3 scripts/gates/assert-hygiene.py
 git diff --check
 ```
 

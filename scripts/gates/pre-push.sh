@@ -4,9 +4,21 @@
 # PURPOSE
 #   Catch deterministic mechanical failures — documentation link validation,
 #   architecture-doc structure, the backend-conformance manifest self-test,
-#   mechanical facts, performance-evidence structural validation, and
-#   whitespace damage — BEFORE a push consumes a GitHub CI round trip. This is
+#   mechanical facts, performance-evidence structural validation, the
+#   changed-lines assert-family policy (AGENTS.md §9.2), and whitespace
+#   damage — BEFORE a push consumes a GitHub CI round trip. This is
 #   developer tooling only.
+#
+# USAGE
+#   bash scripts/gates/pre-push.sh                       # manual: staged + working tree
+#   git push (lefthook)                                  # hook: pushed ref-pair ranges (stdin)
+#   bash scripts/gates/pre-push.sh --range <base>..<head>  # explicit range(s), stdin not read
+#
+#   The --range mode exists for CI: a clean checkout has an empty
+#   `git diff HEAD`, so manual mode would silently scan nothing there.
+#   GitHub CI passes the pull-request range explicitly (see
+#   .github/workflows/ci.yml "Repository mechanical gates" step). The range
+#   may be repeated; each one is scanned by the changed-lines gates.
 #
 # AUTHORITY
 #   This script is the single source of truth for what the local pre-push gate
@@ -35,6 +47,31 @@
 #   exit >0 -> the FIRST failing gate wins; later gates do not run
 #   No `|| true`, no warning-only required gates, no swallowed failures.
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Argument parsing (before any gate runs, so usage errors are immediate).
+#
+# --range <a>..<b> : explicit revision range for the changed-lines gates
+#                    (whitespace check + assert-hygiene scan). Repeatable.
+#                    stdin is NOT read in this mode.
+EXPLICIT_DIFF_ARGS=()
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --range)
+            if [ $# -lt 2 ]; then
+                echo "pre-push.sh: --range requires a <base>..<head> argument" >&2
+                exit 1
+            fi
+            EXPLICIT_DIFF_ARGS+=("$2")
+            shift 2
+            ;;
+        *)
+            echo "pre-push.sh: unknown argument: $1" >&2
+            echo "usage: bash scripts/gates/pre-push.sh [--range <base>..<head>]..." >&2
+            exit 1
+            ;;
+    esac
+done
 
 # ---------------------------------------------------------------------------
 # Environment isolation.
@@ -176,71 +213,104 @@ run_gate "performance evidence artifacts" "${PERF_EVIDENCE_REPRO}" \
     python3 scripts/bench/perf-evidence-validate.py
 
 # ---------------------------------------------------------------------------
-# Gate 6: whitespace / conflict-marker damage across the PUSHED ranges.
+# Gate 5c: assert-hygiene self-test.
+#
+# Plants each violation shape (bare assert / <cassert> / <assert.h> /
+# production side of a testing guard) and requires every detector to fire
+# with zero false positives (static_assert, <cstdint>/<cstddef>, comments,
+# context/removed lines, guarded seam lines, allowlisted paths, and tests/
+# must all pass). Proves the changed-lines assert-family policy gate
+# (AGENTS.md §9.2, docs/architecture/failure-model.md) actually catches.
+ASSERT_HYGIENE_SELFTEST_REPRO="python3 scripts/gates/assert-hygiene.py --self-test"
+run_gate "assert-hygiene self-test" "${ASSERT_HYGIENE_SELFTEST_REPRO}" \
+    python3 scripts/gates/assert-hygiene.py --self-test
+
+# ---------------------------------------------------------------------------
+# Gate 6: whitespace / conflict-marker damage + assert-hygiene changed-lines
+# scan across the selected revision range(s).
 #
 # `git diff --check` reports trailing whitespace, indentation with spaces
-# before tabs, and unresolved merge conflict markers.
+# before tabs, and unresolved merge conflict markers. The assert-hygiene gate
+# scans the ADDED lines of the same range(s) for unregistered assert-family
+# additions (AGENTS.md §9.2).
 #
-# A real pre-push invocation receives the pushed ref-pairs on stdin, one line
-# per ref:
-#     <local-ref> <local-sha> <remote-ref> <remote-sha>
-# For each pair we check the actual pushed range "<remote-sha>..<local-sha>"
-# so damage in the commits being pushed is caught even when the working tree
-# happens to be clean (a working-tree-only check would miss it).
-#
-# When invoked manually (no stdin, e.g. `bash scripts/gates/pre-push.sh`) there
-# are no ref-pairs to read. In that case fall back to checking the staged +
-# working tree so the script stays a useful manual gate. Detect this by reading
-# stdin into an array; an empty array means manual invocation.
-DIFF_CHECK_LABEL="git diff --check (pushed ranges)"
-
-# Read all stdin ref-pair lines up front so we can decide range-vs-tree mode.
-# `mapfile` returns an empty array when stdin is not a pipe / is empty, which
-# is exactly the manual-invocation case.
-mapfile -t PUSH_REF_PAIRS
-
-# Build the set of `git diff --check` revisions to evaluate:
-#   - hook mode (ref-pairs present): one range per pair, "<remote>..<local>"
-#   - manual mode (no ref-pairs):    a single empty-args working-tree check
+# Range selection, first match wins:
+#   1. explicit — `--range <a>..<b>` (repeatable): scan exactly the given
+#      range(s); stdin is not read. This is the CI mode: a clean checkout has
+#      an empty `git diff HEAD`, so manual mode would silently scan nothing.
+#   2. hook — a real pre-push invocation receives the pushed ref-pairs on
+#      stdin, one per line:
+#          <local-ref> <local-sha> <remote-ref> <remote-sha>
+#      For each pair we scan the actual pushed range
+#      "<remote-sha>..<local-sha>" so damage in the commits being pushed is
+#      caught even when the working tree happens to be clean.
+#   3. manual — no ranges and no stdin pairs: fall back to the staged +
+#      working tree so the script stays a useful manual gate. (Reading stdin
+#      only when needed also keeps interactive manual runs from blocking on a
+#      tty.)
+MODE=""          # "explicit" | "hook" | "manual"
 DIFF_ARGS=()
-if [ "${#PUSH_REF_PAIRS[@]}" -gt 0 ]; then
-    for pair in "${PUSH_REF_PAIRS[@]}"; do
-        # pair = "<local-ref> <local-sha> <remote-ref> <remote-sha>"
-        # shellcheck disable=SC2086  # intentional word-splitting on 4 fields
-        set -- $pair
-        local_sha="${2:-}"
-        remote_sha="${4:-}"
-        # Skip refs being deleted (local_sha all zeros): no range to check.
-        case "$local_sha" in
-            0000000000000000000000000000000000000000) continue ;;
-        esac
-        # New branch (remote all zeros): diff against that local commit's full
-        # tree. Otherwise check the pushed range "<remote>..<local>".
-        if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-            DIFF_ARGS+=("$local_sha")
-        else
-            DIFF_ARGS+=("${remote_sha}..${local_sha}")
-        fi
-    done
-    # If every pair was a deletion, there is nothing to check; pass this gate.
-    if [ "${#DIFF_ARGS[@]}" -eq 0 ]; then
-        echo "==> pre-push gate: ${DIFF_CHECK_LABEL}"
-        echo "    (no pushable content: all refs deleted; nothing to check)"
-    else
-        # Reproduction for a hook-mode failure lists the exact ranges checked.
-        DIFF_CHECK_REPRO="git diff --check ${DIFF_ARGS[*]}"
-        run_gate "${DIFF_CHECK_LABEL}" "${DIFF_CHECK_REPRO}" \
-            git diff --check "${DIFF_ARGS[@]}"
-    fi
+
+if [ "${#EXPLICIT_DIFF_ARGS[@]}" -gt 0 ]; then
+    MODE="explicit"
+    DIFF_ARGS=("${EXPLICIT_DIFF_ARGS[@]}")
 else
-    # Manual invocation: no stdin ref-pairs. Fall back to the staged + working
-    # tree so `bash scripts/gates/pre-push.sh` remains a useful pre-push probe.
-    DIFF_CHECK_LABEL="git diff --check (working tree; manual invocation)"
-    DIFF_CHECK_REPRO="git diff --check"
-    echo "==> pre-push gate: ${DIFF_CHECK_LABEL}"
-    echo "    (no stdin ref-pairs; checking staged + working tree)"
-    run_gate "${DIFF_CHECK_LABEL}" "${DIFF_CHECK_REPRO}" \
+    # `mapfile` returns an empty array when stdin is not a pipe / is empty,
+    # which is exactly the manual-invocation case.
+    mapfile -t PUSH_REF_PAIRS
+    if [ "${#PUSH_REF_PAIRS[@]}" -gt 0 ]; then
+        MODE="hook"
+        for pair in "${PUSH_REF_PAIRS[@]}"; do
+            # pair = "<local-ref> <local-sha> <remote-ref> <remote-sha>"
+            # shellcheck disable=SC2086  # intentional word-splitting on 4 fields
+            set -- $pair
+            local_sha="${2:-}"
+            remote_sha="${4:-}"
+            # Skip refs being deleted (local_sha all zeros): no range to check.
+            case "$local_sha" in
+                0000000000000000000000000000000000000000) continue ;;
+            esac
+            # New branch (remote all zeros): diff against that local commit's
+            # full tree. Otherwise check the pushed range
+            # "<remote-sha>..<local-sha>".
+            if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+                DIFF_ARGS+=("$local_sha")
+            else
+                DIFF_ARGS+=("${remote_sha}..${local_sha}")
+            fi
+        done
+    else
+        MODE="manual"
+    fi
+fi
+
+if [ "$MODE" = "manual" ]; then
+    echo "==> pre-push gate: git diff --check (working tree; manual invocation)"
+    echo "    (no stdin ref-pairs and no --range; checking staged + working tree)"
+    run_gate "git diff --check (working tree; manual invocation)" \
+        "git diff --check" \
         git diff --check
+    echo "==> pre-push gate: assert-hygiene (working tree; manual invocation)"
+    echo "    (no stdin ref-pairs and no --range; checking staged + working tree)"
+    run_gate "assert-hygiene (working tree; manual invocation)" \
+        "python3 scripts/gates/assert-hygiene.py" \
+        python3 scripts/gates/assert-hygiene.py
+elif [ "${#DIFF_ARGS[@]}" -eq 0 ]; then
+    # Hook mode where every pushed pair was a deletion: nothing to check.
+    echo "==> pre-push gate: git diff --check (${MODE} ranges)"
+    echo "    (no pushable content: all refs deleted; nothing to check)"
+    echo "==> pre-push gate: assert-hygiene (${MODE} ranges)"
+    echo "    (no pushable content: all refs deleted; nothing to check)"
+else
+    # Reproduction for a failure lists the exact ranges scanned. The ranges
+    # are echoed so a CI/hook log shows what was actually scanned.
+    echo "==> pre-push gate: ${MODE} range(s) for changed-lines gates: ${DIFF_ARGS[*]}"
+    run_gate "git diff --check (${MODE} ranges)" \
+        "git diff --check ${DIFF_ARGS[*]}" \
+        git diff --check "${DIFF_ARGS[@]}"
+    run_gate "assert-hygiene (${MODE} ranges)" \
+        "python3 scripts/gates/assert-hygiene.py ${DIFF_ARGS[*]}" \
+        python3 scripts/gates/assert-hygiene.py "${DIFF_ARGS[@]}"
 fi
 
 # ---------------------------------------------------------------------------
