@@ -335,6 +335,28 @@ bool evented_admission_check() noexcept;
 // Fail-fast in BOTH Debug and Release.
 [[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept;
 
+// ADR-async-primitive-lifetime-failfast: async synchronization primitive
+// destruction fail-fast. Destroying AsyncMutex (while owned), AsyncRwLock
+// (with active readers or writer), AsyncCondition (while a wait() is in
+// flight), or WaitQueue (with registered waiters) is a caller contract
+// violation with no recovery semantics: registered waiters and Scheduler
+// routing records would refer to freed memory. Silent continuation is
+// silent use-after-free, not graceful degradation, and a destructor has no
+// Result channel — deterministic named termination is the truthful option.
+// Debug keeps the descriptive assert ahead of these entries; Release
+// enforcement is these entries. Quiescent destruction is unchanged and
+// side-effect-free (no cancel-all, no wake-all, no force-release, no
+// synthesized results — AGENTS.md §14).
+//
+// Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery,
+// ultimately std::terminate(). No parameter (naming the authority is the
+// function name's job).
+[[noreturn]] void async_mutex_lifetime_fail_fast() noexcept;
+[[noreturn]] void async_rwlock_lifetime_fail_fast() noexcept;
+[[noreturn]] void async_condition_lifetime_fail_fast() noexcept;
+[[noreturn]] void wait_queue_lifetime_fail_fast() noexcept;
+
 // Phase D1 (UringAsyncBackend): non-quiescent destruction. The backend's
 // destructor is called while accepted work remains (an enqueued local dispatch
 // entry, a live operation cookie / ring-owned request, a backend-ready unreaped

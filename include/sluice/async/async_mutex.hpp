@@ -55,10 +55,13 @@
 //
 // Destruction contract: destroying an AsyncMutex while it is owned or while
 // wait epochs remain registered is a CALLER CONTRACT VIOLATION. The destructor
-// debug-asserts owner_ == nullptr and does NOT cancel/wake/synthesize
+// debug-asserts owner_ == nullptr and fails fast via
+// detail::async_mutex_lifetime_fail_fast in Debug AND Release
+// (ADR-async-primitive-lifetime-failfast); it does NOT cancel/wake/synthesize
 // RESOURCE_WAKE and does NOT force-release ownership. Caller must ensure
-// unlocked + all waits terminal before AsyncMutex lifetime ends (~WaitQueue
-// asserts head_ == nullptr in debug). No cancel-all, no wake-all.
+// unlocked + all waits terminal before AsyncMutex lifetime ends (the
+// underlying ~WaitQueue fails fast via wait_queue_lifetime_fail_fast in
+// Debug AND Release). No cancel-all, no wake-all.
 //
 // Misuse contracts (debug asserts; no recovery semantics):
 //   recursive try_lock        -> returns false, no mutation
@@ -70,6 +73,7 @@
 
 #include <cassert>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -95,11 +99,17 @@ public:
     // and its wait queue must be empty before destruction. The destructor does
     // NOT cancel waiters, does NOT wake waiters, does NOT force-release
     // ownership, and does NOT synthesize RESOURCE_WAKE. The underlying
-    // ~WaitQueue asserts head_ == nullptr in debug (caller must drain first).
-    // In release builds, no recovery/cancel-all protocol is required.
+    // ~WaitQueue fails fast via wait_queue_lifetime_fail_fast when waiters
+    // remain registered (caller must drain first; Debug AND Release).
     ~AsyncMutex() {
-        assert(owner_ == nullptr &&
-               "AsyncMutex destroyed while locked (owner != NoOwner)");
+        // ADR-async-primitive-lifetime-failfast: Debug tripwire + named
+        // fail-fast active in BOTH modes (Release previously passed
+        // silently, leaving registered state referring to freed memory).
+        if (owner_ != nullptr) {
+            assert(owner_ == nullptr &&
+                   "AsyncMutex destroyed while locked (owner != NoOwner)");
+            detail::async_mutex_lifetime_fail_fast();
+        }
     }
 
     AsyncMutex(const AsyncMutex&) = delete;

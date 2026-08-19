@@ -735,7 +735,7 @@ nothrow 移动构造和 nothrow 析构约束属于 `AsyncQueue<T>` 本身。结�
 | `注册后竞争` | 注册后 RESOURCE_WAKE / TIMER_EXPIRE / CANCEL 通过单一 `WaitNode::resolve_` CAS 竞争。 |
 | `FIFO 等待者选择` | 等待者按 FIFO 注册顺序选择。**不**保证严格完成顺序。 |
 | `无 barging` | 若有 FIFO 优先级更高的已排队等待者，`try_*` 操作失败。 |
-| `destroy` | 析构函数。要求等待者为空（debug assert）。**不**取消/唤醒/清理。 |
+| `destroy` | 析构函数。要求等待者为空 —— 违规在 Debug 与 Release 双模式经具名 per-authority 条目 fail-fast（ADR-async-primitive-lifetime-failfast）。**不**取消/唤醒/清理。 |
 | `close` | 单调 Open→Closed（仅 Queue）。排空角色 FIFO。 |
 | `begin_teardown` | 不可逆 operational→tearing_down（仅 Queue）。返回 `QueueTeardownSession`。 |
 
@@ -748,7 +748,7 @@ nothrow 移动构造和 nothrow 析构约束属于 `AsyncQueue<T>` 本身。结�
 | 唤醒/通知 | `set`、`release`、`notify_one`、`notify_all` | 否 | 是 |
 | 取消 | `cancel`（所有含 cancel 的原语） | 否 | 是 |
 | 观察 | `is_set`、`available`、`is_closed`、`capacity`、`size` | 否 | 是 |
-| 构造/析构 | 构造函数、析构函数 | 否 | 构造函数：是；析构函数：需要静默状态（WaitQueue 为空、无活跃 condition 等待、无 mutex 持有者） |
+| 构造/析构 | 构造函数、析构函数 | 否 | 构造函数：是；析构函数：需要静默状态（WaitQueue 为空、无活跃 condition 等待、无 mutex 持有者）——违规经具名 per-authority 条目在 Debug 与 Release 双模式 fail-fast（ADR-async-primitive-lifetime-failfast） |
 
 ---
 

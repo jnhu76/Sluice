@@ -7,16 +7,19 @@
 //   Reached through the PUBLIC API. Debug: assert() fires with a specific
 //   diagnostic. Release: trusts the caller (no recovery semantics). These
 //   cases are therefore DEBUG-ONLY: under NDEBUG the assertion is compiled
-//   out and the behavior is undefined-by-contract. The death-test child
-//   still exercises the entry under NDEBUG but is NOT asserted to terminate
-//   in Release (the test is gated to !NDEBUG).
+//   out and the behavior is undefined-by-contract.
+//   EXCEPTION (ADR-async-primitive-lifetime-failfast): the DESTRUCTION cases
+//   A4-A6 fail fast through named per-authority entries in BOTH Debug and
+//   Release; only the non-destruction misuse cases A1-A3 stay Debug-only
+//   (their death-test children are gated to !NDEBUG and are NOT asserted to
+//   terminate in Release).
 //
 //   A1  unlock_read with zero active readers (underflow)
 //   A2  unlock_write while unlocked (writer_active == false)
 //   A3  unlock_write by non-owner Fiber
 //   A4  destroy with active reader (active_readers_ > 0)
 //   A5  destroy with active writer (writer_active_ == true)
-//   A6  destroy with queued waiter (~WaitQueue asserts head_ == nullptr)
+//   A6  destroy with queued waiter (wait_queue_lifetime_fail_fast)
 //
 // Category B — internal linked-queue / authority corruption.
 //   Debug: assert(false) + diagnostic. Release: deterministic fail-fast
@@ -171,6 +174,8 @@ void child_a3_unlock_write_non_owner() {
 // Fiber is still suspended holding its share, so active_readers_ > 0 and
 // the destructor MUST assert and terminate. This matches the documented
 // case: the Fiber is live and parked, not returned-and-cleaned-up.
+#endif  // !defined(NDEBUG)
+
 void child_a4_destroy_with_active_reader() {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -272,7 +277,6 @@ void child_a6_destroy_with_queued_waiter() {
     delete rw;  // MUST terminate; never returns.
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
-#endif  // !defined(NDEBUG)
 
 // ===========================================================================
 // Category B — internal invariant corruption (DEBUG assert + Release abort)
@@ -360,10 +364,12 @@ void dispatch_child(const std::string& name) {
     if      (name == "A1") child_a1_unlock_read_underflow();
     else if (name == "A2") child_a2_unlock_write_while_unlocked();
     else if (name == "A3") child_a3_unlock_write_non_owner();
-    else if (name == "A4") child_a4_destroy_with_active_reader();
+#endif  // !defined(NDEBUG)
+    // ADR-async-primitive-lifetime-failfast: the DESTRUCTION cases are
+    // deterministic named fail-fast in BOTH Debug and Release.
+    if      (name == "A4") child_a4_destroy_with_active_reader();
     else if (name == "A5") child_a5_destroy_with_active_writer();
     else if (name == "A6") child_a6_destroy_with_queued_waiter();
-#endif  // !defined(NDEBUG)
     if      (name == "B1") child_b1_grant_invalid_head_mode();
     else if (name == "B2") child_b2_grant_null_head_user();
     else if (name == "B3") child_b3_reader_batch_invalid_mode();
@@ -384,15 +390,18 @@ int run_parent() {
     };
 
 #if !defined(NDEBUG)
-    // Category A: DEBUG-only (Release compiles out the assertions and trusts
-    // the caller per the design contract).
+    // Category A (non-destruction misuse): DEBUG-only (Release compiles out
+    // the assertions and trusts the caller per the design contract).
     must_term("A1");  // unlock_read underflow
     must_term("A2");  // unlock_write while unlocked
     must_term("A3");  // unlock_write by non-owner
+#endif  // !defined(NDEBUG)
+    // ADR-async-primitive-lifetime-failfast: destruction cases are named
+    // fail-fast in BOTH Debug and Release (A6 also exercises
+    // wait_queue_lifetime_fail_fast via ~WaitQueue).
     must_term("A4");  // destroy with active reader
     must_term("A5");  // destroy with active writer
     must_term("A6");  // destroy with queued waiter
-#endif  // !defined(NDEBUG)
     // Category B: deterministic fail-fast in BOTH Debug and Release.
     must_term("B1");  // invalid head mode
     must_term("B2");  // null head user_

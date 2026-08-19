@@ -106,6 +106,7 @@
 // "who makes the fiber runnable" decision in scheduler code (§8).
 #pragma once
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/mutex.hpp>
 #include <sluice/async/thread_annotations.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -123,17 +124,25 @@ public:
     // §10 destruction invariant: a queue MUST be empty when destroyed, OR its
     // owner must have explicitly resolved (cancelled) all registered waiters.
     // Destroying a queue with linked nodes would orphan them (their home_
-    // points to freed memory; §3 Q8). Debug asserts empty; release is a no-op
-    // (the nodes are caller-owned and remain valid, but their home_ becomes
-    // dangling — the caller contract is to drain first). The Scheduler does NOT
-    // auto-resolve waits on run termination (E10-CORRECTIVE C3); an unresolved
-    // registered wait is left for the caller, exactly as E9 treats a stranded
-    // waiting_ready_ flag (MW-S3 returns STALLED in Drain).
+    // points to freed memory; §3 Q8). A non-empty queue at destruction is a
+    // lifetime contract violation that fails fast via
+    // detail::wait_queue_lifetime_fail_fast in BOTH Debug and Release
+    // (ADR-async-primitive-lifetime-failfast; the Debug assert is a
+    // diagnostic tripwire only). The Scheduler does NOT auto-resolve waits
+    // on run termination (E10-CORRECTIVE C3); an unresolved registered wait
+    // is left for the caller, exactly as E9 treats a stranded waiting_ready_
+    // flag (MW-S3 returns STALLED in Drain).
     ~WaitQueue() {
         // head_ == null iff empty (tail_ maintained in lockstep). A non-empty
         // queue at destruction is a caller contract violation (§10).
-        assert(head_ == nullptr &&
-               "WaitQueue destroyed with registered waiters (resolve them first)");
+        // ADR-async-primitive-lifetime-failfast: Debug tripwire + named
+        // fail-fast active in BOTH modes — registered waiters would refer to
+        // freed memory; Release previously passed silently.
+        if (head_ != nullptr) {
+            assert(head_ == nullptr &&
+                   "WaitQueue destroyed with registered waiters (resolve them first)");
+            detail::wait_queue_lifetime_fail_fast();
+        }
     }
 
     WaitQueue(const WaitQueue&) = delete;

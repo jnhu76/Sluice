@@ -798,7 +798,7 @@ public:
 | `registered race` | After registration, RESOURCE_WAKE / TIMER_EXPIRE / CANCEL compete through the single `WaitNode::resolve_` CAS. |
 | `FIFO waiter selection` | Waiters are selected in FIFO registration order. Does NOT guarantee strict completion order. |
 | `no barging` | `try_*` operations fail if a queued waiter has FIFO priority. |
-| `destroy` | Destructor. Requires waiters empty (debug assert). Does NOT cancel/wake/clean up. |
+| `destroy` | Destructor. Requires waiters empty — violation fails fast via named per-authority entries in Debug AND Release (ADR-async-primitive-lifetime-failfast). Does NOT cancel/wake/clean up. |
 | `close` | Monotonic Open→Closed (Queue only). Drains role FIFOs. |
 | `begin_teardown` | Irreversible operational→tearing_down (Queue only). Returns `QueueTeardownSession`. |
 
@@ -811,7 +811,7 @@ public:
 | Wake/notify | `set`, `release`, `notify_one`, `notify_all` | No | Yes |
 | Cancel | `cancel` (all primitives with cancel) | No | Yes |
 | Observation | `is_set`, `available`, `is_closed`, `capacity`, `size` | No | Yes |
-| Construction/destruction | ctors, dtors | No | Yes (constructors); destruction requires quiescence (empty WaitQueue, no active condition waits, no mutex owner) |
+| Construction/destruction | ctors, dtors | No | Yes (constructors); destruction requires quiescence (empty WaitQueue, no active condition waits, no mutex owner) — violations fail fast via named per-authority entries in Debug AND Release (ADR-async-primitive-lifetime-failfast) |
 
 ---
 
