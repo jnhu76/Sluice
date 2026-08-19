@@ -1,0 +1,30 @@
+# assert-hygiene allowlist — see AGENTS.md §9.2 and
+# docs/architecture/failure-model.md §5.
+#
+# Format: one fnmatch glob per line (matched against the repo-relative path);
+# an optional `# reason` documents WHY the path may add assert-family lines.
+# Blank lines and full-line comments are ignored.
+#
+# Auto-allowed WITHOUT an entry here: added lines that sit inside an active
+# SLUICE_ASYNC_INTERNAL_TESTING preprocessor guard (category 3,
+# internal-testing preconditions) — detected mechanically in the new-file
+# content by scripts/gates/assert-hygiene.py. The #else/#elif branch of such
+# a guard is production code and is NOT auto-allowed.
+#
+# The gate is changed-lines only: pre-existing sites elsewhere are
+# grandfathered (backlog: issue #144). This file is for NEW lines.
+#
+# ---------------------------------------------------------------------------
+# Category 1 — Completion L9 pattern (Debug tripwire layered on a Release
+# path that already returns the documented typed error; Release is correct
+# without the assert):
+include/sluice/async/completion.hpp  # Completion L9: assert + Release invalid_state fallback (header contract §L9)
+#
+# Category 2 — pure diagnostics (assert observes an invariant proven
+# elsewhere; its failure changes no returned value or state transition).
+# No permanent entries; add case-by-case with a written reason.
+#
+# Category 3 — internal-testing preconditions inside guarded seams are
+# auto-allowed via guard detection; whole-file entries for seam headers that
+# are not self-guarded may be added here after PR
+# agent/internal-test-control-plane (#145) lands, if needed.

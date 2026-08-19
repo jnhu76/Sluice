@@ -501,6 +501,36 @@ real syscall error.
 Reference/synthetic backends may retain an explicitly registered descriptor-validation divergence.
 Do not silently extend that exemption to real syscall backends.
 
+### 9.2 Failure-response model and assert authority
+
+The authoritative failure taxonomy (classes T1–T7) and mechanical decision rules live in
+`docs/architecture/failure-model.md`. This section states the binding rules for the `assert()`
+family; the taxonomy document explains how to classify a failure and which response mechanism each
+class permits.
+
+- `NDEBUG` is not semantic authority. The Release build defines `NDEBUG`, and a public header's
+  `assert()` also compiles away for every downstream consumer that defines it. An invariant that
+  matters only inside `assert()` is therefore not enforced in Release and not enforced for
+  consumers at all.
+- `assert()` MUST NOT be the sole enforcement for: correctness of an I/O result; liveness or
+  progress; ownership or borrow lifetime; object lifetime or destruction contracts; request
+  lifecycle transitions; Completion binding or publication; Scheduler routing or wake; backend
+  submission, dispatch, or reap; or resource accounting. If a condition is reachable at runtime by
+  any input, thread interleaving, or environment, its enforcement must be a typed result, a named
+  fail-fast active in Debug AND Release, or a structural (compile-time) guarantee.
+- A new `assert(`, `#include <cassert>`, or `#include <assert.h>` line in `include/` or `src/` is
+  legal only in one of the three allowlisted shapes (Completion L9 pattern; pure diagnostics;
+  internal-testing preconditions — see the taxonomy document §5), and must be registered in
+  `scripts/gates/assert-hygiene.allowlist` with that category as the reason. The changed-lines
+  gate `scripts/gates/assert-hygiene.py` (wired into `scripts/gates/pre-push.sh` and CI) fails
+  unregistered additions.
+- Existing assert sites are grandfathered — the gate is changed-lines only. Grandfathering is not
+  retroactive amnesty: existing code is evidence, not automatic architectural precedent. The
+  historical backlog is inventoried in issue #144 and is reclassified only through reviewed change.
+- This section restricts the `assert()` family only. It does not restrict ordinary freestanding
+  headers such as `<cstdint>` or `<cstddef>`, and it does not affect `static_assert`
+  (compile-time, `NDEBUG`-independent) or `[[nodiscard]]`.
+
 ---
 
 ## 10. Explicit request lifecycle invariants
@@ -1061,6 +1091,8 @@ python3 scripts/check-doc-links.py
 python3 scripts/verify-architecture-docs.py
 python3 scripts/gates/mechanical-facts.py --self-test
 python3 scripts/gates/mechanical-facts.py
+python3 scripts/gates/assert-hygiene.py --self-test
+python3 scripts/gates/assert-hygiene.py
 git diff --check
 ```
 

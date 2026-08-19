@@ -4,8 +4,9 @@
 # PURPOSE
 #   Catch deterministic mechanical failures — documentation link validation,
 #   architecture-doc structure, the backend-conformance manifest self-test,
-#   mechanical facts, performance-evidence structural validation, and
-#   whitespace damage — BEFORE a push consumes a GitHub CI round trip. This is
+#   mechanical facts, performance-evidence structural validation, the
+#   changed-lines assert-family policy (AGENTS.md §9.2), and whitespace
+#   damage — BEFORE a push consumes a GitHub CI round trip. This is
 #   developer tooling only.
 #
 # AUTHORITY
@@ -176,6 +177,19 @@ run_gate "performance evidence artifacts" "${PERF_EVIDENCE_REPRO}" \
     python3 scripts/bench/perf-evidence-validate.py
 
 # ---------------------------------------------------------------------------
+# Gate 5c: assert-hygiene self-test.
+#
+# Plants each violation shape (bare assert / <cassert> / <assert.h> /
+# production side of a testing guard) and requires every detector to fire
+# with zero false positives (static_assert, <cstdint>/<cstddef>, comments,
+# context/removed lines, guarded seam lines, allowlisted paths, and tests/
+# must all pass). Proves the changed-lines assert-family policy gate
+# (AGENTS.md §9.2, docs/architecture/failure-model.md) actually catches.
+ASSERT_HYGIENE_SELFTEST_REPRO="python3 scripts/gates/assert-hygiene.py --self-test"
+run_gate "assert-hygiene self-test" "${ASSERT_HYGIENE_SELFTEST_REPRO}" \
+    python3 scripts/gates/assert-hygiene.py --self-test
+
+# ---------------------------------------------------------------------------
 # Gate 6: whitespace / conflict-marker damage across the PUSHED ranges.
 #
 # `git diff --check` reports trailing whitespace, indentation with spaces
@@ -226,21 +240,29 @@ if [ "${#PUSH_REF_PAIRS[@]}" -gt 0 ]; then
     if [ "${#DIFF_ARGS[@]}" -eq 0 ]; then
         echo "==> pre-push gate: ${DIFF_CHECK_LABEL}"
         echo "    (no pushable content: all refs deleted; nothing to check)"
+        echo "==> pre-push gate: assert-hygiene (pushed ranges)"
+        echo "    (no pushable content: all refs deleted; nothing to check)"
     else
         # Reproduction for a hook-mode failure lists the exact ranges checked.
         DIFF_CHECK_REPRO="git diff --check ${DIFF_ARGS[*]}"
         run_gate "${DIFF_CHECK_LABEL}" "${DIFF_CHECK_REPRO}" \
             git diff --check "${DIFF_ARGS[@]}"
+        ASSERT_HYGIENE_REPRO="python3 scripts/gates/assert-hygiene.py ${DIFF_ARGS[*]}"
+        run_gate "assert-hygiene (pushed ranges)" "${ASSERT_HYGIENE_REPRO}" \
+            python3 scripts/gates/assert-hygiene.py "${DIFF_ARGS[@]}"
     fi
 else
     # Manual invocation: no stdin ref-pairs. Fall back to the staged + working
     # tree so `bash scripts/gates/pre-push.sh` remains a useful pre-push probe.
     DIFF_CHECK_LABEL="git diff --check (working tree; manual invocation)"
     DIFF_CHECK_REPRO="git diff --check"
-    echo "==> pre-push gate: ${DIFF_CHECK_LABEL}"
     echo "    (no stdin ref-pairs; checking staged + working tree)"
     run_gate "${DIFF_CHECK_LABEL}" "${DIFF_CHECK_REPRO}" \
         git diff --check
+    echo "    (no stdin ref-pairs; checking staged + working tree)"
+    run_gate "assert-hygiene (working tree; manual invocation)" \
+        "python3 scripts/gates/assert-hygiene.py" \
+        python3 scripts/gates/assert-hygiene.py
 fi
 
 # ---------------------------------------------------------------------------
