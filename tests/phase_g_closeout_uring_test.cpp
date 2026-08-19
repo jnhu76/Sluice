@@ -531,7 +531,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g5_cqe_vs_control_interrupt) {
             fail_closed(f.sched, "ur-g5d1-bridge-never-fired",
                         "notify never bumped the control epoch");
         }
-        pgate.resume.store(true, std::memory_order_release);
+        sa::AsyncIoContext::resume_wait_source_progress_gate_for_test(pgate);
 
         waiter.ev.set();
         if (!wait_count_at_least(waiter.resumed, 1)) {

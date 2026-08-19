@@ -9,6 +9,14 @@ liburing, `mode=real`), and `spec/tla/e9_park_wake/` (R1–R4 + bridge model,
 4 positive + 4 negative TLC gates). The ADR amendment is
 ADR-execution-model §9.4.7.2.
 **Date:** 2026-08-14 (design), 2026-08-15 (implemented + closeout)
+**Methodology note (2026-08-18, issue #123):** the closeout test's
+observations were migrated from yield-spin + wall-clock deadlines to blocking
+handshakes (zero-CPU atomic::wait / controller-cv / ReadyWaitSource epoch
+observer) with a single fail-closed case-level watchdog; the TP-G5/D1 progress
+baselines are read before the gate release (a baseline-after-release inversion
+caused the documented parallel-Debug false failures). Design semantics are
+unchanged — see
+`docs/investigations/issue-123-phase-g-closeout-parallel-flake.md`.
 **Authority:** ADR-execution-model §9.4.7 / §9.4.7.1 (MIXED-WAKE bounded
 observation park; the P5 seam explicitly reserved: "P5 is reserved if P3 proves
 insufficient under the formal gate or the load-bearing tests"); AGENTS.md §4.4

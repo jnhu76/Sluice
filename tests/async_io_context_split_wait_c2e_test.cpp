@@ -381,14 +381,22 @@ SLUICE_TEST_CASE(ctx_wait_one_inter_iteration_control_wake_not_lost) {
     // second ws->paused here, then release the probe so T1 can return
     // `interrupted` -> final poll -> 0.
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
         // The first wait_for_change returns `progress` (P0 -> P1), which takes
         // the progress branch and does NOT set ws->paused (only the interrupt
         // branch sets paused). The reset is therefore DEFENSIVE: it clears any
         // stale observation so wait_flag(ws->paused, ...) below observes ONLY
         // the second pause — the interrupt-branch pause that proves T1 reached
         // the inter-iteration control-wake recheck.
+        //
+        // The reset MUST run BEFORE the gate release, not after: the release
+        // (store + notify_all) wakes the paused participant IMMEDIATELY, and
+        // it can reach the interrupt-branch pause (ws->paused=true) before a
+        // post-release reset on this thread ran — clobbering the very
+        // observation we then wait for. While T1 is provably held in the
+        // pause gate (gate.paused observed above, resume not yet published),
+        // it cannot touch ws->paused, so a pre-release reset is race-free.
         ws->paused.store(false, std::memory_order_release);
+        AsyncIoContext::resume_wait_source_progress_gate_for_test(gate);
         if (!wait_flag(ws->paused, deadline)) {
             fail_msg = "T1 never returned after resume — the inter-iteration "
                        "control wake was rebaselined away and T1 reparked "
@@ -425,7 +433,7 @@ SLUICE_TEST_CASE(ctx_wait_one_inter_iteration_control_wake_not_lost) {
     // so the resume-before-wake order is an intentional exception to the normal
     // "set persistent state before signaling" expectation, and it is preserved
     // here.
-    gate.resume.store(true, std::memory_order_release);
+    AsyncIoContext::resume_wait_source_progress_gate_for_test(gate);
     ws->resume.store(true, std::memory_order_release);
     ws->signal_progress();  // nudge a stranded parker's cv predicate
     ws->interrupt_all();    // bump control so a parked cv returns

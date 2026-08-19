@@ -47,6 +47,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 
 namespace sluice::async::detail {
 
@@ -89,6 +90,10 @@ class ReadyWaitSource final : public BackendWaitSource {
         // means the first wait parked THROUGH the interrupt — the mutant).
         if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
             c->fetch_add(1, std::memory_order_relaxed);
+            // atomic::wait consumers: notify after the increment so a test can
+            // block zero-CPU on this counter (persistent state first, then the
+            // notify — wait() re-checks the value atomically).
+            c->notify_all();
         }
 #endif
         // Phase G (bounded park): the deadline-driven cap bounds the physical
@@ -174,6 +179,41 @@ class ReadyWaitSource final : public BackendWaitSource {
     // entry. Observe-only; compiled out of production builds.
     void set_wait_prepark_counter(std::atomic<int>* counter) noexcept {
         prepark_counter_.store(counter, std::memory_order_release);
+    }
+    // Zero-CPU epoch observer for tests: blocks until the ACTUAL control/
+    // progress epoch pair differs from `observed`. It parks on the SAME
+    // mtx_ + ready_cv_ domain that interrupt_all()/signal_progress() use:
+    // the predicate state and the park MUST share one synchronization
+    // domain — a dedicated observer cv parked on epochs mutated under a
+    // different mutex has a lost-wake window (the epoch advance + notify
+    // lands between the observer's predicate check and its park, and the
+    // notify is lost because the waiter is not yet parked). Sharing the
+    // production domain makes that window impossible by cv semantics: an
+    // epoch change can only happen under mtx_, which the parked observer
+    // holds while checking the predicate. Non-const like wait_for_change:
+    // it consumes (parks on) the cv. The predicate is the persistent epoch
+    // pair — the single source of truth, no second counter. Compiled out of
+    // production builds.
+    void wait_epoch_changed(BackendWaitToken observed) noexcept {
+        std::unique_lock<std::mutex> lk(mtx_);
+        ready_cv_.wait(lk, [&] {
+            return ready_epoch_ != observed.progress_generation ||
+                   control_epoch_ != observed.control_generation;
+        });
+    }
+
+    // Watchdog-safe epoch read for tests: a try_lock variant of snapshot()
+    // for diagnostic paths that must never block behind the state they are
+    // diagnosing (a case watchdog may fire while a stalled thread holds this
+    // leaf domain). Returns nullopt when the domain is contended — callers
+    // report "locked", they must not retry or block. Compiled out of
+    // production builds.
+    std::optional<BackendWaitToken> try_snapshot() const noexcept {
+        std::unique_lock<std::mutex> lk(mtx_, std::try_to_lock);
+        if (!lk.owns_lock()) {
+            return std::nullopt;
+        }
+        return BackendWaitToken{ready_epoch_, control_epoch_};
     }
 #endif
 

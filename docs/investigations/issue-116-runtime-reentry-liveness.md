@@ -361,6 +361,13 @@ known concurrent-starvation flake classes on record):
   flake of the raw-layer construction (ci.yml documents the same class:
   "failures reproduce on MASTER under a locally forced 4-CPU ... launch —
   pre-existing and load-amplified"), not a regression of this change.
+  **Root-caused since (issue #123, 2026-08-18):** the observation read its
+  progress baseline AFTER the gate release; when the terminal publication
+  won the race the baseline captured ready=1 and the spin waited for a
+  second, never-coming advance. Fixed by reading the baseline before the
+  release and replacing the spin with a blocking epoch observer + case
+  watchdog — see
+  `docs/investigations/issue-123-phase-g-closeout-parallel-flake.md`.
 
 Mechanical/documentation gates: executed individually (table above);
 `bash scripts/gates/pre-push.sh` reproduces the same set.

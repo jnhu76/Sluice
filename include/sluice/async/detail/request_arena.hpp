@@ -211,6 +211,28 @@ public:
         return backend_ready_count_;
     }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Watchdog-safe try-reads (issue #128 review): diagnostic paths that must
+    // never block behind the state they are diagnosing (a case watchdog may
+    // fire while a stalled worker holds the arena leaf domain) read through
+    // try_lock and report nullopt when contended. The caller must not retry
+    // or block on a nullopt. Compiled out of production builds.
+    std::optional<std::size_t> try_accepted_outstanding() const noexcept {
+        std::unique_lock<std::mutex> lk(mutex_, std::try_to_lock);
+        if (!lk.owns_lock()) {
+            return std::nullopt;
+        }
+        return accepted_outstanding_;
+    }
+    std::optional<std::size_t> try_backend_ready_count() const noexcept {
+        std::unique_lock<std::mutex> lk(mutex_, std::try_to_lock);
+        if (!lk.owns_lock()) {
+            return std::nullopt;
+        }
+        return backend_ready_count_;
+    }
+#endif
+
     // --- Stage 1: reserve (ADR Decision 5 / I8) ---
     Result<SlotHandle> reserve() {
         std::lock_guard<std::mutex> lk(mutex_);

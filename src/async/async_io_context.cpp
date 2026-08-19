@@ -516,12 +516,22 @@ void AsyncIoContext::pause_after_wait_source_progress_() noexcept {
     // holds NO lock (the context is between wait_for_change's return and the
     // next internal snapshot — no access_mtx_ is held on this path). No-op
     // when no gate is installed. Compiled out of production builds.
+    //
+    // Bidirectional like the ThreadPoolBackend pause gates (issue #92): the
+    // paused store is paired with a notify for zero-CPU atomic::wait
+    // consumers, and the resume side BLOCKS on resume.wait(false) instead of
+    // yield-spinning. atomic::wait is woken ONLY by a notifying atomic
+    // operation — a plain store of the value does NOT wake an already-parked
+    // consumer (a store racing the park is the lost-wake the gate exists to
+    // eliminate), so the gate's resume field is private and the only
+    // publisher is resume_wait_source_progress_gate_for_test (store +
+    // notify_all). This is a test-only seam; production builds carry no
+    // branch.
     if (auto* g = wait_source_progress_gate_.load(std::memory_order_acquire)) {
         g->exited.store(false, std::memory_order_release);
         g->paused.store(true, std::memory_order_release);
-        while (!g->resume.load(std::memory_order_acquire)) {
-            std::this_thread::yield();
-        }
+        g->paused.notify_all();
+        g->resume.wait(false, std::memory_order_acquire);
         g->exited.store(true, std::memory_order_release);
     }
 }
