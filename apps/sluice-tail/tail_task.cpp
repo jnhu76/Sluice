@@ -9,13 +9,14 @@
 // stopped follow is the normal exit.
 #include "tail_task.hpp"
 
+#include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
-#include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstring>
-#include <mutex>
+#include <memory>
+#include <span>
 #include <sys/stat.h>
 #include <thread>
 #include <utility>
@@ -106,21 +107,9 @@ struct TailTask {
     DiagSink diag;
     std::vector<std::uint8_t> buffer;
 
-    std::mutex& mtx;
-    std::optional<TailResult>& out;
-    std::atomic<bool>& done;
-    std::condition_variable& done_cv;
+    TaskResultSlot<TailResult>& slot;
 
-    void publish(TailResult r) {
-        {
-            std::lock_guard<std::mutex> lk(mtx);
-            if (!done.load(std::memory_order::relaxed)) {
-                out = std::move(r);
-                done.store(true, std::memory_order::release);
-            }
-        }
-        done_cv.notify_all();
-    }
+    void publish(TailResult r) { slot.publish(std::move(r)); }
 
     void emit(std::vector<std::string>& lines, TailResult& r) {
         for (auto& l : lines) {
@@ -134,25 +123,16 @@ struct TailTask {
         if (diag) diag(msg);
     }
 
-    // Await one outstanding read Completion to terminal. Returns the byte
-    // count (0 = EOF) or an error.
+    // Await one read to terminal through the library one-shot helper.
+    // Returns the byte count (0 = EOF) or an error.
     sluice::Result<std::size_t> read_at(RuntimeTaskContext& ctx,
                                         Completion<std::size_t>& rc,
                                         std::uint64_t offset) {
-        auto sr = ctx.submit_read(
-            ReadOp{fd, reinterpret_cast<std::byte*>(buffer.data()),
-                   buffer.size(), offset},
-            rc);
-        if (!sr.has_value())
-            return make_unexpected<std::size_t>(sr.error());
-        auto wr = ctx.await_completion(rc);
-        if (!wr.has_value())
-            return make_unexpected<std::size_t>(wr.error());
-        auto rr = rc.result();
-        rc.reset();
-        if (!rr.has_value())
-            return make_unexpected<std::size_t>(rr.error());
-        return rr.value();
+        return await_read_once(
+            ctx, fd,
+            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                 buffer.size()),
+            offset, rc);
     }
 
     // Backward scan: find the offset where the last `n` lines start. Reads
@@ -170,16 +150,10 @@ struct TailTask {
             std::uint8_t last = 0;
             // One 1-byte positional read through the same async path keeps
             // every I/O on the backend (no direct pread in the task).
-            auto sr = ctx.submit_read(
-                ReadOp{fd, reinterpret_cast<std::byte*>(&last), 1, size - 1},
-                rc);
-            if (!sr.has_value())
-                return make_unexpected<std::uint64_t>(sr.error());
-            auto wr = ctx.await_completion(rc);
-            if (!wr.has_value())
-                return make_unexpected<std::uint64_t>(wr.error());
-            auto rr = rc.result();
-            rc.reset();
+            auto rr = await_read_once(
+                ctx, fd,
+                std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1),
+                size - 1, rc);
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             skip_final_nl = (last == '\n');
@@ -197,17 +171,11 @@ struct TailTask {
             // already-scanned territory (double-counted newlines) and trip
             // the exact-length guard below.
             std::size_t want = static_cast<std::size_t>(pos - lo);
-            auto sr = ctx.submit_read(
-                ReadOp{fd, reinterpret_cast<std::byte*>(buffer.data()), want,
-                       lo},
-                rc);
-            if (!sr.has_value())
-                return make_unexpected<std::uint64_t>(sr.error());
-            auto wr = ctx.await_completion(rc);
-            if (!wr.has_value())
-                return make_unexpected<std::uint64_t>(wr.error());
-            auto rr = rc.result();
-            rc.reset();
+            auto rr = await_read_once(
+                ctx, fd,
+                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                     want),
+                lo, rc);
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             std::size_t got = rr.value();
@@ -365,10 +333,7 @@ struct TailEngine::Impl {
     LineSink sink;
     DiagSink diag;
     std::unique_ptr<ApplicationRuntime> rt;
-    std::mutex mtx;
-    std::condition_variable done_cv;
-    std::optional<TailResult> out;
-    std::atomic<bool> done{false};
+    TaskResultSlot<TailResult> slot;
     std::atomic<bool> started{false};
     std::atomic<bool> waited{false};
     std::vector<std::uint8_t> buffer;
@@ -429,10 +394,7 @@ sluice::Result<void> TailEngine::start() {
                   impl_->sink,
                   impl_->diag,
                   std::move(impl_->buffer),
-                  impl_->mtx,
-                  impl_->out,
-                  impl_->done,
-                  impl_->done_cv};
+                  impl_->slot};
     // The task captures buffer by move; hand the Runtime a heap-kept copy of
     // the state it needs (the task object itself must outlive the run).
     auto sub_r = impl_->rt->submit(
@@ -460,22 +422,12 @@ sluice::Result<TailResult> TailEngine::wait() {
             IoError{IoError::Code::invalid_state});
     }
 
-    {
-        std::unique_lock<std::mutex> lk(impl_->mtx);
-        impl_->done_cv.wait(lk, [&] {
-            return impl_->done.load(std::memory_order::acquire);
-        });
-    }
+    TailResult out = impl_->slot.wait_and_take();
     // The task is terminal; now close the Runtime lifecycle.
     impl_->rt->request_stop();
     (void)impl_->rt->drain();
     (void)impl_->rt->join();
-
-    std::lock_guard<std::mutex> lk(impl_->mtx);
-    if (!impl_->out.has_value())
-        return sluice::make_unexpected<TailResult>(
-            IoError{IoError::Code::invalid_state});
-    return std::move(impl_->out.value());
+    return std::move(out);
 }
 
 }  // namespace sluice_tail

@@ -1,21 +1,23 @@
 // sluice-hash hashing engine implementation.
 //
 // Shape follows sluice-copy's copy_task.cpp (the audited in-repository
-// pattern): one Runtime task drives positional reads + await_completion; the
-// terminal outcome is published through an app-owned slot; the main thread
-// waits for the task to finish BEFORE request_stop/drain/join, so a
-// run-to-completion workload is never aborted by root cancellation.
+// pattern): one Runtime task drives positional reads through the library's
+// await-style op helpers (C7, #135) and publishes its terminal outcome via
+// TaskResultSlot; the run-task-to-result lifecycle (build/start/submit/wait/
+// stop/drain/join + the task exception boundary) is the library's
+// run_task_to_result.
 #include "hash_task.hpp"
 
 #include "sha256.hpp"
 
+#include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
-#include <atomic>
-#include <condition_variable>
 #include <cstring>
 #include <limits>
-#include <mutex>
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace sluice_hash {
@@ -25,28 +27,29 @@ namespace {
 using namespace sluice::async;
 using sluice::IoError;
 
+// Fill one result entry per input on every path (run_hash_engine contract).
+void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out,
+              IoError err) {
+    out.reserve(inputs.size());
+    for (auto& in : inputs) {
+        FileHash f;
+        f.path = in.path;
+        f.error = err;
+        out.push_back(std::move(f));
+    }
+}
+
 struct HashTask {
     std::vector<HashInput> inputs;
     std::size_t buffer_size;
     std::vector<std::uint8_t> buffer;
-    std::vector<FileHash> results;
 
-    std::mutex& mtx;
-    bool& done;
-    std::condition_variable& done_cv;
-
-    void publish() {
-        {
-            std::lock_guard<std::mutex> lk(mtx);
-            done = true;
-        }
-        done_cv.notify_all();
-    }
-
-    // Hash one file: submit positional reads into the shared buffer, await
-    // each, feed the streaming hasher. Short reads just advance the offset
-    // (any n > 0 is progress); n == 0 is EOF. Writes FileHash into results.
-    void hash_one(RuntimeTaskContext& ctx, const HashInput& in) {
+    // Hash one file: positional reads into the shared buffer via
+    // await_read_once, feeding the streaming hasher. Short reads just advance
+    // the offset (any n > 0 is progress); n == 0 is EOF. Writes FileHash into
+    // results.
+    void hash_one(RuntimeTaskContext& ctx, const HashInput& in,
+                  std::vector<FileHash>& results) {
         FileHash out;
         out.path = in.path;
 
@@ -60,22 +63,11 @@ struct HashTask {
                 out.error = IoError{IoError::Code::canceled};
                 break;
             }
-            auto sr = ctx.submit_read(
-                ReadOp{in.fd,
-                       reinterpret_cast<std::byte*>(buffer.data()),
-                       buffer.size(), offset},
-                rc);
-            if (!sr.has_value()) {
-                out.error = sr.error();
-                break;
-            }
-            auto wr = ctx.await_completion(rc);
-            if (!wr.has_value()) {
-                out.error = wr.error();
-                break;
-            }
-            auto rr = rc.result();
-            rc.reset();
+            auto rr = await_read_once(
+                ctx, in.fd,
+                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                     buffer.size()),
+                offset, rc);
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;
@@ -100,12 +92,13 @@ struct HashTask {
         results.push_back(std::move(out));
     }
 
-    void operator()(RuntimeTaskContext& ctx) {
-        // App-local exception boundary (same rationale as copy_task): the
-        // Runtime swallows task exceptions at the Group boundary, so any
-        // escaping exception must be translated into per-file errors before
-        // publish() or the caller's done_cv wait would hang forever. Every
-        // input gets exactly one result entry on every path.
+    void operator()(RuntimeTaskContext& ctx,
+                    TaskResultSlot<sluice::Result<std::vector<FileHash>>>& slot) {
+        std::vector<FileHash> results;
+        results.reserve(inputs.size());
+        // Exception boundary: every input gets exactly one result entry on
+        // every path (remaining files are backfilled with the translation)
+        // before publishing.
         try {
             for (std::size_t i = 0; i < inputs.size(); ++i) {
                 if (ctx.cancel_token().is_requested()) {
@@ -117,17 +110,19 @@ struct HashTask {
                     results.push_back(std::move(out));
                     continue;
                 }
-                hash_one(ctx, inputs[i]);
+                hash_one(ctx, inputs[i], results);
             }
         } catch (...) {
+            auto translated = translate_task_exception<std::vector<FileHash>>();
+            IoError err = translated.error();
             for (std::size_t i = results.size(); i < inputs.size(); ++i) {
                 FileHash out;
                 out.path = inputs[i].path;
-                out.error = IoError{IoError::Code::backend_error};
+                out.error = err;
                 results.push_back(std::move(out));
             }
         }
-        publish();
+        slot.publish(std::move(results));
     }
 };
 
@@ -138,13 +133,7 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
     if (buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize ||
         workers == 0 || workers > kMaxWorkers || !backend) {
         std::vector<FileHash> out;
-        out.reserve(inputs.size());
-        for (auto& in : inputs) {
-            FileHash f;
-            f.path = in.path;
-            f.error = IoError{IoError::Code::invalid_state};
-            out.push_back(std::move(f));
-        }
+        fail_all(inputs, out, IoError{IoError::Code::invalid_state});
         return out;
     }
 
@@ -155,87 +144,25 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
         buffer.assign(buffer_size, 0);
     } catch (const std::bad_alloc&) {
         std::vector<FileHash> out;
-        for (auto& in : inputs) {
-            FileHash f;
-            f.path = in.path;
-            f.error = IoError{IoError::Code::no_space};
-            out.push_back(std::move(f));
-        }
+        fail_all(inputs, out, IoError{IoError::Code::no_space});
         return out;
     }
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(workers);
+    HashTask task{std::move(inputs), buffer_size, std::move(buffer)};
 
-    std::unique_ptr<ApplicationRuntime> rt;
-    try {
-        auto build_r = builder.build();
-        if (!build_r.has_value()) {
-            std::vector<FileHash> out;
-            for (auto& in : inputs) {
-                FileHash f;
-                f.path = in.path;
-                f.error = build_r.error();
-                out.push_back(std::move(f));
-            }
-            return out;
-        }
-        rt = std::move(build_r.value());
-        auto start_r = rt->start();
-        if (!start_r.has_value()) {
-            std::vector<FileHash> out;
-            for (auto& in : inputs) {
-                FileHash f;
-                f.path = in.path;
-                f.error = start_r.error();
-                out.push_back(std::move(f));
-            }
-            return out;
-        }
-    } catch (...) {
-        if (rt) (void)rt->shutdown();  // correct in every state
+    // The library bridge runs the full lifecycle (build/start/submit/wait
+    // publish/stop/drain/join + the task exception boundary). A lifecycle
+    // error (build/start/submit/drain/join) is reported per input — the
+    // run_hash_engine contract: exactly one result entry per input on every
+    // path.
+    auto result =
+        run_task_to_result<std::vector<FileHash>>(workers, std::move(backend), task);
+    if (!result.has_value()) {
         std::vector<FileHash> out;
-        for (auto& in : inputs) {
-            FileHash f;
-            f.path = in.path;
-            f.error = IoError{IoError::Code::no_space};
-            out.push_back(std::move(f));
-        }
+        fail_all(task.inputs, out, result.error());
         return out;
     }
-
-    std::mutex mtx;
-    std::condition_variable done_cv;
-    bool done = false;
-
-    HashTask task{std::move(inputs), buffer_size, std::move(buffer), {},
-                  mtx, done, done_cv};
-
-    auto sub_r = rt->submit(std::ref(task));
-    if (!sub_r.has_value()) {
-        (void)rt->shutdown();
-        std::vector<FileHash> out;
-        for (auto& in : task.inputs) {
-            FileHash f;
-            f.path = in.path;
-            f.error = sub_r.error();
-            out.push_back(std::move(f));
-        }
-        return out;
-    }
-
-    // Wait for the task to publish (run-to-completion; the driver keeps
-    // reaping I/O while we wait). Only then stop/drain/join.
-    {
-        std::unique_lock<std::mutex> wlk(mtx);
-        done_cv.wait(wlk, [&] { return done; });
-    }
-    rt->request_stop();
-    (void)rt->drain();
-    (void)rt->join();
-
-    return std::move(task.results);
+    return std::move(result.value());
 }
 
 }  // namespace

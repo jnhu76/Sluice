@@ -1774,3 +1774,85 @@ errors stay terminal results in the `Completion`. Zero per-op allocation, zero
 extra copies, one suspend + one resume per unresolved await, supports multiple
 simultaneously outstanding `Completion`s. See
 `docs/history/implementation-plans/m1-runtime-io-await-race.md`.
+
+### Await-style op helpers (`await_op_helpers.hpp`, C7 / issue #135)
+
+The await-shaped siblings of the polling coordinators above, for use INSIDE a
+Runtime task (`RuntimeTaskContext`). They move the duplicated application
+I/O protocol (submit → await → result → reset, plus short-read/partial-write
+retry loops) into the library.
+
+```cpp
+struct AwaitOpTally {
+    std::uint64_t ops = 0;        // terminal completions consumed
+    std::uint64_t short_ops = 0;  // completions that returned < requested
+};
+
+Result<std::size_t> await_take(RuntimeTaskContext& ctx, Completion<std::size_t>& c);
+Result<void>       await_take(RuntimeTaskContext& ctx, Completion<void>& c);
+Result<void>       await_drain(RuntimeTaskContext& ctx, Completion<std::size_t>& c);
+
+Result<std::size_t> await_read_once(RuntimeTaskContext& ctx, int fd,
+                                    std::span<std::byte> dst, std::uint64_t offset,
+                                    Completion<std::size_t>& c);
+Result<std::size_t> await_read_fill(RuntimeTaskContext& ctx, int fd,
+                                    std::span<std::byte> dst, std::uint64_t offset,
+                                    Completion<std::size_t>& c,
+                                    AwaitOpTally* tally = nullptr);
+Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, int fd,
+                                      std::span<const std::byte> src, std::uint64_t offset,
+                                      Completion<std::size_t>& c,
+                                      AwaitOpTally* tally = nullptr);
+```
+
+- `await_take` — await an outstanding Completion to terminal, extract its
+  result, reset for reuse. On every returned-terminal path the Completion is
+  idle again; if `await_completion` itself rejects (invalid_state/canceled)
+  the Completion stays outstanding untouched (the I/O still owns its borrow).
+- `await_drain` — error-path cleanup: await to terminal, CONSUME and discard
+  the result, reset. Only await failures propagate; secondary terminal
+  outcomes are swallowed.
+- `await_read_once` — one-shot positional read; short completions returned
+  verbatim, `0` is EOF.
+- `await_read_fill` — fill `dst` exactly, retrying short reads positionally,
+  stopping at EOF. Returns the bytes filled (`dst.size()`, or fewer at EOF —
+  a partial tail is SUCCESS data, deliberately different from polling
+  `read_all`'s E4 eof-error parity).
+- `await_write_exact` — write `src.size()` exactly, retrying partial writes
+  positionally. Zero progress with data remaining is `backend_error`.
+
+The helpers do NOT observe the cancel token between iterations; each submitted
+operation is driven to its terminal, and the task's cooperative cancellation
+checks stay at its own loop boundaries. The caller owns the Completion (L7:
+address-stable for the duration of one call).
+
+### Task-result bridge (`task_result.hpp`, C7 / issue #135)
+
+```cpp
+template <class T> class TaskResultSlot {
+public:
+    void publish(T r) noexcept;   // exactly-once: first publish wins
+    T wait_and_take();            // blocks a NON-Runtime thread until publish
+};
+
+template <class T>
+Result<T> translate_task_exception() noexcept;  // bad_alloc→no_space,
+                                                // system_error→backend_error(+errno),
+                                                // else→backend_error
+
+template <class T, class TaskFn>
+Result<T> run_task_to_result(unsigned workers,
+                             std::unique_ptr<AsyncBackend> backend,
+                             TaskFn&& task);  // task: void(RuntimeTaskContext&,
+                                               //        TaskResultSlot<Result<T>>&)
+```
+
+`run_task_to_result` runs ONE run-to-completion task on a freshly built
+Runtime and returns its published outcome. Sequence: validate (workers >= 1,
+backend non-null) → build → start → submit → wait for publish →
+`request_stop` → `drain` → `join` → return the published result. The task MUST
+publish exactly once on every path; `run_task_to_result` additionally nets
+any escaping exception and publishes `translate_task_exception<T>()`, so a
+throwing task can never hang the caller. No implicit cancellation (stop is
+requested only AFTER the task published), no hidden drain, no fabricated
+outcome.
