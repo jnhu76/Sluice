@@ -212,7 +212,7 @@ mechanically by `scripts/gates/mechanical-facts.py` from the xmake lua
 registrations and equal to the `running.test` line count of
 `xmake test -v`):
 
-| `test:default-gate-targets` | 181 | (168 at issue-116 closeout + 12 file-tools application-track tests on 2026-08-18: sluice-copy safe-output, 4x sluice-hash, 4x sluice-grep, 3x sluice-tail + 1 performance-attribution `sluice_grep_matcher_differential_test`; live cross-reference — this row tracks the current mechanical count, see `scripts/gates/mechanical-facts.py`) |
+| `test:default-gate-targets` | 183 | (168 at issue-116 closeout + 12 file-tools application-track tests on 2026-08-18: sluice-copy safe-output, 4x sluice-hash, 4x sluice-grep, 3x sluice-tail + 1 performance-attribution `sluice_grep_matcher_differential_test`; live cross-reference — this row tracks the current mechanical count, see `scripts/gates/mechanical-facts.py`; 181 → 183 on 2026-08-19, the #135 Case B round added `failure_model_high_risk_test` + `failure_model_high_risk_death_test`) |
 
 ```text
 Sanitizers: TSan full group — pass, 0 warnings (a test-side seam-disarm

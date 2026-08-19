@@ -1132,6 +1132,13 @@ public:
 };
 ```
 
+Accessors follow the Completion L9 pattern (AGENTS.md §9.2): calling them on
+a no-winner (or, for `timer_outcome()`, non-timer) result is a caller
+contract violation — Debug asserts; Release returns the deterministic
+fallback (`index() == 0`, `kind() == SelectKind::event`,
+`timer_outcome() == SelectTimerOutcome::fired`) instead of stale data.
+Check `has_winner()` first.
+
 Select arms:
 
 ```cpp

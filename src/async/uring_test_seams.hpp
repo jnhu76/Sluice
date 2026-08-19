@@ -322,24 +322,30 @@ inline void UringAsyncBackend::set_wait_poll_fn_for_test(
 // domain (see UringWaitSource::wait_epoch_changed); the try variants
 // return nullopt when the domain is contended and the caller reports
 // "locked". Compiled out of production sluice_async.
-inline void UringAsyncBackend::wait_epoch_changed_for_test(
+inline bool UringAsyncBackend::wait_epoch_changed_for_test(
     BackendWaitToken observed) noexcept {
-    // A missing wait source has no epochs to observe; silently returning
-    // would park the test thread until the case watchdog with a
-    // misleading stall report — fail fast with the real reason instead.
-    assert(wait_source_ != nullptr &&
-           "wait_epoch_changed_for_test: backend has no wait source "
-           "(ring construction failed)");
+    // T5 (docs/architecture/failure-model.md): a missing wait source is an
+    // environment-availability condition — the backend is
+    // constructible-but-unavailable because ring construction failed (kernel
+    // without io_uring, sandbox seccomp) — not a programmer error. The typed
+    // response is `false` ("no epochs to observe; nothing waited"), which the
+    // caller turns into an explicit failed observation. A bare assert here
+    // was Debug-only and left Release test binaries a null dereference.
+    if (!wait_source_) return false;
     wait_source_->wait_epoch_changed(observed);
+    return true;
 }
 inline std::optional<BackendWaitToken> UringAsyncBackend::try_wait_token_for_test()
     const noexcept {
-    // The assert keeps "no wait source" (a construction contract
-    // failure) distinct from a nullopt caused by genuine leaf-domain
-    // contention, which callers report as "locked".
-    assert(wait_source_ != nullptr &&
-           "try_wait_token_for_test: backend has no wait source "
-           "(ring construction failed)");
+    // T5 (docs/architecture/failure-model.md): nullopt now covers BOTH
+    // "no wait source" (ring construction failed — environment
+    // availability, not a programmer error; previously a bare assert that
+    // vanished under NDEBUG into a null dereference) and genuine
+    // leaf-domain contention (the watchdog "locked" report). The diagnostic
+    // consumer cannot distinguish them, which is acceptable for a
+    // best-effort stall report; the blocking seam
+    // (wait_epoch_changed_for_test) returns the distinguishing `false`.
+    if (!wait_source_) return std::nullopt;
     return wait_source_->try_snapshot();
 }
 inline std::optional<std::size_t> UringAsyncBackend::try_outstanding_for_test()
