@@ -57,8 +57,22 @@ jobs:
       - name: Run tests (bounded hang watchdog)
         # Debug keeps the forensic path: a rare hosted-runner hang should fail
         # closed and leave an actionable all-thread trace instead of a timeout.
+        #
+        # gdb is FORENSIC tooling for the watchdog, never a test dependency.
+        # Hosted-runner apt has stalled for 5-16+ minutes twice on 2026-08-19
+        # (quiet flags make it look like a test hang while it burns the job
+        # budget before a single test runs), and images have shipped without
+        # gdb. Bound the install and make it optional: the watchdog has a
+        # documented /proc fallback when gdb is absent.
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq gdb
+          if command -v gdb >/dev/null 2>&1; then
+            echo "gdb already present; skipping apt"
+          else
+            timeout 120 sudo apt-get update -qq \
+              || echo "apt-get update failed/timed out; continuing without gdb"
+            timeout 120 sudo apt-get install -y -qq gdb \
+              || echo "gdb install failed/timed out; watchdog will use its /proc fallback"
+          fi
           sudo sysctl -w kernel.yama.ptrace_scope=0 || true
           bash scripts/ci-hang-watchdog.sh 420 xmake test -v -j 4
 
