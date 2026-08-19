@@ -234,6 +234,9 @@ if os.isfile(p) and is_plat("linux", "macosx") then
         add_files(p, R .. "src/async/fail_fast.cpp")
         if has_config("with-liburing") then
             add_files(R .. "src/async/uring_backend.cpp")
+            -- C4 (issue #135): the installed async headers include the
+            -- non-installed internal-testing seam headers from src/async.
+            add_includedirs(R .. "src/async")
             add_defines("SLUICE_HAS_LIBURING", "SLUICE_ASYNC_INTERNAL_TESTING")
             add_packages("liburing")
         end

@@ -75,7 +75,14 @@ target("sluice_async_internal_testing")
     set_kind("static")
     set_default(false)
     set_group("test")
-    add_includedirs(R .. "include", R .. "tests", {public = true})
+    -- src/async is PUBLIC here (C4 / issue #135): the non-installed internal-
+    -- testing seam headers (scheduler_test_access.hpp, threadpool_test_seams.hpp,
+    -- ...) live in src/async and are included by the installed production
+    -- headers ONLY under SLUICE_ASYNC_INTERNAL_TESTING, so internal-testing TUs
+    -- (library + dependent test binaries) must resolve them. The production
+    -- sluice_async target does NOT have this include path and never defines the
+    -- macro, so its TUs compile no seam.
+    add_includedirs(R .. "include", R .. "tests", R .. "src/async", {public = true})
     add_deps("sluice_core")
     add_files(async_sources())
     -- The non-installed test controller (defines test_phase + the registry).

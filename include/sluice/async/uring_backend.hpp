@@ -90,20 +90,14 @@ struct UringConfig {
 #endif
 
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
-// Non-installed transport submit/wait seams used by the dedicated
-// real-liburing fault tests.
-// Production targets never define SLUICE_ASYNC_INTERNAL_TESTING and therefore
-// expose neither this type nor the constructor overload below.
-struct UringBackendSubmitTestHooks {
-    using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
-    using SubmitAndWaitFn = int (*)(void*, ::io_uring*, unsigned) noexcept;
-    using BeforePoisonWaitFn = void (*)(void*) noexcept;
-
-    void* context = nullptr;
-    SubmitFn submit = nullptr;
-    SubmitAndWaitFn submit_and_wait = nullptr;
-    BeforePoisonWaitFn before_poison_wait = nullptr;
-};
+// Transport submit/wait injection hooks for the dedicated real-liburing
+// fault tests. C4 (issue #135): the definition moved to the NON-INSTALLED
+// seam header src/async/uring_test_seams.hpp (included at the bottom of
+// this file under this same guard); this forward declaration remains so
+// the guarded test constructor overload below can name it. Production
+// targets never define SLUICE_ASYNC_INTERNAL_TESTING and therefore expose
+// neither this type nor the constructor overload.
+struct UringBackendSubmitTestHooks;
 #endif
 
 class UringAsyncBackend : public AsyncBackend {
@@ -225,308 +219,94 @@ class UringAsyncBackend : public AsyncBackend {
 #endif
 
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // Test-only: number of io_uring_submit() transport flushes actually issued
-    // (proves submit is transport progress, decoupled from lifecycle).
-    std::uint64_t submit_flushes_for_test() const noexcept {
-        return submit_flushes_.load(std::memory_order_relaxed);
-    }
-    // Test-only: live operation cookies in the CqeRouter (bounded by
-    // request_capacity).
-    std::size_t live_cookies_for_test() const noexcept {
-        return live_cookies_.load(std::memory_order_relaxed);
-    }
-    // Test-only: route a synthetic CQE (cookie + res) through the same
-    // handle_one_cqe path a real CQE takes. Used by the stale-cookie detector
-    // to prove a retired cookie no longer matches any LIVE router entry and is
-    // dropped (P0-B ABA fix). Does NOT touch the io_uring ring; it injects the
-    // CQE directly into the routing/terminal layer.
-    void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept {
-        handle_one_cqe(cookie, res);
-    }
-    // Test-only: read the next operation cookie that WILL be allocated by the
-    // next dispatch_one_locked without advancing the counter. Lets a test
-    // predict the cookie an in-flight op will carry so it can inject a stale
-    // cookie distinct from it. (next_cookie_ is mutated only under
-    // dispatch_mtx_; this snapshot is read single-driver.)
-    std::uint64_t peek_next_cookie_for_test() const noexcept { return next_cookie_; }
-    // Test-only, single-driver read-only observation of the live router. Used
-    // to prove SQ-pressure enqueue dispatches the FIFO front rather than the
-    // newly appended tail. Offsets are unique in that detector.
-    std::optional<std::uint64_t>
-    live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
-        for (const auto& entry : router_) {
-            if (entry.in_use && prepared_ops_[entry.handle.slot.value].offset == offset)
-                return entry.cookie;
-        }
-        return std::nullopt;
-    }
-    // Test-only: validate a WriteOp through the EXACT production descriptor-
-    // validation logic, WITHOUT reserve/prepare/commit/enqueue/get_sqe/kernel.
-    // A read-only static wrapper over validate_write; it touches no instance
-    // state, performs no syscall, and never reaches the ring. Used by the
-    // UINT_MAX length-boundary detector to prove the inclusive validation
-    // boundary without driving a huge real I/O to completion (the unsafe
-    // ring-owned-then-cancel evidence it replaces).
-    static Result<void> validate_write_for_test(WriteOp op) noexcept {
-        return validate_write(op);
-    }
-    // Phase D2 read-only bounded-state observations. These expose no mutation
-    // authority and add no member data; their out-of-line definitions are
-    // compiled only into internal-testing builds.
+    // ---- internal-testing control plane (C4 / issue #135) ----
+    // The pause-gate struct definitions, the bodies of the *_for_test
+    // observation mirrors below, and the transport-injection hooks moved to
+    // the NON-INSTALLED seam header src/async/uring_test_seams.hpp (included
+    // at the bottom of this file under this same guard). This installed
+    // production header keeps only the declarations, the layout-bearing test
+    // members in the private section, and the private seam helpers the
+    // production paths call. Production and stub TUs compile none of it.
+
+    std::uint64_t submit_flushes_for_test() const noexcept;
+    std::size_t live_cookies_for_test() const noexcept;
+    void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept;
+    std::uint64_t peek_next_cookie_for_test() const noexcept;
+    std::optional<std::uint64_t> live_cookie_for_offset_for_test(
+        std::uint64_t offset) const noexcept;
+    static Result<void> validate_write_for_test(WriteOp op) noexcept;
+    // Phase D2 read-only bounded-state observations (out-of-line definitions
+    // compiled only into internal-testing builds, in uring_backend.cpp).
     std::size_t dispatch_size_for_test() const noexcept;
     std::size_t transport_ledger_size_for_test() const noexcept;
     std::size_t sq_ready_for_test() const noexcept;
     std::size_t live_control_entries_for_test() const noexcept;
-    // Test-only: number of backend_ready slots not yet reaped.
-    std::size_t backend_ready_count_for_test() const noexcept {
-        return arena_.backend_ready_count();
-    }
-    // Test-only: live tagged control execution references (submitted
-    // AsyncCancel SQEs not yet retired by their control CQE).
-    std::size_t live_control_sqes_for_test() const noexcept {
-        return live_control_sqes_.load(std::memory_order_relaxed);
-    }
+    std::size_t backend_ready_count_for_test() const noexcept;
+    std::size_t live_control_sqes_for_test() const noexcept;
 
-    // --- Phase D3 C2b/C2c seams (rows 3-8 / 11-14a): mirror the approved
-    // ThreadPool observation style. Every seam delegates to REAL production
-    // authority (RequestArena, ReferenceReadySink, the production cancel
-    // core). No test-side state machine, no side-band identity/waiter map, no
-    // second generation counter. Guarded; production builds carry nothing. ---
-
-    // Resolve a Completion pointer to its current slot+generation (the same
-    // bounded arena scan the public cancel path uses).
+    // Phase D3 C2b/C2c seams: delegate to REAL production authority
+    // (RequestArena, ReferenceReadySink, the production cancel core); no
+    // side-band identity/waiter map, no second generation counter.
     std::optional<detail::SlotHandle> handle_for_completion_for_test(
-        const void* completion) const noexcept {
-        return arena_.resolve_completion(completion);
-    }
-
-    // Single-lock observation that validates generation, context, and non-free
-    // state. Returns nullopt for a stale/released/unknown handle.
+        const void* completion) const noexcept;
     std::optional<detail::RequestArena::RequestObservation> observe_for_test(
-        detail::SlotHandle h) const noexcept {
-        return arena_.observe_for_test(h);
-    }
-
-    // Identity-injection seam (C2b row 4): drive a CAPTURED SlotHandle through
-    // the SAME production cancel core the public Completion-keyed cancel() uses
-    // (dispatch remove_exact + arena_.cancel + terminal_won tally/signal).
-    // Proves a stale-generation handle cannot act on a live N+1 occupant.
-    detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept {
-        return cancel_handle_(h);
-    }
-
-    // Register one waiter on the slot bound to a real accepted Completion.
-    // Forwards verbatim to the arena authority (not_found for an unbound/stale
-    // Completion; invalid_state for a second registration or an
-    // already-reaped slot — registration is orthogonal to execution state,
-    // ADR Decision 10).
+        detail::SlotHandle h) const noexcept;
+    detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept;
     Result<void> register_waiter_for_test(Completion<std::size_t>& c,
                                           detail::WaiterToken token,
-                                          detail::RoutingLease lease) {
-        auto h = arena_.resolve_completion(&c);
-        if (!h.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::not_found});
-        }
-        return arena_.register_waiter(*h, token, std::move(lease));
-    }
+                                          detail::RoutingLease lease);
     Result<void> register_waiter_for_test(Completion<void>& c,
                                           detail::WaiterToken token,
-                                          detail::RoutingLease lease) {
-        auto h = arena_.resolve_completion(&c);
-        if (!h.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::not_found});
-        }
-        return arena_.register_waiter(*h, token, std::move(lease));
-    }
-
-    // Wait-cancel through the REAL arena authority: removes ONLY the waiter,
-    // never the I/O. Returns the moved-out RoutingLease, or not_found when no
-    // registered waiter remains.
-    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<std::size_t>& c) {
-        auto h = arena_.resolve_completion(&c);
-        if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
-        }
-        return arena_.cancel_waiter(*h);
-    }
-    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<void>& c) {
-        auto h = arena_.resolve_completion(&c);
-        if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
-        }
-        return arena_.cancel_waiter(*h);
-    }
-
-    // Stale-generation waiter injection (C2c row 14a): drive a CAPTURED
-    // SlotHandle through the REAL arena register/cancel_waiter authorities.
+                                          detail::RoutingLease lease);
+    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<std::size_t>& c);
+    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<void>& c);
     Result<void> register_waiter_handle_for_test(detail::SlotHandle h,
                                                  detail::WaiterToken token,
-                                                 detail::RoutingLease lease) {
-        return arena_.register_waiter(h, token, std::move(lease));
-    }
-    Result<detail::RoutingLease> cancel_waiter_handle_for_test(detail::SlotHandle h) {
-        return arena_.cancel_waiter(h);
-    }
-
-    // Generation-validated by-value borrow snapshot for a captured SlotHandle.
+                                                 detail::RoutingLease lease);
+    Result<detail::RoutingLease> cancel_waiter_handle_for_test(detail::SlotHandle h);
     std::optional<detail::RequestArena::BorrowSnapshot> borrow_for_test(
-        detail::SlotHandle h) const noexcept {
-        return arena_.borrow_for_test(h);
-    }
-
-    // Generation-validated by-value single-waiter registration observation.
+        detail::SlotHandle h) const noexcept;
     std::optional<detail::RequestArena::WaiterObservation> waiter_for_test(
-        detail::SlotHandle h) const noexcept {
-        return arena_.waiter_for_test(h);
-    }
+        detail::SlotHandle h) const noexcept;
+    std::size_t sink_deliveries() const noexcept;
+    bool sink_last_has_waiter() const noexcept;
+    detail::WaiterToken sink_last_token() const noexcept;
+    std::uint64_t sink_last_lease_id() const noexcept;
 
-    // C2c sink observation (fixed-size, allocation-free, test-only): the last
-    // delivered ReadyEvent's waiter payload + total delivery count.
-    std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
-    bool sink_last_has_waiter() const noexcept { return sink_.last_has_waiter(); }
-    detail::WaiterToken sink_last_token() const noexcept { return sink_.last_token(); }
-    std::uint64_t sink_last_lease_id() const noexcept { return sink_.last_lease_id(); }
+    // Deterministic pause-gate struct types (definitions in the seam header).
+    struct AfterCommitBeforeEnqueuePauseGate;
+    struct BeforeDispatchTransferPauseGate;
+    struct BeforeCommitBindingPauseGate;
+    struct BeforeAdmissionLockPauseGate;
 
-    // Deterministic pause gates for the Uring race tests (mirror the
-    // ThreadPool pause-gate discipline; AGENTS.md §13.3 / §15). Each gate is
-    // a paused/resume atomic handshake; the production path spins on `paused`
-    // and waits on `resume`. Compiled out of production sluice_async; the
-    // layout cost in the internal-testing target is accepted and documented.
-    struct AfterCommitBeforeEnqueuePauseGate {
-        std::atomic<bool> paused{false};
-        std::atomic<bool> resume{false};
-        std::atomic<bool> exited{false};
-    };
-    struct BeforeDispatchTransferPauseGate {
-        std::atomic<bool> paused{false};
-        std::atomic<bool> resume{false};
-        std::atomic<bool> exited{false};
-        // true iff the gate fired with dispatch_mtx_ RELEASED (mirrors the
-        // ThreadPool Gate-B discipline: the request stays enqueued while the
-        // test drives cancel() against it).
-        std::atomic<bool> dispatch_domain_released{false};
-    };
-    void set_after_commit_before_enqueue_pause_gate(AfterCommitBeforeEnqueuePauseGate* gate) noexcept {
-        after_commit_before_enqueue_gate_.store(gate, std::memory_order_release);
-    }
+    void set_after_commit_before_enqueue_pause_gate(
+        AfterCommitBeforeEnqueuePauseGate* gate) noexcept;
+    void set_before_dispatch_transfer_pause_gate(
+        BeforeDispatchTransferPauseGate* gate) noexcept;
+    void set_before_commit_binding_pause_gate(
+        BeforeCommitBindingPauseGate* gate) noexcept;
+    void set_before_admission_lock_pause_gate(
+        BeforeAdmissionLockPauseGate* gate) noexcept;
+
     // Phase D4 C2e split-phase-wait seams (forward to the wait source).
-    // Wait-phase entry flag: the wait source stores `true` immediately before
-    // it blocks in poll(2), so a test can deterministically observe "a
-    // participant has completed its empty reap and is now parked".
-    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept {
-        if (wait_source_) {
-            wait_source_->set_wait_phase_flag(flag);
-        }
-    }
-    // Per-participant pre-poll park counter: counts EACH waiter reaching the
-    // final pre-poll point, so the multi-waiter detector can wait for count ==
-    // N (bounded deadline = hang watchdog only) instead of a sleep.
-    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
-        if (wait_source_) {
-            wait_source_->set_wait_prepark_counter(counter);
-        }
-    }
-    // Deterministic interrupt-vs-final-ready window (fires when a control
-    // wake is about to be reported; see UringWaitSource).
+    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept;
+    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
     void set_wait_control_wake_final_reap_pause_gate(
-        detail::UringWaitSource::ControlWakeFinalReapPauseGate* gate) noexcept {
-        if (wait_source_) {
-            wait_source_->set_control_wake_final_reap_pause_gate(gate);
-        }
-    }
-    // Deterministic pre-poll barrier (see UringWaitSource): one arrival per
-    // distinct participant reaching the physical-poll boundary.
+        detail::UringWaitSource::ControlWakeFinalReapPauseGate* gate) noexcept;
     void set_wait_before_physical_poll_pause_gate(
-        detail::UringWaitSource::BeforePhysicalPollPauseGate* gate) noexcept {
-        if (wait_source_) {
-            wait_source_->set_before_physical_poll_pause_gate(gate);
-        }
-    }
-    // Test-only ring-fd override (see UringWaitSource): poll this fd instead of
-    // the production ring fd. Install BEFORE launching the waiter.
-    void set_wait_poll_ring_fd_override_for_test(int fd) noexcept {
-        if (wait_source_) {
-            wait_source_->set_poll_ring_fd_override_for_test(fd);
-        }
-    }
-    // Test-only poll(2) seam (see UringWaitSource): inject a deterministic
-    // poll outcome (e.g. non-EINTR failure) without an invalid fd.
-    void set_wait_poll_fn_for_test(detail::UringWaitSource::PollFn fn, void* ctx) noexcept {
-        if (wait_source_) {
-            wait_source_->set_poll_fn_for_test(fn, ctx);
-        }
-    }
-    // Test-only epoch observer + try-reads for the case watchdog (issue
-    // #129; mirrors the ThreadPoolBackend watchdog seam). The blocking reads
-    // take wait-source/arena leaf locks, so a watchdog diagnosing a stall
-    // could otherwise block behind the very defect it is diagnosing (a
-    // paused control-wake gate holds the wait-source leaf mutex while
-    // spinning). The observer parks on the wait source's own mtx_ + cv_
-    // domain (see UringWaitSource::wait_epoch_changed); the try variants
-    // return nullopt when the domain is contended and the caller reports
-    // "locked". Compiled out of production sluice_async.
-    void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept {
-        // A missing wait source has no epochs to observe; silently returning
-        // would park the test thread until the case watchdog with a
-        // misleading stall report — fail fast with the real reason instead.
-        assert(wait_source_ != nullptr &&
-               "wait_epoch_changed_for_test: backend has no wait source "
-               "(ring construction failed)");
-        wait_source_->wait_epoch_changed(observed);
-    }
-    std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept {
-        // The assert keeps "no wait source" (a construction contract
-        // failure) distinct from a nullopt caused by genuine leaf-domain
-        // contention, which callers report as "locked".
-        assert(wait_source_ != nullptr &&
-               "try_wait_token_for_test: backend has no wait source "
-               "(ring construction failed)");
-        return wait_source_->try_snapshot();
-    }
-    std::optional<std::size_t> try_outstanding_for_test() const noexcept {
-        return arena_.try_accepted_outstanding();
-    }
-    std::optional<std::size_t> try_backend_ready_count_for_test() const noexcept {
-        return arena_.try_backend_ready_count();
-    }
-    void set_before_dispatch_transfer_pause_gate(BeforeDispatchTransferPauseGate* gate) noexcept {
-        before_dispatch_transfer_gate_.store(gate, std::memory_order_release);
-    }
-    // Phase D4 C2e gates: close-vs-submit linearization windows (mirror the
-    // ThreadPool BeforeCommitBindingPauseGate / BeforeAdmissionLockPauseGate).
-    struct BeforeCommitBindingPauseGate {
-        std::atomic<bool> paused{false};
-        std::atomic<bool> resume{false};
-        std::atomic<bool> exited{false};
-        // true iff the gate fired INSIDE dispatch_mtx_ (the admission
-        // transaction lock — close_admission() blocks on it while paused).
-        std::atomic<bool> admission_domain_held{false};
-    };
-    struct BeforeAdmissionLockPauseGate {
-        std::atomic<bool> paused{false};
-        std::atomic<bool> resume{false};
-        std::atomic<bool> exited{false};
-    };
-    void set_before_commit_binding_pause_gate(BeforeCommitBindingPauseGate* gate) noexcept {
-        before_commit_binding_gate_.store(gate, std::memory_order_release);
-    }
-    void set_before_admission_lock_pause_gate(BeforeAdmissionLockPauseGate* gate) noexcept {
-        before_admission_lock_gate_.store(gate, std::memory_order_release);
-    }
-    // Deterministic destructor-order probe (D4-RM11 detector): an allocation-
-    // free function pointer + context invoked in the destructor BETWEEN the
-    // quiescent preflight and io_uring_queue_exit(). The death child installs
-    // a fn that _Exit(90) so a mutant that removes/bypasses the preflight is
-    // caught AT the teardown boundary (exit 90), distinct from exit 86
-    // (preflight fail-fast), 87 (unexpected return), 88 (child setup fail).
-    // Production behavior is unchanged when no fn is installed.
+        detail::UringWaitSource::BeforePhysicalPollPauseGate* gate) noexcept;
+    void set_wait_poll_ring_fd_override_for_test(int fd) noexcept;
+    void set_wait_poll_fn_for_test(detail::UringWaitSource::PollFn fn,
+                                   void* ctx) noexcept;
+    void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept;
+    std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept;
+    std::optional<std::size_t> try_outstanding_for_test() const noexcept;
+    std::optional<std::size_t> try_backend_ready_count_for_test() const noexcept;
+
+    // Deterministic destructor-order probe (D4-RM11 detector). The alias must
+    // stay in the class: the guarded test members below use it.
     using BeforeQueueExitFn = void (*)(void*);
-    void set_before_queue_exit_hook_for_test(BeforeQueueExitFn fn, void* ctx) noexcept {
-        before_queue_exit_fn_.store(fn, std::memory_order_release);
-        before_queue_exit_ctx_.store(ctx, std::memory_order_release);
-    }
+    void set_before_queue_exit_hook_for_test(BeforeQueueExitFn fn, void* ctx) noexcept;
 #endif
 
   private:
@@ -799,3 +579,12 @@ class UringAsyncBackend : public AsyncBackend {
 };
 
 } // namespace sluice::async
+
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// C4 (issue #135): the complete internal-testing control plane for
+// UringAsyncBackend (gate struct definitions, *_for_test bodies, the
+// transport-injection hooks) lives in the NON-INSTALLED seam header
+// src/async/uring_test_seams.hpp, resolved via the internal-testing-only
+// include path. Production and stub TUs never compile this include.
+#include "uring_test_seams.hpp"
+#endif  // defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)

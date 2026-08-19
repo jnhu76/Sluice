@@ -84,7 +84,8 @@ if has_liburing and os.isfile(R .. "tests/uring_submit_failure_test.cpp") then
         set_default(false)
         set_group("test")
         add_deps("sluice_core")
-        add_includedirs(R .. "include")
+        add_includedirs(R .. "include",
+                        R .. "src/async")  -- seam headers (C4, issue #135)
         add_files(R .. "src/async/uring_backend.cpp",
                   R .. "src/async/fail_fast.cpp",
                   R .. "tests/uring_submit_failure_test.cpp")
@@ -109,6 +110,9 @@ if os.isfile(R .. "tests/uring_d2_failure_noalloc_test.cpp") then
         add_files(R .. "tests/uring_d2_failure_noalloc_test.cpp")
         if has_liburing then
             add_deps("sluice_core")
+            -- C4 (issue #135): the installed async headers include the
+            -- non-installed internal-testing seam headers from src/async.
+            add_includedirs(R .. "src/async")
             add_files(R .. "src/async/uring_backend.cpp",
                       R .. "src/async/fail_fast.cpp")
             add_defines("SLUICE_HAS_LIBURING",
@@ -134,6 +138,9 @@ if os.isfile(R .. "tests/uring_backend_c2b_identity_test.cpp") then
         add_files(R .. "tests/uring_backend_c2b_identity_test.cpp")
         if has_liburing then
             add_deps("sluice_core")
+            -- C4 (issue #135): the installed async headers include the
+            -- non-installed internal-testing seam headers from src/async.
+            add_includedirs(R .. "src/async")
             add_files(R .. "src/async/uring_backend.cpp",
                       R .. "src/async/fail_fast.cpp")
             add_defines("SLUICE_HAS_LIBURING",
@@ -156,6 +163,9 @@ if os.isfile(R .. "tests/uring_backend_c2c_waiter_borrow_test.cpp") then
         add_files(R .. "tests/uring_backend_c2c_waiter_borrow_test.cpp")
         if has_liburing then
             add_deps("sluice_core")
+            -- C4 (issue #135): the installed async headers include the
+            -- non-installed internal-testing seam headers from src/async.
+            add_includedirs(R .. "src/async")
             add_files(R .. "src/async/uring_backend.cpp",
                       R .. "src/async/fail_fast.cpp")
             add_defines("SLUICE_HAS_LIBURING",
@@ -201,6 +211,9 @@ if os.isfile(R .. "tests/uring_backend_c2e_close_drain_test.cpp") then
         add_files(R .. "tests/uring_backend_c2e_close_drain_test.cpp")
         if has_liburing then
             add_deps("sluice_core")
+            -- C4 (issue #135): the installed async headers include the
+            -- non-installed internal-testing seam headers from src/async.
+            add_includedirs(R .. "src/async")
             add_files(R .. "src/async/uring_backend.cpp",
                       R .. "src/async/async_io_context.cpp",
                       R .. "src/async/fail_fast.cpp",

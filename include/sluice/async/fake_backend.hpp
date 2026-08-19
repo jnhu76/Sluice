@@ -66,10 +66,6 @@
 #include <type_traits>
 #include <utility>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include <thread>
-#endif
-
 namespace sluice::async {
 
 class FakeAsyncBackend : public AsyncBackend {
@@ -314,20 +310,14 @@ class FakeAsyncBackend : public AsyncBackend {
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // Deterministic causal seam (Phase B / review test-gap 1): pause the submit
-    // path between commit and enqueue so a backend-level test can interleave
-    // cancel exactly in the Scheme-B window (the window AsyncIoContext::
-    // access_mtx_ serialization hides). Test-only: production builds of this
-    // header (no macro) carry no field and no pause; the layout cost is
-    // accepted and documented (AGENTS.md §8 — internal-testing variants may
-    // carry guarded seams).
-    struct SubmitPauseGate {
-        std::atomic<bool> paused{false};  // the submit path set this when paused
-        std::atomic<bool> resume{false};  // the test sets this to resume
-    };
-    void set_submit_pause_after_commit(SubmitPauseGate* gate) noexcept {
-        submit_pause_gate_ = gate;
-    }
+    // Deterministic causal seam (Phase B / review test-gap 1; C4 / issue
+    // #135): the SubmitPauseGate definition and the seam bodies moved to the
+    // NON-INSTALLED seam header src/async/fake_test_seams.hpp (included at
+    // the bottom of this file under this same guard). Test-only: production
+    // builds of this header (no macro) carry no field and no pause; the
+    // layout cost is accepted and documented (AGENTS.md §8).
+    struct SubmitPauseGate;
+    void set_submit_pause_after_commit(SubmitPauseGate* gate) noexcept;
 
     // Test-only: resolve a Completion pointer to its current slot+generation.
     // Returns nullopt if the Completion is not bound to any slot. Mirrors the
@@ -771,14 +761,7 @@ class FakeAsyncBackend : public AsyncBackend {
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    void wait_submit_pause_() noexcept {
-        SubmitPauseGate* g = submit_pause_gate_.load(std::memory_order_relaxed);
-        if (g == nullptr) return;
-        g->paused.store(true, std::memory_order_release);
-        while (!g->resume.load(std::memory_order_acquire)) {
-            std::this_thread::yield();
-        }
-    }
+    void wait_submit_pause_() noexcept;  // defined in the non-installed seam header
     std::atomic<SubmitPauseGate*> submit_pause_gate_{nullptr};
 #endif
 
@@ -809,3 +792,11 @@ class FakeAsyncBackend : public AsyncBackend {
 };
 
 } // namespace sluice::async
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// C4 (issue #135): the complete internal-testing control plane for
+// FakeAsyncBackend lives in the NON-INSTALLED seam header
+// src/async/fake_test_seams.hpp, resolved via the internal-testing-only
+// include path. Production TUs never compile this include.
+#include "fake_test_seams.hpp"
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)

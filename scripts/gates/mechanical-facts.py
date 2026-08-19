@@ -20,6 +20,12 @@ of those facts is the wrong tool; this gate checks them mechanically:
      must equal the mechanically counted default-`xmake test` gate size
      (the ``running.test`` line count of a Linux Clang Debug run),
      derived from the xmake lua registration constructs, not hand-typed.
+  G. seam/production exclusion (C4 / issue #135) — the internal-testing
+     control plane lives in NON-INSTALLED src/async/*_test_seams.hpp headers
+     included by installed headers ONLY under SLUICE_ASYNC_INTERNAL_TESTING.
+     Installed headers must reference seam headers only inside the macro
+     guard, and the production sluice_async target must never define the
+     macro nor gain the src/async seam include path (AGENTS.md §15 contract).
 
 Fail-closed: exits non-zero on the first category with findings, printing
 the exact reproduction. --self-test plants violations in a temp dir and
@@ -436,6 +442,124 @@ TEST_TOTAL_EXTRA_DOCS = [
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# G. Seam/production exclusion (C4 / issue #135). The internal-testing control
+#    plane moved out of the installed production headers into NON-INSTALLED
+#    src/async/*_test_seams.hpp headers, included by the installed headers ONLY
+#    under SLUICE_ASYNC_INTERNAL_TESTING. AGENTS.md §15 persistence contract:
+#    production targets MUST NOT define the macro, MUST NOT gain the src/async
+#    seam include path, and installed headers MUST reference seam headers only
+#    inside the macro guard.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SEAM_HEADER_INCLUDE_RE = re.compile(
+    r"^\s*#\s*include\s*[<\"]([^>\"]*(?:test_seams|test_access)\.hpp)[>\"]", re.M)
+INTERNAL_TESTING_MACRO = "SLUICE_ASYNC_INTERNAL_TESTING"
+
+# xmake lua uses IMPLICIT target scoping: a `target("name")` block ends at the
+# next top-level target()/option()/task()/includes() (or EOF), not at an
+# explicit `end`. The repo's xmake files rely on this (no `end` after
+# target("sluice_async") in libraries.lua), so block extraction must NOT count
+# `end` keywords.
+TARGET_DECL_RE = re.compile(r'target\(\s*"([^"]+)"\s*\)')
+NEXT_BLOCK_RE = re.compile(r"^\s*(?:target|option|task|includes)\s*\(", re.M)
+
+
+def _seam_includes_guarded(text):
+    """True iff every seam-header `#include` in `text` sits inside an active
+    `SLUICE_ASYNC_INTERNAL_TESTING` guard region. Naive `#if`-stack scan: each
+    `#if`/`#ifdef`/`#ifndef` pushes whether that region is compiled only when
+    the macro is defined; `#elif`/`#else` update the top entry; `#endif` pops.
+    A seam include is allowed only while some enclosing region is macro-
+    guarded — a bare `#if SLUICE_HAS_LIBURING` guard is NOT sufficient."""
+    stack = []
+    for line in text.splitlines():
+        m = re.match(r"#\s*(ifndef|ifdef|if|elif|else|endif)\b", line.lstrip())
+        if m:
+            kind = m.group(1)
+            if kind in ("if", "ifdef", "ifndef"):
+                guarded = INTERNAL_TESTING_MACRO in line and kind != "ifndef"
+                stack.append(guarded)
+            elif kind in ("elif", "else"):
+                if stack:
+                    if kind == "elif":
+                        stack[-1] = INTERNAL_TESTING_MACRO in line
+                    else:
+                        stack[-1] = not stack[-1]
+            else:  # endif
+                if stack:
+                    stack.pop()
+            continue
+        if SEAM_HEADER_INCLUDE_RE.match(line) and not any(stack):
+            return False
+    return True
+
+
+def _xmake_lua_sources(root=None):
+    """All xmake lua sources (xmake.lua + xmake/*.lua + xmake/tests/*.lua)."""
+    base = Path(root) if root else REPO
+    out = []
+    if (base / "xmake.lua").is_file():
+        out.append((base / "xmake.lua").read_text(errors="replace"))
+    for d in ("xmake", "xmake/tests"):
+        p = base / d
+        if p.is_dir():
+            for f in sorted(p.glob("*.lua")):
+                out.append(f.read_text(errors="replace"))
+    return out
+
+
+def _implicit_target_regions(text, names):
+    """Configuration region of each `target("<name>")` block under xmake's
+    implicit scoping (block ends at the next top-level target()/option()/
+    task()/includes() or EOF). Comments are stripped first. The region is a
+    superset — it may include following top-level `local` helper definitions
+    — which is harmless for contamination detection."""
+    clean = _strip_lua_comments(text)
+    out = []
+    for m in TARGET_DECL_RE.finditer(clean):
+        if m.group(1) not in names:
+            continue
+        start = m.end()
+        nxt = NEXT_BLOCK_RE.search(clean, start)
+        end = nxt.start() if nxt else len(clean)
+        out.append(clean[start:end])
+    return out
+
+
+def check_seam_production_exclusion(root=None):
+    """C4 (issue #135) persistence contract (AGENTS.md §15): production targets
+    never compile testing-only control-plane code. Three mechanical facts:
+      - installed headers reference seam headers only inside the
+        SLUICE_ASYNC_INTERNAL_TESTING guard;
+      - the production sluice_async target never defines the macro;
+      - the production sluice_async target never gains the src/async seam
+        include path."""
+    base = Path(root) if root else REPO
+    errs = []
+    inc = base / "include" / "sluice"
+    for hdr in sorted(inc.rglob("*.hpp")) if inc.is_dir() else []:
+        text = hdr.read_text(errors="replace")
+        if SEAM_HEADER_INCLUDE_RE.search(text) and not _seam_includes_guarded(text):
+            errs.append(
+                f"{hdr.relative_to(base)}: seam header include outside a "
+                f"{INTERNAL_TESTING_MACRO} guard region"
+            )
+    for src in _xmake_lua_sources(root):
+        for region in _implicit_target_regions(src, {"sluice_async"}):
+            if INTERNAL_TESTING_MACRO in region:
+                errs.append(
+                    f"production target sluice_async defines "
+                    f"{INTERNAL_TESTING_MACRO} (xmake implicit-scope region)"
+                )
+            if re.search(r"add_includedirs\s*\([^)]*src/async", region):
+                errs.append(
+                    f"production target sluice_async gains the src/async seam "
+                    f"include path (xmake implicit-scope region)"
+                )
+    return errs
+
+
 def run_all():
     errs = []
     canon = canonical_identifiers()
@@ -453,6 +577,7 @@ def run_all():
         if p.is_file():
             total_docs.append(p)
     errs += check_test_total_claims(total_docs, root=REPO)
+    errs += check_seam_production_exclusion(root=REPO)
     return errs
 
 
@@ -536,6 +661,67 @@ def self_test():
             failures.append("self-test: LOC-claim false positive on clean input")
         if check_tracker_refs([doc]):
             failures.append("self-test: tracker-ref false positive on clean input")
+
+        # G: seam/production exclusion (C4 / issue #135). An unguarded seam
+        # include in an installed header must fire; a macro-guarded include
+        # must not; a bare liburing-only guard must NOT count as a seam guard.
+        (t / "include" / "sluice" / "async").mkdir(parents=True)
+        bad = t / "include" / "sluice" / "async" / "bad.hpp"
+        bad.write_text('#include "scheduler_test_access.hpp"\n')
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: unguarded seam include failed to fire")
+        bad.write_text(
+            "#if defined(SLUICE_ASYNC_INTERNAL_TESTING)\n"
+            '#include "scheduler_test_access.hpp"\n'
+            "#endif\n"
+        )
+        if check_seam_production_exclusion(t):
+            failures.append("self-test: guarded seam include false positive")
+        bad.write_text(
+            "#if defined(SLUICE_HAS_LIBURING)\n"
+            '#include "uring_test_seams.hpp"\n'
+            "#endif\n"
+        )
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: non-macro guard admitted a seam include")
+
+        # The production sluice_async target must not define the macro nor
+        # gain the src/async seam include path (implicit-scope region check;
+        # add_files of src/async/*.cpp is legitimate and must not fire).
+        # Reset the header fixture to a clean macro-guarded include first so
+        # the whole-tree scan only reflects the prod.lua under test.
+        bad.write_text(
+            "#if defined(SLUICE_ASYNC_INTERNAL_TESTING)\n"
+            '#include "scheduler_test_access.hpp"\n'
+            "#endif\n"
+        )
+        prod = t / "xmake" / "prod.lua"
+        prod.write_text(
+            'target("sluice_async")\n'
+            '    add_defines("SLUICE_ASYNC_INTERNAL_TESTING", {public = true})\n'
+        )
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: production macro define failed to fire")
+        prod.write_text(
+            'target("sluice_async")\n'
+            '    add_includedirs(R .. "src/async", {public = true})\n'
+        )
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: production seam include path failed to fire")
+        prod.write_text(
+            'target("sluice_async")\n'
+            '    add_includedirs(R .. "include", {public = true})\n'
+            '    add_files(R .. "src/async/*.cpp")\n'
+            'local s = function()\n'
+            '    return { R .. "src/async/*.cpp" }\n'
+            'end\n'
+            'target("sluice_async_internal_testing")\n'
+            '    add_includedirs(R .. "include", R .. "src/async", '
+            '{public = true})\n'
+            '    add_defines("SLUICE_ASYNC_INTERNAL_TESTING", {public = true})\n'
+        )
+        if check_seam_production_exclusion(t):
+            failures.append("self-test: clean production target false positive")
     return failures
 
 
@@ -557,7 +743,7 @@ def main():
         print("reproduce: python3 scripts/gates/mechanical-facts.py")
         return 1
     print("mechanical-facts: OK (near-miss scan, LOC claims, split layout, "
-          "SHA refs, tracker refs, test totals)")
+          "SHA refs, tracker refs, test totals, seam production exclusion)")
     return 0
 
 
