@@ -56,6 +56,7 @@
 #endif
 
 #include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -456,6 +457,39 @@ class UringAsyncBackend : public AsyncBackend {
         if (wait_source_) {
             wait_source_->set_poll_fn_for_test(fn, ctx);
         }
+    }
+    // Test-only epoch observer + try-reads for the case watchdog (issue
+    // #129; mirrors the ThreadPoolBackend watchdog seam). The blocking reads
+    // take wait-source/arena leaf locks, so a watchdog diagnosing a stall
+    // could otherwise block behind the very defect it is diagnosing (a
+    // paused control-wake gate holds the wait-source leaf mutex while
+    // spinning). The observer parks on the wait source's own mtx_ + cv_
+    // domain (see UringWaitSource::wait_epoch_changed); the try variants
+    // return nullopt when the domain is contended and the caller reports
+    // "locked". Compiled out of production sluice_async.
+    void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept {
+        // A missing wait source has no epochs to observe; silently returning
+        // would park the test thread until the case watchdog with a
+        // misleading stall report — fail fast with the real reason instead.
+        assert(wait_source_ != nullptr &&
+               "wait_epoch_changed_for_test: backend has no wait source "
+               "(ring construction failed)");
+        wait_source_->wait_epoch_changed(observed);
+    }
+    std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept {
+        // The assert keeps "no wait source" (a construction contract
+        // failure) distinct from a nullopt caused by genuine leaf-domain
+        // contention, which callers report as "locked".
+        assert(wait_source_ != nullptr &&
+               "try_wait_token_for_test: backend has no wait source "
+               "(ring construction failed)");
+        return wait_source_->try_snapshot();
+    }
+    std::optional<std::size_t> try_outstanding_for_test() const noexcept {
+        return arena_.try_accepted_outstanding();
+    }
+    std::optional<std::size_t> try_backend_ready_count_for_test() const noexcept {
+        return arena_.try_backend_ready_count();
     }
     void set_before_dispatch_transfer_pause_gate(BeforeDispatchTransferPauseGate* gate) noexcept {
         before_dispatch_transfer_gate_.store(gate, std::memory_order_release);
