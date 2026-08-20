@@ -296,6 +296,26 @@ void wait_token(URGFixture& f, T sa::BackendWaitToken::*field, T observed) {
     }
 }
 
+// Baseline snapshot feeding a later wait_token call (issue #151; same T5
+// contract as wait_token above). The baseline must be taken at the exact
+// pre-trigger point (baseline-before-trigger discipline), so it cannot be
+// folded into wait_token — but it is still a wait-source observation and
+// must be typed: a constructible-but-unavailable backend (ring construction
+// failed) has no wait source, so record an explicit failed observation and
+// return the zero token instead of null-dereferencing f.ws. The zero token
+// is never consumed as a pass: the paired wait_token hits its own null
+// guard and fails the case explicitly. SLUICE_CHECK's `return` cannot be
+// used in this value-returning helper, hence the direct record_failure.
+sa::BackendWaitToken snapshot_baseline(URGFixture& f) {
+    if (f.ws == nullptr) {
+        ::sluice_test::record_failure(
+            __FILE__, __LINE__, "f.ws != nullptr",
+            "snapshot_baseline: backend has no wait source (ring construction failed)");
+        return {};
+    }
+    return f.ws->snapshot();
+}
+
 // External-wake-possible fiber parked in select() — keeps the run Live so an
 // interrupted park re-parks instead of terminating (see the TP twin).
 struct SelectWaiter {
@@ -562,7 +582,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g1_cqe_between_snapshot_and_park) {
     // Baseline BEFORE the release: the pipe write is the ONLY trigger for
     // the CQE, so the progress advance is strictly after this baseline (the
     // baseline-before-trigger discipline, issue #123).
-    const auto progress_before = f.ws->snapshot();
+    const auto progress_before = snapshot_baseline(f);
     f.release_kernel(1);
     probe.set_phase("observe-cqe-published");
     wait_token(f, &sa::BackendWaitToken::progress_generation,
@@ -658,7 +678,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g3_external_wake_while_poll_parked) {
     // the bridge wake ever being consumed.
     const int prepark_before =
         f.prepark_entries.load(std::memory_order_acquire);
-    const auto control_before = f.ws->snapshot();
+    const auto control_before = snapshot_baseline(f);
     f.wh.notify();
     probe.set_phase("observe-bridge-fired");
     wait_token(f, &sa::BackendWaitToken::control_generation,
@@ -723,7 +743,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g4_external_wake_commit_to_wait) {
     // Baseline BEFORE the notify (the bridge is the ONLY control-epoch
     // publisher here) and BEFORE the gate install (a paused gate holds the
     // wait-source leaf mutex; the blocking snapshot below must not race it).
-    const auto control_before = f.ws->snapshot();
+    const auto control_before = snapshot_baseline(f);
     f.wh.notify();
     probe.set_phase("observe-bridge-fired");
     wait_token(f, &sa::BackendWaitToken::control_generation,
@@ -815,7 +835,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g5_cqe_vs_control_interrupt) {
         // Baseline BEFORE the notify, taken while the seam holds NO lock (the
         // context pauses between wait_for_change's return and the reaping
         // poll, outside access_mtx_ and the wait-source mutex).
-        const auto control_before = f.ws->snapshot();
+        const auto control_before = snapshot_baseline(f);
         f.wh.notify();
         probe.set_phase("observe-bridge-fired");
         wait_token(f, &sa::BackendWaitToken::control_generation,
@@ -862,7 +882,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g5_cqe_vs_control_interrupt) {
         // by a spurious pre-notify re-park without the wake being consumed).
         const int prepark_before =
             f.prepark_entries.load(std::memory_order_acquire);
-        const auto control_before = f.ws->snapshot();
+        const auto control_before = snapshot_baseline(f);
         f.wh.notify();
         probe.set_phase("observe-bridge-fired");
         wait_token(f, &sa::BackendWaitToken::control_generation,
@@ -871,7 +891,7 @@ SLUICE_TEST_CASE(phase_g_closeout_uring_g5_cqe_vs_control_interrupt) {
         wait_count_at_least(f.prepark_entries, prepark_before + 1);
         // Baseline BEFORE the release (the pipe write is the ONLY CQE
         // trigger, so the progress advance is strictly after it).
-        const auto progress_before = f.ws->snapshot();
+        const auto progress_before = snapshot_baseline(f);
         f.release_kernel(1);
         probe.set_phase("observe-cqe-published");
         wait_token(f, &sa::BackendWaitToken::progress_generation,
