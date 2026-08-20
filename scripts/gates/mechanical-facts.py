@@ -69,6 +69,8 @@ KNOWN_TRACKER_REFS = {
                                        # parked-worker stranding observation
     116,                                # runtime lost re-entry liveness (fixed
                                        # 2026-08-17; corrective note in this report)
+    139,                                # request-lifecycle walkthrough nav comment
+                                       # (2026-08-20, docs-only attribution entry)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

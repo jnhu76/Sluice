@@ -1,5 +1,9 @@
 // sluice::async::Completion<T> — caller-owned operation state.
 //
+// How this state machine interleaves with the RequestSlot lifecycle (submit
+// -> ... -> ready -> reset -> slot free): see the annotated walkthrough in
+// docs/architecture/async-request-lifecycle.md (issue #139).
+//
 // A single outstanding operation's state, CALLER-OWNED so allocation is
 // decoupled from submit (mirrors Zig std.Io Completion). The runtime NEVER
 // allocates a Completion (L4); the caller constructs one and passes it by

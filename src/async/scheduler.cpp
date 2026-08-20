@@ -1358,6 +1358,11 @@ bool Scheduler::drain_routed_completion_waits_locked() {
 }
 
 // ---- Phase F1 registry helpers (leaf domain, callers hold G) ----
+//
+// on_ready is the Scheduler's ONLY entry into the request story: the arena
+// reap invokes it outside the slot domain with a by-value ReadyEvent; the
+// drain + routing that follow are step 7 of the walkthrough in
+// docs/architecture/async-request-lifecycle.md (issue #139).
 
 void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
     Scheduler* s = scheduler_;
