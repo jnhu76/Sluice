@@ -42,6 +42,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
+#include <sluice/async/detail/submit_transaction.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -67,10 +68,10 @@ class SyncBackend : public AsyncBackend {
     }
 
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
-        return submit_size(op, c, detail::OperationKind::read, op.len);
+        return submit_size(op, c, detail::OperationKind::read);
     }
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override {
-        return submit_size(op, c, detail::OperationKind::write, op.len);
+        return submit_size(op, c, detail::OperationKind::write);
     }
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override {
         return submit_void(op, c, detail::OperationKind::sync_data);
@@ -210,95 +211,113 @@ class SyncBackend : public AsyncBackend {
         return ++id;
     }
 
-    // Five-stage admission for a byte-carrying op. The synthetic terminal is
-    // NOT recorded here: it is decided at dispatch (poll) time so a cancel
-    // between submit and poll can still win the terminal transition (Scheme B).
-    // The requested length is carried in the slot's publication binding for
-    // the dispatch step. Transactional pre-commit path (review C1): the
-    // publication binding is installed INTO the slot record (no map insert,
-    // no allocation) and every pre-commit failure rolls the reservation back
-    // with zero side effects; a lost Completion CAS rolls back only this
-    // submit's slot. Nothing after commit_binding may throw (I9).
+    // Five-stage admission for a byte-carrying op, now ONE call into the
+    // shared pre-accept ladder (issue #137; detail::submit_transaction). The
+    // synthetic terminal is NOT recorded here: it is decided at dispatch
+    // (poll) time so a cancel between submit and poll can still win the
+    // terminal transition (Scheme B). The requested length is carried in the
+    // slot's publication binding for the dispatch step. Transactional
+    // pre-commit path (review C1): the publication binding is installed INTO
+    // the slot record (no map insert, no allocation) and every pre-commit
+    // failure rolls the reservation back with zero side effects; a lost
+    // Completion CAS rolls back only this submit's slot. Nothing after
+    // commit_binding may throw (I9). Admission serialization is EXTERNAL
+    // (the context's access_mtx_); this backend has no admission lock of its
+    // own, so the wrapper is lock-free — the ladder runs as-is.
     template <class Op>
-    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
-                             std::size_t len) {
-        // Stage 1: reserve. Arena full -> would_block; admission closed ->
-        // invalid_state (ADR Decision 6/13: capacity pressure is NEVER
-        // invalid_state).
-        auto rh = arena_.reserve();
-        if (!rh.has_value()) {
-            return make_unexpected<void>(rh.error());
+    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind) {
+        SubmitPolicy<Op, Completion<std::size_t>> policy{kind};
+        auto r = detail::submit_transaction(arena_, c, op, policy);
+        if (!r.has_value()) {
+            return make_unexpected<void>(r.error());
         }
-        detail::SlotHandle h = rh.value();
-        // Stage 2: prepare (op kind + fd/buffer borrow metadata).
-        auto ph = arena_.prepare(h, kind, borrow_of(op));
-        if (!ph.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h); // roll back reservation
-            return make_unexpected<void>(ph.error());
-        }
-        // Stage 2.5: install the slot's Completion publication binding (review
-        // C2 — the slot is the identity carrier; reap publishes through it
-        // inside the leaf domain). A later CAS loss rolls the binding back
-        // with the slot.
-        auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
-        if (!bh.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(bh.error());
-        }
-        // Stage 3a: Completion CAS idle -> binding elects ONE submitter. Loser:
-        // roll back only our own slot + binding (zero side effects).
-        if (!begin_binding(c)) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        // Stage 3c: install the slot-release capability, then publish
-        // outstanding (submit-success LP). AFTER this nothing may throw.
-        install_binding(c, &arena_, h);
-        commit_binding(c);
         // Stage 4: enqueue (pending -> enqueued OR terminal no-op). noexcept.
-        (void)arena_.enqueue(h);
+        (void)arena_.enqueue(r.value());
         return {};
     }
 
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind) {
-        auto rh = arena_.reserve();
-        if (!rh.has_value()) {
-            return make_unexpected<void>(rh.error());
+        SubmitPolicy<Op, Completion<void>> policy{kind};
+        auto r = detail::submit_transaction(arena_, c, op, policy);
+        if (!r.has_value()) {
+            return make_unexpected<void>(r.error());
         }
-        detail::SlotHandle h = rh.value();
-        auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
-        if (!ph.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(ph.error());
-        }
-        auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
-        if (!bh.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(bh.error());
-        }
-        if (!begin_binding(c)) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        install_binding(c, &arena_, h);
-        commit_binding(c);
-        (void)arena_.enqueue(h);
+        (void)arena_.enqueue(r.value());
         return {};
     }
+
+    // The backend's policy for detail::submit_transaction (issue #137): the
+    // reference backend's divergence set is empty by construction — no
+    // Stage-0 gate (admission is serialized externally by the context's
+    // access_mtx_; the arena's own reserve check arbitrates admission), no
+    // descriptor validation (DIV-14: the fd is a metadata carrier here, not
+    // a syscall target — the deferred-validation divergence lives in this
+    // trivial hook), no prepared-op scratch (the synthetic terminal is
+    // decided at dispatch from the slot binding), no deterministic pause
+    // seam. Every production hook is the trivial one; this struct is the
+    // visible, greppable declaration of that divergence.
+    template <class Op, class Comp>
+    struct SubmitPolicy {
+        using completion_type = Comp;
+        using op_type = Op;
+
+        explicit SubmitPolicy(detail::OperationKind kind) noexcept : kind_(kind) {}
+
+        // --- data accessors ---
+        detail::OperationKind kind() const noexcept { return kind_; }
+        static detail::BorrowMetadata borrow(const Op& op) noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return borrow_of(op);
+            } else {
+                return detail::BorrowMetadata{op.fd, nullptr, 0};
+            }
+        }
+        static std::uint64_t requested_bytes(const Op& op) noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return op.len;
+            } else {
+                return 0;
+            }
+        }
+        static auto publish_thunk() noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return &SyncBackend::publish_size_ready;
+            } else {
+                return &SyncBackend::publish_void_ready;
+            }
+        }
+        // --- binding trio (protected AsyncBackend statics, reached through
+        // the enclosing backend — the trusted backend-author role) ---
+        static bool begin_binding(Comp& c) noexcept {
+            return SyncBackend::begin_binding(c);
+        }
+        static void install_binding(Comp& c, detail::RequestArena* arena,
+                                    detail::SlotHandle h) noexcept {
+            SyncBackend::install_binding(c, arena, h);
+        }
+        static void commit_binding(Comp& c) noexcept {
+            SyncBackend::commit_binding(c);
+        }
+        static void rollback_binding(Comp& c) noexcept {
+            SyncBackend::rollback_binding_before_accept(c);
+        }
+        // --- production hooks (all trivial; see the struct comment) ---
+        Result<void> stage0_precheck() const noexcept { return {}; }
+        Result<void> validate(const Op&) const noexcept { return {}; }
+        void write_scratch(detail::SlotHandle, const Op&) const noexcept {}
+        void pause_before_commit_binding() const noexcept {}
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // The reference backend carries no C2d injection harness.
+        std::optional<IoError> injected_precommit_stage_failure(
+            detail::SubmitStage) const noexcept {
+            return std::nullopt;
+        }
+#endif
+
+      private:
+        detail::OperationKind kind_;
+    };
 
     // fd/buffer borrow metadata for a byte-carrying op (ADR Decision 3/8).
     template <class Op>

@@ -628,7 +628,11 @@ std::size_t UringAsyncBackend::live_control_entries_for_test() const noexcept {
 
 template <class Op>
 Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
-                                            detail::OperationKind kind, std::size_t len) {
+                                            detail::OperationKind kind) {
+    // Fast path: construction-time ring availability is immutable state
+    // (written once in the constructor, reset only in the destructor), so a
+    // ring-less backend rejects without taking the admission lock. The
+    // in-lock Stage-0 poison/admission gate lives in the policy hook below.
     if (!have_ring_)
         return no_ring();
 
@@ -636,91 +640,22 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
     {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         // D4 C2e (close-wins window): the submit pauses BEFORE taking the
-        // admission transaction lock, so close_admission() completes with no
-        // contention and the resumed submit must observe admission closed at
-        // Stage 0 and reject synchronously (ADR Decision 15). Compiled out of
-        // production builds.
+        // admission transaction lock — see submit_size in
+        // threadpool_backend.cpp (same seam, same discipline). Compiled out
+        // of production builds.
         wait_before_admission_lock_pause_();
 #endif
+        // Admission transaction domain: dispatch_mtx_ (one lock for
+        // admission + dispatch on this backend). The shared ladder runs
+        // under it; its first step is the policy's in-lock Stage-0
+        // poison/admission gate (D4-M5 precedence preserved verbatim).
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // Stage 0: admission/poison authority is read ONLY inside
-        // dispatch_mtx_ — the SAME lock close_admission() and
-        // poison_and_recover_locked() write under. There is deliberately NO
-        // unlocked fast-path read of admission_closed_ / fatal_error_ here:
-        // both are written under this mutex, so an unlocked read would be a
-        // C++ data race on the exact submit-vs-close arbitration D4 supports
-        // (P0-B; mutant D4-RM1). This in-lock check is the single authority.
-        // Poison precedence (D4-M5): a poisoned backend reports its permanent
-        // backend_error verbatim even after close_admission(); admission-closed
-        // alone rejects invalid_state. Either way no acceptance LP occurs.
-        if (fatal_error_.has_value())
-            return make_unexpected<void>(*fatal_error_);
-        if (admission_closed_) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        SubmitPolicy<Op, Completion<std::size_t>> policy{*this, kind};
+        auto r = detail::submit_transaction(arena_, c, op, policy);
+        if (!r.has_value()) {
+            return make_unexpected<void>(r.error());
         }
-        // Stage 1: reserve. Arena full -> would_block.
-        auto rh = arena_.reserve();
-        if (!rh.has_value())
-            return make_unexpected<void>(rh.error());
-        h = rh.value();
-
-        // Stage 1.5: descriptor validation INSIDE the admission transaction,
-        // AFTER reserve — admission/capacity take precedence over malformed
-        // descriptor (ADR Decision 5 stage order). Roll back on failure.
-        auto v = validate_op(op);
-        if (!v.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return v;
-        }
-
-        // Stage 2: prepare (op kind + fd/buffer borrow metadata).
-        auto ph = arena_.prepare(h, kind, borrow_of(op));
-        if (!ph.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(ph.error());
-        }
-        // Record the fixed prepared op into per-slot scratch. Dispatch reads
-        // this only after mark_running(h) succeeds (current-generation enqueued).
-        // Normalize the length to liburing's `unsigned nbytes` at prepare (the
-        // validation above already proved op.len <= UINT_MAX), so the dispatch
-        // fill uses prep.native_length directly with no implicit narrowing.
-        prepared_ops_[h.slot.value] = PreparedUringOp{
-            kind, op.fd, static_cast<const std::byte*>(borrow_of(op).address), op.len,
-            static_cast<unsigned>(op.len), op.offset};
-
-        // Stage 2.5: install the slot's Completion publication binding.
-        auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
-        if (!bh.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(bh.error());
-        }
-
-        // Stage 3a: Completion CAS idle -> binding elects ONE submitter.
-        if (!begin_binding(c)) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // D4 C2e (submit-vs-close LP window): the submit pauses INSIDE the
-        // admission transaction (dispatch_mtx_ held) between the arena commit
-        // (the slot half of the accept LP) and the binding->outstanding
-        // release-store (the accept half). close_admission() takes the same
-        // lock, so it must BLOCK while the submit holds the transaction and
-        // only return after the LP completed (submit wins). Compiled out of
-        // production builds.
-        wait_before_commit_binding_pause_();
-#endif
-        // Stage 3c: install slot-release capability, then publish outstanding.
-        // AFTER commit_binding nothing may throw (I9).
-        install_binding(c, &arena_, h);
-        commit_binding(c);
+        h = r.value();
     } // dispatch_mtx_ released BEFORE enqueue (no-fail, needs no serialization).
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -754,51 +689,13 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
         // Stage 0: admission/poison authority read ONLY under dispatch_mtx_
         // (see submit_size): no unlocked fast-path read of admission_closed_ /
         // fatal_error_ (P0-B; D4-RM1). Poison precedence, then admission
-        // closed -> invalid_state.
-        if (fatal_error_.has_value())
-            return make_unexpected<void>(*fatal_error_);
-        if (admission_closed_) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        // closed -> invalid_state — both in the policy hook, verbatim.
+        SubmitPolicy<Op, Completion<void>> policy{*this, kind};
+        auto r = detail::submit_transaction(arena_, c, op, policy);
+        if (!r.has_value()) {
+            return make_unexpected<void>(r.error());
         }
-        auto rh = arena_.reserve();
-        if (!rh.has_value())
-            return make_unexpected<void>(rh.error());
-        h = rh.value();
-
-        auto v = validate_op(op);
-        if (!v.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return v;
-        }
-        auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
-        if (!ph.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(ph.error());
-        }
-        prepared_ops_[h.slot.value] =
-            PreparedUringOp{kind, op.fd, nullptr, std::size_t{0}, /*native_length=*/0u,
-                            std::uint64_t{0}};
-
-        auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
-        if (!bh.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(bh.error());
-        }
-        if (!begin_binding(c)) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        wait_before_commit_binding_pause_();
-#endif
-        install_binding(c, &arena_, h);
-        commit_binding(c);
+        h = r.value();
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -810,10 +707,10 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
 }
 
 Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    return submit_size(op, c, detail::OperationKind::read, op.len);
+    return submit_size(op, c, detail::OperationKind::read);
 }
 Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    return submit_size(op, c, detail::OperationKind::write, op.len);
+    return submit_size(op, c, detail::OperationKind::write);
 }
 Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     return submit_void(op, c, detail::OperationKind::sync_data);

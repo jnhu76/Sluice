@@ -43,6 +43,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
+#include <sluice/async/detail/submit_transaction.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -384,12 +385,130 @@ class UringAsyncBackend : public AsyncBackend {
     static Result<void> validate_sync(SyncAllOp op);
     template <class Op> static Result<void> validate_op(const Op& op) noexcept;
 
-    // Five-stage admission mirroring ThreadPoolBackend (ADR Decision 5).
+    // Five-stage admission mirroring ThreadPoolBackend (ADR Decision 5), now
+    // ONE call into the shared pre-accept ladder (issue #137;
+    // detail::submit_transaction) under this backend's admission discipline
+    // (dispatch_mtx_, with the in-lock Stage-0 poison/admission gate).
     template <class Op>
-    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
-                             std::size_t len);
+    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind);
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind);
+
+    // The backend's policy for detail::submit_transaction (issue #137): the
+    // REAL io_uring backend adds to the ThreadPool shape exactly the Stage-0
+    // poison/admission gate (D4-M5 precedence: poison error verbatim BEFORE
+    // admission-closed and reserve — both read ONLY under dispatch_mtx_,
+    // P0-B/D4-RM1; the hook runs under the caller-held admission lock, so
+    // the reads stay in-lock exactly as before centralization) and the
+    // native-length scratch normalization (op.len is validated <= UINT_MAX
+    // at Stage 1.5, so the dispatch fill uses prep.native_length directly).
+    // The C2d stage-injection harness is ThreadPool-only (this backend
+    // probes the same windows through its D3/D4 pause seams).
+    template <class Op, class Comp>
+    struct SubmitPolicy {
+        using completion_type = Comp;
+        using op_type = Op;
+
+        SubmitPolicy(UringAsyncBackend& self, detail::OperationKind kind) noexcept
+            : self_(self), kind_(kind) {}
+
+        // --- data accessors ---
+        detail::OperationKind kind() const noexcept { return kind_; }
+        static detail::BorrowMetadata borrow(const Op& op) noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return borrow_of(op);
+            } else {
+                return detail::BorrowMetadata{op.fd, nullptr, 0};
+            }
+        }
+        static std::uint64_t requested_bytes(const Op& op) noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return op.len;
+            } else {
+                return 0;
+            }
+        }
+        static auto publish_thunk() noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return &UringAsyncBackend::publish_size_ready;
+            } else {
+                return &UringAsyncBackend::publish_void_ready;
+            }
+        }
+        // --- binding trio (protected AsyncBackend statics, reached through
+        // the enclosing backend — the trusted backend-author role) ---
+        static bool begin_binding(Comp& c) noexcept {
+            return UringAsyncBackend::begin_binding(c);
+        }
+        static void install_binding(Comp& c, detail::RequestArena* arena,
+                                    detail::SlotHandle h) noexcept {
+            UringAsyncBackend::install_binding(c, arena, h);
+        }
+        static void commit_binding(Comp& c) noexcept {
+            UringAsyncBackend::commit_binding(c);
+        }
+        static void rollback_binding(Comp& c) noexcept {
+            UringAsyncBackend::rollback_binding_before_accept(c);
+        }
+        // --- production hooks ---
+        Result<void> stage0_precheck() const noexcept {
+            // Stage 0: admission/poison authority is read ONLY under
+            // dispatch_mtx_ — the SAME lock close_admission() and
+            // poison_and_recover_locked() write under. There is deliberately
+            // NO unlocked fast-path read of admission_closed_ /
+            // fatal_error_ here (P0-B; mutant D4-RM1): both are written
+            // under this mutex, so an unlocked read would be a C++ data race
+            // on the exact submit-vs-close arbitration D4 supports. This
+            // in-lock check is the single authority. Poison precedence
+            // (D4-M5): a poisoned backend reports its permanent
+            // backend_error verbatim even after close_admission();
+            // admission-closed alone rejects invalid_state. Either way no
+            // acceptance LP occurs.
+            if (self_.fatal_error_.has_value()) {
+                return make_unexpected<void>(*self_.fatal_error_);
+            }
+            if (self_.admission_closed_) {
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
+            return {};
+        }
+        Result<void> validate(const Op& op) const noexcept { return self_.validate_op(op); }
+        void write_scratch(detail::SlotHandle h, const Op& op) const noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                // Normalize the length to liburing's `unsigned nbytes` here
+                // (validation already proved op.len <= UINT_MAX), so the
+                // dispatch fill uses prep.native_length directly with no
+                // implicit narrowing.
+                self_.prepared_ops_[h.slot.value] =
+                    PreparedUringOp{kind_, op.fd,
+                                    static_cast<const std::byte*>(borrow_of(op).address),
+                                    op.len, static_cast<unsigned>(op.len), op.offset};
+            } else {
+                self_.prepared_ops_[h.slot.value] =
+                    PreparedUringOp{kind_, op.fd, nullptr, std::size_t{0},
+                                    /*native_length=*/0u, std::uint64_t{0}};
+            }
+        }
+        void pause_before_commit_binding() noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // D4 C2e (submit-vs-close LP window): the seam body is compiled
+            // out of production builds (empty inline).
+            self_.wait_before_commit_binding_pause_();
+#endif
+        }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // This backend probes the pre-commit windows through its D3/D4 pause
+        // seams, not the C2d stage-injection harness.
+        std::optional<IoError> injected_precommit_stage_failure(
+            detail::SubmitStage) const noexcept {
+            return std::nullopt;
+        }
+#endif
+
+      private:
+        UringAsyncBackend& self_;
+        detail::OperationKind kind_;
+    };
 
     template <class Op> static detail::BorrowMetadata borrow_of(const Op& op) noexcept {
         if constexpr (std::is_same_v<Op, ReadOp>) {
