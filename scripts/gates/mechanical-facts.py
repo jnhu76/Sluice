@@ -20,12 +20,16 @@ of those facts is the wrong tool; this gate checks them mechanically:
      must equal the mechanically counted default-`xmake test` gate size
      (the ``running.test`` line count of a Linux Clang Debug run),
      derived from the xmake lua registration constructs, not hand-typed.
-  G. seam/production exclusion (C4 / issue #135) — the internal-testing
-     control plane lives in NON-INSTALLED src/async/*_test_seams.hpp headers
-     included by installed headers ONLY under SLUICE_ASYNC_INTERNAL_TESTING.
-     Installed headers must reference seam headers only inside the macro
-     guard, and the production sluice_async target must never define the
-     macro nor gain the src/async seam include path (AGENTS.md §15 contract).
+  G. seam/production exclusion (C4 / issue #135, extended by #142 review) —
+     the internal-testing control plane lives in NON-INSTALLED seam headers
+     (src/async/*_test_seams.hpp, apps/sluice-copy/safe_output_test_seams.hpp)
+     included by production-compiled sources ONLY under the matching
+     *_INTERNAL_TESTING macro. Installed headers must reference seam headers
+     only inside the SLUICE_ASYNC_INTERNAL_TESTING guard; app production
+     sources must reference app seam headers only inside the app guard; and
+     the production sluice_async / sluice-copy targets must never define the
+     macros, gain a seam include path, or list a seam source (AGENTS.md §15
+     persistence contract — one mechanical authority for every seam family).
 
 Fail-closed: exits non-zero on the first category with findings, printing
 the exact reproduction. --self-test plants violations in a temp dir and
@@ -443,18 +447,24 @@ TEST_TOTAL_EXTRA_DOCS = [
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# G. Seam/production exclusion (C4 / issue #135). The internal-testing control
-#    plane moved out of the installed production headers into NON-INSTALLED
-#    src/async/*_test_seams.hpp headers, included by the installed headers ONLY
-#    under SLUICE_ASYNC_INTERNAL_TESTING. AGENTS.md §15 persistence contract:
-#    production targets MUST NOT define the macro, MUST NOT gain the src/async
-#    seam include path, and installed headers MUST reference seam headers only
-#    inside the macro guard.
+# G. Seam/production exclusion (C4 / issue #135; app-seam extension from the
+#    #142 review). The internal-testing control plane lives in NON-INSTALLED
+#    seam headers — src/async/*_test_seams.hpp for async,
+#    apps/sluice-copy/safe_output_test_seams.hpp for the copy app — included
+#    by production-compiled sources ONLY under the matching *_INTERNAL_TESTING
+#    macro. AGENTS.md §15 persistence contract, mechanically enforced for every
+#    seam family: production targets never compile test control plane.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SEAM_HEADER_INCLUDE_RE = re.compile(
     r"^\s*#\s*include\s*[<\"]([^>\"]*(?:test_seams|test_access)\.hpp)[>\"]", re.M)
 INTERNAL_TESTING_MACRO = "SLUICE_ASYNC_INTERNAL_TESTING"
+# App-private seam families: macro -> (guard macro set, production xmake
+# target). A new app seam must register here in the same reviewed change that
+# introduces it (#142 review merge-blocker: no ungated seam families).
+APP_SEAM_FAMILIES = {
+    "SLUICE_COPY_INTERNAL_TESTING": "sluice-copy",
+}
 
 # xmake lua uses IMPLICIT target scoping: a `target("name")` block ends at the
 # next top-level target()/option()/task()/includes() (or EOF), not at an
@@ -465,25 +475,27 @@ TARGET_DECL_RE = re.compile(r'target\(\s*"([^"]+)"\s*\)')
 NEXT_BLOCK_RE = re.compile(r"^\s*(?:target|option|task|includes)\s*\(", re.M)
 
 
-def _seam_includes_guarded(text):
+def _seam_includes_guarded(text, macros=(INTERNAL_TESTING_MACRO,)):
     """True iff every seam-header `#include` in `text` sits inside an active
-    `SLUICE_ASYNC_INTERNAL_TESTING` guard region. Naive `#if`-stack scan: each
-    `#if`/`#ifdef`/`#ifndef` pushes whether that region is compiled only when
-    the macro is defined; `#elif`/`#else` update the top entry; `#endif` pops.
-    A seam include is allowed only while some enclosing region is macro-
-    guarded — a bare `#if SLUICE_HAS_LIBURING` guard is NOT sufficient."""
+    guard region for at least one of `macros` (an app seam passes the app
+    family, an installed header the async macro — never the union). Naive
+    `#if`-stack scan: each `#if`/`#ifdef`/`#ifndef` pushes whether that region
+    is compiled only when a macro is defined; `#elif`/`#else` update the top
+    entry; `#endif` pops. A seam include is allowed only while some enclosing
+    region is macro-guarded — a bare `#if SLUICE_HAS_LIBURING` guard is NOT
+    sufficient."""
     stack = []
     for line in text.splitlines():
         m = re.match(r"#\s*(ifndef|ifdef|if|elif|else|endif)\b", line.lstrip())
         if m:
             kind = m.group(1)
             if kind in ("if", "ifdef", "ifndef"):
-                guarded = INTERNAL_TESTING_MACRO in line and kind != "ifndef"
+                guarded = any(mac in line for mac in macros) and kind != "ifndef"
                 stack.append(guarded)
             elif kind in ("elif", "else"):
                 if stack:
                     if kind == "elif":
-                        stack[-1] = INTERNAL_TESTING_MACRO in line
+                        stack[-1] = any(mac in line for mac in macros)
                     else:
                         stack[-1] = not stack[-1]
             else:  # endif
@@ -528,13 +540,18 @@ def _implicit_target_regions(text, names):
 
 
 def check_seam_production_exclusion(root=None):
-    """C4 (issue #135) persistence contract (AGENTS.md §15): production targets
-    never compile testing-only control-plane code. Three mechanical facts:
+    """C4 (issue #135) persistence contract (AGENTS.md §15), extended by the
+    #142 review to app-private seams: production targets never compile
+    testing-only control-plane code. Mechanical facts:
       - installed headers reference seam headers only inside the
         SLUICE_ASYNC_INTERNAL_TESTING guard;
       - the production sluice_async target never defines the macro;
       - the production sluice_async target never gains the src/async seam
-        include path."""
+        include path;
+      - app sources compiled by a production app target reference app seam
+        headers only inside that family's *_INTERNAL_TESTING guard;
+      - the production app targets never define their seam macro nor list a
+        seam header as a source (test targets may define it freely)."""
     base = Path(root) if root else REPO
     errs = []
     inc = base / "include" / "sluice"
@@ -545,6 +562,21 @@ def check_seam_production_exclusion(root=None):
                 f"{hdr.relative_to(base)}: seam header include outside a "
                 f"{INTERNAL_TESTING_MACRO} guard region"
             )
+    apps = base / "apps"
+    if apps.is_dir():
+        for f in sorted(apps.rglob("*")):
+            if f.suffix not in (".cpp", ".hpp") or not f.is_file():
+                continue
+            if f.name.endswith(("test_seams.hpp", "test_access.hpp")):
+                continue  # the seam header itself, not a consumer
+            text = f.read_text(errors="replace")
+            if SEAM_HEADER_INCLUDE_RE.search(text) and not _seam_includes_guarded(
+                    text, tuple(APP_SEAM_FAMILIES)):
+                macros = "/".join(APP_SEAM_FAMILIES)
+                errs.append(
+                    f"{f.relative_to(base)}: seam header include outside a "
+                    f"{macros} guard region"
+                )
     for src in _xmake_lua_sources(root):
         for region in _implicit_target_regions(src, {"sluice_async"}):
             if INTERNAL_TESTING_MACRO in region:
@@ -557,6 +589,18 @@ def check_seam_production_exclusion(root=None):
                     f"production target sluice_async gains the src/async seam "
                     f"include path (xmake implicit-scope region)"
                 )
+        for macro, target in APP_SEAM_FAMILIES.items():
+            for region in _implicit_target_regions(src, {target}):
+                if macro in region:
+                    errs.append(
+                        f"production target {target} defines {macro} "
+                        f"(xmake implicit-scope region)"
+                    )
+                if re.search(r"test_seams|test_access", region):
+                    errs.append(
+                        f"production target {target} lists a test seam header "
+                        f"as source/include (xmake implicit-scope region)"
+                    )
     return errs
 
 
@@ -722,6 +766,46 @@ def self_test():
         )
         if check_seam_production_exclusion(t):
             failures.append("self-test: clean production target false positive")
+
+        # G (app seams, #142 review): an app source compiled by a production
+        # app target may include an app seam header ONLY inside the family's
+        # internal-testing guard; the production sluice-copy target must
+        # never define the macro nor list a seam header; a TEST target may
+        # define the macro freely.
+        (t / "apps" / "sluice-copy").mkdir(parents=True)
+        app = t / "apps" / "sluice-copy" / "safe_output.cpp"
+        app.write_text('#include "safe_output_test_seams.hpp"\n')
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: unguarded app seam include failed to fire")
+        app.write_text(
+            "#ifdef SLUICE_COPY_INTERNAL_TESTING\n"
+            '#include "safe_output_test_seams.hpp"\n'
+            "#endif\n"
+        )
+        if check_seam_production_exclusion(t):
+            failures.append("self-test: guarded app seam include false positive")
+        app_prod = t / "xmake" / "app_prod.lua"
+        app_prod.write_text(
+            'target("sluice-copy")\n'
+            '    add_defines("SLUICE_COPY_INTERNAL_TESTING")\n'
+        )
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: production app macro define failed to fire")
+        app_prod.write_text(
+            'target("sluice-copy")\n'
+            '    add_files(R .. "apps/sluice-copy/safe_output.cpp", '
+            'R .. "apps/sluice-copy/safe_output_test_seams.hpp")\n'
+        )
+        if not check_seam_production_exclusion(t):
+            failures.append("self-test: production app seam source failed to fire")
+        app_prod.write_text(
+            'target("sluice-copy")\n'
+            '    add_files(R .. "apps/sluice-copy/safe_output.cpp")\n'
+            'target("sluice_copy_safe_output_test")\n'
+            '    add_defines("SLUICE_COPY_INTERNAL_TESTING")\n'
+        )
+        if check_seam_production_exclusion(t):
+            failures.append("self-test: clean app targets false positive")
     return failures
 
 
