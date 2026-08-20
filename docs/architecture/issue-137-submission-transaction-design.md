@@ -154,30 +154,36 @@ Keep 8 copies; add a gate that diffs the ladder copies textually.
 ## 4. Recommended design (Option C, strict form)
 
 ```cpp
-// include/sluice/async/detail/submit_transaction.hpp
+// Schematic (structure is near-literal; exact types/names decided at S1).
+// Lives in an installed detail header (see §9 item 3).
 namespace sluice::async::detail {
 
 // One ladder. The backend holds its admission discipline AROUND this call;
 // this function acquires no lock, performs no wake, allocates nothing.
+// noexcept boundary: any accidental throw inside — in particular in the
+// 3c→return window — terminates (fail-fast), which is exactly the intended
+// response to a violated no-throw-after-acceptance contract.
 template <class Policy>
 Result<void> submit_transaction(RequestArena& arena,
                                  typename Policy::CompletionRef c,
                                  const typename Policy::Op& op,
-                                 Policy& policy) {
-    if (auto pre = policy.stage0_precheck()) return pre;      // 0  (uring poison/ring/admission)
-    auto h = arena.reserve();                                  // 1
+                                 Policy& policy) noexcept {
+    if (auto pre = policy.stage0_precheck(); !pre.has_value()) return pre;   // 0
+    auto h = arena.reserve();                                                // 1
     if (!h.has_value()) return unexpected(h.error());
-    if (auto v = policy.validate(op)) {                        // 1.5
+    if (auto v = policy.validate(op); !v.has_value()) {                      // 1.5
         arena.rollback_reserved_or_prepared(h.value());
         return v;
     }
-    if (auto p = arena.prepare(h.value(), policy.kind(op), policy.borrow(op))) {
+    if (auto p = arena.prepare(h.value(), policy.kind(op), policy.borrow(op));
+        !p.has_value()) {
         arena.rollback_reserved_or_prepared(h.value());
         return p;
     }
     policy.write_scratch(h.value(), op);                       // 2   (noexcept)
     if (auto b = arena.install_publication_binding(h.value(), &c, policy.requested_bytes(op),
-                                                   policy.publish_thunk())) {
+                                                   policy.publish_thunk());
+        !b.has_value()) {
         arena.rollback_reserved_or_prepared(h.value());
         return b;
     }
@@ -204,7 +210,12 @@ forwarders, publish thunks, `resolve_identity_state`, waiter surface stay
 per-backend in shape but shrink; forwarding thunks may additionally be
 shared via the policy's template parameters — NOT required for acceptance.
 
-### 4.1 The hook budget (5; any addition needs issue-gate review)
+### 4.1 The policy surface — 5 hooks + 6 accessors
+
+Two different kinds of policy members, counted separately so the issue's
+"surface ≈ protocol size ⇒ failure" criterion is evaluated honestly:
+
+**Hooks (control-flow decisions — 5; any addition needs issue-gate review):**
 
 | Hook | Sync | Fake | ThreadPool | Uring |
 |---|---|---|---|---|
@@ -213,6 +224,14 @@ shared via the policy's template parameters — NOT required for acceptance.
 | `write_scratch` | none | none | `PreparedBlockingOp` | `PreparedUringOp` (+ native length) |
 | `pause_before_commit_binding` | none | `wait_submit_pause_` | `wait_before_commit_binding_pause_` | same + `admission_domain_held` |
 | binding/publication trio | size/void template param | same | same | same |
+
+**Accessors (pure data the ladder reads — 6, fixed by the protocol itself,
+not backend discretion):** `kind`, `borrow`, `requested_bytes`,
+`publish_thunk`, plus the binding trio's member selection
+(`install_and_commit_binding`, `rollback_binding`, `begin_binding`). These
+mirror one-to-one onto existing arena/Completion call arguments; they carry
+no control flow and cannot drift into a hook. Combined surface: 11 named
+members against the ~8×60-line protocol it replaces.
 
 **Explicitly NOT parameterized (stays backend code):** admission lock
 acquisition/release, Stage-4 enqueue and its linkage, `signal_ready_progress`
@@ -231,7 +250,7 @@ calls and zero lock operations by construction.
 | slot binding installation / commit LP / borrow start | arena calls unchanged (single authority already) |
 | accepted_outstanding accounting | arena-only (unchanged) |
 | rollback before acceptance / none after | structural: no `return` statement exists after 3c in the function |
-| no allocation/throw after acceptance | 3c→return contains only noexcept policy calls; enforced by `noexcept` on the function boundary |
+| no allocation/throw after acceptance | 3c→return contains only noexcept policy calls; a throw there terminates through the `noexcept` boundary (fail-fast), never returns a rejection |
 | enqueue pin semantics | arena `enqueue` unchanged; Scheme-B no-op unchanged |
 | close_admission linearization | unchanged (arena reserve check + uring Stage-0) |
 | backend execution ownership / generation safety / no Completion* identity | untouched by design scope |
@@ -247,7 +266,7 @@ calls and zero lock operations by construction.
 | malformed descriptor (1.5) | no | unchanged | no | ladder: slot rollback | `invalid_argument` |
 | binding CAS loser (3a) | no | unchanged | no | ladder: own-slot rollback | `invalid_state` |
 | commit failure (3b) | no | reversed in ladder | no | `rollback_binding_before_accept` THEN slot rollback | error |
-| exception inside transaction | — impossible path — | — | — | Result discipline; all policy hooks `noexcept`; function boundary `noexcept` | (compile-time) |
+| exception inside transaction | no (pre-LP) / never returns (post-LP) | unchanged | — | Result discipline; hooks and the function boundary `noexcept` — an accidental throw terminates (fail-fast), it can never produce a half-submitted request or a rejection-after-accept | process termination = invariant violation surfaced, by design |
 | dispatch-ring overflow post-commit (today: ThreadPool fail-fast) | YES | committed | yes | **no rollback after LP** — capacity equation makes this unreachable (ring capacity == request capacity) | fail-fast = invariant violation, by design |
 | uring SQE/submit failure post-commit | yes | committed | yes | none — terminal only after ownership proof (D2) | terminal `backend_error` via reap |
 | shutdown race vs submit | resolved at 0/1 under admission discipline | — | — | ladder | whichever linearizes first; no half-state |
