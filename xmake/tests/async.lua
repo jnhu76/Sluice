@@ -470,6 +470,10 @@ do
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs(R .. "include", app_dir)
+            -- #142 EINTR regression: compiles the app-private DirFsyncScript
+            -- seam in safe_output.cpp. The production sluice-copy target never
+            -- defines this macro, so production builds contain no seam code.
+            add_defines("SLUICE_COPY_INTERNAL_TESTING")
             add_files(test_src, app_dir .. "/safe_output.cpp",
                       app_dir .. "/copy_task.cpp")
             add_tests("sluice_copy_safe_output_test")

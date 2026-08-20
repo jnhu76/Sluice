@@ -229,7 +229,11 @@ NOT guaranteed (documented scope):
   regular file — the target is never written through;
 - with `--sync data|all`, a *directory* fsync failure is reported as exit 2
   **after** the rename already happened: the destination holds the new
-  content; only the crash-durability of the rename is missing;
+  content; only the crash-durability of the rename is missing. An interrupted
+  (`EINTR`) directory fsync is retried through Sluice's POSIX retry authority
+  before any durability failure is reported; a real fsync error is reported
+  verbatim. This does not broaden the application's documented
+  platform-support or durability guarantees;
 - no recursive copy, no reflink, no sparse handling, no delta transfer.
 
 ## Durability scope (`--sync`)

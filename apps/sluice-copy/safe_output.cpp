@@ -1,6 +1,8 @@
 // sluice-copy Version C — safe atomic output implementation.
 #include "safe_output.hpp"
 
+#include <sluice/detail/posix_retry.hpp>
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -8,6 +10,10 @@
 #include <unistd.h>
 
 #include <vector>
+
+#ifdef SLUICE_COPY_INTERNAL_TESTING
+#include "safe_output_test_seams.hpp"
+#endif
 
 namespace sluice_copy {
 
@@ -39,6 +45,19 @@ std::string parent_dir_of(const std::string& path) {
     if (slash == std::string::npos) return ".";
     if (slash == 0) return "/";
     return path.substr(0, slash);
+}
+
+// Directory durability syscall — indirection point for the deterministic
+// EINTR regression seam (#142). In production this is exactly ::fsync; only
+// the internal-testing build can script it, and that build carries no other
+// behavior difference.
+int directory_fsync(int fd) {
+#ifdef SLUICE_COPY_INTERNAL_TESTING
+    if (testing::DirFsyncScript* script = testing::DirFsyncScript::active()) {
+        return script->next(fd);
+    }
+#endif
+    return ::fsync(fd);
 }
 
 }  // namespace
@@ -193,7 +212,14 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
                 sluice::from_errno_value(errno));
         }
         ScopedFd dir_guard(dir_fd);
-        if (::fsync(dir_fd) != 0) {
+        // EINTR on fsync is retried through the repository retry authority
+        // (T7): an interrupted fsync may have already written data, so
+        // retrying is safe and required — unlike close() — and must never
+        // surface as a durability failure. After the helper returns, errno is
+        // a real error.
+        int rc = sluice::detail::retry_on_eintr(
+            [&] { return directory_fsync(dir_fd); });
+        if (rc != 0) {
             if (stage) *stage = SafeCommitStage::dir_sync;
             return sluice::make_unexpected<void>(
                 sluice::from_errno_value(errno));

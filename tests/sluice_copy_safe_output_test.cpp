@@ -10,18 +10,23 @@
 //   - the full atomic flow with a fault-injecting backend: a copy error or
 //     cancellation leaves an existing destination untouched and no temp file;
 //   - the full atomic flow with the real ThreadPoolBackend (multi-buffer,
-//     pipeline, sync=all).
+//     pipeline, sync=all);
+//   - the directory-fsync EINTR contract (#142): scripted through the
+//     app-private DirFsyncScript seam (armed only in this internal-testing
+//     target) — EINTR is retried, a real error still fails.
 //
 // No sleeps. safe_output.cpp + copy_task.cpp are compiled into this target.
 #include "harness.hpp"
 
 #include "copy_task.hpp"
 #include "safe_output.hpp"
+#include "safe_output_test_seams.hpp"
 
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
 
+#include <cerrno>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -391,6 +396,87 @@ SLUICE_TEST_CASE(atomic_flow_empty_source_makes_empty_dst) {
     SLUICE_CHECK(read_file(dst).empty());
     SLUICE_CHECK(count_temp_files(dir) == 0);
     ::close(o.src_fd);
+}
+
+// ---------------------------------------------------------------------------
+// Directory fsync EINTR contract (#142 EINTR-001)
+// ---------------------------------------------------------------------------
+// The post-rename directory fsync is scripted via DirFsyncScript (armed only
+// in this internal-testing build; production calls the real ::fsync). Each
+// script's destructor disarms the seam, so these cases cannot affect the
+// real-filesystem cases above.
+
+// fsync #1 -> -1/EINTR, fsync #2 -> 0: the interruption must be retried, not
+// reported as a durability failure.
+SLUICE_TEST_CASE(safe_output_commit_dir_fsync_eintr_once_still_succeeds) {
+    TempDir dir;
+    std::string src = make_file(dir, "src", "x");
+    std::string dst = make_file(dir, "dst", "OLD");
+    SafeOpenOutcome o = open_atomic_copy(src, dst);
+    SLUICE_CHECK(o.failure == SafeOpenFailure::none);
+    const char* n = "NEW";
+    SLUICE_CHECK(::write(o.temp_fd, n, std::strlen(n)) ==
+                 static_cast<ssize_t>(std::strlen(n)));
+    ::close(o.src_fd);
+
+    testing::DirFsyncScript script({{-1, EINTR}, {0, 0}});
+    SafeCommitStage stage = SafeCommitStage::none;
+    auto r = commit_atomic_copy(o, dst, SyncPolicy::all, &stage);
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(stage == SafeCommitStage::none);
+    SLUICE_CHECK(script.calls() == 2);  // interrupted once, retried once
+    SLUICE_CHECK(read_file(dst) == "NEW");
+    SLUICE_CHECK(count_temp_files(dir) == 0);
+}
+
+// fsync #1 -> -1/EIO: a real fsync error is a genuine durability failure —
+// it must surface with the rename already applied (missing durability, not a
+// lost copy), and it must not be retried.
+SLUICE_TEST_CASE(safe_output_commit_dir_fsync_real_eio_still_fails) {
+    TempDir dir;
+    std::string src = make_file(dir, "src", "x");
+    std::string dst = make_file(dir, "dst", "OLD");
+    SafeOpenOutcome o = open_atomic_copy(src, dst);
+    SLUICE_CHECK(o.failure == SafeOpenFailure::none);
+    const char* n = "NEW";
+    SLUICE_CHECK(::write(o.temp_fd, n, std::strlen(n)) ==
+                 static_cast<ssize_t>(std::strlen(n)));
+    ::close(o.src_fd);
+
+    testing::DirFsyncScript script({{-1, EIO}});
+    SafeCommitStage stage = SafeCommitStage::none;
+    auto r = commit_atomic_copy(o, dst, SyncPolicy::all, &stage);
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(stage == SafeCommitStage::dir_sync);
+    SLUICE_CHECK(r.error().os_errno == EIO);
+    SLUICE_CHECK(script.calls() == 1);  // real errors are not retried
+    SLUICE_CHECK(read_file(dst) == "NEW");
+    SLUICE_CHECK(count_temp_files(dir) == 0);
+}
+
+// fsync #1 -> -1/EINTR, fsync #2 -> -1/EIO: EINTR triggers exactly one retry;
+// the following real error terminates it and is reported verbatim — no
+// infinite loop, no EINTR leaking to the caller.
+SLUICE_TEST_CASE(safe_output_commit_dir_fsync_eintr_then_eio_reports_eio) {
+    TempDir dir;
+    std::string src = make_file(dir, "src", "x");
+    std::string dst = make_file(dir, "dst", "OLD");
+    SafeOpenOutcome o = open_atomic_copy(src, dst);
+    SLUICE_CHECK(o.failure == SafeOpenFailure::none);
+    const char* n = "NEW";
+    SLUICE_CHECK(::write(o.temp_fd, n, std::strlen(n)) ==
+                 static_cast<ssize_t>(std::strlen(n)));
+    ::close(o.src_fd);
+
+    testing::DirFsyncScript script({{-1, EINTR}, {-1, EIO}});
+    SafeCommitStage stage = SafeCommitStage::none;
+    auto r = commit_atomic_copy(o, dst, SyncPolicy::all, &stage);
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(stage == SafeCommitStage::dir_sync);
+    SLUICE_CHECK(r.error().os_errno == EIO);
+    SLUICE_CHECK(script.calls() == 2);  // one retry, then stop at the error
+    SLUICE_CHECK(read_file(dst) == "NEW");
+    SLUICE_CHECK(count_temp_files(dir) == 0);
 }
 
 SLUICE_MAIN()
