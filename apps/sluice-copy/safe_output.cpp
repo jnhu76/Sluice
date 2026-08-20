@@ -1,6 +1,8 @@
 // sluice-copy Version C — safe atomic output implementation.
 #include "safe_output.hpp"
 
+#include <sluice/detail/posix_retry.hpp>
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -210,7 +212,14 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
                 sluice::from_errno_value(errno));
         }
         ScopedFd dir_guard(dir_fd);
-        if (directory_fsync(dir_fd) != 0) {
+        // EINTR on fsync is retried through the repository retry authority
+        // (T7): an interrupted fsync may have already written data, so
+        // retrying is safe and required — unlike close() — and must never
+        // surface as a durability failure. After the helper returns, errno is
+        // a real error.
+        int rc = sluice::detail::retry_on_eintr(
+            [&] { return directory_fsync(dir_fd); });
+        if (rc != 0) {
             if (stage) *stage = SafeCommitStage::dir_sync;
             return sluice::make_unexpected<void>(
                 sluice::from_errno_value(errno));
