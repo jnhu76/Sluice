@@ -52,6 +52,34 @@ sluice_production_async_test("fake_backend_test")
 -- Async "all" helpers tests (sluice-CORE-018). read_all/write_all over the fake.
 sluice_production_async_test("async_op_helpers_test")
 
+-- Runtime await-style op helpers + task-result bridge tests (C7, #135):
+-- await_take/await_drain/await_read_once/await_read_fill/await_write_exact
+-- and TaskResultSlot/run_task_to_result contracts, driven deterministically
+-- through FakeAsyncBackend's auto modes, the staged-completion
+-- ScriptedBackendController (support source compiled alongside), and one
+-- real ThreadPoolBackend round trip. The four applications
+-- (copy/hash/grep/tail) build on exactly these helpers. FAIL-FAST: both
+-- sources are fixed in-repo; a missing file is a hard xmake error (raise),
+-- never a silent coverage drop.
+do
+    local test_src = R .. "tests/runtime_await_helpers_test.cpp"
+    local support_src = R .. "tests/support/scripted_async_backend.cpp"
+    if not os.isfile(test_src) then
+        raise("runtime_await_helpers_test source missing: " .. test_src)
+    end
+    if not os.isfile(support_src) then
+        raise("runtime_await_helpers_test support source missing: " .. support_src)
+    end
+    target("runtime_await_helpers_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core", "sluice_async")
+        add_includedirs(R .. "include", R .. "tests")
+        add_files(test_src, support_src)
+        add_tests("runtime_await_helpers_test")
+end
+
 -- Async durability ops tests (sluice-CORE-018B, W4).
 sluice_production_async_test("async_durability_test")
 

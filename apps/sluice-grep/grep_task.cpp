@@ -1,16 +1,19 @@
 // sluice-grep scanning engine implementation (same Runtime shape as
-// sluice-copy/sluice-hash: one task, app-owned terminal slot, stop only
-// after the task publishes).
+// sluice-copy/sluice-hash: one task, TaskResultSlot terminal slot, stop only
+// after the task publishes). The I/O protocol (submit -> await -> result ->
+// reset) and the run-to-result lifecycle are the library's await-style
+// helpers (C7, #135).
 #include "grep_task.hpp"
 
 #include "matcher.hpp"
 
+#include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
-#include <atomic>
-#include <condition_variable>
 #include <limits>
-#include <mutex>
+#include <memory>
+#include <span>
 #include <utility>
 
 namespace sluice_grep {
@@ -28,18 +31,6 @@ struct GrepTask {
     MatchSink sink;
     std::vector<std::uint8_t> buffer;
     std::vector<GrepFileResult> results;
-
-    std::mutex& mtx;
-    bool& done;
-    std::condition_variable& done_cv;
-
-    void publish() {
-        {
-            std::lock_guard<std::mutex> lk(mtx);
-            done = true;
-        }
-        done_cv.notify_all();
-    }
 
     void finish_canceled(std::size_t i) {
         GrepFileResult r;
@@ -66,22 +57,11 @@ struct GrepTask {
                 out.error = IoError{IoError::Code::canceled};
                 break;
             }
-            auto sr = ctx.submit_read(
-                ReadOp{in.fd,
-                       reinterpret_cast<std::byte*>(buffer.data()),
-                       buffer.size(), offset},
-                rc);
-            if (!sr.has_value()) {
-                out.error = sr.error();
-                break;
-            }
-            auto wr = ctx.await_completion(rc);
-            if (!wr.has_value()) {
-                out.error = wr.error();
-                break;
-            }
-            auto rr = rc.result();
-            rc.reset();
+            auto rr = await_read_once(
+                ctx, in.fd,
+                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                     buffer.size()),
+                offset, rc);
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;
@@ -115,7 +95,8 @@ struct GrepTask {
         results.push_back(std::move(out));
     }
 
-    void operator()(RuntimeTaskContext& ctx) {
+    void operator()(RuntimeTaskContext& ctx,
+                    TaskResultSlot<sluice::Result<std::vector<GrepFileResult>>>& slot) {
         // Exception boundary (same rationale as copy_task/hash_task): every
         // input gets exactly one result entry on every path.
         try {
@@ -127,14 +108,17 @@ struct GrepTask {
                 scan_one(ctx, i);
             }
         } catch (...) {
+            auto translated =
+                translate_task_exception<std::vector<GrepFileResult>>();
+            IoError err = translated.error();
             for (std::size_t i = results.size(); i < inputs.size(); ++i) {
                 GrepFileResult r;
                 r.path = inputs[i].path;
-                r.error = IoError{IoError::Code::backend_error};
+                r.error = err;
                 results.push_back(std::move(r));
             }
         }
-        publish();
+        slot.publish(std::move(results));
     }
 };
 
@@ -174,48 +158,19 @@ std::vector<GrepFileResult> run_grep_engine(
         return all_error(inputs, IoError{IoError::Code::no_space});
     }
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(workers);
+    GrepTask task{pattern,        std::move(inputs), buffer_size,
+                  max_line_bytes, std::move(sink),   std::move(buffer),
+                  {}};
 
-    std::unique_ptr<ApplicationRuntime> rt;
-    try {
-        auto build_r = builder.build();
-        if (!build_r.has_value())
-            return all_error(inputs, build_r.error());
-        rt = std::move(build_r.value());
-        auto start_r = rt->start();
-        if (!start_r.has_value())
-            return all_error(inputs, start_r.error());
-    } catch (...) {
-        if (rt) (void)rt->shutdown();
-        return all_error(inputs, IoError{IoError::Code::no_space});
-    }
-
-    std::mutex mtx;
-    std::condition_variable done_cv;
-    bool done = false;
-
-    GrepTask task{pattern,          std::move(inputs), buffer_size,
-                  max_line_bytes,   std::move(sink),   std::move(buffer),
-                  {},               mtx,               done,
-                  done_cv};
-
-    auto sub_r = rt->submit(std::ref(task));
-    if (!sub_r.has_value()) {
-        (void)rt->shutdown();
-        return all_error(task.inputs, sub_r.error());
-    }
-
-    {
-        std::unique_lock<std::mutex> wlk(mtx);
-        done_cv.wait(wlk, [&] { return done; });
-    }
-    rt->request_stop();
-    (void)rt->drain();
-    (void)rt->join();
-
-    return std::move(task.results);
+    // The library bridge runs the full lifecycle (build/start/submit/wait
+    // publish/stop/drain/join + the task exception boundary). A lifecycle
+    // error is reported per input (exactly one result entry per input on
+    // every path — the run_grep_engine contract).
+    auto result = run_task_to_result<std::vector<GrepFileResult>>(
+        workers, std::move(backend), task);
+    if (!result.has_value())
+        return all_error(task.inputs, result.error());
+    return std::move(result.value());
 }
 
 }  // namespace

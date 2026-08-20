@@ -9,17 +9,15 @@
 // cooperative boundaries between operations.
 #include "copy_task.hpp"
 
-#include <sluice/async/application_runtime.hpp>
+#include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
-#include <atomic>
-#include <condition_variable>
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <mutex>
-#include <optional>
-#include <system_error>
+#include <span>
+#include <utility>
 #include <vector>
 
 namespace sluice_copy {
@@ -89,48 +87,14 @@ struct PipelinedCopyTask {
     std::vector<std::unique_ptr<PipelineSlot>> slots;
     Completion<void> sync_c;
 
-    std::mutex& mtx;
-    std::optional<Result<CopyStats>>& out;
-    std::atomic<bool>& done;
-    std::condition_variable& done_cv;
-
-    void operator()(RuntimeTaskContext& ctx) {
-        // App-level exception boundary. The Runtime swallows exceptions thrown
-        // by the user task at its task boundary (Group boundary contract), so
-        // an uncaught exception would kill the task SILENTLY: `done` would
-        // never be published and the caller's done_cv wait would hang forever.
-        // Translate any task-body exception into an IoError result instead.
-        // Real triggers: an op-dispatch failure from a backend that throws
-        // (ThreadPoolBackend::enqueue_* now resolves spawn failures as op
-        // errors, but other backends may still throw), or an allocation
-        // failure inside the Scheduler's await/registration internals.
-        Result<CopyStats> result = [&]() -> Result<CopyStats> {
-            try {
-                return run_body(ctx);
-            } catch (const std::bad_alloc&) {
-                return make_unexpected<CopyStats>(
-                    IoError{IoError::Code::no_space});
-            } catch (const std::system_error& e) {
-                IoError err{IoError::Code::backend_error};
-                if (e.code().value() > 0) err.os_errno = e.code().value();
-                return make_unexpected<CopyStats>(err);
-            } catch (...) {
-                return make_unexpected<CopyStats>(
-                    IoError{IoError::Code::backend_error});
-            }
-        }();
-        publish(std::move(result));
-    }
-
-    void publish(Result<CopyStats> r) {
-        {
-            std::lock_guard<std::mutex> lk(mtx);
-            if (!done.load(std::memory_order::relaxed)) {
-                out = std::move(r);
-                done.store(true, std::memory_order::release);
-            }
-        }
-        done_cv.notify_all();
+    void operator()(RuntimeTaskContext& ctx,
+                    TaskResultSlot<Result<CopyStats>>& slot) {
+        // The task-level exception boundary (an escaping exception translated
+        // into the published outcome — the Runtime swallows task exceptions at
+        // the Group boundary, so an unhandled one would hang the caller's
+        // wait) is the library's run_task_to_result net; the task itself only
+        // publishes its terminal outcome.
+        slot.publish(run_body(ctx));
     }
 
     // Submit the (possibly partial) read for a slot in `idle` or `reading`
@@ -158,64 +122,87 @@ struct PipelinedCopyTask {
         return {};
     }
 
-    // Await a slot's outstanding read to terminal; on short read, resubmit
-    // within the same slot until filled or EOF. Returns an error on a
-    // completion/submit error; the primary error is captured by the caller.
+    // Await a slot's outstanding read to filled-or-EOF. The pipeline
+    // PRE-SUBMITS its read window (submit_slot_read in Phase 1 / slot
+    // recycle), so the already-submitted completion is consumed with
+    // await_take FIRST; only a short read's remainder goes through the
+    // library's await_read_fill coordinator (which submits its own retries).
+    // Returns an error on a completion/submit error; the primary error is
+    // captured by the caller.
     Result<void> await_slot_read(RuntimeTaskContext& ctx, PipelineSlot& s,
                                  CopyStats& stats, bool& saw_eof) {
-        for (;;) {
-            auto wr = ctx.await_completion(s.read_c);
-            if (!wr.has_value()) return make_unexpected<void>(wr.error());
-            auto rr = s.read_c.result();
-            s.read_c.reset();
-            if (!rr.has_value()) return make_unexpected<void>(rr.error());
-            std::size_t n = rr.value();
-            ++stats.read_ops;
-            if (n == 0) {
-                // EOF for this chunk.
-                s.eof = true;
-                saw_eof = true;
-                s.state = (s.filled == 0) ? SlotState::done : SlotState::read_done;
-                return {};
-            }
-            s.filled += n;
-            if (s.filled >= buffer_size) {
-                s.state = SlotState::read_done;
-                return {};
-            }
-            // Short read with more room: resubmit the remainder in this slot.
-            auto rsr = submit_slot_read(ctx, s);
-            if (!rsr.has_value()) return rsr;
-            // loop awaits the resubmitted read
+        const std::size_t remaining = buffer_size - s.filled;
+        AwaitOpTally tally;
+        auto first = await_take(ctx, s.read_c);
+        if (!first.has_value()) return make_unexpected<void>(first.error());
+        ++tally.ops;
+        if (first.value() < remaining) ++tally.short_ops;
+
+        if (first.value() == 0) {
+            // EOF for this chunk before any byte.
+            stats.read_ops += tally.ops;
+            s.eof = true;
+            saw_eof = true;
+            s.state = (s.filled == 0) ? SlotState::done : SlotState::read_done;
+            return {};
         }
+        s.filled += first.value();
+        if (s.filled >= buffer_size) {
+            stats.read_ops += tally.ops;
+            s.state = SlotState::read_done;
+            return {};
+        }
+        // Short read with more room: the coordinator retries the remainder.
+        auto fr = await_read_fill(
+            ctx, src_fd,
+            std::span<std::byte>(s.buffer.data() + s.filled,
+                                 buffer_size - s.filled),
+            s.chunk_offset + s.filled, s.read_c, &tally);
+        if (!fr.has_value()) return make_unexpected<void>(fr.error());
+        stats.read_ops += tally.ops;
+        std::size_t n = fr.value();
+        s.filled += n;
+        if (n < buffer_size - (s.filled - n)) {
+            // EOF for this chunk (a partial tail is data).
+            s.eof = true;
+            saw_eof = true;
+        }
+        s.state = (s.filled == 0) ? SlotState::done : SlotState::read_done;
+        return {};
     }
 
-    // Await a slot's outstanding write to terminal; on partial write, resubmit
-    // the remainder. A zero write with data remaining is a deterministic error.
+    // Await a slot's outstanding write to fully written. The write was
+    // PRE-SUBMITTED by submit_slot_write, so its completion is consumed with
+    // await_take FIRST; only a partial write's remainder goes through the
+    // library's await_write_exact coordinator (which submits its own
+    // retries). Zero progress with data remaining is a deterministic
+    // backend_error.
     Result<void> await_slot_write(RuntimeTaskContext& ctx, PipelineSlot& s,
                                   CopyStats& stats) {
-        for (;;) {
-            auto wr = ctx.await_completion(s.write_c);
-            if (!wr.has_value()) return make_unexpected<void>(wr.error());
-            auto wr_res = s.write_c.result();
-            s.write_c.reset();
-            if (!wr_res.has_value()) return make_unexpected<void>(wr_res.error());
-            std::size_t wrote = wr_res.value();
-            ++stats.write_ops;
-            if (wrote == 0) {
-                // Zero progress on a non-empty write: deterministic error.
-                return make_unexpected<void>(IoError{IoError::Code::backend_error});
-            }
-            if (wrote < (s.filled - s.written)) ++stats.short_writes;
-            s.written += wrote;
-            if (s.written >= s.filled) {
-                // Whole slot written out.
-                return {};
-            }
-            // Partial write: resubmit the remainder.
-            auto wsr = submit_slot_write(ctx, s);
-            if (!wsr.has_value()) return wsr;
+        AwaitOpTally tally;
+        auto first = await_take(ctx, s.write_c);
+        if (!first.has_value()) return make_unexpected<void>(first.error());
+        ++tally.ops;
+        if (first.value() == 0) {
+            // Zero progress on a non-empty write: deterministic error.
+            return make_unexpected<void>(IoError{IoError::Code::backend_error});
         }
+        const std::size_t remaining_before = s.filled - s.written;
+        if (first.value() < remaining_before) ++tally.short_ops;
+        s.written += first.value();
+        if (s.written < s.filled) {
+            // Partial write: the coordinator retries the remainder.
+            auto wr = await_write_exact(
+                ctx, dst_fd,
+                std::span<const std::byte>(s.buffer.data() + s.written,
+                                           s.filled - s.written),
+                s.chunk_offset + s.written, s.write_c, &tally);
+            if (!wr.has_value()) return make_unexpected<void>(wr.error());
+            s.written = s.filled;  // the helper returns only after all bytes land
+        }
+        stats.write_ops += tally.ops;
+        stats.short_writes += tally.short_ops;
+        return {};
     }
 
     Result<CopyStats> run_body(RuntimeTaskContext& ctx) {
@@ -370,19 +357,15 @@ struct PipelinedCopyTask {
         // and discarded. Submit-failed ops (never entered the backend) are
         // skipped: their Completion is idle, so await is skipped.
         for (auto& s : slots) {
-            // Drain an outstanding read.
+            // Drain an outstanding read / write: await to terminal, consume
+            // and discard the secondary outcome, reset for reuse.
             if (s->read_c.outstanding()) {
-                auto wr = ctx.await_completion(s->read_c);
-                if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
-                (void)s->read_c.result();  // consume; ignore secondary errors
-                s->read_c.reset();
+                auto dr = await_drain(ctx, s->read_c);
+                if (!dr.has_value()) return make_unexpected<CopyStats>(dr.error());
             }
-            // Drain an outstanding write.
             if (s->write_c.outstanding()) {
-                auto wr = ctx.await_completion(s->write_c);
-                if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
-                (void)s->write_c.result();
-                s->write_c.reset();
+                auto dr = await_drain(ctx, s->write_c);
+                if (!dr.has_value()) return make_unexpected<CopyStats>(dr.error());
             }
         }
 
@@ -394,16 +377,12 @@ struct PipelinedCopyTask {
         if (sync == SyncPolicy::data) {
             auto ssr = ctx.submit_sync_data(SyncDataOp{dst_fd}, sync_c);
             if (!ssr.has_value()) return make_unexpected<CopyStats>(ssr.error());
-            auto wr = ctx.await_completion(sync_c);
-            if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
-            auto sr = sync_c.result();
+            auto sr = await_take(ctx, sync_c);
             if (!sr.has_value()) return make_unexpected<CopyStats>(sr.error());
         } else if (sync == SyncPolicy::all) {
             auto ssr = ctx.submit_sync_all(SyncAllOp{dst_fd}, sync_c);
             if (!ssr.has_value()) return make_unexpected<CopyStats>(ssr.error());
-            auto wr = ctx.await_completion(sync_c);
-            if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
-            auto sr = sync_c.result();
+            auto sr = await_take(ctx, sync_c);
             if (!sr.has_value()) return make_unexpected<CopyStats>(sr.error());
         }
 
@@ -476,99 +455,16 @@ Result<CopyStats> run_pipelined_copy_with_backend(
         return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
     }
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(workers);
-
-    // RuntimeBuilder::build() allocates the Runtime on the heap (raw new +
-    // make_unique members) and can throw std::bad_alloc; ApplicationRuntime
-    // start() catches std::system_error internally, but the thread spawn can
-    // still throw other allocation errors. Translate any of those into
-    // IoError instead of letting the exception cross the public boundary.
-    // shutdown() is documented correct in every Runtime state (P1-05), so a
-    // partially-started Runtime is always cleaned up before we report.
-    std::unique_ptr<ApplicationRuntime> rt;
-    try {
-        auto build_r = builder.build();
-        if (!build_r.has_value()) return make_unexpected<CopyStats>(build_r.error());
-        rt = std::move(build_r.value());
-
-        auto start_r = rt->start();
-        if (!start_r.has_value()) return make_unexpected<CopyStats>(start_r.error());
-    } catch (const std::bad_alloc&) {
-        if (rt) (void)rt->shutdown();  // best-effort: correct in every state
-        return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
-    }
-
-    // App-owned result slot + completion signal (brief §23). Lifetime exceeds
-    // the task. The Runtime Worker NEVER blocks on this slot. The optional is
-    // empty until the task publishes its terminal outcome. The main thread
-    // waits on done_cv (NOT a Runtime Worker) for the task to finish its copy
-    // BEFORE requesting stop, so a run-to-completion copy is never aborted by
-    // root cancellation.
-    std::mutex mtx;
-    std::condition_variable done_cv;
-    std::optional<Result<CopyStats>> out;
-    std::atomic<bool> done{false};
-
-    // Slots are offset-ordered (slot i covers i*buffer_size + k*depth*buffer_size
-    // for round k), so processing them in vector order yields ascending write
-    // offsets. Each slot owns a fixed buffer and address-stable Completions
-    // (L7). All slots were allocated and validated above, BEFORE the Runtime
-    // started, so no exception can occur here.
     PipelinedCopyTask task{src_fd,        dst_fd,      buffer_size,
                            pipeline_depth, sync,        std::move(slots),
-                           {},            mtx,         out,
-                           done,          done_cv};
+                           {}};
 
-    auto sub_r = rt->submit(std::ref(task));
-    if (!sub_r.has_value()) {
-        // Submit rejected (e.g. admission closed). Tear down and return.
-        (void)rt->shutdown();
-        return make_unexpected<CopyStats>(sub_r.error());
-    }
-
-    // Wait for the copy task to publish its terminal outcome BEFORE requesting
-    // stop. The task is a run-to-completion copy, not a long-lived service: it
-    // must NOT observe root cancellation while it still has work to do. The main
-    // thread (not a Runtime Worker) blocks on done_cv, which the task signals
-    // from publish(). The Runtime driver keeps making progress (run_live) and
-    // reaps I/O independently while we wait, so the task completes via normal
-    // scheduler progress.
-    {
-        std::unique_lock<std::mutex> wlk(mtx);
-        done_cv.wait(wlk, [&] {
-            return done.load(std::memory_order::acquire);
-        });
-    }
-
-    // Now the task is terminal and all outstanding I/O has been reaped by the
-    // driver (the task only publishes after its final await completes). Safe to
-    // request stop + drain + join. This stop does not abort any copy work.
-    rt->request_stop();
-    auto drain_r = rt->drain();
-    if (!drain_r.has_value()) {
-        (void)rt->shutdown();
-        return make_unexpected<CopyStats>(drain_r.error());
-    }
-    auto join_r = rt->join();
-    if (!join_r.has_value()) {
-        (void)rt->shutdown();
-        return make_unexpected<CopyStats>(join_r.error());
-    }
-
-    // The task published its terminal outcome before drain completed (the
-    // Runtime's drain_complete requires all tasks terminal + outstanding==0).
-    std::optional<Result<CopyStats>> final_result;
-    {
-        std::lock_guard<std::mutex> lk(mtx);
-        final_result = std::move(out);
-    }
-    if (!final_result.has_value()) {
-        // The task did not publish (e.g. admission was rejected before publish).
-        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
-    }
-    return std::move(final_result.value());
+    // The library bridge runs the full lifecycle (build/start/submit/wait
+    // publish/stop/drain/join + the task exception boundary), exactly the
+    // audited application pattern: wait for the task's terminal outcome
+    // BEFORE requesting stop (a run-to-completion copy is never aborted by
+    // root cancellation), then drain/join so the Runtime closes quiescent.
+    return run_task_to_result<CopyStats>(workers, std::move(backend), task);
 }
 
 Result<CopyStats> run_sequential_copy_with_backend(
