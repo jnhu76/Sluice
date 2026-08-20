@@ -35,6 +35,30 @@ do
     end
 end
 
+-- file_close_test (ERR-001, issue #143): compiles src/file.cpp directly WITH
+-- SLUICE_FILE_INTERNAL_TESTING so the CloseScript seam (src/file_test_seams.hpp)
+-- can inject deterministic close(2) failures at the real syscall boundary. It
+-- deliberately does NOT link sluice_core: the seam-enabled file.cpp object
+-- would redefine the library's symbols. The sibling TUs are the minimal
+-- self-contained closure around file.cpp (base-class key functions in
+-- reader/writer, whose read_exact/stream_to pull in copy) — header-only
+-- dependencies elsewhere.
+do
+    local p = R .. "tests/file_close_test.cpp"
+    if os.isfile(p) then
+        target("file_close_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_files(p, R .. "src/file.cpp", R .. "src/reader.cpp",
+                      R .. "src/writer.cpp", R .. "src/copy.cpp",
+                      R .. "src/copy_strategy.cpp")
+            add_defines("SLUICE_FILE_INTERNAL_TESTING")
+            add_includedirs(R .. "include", R .. "src", R .. "tests")
+            add_tests("file_close_test")
+    end
+end
+
 -- blocking_io_pool_test (021S) needs the bench helper lib (it links
 -- BlockingIoPool from bench/support/) in addition to the core.
 do

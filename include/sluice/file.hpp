@@ -1,5 +1,7 @@
 // sluice FileReader / FileWriter — blocking POSIX file I/O behind the
-// Reader/Writer abstractions. RAII closes the descriptor; move-only.
+// Reader/Writer abstractions. RAII closes the descriptor (best-effort,
+// unreportable); move-only. Callers that need the close(2) result call
+// close() explicitly before destruction (ERR-001, issue #143).
 //
 // This is the minimal blocking backend. No durability beyond what is asked
 // for: FileWriter::flush() is a documented no-op for user-space state (no
@@ -38,7 +40,10 @@ class FileReader final : public Reader {
           vec_stats_(std::exchange(other.vec_stats_, nullptr)) {}
     FileReader& operator=(FileReader&& other) noexcept {
         if (this != &other) {
-            close();
+            // Old descriptor closed best-effort; the result is discarded —
+            // operator= is noexcept and has no error channel (call close()
+            // first when the result matters).
+            (void)close();
             fd_ = std::exchange(other.fd_, -1);
             open_error_ = std::exchange(other.open_error_, {});
             stats_ = std::exchange(other.stats_, nullptr);
@@ -54,6 +59,28 @@ class FileReader final : public Reader {
     // reader is default/moved-from. Exposed so IoContext backends can surface the
     // real open error at open time rather than deferring to first read.
     const std::optional<IoError>& open_error() const { return open_error_; }
+    // Close the descriptor and REPORT the close(2) result (ERR-001, issue
+    // #143). For a reader this is diagnostic (a read-only close has no
+    // writeback semantics); see FileWriter::close for the data-integrity
+    // case. Contract (both classes):
+    //  - idempotent: closing an already-closed / never-opened / moved-from
+    //    object is a no-op returning success. close() reports ONLY the close
+    //    syscall — a preserved open() failure stays on open_error() and the
+    //    first-I/O path, never here;
+    //  - the descriptor is consumed on EVERY return path (success or error):
+    //    on Linux close(2) releases the fd even when it reports EINTR/EIO.
+    //    close is deliberately NOT retried through detail::retry_on_eintr
+    //    (unlike read/write/fsync) — after an error return the fd number may
+    //    already have been reused by another open, and retrying could close
+    //    an unrelated descriptor. The raw errno is reported verbatim instead
+    //    (EINTR -> interrupted, EIO -> backend_error, os_errno preserved);
+    //  - the destructor and move-assignment close best-effort with the result
+    //    DISCARDED (a destructor must not throw and has no channel); callers
+    //    that need the close result must call close() explicitly first.
+    // close() is noexcept by design: it performs one C syscall and returns a
+    // value-type Result, so the destructor's best-effort use is structurally
+    // throw-free, not incidentally so.
+    Result<void> close() noexcept;
     // Returns an error if !opened(); preserves the real errno from a failed
     // open() rather than a synthetic code.
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
@@ -75,7 +102,6 @@ class FileReader final : public Reader {
     Result<void> read_at_exact(std::uint64_t offset, std::span<std::byte> dst);
 
   private:
-    void close();
     int fd_ = -1;
     // Set when the constructor's open() failed; surfaced on first I/O. Empty
     // for a default-constructed or moved-from reader.
@@ -107,7 +133,10 @@ class FileWriter final : public Writer, public SyncableWriter {
           sync_stats_(std::exchange(other.sync_stats_, nullptr)) {}
     FileWriter& operator=(FileWriter&& other) noexcept {
         if (this != &other) {
-            close();
+            // Old descriptor closed best-effort; the result is discarded —
+            // operator= is noexcept and has no error channel (call close()
+            // first when the result matters).
+            (void)close();
             fd_ = std::exchange(other.fd_, -1);
             open_error_ = std::exchange(other.open_error_, {});
             stats_ = std::exchange(other.stats_, nullptr);
@@ -124,6 +153,16 @@ class FileWriter final : public Writer, public SyncableWriter {
     // writer is default/moved-from. Exposed so IoContext backends can surface the
     // real open error at open time rather than deferring to first write.
     const std::optional<IoError>& open_error() const { return open_error_; }
+    // Close the descriptor and REPORT the close(2) result (ERR-001, issue
+    // #143). close(2) on a file with delayed writeback may fail with
+    // EIO/ENOSPC — the kernel's LAST data-integrity report for this file;
+    // discarding it (as the RAII destructor must) hides a real write
+    // failure. The full contract is on FileReader::close; the writeback
+    // consequence specific to writers: sync_all()/sync_data() success and a
+    // later close() failure are INDEPENDENT observations on separate
+    // channels — durability asked for is not durability achieved if the
+    // final close reports an error, and only the caller can judge.
+    Result<void> close() noexcept;
     // Returns an error if !opened(); preserves the real errno from a failed
     // open() rather than a synthetic code.
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
@@ -153,7 +192,6 @@ class FileWriter final : public Writer, public SyncableWriter {
     Result<void> sync_all() override;
 
   private:
-    void close();
     int fd_ = -1;
     std::optional<IoError> open_error_;
     SyscallStats* stats_ = nullptr;

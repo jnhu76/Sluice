@@ -308,8 +308,25 @@ FileWriter(int fd);
 // Query
 bool opened() const;
 const optional<IoError>& open_error() const;
+
+// Explicit close: reports the close(2) result (ERR-001, issue #143)
+Result<void> close();
 ```
 
+- `close()` is **idempotent** (already-closed / never-opened / moved-from is a
+  no-op returning success) and reports ONLY the close syscall — a preserved
+  `open()` failure is never re-reported here. The descriptor is consumed on
+  **every** return path: on Linux `close(2)` releases the fd even when it
+  reports `EINTR`/`EIO`, so close is deliberately **not retried** (unlike the
+  repository's `retry_on_eintr` authority) — a retry could close a
+  since-reused fd number. The raw errno is reported verbatim
+  (`EINTR -> interrupted`, `EIO -> backend_error`, `os_errno` preserved). For
+  a `FileWriter`, an `EIO`/`ENOSPC` from delayed writeback is the kernel's
+  last data-integrity report — discard it only if you truly do not care.
+- The **destructor and move-assignment** close best-effort with the result
+  discarded (no channel, must not throw). Callers that need the close result
+  call `close()` explicitly first. `sync_data()`/`sync_all()` success and a
+  later `close()` failure are independent observations on separate channels.
 - `FileWriter::flush()` is a **no-op** (no fsync). Use `sync_data()` / `sync_all()`.
 - `FileWriter` implements `SyncableWriter`.
 

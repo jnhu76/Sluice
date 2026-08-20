@@ -461,11 +461,16 @@ TEST_TOTAL_EXTRA_DOCS = [
 SEAM_HEADER_INCLUDE_RE = re.compile(
     r"^\s*#\s*include\s*[<\"]([^>\"]*(?:test_seams|test_access)\.hpp)[>\"]", re.M)
 INTERNAL_TESTING_MACRO = "SLUICE_ASYNC_INTERNAL_TESTING"
-# App-private seam families: macro -> (guard macro set, production xmake
-# target). A new app seam must register here in the same reviewed change that
-# introduces it (#142 review merge-blocker: no ungated seam families).
+# Private seam families (app or core): macro -> production xmake target that
+# must never define the macro nor list a seam header. A new seam family must
+# register here in the same reviewed change that introduces it (#142 review
+# merge-blocker: no ungated seam families). Core families (e.g. #143's file
+# close seam) pair the macro with sluice_core; app families with the app
+# target. The apps/ source scan below accepts any family's guard — an app
+# file including a core seam header would still have to guard it.
 APP_SEAM_FAMILIES = {
     "SLUICE_COPY_INTERNAL_TESTING": "sluice-copy",
+    "SLUICE_FILE_INTERNAL_TESTING": "sluice_core",
 }
 
 # xmake lua uses IMPLICIT target scoping: a `target("name")` block ends at the

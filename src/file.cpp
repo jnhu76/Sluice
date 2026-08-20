@@ -13,7 +13,12 @@
 #include <sys/uio.h> // readv / writev / struct iovec
 #include <algorithm>
 #include <optional>
+#include <utility>
 #include <vector>
+
+#ifdef SLUICE_FILE_INTERNAL_TESTING
+#include "file_test_seams.hpp" // src/ — non-installed close(2) seam (#143)
+#endif
 
 #ifdef IOV_MAX
 inline constexpr long kIovMaxConst = IOV_MAX;
@@ -66,6 +71,21 @@ int iovcnt_clamped(std::size_t chunk) {
     return static_cast<int>(std::min<std::size_t>(chunk, static_cast<std::size_t>(INT_MAX)));
 }
 
+// errno-aware close(2) indirection (ERR-001, issue #143). close is the one
+// POSIX syscall in this file whose EINTR must NOT go through
+// detail::retry_on_eintr: on EINTR — as on any error return — Linux has
+// already released the descriptor, and a blind retry could close a
+// since-reused fd number. The production form is exactly ::close; the
+// internal-testing build may script it (src/file_test_seams.hpp).
+int close_fd(int fd) {
+#ifdef SLUICE_FILE_INTERNAL_TESTING
+    if (file_testing::CloseScript* script = file_testing::CloseScript::active()) {
+        return script->next(fd);
+    }
+#endif
+    return ::close(fd);
+}
+
 } // namespace
 
 // ---------------- FileReader ----------------
@@ -80,15 +100,28 @@ FileReader::FileReader(const std::string& path, SyscallStats* stats, VectorStats
     }
 }
 
-void FileReader::close() {
-    if (fd_ >= 0) {
-        ::close(fd_);
-        fd_ = -1;
+Result<void> FileReader::close() noexcept {
+    if (fd_ < 0) {
+        // Never opened / already closed / moved-from: idempotent no-op. A
+        // preserved open() failure is NOT re-reported here — close() observes
+        // only the close syscall.
+        return {};
     }
+    // Ownership is released unconditionally, before the result is even known:
+    // on Linux close(2) consumes the fd on every return path (including
+    // EINTR/EIO), so a second close attempt could hit a reused fd number.
+    const int fd = std::exchange(fd_, -1);
+    if (close_fd(fd) != 0) {
+        return make_unexpected<void>(from_errno_value(errno));
+    }
+    return {};
 }
 
 FileReader::~FileReader() {
-    close();
+    // Best-effort, unreportable by design (AGENTS.md §9: a destructor must
+    // not invent success and must not throw). Callers that need the close
+    // result call close() explicitly before destruction.
+    (void)close();
 }
 
 Result<std::size_t> FileReader::read_some(std::span<std::byte> dst) {
@@ -340,15 +373,29 @@ FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats
     }
 }
 
-void FileWriter::close() {
-    if (fd_ >= 0) {
-        ::close(fd_);
-        fd_ = -1;
+Result<void> FileWriter::close() noexcept {
+    if (fd_ < 0) {
+        // Never opened / already closed / moved-from: idempotent no-op. A
+        // preserved open() failure is NOT re-reported here — close() observes
+        // only the close syscall.
+        return {};
     }
+    // Ownership is released unconditionally (see FileReader::close): the fd
+    // is consumed on every close return path; never retried.
+    const int fd = std::exchange(fd_, -1);
+    if (close_fd(fd) != 0) {
+        // The kernel's last writeback report for this file (EIO/ENOSPC are
+        // real data-integrity failures, not diagnostics).
+        return make_unexpected<void>(from_errno_value(errno));
+    }
+    return {};
 }
 
 FileWriter::~FileWriter() {
-    close();
+    // Best-effort, unreportable by design (AGENTS.md §9: a destructor must
+    // not invent success and must not throw). Callers that need the close
+    // result call close() explicitly before destruction.
+    (void)close();
 }
 
 Result<std::size_t> FileWriter::write_some(std::span<const std::byte> src) {
