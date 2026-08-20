@@ -1,5 +1,9 @@
 // sluice::async::detail::RequestArena — bounded RequestSlot arena (Phase B).
 //
+// End-to-end request story (submit -> execution -> reap -> reset -> free),
+// with the authority table and per-transition code anchors:
+// docs/architecture/async-request-lifecycle.md (issue #139).
+//
 // ADR-explicit-io-request-contract (Accepted):
 //   Decision 2  — one logical capacity and one context-provenance domain per
 //                 context/backend pair; the implementation MUST NOT create two

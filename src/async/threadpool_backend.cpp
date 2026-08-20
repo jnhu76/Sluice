@@ -3,6 +3,8 @@
 // Bounded persistent blocking-I/O backend driving real POSIX syscalls through
 // the RequestArena / RequestSlot lifecycle. See threadpool_backend.hpp and
 // docs/design/phase-e-bounded-threadpool-backend.md for the frozen design.
+// This TU is the worked example in docs/architecture/async-request-lifecycle.md
+// (issue #139): submission transaction §4.1 steps 2-3, worker steps 4-5.
 //
 // Phase E replaces the legacy "one std::thread per op + std::function +
 // Completion* ready deque" model (DIV-03 / DIV-12) with a fixed worker pool, a

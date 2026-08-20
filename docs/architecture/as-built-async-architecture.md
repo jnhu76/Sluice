@@ -16,6 +16,13 @@ Sections 1–8 below remain the `b20bcc7` baseline record; the current state of
 each subsystem is carried by the update blocks in §2.2/§2.3 and the delta table
 in §9. Re-baselined by audit issue #94 (2026-08-13).
 
+**Request lifecycle navigation (issue #139):** the end-to-end story of ONE
+explicit-I/O request — annotated state diagram, authority table, and a worked
+ThreadPoolBackend walkthrough from `submit_write` to `Completion::reset` —
+lives in [async-request-lifecycle.md](async-request-lifecycle.md). This file
+keeps the component/progress/shutdown view; that file owns the per-request
+narrative.
+
 ---
 
 ## 1. Component Topology
@@ -50,6 +57,10 @@ ApplicationRuntime (E16)
 ---
 
 ## 2. L1 I/O Submission Path (per backend)
+
+> Per-request narrative (state diagram, authority table, full walkthrough):
+> [async-request-lifecycle.md](async-request-lifecycle.md) — this section keeps
+> the per-backend submission-shape comparison.
 
 ### 2.1 Common entry
 
