@@ -194,10 +194,6 @@ inline void bump(sluice::AsyncStats* s, std::uint64_t sluice::AsyncStats::* fiel
         ++(s->*field);
 }
 
-Result<void> no_ring() {
-    return make_unexpected<void>(IoError{IoError::Code::backend_error});
-}
-
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -629,13 +625,10 @@ std::size_t UringAsyncBackend::live_control_entries_for_test() const noexcept {
 template <class Op>
 Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
                                             detail::OperationKind kind) {
-    // Fast path: construction-time ring availability is immutable state
-    // (written once in the constructor, reset only in the destructor), so a
-    // ring-less backend rejects without taking the admission lock. The
-    // in-lock Stage-0 poison/admission gate lives in the policy hook below.
-    if (!have_ring_)
-        return no_ring();
-
+    // Ring availability, poison, and admission-closed are all checked in
+    // the policy's stage0_precheck hook — the single Stage-0 authority
+    // under dispatch_mtx_ (accepted #157 review; ring -> poison ->
+    // admission hook-internal order).
     detail::SlotHandle h{};
     {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -648,7 +641,7 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
         // Admission transaction domain: dispatch_mtx_ (one lock for
         // admission + dispatch on this backend). The shared ladder runs
         // under it; its first step is the policy's in-lock Stage-0
-        // poison/admission gate (D4-M5 precedence preserved verbatim).
+        // ring/poison/admission gate (D4-M5 precedence preserved verbatim).
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         SubmitPolicy<Op, Completion<std::size_t>> policy{*this, kind};
         auto r = detail::submit_transaction(arena_, c, op, policy);
@@ -677,19 +670,14 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
 template <class Op>
 Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
                                             detail::OperationKind kind) {
-    if (!have_ring_)
-        return no_ring();
-
+    // Stage-0 authority (ring/poison/admission) lives in the policy hook
+    // — see submit_size.
     detail::SlotHandle h{};
     {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         wait_before_admission_lock_pause_();
 #endif
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // Stage 0: admission/poison authority read ONLY under dispatch_mtx_
-        // (see submit_size): no unlocked fast-path read of admission_closed_ /
-        // fatal_error_ (P0-B; D4-RM1). Poison precedence, then admission
-        // closed -> invalid_state — both in the policy hook, verbatim.
         SubmitPolicy<Op, Completion<void>> policy{*this, kind};
         auto r = detail::submit_transaction(arena_, c, op, policy);
         if (!r.has_value()) {

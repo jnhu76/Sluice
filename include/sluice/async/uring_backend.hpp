@@ -396,14 +396,14 @@ class UringAsyncBackend : public AsyncBackend {
 
     // The backend's policy for detail::submit_transaction (issue #137): the
     // REAL io_uring backend adds to the ThreadPool shape exactly the Stage-0
-    // poison/admission gate (D4-M5 precedence: poison error verbatim BEFORE
-    // admission-closed and reserve — both read ONLY under dispatch_mtx_,
-    // P0-B/D4-RM1; the hook runs under the caller-held admission lock, so
-    // the reads stay in-lock exactly as before centralization) and the
-    // native-length scratch normalization (op.len is validated <= UINT_MAX
-    // at Stage 1.5, so the dispatch fill uses prep.native_length directly).
-    // The C2d stage-injection harness is ThreadPool-only (this backend
-    // probes the same windows through its D3/D4 pause seams).
+    // ring/poison/admission gate (accepted #157 review hook-internal order:
+    // ring -> poison -> admission; D4-M5 precedence: poison error verbatim
+    // BEFORE admission-closed; ring availability is construction-time
+    // immutable state; all read ONLY under dispatch_mtx_, P0-B/D4-RM1) and
+    // the native-length scratch normalization (op.len is validated <=
+    // UINT_MAX at Stage 1.5, so the dispatch fill uses prep.native_length
+    // directly). The C2d stage-injection harness is ThreadPool-only (this
+    // backend probes the same windows through its D3/D4 pause seams).
     template <class Op, class Comp>
     struct SubmitPolicy {
         using completion_type = Comp;
@@ -452,18 +452,30 @@ class UringAsyncBackend : public AsyncBackend {
         }
         // --- production hooks ---
         Result<void> stage0_precheck() const noexcept {
-            // Stage 0: admission/poison authority is read ONLY under
-            // dispatch_mtx_ — the SAME lock close_admission() and
-            // poison_and_recover_locked() write under. There is deliberately
-            // NO unlocked fast-path read of admission_closed_ /
-            // fatal_error_ here (P0-B; mutant D4-RM1): both are written
-            // under this mutex, so an unlocked read would be a C++ data race
-            // on the exact submit-vs-close arbitration D4 supports. This
-            // in-lock check is the single authority. Poison precedence
-            // (D4-M5): a poisoned backend reports its permanent
-            // backend_error verbatim even after close_admission();
-            // admission-closed alone rejects invalid_state. Either way no
-            // acceptance LP occurs.
+            // Stage 0 (accepted #157 review — hook-internal order
+            // ring -> poison -> admission): the single authority for
+            // every Uring pre-reserve rejection, running under the
+            // caller-held dispatch_mtx_.
+            //
+            // Ring availability: construction-time immutable state
+            // (written once in the constructor, reset only in the
+            // destructor), so reading it here under dispatch_mtx_ is
+            // safe and does not require additional synchronization.
+            // Centralizing it in the hook (rather than as an unlocked
+            // fast-path in submit_size/submit_void) makes Stage-0 the
+            // ONE policy authority per the accepted design.
+            if (!self_.have_ring_) {
+                return make_unexpected<void>(IoError{IoError::Code::backend_error});
+            }
+            // Poison precedence (D4-M5): a poisoned backend reports its
+            // permanent backend_error verbatim even after
+            // close_admission(). admission_closed_ / fatal_error_ are
+            // read ONLY under dispatch_mtx_ — the SAME lock
+            // close_admission() and poison_and_recover_locked() write
+            // under. There is deliberately NO unlocked fast-path read
+            // of these fields (P0-B; D4-RM1): both are written under
+            // this mutex, so an unlocked read would be a C++ data race
+            // on the exact submit-vs-close arbitration D4 supports.
             if (self_.fatal_error_.has_value()) {
                 return make_unexpected<void>(*self_.fatal_error_);
             }

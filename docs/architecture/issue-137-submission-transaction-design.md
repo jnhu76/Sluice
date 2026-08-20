@@ -135,9 +135,10 @@ static policy; the backend calls the function inside its own admission
 discipline; stage-4 enqueue stays in backend code after the call returns.
 
 - If the policy surface approaches the protocol size, the design fails
-  (issue's own criterion). The hook set below is 5 — far below the ~8×60-line
-  protocol it replaces.
-- Verdict: **recommended**, with the strict hook budget below.
+  (issue's own criterion). The policy surface below is 12 production-facing
+  methods + 1 test-only injection hook — far below the ~8×60-line protocol
+  it replaces, and mechanically countable.
+- Verdict: **recommended**, with the strict policy interface below.
 
 ### Option D — status quo + mechanical drift probe only
 
@@ -159,7 +160,9 @@ Keep 8 copies; add a gate that diffs the ladder copies textually.
 namespace sluice::async::detail {
 
 // One ladder. The backend holds its admission discipline AROUND this call;
-// this function acquires no lock, performs no wake, allocates nothing.
+// this function acquires no backend/admission/wake lock directly (arena
+// leaf mutex via RequestArena calls is unchanged), performs no wake,
+// allocates nothing.
 // noexcept boundary: any accidental throw inside — in particular in the
 // 3c→return window — terminates (fail-fast), which is exactly the intended
 // response to a violated no-throw-after-acceptance contract.
@@ -215,7 +218,17 @@ shared via the policy's template parameters — NOT required for acceptance.
 Two different kinds of policy members, counted separately so the issue's
 "surface ≈ protocol size ⇒ failure" criterion is evaluated honestly:
 
-**Hooks (control-flow decisions — 5; any addition needs issue-gate review):**
+**Policy interface (mechanically countable; any addition needs re-review):**
+
+*4 argument/data adapters (pure data the ladder reads):*
+`kind`, `borrow`, `requested_bytes`, `publish_thunk`. Fixed by the
+protocol; they carry no control flow and cannot drift into a hook.
+
+*4 Completion-binding adapters (protected AsyncBackend statics):*
+`begin_binding`, `install_binding`, `commit_binding`, `rollback_binding`.
+Mirror one-to-one onto existing arena/Completion call arguments.
+
+*4 backend-divergence hooks (control-flow decisions):*
 
 | Hook | Sync | Fake | ThreadPool | Uring |
 |---|---|---|---|---|
@@ -223,21 +236,19 @@ Two different kinds of policy members, counted separately so the issue's
 | `validate` | ok (DIV-14 divergence stays explicit) | ok | `SSIZE_MAX` family | `UINT_MAX` native-length family |
 | `write_scratch` | none | none | `PreparedBlockingOp` | `PreparedUringOp` (+ native length) |
 | `pause_before_commit_binding` | none | `wait_submit_pause_` | `wait_before_commit_binding_pause_` | same + `admission_domain_held` |
-| binding/publication trio | size/void template param | same | same | same |
 
-**Accessors (pure data the ladder reads — 6, fixed by the protocol itself,
-not backend discretion):** `kind`, `borrow`, `requested_bytes`,
-`publish_thunk`, plus the binding trio's member selection
-(`install_and_commit_binding`, `rollback_binding`, `begin_binding`). These
-mirror one-to-one onto existing arena/Completion call arguments; they carry
-no control flow and cannot drift into a hook. Combined surface: 11 named
-members against the ~8×60-line protocol it replaces.
+*1 test-only injection hook (`SLUICE_ASYNC_INTERNAL_TESTING` only):*
+`injected_precommit_stage_failure`.
+
+Combined surface: 12 production-facing methods + 1 test-only injection
+hook against the ~8×60-line protocol it replaces.
 
 **Explicitly NOT parameterized (stays backend code):** admission lock
 acquisition/release, Stage-4 enqueue and its linkage, `signal_ready_progress`
 placement, cancel execution interlock, close_admission wake, stats tally
 policy, `mark_running`/dispatch. The shared function contains zero wake
-calls and zero lock operations by construction.
+calls and no new lock-domain operations by construction (arena leaf mutex
+via RequestArena calls is unchanged from pre-centralization behavior).
 
 ### 4.2 What each non-breakable invariant maps to
 
@@ -399,10 +410,10 @@ mutation probes (§8).
 What independent review should specifically confirm (the points a reviewer
 could still reject):
 
-1. the 5-hook budget is genuinely sufficient at S3/S4 (no hidden sixth
+1. the 12+1 policy surface is genuinely sufficient at S3/S4 (no hidden
    divergence — e.g. ThreadPool's `SubmitStage` failure-injection harness
-   must be expressible as policy test hooks without widening the production
-   interface);
+   must be expressible as the test-only injection hook without widening
+   the production interface);
 2. the policy's `stage0_precheck` position (before `reserve`) preserves
    Uring's poison-vs-admission precedence exactly (D4-M5);
 3. whether the shared function should live in an installed detail

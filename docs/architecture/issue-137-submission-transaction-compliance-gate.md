@@ -70,7 +70,8 @@ work ring + cv / dispatch ring + SQE drain).
 ```
 
 Lock/atomic authority table (UNCHANGED domains; the shared function acquires
-no lock, wakes nothing, allocates nothing):
+no backend/admission/wake lock directly — arena leaf mutex unchanged;
+wakes nothing, allocates nothing):
 
 ```text
 context access_mtx_  : AsyncIoContext (Sync's external admission serialization)
@@ -103,10 +104,13 @@ Failure matrix: see the design doc §5 — every pre-LP row is zero-residue via
 
 ## Gate 3 — Progress and Wake Model
 
-**UNCHANGED by construction.** The shared function contains zero lock
-acquisitions, zero Scheduler calls, zero wait-source operations, zero
-backend-queue operations. Wake obligations stay where they are today:
-backend `enqueue_after_commit` (work cv / SQE drain), `close_admission`
+**UNCHANGED by construction.** The shared function acquires no backend /
+admission / Scheduler / wake-domain lock directly; contains zero Scheduler
+calls, zero wait-source operations, zero backend-queue operations. It
+invokes RequestArena leaf operations (reserve, prepare, commit, etc.),
+which acquire the arena leaf mutex exactly as before centralization — no
+lock-domain change. Wake obligations stay where they are today: backend
+`enqueue_after_commit` (work cv / SQE drain), `close_admission`
 interrupts, Scheduler routing. No polling dependency is introduced or
 removed. Single-worker liveness: unchanged.
 
