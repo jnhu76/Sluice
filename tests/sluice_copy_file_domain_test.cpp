@@ -9,6 +9,13 @@
 //   - an existing destination is left byte-identical when the source is
 //     rejected;
 //   - a directory destination fails with the OS open error;
+//   - a symlink in the FINAL destination component is rejected at open
+//     (ELOOP) instead of being followed — following it would aim the caller's
+//     later truncate/write at the link target, because every post-open check
+//     (regular file, inode identity) operates on the already-followed fd
+//     (issue #141 / FILEOP-001);
+//   - a dangling symlink destination is likewise rejected: O_CREAT must not
+//     punch through the link and create its target;
 //   - source == destination (same path or hard link) is rejected by inode
 //     identity, before any truncation.
 //
@@ -25,6 +32,7 @@
 #include <unistd.h>
 
 #include <cstddef>
+#include <cerrno>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -207,6 +215,60 @@ SLUICE_TEST_CASE(file_domain_hard_link_rejected) {
     auto content = read_file(dst.path);
     SLUICE_CHECK(content.size() == 64);
     SLUICE_CHECK(content[0] == std::byte{0x33});
+}
+
+// ---------------------------------------------------------------------------
+// Symlink destination (issue #141 / FILEOP-001): a symlink in the final
+// destination component must be rejected at open (ELOOP) rather than
+// followed. The victim must survive byte-identical: with symlink following,
+// every post-open validation (regular file, inode identity) sees the
+// already-followed TARGET fd and passes, and the caller's ftruncate would
+// destroy the victim.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(file_domain_symlink_destination_rejected) {
+    TempPath src;
+    seed_file(src.path, 64, std::byte{0x44});
+    TempPath victim;
+    seed_file(victim.path, 512, std::byte{0x77});
+    TempPath dst;  // unique name; replace the file entry with a symlink
+    ::unlink(dst.path.c_str());
+    SLUICE_CHECK(::symlink(victim.path.c_str(), dst.path.c_str()) == 0);
+
+    auto oc = open_copy_files(src.path, dst.path);
+    SLUICE_CHECK(oc.failure == OpenCopyFailure::dst_open);
+    SLUICE_CHECK(oc.error.os_errno == ELOOP);
+    SLUICE_CHECK(oc.src_fd < 0 && oc.dst_fd < 0);
+
+    // The victim was never opened for writing and never truncated.
+    auto content = read_file(victim.path);
+    SLUICE_CHECK(content.size() == 512);
+    for (std::byte b : content) SLUICE_CHECK(b == std::byte{0x77});
+}
+
+// ---------------------------------------------------------------------------
+// Dangling symlink destination: the more subtle variant — O_CREAT without
+// symlink rejection would follow the link and CREATE its (nonexistent)
+// target. The link must be rejected as dst_open/ELOOP, its target must not
+// come into existence, and the link itself survives as a link.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(file_domain_dangling_symlink_destination_rejected) {
+    TempPath src;
+    seed_file(src.path, 64, std::byte{0x55});
+    TempPath target;  // unique name; unlink so the link target does NOT exist
+    ::unlink(target.path.c_str());
+    TempPath dst;
+    ::unlink(dst.path.c_str());
+    SLUICE_CHECK(::symlink(target.path.c_str(), dst.path.c_str()) == 0);
+
+    auto oc = open_copy_files(src.path, dst.path);
+    SLUICE_CHECK(oc.failure == OpenCopyFailure::dst_open);
+    SLUICE_CHECK(oc.error.os_errno == ELOOP);
+    SLUICE_CHECK(oc.src_fd < 0 && oc.dst_fd < 0);
+
+    SLUICE_CHECK(!file_exists(target.path));  // not created through the link
+    struct stat lst{};
+    SLUICE_CHECK(::lstat(dst.path.c_str(), &lst) == 0);
+    SLUICE_CHECK(S_ISLNK(lst.st_mode));
 }
 
 // ---------------------------------------------------------------------------

@@ -35,7 +35,10 @@
 // Input domain: the source must be a REGULAR file (the pipeline requires a
 // seekable, finite-length source); the destination must be a regular file or
 // not exist (atomic mode creates it via rename). Source == destination and
-// hardlink aliases are rejected by inode identity.
+// hardlink aliases are rejected by inode identity. With --no-atomic a
+// symlink in the final destination component is rejected at open (ELOOP,
+// never followed); the default atomic mode instead replaces the directory
+// entry — including a symlink entry — via rename (issue #141).
 //
 // Exit codes: 0 = success, 1 = usage error, 2 = I/O error, 3 = canceled.
 #include "cli_parse.hpp"

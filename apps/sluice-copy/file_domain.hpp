@@ -32,14 +32,20 @@ struct OpenCopyOutcome {
     sluice::IoError error{};  // underlying OS error (os_errno) where relevant
 };
 
-// Open source O_RDONLY and destination O_WRONLY|O_CREAT (mode 0644) and
-// validate the Version B input domain:
+// Open source O_RDONLY and destination O_WRONLY|O_CREAT|O_NOFOLLOW|O_CLOEXEC
+// (mode 0644) and validate the Version B input domain:
 //
 //   * source must be a regular file (positional reads, finite length, eventual
 //     EOF). This is checked via fstat IMMEDIATELY after opening the source and
 //     BEFORE the destination is created, so an invalid source never creates a
 //     new destination file and never touches an existing one.
 //   * destination must be a regular file (truncatable, positional).
+//   * a symlink in the FINAL destination component is rejected at open with
+//     ELOOP (dst_open + errno), never followed — following it would aim the
+//     caller's later truncate/write at the link target, because the checks
+//     below all operate on the already-followed fd (issue #141 / FILEOP-001).
+//     Overwriting an existing regular destination stays supported (no
+//     O_EXCL); symlinks in intermediate path components are still followed.
 //   * source and destination must not be the same file (device + inode
 //     identity, covering hard links and the same pathname).
 //
