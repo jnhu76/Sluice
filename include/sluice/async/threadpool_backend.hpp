@@ -59,6 +59,7 @@
 #include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
+#include <sluice/async/detail/submit_transaction.hpp>
 #include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
@@ -343,14 +344,105 @@ class ThreadPoolBackend : public AsyncBackend {
     template <class Op>
     static Result<void> validate_op(const Op& op) noexcept;
 
-    // Five-stage admission for a byte-carrying / void op (ADR Decision 5; mirrors
-    // the SyncBackend reference). Records the fixed prepared op into per-slot
-    // scratch so the worker can run the real syscall after mark_running.
+    // Five-stage admission for a byte-carrying / void op, now ONE call into
+    // the shared pre-accept ladder (issue #137; detail::submit_transaction).
+    // Records the fixed prepared op into per-slot scratch (the policy's
+    // write_scratch) so the worker can run the real syscall after
+    // mark_running.
     template <class Op>
-    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
-                             std::size_t len);
+    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind);
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind);
+
+    // The backend's policy for detail::submit_transaction (issue #137): a
+    // REAL syscall backend — descriptor validation (Stage 1.5, AFTER
+    // reserve: admission/capacity precedence over malformed descriptors,
+    // ADR Decision 5 stage order; review P1), prepared-op scratch (the
+    // worker reads it only after a current-generation running transition,
+    // Scheme B), the C2e pause seam between the arena commit and the
+    // acceptance LP, and the C2d pre-commit stage-failure injection harness
+    // (test-guarded). No Stage-0 gate: admission arbitration is the arena's
+    // reserve check under admission_mtx_ — this backend has no poison state.
+    template <class Op, class Comp>
+    struct SubmitPolicy {
+        using completion_type = Comp;
+        using op_type = Op;
+
+        SubmitPolicy(ThreadPoolBackend& self, detail::OperationKind kind) noexcept
+            : self_(self), kind_(kind) {}
+
+        // --- data accessors ---
+        detail::OperationKind kind() const noexcept { return kind_; }
+        static detail::BorrowMetadata borrow(const Op& op) noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return borrow_of(op);
+            } else {
+                return detail::BorrowMetadata{op.fd, nullptr, 0};
+            }
+        }
+        static std::uint64_t requested_bytes(const Op& op) noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return op.len;
+            } else {
+                return 0;
+            }
+        }
+        static auto publish_thunk() noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                return &ThreadPoolBackend::publish_size_ready;
+            } else {
+                return &ThreadPoolBackend::publish_void_ready;
+            }
+        }
+        // --- binding trio (protected AsyncBackend statics, reached through
+        // the enclosing backend — the trusted backend-author role) ---
+        static bool begin_binding(Comp& c) noexcept {
+            return ThreadPoolBackend::begin_binding(c);
+        }
+        static void install_binding(Comp& c, detail::RequestArena* arena,
+                                    detail::SlotHandle h) noexcept {
+            ThreadPoolBackend::install_binding(c, arena, h);
+        }
+        static void commit_binding(Comp& c) noexcept {
+            ThreadPoolBackend::commit_binding(c);
+        }
+        static void rollback_binding(Comp& c) noexcept {
+            ThreadPoolBackend::rollback_binding_before_accept(c);
+        }
+        // --- production hooks ---
+        Result<void> stage0_precheck() const noexcept { return {}; }
+        Result<void> validate(const Op& op) const noexcept { return self_.validate_op(op); }
+        void write_scratch(detail::SlotHandle h, const Op& op) const noexcept {
+            if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                self_.prepared_ops_[h.slot.value] =
+                    PreparedBlockingOp{kind_, op.fd,
+                                       static_cast<const std::byte*>(borrow_of(op).address),
+                                       op.len, op.offset};
+            } else {
+                self_.prepared_ops_[h.slot.value] =
+                    PreparedBlockingOp{kind_, op.fd, nullptr, std::size_t{0},
+                                       std::uint64_t{0}};
+            }
+        }
+        void pause_before_commit_binding() noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // C2e (row 15; B1): deterministic close-vs-LP window — the seam
+            // body is compiled out of production builds (empty inline).
+            self_.wait_before_commit_binding_pause_();
+#endif
+        }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // C2d (ADR Gate 4): the pre-commit stage-failure injection harness.
+        std::optional<IoError> injected_precommit_stage_failure(
+            detail::SubmitStage stage) const noexcept {
+            return self_.injected_precommit_stage_failure_(stage);
+        }
+#endif
+
+      private:
+        ThreadPoolBackend& self_;
+        detail::OperationKind kind_;
+    };
 
     // Unified enqueue + dispatch push under one work_mtx_ critical section
     // (Phase E P0). Closes the window where the arena pin is cleared but the
@@ -416,8 +508,11 @@ class ThreadPoolBackend : public AsyncBackend {
 
     // The pre-commit admission stages that carry a synchronous rejection
     // (ADR Gate 4): reserve (capacity-full would_block / admission-closed
-    // invalid_state), prepare, and commit.
-    enum class SubmitStage { reserve, prepare, commit };
+    // invalid_state), prepare, and commit. Issue #137: the vocabulary moved
+    // to the shared detail header (the ladder's guarded injection seam uses
+    // it); this alias preserves the in-class name for the harness and the
+    // .cpp call sites.
+    using SubmitStage = detail::SubmitStage;
 
     // C2d pre-commit stage-failure injection (see the public seam above):
     // when the seam is armed at `stage`, increments that stage's `fired`
