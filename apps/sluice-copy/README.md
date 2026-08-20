@@ -79,6 +79,21 @@ links) is rejected before any truncation.
 Note: `open(source, O_RDONLY)` itself may block for a FIFO with no writer —
 that happens before the type check can run.
 
+### Symlink destinations (intentionally mode-dependent)
+
+`--no-atomic` rejects a symlink in the final destination component rather
+than following it: the destination is opened with `O_NOFOLLOW`, so a symlink
+destination fails as a normal `cannot open destination` error (`ELOOP`,
+exit 2), and a dangling symlink is rejected the same way — `O_CREAT` never
+punches through the link to create its target. Overwriting an existing
+*regular* destination remains supported in this mode. `O_NOFOLLOW` protects
+only the final component; symlinks in intermediate path components are still
+followed (documented limitation).
+
+The default atomic mode does not open the destination for writing; its final
+`rename()` replaces the destination directory entry, including a symlink
+entry. The two modes' symlink semantics are intentionally different.
+
 ## Exit codes
 
 | code | meaning        |
@@ -245,8 +260,6 @@ ownership, xattrs, or other metadata beyond the permission bits.
 
 - owner/group/timestamp/ACL/xattr preservation (Version C preserves permission
   bits only);
-- O_NOFOLLOW-style symlink rejection for the final destination component
-  (a symlink destination is atomically replaced — see Version C scope);
 - progress display;
 - directory traversal (see `sluice-mirror-mini`, a later app);
 - io_uring production backend;
