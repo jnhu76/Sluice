@@ -287,6 +287,16 @@ public:
     // and every Scheduler lock are uncontended). Absent from the installed
     // production build.
     void test_dump_forensics(const char* tag);
+
+    // #135 C7 P1 regression seam: arms the ROOT group's next admission so the
+    // next submit() takes its documented rollback-and-rethrow path (P2-02:
+    // Group::async_evented throws std::bad_alloc at a reserve boundary;
+    // submit rolls back the admission reservation and rethrows). Lets a
+    // deterministic test prove the task-result bridge's submit exception
+    // boundary without any allocation pressure. One-shot (the underlying
+    // Group injection is one-shot); method-only seam, no object layout
+    // change; absent from the installed production build.
+    void test_inject_next_submit_throw();
 #endif
 
 private:

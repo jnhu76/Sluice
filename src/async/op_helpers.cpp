@@ -64,6 +64,11 @@ Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
         std::size_t put = r.value();
         if (put == 0) {
             // Zero progress on non-empty remaining input — invalid_state.
+            // DELIBERATE DIVERGENCE from the await-style write coordinator
+            // (include/sluice/async/await_op_helpers.hpp), which reports
+            // backend_error for the same condition to preserve the audited
+            // applications' observable error codes; see the bilateral note
+            // there.
             return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
         }
         written += put;

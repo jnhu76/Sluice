@@ -19,7 +19,14 @@
 //     returns the bytes filled so far (a partial tail is SUCCESSFUL data —
 //     deliberately different from polling read_all's E4 eof-error parity).
 //   - zero progress on a non-empty write: IoError::backend_error (an invalid
-//     backend state, not an infinite retry).
+//     backend state, not an infinite retry). DELIBERATE DIVERGENCE from the
+//     canonical polling write_all (src/async/op_helpers.cpp), which returns
+//     invalid_state for the same condition: backend_error is what the audited
+//     applications reported on this path, and these helpers exist to preserve
+//     their observable behavior (changing the code would alter app-level
+//     error handling for no architectural gain — both codes unambiguously
+//     mean "invalid backend state, do not retry"); the note is bilateral
+//     (see op_helpers.cpp).
 //   - cancellation: these helpers do NOT observe the cancel token between
 //     iterations. Each submitted operation is driven to its terminal; the
 //     task's cooperative cancellation checks stay at ITS loop boundaries

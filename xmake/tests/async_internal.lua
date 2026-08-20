@@ -320,6 +320,17 @@ sluice_internal_async_test("threaded_evented_internal_test")
 -- out. Gated to x86_64 (fiber_ctx::supported) at runtime.
 sluice_internal_async_test("group_evented_admission_exception_safety_test")
 
+-- task_result_submit_throw_test — #135 C7 P1 regression: run_task_to_result's
+-- submit() leg must be a TYPED exception boundary. Arms (via the one-shot
+-- internal-testing injection compiled into the bridge) the runtime root
+-- group's P2-01 admission fail-point, so the next submit() deterministically
+-- takes its rollback-and-rethrow path (std::bad_alloc). Before the fix the
+-- escaping exception unwound into ~ApplicationRuntime while Running and
+-- fail-fasted (group_lifetime_fail_fast) — process termination instead of the
+-- typed no_space translation. The production sluice_async build compiles the
+-- injection out entirely.
+sluice_internal_async_test("task_result_submit_throw_test")
+
 -- threadpool_backend_reap_test — ThreadPoolBackend persistent-worker regression
 -- (Phase E). Proves the fixed worker pool never grows under load: the
 -- SLUICE_ASYNC_INTERNAL_TESTING-only workers_spawned_for_test() seam equals the

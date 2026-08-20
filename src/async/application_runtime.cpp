@@ -877,6 +877,15 @@ void ApplicationRuntime::test_dump_forensics(const char* tag) {
         Scheduler::AsyncTestAccess::dump_park_forensics(*sched_, tag);
     }
 }
+
+void ApplicationRuntime::test_inject_next_submit_throw() {
+    // #135 C7 P1 regression seam: reuses the P2-01 Group admission injection
+    // (one-shot, throws std::bad_alloc at a reserve boundary inside the next
+    // async_evented) on THIS runtime's root group, so the next submit() takes
+    // its documented rollback-and-rethrow path deterministically.
+    root_group_->test_set_evented_admission_fail(
+        Group::EventedAdmissionFailPoint::before_fiber_storage_reserve);
+}
 #endif  // SLUICE_ASYNC_INTERNAL_TESTING
 
 }  // namespace sluice::async

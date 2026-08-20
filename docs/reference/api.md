@@ -1819,7 +1819,11 @@ Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, int fd,
   a partial tail is SUCCESS data, deliberately different from polling
   `read_all`'s E4 eof-error parity).
 - `await_write_exact` — write `src.size()` exactly, retrying partial writes
-  positionally. Zero progress with data remaining is `backend_error`.
+  positionally. Zero progress with data remaining is `backend_error` — a
+  deliberate, bilaterally documented divergence from the polling `write_all`
+  (which reports `invalid_state` for the same condition), kept to preserve the
+  audited applications' observable error codes; both codes mean "invalid
+  backend state, do not retry".
 
 The helpers do NOT observe the cancel token between iterations; each submitted
 operation is driven to its terminal, and the task's cooperative cancellation
@@ -1829,16 +1833,22 @@ address-stable for the duration of one call).
 ### Task-result bridge (`task_result.hpp`, C7 / issue #135)
 
 ```cpp
-template <class T> class TaskResultSlot {
+template <class T> class TaskResultSlot {  // T: nothrow move constructible
 public:
-    void publish(T r) noexcept;   // exactly-once: first publish wins
-    T wait_and_take();            // blocks a NON-Runtime thread until publish
+    void publish(T r) noexcept;   // exactly-once EFFECTIVE publish: first wins,
+                                  // later publishes dropped
+    T wait_and_take();            // blocks a NON-Runtime thread until publish;
+                                  // ONE take — a second take throws
+                                  // std::bad_optional_access (never a silent
+                                  // moved-from value)
 };
 
 template <class T>
 Result<T> translate_task_exception() noexcept;  // bad_alloc→no_space,
                                                 // system_error→backend_error(+errno),
                                                 // else→backend_error
+// PRECONDITION: only callable inside an active catch handler (it rethrows the
+// in-flight exception; with no active exception it terminates).
 
 template <class T, class TaskFn>
 Result<T> run_task_to_result(unsigned workers,
@@ -1856,3 +1866,23 @@ any escaping exception and publishes `translate_task_exception<T>()`, so a
 throwing task can never hang the caller. No implicit cancellation (stop is
 requested only AFTER the task published), no hidden drain, no fabricated
 outcome.
+
+Exception boundaries: every leg that can throw is netted into a typed result.
+A `submit()`-time throw (P2-02: `ApplicationRuntime::submit` rolls back
+admission and rethrows, e.g. `bad_alloc` from a bookkeeping reserve) is
+converted after a best-effort `shutdown()` — an escaping exception would
+otherwise unwind into `~ApplicationRuntime` while Running and fail fast
+(`group_lifetime_fail_fast`), turning an allocation failure into process
+termination. Deterministically regression-tested via the internal-testing
+injection seam (the task never runs; the caller receives the typed
+`no_space`).
+
+drain/join precedence: a `drain()`/`join()` failure after the task published
+is RETURNED as the bridge result (after best-effort shutdown), never
+swallowed — `~ApplicationRuntime` fail-fasts in any state other than
+Constructed/StartFailed/Stopped, so ignoring a teardown failure and dropping
+the Runtime would terminate at scope exit anyway; returning the lifecycle
+error is the only sound observable. When drain/join succeed (the normal
+path), the task's published result is returned verbatim. `TaskResultSlot`'s
+`publish` is mutex-protected (may briefly contend; no unbounded wait/work)
+and requires `T` nothrow-move-constructible.
