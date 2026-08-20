@@ -45,7 +45,11 @@ free → reserved → prepared → pending → enqueued → running
                                   │                   │
                                   └──────→ backend_ready ←────────────┘
                                              │
-                                             │ reap (poll/wait_one only)
+                                             │
+                                             │ reap — progress drivers only
+                                             │ (poll()/wait_one(); a Scheduler
+                                             │  drain reaches the SAME reap
+                                             │  through ctx_.poll())
                                              ▼
                                       completion_ready
                                              │
