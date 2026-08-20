@@ -56,8 +56,19 @@ OpenCopyOutcome open_copy_files(const std::string& src_path,
     }
 
     // 2. Open the destination write/create (NO O_TRUNC — truncation happens
-    //    only after the same-file identity check below).
-    int dst_fd = ::open(dst_path.c_str(), O_WRONLY | O_CREAT, 0644);
+    //    only after the same-file identity check below). O_NOFOLLOW: a
+    //    symlink in the FINAL component is rejected with ELOOP instead of
+    //    being followed (issue #141 / FILEOP-001) — following it would aim
+    //    the caller's ftruncate/pwrite at the link target, because every
+    //    post-open check below (regular file, inode identity) operates on
+    //    the already-followed fd and would pass. Deliberately NO O_EXCL:
+    //    overwriting an existing regular destination is part of the
+    //    documented --no-atomic semantics; create-new policy is a separate
+    //    design. O_CLOEXEC: defense in depth for fd inheritance. Symlinks
+    //    in INTERMEDIATE path components are still followed (documented
+    //    limitation of O_NOFOLLOW).
+    int dst_fd = ::open(dst_path.c_str(),
+                        O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0644);
     if (dst_fd < 0) {
         return fail(OpenCopyFailure::dst_open,
                     sluice::from_errno_value(errno));
