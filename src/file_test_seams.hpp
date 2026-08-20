@@ -54,6 +54,9 @@ class CloseScript {
     // One scripted call: sets errno from the step, then returns the step's
     // return value. Beyond the scripted sequence the seam returns -1/EBADF —
     // a terminal result — so an unexpected extra close cannot pass silently.
+    // (Note: exhaustion-as-EBADF is indistinguishable from a real EBADF close
+    // failure; the cases() assertions are what distinguish "the test's extra
+    // close" from "the implementation double-closed" — always assert calls().)
     int next(int /*fd*/) {
         ++calls_;
         if (pos_ >= steps_.size()) {

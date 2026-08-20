@@ -100,7 +100,7 @@ FileReader::FileReader(const std::string& path, SyscallStats* stats, VectorStats
     }
 }
 
-Result<void> FileReader::close() {
+Result<void> FileReader::close() noexcept {
     if (fd_ < 0) {
         // Never opened / already closed / moved-from: idempotent no-op. A
         // preserved open() failure is NOT re-reported here — close() observes
@@ -373,7 +373,7 @@ FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats
     }
 }
 
-Result<void> FileWriter::close() {
+Result<void> FileWriter::close() noexcept {
     if (fd_ < 0) {
         // Never opened / already closed / moved-from: idempotent no-op. A
         // preserved open() failure is NOT re-reported here — close() observes

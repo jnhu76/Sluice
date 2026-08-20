@@ -79,6 +79,22 @@ SLUICE_TEST_CASE(file_writer_destructor_best_effort_keeps_happy_path) {
     SLUICE_CHECK(file_has(tp.str(), "dtor"));
 }
 
+SLUICE_TEST_CASE(file_writer_destructor_close_failure_discarded_survives) {
+    // The destructor's best-effort path must route through the SAME close()
+    // (exactly one syscall, fd consumed) and must neither throw nor fail-fast
+    // when the close fails. Guards against a later "optimization" that
+    // bypasses close() in the destructor or turns the discarded error into a
+    // contract violation.
+    TempPath tp;
+    sluice::file_testing::CloseScript script({{.ret = -1, .err = EIO}});
+    {
+        sluice::FileWriter w(tp.str()); // destructor runs while seam armed
+        SLUICE_CHECK(w.opened());
+    }
+    SLUICE_CHECK(script.calls() == 1); // exactly one close, result discarded
+    // Process survived to here: the destructor did not throw or terminate.
+}
+
 SLUICE_TEST_CASE(file_reader_close_success_consumes_fd_once) {
     TempPath tp;
     {

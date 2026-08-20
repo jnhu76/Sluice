@@ -77,7 +77,10 @@ class FileReader final : public Reader {
     //  - the destructor and move-assignment close best-effort with the result
     //    DISCARDED (a destructor must not throw and has no channel); callers
     //    that need the close result must call close() explicitly first.
-    Result<void> close();
+    // close() is noexcept by design: it performs one C syscall and returns a
+    // value-type Result, so the destructor's best-effort use is structurally
+    // throw-free, not incidentally so.
+    Result<void> close() noexcept;
     // Returns an error if !opened(); preserves the real errno from a failed
     // open() rather than a synthetic code.
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
@@ -159,7 +162,7 @@ class FileWriter final : public Writer, public SyncableWriter {
     // later close() failure are INDEPENDENT observations on separate
     // channels — durability asked for is not durability achieved if the
     // final close reports an error, and only the caller can judge.
-    Result<void> close();
+    Result<void> close() noexcept;
     // Returns an error if !opened(); preserves the real errno from a failed
     // open() rather than a synthetic code.
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
