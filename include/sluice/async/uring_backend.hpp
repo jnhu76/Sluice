@@ -399,7 +399,9 @@ class UringAsyncBackend : public AsyncBackend {
     // ring/poison/admission gate (accepted #157 review hook-internal order:
     // ring -> poison -> admission; D4-M5 precedence: poison error verbatim
     // BEFORE admission-closed; ring availability is construction-time
-    // immutable state; all read ONLY under dispatch_mtx_, P0-B/D4-RM1) and
+    // immutable state — read under dispatch_mtx_ on the Stage-0 admission
+    // path, and elsewhere (e.g. wait_source) read lock-free relying on that
+    // immutability plus the quiescent-lifetime guarantee, P0-B/D4-RM1) and
     // the native-length scratch normalization (op.len is validated <=
     // UINT_MAX at Stage 1.5, so the dispatch fill uses prep.native_length
     // directly). The C2d stage-injection harness is ThreadPool-only (this

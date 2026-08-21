@@ -733,6 +733,14 @@ InboxImpliesTicket ==
             fiberPC[held[w]] \in {"Ticket", "RunUnlock", "RunNoop",
                                   "RunFlag", "RunUnlockRead"}))
 
+(* Structural type invariant: every worker stage and fiber PC is one of the
+   defined values (the StageVal/PCVal sets — previously dead definitions —
+   now back every transition). Catches a stage/PC typo as an invariant
+   violation instead of a silently unreachable transition. *)
+TypeOK ==
+    /\ \A w \in Workers : workerStage[w] \in StageVal
+    /\ \A f \in Fibers : fiberPC[f] \in PCVal
+
 (* #115-class guard: a visible runnable ticket must never coexist with all
    workers parked (no observer) and no termination in flight. *)
 NoStrandedRunnable ==

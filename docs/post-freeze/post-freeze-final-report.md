@@ -60,7 +60,13 @@ same investigation doc §6a);
 `scheduler.cpp` 1986 → 1991 (2026-08-20, Issue #139 — code-adjacent
 navigation comment above `ReadyRoutingSink::on_ready` pointing to the
 request-lifecycle walkthrough doc `docs/architecture/async-request-lifecycle.md`;
-comment-only, no behavior change).
+comment-only, no behavior change);
+`scheduler.cpp` 1991 → 2085 and `scheduler_park_wake.cpp` 1155 → 1193
+(2026-08-21, Issue #161 — the contribution-identity repair: the three
+idle-count erase sites become `exchange(0)` + a conditional generation
+bump, the park-commit identity-refusal term, and the per-worker test
+seams; see
+`docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

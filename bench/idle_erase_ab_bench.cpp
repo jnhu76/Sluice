@@ -3,19 +3,23 @@
 // The contribution-identity repair changed the three genuine idle-count
 // erase sites from a plain release store(0) to exchange(0) + a conditional
 // dance_epoch_ fetch_add (locked RMWs on x86). This bench measures the
-// end-to-end Scheduler cost of that class of write on the route/pop/dance
-// hot path so the repair's cost can be compared against its baseline
-// (baseline tree: store(0) at the route-publication site; repaired tree:
-// exchange+bump at all three sites).
+// end-to-end Scheduler cost of that class of write on the pop/dance hot
+// path so the repair's cost can be compared against its baseline.
 //
 // Workload: K trivial short fibers pre-spawned per round, then
 // Scheduler::run(W) to completion — measured span is ONLY run(). Each
-// round exercises the route-publication erase (the startup distribution
-// routes every fiber through route_runnable_locked), the pop path (site-1
-// erase), fiber start/finish, and the terminating idle dance (W
-// contributions). Worker counts {1,2,4,8}; R rounds per count; the
-// summary reports the MEDIAN round. FakeAsyncBackend isolates scheduler
-// machinery from real-disk noise.
+// round exercises the pop-path erase (site 1: every fiber pop crosses
+// idle_workers_.exchange(0)), fiber start/finish, and the terminating
+// idle dance (W contributions). The ROUTE-PUBLICATION erase (site 3,
+// route_runnable_locked) is NOT exercised: the run-start distribution
+// pushes pending_spawn_ fibers straight into each worker's local_runnable
+// (scheduler.cpp run setup, not route_runnable_locked), and the trivial
+// bodies never wait, so no wait is resolved and no route ever fires. The
+// A/B therefore compares sites 1+2 only (a store(0) baseline vs
+// exchange+bump); the route site's cost is not measured by this bench.
+// Worker counts {1,2,4,8}; R rounds per count; the summary reports the
+// MEDIAN round. FakeAsyncBackend isolates scheduler machinery from
+// real-disk noise.
 //
 // A/B protocol (same session, same machine, Release builds): build this
 // bench on the baseline tree and on the repaired tree, run both, compare
@@ -32,6 +36,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <vector>
 

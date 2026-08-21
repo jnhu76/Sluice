@@ -223,6 +223,19 @@ of ns/fiber in the same environment. Reproduce:
 `xmake f -m release --toolchain=clang -c -y && xmake build
 idle_erase_ab_bench && xmake run idle_erase_ab_bench`.
 
+Coverage honesty (CodeRabbit review of the repair round): the bench
+workload does NOT exercise the route-publication erase — the run-start
+distribution pushes `pending_spawn_` fibers straight into each worker's
+`local_runnable` (not through `route_runnable_locked`), and the trivial
+bodies never wait, so no route fires during the timed `run()`. The
+CAND/HEAD column (which isolates the route site — HEAD has sites 1+2
+exchange and the route site `store(0)`) is therefore NOT a measured
+route-site cost; it is the same tree's run-to-run noise. The measurable
+repair cost is CAND/MAST (sites 1+2 exchange+bump vs store(0)): single-
+worker indistinguishable, +2–10% at 2–8 workers inside the noise band.
+The route site's own cost is unmeasured by this bench (see the bench's
+workload comment).
+
 ## Gate 3 — Progress and Wake Model
 
 The refusal is state-first-then-notify exactly like the existing G1/R4

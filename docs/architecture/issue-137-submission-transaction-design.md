@@ -213,7 +213,7 @@ forwarders, publish thunks, `resolve_identity_state`, waiter surface stay
 per-backend in shape but shrink; forwarding thunks may additionally be
 shared via the policy's template parameters — NOT required for acceptance.
 
-### 4.1 The policy surface — 5 hooks + 6 accessors
+### 4.1 The policy surface — 12 production-facing methods + 1 test-only injection hook
 
 Two different kinds of policy members, counted separately so the issue's
 "surface ≈ protocol size ⇒ failure" criterion is evaluated honestly:
@@ -276,7 +276,7 @@ via RequestArena calls is unchanged from pre-centralization behavior).
 | admission closed (arena check / uring Stage-0) | no | unchanged | no | none | `invalid_state` / poison error verbatim |
 | malformed descriptor (1.5) | no | unchanged | no | ladder: slot rollback | `invalid_argument` |
 | binding CAS loser (3a) | no | unchanged | no | ladder: own-slot rollback | `invalid_state` |
-| commit failure (3b) | no | reversed in ladder | no | `rollback_binding_before_accept` THEN slot rollback | error |
+| commit failure (3b) | no | reversed in ladder | no | `rollback_binding_before_accept` THEN slot rollback | `invalid_state` (matches the submit_transaction return) |
 | exception inside transaction | no (pre-LP) / never returns (post-LP) | unchanged | — | Result discipline; hooks and the function boundary `noexcept` — an accidental throw terminates (fail-fast), it can never produce a half-submitted request or a rejection-after-accept | process termination = invariant violation surfaced, by design |
 | dispatch-ring overflow post-commit (today: ThreadPool fail-fast) | YES | committed | yes | **no rollback after LP** — capacity equation makes this unreachable (ring capacity == request capacity) | fail-fast = invariant violation, by design |
 | uring SQE/submit failure post-commit | yes | committed | yes | none — terminal only after ownership proof (D2) | terminal `backend_error` via reap |

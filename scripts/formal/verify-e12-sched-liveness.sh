@@ -118,6 +118,11 @@ expect_pass() {
 # launch error, parse error, or TLC crash is NOT a counterexample — the run
 # must actually NAME a violated temporal property, mirroring the
 # expect_fail_invariant discipline (which greps the invariant name).
+# Property specificity (review finding of the correction round): TLC does
+# not name the violated temporal property in its output, so each negative
+# liveness cfg lists ONLY the expected property
+# (M4Liveness -> DrainEventuallyReturns; M5 -> CancelUnlockScenarioEventuallyCompletes)
+# and any temporal-violation verdict is therefore exactly that property.
 temporal_violated() {
   # TLC reports liveness failures as "Temporal properties were violated."
   # (plural, trailing period) — verified wording, not assumed. Match the
@@ -175,9 +180,9 @@ expect_pass "M3 composition [no-commit-recheck; closed in-scope]" \
 # --- Negative gates (expected counterexamples) ---
 expect_fail_invariant "M4 as-built [safety]" \
   E12SchedLivenessM4 DrainStuckState m4_safety || rc=1
-expect_temporal_cex "M4 as-built [liveness]" \
+expect_temporal_cex "M4 as-built [liveness: DrainEventuallyReturns CEX]" \
   E12SchedLivenessM4Liveness m4_liveness || rc=1
-expect_temporal_cex "M5 grant-without-ticket [liveness]" \
+expect_temporal_cex "M5 grant-without-ticket [liveness: CancelUnlock... CEX]" \
   E12SchedLivenessM5 m5 || rc=1
 expect_fail_invariant "B4: :550 pop erase IS an invalidation site" \
   E12SchedLivenessB4NoBumpPopErase DrainStuckState b4_pop || rc=1

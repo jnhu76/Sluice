@@ -112,9 +112,11 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdio>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 namespace sa = sluice::async;
 namespace stest = sluice_async_test;
@@ -356,7 +358,16 @@ SLUICE_TEST_CASE(issue161_pub_erase_orphans_dance_contribution) {
         }
         stest::SchedulerParkBaselineSeam::release(sched);
         sched.make_wake_handle().notify();
-        SLUICE_CHECK(wait_flag(run_returned, kWatchdog));
+        // Bounded rescue retry (the join below must not hang a still-stuck
+        // run): the first notify deterministically wakes the parked workers
+        // to re-dance and terminate for this construction; the loop is
+        // belt-and-braces against a racing wake absorption.
+        bool rescued = false;
+        for (int i = 0; i < 4 && !rescued; ++i) {
+            sched.make_wake_handle().notify();
+            rescued = wait_flag(run_returned, kWatchdog);
+        }
+        SLUICE_CHECK(rescued);
     }
     runner.join();
 

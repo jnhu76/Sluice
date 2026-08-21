@@ -86,15 +86,26 @@ void test_phase_worker(sluice::async::Scheduler& s, PhaseTag tag,
     {
         std::lock_guard<std::mutex> lk(p.mtx);
         p.reached = true;
-        p.paused = p.armed &&
-                   (p.armed_worker == kAnyWorker || p.armed_worker == worker_id);
+        // The pauser owns `paused`: set it only for the worker that actually
+        // blocks, so a non-pinned peer's pass through the same call site
+        // cannot clear an active hold while the pinned worker is still
+        // blocked in the cv wait below (wait_paused/is_paused would then miss
+        // the hold).
+        const bool will_pause =
+            p.armed &&
+            (p.armed_worker == kAnyWorker || p.armed_worker == worker_id);
+        if (will_pause) {
+            p.paused = true;
+            p.pauser = worker_id;
+        }
     }
     p.cv.notify_all();  // tell the coordinator we reached + paused
     {
         std::unique_lock<std::mutex> lk(p.mtx);
-        if (p.paused) {
+        if (p.paused && p.pauser == worker_id) {
             p.cv.wait(lk, [&p] { return !p.armed; });
             p.paused = false;
+            p.pauser = kAnyWorker;
         }
     }
 }
@@ -161,6 +172,7 @@ void arm(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
         p.armed_worker = kAnyWorker;  // plain arm is global (issue #161 note)
         p.reached = false;
         p.paused = false;
+        p.pauser = kAnyWorker;
     }
 }
 
@@ -175,6 +187,7 @@ void arm_worker(sluice::async::Scheduler& s, PhaseTag tag,
         p.armed_worker = worker_id;
         p.reached = false;
         p.paused = false;
+        p.pauser = kAnyWorker;
     }
 }
 

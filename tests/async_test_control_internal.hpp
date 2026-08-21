@@ -243,6 +243,11 @@ struct PhaseState {
     // Issue #161: kAnyWorker (default) keeps the global block-any-worker
     // semantics; a concrete id blocks only that worker (see kAnyWorker).
     unsigned armed_worker = kAnyWorker;
+    // The worker currently holding the pause (the pauser owns `paused`:
+    // only it sets and clears the flag, so a non-pinned peer's pass through
+    // the same call site cannot overwrite an active hold — see
+    // async_test_control.cpp test_phase_worker). kAnyWorker = no pauser.
+    unsigned pauser = kAnyWorker;
     bool reached = false;  // the phase call site was reached (set under mtx)
     bool paused = false;   // the phase is blocked waiting for release
 };

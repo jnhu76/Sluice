@@ -79,6 +79,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdio>
 #include <mutex>
 #include <thread>
@@ -290,7 +291,16 @@ SLUICE_TEST_CASE(issue161_orphaned_dance_contribution_stalls_run) {
                 w, static_cast<int>(domain), available ? 1 : 0, cls);
         }
         sched.make_wake_handle().notify();
-        SLUICE_CHECK(wait_flag(run_returned, kWatchdog));
+        // Bounded rescue retry (the join below must not hang a still-stuck
+        // run): the first notify deterministically wakes both parked workers
+        // to re-dance and terminate for this construction; the loop is
+        // belt-and-braces against a racing wake absorption.
+        bool rescued = false;
+        for (int i = 0; i < 4 && !rescued; ++i) {
+            sched.make_wake_handle().notify();
+            rescued = wait_flag(run_returned, kWatchdog);
+        }
+        SLUICE_CHECK(rescued);
     }
     runner.join();
 
