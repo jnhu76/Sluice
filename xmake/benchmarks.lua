@@ -35,6 +35,14 @@ sluice_one_file_target("binary", "bench", "async_writes_bench", "bench",
 sluice_one_file_target("binary", "bench", "bench_runtime_io_wait", "bench",
                       {"sluice_core", "sluice_async"})
 
+-- idle_erase_ab_bench (issue #161 repair cost check): trivial short fibers
+-- through Scheduler::run at 1/2/4/8 workers, measuring the route/pop/dance
+-- hot path that carries the idle-count erase (store(0) baseline vs the
+-- repair's exchange(0) + conditional generation bump). A/B protocol in the
+-- bench header; cost-check evidence only, no optimization claim (16.7).
+sluice_one_file_target("binary", "bench", "idle_erase_ab_bench", "bench",
+                      {"sluice_core", "sluice_async"})
+
 -- Grep performance-attribution ladder (docs/verification/
 -- performance-attribution.md): L0..L4 over identical deterministic
 -- workloads. Links the real sluice-grep engine (grep_task + matcher) for
