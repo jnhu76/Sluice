@@ -74,6 +74,11 @@ KNOWN_TRACKER_REFS = {
     161,                                # idle-dance contribution-identity stall
                                        # (2026-08-21, corrective delta attribution
                                        # in this report; gate doc in docs/architecture/)
+    162,                                # C++<->TLA+ adversarial abstraction audit
+                                       # (2026-08-21, Phase-7 CPP-001/002 corrective
+                                       # delta attribution in this report; closeout
+                                       # docs/history/closeout/e12-cross-primitive-
+                                       # terminal-audit.md SS11.4-11.7)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")
