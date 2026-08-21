@@ -565,7 +565,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             sluice_async_test::test_phase_worker(*this,
                 sluice_async_test::PhaseTag::worker_ticket_popped, ws->id);
 #endif
-            // Issue #161 (contribution-identity law, B4 site 1 of 2): this
+            // Issue #161 (contribution-identity law, B4 site 1 of 3): this
             // unlocked erase is a genuine contribution-invalidation event —
             // it can orphan a peer's live not-last contribution while the
             // peer's 1-bit flag still claims it. Exchange (not store) so the
@@ -580,6 +580,20 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
                 }
             }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // Issue #161 B4-reclassification seam (worker_ticket_erase_done):
+            // the pop-erase above has fully landed (exchange AND conditional
+            // bump) but run_next_on has not — running is still 0 and the
+            // ticket is invisible. A peer's not-last dance contribution made
+            // while a worker is held here therefore survives the pop-erase,
+            // and the next idle-count write is the route-publication erase
+            // in route_runnable_locked — the pub-site M4 variant the
+            // original pre-erase seam (worker_ticket_popped) cannot express.
+            // No locks are held. ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1:
+            // controller-driven, per-worker arming.
+            sluice_async_test::test_phase_worker(*this,
+                sluice_async_test::PhaseTag::worker_ticket_erase_done, ws->id);
+#endif
             run_next_on(ws, f);
             continue;
         }
@@ -612,8 +626,8 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             // publishes under global_mtx_ + signal_wake_locked), so the parked
             // worker re-checks without polling.
             //
-            // Issue #161 (contribution-identity law, B4 site 2 of 2): this
-            // second unlocked erase is the other genuine invalidation event
+            // Issue #161 (contribution-identity law, B4 site 2 of 3): this
+            // second unlocked erase is another genuine invalidation event
             // (same exchange/bump discipline and refinement argument as the
             // popped-ticket branch above — B4 proved the G-section reset
             // sites self-guarded, so they do NOT bump).
@@ -1510,7 +1524,27 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     // Clear the terminate signal: new work was routed, so the run is NOT over.
     // A worker that was about to exit must re-check its inbox (late-drain).
     global_terminate_.store(false, std::memory_order_release);
-    idle_workers_.store(0, std::memory_order_release);
+    // Issue #161 (contribution-identity law, B4 site 3 of 3): this route-
+    // publication erase was reclassified to a GENUINE contribution-
+    // invalidation event by the split-window TLA model
+    // (spec/tla/e12_rwlock_scheduler_liveness/: EraseIdleOnPop and
+    // EraseIdleMwS1 model the unlocked sites as split erase+bump steps; the
+    // pub-erase was the third genuine site). The old M4 verdict treated it
+    // as non-genuine; TLC proved a dance contribution made before a routed
+    // grant can be orphaned by this erase with the contributor's 1-bit flag
+    // still claiming it. It gets the same exchange/bump discipline as B4
+    // sites 1 and 2. Self-guarded on erased != 0 for the same reason the
+    // G-section recheck/reset-continue sites (:1003/:1054/:1121) never bump:
+    // a zero erase erases nothing, so advancing the generation would only
+    // invalidate legitimate contributions. The conditional keeps the hot
+    // all-idle-zero route path epoch-stable.
+    {
+        const unsigned erased =
+            idle_workers_.exchange(0, std::memory_order_acq_rel);
+        if (erased != 0) {
+            dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
+        }
+    }
     // E7-C fixup: new runnable work cancels any MW-S2 admission candidate/
     // committed. A committed participant in wait_one cannot be interrupted
     // (it has released global_mtx_), but a CANDIDATE that has not yet

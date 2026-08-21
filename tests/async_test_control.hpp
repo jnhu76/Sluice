@@ -213,6 +213,30 @@ struct Issue161CandidateSeam {
     }
 };
 
+// Issue #161 B4-reclassification round: holds the ERASER strictly AFTER its
+// pop-erase (exchange + conditional bump) and strictly BEFORE run_next_on.
+// Unlike Issue161TicketSeam (pre-erase), a peer contribution made during the
+// hold SURVIVES the pop-erase, so the next idle-count write is the
+// route-publication erase — the pub-site orphan variant (third genuine B4
+// site; see issue161_pub_erase_orphan_test).
+struct Issue161EraseDoneSeam {
+    static void arm_for_worker(sluice::async::Scheduler& s,
+                               unsigned worker_id) noexcept {
+        sluice_async_test::arm_worker(s, PhaseTag::worker_ticket_erase_done,
+                                      worker_id);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_ticket_erase_done);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s,
+                                            PhaseTag::worker_ticket_erase_done);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_ticket_erase_done);
+    }
+};
+
 // ---- Phase G G1 reproducer construction: run-entry seam. run_impl pauses
 // AFTER publishing the invocation topology (active_worker_count_ set,
 // pending_spawn_ distributed, terminate cleared) and BEFORE starting any

@@ -309,20 +309,27 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         const unsigned own_dance =
             ws->idle_dance_contributed_.load(std::memory_order_acquire);
         // Issue #161 (contribution-identity law): the identity term is
-        // evaluated LAST — its dance_epoch_ load must be sequenced AFTER the
-        // idle_workers_ load above it (the eraser bumps the epoch strictly
-        // after its idle exchange, so a commit that OBSERVES the erased count
-        // is guaranteed to observe the newer generation too; see the
-        // refinement argument on Scheduler::dance_epoch_). A mismatch means
-        // this worker's recorded contribution was orphaned by an unlocked
-        // erase: the run is one short of the last-idle threshold while this
-        // 1-bit flag still claims a live contribution — the exact M4 stall
-        // (both workers parked, work complete, no producer). Refuse and
-        // re-dance instead of arming a baseline that would absorb the
-        // eraser's already-emitted not-last signal. Gated on own_dance != 0:
-        // a worker that has not danced must not refuse (its observer
-        // delegation is legitimate — R4; also prevents a self-sustaining
-        // refuse loop on an unbounded generation).
+        // evaluated LAST — its dance_epoch_ load is sequenced AFTER the
+        // idle_workers_ load above it, but that ordering does NOT (and
+        // cannot) make the epoch load see the eraser's bump whenever the
+        // idle load sees the erased count: the two are distinct unlocked
+        // atomics, and the eraser's exchange(0)-then-bump pair can split
+        // around this commit. What the ordering does give is the honest
+        // dichotomy (see the refinement argument on dance_epoch_): a
+        // mismatch refuses; a MATCH together with an erased count pins
+        // the split window, in which the eraser's protocol is incomplete
+        // and every not-last signal it can later emit is G-serialized
+        // AFTER this arming — a transient park, never the M4 stall. A
+        // mismatch means this worker's recorded contribution was orphaned
+        // by an unlocked erase: the run is one short of the last-idle
+        // threshold while this 1-bit flag still claims a live
+        // contribution — the exact M4 stall (both workers parked, work
+        // complete, no producer). Refuse and re-dance instead of arming a
+        // baseline that would absorb the eraser's already-emitted
+        // not-last signal. Gated on own_dance != 0: a worker that has
+        // not danced must not refuse (its observer delegation is
+        // legitimate — R4; also prevents a self-sustaining refuse loop on
+        // an unbounded generation).
         if (unguarded_progress_pending_locked() ||
             idle_workers_.load(std::memory_order_acquire) > own_dance ||
             (own_dance != 0 &&

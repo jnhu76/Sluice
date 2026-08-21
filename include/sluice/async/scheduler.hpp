@@ -257,12 +257,14 @@ struct WorkerState {
     // refinement argument on Scheduler::dance_epoch_). Meaningful only
     // while idle_dance_contributed_ == 1: the park commit refuses to arm a
     // baseline behind a contribution whose recorded identity is no longer
-    // current (the count was orphaned by a ticketed worker's unlocked erase,
-    // so the run is one short of the last-idle threshold even though this
-    // bit still claims a live contribution). Stale-record false refusals are
-    // safe by the same conservative-convergence argument as the R4
-    // under-clear: the refusing worker re-loops, re-dances with a fresh
-    // identity, and either reaches the last-idle threshold or parks counted.
+    // current (the count was orphaned by one of the three genuine erase
+    // sites — the two unlocked ticketed paths or the route-publication
+    // erase — so the run is one short of the last-idle threshold even
+    // though this bit still claims a live contribution). Stale-record
+    // false refusals are safe by the same conservative-convergence argument
+    // as the R4 under-clear: the refusing worker re-loops, re-dances with a
+    // fresh identity, and either reaches the last-idle threshold or parks
+    // counted.
     // Plain production atomic; written in the dance under global_mtx_, read
     // at the park commit under global_mtx_ (the generation field itself is
     // never mutex-guarded — it is monotonic and its writers are unlocked by
@@ -1561,26 +1563,50 @@ private:
     // dancer may arm a park baseline only while its recorded identity is
     // still current, else it refuses, signals, and re-dances (toward the
     // last-idle threshold or a re-counted park). This field is that
-    // generation. It is advanced ONLY at the two unlocked erase sites
-    // (B4 site classification — the model shows every other reset site is
-    // self-guarded: same-G-critical-section forced re-loop/continue,
-    // erase+signal atomic pairs, or the run boundary, which resets every
-    // worker's identity together).
+    // generation. It is advanced at exactly THREE erase sites (B4
+    // classification, re-proven by the split-window model round): the two
+    // unlocked ticketed paths above, and the route-publication erase in
+    // route_runnable_locked — the split-window model round falsified its
+    // old "self-guarded" verdict (a delayed orphan commit can absorb the
+    // eraser's final not-last signal with the generation still matching).
+    // Every other reset site is self-guarded — and CONDITIONED on the route
+    // bump: same-G-critical-section forced re-loop/continue sites
+    // (:1003/:1054/:1121) are reachable only after work appeared, i.e.
+    // after a route publication whose bump already invalidated whatever it
+    // orphaned; the run boundary resets every worker's identity together;
+    // the Live-resident reset keeps its bounded-timeout re-drain backstop;
+    // and the two MW-S2 sites are carried by the same publication backbone
+    // plus the no-progress terminate flag (model-out-of-scope, documented
+    // in the suite README).
     //
     // C++ refinement argument (why the unlocked RMW pair refines the
-    // model's atomic EraseIdle): the dancer RECORDS this epoch strictly
-    // BEFORE its idle fetch_add; the eraser bumps strictly AFTER its
-    // idle exchange(0). Epochs are monotonic, so whenever an eraser's
-    // exchange lands after a dancer's fetch_add (the orphaning case), the
-    // bump is sequenced after it and the dancer's park commit — which
-    // loads the epoch only after loading idle_workers_ — must observe a
-    // strictly newer generation than the recorded one: the refusal fires.
-    // The remaining interleavings (erase between record and fetch_add, or
-    // bump observed without the orphaning exchange) can only cause a FALSE
-    // refusal, which converges by the R4 conservative argument above. NOT
-    // mutex-guarded (its writers are the unlocked erase sites by design);
-    // never resets — a run boundary needs no reset because every worker
-    // re-dances from a fresh loop top and records the current value.
+    // model's split EraseIdle/BumpGen — the honest dichotomy, NOT a
+    // visibility claim): the dancer RECORDS this epoch strictly BEFORE its
+    // idle fetch_add; the eraser bumps strictly AFTER its exchange(0).
+    // These are two distinct unlocked atomics — no acquire load can
+    // "guarantee" seeing the later bump — so a stale dancer's park commit
+    // CAN read the erased count together with the still-current
+    // generation (the split window; reachable in the model, witness gate
+    // E12SchedLivenessSplitWindow). The window is nevertheless safe by a
+    // two-case split on what the commit observes:
+    //   (1) generation != recorded (bump visible): the identity term
+    //       refuses; the worker signals and re-dances; convergence by the
+    //       R4 conservative argument.
+    //   (2) generation == recorded with the count already erased (the
+    //       split window): the eraser has NOT completed its protocol. Its
+    //       re-dance not-last signal — the only signal the dancer could
+    //       sleep through — is emitted under global_mtx_, and the commit
+    //       holds global_mtx_ across its count load, generation load, and
+    //       baseline arming; observing the erased count additionally
+    //       proves no re-dance contribution is G-visible yet. The signal
+    //       is therefore sequenced strictly AFTER the arming: the cv
+    //       predicate fires, the park is transient, and the dancer
+    //       re-loops. The window reorders who wakes; it cannot rebuild
+    //       the terminal M4 stuck state, whose mechanism needs the
+    //       absorbed signal to precede the arming.
+    // NOT mutex-guarded (its writers are the unlocked erase sites by
+    // design); never resets — a run boundary needs no reset because every
+    // worker re-dances from a fresh loop top and records the current value.
     std::atomic<std::uint64_t> dance_epoch_{0};
     std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;

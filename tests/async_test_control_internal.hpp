@@ -209,6 +209,18 @@ enum class PhaseTag : unsigned char {
     // the reproducer must let the peer's pass through the same call site).
     worker_ticket_popped,
 
+    // Issue #161 B4-reclassification round: the popped-ticket erase has
+    // EXECUTED (the exchange(0) — and its conditional generation bump — has
+    // landed) but run_next_on has not (running not yet incremented). The
+    // difference from worker_ticket_popped is load-bearing for the
+    // route-publication orphan reproducer: a peer contribution made while a
+    // worker is held HERE survives this worker's pop-erase untouched, so the
+    // next count write is the route-publication erase in
+    // route_runnable_locked — the third genuine invalidation site (the
+    // pub-site M4 variant). No locks are held at this point. Fired through
+    // test_phase_worker (per-worker arming).
+    worker_ticket_erase_done,
+
     count
 };
 
