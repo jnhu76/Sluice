@@ -1,24 +1,23 @@
 ---
 name: cpp-coding-standards
-description: Base C++ engineering workflow for Sluice. Use whenever writing, changing, or reviewing C++ source/header code or a C++ API. Enforces repository authority, ownership, lifetime, type, resource, and failure discipline; routes concurrency, performance, and advanced atomic work to specialist skills.
-origin: ECC+custom
+description: C++ engineering workflow for Sluice. Use for any C++ source/header/API edit or review. Drives ownership, lifetime, type, failure, and narrow-patch review; routes shared-state concurrency, performance investigation, and advanced atomic protocols to specialist skills.
 ---
 
 # C++ engineering baseline
 
 Use this skill to make a C++ change predictable and reviewable. The target is a narrow patch whose ownership, lifetime, state, failure behavior, and evidence are explicit.
 
-## Authority first
+## Authority and mechanical sources of truth
 
-Apply rules in this order:
+Use the authority chain in `AGENTS.md §3`. Do not maintain a second precedence list here. Project contracts and accepted ADRs decide allowed semantics; generic C++ guidance does not override them.
 
-1. the explicit task / approved issue scope;
-2. `AGENTS.md` and applicable accepted ADRs / architecture documents;
-3. the public contract;
-4. C++ language/library semantics;
-5. this skill and its reference material.
+For mechanical C++ style and static-analysis policy, use the repository itself:
 
-If this skill conflicts with a repository contract, follow the repository contract and report the conflict. `REFERENCE.md` is guidance, not project authority.
+- `.clang-format` is the formatting source of truth;
+- `.clang-tidy` is the configured static-analysis source of truth;
+- `xmake.lua` / `AGENTS.md` define the applicable repository commands and gates.
+
+Do not invent a second style guide inside this skill. If generic guidance disagrees with project authority or tool configuration, follow the project and report the conflict.
 
 ## Step 1 — classify the change
 
@@ -29,18 +28,18 @@ Before editing, identify the branches that apply:
 - **failure** — `Result<T>` / `IoError`, fail-fast, exception boundary, OS error preservation;
 - **low-level boundary** — syscall, C ABI, wire/layout, allocator, SIMD, platform code;
 - **concurrency** — shared mutable state, threads/fibers, queues, locks, atomics, wake/park, cancellation, shutdown;
-- **performance** — the task is explicitly about measured throughput/latency/scaling/cost;
-- **advanced atomics** — correctness depends on CAS, memory ordering across atomic operations, linearization, ABA, reclamation, or a lock-free progress property.
+- **performance** — the task asks to measure, diagnose, review, or optimize concurrent performance;
+- **advanced atomics** — correctness depends on CAS, cross-operation memory ordering, linearization, ABA, reclamation, or a non-blocking progress property.
 
 Route specialist branches:
 
 - concurrency → load `cpp-concurrency-guidelines`;
-- measured concurrent performance → load `cpp-concurrency-performance`;
+- concurrent performance → load `cpp-concurrency-performance`;
 - advanced atomics / lock-free proof → load `cpp-lock-free`.
 
 If `AGENTS.md` classifies the change as architecture-sensitive, complete its architecture gate before production implementation.
 
-**Completion criterion:** you can state the governing authority, change class, and required specialist skills before editing production C++.
+**Completion criterion:** you can name the governing repository authority, change class, and required specialist skills before editing production C++.
 
 ## Step 2 — model ownership and valid state
 
@@ -95,9 +94,9 @@ During implementation:
 - avoid unrelated formatting and cleanup;
 - write comments for invariants, authority, non-obvious lifetime, memory ordering, or "why" — not narration.
 
-Do not convert a local repair into a style migration.
+Use `.clang-format` for touched C++ when formatting is needed; do not turn a local repair into a repository-wide style migration.
 
-**Completion criterion:** every changed line is causally necessary for the requested behavior, evidence, or contract update.
+**Completion criterion:** every changed line is causally necessary for the requested behavior, evidence, contract update, or local mechanical conformance.
 
 ## Step 5 — review the changed C++
 
@@ -111,10 +110,9 @@ Before declaring implementation complete, inspect the final diff and answer:
 6. **Boundary:** did syscall/C/ABI representation leak farther into ordinary C++ than necessary?
 7. **Complexity:** did the patch add an abstraction that does not remove a real invariant, duplication, or misuse class?
 8. **Specialists:** did concurrency/performance/advanced-atomic code receive the corresponding specialist review?
+9. **Mechanical policy:** does changed code follow `.clang-format` and the repository's configured `.clang-tidy` policy rather than a generic taste preference?
 
-Use `REFERENCE.md` only when an exact Core Guideline, alternative design, or detailed example is needed to resolve a specific question.
-
-**Completion criterion:** every applicable question has a concrete answer grounded in the final diff.
+**Completion criterion:** every applicable question has a concrete answer grounded in the final diff or in an explicit repository configuration.
 
 ## Step 6 — produce evidence
 
@@ -138,6 +136,7 @@ authority:
 change class:
 ownership/lifetime result:
 failure/interface result:
+mechanical style/lint authority applied:
 specialist skills applied:
 evidence actually run:
 residuals / follow-ups:
@@ -145,4 +144,4 @@ residuals / follow-ups:
 
 ## Detailed reference
 
-`REFERENCE.md` contains the previous comprehensive C++ Core Guidelines-derived handbook and examples. Read it on demand for exact guidance; do not load it by default.
+`REFERENCE.md` preserves the previous comprehensive handbook and examples. It is long-form reference, not routing or project authority. Search for the exact heading/topic first and read only the smallest relevant section; do not load the whole handbook by default. Current invocation, workflow, and completion rules live in this `SKILL.md`.
