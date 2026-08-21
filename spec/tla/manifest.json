@@ -86,6 +86,26 @@
       "notes": "Protocol: Phase-F1 identity-bearing WaitRecord registry — generation-bump-before-visibility record reuse, the arena-leaf cancel/reap single-authority race (Race B; HISTORICAL XOR per registration epoch — a sequential cancel-grant-then-delivery-grant in one epoch is a violation even when never simultaneously held), stale-token isolation after reuse (Race C), lease pinning (slot lease and extracted authority each pin the record), P1-2 live-record accounting, P1-1 one-directional outcome-frozen-on-publication (the freeze precedes the E7-T2 CAS and is unconditional in the C++), E7-T2 single publication. Closes MODEL-007(b) from audit #162 / umbrella #171 (child #174). Safety-only, SC protocol abstraction (registry leaf + arena leaf mutex domains; no C++ weak-memory claim). Three one-rule cfg-flip negatives with named CEXs (drop sink generation check / acquire a delivered-pinned record / cancel keeps waiter_delivery_present_) plus per-defect specificity cfgs with documented entailed co-victim exclusions. Layering finding: double publication is unreachable from any single-rule break — L2/L3 registry state checks and the E7-T2 CAS (e7_publication's modeled defect) independently suppress it; no compound chain mutant built (ceremonial). C++ bridges: tests/scheduler_identity_wake_test.cpp T5 (real-thread cancel-vs-reap exactly-once) and T6 (forged stale token inertly dropped)."
     },
     {
+      "id": "spawn-wake-epoch",
+      "spec_dir": "spec/tla/spawn_wake_epoch",
+      "verifier": "scripts/formal/verify-spawn-wake-epoch.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 1,
+      "negative_gate_count": 2,
+      "reachability_gate_count": 6,
+      "owner_docs": [
+        "docs/verification/formal/cpp-model-coverage.md"
+      ],
+      "implementation_bindings": [
+        "src/async/scheduler.cpp",
+        "src/async/scheduler_park_wake.cpp",
+        "include/sluice/async/scheduler.hpp"
+      ],
+      "notes": "Protocol: #115 spawn-to-busy-worker wake obligation - a runnable ticket published onto a busy worker's local queue must advance the Scheduler wake epoch, because a committed-parked peer observes cross-worker publications only through the epoch predicate (its own-inbox backstop cannot see another worker's queue; inbox_cv has no waiter - issue #170). Closes MODEL-007(d) from audit #162 / umbrella #171 (child #176; historical defect #115). Safety/accounting only (the stranded shape is the violated state predicate InvWakeObligation, not a temporal formula); SC protocol abstraction (wake_epoch_ is a wake_mtx_ mutex domain). Two EXACT historical negatives as one-rule cfg flips: NegNoSignal (#115 pre-fix publication - push + inert inbox notify, no epoch advance) and NegNoRecheck (pre-G1 consumed-baseline commit without the unguarded_progress_pending runnable-first recheck), both naming InvWakeObligation; NegNoRecheck excludes the entailed co-victim InvStealRequiresAwake. 6 witnesses incl. the strong post-park rescue chain (NoReachRescuedAfterWake). C++ bridge: tests/issue115_runnable_publication_wake_test.cpp (seam-parked W0 + pinned-busy W1 + strictly post-commit production spawn/spawn_on)."
+    },
+    {
       "id": "e7-publication",
       "spec_dir": "spec/tla/e7_publication",
       "verifier": "scripts/formal/verify-e7-publication.sh",
