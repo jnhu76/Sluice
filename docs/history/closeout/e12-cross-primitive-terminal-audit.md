@@ -1130,7 +1130,399 @@ runtime reconcile tests protect the property (no dedicated formal invariant or
 negative model encodes the reconcile path). A future RwLock negative
 model for the reconcile path (e.g. `E12RwLockNegNoReconcileAfterCancel`) would
 bring parity with the sibling models; it is NOT required to close E12-G and is
-NOT authorized by this audit.
+NOT authorized by this audit. (2026-08-21: this gap is closed by the issue
+audit #162 Phase 4 repair — see §11.4; the reconcile path is now encoded by a
+dedicated formal negative and five reachability witnesses.)
+
+---
+
+### 11.4 Audit #162 Phase 4 — RwLock model-drift repair and coverage closure (2026-08-21)
+
+The adversarial C++↔TLA+ audit (issue #162) found two high-severity MODEL
+defects in `spec/tla/e12_rwlock/E12RwLock.tla`, both confirmed by TLC and now
+repaired as a unit (MODEL-001 and MODEL-002 are the same code region; the
+repair is single-assignment + guards + anti-revocation + negative controls):
+
+```text
+MODEL-001  CancelQueued/ExpireQueued reconcile branches were DEAD CODE: each
+           branch primed nodeState'/resolutionCount'/publicationCount' twice
+           (top-level and inside the branch), making the conjunction
+           unsatisfiable — RW4 was vacuously true for cancel/expire and the
+           C++ rwlock_cancel -> rwlock_grant_from_head_locked behavior was
+           entirely unmodeled.
+MODEL-002  The dead writer-grant branch lacked the C++ admission guard
+           `if (active_readers > 0 || writer_active) return;`
+           (scheduler_rwlock.cpp:119). Repairing MODEL-001 without adding the
+           guard would have modeled a reader-revocation transition the C++ can
+           never take.
+```
+
+**Repair** (`spec/tla/e12_rwlock/E12RwLock.tla`, `E12RwLock.cfg`):
+
+1. **Single assignment** — every reconcile branch assigns every state variable
+   exactly once (no duplicate primed assignments; the CHOOSE/LET structure is
+   shared, branches assign disjoint final states).
+2. **Writer-grant guard** — both reconcile actions encode `activeReaders = 0`
+   (plus `writerOwner = NoWriter`) before granting a head writer; reader-prefix
+   grants MERGE into the live reader set (`activeReaders += prefix`), matching
+   the C++ batch grant.
+3. **Anti-revocation invariant** — new HISTORY ghost `revocationOccurred` and
+   invariant `ReaderRevocationFree` (RW10): a granted reader may disappear only
+   through its own `UnlockRead`. The ghost is set only by a writer-grant that
+   clears a live reader set; the guard makes that unreachable in the positive
+   model.
+4. **Negative control NEG-RW3** — `E12RwLockNegWriterRevoke.tla` drops the
+   `activeReaders = 0` guard in BOTH reconcile actions; `ReaderRevocationFree`
+   must FAIL there and only there (all other laws stay intact).
+5. **Reachability witnesses (non-vacuity)** — five `E12RwLock.reach-*.cfg`
+   reverse invariants prove the repaired branches genuinely fire:
+   cancel/expire reader-prefix merge into a live reader set,
+   cancel/expire writer-refused head stays blocked (R1/R2 topologies), and the
+   writer-blocked contrast that even the dead-reconcile mutant satisfies.
+
+**TLA+ operator-precedence pitfall identified during regeneration** (NOT a
+TLC implementation limitation; wording corrected by the PR #168 review): an
+unparenthesized `x' = y \/ (S # {})` does NOT express "assign the
+disjunction" — `=` binds tighter than `\/`, so the line parses as
+`(x' = y) \/ (S # {})`: the second disjunct is a separate successor conjunct
+that assigns nothing, and TLC then reports "Successor state is not completely
+specified ... variable is not assigned" on exactly the successors that
+disjunct enables. The intended boolean disjunction would need
+`x' = (y \/ (S # {}))`; the model instead uses the equivalent IF-form
+`x' = IF S = {} THEN y ELSE TRUE` — semantically identical, unambiguous
+under precedence, and the assignment idiom already used everywhere in this
+model (e.g. nodeState'). The tracked generator
+`scripts/formal/gen-rwlock-neg-writer-revoke.py` encodes this law and FAILS
+CLOSED if the source ever regresses to the unsafe form; exact full-line
+substitutions (never a regex over `*` or `-`) keep the `\*` comment lines and
+the arithmetic `-` operators untouched, and a round-trip check proves the
+derived file is the exact inverse of the source.
+
+**Evidence (TLC 2.19 / tla2tools v1.7.4, Java 25, 4 workers, isolated
+mktemp workspace; `scripts/formal/verify-async-rwlock.sh` exit 0):**
+
+```text
+PASS  E12RwLock [12 invariants incl. ReaderRevocationFree]
+      1615 states generated, 1030 distinct, depth 7
+CEX   NEG ReaderBypass  (NoReaderBarging violated, as expected)
+CEX   NEG NoReconcile   (InvNoStrandedGrantableHead violated, as expected)
+CEX   NEG WriterRevoke  (ReaderRevocationFree violated, as expected)   [NEG-RW3]
+CEX   REACH cancel reader-prefix merge     (NoReachCancelReaderPrefixMerge violated)
+CEX   REACH expire reader-prefix merge     (NoReachExpireReaderPrefixMerge violated)
+CEX   REACH cancel writer-refused (R1)     (NoReachCancelWriterRefused violated)
+CEX   REACH expire writer-refused (R2)     (NoReachExpireWriterRefused violated)
+CEX   REACH writer-blocked contrast        (NoReachWriterBlockedByReaders violated)
+```
+
+**Deterministic C++ counter-evidence** (issue #162 Phase 2, R1–R5 race
+classes; `tests/async_rwlock_test.cpp`, exact `SLUICE_TEST_FILTER` runs,
+all PASS): `rwlock_audit_r1_cancel_head_writer_wall`,
+`rwlock_audit_r2_expire_head_writer_wall`,
+`rwlock_audit_r3_writer_owner_cancel_reader_head`,
+`rwlock_audit_r4_cancel_exposes_writer_at_zero`,
+`rwlock_audit_r5_cancel_wins_over_late_expiry`,
+`rwlock_audit_r5_expiry_wins_cancel_returns_false`,
+`rwlock_audit_r5_grant_wins_cancel_returns_false`,
+`rwlock_audit_r5_cancel_wins_grant_is_noop`,
+`rwlock_audit_m3_write_lock_until_resource_first`,
+`rwlock_audit_m3_write_lock_until_due_blocked_expires`.
+Full Clang Debug gate: 189/189 tests pass.
+
+**Manifest / gate wiring**: `spec/tla/manifest.json` e12-rwlock suite:
+negative_gate_count 2 → 3, reachability_gate_count 0 → 5;
+`scripts/formal/verify-async-rwlock.sh` runs all 9 gates with named-verdict
+checks; `python3 scripts/formal/verify.py check` PASS.
+
+### 11.5 Audit #162 Phase 5 — timed-admission modeling parity, MODEL-003 closure (2026-08-21)
+
+Finding MODEL-003 (issue #162): `E12RwLock` was the only E12 sync-primitive
+suite without timed-admission modeling — the `*_lock_until`
+resource-first-vs-already-due precedence
+(`src/async/scheduler_rwlock.cpp` `rwlock_read_lock_until` /
+`rwlock_write_lock_until`, precedence 1 claim at :514/:602 before precedence 2
+due-expiry at :531/:615) was entirely absent, while `E12Semaphore`
+(`deadlineDue` + `InvPermitFirstDeadline`, P7) and `E12AsyncMutex`
+(`LockUntil*` family + evidence latches, M7) both model it.
+
+**Repair** (`spec/tla/e12_rwlock/E12RwLock.tla`, `E12RwLock.cfg`), at sibling
+parity and in the suite's one-atomic-admission-step idiom:
+
+1. **Ghosts** — `deadlineDue[e]` is the environment-chosen admission input
+   (`\E due \in BOOLEAN` in the two `*UntilAdmit` actions, so BOTH precedence
+   halves are reachable); `admissionSawResource[e]` / `admissionSawDue[e]`
+   are evidence latches set atomically with the resolution, making the
+   precedence invariant a prime-free state predicate (P7/M7 pattern).
+2. **Six timed actions** — `ReadUntilAdmit` / `WriteUntilAdmit` (resource
+   admissible: fresh node at queue head — model `Len(queue)=0` pre-state —
+   plus the read/write admissibility guards; WINS over a due deadline),
+   `ReadUntilExpired` / `WriteUntilExpired` (not admissible + already due →
+   Expired at admission, no runnable publication, never queue-visible), and
+   `ReadUntilSuspend` / `WriteUntilSuspend` (not admissible + not due →
+   park). The transient timer registration is invisible at this abstraction
+   (created and retired inside the same atomic step).
+3. **RW11** — `InvResourceFirstDeadline`: an admission that saw an
+   admissible resource AND an already-due deadline must resolve `Woken`. The
+   Expired-at-admission actions latch `admissionSawResource = FALSE`, so a
+   precedence inversion violates it.
+4. **Two reachability witnesses** — `E12RwLock.reach-until-resource-beat-due.cfg`
+   (precedence 1 fires with `due = TRUE`) and
+   `E12RwLock.reach-until-expired.cfg` (precedence 2 fires inline).
+
+The four plain admission actions latch evidence too (`sawResource = TRUE` for
+immediate admits), so RW11 constrains the whole admission family uniformly.
+
+**Evidence (TLC 2.19 / tla2tools v1.7.4, isolated mktemp workspace;
+`scripts/formal/verify-async-rwlock.sh` exit 0):**
+
+```text
+PASS  E12RwLock [13 invariants incl. InvResourceFirstDeadline]
+      7321 states generated, 3781 distinct, 0 left on queue
+CEX   NEG ReaderBypass  (NoReaderBarging violated, as expected)
+CEX   NEG NoReconcile   (InvNoStrandedGrantableHead violated, as expected)
+CEX   NEG WriterRevoke  (ReaderRevocationFree violated, as expected)   [NEG-RW3]
+CEX   REACH cancel reader-prefix merge     (NoReachCancelReaderPrefixMerge violated)
+CEX   REACH expire reader-prefix merge     (NoReachExpireReaderPrefixMerge violated)
+CEX   REACH cancel writer-refused (R1)     (NoReachCancelWriterRefused violated)
+CEX   REACH expire writer-refused (R2)     (NoReachExpireWriterRefused violated)
+CEX   REACH writer-blocked contrast        (NoReachWriterBlockedByReaders violated)
+CEX   REACH until resource-beat-due        (NoReachUntilResourceBeatDue violated)
+CEX   REACH until admission-expire         (NoReachUntilExpired violated)
+```
+
+**Deterministic C++ counter-evidence** (issue #162 Phase 2, exact
+`SLUICE_TEST_FILTER` runs, both PASS, added in Phase 2):
+`rwlock_audit_m3_write_lock_until_resource_first`,
+`rwlock_audit_m3_write_lock_until_due_blocked_expires` — the C++ precedence
+was already as-built-correct; MODEL-003 was pure model drift, so this phase
+is model+gates only (no production change, per the C++-FIRST protocol).
+
+**Generator compatibility**: the MODEL-002 negative control
+`E12RwLockNegWriterRevoke.tla` is regenerated from the extended source by
+`scripts/formal/gen-rwlock-neg-writer-revoke.py`; all fail-closed anchors
+held (exact guard lines ×2, IF-form ghost ×2, module header), the round-trip
+inverse proof passed, and the regenerated negative still violates exactly
+`ReaderRevocationFree`.
+
+**Manifest / gate wiring**: `spec/tla/manifest.json` e12-rwlock suite:
+reachability_gate_count 5 → 7; `scripts/formal/verify-async-rwlock.sh` runs
+all 11 gates (positive 13-invariant + 3 negatives + 7 witnesses);
+`python3 scripts/formal/verify.py check` PASS.
+
+### 11.6 Audit #162 Phase 6 — remaining model findings: explicit verdicts (2026-08-21)
+
+Per-item dispositions for MODEL-004..MODEL-009 (issue #162 §4). Audit scope
+decision: **no auto model building** — every item receives an explicit
+verdict (repaired claim, documented divergence, justified gap, or INFO-keep)
+instead. Gates re-run green after the edits:
+`scripts/formal/verify-e10-waitnode.sh`, `verify-e7-publication.sh`,
+`verify-e8-ownership-transfer.sh` — all PASS with their named negatives.
+
+| ID | Verdict | Disposition |
+| --- | --- | --- |
+| MODEL-004 (MEDIUM) | STALE CLAIM REPAIRED (doc-in-model) | `E10WaitNode.tla` header now DECLARES the E10/E11 resolver split: production has THREE CAS-competing terminal resolvers (woken / cancelled / expired, `wait_node.hpp:81-99` + `resolve_` at `:241-251`) plus the node-targeted `wake_node_locked`; E10 deliberately instantiates the single-winner law for the two-resolver core, and the `expired` resolver + its timer races are owned by the E11 suite. The winner-CAS law is resolver-count-agnostic (Registered → terminal under one CAS), so a third E10 resolver would duplicate E11 coverage without a new race class. |
+| MODEL-005 (LOW) | DIVERGENCE DOCUMENTED; C++ deadness CONFIRMED with per-member precision, removal re-tracked (issue #170) | Verified this round (rg survey re-verified by the PR #168 review, @ `15a80ba`): `WorkerState::inbox` (deque) has ZERO push/pop repo-wide — **unused storage** carrying no ticket; `inbox_cv` has ZERO production waiters (no `wait/wait_for/wait_until`) — its notify sites (`scheduler.cpp:288…1959`) are **notify-only / semantically inert transport**, NOT a zero-ref dead declaration; `inbox_mtx` is **LIVE** (34 refs — it serializes cross-worker publication into the single `local_runnable` queue, the actual production runnable queue, 42 refs). The E7 artifact states the model-side fact precisely: `W*Inbox`/`MoveInboxToLocal` are **UNREACHABLE compatibility states** — Init and every producer action assign only `PendingSpawn`/`W*Local`, so the checked graph never enters the Inbox tier and the E7 gate does NOT exercise that hop (`E7Publication.tla` header + the README refinement-map row). C++ dead-field removal (deque + CV + their no-op notifies; the live mutex stays) is re-tracked as issue #170: it is a wake-path-wide mechanical change requiring its own review and §16.3 TSan, out of this audit's minimal boundary. |
+| MODEL-006 (LOW/INFO) | KEEP (self-documented) | E9's 1-bit wakeEpoch ABA limitation is documented inside the model; persistent state is the return authority. No action. |
+| MODEL-007 (MEDIUM, aggregate) | JUSTIFIED COVERAGE GAP + TRIGGERS RECORDED | The five mechanisms (I47-F2 suspend-switch/steal window; Phase-F1 WaitRecord registry races; CancelToken epoch protocol; #115 spawn-to-busy-worker wake obligation; G1 retire-ring ticket rescue) are coverage gaps, not defects. Recorded in `docs/verification/formal/cpp-model-coverage.md` debt register with per-mechanism triggers. Issue #162 §7.3's two suggested focused models are deliberately NOT auto-built (scope decision); taking them up is the revisit trigger. |
+| MODEL-008 (INFO) | KEEP (documented) | `RecordCanceledConfirmed` has no production caller on master (ThreadPool EINTR retry keeps running requests uninterruptible); already documented in the model. No action. |
+| MODEL-009 (LOW) | REFINEMENT/DOCUMENTATION DRIFT REPAIRED by NARROWING the model claim (PR #168 review); NOT tracked as formal debt | `E8OwnershipTransfer.tla` covers the registration-time-owner family ONLY: Completion waits route by `WaitReg.owner` — exactly what `WakeReady` models. The WaitQueue-class wake discipline (the E12 primitives resolve the target via `fiber_owner_`, the CURRENT owner updated by steal) is **not instantiated by any E8 action**, and worker liveness / G1 retire-ring rescue are outside this model's state machine — so this suite proves NOTHING about that family (the earlier "no E8 invariant distinguishes them" wording followed from omitting the second behavior, not from comparing both). The finding was drift of the model's own documentation, repaired by the narrowed claim itself: the current-owner family is recorded as a documentation-level coverage boundary (implementation-level safety argument, separate from the gate), deliberately NOT re-tracked as formal debt — the issue #171 umbrella owns the MODEL-007 unmodeled-mechanism list, which does not include this routing family. |
+
+### 11.7 Audit #162 Phase 7 — C++ observations CPP-001/CPP-002: verdicts and repair (2026-08-21)
+
+Issue #162 §6 recorded two LOW C++ observations "not confirmed bugs, review
+only". This phase investigated both to explicit verdicts and repaired them
+(the issue's §7.5 recommendation: incidental cleanup through the normal
+review gates). **No reachable behavior changes** — both repairs are
+no-op-removal plus violation-state fail-fast, proven below.
+
+**CPP-001 (owner-lookup discipline unification) — CONFIRMED, REPAIRED.**
+
+The rwlock cancel/expire/grant publication sites resolved the target worker
+with `fiber_owner_.find` + a `g_worker` tolerant fallback, while every other
+primitive (semaphore, condition, timer, event, queue, mutex, park-wake)
+routes through the I47-F1 authoritative `publish_waiting_fiber_runnable_locked`
+/ `owner_for_fiber_locked` helper, which FAIL-FASTS
+(`scheduler_missing_fiber_owner_fail_fast`) on a missing record.
+
+Proof the fallback was not load-bearing: `fiber_owner_` is written at six
+sites (`scheduler.cpp:271, 322, 391, 537, 1564, 1954` — spawn, distribute,
+retire-ring rescue, re-route, steal) and **never erased** (zero erase sites
+repo-wide), so a Fiber that has run and entered Waiting ALWAYS has a record.
+A miss is exactly the Scheduler invariant violation the authoritative path
+fail-fasts on; the rwlock fallback silently routed around it. Repair: all
+four lookup sites across the three rwlock publication regions
+(`rwlock_grant_from_head_locked` writer + reader-prefix loop,
+`rwlock_cancel` capture, `rwlock_expire_wait` capture) now call
+`owner_for_fiber_locked` under the already-held `global_mtx_`. The null-fiber
+tolerance order is preserved exactly (the lookup happens only inside the
+`fib != nullptr` / `cancel_fiber != nullptr` guards the old code already
+used to skip the route).
+
+**CPP-002 (dead `make_runnable` on the current Running fiber) — CONFIRMED,
+REPAIRED, class widened.**
+
+`Fiber::make_runnable` is a documented no-op from `running`
+(`fiber.hpp:89-90` "No-op from runnable/running"), and every inline
+admission-resolution path runs BEFORE `commit_suspend_locked` / `make_waiting`,
+so `me` is always the current RUNNING fiber there: the call could only return
+false, and discarding it achieved nothing. Issue #162 listed five sites; the
+full class is **thirteen** plus one doubly-dead conditional: mutex ×3,
+rwlock ×2, semaphore ×3, event ×3, condition ×1, and
+`scheduler_timer.cpp`'s `if (me->make_runnable()) route_runnable_locked(...)`
+whose condition is always false, so its route branch NEVER executed. All
+removed; the touched comments now state the actual invariant (the Fiber is
+RUNNING, continues inline, and needs no runnable publication — publishing
+one would violate E7 exactly-once). Two pre-existing comments that
+rationalized the call ("make_runnable may return false. That is not a
+reason to publish it"; "Call it for state consistency") are corrected —
+there was no state effect to preserve.
+
+**Focused architecture-compliance note** (AGENTS.md §8; this change touches
+scheduler wake/publication code paths, so the phase-specific gate is recorded
+here against the generic gate): state machines — unchanged (no transition
+added/removed); wake/publication protocol — unchanged in every reachable
+state (removed calls were provable no-ops; the owner value is identical in
+every reachable state, so routing targets are unchanged); lock/atomic
+domains — unchanged (`owner_for_fiber_locked` requires `global_mtx_`, held
+at every converted site; no new lock order); capacities/resources —
+unchanged; shutdown/drain — unchanged; formal models — unaffected (E7
+publication exactly-once and E8 current-owner routing are precisely what
+the code still does; no modeled state transition changed, so no model edit
+is required under the §17 binding).
+
+**Evidence**: baseline Clang Debug 189/189 PASS before the edits; Clang
+Debug 189/189 PASS after; Clang TSan full suite ALL TESTS PASSED after
+(§16.3 change class). Inline-admission semantics are covered by the
+existing deterministic suite (including `rwlock_audit_m3_*`,
+semaphore/mutex/event `*_until` admission cases and the wait-queue race
+matrices).
+
+### 11.8 PR #168 review closeout — verification-strength and scope-narrowing repairs (2026-08-21)
+
+The PR #168 adversarial review (our own + CodeRabbit) found that the
+Phase 4/5/6 evidence, while green, overstated its strength in three places
+and left two generated-negative discipline gaps. All repairs are
+formal/docs/test-only: **no production C++ semantics changed** in this
+round.
+
+1. **MODEL-003 sensitivity negative control (NEG-RW4)** — the two timed
+   admission reachability witnesses (§11.5) proved both correct paths
+   REACHABLE, but nothing proved `InvResourceFirstDeadline` would FAIL if
+   the precedence were wrong. New generated negative
+   `E12RwLockNegDeadlinePrecedence.tla`
+   (`scripts/formal/gen-rwlock-neg-deadline-precedence.py`): in BOTH
+   `ReadUntilAdmit` and `WriteUntilAdmit` the disposition is split on the
+   environment's due bit — the `due = FALSE` successor is EXACTLY the
+   positive behavior, while `due = TRUE` (resource admissible AND deadline
+   already due) wrongly resolves `Expired` and commits NO ownership (no
+   reader grant, no `activeReaders` increment, no `writerOwner` install).
+   Narrowed after the PR #168 adversarial review: the first draft flipped
+   the outcome unconditionally and kept the ownership commits, which would
+   have made the mutant also violate `WriterOwnerConsistency` (an Expired
+   node still owning the writer lock) — i.e. a BROADER broken model, not an
+   isolated precedence mutation. The evidence latches are untouched
+   (`admissionSawResource' = TRUE`; the `\E due` latch), so the mutant
+   cannot make the invariant self-proving by erasing evidence. The
+   derivation hoists the common assignments before the split and makes the
+   IF the action's last conjunct, so both successors assign every variable
+   exactly once under any reading of TLA+ quantifier/IF scope. Parity:
+   `E12SemNeg7DeadlinePrecedence` (NEG-SEM-7). Observed verdicts:
+   `InvResourceFirstDeadline` VIOLATED (named CEX) and, on the SAME mutant,
+   the remaining 12 positive invariants PASS — the new
+   `E12RwLockNegDeadlinePrecedence.specificity.cfg` gate proves the
+   negative is EXACT (fails for the deadline-precedence defect and nothing
+   else). Adversarially probed in an isolated workspace: re-broadening the
+   write-path defect branch to install `writerOwner' = e` makes the
+   specificity gate FAIL on `WriterOwnerConsistency`, so the specificity
+   check genuinely detects collateral damage.
+2. **Generated-negative freshness gates (fail-closed)** —
+   `verify-async-rwlock.sh` previously ran TLC on the committed
+   `E12RwLockNegWriterRevoke.tla` without proving it equals what the
+   CURRENT positive model would generate (CodeRabbit finding; accepted).
+   Both generators now have a `--check` mode (byte-compare against the
+   committed negative, repository untouched, stale -> non-zero with
+   "generated negative is stale; regenerate it"), and the verifier runs
+   both checks BEFORE any TLC execution. Adversarially probed: a positive
+   model edit that flows into a negative (anchor drift or carried-content
+   drift) turns the gate RED before TLC launches.
+3. **TLA+ precedence wording (§11.4 above)** — the "TLC 2.19 constraint"
+   mislabel is corrected everywhere it appeared (generator docstring,
+   closeout §11.4, manifest notes): the `x' = y \/ c` failure is TLA+
+   operator-precedence parsing (`=` binds tighter than `\/`), not a TLC
+   implementation limitation.
+4. **E7 Inbox-tier claim narrowed (CodeRabbit finding; verified true)** —
+   no `Init` value and no producer action ever assigns `W0Inbox`/`W1Inbox`,
+   so `MoveInboxToLocal` is UNREACHABLE in the checked graph: the E7 gate
+   does not exercise that hop and never proved anything about it. The
+   model header, the action comment, and the README refinement-map row now
+   say exactly that (unreachable compatibility states of the never-built
+   staged design); no producer transition was added (that would widen
+   model scope to defend old prose). Production publication uses the
+   direct `local_runnable` path.
+5. **MODEL-005 wording precision (CodeRabbit finding; corrected, not
+   blindly adopted)** — the four members are now described individually
+   (§11.6 row): `inbox` = unused storage; `inbox_cv` = notify-only /
+   no production waiter (NOT a zero-ref dead declaration — it HAS notify
+   call sites); `inbox_mtx` = LIVE lock; `local_runnable` = the production
+   queue. Removal re-tracked as issue #170 (needs wake-path review + TSan;
+   NOT done in this PR).
+6. **E8 wake-routing claim narrowed (CodeRabbit finding; accepted)** —
+   E8 models only the registration-time-owner family; the
+   current-owner (`fiber_owner_`) WaitQueue routing, worker liveness, and
+   the G1 retire-ring rescue are not in its state machine, so the model
+   proves nothing about them. The "no E8 invariant distinguishes them"
+   sentence is gone (it followed from omitting the second behavior). The
+   finding was refinement/documentation drift repaired by the narrowed
+   claim itself; the current-owner family stays a documentation-level
+   coverage boundary and is deliberately NOT re-tracked as formal debt
+   (the #171 umbrella owns the MODEL-007 mechanism list only — a different
+   list, so #171's scope is not widened to absorb MODEL-009).
+7. **Markdown lint** — two line-leading `#162` lines (this file, and
+   `docs/verification/formal/migration-report.md`) that a Markdown parser
+   would read as headings were rewritten as prose.
+8. **Deterministic-test hygiene** — the six `std::this_thread::yield()`
+   calls inside the `rwlock_audit_r2_*`/`rwlock_audit_r5_*` driver-fiber
+   loops were removed: under `sched.run(1)` they are OS-thread scheduling
+   hints, not Fiber interleaving authority — the causal seams are
+   `await_ready_flag`, `advance_clock` (whose pump resolves the node
+   inline under `global_mtx_`), run phases, and terminal-state assertions.
+   The review's second pass also collapsed the arbitrary retry loops
+   (`200 && !terminal` / `5×`) to a SINGLE `advance_clock(100)` per driver:
+   if the inline-pump argument is right, one advance from clock 0 past the
+   deadline is the complete causal evidence — a loop would only mask a
+   falsified assumption. All ten audit cases re-ran green after both
+   removals.
+9. **#162 residual re-tracking** — E12AsyncMutexNegM4 generator staleness
+   (pre-existing, NOT a #162 rwlock defect) -> issue #169; E7 C++
+   dead/inert field cleanup -> issue #170; MODEL-007's five unmodeled
+   mechanisms -> umbrella issue #171 (details stay in the
+   `cpp-model-coverage.md` debt register with triggers).
+10. **CodeRabbit "docstring coverage 42.31%" advisory — NOT ACTIONED**:
+    not a repository required gate; bulk docstrings would add comment
+    noise against the repository's comment-simplification direction, and
+    the finding is outside #162's correctness scope.
+
+**Evidence (`scripts/formal/verify-async-rwlock.sh`, TLC 2.19 / tla2tools
+v1.7.4, isolated mktemp workspace, exit 0):**
+
+```text
+fresh  gen-rwlock-neg-writer-revoke.py --check       (byte-identical)
+fresh  gen-rwlock-neg-deadline-precedence.py --check (byte-identical)
+PASS   E12RwLock [13 invariants]  7321 states, 3781 distinct
+CEX    NEG ReaderBypass        (NoReaderBarging violated)
+CEX    NEG NoReconcile         (InvNoStrandedGrantableHead violated)
+CEX    NEG WriterRevoke        (ReaderRevocationFree violated)        [NEG-RW3]
+CEX    NEG DeadlinePrecedence  (InvResourceFirstDeadline violated)    [NEG-RW4]
+PASS   NEG DeadlinePrecedence specificity — the 12 remaining positive
+       invariants hold on the SAME mutant (3748 states, full exploration)
+CEX    REACH × 7               (all seven NoReach* witnesses)
+```
+
+`verify-e7-publication.sh` / `verify-e8-ownership-transfer.sh` /
+`verify-e10-waitnode.sh` re-ran PASS after the comment edits;
+`python3 scripts/formal/verify.py check` PASS (95 .tla / 241 .cfg all
+manifest-covered). Manifest: e12-rwlock `negative_gate_count` 3 -> 5
+(4 violation gates + 1 specificity pass gate across 4 negative models);
+gate structure is now positive(1) + negative(5) + reachability(7).
 
 ---
 

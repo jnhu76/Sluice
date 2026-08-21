@@ -1,5 +1,18 @@
-------------------------------- MODULE E12RwLock -------------------------------
+------------------------------- MODULE E12RwLockNegDeadlinePrecedence -------------------------------
 \* sluice::async::AsyncRwLock -- writer-fair phase-batched RwLock SAFETY model
+\*
+\* NEGATIVE MODEL (audit-added, NEG-RW4): this variant ISOLATES the audit
+\* MODEL-003 precedence defect. In ReadUntilAdmit/WriteUntilAdmit, only when
+\* the environment chose due = TRUE (deadline already due AND the resource
+\* admissible) does the admission wrongly resolve Expired and commit NO
+\* ownership (no reader grant, no writerOwner install) — the C++
+\* rwlock_{read,write}_lock_until order is the opposite (the resource claim
+\* is precedence 1). The due = FALSE successor is exactly the positive
+\* model's behavior. Expected TLC verdicts: VIOLATION of
+\* InvResourceFirstDeadline ONLY (cfg E12RwLockNegDeadlinePrecedence.cfg)
+\* and PASS of the remaining 12 positive invariants on this same mutant
+\* (cfg E12RwLockNegDeadlinePrecedence.specificity.cfg) — the negative is
+\* exact: it fails for the deadline-precedence defect and nothing else.
 \* (E12-F, authority docs/history/implementation-plans/e12-rwlock.md).
 \*
 \* Key safety properties:
@@ -184,14 +197,21 @@ ReadUntilAdmit(e) ==
     /\ \E due \in BOOLEAN :
         /\ deadlineDue' = [deadlineDue EXCEPT ![e] = due]
         /\ admissionSawDue' = [admissionSawDue EXCEPT ![e] = due]
-    /\ mode' = [mode EXCEPT ![e] = "read"]
-    /\ nodeState' = [nodeState EXCEPT ![e] = "Woken"]
-    /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
-    /\ grantedReaders' = grantedReaders \cup {e}
-    /\ activeReaders' = activeReaders + 1
-    /\ admissionSawResource' = [admissionSawResource EXCEPT ![e] = TRUE]
-    /\ UNCHANGED <<writerOwner, queue, publicationCount, bargingOccurred,
-                   writerWasQueued, revocationOccurred>>
+        /\ mode' = [mode EXCEPT ![e] = "read"]
+        /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
+        /\ admissionSawResource' = [admissionSawResource EXCEPT ![e] = TRUE]
+        /\ UNCHANGED <<writerOwner, queue, publicationCount, bargingOccurred,
+                       writerWasQueued, revocationOccurred>>
+        /\ IF due THEN
+             \* DEFECT (NEG-RW4): the due deadline wins over the admissible
+             \* resource and NO ownership is committed.
+             /\ nodeState' = [nodeState EXCEPT ![e] = "Expired"]
+             /\ UNCHANGED <<grantedReaders, activeReaders>>
+         ELSE
+             \* correct precedence 1: the resource claim wins.
+             /\ nodeState' = [nodeState EXCEPT ![e] = "Woken"]
+             /\ grantedReaders' = grantedReaders \cup {e}
+             /\ activeReaders' = activeReaders + 1
 
 \* ReadUntilExpired: NOT resource-admissible + deadline already due -> Expired
 \* at admission (precedence 2; production authority E11, modeled here to prove
@@ -237,13 +257,20 @@ WriteUntilAdmit(e) ==
     /\ \E due \in BOOLEAN :
         /\ deadlineDue' = [deadlineDue EXCEPT ![e] = due]
         /\ admissionSawDue' = [admissionSawDue EXCEPT ![e] = due]
-    /\ mode' = [mode EXCEPT ![e] = "write"]
-    /\ nodeState' = [nodeState EXCEPT ![e] = "Woken"]
-    /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
-    /\ writerOwner' = e
-    /\ admissionSawResource' = [admissionSawResource EXCEPT ![e] = TRUE]
-    /\ UNCHANGED <<activeReaders, queue, publicationCount, grantedReaders,
-                   bargingOccurred, writerWasQueued, revocationOccurred>>
+        /\ mode' = [mode EXCEPT ![e] = "write"]
+        /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
+        /\ admissionSawResource' = [admissionSawResource EXCEPT ![e] = TRUE]
+        /\ UNCHANGED <<activeReaders, queue, publicationCount, grantedReaders,
+                       bargingOccurred, writerWasQueued, revocationOccurred>>
+        /\ IF due THEN
+             \* DEFECT (NEG-RW4): the due deadline wins over the admissible
+             \* resource and NO ownership is committed.
+             /\ nodeState' = [nodeState EXCEPT ![e] = "Expired"]
+             /\ UNCHANGED <<writerOwner>>
+         ELSE
+             \* correct precedence 1: the resource claim wins.
+             /\ nodeState' = [nodeState EXCEPT ![e] = "Woken"]
+             /\ writerOwner' = e
 
 \* WriteUntilExpired: NOT resource-admissible + deadline already due ->
 \* Expired at admission (precedence 2). No publication.

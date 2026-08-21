@@ -9,7 +9,7 @@
 \* scope description.
 \*
 \* sluice::async::AsyncRwLock -- writer-fair phase-batched RwLock SAFETY model
-\* (E12-F, authority docs/e12-rwlock.md).
+\* (E12-F, authority docs/history/implementation-plans/e12-rwlock.md).
 \*
 \* Key safety properties:
 \*   RW1  Mutual Exclusion        writer active => no readers; readers > 0 => no writer

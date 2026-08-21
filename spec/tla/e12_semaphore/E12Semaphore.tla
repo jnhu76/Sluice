@@ -4,7 +4,7 @@
   Semaphore TLA+ SAFETY model (E12-B-SEMAPHORE-PREPARATION-CORRECTIVE-1).
 
   This is the formal half of the E12-B preparation corrective. The authority
-  document is docs/e12-semaphore.md; the gate is
+  document is docs/history/closeout/e12-semaphore.md; the gate is
   scripts/verify-async-semaphore-formal.sh. See that README for the design.
 
   The load-bearing E12-B questions:
@@ -38,7 +38,7 @@
       In production, Expired's authority is the E11 timer/expire seam; the
       refinement note is in the README.
     - No negative model assumes a linked eligible FIFO head can lose its
-      resolve_(Woken) CAS (Conclusion A: see docs/e12-semaphore.md §5).
+      resolve_(Woken) CAS (Conclusion A: see docs/history/closeout/e12-semaphore.md §5).
 
   Refinement map (TLA+ concept -> production seam):
     available            <-> Semaphore::available_ (std::atomic<permit_count_t>)

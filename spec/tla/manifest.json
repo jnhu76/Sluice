@@ -287,15 +287,15 @@
         "smoke"
       ],
       "positive_gate_count": 1,
-      "negative_gate_count": 2,
-      "reachability_gate_count": 0,
+      "negative_gate_count": 5,
+      "reachability_gate_count": 7,
       "owner_docs": [
         "docs/history/closeout/e12-cross-primitive-terminal-audit.md"
       ],
       "implementation_bindings": [
         "src/async/scheduler_rwlock.cpp"
       ],
-      "notes": "Protocol: rwlock writer-fair FIFO reconcile (unlock/cancel/expire head-prefix grant). Negative models: ReaderBypass (admission barging) and NoReconcile (release drops grant-from-head, stranding a grantable head — closes the audit-found reconcile-coverage gap; InvNoStrandedGrantableHead also gives RW4 its first invariant)."
+      "notes": "Protocol: rwlock writer-fair FIFO reconcile (unlock/cancel/expire head-prefix grant) plus timed admission (*_lock_until). Negative models: ReaderBypass (admission barging), NoReconcile (release drops grant-from-head, stranding a grantable head), WriterRevoke (MODEL-002 control: writer reconcile drops the activeReaders = 0 guard, revoking a live reader), and DeadlinePrecedence (MODEL-003 sensitivity control: ONLY the due=TRUE successor of ReadUntilAdmit/WriteUntilAdmit resolves Expired and commits NO ownership — due=FALSE is exactly the positive behavior; a due deadline beats the admissible resource while the evidence latches stay TRUE, violating InvResourceFirstDeadline, and the sibling .specificity.cfg proves the SAME mutant passes the remaining 12 positive invariants, so the negative is exact) — 5 negative gates = 4 violation gates + 1 specificity pass gate across 4 negative models; the latter two GENERATED from the positive model by scripts/formal/gen-rwlock-neg-writer-revoke.py and gen-rwlock-neg-deadline-precedence.py, whose --check freshness modes run inside verify-async-rwlock.sh BEFORE TLC (a stale committed negative fails the gate; the IF-form ghost is required because an unparenthesized x' = y \\/ c parses as (x' = y) \\/ c under TLA+ precedence — a language pitfall, not a TLC limitation). Reachability witnesses (MODEL-001 closure, non-vacuity): cancel/expire reader-prefix merge, cancel/expire writer-refused head stays blocked, and the writer-blocked contrast — each NoReach* is violated, proving the reconcile branches fire in the as-built model — plus the two MODEL-003 timed-admission halves (resource beats an already-due deadline; inline admission-expire when not admissible). Positive gate checks 13 invariants including ReaderRevocationFree (RW10) and InvResourceFirstDeadline (RW11, MODEL-003 closure at parity with E12Semaphore P7 / E12AsyncMutex M7)."
     },
     {
       "id": "e12-rwlock-scheduler-liveness",

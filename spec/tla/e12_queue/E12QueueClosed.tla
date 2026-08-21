@@ -1,8 +1,8 @@
 ------------------------------- MODULE E12QueueClosed -------------------------------
 (*
   sluice::async::AsyncQueue -- Model B: Open/Closed monotonicity SAFETY model
-  (E12-E-QUEUE-FORMAL-MODEL-1, Model B). Authority: docs/e12-queue.md
-  (Corrective-2 close contract) and docs/e12-queue-state-machine.md §3.3, §7.1.
+  (E12-E-QUEUE-FORMAL-MODEL-1, Model B). Authority: docs/history/closeout/e12-queue.md
+  (Corrective-2 close contract) and docs/history/implementation-plans/e12-queue-state-machine.md §3.3, §7.1.
 
   This model re-implements Model A (bounded MPMC FIFO) and adds the close
   lifecycle. It is SAFETY-ONLY.

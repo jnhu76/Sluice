@@ -17,6 +17,21 @@
   Fiber. The intended protocol is linear:
       no ticket -> publication creates one -> transport moves it -> pop consumes
   A transport action must NOT create another publication.
+
+  AUDIT #162 MODEL-005 divergence note (2026-08-21, scope narrowed by the
+  PR #168 review): the W*Inbox tier and MoveInboxToLocal are UNREACHABLE
+  compatibility states. They model the staged E7-A/E7-B routed-inbox design
+  that production never populated; Init assigns no W*Inbox location and no
+  action produces one (producers write only PendingSpawn / W*Local), so
+  MoveInboxToLocal never fires in the checked state graph — the E7 gate
+  does NOT exercise that transport hop and this suite proves nothing about
+  it. As-built is a SINGLE owner-local queue: WorkerState::local_runnable,
+  whose cross-worker publication is serialized by the target worker's LIVE
+  inbox_mtx (the C++ WorkerState::inbox deque carries no ticket — unused
+  storage — and inbox_cv is notify-only with no production waiter; removal
+  tracked in issue #170). Retaining the unreachable tier changes no checked
+  behavior (E7-T2 is unaffected either way); retiring it is the recorded
+  e7->e8 fold-in debt. See the README refinement map.
 *)
 
 EXTENDS Naturals, Sequences, FiniteSets, TLC
@@ -89,7 +104,10 @@ WakeReady(f) ==
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
     /\ UNCHANGED owner
 
-(* MOVE: owner inbox -> owner local. Cardinality unchanged. *)
+(* MOVE: owner inbox -> owner local. Cardinality unchanged. UNREACHABLE in
+   the checked graph: no Init value and no producer action ever assigns a
+   W*Inbox location (see the MODEL-005 note above) — retained only as a
+   compatibility state of the never-populated staged design. *)
 MoveInboxToLocal(f) ==
     /\ ticketLocation[f] = InboxOf(owner[f])
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]

@@ -182,24 +182,26 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
         }
     }  // W released here
 
-    // Publication under G (W already released).
+    // Publication under G (W already released). Owner lookup is the I47-F1
+    // authoritative owner_for_fiber_locked (audit #162 CPP-001: the former
+    // fiber_owner_.find + g_worker fallback duplicated the lookup discipline
+    // every other primitive fail-fasts through; fiber_owner_ is never erased,
+    // so a missing entry is a Scheduler invariant violation, not a state to
+    // route around).
     if (granted_writer) {
         if (single_writer_fiber != nullptr && single_writer_fiber->make_runnable()) {
-            auto it = fiber_owner_.find(single_writer_fiber);
-            WorkerState* owner_ws = (it != fiber_owner_.end()) ? it->second : g_worker;
-            route_runnable_locked(single_writer_fiber, owner_ws);
+            route_runnable_locked(single_writer_fiber,
+                                  owner_for_fiber_locked(single_writer_fiber));
         }
     }
     WaitNode* w = pub_head;
     while (w != nullptr) {
         WaitNode* pub_next = w->next_;
         Fiber* fib = w->fiber();
-        auto it = fiber_owner_.find(fib);
-        WorkerState* owner_ws = (it != fiber_owner_.end()) ? it->second : g_worker;
         w->next_ = nullptr;
         w->prev_ = nullptr;
         if (fib != nullptr && fib->make_runnable()) {
-            route_runnable_locked(fib, owner_ws);
+            route_runnable_locked(fib, owner_for_fiber_locked(fib));
         }
         w = pub_next;
     }
@@ -423,10 +425,12 @@ bool Scheduler::rwlock_cancel(WaitQueue& waiters,
         if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
         retire_timer_for_node_locked(node);
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-        // Capture publication data for the cancel winner.
+        // Capture publication data for the cancel winner (I47-F1
+        // authoritative owner lookup; see the grant-path note).
         cancel_fiber = node.fiber();
-        auto it = fiber_owner_.find(cancel_fiber);
-        cancel_owner = (it != fiber_owner_.end()) ? it->second : g_worker;
+        if (cancel_fiber != nullptr) {
+            cancel_owner = owner_for_fiber_locked(cancel_fiber);
+        }
     }  // W released
 
     // Head reconcile: the newly exposed head may be admissible.
@@ -456,10 +460,12 @@ bool Scheduler::rwlock_expire_wait(WaitQueue& waiters,
         if (!waiters.expire_locked(node)) return false;  // lost to grant/cancel
         // Timer already CONSUMED by pump. Update accounting.
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-        // Capture publication data.
+        // Capture publication data (I47-F1 authoritative owner lookup; see
+        // the grant-path note).
         exp_fiber = node.fiber();
-        auto it = fiber_owner_.find(exp_fiber);
-        exp_owner = (it != fiber_owner_.end()) ? it->second : g_worker;
+        if (exp_fiber != nullptr) {
+            exp_owner = owner_for_fiber_locked(exp_fiber);
+        }
         won = true;
     }  // W released
 
@@ -536,7 +542,10 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
-                if (me != nullptr) (void)me->make_runnable();
+                // The current Fiber is RUNNING (never called make_waiting());
+                // it continues inline. No runnable publication is needed and
+                // make_runnable would be a no-op from running (audit #162
+                // CPP-002 removed the dead call).
                 return;
             }
         }
@@ -620,7 +629,8 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
-                if (me != nullptr) (void)me->make_runnable();
+                // Same as read_lock_until: the Fiber is RUNNING and continues
+                // inline; no publication (audit #162 CPP-002).
                 return;
             }
         }
