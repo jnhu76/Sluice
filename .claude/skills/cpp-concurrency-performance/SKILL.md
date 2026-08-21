@@ -1,20 +1,21 @@
 ---
 name: cpp-concurrency-performance
-description: Evidence-first performance workflow for concurrent C++ in Sluice. Use only when the task is explicitly about measured throughput, latency, scaling, contention, scheduling, cache/coherence, locality, oversubscription, or NUMA behavior and a baseline can be measured.
-origin: custom
+description: Concurrent C++ performance workflow for Sluice. Use when the task asks to measure, diagnose, review, benchmark, or optimize throughput, latency, scaling, contention, scheduling, cache/coherence, locality, oversubscription, or NUMA behavior.
 ---
 
 # C++ concurrency performance
 
-Use this skill to turn a measured performance problem into a narrow, attributable experiment. It is not a correctness skill and does not authorize lock-free code by itself.
+Use this skill to turn a performance question into a reproducible, attributable experiment. It is not a correctness skill and does not authorize lock-free code by itself.
 
-Apply `cpp-concurrency-guidelines` first whenever the proposed change alters synchronization, ownership, wake/progress, cancellation, or shutdown semantics.
+Apply `cpp-concurrency-guidelines` whenever a candidate changes synchronization, ownership, wake/progress, cancellation, or shutdown semantics.
 
 Load `cpp-lock-free` only if the chosen candidate genuinely requires advanced atomic/lock-free reasoning.
 
+A performance investigation may start before a baseline exists. Production optimization is blocked until the baseline/experiment contract below is established.
+
 ## Step 1 — freeze the experiment
 
-Before changing code, record:
+Before changing production code, record the material comparison conditions:
 
 ```text
 revision:
@@ -31,9 +32,11 @@ compiler/build flags:
 backend/storage:
 ```
 
+If the task is only to design or review a benchmark, this step defines what must be measured next; do not invent results that do not exist.
+
 Keep correctness/output semantics equivalent across compared runs.
 
-**Completion criterion:** another run can reproduce the comparison conditions without guessing material parameters.
+**Completion criterion:** either a reproducible baseline contract exists, or the missing measurements are explicitly identified and no production optimization claim proceeds past this gate.
 
 ## Step 2 — establish the baseline shape
 
@@ -53,7 +56,7 @@ CPU utilization / blocking evidence when available
 
 The scaling curve is evidence. Do not infer a bottleneck from one thread count or one profiler screenshot.
 
-**Completion criterion:** the regression or scaling limit is repeatable enough to distinguish from environment noise.
+**Completion criterion:** the regression or scaling limit is repeatable enough to distinguish from environment noise, or the task remains an evidence-gathering experiment rather than an optimization claim.
 
 ## Step 3 — classify before optimizing
 
@@ -73,7 +76,7 @@ Classify the leading candidate using measured evidence:
 - algorithm/application work;
 - unknown.
 
-A sampled symbol percentage is not by itself causal attribution. Look for a scaling signature, request-count relationship, controlled toggle, ladder, counter, or other discriminating experiment.
+A sampled symbol percentage is not causal attribution by itself. Look for a scaling signature, request-count relationship, controlled toggle, ladder, counter, or another discriminating experiment.
 
 **Completion criterion:** the candidate has at least one observation that would differ if the hypothesis were false.
 
@@ -89,9 +92,7 @@ Prefer the smallest experiment that tests the hypothesis:
 - improve locality or layout;
 - change an algorithmic class when APP-layer evidence points there.
 
-Do not jump directly from “mutex/atomic appears hot” to “replace it with lock-free.”
-
-If the change modifies synchronization semantics, stop and apply `cpp-concurrency-guidelines` to the candidate before treating its speed as meaningful.
+If the change modifies synchronization semantics, apply `cpp-concurrency-guidelines` before treating its speed as meaningful.
 
 **Completion criterion:** the experiment changes one primary causal mechanism while preserving the tested contract.
 
@@ -131,15 +132,16 @@ A finished performance task should state:
 
 ```text
 objective:
-baseline/scaling evidence:
+baseline contract / missing evidence:
+scaling evidence:
 attribution classification:
 discriminating experiment:
 A/B result and noise:
 correctness equivalence:
 cost vector / regression risk:
-decision: keep / revise / revert
+decision: keep / revise / revert / evidence-only
 ```
 
 ## Detailed reference
 
-`REFERENCE.md` contains the previous comprehensive performance handbook, tooling suggestions, bottleneck taxonomy, examples, and deeper measurement guidance. Read it on demand for the bottleneck class actually under investigation.
+`REFERENCE.md` preserves the previous long-form performance handbook. Search for the bottleneck/tool/topic heading first and read only the smallest relevant section; do not load the whole handbook by default. Current routing and completion criteria live here.
