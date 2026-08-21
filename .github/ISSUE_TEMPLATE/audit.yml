@@ -1,0 +1,84 @@
+name: Audit / research finding
+description: Record an evidence-backed audit, model drift, coverage gap, or research result without presuming an implementation defect.
+title: "[Audit] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when the primary deliverable is analysis. Classify findings by evidence; do not turn model/document drift into a C++ bug by terminology.
+
+  - type: input
+    id: baseline
+    attributes:
+      label: Baseline
+      description: Exact repository SHA / branch and tool versions used.
+      placeholder: master@<sha>, TLC ..., clang ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Audit question / scope
+      description: What specific implementation or contract question is being investigated? Include explicit non-goals.
+    validations:
+      required: true
+
+  - type: textarea
+    id: method
+    attributes:
+      label: Method
+      description: Source tracing, deterministic C++ experiments, TLA+ probes, sanitizers, static analysis, differential review, etc. State important limitations.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: As-built C++ facts
+      description: Relevant state machine, locks/atomics, queue/ownership/publication behavior recovered from current C++ before interpreting models/docs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings and classification
+      description: Classify each item as CONFIRMED C++ DEFECT, MODEL-ONLY DEFECT / MODEL DRIFT, COVERAGE GAP, REFINEMENT/DOCUMENTATION DRIFT, DEAD/LOW-VALUE SURFACE, or UNKNOWN. Provide evidence for each.
+    validations:
+      required: true
+
+  - type: textarea
+    id: counterexamples
+    attributes:
+      label: Reproducers / counterexamples / witnesses
+      description: Deterministic C++ schedules, TLC counterexamples, non-vacuity witnesses, static proofs, or exact commands. Separate exploratory probes from repository gates.
+
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommended disposition
+      description: ACTIVE fix, model-only repair, READY experiment, ON-TOUCH cleanup, DEFERRED with reopen trigger, or no action. Explain why.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Commands and artifacts
+      description: Report only evidence actually executed/observed.
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: discipline
+    attributes:
+      label: Audit discipline
+      options:
+        - label: Current C++ behavior was inspected before claiming C++ ↔ model/document misalignment.
+          required: true
+        - label: A green model/check alone is not being presented as implementation verification.
+          required: true
+        - label: Unknowns and skipped evidence are explicitly stated.
+          required: true

@@ -1,0 +1,100 @@
+name: Architecture / design proposal
+description: Propose a bounded architecture or API change with an explicit trigger and stop conditions.
+title: "[Design] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Design issues do not authorize production implementation by default. Start from the concrete problem and current evidence, not from a preferred refactor shape.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Concrete problem
+      description: What real defect, repeated maintenance failure, capability need, or policy requirement motivates this design?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why_now
+    attributes:
+      label: Why now / promotion trigger
+      description: Why should this be actionable now instead of READY/EXPERIMENT or DEFERRED?
+    validations:
+      required: true
+
+  - type: textarea
+    id: baseline
+    attributes:
+      label: Current as-built behavior
+      description: Current revision and the implementation shape being changed. Name the actual authority/locks/atomics/queues involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: authority
+    attributes:
+      label: Governing authority
+      description: Relevant ADRs, architecture-constitution rules, AGENTS.md sections, public contract, and existing divergence decisions.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Smallest design that addresses the problem. Distinguish required semantics from optional code-shape cleanup.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Explicitly list adjacent work that must not be pulled into this change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: state_machine
+    attributes:
+      label: State-machine / ownership impact
+      description: State transitions, ownership/authority changes, publication/cancellation/lifetime impact.
+
+  - type: textarea
+    id: synchronization
+    attributes:
+      label: Lock / atomic / wake / progress impact
+      description: Lock order, observable intermediate states, memory ordering, wake obligations, fairness assumptions, shutdown/drain impact.
+
+  - type: textarea
+    id: resources
+    attributes:
+      label: Resource and performance impact
+      description: Capacity/bounds/allocation changes and expected hot-path cost. State what must be measured.
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence and acceptance criteria
+      description: Deterministic tests, formal negative controls, sanitizer gates, performance A/B, platform checks, docs/ADR work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: stop
+    attributes:
+      label: Stop conditions
+      description: Conditions that should abort or defer the design (authority split, proof explosion, performance cliff, no demonstrated value, etc.).
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: discipline
+    attributes:
+      label: Design discipline
+      options:
+        - label: I have separated the motivating problem from the preferred implementation shape.
+          required: true
+        - label: I understand this issue does not authorize broad implementation until the architecture gate is satisfied.
+          required: true

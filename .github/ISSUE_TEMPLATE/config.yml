@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contribution and lifecycle policy
+    url: https://github.com/jnhu76/Sluice/blob/master/.github/CONTRIBUTING.md
+    about: Read contribution, evidence, and issue-lifecycle rules before filing.
