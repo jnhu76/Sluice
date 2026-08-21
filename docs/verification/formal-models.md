@@ -18,6 +18,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | d1-uring-poison | D1 io_uring Poison/Recovery | `spec/tla/d1_uring_poison/` | `scripts/formal/verify-d1-uring-poison.sh` |
 | request-arena | RequestArena/RequestSlot explicit-I/O lifecycle | `spec/tla/request_arena/` | `scripts/formal/verify-request-arena.sh` |
 | e7-publication | E7 Publication | `spec/tla/e7_publication/` | `scripts/formal/verify-e7-publication.sh` |
+| f1-wait-record | F1 WaitRecord Registry (MODEL-007b) | `spec/tla/f1_wait_record/` | `scripts/formal/verify-f1-wait-record.sh` |
 | e7-multiworker-progress | E7 MultiWorker Progress | `spec/tla/e7_multiworker_progress/` | `scripts/formal/verify-e7-multiworker-progress.sh` |
 | e8-ownership-transfer | E8 Ownership Transfer | `spec/tla/e8_ownership_transfer/` | `scripts/formal/verify-e8-ownership-transfer.sh` |
 | e8-suspend-switch | E8 Suspend-Switch Steal Exclusion (MODEL-007a) | `spec/tla/e8_suspend_switch/` | `scripts/formal/verify-e8-suspend-switch.sh` |
