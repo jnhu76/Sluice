@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1155 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1193 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 504 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
@@ -39,7 +39,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_condition.cpp` | 264 | condition waits |
 | `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 1991 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2085 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -60,7 +60,13 @@ same investigation doc §6a);
 `scheduler.cpp` 1986 → 1991 (2026-08-20, Issue #139 — code-adjacent
 navigation comment above `ReadyRoutingSink::on_ready` pointing to the
 request-lifecycle walkthrough doc `docs/architecture/async-request-lifecycle.md`;
-comment-only, no behavior change).
+comment-only, no behavior change);
+`scheduler.cpp` 1991 → 2085 and `scheduler_park_wake.cpp` 1155 → 1193
+(2026-08-21, Issue #161 — the contribution-identity repair: the three
+idle-count erase sites become `exchange(0)` + a conditional generation
+bump, the park-commit identity-refusal term, and the per-worker test
+seams; see
+`docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

@@ -30,6 +30,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | e12-async-condition | E12 AsyncCondition | `spec/tla/e12_async_condition/` | `scripts/formal/verify-async-condition.sh` |
 | e12-queue | E12 Queue | `spec/tla/e12_queue/` | `scripts/formal/verify-async-queue.sh` |
 | e12-rwlock | E12 RwLock | `spec/tla/e12_rwlock/` | `scripts/formal/verify-async-rwlock.sh` |
+| e12-rwlock-scheduler-liveness | E12 RwLock + Scheduler Liveness (issue #161) | `spec/tla/e12_rwlock_scheduler_liveness/` | `scripts/formal/verify-e12-sched-liveness.sh` |
 | e13-select-core | E13 Select Core | `spec/tla/e13_select/` | `scripts/formal/verify-e13-select-core.sh` |
 | e13-select-safety | E13 Select Safety | `spec/tla/e13_select/` | `scripts/formal/verify-e13-select-safety.sh` |
 | e16-application-runtime | E16 Application Runtime | `spec/tla/e16_application_runtime/` | `scripts/formal/verify-e16-application-runtime.sh` |

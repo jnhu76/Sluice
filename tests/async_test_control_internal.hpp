@@ -197,8 +197,41 @@ enum class PhaseTag : unsigned char {
     // steal the routed ticket while suspend_switch_pending is active.
     scheduler_suspend_before_physical_switch,
 
+    // Issue #161 (idle-dance contribution orphaning): the worker popped a
+    // runnable ticket (it is REMOVED from its inbox — invisible to steals and
+    // to classify) but has NOT yet executed the unlocked
+    // idle_workers_.store(0) erase nor entered run_next_on (running not yet
+    // incremented). Holding a worker here realizes the exact M4 window: an
+    // idle-dance contribution a peer makes now is orphaned by this worker's
+    // erase on release, and this worker's own later not-last dance signal can
+    // then be absorbed by the peer's late-armed park baseline. No locks are
+    // held at this point. Fired through test_phase_worker (per-worker arming:
+    // the reproducer must let the peer's pass through the same call site).
+    worker_ticket_popped,
+
+    // Issue #161 B4-reclassification round: the popped-ticket erase has
+    // EXECUTED (the exchange(0) — and its conditional generation bump — has
+    // landed) but run_next_on has not (running not yet incremented). The
+    // difference from worker_ticket_popped is load-bearing for the
+    // route-publication orphan reproducer: a peer contribution made while a
+    // worker is held HERE survives this worker's pop-erase untouched, so the
+    // next count write is the route-publication erase in
+    // route_runnable_locked — the third genuine invalidation site (the
+    // pub-site M4 variant). No locks are held at this point. Fired through
+    // test_phase_worker (per-worker arming).
+    worker_ticket_erase_done,
+
     count
 };
+
+// Issue #161 per-worker arming sentinel: a PhaseState whose armed_worker is
+// kAnyWorker blocks EVERY worker reaching its call site (the pre-existing
+// global-seam semantics). A concrete worker id pins the hold to that one
+// worker's pass; other workers mark the phase reached and pass through.
+// Two workers traverse the same worker_loop seams, so a role-pinned
+// reproducer (the eraser held at the ticket seam while the dancer parks, or
+// conversely) cannot be expressed with global arming alone.
+inline constexpr unsigned kAnyWorker = static_cast<unsigned>(-1);
 
 // Per-PhaseTag controller state. Owned by the controller registry, keyed on
 // Scheduler*. All fields are guarded by `mtx` (the phase's own coordination
@@ -207,6 +240,14 @@ struct PhaseState {
     std::mutex mtx;
     std::condition_variable cv;
     bool armed = false;
+    // Issue #161: kAnyWorker (default) keeps the global block-any-worker
+    // semantics; a concrete id blocks only that worker (see kAnyWorker).
+    unsigned armed_worker = kAnyWorker;
+    // The worker currently holding the pause (the pauser owns `paused`:
+    // only it sets and clears the flag, so a non-pinned peer's pass through
+    // the same call site cannot overwrite an active hold — see
+    // async_test_control.cpp test_phase_worker). kAnyWorker = no pauser.
+    unsigned pauser = kAnyWorker;
     bool reached = false;  // the phase call site was reached (set under mtx)
     bool paused = false;   // the phase is blocked waiting for release
 };
@@ -314,6 +355,16 @@ struct SchedulerController {
 // that happen to be compiled into the variant without a test driver).
 void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 
+// Issue #161 per-worker variant of test_phase: an armed phase whose
+// armed_worker is a concrete id blocks ONLY that worker's pass; every other
+// worker marks the phase reached and passes through. A globally armed phase
+// (kAnyWorker) blocks all workers exactly like test_phase. Used by the
+// worker_loop seams whose call sites are traversed by every worker (ticket
+// pop, park candidate) where a reproducer must pin the two workers to
+// different roles through the SAME site.
+void test_phase_worker(sluice::async::Scheduler& s, PhaseTag tag,
+                       unsigned worker_id) noexcept;
+
 // E13 P5 CORRECTIVE: capture an admission boundary snapshot into the
 // controller's snapshot storage. Must be called from the admission worker
 // under global_mtx_, immediately before the corresponding test_phase() call.
@@ -377,6 +428,13 @@ bool is_paused(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void release(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void disarm(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void clear_reached(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
+
+// Issue #161: arm a phase for ONE worker's pass only (see kAnyWorker). The
+// wait_paused/is_paused/release observables are shared with global arming —
+// with a pinned worker only that worker can be the pauser, so wait_paused is
+// unambiguous. Plain arm() resets the phase to global (kAnyWorker) semantics.
+void arm_worker(sluice::async::Scheduler& s, PhaseTag tag,
+                unsigned worker_id) noexcept;
 
 // ---- E13 P7: synthetic registration-failure injection (task §18) ----
 //

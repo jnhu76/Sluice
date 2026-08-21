@@ -506,6 +506,10 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // slept) only makes the next park commit treat the worker's own
         // stale count as another dancer's (refuse once more, re-dance,
         // converge); it can never suppress a needed refusal.
+        // Issue #161: with the contribution-identity law, this reset also
+        // retires the recorded dance_epoch_at_contribution_ — the identity
+        // is consulted only while contributed == 1, so a stale record left
+        // by an erased contribution is never trusted past the re-loop.
         ws->idle_dance_contributed_.store(0, std::memory_order_release);
         // 1. Get a runnable Fiber.
         Fiber* f = nullptr;
@@ -547,7 +551,49 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         }
 
         if (f) {
-            idle_workers_.store(0, std::memory_order_release);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // Issue #161 seam (worker_ticket_popped): the ticket is popped —
+            // REMOVED from its inbox, invisible to steals and to classify —
+            // but the unlocked idle-count erase below has not run and
+            // run_next_on has not incremented running. This is the exact M4
+            // window: an idle-dance contribution a peer makes while a worker
+            // is held here is orphaned by the erase on release. No locks are
+            // held at this point. ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1:
+            // controller-driven, per-worker arming (test_phase_worker) so a
+            // reproducer can hold the eraser while the peer's pass through
+            // the same site is let through.
+            sluice_async_test::test_phase_worker(*this,
+                sluice_async_test::PhaseTag::worker_ticket_popped, ws->id);
+#endif
+            // Issue #161 (contribution-identity law, B4 site 1 of 3): this
+            // unlocked erase is a genuine contribution-invalidation event —
+            // it can orphan a peer's live not-last contribution while the
+            // peer's 1-bit flag still claims it. Exchange (not store) so the
+            // generation advances exactly when a contribution was erased;
+            // bump strictly AFTER the exchange (refinement argument on
+            // Scheduler::dance_epoch_). The conditional keeps the hot
+            // all-idle-zero path epoch-stable.
+            {
+                const unsigned erased =
+                    idle_workers_.exchange(0, std::memory_order_acq_rel);
+                if (erased != 0) {
+                    dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
+                }
+            }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // Issue #161 B4-reclassification seam (worker_ticket_erase_done):
+            // the pop-erase above has fully landed (exchange AND conditional
+            // bump) but run_next_on has not — running is still 0 and the
+            // ticket is invisible. A peer's not-last dance contribution made
+            // while a worker is held here therefore survives the pop-erase,
+            // and the next idle-count write is the route-publication erase
+            // in route_runnable_locked — the pub-site M4 variant the
+            // original pre-erase seam (worker_ticket_popped) cannot express.
+            // No locks are held. ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1:
+            // controller-driven, per-worker arming.
+            sluice_async_test::test_phase_worker(*this,
+                sluice_async_test::PhaseTag::worker_ticket_erase_done, ws->id);
+#endif
             run_next_on(ws, f);
             continue;
         }
@@ -579,7 +625,19 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             // owning worker's route signals the wake source (route_runnable
             // publishes under global_mtx_ + signal_wake_locked), so the parked
             // worker re-checks without polling.
-            idle_workers_.store(0, std::memory_order_release);
+            //
+            // Issue #161 (contribution-identity law, B4 site 2 of 3): this
+            // second unlocked erase is another genuine invalidation event
+            // (same exchange/bump discipline and refinement argument as the
+            // popped-ticket branch above — B4 proved the G-section reset
+            // sites self-guarded, so they do NOT bump).
+            {
+                const unsigned erased =
+                    idle_workers_.exchange(0, std::memory_order_acq_rel);
+                if (erased != 0) {
+                    dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
+                }
+            }
             if (global_terminate_.load(std::memory_order_acquire)) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 ws->loop_exit_reason =
@@ -983,6 +1041,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // caller; unrelated registrations remain for later.
                         // G1 repair: converge against the LIVE loop count —
                         // early-exited workers can never join the dance.
+                        // Issue #161: record the contribution identity
+                        // STRICTLY BEFORE the fetch_add (refinement argument
+                        // on Scheduler::dance_epoch_).
+                        ws->dance_epoch_at_contribution_.store(
+                            dance_epoch_.load(std::memory_order_acquire),
+                            std::memory_order_release);
                         unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
                         ws->idle_dance_contributed_.store(1, std::memory_order_release);
                         if (prev + 1 >= live_loop_workers_) {
@@ -1032,6 +1096,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     // early-exited worker (e.g. the MW-S2 no-progress
                     // terminate) can never join the dance; counting it would
                     // strand the survivors one short of last-idle forever.
+                    // Issue #161: record the contribution identity STRICTLY
+                    // BEFORE the fetch_add (refinement argument on
+                    // Scheduler::dance_epoch_).
+                    ws->dance_epoch_at_contribution_.store(
+                        dance_epoch_.load(std::memory_order_acquire),
+                        std::memory_order_release);
                     unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
                     ws->idle_dance_contributed_.store(1, std::memory_order_release);
                     if (prev + 1 >= live_loop_workers_) {
@@ -1109,9 +1179,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // a publication before ParkCandidate is drained (E9-T3). The seam
         // does NOT modify Scheduler state; it only pauses at the boundary.
         // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+        // Issue #161: fired through test_phase_worker so the phase can be
+        // armed for ONE worker's pass (every worker traverses this site; a
+        // role-pinned reproducer holds the dancer here while the eraser's
+        // later pass must go through). Global arm() keeps blocking everyone.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(*this,
-            sluice_async_test::PhaseTag::scheduler_park_candidate);
+        sluice_async_test::test_phase_worker(*this,
+            sluice_async_test::PhaseTag::scheduler_park_candidate, ws->id);
 #endif
 
         // E9: park on the unified wake source (wake_cv + wake epoch). This
@@ -1450,7 +1524,27 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     // Clear the terminate signal: new work was routed, so the run is NOT over.
     // A worker that was about to exit must re-check its inbox (late-drain).
     global_terminate_.store(false, std::memory_order_release);
-    idle_workers_.store(0, std::memory_order_release);
+    // Issue #161 (contribution-identity law, B4 site 3 of 3): this route-
+    // publication erase was reclassified to a GENUINE contribution-
+    // invalidation event by the split-window TLA model
+    // (spec/tla/e12_rwlock_scheduler_liveness/: EraseIdleOnPop and
+    // EraseIdleMwS1 model the unlocked sites as split erase+bump steps; the
+    // pub-erase was the third genuine site). The old M4 verdict treated it
+    // as non-genuine; TLC proved a dance contribution made before a routed
+    // grant can be orphaned by this erase with the contributor's 1-bit flag
+    // still claiming it. It gets the same exchange/bump discipline as B4
+    // sites 1 and 2. Self-guarded on erased != 0 for the same reason the
+    // G-section recheck/reset-continue sites (:1003/:1054/:1121) never bump:
+    // a zero erase erases nothing, so advancing the generation would only
+    // invalidate legitimate contributions. The conditional keeps the hot
+    // all-idle-zero route path epoch-stable.
+    {
+        const unsigned erased =
+            idle_workers_.exchange(0, std::memory_order_acq_rel);
+        if (erased != 0) {
+            dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
+        }
+    }
     // E7-C fixup: new runnable work cancels any MW-S2 admission candidate/
     // committed. A committed participant in wait_one cannot be interrupted
     // (it has released global_mtx_), but a CANDIDATE that has not yet

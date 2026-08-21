@@ -298,6 +298,25 @@
       "notes": "Protocol: rwlock writer-fair FIFO reconcile (unlock/cancel/expire head-prefix grant). Negative models: ReaderBypass (admission barging) and NoReconcile (release drops grant-from-head, stranding a grantable head — closes the audit-found reconcile-coverage gap; InvNoStrandedGrantableHead also gives RW4 its first invariant)."
     },
     {
+      "id": "e12-rwlock-scheduler-liveness",
+      "spec_dir": "spec/tla/e12_rwlock_scheduler_liveness",
+      "verifier": "scripts/formal/verify-e12-sched-liveness.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 8,
+      "negative_gate_count": 6,
+      "reachability_gate_count": 1,
+      "owner_docs": [
+        "docs/architecture/issue-161-idle-dance-contribution-generation-gate.md"
+      ],
+      "implementation_bindings": [
+        "src/async/scheduler.cpp",
+        "src/async/scheduler_park_wake.cpp"
+      ],
+      "notes": "Protocol: issue #161 combined rwlock-publication x idle-dance termination liveness (T22 multi-worker drain hang). Positive: repaired safety+liveness at the EXACT as-built constants (contribution-generation law; the three genuine invalidation sites bump — pop/mw_s1/route-publication — while the :958 recheck and :1065 reset-continue sites do NOT, matching C++ store(0); EraseIdleBumping bumps only when the erase actually erased a contribution), split-window safety on the all-bumps constants (the window costs only a transient park), two B4 self-guarded-site proofs (:958/:1065), M1/M2/M3 composition on the repaired base (documented in-scope closure — those hazard classes need a non-worker producer or unbounded busy owner; carried by e9 negatives at its abstraction). Negative: M4 as-built DrainStuckState + liveness CEX (an unlocked or route-publication erase orphans a not-last dancer's contribution; its stale 1-bit R4 flag lets the park commit absorb the eraser's not-last signal; both workers sleep with work complete), M5 grant-without-ticket, and the three genuine invalidation sites (:550 pop-erase, :582 mw_s1 erase, and the route-publication erase RECLASSIFIED genuine by the split-window model — the two unlocked sites are modeled as the split exchange/bump pairs the C++ performs). Reachability witness: E12SchedLivenessSplitWindow violates SplitWindowNeverArmed (the exchange(0)-before-bump window a park commit can observe); the repaired-constants safety gate on the same split constants proves the window costs only a transient park. SF on TryPop encodes own-inbox straight-line pop scheduling (steal-war closure); wake epoch is monotonic Nat."
+    },
+    {
       "id": "e13-select-core",
       "spec_dir": "spec/tla/e13_select",
       "verifier": "scripts/formal/verify-e13-select-core.sh",

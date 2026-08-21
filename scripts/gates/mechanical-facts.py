@@ -71,6 +71,9 @@ KNOWN_TRACKER_REFS = {
                                        # 2026-08-17; corrective note in this report)
     139,                                # request-lifecycle walkthrough nav comment
                                        # (2026-08-20, docs-only attribution entry)
+    161,                                # idle-dance contribution-identity stall
+                                       # (2026-08-21, corrective delta attribution
+                                       # in this report; gate doc in docs/architecture/)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

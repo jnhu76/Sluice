@@ -26,18 +26,29 @@
 //     hits the noexcept boundary and terminates (fail-fast), never a
 //     rejection-after-accept.
 //
-// It acquires NO lock, performs NO wake, allocates NOTHING, and touches NO
-// Scheduler / wait-source / backend-queue state. The caller (the backend)
-// holds its own admission discipline around the whole call — context
-// access_mtx_ serialization (Sync), admission_mtx_ (Fake/ThreadPool), or
-// dispatch_mtx_ with the in-lock Stage-0 gate (Uring) — and performs
-// stage-4 enqueue itself after the call returns (backend execution
-// ownership, unchanged).
+// It acquires NO backend / admission / Scheduler / wake-domain lock
+// directly, performs NO wake, allocates NOTHING, and touches NO
+// Scheduler / wait-source / backend-queue state. It invokes RequestArena
+// leaf operations (reserve, prepare, install_publication_binding, commit,
+// rollback_reserved_or_prepared), which acquire the arena leaf mutex
+// exactly as before centralization — no lock-domain change. The caller
+// (the backend) holds its own admission discipline around the whole call
+// — context access_mtx_ serialization (Sync), admission_mtx_
+// (Fake/ThreadPool), or dispatch_mtx_ with the in-lock Stage-0 gate
+// (Uring) — and performs stage-4 enqueue itself after the call returns
+// (backend execution ownership, unchanged).
 //
 // Policy contract (per backend; nested in the backend class so the binding
 // trio reaches the protected AsyncBackend statics). Surface budget accepted
-// by review: 5 production hooks + 6 data accessors + 1 test-guarded
-// injection seam; any addition requires an issue-gate review.
+// by review (mechanically countable; any addition requires re-review):
+//
+//   4 argument/data adapters    (kind, borrow, requested_bytes, publish_thunk)
+//   4 Completion-binding adapters (begin_binding, install_binding,
+//                                  commit_binding, rollback_binding)
+//   4 backend-divergence hooks  (stage0_precheck, validate, write_scratch,
+//                                pause_before_commit_binding)
+//   1 test-only injection hook  (injected_precommit_stage_failure;
+//                                SLUICE_ASYNC_INTERNAL_TESTING only)
 //
 //   using completion_type = Completion<std::size_t> | Completion<void>;
 //   // --- data accessors (pure; mirror arena/Completion call arguments) ---
@@ -52,7 +63,7 @@
 //   void commit_binding(completion_type& c) noexcept;
 //   void rollback_binding(completion_type& c) noexcept;  // before-accept form
 //   // --- production hooks ---
-//   Result<void> stage0_precheck() noexcept;   // Uring: poison/admission, verbatim
+//   Result<void> stage0_precheck() noexcept;   // Uring: ring/poison/admission, verbatim
 //   Result<void> validate(const Op& op) noexcept;
 //   void write_scratch(detail::SlotHandle h, const Op& op) noexcept;
 //   void pause_before_commit_binding() noexcept;  // test seam, guarded body
@@ -87,12 +98,13 @@ Result<SlotHandle> submit_transaction(RequestArena& arena,
                                       typename Policy::completion_type& c,
                                       const typename Policy::op_type& op,
                                       Policy& policy) noexcept {
-    // Stage 0: backend admission/poison gate, under the CALLER's admission
-    // discipline (the hook may assume it). Uring returns its poison error
-    // verbatim BEFORE admission-closed and reserve (D4-M5 precedence,
-    // hook-internal order ring -> poison -> admission); the reference and
-    // ThreadPool policies are trivial ok. The shared function never assumes
-    // a healthy backend: health is a policy question.
+    // Stage 0: backend ring/poison/admission gate, under the CALLER's
+    // admission discipline (the hook may assume it). Uring returns its
+    // ring, poison, and admission errors verbatim BEFORE reserve (D4-M5
+    // precedence, hook-internal order ring -> poison -> admission); the
+    // reference and ThreadPool policies are trivial ok. The shared
+    // function never assumes a healthy backend: health is a policy
+    // question.
     if (auto pre = policy.stage0_precheck(); !pre.has_value()) {
         return make_unexpected<SlotHandle>(pre.error());
     }
@@ -174,7 +186,12 @@ Result<SlotHandle> submit_transaction(RequestArena& arena,
     if (auto ch = arena.commit(h); !ch.has_value()) {
         policy.rollback_binding(c);
         (void)arena.rollback_reserved_or_prepared(h);
-        return make_unexpected<SlotHandle>(ch.error());
+        // Observable error mapping: commit failure on the submission path
+        // is mapped to invalid_state, matching the pre-centralization
+        // per-backend behavior (accepted constraint: error precedence /
+        // observable behavior identical per backend).
+        (void)ch; // arena error consumed — invalid_state is the contract
+        return make_unexpected<SlotHandle>(IoError{IoError::Code::invalid_state});
     }
     // Deterministic causal seam (C2e/DIV): between the arena commit and the
     // binding->outstanding release-store. Bodies are guarded inside the

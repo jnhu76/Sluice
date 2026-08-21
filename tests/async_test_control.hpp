@@ -170,6 +170,73 @@ struct WorkerParkReturnSeam {
     }
 };
 
+// ---- Issue #161 reproducer seams (per-worker role pinning) ----
+// The idle-dance contribution-orphaning defect needs TWO workers held at
+// DIFFERENT passes of the SAME worker_loop sites: the eraser at the popped-
+// ticket window (before its unlocked idle_workers_ store(0)), the dancer at
+// the park-candidate boundary (after its not-last dance contribution, before
+// its park commit arms the baseline). Both sites are traversed by every
+// worker, so both holds use arm_worker (see kAnyWorker) — the peer's pass
+// through the same site is let through unpaused.
+struct Issue161TicketSeam {
+    static void arm_for_worker(sluice::async::Scheduler& s,
+                               unsigned worker_id) noexcept {
+        sluice_async_test::arm_worker(s, PhaseTag::worker_ticket_popped,
+                                      worker_id);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_ticket_popped);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::worker_ticket_popped);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_ticket_popped);
+    }
+};
+
+struct Issue161CandidateSeam {
+    static void arm_for_worker(sluice::async::Scheduler& s,
+                               unsigned worker_id) noexcept {
+        sluice_async_test::arm_worker(s, PhaseTag::scheduler_park_candidate,
+                                      worker_id);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::scheduler_park_candidate);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s,
+                                            PhaseTag::scheduler_park_candidate);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::scheduler_park_candidate);
+    }
+};
+
+// Issue #161 B4-reclassification round: holds the ERASER strictly AFTER its
+// pop-erase (exchange + conditional bump) and strictly BEFORE run_next_on.
+// Unlike Issue161TicketSeam (pre-erase), a peer contribution made during the
+// hold SURVIVES the pop-erase, so the next idle-count write is the
+// route-publication erase — the pub-site orphan variant (third genuine B4
+// site; see issue161_pub_erase_orphan_test).
+struct Issue161EraseDoneSeam {
+    static void arm_for_worker(sluice::async::Scheduler& s,
+                               unsigned worker_id) noexcept {
+        sluice_async_test::arm_worker(s, PhaseTag::worker_ticket_erase_done,
+                                      worker_id);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_ticket_erase_done);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s,
+                                            PhaseTag::worker_ticket_erase_done);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_ticket_erase_done);
+    }
+};
+
 // ---- Phase G G1 reproducer construction: run-entry seam. run_impl pauses
 // AFTER publishing the invocation topology (active_worker_count_ set,
 // pending_spawn_ distributed, terminate cleared) and BEFORE starting any

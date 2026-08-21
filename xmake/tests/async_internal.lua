@@ -272,6 +272,32 @@ sluice_internal_async_test("phase_g_backend_progress_wake_test")
 -- x86_64 (fiber_ctx::supported).
 sluice_internal_async_test("issue115_runnable_publication_wake_test")
 
+-- Issue #161 deterministic causal regression: an idle-dance contribution
+-- orphaned by a ticketed worker's unlocked idle_workers_ store(0) leaves the
+-- run one short of the last-idle termination forever (the async_rwlock T22
+-- hang; TLC counterexample M4 in spec/tla/e12_rwlock_scheduler_liveness/).
+-- Per-worker seams (worker_ticket_popped for the eraser,
+-- scheduler_park_candidate for the stale contributor) realize the exact
+-- counterexample sequence; pre-fix the bounded watchdog fail-closes then
+-- rescues via the external wake handle. Deterministic (seams + bounded
+-- watchdogs); NO sleep-ordering. Gated to x86_64 (fiber_ctx::supported).
+sluice_internal_async_test("issue161_idle_dance_orphan_test")
+
+-- Issue #161 B4-reclassification causal regression: the ROUTE-PUBLICATION
+-- idle-count erase (route_runnable_locked) orphans a live not-last dance
+-- contribution exactly like the two unlocked ticketed erases; pre-fix the
+-- run stalls permanently with all work complete (TLC B4NoBumpPubErase
+-- counterexample, exposed by the split-window model round). Per-worker seams
+-- (worker_ticket_erase_done for the eraser — strictly after its pop-erase,
+-- strictly before run_next_on — and scheduler_park_candidate for the stale
+-- contributor) plus the global scheduler_park_baseline_recorded seam (pins
+-- the eraser strictly after its final not-last dance signal, proving the
+-- signal precedes the stale contributor's late baseline arming) realize the
+-- exact counterexample sequence; pre-fix the bounded watchdog fail-closes
+-- then rescues via the external wake handle. Deterministic (seams + bounded
+-- watchdogs); NO sleep-ordering. Gated to x86_64 (fiber_ctx::supported).
+sluice_internal_async_test("issue161_pub_erase_orphan_test")
+
 -- phase_g_closeout_test — Phase G final closeout: deterministic causal
 -- proofs for the commit→park wake protocol (Cases A–D: notify before arm /
 -- after arm / while parked / backend-ready-vs-notify) and the ThreadPool

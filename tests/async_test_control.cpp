@@ -69,7 +69,8 @@ void reset_rollback_observation_locked(SchedulerController& c) noexcept {
 
 }  // namespace
 
-void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
+void test_phase_worker(sluice::async::Scheduler& s, PhaseTag tag,
+                       unsigned worker_id) noexcept {
     // No allocation: find only. If the Scheduler has no registered controller
     // (e.g. a variant-lib path hit during a non-test run), this is a no-op.
     SchedulerController* c = find_controller(s);
@@ -79,20 +80,38 @@ void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
     // production lock) so the test coordinator can observe/ release. When the
     // phase is armed, we block here until release — the production lock held
     // by the caller (e.g. global_mtx_) remains held, which is the guarantee
-    // under test.
+    // under test. Issue #161 per-worker arming: a pinned armed_worker blocks
+    // only the identified worker; the pre-existing global arming (kAnyWorker)
+    // blocks every arriver, preserving the test_phase semantics unchanged.
     {
         std::lock_guard<std::mutex> lk(p.mtx);
         p.reached = true;
-        p.paused = p.armed;
+        // The pauser owns `paused`: set it only for the worker that actually
+        // blocks, so a non-pinned peer's pass through the same call site
+        // cannot clear an active hold while the pinned worker is still
+        // blocked in the cv wait below (wait_paused/is_paused would then miss
+        // the hold).
+        const bool will_pause =
+            p.armed &&
+            (p.armed_worker == kAnyWorker || p.armed_worker == worker_id);
+        if (will_pause) {
+            p.paused = true;
+            p.pauser = worker_id;
+        }
     }
     p.cv.notify_all();  // tell the coordinator we reached + paused
     {
         std::unique_lock<std::mutex> lk(p.mtx);
-        if (p.paused) {
+        if (p.paused && p.pauser == worker_id) {
             p.cv.wait(lk, [&p] { return !p.armed; });
             p.paused = false;
+            p.pauser = kAnyWorker;
         }
     }
+}
+
+void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
+    test_phase_worker(s, tag, kAnyWorker);
 }
 
 void release_all_phases(sluice::async::Scheduler& s) noexcept {
@@ -150,8 +169,25 @@ void arm(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
     {
         std::lock_guard<std::mutex> lk(p.mtx);
         p.armed = true;
+        p.armed_worker = kAnyWorker;  // plain arm is global (issue #161 note)
         p.reached = false;
         p.paused = false;
+        p.pauser = kAnyWorker;
+    }
+}
+
+void arm_worker(sluice::async::Scheduler& s, PhaseTag tag,
+                unsigned worker_id) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, tag);
+    {
+        std::lock_guard<std::mutex> lk(p.mtx);
+        p.armed = true;
+        p.armed_worker = worker_id;
+        p.reached = false;
+        p.paused = false;
+        p.pauser = kAnyWorker;
     }
 }
 
