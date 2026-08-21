@@ -247,36 +247,39 @@ check is inside the commit's existing G-section. No edge is added between
 ## Gate 4 — Evidence
 
 ```text
-FORMAL (re-executed 2026-08-21 after the split-window round;
+FORMAL (re-executed 2026-08-21 after the correction round;
         bash scripts/formal/verify-e12-sched-liveness.sh):
-  Positive [repaired] safety ................. PASS (incl. DrainStuckState)
-  Positive [repaired] liveness ................ PASS (4 temporal properties)
-  B4 self-guarded sites (:958/:1065) ......... PASS with bump disabled
-  B4 route-publication erase (:1514) ......... CEX DrainStuckState with the
-                                                bump disabled (RECLASSIFIED
-                                                genuine by the split model;
-                                                the old "self-guarded"
-                                                positive gate was removed)
-  M1/M2/M3 composition on repaired base ....... PASS (documented in-scope
-                                                closure; e9 carries the
-                                                classes at its abstraction)
-  M4 as-built safety .......................... CEX DrainStuckState
-                                                (the 21-state trace above)
-  M4 as-built liveness ........................ CEX (fail-closed temporal
-                                                grep — TLC's plural wording
-                                                "Temporal properties were
-                                                violated." is matched, and a
-                                                crash/parse failure no longer
-                                                masquerades as a witness)
-  M5 grant-without-ticket ..................... CEX liveness
-  B4 ticketed sites (pop path, mw_s1) ........ CEX DrainStuckState when
-                                                the bump is disabled
-  Split-window witness (all bumps on) ........ CEX SplitWindowNeverArmed —
-                                                the exchange(0)-before-bump
-                                                window is REACHABLE in the
-                                                model; the repaired-constants
-                                                safety gate proves it costs
-                                                only a transient park
+  Positive [repaired] safety, EXACT as-built constants .... PASS (incl.
+      DrainStuckState). The three genuine invalidation sites bump (pop,
+      mw_s1, route-publication); the :958 recheck and :1065 reset-continue
+      sites do NOT bump (C++ store(0)); EraseIdleBumping advances the
+      generation only when the erase actually erased a contribution
+      (idleCount > 0 — the C++ erased != 0).
+  Positive [repaired] liveness, same constants ........... PASS
+      (4 temporal properties)
+  Split-window safety (all-bumps constants, same as the witness) PASS —
+      the window costs only a transient park
+  B4 self-guarded sites (:958/:1065) .................... PASS with bump
+      disabled
+  B4 route-publication erase (:1514) ..................... CEX DrainStuckState
+      with the bump disabled (RECLASSIFIED genuine by the split model; the
+      old "self-guarded" positive gate was removed)
+  M1/M2/M3 composition on repaired base .................. PASS (documented
+      in-scope closure; M2's verdict is unified as DOCUMENTED PASS across
+      module header, cfg, verifier, and README; e9 carries the classes at
+      its abstraction)
+  M4 as-built safety ..................................... CEX DrainStuckState
+      (the 21-state trace above)
+  M4 as-built liveness ................................... CEX (fail-closed
+      temporal grep — TLC's plural wording "Temporal properties were
+      violated." is matched, and a crash/parse failure no longer
+      masquerades as a witness)
+  M5 grant-without-ticket ................................ CEX liveness
+  B4 ticketed sites (pop path, mw_s1) ................... CEX DrainStuckState
+      when the bump is disabled
+  Split-window witness (all bumps on) ................... CEX SplitWindowNeverArmed —
+      the exchange(0)-before-bump window is REACHABLE in the model; the
+      split-window safety gate above proves it costs only a transient park
 
 C++ (first fix round — executed 2026-08-21, Clang Debug unless noted;
      commands verbatim):

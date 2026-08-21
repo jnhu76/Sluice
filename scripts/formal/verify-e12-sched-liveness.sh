@@ -2,9 +2,18 @@
 # verify-e12-sched-liveness.sh — E12 x Scheduler combined liveness formal gate
 # (issue #161: async_rwlock_test T22 multi-worker drain hang).
 #
-#   Positive (repaired protocol, RepairContributionGeneration=TRUE):
+#   Positive (repaired protocol, RepairContributionGeneration=TRUE) at the
+#     EXACT as-built constants — the three genuine invalidation sites bump
+#     (pop, mw_s1, route-publication); the :958 recheck and :1065
+#     reset-continue sites do NOT bump (C++ uses plain store(0) there):
 #     E12SchedLivenessSafety    -> all invariants PASS (incl. DrainStuckState)
 #     E12SchedLivenessLiveness  -> all temporal properties PASS
+#     E12SchedLivenessSplitWindowSafety -> all invariants PASS on the SAME
+#                          all-bumps-on constants as the split-window
+#                          witness (below): the exchange(0)-before-bump
+#                          window is reachable (witness), but it costs only
+#                          a transient park — the over-strong exploration
+#                          configuration stays safe.
 #     B4NoBumpRecheckErase      -> PASS  (:958 self-guarded; see below)
 #     B4NoBumpPubErase          -> FAIL-EXPECTED (reclassified: the route-
 #                                          publication erase IS a genuine
@@ -177,6 +186,9 @@ expect_fail_invariant "B4: :582 mw_s1 erase IS an invalidation site" \
 # --- Reachability witness (split window is genuinely explored) ---
 expect_fail_invariant "Split-window witness [repaired; window reachable]" \
   E12SchedLivenessSplitWindow SplitWindowNeverArmed splitwin || rc=1
+# --- Split-window SAFETY on the same constants (transient-park proof) ---
+expect_pass "Split-window safety [all-bumps constants; transient park]" \
+  E12SchedLivenessSplitWindowSafety splitwin_safety || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi

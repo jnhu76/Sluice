@@ -9,7 +9,7 @@ classifies which idle-count reset sites are genuine "contribution
 invalidation events".
 
 Tracking issue: **#161**. Verifier: `scripts/formal/verify-e12-sched-liveness.sh`
-(7 positive gates PASS, 6 negative gates CEX, 1 fail-closed reachability
+(8 positive gates PASS, 6 negative gates CEX, 1 fail-closed reachability
 witness). Owner doc:
 `docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`.
 
@@ -30,6 +30,28 @@ conditional bump (`BumpPopGen` / `BumpMwS1Gen`), with the intermediate
    and the repaired-constants safety gate proves the window costs only a
    transient park. This is why the C++ refinement argument is the honest
    dichotomy, not a visibility claim (see below).
+
+**Review-correction round (this revision):** the formal model now matches
+the C++ refinement exactly, not more strongly.
+
+- The positive safety/liveness gates (`E12SchedLivenessSafety.cfg` /
+  `E12SchedLivenessLiveness.cfg`) run at the EXACT as-built repaired
+  constants: the three GENUINE invalidation sites bump (`pop`, `mw_s1`,
+  `route-publication`); the `:958` recheck and `:1065` reset-continue
+  sites do NOT (C++ uses plain `store(0)` there). The over-strong
+  all-bumps-on exploration remains, as `E12SchedLivenessSplitWindowSafety.cfg`
+  (safety on the same constants as the split-window witness).
+- `EraseIdleBumping` advances the generation only when the erase actually
+  erased a contribution (`idleCount > 0`), matching C++ `if (erased != 0)`.
+  A zero-count erase invalidates nothing and must not bump.
+- `ReclassifyMwS1`'s mw_s1-still branch is no longer pinned shut by a
+  contradictory `UNCHANGED` (the outer frame also pinned `idleCount` /
+  `contributionGen`, which the branch's erase modifies — with
+  `BumpRecheckErase` on, the transition was unsatisfiable and TLC silently
+  deleted the recheck path from the state space). The branch is now live.
+- M2's verdict is unified as **DOCUMENTED PASS** in the closed T22 scope
+  (module header, cfg, verifier, and README agree); the mutant cfgs'
+  duplicate constant assignments are removed.
 
 ## Scope
 

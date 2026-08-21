@@ -67,8 +67,8 @@
                     e9 BuggyPrePark carries the class at its abstraction).
     M2NoTransport   M2: pure-baseline transport — the cv predicate drops the
                     own-inbox clause AND the park commit drops the progress
-                    scan (the pre-G1/pre-E9-Section-10 shape). Expected:
-                    NoStrandedRunnable counterexample.
+                    scan (the pre-G1/pre-E9-Section-10 shape). Expected in
+                    this closed scenario: DOCUMENTED PASS — see README.
     M3NoCommitRecheck M3: park commit arms the baseline without the progress
                     recheck (the pre-G1 arm-before-recheck shape; the
                     own-inbox backstop is KEPT). Expected in this closed
@@ -300,10 +300,16 @@ RefusePark(w) ==
    model experiments can decide which sites are GENUINE invalidation events
    (disabling the bump must reproduce the M4 stuck state) and which are
    self-guarded by other protocol mechanisms (disabling the bump must stay
-   safe). *)
+   safe).
+
+   Fidelity (review of the correction round): the bump fires ONLY when the
+   erase actually erased a contribution (idleCount > 0) — matching the C++
+   `if (erased != 0) dance_epoch_.fetch_add(...)` at every genuine site; a
+   zero-count erase invalidates nothing and must not advance the generation
+   (that would orphan legitimate contributions). *)
 EraseIdleBumping(bump) ==
     /\ idleCount' = 0
-    /\ contributionGen' = IF (RepairContributionGeneration /\ bump)
+    /\ contributionGen' = IF (RepairContributionGeneration /\ bump /\ idleCount > 0)
                           THEN contributionGen + 1
                           ELSE contributionGen
 
@@ -479,7 +485,7 @@ ReclassifyMwS1(w) ==
             /\ workerStage' = [workerStage EXCEPT ![w] = "DanceGo"]
     /\ UNCHANGED <<held, inbox, fiberPC, writerActive, activeReaders,
                    r2Queued, r2Acquired, waitingReady, runningCount,
-                   wakeEpoch, observedEpoch, idleCount, contributed,
+                   wakeEpoch, observedEpoch, contributed,
                    contribGen, terminate, resCount, pubCount>>
 
 (* =========================================================================
