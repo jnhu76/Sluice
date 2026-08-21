@@ -292,12 +292,43 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // its signal advances the epoch past the baseline being recorded
     // (predicate wake) — the E9-LIFE-8 absorbed-baseline window stays
     // closed with persistent state.
+    //
+    // Issue #161 (contribution-identity law, third refusal term): the R4
+    // idle>own comparison cannot distinguish a dancer's OWN stale count from
+    // the eraser's fresh one — both read 1 == 1 after the unlocked erase
+    // orphaned the dancer's contribution. The generation term closes that:
+    // a counted dancer whose recorded contribution identity is no longer
+    // current (an unlocked erase at the popped-ticket or MW-S1 site
+    // advanced Scheduler::dance_epoch_ past it) refuses, signals, and
+    // re-dances toward the last-idle threshold instead of arming a
+    // baseline that absorbs the eraser's not-last signal (the permanent
+    // all-work-complete stall; TLC M4, spec/tla/e12_rwlock_scheduler_
+    // liveness).
     {
         LockGuard glk(global_mtx_);
         const unsigned own_dance =
             ws->idle_dance_contributed_.load(std::memory_order_acquire);
+        // Issue #161 (contribution-identity law): the identity term is
+        // evaluated LAST — its dance_epoch_ load must be sequenced AFTER the
+        // idle_workers_ load above it (the eraser bumps the epoch strictly
+        // after its idle exchange, so a commit that OBSERVES the erased count
+        // is guaranteed to observe the newer generation too; see the
+        // refinement argument on Scheduler::dance_epoch_). A mismatch means
+        // this worker's recorded contribution was orphaned by an unlocked
+        // erase: the run is one short of the last-idle threshold while this
+        // 1-bit flag still claims a live contribution — the exact M4 stall
+        // (both workers parked, work complete, no producer). Refuse and
+        // re-dance instead of arming a baseline that would absorb the
+        // eraser's already-emitted not-last signal. Gated on own_dance != 0:
+        // a worker that has not danced must not refuse (its observer
+        // delegation is legitimate — R4; also prevents a self-sustaining
+        // refuse loop on an unbounded generation).
         if (unguarded_progress_pending_locked() ||
-            idle_workers_.load(std::memory_order_acquire) > own_dance) {
+            idle_workers_.load(std::memory_order_acquire) > own_dance ||
+            (own_dance != 0 &&
+             dance_epoch_.load(std::memory_order_acquire) !=
+                 ws->dance_epoch_at_contribution_.load(
+                     std::memory_order_acquire))) {
             // Persistent progress with no observer, or an unfinished idle
             // dance this worker has not contributed to: parking here is
             // the G1 violation (stranded progress) or the E9-LIFE-8

@@ -251,6 +251,24 @@ struct WorkerState {
     // park commit alongside idle_workers_.
     std::atomic<unsigned> idle_dance_contributed_{0};
 
+    // Issue #161 (contribution-identity law): the value of
+    // Scheduler::dance_epoch_ at the moment this worker's dance contribution
+    // was made — loaded BEFORE the idle_workers_ fetch_add (see the
+    // refinement argument on Scheduler::dance_epoch_). Meaningful only
+    // while idle_dance_contributed_ == 1: the park commit refuses to arm a
+    // baseline behind a contribution whose recorded identity is no longer
+    // current (the count was orphaned by a ticketed worker's unlocked erase,
+    // so the run is one short of the last-idle threshold even though this
+    // bit still claims a live contribution). Stale-record false refusals are
+    // safe by the same conservative-convergence argument as the R4
+    // under-clear: the refusing worker re-loops, re-dances with a fresh
+    // identity, and either reaches the last-idle threshold or parks counted.
+    // Plain production atomic; written in the dance under global_mtx_, read
+    // at the park commit under global_mtx_ (the generation field itself is
+    // never mutex-guarded — it is monotonic and its writers are unlocked by
+    // design).
+    std::atomic<std::uint64_t> dance_epoch_at_contribution_{0};
+
     // E13: owner Scheduler identity. Set exactly once when WorkerState is
     // attached to a Scheduler. Immutable by contract; not used for routing.
     Scheduler* owner_scheduler{nullptr};
@@ -1526,6 +1544,44 @@ private:
     std::atomic<unsigned> active_worker_count_{0};
     std::atomic<unsigned> running_fiber_count_{0};
     std::atomic<unsigned> idle_workers_{0};
+    // Issue #161 (contribution-identity law): generation of the CURRENT
+    // idle-dance contribution epoch. idle_workers_ is erased OUTSIDE any
+    // lock by two ticketed paths (the popped-ticket branch and the MW-S1
+    // fall-through in worker_loop), and such an erase can orphan a peer's
+    // just-made not-last contribution: the count is gone while the peer's
+    // 1-bit idle_dance_contributed_ still claims a live contribution, so
+    // the park commit's bare idle>own comparison cannot tell the eraser's
+    // fresh count from the peer's stale one (1 == 1) and both workers park
+    // with the run permanently one short of the last-idle threshold —
+    // work complete, terminate false, no remaining producer (the #161
+    // stall; TLC counterexample M4, spec/tla/e12_rwlock_scheduler_liveness).
+    //
+    // LAW (B3, model-proven): any idle-count reset that CAN orphan a live
+    // contribution invalidates the identity of ALL live contributions; a
+    // dancer may arm a park baseline only while its recorded identity is
+    // still current, else it refuses, signals, and re-dances (toward the
+    // last-idle threshold or a re-counted park). This field is that
+    // generation. It is advanced ONLY at the two unlocked erase sites
+    // (B4 site classification — the model shows every other reset site is
+    // self-guarded: same-G-critical-section forced re-loop/continue,
+    // erase+signal atomic pairs, or the run boundary, which resets every
+    // worker's identity together).
+    //
+    // C++ refinement argument (why the unlocked RMW pair refines the
+    // model's atomic EraseIdle): the dancer RECORDS this epoch strictly
+    // BEFORE its idle fetch_add; the eraser bumps strictly AFTER its
+    // idle exchange(0). Epochs are monotonic, so whenever an eraser's
+    // exchange lands after a dancer's fetch_add (the orphaning case), the
+    // bump is sequenced after it and the dancer's park commit — which
+    // loads the epoch only after loading idle_workers_ — must observe a
+    // strictly newer generation than the recorded one: the refusal fires.
+    // The remaining interleavings (erase between record and fetch_add, or
+    // bump observed without the orphaning exchange) can only cause a FALSE
+    // refusal, which converges by the R4 conservative argument above. NOT
+    // mutex-guarded (its writers are the unlocked erase sites by design);
+    // never resets — a run boundary needs no reset because every worker
+    // re-dances from a fresh loop top and records the current value.
+    std::atomic<std::uint64_t> dance_epoch_{0};
     std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;
     bool in_coordinated_run_ = false;
