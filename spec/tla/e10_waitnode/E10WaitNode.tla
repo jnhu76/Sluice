@@ -14,6 +14,18 @@
   Scheduler, the Fiber lifecycle (closed by E7/E8), MW admission (closed by
   E9), backends, or timers.
 
+  RESOLVER SCOPE (audit #162 MODEL-004, declared 2026-08-21): production
+  WaitOutcome has THREE terminal resolvers competing for the SAME resolve_
+  CAS — woken / cancelled / expired (wait_node.hpp:81-99, resolve_ at
+  241-251) — plus the node-targeted wake_node_locked seam. This model
+  deliberately instantiates the single-winner law for the TWO-resolver
+  (wake/cancel) core; the third resolver (expired) and its timer races are
+  covered by the E11 suite (spec/tla/e11_timer_wait/). The winner-CAS law is
+  resolver-count-agnostic (Registered -> terminal under one CAS), so a third
+  E10 resolver would duplicate E11 coverage without a new race class. This
+  note replaces the header's earlier unconditional "the WaitNode-specific
+  state machine" claim.
+
   THE LOAD-BEARING PROPERTY (§2):
       Exactly one terminal resolver wins.
       All losing resolvers observe loss and perform no second wake.

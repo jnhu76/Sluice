@@ -17,6 +17,17 @@
   Fiber. The intended protocol is linear:
       no ticket -> publication creates one -> transport moves it -> pop consumes
   A transport action must NOT create another publication.
+
+  AUDIT #162 MODEL-005 divergence note (2026-08-21): the W*Inbox tier and
+  MoveInboxToLocal model the staged E7-A/E7-B routed-inbox design that
+  production never populated. As-built is a SINGLE owner-local queue:
+  WorkerState::local_runnable, whose cross-worker publication is serialized
+  by the target worker's inbox_mtx (the C++ WorkerState::inbox deque has
+  zero push/pop and inbox_cv has zero waiters — dead declarations, removal
+  tracked separately). The Inbox tier is retained as a conservative extra
+  transport hop: MoveInboxToLocal is a MOVE (ticket cardinality unchanged),
+  so it can neither create nor hide the duplicate-publication defect this
+  model exists to prove (E7-T2). See the README refinement map.
 *)
 
 EXTENDS Naturals, Sequences, FiniteSets, TLC

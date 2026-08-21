@@ -85,7 +85,7 @@ queue, two POPs, the second on a Done fiber).
 | `SpawnPublish(f)`      | `Scheduler::spawn` → `make_runnable` + enqueue      | `global_mtx_`                     |
 | `SuspendFiber(f,key)`  | `await_ready_flag`/`await_completion_*` (register + `make_waiting` + switch away) | `global_mtx_` (register); the register+suspend window is **atomic** in the model — production has a transient (documented) |
 | `WakeReady(f)`         | `wake_ready_flags_locked` / `wake_ready_completions_locked` | `global_mtx_`               |
-| `MoveInboxToLocal(f)`  | `route_runnable_locked` transport                   | `global_mtx_` + `owner->inbox_mtx`|
+| `MoveInboxToLocal(f)`  | `route_runnable_locked` transport — **audit #162 MODEL-005: the Inbox storage hop has NO production counterpart** (as-built transports directly into the single `local_runnable` queue under `inbox_mtx`; `WorkerState::inbox`/`inbox_cv` are dead declarations); modeled tier is a conservative extra MOVE hop, retained until the e8 fold-in | `global_mtx_` + `owner->inbox_mtx`|
 | `MovePendingToOwnerLocal(f)` | `run()` distribute loop                       | `global_mtx_` + `inbox_mtx`       |
 | `PopRunnable(f)`       | `worker_loop` pop + `run_next_on` → `make_running` | `inbox_mtx` (local) / `global_mtx_` (pending) |
 | `FinishFiber(f)`       | `fiber_entry_bridge` → `make_done`                 | (single-threaded on the worker)   |

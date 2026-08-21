@@ -1,14 +1,14 @@
 ------------------------------- MODULE E12Queue -------------------------------
 (*
   sluice::async::AsyncQueue -- first-scope bounded MPMC FIFO SAFETY TLA+ model
-  (E12-E-QUEUE-FORMAL-MODEL-1, Model A). Authority: docs/e12-queue.md
-  (Corrective-2 binding decisions) and docs/e12-queue-state-machine.md.
+  (E12-E-QUEUE-FORMAL-MODEL-1, Model A). Authority: docs/history/closeout/e12-queue.md
+  (Corrective-2 binding decisions) and docs/history/implementation-plans/e12-queue-state-machine.md.
 
   This is the formal half of the B4 gate. It is SAFETY-ONLY. The verify
   script is scripts/verify-async-queue-formal.sh; the design narrative is in
   spec/tla/e12_queue/README.md.
 
-  The load-bearing E12-E Model-A questions (docs/e12-queue.md
+  The load-bearing E12-E Model-A questions (docs/history/closeout/e12-queue.md
   "Current binding semantic decisions"; state machine §7):
     A1  CapacityBound            0 <= Len(ring) <= Capacity
     A2  UniqueItemOwner          one live ItemId => one non-released location

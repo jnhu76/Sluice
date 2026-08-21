@@ -42,6 +42,18 @@
   claimed wake routing reads fiber_owner_ — a refinement ambiguity that is
   corrected here.
 
+  AUDIT #162 MODEL-009 note (2026-08-21): the claim above covers the
+  COMPLETION-wait family (Scheduler::await_* WaitReg routing). Production
+  has a SECOND, equally-safe wake-routing discipline: WaitQueue-class wakes
+  (the E12 primitives) resolve the target worker via fiber_owner_ — the
+  CURRENT owner, updated by steal — not the registration-time owner (the
+  publish paths in scheduler_mutex.cpp / scheduler_rwlock.cpp). Both
+  disciplines are safe: any live worker can execute any Fiber, and a dead
+  worker's ticket is rescued by the G1 retire-ring rescue. The model
+  instantiates the registration-time-owner family; the current-owner family
+  differs only in WHICH safe worker is chosen, so no E8 invariant
+  distinguishes them.
+
   Extends the E7 runnable-publication vocabulary (spec/tla/e7_publication/
   E7Publication.tla): one successful created|waiting -> runnable transition
   grants one runnable publication capability; transport/consumption move/

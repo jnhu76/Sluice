@@ -10,7 +10,7 @@ This is a build aid (not part of the formal gate output committed as evidence;
 the generated .tla/.cfg files are committed). Re-run after editing
 E12AsyncMutex.tla to regenerate all negatives.
 
-Expected violated invariant per NEG (matches docs/e12-async-mutex.md §16):
+Expected violated invariant per NEG (matches docs/history/closeout/e12-async-mutex.md §16):
   NEG-M1  NonOwnerUnlock              -> InvUnlockAuthority
   NEG-M2  RecursiveAcquire            -> InvRecursiveForbidden
   NEG-M3  NonFIFOGrant                -> InvFIFOGrant
