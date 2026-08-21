@@ -1,5 +1,14 @@
-------------------------------- MODULE E12RwLock -------------------------------
+------------------------------- MODULE E12RwLockNegWriterRevoke -------------------------------
 \* sluice::async::AsyncRwLock -- writer-fair phase-batched RwLock SAFETY model
+\*
+\* NEGATIVE MODEL (audit-added, NEG-RW3): this variant restores the audit
+\* MODEL-002 hazard — the cancel/expire writer-reconcile branch drops the C++
+\* `activeReaders = 0` guard (scheduler_rwlock.cpp:119
+\* `if (active_readers > 0 || writer_active) return;`), so a head writer can
+\* be granted while a live reader still holds, silently revoking it. Expected
+\* TLC verdict: VIOLATION of ReaderRevocationFree (cfg:
+\* E12RwLockNegWriterRevoke.cfg). All other laws remain intact so the named
+\* check is exact.
 \* (E12-F, authority docs/history/implementation-plans/e12-rwlock.md).
 \*
 \* Key safety properties:
@@ -397,7 +406,7 @@ CancelQueued(e) ==
                   /\ queue' = SubSeq(newQ, prefix + 1, Len(newQ))
                   /\ revocationOccurred' = revocationOccurred
           ELSE IF pos = 1 /\ Len(newQ) > 0 /\ writerOwner = NoWriter /\
-                    mode[Head(newQ)] = "write" /\ activeReaders = 0
+                    mode[Head(newQ)] = "write"
           THEN \* grant exactly one writer
                /\ activeReaders' = 0
                /\ grantedReaders' = {}
@@ -458,7 +467,7 @@ ExpireQueued(e) ==
                   /\ queue' = SubSeq(newQ, prefix + 1, Len(newQ))
                   /\ revocationOccurred' = revocationOccurred
           ELSE IF pos = 1 /\ Len(newQ) > 0 /\ writerOwner = NoWriter /\
-                    mode[Head(newQ)] = "write" /\ activeReaders = 0
+                    mode[Head(newQ)] = "write"
           THEN /\ activeReaders' = 0
                /\ grantedReaders' = {}
                /\ writerOwner' = Head(newQ)

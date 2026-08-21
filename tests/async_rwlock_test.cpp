@@ -1627,3 +1627,649 @@ SLUICE_TEST_CASE(rwlock_batch_publication_does_not_access_published_node) {
                      "all 3 readers admitted by the batch grant");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
 }
+
+// ===========================================================================
+// Slice 8 — Issue #162 adversarial audit (C++-first evidence, R1-R5 + M3)
+//
+// Deterministic witnesses for the cancel/expire head-reconcile family that
+// E12RwLock.tla previously dead-coded (MODEL-001/002). Every scenario is
+// phase-driven (park on ready flags + separate sched.run() calls + the
+// test clock), never sleep_for. All runs: 1 worker.
+// ===========================================================================
+
+// ---- R1: cancel head writer; next queued writer must stay queued -----------
+//
+// R0 active -> W_A queued -> W_B queued -> cancel(W_A).
+// W_B MUST remain queued while R0 holds; only after R0 unlocks may W_B
+// acquire, exactly once.
+SLUICE_TEST_CASE(rwlock_audit_r1_cancel_head_writer_wall) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<int> wb_grants{0};  // exactly-one-grant counter
+    std::atomic<bool> wa_registered{false};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wna;  // outlives the fiber: canceled from the main thread
+    Fiber wfa;
+    wfa.set_entry([&](Fiber&) {
+        wa_registered.store(true, std::memory_order_release);
+        rw.write_lock(wna);
+        // Canceled here: must NOT observe Woken, must NOT unlock_write.
+        SLUICE_CHECK_MSG(wna.was_cancelled(),
+                         "W_A resumed only via cancel terminal");
+    });
+
+    Fiber wfb;
+    wfb.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.write_lock(rn);
+        if (rn.was_woken()) {
+            wb_grants.fetch_add(1, std::memory_order_acq_rel);
+            rw.unlock_write();
+        }
+    });
+
+    FiberStack s0, swa, swb;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(wfa, swa.base(), swa.size()));
+    SLUICE_CHECK(sched.init_fiber(wfb, swb.base(), swb.size()));
+
+    // Phase 1: R0 acquires and parks.
+    sched.spawn(rf0);
+    sched.run(1);
+
+    // Phase 2: W_A, W_B queue behind R0.
+    sched.spawn(wfa);
+    sched.spawn(wfb);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wa_registered.load() && wna.is_registered(),
+                     "W_A registered and linked");
+    SLUICE_CHECK_MSG(wb_grants.load() == 0, "W_B queued, not granted");
+
+    // Phase 3: cancel head writer W_A.
+    SLUICE_CHECK_MSG(rw.cancel(wna), "cancel(W_A) won");
+    SLUICE_CHECK_MSG(wna.was_cancelled(), "W_A terminal Cancelled");
+    sched.run(1);
+    SLUICE_CHECK_MSG(wb_grants.load() == 0,
+                     "W_B still queued after W_A cancel (readers active)");
+
+    // Phase 4: R0 unlocks; only then W_B acquires, exactly once.
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wb_grants.load() == 1,
+                     "exactly one grant to W_B, after R0 released");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R2: expire head writer; next queued writer must stay queued -----------
+// Same shape as R1, W_A removed by deadline expiry instead of cancel.
+SLUICE_TEST_CASE(rwlock_audit_r2_expire_head_writer_wall) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<int> wb_grants{0};
+    std::atomic<bool> wa_registered{false};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wna;
+    Fiber wfa;
+    wfa.set_entry([&](Fiber&) {
+        wa_registered.store(true, std::memory_order_release);
+        rw.write_lock_until(wna, 100);
+        SLUICE_CHECK_MSG(wna.was_expired(), "W_A resumed only via expiry");
+    });
+
+    Fiber wfb;
+    wfb.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.write_lock(rn);
+        if (rn.was_woken()) {
+            wb_grants.fetch_add(1, std::memory_order_acq_rel);
+            rw.unlock_write();
+        }
+    });
+
+    // Driver: advance the clock past W_A's deadline.
+    Fiber fdrv;
+    fdrv.set_entry([&](Fiber&) {
+        sched.await_ready_flag(wa_registered);
+        std::this_thread::yield();
+        for (int i = 0; i < 200 && !wna.is_terminal(); ++i) {
+            sched.advance_clock(100);
+            std::this_thread::yield();
+        }
+    });
+
+    FiberStack s0, swa, swb, sd;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(wfa, swa.base(), swa.size()));
+    SLUICE_CHECK(sched.init_fiber(wfb, swb.base(), swb.size()));
+    SLUICE_CHECK(sched.init_fiber(fdrv, sd.base(), sd.size()));
+
+    sched.spawn(rf0);
+    sched.run(1);
+
+    sched.spawn(wfa);
+    sched.spawn(wfb);
+    sched.spawn(fdrv);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wna.was_expired(), "W_A removed by expiry");
+    SLUICE_CHECK_MSG(wb_grants.load() == 0,
+                     "W_B still queued after W_A expiry (readers active)");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "W_A timer retired exactly once (no leak)");
+
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wb_grants.load() == 1,
+                     "exactly one grant to W_B, after R0 released");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R3: writer owner; cancel head READER; reader prefix never barged ------
+//
+// W0 owns -> R_A, R_B queued -> W_C queued. cancel(R_A) reconciles to a
+// reader head while writer_active: NOTHING may be granted. After W0
+// releases, the reader prefix [R_B] is granted (stops at W_C); W_C must
+// wait for R_B's release.
+SLUICE_TEST_CASE(rwlock_audit_r3_writer_owner_cancel_reader_head) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+
+    std::atomic<bool> w0_released{false};
+    std::atomic<bool> ra_registered{false};
+    std::atomic<bool> rB_acquired{false};
+    std::atomic<bool> rB_released{false};
+    std::atomic<bool> wC_acquired{false};
+
+    Fiber wf0;
+    wf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.write_lock(rn);
+        sched.await_ready_flag(w0_released);
+        rw.unlock_write();
+    });
+
+    WaitNode rna;  // canceled from the main thread
+    Fiber rfa;
+    rfa.set_entry([&](Fiber&) {
+        ra_registered.store(true, std::memory_order_release);
+        rw.read_lock(rna);
+        SLUICE_CHECK_MSG(rna.was_cancelled(),
+                         "R_A resumed only via cancel terminal");
+    });
+
+    Fiber rfb;
+    rfb.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        if (rn.was_woken()) {
+            rB_acquired.store(true, std::memory_order_release);
+            sched.await_ready_flag(rB_released);
+            rw.unlock_read();
+        }
+    });
+
+    Fiber wfc;
+    wfc.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.write_lock(rn);
+        wC_acquired.store(true, std::memory_order_release);
+        rw.unlock_write();
+    });
+
+    FiberStack s0, sra, srb, swc;
+    SLUICE_CHECK(sched.init_fiber(wf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(rfa, sra.base(), sra.size()));
+    SLUICE_CHECK(sched.init_fiber(rfb, srb.base(), srb.size()));
+    SLUICE_CHECK(sched.init_fiber(wfc, swc.base(), swc.size()));
+
+    // Phase 1: W0 owns, parks.
+    sched.spawn(wf0);
+    sched.run(1);
+
+    // Phase 2: R_A, R_B, W_C queue behind the writer.
+    sched.spawn(rfa);
+    sched.spawn(rfb);
+    sched.spawn(wfc);
+    sched.run(1);
+    SLUICE_CHECK_MSG(ra_registered.load() && rna.is_registered(),
+                     "R_A registered and linked");
+    SLUICE_CHECK_MSG(!rB_acquired.load() && !wC_acquired.load(),
+                     "R_B/W_C queued behind W0");
+
+    // Phase 3: cancel head reader R_A. Reconcile sees a reader head under an
+    // active writer: nothing may be granted.
+    SLUICE_CHECK_MSG(rw.cancel(rna), "cancel(R_A) won");
+    sched.run(1);
+    SLUICE_CHECK_MSG(rna.was_cancelled(), "R_A terminal Cancelled");
+    SLUICE_CHECK_MSG(!rB_acquired.load() && !wC_acquired.load(),
+                     "no grant under active writer (R_B, W_C still queued)");
+
+    // Phase 4: W0 releases. Reader prefix [R_B] granted; W_C must not barge.
+    w0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(rB_acquired.load(),
+                     "R_B granted by reader-prefix reconcile");
+    SLUICE_CHECK_MSG(!wC_acquired.load(),
+                     "W_C never barges the reader prefix (FIFO boundary)");
+
+    // Phase 5: R_B releases; only now W_C acquires.
+    rB_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wC_acquired.load(), "W_C granted after R_B released");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R4: two active readers; cancel head; grant only at activeReaders==0 ----
+//
+// R0+R1 hold (active_readers=2) -> W_A, W_B queued -> cancel(W_A).
+// R0's release (2->1) must NOT grant; R1's release (1->0) grants exactly W_B.
+SLUICE_TEST_CASE(rwlock_audit_r4_cancel_exposes_writer_at_zero) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<bool> r1_released{false};
+    std::atomic<int> wb_grants{0};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+    Fiber rf1;
+    rf1.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r1_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wna;
+    Fiber wfa;
+    wfa.set_entry([&](Fiber&) {
+        rw.write_lock(wna);
+        SLUICE_CHECK_MSG(wna.was_cancelled(), "W_A resumed only via cancel");
+    });
+
+    Fiber wfb;
+    wfb.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.write_lock(rn);
+        if (rn.was_woken()) {
+            wb_grants.fetch_add(1, std::memory_order_acq_rel);
+            rw.unlock_write();
+        }
+    });
+
+    FiberStack s0, s1, swa, swb;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(rf1, s1.base(), s1.size()));
+    SLUICE_CHECK(sched.init_fiber(wfa, swa.base(), swa.size()));
+    SLUICE_CHECK(sched.init_fiber(wfb, swb.base(), swb.size()));
+
+    // Phase 1: both readers acquire; writers queue.
+    sched.spawn(rf0);
+    sched.spawn(rf1);
+    sched.run(1);
+    sched.spawn(wfa);
+    sched.spawn(wfb);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wna.is_registered(), "W_A queued head");
+    SLUICE_CHECK_MSG(wb_grants.load() == 0, "W_B queued, not granted");
+
+    // Phase 2: cancel W_A (head). active_readers=2 -> reconcile refuses.
+    SLUICE_CHECK_MSG(rw.cancel(wna), "cancel(W_A) won");
+    sched.run(1);
+    SLUICE_CHECK_MSG(wb_grants.load() == 0,
+                     "W_B not granted after cancel (readers still active)");
+
+    // Phase 3: R0 releases (2->1): still no grant.
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wb_grants.load() == 0,
+                     "W_B not granted at active_readers=1 (early return)");
+
+    // Phase 4: R1 releases (1->0): exactly W_B acquires.
+    r1_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wb_grants.load() == 1,
+                     "exactly W_B granted at active_readers==0");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R5a: cancel wins the node; a later expiry must be a no-op -------------
+SLUICE_TEST_CASE(rwlock_audit_r5_cancel_wins_over_late_expiry) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<bool> w_registered{false};
+    std::atomic<bool> cancel_done{false};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wn;
+    Fiber wf;
+    wf.set_entry([&](Fiber&) {
+        w_registered.store(true, std::memory_order_release);
+        rw.write_lock_until(wn, 100);
+        SLUICE_CHECK_MSG(wn.was_cancelled(),
+                         "cancel winner: node resolves Cancelled, not Expired");
+    });
+
+    // Driver: after cancel, still advance the clock so the pump processes the
+    // stale (RETIRED) registration; it MUST skip it inertly.
+    Fiber fdrv;
+    fdrv.set_entry([&](Fiber&) {
+        sched.await_ready_flag(cancel_done);
+        std::this_thread::yield();
+        for (int i = 0; i < 5; ++i) {
+            sched.advance_clock(100);
+            std::this_thread::yield();
+        }
+    });
+
+    FiberStack s0, sw, sd;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(wf, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fdrv, sd.base(), sd.size()));
+
+    sched.spawn(rf0);
+    sched.run(1);
+    sched.spawn(wf);
+    sched.spawn(fdrv);
+    sched.run(1);
+    SLUICE_CHECK_MSG(w_registered.load() && wn.is_registered(),
+                     "timed writer queued");
+
+    // Cancel wins the terminal CAS; retire the timer in the same CS.
+    SLUICE_CHECK_MSG(rw.cancel(wn), "cancel(writer) won");
+    SLUICE_CHECK_MSG(wn.was_cancelled(), "terminal outcome is Cancelled");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "cancel retired the timer exactly once");
+
+    cancel_done.store(true, std::memory_order_release);
+    sched.run(1);  // pump pops the stale entry
+    SLUICE_CHECK_MSG(wn.is_terminal() && !wn.was_expired(),
+                     "late expiry is a no-op (single terminal winner)");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "pump did not double-decrement");
+
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R5b: expiry wins; a later cancel must return false --------------------
+SLUICE_TEST_CASE(rwlock_audit_r5_expiry_wins_cancel_returns_false) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<bool> w_registered{false};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wn;
+    Fiber wf;
+    wf.set_entry([&](Fiber&) {
+        w_registered.store(true, std::memory_order_release);
+        rw.write_lock_until(wn, 100);
+        SLUICE_CHECK_MSG(wn.was_expired(),
+                         "expiry winner: node resolves Expired");
+    });
+
+    Fiber fdrv;
+    fdrv.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w_registered);
+        std::this_thread::yield();
+        for (int i = 0; i < 200 && !wn.is_terminal(); ++i) {
+            sched.advance_clock(100);
+            std::this_thread::yield();
+        }
+    });
+
+    FiberStack s0, sw, sd;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(wf, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fdrv, sd.base(), sd.size()));
+
+    sched.spawn(rf0);
+    sched.run(1);
+    sched.spawn(wf);
+    sched.spawn(fdrv);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(wn.was_expired(), "expiry won (single terminal)");
+    SLUICE_CHECK_MSG(!rw.cancel(wn), "cancel after expiry returns false");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "timer consumed exactly once");
+
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R5c: grant vs cancel arbitration — grant first, cancel loses ----------
+SLUICE_TEST_CASE(rwlock_audit_r5_grant_wins_cancel_returns_false) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<bool> w_acquired{false};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wn;
+    Fiber wf;
+    wf.set_entry([&](Fiber&) {
+        rw.write_lock(wn);
+        w_acquired.store(wn.was_woken(), std::memory_order_release);
+        if (wn.was_woken()) rw.unlock_write();
+    });
+
+    FiberStack s0, sw;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(wf, sw.base(), sw.size()));
+
+    sched.spawn(rf0);
+    sched.run(1);
+    sched.spawn(wf);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wn.is_registered(), "writer queued behind R0");
+
+    // Unlock first: grant wins; the node is woken and unlinked.
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(w_acquired.load(), "grant winner: W acquired");
+    SLUICE_CHECK_MSG(!rw.cancel(wn), "cancel after grant returns false");
+    SLUICE_CHECK_MSG(wn.was_woken(), "single terminal outcome Woken");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- R5d: grant vs cancel arbitration — cancel first, grant is a no-op -----
+SLUICE_TEST_CASE(rwlock_audit_r5_cancel_wins_grant_is_noop) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+
+    std::atomic<bool> r0_released{false};
+    std::atomic<bool> w_acquired{false};
+
+    Fiber rf0;
+    rf0.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        sched.await_ready_flag(r0_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wn;
+    Fiber wf;
+    wf.set_entry([&](Fiber&) {
+        rw.write_lock(wn);
+        w_acquired.store(wn.was_woken(), std::memory_order_release);
+    });
+
+    FiberStack s0, sw;
+    SLUICE_CHECK(sched.init_fiber(rf0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(wf, sw.base(), sw.size()));
+
+    sched.spawn(rf0);
+    sched.run(1);
+    sched.spawn(wf);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wn.is_registered(), "writer queued behind R0");
+
+    // Cancel first: node terminal Cancelled; the later unlock reconcile
+    // grants nothing (queue already drained).
+    SLUICE_CHECK_MSG(rw.cancel(wn), "cancel won");
+    r0_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(wn.was_cancelled(), "single terminal outcome Cancelled");
+    SLUICE_CHECK_MSG(!w_acquired.load(),
+                     "grant is a no-op for the canceled node");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
+
+// ---- M3a: write_lock_until — due deadline + free resource = resource-first -
+// Same precedence probe as T9 (read side); the write side must be identical.
+SLUICE_TEST_CASE(rwlock_audit_m3_write_lock_until_resource_first) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);
+
+    WaitNode node;
+    std::atomic<bool> acquired{false};
+    Fiber f;
+    f.set_entry([&](Fiber&) {
+        rw.write_lock_until(node, 0);  // deadline already due
+        acquired.store(node.was_woken(), std::memory_order_release);
+        if (node.was_woken()) rw.unlock_write();
+    });
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(f, sa.base(), sa.size()));
+    sched.spawn(f);
+    sched.run(1);
+    SLUICE_CHECK_MSG(acquired.load(),
+                     "resource-first: admission wins over due deadline (write)");
+    SLUICE_CHECK_MSG(node.was_woken(), "resolved Woken (not Expired)");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "timer retired at admission (no leak)");
+}
+
+// ---- M3b: write_lock_until — due deadline + busy resource = expire-inline --
+// Precedence 2: when admission is impossible and the deadline is already due,
+// the registration resolves Expired immediately without suspending.
+SLUICE_TEST_CASE(rwlock_audit_m3_write_lock_until_due_blocked_expires) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);
+
+    std::atomic<bool> r_holds{false};
+    std::atomic<bool> r_released{false};
+
+    Fiber rf;
+    rf.set_entry([&](Fiber&) {
+        WaitNode rn;
+        rw.read_lock(rn);
+        r_holds.store(true, std::memory_order_release);
+        sched.await_ready_flag(r_released);
+        rw.unlock_read();
+    });
+
+    WaitNode wn;
+    std::atomic<bool> expired_inline{false};
+    Fiber wf;
+    wf.set_entry([&](Fiber&) {
+        rw.write_lock_until(wn, 0);  // deadline already due, resource busy
+        expired_inline.store(wn.was_expired(), std::memory_order_release);
+    });
+
+    FiberStack sr, sw;
+    SLUICE_CHECK(sched.init_fiber(rf, sr.base(), sr.size()));
+    SLUICE_CHECK(sched.init_fiber(wf, sw.base(), sw.size()));
+
+    sched.spawn(rf);
+    sched.run(1);
+    SLUICE_CHECK_MSG(r_holds.load(), "reader holds");
+
+    sched.spawn(wf);
+    sched.run(1);
+    SLUICE_CHECK_MSG(expired_inline.load(),
+                     "due deadline + busy resource: Expired inline (no suspend)");
+    SLUICE_CHECK_MSG(wn.was_expired(), "resolved Expired, not Woken");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "timer consumed exactly once");
+
+    r_released.store(true, std::memory_order_release);
+    sched.run(1);
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
+}
