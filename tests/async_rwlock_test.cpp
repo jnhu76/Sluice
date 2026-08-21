@@ -1754,14 +1754,12 @@ SLUICE_TEST_CASE(rwlock_audit_r2_expire_head_writer_wall) {
 
     // Driver: advance the clock past W_A's deadline. advance_clock pumps due
     // timers inline under global_mtx_ (the node resolves Expired inside the
-    // call), so the loop needs no inter-fiber yielding — the terminal CAS is
-    // observable from this fiber the moment the pump wins it.
+    // call), so ONE advance from clock 0 to the deadline 100 is the complete
+    // causal evidence — no retry loop is needed or permitted.
     Fiber fdrv;
     fdrv.set_entry([&](Fiber&) {
         sched.await_ready_flag(wa_registered);
-        for (int i = 0; i < 200 && !wna.is_terminal(); ++i) {
-            sched.advance_clock(100);
-        }
+        sched.advance_clock(100);
     });
 
     FiberStack s0, swa, swb, sd;
@@ -2000,14 +1998,13 @@ SLUICE_TEST_CASE(rwlock_audit_r5_cancel_wins_over_late_expiry) {
     });
 
     // Driver: after cancel, still advance the clock so the pump processes the
-    // stale (RETIRED) registration; it MUST skip it inertly. The pump resolves
-    // under global_mtx_ inside advance_clock — no inter-fiber yielding needed.
+    // stale (RETIRED) registration; it MUST skip it inertly. The pump drains
+    // every due entry inside the single advance_clock call — one advance is
+    // the complete causal evidence, not a retry loop.
     Fiber fdrv;
     fdrv.set_entry([&](Fiber&) {
         sched.await_ready_flag(cancel_done);
-        for (int i = 0; i < 5; ++i) {
-            sched.advance_clock(100);
-        }
+        sched.advance_clock(100);
     });
 
     FiberStack s0, sw, sd;
@@ -2073,9 +2070,7 @@ SLUICE_TEST_CASE(rwlock_audit_r5_expiry_wins_cancel_returns_false) {
     Fiber fdrv;
     fdrv.set_entry([&](Fiber&) {
         sched.await_ready_flag(w_registered);
-        for (int i = 0; i < 200 && !wn.is_terminal(); ++i) {
-            sched.advance_clock(100);
-        }
+        sched.advance_clock(100);
     });
 
     FiberStack s0, sw, sd;
