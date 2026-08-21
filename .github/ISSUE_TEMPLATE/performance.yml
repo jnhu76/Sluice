@@ -1,0 +1,92 @@
+name: Performance investigation
+description: Record a reproducible performance gap, attribution experiment, or optimization candidate.
+title: "[Perf] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Performance issues are evidence-first. A measured aggregate gap does not authorize a Core change until attribution identifies the owning layer and promotion criteria are met.
+
+  - type: input
+    id: baseline
+    attributes:
+      label: Baseline
+      description: Exact revision(s) being measured.
+      placeholder: master@<sha> / candidate@<sha>
+    validations:
+      required: true
+
+  - type: textarea
+    id: workload
+    attributes:
+      label: Workload and comparison
+      description: Dataset/input size, operation, concurrency, competitor/baseline, warmup/iteration policy.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: CPU, kernel/OS, compiler, build flags, storage/tmpfs, backend, affinity, virtualization/noise constraints.
+    validations:
+      required: true
+
+  - type: textarea
+    id: results
+    attributes:
+      label: Raw/summary results
+      description: Median/min/max or confidence interval, throughput/latency, and enough raw evidence to distinguish signal from noise.
+    validations:
+      required: true
+
+  - type: textarea
+    id: correctness
+    attributes:
+      label: Correctness equivalence
+      description: Explain how outputs/semantics were verified equivalent before comparing speed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: attribution
+    attributes:
+      label: Attribution
+      description: APP / CORE / backend / syscall / environment / unknown. Separate observations from hypotheses and show decomposition/scaling evidence.
+    validations:
+      required: true
+
+  - type: textarea
+    id: candidate
+    attributes:
+      label: Candidate change
+      description: Optional optimization direction. State which evidence must exist before production implementation is authorized.
+
+  - type: textarea
+    id: budget
+    attributes:
+      label: Promotion / regression budget
+      description: What threshold promotes this from READY/EXPERIMENT to ACTIVE? What regression would reject an optimization?
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Commands and canonical artifacts
+      description: Exact commands, runner/schema, artifact paths/checksums where applicable.
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: discipline
+    attributes:
+      label: Measurement discipline
+      options:
+        - label: Correctness/output equivalence was checked before performance claims.
+          required: true
+        - label: I have not attributed an aggregate gap to Sluice Core without decomposition/scaling evidence.
+          required: true
+        - label: Environment noise and outliers are reported rather than discarded silently.
+          required: true

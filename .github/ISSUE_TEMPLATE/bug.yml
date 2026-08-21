@@ -1,0 +1,83 @@
+name: Bug / correctness failure
+description: Report a reproducible C++ correctness, race, liveness, lifecycle, or contract defect.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for implementation defects. A TLA+/documentation mismatch without C++ evidence belongs in Audit / research.
+
+  - type: input
+    id: baseline
+    attributes:
+      label: Baseline
+      description: Commit SHA / branch where the behavior was observed.
+      placeholder: master@<sha>
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, compiler, build mode, backend, sanitizer, relevant hardware/runtime details.
+      placeholder: Linux / clang / Debug / ThreadPoolBackend / ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What actually happened? Include exact failure text/state when available.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected contract
+      description: What should happen, and what contract/ADR/API/invariant establishes that expectation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproducer / causal evidence
+      description: Exact commands, deterministic schedule, persistent-state barrier, backtrace, or smallest reliable evidence. State explicitly if not yet deterministic.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: state
+    attributes:
+      label: Relevant state / interleaving
+      description: For concurrency/liveness bugs, describe roles, ordering, locks/atomics, queue/publication/wake state, and the terminal stuck/invalid state.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and scope
+      description: Correctness/security/liveness impact, affected components, and whether the issue appears pre-existing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Root-cause hypothesis
+      description: Optional. Separate established facts from hypotheses.
+
+  - type: checkboxes
+    id: discipline
+    attributes:
+      label: Evidence discipline
+      options:
+        - label: I searched existing open/closed issues for the same failure class.
+          required: true
+        - label: I have not used retries/sleeps/skips as proof that the defect is fixed.
+          required: true
+        - label: I understand a model failure alone does not establish a C++ implementation defect.
+          required: true
