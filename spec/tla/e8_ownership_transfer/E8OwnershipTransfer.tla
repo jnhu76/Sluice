@@ -42,17 +42,22 @@
   claimed wake routing reads fiber_owner_ — a refinement ambiguity that is
   corrected here.
 
-  AUDIT #162 MODEL-009 note (2026-08-21): the claim above covers the
-  COMPLETION-wait family (Scheduler::await_* WaitReg routing). Production
-  has a SECOND, equally-safe wake-routing discipline: WaitQueue-class wakes
+  AUDIT #162 MODEL-009 note (2026-08-21; scope narrowed by the PR #168
+  review): the claim above covers the COMPLETION-wait family ONLY —
+  Scheduler::await_* WaitReg routing through the registration-time owner,
+  which is what WakeReady models. Production ALSO has a second wake-routing
+  discipline that this model does NOT instantiate: WaitQueue-class wakes
   (the E12 primitives) resolve the target worker via fiber_owner_ — the
   CURRENT owner, updated by steal — not the registration-time owner (the
-  publish paths in scheduler_mutex.cpp / scheduler_rwlock.cpp). Both
-  disciplines are safe: any live worker can execute any Fiber, and a dead
-  worker's ticket is rescued by the G1 retire-ring rescue. The model
-  instantiates the registration-time-owner family; the current-owner family
-  differs only in WHICH safe worker is chosen, so no E8 invariant
-  distinguishes them.
+  publish paths in scheduler_mutex.cpp / scheduler_rwlock.cpp). That
+  current-owner family, worker liveness, and the G1 retire-ring rescue are
+  OUTSIDE this model's state machine: no action here routes a wake through
+  ownerRecord, so this suite proves NOTHING about the current-owner
+  discipline. It is recorded as an unmodeled implementation family /
+  coverage boundary (issue #171 tracker), not as a proven-equivalent
+  alternative; the safety argument for it (any live worker can execute any
+  Fiber; a dead worker's ticket is rescued by the retire ring) is an
+  implementation-level argument, separate from this gate.
 
   Extends the E7 runnable-publication vocabulary (spec/tla/e7_publication/
   E7Publication.tla): one successful created|waiting -> runnable transition

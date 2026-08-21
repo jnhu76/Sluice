@@ -212,15 +212,17 @@ All pre-existing model issues have been resolved in this PR:
 | BlockingIoPool has no negative model | MEDIUM | Only positive safety + liveness |
 | E12 RwLock has only 1 negative model | LOW | ReaderBypass only; no reconcile-after-cancel |
 
-### Post-migration update (audit #162, 2026-08-21)
+### Post-migration update (audit #162, 2026-08-21; refreshed by the PR #168 review closeout)
 
 This report is a point-in-time snapshot at BASE SHA `37bfb53`. The RwLock gap
 row above is superseded: the e12-rwlock suite now checks 13 invariants with
-3 negative models (ReaderBypass, NoReconcile, WriterRevoke — the reconcile
-coverage the gap row asked for) and 7 reachability witnesses, after the
-#162 adversarial audit's MODEL-001/002 (reconcile dead-code + revocation
-guard) and MODEL-003 (timed admission) repairs. Current authority:
-`spec/tla/manifest.json` + `docs/history/closeout/e12-cross-primitive-terminal-audit.md` §11.4–11.7.
+4 negative models (ReaderBypass, NoReconcile, WriterRevoke, DeadlinePrecedence
+— the reconcile and timed-admission-precedence coverage the gap row asked for;
+the two generated negatives are freshness-gated) and 7 reachability
+witnesses, after the audit #162 adversarial audit's MODEL-001/002 (reconcile
+dead-code + revocation guard) and MODEL-003 (timed admission) repairs.
+Current authority: `spec/tla/manifest.json` +
+`docs/history/closeout/e12-cross-primitive-terminal-audit.md` §11.4–11.8.
 
 ## Deferred formal gaps
 
