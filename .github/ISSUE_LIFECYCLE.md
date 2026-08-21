@@ -2,9 +2,22 @@
 
 This document defines the repository-wide lifecycle vocabulary for GitHub issues.
 
-The goal is simple: **Open means actionable or intentionally tracking active work.** Deferred, speculative, policy-blocked, or superseded work should not permanently occupy the active queue.
+The goal is simple: **Open means triage, actionable work, or intentionally tracking active work.** Deferred, speculative, policy-blocked, or superseded work should not permanently occupy the active queue.
 
 ## Lifecycle states
+
+### TRIAGE
+
+**GitHub state:** Open
+
+Use for newly filed or newly reopened issues whose evidence, technical classification, scope, or priority has not yet been reviewed.
+
+Rules:
+- TRIAGE does not authorize production implementation;
+- verify duplicate/history and baseline evidence first;
+- classify the technical finding separately from lifecycle;
+- after review, move the issue to ACTIVE, READY / EXPERIMENT, ON-TOUCH, UMBRELLA / TRACKING, DEFERRED, or COMPLETED as appropriate;
+- do not leave reviewed issues indefinitely in TRIAGE.
 
 ### ACTIVE
 
@@ -87,8 +100,9 @@ When changing lifecycle state:
    - execution authority;
    - next action or reopen/promotion trigger;
 3. use GitHub state reasons consistently;
-4. before implementing work from READY, DEFERRED, or an UMBRELLA, promote/reopen the focused issue and record why;
-5. if the issue is an audit report, distinguish the report itself from implementation follow-ups.
+4. newly filed issues begin in TRIAGE until reviewed;
+5. before implementing work from TRIAGE, READY, DEFERRED, or an UMBRELLA, promote/reopen the focused issue and record why;
+6. if the issue is an audit report, distinguish the report itself from implementation follow-ups.
 
 ## Classification is separate from lifecycle
 
