@@ -5,9 +5,10 @@
 #   Positive (repaired protocol, RepairContributionGeneration=TRUE):
 #     E12SchedLivenessSafety    -> all invariants PASS (incl. DrainStuckState)
 #     E12SchedLivenessLiveness  -> all temporal properties PASS
-#     B4NoBumpRecheckErase      -> PASS  (:958 self-guarded by :582)
-#     B4NoBumpPubErase          -> PASS  (:1452 self-guarded by the
-#                                          G-atomic erase+signal pair)
+#     B4NoBumpRecheckErase      -> PASS  (:958 self-guarded; see below)
+#     B4NoBumpPubErase          -> FAIL-EXPECTED (reclassified: the route-
+#                                          publication erase IS a genuine
+#                                          invalidation site — see Negative)
 #     B4NoBumpDanceResetErase   -> PASS  (:1065 eraser stays active/re-loops)
 #     M1/M2/M3 composition       -> PASS (documented closure: in the closed
 #                          T22 scenario every publisher is worker-executed,
@@ -30,6 +31,27 @@
 #                          (scheduler.cpp:550 is a genuine invalidation site)
 #     B4NoBumpMwS1Erase                    -> DrainStuckState violated
 #                          (scheduler.cpp:582 is a genuine invalidation site)
+#     B4NoBumpPubErase                     -> DrainStuckState violated
+#                          (route_runnable_locked is a GENUINE invalidation
+#                          site — reclassified: the split-window model proved
+#                          a dance contribution made before a routed grant
+#                          can be orphaned by the pub erase with the
+#                          contributor's 1-bit flag still claiming it. The
+#                          old "self-guarded by the G-atomic erase+signal
+#                          pair" verdict was an artifact. scheduler.cpp:1514
+#                          now bumps like the other two sites.)
+#
+#   Reachability witness (repaired protocol; fail-closed like the negatives):
+#     E12SchedLivenessSplitWindow           -> SplitWindowNeverArmed violated.
+#                          With the split EraseIdle/BumpGen modeling, a stale
+#                          contributor's park commit CAN read the erased count
+#                          with the still-current generation and arm a
+#                          baseline without the identity-term refusal (the C++
+#                          exchange(0)-before-bump window). The witness must be
+#                          REACHABLE (guarding against a silent model change
+#                          that closes the window by accident); the safety gate
+#                          on the same constants proves it costs only a
+#                          transient park.
 #
 # Source-safe: TLC runs in an isolated mktemp workspace.
 set -euo pipefail
@@ -83,13 +105,29 @@ expect_pass() {
   echo "FAIL  $label (expected PASS)"; tail -20 "$out"; return 1
 }
 
-expect_cex() {
+# Fail-closed temporal-CEX gate (review finding of the repair round): a
+# launch error, parse error, or TLC crash is NOT a counterexample — the run
+# must actually NAME a violated temporal property, mirroring the
+# expect_fail_invariant discipline (which greps the invariant name).
+temporal_violated() {
+  # TLC reports liveness failures as "Temporal properties were violated."
+  # (plural, trailing period) — verified wording, not assumed. Match the
+  # family exactly (the first repair-round `.+` ate the verb and matched
+  # nothing); fail closed otherwise.
+  grep -Eq 'Temporal propert(y|ies) (was|were) violated' "$1"
+}
+
+expect_temporal_cex() {
   local label="$1" cfg="$2" tag="$3"
   local out="$outroot/$tag.out"
   run_tlc E12SchedLiveness "$cfg" "$tag"
   if ! launched "$out"; then echo "FAIL  $label (no launch)"; tail -20 "$out"; return 1; fi
-  if passed "$out"; then echo "FAIL  $label (expected counterexample, PASSED)"; return 1; fi
-  echo "CEX   $label"; return 0
+  if passed "$out"; then echo "FAIL  $label (expected temporal violation, PASSED)"; return 1; fi
+  if ! temporal_violated "$out"; then
+    echo "FAIL  $label (failed without a named temporal violation — not a witness)"; tail -8 "$out"; return 1
+  fi
+  echo "CEX   $label (temporal property violated)"
+  return 0
 }
 
 expect_fail_invariant() {
@@ -114,8 +152,8 @@ expect_pass "E12SchedLiveness [liveness, repaired]" \
 # --- B4 site-classification experiments (repaired base, one bump off) ---
 expect_pass "B4: :958 recheck erase self-guarded (no bump needed)" \
   E12SchedLivenessB4NoBumpRecheckErase b4_recheck || rc=1
-expect_pass "B4: :1452 pub erase self-guarded (no bump needed)" \
-  E12SchedLivenessB4NoBumpPubErase b4_pub || rc=1
+expect_fail_invariant "B4: :1514 route-pub erase IS an invalidation site" \
+  E12SchedLivenessB4NoBumpPubErase DrainStuckState b4_pub || rc=1
 expect_pass "B4: :1065 dance reset self-guarded (no bump needed)" \
   E12SchedLivenessB4NoBumpDanceResetErase b4_dance || rc=1
 # --- M1/M2/M3 composition on the repaired base (documented closure) ---
@@ -128,14 +166,17 @@ expect_pass "M3 composition [no-commit-recheck; closed in-scope]" \
 # --- Negative gates (expected counterexamples) ---
 expect_fail_invariant "M4 as-built [safety]" \
   E12SchedLivenessM4 DrainStuckState m4_safety || rc=1
-expect_cex "M4 as-built [liveness]" \
+expect_temporal_cex "M4 as-built [liveness]" \
   E12SchedLivenessM4Liveness m4_liveness || rc=1
-expect_cex "M5 grant-without-ticket [liveness]" \
+expect_temporal_cex "M5 grant-without-ticket [liveness]" \
   E12SchedLivenessM5 m5 || rc=1
 expect_fail_invariant "B4: :550 pop erase IS an invalidation site" \
   E12SchedLivenessB4NoBumpPopErase DrainStuckState b4_pop || rc=1
 expect_fail_invariant "B4: :582 mw_s1 erase IS an invalidation site" \
   E12SchedLivenessB4NoBumpMwS1Erase DrainStuckState b4_mws1 || rc=1
+# --- Reachability witness (split window is genuinely explored) ---
+expect_fail_invariant "Split-window witness [repaired; window reachable]" \
+  E12SchedLivenessSplitWindow SplitWindowNeverArmed splitwin || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi

@@ -83,21 +83,30 @@
 
   STATE AXES (all non-atomic C++ steps that matter are separate actions):
 
-    workerStage[w]: LoopTop -> Popped -> PopEraseDone -> Executing -> LoopTop
-                    LoopTop -> DrainClassify -> MwS1Idle -> ParkCandidate
+    workerStage[w]: LoopTop -> Popped -> PopBumpPending -> PopEraseDone ->
+                        Executing -> LoopTop
+                    LoopTop -> DrainClassify -> MwS1Idle -> MwS1BumpPending
+                                             -> MwS1GRecheck -> ParkCandidate
                                                  -> DanceGo -> ParkCandidate
                     ParkCandidate -> Parked | LoopTop(refuse)
                     Parked -> LoopTop | Exited ; any -> Exited(terminate)
-      Popped       models scheduler.cpp:513-517 (ticket removed from the
+      Popped         models scheduler.cpp:513-517 (ticket removed from the
                    inbox under inbox_mtx only — INVISIBLE to classify and to
                    the park-commit progress scan).
-      PopEraseDone models :550 executed (unlocked idle store(0)) but :1215
-                   running_fiber_count_++ not yet — the classify-blind and
-                   commit-scan-blind window that admits a quiescent dance
-                   beside live work.
-      MwS1Idle     models the mw_s1 fall-through between the (unlocked)
-                   classify at :567 and the idle reset at :582 — the reset
-                   is its OWN unlocked action here.
+      PopBumpPending models :578 executed (the unlocked exchange(0) has
+                   landed) while :580 (the conditional generation bump) has
+                   not — the SPLIT WINDOW between the eraser's two unlocked
+                   RMWs, in which a stale contributor's park commit can read
+                   the erased count together with the still-current
+                   generation (see the split-window refinement below and the
+                   E12SchedLivenessSplitWindow reachability witness).
+      PopEraseDone  models :580 done but :1215 running_fiber_count_++ not
+                   yet — the classify-blind and commit-scan-blind window
+                   that admits a quiescent dance beside live work.
+      MwS1Idle      models the mw_s1 fall-through between the (unlocked)
+                   classify at :567 and the idle reset at :622.
+      MwS1BumpPending models the same split window on the second erase site
+                   (:622 exchange landed, :624 bump not yet).
     held[w]:        the popped ticket inside the pop window / executing.
     inbox[w]:       runnable tickets (fiber pc = "Ticket").
     wakeEpoch:      monotonic; every signal advances it.
@@ -114,14 +123,35 @@
       drain+classify entry (one G section), the dance contribute+not-last
       signal (one G section, :942-1096).
     - The steps C++ performs OUTSIDE any serializing lock are separate
-      actions: pop (:513), pop-erase (:550), running++ (:1215), the mw_s1
-      fall-through erase (:582), park candidate->commit seam gap, the cv
+      actions: pop (:513), pop-erase (:578), running++ (:1215), the mw_s1
+      fall-through erase (:622), park candidate->commit seam gap, the cv
       predicate wake.
+    - SPLIT-WINDOW FIDELITY (review of the repair round): the two unlocked
+      erase sites are each TWO actions — the exchange(0) and its
+      conditional generation bump (BumpPopGen / BumpMwS1Gen) — because the
+      C++ writes are two distinct unlocked RMWs a peer's park commit can
+      land between. A park commit that reads the erased count with the
+      still-current generation passes the identity term (witness gate
+      E12SchedLivenessSplitWindow); the safety/liveness gates then prove
+      that pass produces only a TRANSIENT park (the dichotomy argument in
+      the suite README): the eraser's bump, fiber run, and re-dance
+      not-last signal are all sequenced after the arming, so the cv
+      predicate — not a lost signal — returns the dancer to the loop. The
+      ParkCommit itself stays ONE action (recheck then arm inside one G
+      section); its refusal verdict is a pure function of the (idleCount,
+      contributionGen) pair it reads, and every pair the split C++ loads
+      can produce (pre-erase, post-bump, and the split combination) is
+      explored as a distinct state the atomic commit reads from.
     - The dance final re-check (:1039) is folded into DanceContribute (same
       G section in C++; only runningCount may change under it in C++, and
       the fold explores that as a pre-state difference because
       DrainClassify/DanceContribute are separate actions here — an
       over-approximation, never an under-approximation).
+    - LoopTop fidelity: a worker at LoopTop always holds contributed=0
+      (every entry path — TryPop, TrySteal, park refusal, park leave,
+      fiber completion, and the :1065 reset-continue — models the C++
+      loop-top flag reset at :513; the reset-continue originally left a
+      stale contributed=1, over-approximating the identity-term refusals).
     - Steal (E8) is modeled as the LoopTop TrySteal action and
       DrainClassify REQUIRES nothing stealable, mirroring the C++
       straight-line order pop -> steal -> drain/classify. Without this the
@@ -160,9 +190,9 @@ VARIABLES
     resCount,
     pubCount
 
-StageVal == {"LoopTop", "Popped", "PopEraseDone", "Executing",
-             "MwS1Idle", "MwS1GRecheck", "DanceGo", "ParkCandidate",
-             "Parked", "Exited"}
+StageVal == {"LoopTop", "Popped", "PopBumpPending", "PopEraseDone", "Executing",
+             "MwS1Idle", "MwS1BumpPending", "MwS1GRecheck", "DanceGo",
+             "ParkCandidate", "Parked", "Exited"}
 PCVal == {"FlagWait", "QueueWait", "Ticket", "RunUnlock", "RunNoop",
           "RunFlag", "RunUnlockRead", "Done"}
 
@@ -258,12 +288,19 @@ RefusePark(w) ==
     \/ (RepairContributionGeneration /\ contributed[w] = 1
         /\ contributionGen # contribGen[w])
 
-(* Idle reset with the repair's identity invalidation. The B4 site
-   classification: each idleCount reset site routes through this operator
-   with its own bump toggle, so model experiments can decide which sites
-   are GENUINE invalidation events (disabling the bump must reproduce the
-   M4 stuck state) and which are self-guarded by other protocol mechanisms
-   (disabling the bump must stay safe). *)
+(* Idle reset with the repair's identity invalidation — the G-SECTION sites
+   ONLY (the drain/route publication erase, the :958 reclassify erase, and
+   the :1065 reset-continue erase): there the erase and its bump sit inside
+   ONE global_mtx_ critical section with the accompanying signal/re-loop,
+   so a single atomic action is the faithful granularity. The two UNLOCKED
+   sites are NOT routed here — they are the split EraseIdleOnPop/BumpPopGen
+   and EraseIdleMwS1/BumpMwS1Gen pairs, so the model explores the C++ split
+   window between exchange(0) and the generation bump. The B4 site
+   classification: each reset site routes through its own bump toggle, so
+   model experiments can decide which sites are GENUINE invalidation events
+   (disabling the bump must reproduce the M4 stuck state) and which are
+   self-guarded by other protocol mechanisms (disabling the bump must stay
+   safe). *)
 EraseIdleBumping(bump) ==
     /\ idleCount' = 0
     /\ contributionGen' = IF (RepairContributionGeneration /\ bump)
@@ -307,18 +344,41 @@ TrySteal(w) ==
                        observedEpoch, idleCount, contributionGen,
                        contribGen, terminate, resCount, pubCount>>
 
-(* scheduler.cpp:550 — the UNLOCKED pop-path idle reset. A separate action
-   because it is the only idle reset in the protocol with NO mandatory
-   follow-up signal (contrast route_runnable_locked:1452-1483, one G section
-   pairing the erase with the publication signal). *)
+(* scheduler.cpp:578 — the UNLOCKED pop-path idle reset, STEP 1 of 2 (the
+   exchange(0)). The conditional generation bump is a SEPARATE, arbitrarily-
+   delayable action (BumpPopGen, :580): the C++ writes are two distinct
+   unlocked RMWs, and a peer's park commit can land between them — the
+   SPLIT WINDOW. The exchange itself knows whether it erased a contribution
+   (idleCount > 0 at the RMW, the C++ erased != 0); the owed bump observes
+   the ERASE-time answer, never the bump-time count. With the repair off
+   (or the site's bump disabled by B4 experiment), no bump is owed and the
+   stage advances directly — the pre-split (as-built) protocol. *)
 EraseIdleOnPop(w) ==
     /\ workerStage[w] = "Popped"
-    /\ EraseIdleBumping(BumpPopErase)
+    /\ idleCount' = 0
+    /\ workerStage' = [workerStage EXCEPT ![w] =
+                           IF RepairContributionGeneration /\ BumpPopErase
+                              /\ idleCount > 0
+                           THEN "PopBumpPending"
+                           ELSE "PopEraseDone"]
+    /\ UNCHANGED <<held, inbox, fiberPC, writerActive, activeReaders,
+                   r2Queued, r2Acquired, waitingReady, runningCount,
+                   wakeEpoch, observedEpoch, contributed, contributionGen,
+                   contribGen, terminate, resCount, pubCount>>
+
+(* scheduler.cpp:580 — the pop-path generation bump, STEP 2 of 2. Sequenced
+   strictly after the exchange in the eraser's program order (StartFiber
+   requires this stage to have cleared), and sequenced before the fiber's
+   execution and every subsequent G-section progress of the eraser — the
+   ordering the split-window dichotomy argument leans on. *)
+BumpPopGen(w) ==
+    /\ workerStage[w] = "PopBumpPending"
+    /\ contributionGen' = contributionGen + 1
     /\ workerStage' = [workerStage EXCEPT ![w] = "PopEraseDone"]
     /\ UNCHANGED <<held, inbox, fiberPC, writerActive, activeReaders,
                    r2Queued, r2Acquired, waitingReady, runningCount,
-                   wakeEpoch, observedEpoch, contributed, contribGen,
-                   terminate, resCount, pubCount>>
+                   wakeEpoch, observedEpoch, idleCount, contributed,
+                   contribGen, terminate, resCount, pubCount>>
 
 (* scheduler.cpp:1211-1219 — make_running + running_fiber_count_++. The
    ticket becomes observable to classify (running observer) only HERE. *)
@@ -375,17 +435,35 @@ DrainClassify(w) ==
                       r2Acquired, runningCount, observedEpoch, contributed,
                       contribGen, terminate, resCount, pubCount>>
 
-(* scheduler.cpp:582 — the UNLOCKED mw_s1 fall-through idle reset between
-   the unlocked classify (:567) and the dance-block entry. A separate,
-   arbitrarily-delayable action (preemption window). *)
+(* scheduler.cpp:622 — the UNLOCKED mw_s1 fall-through idle reset between
+   the unlocked classify (:567) and the dance-block entry, STEP 1 of 2 (the
+   exchange(0)). Same split-window discipline as EraseIdleOnPop: the bump
+   (:624) is its own arbitrarily-delayable action, owed exactly when this
+   exchange actually erased a contribution. *)
 EraseIdleMwS1(w) ==
     /\ workerStage[w] = "MwS1Idle"
-    /\ EraseIdleBumping(BumpMwS1Erase)
+    /\ idleCount' = 0
+    /\ workerStage' = [workerStage EXCEPT ![w] =
+                           IF RepairContributionGeneration /\ BumpMwS1Erase
+                              /\ idleCount > 0
+                           THEN "MwS1BumpPending"
+                           ELSE "MwS1GRecheck"]
+    /\ UNCHANGED <<held, inbox, fiberPC, writerActive, activeReaders,
+                   r2Queued, r2Acquired, waitingReady, runningCount,
+                   wakeEpoch, observedEpoch, contributed, contributionGen,
+                   contribGen, terminate, resCount, pubCount>>
+
+(* scheduler.cpp:624 — the mw_s1 fall-through generation bump, STEP 2 of 2.
+   Sequenced strictly after its exchange; the eraser's next steps (the
+   terminate load, the park commit) wait for it via the stage gate. *)
+BumpMwS1Gen(w) ==
+    /\ workerStage[w] = "MwS1BumpPending"
+    /\ contributionGen' = contributionGen + 1
     /\ workerStage' = [workerStage EXCEPT ![w] = "MwS1GRecheck"]
     /\ UNCHANGED <<held, inbox, fiberPC, writerActive, activeReaders,
                    r2Queued, r2Acquired, waitingReady, runningCount,
-                   wakeEpoch, observedEpoch, contributed, contribGen,
-                   terminate, resCount, pubCount>>
+                   wakeEpoch, observedEpoch, idleCount, contributed,
+                   contribGen, terminate, resCount, pubCount>>
 
 (* scheduler.cpp:942-958 — the dance-block reclassify under G. mw_s1 still:
    the :958 erase and fall through to the park candidate; otherwise the
@@ -422,21 +500,33 @@ DanceContribute(w) ==
                /\ idleCount' = idleCount
                /\ contributionGen' = contributionGen
                /\ workerStage' = [workerStage EXCEPT ![w] = "Exited"]
+               /\ contributed' = [contributed EXCEPT ![w] = 1]
+               /\ contribGen' = [contribGen EXCEPT ![w] = contributionGen]
           ELSE IF lastDancer /\ recheckMwS1
           THEN (* :1065 reset-continue: work appeared between classify and
                   the dance; re-loop to run it. No signal (the work itself
-                  is the observer's to run). *)
+                  is the observer's to run). Fidelity fix (review of the
+                  split-window round): the C++ `continue` re-enters the
+                  loop top, whose FIRST statement re-clears
+                  idle_dance_contributed_ (:513) — a re-looping eraser
+                  holds NO live contribution, so the model must not leave
+                  contributed=1 at LoopTop (a stale 1 with a stale record
+                  could fire the identity term on a ParkCandidate pass the
+                  C++ would take with contributed=0 — a spurious refusal
+                  that over-approximates the repair). *)
                /\ EraseIdleBumping(BumpDanceResetErase)
                /\ UNCHANGED <<terminate, wakeEpoch>>
                /\ workerStage' = [workerStage EXCEPT ![w] = "LoopTop"]
+               /\ contributed' = [contributed EXCEPT ![w] = 0]
+               /\ UNCHANGED contribGen
           ELSE (* not last: E9-LIFE-8 not-last signal *)
                /\ wakeEpoch' = wakeEpoch + 1
                /\ idleCount' = idleCount + 1
                /\ contributionGen' = contributionGen
                /\ UNCHANGED terminate
                /\ workerStage' = [workerStage EXCEPT ![w] = "ParkCandidate"]
-       /\ contributed' = [contributed EXCEPT ![w] = 1]
-       /\ contribGen' = [contribGen EXCEPT ![w] = contributionGen]
+               /\ contributed' = [contributed EXCEPT ![w] = 1]
+               /\ contribGen' = [contribGen EXCEPT ![w] = contributionGen]
        /\ UNCHANGED <<held, inbox, fiberPC, writerActive, activeReaders,
                       r2Queued, r2Acquired, waitingReady, runningCount,
                       observedEpoch, resCount, pubCount>>
@@ -573,9 +663,11 @@ Next ==
         \/ TryPop(w)
         \/ TrySteal(w)
         \/ EraseIdleOnPop(w)
+        \/ BumpPopGen(w)
         \/ StartFiber(w)
         \/ DrainClassify(w)
         \/ EraseIdleMwS1(w)
+        \/ BumpMwS1Gen(w)
         \/ ReclassifyMwS1(w)
         \/ DanceContribute(w)
         \/ ParkCommit(w)
@@ -595,9 +687,11 @@ Fairness ==
         /\ SF_vars (TryPop(w))
         /\ WF_vars (TrySteal(w))
         /\ WF_vars (EraseIdleOnPop(w))
+        /\ WF_vars (BumpPopGen(w))
         /\ WF_vars (StartFiber(w))
         /\ WF_vars (DrainClassify(w))
         /\ WF_vars (EraseIdleMwS1(w))
+        /\ WF_vars (BumpMwS1Gen(w))
         /\ WF_vars (ReclassifyMwS1(w))
         /\ WF_vars (DanceContribute(w))
         /\ WF_vars (ParkCommit(w))
@@ -653,6 +747,28 @@ DrainStuckState ==
       /\ runningCount = 0
       /\ waitingReady = FALSE
       /\ \A u \in Workers : ~CanLeavePark(u))
+
+(* Split-window reachability witness (REPAIRED constants only — negative
+   gate E12SchedLivenessSplitWindow expects this VIOLATED): a park commit
+   can read the erased count together with the STILL-CURRENT generation —
+   the eraser's exchange(0) landed but its generation bump has not — and so
+   arm a baseline WITHOUT the identity-term refusal. The state is
+   reachable only through the split: once w holds contributed=1, every
+   count-zeroing path except a pending split bump advances the generation
+   past w's record (the atomic G-section erases bump when they erase), so
+   idleCount = 0 /\ contributionGen = contribGen[w] pins the moment
+   between the eraser's two unlocked RMWs. The witness proves the model
+   genuinely explores the C++ split window; the POSITIVE safety gate
+   (DrainStuckState, same constants) proves what the window costs — only a
+   transient park: the eraser's bump, run, and re-dance not-last signal are
+   all sequenced after the arming, the cv predicate fires, and the dancer
+   re-loops instead of sleeping through an absorbed signal. *)
+SplitWindowNeverArmed ==
+    ~\E w \in Workers :
+        /\ workerStage[w] = "Parked"
+        /\ contributed[w] = 1
+        /\ idleCount = 0
+        /\ contributionGen = contribGen[w]
 
 (* =========================================================================
    Liveness properties (~> / <>; fairness only on the WF'd actions above)
