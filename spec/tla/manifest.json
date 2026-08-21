@@ -116,6 +116,26 @@
       "notes": "Protocol: runnable-ownership transfer (fiber_owner_/execWorker/waitOwner triple authority, work stealing). BuggyOwner model expects the named InvLocalMatchesOwner violation (verifier asserts the exact name)."
     },
     {
+      "id": "e8-suspend-switch",
+      "spec_dir": "spec/tla/e8_suspend_switch",
+      "verifier": "scripts/formal/verify-e8-suspend-switch.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 1,
+      "negative_gate_count": 4,
+      "reachability_gate_count": 3,
+      "owner_docs": [
+        "docs/verification/formal/cpp-model-coverage.md"
+      ],
+      "implementation_bindings": [
+        "src/async/scheduler.cpp",
+        "include/sluice/async/scheduler.hpp",
+        "src/async/fiber_ctx.cpp"
+      ],
+      "notes": "Focused safety model of the I47-F2 suspend_switch_pending steal-refusal window (MODEL-007a, issue #172; parent #171): the register+make_waiting+physical-switch transient that e8-ownership-transfer's atomic SuspendFiber fuses away. 2 workers / 1 fiber / 1 resolver, safety-only, SC protocol abstraction (no C++ weak-memory claim). Negatives are cfg-boolean flips (one defect each): ignore-pending steal, late raise (old P1-1), early clear (old Select clear point), plus a late-raise chain gate; each expects its exact named invariant violation, with specificity cfgs proving the one-rule defects leave the unrelated laws intact. Reachability witnesses: R1 wake-before-save transient, R2 thief refusal, R3 safe post-save migration."
+    },
+    {
       "id": "e9-park-wake",
       "spec_dir": "spec/tla/e9_park_wake",
       "verifier": "scripts/formal/verify-e9-park-wake.sh",

@@ -221,6 +221,11 @@ duplicate-publication defect class (`spec/tla/e7_publication/`).
 
 ## What this model does NOT cover
 
+- The suspend-switch physical-save transient that `SuspendFiber`'s atomic
+  fusion hides (logical Waiting/Runnable vs the in-flight physical
+  `context_switch`, and the `suspend_switch_pending` steal refusal that
+  guards it) — modeled separately in `spec/tla/e8_suspend_switch/`
+  (MODEL-007a / I47-F2).
 - AsyncBackend internals, io_uring, ThreadPool (out of scope; E7 closed).
 - MW-S2 blocking admission (closed by
   `spec/tla/e7_multiworker_progress/E7MultiWorkerProgress.tla`). E8 reuses
