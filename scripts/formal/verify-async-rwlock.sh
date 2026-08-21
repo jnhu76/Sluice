@@ -13,6 +13,10 @@
 #   E12RwLockNegDeadlinePrecedence     -> InvResourceFirstDeadline FAILS
 #                                         (MODEL-003 negative control; generated
 #                                         by scripts/formal/gen-rwlock-neg-deadline-precedence.py)
+#   E12RwLockNegDeadlinePrecedence     -> the remaining 12 positive invariants
+#      (.specificity.cfg)                 PASS on the SAME mutant (the negative
+#                                         is EXACT: it fails for the deadline-
+#                                         precedence defect and nothing else)
 #   7 reachability witnesses           -> each NoReach* FAILS (state genuinely
 #                                         reachable: cancel/expire reader-prefix
 #                                         merge, cancel/expire writer-refused,
@@ -166,12 +170,21 @@ expect_fail "NEG WriterRevoke (reader revocation)" \
             ReaderRevocationFree E12RwLockNeg3 || rc=1
 # Negative: timed admission resolves Expired although the resource was
 # admissible AND the evidence latches recorded it (deadline beats resource;
-# the C++ precedence is the opposite). Mutates ONLY the outcome — the
-# latches stay TRUE — so the invariant's failure proves property sensitivity
-# (audit #162 MODEL-003 negative control; freshness-checked above).
+# the C++ precedence is the opposite). The mutation splits the disposition on
+# the environment's due bit: due=FALSE successors are exactly the positive
+# behavior, due=TRUE resolves Expired and commits NO ownership — so the
+# invariant's failure proves property sensitivity (audit #162 MODEL-003
+# negative control; freshness-checked above).
 expect_fail "NEG DeadlinePrecedence (due beats admissible)" \
             E12RwLockNegDeadlinePrecedence E12RwLockNegDeadlinePrecedence.cfg \
             InvResourceFirstDeadline E12RwLockNeg4 || rc=1
+# Specificity: the SAME mutant must PASS every remaining positive invariant —
+# the negative is exact (fails for the deadline-precedence defect and nothing
+# else; a broad mutant that, e.g., still installed writerOwner' = e on an
+# Expired node would fail here on WriterOwnerConsistency).
+expect_pass "NEG DeadlinePrecedence specificity (12 remaining invariants)" \
+            E12RwLockNegDeadlinePrecedence E12RwLockNegDeadlinePrecedence.specificity.cfg \
+            E12RwLockNeg4s || rc=1
 
 # Reachability witnesses (non-vacuity, audit #162 Phase 4): each NoReach*
 # must be VIOLATED — the CEX trace is the witness that the reconcile branch
