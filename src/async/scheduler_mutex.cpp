@@ -108,10 +108,10 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
             if (waiters.wake_node_locked(node)) {
                 owner = me;
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // The current Fiber is RUNNING (has not called make_waiting());
-                // make_runnable may return false. That is not a reason to
-                // publish it.
-                if (me != nullptr) (void)me->make_runnable();
+                // The current Fiber is RUNNING (it has not called
+                // make_waiting()) and continues inline without suspending;
+                // no runnable publication is needed (audit #162 CPP-002
+                // removed the dead make_runnable call).
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
@@ -191,7 +191,8 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
                 }
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                if (me != nullptr) (void)me->make_runnable();
+                // Fiber is RUNNING and continues inline; no publication
+                // (audit #162 CPP-002).
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
@@ -206,7 +207,8 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                if (me != nullptr) (void)me->make_runnable();
+                // Fiber is RUNNING and continues inline; no publication
+                // (audit #162 CPP-002).
                 return;  // resolved at admission; do NOT suspend
             }
             // If expire_locked lost, a concurrent resolver won; fall through.

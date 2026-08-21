@@ -281,9 +281,10 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
         if (set_flag.load(std::memory_order::acquire)) {
             if (q.wake_node_locked(node)) {
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // The current Fiber is RUNNING; make_runnable may return false.
-                // That is not a reason to publish it. Return from wait normally.
-                if (me != nullptr) (void)me->make_runnable();
+                // The current Fiber is RUNNING (it has not called
+                // make_waiting()) and continues inline; no runnable
+                // publication is needed (audit #162 CPP-002 removed the dead
+                // make_runnable call).
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
@@ -350,7 +351,8 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
                 }
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                if (me != nullptr) (void)me->make_runnable();
+                // Fiber is RUNNING and continues inline; no publication
+                // (audit #162 CPP-002).
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
@@ -365,11 +367,9 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // The current Fiber is RUNNING (has not called make_waiting());
-                // make_runnable() returns false for a Running fiber (E7-T2).
-                // Call it for state consistency but do NOT route - matches the
-                // inline SET admission path above.
-                if (me != nullptr) (void)me->make_runnable();
+                // Fiber is RUNNING and continues inline; no publication
+                // (audit #162 CPP-002 removed the dead call and the
+                // never-taken route that consumed its result).
                 return;  // resolved at admission; do NOT suspend
             }
             // If expire_locked lost, a concurrent resolver won; fall through.

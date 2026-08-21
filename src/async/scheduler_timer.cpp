@@ -123,9 +123,11 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();  // reg no longer Active
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                if (me != nullptr && me->make_runnable()) {
-                    route_runnable_locked(me, g_worker);
-                }
+                // The current Fiber is RUNNING and continues inline; no
+                // publication. The former `if (me->make_runnable())
+                // route_runnable_locked(me, g_worker)` was doubly dead: the
+                // condition is always false from running, so the route never
+                // executed (audit #162 CPP-002).
                 // The consumed block stays in the heap/pool for lazy removal:
                 // its deadline is already due, so the next pump_deadlines_locked
                 // (worker-loop drain, or the test driver's advance_clock) pops

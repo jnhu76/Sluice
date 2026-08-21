@@ -166,7 +166,8 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                if (me != nullptr) (void)me->make_runnable();
+                // Fiber is RUNNING and continues inline; no publication
+                // (audit #162 CPP-002).
                 released_mutex = false;  // Mutex NOT released; no reacquire
                 return WaitOutcome::expired;  // resolved at admission; do NOT
                                              // release Mutex or suspend
