@@ -9,8 +9,27 @@ classifies which idle-count reset sites are genuine "contribution
 invalidation events".
 
 Tracking issue: **#161**. Verifier: `scripts/formal/verify-e12-sched-liveness.sh`
-(8 positive gates PASS, 5 negative gates CEX). Owner doc:
+(7 positive gates PASS, 6 negative gates CEX, 1 fail-closed reachability
+witness). Owner doc:
 `docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`.
+
+**Split-window model round (this revision):** the two unlocked erase sites
+are now modeled as the TWO steps the C++ performs — the `exchange(0)`
+(`EraseIdleOnPop` / `EraseIdleMwS1`) and the arbitrarily-delayable
+conditional bump (`BumpPopGen` / `BumpMwS1Gen`), with the intermediate
+`PopBumpPending` / `MwS1BumpPending` stages. The round had two outcomes:
+
+1. the ROUTE-PUBLICATION erase (`route_runnable_locked`, `BumpPubErase`)
+   was RECLASSIFIED to a genuine invalidation site — with the split
+   interleaving live, `E12SchedLivenessB4NoBumpPubErase.cfg` finds the
+   M4 stuck shape with the route erase as the orphaning site (its old
+   "self-guarded" verdict was an artifact of the fused-atomicity model);
+2. the split window itself (a park commit reading the erased count with
+   the still-current generation) is REACHABLE — witness
+   `E12SchedLivenessSplitWindow.cfg` violates `SplitWindowNeverArmed` —
+   and the repaired-constants safety gate proves the window costs only a
+   transient park. This is why the C++ refinement argument is the honest
+   dichotomy, not a visibility claim (see below).
 
 ## Scope
 
@@ -28,16 +47,16 @@ IdleBackend; the e9 suite owns the backend park domain.
 | C++ site | Model action(s) | Load-bearing role |
 |---|---|---|
 | `scheduler.cpp:513-517` pop | `TryPop` | removes the ticket under `inbox_mtx` only — invisible to classify and to the park-commit scan |
-| `scheduler.cpp:550` pop-path idle reset | `EraseIdleOnPop` | **unlocked, no mandatory follow-up signal — genuine invalidation site (B4)** |
+| `scheduler.cpp:550` pop-path idle reset | `EraseIdleOnPop` + `BumpPopGen` | **unlocked, no mandatory follow-up signal — genuine invalidation site (B4); modeled as the split exchange/bump pair (the C++ window)** |
 | `scheduler.cpp:1211-1219` make_running | `StartFiber` | the ticket becomes a classify-visible observer only here |
 | `scheduler.cpp:567` unlocked classify | `DrainClassify` (with the :562-568 drain) | drain publishes + signals + erases idle atomically under G |
-| `scheduler.cpp:582` mw_s1 fall-through erase | `EraseIdleMwS1` | **unlocked, arbitrarily delayable — genuine invalidation site (B4)** |
+| `scheduler.cpp:582` mw_s1 fall-through erase | `EraseIdleMwS1` + `BumpMwS1Gen` | **unlocked, arbitrarily delayable — genuine invalidation site (B4); split exchange/bump pair** |
 | `scheduler.cpp:955-958` dance-block reclassify + erase | `ReclassifyMwS1` | self-guarded (:582 always precedes on the same path) |
 | `scheduler.cpp:1035-1093` idle dance | `DanceContribute` | contribute; not-last signal (E9-LIFE-8); last-idle recheck/terminate |
 | `scheduler.cpp:1065` reset-continue | `DanceContribute` middle branch | self-guarded (the eraser stays active and re-loops) |
 | `park_wake.cpp:295-338` park commit | `ParkCommit` | recheck (`RefusePark`) then arm baseline — the refusal is the repair point |
 | `park_wake.cpp:379-396` cv predicate | `CanLeavePark`/`LeavePark` | epoch / terminate / own-inbox backstop |
-| `scheduler.cpp:1452-1483` route erase+signal | inside `DrainClassify`/`FiberStepWF` | G-atomic pair — self-guarded (the #115 closure) |
+| `scheduler.cpp:1452-1483` route erase+signal | `EraseIdleBumping(BumpPubErase)` inside `DrainClassify`/`FiberStepWF` | **RECLASSIFIED genuine (split-window round): a dance contribution made before a routed grant can be orphaned here with the contributor's 1-bit flag still claiming it** |
 | E8 steal | `TrySteal` | transport; `DrainClassify` requires nothing stealable (the C++ pop→steal→drain order) |
 
 Properties: invariants `NoReaderWriterOverlap`, `TerminalUniqueness`,
@@ -71,7 +90,13 @@ s22-23  W0's delayed ParkCommit: ProgressPending=FALSE, idle(1)>contributed(1)
 ```
 
 The `:582`-erase variant (`E12SchedLivenessB4NoBumpMwS1Erase.cfg`) realizes
-the same shape with the mw_s1 fall-through erase as the orphaning site.
+the same shape with the mw_s1 fall-through erase as the orphaning site, and
+the route-publication variant (`E12SchedLivenessB4NoBumpPubErase.cfg`,
+split-window round) realizes it with the route erase as the orphaning
+site: a not-last DanceContribute → WF's unlock grants R2 and the route
+erase zeroes the live count → work completes → the eraser's final
+not-last dance → the orphaned contributor's late ParkCommit arms a
+baseline after the last signal → both Parked.
 
 ## The repair (proven sufficient in the abstract)
 
@@ -87,26 +112,27 @@ all safety and liveness properties hold.
 
 | Site | Toggle | Bump off | Verdict |
 |---|---|---|---|
-| `scheduler.cpp:550` pop-path (unlocked) | `BumpPopErase` | `DrainStuckState` CEX | **genuine invalidation event** |
-| `scheduler.cpp:582` mw_s1 fall-through (unlocked) | `BumpMwS1Erase` | `DrainStuckState` CEX | **genuine invalidation event** |
+| `scheduler.cpp:550` pop-path (unlocked, split) | `BumpPopErase` | `DrainStuckState` CEX | **genuine invalidation event** |
+| `scheduler.cpp:582` mw_s1 fall-through (unlocked, split) | `BumpMwS1Erase` | `DrainStuckState` CEX | **genuine invalidation event** |
+| `scheduler.cpp:1452` route publication (under G) | `BumpPubErase` | `DrainStuckState` CEX | **genuine invalidation event — RECLASSIFIED by the split-window round (the fused-atomicity model had masked the trace; the old "self-guarded" PASS row was an artifact)** |
 | `scheduler.cpp:958` dance-block recheck (under G) | `BumpRecheckErase` | PASS | self-guarded — :582 always precedes on the same path |
-| `scheduler.cpp:1452` route erase (under G, atomic with signal) | `BumpPubErase` | PASS | self-guarded — the G-atomic erase+signal pair plus the park-commit scan (#115 closure) rescue any orphan |
 | `scheduler.cpp:1065` dance reset-continue (under G) | `BumpDanceResetErase` | PASS | self-guarded — the eraser stays active and re-loops/re-dances |
 
 The Live-resident erase (`:1027`) is out of scope (Drain-only scenario);
 its convergence is carried by the not-last signal per the R4/E9-LIFE-8
 analysis in the e9 suite.
 
-**Minimal C++ refinement:** advance the dance/contribution generation ONLY
-at `:550` and `:582` — the two UNLOCKED erases with no mandatory follow-up
-signal and no forced re-loop.
+**Minimal C++ refinement:** advance the dance/contribution generation at
+the pop-path erase, the mw_s1 fall-through erase, AND the
+route-publication erase — the three genuine invalidation events (each an
+`exchange(0)` that bumps only when a contribution was actually erased).
 
 ## C++ refinement of the model's atomicity (implementation binding)
 
-The model's `EraseIdle` (reset + generation advance) and `DanceContribute`
-(record + count) are atomic actions; the C++ sites are unlocked RMW pairs
-that can interleave. The shipped refinement follows three ordering rules
-(full argument in `docs/architecture/issue-161-idle-dance-contribution-
+The G-section erase sites stay single atomic actions (`EraseIdleBumping`);
+the two UNLOCKED sites are modeled as the split exchange/bump pairs the
+C++ performs. The shipped refinement follows three ordering rules (full
+argument in `docs/architecture/issue-161-idle-dance-contribution-
 generation-gate.md` §Gate 1):
 
 1. the dancer records the generation strictly BEFORE its `fetch_add`;
@@ -115,13 +141,29 @@ generation-gate.md` §Gate 1):
 3. the park commit loads the generation strictly AFTER its
    `idle_workers_` load (the identity term is the last refusal disjunct).
 
-Monotonicity then guarantees every true orphaning is caught (the orphaning
-erase's bump is sequenced after the victim's earlier record, so a commit
-that sees the erased count also sees the newer generation), while every
-residual interleaving can only cause a false refusal — which converges by
-the R4 conservative argument. The bridge regression is
-`tests/issue161_idle_dance_orphan_test.cpp` (per-worker seams; deterministic
-pre-fix FAIL, post-fix PASS).
+Rule 3 does NOT make the generation load observe the bump whenever the
+idle load observes the erased count — `idle_workers_` and `dance_epoch_`
+are distinct atomics with independent modification orders, so the claim
+"every true orphaning is caught by monotonicity" (an earlier draft of
+this section) is FALSE as a C++ argument. The witness gate
+(`E12SchedLivenessSplitWindow.cfg`, `SplitWindowNeverArmed` violated)
+keeps that honest: the split window — a park commit reading the erased
+count together with the still-current generation — is REACHABLE. Its
+safety is the two-case dichotomy: (a) generation mismatch → refuse and
+converge by the R4 conservative argument; (b) generation match with the
+count already erased → the eraser's protocol is incomplete, its re-dance
+not-last signal is G-serialized strictly AFTER the committing worker's
+arming (the commit holds `global_mtx_` across both loads and the arming,
+and observing the erased count proves no re-dance contribution is
+G-visible yet), so the park is transient — the window reorders who wakes
+but cannot rebuild the terminal M4 stuck state, whose mechanism needs
+the absorbed signal to PRECEDE the arming. The repaired-constants safety
+gate on the SAME split constants proves exactly this (DrainStuckState
+holds). Bridge regressions: `tests/issue161_idle_dance_orphan_test.cpp`
+(pop-path site, per-worker seams) and
+`tests/issue161_pub_erase_orphan_test.cpp` (route-publication site,
+per-worker seams + the baseline seam; deterministic pre-fix FAIL,
+post-fix PASS).
 
 ## M1/M2/M3: documented in-scope closure
 
@@ -150,3 +192,11 @@ with `r2Acquired` false).
 3. The wake epoch is monotonic Nat here (not a 1-bit toggle): two signals
    between baselines must not alias to "no signal" — a toggle would
    over-approximate misses and could fabricate phantom stuck states.
+4. Split-window round: modeling two unlocked RMWs as ONE atomic action
+   fuses a window the C++ really has — and the fused model can silently
+   VINDICATE a site the split model convicts (the route-publication
+   erase's "self-guarded" verdict was exactly this artifact, compounded
+   by an unfaithful LoopTop `contributed` reset). When the implementation
+   performs N distinct atomics, the model needs N distinct steps plus a
+   reachability witness for the window, and the safety gate on the same
+   constants must show what the window costs (here: a transient park).

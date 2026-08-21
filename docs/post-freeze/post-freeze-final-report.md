@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1186 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1193 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 504 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
@@ -39,7 +39,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_condition.cpp` | 264 | condition waits |
 | `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2051 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2085 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
