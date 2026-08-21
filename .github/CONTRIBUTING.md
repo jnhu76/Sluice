@@ -15,12 +15,15 @@ Sluice is an experimental C++20 I/O/control-flow library with deliberately stric
 5. A model defect is not automatically a C++ defect. Classify evidence honestly.
 6. A design smell or research idea does not authorize implementation by itself.
 
+Newly filed issues enter **TRIAGE** until a maintainer classifies their evidence, scope, and lifecycle. Filing an issue does not by itself authorize implementation.
+
 See [ISSUE_LIFECYCLE.md](ISSUE_LIFECYCLE.md) for tracker states and defer/reopen rules.
 
 ## Issue lifecycle
 
-Open issues are reserved for actionable work or active tracking:
+Open issues are reserved for triage, actionable work, or intentional tracking:
 
+- **TRIAGE** — newly filed / not yet classified; no implementation authority yet;
 - **ACTIVE** — currently executing or explicitly selected;
 - **READY / EXPERIMENT** — bounded evidence/design work is allowed, but production modification may still be gated;
 - **ON-TOUCH** — gradual maintenance ledger; no big-bang cleanup;
