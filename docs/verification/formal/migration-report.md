@@ -218,7 +218,9 @@ This report is a point-in-time snapshot at BASE SHA `37bfb53`. The RwLock gap
 row above is superseded: the e12-rwlock suite now checks 13 invariants with
 4 negative models (ReaderBypass, NoReconcile, WriterRevoke, DeadlinePrecedence
 — the reconcile and timed-admission-precedence coverage the gap row asked for;
-the two generated negatives are freshness-gated) and 7 reachability
+the two generated negatives are freshness-gated, and DeadlinePrecedence has a
+specificity cfg proving the SAME mutant passes the remaining 12 positive
+invariants, so that negative is exact) and 7 reachability
 witnesses, after the audit #162 adversarial audit's MODEL-001/002 (reconcile
 dead-code + revocation guard) and MODEL-003 (timed admission) repairs.
 Current authority: `spec/tla/manifest.json` +

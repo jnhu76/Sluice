@@ -1324,7 +1324,7 @@ instead. Gates re-run green after the edits:
 | MODEL-006 (LOW/INFO) | KEEP (self-documented) | E9's 1-bit wakeEpoch ABA limitation is documented inside the model; persistent state is the return authority. No action. |
 | MODEL-007 (MEDIUM, aggregate) | JUSTIFIED COVERAGE GAP + TRIGGERS RECORDED | The five mechanisms (I47-F2 suspend-switch/steal window; Phase-F1 WaitRecord registry races; CancelToken epoch protocol; #115 spawn-to-busy-worker wake obligation; G1 retire-ring ticket rescue) are coverage gaps, not defects. Recorded in `docs/verification/formal/cpp-model-coverage.md` debt register with per-mechanism triggers. Issue #162 §7.3's two suggested focused models are deliberately NOT auto-built (scope decision); taking them up is the revisit trigger. |
 | MODEL-008 (INFO) | KEEP (documented) | `RecordCanceledConfirmed` has no production caller on master (ThreadPool EINTR retry keeps running requests uninterruptible); already documented in the model. No action. |
-| MODEL-009 (LOW) | REFINEMENT/DOCUMENTATION DRIFT REPAIRED by NARROWING the model claim (PR #168 review) | `E8OwnershipTransfer.tla` covers the registration-time-owner family ONLY: Completion waits route by `WaitReg.owner` — exactly what `WakeReady` models. The WaitQueue-class wake discipline (the E12 primitives resolve the target via `fiber_owner_`, the CURRENT owner updated by steal) is **not instantiated by any E8 action**, and worker liveness / G1 retire-ring rescue are outside this model's state machine — so this suite proves NOTHING about that family (the earlier "no E8 invariant distinguishes them" wording followed from omitting the second behavior, not from comparing both). The model note now records the current-owner family as an unmodeled implementation family / coverage boundary (issue #171 tracker); its safety argument (any live worker can execute any Fiber; a dead worker's ticket is rescued by the retire ring) is an implementation-level argument separate from this gate. |
+| MODEL-009 (LOW) | REFINEMENT/DOCUMENTATION DRIFT REPAIRED by NARROWING the model claim (PR #168 review); NOT tracked as formal debt | `E8OwnershipTransfer.tla` covers the registration-time-owner family ONLY: Completion waits route by `WaitReg.owner` — exactly what `WakeReady` models. The WaitQueue-class wake discipline (the E12 primitives resolve the target via `fiber_owner_`, the CURRENT owner updated by steal) is **not instantiated by any E8 action**, and worker liveness / G1 retire-ring rescue are outside this model's state machine — so this suite proves NOTHING about that family (the earlier "no E8 invariant distinguishes them" wording followed from omitting the second behavior, not from comparing both). The finding was drift of the model's own documentation, repaired by the narrowed claim itself: the current-owner family is recorded as a documentation-level coverage boundary (implementation-level safety argument, separate from the gate), deliberately NOT re-tracked as formal debt — the issue #171 umbrella owns the MODEL-007 unmodeled-mechanism list, which does not include this routing family. |
 
 ### 11.7 Audit #162 Phase 7 — C++ observations CPP-001/CPP-002: verdicts and repair (2026-08-21)
 
@@ -1410,16 +1410,30 @@ round.
    the precedence were wrong. New generated negative
    `E12RwLockNegDeadlinePrecedence.tla`
    (`scripts/formal/gen-rwlock-neg-deadline-precedence.py`): in BOTH
-   `ReadUntilAdmit` and `WriteUntilAdmit` the inline resolution flips
-   `Woken -> Expired` when the deadline is due even though the resource is
-   admissible. The mutation changes ONLY the outcome —
-   `admissionSawResource' = TRUE` and the `\E due` evidence latch are kept
-   exactly as the positive model writes them — so the mutant cannot make
-   the invariant self-proving by erasing evidence. Mutating both paths
-   (not just one) keeps the law uniform across read/write timed admission
-   at negligible state cost (the CEX is 2 states deep). Parity:
-   `E12SemNeg7DeadlinePrecedence` (NEG-SEM-7). Expected and observed:
-   `InvResourceFirstDeadline` VIOLATED (named CEX), all other laws intact.
+   `ReadUntilAdmit` and `WriteUntilAdmit` the disposition is split on the
+   environment's due bit — the `due = FALSE` successor is EXACTLY the
+   positive behavior, while `due = TRUE` (resource admissible AND deadline
+   already due) wrongly resolves `Expired` and commits NO ownership (no
+   reader grant, no `activeReaders` increment, no `writerOwner` install).
+   Narrowed after the PR #168 adversarial review: the first draft flipped
+   the outcome unconditionally and kept the ownership commits, which would
+   have made the mutant also violate `WriterOwnerConsistency` (an Expired
+   node still owning the writer lock) — i.e. a BROADER broken model, not an
+   isolated precedence mutation. The evidence latches are untouched
+   (`admissionSawResource' = TRUE`; the `\E due` latch), so the mutant
+   cannot make the invariant self-proving by erasing evidence. The
+   derivation hoists the common assignments before the split and makes the
+   IF the action's last conjunct, so both successors assign every variable
+   exactly once under any reading of TLA+ quantifier/IF scope. Parity:
+   `E12SemNeg7DeadlinePrecedence` (NEG-SEM-7). Observed verdicts:
+   `InvResourceFirstDeadline` VIOLATED (named CEX) and, on the SAME mutant,
+   the remaining 12 positive invariants PASS — the new
+   `E12RwLockNegDeadlinePrecedence.specificity.cfg` gate proves the
+   negative is EXACT (fails for the deadline-precedence defect and nothing
+   else). Adversarially probed in an isolated workspace: re-broadening the
+   write-path defect branch to install `writerOwner' = e` makes the
+   specificity gate FAIL on `WriterOwnerConsistency`, so the specificity
+   check genuinely detects collateral damage.
 2. **Generated-negative freshness gates (fail-closed)** —
    `verify-async-rwlock.sh` previously ran TLC on the committed
    `E12RwLockNegWriterRevoke.tla` without proving it equals what the
@@ -1456,11 +1470,12 @@ round.
    current-owner (`fiber_owner_`) WaitQueue routing, worker liveness, and
    the G1 retire-ring rescue are not in its state machine, so the model
    proves nothing about them. The "no E8 invariant distinguishes them"
-   sentence is gone (it followed from omitting the second behavior); the
-   current-owner family is recorded as an unmodeled implementation family
-   / coverage boundary under the issue #171 tracker. MODEL-009's verdict
-   (§11.6) is correspondingly "REFINEMENT/DOCUMENTATION DRIFT REPAIRED by
-   NARROWING the model claim".
+   sentence is gone (it followed from omitting the second behavior). The
+   finding was refinement/documentation drift repaired by the narrowed
+   claim itself; the current-owner family stays a documentation-level
+   coverage boundary and is deliberately NOT re-tracked as formal debt
+   (the #171 umbrella owns the MODEL-007 mechanism list only — a different
+   list, so #171's scope is not widened to absorb MODEL-009).
 7. **Markdown lint** — two line-leading `#162` lines (this file, and
    `docs/verification/formal/migration-report.md`) that a Markdown parser
    would read as headings were rewritten as prose.
@@ -1470,7 +1485,12 @@ round.
    hints, not Fiber interleaving authority — the causal seams are
    `await_ready_flag`, `advance_clock` (whose pump resolves the node
    inline under `global_mtx_`), run phases, and terminal-state assertions.
-   All ten audit cases re-ran green after the removal.
+   The review's second pass also collapsed the arbitrary retry loops
+   (`200 && !terminal` / `5×`) to a SINGLE `advance_clock(100)` per driver:
+   if the inline-pump argument is right, one advance from clock 0 past the
+   deadline is the complete causal evidence — a loop would only mask a
+   falsified assumption. All ten audit cases re-ran green after both
+   removals.
 9. **#162 residual re-tracking** — E12AsyncMutexNegM4 generator staleness
    (pre-existing, NOT a #162 rwlock defect) -> issue #169; E7 C++
    dead/inert field cleanup -> issue #170; MODEL-007's five unmodeled
@@ -1492,14 +1512,17 @@ CEX    NEG ReaderBypass        (NoReaderBarging violated)
 CEX    NEG NoReconcile         (InvNoStrandedGrantableHead violated)
 CEX    NEG WriterRevoke        (ReaderRevocationFree violated)        [NEG-RW3]
 CEX    NEG DeadlinePrecedence  (InvResourceFirstDeadline violated)    [NEG-RW4]
+PASS   NEG DeadlinePrecedence specificity — the 12 remaining positive
+       invariants hold on the SAME mutant (3748 states, full exploration)
 CEX    REACH × 7               (all seven NoReach* witnesses)
 ```
 
 `verify-e7-publication.sh` / `verify-e8-ownership-transfer.sh` /
 `verify-e10-waitnode.sh` re-ran PASS after the comment edits;
-`python3 scripts/formal/verify.py check` PASS (95 .tla / 240 .cfg all
-manifest-covered). Manifest: e12-rwlock `negative_gate_count` 3 -> 4;
-gate structure is now positive(1) + negative(4) + reachability(7).
+`python3 scripts/formal/verify.py check` PASS (95 .tla / 241 .cfg all
+manifest-covered). Manifest: e12-rwlock `negative_gate_count` 3 -> 5
+(4 violation gates + 1 specificity pass gate across 4 negative models);
+gate structure is now positive(1) + negative(5) + reachability(7).
 
 ---
 

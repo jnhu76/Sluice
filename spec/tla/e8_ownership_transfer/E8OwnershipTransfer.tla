@@ -53,11 +53,13 @@
   current-owner family, worker liveness, and the G1 retire-ring rescue are
   OUTSIDE this model's state machine: no action here routes a wake through
   ownerRecord, so this suite proves NOTHING about the current-owner
-  discipline. It is recorded as an unmodeled implementation family /
-  coverage boundary (issue #171 tracker), not as a proven-equivalent
-  alternative; the safety argument for it (any live worker can execute any
-  Fiber; a dead worker's ticket is rescued by the retire ring) is an
-  implementation-level argument, separate from this gate.
+  discipline. MODEL-009 was refinement/documentation drift, repaired by
+  this narrowed claim itself; the current-owner family is therefore a
+  documentation-level coverage boundary (an implementation-level safety
+  argument — any live worker can execute any Fiber; a dead worker's ticket
+  is rescued by the retire ring — separate from this gate), deliberately
+  NOT tracked as formal debt (the issue #171 umbrella owns the MODEL-007
+  unmodeled-mechanism list, which does not include this routing family).
 
   Extends the E7 runnable-publication vocabulary (spec/tla/e7_publication/
   E7Publication.tla): one successful created|waiting -> runnable transition
