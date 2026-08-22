@@ -19,6 +19,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | request-arena | RequestArena/RequestSlot explicit-I/O lifecycle | `spec/tla/request_arena/` | `scripts/formal/verify-request-arena.sh` |
 | spawn-wake-epoch | Spawn Wake-Epoch Obligation (MODEL-007d) | `spec/tla/spawn_wake_epoch/` | `scripts/formal/verify-spawn-wake-epoch.sh` |
 | worker-retire-rescue | Worker Retire Ticket Rescue (MODEL-007e) | `spec/tla/worker_retire_rescue/` | `scripts/formal/verify-worker-retire-rescue.sh` |
+| cancel-token-epoch | CancelToken Request-Epoch Isolation (MODEL-007c) | `spec/tla/cancel_token_epoch/` | `scripts/formal/verify-cancel-token-epoch.sh` |
 | e7-publication | E7 Publication | `spec/tla/e7_publication/` | `scripts/formal/verify-e7-publication.sh` |
 | f1-wait-record | F1 WaitRecord Registry (MODEL-007b) | `spec/tla/f1_wait_record/` | `scripts/formal/verify-f1-wait-record.sh` |
 | e7-multiworker-progress | E7 MultiWorker Progress | `spec/tla/e7_multiworker_progress/` | `scripts/formal/verify-e7-multiworker-progress.sh` |
