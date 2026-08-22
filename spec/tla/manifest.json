@@ -193,7 +193,7 @@
         "src/async/scheduler_park_wake.cpp",
         "include/sluice/async/scheduler.hpp"
       ],
-      "notes": "Protocol: runnable-ownership transfer (fiber_owner_/execWorker/waitOwner triple authority, work stealing). BuggyOwner model expects the named InvLocalMatchesOwner violation (verifier asserts the exact name)."
+      "notes": "Protocol: runnable-ownership transfer (fiber_owner_/execWorker/waitOwner triple authority, work stealing). BuggyOwner model expects the named InvLocalMatchesOwner violation (verifier asserts the exact name). Issue #184: the former unreachable W*Inbox/MoveInboxToLocal/InvInboxMatchesOwner compatibility tier is RETIRED (matching the E7/#170 retirement) - no action ever assigned a W*Inbox location (InvNoInboxTicket held on the pre-change graph, producer-injection probe violated it); checked graph unchanged (341/100/depth 11, BuggyOwner 17/10/depth 4)."
     },
     {
       "id": "e8-suspend-switch",
