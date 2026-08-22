@@ -175,18 +175,20 @@ struct WorkerState {
     std::condition_variable inbox_cv;
     std::atomic<bool> active{false};  // this worker is part of a coordinated run
 
-    // E13 P6-C1 (P1-1 corrective): suspend-switch execution authority that
-    // closes the wake-before-physical-context-switch window. Raised by the
-    // suspending Fiber's owner AFTER global_mtx_ is released but BEFORE the
-    // physical context_switch (so a resolver may have already routed the
-    // caller Runnable ticket onto this worker's local_runnable), and cleared
-    // AFTER the context_switch returns control to the scheduler continuation
-    // (the CPU context is then saved). try_steal reads this under global_mtx_
-    // and refuses to steal a ticket from a victim that is mid-suspension:
-    // resuming such a ticket on a thief would re-enter a Fiber context whose
-    // rsp/rbp/rip have NOT yet been saved by the in-flight switch. Atomic
-    // (NOT guarded_by global_mtx_): the owner sets/clears it OUTSIDE any lock
-    // around context_switch; a thief observes it under global_mtx_, and the
+    // E13 P6-C1 / I47-F2 (unified suspend-switch authority): suspend-switch
+    // execution authority that closes the wake-before-physical-context-switch
+    // window. Raised UNDER global_mtx_ by commit_suspend_locked BEFORE
+    // make_waiting() — a resolver, which also needs global_mtx_, can therefore
+    // never publish a Runnable ticket onto this worker's local_runnable
+    // between Waiting-visibility and protection-publication (it MAY publish
+    // later, after G release, while the physical context_switch is still in
+    // flight). Cleared AFTER the context_switch returns control to the
+    // scheduler continuation (run_next_on; the CPU context is then saved; no
+    // lock held). try_steal reads this under global_mtx_ and refuses to steal
+    // a ticket from a victim that is mid-suspension: resuming such a ticket on
+    // a thief would re-enter a Fiber context whose rsp/rbp/rip have NOT yet
+    // been saved by the in-flight switch. The raise happens inside the
+    // global_mtx_ critical section, the clear outside any lock; the
     // release/acquire pair on the atomic establishes happens-before between
     // the clear-store and the thief's subsequent load.
     std::atomic<bool> suspend_switch_pending{false};

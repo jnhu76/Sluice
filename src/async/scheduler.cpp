@@ -1927,7 +1927,7 @@ bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers)
         // fiber's CPU context. Resuming that ticket here would re-enter a stale
         // ctx. Skip the whole victim; the next suspend cycle re-arms the flag
         // only around its own switch. acquire load pairs with the release
-        // stores in select.cpp's suspend path.
+        // stores in commit_suspend_locked (raise) and run_next_on (clear).
         if (victim->suspend_switch_pending.load(std::memory_order_acquire)) {
             continue;
         }

@@ -133,4 +133,7 @@ safety and demonstrates that the defect's abstract form violates it.
   ThreadPool syscalls, timers, cancellation redesign, or performance.
 - Does NOT model the register→suspend transient as a separate visible state
   in the CORRECT model (collapsed to one atomic `SuspendFiber`); the buggy
-  model encodes the defect directly.
+  model encodes the defect directly. The suspend-switch physical-save
+  transient hidden by that fusion (I47-F2 `suspend_switch_pending` vs
+  steal/wake) is modeled separately in `spec/tla/e8_suspend_switch/`
+  (MODEL-007a).
