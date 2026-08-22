@@ -17,6 +17,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | blocking-io-pool | BlockingIoPool | `spec/tla/blocking_io_pool/` | `scripts/formal/verify-blocking-io-pool.sh` |
 | d1-uring-poison | D1 io_uring Poison/Recovery | `spec/tla/d1_uring_poison/` | `scripts/formal/verify-d1-uring-poison.sh` |
 | request-arena | RequestArena/RequestSlot explicit-I/O lifecycle | `spec/tla/request_arena/` | `scripts/formal/verify-request-arena.sh` |
+| spawn-wake-epoch | Spawn Wake-Epoch Obligation (MODEL-007d) | `spec/tla/spawn_wake_epoch/` | `scripts/formal/verify-spawn-wake-epoch.sh` |
 | e7-publication | E7 Publication | `spec/tla/e7_publication/` | `scripts/formal/verify-e7-publication.sh` |
 | f1-wait-record | F1 WaitRecord Registry (MODEL-007b) | `spec/tla/f1_wait_record/` | `scripts/formal/verify-f1-wait-record.sh` |
 | e7-multiworker-progress | E7 MultiWorker Progress | `spec/tla/e7_multiworker_progress/` | `scripts/formal/verify-e7-multiworker-progress.sh` |
