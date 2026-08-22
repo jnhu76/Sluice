@@ -39,7 +39,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_condition.cpp` | 265 | condition waits |
 | `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2085 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2065 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -67,6 +67,11 @@ idle-count erase sites become `exchange(0)` + a conditional generation
 bump, the park-commit identity-refusal term, and the per-worker test
 seams; see
 `docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`);
+`scheduler.cpp` 2085 → 2065 (2026-08-22, Issue #170 — removal of the inert
+worker-inbox notification surface: the never-populated `WorkerState::inbox`
+deque, the no-consumer `inbox_cv`, all 9 inert notifies, and the three
+notify-only terminate loops; comments reworded to the wake-domain authority.
+No scheduling/wake/lock-order semantic change — see issue #170 Comment A);
 `scheduler_rwlock.cpp` 667 → 677, `scheduler_mutex.cpp` 343 → 345,
 `scheduler_semaphore.cpp` 315 → 317, `scheduler_timer.cpp` 504 → 506,
 `scheduler_condition.cpp` 264 → 265 (2026-08-21, Issue #162 Phase 7 —

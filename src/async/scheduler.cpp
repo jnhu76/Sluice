@@ -275,17 +275,13 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
         // exactly like route_runnable_locked. The target may be busy inside a
         // Fiber and unable to drain its queue; without the wake-epoch advance
         // every other worker already committed to the unbounded wake-domain
-        // park sleeps through the publication (inbox_cv has no waiter — all
-        // parks are on wake_cv_/wait_one — so the notify below is inert) and
-        // the stealable ticket strands. State first, then wake: queue
-        // membership is published above and the inbox lock is RELEASED before
-        // the signal (the park predicate holds wake_mtx_ while inspecting an
-        // inbox — never invert that edge). Safe under global_mtx_:
+        // park sleeps through the publication and the stealable ticket
+        // strands. State first, then wake: queue membership is published
+        // above and the inbox lock is RELEASED before the signal (the park
+        // predicate holds wake_mtx_ while inspecting the worker's
+        // local_runnable — never invert that edge). Safe under global_mtx_:
         // signal_wake_locked only acquires wake_mtx_.
         signal_wake_locked();
-        // Legacy transport retained (harmless): no production path waits on
-        // inbox_cv; the wake authority is the epoch advanced above.
-        workers_[target]->inbox_cv.notify_one();
     } else {
         pending_spawn_.push_back(&fiber);
         // Owner is assigned at run() distribute time; record a placeholder
@@ -325,7 +321,6 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
     // explicit target can be a BUSY worker that cannot drain its queue, and a
     // parked steal-capable peer must observe the publication (see spawn()).
     signal_wake_locked();
-    tgt->inbox_cv.notify_one();
 }
 
 WorkerState* Scheduler::current_worker() {
@@ -389,7 +384,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
             std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
             worker->local_runnable.push_back(fiber);
             fiber_owner_[fiber] = worker;
-            worker->inbox_cv.notify_one();
             ++target;
         }
         next_spawn_worker_ = 0;
@@ -529,7 +523,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                 // DEAD original owner (the retire moves the ticket, not the
                 // ownership record). Without this, the fiber's next wait
                 // resolution routes it back onto the terminated worker's
-                // inbox (route_runnable_locked), turning every retire-rescue
+                // local_runnable (route_runnable_locked), turning every retire-rescue
                 // into a stranded ticket that only a later steal happens to
                 // recover (adversarial-review finding: the route-to-dead-
                 // worker class G1 repairs must not survive as a designed-in
@@ -553,7 +547,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         if (f) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             // Issue #161 seam (worker_ticket_popped): the ticket is popped —
-            // REMOVED from its inbox, invisible to steals and to classify —
+            // REMOVED from its local_runnable, invisible to steals and to classify —
             // but the unlocked idle-count erase below has not run and
             // run_next_on has not incremented running. This is the exact M4
             // window: an idle-dance contribution a peer makes while a worker
@@ -968,10 +962,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // (E4/E5 model). MW-S2 with outstanding-but-uncompletable
                         // ops is treated as a no-progress boundary, NOT busy-spin.
                         global_terminate_.store(true, std::memory_order_release);
-                        for (WorkerState* worker : run_workers) {
-                            std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
-                            worker->inbox_cv.notify_all();
-                        }
                         // E9: wake any Worker parked on the wake source.
                         signal_wake_locked();
                         // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: release any paused
@@ -1053,10 +1043,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             MwState still = classify_locked(run_workers, ws);
                             if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                                 global_terminate_.store(true, std::memory_order_release);
-                                for (WorkerState* worker : run_workers) {
-                                    std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
-                                    worker->inbox_cv.notify_all();
-                                }
                                 signal_wake_locked();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                             sluice_async_test::release_all_phases(*this);
@@ -1115,10 +1101,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             // Live it is reached only for MW-S3 without an
                             // effective wake source, or true quiescence.
                             global_terminate_.store(true, std::memory_order_release);
-                            for (WorkerState* worker : run_workers) {
-                                std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
-                                worker->inbox_cv.notify_all();
-                            }
                             // E9: wake any Worker parked on the wake source.
                             signal_wake_locked();
                             // Release any paused test phase so parked test
@@ -1188,9 +1170,9 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             sluice_async_test::PhaseTag::scheduler_park_candidate, ws->id);
 #endif
 
-        // E9: park on the unified wake source (wake_cv + wake epoch). This
-        // replaces the E7 1ms inbox_cv timed park, which was a de-facto
-        // periodic poll masking the external-wake gap (ADR §9.4). The wake
+        // E9: park on the unified wake source (wake_cv + wake epoch); the
+        // wake-domain park is unbounded except for deadline/backend
+        // observation bounds (ADR §9.4). The wake
         // source's wake set now includes runnable publication (route_runnable
         // signals) and external-ready publication (SchedulerWakeHandle).
         // Phase G: no MIXED-WAKE backend observation is needed from the
@@ -1208,7 +1190,8 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         // Phase G review P2b — G1 deterministic reproducer seam: the worker
         // just RETURNED from a wake-domain park and is about to re-enter the
-        // loop top (pop own inbox -> try_steal -> global_mtx_ drain -> classify).
+        // loop top (pop own local_runnable -> try_steal -> global_mtx_ drain
+        // -> classify).
         // A test holding a worker HERE has the exact causal point the G1
         // park-window violation needs: everything the worker is about to
         // observe (a backend-ready publication, a route, a terminate flag) can
@@ -1270,8 +1253,8 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
     // Causal worker-death evidence (G1 reproducer): after this store the
     // thread never touches WorkerState again (run_impl's thread lambda only
     // clears `active` and TLS). A test observing loop_exited knows the
-    // worker's inbox residue is stranded unless a live participant re-seeds
-    // or steals it.
+    // worker's local_runnable residue is stranded unless a live participant
+    // re-seeds or steals it.
     ws->loop_exited.store(true, std::memory_order_release);
 #endif
 }
@@ -1339,7 +1322,6 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
     if (owner) {
         std::lock_guard<std::mutex> lk(owner->inbox_mtx);
         owner->local_runnable.push_back(f);
-        owner->inbox_cv.notify_one();
     } else {
         pending_spawn_.push_back(f);
     }
@@ -1522,7 +1504,7 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     }
 
     // Clear the terminate signal: new work was routed, so the run is NOT over.
-    // A worker that was about to exit must re-check its inbox (late-drain).
+    // A worker that was about to exit must re-check its local_runnable (late-drain).
     global_terminate_.store(false, std::memory_order_release);
     // Issue #161 (contribution-identity law, B4 site 3 of 3): this route-
     // publication erase was reclassified to a GENUINE contribution-
@@ -1566,7 +1548,6 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     {
         std::lock_guard<std::mutex> lk(target->inbox_mtx);
         target->local_runnable.push_back(f);
-        target->inbox_cv.notify_one();
     }
 
     // E9: signal the wake source so a Worker parked on the SCHEDULER domain
@@ -1956,7 +1937,6 @@ bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers)
                 std::lock_guard<std::mutex> tlk(thief->inbox_mtx);
                 thief->local_runnable.push_back(stolen);
             }
-            thief->inbox_cv.notify_one();
             // Stealable work was MW-S1; a successful steal keeps it MW-S1
             // (ticket count unchanged — see E8-0 audit O7). No admission
             // demotion needed: route_runnable_locked's admission-cancel is

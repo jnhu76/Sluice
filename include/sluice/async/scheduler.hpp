@@ -155,7 +155,7 @@ enum class RunMode : unsigned char {
 // Per-worker execution state (E7-C1). Each Worker thread owns one of these.
 // The scheduler Context + current Fiber are NEVER shared across concurrent
 // Workers. Accessed by the owning Worker thread without locks for the
-// execution-state fields; the inbox is concurrency-safe for cross-worker
+// execution-state fields; local_runnable is concurrency-safe for cross-worker
 // publication (E7-B).
 struct WorkerState {
     fiber_ctx::Context sched_ctx{};   // this worker's saved scheduler continuation
@@ -168,11 +168,15 @@ struct WorkerState {
     std::deque<Fiber*> local_runnable{};  // owner-local runnable queue
     unsigned id = 0;
 
-    // Cross-worker routed inbox (E7-B will populate; E7-A leaves empty).
-    // Protected by inbox_mtx for cross-worker publication.
+    // Synchronization authority for cross-worker local_runnable publication
+    // (spawn/spawn_on routing, route_runnable_locked, steal transfers, the
+    // retire-rescue move) and for the park predicate's own-queue backstop
+    // read (acquired inside wake_mtx_ — that one-way wake_mtx_->inbox_mtx
+    // edge is load-bearing). Parked-worker notification authority is the
+    // Scheduler wake domain (wake_epoch_/wake_cv_ via signal_wake_locked()),
+    // NOT any per-worker condition_variable. The name is historical (the
+    // E7-B "routed inbox" design); renaming is deferred to an on-touch pass.
     std::mutex inbox_mtx;
-    std::deque<Fiber*> inbox;
-    std::condition_variable inbox_cv;
     std::atomic<bool> active{false};  // this worker is part of a coordinated run
 
     // E13 P6-C1 / I47-F2 (unified suspend-switch authority): suspend-switch
@@ -1247,8 +1251,9 @@ private:
     bool drain_routed_completion_waits_locked() SLUICE_REQUIRES(global_mtx_);
 
     // Registry helpers. `wait_registry_mtx_` is a leaf domain: code holding
-    // it MUST NOT acquire global_mtx_, access_mtx_, a worker inbox, the wake
-    // mutex, or a backend-progress lock (design §5.2). All callers hold G.
+    // it MUST NOT acquire global_mtx_, access_mtx_, a worker inbox mutex,
+    // the wake mutex, or a backend-progress lock (design §5.2). All callers
+    // hold G.
     WaitRecord* acquire_wait_record_locked(Fiber* fiber, WorkerState* owner,
                                            const void* completion,
                                            std::uint64_t& lease_id_out)
@@ -1472,8 +1477,8 @@ private:
 
     // ---- Phase F1 wait registry (ADR Decision 10; design §4.1/§5) ----
     // The registry is a LEAF domain: wait_registry_mtx_ is never held while
-    // acquiring global_mtx_, access_mtx_, a worker inbox, the wake mutex, or
-    // a backend-progress lock. Inbound edges only: {global_mtx_, access_mtx_}
+    // acquiring global_mtx_, access_mtx_, a worker inbox mutex, the wake
+    // mutex, or a backend-progress lock. Inbound edges only: {global_mtx_, access_mtx_}
     // -> registry (registration/drain/cancel under G; ReadyRoutingSink under
     // access_mtx_ during poll/wait_one). Records are address-stable
     // unique_ptrs; the pool is preallocated at construction to exactly

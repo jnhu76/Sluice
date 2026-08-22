@@ -18,20 +18,18 @@
       no ticket -> publication creates one -> transport moves it -> pop consumes
   A transport action must NOT create another publication.
 
-  AUDIT #162 MODEL-005 divergence note (2026-08-21, scope narrowed by the
-  PR #168 review): the W*Inbox tier and MoveInboxToLocal are UNREACHABLE
-  compatibility states. They model the staged E7-A/E7-B routed-inbox design
-  that production never populated; Init assigns no W*Inbox location and no
-  action produces one (producers write only PendingSpawn / W*Local), so
-  MoveInboxToLocal never fires in the checked state graph — the E7 gate
-  does NOT exercise that transport hop and this suite proves nothing about
-  it. As-built is a SINGLE owner-local queue: WorkerState::local_runnable,
-  whose cross-worker publication is serialized by the target worker's LIVE
-  inbox_mtx (the C++ WorkerState::inbox deque carries no ticket — unused
-  storage — and inbox_cv is notify-only with no production waiter; removal
-  tracked in issue #170). Retaining the unreachable tier changes no checked
-  behavior (E7-T2 is unaffected either way); retiring it is the recorded
-  e7->e8 fold-in debt. See the README refinement map.
+  AUDIT #162 MODEL-005 resolution (2026-08-22, issue #170): the former
+  W*Inbox tier and MoveInboxToLocal — compatibility states of the staged
+  E7-A/E7-B routed-inbox design that production never populated (Init
+  assigned no W*Inbox location, no producer ever created one, and the
+  transport hop never fired in the checked graph) — are REMOVED. As-built
+  is a SINGLE owner-local queue: WorkerState::local_runnable, whose
+  cross-worker publication is serialized by the target worker's inbox_mtx
+  (kept; the name is historical), and the dead WorkerState::inbox storage
+  + notify-only inbox_cv were deleted from production in #170. The model
+  now matches the as-built ticket locations exactly (the C++ inbox deque
+  and CV no longer exist to diverge from). E7-T2 is unaffected: the
+  duplicate-publication defect lives in WakeReady, not in transport.
 *)
 
 EXTENDS Naturals, Sequences, FiniteSets, TLC
@@ -45,7 +43,7 @@ VARIABLES
     owner              \* [Fibers -> Workers]    -- pinned owning worker (immutable per fiber)
 
 FiberState == {"Created", "Waiting", "Runnable", "Running", "Done"}
-TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local", "W0Inbox", "W1Inbox"}
+TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local"}
 WaitKeyVal == WaitKeys \cup {"None"}
 
 ASSUME
@@ -59,9 +57,6 @@ ASSUME
 
 LocalOf(w) == CASE w = W0 -> "W0Local"
                     [] w = W1 -> "W1Local"
-
-InboxOf(w) == CASE w = W0 -> "W0Inbox"
-                    [] w = W1 -> "W1Inbox"
 
 TicketLive(f) == ticketLocation[f] # "None"
 TicketFree(f) == ticketLocation[f] = "None"
@@ -104,15 +99,6 @@ WakeReady(f) ==
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
     /\ UNCHANGED owner
 
-(* MOVE: owner inbox -> owner local. Cardinality unchanged. UNREACHABLE in
-   the checked graph: no Init value and no producer action ever assigns a
-   W*Inbox location (see the MODEL-005 note above) — retained only as a
-   compatibility state of the never-populated staged design. *)
-MoveInboxToLocal(f) ==
-    /\ ticketLocation[f] = InboxOf(owner[f])
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED <<fiberState, waitReg, owner>>
-
 (* MOVE: pending_spawn -> owner local (run() distribute). Cardinality unchanged. *)
 MovePendingToOwnerLocal(f) ==
     /\ ticketLocation[f] = "PendingSpawn"
@@ -152,7 +138,6 @@ Next ==
         \/ SpawnPublish(f)
         \/ \E key \in WaitKeys : SuspendFiber(f, key)
         \/ WakeReady(f)
-        \/ MoveInboxToLocal(f)
         \/ MovePendingToOwnerLocal(f)
         \/ PopRunnable(f)
         \/ FinishFiber(f)
@@ -212,8 +197,6 @@ InvPinnedLocal ==
     \A f \in Fibers :
         /\ ticketLocation[f] = "W0Local" => owner[f] = W0
         /\ ticketLocation[f] = "W1Local" => owner[f] = W1
-        /\ ticketLocation[f] = "W0Inbox" => owner[f] = W0
-        /\ ticketLocation[f] = "W1Inbox" => owner[f] = W1
 
 Inv ==
     /\ InvTicketImpliesRunnable

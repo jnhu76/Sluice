@@ -239,7 +239,7 @@ assumed for the return properties.
 
 ```
 SCHEDULER-domain park (park_on_wake_source):
-    wake epoch advance / terminateFlag (global_terminate_) / routed inbox;
+    wake epoch advance / terminateFlag (global_terminate_) / own local_runnable;
     bounded observation return ONLY for ~SplitWait reference parks
     (the 2ms interval is the reference backends' MIXED-WAKE progress
     authority — DIV-05 narrowed; split-wait parks are deadline-bounded

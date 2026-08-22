@@ -35,7 +35,7 @@ WaitKeys = {K0, K1}
 ## State
 
 - `fiberState[f]    ∈ {Created, Waiting, Runnable, Running, Done}`
-- `ticketLocation[f]∈ {None, PendingSpawn, W0Local, W1Local, W0Inbox, W1Inbox}`
+- `ticketLocation[f]∈ {None, PendingSpawn, W0Local, W1Local}`
   (the **single** abstract runnable publication token for a Fiber)
 - `waitReg[f]       ∈ WaitKeys ∪ {None}`
 - `owner[f]         ∈ Workers` (immutable per fiber)
@@ -61,7 +61,7 @@ action must NOT create another publication.
 - **Inv6** `fiberState = Runnable     => waitReg = None`
 - **Inv7** encoded structurally — no action has the shape
   "Runnable → Runnable plus publish". `WakeReady` requires `Waiting`.
-- **Inv8** pinned routing — a ticket at `WxLocal`/`WxInbox` ⇒ `owner = Wx`.
+- **Inv8** pinned routing — a ticket at `WxLocal` ⇒ `owner = Wx`.
 
 ### Buggy model counterexample (matches the flight recorder)
 
@@ -85,7 +85,6 @@ queue, two POPs, the second on a Done fiber).
 | `SpawnPublish(f)`      | `Scheduler::spawn` → `make_runnable` + enqueue      | `global_mtx_`                     |
 | `SuspendFiber(f,key)`  | `await_ready_flag`/`await_completion_*` (register + `make_waiting` + switch away) | `global_mtx_` (register); the register+suspend window is **atomic** in the model — production has a transient (documented) |
 | `WakeReady(f)`         | `wake_ready_flags_locked` / `wake_ready_completions_locked` | `global_mtx_`               |
-| `MoveInboxToLocal(f)`  | **no production counterpart and NOT EXERCISED by the gate** — audit #162 MODEL-005 (scope narrowed in the PR #168 review): `Init` and every producer action assign only `PendingSpawn`/`W*Local`, so no state ever holds a `W*Inbox` ticket and this action never fires in the checked graph. The tier models the never-populated staged routed-inbox design (as-built transports directly into the single `local_runnable` queue under the live `inbox_mtx`; `WorkerState::inbox` is unused storage and `inbox_cv` is notify-only with no production waiter — removal tracked in issue #170). Retained as an unreachable compatibility state until the e8 fold-in | `global_mtx_` + `owner->inbox_mtx`|
 | `MovePendingToOwnerLocal(f)` | `run()` distribute loop                       | `global_mtx_` + `inbox_mtx`       |
 | `PopRunnable(f)`       | `worker_loop` pop + `run_next_on` → `make_running` | `inbox_mtx` (local) / `global_mtx_` (pending) |
 | `FinishFiber(f)`       | `fiber_entry_bridge` → `make_done`                 | (single-threaded on the worker)   |

@@ -20,7 +20,7 @@ C++ is the fact source.
 | `observedEpochW0 := wakeEpoch` | the baseline record under nested `wake_mtx_` inside the G scope |
 | `WakeObserve` | the unbounded-park cv predicate (`wake_epoch_ != observed_epoch` ∨ terminate ∨ own-inbox backstop) |
 | `StealB` | `try_steal` (transport + owner transfer, E8's domain) |
-| `inboxNotified` (no consumer) | `inbox_cv.notify_one()` — notify-only, no production waiter (issue #170) |
+| `inboxNotified` (no consumer) | historical: the pre-#170 `inbox_cv.notify_one()` (notify-only, never a waiter); the C++ notify was deleted by issue #170, so the ghost now records only the #115 pre-fix transport that `NegNoSignal` mutates |
 | W1 pinned busy | the #115 precondition: the owner sits inside an unbounded fiber execution and cannot drain its queue |
 
 ## Boundary

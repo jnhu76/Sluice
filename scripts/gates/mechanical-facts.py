@@ -79,6 +79,9 @@ KNOWN_TRACKER_REFS = {
                                        # delta attribution in this report; closeout
                                        # docs/history/closeout/e12-cross-primitive-
                                        # terminal-audit.md SS11.4-11.7)
+    170,                                # inert worker-inbox notification surface
+                                       # removal (2026-08-22, LOC-only delta in this
+                                       # report; wake authority unchanged)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

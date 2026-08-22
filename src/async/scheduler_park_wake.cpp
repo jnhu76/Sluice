@@ -268,7 +268,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     //     predicate observes it; a publication before it was visible to
     //     the (a) recheck — no consumed-signal window remains.
     // The cv.wait below runs with BOTH locks released; the predicate
-    // (epoch / terminate / own inbox) is unchanged from E9.
+    // (epoch / terminate / own local_runnable) is unchanged from E9.
     //
     // R4 (persistent-state backstop, final form after the adversarial
     // review): the idle-dance condition is checked HERE, at the COMMIT
