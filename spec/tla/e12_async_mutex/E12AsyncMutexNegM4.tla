@@ -1,18 +1,7 @@
 ------------------------------- MODULE E12AsyncMutexNegM4 -------------------------------
 (*
-  NEG-M4 HandoffFreeWindow: UnlockHandoff breaks the atomic owner-commit by
-  setting owner := NoOwner instead of owner := epochFiber[w]. The FIFO head is
-  resolved Woken and published, but ownership is NOT committed to the winner.
-  This creates an ownerless queued-demand state (a free window) where a
-  newcomer could barge.
-
-  Reachable starting state:
-    owner = F0, queue = <<E1, E2>>, nodeState[E1] = Registered,
-    nodeState[E2] = Registered, epochFiber[E1] = F1, epochFiber[E2] = F2
-  After broken UnlockHandoff (F0 unlocks):
-    owner = NoOwner, E1 resolved Woken + published, E2 still Registered + queued
-  Violated property: InvNoOwnerlessQueuedDemand (owner = NoOwner => EligibleQueue = <<>>)
-
+  NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued.
+  Expected violated property: InvNoOwnerlessQueuedDemand.
   Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
@@ -180,12 +169,17 @@ Mark(act, actor, tgt, granted) ==
 \* §7): the acting Fiber must not already own the mutex.
 TryLockSuccess(actor) ==
     /\ ~destroyed
+    /\ owner = NoOwner
+    /\ actor # owner
+    /\ FIFOHead = None
     /\ owner' = actor
     /\ Mark("TryLockSuccess", actor, None, None)
     /\ UNCHANGED <<queue, nodeState, epochFiber, deadlineDue, runnablePublished,
                    resolutionCount, publicationCount, destroyed,
                    admissionSawFree, admissionSawDue>>
 
+\* TryLockFailure: pure operation record. No authoritative mutation. (Retained
+\* for safety checking; the production API must not operate after destruction.)
 TryLockFailure(actor) ==
     /\ owner # NoOwner \/ FIFOHead # None \/ destroyed
     /\ Mark("TryLockFailure", actor, None, None)
@@ -337,10 +331,12 @@ UnlockNoWaiter(actor) ==
                    resolutionCount, publicationCount, destroyed,
                    admissionSawFree, admissionSawDue>>
 
-\* UnlockHandoff (BROKEN): resolves the FIFO head Woken and publishes, but
-\* does NOT commit ownership to the winner. owner := NoOwner instead of
-\* owner := epochFiber[w]. This creates a free window: the mutex appears
-\* unowned while an eligible waiter (the second in queue) remains queued.
+\* UnlockHandoff: direct ownership handoff to the eligible FIFO head. Publishes
+\* ONLY a Suspended (Registered) waiter. Atomic coupling (M4/M5):
+\*   winner resolve Woken
+\*   owner := winner Fiber          (BEFORE publication)
+\*   runnablePublished := TRUE      (publication AFTER owner commit)
+\* No intermediate owner := NoOwner.
 UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor
