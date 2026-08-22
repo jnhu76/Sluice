@@ -6,15 +6,29 @@ one single-rule defect (a modified action precondition or effect). The rest is
 copied verbatim with the module renamed. A header comment records the defect +
 the expected violated invariant.
 
-This is a build aid (not part of the formal gate output committed as evidence;
-the generated .tla/.cfg files are committed). Re-run after editing
-E12AsyncMutex.tla to regenerate all negatives.
+The committed generated negatives are freshness-gated: `--check` is part of
+formal verification. `scripts/formal/verify-async-mutex.sh` runs
+`_gen_neg.py --check` BEFORE any TLC invocation, so a committed negative that
+went stale after a positive-model or generator edit fails the formal gate
+instead of silently checking an outdated mutation while CI stays green.
+
+Usage:
+    python3 _gen_neg.py            # regenerate the 22 committed artifacts
+    python3 _gen_neg.py --check    # read-only freshness verification
+
+`--check` renders the expected bytes in memory and compares them against the
+committed files; it never writes to the working tree. It FAILS (non-zero exit)
+on: a stale generated .tla/.cfg, a missing generated file, an unexpected
+E12AsyncMutexNeg* artifact not produced by the current CASES, any positive-model
+anchor drift (an action signature matching zero or multiple definition lines),
+a malformed CASE entry, or a defect body whose signature line does not name the
+action it replaces (which would silently leave the source action intact).
 
 Expected violated invariant per NEG (matches docs/history/closeout/e12-async-mutex.md §16):
   NEG-M1  NonOwnerUnlock              -> InvUnlockAuthority
   NEG-M2  RecursiveAcquire            -> InvRecursiveForbidden
   NEG-M3  NonFIFOGrant                -> InvFIFOGrant
-  NEG-M4  Barging                     -> InvNoBarging
+  NEG-M4  HandoffFreeWindow           -> InvNoOwnerlessQueuedDemand
   NEG-M5  GrantWithoutOwnerCommit     -> InvGrantOwnerCommit
   NEG-M6  PublicationWithoutGrantCoupling -> InvGrantPublicationCoupling
   NEG-M7  AdmissionClosureFailure     -> InvAdmissionClosure
@@ -22,12 +36,24 @@ Expected violated invariant per NEG (matches docs/history/closeout/e12-async-mut
   NEG-M9  DeadlineRevokesHandoff      -> InvGrantFinality
   NEG-M10 ImmediatePublication        -> InvPublicationRequiresSuspensionOrHandoff
   NEG-M11 DestructionWhileOwnedOrQueued -> InvDestructionPrecondition
+
+The arrows above DESIGNATE each gate's detector invariant; designation is not a
+specificity claim. NEG-M4 and NEG-M5 are ONE mutation with TWO designated
+detector roles (their defect bodies are transition-identical), so each
+designated invariant is an entailed CO-VICTIM of the same defect -- see the
+CASES commentary below. verify-async-mutex.sh proves the co-victim relation
+mechanically with CROSS-DETECTOR probes (M4 model + InvGrantOwnerCommit and
+M5 model + InvNoOwnerlessQueuedDemand each produce their expected CEX).
 """
-import re
+from __future__ import annotations
+
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CORRECT = (HERE / "E12AsyncMutex.tla").read_text()
+POSITIVE = HERE / "E12AsyncMutex.tla"
+POSITIVE_MODULE = "E12AsyncMutex"
+ARTIFACT_GLOB = "E12AsyncMutexNeg*"
 
 CFG = """\
 SPECIFICATION Spec
@@ -45,18 +71,44 @@ Epochs = {{E1, E2, E3}}
 """
 
 
-def replace_action(text, name, new_body):
+def fail(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def render_action(text: str, name: str, new_body: str) -> str:
     """Replace the action definition `name == ...` with new_body (which must
     include the `name ==` line). The action block runs until the next top-level
     definition, a `----` separator, or a line comment introducing the next
     action. We anchor on the action signature line; the block ends at the first
     subsequent line that is a top-level definition (`X ==` or `X(...`) or a
-    `----` rule."""
+    `----` rule.
+
+    Fail-closed: the signature line must match EXACTLY ONE line of the source;
+    zero matches or multiple matches is positive-model anchor drift and aborts
+    the generation instead of silently mutating the wrong block."""
     lines = text.split("\n")
-    start = next(i for i, ln in enumerate(lines)
-                 if ln.startswith(name + "(") or ln.startswith(name + " =="))
+    starts = [i for i, ln in enumerate(lines)
+              if ln.startswith(name + "(") or ln.startswith(name + " ==")]
+    if len(starts) != 1:
+        fail(f"positive-model anchor drift: action {name!r} matched "
+             f"{len(starts)} signature lines (expected exactly 1) in {POSITIVE.name}")
+    start = starts[0]
+    # A NEG replaces the WHOLE action, so the positive action's glued local
+    # comment block (contiguous \\* lines directly above the signature, no
+    # blank line between) must not survive into the artifact: it prescribes
+    # exactly the un-mutated rule the defect intentionally breaks (e.g.
+    # UnlockHandoff's "owner := winner Fiber / No intermediate owner :=
+    # NoOwner" sitting directly above M4/M5/M6's owner' mutation would make
+    # the artifact contradict itself). Comment blocks separated from the
+    # signature by a blank line are shared section commentary and are KEPT.
+    # The block-end scan below still runs from the SIGNATURE line (sig), not
+    # from the stripped start.
+    sig = start
+    while start > 0 and lines[start - 1].startswith("\\*"):
+        start -= 1
     end = len(lines)
-    for j in range(start + 1, len(lines)):
+    for j in range(sig + 1, len(lines)):
         ln = lines[j]
         if ln.startswith("----"):
             end = j
@@ -68,29 +120,133 @@ def replace_action(text, name, new_body):
     return "\n".join(lines[:start] + new_body.split("\n") + lines[end:])
 
 
-def gen(modname, header_desc, edits, expected_inv):
-    """edits: list of (action_name, defect_body) applied in order."""
-    text = CORRECT.replace("MODULE E12AsyncMutex", f"MODULE {modname}", 1)
+def render_case(modname: str, header_desc: str, edits: list, expected_inv: str,
+                positive_text: str) -> dict:
+    """Render one NEG case into its expected artifact bytes (in memory).
+
+    edits: list of (action_name, defect_body) applied in order."""
+    n = positive_text.count(f"MODULE {POSITIVE_MODULE}")
+    if n != 1:
+        fail(f"positive-model anchor drift: 'MODULE {POSITIVE_MODULE}' found "
+             f"{n} times (expected exactly 1) in {POSITIVE.name}")
+    text = positive_text.replace(f"MODULE {POSITIVE_MODULE}", f"MODULE {modname}", 1)
     for action_name, defect_body in edits:
-        text = replace_action(text, action_name, defect_body)
+        first = defect_body.split("\n", 1)[0]
+        if not (first.startswith(action_name + "(")
+                or first.startswith(action_name + " ==")):
+            fail(f"malformed CASE metadata: defect body for {modname} targets "
+                 f"action {action_name!r} but its first line defines {first.split('(')[0]!r}")
+        text = render_action(text, action_name, defect_body)
+    if "EXTENDS" not in text:
+        fail(f"positive-model anchor drift: no EXTENDS clause survives in {modname}")
     body = text[text.index("EXTENDS"):]
     header = (
         f"------------------------------- MODULE {modname} "
         f"-------------------------------\n(*\n  {header_desc}\n"
         f"  Expected violated property: {expected_inv}.\n"
-        f"  Single-rule difference(s) from E12AsyncMutex noted below. Everything "
-        f"else is identical.\n*)\n"
+        f"  Single-rule difference(s) from E12AsyncMutex noted below. A replaced\n"
+        f"  action's immediately-adjacent comment block is not carried over (it\n"
+        f"  prescribes the un-mutated rule); everything else is identical.\n*)\n"
     )
-    out = header + body
-    (HERE / f"{modname}.tla").write_text(out)
-    (HERE / f"{modname}.cfg").write_text(CFG.format(inv=expected_inv))
-    print(f"  wrote {modname}.tla / .cfg  (expected: {expected_inv})")
+    return {
+        f"{modname}.tla": header + body,
+        f"{modname}.cfg": CFG.format(inv=expected_inv),
+    }
+
+
+def validate_cases(cases: list) -> None:
+    """Fail-closed CASES metadata check: unique module names (a duplicated
+    entry would silently overwrite one artifact with another's bytes),
+    non-empty description/invariant, and at least one edit per case."""
+    seen: set[str] = set()
+    for modname, desc, edits, inv in cases:
+        if not modname.startswith(POSITIVE_MODULE + "Neg"):
+            fail(f"malformed CASE metadata: module {modname!r} does not extend "
+                 f"the positive module name")
+        if modname in seen:
+            fail(f"unexpected CASE duplication: {modname} appears twice in CASES")
+        seen.add(modname)
+        if not desc or not inv:
+            fail(f"malformed CASE metadata: empty description or invariant for {modname}")
+        if not edits:
+            fail(f"malformed CASE metadata: {modname} has no edits")
+        names = [action_name for action_name, _ in edits]
+        if len(set(names)) != len(names):
+            fail(f"malformed CASE metadata: {modname} edits the same action twice")
+
+
+def expected_artifacts(cases: list, positive_text: str) -> dict:
+    artifacts: dict[str, str] = {}
+    for modname, desc, edits, inv in cases:
+        rendered = render_case(modname, desc, edits, inv, positive_text)
+        clash = artifacts.keys() & rendered.keys()
+        if clash:
+            fail(f"unexpected CASE duplication: {sorted(clash)} rendered twice")
+        artifacts.update(rendered)
+    return artifacts
+
+
+def write_artifacts(artifacts: dict) -> None:
+    for name, content in sorted(artifacts.items()):
+        (HERE / name).write_text(content, encoding="utf-8")
+    print(f"regenerated {len(artifacts)} artifacts "
+          f"({len(artifacts) // 2} NEG modules, .tla + .cfg) in {HERE.name}/")
+
+
+def check_artifacts(artifacts: dict) -> int:
+    """Read-only freshness verification: compare the committed files against
+    the in-memory render. NEVER writes to the working tree. Returns 0 iff
+    every committed generated artifact is byte-identical to the render and no
+    unexpected E12AsyncMutexNeg* artifact exists."""
+    problems: list[str] = []
+    expected_names = set(artifacts)
+    for p in sorted(HERE.glob(ARTIFACT_GLOB)):
+        if p.name not in expected_names:
+            problems.append(f"unexpected generated artifact {p.name} "
+                            f"(not produced by the current CASES)")
+    for name, content in sorted(artifacts.items()):
+        path = HERE / name
+        if not path.is_file():
+            problems.append(f"missing generated artifact {name}")
+            continue
+        if path.read_text(encoding="utf-8") != content:
+            problems.append(f"stale generated artifact {name}")
+    if problems:
+        print("error: generated-negative freshness check FAILED:", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
+        print("regenerate with: python3 spec/tla/e12_async_mutex/_gen_neg.py",
+              file=sys.stderr)
+        return 1
+    print(f"fresh: all {len(artifacts)} generated artifacts "
+          f"({len(artifacts) // 2} NEG modules) match the current positive "
+          f"model + generator")
+    return 0
 
 
 # ---------------------------------------------------------------------------
 # Each defect is a SINGLE focused rule change. The defect body is the FULL
 # replacement action (with the injected defect) so the generator does a clean
 # whole-action substitution.
+#
+# NEG-M4 and NEG-M5 are ONE mutation with TWO designated detector roles, and
+# must not be merged into a single gate. Their defect bodies are
+# transition-identical (UnlockHandoff resolves + publishes the FIFO head but
+# leaves owner = NoOwner; the only textual difference is M4's \* DEFECT
+# marker), so the two models have the SAME reachable behavior set. That set
+# violates BOTH designated invariants: every state after the broken handoff
+# has lastAction = "UnlockHandoff" /\ owner = NoOwner /=
+# epochFiber[lastGrantedEpoch] (violates InvGrantOwnerCommit, M5's designated
+# law), and any >=2-eligible-waiter trace additionally leaves owner = NoOwner
+# with the remaining eligible waiter queued (violates
+# InvNoOwnerlessQueuedDemand, M4's designated law). The two designated
+# invariants are therefore entailed CO-VICTIMS of the same defect, NOT
+# evidence of two property-specific mutants: "designated" assigns the detector
+# role -- the state property vs the history-backed transition property, with
+# distinct CEX shapes per closeout §16 -- it does not claim the other law
+# passes. verify-async-mutex.sh proves the relation mechanically with
+# CROSS-DETECTOR probes (M4 model + InvGrantOwnerCommit and M5 model +
+# InvNoOwnerlessQueuedDemand each produce their expected CEX).
 
 # NEG-M1 NonOwnerUnlock: UnlockNoWaiter drops the `owner = actor` precondition,
 # so a foreign Fiber can unlock. Expected: InvUnlockAuthority.
@@ -147,7 +303,10 @@ NEGM3 = r'''UnlockHandoff(actor) ==
 # NEG-M4 HandoffFreeWindow: UnlockHandoff resolves the FIFO head Woken and
 # publishes but does NOT commit ownership (owner := NoOwner). This creates a
 # free window: owner = NoOwner while an eligible queued waiter remains.
-# Expected: InvNoOwnerlessQueuedDemand.
+# Transition-identical to NEG-M5 (same mutation; the designated detector HERE
+# is the state property). Expected: InvNoOwnerlessQueuedDemand -- with
+# InvGrantOwnerCommit as a documented entailed co-victim (cross-detector
+# probe in verify-async-mutex.sh).
 NEGM4 = r'''UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor
@@ -172,7 +331,11 @@ NEGM4 = r'''UnlockHandoff(actor) ==
 '''
 
 # NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff does NOT commit owner to the
-# winner (leaves owner = NoOwner). Expected: InvGrantOwnerCommit.
+# winner (leaves owner = NoOwner). Transition-identical to NEG-M4 (same
+# mutation; the designated detector HERE is the history-backed transition
+# property). Expected: InvGrantOwnerCommit -- with
+# InvNoOwnerlessQueuedDemand as a documented entailed co-victim
+# (cross-detector probe in verify-async-mutex.sh).
 NEGM5 = r'''UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor
@@ -312,9 +475,9 @@ CASES = [
      [("TryLockSuccess", NEGM2)], "InvRecursiveForbidden"),
     ("E12AsyncMutexNegM3", "NEG-M3 NonFIFOGrant: with >= 2 eligible waiters, UnlockHandoff grants the second instead of the FIFO head.",
      [("UnlockHandoff", NEGM3)], "InvFIFOGrant"),
-    ("E12AsyncMutexNegM4", "NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued.",
+    ("E12AsyncMutexNegM4", "NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued. One mutation with NEG-M5 (transition-identical bodies); designated detector here is the state property, with InvGrantOwnerCommit a documented entailed co-victim.",
      [("UnlockHandoff", NEGM4)], "InvNoOwnerlessQueuedDemand"),
-    ("E12AsyncMutexNegM5", "NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner.",
+    ("E12AsyncMutexNegM5", "NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner. One mutation with NEG-M4 (transition-identical bodies); designated detector here is the history-backed transition property, with InvNoOwnerlessQueuedDemand a documented entailed co-victim.",
      [("UnlockHandoff", NEGM5)], "InvGrantOwnerCommit"),
     ("E12AsyncMutexNegM6", "NEG-M6 PublicationWithoutGrantCoupling: UnlockHandoff publishes but commits owner to the old actor (not the winner).",
      [("UnlockHandoff", NEGM6)], "InvGrantPublicationCoupling"),
@@ -331,10 +494,17 @@ CASES = [
 ]
 
 
-def main():
-    for modname, desc, edits, inv in CASES:
-        gen(modname, desc, edits, inv)
+def main() -> int:
+    check_only = "--check" in sys.argv[1:]
+    if not POSITIVE.is_file():
+        fail(f"positive model not found: {POSITIVE}")
+    validate_cases(CASES)
+    artifacts = expected_artifacts(CASES, POSITIVE.read_text(encoding="utf-8"))
+    if check_only:
+        return check_artifacts(artifacts)
+    write_artifacts(artifacts)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

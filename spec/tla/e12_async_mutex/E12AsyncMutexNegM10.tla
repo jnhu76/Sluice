@@ -2,7 +2,9 @@
 (*
   NEG-M10 ImmediatePublication: LockImmediate creates a runnable publication though the Fiber never suspended.
   Expected violated property: InvPublicationRequiresSuspensionOrHandoff.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -193,7 +195,6 @@ TryLockFailure(actor) ==
 \* inline-Woken | inline-Expired | make_waiting) as ONE atomic step. A Registered
 \* epoch in the queue IS a Suspended (make_waiting-committed) epoch.
 
-\* LockImmediate: free + no queued waiter -> acquire without suspension.
 LockImmediate(actor, epoch) ==
     /\ ~destroyed
     /\ nodeState[epoch] = "Detached"

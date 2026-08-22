@@ -2,7 +2,9 @@
 (*
   NEG-M2 RecursiveAcquire: TryLockSuccess drops the owner = NoOwner precondition; an owner can re-acquire.
   Expected violated property: InvRecursiveForbidden.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -164,9 +166,6 @@ Mark(act, actor, tgt, granted) ==
 -------------------------------------------------------------------------------
 \* ---- Non-epoch operations ----
 
-\* TryLockSuccess: no Epoch, no WaitNode resolution. Free + empty queue -> own.
-\* Recursive acquisition is forbidden (caller-contract violation in production,
-\* §7): the acting Fiber must not already own the mutex.
 TryLockSuccess(actor) ==
     /\ ~destroyed
     /\ FIFOHead = None

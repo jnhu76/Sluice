@@ -2,7 +2,9 @@
 (*
   NEG-M7 AdmissionClosureFailure: LockAdmissionSuspend's precondition is inverted to suspend when free + FIFO head, latching admissionSawFree=TRUE (strands a free mutex).
   Expected violated property: InvAdmissionClosure.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -229,8 +231,6 @@ LockAdmissionAcquire(actor, epoch) ==
     /\ UNCHANGED <<runnablePublished, publicationCount, destroyed>>
     \* no runnable publication (Fiber running)
 
-\* LockAdmissionSuspend: register, recheck finds owned OR older waiter -> suspend.
-\* Post-state: owner /= NoOwner OR older eligible waiter; epoch Registered in queue.
 LockAdmissionSuspend(actor, epoch) ==
     /\ ~destroyed
     /\ nodeState[epoch] = "Detached"

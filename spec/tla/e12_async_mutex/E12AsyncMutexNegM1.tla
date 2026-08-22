@@ -2,7 +2,9 @@
 (*
   NEG-M1 NonOwnerUnlock: UnlockNoWaiter drops the owner = actor precondition; a foreign Fiber can unlock.
   Expected violated property: InvUnlockAuthority.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -320,7 +322,6 @@ LockUntilDue(actor, epoch) ==
 -------------------------------------------------------------------------------
 \* ---- Unlock operations ----
 
-\* UnlockNoWaiter: owner unlocks, queue empty -> owner := NoOwner. No publication.
 UnlockNoWaiter(actor) ==
     /\ ~destroyed
     /\ FIFOHead = None

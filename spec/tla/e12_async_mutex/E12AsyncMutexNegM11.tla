@@ -2,7 +2,9 @@
 (*
   NEG-M11 DestructionWhileOwnedOrQueued: Destroy drops the owner=NoOwner / queue-empty precondition.
   Expected violated property: InvDestructionPrecondition.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 

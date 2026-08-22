@@ -341,7 +341,7 @@
       "implementation_bindings": [
         "src/async/scheduler_mutex.cpp"
       ],
-      "notes": "Protocol: async mutex FIFO handoff (owner commit before publication, no-barging admission closure). Safety-only. 11 negative models (NEG-M1..M11), wrong-property gate, compile-probe gate."
+      "notes": "Protocol: async mutex FIFO handoff (owner commit before publication, no-barging admission closure). Safety-only. 11 negative models (NEG-M1..M11), wrong-property gate, cross-detector probes (NEG-M4/NEG-M5 are ONE mutation with two designated detector roles -- transition-identical defect bodies; each designated invariant is an entailed co-victim of the same defect, and both co-victim CEXs are probed mechanically), compile-probe gate. All 22 negative artifacts (NEG-M1..M11 .tla/.cfg) are GENERATED from the positive model by spec/tla/e12_async_mutex/_gen_neg.py, whose --check freshness mode runs inside verify-async-mutex.sh BEFORE any TLC run (a stale/missing/unexpected committed artifact fails the gate; #169 — the committed NEG-M4 predated the positive model's TryLockSuccess admission preconditions, was a collateral mutant violating InvRecursiveForbidden/InvNoBarging besides its named law, yet still exposed the named CEX, so a green TLC run alone proved nothing about freshness)."
     },
     {
       "id": "e12-async-condition",
