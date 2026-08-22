@@ -106,6 +106,25 @@
       "notes": "Protocol: #115 spawn-to-busy-worker wake obligation - a runnable ticket published onto a busy worker's local queue must advance the Scheduler wake epoch, because a committed-parked peer observes cross-worker publications only through the epoch predicate (its own-inbox backstop cannot see another worker's queue; inbox_cv has no waiter - issue #170). Closes MODEL-007(d) from audit #162 / umbrella #171 (child #176; historical defect #115). Safety/accounting only (the stranded shape is the violated state predicate InvWakeObligation, not a temporal formula); SC protocol abstraction (wake_epoch_ is a wake_mtx_ mutex domain). Two EXACT historical negatives as one-rule cfg flips: NegNoSignal (#115 pre-fix publication - push + inert inbox notify, no epoch advance) and NegNoRecheck (pre-G1 consumed-baseline commit without the unguarded_progress_pending runnable-first recheck), both naming InvWakeObligation; NegNoRecheck excludes the entailed co-victim InvStealRequiresAwake. 6 witnesses incl. the strong post-park rescue chain (NoReachRescuedAfterWake). C++ bridge: tests/issue115_runnable_publication_wake_test.cpp (seam-parked W0 + pinned-busy W1 + strictly post-commit production spawn/spawn_on)."
     },
     {
+      "id": "worker-retire-rescue",
+      "spec_dir": "spec/tla/worker_retire_rescue",
+      "verifier": "scripts/formal/verify-worker-retire-rescue.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 1,
+      "negative_gate_count": 3,
+      "reachability_gate_count": 5,
+      "owner_docs": [
+        "docs/verification/formal/cpp-model-coverage.md"
+      ],
+      "implementation_bindings": [
+        "src/async/scheduler.cpp",
+        "include/sluice/async/scheduler.hpp"
+      ],
+      "notes": "Protocol: G1 worker-retirement runnable-ticket rescue - the fused retire epilogue (one global_mtx_ scope: --live_loop_workers_, active := false, move local_runnable -> pending_spawn_ under nested inbox_mtx, unconditional signal) plus the loop-top redispatch with the fiber_owner_ RE-RECORD (a retire-seeded ticket carries its DEAD original owner; the retire moves the ticket, not the ownership record - the adversarial-review route-to-dead-worker repair). Closes MODEL-007(e) from audit #162 / umbrella #171 (child #178). ticketAt is a SET of locations (singleton as-built) so the copy-not-move defect is expressible; safety only; SC abstraction (G + inbox_mtx mutex domains). Three one-rule cfg-flip negatives with named CEXs: NegNoRescue (pre-G1 strand) -> InvNoTicketOnRetiredWorker, NegRescueCopies (queue not cleared) -> InvSingleTicket, NegNoRerecord (dropped owner re-record) -> InvOwnerLocationConsistency; specificity cfgs document the entailed co-victims. #161 idle-dance terms deliberately excluded (composition boundary - their own suite e12-rwlock-scheduler-liveness). C++ bridge: WorkerState::loop_exited causal seam + the G1 worker-death reproducer (tests/issue161_idle_dance_orphan_test.cpp) and multi-worker lifecycle tests. Review-fix: RetireW0 guarded to the unconsumed-ticket epilogue state (fiber Runnable, ticket on W0Local; no mid-RunFiber retirement); RunFiber carries make_running's Runnable precondition as a structural guard; ER2 strengthened to ticket-AT-PENDING (subsumes the standalone Pending witness); ER5 tightened to the full survivor-resume chain (retire->rescue->redispatch->re-record->W1-consume); bridge classified as causal seam + adjacent bridges, no exact C++ topology realization."
+    },
+    {
       "id": "e7-publication",
       "spec_dir": "spec/tla/e7_publication",
       "verifier": "scripts/formal/verify-e7-publication.sh",
