@@ -9,8 +9,11 @@
 #   NegRescueCopiesSpecificity         -> unrelated laws PASS
 #   NegNoRerecord                      -> InvOwnerLocationConsistency CEX
 #   NegNoRerecordSpecificity           -> other laws PASS
-#   Reach{InitialTicket,RetiredTicketUnconsumed,Pending,Redispatched,
-#         Resumed,RescueMove}          -> NoReach* CEX = witness
+#   Reach{InitialTicket,RetiredTicketPending,Redispatched,
+#         SurvivorResume,RescueMove}   -> NoReach* CEX = witness
+#         (5 witnesses; the old standalone ReachPending merged into the
+#          strengthened RetiredTicketPending, and Resumed tightened into
+#          the survivor-resume chain - quality over witness count)
 #
 # Source-safe: TLC runs in an isolated mktemp workspace. Fail-closed on
 # no-launch, unexpected pass, wrong named invariant, and deadlock.
@@ -103,16 +106,14 @@ expect_pass "NegNoRerecordSpecificity" WorkerRetireRescue \
 
 expect_fail "ReachInitialTicket" WorkerRetireRescue \
   WorkerRetireRescueReachInitialTicket.cfg NoReachInitialTicket r1 || rc=1
-expect_fail "ReachRetiredTicketUnconsumed" WorkerRetireRescue \
-  WorkerRetireRescueReachRetiredTicketUnconsumed.cfg NoReachRetiredTicketUnconsumed r2 || rc=1
-expect_fail "ReachPending" WorkerRetireRescue \
-  WorkerRetireRescueReachPending.cfg NoReachPending r3 || rc=1
+expect_fail "ReachRetiredTicketPending" WorkerRetireRescue \
+  WorkerRetireRescueReachRetiredTicketPending.cfg NoReachRetiredTicketPending r2 || rc=1
 expect_fail "ReachRedispatched" WorkerRetireRescue \
-  WorkerRetireRescueReachRedispatched.cfg NoReachRedispatched r4 || rc=1
-expect_fail "ReachResumed" WorkerRetireRescue \
-  WorkerRetireRescueReachResumed.cfg NoReachResumed r5 || rc=1
+  WorkerRetireRescueReachRedispatched.cfg NoReachRedispatched r3 || rc=1
+expect_fail "ReachSurvivorResume" WorkerRetireRescue \
+  WorkerRetireRescueReachSurvivorResume.cfg NoReachSurvivorResume r4 || rc=1
 expect_fail "ReachRescueMove" WorkerRetireRescue \
-  WorkerRetireRescueReachRescueMove.cfg NoReachRescueMove r6 || rc=1
+  WorkerRetireRescueReachRescueMove.cfg NoReachRescueMove r5 || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi

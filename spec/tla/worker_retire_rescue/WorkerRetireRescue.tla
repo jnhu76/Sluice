@@ -70,12 +70,20 @@ Init ==
     /\ sawRescue = FALSE
 
 (* R1 - the fused G-scope retirement epilogue: active-flag clear + rescue
-   + unconditional signal effect. The owner record is NOT updated (the
+   + unconditional signal effect. Guarded to the as-built worker-loop
+   epilogue state: the retiring worker is NOT executing the Fiber (a
+   Running fiber means the worker is inside RunFiber's switch, not at the
+   retire epilogue), and this focused scenario is precisely "retire WITH
+   an unconsumed runnable ticket" - the C++ recovery can also retire with
+   an empty queue, but that path has no ticket topology to study and is
+   deliberately outside this action. The owner record is NOT updated (the
    C++ fact: the dead owner rides with the ticket into pending_spawn_).
    NEG-RT1: no rescue (pre-G1 "terminate path strands queued runnables").
    NEG-RT2: the rescue copies instead of moves (queue not cleared). *)
 RetireW0 ==
     /\ wActive[W0] = TRUE
+    /\ fiberState = "Runnable"
+    /\ W0Local \in ticketAt
     /\ wActive' = [wActive EXCEPT ![W0] = FALSE]
     /\ IF (W0Local \in ticketAt) /\ RescueOnRetire
          THEN /\ ticketAt' =
@@ -97,10 +105,15 @@ RedispatchW1 ==
     /\ UNCHANGED <<wActive, fiberState, sawRescue>>
 
 (* X1 - pop + make_running + switch, fused (the suspend-switch window is
-   MODEL-007(a)'s modeled domain). The ticket leaves the transport
-   domain; the fiber begins executing on the live owner. *)
+   MODEL-007(a)'s modeled domain). make_running's precondition is the
+   Fiber being Runnable - encoded structurally as a guard, so a
+   duplicate-ticket mutant (NEG-RT2) cannot "run" an already-Running
+   fiber a second time, and a worker cannot retire-then-run. The ticket
+   leaves the transport domain; the fiber begins executing on the live
+   owner. *)
 RunFiber(w) ==
     /\ wActive[w] = TRUE
+    /\ fiberState = "Runnable"
     /\ (IF w = W0 THEN W0Local \in ticketAt ELSE W1Local \in ticketAt)
     /\ ticketAt' = ticketAt \ {IF w = W0 THEN W0Local ELSE W1Local}
     /\ fiberState' = "Running"
@@ -156,11 +169,38 @@ InvOwnerLocationConsistency ==
 
 NoReachInitialTicket ==
     ~ (wActive[W0] = TRUE /\ W0Local \in ticketAt /\ fiberState = "Runnable")
-NoReachRetiredTicketUnconsumed ==
-    ~ (wActive[W0] = FALSE /\ fiberState = "Runnable" /\ ticketAt # {})
-NoReachPending == ~ (Pending \in ticketAt)
+
+(* ER2 (strengthened): the retire epilogue actually moved the unconsumed
+   ticket into the pre-run domain - retired worker, fiber still Runnable,
+   ticket AT PENDING specifically. The earlier ticketAt # {} form was
+   weaker (any ticket anywhere). This witness subsumes the old standalone
+   NoReachPending: in this model Pending is reachable ONLY through the
+   retire rescue (RetireW0 is its sole producer), so the two targets
+   coincide - the duplicate weak gate was merged away rather than kept
+   for witness-count ceremony. *)
+NoReachRetiredTicketPending ==
+    ~ ( /\ wActive[W0] = FALSE
+       /\ fiberState = "Runnable"
+       /\ Pending \in ticketAt )
+
+(* ER4: the survivor redispatched the pending ticket AND re-recorded the
+   owner while W0 stays retired. *)
 NoReachRedispatched ==
     ~ (W1Local \in ticketAt /\ owner = W1 /\ wActive[W0] = FALSE)
-NoReachResumed == ~ (fiberState \in {"Running", "Done"})
+
+(* ER5 (strengthened): the SURVIVOR genuinely resumed the rescued ticket -
+   W0 retired, owner re-recorded to W1 (only RedispatchW1's re-record can
+   do that), ticket consumed, fiber Running on the live owner. This state
+   is reachable ONLY through retire -> rescue -> pending -> redispatch ->
+   re-record -> W1 consumes: the full rescue chain. The earlier generic
+   ~Running∨Done form was vacuous - Init -> RunFiber(W0) satisfies it
+   without any retirement at all. Running is used (not Done): Done drops
+   the executor identity, blurring WHICH worker resumed. *)
+NoReachSurvivorResume ==
+    ~ ( /\ wActive[W0] = FALSE
+       /\ owner = W1
+       /\ ticketAt = {}
+       /\ fiberState = "Running" )
+
 NoReachRescueMove == ~ sawRescue
 ====
