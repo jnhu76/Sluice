@@ -64,6 +64,28 @@
       "notes": "Protocol: RequestArena/RequestSlot explicit-I/O accepted-request lifecycle (five-stage admission, Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once, running-cancel intent verbatim law, reap-only publication gated on the acknowledged enqueue pin, generation advance before reuse, borrow-through-reap). Closes the former request-arena-lifecycle formal-debt gap with the smallest single-slot model (e13 FAULT-constant negatives NEG-RA-1..6, wrong-property controls, witnesses W1-W5; residual multi-slot ready-ring ORDER scope recorded in the coverage gap). Authority layering (PR #125 review P1): the two detail headers are the Layer-A leaf-safety authority the model proves; the two backend files bind the Layer-B EXTERNAL obligations only — WF(Enqueue) is the submit-path obligation (enqueue_after_commit) and WF(Reap) is the progress-loop obligation (poll/wait_one/reaper call sites of arena_.reap), neither guaranteed by the arena leaf, and every cfg sets CHECK_DEADLOCK FALSE (no deadlock-freedom claim). RecordCanceledConfirmed is a BACKEND obligation: the leaf record_canceled checks only state/exactly-once (no provenance) and has NO production caller today — future backend obligation, exercised by tests and pinned adversarially by NEG-RA-6. NEG-RA-2's stale key is causal (committed and freed in an earlier generation racing the W4 reuse)."
     },
     {
+      "id": "f1-wait-record",
+      "spec_dir": "spec/tla/f1_wait_record",
+      "verifier": "scripts/formal/verify-f1-wait-record.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 1,
+      "negative_gate_count": 3,
+      "reachability_gate_count": 6,
+      "owner_docs": [
+        "docs/verification/formal/cpp-model-coverage.md"
+      ],
+      "implementation_bindings": [
+        "include/sluice/async/scheduler.hpp",
+        "src/async/scheduler.cpp",
+        "src/async/scheduler_park_wake.cpp",
+        "include/sluice/async/detail/request_arena.hpp",
+        "include/sluice/async/detail/ready_sink.hpp"
+      ],
+      "notes": "Protocol: Phase-F1 identity-bearing WaitRecord registry — generation-bump-before-visibility record reuse, the arena-leaf cancel/reap single-authority race (Race B; HISTORICAL XOR per registration epoch — a sequential cancel-grant-then-delivery-grant in one epoch is a violation even when never simultaneously held), stale-token isolation after reuse (Race C), lease pinning (slot lease and extracted authority each pin the record), P1-2 live-record accounting, P1-1 one-directional outcome-frozen-on-publication (the freeze precedes the E7-T2 CAS and is unconditional in the C++), E7-T2 single publication. Closes MODEL-007(b) from audit #162 / umbrella #171 (child #174). Safety-only, SC protocol abstraction (registry leaf + arena leaf mutex domains; no C++ weak-memory claim). Three one-rule cfg-flip negatives with named CEXs (drop sink generation check / acquire a delivered-pinned record / cancel keeps waiter_delivery_present_) plus per-defect specificity cfgs with documented entailed co-victim exclusions. Layering finding: double publication is unreachable from any single-rule break — L2/L3 registry state checks and the E7-T2 CAS (e7_publication's modeled defect) independently suppress it; no compound chain mutant built (ceremonial). C++ bridges: tests/scheduler_identity_wake_test.cpp T5 (real-thread cancel-vs-reap exactly-once) and T6 (forged stale token inertly dropped)."
+    },
+    {
       "id": "e7-publication",
       "spec_dir": "spec/tla/e7_publication",
       "verifier": "scripts/formal/verify-e7-publication.sh",
