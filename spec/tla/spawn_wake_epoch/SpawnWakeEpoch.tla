@@ -155,11 +155,21 @@ Spec == Init /\ [][Next]_vars
    published ticket can coexist ONLY if the publication advanced the epoch
    past the parked baseline. The violating state IS the persistent
    stranded shape: the predicate can never fire and nothing else consumes
-   the ticket (W1 is pinned). *)
+   the ticket (W1 is pinned). The comparison mirrors the production
+   predicate `wake_epoch_ != observed_epoch` (scheduler.hpp WorkerState)
+   directly: inequality, not `>`. In this finite model the epoch is
+   monotonic with a single bounded advance (0 -> 1), so `#` and `>` are
+   extensionally equal here - but the model states the as-built form.
+   Wraparound / multiple epoch cycles are outside the focused domain
+   (bounded: one publication advance). *)
 InvWakeObligation ==
-    (w0State = "Parked" /\ ticketB = "OnW1") => (wakeEpoch > observedEpochW0)
+    (w0State = "Parked" /\ ticketB = "OnW1") => (wakeEpoch # observedEpochW0)
 
-(* The baseline never exceeds the current epoch. *)
+(* The baseline never exceeds the current epoch. Finite monotonic
+   abstraction law: the model bounds ONE publication epoch advance
+   (0 -> 1), so this orders the two values; the production predicate is
+   the inequality in InvWakeObligation, and epoch wraparound/multiple
+   cycles are outside the focused domain. *)
 InvBaselineSound ==
     observedEpochW0 \leq wakeEpoch
 

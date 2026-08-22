@@ -2,7 +2,7 @@
 # verify-spawn-wake-epoch.sh - spawn-to-busy-worker wake-epoch formal gate
 # (MODEL-007d, issue #176, umbrella #171; historical defect #115).
 #
-#   SpawnWakeEpoch (positive)            -> all 3 as-built laws PASS
+#   SpawnWakeEpoch (positive)            -> all 4 as-built laws PASS
 #   NegNoSignal                          -> InvWakeObligation CEX (#115 pre-fix)
 #   NegNoSignalSpecificity               -> unrelated laws PASS
 #   NegNoRecheck                         -> InvWakeObligation CEX (pre-G1)

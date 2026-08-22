@@ -42,8 +42,8 @@ proves the SC abstraction only — no C++ weak-memory claim.
 
 | invariant | meaning |
 |---|---|
-| `InvWakeObligation` | a committed-parked peer and a cross-worker published ticket coexist only if the publication advanced the epoch past the parked baseline — the violating state IS the persistent stranded shape |
-| `InvBaselineSound` | the parked baseline never exceeds the current epoch |
+| `InvWakeObligation` | a committed-parked peer and a cross-worker published ticket coexist only if the publication advanced the epoch past the parked baseline — the violating state IS the persistent stranded shape. The comparison mirrors the production predicate `wake_epoch_ != observed_epoch` directly (inequality, not `>`; extensionally equal in this finite monotonic model with one bounded epoch advance; wraparound/multiple cycles outside the focused domain) |
+| `InvBaselineSound` | the parked baseline never exceeds the current epoch (finite monotonic abstraction law; the production predicate is the inequality in `InvWakeObligation`) |
 | `InvStealRequiresAwake` | transport only by a looping worker |
 | `InvConsumedRequiresPublication` | no consumption without a publication |
 
