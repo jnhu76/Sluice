@@ -157,7 +157,7 @@
       "implementation_bindings": [
         "src/async/scheduler.cpp"
       ],
-      "notes": "Protocol: runnable-ticket publication (exactly one ticket per runnable fiber; the Phase-5 duplicate-publication defect class). Buggy model expects InvDoneNoTicket violation. (Audit fix: dangling owner_doc docs/history/closeout/e7-publication.md removed — no such file exists; see docs/verification/formal/cpp-model-coverage.md for the current mapping.)"
+      "notes": "Protocol: runnable-ticket publication (exactly one ticket per runnable fiber; the Phase-5 duplicate-publication defect class). Buggy model expects InvDoneNoTicket violation. (Audit fix: dangling owner_doc docs/history/closeout/e7-publication.md removed — no such file exists; see docs/verification/formal/cpp-model-coverage.md for the current mapping. Issue #170: the former unreachable W*Inbox/MoveInboxToLocal compatibility tier is RETIRED — as-built is the single local_runnable queue under inbox_mtx, matching the C++ after the dead WorkerState::inbox/inbox_cv removal; checked graph unchanged, the tier was never reachable.)"
     },
     {
       "id": "e7-multiworker-progress",

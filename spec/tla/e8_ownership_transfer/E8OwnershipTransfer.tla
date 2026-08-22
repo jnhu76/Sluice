@@ -183,9 +183,10 @@ WakeReady(f) ==
     /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]   \* resume owner consumed
     /\ UNCHANGED <<ownerRecord, execWorker>>
 
-(* MOVE: owner inbox -> owner local. Cardinality unchanged. Kept for
-   vocabulary completeness with E7; production inbox is dead storage
-   (E8-0 audit O5/O6) but the model permits the transition. Guarded on
+(* MOVE: owner inbox -> owner local. Cardinality unchanged. Retained as
+   an unreachable vocabulary tier: the production inbox storage never
+   existed as a live queue (E8-0 audit O5/O6) and was DELETED in #170
+   (the E7 tier was retired there). Guarded on
    ownerRecord \in Workers so the LocalOf/InboxOf CASE helpers (which are
    total only over {W0,W1}) are never evaluated at NA. *)
 MoveInboxToLocal(f) ==

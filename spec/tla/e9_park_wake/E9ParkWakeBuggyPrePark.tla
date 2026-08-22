@@ -192,8 +192,9 @@ DrainBackendReady ==
 
 (* A Fiber publishes runnable work from inside a Worker (W1/W2/W3). This
    advances the wake epoch AND routes (the route is abstracted here as
-   runnableVisible' = TRUE). route_runnable_locked in production also
-   notifies inbox_cv; E9 adds the wake-epoch path. *)
+   runnableVisible' = TRUE). Pre-#170 production additionally emitted an
+   inert inbox_cv notify on this path (no waiter ever existed); the wake
+   epoch IS the transport. *)
 PublishRunnable ==
     /\ ~runnableVisible
     /\ runnableVisible' = TRUE
@@ -360,7 +361,7 @@ FinishFiber ==
    ========================================================================= *)
 
 (* ShutdownSignal: a coordinated termination condition. Advances the wake
-   epoch and (in production) notifies wake_cv + inbox_cv, waking every
+   epoch and (in production) notifies wake_cv, waking every
    parked Worker. Modeled as a flag via wakeEpoch odd/even is overkill;
    we model shutdown's effect on parking by allowing LeavePark on epoch
    advance. A dedicated terminal flag is not needed for the safety props. *)
