@@ -78,9 +78,11 @@ Fibers  = {F0, F1}
 ## State
 
 - `fiberState[f]   ∈ {Created, Waiting, Runnable, Running, Done}`
-- `ticketLocation[f] ∈ {None, PendingSpawn, W0Local, W1Local, W0Inbox, W1Inbox}`
+- `ticketLocation[f] ∈ {None, PendingSpawn, W0Local, W1Local}`
   (the **single** abstract runnable publication token for a Fiber —
-  inherited from E7)
+  inherited from E7; the former `W0Inbox`/`W1Inbox` compatibility tier was
+  unreachable vocabulary and is retired, issue #184, matching the E7/#170
+  retirement — the reachable graph is unchanged)
 - `waitReg[f]      ∈ {K, None}`  (active wait registration)
 - `ownerRecord[f]  ∈ Workers ∪ {NA}`  (**mutable** by `StealRunnable`;
   the runnable owner record ↔ `fiber_owner_`. NA = no runnable owner yet)
@@ -107,7 +109,6 @@ which is MOVE + OWNER-RECORD TRANSFER — it never creates a ticket.
   ownerRecord ∈ Workers ∧ execWorker = NA ∧ waitOwner = NA`
 - **E8-AUTH-Inv3** `ticketLocation = W{0,1}Local => ownerRecord = W{0,1}`
   (load-bearing — this is what the negative model violates)
-- **E8-AUTH-Inv3b** `ticketLocation = W{0,1}Inbox => ownerRecord = W{0,1}`
 - **E8-AUTH-Inv4** `fiberState = Running => execWorker ∈ Workers ∧
   ticketLocation = None ∧ waitOwner = NA ∧ waitReg = None ∧
   ownerRecord = execWorker`
@@ -183,7 +184,6 @@ BLOCKER.
 | `waitOwner[f]`   | `WaitReg.owner` (in `waiting_size_/void_/ready_` maps)    | WAITING wait-epoch resume authority          | `global_mtx_`                        |
 | `SpawnPublish(f)`| `Scheduler::spawn` → `fiber.make_runnable()` + push to `target->local_runnable` (or `pending_spawn_`) | **PUBLISH** (created→runnable); sets `ownerRecord` | `global_mtx_` + `inbox_mtx` |
 | `MovePendingToOwnerLocal(f)` | `Scheduler::run` distribute `pending_spawn_` → `workers_[w]->local_runnable` | **MOVE** (transport)         | `global_mtx_` + `inbox_mtx`          |
-| `MoveInboxToLocal(f)` | n/a (production `inbox` deque was dead storage — E8-0 audit O5/O6 — and is DELETED, #170; E7 retired its tier there; this unreachable vocabulary action retires on this suite's next on-touch pass) | MOVE                                  | —                                    |
 | `SuspendFiber(f)`| `Scheduler::await_completion_*` / `await_ready_flag`: `make_waiting` + insert `WaitReg{me, ws}` with `ws = g_worker` under `global_mtx`, switch away. **Captures `waitOwner = execWorker`** (=`g_worker`). | state-only + wait registration | `global_mtx_` |
 | `WakeReady(f)`   | `wake_ready_completions_locked` / `wake_ready_flags_locked`: erase reg, `make_runnable`, `route_runnable_locked(f, it->second.owner)`. **Routes by `WaitReg.owner`** (= `waitOwner`), NOT `fiber_owner_`. | **PUBLISH** (waiting→runnable)        | `global_mtx_`                        |
 | `Route`          | `route_runnable_locked(f, owner)` — pushes `f` to `owner->local_runnable` | transport after wake                | `global_mtx_` + `inbox_mtx`          |
