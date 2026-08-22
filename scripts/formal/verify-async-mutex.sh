@@ -39,6 +39,11 @@
 #   WRONG-PROPERTY gate                 -> NEG-3's non-FIFO grant vs InvGrantOwnerCommit
 #                                          PASSES (defect is property-specific) and does
 #                                          NOT flag InvFIFOGrant under that config
+#   FRESHNESS gate (fail-closed, #169)  -> the eleven generated negatives
+#                                          (E12AsyncMutexNegM1..M11 .tla/.cfg) are
+#                                          byte-compared against what the current
+#                                          positive model + _gen_neg.py would
+#                                          produce, BEFORE any TLC run
 #
 # Expected-property mapping (declared once per negative model below). The script
 # FAILs if:
@@ -49,6 +54,9 @@
 #   - the WRONG invariant/property fails first (expected named property absent)
 #   - the wrong-property gate flags the expected property (defect not specific)
 #   - stale output is reused (a fresh output directory is used per invocation)
+#   - a committed generated negative is stale/missing/unexpected vs the
+#     current generator (freshness gate; a stale negative can still expose
+#     its named CEX, so a green TLC run alone proves nothing about freshness)
 #
 # Usage:
 #   scripts/formal/verify-async-mutex.sh
@@ -56,7 +64,8 @@
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the
-# wrong-property gate did not misfire.
+# wrong-property gate did not misfire AND the freshness gate passed (before any
+# TLC invocation).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -72,6 +81,22 @@ CXX_BIN="${CXX:-c++}"
 
 if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2; exit 2
+fi
+
+# Freshness gate (fail-closed, #169): the eleven generated negatives must be
+# byte-identical to what the current positive model + _gen_neg.py CASES would
+# produce. NEG-M4 was committed stale from the suite's birth (its verbatim
+# TryLockSuccess copy predated the positive model's admission preconditions)
+# and STILL exposed the named CEX, so TLC alone cannot detect staleness: a
+# stale negative keeps checking an outdated mutation while CI stays green.
+# Freshness is a prerequisite -- if this fails, TLC NEVER STARTS. The check is
+# read-only (--check renders in memory and compares; it never writes).
+if python3 "$spec/_gen_neg.py" --check; then
+  echo "[freshness] PASS  (committed negatives match the current generator)"
+else
+  echo "[freshness] FAIL  (committed generated negatives are stale/missing/unexpected)"
+  echo "=== gate failed: generated negative freshness (_gen_neg.py --check) ==="
+  exit 1
 fi
 
 outroot="$(mktemp -d -t sluice-formal.e12-mtx.XXXXXX)"

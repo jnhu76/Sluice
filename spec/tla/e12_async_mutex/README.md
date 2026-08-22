@@ -52,9 +52,15 @@ model safety-only (no scheduler-fairness liveness).
 | `E12AsyncMutexNegM9.tla/.cfg` | NEG-M9: late expire revokes handoff → `InvGrantFinality` |
 | `E12AsyncMutexNegM10.tla/.cfg` | NEG-M10: immediate publication → `InvPublicationRequiresSuspensionOrHandoff` |
 | `E12AsyncMutexNegM11.tla/.cfg` | NEG-M11: destruction while owned/queued → `InvDestructionPrecondition` |
-| `_gen_neg.py` | Build aid that generates NEG-M1..NEG-M11 from `E12AsyncMutex.tla` by single-rule action substitution |
+| `_gen_neg.py` | Generator that derives NEG-M1..NEG-M11 from `E12AsyncMutex.tla` by single-rule action substitution; `--check` is the read-only freshness gate the verifier runs before any TLC invocation |
 
-The gate is [`scripts/verify-async-mutex-formal.sh`](../../../scripts/verify-async-mutex-formal.sh).
+The gate is [`scripts/formal/verify-async-mutex.sh`](../../../scripts/formal/verify-async-mutex.sh).
+It first asserts (fail-closed, before any TLC run) that the committed generated
+negatives are byte-identical to what the current positive model + generator
+would produce (`_gen_neg.py --check`); a stale, missing, or unexpected
+generated artifact fails the gate (#169 — the committed NEG-M4 predates the
+positive model's `TryLockSuccess` admission preconditions yet still exposed
+its named CEX, so TLC alone cannot detect staleness).
 
 ## State model
 
@@ -120,8 +126,14 @@ EligibleQueue=<<>>` — one-way; an owned Mutex MAY have an empty queue),
 
 Each NEG introduces exactly ONE focused defect in ONE action and fails exactly
 ONE expected named invariant, from a reachable valid state (avoiding unrelated
-malformed initialization). `_gen_neg.py` is the generator (a build aid; the
-generated `.tla`/`.cfg` files are the committed authority).
+malformed initialization). `_gen_neg.py` is the generator authority for all
+eleven committed `.tla`/`.cfg` pairs; the verifier's freshness gate
+(`_gen_neg.py --check`) fail-closes on any stale, missing, or unexpected
+generated artifact before TLC starts (#169). NEG-M4 and NEG-M5 deliberately
+share the same defect class (handoff leaves `owner = NoOwner`) but target
+different detectors — M4 the state property `InvNoOwnerlessQueuedDemand`,
+M5 the history-backed transition property `InvGrantOwnerCommit` — so they are
+two roles, not a duplication.
 
 ## Refinement note (production)
 
