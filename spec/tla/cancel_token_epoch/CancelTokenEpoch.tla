@@ -15,10 +15,13 @@ protocol (ADR-cancel-request-epoch, Accepted 2026-08-13, baseline 5e5ec36):
   rearm()   : pending -> epoch+=1 (pending stays set; re-arms delivery)
               idle -> no-op
   clear()   : pending=0 (epoch unchanged; a later request() is a NEW request)
+  reset_acknowledgement() : per-consumer re-arm -- acked[c] := 0 (the next
+              cancel point delivers the CURRENT request again even though
+              this consumer already delivered it)
   check_cancel(token, state) : ONE atomic snapshot; delivers IoError::canceled
               iff unblocked AND pending AND state.acked_epoch != token.epoch;
               on delivery records state.acked_epoch = token.epoch (single-shot
-              per request).
+              per request between explicit re-arm authorities).
 
 C++ fact source (branch baseline e035ff5):
   - include/sluice/async/cancel.hpp   (CancelToken/CancelState/CancelGuard/check_cancel)
@@ -36,10 +39,14 @@ request generations 0..MaxEpoch - not the hypothetical per-incarnation tokens
 of the original MODEL-007(c) brief.
 
 Boundary: 1 token, 2 consumers, 1 canceller, request generations 0..3, safety
-only. reset_acknowledgement() (the per-consumer re-arm) is OUT of scope: it is
-the per-consumer variant of token-side rearm() and would deliberately re-open
-the same epoch to a second delivery, obscuring the single-shot law; token-side
-rearm() covers the re-arm mechanism. The Future/Group task machinery, the
+only. reset_acknowledgement() (the per-consumer re-arm) IS modeled (review
+fix, PR #181 round 2): the as-built CancelState carries an explicit
+per-consumer re-arm authority (cancel.hpp:151, ADR-cancel-request-epoch
+semantics table) that deliberately re-opens the SAME request epoch to a
+second delivery; the single-shot law is therefore stated as "no duplicate
+delivery WITHOUT an explicit re-arm authority" - token-side rearm() (a new
+epoch) or per-consumer reset_acknowledgement() (acked := 0) - not as an
+absolute per-epoch single-shot. The Future/Group task machinery, the
 Scheduler, wait registration, and backend op cancel (ADR X2/X3) are out of
 scope (e16 models the runtime; the token is the T1 authority).
 
@@ -59,9 +66,9 @@ EXTENDS Naturals, FiniteSets
 CONSTANTS
     Consumers,          \* modeled consumers {A, B} sharing the token
     A, B,               \* model values
-    AckIsSticky,        \* NEG-CT1: FALSE = acknowledgement is a sticky bool
+    AckIsEpochRelative, \* NEG-CT1: FALSE = acknowledgement is a sticky bool
                         \*   (the pre-fix representation; ack never becomes
-                        \*   request-relative)
+                        \*   request-relative). TRUE = as-built epoch-relative.
     ClearClearsPending, \* NEG-CT2: FALSE = clear() keeps the pending bit
     SingleShot,         \* NEG-CT3: FALSE = every unblocked pending check
                         \*   delivers (single-shot ack gate dropped)
@@ -92,28 +99,40 @@ VARIABLES
     deliveredEpochs,      \* HISTORY: epochs the consumer has actually
                           \*   delivered (independent provenance)
     dupDelivered,         \* HISTORY: a consumer delivered the same epoch
-                          \*   twice (single-shot witness)
+                          \*   twice WITHOUT an explicit re-arm authority
+                          \*   (single-shot witness)
     sawDeliveryWhileIdle, \* HISTORY: a delivery happened with pending=0
                           \*   (provenance witness - no ghost delivery)
     sawBlockedDelivery,   \* HISTORY: a delivery happened to a blocked
                           \*   consumer (protection witness)
     sawProtectedRequestDelivered,
-                          \* HISTORY: a request that was once protected
-                          \*   (blocked check while pending) later delivered
-                          \*   (protection-blocks-delivery-not-request)
-    blockedCheckedEpochs, \* HISTORY: epochs whose pending request was
-                          \*   observed by a blocked cancel point
-    sawDeliverAfterRearm, \* HISTORY: a delivery at or past a rearm with no
-                          \*   intervening clear (rearm re-delivery witness)
+                          \* HISTORY: the SAME consumer delivered an epoch it
+                          \*   had previously observed from a blocked cancel
+                          \*   point (protection-blocks-delivery-not-request)
+    blockedCheckedEpochs, \* HISTORY (per consumer): the epoch whose pending
+                          \*   request was observed by THAT consumer's most
+                          \*   recent blocked cancel point (0 = none)
+    sawDeliverAfterRearm, \* HISTORY: the SAME consumer that delivered the
+                          \*   re-armed epoch delivers again after rearm()
+                          \*   with no intervening clear (rearm witness)
     rearmEpoch,           \* HISTORY: epoch at the most recent rearm (0=none)
     clearSinceRearm,      \* HISTORY: a clear happened after the last rearm
+    lastClearedEpoch,     \* HISTORY: the epoch effectively cleared by the
+                          \*   most recent clear() that dropped a pending
+                          \*   request (0 = none; reuse provenance for the
+                          \*   clear+request witness)
+    sawResetRedelivery,   \* HISTORY: a consumer re-delivered an epoch it had
+                          \*   already delivered, after the explicit
+                          \*   per-consumer ResetAcknowledgement re-arm
+                          \*   (reset_acknowledgement witness)
     clearCount            \* HISTORY: number of clear() calls
 
 vars ==
     <<pending, epoch, postClear, requestedEpochs, acked, blocked,
       lastCheckEpoch, deliveredEpochs, dupDelivered, sawDeliveryWhileIdle,
       sawBlockedDelivery, sawProtectedRequestDelivered, blockedCheckedEpochs,
-      sawDeliverAfterRearm, rearmEpoch, clearSinceRearm, clearCount>>
+      sawDeliverAfterRearm, rearmEpoch, clearSinceRearm, lastClearedEpoch,
+      sawResetRedelivery, clearCount>>
 
 Init ==
     /\ pending = FALSE
@@ -128,10 +147,12 @@ Init ==
     /\ sawDeliveryWhileIdle = FALSE
     /\ sawBlockedDelivery = FALSE
     /\ sawProtectedRequestDelivered = FALSE
-    /\ blockedCheckedEpochs = {}
+    /\ blockedCheckedEpochs = [c \in Consumers |-> 0]
     /\ sawDeliverAfterRearm = FALSE
     /\ rearmEpoch = 0
     /\ clearSinceRearm = FALSE
+    /\ lastClearedEpoch = 0
+    /\ sawResetRedelivery = FALSE
     /\ clearCount = 0
 
 (* request() from idle: pending=1 and epoch+=1 in ONE CAS (cancel.cpp:28) -
@@ -149,12 +170,16 @@ Request ==
     /\ UNCHANGED <<acked, blocked, lastCheckEpoch, deliveredEpochs,
                    dupDelivered, sawDeliveryWhileIdle, sawBlockedDelivery,
                    sawProtectedRequestDelivered, blockedCheckedEpochs,
-                   sawDeliverAfterRearm, rearmEpoch, clearSinceRearm, clearCount>>
+                   sawDeliverAfterRearm, rearmEpoch,
+                   clearSinceRearm, lastClearedEpoch, sawResetRedelivery,
+                   clearCount>>
 
 (* rearm() while pending (cancel.cpp:47): the SAME request stays pending and
    the epoch advances (Zig Io.recancel), so every consumer whose last delivery
    predates the new epoch delivers once more. Idle rearm is a no-op (not
-   enabled). *)
+   enabled). The epoch being re-armed (the pre-rearm epoch) is derived from
+   rearmEpoch as RearmedFromEpoch, so the rearm witness can pin that the
+   delivering consumer had actually delivered it. *)
 Rearm ==
     /\ pending
     /\ epoch < MaxEpoch
@@ -165,22 +190,30 @@ Rearm ==
     /\ UNCHANGED <<pending, postClear, acked, blocked, lastCheckEpoch,
                    deliveredEpochs, dupDelivered, sawDeliveryWhileIdle,
                    sawBlockedDelivery, sawProtectedRequestDelivered,
-                   blockedCheckedEpochs, sawDeliverAfterRearm, clearCount>>
+                   blockedCheckedEpochs, sawDeliverAfterRearm, lastClearedEpoch,
+                   sawResetRedelivery, clearCount>>
 
 (* clear() (cancel.cpp:64): pending=0, epoch unchanged; a later request() is
    a NEW request. NEG-CT2 flips ClearClearsPending so the pending bit
    survives - the "cancel intent survives reuse" defect (HC3): after a clear
-   the old request still delivers to the next cancel point. *)
+   the old request still delivers to the next cancel point. lastClearedEpoch
+   records only an EFFECTIVE clear (one that drops a pending request): it is
+   the reuse-history provenance the clear+request witness is pinned on. *)
 Clear ==
     /\ clearCount < MaxClear
     /\ pending' = IF ClearClearsPending THEN FALSE ELSE pending
     /\ postClear' = TRUE
     /\ clearCount' = clearCount + 1
     /\ clearSinceRearm' = TRUE
+    /\ lastClearedEpoch' =
+         IF ClearClearsPending /\ pending
+           THEN epoch
+           ELSE lastClearedEpoch
     /\ UNCHANGED <<epoch, requestedEpochs, acked, blocked, lastCheckEpoch,
                    deliveredEpochs, dupDelivered, sawDeliveryWhileIdle,
                    sawBlockedDelivery, sawProtectedRequestDelivered,
-                   blockedCheckedEpochs, sawDeliverAfterRearm, rearmEpoch>>
+                   blockedCheckedEpochs, sawDeliverAfterRearm, rearmEpoch,
+                   sawResetRedelivery>>
 
 (* CancelProtection::swap_protection - the consumer drives its own bit. *)
 Protect(c) ==
@@ -189,7 +222,9 @@ Protect(c) ==
                    lastCheckEpoch, deliveredEpochs, dupDelivered,
                    sawDeliveryWhileIdle, sawBlockedDelivery,
                    sawProtectedRequestDelivered, blockedCheckedEpochs,
-                   sawDeliverAfterRearm, rearmEpoch, clearSinceRearm, clearCount>>
+                   sawDeliverAfterRearm, rearmEpoch,
+                   clearSinceRearm, lastClearedEpoch, sawResetRedelivery,
+                   clearCount>>
 
 Unprotect(c) ==
     /\ blocked' = [blocked EXCEPT ![c] = FALSE]
@@ -197,7 +232,24 @@ Unprotect(c) ==
                    lastCheckEpoch, deliveredEpochs, dupDelivered,
                    sawDeliveryWhileIdle, sawBlockedDelivery,
                    sawProtectedRequestDelivered, blockedCheckedEpochs,
-                   sawDeliverAfterRearm, rearmEpoch, clearSinceRearm, clearCount>>
+                   sawDeliverAfterRearm, rearmEpoch,
+                   clearSinceRearm, lastClearedEpoch, sawResetRedelivery,
+                   clearCount>>
+
+(* CancelState::reset_acknowledgement() (cancel.hpp:151) - the explicit
+   per-consumer re-arm authority: the next cancel point delivers the CURRENT
+   request again even though this consumer already delivered it (ADR
+   semantics table; tests/cancel_token_test.cpp T-CANCEL-SHARED-4). It is
+   consumer-owned, so it touches only acked[c]; it never changes the token. *)
+ResetAcknowledgement(c) ==
+    /\ acked' = [acked EXCEPT ![c] = 0]
+    /\ UNCHANGED <<pending, epoch, postClear, requestedEpochs, blocked,
+                   lastCheckEpoch, deliveredEpochs, dupDelivered,
+                   sawDeliveryWhileIdle, sawBlockedDelivery,
+                   sawProtectedRequestDelivered, blockedCheckedEpochs,
+                   sawDeliverAfterRearm, rearmEpoch,
+                   clearSinceRearm, lastClearedEpoch, sawResetRedelivery,
+                   clearCount>>
 
 (* The as-built delivery decision, as one operator: deliver iff unblocked
    (and protection is enforced), the single-shot ack gate passes, and the
@@ -205,20 +257,26 @@ Unprotect(c) ==
 DeliverNow(c) ==
     ~(blocked[c] /\ ProtectionBlocks)
       /\ (IF SingleShot
-            THEN IF AckIsSticky THEN acked[c] # epoch ELSE acked[c] = 0
+            THEN IF AckIsEpochRelative THEN acked[c] # epoch ELSE acked[c] = 0
             ELSE TRUE)
       /\ (IF CheckPending THEN pending ELSE TRUE)
+
+(* The epoch that the most recent rearm() re-armed (0 = none): rearmEpoch
+   records the POST-rearm epoch (epoch+1), so the re-armed epoch is
+   rearmEpoch - 1. Derived, not a state variable, to keep the state space
+   small. *)
+RearmedFromEpoch == IF rearmEpoch >= 1 THEN rearmEpoch - 1 ELSE 0
 
 (* check_cancel(token, state) - ONE action, mirroring the single atomic
    snapshot (cancel.cpp:102): the delivery decision linearizes at a single
    moment. As-built (all switches TRUE) delivers iff:
      unblocked AND pending AND acked[c] # epoch
-   and on delivery records acked[c] = epoch (single-shot per request). The
-   ghosts record independent facts (token epoch, whether a request was
-   pending, whether a delivery happened, blocked observations) - never
-   self-labels. Every primed variable is assigned at the action's top-level
-   conjunction (TLC requires assignments at that level, not inside a
-   LET-IN expression). *)
+   and on delivery records acked[c] = epoch (single-shot per request between
+   explicit re-arm authorities). The ghosts record independent facts (token
+   epoch, whether a request was pending, whether a delivery happened, blocked
+   observations) - never self-labels. Every primed variable is assigned at
+   the action's top-level conjunction (TLC requires assignments at that
+   level, not inside a LET-IN expression). *)
 
 CancelPoint(c) ==
     \* lastCheckEpoch records the epoch at the consumer's most recent
@@ -229,24 +287,39 @@ CancelPoint(c) ==
          IF blocked[c] /\ ProtectionBlocks
            THEN lastCheckEpoch
            ELSE [lastCheckEpoch EXCEPT ![c] = epoch]
+    \* Per-consumer blocked-observation history: only consumer c's OWN
+    \* blocked cancel point records the observed epoch into
+    \* blockedCheckedEpochs[c] (scalar: the most recent blocked observation).
     /\ blockedCheckedEpochs' =
-         IF blocked[c] /\ ProtectionBlocks /\ pending
-           THEN blockedCheckedEpochs \cup {epoch}
-           ELSE blockedCheckedEpochs
+         [blockedCheckedEpochs EXCEPT ![c] =
+             IF blocked[c] /\ ProtectionBlocks /\ pending
+               THEN epoch
+               ELSE blockedCheckedEpochs[c]]
     /\ acked' = [acked EXCEPT ![c] =
                     IF DeliverNow(c)
-                      THEN IF AckIsSticky THEN epoch ELSE 1
+                      THEN IF AckIsEpochRelative THEN epoch ELSE 1
                       ELSE acked[c]]
     /\ deliveredEpochs' = [deliveredEpochs EXCEPT ![c] =
                                IF DeliverNow(c)
                                  THEN deliveredEpochs[c] \cup {epoch}
                                  ELSE deliveredEpochs[c]]
-    \* All history ghosts use IF-form assignments (a top-level disjunction
-    \* RHS - x' = a \/ b - defeats TLC 2.19's assignment detection).
+    \* dupDelivered: a delivery of the CURRENT epoch that was ALREADY
+    \* delivered with no intervening explicit re-arm authority. Under the
+    \* as-built ack (acked[c] = epoch after delivery) this is exactly
+    \* "acked[c] = epoch at delivery"; a reset_acknowledgement() (acked := 0)
+    \* is the explicit per-consumer re-arm that makes the redelivery legal,
+    \* so it is NOT a duplicate.
     /\ dupDelivered' =
-         IF DeliverNow(c) /\ epoch \in deliveredEpochs[c]
+         IF DeliverNow(c) /\ acked[c] = epoch
            THEN TRUE
            ELSE dupDelivered
+    \* Explicit per-consumer re-arm witness: a consumer re-delivers an epoch
+    \* it ALREADY delivered (epoch \in deliveredEpochs[c]) with acked = 0 -
+    \* i.e. only after reset_acknowledgement() re-armed it.
+    /\ sawResetRedelivery' =
+         IF DeliverNow(c) /\ epoch \in deliveredEpochs[c] /\ acked[c] = 0
+           THEN TRUE
+           ELSE sawResetRedelivery
     /\ sawDeliveryWhileIdle' =
          \* Fires iff a delivery happened while no request was pending.
          \* With the pending gate intact (CheckPending=TRUE) DeliverNow
@@ -259,17 +332,26 @@ CancelPoint(c) ==
          IF DeliverNow(c) /\ blocked[c]
            THEN TRUE
            ELSE sawBlockedDelivery
+    \* Per-consumer protection witness: the DELIVERING consumer c must have
+    \* itself observed this epoch from a blocked cancel point (its own
+    \* blockedCheckedEpochs[c]) - a different consumer's blocked observation
+    \* cannot impersonate c's blocked -> unblocked -> deliver chain.
     /\ sawProtectedRequestDelivered' =
-         IF DeliverNow(c) /\ epoch \in blockedCheckedEpochs
+         IF DeliverNow(c) /\ epoch = blockedCheckedEpochs[c]
            THEN TRUE
            ELSE sawProtectedRequestDelivered
+    \* Same-consumer rearm witness: c must have delivered the epoch that was
+    \* re-armed (RearmedFromEpoch) BEFORE this delivery - a consumer's FIRST
+    \* delivery after a rearm is a first delivery, not a re-delivery.
     /\ sawDeliverAfterRearm' =
-         IF DeliverNow(c) /\ rearmEpoch >= 1 /\ ~clearSinceRearm
-              /\ epoch >= rearmEpoch
+         IF DeliverNow(c) /\ RearmedFromEpoch >= 1 /\ ~clearSinceRearm
+              /\ epoch > RearmedFromEpoch
+              /\ RearmedFromEpoch \in deliveredEpochs[c]
            THEN TRUE
            ELSE sawDeliverAfterRearm
     /\ UNCHANGED <<pending, epoch, postClear, requestedEpochs, blocked,
-                   rearmEpoch, clearSinceRearm, clearCount>>
+                   rearmEpoch, clearSinceRearm, lastClearedEpoch,
+                   clearCount>>
 
 Stutter == UNCHANGED vars
 
@@ -280,6 +362,7 @@ Next ==
     \/ \E c \in Consumers :
          \/ Protect(c)
          \/ Unprotect(c)
+         \/ ResetAcknowledgement(c)
          \/ CancelPoint(c)
     \/ Stutter
 
@@ -287,8 +370,13 @@ Spec == Init /\ [][Next]_vars
 
 (* ---- As-built safety laws (positive cfg, all PASS) ---- *)
 
-(* Zig Io.zig:1186 single-shot per request: each consumer delivers a given
-   request epoch at most once. dupDelivered is the history witness. *)
+(* Zig Io.zig:1186 single-shot per request, stated WITH the explicit re-arm
+   authorities (review fix): within one request epoch each consumer delivers
+   at most once UNLESS an explicit re-arm occurred - token-side rearm() (a
+   new epoch) or the per-consumer CancelState::reset_acknowledgement()
+   (acked := 0, ADR-cancel-request-epoch semantics table). dupDelivered is
+   the history witness: a delivery with acked[c] = epoch is a duplicate
+   WITHOUT such an authority. *)
 InvSingleShotPerEpoch == ~dupDelivered
 
 (* Provenance: a delivery happens only while a request is actually pending
@@ -338,20 +426,24 @@ NoReachRequestCreated == ~(pending \/ epoch >= 1)
 (* CR2: a consumer actually delivered a request. *)
 NoReachDelivered == ~(\E c \in Consumers : deliveredEpochs[c] # {})
 
-(* CR3: token reuse - after a consumer acked a request, clear()+request()
-   opened a NEW request generation (epoch >= 2) while pending. *)
+(* CR3: token reuse - a consumer acked a request, then a NEW request
+   generation (epoch >= 2) opened while pending (reached via rearm() or via
+   clear()+request()). *)
 NoReachReuse ==
     ~((epoch >= 2) /\ pending /\ (\E c \in Consumers : acked[c] >= 1))
 
-(* CR5: the ADR fix is non-vacuous - a consumer that PREVIOUSLY delivered an
-   older request (Cardinality(deliveredEpochs[c]) >= 2, i.e. the current
-   request is not the consumer's first) has delivered the NEW (>= 2) request
-   after clear()+request(). The two-element history is what pins "token reuse
-   for real": a fresh consumer that only ever delivered the current epoch
-   (e.g. a rearm before its first check) cannot impersonate the reused path. *)
+(* CR5: the ADR fix is non-vacuous - the SAME consumer that delivered an
+   effectively-cleared request epoch (lastClearedEpoch, recorded only by a
+   clear() that drops a pending request) later delivers a strictly newer
+   epoch. Because only request() can advance the epoch while the token is
+   idle after a clear, that newer delivery must come after clear()+request()
+   (token reuse for real); the rearm() path cannot impersonate this witness
+   because rearm() never records a cleared epoch. *)
 NoReachNewRequestDelivered ==
-    ~(\E c \in Consumers : acked[c] = epoch /\ epoch >= 2 /\ pending
-        /\ Cardinality(deliveredEpochs[c]) >= 2)
+    ~(\E c \in Consumers :
+        lastClearedEpoch >= 1
+        /\ lastClearedEpoch \in deliveredEpochs[c]
+        /\ \E fe \in deliveredEpochs[c] : fe > lastClearedEpoch)
 
 (* Shared-token semantics (Group): one request delivers to BOTH consumers -
    per-consumer acknowledgement is real, not a single global bit. *)
@@ -360,14 +452,23 @@ NoReachSharedDelivered ==
          c1 # c2 /\ pending /\ epoch \in deliveredEpochs[c1]
          /\ epoch \in deliveredEpochs[c2])
 
-(* Protection-blocks-delivery-not-request: a request observed by a blocked
-   cancel point later delivers after unblocking (the request survived). *)
+(* Protection-blocks-delivery-not-request: the SAME consumer that observed a
+   request from a blocked cancel point later delivers it after unblocking
+   (the request survived; per-consumer blockedCheckedEpochs[c] pins the
+   same-consumer chain - no cross-consumer impersonation). *)
 NoReachProtectedRequestDelivered == ~sawProtectedRequestDelivered
 
 (* rearm() re-delivery (Zig Io.recancel): a consumer that already delivered a
    request delivers once more after rearm() - the request stays pending and
-   its epoch advances. *)
+   its epoch advances. RearmedFromEpoch \in deliveredEpochs[c] pins that c
+   delivered the re-armed epoch BEFORE this delivery. *)
 NoReachRearmRedelivers == ~sawDeliverAfterRearm
+
+(* reset_acknowledgement() re-delivery (ADR semantics table,
+   T-CANCEL-SHARED-4): a consumer that already delivered the current request
+   delivers it AGAIN after the explicit per-consumer re-arm - the reachable
+   positive shape of "single-shot between explicit re-arms". *)
+NoReachResetRedelivers == ~sawResetRedelivery
 
 (* CR6: clean reuse start - after clear(), the token is genuinely idle
    (pending=0) before the next request. *)

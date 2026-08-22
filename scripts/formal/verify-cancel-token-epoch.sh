@@ -14,7 +14,7 @@
 #   NegDropProtection                            -> InvProtectionBlocksDelivery CEX
 #   NegDropProtectionSpecificity                 -> other laws PASS
 #   Reach{RequestCreated,Delivered,Reuse,NewRequestDelivered,SharedDelivered,
-#         ProtectedRequestDelivered,RearmRedelivers,ClearedIdle}
+#         ProtectedRequestDelivered,RearmRedelivers,ResetRedelivers,ClearedIdle}
 #                                                -> NoReach* CEX = witness
 #
 # Source-safe: TLC runs in an isolated mktemp workspace. Fail-closed on
@@ -134,8 +134,10 @@ expect_fail "ReachProtectedRequestDelivered" CancelTokenEpoch \
   CancelTokenEpochReachProtectedRequestDelivered.cfg NoReachProtectedRequestDelivered r6 || rc=1
 expect_fail "ReachRearmRedelivers" CancelTokenEpoch \
   CancelTokenEpochReachRearmRedelivers.cfg NoReachRearmRedelivers r7 || rc=1
+expect_fail "ReachResetRedelivers" CancelTokenEpoch \
+  CancelTokenEpochReachResetRedelivers.cfg NoReachResetRedelivers r8 || rc=1
 expect_fail "ReachClearedIdle" CancelTokenEpoch \
-  CancelTokenEpochReachClearedIdle.cfg NoReachClearedIdle r8 || rc=1
+  CancelTokenEpochReachClearedIdle.cfg NoReachClearedIdle r9 || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi
