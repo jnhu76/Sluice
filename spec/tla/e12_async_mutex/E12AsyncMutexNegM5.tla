@@ -1,8 +1,10 @@
 ------------------------------- MODULE E12AsyncMutexNegM5 -------------------------------
 (*
-  NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner.
+  NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner. One mutation with NEG-M4 (transition-identical bodies); designated detector here is the history-backed transition property, with InvNoOwnerlessQueuedDemand a documented entailed co-victim.
   Expected violated property: InvGrantOwnerCommit.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -331,12 +333,6 @@ UnlockNoWaiter(actor) ==
                    resolutionCount, publicationCount, destroyed,
                    admissionSawFree, admissionSawDue>>
 
-\* UnlockHandoff: direct ownership handoff to the eligible FIFO head. Publishes
-\* ONLY a Suspended (Registered) waiter. Atomic coupling (M4/M5):
-\*   winner resolve Woken
-\*   owner := winner Fiber          (BEFORE publication)
-\*   runnablePublished := TRUE      (publication AFTER owner commit)
-\* No intermediate owner := NoOwner.
 UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor

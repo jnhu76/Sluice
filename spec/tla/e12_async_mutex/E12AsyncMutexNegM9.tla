@@ -2,7 +2,9 @@
 (*
   NEG-M9 DeadlineRevokesHandoff: a late ExpireAttemptTerminal of a Woken epoch republishes.
   Expected violated property: InvGrantFinality.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 

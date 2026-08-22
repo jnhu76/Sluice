@@ -36,6 +36,14 @@ Expected violated invariant per NEG (matches docs/history/closeout/e12-async-mut
   NEG-M9  DeadlineRevokesHandoff      -> InvGrantFinality
   NEG-M10 ImmediatePublication        -> InvPublicationRequiresSuspensionOrHandoff
   NEG-M11 DestructionWhileOwnedOrQueued -> InvDestructionPrecondition
+
+The arrows above DESIGNATE each gate's detector invariant; designation is not a
+specificity claim. NEG-M4 and NEG-M5 are ONE mutation with TWO designated
+detector roles (their defect bodies are transition-identical), so each
+designated invariant is an entailed CO-VICTIM of the same defect -- see the
+CASES commentary below. verify-async-mutex.sh proves the co-victim relation
+mechanically with CROSS-DETECTOR probes (M4 model + InvGrantOwnerCommit and
+M5 model + InvNoOwnerlessQueuedDemand each produce their expected CEX).
 """
 from __future__ import annotations
 
@@ -86,8 +94,21 @@ def render_action(text: str, name: str, new_body: str) -> str:
         fail(f"positive-model anchor drift: action {name!r} matched "
              f"{len(starts)} signature lines (expected exactly 1) in {POSITIVE.name}")
     start = starts[0]
+    # A NEG replaces the WHOLE action, so the positive action's glued local
+    # comment block (contiguous \\* lines directly above the signature, no
+    # blank line between) must not survive into the artifact: it prescribes
+    # exactly the un-mutated rule the defect intentionally breaks (e.g.
+    # UnlockHandoff's "owner := winner Fiber / No intermediate owner :=
+    # NoOwner" sitting directly above M4/M5/M6's owner' mutation would make
+    # the artifact contradict itself). Comment blocks separated from the
+    # signature by a blank line are shared section commentary and are KEPT.
+    # The block-end scan below still runs from the SIGNATURE line (sig), not
+    # from the stripped start.
+    sig = start
+    while start > 0 and lines[start - 1].startswith("\\*"):
+        start -= 1
     end = len(lines)
-    for j in range(start + 1, len(lines)):
+    for j in range(sig + 1, len(lines)):
         ln = lines[j]
         if ln.startswith("----"):
             end = j
@@ -123,8 +144,9 @@ def render_case(modname: str, header_desc: str, edits: list, expected_inv: str,
         f"------------------------------- MODULE {modname} "
         f"-------------------------------\n(*\n  {header_desc}\n"
         f"  Expected violated property: {expected_inv}.\n"
-        f"  Single-rule difference(s) from E12AsyncMutex noted below. Everything "
-        f"else is identical.\n*)\n"
+        f"  Single-rule difference(s) from E12AsyncMutex noted below. A replaced\n"
+        f"  action's immediately-adjacent comment block is not carried over (it\n"
+        f"  prescribes the un-mutated rule); everything else is identical.\n*)\n"
     )
     return {
         f"{modname}.tla": header + body,
@@ -207,12 +229,24 @@ def check_artifacts(artifacts: dict) -> int:
 # replacement action (with the injected defect) so the generator does a clean
 # whole-action substitution.
 #
-# NEG-M4 and NEG-M5 intentionally share the same defect CLASS (UnlockHandoff
-# leaves owner = NoOwner) but carry DIFFERENT detection roles and must not be
-# merged: M4 exercises the state property InvNoOwnerlessQueuedDemand (an
-# ownerless mutex must not have eligible queued demand) while M5 exercises the
-# history-backed transition property InvGrantOwnerCommit (a handoff must
-# commit owner to the winner). See closeout §16 for the distinct CEX shapes.
+# NEG-M4 and NEG-M5 are ONE mutation with TWO designated detector roles, and
+# must not be merged into a single gate. Their defect bodies are
+# transition-identical (UnlockHandoff resolves + publishes the FIFO head but
+# leaves owner = NoOwner; the only textual difference is M4's \* DEFECT
+# marker), so the two models have the SAME reachable behavior set. That set
+# violates BOTH designated invariants: every state after the broken handoff
+# has lastAction = "UnlockHandoff" /\ owner = NoOwner /=
+# epochFiber[lastGrantedEpoch] (violates InvGrantOwnerCommit, M5's designated
+# law), and any >=2-eligible-waiter trace additionally leaves owner = NoOwner
+# with the remaining eligible waiter queued (violates
+# InvNoOwnerlessQueuedDemand, M4's designated law). The two designated
+# invariants are therefore entailed CO-VICTIMS of the same defect, NOT
+# evidence of two property-specific mutants: "designated" assigns the detector
+# role -- the state property vs the history-backed transition property, with
+# distinct CEX shapes per closeout §16 -- it does not claim the other law
+# passes. verify-async-mutex.sh proves the relation mechanically with
+# CROSS-DETECTOR probes (M4 model + InvGrantOwnerCommit and M5 model +
+# InvNoOwnerlessQueuedDemand each produce their expected CEX).
 
 # NEG-M1 NonOwnerUnlock: UnlockNoWaiter drops the `owner = actor` precondition,
 # so a foreign Fiber can unlock. Expected: InvUnlockAuthority.
@@ -269,7 +303,10 @@ NEGM3 = r'''UnlockHandoff(actor) ==
 # NEG-M4 HandoffFreeWindow: UnlockHandoff resolves the FIFO head Woken and
 # publishes but does NOT commit ownership (owner := NoOwner). This creates a
 # free window: owner = NoOwner while an eligible queued waiter remains.
-# Expected: InvNoOwnerlessQueuedDemand.
+# Transition-identical to NEG-M5 (same mutation; the designated detector HERE
+# is the state property). Expected: InvNoOwnerlessQueuedDemand -- with
+# InvGrantOwnerCommit as a documented entailed co-victim (cross-detector
+# probe in verify-async-mutex.sh).
 NEGM4 = r'''UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor
@@ -294,7 +331,11 @@ NEGM4 = r'''UnlockHandoff(actor) ==
 '''
 
 # NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff does NOT commit owner to the
-# winner (leaves owner = NoOwner). Expected: InvGrantOwnerCommit.
+# winner (leaves owner = NoOwner). Transition-identical to NEG-M4 (same
+# mutation; the designated detector HERE is the history-backed transition
+# property). Expected: InvGrantOwnerCommit -- with
+# InvNoOwnerlessQueuedDemand as a documented entailed co-victim
+# (cross-detector probe in verify-async-mutex.sh).
 NEGM5 = r'''UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor
@@ -434,9 +475,9 @@ CASES = [
      [("TryLockSuccess", NEGM2)], "InvRecursiveForbidden"),
     ("E12AsyncMutexNegM3", "NEG-M3 NonFIFOGrant: with >= 2 eligible waiters, UnlockHandoff grants the second instead of the FIFO head.",
      [("UnlockHandoff", NEGM3)], "InvFIFOGrant"),
-    ("E12AsyncMutexNegM4", "NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued.",
+    ("E12AsyncMutexNegM4", "NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued. One mutation with NEG-M5 (transition-identical bodies); designated detector here is the state property, with InvGrantOwnerCommit a documented entailed co-victim.",
      [("UnlockHandoff", NEGM4)], "InvNoOwnerlessQueuedDemand"),
-    ("E12AsyncMutexNegM5", "NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner.",
+    ("E12AsyncMutexNegM5", "NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner. One mutation with NEG-M4 (transition-identical bodies); designated detector here is the history-backed transition property, with InvNoOwnerlessQueuedDemand a documented entailed co-victim.",
      [("UnlockHandoff", NEGM5)], "InvGrantOwnerCommit"),
     ("E12AsyncMutexNegM6", "NEG-M6 PublicationWithoutGrantCoupling: UnlockHandoff publishes but commits owner to the old actor (not the winner).",
      [("UnlockHandoff", NEGM6)], "InvGrantPublicationCoupling"),

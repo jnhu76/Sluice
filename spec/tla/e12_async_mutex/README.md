@@ -124,16 +124,26 @@ EligibleQueue=<<>>` — one-way; an owned Mutex MAY have an empty queue),
 
 ## Negative models
 
-Each NEG introduces exactly ONE focused defect in ONE action and fails exactly
-ONE expected named invariant, from a reachable valid state (avoiding unrelated
-malformed initialization). `_gen_neg.py` is the generator authority for all
+Each NEG introduces exactly ONE focused defect in ONE action, from a reachable
+valid state (avoiding unrelated malformed initialization). Each gate has ONE
+designated named invariant; some mutants have explicitly documented entailed
+co-victims — additional invariants the same single mutation necessarily also
+violates (a designated invariant is a detector assignment, not a specificity
+claim). `_gen_neg.py` is the generator authority for all
 eleven committed `.tla`/`.cfg` pairs; the verifier's freshness gate
 (`_gen_neg.py --check`) fail-closes on any stale, missing, or unexpected
-generated artifact before TLC starts (#169). NEG-M4 and NEG-M5 deliberately
-share the same defect class (handoff leaves `owner = NoOwner`) but target
-different detectors — M4 the state property `InvNoOwnerlessQueuedDemand`,
-M5 the history-backed transition property `InvGrantOwnerCommit` — so they are
-two roles, not a duplication.
+generated artifact before TLC starts (#169). NEG-M4 and NEG-M5 are ONE
+mutation with TWO designated detector roles: their defect bodies are
+transition-identical (handoff resolves + publishes the FIFO head but leaves
+`owner = NoOwner`), so each model also violates the other gate's designated
+invariant — every broken handoff violates `InvGrantOwnerCommit` (M5's law),
+and any ≥2-eligible-waiter trace additionally violates
+`InvNoOwnerlessQueuedDemand` (M4's law). The designated invariants are
+entailed co-victims of the same defect; the verifier's CROSS-DETECTOR probes
+prove both co-victim CEXs mechanically (one cfg per probed invariant, since
+TLC stops at the first violated invariant). They remain two gates because the
+detection roles differ — state property vs history-backed transition
+property, with distinct CEX shapes (closeout §16).
 
 ## Refinement note (production)
 

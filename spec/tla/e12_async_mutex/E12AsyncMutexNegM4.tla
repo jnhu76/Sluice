@@ -1,8 +1,10 @@
 ------------------------------- MODULE E12AsyncMutexNegM4 -------------------------------
 (*
-  NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued.
+  NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued. One mutation with NEG-M5 (transition-identical bodies); designated detector here is the state property, with InvGrantOwnerCommit a documented entailed co-victim.
   Expected violated property: InvNoOwnerlessQueuedDemand.
-  Single-rule difference(s) from E12AsyncMutex noted below. Everything else is identical.
+  Single-rule difference(s) from E12AsyncMutex noted below. A replaced
+  action's immediately-adjacent comment block is not carried over (it
+  prescribes the un-mutated rule); everything else is identical.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -331,12 +333,6 @@ UnlockNoWaiter(actor) ==
                    resolutionCount, publicationCount, destroyed,
                    admissionSawFree, admissionSawDue>>
 
-\* UnlockHandoff: direct ownership handoff to the eligible FIFO head. Publishes
-\* ONLY a Suspended (Registered) waiter. Atomic coupling (M4/M5):
-\*   winner resolve Woken
-\*   owner := winner Fiber          (BEFORE publication)
-\*   runnablePublished := TRUE      (publication AFTER owner commit)
-\* No intermediate owner := NoOwner.
 UnlockHandoff(actor) ==
     /\ ~destroyed
     /\ owner = actor

@@ -39,6 +39,15 @@
 #   WRONG-PROPERTY gate                 -> NEG-3's non-FIFO grant vs InvGrantOwnerCommit
 #                                          PASSES (defect is property-specific) and does
 #                                          NOT flag InvFIFOGrant under that config
+#   CROSS-DETECTOR gate (#169 review)   -> M4 model + InvGrantOwnerCommit and
+#                                          M5 model + InvNoOwnerlessQueuedDemand BOTH
+#                                          produce their expected CEX: NEG-M4/NEG-M5
+#                                          are ONE mutation with TWO designated
+#                                          detector roles (transition-identical
+#                                          defect bodies), so each designated
+#                                          invariant is an entailed co-victim of
+#                                          the same defect -- documented and
+#                                          mechanically probed, not hidden
 #   FRESHNESS gate (fail-closed, #169)  -> the eleven generated negatives
 #                                          (E12AsyncMutexNegM1..M11 .tla/.cfg) are
 #                                          byte-compared against what the current
@@ -53,6 +62,9 @@
 #   - a negative model unexpectedly PASSES (no counterexample)
 #   - the WRONG invariant/property fails first (expected named property absent)
 #   - the wrong-property gate flags the expected property (defect not specific)
+#   - the cross-detector probes fail to reproduce the entailed co-victim CEXs
+#     (the M4/M5 one-mutation relation would silently regress into an
+#     undocumented "two property-specific mutants" claim)
 #   - stale output is reused (a fresh output directory is used per invocation)
 #   - a committed generated negative is stale/missing/unexpected vs the
 #     current generator (freshness gate; a stale negative can still expose
@@ -64,7 +76,8 @@
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the
-# wrong-property gate did not misfire AND the freshness gate passed (before any
+# wrong-property gate did not misfire AND the cross-detector probes reproduced
+# the entailed co-victim CEXs AND the freshness gate passed (before any
 # TLC invocation).
 set -euo pipefail
 
@@ -225,6 +238,41 @@ EOF
   return 0
 }
 
+# CROSS-DETECTOR probes (#169 review corrective): NEG-M4 and NEG-M5 are ONE
+# mutation with TWO designated detector roles. Their defect bodies are
+# transition-identical (UnlockHandoff resolves + publishes the FIFO head but
+# leaves owner = NoOwner), so each model's reachable behavior set also violates
+# the OTHER gate's designated invariant:
+#   M4 model + InvGrantOwnerCommit        -> EXPECTED CEX: every broken handoff
+#                                            leaves lastAction = "UnlockHandoff"
+#                                            with owner = NoOwner /=
+#                                            epochFiber[lastGrantedEpoch] (fires
+#                                            even on the single-waiter trace)
+#   M5 model + InvNoOwnerlessQueuedDemand -> EXPECTED CEX: the >=2-eligible-waiter
+#                                            trace resolves the head and leaves
+#                                            owner = NoOwner with another
+#                                            eligible waiter queued
+# "Designated" therefore assigns a detector; it is NOT a specificity claim. The
+# probes document the entailed co-victims mechanically instead of hiding them.
+# One cfg per probed invariant: without -continue TLC stops at the first
+# violated invariant, so a joint cfg could only ever expose one of the two.
+cross_cfg() {  # cross_cfg NAME INVARIANT  -- writes $outroot/NAME.cfg
+  cat > "$outroot/$1.cfg" <<EOF
+SPECIFICATION Spec
+INVARIANT $2
+
+CONSTANTS
+F1 = F1
+F2 = F2
+F3 = F3
+Fibers = {F1, F2, F3}
+E1 = E1
+E2 = E2
+E3 = E3
+Epochs = {E1, E2, E3}
+EOF
+}
+
 tlc_version() {
   # Report ONLY the actual runtime TLC version string (not a release tag).
   grep -m1 '^TLC2 Version' "$outroot/E12AsyncMutex.safety.out" \
@@ -325,6 +373,17 @@ expect_fail "NEG-M11 DestructionWhileOwnedOrQueued" \
 # Wrong-property gate (defect specificity).
 wrong_property_gate || rc=1
 
+# Cross-detector probes (#169 review): entailed co-victims of the ONE M4/M5
+# mutation, proven rather than claimed (see cross_cfg commentary above).
+cross_cfg E12AsyncMutexNegM4Cross InvGrantOwnerCommit
+expect_fail "CROSS-DETECTOR M4 model + InvGrantOwnerCommit (entailed co-victim)" \
+            E12AsyncMutexNegM4 "$outroot/E12AsyncMutexNegM4Cross.cfg" \
+            InvGrantOwnerCommit E12AsyncMutexNegM4Cross || rc=1
+cross_cfg E12AsyncMutexNegM5Cross InvNoOwnerlessQueuedDemand
+expect_fail "CROSS-DETECTOR M5 model + InvNoOwnerlessQueuedDemand (entailed co-victim)" \
+            E12AsyncMutexNegM5 "$outroot/E12AsyncMutexNegM5Cross.cfg" \
+            InvNoOwnerlessQueuedDemand E12AsyncMutexNegM5Cross || rc=1
+
 # Compile-probe gate (only if the production probe exists; Commit D onward).
 # During Commit C (formal-only) the probe is absent and the gate is SKIPPED
 # (reported, not failed). Once Commit D adds the probe, the gate is enforced.
@@ -338,5 +397,5 @@ echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
 echo
-echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate + compile-probe) ==="
+echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate + cross-detector probes + compile-probe) ==="
 exit "$rc"

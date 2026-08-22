@@ -1230,7 +1230,15 @@ Proven by:
 
 - **DoubleOwner** structurally impossible (single-valued `owner`).
 - **Worker identity ownership failure** is runtime-only (E8 migration test).
-- Each NEG has exactly ONE broken rule and ONE expected violated invariant.
+- Each NEG breaks exactly ONE rule and has ONE designated named invariant.
+  Designation assigns the detector; it is not a specificity claim. NEG-M4 and
+  NEG-M5 are ONE mutation with two designated detector roles (transition-
+  identical defect bodies: handoff leaves `owner = NoOwner`), so each
+  designated invariant is an entailed co-victim of the same defect — every
+  broken handoff violates `InvGrantOwnerCommit`, and any ≥2-eligible-waiter
+  trace additionally violates `InvNoOwnerlessQueuedDemand`. The #169 review
+  round documented this and `verify-async-mutex.sh` proves both co-victim
+  CEXs with cross-detector probes.
 - NEG-M7 targets `LockAdmissionSuspend` (the suspension action), not a
   removed standalone `LockSuspend`.
 - No stale `Cancel`/`Expire` action names remain.
