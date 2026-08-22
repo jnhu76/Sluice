@@ -434,16 +434,21 @@ NoReachReuse ==
 
 (* CR5: the ADR fix is non-vacuous - the SAME consumer that delivered an
    effectively-cleared request epoch (lastClearedEpoch, recorded only by a
-   clear() that drops a pending request) later delivers a strictly newer
-   epoch. Because only request() can advance the epoch while the token is
-   idle after a clear, that newer delivery must come after clear()+request()
-   (token reuse for real); the rearm() path cannot impersonate this witness
-   because rearm() never records a cleared epoch. *)
+   clear() that drops a pending request) later delivers the FRESH request
+   that replaced it. As-built, clear() leaves the epoch unchanged and only
+   request() from idle advances the epoch after a clear, so the fresh
+   request's identity is exactly lastClearedEpoch + 1; the witness therefore
+   pins on (lastClearedEpoch + 1) \in deliveredEpochs[c] (PR #181 round-3
+   tightening - "some strictly newer fe" alone still admitted a clear ->
+   request -> rearm -> deliver-later-epoch chain in which the fresh request
+   was never delivered). A rearm() path can never impersonate this witness:
+   rearm() requires pending, so it cannot be the first advance after a clear,
+   and it never records a cleared epoch. *)
 NoReachNewRequestDelivered ==
     ~(\E c \in Consumers :
-        lastClearedEpoch >= 1
+        /\ lastClearedEpoch >= 1
         /\ lastClearedEpoch \in deliveredEpochs[c]
-        /\ \E fe \in deliveredEpochs[c] : fe > lastClearedEpoch)
+        /\ (lastClearedEpoch + 1) \in deliveredEpochs[c])
 
 (* Shared-token semantics (Group): one request delivers to BOTH consumers -
    per-consumer acknowledgement is real, not a single global bit. *)
