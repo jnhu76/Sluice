@@ -89,7 +89,7 @@ W0 here — both production routing disciplines agree at suspend time).
 
 | cfg | flip | defect | expected NAMED violation | specificity (must PASS) |
 | --- | ---- | ------ | ------------------------ | ---------------------- |
-| `…NegIgnorePendingSteal` | `GuardStealWithPending = FALSE` | H1: `try_steal` ignores the flag | `InvNoResumeBeforeContextSaved` | the other 3 laws |
+| `…NegIgnorePendingSteal` | `GuardStealWithPending = FALSE` | H1: `try_steal` ignores the flag (`StealRefused` is disabled under this flip — exact one-rule mutant: only the broken steal behavior remains) | `InvNoResumeBeforeContextSaved` | the other 3 laws |
 | `…NegRaiseTooLate` | `RaiseBeforeVisibility = FALSE` | H2: old P1-1 late raise | `InvUnsavedSuspensionProtected` | ticket/pending-binding laws |
 | `…NegRaiseTooLateChain` | same | same, chain completeness | `InvNoResumeBeforeContextSaved` | — |
 | `…NegClearTooEarly` | `ClearOnlyAfterSave = FALSE` | H3: clear before save | `InvNoResumeBeforeContextSaved` | ticket/pending-binding laws |

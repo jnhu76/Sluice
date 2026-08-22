@@ -68,7 +68,11 @@
 
   NEGATIVE CONTROLS (config-boolean flips, d1_uring_poison precedent; one
   defect per cfg, no generator, no staleness surface):
-    GuardStealWithPending = FALSE  -> NEG-SS1 (H1: try_steal ignores the flag)
+    GuardStealWithPending = FALSE  -> NEG-SS1 (H1: try_steal ignores the flag;
+                                       StealRefused is disabled under this
+                                       constant, so the refusal path ceases to
+                                       exist and the mutant is exact: only the
+                                       broken steal behavior remains)
     RaiseBeforeVisibility = FALSE  -> NEG-SS2 (H2: the OLD P1-1 corrective —
                                        make_waiting under G, raise only AFTER
                                        G release; resolver may publish while
@@ -155,8 +159,13 @@ Resolve ==
 
 (* D2: try_steal under G loads pending==true and skips the whole victim.
    Witness-only (records the independent pre-state fact ticket@victim /\
-   pending); state otherwise unchanged. Proves the refusal path non-vacuous. *)
+   pending); state otherwise unchanged. Proves the refusal path non-vacuous.
+   Guarded by GuardStealWithPending: the refusal IS the guard's behavior, so
+   with the H1 defect (guard removed) the refusal path must cease to exist —
+   this is what makes NEG-SS1 an exact one-rule mutant instead of a model
+   where the broken steal and the old refusal coexist. *)
 StealRefused ==
+    /\ GuardStealWithPending
     /\ ticketLocation = "VictimLocal"
     /\ suspendPending
     /\ sawStealRefusal' = TRUE
