@@ -193,9 +193,10 @@ SLUICE_TEST_CASE(steal_steal_transfers_owner_no_duplicate) {
 //
 // WHY f0 MUST SPIN UNTIL f2_spawned (CI run 31945036160 regression proof):
 //   A worker that has COMMITTED to the unbounded wake-domain park never
-//   re-scans victim queues (its wait predicate checks only its own inbox),
-//   and spawn_on() notifies only the target worker's inbox_cv — it does not
-//   advance the wake epoch. If W0 finishes f0 and parks BEFORE f1 places F2
+//   re-scans victim queues (its wait predicate checks only its own
+//   local_runnable). At the time of that CI failure spawn_on() also only
+//   notified the target worker's (since-removed, no-consumer) inbox_cv
+//   without advancing the wake epoch — the pre-#115-fix transport. If W0 finishes f0 and parks BEFORE f1 places F2
 //   on W1's queue, F2 is stranded forever (f2_suspended is never observed;
 //   the hang-watchdog kills the binary — exactly the CI failure, reproduced
 //   by construction via the park-forensics ledger). f0 spinning until
