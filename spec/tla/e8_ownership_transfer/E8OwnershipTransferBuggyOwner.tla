@@ -45,7 +45,7 @@ CONSTANTS Fibers, Workers, W0, W1, F0, F1, NA
 VARIABLES fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner
 
 FiberState == {"Created", "Waiting", "Runnable", "Running", "Done"}
-TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local", "W0Inbox", "W1Inbox"}
+TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local"}
 
 ASSUME
     /\ Fibers # {}
@@ -60,10 +60,6 @@ ASSUME
 
 LocalOf(w) == CASE w = W0 -> "W0Local"
                     [] w = W1 -> "W1Local"
-                    [] OTHER -> "None"
-
-InboxOf(w) == CASE w = W0 -> "W0Inbox"
-                    [] w = W1 -> "W1Inbox"
                     [] OTHER -> "None"
 
 TicketLive(f) == ticketLocation[f] # "None"
@@ -105,12 +101,6 @@ WakeReady(f) ==
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(waitOwner[f])]
     /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]
     /\ UNCHANGED <<ownerRecord, execWorker>>
-
-MoveInboxToLocal(f) ==
-    /\ ownerRecord[f] \in Workers
-    /\ ticketLocation[f] = InboxOf(ownerRecord[f])
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(ownerRecord[f])]
-    /\ UNCHANGED <<fiberState, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* SAME as the correct model. The buggy model does NOT relax PopRunnable: the
    load-bearing defect is solely in StealRunnableBuggy. Keeping PopRunnable
@@ -157,7 +147,6 @@ Next ==
     \/ \E f \in Fibers : MovePendingToOwnerLocal(f)
     \/ \E f \in Fibers : SuspendFiber(f)
     \/ \E f \in Fibers : WakeReady(f)
-    \/ \E f \in Fibers : MoveInboxToLocal(f)
     \/ \E w \in Workers, f \in Fibers : PopRunnable(w, f)
     \/ \E victim \in Workers, thief \in Workers, f \in Fibers :
         StealRunnableBuggy(victim, thief, f)
@@ -182,11 +171,6 @@ InvLocalMatchesOwner ==
         /\ (ticketLocation[f] = "W0Local" => ownerRecord[f] = W0)
         /\ (ticketLocation[f] = "W1Local" => ownerRecord[f] = W1)
 
-InvInboxMatchesOwner ==
-    \A f \in Fibers :
-        /\ (ticketLocation[f] = "W0Inbox" => ownerRecord[f] = W0)
-        /\ (ticketLocation[f] = "W1Inbox" => ownerRecord[f] = W1)
-
 (* The full correct-model invariant conjunction (for completeness / to confirm
    that ONLY InvLocalMatchesOwner is the one that falls). *)
 InvTicketImpliesRunnable ==
@@ -196,5 +180,4 @@ InvTicketImpliesRunnable ==
 Inv ==
     /\ InvTicketImpliesRunnable
     /\ InvLocalMatchesOwner
-    /\ InvInboxMatchesOwner
 =====
