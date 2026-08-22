@@ -72,7 +72,7 @@
       ],
       "positive_gate_count": 1,
       "negative_gate_count": 3,
-      "reachability_gate_count": 5,
+      "reachability_gate_count": 6,
       "owner_docs": [
         "docs/verification/formal/cpp-model-coverage.md"
       ],
@@ -83,7 +83,7 @@
         "include/sluice/async/detail/request_arena.hpp",
         "include/sluice/async/detail/ready_sink.hpp"
       ],
-      "notes": "Protocol: Phase-F1 identity-bearing WaitRecord registry — generation-bump-before-visibility record reuse, the arena-leaf cancel/reap single-authority race (Race B), stale-token isolation after reuse (Race C), lease pinning (slot lease and extracted authority each pin the record), P1-2 live-record accounting, P1-1 outcome-publication coupling, E7-T2 single publication. Closes MODEL-007(b) from audit #162 / umbrella #171 (child #174). Safety-only, SC protocol abstraction (registry leaf + arena leaf mutex domains; no C++ weak-memory claim). Three one-rule cfg-flip negatives with named CEXs (drop sink generation check / acquire a delivered-pinned record / cancel keeps waiter_delivery_present_) plus per-defect specificity cfgs with documented entailed co-victim exclusions. Layering finding: double publication is unreachable from any single-rule break — L2/L3 registry state checks and the E7-T2 CAS (e7_publication's modeled defect) independently suppress it; no compound chain mutant built (ceremonial). C++ bridges: tests/scheduler_identity_wake_test.cpp T5 (real-thread cancel-vs-reap exactly-once) and T6 (forged stale token inertly dropped)."
+      "notes": "Protocol: Phase-F1 identity-bearing WaitRecord registry — generation-bump-before-visibility record reuse, the arena-leaf cancel/reap single-authority race (Race B; HISTORICAL XOR per registration epoch — a sequential cancel-grant-then-delivery-grant in one epoch is a violation even when never simultaneously held), stale-token isolation after reuse (Race C), lease pinning (slot lease and extracted authority each pin the record), P1-2 live-record accounting, P1-1 one-directional outcome-frozen-on-publication (the freeze precedes the E7-T2 CAS and is unconditional in the C++), E7-T2 single publication. Closes MODEL-007(b) from audit #162 / umbrella #171 (child #174). Safety-only, SC protocol abstraction (registry leaf + arena leaf mutex domains; no C++ weak-memory claim). Three one-rule cfg-flip negatives with named CEXs (drop sink generation check / acquire a delivered-pinned record / cancel keeps waiter_delivery_present_) plus per-defect specificity cfgs with documented entailed co-victim exclusions. Layering finding: double publication is unreachable from any single-rule break — L2/L3 registry state checks and the E7-T2 CAS (e7_publication's modeled defect) independently suppress it; no compound chain mutant built (ceremonial). C++ bridges: tests/scheduler_identity_wake_test.cpp T5 (real-thread cancel-vs-reap exactly-once) and T6 (forged stale token inertly dropped)."
     },
     {
       "id": "e7-publication",

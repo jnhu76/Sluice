@@ -11,6 +11,10 @@
 #   NegCancelKeepsDeliverySpecificity        -> unrelated laws PASS
 #   Reach{AuthorityWindow,CancelWon,DeliveryWon,Reuse,StaleDropped}
 #                                            -> NoReach* CEX = witness
+#   ReachSequentialDoubleGrant (NEG-WR3 cfg) -> NoReachSequentialDoubleGrant
+#                                            -> CEX = sequential double-grant
+#                                               witness for the historical
+#                                               InvSingleAuthority
 #
 # Source-safe: TLC runs in an isolated mktemp workspace. Fail-closed on
 # no-launch, unexpected pass, wrong named invariant, and deadlock.
@@ -115,6 +119,8 @@ expect_fail "ReachReuse" F1WaitRecord \
   F1WaitRecordReachReuse.cfg NoReachReuse r4 || rc=1
 expect_fail "ReachStaleDropped" F1WaitRecord \
   F1WaitRecordReachStaleDropped.cfg NoReachStaleDropped r5 || rc=1
+expect_fail "ReachSequentialDoubleGrant" F1WaitRecord \
+  F1WaitRecordReachSequentialDoubleGrant.cfg NoReachSequentialDoubleGrant r6 || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then echo "=== PASS ==="; else echo "=== FAIL ==="; fi

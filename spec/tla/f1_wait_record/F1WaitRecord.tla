@@ -28,8 +28,12 @@ Exactly-once publication layers (see issue #174 Comment A):
                       pub[w] = 0 guard; its removal is e7_publication's
                       modeled defect, not duplicated here)
 
-Boundary: 1 record, 2 generations (epochs 0/1), waiters {W0, W1}, one
-delivery actor, one cancel actor. Safety only. Race A (pre-registration reap
+Boundary: 1 record, 2 registration epochs, waiters {W0, W1}, one
+delivery actor, one cancel actor. Generation values mirror the real C++
+pool discipline (README "Generation mapping"): 0 = pool-construction
+value, NEVER issued to any occupant (it is exactly the value a forged
+stale token carries); the first acquire bumps 0->1 (W0's token); reuse
+bumps 1->2 (W1's token). Safety only. Race A (pre-registration reap
 window) is closed at the arena leaf and out of scope; the non-arena legacy
 Completion*-map fallback is out of scope. Memory-model boundary: every
 modeled transition happens under wait_registry_mtx_ or the arena leaf mutex
@@ -52,7 +56,7 @@ Init uses equality form on every variable: TLC 2.19's initial-state
 enumerator rejects negation-form constraints with a misleading
 "identifier undefined" diagnostic (issue #172 lesson). *)
 
-EXTENDS Naturals
+EXTENDS Naturals, FiniteSets
 
 CONSTANTS
     Waiters,                  \* set of modeled waiters {W0, W1}
@@ -68,6 +72,16 @@ VARIABLES
                       \* cancelled-then-free inside ONE registry CS in the
                       \* C++ - externally unobservable, modeled Free)
     occupant,         \* None / W0 / W1 (the record's registered waiter)
+    slotWaiter,       \* None / W0 / W1 (the ARENA SLOT's current waiter -
+                      \* the waiter_token_ identity carried by the slot
+                      \* registration, NOT the WaitRecord occupant: cancel/
+                      \* extract act on the slot (request_arena.hpp
+                      \* cancel_waiter/reap, keyed by SlotHandle), so a slot
+                      \* reopened by cancel still names its waiter after the
+                      \* record was retired. Decoupled so the sequential
+                      \* double-grant schedule (cancel granted -> cancel
+                      \* consumed -> late reap extract) stays expressible -
+                      \* the historical-XOR evidence for InvSingleAuthority)
     slotReg,          \* arena-slot waiter registration for the current epoch:
                       \* Fresh (accepted, no waiter) / Registered (lease in
                       \* slot) / Open (cancel reopened) / Closed (reaped)
@@ -78,43 +92,63 @@ VARIABLES
     authCancel,       \* cancel authority (lease) in flight: None / Held
     cancelGen,        \* generation stamped on the cancel lease
     deliveredGen,     \* generation stamped at the sink's delivered-marking
-                      \* (2 = never delivered)
+                      \* (3 = NoDelivered sentinel; 0/1/2 are real
+                      \* generation values, so the sentinel cannot collide)
     liveCount,        \* P1-2 wait_record_live_count_ (registry accounting)
     pub,              \* runnable publications per waiter (E7-T2 CAS gate)
     outcome,          \* P1-1 frozen outcome per waiter
+    authorityGrants,  \* HISTORY (no action guard): per-waiter set of
+                      \* authority kinds granted at the arena leaf in this
+                      \* waiter's registration epoch, SUBSET {Cancel,
+                      \* Delivery}. Waiter and epoch are 1:1 in this
+                      \* boundary (each waiter registers at most once), so
+                      \* per-waiter keying IS per-epoch keying here; no
+                      \* re-arm is needed on reuse.
     sawCancelWon,     \* history witness: cancel won the arena race
     sawDeliveryWon,   \* history witness: reap-extract took the delivery
-    sawStaleDropped   \* history witness: a stale event was inertly dropped
+    sawStaleDropped,  \* history witness: a stale event was inertly dropped
+    sawDeliveryAfterCancel
+                      \* history witness: a delivery grant landed in an
+                      \* epoch whose grant set already held Cancel (the
+                      \* sequential double-grant shape)
 
 vars ==
-    <<generation, recordState, occupant, slotReg, deliveryPresent,
+    <<generation, recordState, occupant, slotWaiter, slotReg, deliveryPresent,
       authDeliv, delivGen, authCancel, cancelGen, deliveredGen, liveCount,
-      pub, outcome, sawCancelWon, sawDeliveryWon, sawStaleDropped>>
+      pub, outcome, authorityGrants, sawCancelWon, sawDeliveryWon,
+      sawStaleDropped, sawDeliveryAfterCancel>>
 
-GenOf(w) == IF w = W0 THEN 0 ELSE 1
+\* Real C++ pool discipline: construction generation 0 is never issued;
+\* the first acquire bumps 0->1, reuse bumps 1->2.
+GenOf(w) == IF w = W0 THEN 1 ELSE 2
 
 Init ==
     /\ generation = 0
     /\ recordState = "Free"
     /\ occupant = "None"
+    /\ slotWaiter = "None"
     /\ slotReg = "Fresh"
     /\ deliveryPresent = FALSE
     /\ authDeliv = "None"
     /\ delivGen = 0
     /\ authCancel = "None"
     /\ cancelGen = 0
-    /\ deliveredGen = 2
+    /\ deliveredGen = 3
     /\ liveCount = 0
     /\ pub = [w \in Waiters |-> 0]
     /\ outcome = [w \in Waiters |-> "None"]
+    /\ authorityGrants = [w \in Waiters |-> {}]
     /\ sawCancelWon = FALSE
     /\ sawDeliveryWon = FALSE
     /\ sawStaleDropped = FALSE
+    /\ sawDeliveryAfterCancel = FALSE
 
 (* A1 - registration, fused: record acquire (generation bumped INSIDE the
    critical section = bump-before-visibility) + arena register_waiter (slot
    Fresh->Registered, delivery present). W1 additionally requires the
-   epoch-0 slot reaped (Closed): sequential-epoch boundary - a concurrent
+   epoch-0 slot reaped (Closed) AND generation = 1 - the leftover from W0's
+   acquire bump 0->1, i.e. W0's epoch settled; reuse then bumps 1->2:
+   sequential-epoch boundary - a concurrent
    second slot adds no new registry-race shape (T6 reuses after A settles).
    NEG-WR2: the mutant may pop a record that is still delivered-pinned
    (recycle before the drain closed the lease). *)
@@ -127,47 +161,68 @@ AcquireRegister(w) ==
     /\ IF w = W0
          THEN slotReg = "Fresh"
          ELSE /\ slotReg = "Closed"
-              /\ generation = 0
+              /\ generation = 1
     /\ generation' = GenOf(w)
     /\ recordState' = "Registered"
     /\ occupant' = w
+    /\ slotWaiter' = w
     /\ slotReg' = "Registered"
     /\ deliveryPresent' = TRUE
     /\ liveCount' = liveCount + 1
     /\ UNCHANGED <<authDeliv, delivGen, authCancel, cancelGen, deliveredGen,
-                   pub, outcome, sawCancelWon, sawDeliveryWon, sawStaleDropped>>
+                   pub, outcome, authorityGrants, sawCancelWon,
+                   sawDeliveryWon, sawStaleDropped, sawDeliveryAfterCancel>>
 
 (* B1 - cancel wins the arena leaf race: the lease moves out to the caller
    and the slot registration reopens (the I/O itself is untouched - I5).
    As-built clears waiter_delivery_present_ here; NEG-WR3 keeps it set,
    which lets a later reap ALSO extract the delivery (broken L1
-   arbitration). *)
+   arbitration). The grant is recorded on the per-epoch authority history
+   (the historical-XOR evidence for InvSingleAuthority). *)
 ArenaCancelWin(w) ==
     /\ slotReg = "Registered"
-    /\ occupant = w
+    /\ slotWaiter = w
     /\ slotReg' = "Open"
     /\ deliveryPresent' = IF CancelClearsDelivery THEN FALSE ELSE TRUE
     /\ authCancel' = "Held"
     /\ cancelGen' = generation
+    /\ authorityGrants' =
+         [authorityGrants EXCEPT ![w] = authorityGrants[w] \cup {"Cancel"}]
     /\ sawCancelWon' = TRUE
-    /\ UNCHANGED <<generation, recordState, occupant, authDeliv, delivGen,
-                   deliveredGen, liveCount, pub, outcome, sawDeliveryWon,
-                   sawStaleDropped>>
+    /\ UNCHANGED <<generation, recordState, occupant, slotWaiter, authDeliv,
+                   delivGen, deliveredGen, liveCount, pub, outcome,
+                   sawDeliveryWon, sawStaleDropped, sawDeliveryAfterCancel>>
 
 (* C1 - reap closes the slot registration and takes the waiter delivery
-   exactly-once (iff still present). From Open (post-cancel) the as-built
-   extraction carries has_waiter=false and the sink no-ops. *)
+   exactly-once (iff still present). Keyed on the SLOT's waiter identity
+   (slotWaiter), not the record occupant: the C++ extract acts on the slot
+   (request_arena.hpp reap), so it stays enabled after the record was
+   retired by cancel - the schedule that exposes the sequential
+   double-grant. From Open (post-cancel) the as-built extraction carries
+   has_waiter=false and the sink no-ops. A real grant is recorded on the
+   per-epoch authority history; the sequential double-grant ghost fires
+   only when this grant lands after a Cancel grant in the SAME epoch
+   (witness for NoReachSequentialDoubleGrant - history only, never a
+   guard). *)
 ArenaReapExtract(w) ==
-    /\ occupant = w
+    /\ slotWaiter = w
     /\ slotReg \in {"Registered", "Open"}
     /\ slotReg' = "Closed"
+    /\ slotWaiter' = "None"
     /\ IF deliveryPresent
          THEN /\ authDeliv' = "Held"
               /\ delivGen' = generation
               /\ deliveryPresent' = FALSE
               /\ sawDeliveryWon' = TRUE
+              /\ authorityGrants' =
+                   [authorityGrants EXCEPT ![w] = authorityGrants[w] \cup {"Delivery"}]
+              /\ sawDeliveryAfterCancel' =
+                   IF "Cancel" \in authorityGrants[w]
+                     THEN TRUE
+                     ELSE sawDeliveryAfterCancel
          ELSE /\ UNCHANGED <<authDeliv, delivGen, deliveryPresent,
-                             sawDeliveryWon>>
+                             sawDeliveryWon, authorityGrants,
+                             sawDeliveryAfterCancel>>
     /\ UNCHANGED <<generation, recordState, occupant, authCancel, cancelGen,
                    deliveredGen, liveCount, pub, outcome, sawCancelWon,
                    sawStaleDropped>>
@@ -188,17 +243,21 @@ SinkMarkDelivered ==
               /\ UNCHANGED sawStaleDropped
          ELSE /\ sawStaleDropped' = TRUE
               /\ UNCHANGED <<recordState, deliveredGen>>
-    /\ UNCHANGED <<generation, occupant, slotReg, deliveryPresent, authCancel,
-                   delivGen, cancelGen, liveCount, pub, outcome, sawCancelWon,
-                   sawDeliveryWon>>
+    /\ UNCHANGED <<generation, occupant, slotWaiter, slotReg, deliveryPresent,
+                   authCancel, delivGen, cancelGen, liveCount, pub, outcome,
+                   authorityGrants, sawCancelWon, sawDeliveryWon,
+                   sawDeliveryAfterCancel>>
 
 (* T6 - a forged/stale gen-0 event injected directly at the sink while the
    reused record holds epoch-1's occupant (tests/scheduler_identity_wake_
    test.cpp f1_stale_record_generation_no_wake does exactly this). The
    event carries no authority variable: the sink simply validates and
-   drops. The generation comparison for THIS event is 0 = generation. *)
+   drops. Generation 0 is the pool-construction value NEVER issued to an
+   occupant (first acquire bumps 0->1, reuse 1->2), so the forged token is
+   stale against EVERY real occupant; the current occupant W1 holds
+   generation 2, and the comparison for THIS event is 0 = 2. *)
 SinkStaleGen0 ==
-    /\ generation = 1
+    /\ generation = 2
     /\ occupant = W1
     /\ recordState = "Registered"
     /\ IF (0 = generation) \/ (CheckGeneration = FALSE)
@@ -207,34 +266,42 @@ SinkStaleGen0 ==
               /\ UNCHANGED sawStaleDropped
          ELSE /\ sawStaleDropped' = TRUE
               /\ UNCHANGED <<recordState, deliveredGen>>
-    /\ UNCHANGED <<generation, occupant, slotReg, deliveryPresent, authDeliv,
-                   delivGen, authCancel, cancelGen, liveCount, pub, outcome,
-                   sawCancelWon, sawDeliveryWon>>
+    /\ UNCHANGED <<generation, occupant, slotWaiter, slotReg, deliveryPresent,
+                   authDeliv, delivGen, authCancel, cancelGen, liveCount, pub,
+                   outcome, authorityGrants, sawCancelWon, sawDeliveryWon,
+                   sawDeliveryAfterCancel>>
 
 (* C3 - drain consume + publish, one global_mtx_ scope in the C++ (pop the
    delivered list, retire to free, freeze outcome=completed, make_runnable,
    route). The drain pops the RECORD (intrusive delivered link) - no token
    re-validation in the C++; the E7-T2 CAS (pub[w] = 0) is the publication
-   gate. *)
+   gate. P1-1 as-built ORDER (scheduler.cpp:1385-1391): freeze the outcome
+   BEFORE make_runnable, UNCONDITIONALLY - set_completion_wait_outcome is
+   noexcept and has no failure branch; only the publication is CAS-gated
+   (a concurrent already-runnable wake could lose the CAS AFTER the
+   freeze). *)
 DrainConsumePublish(w) ==
     /\ recordState = "Delivered"
     /\ occupant = w
     /\ recordState' = "Free"
     /\ occupant' = "None"
     /\ liveCount' = liveCount - 1
-    /\ IF pub[w] = 0
-         THEN /\ pub' = [pub EXCEPT ![w] = 1]
-              /\ outcome' = [outcome EXCEPT ![w] = "Completed"]
-         ELSE /\ UNCHANGED <<pub, outcome>>
-    /\ UNCHANGED <<generation, slotReg, deliveryPresent, authDeliv, delivGen,
-                   authCancel, cancelGen, deliveredGen, sawCancelWon,
-                   sawDeliveryWon, sawStaleDropped>>
+    /\ outcome' = [outcome EXCEPT ![w] = "Completed"]
+    /\ pub' = IF pub[w] = 0
+                THEN [pub EXCEPT ![w] = 1]
+                ELSE pub
+    /\ UNCHANGED <<generation, slotWaiter, slotReg, deliveryPresent, authDeliv,
+                   delivGen, authCancel, cancelGen, deliveredGen,
+                   authorityGrants, sawCancelWon, sawDeliveryWon,
+                   sawStaleDropped, sawDeliveryAfterCancel>>
 
 (* B2 - cancel retire + publish, one global_mtx_ scope in the C++. The L3
    check (generation matches AND state Registered) mirrors the production
    cancel body; on failure the lease is dropped with NO publication
    (defense-in-depth - unreachable while L1 holds). The published waiter is
-   read from the record (occupant = w). *)
+   read from the record (occupant = w). P1-1 as-built ORDER
+   (scheduler_park_wake.cpp:946-951): freeze canceled UNCONDITIONALLY
+   before the make_runnable CAS; publication is CAS-gated. *)
 CancelRetirePublish(w) ==
     /\ authCancel = "Held"
     /\ occupant = w
@@ -243,14 +310,15 @@ CancelRetirePublish(w) ==
          THEN /\ recordState' = "Free"
               /\ occupant' = "None"
               /\ liveCount' = liveCount - 1
-              /\ IF pub[w] = 0
-                   THEN /\ pub' = [pub EXCEPT ![w] = 1]
-                        /\ outcome' = [outcome EXCEPT ![w] = "Canceled"]
-                   ELSE /\ UNCHANGED <<pub, outcome>>
+              /\ outcome' = [outcome EXCEPT ![w] = "Canceled"]
+              /\ pub' = IF pub[w] = 0
+                          THEN [pub EXCEPT ![w] = 1]
+                          ELSE pub
          ELSE /\ UNCHANGED <<recordState, occupant, liveCount, pub, outcome>>
-    /\ UNCHANGED <<generation, slotReg, deliveryPresent, authDeliv, delivGen,
-                   cancelGen, deliveredGen, sawCancelWon, sawDeliveryWon,
-                   sawStaleDropped>>
+    /\ UNCHANGED <<generation, slotWaiter, slotReg, deliveryPresent, authDeliv,
+                   delivGen, cancelGen, deliveredGen, authorityGrants,
+                   sawCancelWon, sawDeliveryWon, sawStaleDropped,
+                   sawDeliveryAfterCancel>>
 
 Stutter == UNCHANGED vars
 
@@ -275,9 +343,16 @@ InvGenerationIsolation ==
     (recordState = "Delivered") => (deliveredGen = generation)
 
 (* L1 / C2c: the arena leaf grants the waiter delivery to exactly one of
-   cancel / reap-extract. Violated by NEG-WR3. *)
+   cancel / reap-extract — a HISTORICAL XOR per registration epoch: even
+   after the first grant is CONSUMED (lease retired, authority back to
+   None), a second grant of the other kind in the same epoch is an
+   arbitration break. The earlier simultaneous-only form
+   (~(authDeliv=Held /\ authCancel=Held)) let the sequential schedule
+   (cancel wins -> cancel consumed -> later reap extracts the kept
+   delivery) pass undetected - never simultaneously held, yet historical
+   exclusivity broken. Violated by NEG-WR3 in BOTH shapes. *)
 InvSingleAuthority ==
-    ~ ((authDeliv = "Held") /\ (authCancel = "Held"))
+    \A w \in Waiters : Cardinality(authorityGrants[w]) <= 1
 
 (* E7-T2: at most one runnable publication per waiter. *)
 InvSingleDelivery ==
@@ -300,10 +375,18 @@ InvAuthorityPinsRecord ==
 InvLiveRecordAccounting ==
     liveCount = (IF recordState = "Free" THEN 0 ELSE 1)
 
-(* P1-1 outcome freeze: a publication always froze its outcome in the same
-   critical section; no outcome without a publication. *)
-InvOutcomePublicationCoupling ==
-    \A w \in Waiters : (pub[w] = 0) <=> (outcome[w] = "None")
+(* P1-1 outcome freeze - the AS-BUILT contract is one-directional: a
+   PUBLISHED waiter necessarily has a frozen outcome (the fiber reads the
+   outcome after resume; the freeze precedes make_runnable in both
+   terminal paths - scheduler.cpp:1385-1391, scheduler_park_wake.cpp:
+   946-951). The converse (frozen outcome must publish) is NOT a C++
+   guarantee: the freeze is unconditional (noexcept) while publication is
+   E7-T2 CAS-gated, and a concurrent already-runnable wake could consume
+   the CAS after the freeze. The earlier iff-form was therefore
+   over-strong; the actions now model the exact as-built order (freeze,
+   then CAS-gated publish). *)
+InvOutcomeFrozenOnPublication ==
+    \A w \in Waiters : (pub[w] = 1) => (outcome[w] # "None")
 
 (* ---- Reachability witnesses (NoReach* invariants are deliberately false
    at the target states; TLC's CEX is the witness. Ghost variables are
@@ -317,11 +400,20 @@ NoReachAuthorityWindow ==
 NoReachCancelWon == ~ sawCancelWon
 NoReachDeliveryWon == ~ sawDeliveryWon
 
-(* BR2: the record was recycled and re-registered at generation 1. *)
+(* BR2: the record was recycled and re-registered at generation 2 (the
+   reuse bump 1->2; W1 is the epoch-1 occupant). *)
 NoReachReuse ==
-    ~ ((generation = 1) /\ (occupant = W1) /\ (recordState = "Registered"))
+    ~ ((generation = 2) /\ (occupant = W1) /\ (recordState = "Registered"))
 
 (* BR3: a stale gen-0 event was processed during epoch 1 and inertly
    dropped by the generation check. *)
 NoReachStaleDropped == ~ sawStaleDropped
+
+(* BR4: the sequential double-grant shape - a delivery grant landed in an
+   epoch whose grant set already held Cancel (the cancel authority may
+   already be consumed). The critical historical-XOR counterexample shape
+   that the old simultaneous-only property could not see; witnessed under
+   the NEG-WR3 mutant so the strengthened law is proven non-vacuous
+   against the exact sequential schedule, not only the overlap prefix. *)
+NoReachSequentialDoubleGrant == ~ sawDeliveryAfterCancel
 ====

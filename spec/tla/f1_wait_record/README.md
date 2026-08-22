@@ -15,6 +15,7 @@ conforms to the implementation, never the reverse.
 |---|---|
 | `generation` bump inside `AcquireRegister` | `acquire_wait_record_locked` (`src/async/scheduler_park_wake.cpp:684`) — `++r->generation` inside the registry critical section, before the new occupant is visible; first use also bumps 0→1 |
 | `recordState` Registered/Delivered/Free | `WaitRecordState` (`include/sluice/async/scheduler.hpp:1185`); the `cancelled` state is written-then-overwritten inside one registry CS in the cancel body — externally unobservable, modeled registered→free |
+| `slotWaiter` | the arena SLOT's `waiter_token_` identity (`request_arena.hpp:649-651`) — decoupled from the record occupant because C++ cancel/extract act on the SlotHandle, not the WaitRecord: a cancel-reopened slot still names its waiter after the record was retired (the schedule that exposes the sequential double-grant) |
 | `slotReg`, `deliveryPresent` | arena slot waiter registration (`include/sluice/async/detail/request_arena.hpp:629-690`): `WaiterRegistration` + `waiter_delivery_present_` |
 | `ArenaCancelWin` / `ArenaReapExtract` | arena leaf `cancel_waiter` / `reap` extraction — the C2c exactly-once race for the waiter delivery |
 | `SinkMarkDelivered` | `ReadyRoutingSink::on_ready` (`src/async/scheduler.cpp:1430`) — scheduler-identity → slot-bound → **generation** → state checks; runs on any poll thread with NO Scheduler lock |
@@ -25,8 +26,20 @@ conforms to the implementation, never the reverse.
 
 ## Boundary
 
-1 record, 2 generations (epochs 0/1 = waiters W0/W1), one delivery actor,
+1 record, 2 registration epochs, waiters {W0, W1}, one delivery actor,
 one cancel actor. Safety only (no fairness/liveness claims).
+
+### Generation mapping (mirrors the real C++ pool discipline)
+
+| value | meaning |
+|---|---|
+| `0` | pool-construction generation — **never issued to any occupant** (the first acquire bumps before the occupant becomes visible); exactly the value a forged/stale token carries |
+| `1` | W0's registration — the first real acquire bump `0→1` |
+| `2` | W1's registration — the reuse bump `1→2` |
+
+The delivered-marking sentinel is `3` (`NoDelivered`), chosen so it cannot
+collide with any real generation value. `SinkStaleGen0` compares the forged
+`0` against the current occupant's `2`.
 
 Out of scope (explicit non-goals):
 
@@ -50,12 +63,12 @@ Out of scope (explicit non-goals):
 | invariant | meaning |
 |---|---|
 | `InvGenerationIsolation` | a delivered-marking belongs to the CURRENT occupant's generation (Race C) |
-| `InvSingleAuthority` | delivery and cancel authorities never held together (arena C2c exactly-once) |
+| `InvSingleAuthority` | **historical XOR per registration epoch**: at most one authority kind (cancel XOR delivery) is EVER granted at the arena leaf — even after the first grant is consumed (`authorityGrants[w]` history set, `Cardinality ≤ 1`); the earlier simultaneous-only form let the sequential schedule (cancel granted → cancel consumed → delivery granted) pass undetected |
 | `InvSingleDelivery` | ≤1 runnable publication per waiter (E7-T2 CAS) |
 | `InvSlotLeasePinsRecord` | the in-slot lease pins the record live |
 | `InvAuthorityPinsRecord` | an extracted-but-unconsumed authority pins the record Registered |
 | `InvLiveRecordAccounting` | `liveCount = (recordState ≠ Free)` (P1-2) |
-| `InvOutcomePublicationCoupling` | publication ⇔ frozen outcome (P1-1) |
+| `InvOutcomeFrozenOnPublication` | P1-1, **one-directional as-built contract**: publication ⇒ frozen outcome. The freeze precedes `make_runnable` and is unconditional (`set_completion_wait_outcome` is `noexcept`); publication is E7-T2 CAS-gated. The converse (frozen ⇒ published) is NOT a C++ guarantee — a concurrent already-runnable wake could lose the CAS after the freeze — so the earlier iff-form was over-strong and was corrected in review |
 
 ## Negative controls (one-rule cfg flips; each names its invariant)
 
@@ -63,7 +76,7 @@ Out of scope (explicit non-goals):
 |---|---|---|---|
 | NegNoGenCheck | sink drops the generation comparison | `InvGenerationIsolation` | co-victims `InvSlotLeasePinsRecord`, `InvAuthorityPinsRecord` (entailed: as-built Delivered ⇒ slot closed ∧ no cancel authority) |
 | NegReuseWhileDelivered | acquire pops a delivered-pinned record | `InvLiveRecordAccounting` | none — all 6 other laws PASS |
-| NegCancelKeepsDelivery | cancel keeps `waiter_delivery_present_` set | `InvSingleAuthority` | co-victim `InvAuthorityPinsRecord` (entailed: the broken arbitration lets a delivery authority outlive the terminal retire) |
+| NegCancelKeepsDelivery | cancel keeps `waiter_delivery_present_` set | `InvSingleAuthority` (historical form: the sequential schedule cancel-granted → cancel-consumed → delivery-granted breaks epoch exclusivity exactly like the simultaneous overlap) | co-victim `InvAuthorityPinsRecord` (entailed: the broken arbitration lets a delivery authority outlive the terminal retire) |
 
 ### Exactly-once layering (the load-bearing finding)
 
@@ -77,21 +90,31 @@ Double publication is NOT reachable from any single-rule break:
   e7_publication/`'s modeled defect; this suite does not duplicate that
   mutant, and a compound ≥3-rule chain mutant was rejected as ceremonial.
 
-## Reachability (5 witnesses, each a NoReach* CEX)
+## Reachability (6 witnesses, each a NoReach* CEX)
 
 `NoReachAuthorityWindow` (extracted winner in flight) · `NoReachCancelWon` /
 `NoReachDeliveryWon` (both arena outcomes) · `NoReachReuse` (epoch-1
-occupant registered at generation 1) · `NoReachStaleDropped` (forged
-gen-0 event inertly dropped during epoch 1).
+occupant registered at generation 2) · `NoReachStaleDropped` (forged
+gen-0 event inertly dropped during epoch 1) ·
+`NoReachSequentialDoubleGrant` (under the NEG-WR3 cfg: a delivery grant
+landed after a cancel grant in the SAME epoch — the sequential
+double-grant shape that motivates the historical form of
+`InvSingleAuthority`; proves the strengthened law non-vacuous against the
+exact sequential schedule, not only the simultaneous-overlap prefix).
 
 ## Results
 
 TLC 2.19 (tla2tools 1.7.4), exhaustive, 1 worker:
 
-- positive: 96 states generated, 41 distinct, depth 10, no error.
+- positive: 101 states generated, 41 distinct, depth 10, no error.
 - all 3 negative gates: exact named CEX; all 3 specificity gates PASS;
-  all 5 reachability gates CEX as expected.
-- `bash scripts/formal/verify-f1-wait-record.sh` → 12/12, PASS.
+  all 6 reachability gates CEX as expected.
+- `bash scripts/formal/verify-f1-wait-record.sh` → 14/14, PASS.
+- review-fix adversarial probes (temp workspace, not committed): under
+  NEG-WR3 the simultaneous-overlap shape stays reachable AND the
+  pure-sequential shape (cancel granted → cancel consumed → delivery
+  granted with the lease already retired) reaches its own named CEX —
+  both orders violate the historical `InvSingleAuthority`.
 
 ## C++ bridges (no new tests; existing deterministic coverage)
 
@@ -102,10 +125,12 @@ TLC 2.19 (tla2tools 1.7.4), exhaustive, 1 worker:
   token inertly dropped (`stale_dropped == 1`), the real completion still
   routes, registry drains to 0.
 
-Cosmetic drift noted in issue #174 Comment A (not fixed here): T6's comment
-calls the forged token "the token A used (record 0, generation 0)" — the
-first acquire bumps 0→1, so A's real token generation was 1; the forged
-gen-0 token was never issued.
+Cosmetic drift noted in issue #174 Comment A (still present in the C++ test
+comment, not fixed here — comment-only C++ touch, out of this change's
+scope): T6's comment calls the forged token "the token A used (record 0,
+generation 0)" — the first acquire bumps 0→1, so A's real token generation
+was 1; the forged gen-0 token was never issued. The MODEL now uses the real
+values (see "Generation mapping" above), so the model↔test mapping is exact.
 
 ## Verdict
 
