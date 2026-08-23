@@ -1,4 +1,4 @@
-------------------------------- MODULE E9ParkWakeNegParticipantDead -------------------------------
+------------------------------- MODULE E9ParkWakeNegOldEscape -------------------------------
 (*
   GENERATED ARTIFACT -- DO NOT EDIT.
   Regenerate with: python3 spec/tla/e9_park_wake/_gen_neg.py
@@ -7,18 +7,16 @@
   unexpected generated artifact fails the formal gate instead of
   silently checking an outdated mutation.)
 
-  GENERATED NEGATIVE (#191 fail-closed witness control): the EXACT
-  pre-#191 defect -- ParticipantNoProgressExit conjoins BridgeEffect
-  (whose bridge branch primes bridgePending' = TRUE while a
-  participant exists) while its own body assigns bridgePending' =
-  FALSE (the one-shot consume), so the double-prime contradiction
-  makes the action unsatisfiable and it never fires. Expected TLC
-  verdict: PASS with NoReachParticipantExitFired /
-  NoReachPnpExitEndedRun both HOLDING -- the permanent witness gate
-  fails closed (a reintroduced dead participant is detected).
-  Documented co-victim: WF_vars(ParticipantNoProgressExit) goes
-  vacuous again (FairRetire half-dead on the participant side).
-  Every other rule is the current E9ParkWake verbatim.
+  GENERATED NEGATIVE (#185 fail-closed escape control): the EXACT
+  pre-#185 non-participant LeavePark escape -- the unconditional
+  `~SplitWait` disjunct that let a reference-config parked worker
+  return without ANY scheduler-domain cause and without an
+  entry-armed observation. The as-built scheduler-domain park has
+  no such return (scheduler_park_wake.cpp:400-469: unbounded
+  unless entry-armed or a deadline is active). Expected TLC
+  verdict: VIOLATION of InvNoCauselessReturn -- the invented
+  return class is detected. Every other rule is the current
+  E9ParkWake verbatim.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -460,7 +458,7 @@ LeaveParkEnabled(w) ==
     /\ workerPhase[w] = "Parked"
     /\ \/ (backendWaitParticipant = w /\ BackendDomainWakeDue)
        \/ (backendWaitParticipant # w
-            /\ \/ (~SplitWait /\ observationArmed[w])
+            /\ \/ ~SplitWait
                \/ SchedulerDomainWakeDue
                \/ runState # "Active")
 
@@ -531,7 +529,7 @@ ParticipantNoProgressExit(w) ==
     /\ ~backendReady
     /\ ~ExecutableWork
     /\ ~ExternalWakePossible
-    /\ BridgeEffect(1 - wakeEpoch)
+    /\ wakeEpoch' = 1 - wakeEpoch
     /\ backendWaitParticipant' = NONE
     /\ bridgePending' = FALSE
     /\ workerAlive' = [workerAlive EXCEPT ![w] = FALSE]

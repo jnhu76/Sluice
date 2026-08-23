@@ -75,6 +75,12 @@ CONSTANTS
     SplitWait = TRUE
 """
 
+# #185: the escape-control negatives must run under SplitWait=FALSE (the
+# reference config where the ~SplitWait escape is live); the other negatives
+# stay on the default SplitWait=TRUE. A per-case "constants" field overrides
+# the default block.
+REF_CONSTANTS = CONSTANTS.replace("SplitWait = TRUE", "SplitWait = FALSE")
+
 
 def fail(msg: str) -> None:
     print(f"error: {msg}", file=sys.stderr)
@@ -91,16 +97,17 @@ def fail(msg: str) -> None:
 # and bridgePending in UNCHANGED while conjoining BridgeEffect, making the
 # action unsatisfiable (wakeEpoch in {0,1}, BridgeEffect assigns
 # wakeEpoch' = 1 - wakeEpoch # wakeEpoch). Restoring the pin kills the
-# action again. (#191 note: the UNCHANGED tail now also carries the
-# participant-exit witness ghosts -- they stay pinned by the replacement,
-# exactly as the current model carries them.)
+# action again. (#191 note: the UNCHANGED tail also carries the
+# participant-exit witness ghosts; #185 note: it also carries
+# observationArmed — both stay pinned by the replacement, exactly as the
+# current model carries them.)
 NEG_RETIRE_DEAD = (
     "                   workerPhase, observedEpoch,\n"
     "                   backendWaitParticipant, idleCount, runMode,\n"
-    "                   participantExitFired, participantExitEndedRun>>",
+    "                   participantExitFired, participantExitEndedRun, observationArmed>>",
     "                   wakeEpoch, bridgePending, workerPhase, observedEpoch,\n"
     "                   backendWaitParticipant, idleCount, runMode,\n"
-    "                   participantExitFired, participantExitEndedRun>>",
+    "                   participantExitFired, participantExitEndedRun, observationArmed>>",
 )
 
 # NEG #191 dead participant exit: the pre-#191 ParticipantNoProgressExit
@@ -124,6 +131,25 @@ NEG_NO_BRIDGE = (
     "    /\\ bridgePending' = IF BridgeFiresFromParticipant THEN TRUE\n"
     "                        ELSE bridgePending",
     "    /\\ bridgePending' = bridgePending",
+)
+
+# NEG #185 old escape: the pre-#185 unconditional ~SplitWait non-participant
+# LeavePark escape (always enabled under SplitWait=FALSE). The as-built
+# scheduler-domain park has NO such return (scheduler_park_wake.cpp:400-469);
+# restoring it makes InvNoCauselessReturn detect the invented return class.
+NEG_OLD_ESCAPE = (
+    "            /\\ \\/ (~SplitWait /\\ observationArmed[w])",
+    "            /\\ \\/ ~SplitWait",
+)
+
+# NEG #185 naive escape: the plausible-but-unfaithful ~SplitWait /\
+# ExternalWakePossible escape — a registered-but-not-ready external wait
+# (externalWaitRegistered /\ ~externalReady) is NOT a wake publication in
+# C++; restoring it makes InvNoCauselessReturn fire on the registered-not-
+# ready causeless return.
+NEG_NAIVE_ESCAPE = (
+    "            /\\ \\/ (~SplitWait /\\ observationArmed[w])",
+    "            /\\ \\/ (~SplitWait /\\ ExternalWakePossible)",
 )
 
 CASES = [
@@ -195,6 +221,51 @@ CASES = [
         ),
         "invariants": ["NoReachParticipantExitFired", "NoReachPnpExitEndedRun"],
     },
+    {
+        "module": "E9ParkWakeNegOldEscape",
+        "desc": (
+            "GENERATED NEGATIVE (#185 fail-closed escape control): the EXACT\n"
+            "  pre-#185 non-participant LeavePark escape -- the unconditional\n"
+            "  `~SplitWait` disjunct that let a reference-config parked worker\n"
+            "  return without ANY scheduler-domain cause and without an\n"
+            "  entry-armed observation. The as-built scheduler-domain park has\n"
+            "  no such return (scheduler_park_wake.cpp:400-469: unbounded\n"
+            "  unless entry-armed or a deadline is active). Expected TLC\n"
+            "  verdict: VIOLATION of InvNoCauselessReturn -- the invented\n"
+            "  return class is detected. Every other rule is the current\n"
+            "  E9ParkWake verbatim."
+        ),
+        "mutations": [NEG_OLD_ESCAPE],
+        "constants": REF_CONSTANTS,
+        "cfg_comment": (
+            "#185 escape control (generated). The pre-fix unconditional\n"
+            "~SplitWait escape: InvNoCauselessReturn VIOLATED -- an un-armed\n"
+            "reference park returns with no scheduler-domain cause. See\n"
+            "E9ParkWakeReference.cfg for the faithful side."
+        ),
+        "invariants": ["InvNoCauselessReturn"],
+    },
+    {
+        "module": "E9ParkWakeNegNaiveEscape",
+        "desc": (
+            "GENERATED NEGATIVE (#185 fail-closed escape control): the naive\n"
+            "  `~SplitWait /\\ ExternalWakePossible` escape -- a registered-\n"
+            "  but-not-ready external wait (externalWaitRegistered /\\\n"
+            "  ~externalReady) is NOT a wake publication in C++ (registration\n"
+            "  is not a publication; the ready flag publication is the wake).\n"
+            "  Expected TLC verdict: VIOLATION of InvNoCauselessReturn -- the\n"
+            "  registered-not-ready causeless return is detected. Every other\n"
+            "  rule is the current E9ParkWake verbatim."
+        ),
+        "mutations": [NEG_NAIVE_ESCAPE],
+        "constants": REF_CONSTANTS,
+        "cfg_comment": (
+            "#185 escape control (generated). The naive ExternalWakePossible\n"
+            "escape: InvNoCauselessReturn VIOLATED -- a registered-not-ready\n"
+            "external wait is not a return cause in the as-built park."
+        ),
+        "invariants": ["InvNoCauselessReturn"],
+    },
 ]
 
 
@@ -256,7 +327,7 @@ def render_case(case: dict, positive_text: str) -> dict:
         "INVARIANTS\n"
         f"{inv_lines}\n"
         "\n"
-        + CONSTANTS
+        + case.get("constants", CONSTANTS)
     )
     return {f"{mod}.tla": tla, f"{mod}.cfg": cfg}
 
