@@ -1,111 +1,20 @@
 ------------------------------- MODULE E9ParkWakeBuggyNoBridge -------------------------------
 (*
-  E9 Scheduler park-admission and unified wake-source protocol
-  (sluice-CORE-E9), Model P3 (decoupled wake domains).
+  GENERATED ARTIFACT -- DO NOT EDIT.
+  Regenerate with: python3 spec/tla/e9_park_wake/_gen_neg.py
+  (freshness-gated: scripts/formal/verify-e9-park-wake.sh runs
+  `_gen_neg.py --check` before any TLC run, so a stale, missing, or
+  unexpected generated artifact fails the formal gate instead of
+  silently checking an outdated mutation.)
 
-  E9-CORRECTIVE adds the RUN INVOCATION LIFETIME dimension (runMode /
-  runState) that the original model omitted. The omission let TLC green-
-  light a Drain run that parks forever on MW-S3 + external-wake-capable
-  (the shipped deterministic hang). See ADR §9.4.0.
-
-  PHASE G (P5-CORRECTIVE / G1 repair R1-R4, 2026-08-15 closeout) adds:
-
-    - SPLIT-WAIT PARK DOMAIN (CONSTANT SplitWait): a split-wait backend
-      (ThreadPool / real io_uring — wait_source() != null) parks the
-      MW-S2 participant in the BACKEND domain for BOTH backend-only and
-      MIXED-WAKE; its progress transport is prompt (ready epoch / ring
-      fd). A non-split (reference) backend keeps the E9 rule: MIXED-WAKE
-      parks on the SCHEDULER domain with the bounded observation return.
-    - THE BRIDGE (signal_wake_locked -> interrupt_backend_waiters): every
-      Scheduler wake publication (external ready, routing, retire,
-      shutdown) ALSO delivers a one-shot control wake to a BACKEND-parked
-      participant. Modeled as the boolean bridgePending: set by every
-      wake-epoch-advancing producer while a committed/parked participant
-      exists (the backend_wait_active_ gate window), consumed exactly by
-      the participant's park return (D4-RM13 one-shot semantics). The
-      D4-RM14 arm is the persistence of bridgePending across the
-      commit-to-park-entry window: a bump landing between the MW-S2
-      commit and the physical park is still delivered to the FIRST park
-      (never rebaselined into a past event).
-    - R1 (park-commit refuse): a SCHEDULER-domain park commit REFUSES
-      when unguarded progress exists (runnable / accepted backend work
-      with NO observer: no running fiber, no committed/parked backend
-      participant, no admission in flight). The refuser signals the wake
-      domain (wakes an electable sleeping sibling) and returns to Active
-      to become the observer itself.
-    - R2 (transferable election): the backend participant is the LOWEST
-      alive worker, not a fixed worker 0 — after a worker retires, a
-      survivor can still elect (the no-participant manifestation heals).
-    - R3 (terminate-path retire): a worker leaving the loop publishes an
-      UNCONDITIONAL wake (advance wakeEpoch), never loses runnable work
-      (retire requires the worker's own view drained), and leaves the
-      alive set; the last retire ends the run invocation.
-    - R4 (idle-dance not-last signal): the first worker to enter the
-      counted idle park signals the wake domain as part of its commit
-      (the conservative "under-clear may cost an extra dance, never a
-      missed signal" rule; the contribution-aware damping refinement is
-      an anti-livelock optimization abstracted here to its convergence
-      obligation).
-
-  THE LOAD-BEARING E9 QUESTION (ADR 9.4):
-
-    When may an idle Scheduler Worker commit to parking, and which state
-    publications create an obligation to wake parked Workers?
-
-  ANSWER (P3 + RunMode + Phase G, decoupled wake domains):
-
-    - A Worker commits to parking only after a globally-coordinated
-      admission: drain persistent readiness, reclassify, OBSERVE the wake
-      epoch, and validate the epoch before sleeping. The wake epoch is the
-      authority for "a wake-relevant publication happened after I decided
-      to park"; the cv/notify is the physical delivery.
-    - There are TWO park domains: BACKEND (ctx_.wait_one, at most one
-      participant, the E7 MW-S2 rule) and SCHEDULER (wake_cv + wake
-      epoch, any number of Workers). SplitWait selects BACKEND for all of
-      MW-S2 (the bridge carries external wakes into it); non-split keeps
-      the E9 rule (BACKEND only when no external-wake-capable wait is
-      registered; the bounded observation return remains the reference
-      backends' MIXED-WAKE progress authority).
-    - Every wake-relevant producer publishes persistent state FIRST and
-      signals (advances wakeEpoch + notifies) SECOND. The signal is
-      advisory; persistent state is authoritative. Under SplitWait the
-      same signal ALSO bridges into a parked backend participant.
-    - RUN LIFETIME IS AN EXPLICIT POLICY DIMENSION (E9-CORRECTIVE):
-        runMode  in {Drain, Live}
-        runState in {Active, ReturnedStalled, ReturnedQuiescent, Shutdown}
-      ClassifyGlobalState is SEPARATE from SelectIdleAction. In Drain,
-      MW-S3 MUST return Stalled (never park). In Live, MW-S3 + effective
-      external wake MAY park; MW-S3 without effective external wake MUST
-      return Stalled. A wake handle never mutates runMode.
-
-  DOMAIN (finite, exhaustive TLC):
-    Workers = {W0, W1}, Fibers = {F0}. (F1 not needed; one waiter is the
-    load-bearing proof. Two Workers exercise the multi-parked state, the
-    at-most-one-backend-participant rule, the R2 transferable election,
-    and the R3/R4 retire/dance convergence.)
-
-  STATE AXES (E9 spec 10, four-dimensional topology M2):
-    resource:    runnableVisible, runningVisible, backendOutstanding,
-                 backendReady, externalWaitRegistered, externalReady
-    execution:   (Fiber lifecycle collapsed; E8 ownership is CLOSED)
-    coordination:workerPhase[w], observedEpoch[w], wakeEpoch,
-                 backendWaitParticipant, bridgePending   [PHASE G]
-    population:  workerAlive[w], idleCount               [R2/R3/R4]
-    invocation:  runMode, runState   [E9-CORRECTIVE]
-
-  Persistent state (runnable/running/backend/external ready) is kept
-  SEPARATE from the wake signal/epoch. The wake notification is NOT the
-  source of truth.
-
-  This model abstracts away Fiber identity beyond F0 (the external-wait
-  Fiber) and collapses runnable/running into booleans. The E7/E8
-  publication/steal protocols are CLOSED; E9 does not reopen them. The
-  R3 retire's pending_spawn re-seeding is collapsed into "runnable
-  survives on a live worker or the run returns" (retire requires the
-  retiring worker's own view drained). The R4 contribution-aware damping
-  (a counted dancer may sleep holding its count) is a livelock
-  optimization; the model keeps its convergence obligation (the
-  not-last-signal) and the live-worker threshold.
+  GENERATED NEGATIVE (Phase G model-level M1, bridge disabled):
+  BridgeEffect advances wakeEpoch but never arms bridgePending, so
+  every Scheduler wake publication strands a parked split-wait
+  backend participant. Expected TLC verdict: VIOLATION of
+  Inv8BridgeReachesBackendPark. Documented co-victim (liveness, not
+  in this cfg): Life7ExternalReadyEventuallyDrained -- the model
+  text names Life7 the model-level M1 mutation detector. Every other
+  rule is the current E9ParkWake verbatim.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -127,7 +36,8 @@ VARIABLES
     idleCount,
     terminateFlag,
     runMode,
-    runState
+    runState,
+    retireFired      \* causal history witness: RetireWorkerQuiescent executed
 
 PhaseVal == {"Active", "ParkCandidate", "ParkCommitted", "Parked"}
 PartVal  == {NONE, W0, W1}
@@ -265,7 +175,7 @@ ParkAdmitted ==
    participant's wait_one returns). *)
 BridgeEffect(newWakeEpoch) ==
     /\ wakeEpoch' = newWakeEpoch
-    /\ bridgePending' = bridgePending   \* MUTANT: bridge disabled (M1)
+    /\ bridgePending' = bridgePending
 
 (* W8: external thread completes a Future. Publishes externalReady, then
    signals the wake source (and bridges into a parked participant). *)
@@ -279,7 +189,7 @@ ExternalReadyPublish ==
                    externalWaitRegistered,
                    workerPhase, observedEpoch, backendWaitParticipant,
                    workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A Scheduler Worker observes externalReady and routes the waiting Fiber
    to runnable (DrainExternalReady). *)
@@ -295,7 +205,7 @@ DrainExternalReady ==
     /\ UNCHANGED <<runningVisible, backendOutstanding, backendReady,
                    workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A backend op becomes ready. Persistent state first; the MW-S2 BACKEND
    participant observes it via its wait_one return (LeavePark's backend
@@ -310,7 +220,7 @@ BackendReadyPublish ==
                    backendOutstanding, externalWaitRegistered,
                    externalReady, wakeEpoch, bridgePending,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* A running Fiber submits a backend op. *)
 SubmitBackend ==
@@ -322,7 +232,7 @@ SubmitBackend ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A Scheduler Worker drains backendReady into runnable. *)
 DrainBackendReady ==
@@ -336,7 +246,7 @@ DrainBackendReady ==
     /\ UNCHANGED <<runningVisible, externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A Fiber publishes runnable work from inside a Worker (route + wake). *)
 PublishRunnable ==
@@ -348,7 +258,7 @@ PublishRunnable ==
     /\ UNCHANGED <<runningVisible, backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* =========================================================================
    Park-admission actions (Worker side). Globally coordinated under the
@@ -370,7 +280,7 @@ BeginParkCandidate(w) ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* FinalParkRecheckAndCommit: the candidate does a final drain + classify,
    OBSERVES the wake epoch, and COMMITS to park (recording observedEpoch).
@@ -401,7 +311,7 @@ FinalParkRecheckAndCommit(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* AbandonParkCandidate: the candidate returns to Active without
    committing. R1: the refusal beside unguarded progress must SIGNAL the
@@ -423,7 +333,7 @@ AbandonParkCandidate(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* EnterPhysicalPark: the committed Worker releases the wake mutex and
    parks on its chosen domain. Domain selection (P3 + Phase G):
@@ -486,7 +396,7 @@ EnterPhysicalPark(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   observedEpoch, workerAlive, terminateFlag, runMode, runState>>
+                   observedEpoch, workerAlive, terminateFlag, runMode, runState, retireFired>>
 
 (* LeavePark: a parked Worker returns to Active to re-drain.
 
@@ -547,7 +457,7 @@ LeavePark(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, observedEpoch, workerAlive,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* =========================================================================
    R3: terminate-path retire — TWO production exit paths, neither of which
@@ -562,8 +472,14 @@ LeavePark(w) ==
       with ~external_wake_possible -> global terminate). The departure
       publishes the UNCONDITIONAL R3 wake and leaves the alive set.
 
-   2. RetireWorkerQuiescent: the last-idle terminate — only at true
-      quiescence (no executable work, no backend work, no waits).
+   2. RetireWorkerQuiescent (historical name): non-participant
+      worker-loop retirement. It covers BOTH:
+      - true-quiescent last-idle retirement; and
+      - terminate-observed retirement after another worker has already
+        published invocation termination (may be non-quiescent: the
+        loop-top pop+run precedes the terminate check).
+      Only the former is classified ReturnedQuiescent; a last-alive
+      non-quiescent retirement is ReturnedStalled.
 
    A Worker that merely REFUSED to park beside unguarded backend progress
       (R1) satisfies NEITHER precondition: it must re-loop and elect as
@@ -588,7 +504,7 @@ ParticipantNoProgressExit(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   observedEpoch, idleCount, runMode>>
+                   observedEpoch, idleCount, runMode, retireFired>>
 
 RetireWorkerQuiescent(w) ==
     /\ workerAlive[w]
@@ -599,13 +515,16 @@ RetireWorkerQuiescent(w) ==
     /\ BridgeEffect(1 - wakeEpoch)
     /\ workerAlive' = [workerAlive EXCEPT ![w] = FALSE]
     /\ terminateFlag' = TRUE
+    /\ retireFired' = TRUE
     /\ runState' = IF \A v \in Workers : v = w \/ ~workerAlive[v]
-                   THEN "ReturnedQuiescent"
+                   THEN IF Quiescent
+                        THEN "ReturnedQuiescent"
+                        ELSE "ReturnedStalled"
                    ELSE runState
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   wakeEpoch, bridgePending, workerPhase, observedEpoch,
+                   workerPhase, observedEpoch,
                    backendWaitParticipant, idleCount, runMode>>
 
 (* =========================================================================
@@ -623,7 +542,7 @@ ReturnStalled ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   runMode>>
+                   runMode, retireFired>>
 
 ReturnQuiescent ==
     /\ runState = "Active"
@@ -635,7 +554,7 @@ ReturnQuiescent ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   runMode>>
+                   runMode, retireFired>>
 
 (* ShutdownSignal: a coordinated termination condition. Advances the wake
    epoch (bridging into a parked participant) and ends the invocation. *)
@@ -648,7 +567,7 @@ ShutdownSignal ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, runMode>>
+                   workerAlive, idleCount, runMode, retireFired>>
 
 (* =========================================================================
    Fiber lifecycle (collapsed).
@@ -665,7 +584,7 @@ RunFiber ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 SuspendFiber ==
     /\ runState = "Active"
@@ -676,7 +595,7 @@ SuspendFiber ==
     /\ UNCHANGED <<runnableVisible, backendOutstanding, backendReady,
                    externalReady, wakeEpoch, bridgePending, workerPhase,
                    observedEpoch, backendWaitParticipant, workerAlive,
-                   idleCount, terminateFlag, runMode, runState>>
+                   idleCount, terminateFlag, runMode, runState, retireFired>>
 
 FinishFiber ==
     /\ runState = "Active"
@@ -686,7 +605,7 @@ FinishFiber ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* =========================================================================
    Next, Init, Spec
@@ -698,7 +617,7 @@ vars ==
       externalWaitRegistered, externalReady,
       wakeEpoch, workerPhase, observedEpoch,
       backendWaitParticipant, bridgePending, workerAlive, idleCount,
-      terminateFlag, terminateFlag, runMode, runState>>
+      terminateFlag, runMode, runState, retireFired>>
 
 TerminalStutter ==
     /\ runState # "Active"
@@ -779,6 +698,7 @@ Init ==
     /\ terminateFlag = FALSE
     /\ runMode \in {"Drain", "Live"}
     /\ runState = "Active"
+    /\ retireFired = FALSE
 
 Spec == Init /\ [][Next]_vars
 
@@ -889,7 +809,7 @@ InvLife1DrainNoMW3Park ==
 
 InvLife3LiveExternalParkAdmitted ==
     (runMode = "Live" /\ GlobalClass = "MWS3" /\ ExternalWakePossible
-     /\ runState = "Active")
+     /\ runState = "Active" /\ ~terminateFlag)
     => ParkAdmitted
 
 InvLife5QuiescenceClassifierDefined ==
@@ -991,4 +911,33 @@ LifeProps ==
     /\ Life4LiveNonWakeableMWS3Returns
     /\ Life7ExternalReadyEventuallyDrained
     /\ Life8BackendReadyEventuallyObserved
+
+(* =========================================================================
+   Reachability / non-vacuity witnesses (#189). NoReach* are DELIBERATELY
+   FALSE at the target: TLC's counterexample is the causal witness.
+
+   NoReachRetireFired: the ghost retireFired is set ONLY inside
+   RetireWorkerQuiescent's action body - which conjoins BridgeEffect - so a
+   witness trace with retireFired = TRUE proves the full as-built retire
+   step executed, INCLUDING the unconditional departure wake
+   (wakeEpoch' = 1 - wakeEpoch; the C++ signal_wake_locked() in the worker
+   epilogue, scheduler.cpp:1242-1249). Pre-#189 the action was
+   unsatisfiable (BridgeEffect primed wakeEpoch'/bridgePending' while the
+   action's own UNCHANGED pinned them); the witness fails closed.
+
+   NoReachQuiescentTerminate: the terminal chain - every worker retired and
+   the invocation classified ReturnedQuiescent at true quiescence. This
+   final shape is reachable ONLY through a last-alive RetireWorkerQuiescent
+   step (ReturnQuiescent never retires a worker; ParticipantNoProgressExit
+   classifies ReturnedStalled), and it pins the C++-faithful terminal
+   classification: a retire that ends the run at NON-quiescence must
+   classify ReturnedStalled (the terminate-observed / E4-E5 caller-re-entry
+   boundary), never ReturnedQuiescent (InvLife5). *)
+NoReachRetireFired ==
+    ~retireFired
+
+NoReachQuiescentTerminate ==
+    ~( /\ \A v \in Workers : ~workerAlive[v]
+       /\ runState = "ReturnedQuiescent"
+       /\ Quiescent )
 ====
