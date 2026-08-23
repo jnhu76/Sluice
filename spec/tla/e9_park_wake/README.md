@@ -464,17 +464,18 @@ states — the new families are disjoint from the pre-retire set, exactly as
 expected for states only reachable through a retirement. No unexpected
 families appear.
 
-### Known separate defect (documented, NOT repaired here)
+### Known separate defect (documented at #189, REPAIRED at #191)
 
-`ParticipantNoProgressExit` is ALSO dead in every config (pre-existing, and
-still 0:0 after this repair), via a DISTINCT root cause: its body conjoins
+`ParticipantNoProgressExit` was ALSO dead (pre-existing, and still 0:0
+after the #189 repair), via a DISTINCT root cause: its body conjoined
 `BridgeEffect(1 - wakeEpoch)` — whose bridge branch sets `bridgePending' =
 TRUE` (a participant exists) — AND an explicit `bridgePending' = FALSE`
-(one-shot consume), a double-prime contradiction. Its guard IS reachable
+(one-shot consume), a double-prime contradiction. Its guard was reachable
 (probe: 1055 states), so the interrupted-0-progress participant exit (exit
-class C) is entirely unmodeled. This is out of #189's scope (different
-action, different root cause); registered in the debt register and the
-manifest notes, and tracked independently in issue #191.
+class C) was entirely unmodeled at the time. This was out of #189's scope
+(different action, different root cause); it was registered in the debt
+register and the manifest notes, tracked independently in issue #191, and
+is now REPAIRED — see the next section ("Issue #191 repair").
 
 ## Issue #191 repair (2026-08-23): `ParticipantNoProgressExit` revived
 
