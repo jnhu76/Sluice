@@ -1,4 +1,4 @@
-------------------------------- MODULE E9ParkWakeBuggyNoBridge -------------------------------
+------------------------------- MODULE E9ParkWakeNegParticipantDead -------------------------------
 (*
   GENERATED ARTIFACT -- DO NOT EDIT.
   Regenerate with: python3 spec/tla/e9_park_wake/_gen_neg.py
@@ -7,14 +7,18 @@
   unexpected generated artifact fails the formal gate instead of
   silently checking an outdated mutation.)
 
-  GENERATED NEGATIVE (Phase G model-level M1, bridge disabled):
-  BridgeEffect advances wakeEpoch but never arms bridgePending, so
-  every Scheduler wake publication strands a parked split-wait
-  backend participant. Expected TLC verdict: VIOLATION of
-  Inv8BridgeReachesBackendPark. Documented co-victim (liveness, not
-  in this cfg): Life7ExternalReadyEventuallyDrained -- the model
-  text names Life7 the model-level M1 mutation detector. Every other
-  rule is the current E9ParkWake verbatim.
+  GENERATED NEGATIVE (#191 fail-closed witness control): the EXACT
+  pre-#191 defect -- ParticipantNoProgressExit conjoins BridgeEffect
+  (whose bridge branch primes bridgePending' = TRUE while a
+  participant exists) while its own body assigns bridgePending' =
+  FALSE (the one-shot consume), so the double-prime contradiction
+  makes the action unsatisfiable and it never fires. Expected TLC
+  verdict: PASS with NoReachParticipantExitFired /
+  NoReachPnpExitEndedRun both HOLDING -- the permanent witness gate
+  fails closed (a reintroduced dead participant is detected).
+  Documented co-victim: WF_vars(ParticipantNoProgressExit) goes
+  vacuous again (FairRetire half-dead on the participant side).
+  Every other rule is the current E9ParkWake verbatim.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -177,7 +181,8 @@ ParkAdmitted ==
    participant's wait_one returns). *)
 BridgeEffect(newWakeEpoch) ==
     /\ wakeEpoch' = newWakeEpoch
-    /\ bridgePending' = bridgePending
+    /\ bridgePending' = IF BridgeFiresFromParticipant THEN TRUE
+                        ELSE bridgePending
 
 (* W8: external thread completes a Future. Publishes externalReady, then
    signals the wake source (and bridges into a parked participant). *)
@@ -508,7 +513,7 @@ ParticipantNoProgressExit(w) ==
     /\ ~backendReady
     /\ ~ExecutableWork
     /\ ~ExternalWakePossible
-    /\ wakeEpoch' = 1 - wakeEpoch
+    /\ BridgeEffect(1 - wakeEpoch)
     /\ backendWaitParticipant' = NONE
     /\ bridgePending' = FALSE
     /\ workerAlive' = [workerAlive EXCEPT ![w] = FALSE]

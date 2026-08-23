@@ -91,12 +91,31 @@ def fail(msg: str) -> None:
 # and bridgePending in UNCHANGED while conjoining BridgeEffect, making the
 # action unsatisfiable (wakeEpoch in {0,1}, BridgeEffect assigns
 # wakeEpoch' = 1 - wakeEpoch # wakeEpoch). Restoring the pin kills the
-# action again.
+# action again. (#191 note: the UNCHANGED tail now also carries the
+# participant-exit witness ghosts -- they stay pinned by the replacement,
+# exactly as the current model carries them.)
 NEG_RETIRE_DEAD = (
     "                   workerPhase, observedEpoch,\n"
-    "                   backendWaitParticipant, idleCount, runMode>>",
+    "                   backendWaitParticipant, idleCount, runMode,\n"
+    "                   participantExitFired, participantExitEndedRun>>",
     "                   wakeEpoch, bridgePending, workerPhase, observedEpoch,\n"
-    "                   backendWaitParticipant, idleCount, runMode>>",
+    "                   backendWaitParticipant, idleCount, runMode,\n"
+    "                   participantExitFired, participantExitEndedRun>>",
+)
+
+# NEG #191 dead participant exit: the pre-#191 ParticipantNoProgressExit
+# conjoined BridgeEffect (whose bridge branch primes bridgePending' = TRUE
+# while a participant exists) while its own body assigned bridgePending' =
+# FALSE (the one-shot consume) -- a double-prime contradiction that made the
+# action unsatisfiable. Restoring BridgeEffect in place of the repaired
+# direct epoch advance kills the action again.
+NEG_PARTICIPANT_DEAD = (
+    "    /\\ wakeEpoch' = 1 - wakeEpoch\n"
+    "    /\\ backendWaitParticipant' = NONE\n"
+    "    /\\ bridgePending' = FALSE",
+    "    /\\ BridgeEffect(1 - wakeEpoch)\n"
+    "    /\\ backendWaitParticipant' = NONE\n"
+    "    /\\ bridgePending' = FALSE",
 )
 
 # Phase G M1 bridge-disabled: BridgeEffect keeps the epoch advance but never
@@ -149,6 +168,32 @@ CASES = [
             "Expected: Inv8BridgeReachesBackendPark VIOLATED."
         ),
         "invariants": ["Inv8BridgeReachesBackendPark"],
+    },
+    {
+        "module": "E9ParkWakeNegParticipantDead",
+        "desc": (
+            "GENERATED NEGATIVE (#191 fail-closed witness control): the EXACT\n"
+            "  pre-#191 defect -- ParticipantNoProgressExit conjoins BridgeEffect\n"
+            "  (whose bridge branch primes bridgePending' = TRUE while a\n"
+            "  participant exists) while its own body assigns bridgePending' =\n"
+            "  FALSE (the one-shot consume), so the double-prime contradiction\n"
+            "  makes the action unsatisfiable and it never fires. Expected TLC\n"
+            "  verdict: PASS with NoReachParticipantExitFired /\n"
+            "  NoReachPnpExitEndedRun both HOLDING -- the permanent witness gate\n"
+            "  fails closed (a reintroduced dead participant is detected).\n"
+            "  Documented co-victim: WF_vars(ParticipantNoProgressExit) goes\n"
+            "  vacuous again (FairRetire half-dead on the participant side).\n"
+            "  Every other rule is the current E9ParkWake verbatim."
+        ),
+        "mutations": [NEG_PARTICIPANT_DEAD],
+        "cfg_comment": (
+            "#191 fail-closed witness control (generated). The exact pre-fix\n"
+            "dead-participant double-prime contradiction: both witnesses HOLD\n"
+            "(PASS) -- a reintroduced dead participant exit is detected by the\n"
+            "witness gate going green. See E9ParkWakeWitnessPnpExit.cfg and\n"
+            "E9ParkWakeWitnessPnpEndedRun.cfg for the violated side."
+        ),
+        "invariants": ["NoReachParticipantExitFired", "NoReachPnpExitEndedRun"],
     },
 ]
 
