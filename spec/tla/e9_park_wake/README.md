@@ -45,16 +45,36 @@ to that obligation).
 - `E9ParkWakeReference.cfg`        — TLC config (safety, `SplitWait=FALSE`
   — the reference/legacy E9 rule retained for Fake/Sync backends).
 - `E9ParkWakeReferenceLiveness.cfg`— TLC config (liveness, reference).
+- `E9ParkWakeWitnessRetire.cfg`    — #189 non-vacuity witness (1/2):
+  `RetireWorkerQuiescent` fires with the departure wake.
+- `E9ParkWakeWitnessTerminate.cfg` — #189 non-vacuity witness (2/2): the
+  all-retired `ReturnedQuiescent`-at-quiescence terminal chain.
+- `E9ParkWakeWitnessPnpExit.cfg`   — #191 non-vacuity witness (1/2):
+  `ParticipantNoProgressExit` fires with the departure wake.
+- `E9ParkWakeWitnessPnpEndedRun.cfg`— #191 non-vacuity witness (2/2): the
+  last-alive `ReturnedStalled` classification.
 - `E9ParkWakeBuggyNoBridge.tla/.cfg` — negative model (Phase G): the
   model-level M1 mutation — wake publications advance `wakeEpoch` but
   never set `bridgePending`. Produces an `Inv8BridgeReachesBackendPark`
   counterexample (a parked participant that can never observe an
   external publication). GENERATED from the current positive model by
   `_gen_neg.py` (#192; freshness-gated, do not edit by hand).
+- `E9ParkWakeNegRetireDead.tla/.cfg` — negative model (#189 fail-closed
+  witness control): the EXACT pre-#189 defect — `RetireWorkerQuiescent`'s
+  `UNCHANGED` reacquires `wakeEpoch, bridgePending` while the action body
+  conjoins `BridgeEffect` (double-prime contradiction). Both witness
+  invariants HOLD (PASS). GENERATED from the current positive model by
+  `_gen_neg.py` (#192; freshness-gated, do not edit by hand).
+- `E9ParkWakeNegParticipantDead.tla/.cfg` — negative model (#191 fail-closed
+  witness control): the EXACT pre-#191 defect — `ParticipantNoProgressExit`
+  conjoins `BridgeEffect` while its body assigns `bridgePending' = FALSE`
+  (double-prime contradiction). Both witness invariants HOLD (PASS).
+  GENERATED from the current positive model by `_gen_neg.py` (#191;
+  freshness-gated, do not edit by hand).
 - `_gen_neg.py`                  — generates the duplicated-snapshot
-  negatives (`NegRetireDead`, `BuggyNoBridge`) from the current
-  `E9ParkWake.tla`; `--check` is the read-only freshness gate the
-  verifier runs before any TLC invocation (#192).
+  negatives (`NegRetireDead`, `BuggyNoBridge`, `NegParticipantDead`) from
+  the current `E9ParkWake.tla`; `--check` is the read-only freshness gate
+  the verifier runs before any TLC invocation (#192, #191).
 - `E9ParkWakeBuggyDrainParks.tla/.cfg` — negative model C (E9-CORRECTIVE,
   historical): the shipped Drain-park defect. `Life2Buggy`
   counterexample.
@@ -75,31 +95,30 @@ delete them.
 bash scripts/formal/verify-e9-park-wake.sh
 ```
 
-(four positive gates + two reachability-witness gates + five negative
+(four positive gates + four reachability-witness gates + six negative
 gates; TLC runs in an isolated mktemp workspace — never in this
 directory.)
 
-## Generated negatives + freshness gate (#192)
+## Generated negatives + freshness gate (#192, #191)
 
-`NegRetireDead` and `BuggyNoBridge` are FULL DUPLICATED SNAPSHOTS of the
-positive model, so they are GENERATED from the current `E9ParkWake.tla`
-by `_gen_neg.py` (each mutation is a declared exact-fragment swap whose
-anchor must match exactly one location — zero or multiple matches aborts
-generation fail-closed) and freshness-gated:
+`NegRetireDead`, `BuggyNoBridge`, and `NegParticipantDead` are FULL
+DUPLICATED SNAPSHOTS of the positive model, so they are GENERATED from the
+current `E9ParkWake.tla` by `_gen_neg.py` (each mutation is a declared
+exact-fragment swap whose anchor must match exactly one location — zero or
+multiple matches aborts generation fail-closed) and freshness-gated:
 `verify-e9-park-wake.sh` runs `_gen_neg.py --check` BEFORE any TLC run,
 so a stale, missing, or unexpected generated artifact fails the formal
 gate without starting TLC (a stale negative would keep checking an
-outdated mutation while CI stays green). Never edit those four files by
+outdated mutation while CI stays green). Never edit those six files by
 hand — regenerate with `python3 spec/tla/e9_park_wake/_gen_neg.py`.
 
 `BuggyPrePark` / `BuggyMixedSource` (pre-Phase-G protocol snapshots) and
 `BuggyDrainParks` (an EXTENDS-based minimal mutant that auto-tracks the
 positive model) are intentionally NOT generated: the first two are
 frozen historical controls, the third has no drift risk. A future
-negative that is a single-rule mutation of the current model (e.g. the
-#191 `ParticipantNoProgressExit` exact-old mutant) should join the
-generator's CASES — mutation spec + cfg + verifier expectation — not add
-another hand-copied snapshot.
+negative that is a single-rule mutation of the current model should
+join the generator's CASES — mutation spec + cfg + verifier expectation —
+not add another hand-copied snapshot.
 
 ## Model domain (finite, exhaustive TLC)
 
@@ -456,3 +475,196 @@ TRUE` (a participant exists) — AND an explicit `bridgePending' = FALSE`
 class C) is entirely unmodeled. This is out of #189's scope (different
 action, different root cause); registered in the debt register and the
 manifest notes, and tracked independently in issue #191.
+
+## Issue #191 repair (2026-08-23): `ParticipantNoProgressExit` revived
+
+### Root cause (pre-fix, mechanically proven)
+
+`ParticipantNoProgressExit` was unsatisfiable in every state: it conjoined
+`BridgeEffect(1 - wakeEpoch)` — whose bridge branch (lines 266-269) sets
+`bridgePending' = IF BridgeFiresFromParticipant THEN TRUE ELSE bridgePending`
+— while its own body assigned `bridgePending' = FALSE` (the one-shot consume
+at line 605). For a participant (`backendWaitParticipant = w`),
+`BridgeFiresFromParticipant` is TRUE, so the conjunction is
+`bridgePending' = TRUE ∧ bridgePending' = FALSE`, which is inconsistent:
+
+- TLC action coverage: `ParticipantNoProgressExit ...: 0:0` (never enabled,
+  zero successors).
+- Guard-reachability probe: `NotReachPnpExitGuard` is **violated** (1055
+  states reach the guard), so the deadness is the double-prime contradiction,
+  not an unreachable guard.
+- Consequence: `WF_vars(ParticipantNoProgressExit(w))` (`FairRetire` on the
+  participant side) was vacuous; the interrupted-0-progress participant exit
+  (exit class C, the E4/E5 caller-re-entry boundary) was entirely unmodeled.
+
+### C++ as-built participant exit path (the repair's authority)
+
+The participant exit is the MW-S2 no-progress terminate path
+(`src/async/scheduler.cpp:914-974`): `wait_one` returns 0 (no progress) →
+`backend_wait_active_.store(false)` (participant gate CLEARED before any
+signal, line 915) → Phase-D drain (lines 928-935) → classify `mw_s1`
+(ExecutableWork) → `continue` (line 942, the `~ExecutableWork` guard) →
+`external_wake_possible` → `continue` (line 957) → `global_terminate_.store(true)`
+(line 964) → **`signal_wake_locked()`** (line 966, wake publication #1) →
+`break` (line 974) → the common retire epilogue (lines 1216-1250) →
+**`signal_wake_locked()`** (line 1249, wake publication #2).
+
+Two distinct wake publications, both unconditional. The participant slot is
+cleared BEFORE the first signal (line 915), so neither signal re-arms the
+bridge (the `backend_wait_active_` gate is false).
+
+### Repair (faithful to the C++ epilogue)
+
+1. **Fuse the two wake publications into a single action** — matching #189's
+   retire precedent (the common epilogue fuses the two C++ signals into one
+   modeled action). The repaired action advances `wakeEpoch' = 1 - wakeEpoch`
+   (direct, no `BridgeEffect`) and clears `backendWaitParticipant' = NONE` and
+   `bridgePending' = FALSE` (the one-shot consume).
+2. **`~ExecutableWork` guard added** — the C++ line 942 reclassifies to
+   `mw_s1` and continues (refuses to exit) when executable work exists. The
+   pre-fix model lacked this guard, so the action could fire beside runnable
+   or running work (violating `Inv9NoStrandedRunnable`).
+3. **Participant slot cleared before signal** — `backendWaitParticipant' = NONE`
+   and `bridgePending' = FALSE` are assigned BEFORE the epoch advance, so the
+   signal does not re-arm the bridge (the `BridgeFiresFromParticipant` guard
+   is false when the action fires).
+4. **Last-alive classification** — `IF (∀v ∈ Workers: v = w ∨ ~workerAlive[v])
+   THEN runState' = "ReturnedStalled" ELSE runState' = runState`. The
+   participant exit is beside outstanding backend work or a bridge obligation
+   (the participant was parked waiting for it), so it is NEVER quiescent
+   (quiescence requires no backend outstanding).
+5. **Causal witness ghosts** — `participantExitFired` and
+   `participantExitEndedRun` (the last-alive branch). Set only inside the
+   action body (which conjoins the direct epoch advance), so a witness trace
+   with the ghost flipped proves the full as-built participant exit executed.
+
+### Inv8 and Inv10 refinements (D4-RM14 arm baseline + R2 transferable election)
+
+Reviving `ParticipantNoProgressExit` exposed two invariant violations that
+are NOT model defects — they are faithful encodings of the as-built C++
+semantics:
+
+- **Inv8BridgeReachesBackendPark** — the pre-repair invariant owed a bridge
+  to ANY parked participant beside a scheduler-domain publication. The C++
+  D4-RM14 arm baseline (`scheduler.cpp:770-795`) registers the commit-to-park
+  persistence BEFORE the park is exposed, so a publication landing between
+  the commit and the physical park is a PAST EVENT (the armed baseline makes
+  the upcoming `wait_one()` observe it). The refined Inv8 narrows the owed
+  set to DURING-RESIDENCY publications only (the `SchedulerDomainWakeDue`
+  predicate excludes `terminateFlag`, which is a past event when the
+  participant commits after another worker has already published termination).
+
+- **Inv10BackendProgressHasObserver** — the pre-repair invariant required an
+  observer beside backend work. The C++ R2 transferable election
+  (`scheduler.cpp:665-670`) elects the lowest-id ALIVE worker as the
+  participant, so a post-terminate participant (one worker has already exited
+  via the no-progress path, publishing `global_terminate_`) is LEGAL — the
+  surviving worker becomes the participant and observes the outstanding
+  backend work (the E4/E5 caller-re-entry boundary owns it). The refined
+  Inv10 exempts `terminateFlag` from the observer requirement (a post-terminate
+  participant is legal, the outstanding work is the caller's responsibility).
+
+### Non-vacuity witnesses (permanent gates)
+
+- `E9ParkWakeWitnessPnpExit.cfg` — checks `NoReachParticipantExitFired`;
+  expected **VIOLATED**. The CEX is the causal chain: a worker alive in
+  `Parked` phase as the backend participant → `ParticipantNoProgressExit`
+  fires → `workerAlive` TRUE→FALSE → `wakeEpoch` advances (departure wake) →
+  `backendWaitParticipant` cleared → the ghost `participantExitFired` flips.
+- `E9ParkWakeWitnessPnpEndedRun.cfg` — checks `NoReachPnpExitEndedRun`;
+  expected **VIOLATED**. Pins the last-alive branch: the participant is the
+  last alive worker, so its exit classifies the run `ReturnedStalled` (never
+  `ReturnedQuiescent`, because a participant exit is beside outstanding
+  backend work or bridge obligation). Each witness has its own cfg so TLC
+  verifies both.
+- `E9ParkWakeNegParticipantDead.tla/.cfg` — the EXACT pre-fix defect
+  (double-prime contradiction reintroduced). GENERATED from the current
+  positive model by `_gen_neg.py` (#191): the mutation restores
+  `BridgeEffect(1 - wakeEpoch)` in place of the repaired direct epoch
+  advance; the witness invariants **HOLD** here (fail-closed): a reintroduced
+  dead participant is detected.
+
+### Fairness (`FairRetire` on participant side) non-vacuity
+
+Under the `LivenessSpec`, TLC action coverage for
+`ParticipantNoProgressExit` is **162:176** (enabled/fired) — live, versus 0:0
+pre-fix. The witness CEX's State-2 shape (`Parked ∧ participant ∧
+~ExecutableWork ∧ ~ExternalWakePossible`) is a reachable state where the
+action is continuously enabled (only stuttering otherwise), so
+`WF_vars(ParticipantNoProgressExit)` is mechanically exercised.
+
+### State-space delta (PRE vs POST, safety)
+
+| config | PRE (pristine, dead action) | POST (repaired) |
+|--------|------------------------------|-----------------|
+| split-wait safety | 57944 generated / 18928 distinct / depth 27 | 64504 / 21664 / depth 29 |
+| reference safety | 62888 / 19872 | 69496 / 22608 |
+
+The +2736 distinct split-wait states are ALL the participant-exit and
+post-exit families (verified from a state dump: every new state has ≥1 dead
+worker who was the participant, `terminateFlag = TRUE`, and
+`participantExitFired = TRUE`, across `Active`-survivor and
+`ReturnedStalled` classifications). The ghost splits the same graph into
+18928 (`participantExitFired=FALSE`) + 2736 (`participantExitFired=TRUE`)
+states — the new families are disjoint from the pre-exit set, exactly as
+expected for states only reachable through a participant exit. No unexpected
+families appear.
+
+### Adversarial probes (2G, #191)
+
+One-rule mutants of the REPAIRED `ParticipantNoProgressExit`, each
+reintroducing a specific adjacent defect, checked against the repaired
+model:
+
+- **A — exact pre-fix double-prime** (the #191 defect itself): caught by
+  the permanent `NegParticipantDead` gate (both witness invariants HOLD,
+  fail-closed).
+- **B — departure wake BEFORE the participant slot is cleared**
+  (self-bridge rearm): **CAUGHT by `Inv6OneBackendParticipant`** — the
+  mutant keeps `backendWaitParticipant' = w` while `workerAlive'[w] =
+  FALSE`, leaving a DEAD participant in the slot. This proves the
+  as-built ordering (authority cleared before the departure signal,
+  `scheduler.cpp:915` precedes `:966`/`:1249`) is structurally
+  load-bearing, not cosmetic.
+- **C — participant cleared with NO departure wake** (both production
+  signals `:966`/`:1249` dropped): NOT CAUGHT — a documented model
+  boundary. The fused exit publishes `terminateFlag` (persistent
+  scheduler-domain state) atomically with the slot clear; the model's
+  park-return authority is the PERSISTENT per-domain wake state, not the
+  epoch parity (see "Model domain" above). The departure wake is a
+  promptness signal; correctness is carried by persistent state plus the
+  second epilogue signal. The model cannot express "wake dropped but
+  terminate published" as a distinct violation because the fused action
+  publishes both.
+- **D — `~ExternalWakePossible` guard dropped** (participant may exit
+  beside a registered external-wait): NOT CAUGHT — a documented model
+  boundary. The guard is a C++ progress decision (`scheduler.cpp:957`
+  re-loop); the model's terminal classification (exit class C → run ends
+  → the E4/E5 caller-re-entry boundary owns the wait) subsumes the
+  pending-wait handoff, so Life7's `runState # "Active"` escape holds.
+  The model cannot distinguish "participant exits beside a registered
+  external wait" from "run ends with the wait handed to the caller".
+- **E — sibling publication between wait return and termination** (the
+  D4-RM14 arm baseline / R2 transferable election families): this is the
+  `Inv8`/`Inv10` refinement driver. The repaired model PASSES the refined
+  invariants (post-terminate elected participants and pre-arm
+  publications are legal C++), and the `BuggyNoBridge` permanent gate
+  still catches the bridge-disabled defect (the owed set is narrower but
+  the detector still fires on a genuinely stranded participant).
+- **F — last-alive vs survivor-alive classification**: caught by the
+  permanent `WitnessPnpEndedRun` gate (the last-alive branch is
+  reachable and classifies `ReturnedStalled`).
+- **G — #189 retire witness still works**: `WitnessRetire` /
+  `WitnessTerminate` remain VIOLATED (permanent gates; the #189 repair
+  did not regress).
+- **H — #185 SplitWait semantics unchanged**: reference-config safety +
+  liveness still PASS (permanent gates; the reference domain's bounded
+  observation authority is untouched).
+
+Probes C and D are honest boundaries, not silent gaps: the model's
+persistent-state return authority and fused atomic exit intentionally
+cannot distinguish those promptness/progress-decision defects from the
+legal states they collapse into. The C++-level guarantee for C/D rests on
+the deterministic production tests (the `phase_g_backend_progress_wake`
+and no-progress-terminate tests) and the `scheduler.cpp:942/:957` guards
+themselves.
