@@ -297,3 +297,129 @@ anyone citing these gates must know:
 - `FairObservationTimeout == WF(EnterPhysicalPark)` is a legacy label: under
   SplitWait=TRUE there is no observation timeout; read it as
   "committed park entry eventually happens".
+
+## Issue #189 repair (2026-08-23): `RetireWorkerQuiescent` revived
+
+### Root cause (pre-fix, mechanically proven)
+
+`RetireWorkerQuiescent` was unsatisfiable in every state: it conjoined
+`BridgeEffect(1 - wakeEpoch)` — which primes `wakeEpoch'` and `bridgePending'`
+(lines 266-269) — while its own `UNCHANGED` list pinned both variables
+(`E9ParkWake.tla:594-610`). For `wakeEpoch \in {0,1}` the conjunction is
+inconsistent, so the action had zero successors:
+
+- TLC warning (pristine source): `The variable wakeEpoch was changed while
+  it is specified as UNCHANGED at line 609, col 20 to line 609, col 28`.
+- TLC action coverage: `RetireWorkerQuiescent ...: 0:0` (never enabled,
+  zero successors).
+- Guard-reachability probe: `NotReachRetireGuard` is **violated by the
+  initial state** — the guard (`workerAlive ∧ runState="Active" ∧
+  workerPhase[w]="Active" ∧ (Quiescent ∨ terminateFlag)`) is reachable, so
+  the deadness is the primed-write vs `UNCHANGED` contradiction, not an
+  unreachable guard.
+- Consequence: `WF_vars(RetireWorkerQuiescent(w))` (`FairRetire`) was
+  vacuous; any gate that appeared to prove retire-progress proved nothing.
+
+### C++ as-built retirement path (the repair's authority)
+
+Every `Scheduler::worker_loop` exit funnels through ONE retire epilogue
+(`src/async/scheduler.cpp:1216-1250`): hold `global_mtx_` → `--live_loop_workers_`
+→ `ws->active=false` → hold `ws->inbox_mtx`, move `local_runnable` to
+`pending_spawn_`, release → **unconditional `signal_wake_locked()`** →
+release. `signal_wake_locked()` (`scheduler_park_wake.cpp:128-157`) advances
+`wake_epoch_`, notifies, and bridges to the backend participant when
+`backend_wait_active_`. The exit classes (A last-idle quiescent, B
+terminate-observed, C MW-S2 no-progress, D E14-F1 stop) all share the
+epilogue; a fiber already running when termination lands is NOT preempted
+(the loop-top pop+run at `scheduler.cpp:511-592` precedes the terminate
+check), so runnable/running may remain after `global_terminate_`.
+
+### Repair (faithful to the C++ epilogue)
+
+1. **Keep `BridgeEffect(1 - wakeEpoch)`** — the C++ departure signal is
+   unconditional — and **drop `wakeEpoch`/`bridgePending` from the action's
+   `UNCHANGED`** (the contradiction).
+2. **Faithful terminal classification** — `runState' = IF last-alive THEN
+   (IF Quiescent THEN "ReturnedQuiescent" ELSE "ReturnedStalled") ELSE
+   runState`. Reviving the action exposed a dormant model defect: the old
+   `"ReturnedQuiescent"`-if-last-alive rule misclassified a
+   terminate-observed exit at non-quiescence (e.g. an external ready or
+   runnable published after a sibling's retire) as `ReturnedQuiescent`,
+   violating `InvLife5QuiescenceClassifierDefined`. C++ never labels an
+   observer exit "quiescent" (it just exits; `run()` returns void); the
+   faithful label is `ReturnedStalled` at non-quiescence (the
+   terminate-observed / E4-E5 caller-re-entry boundary).
+3. **`InvLife3LiveExternalParkAdmitted` scoped to `~terminateFlag`** — the
+   revival also exposed the legal-C++ state where a survivor keeps running
+   (and suspending) its current fiber after termination and lands in
+   MWS3 + `terminateFlag`; there parking is deliberately refused
+   (`ParkAdmitted` requires `~terminateFlag`; the worker breaks at
+   `scheduler.cpp:1150-1156`). The invariant's antecedent is now scoped to
+   the non-terminated run, matching the model's own `ParkAdmitted` rule.
+4. **`vars` dedupe** — the duplicate `terminateFlag` entry removed.
+5. **Causal witness ghost `retireFired`** — set only inside
+   `RetireWorkerQuiescent`'s body (which conjoins `BridgeEffect`), so a
+   witness trace with `retireFired = TRUE` proves the full as-built retire
+   step executed, including the departure wake.
+
+### Non-vacuity witnesses (permanent gates)
+
+- `E9ParkWakeWitnessRetire.cfg` — checks `NoReachRetireFired`; expected
+  **VIOLATED**. The CEX is the causal chain: a worker alive in `Active`
+  phase → `RetireWorkerQuiescent` fires → `workerAlive` TRUE→FALSE →
+  `wakeEpoch` advances (departure wake) → the ghost `retireFired` flips.
+- `E9ParkWakeWitnessTerminate.cfg` — checks `NoReachQuiescentTerminate`;
+  expected **VIOLATED**. Pins the all-retired
+  `ReturnedQuiescent`-at-quiescence terminal chain (reachable only through
+  a last-alive `RetireWorkerQuiescent`). Each witness has its own cfg so
+  TLC verifies both (it stops at the first violation otherwise).
+- `E9ParkWakeNegRetireDead.tla/.cfg` — the EXACT pre-fix defect
+  (contradiction reintroduced). The witness invariants **HOLD** here
+  (fail-closed): a reintroduced dead retire is detected. Reachable-state
+  counts / semantic-graph cardinality match the pre-#189 model (46456
+  generated / 14472 distinct; the mutant also carries the `retireFired`
+  ghost and the post-fix `InvLife3` scope), and the positive invariants
+  still pass on the mutant — the witness gate is the sole detector, which
+  is why #189 existed.
+
+### Fairness (`FairRetire`) non-vacuity
+
+Under the `LivenessSpec`, TLC action coverage for
+`RetireWorkerQuiescent` is **904:1720** (enabled/fired) — live, versus 0:0
+pre-fix. The witness CEX's State-2 shape (`Quiescent ∧ terminateFlag ∧ the
+other worker Active`) is a reachable state where the action is continuously
+enabled (only stuttering otherwise), so `WF_vars(RetireWorkerQuiescent)`
+is mechanically exercised. Honest note: no named liveness *property*
+changes verdict if the action is disabled (probe: dropping the departure
+wake fails nothing — `terminateFlag` itself is the scheduler-domain wake
+authority, and at true quiescence no backend participant exists for the
+bridge); the dedicated non-vacuity witness is the detector, not a liveness
+property.
+
+### State-space delta (PRE vs POST, safety)
+
+| config | PRE (pristine, dead action) | POST (repaired) |
+|--------|------------------------------|-----------------|
+| split-wait safety | 46456 generated / 14472 distinct / depth 22 | 57944 / 18928 / depth 27 |
+| reference safety | 51240 / 15376 | 62888 / 19872 |
+
+The +4456 distinct split-wait states are ALL the retire/post-retire
+families (verified from a state dump: every new state has ≥1 dead worker
+and `terminateFlag = TRUE`, across `Active`-survivor, `ReturnedQuiescent`,
+`ReturnedStalled`, and `Shutdown` classifications). The ghost splits the
+same graph into 14472 (`retireFired=FALSE`) + 4456 (`retireFired=TRUE`)
+states — the new families are disjoint from the pre-retire set, exactly as
+expected for states only reachable through a retirement. No unexpected
+families appear.
+
+### Known separate defect (documented, NOT repaired here)
+
+`ParticipantNoProgressExit` is ALSO dead in every config (pre-existing, and
+still 0:0 after this repair), via a DISTINCT root cause: its body conjoins
+`BridgeEffect(1 - wakeEpoch)` — whose bridge branch sets `bridgePending' =
+TRUE` (a participant exists) — AND an explicit `bridgePending' = FALSE`
+(one-shot consume), a double-prime contradiction. Its guard IS reachable
+(probe: 1055 states), so the interrupted-0-progress participant exit (exit
+class C) is entirely unmodeled. This is out of #189's scope (different
+action, different root cause); registered in the debt register and the
+manifest notes, and tracked independently in issue #191.
