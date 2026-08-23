@@ -326,6 +326,17 @@ and does not replace, the deterministic production tests
 
 ## Audit note (2026-08-18): reference-config gate strength
 
+> **Superseded by the #185 repair (2026-08-23, section below).** The
+> unconditional `~SplitWait` escape this note describes was the B6 defect:
+> it modeled ALL reference parks as timeout-bounded, which is stronger than
+> the C++ truth. Post-#185 the escape is scoped to ENTRY-ARMED parks
+> (`observationArmed[w]`), a causeless-return detector
+> (`InvNoCauselessReturn`) is part of `Inv` in BOTH configs, and both the
+> armed and un-armed reference park classes have reachability witnesses.
+> The evidence-hierarchy point stands unchanged: the load-bearing
+> no-lost-wake evidence remains the SplitWait=TRUE gates. Text below kept
+> as the historical B6 record.
+
 `LeaveParkEnabled` contains an unconditional `~SplitWait` disjunct for
 scheduler-domain parks. This is INTENTIONAL: it models the E9-era bounded
 observation rule (the reference topology's parks are timeout-bounded, so a
@@ -598,7 +609,7 @@ action is continuously enabled (only stuttering otherwise), so
 
 | config | PRE (pristine, dead action) | POST (repaired) |
 |--------|------------------------------|-----------------|
-| split-wait safety | 57944 generated / 18928 distinct / depth 27 | 64504 / 21664 / depth 29 |
+| split-wait safety | 57944 generated / 18928 distinct / depth 27 | 64504 / 21664 / depth 27 |
 | reference safety | 62888 / 19872 | 69496 / 22608 |
 
 The +2736 distinct split-wait states are ALL the participant-exit and
@@ -669,3 +680,131 @@ legal states they collapse into. The C++-level guarantee for C/D rests on
 the deterministic production tests (the `phase_g_backend_progress_wake`
 and no-progress-terminate tests) and the `scheduler.cpp:942/:957` guards
 themselves.
+
+## Issue #185 repair (2026-08-23): reference escape made faithful (`observationArmed`)
+
+### Root cause (the B6 STOP classification, mechanically confirmed)
+
+Pre-#185, `LeaveParkEnabled`'s scheduler-domain branch contained an
+UNCONDITIONAL `\/ ~SplitWait` disjunct: every reference-config park was
+modeled as always-returnable, standing for "reference parks are
+timeout-bounded (E9 bounded observation, DIV-05)". That claim is STRONGER
+than the C++ truth:
+
+- The 2 ms `kParkBackstop` (`scheduler_park_wake.cpp:400`) applies only
+  when `bounded_backend_observation` was armed at park entry or a deadline
+  is active (`:455`, `:468`); with no deadline and no backend observation
+  the park is UNBOUNDED — "No deadline and no backend observation:
+  unbounded park (epoch / terminate / runnable predicate only). No periodic
+  wake exists." (`:413-415`).
+- Only the reference MIXED-WAKE park arms observation at entry:
+  `park_on_wake_source(ws, /*bounded_backend_observation=*/true)`
+  (`scheduler.cpp:818`). The general MW-S3 idle park does not
+  (`scheduler.cpp:988-999`, `:1188`, and the explicit no-periodic-wake
+  comment at `:1173-1178`).
+
+So the unconditional escape licensed causeless returns for UN-ARMED
+reference parks (a real C++ park of the unbounded class), and
+`InvLife1DrainNoMW3Park` (then unscoped: every Drain+MW-S3 park must be
+leave-enabled) held ONLY because of that unfaithful escape. Classification
+(B6): CONTRACT/MODEL CLAIM MISMATCH — the model claimed more than the C++
+guarantees; the repair follows the C++ (never vice versa), and no
+invariant was weakened merely to regain green.
+
+### C++ as-built park table (the repair's authority)
+
+| park class (C++) | bound | return authority |
+|------------------|-------|------------------|
+| reference MIXED-WAKE park (`scheduler.cpp:818`, observation armed at entry) | 2 ms `kParkBackstop` | bounded observation re-check |
+| MW-S3 idle / wake-domain park (`:988-999`, `:1188`, `:1173-1187`) | UNBOUNDED (unless a deadline) | cv predicate: epoch moved, `global_terminate_`, or local runnable |
+| backend participant park (split-wait, Phase G domain) | unbounded | `backendReady` or the bridge interrupt |
+
+### Repair (faithful to the C++)
+
+1. **Ghost `observationArmed[w]`** — set to `ExternalWakePossible` at
+   SCHEDULER-park entry (the entry capture of "an external wake-capable
+   wait was registered", mirroring the C++ entry-time arming at
+   `scheduler.cpp:818` and the `ready_flag_observation` entry capture at
+   `:708`), cleared on park leave and on non-parking branches; carried
+   through all `UNCHANGED` lists.
+2. **`LeaveParkEnabled` escape scoped** — `(~SplitWait /\
+   observationArmed[w])`: only ENTRY-ARMED reference parks carry the
+   bounded-observation return. Un-armed reference parks return only on a
+   real scheduler-domain cause (`SchedulerDomainWakeDue`) or run end,
+   exactly the unbounded C++ park.
+3. **`InvLife1DrainNoMW3Park` scoped to armed parks** — the consequent is
+   now `(workerPhase[w] = "Parked" /\ observationArmed[w]) =>
+   LeaveParkEnabled(w)`. Probe U (below) proves the unscoped law is FALSE
+   against the faithful escape: the scoping is forced by C++ truth, not a
+   convenience.
+4. **`Inv10` comment corrected** — the 2 ms bound belongs ONLY to the
+   entry-armed reference park; the general MW-S3 idle park is unbounded.
+5. **`InvNoCauselessReturn` detector added to `Inv` (BOTH configs)** —
+   forbids a scheduler-domain park returning with NO cause: not the
+   backend participant wake, not a scheduler-domain wake, not entry-armed
+   observation, run still Active.
+
+### Non-vacuity witnesses (permanent gates)
+
+- `E9ParkWakeWitnessRefObservation.cfg` — checks
+  `NoReachRefObservationPark`; expected **VIOLATED**. An entry-armed
+  reference park is reachable: the faithful escape is a real, exercised
+  return class (the reference 2 ms observation authority).
+- `E9ParkWakeWitnessRefUnbounded.cfg` — checks `NoReachUnboundedRefPark`;
+  expected **VIOLATED**. An UN-armed reference park is reachable: the
+  reference config genuinely explores the unbounded park (it was not
+  retired from the graph to make the detector vacuous), and the detector
+  is checked against real reachable states.
+- `E9ParkWakeWitnessRefDrainMWS3.cfg` — checks
+  `NoReachRefDrainMWS3ArmedPark`; expected **VIOLATED**. The scoped
+  `InvLife1` antecedent (Drain + MW-S3 + armed park) is reachable: the
+  law is non-vacuous after scoping.
+
+### Fail-closed negatives (GENERATED by `_gen_neg.py`, SplitWait=FALSE)
+
+Both are EXACT mutants — on each, the full safety set minus the detector
+PASSES; only `InvNoCauselessReturn` fires.
+
+- `NegOldEscape` — the pre-#185 unconditional `\/ ~SplitWait` escape
+  reintroduced: an un-armed park returns with no wake due (causeless
+  return). `InvNoCauselessReturn` **VIOLATED**.
+- `NegNaiveEscape` — the naive "check `ExternalWakePossible` at leave"
+  escape: a park armed at entry can be left after the flag has since
+  cleared, again a causeless return. **VIOLATED**. This pins WHY the
+  repair uses an entry-captured ghost rather than re-reading the live
+  condition at return.
+
+### Adversarial probes (2G, #185)
+
+- **U — unscoped `InvLife1` vs the faithful escape**: VIOLATES in the
+  reference config. The pre-#185 law is genuinely false once the escape
+  is faithful; the scoping is load-bearing. (This is the mechanical
+  confirmation of the B6 classification.)
+- **G — ghost capture removed** (scheduler-park entry sets
+  `observationArmed' = FALSE`): BOTH capture-dependent witnesses
+  (`NoReachRefObservationPark`, `NoReachRefDrainMWS3ArmedPark`) HOLD —
+  the witness gates fail closed if the capture is dropped; they genuinely
+  test the entry capture, not incidental reachability.
+- **Specificity** — both escape mutants PASS every other safety
+  invariant: the detector is the sole catcher (EXACT negatives).
+- **SplitWait=TRUE unchanged** — split safety/liveness PASS and the
+  Phase-G bridge evidence (`Inv8` + `BuggyNoBridge`) is untouched
+  (permanent gates in the 19-gate verifier run).
+- **Detector soundness on the correct model** — both positive cfgs check
+  the full `Inv` conjunction (which now includes the detector): PASS in
+  both configs.
+
+### State-space delta (PRE vs POST, safety)
+
+| config | PRE (master 8c08e46) | POST (#185) |
+|--------|------------------------|-------------|
+| split-wait safety | 64504 generated / 21664 distinct / depth 27 | 71304 / 23984 / depth 27 |
+| reference safety | 69496 / 22608 / depth 27 | 75904 / 24800 / depth 27 |
+
+Under SplitWait=TRUE the transition relation is UNCHANGED (the escape
+conjunct is FALSE there either way), so the +2320 distinct states are
+purely the `observationArmed` ghost splitting states whose
+scheduler-park entry-time `ExternalWakePossible` history differs. Under
+the reference config the delta mixes those ghost splits with the REMOVED
+causeless leave transitions (the un-armed park no longer has a causeless
+out-edge). No state family disappears from the split graph.
