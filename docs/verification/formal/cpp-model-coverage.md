@@ -1,11 +1,12 @@
 # C++ ↔ TLA+ Model Coverage Matrix
 
-> Current developer document (2026-08-18 formal realignment audit,
-> `audit/formal-cpp-tla-realignment`). This is the authoritative map of what
-> each TLA+ suite abstracts, which C++ code owns the protocol, where the
-> executable regression bridge lives, and what remains debt. The suite IDs
-> and gate counts match `spec/tla/manifest.json`; per-suite details live in
-> each `spec/tla/*/README.md`.
+> Current developer document (2026-08-18 formal realignment audit
+> `audit/formal-cpp-tla-realignment`; debt register rebaselined 2026-08-23,
+> issue #186). This is the authoritative map of what each TLA+ suite
+> abstracts, which C++ code owns the protocol, where the executable
+> regression bridge lives, and what remains debt. The suite IDs and gate
+> counts match `spec/tla/manifest.json`; per-suite details live in each
+> `spec/tla/*/README.md`.
 >
 > Governing principle: **TLA+ serves the C++ design** (AGENTS.md §17). The
 > C++ public contract and production implementation are the source of truth;
@@ -28,7 +29,7 @@ abstraction, materially incomplete scope) · `DEBT` (unmodeled, recorded) ·
 | Multi-worker admission classification + blocking-park commit (MW-S1/S2/S3, re-drain before commit) | `src/async/scheduler.cpp` (`classify_locked_impl`, Phase A/B elect-commit) | e7-multiworker-progress | MWInv2/3/6/7 | none (liveness carried by e9) | BuggyAdmission (commit skips re-drain), BuggyOutstanding (classifier from registrations) — both name-asserted | scheduler classification/park-commit tests | GOOD (~70% overlaps e9 for admission safety; retained for MWInv7 + the two negatives) |
 | Runnable-ownership transfer / work stealing (owner/exec/wait triple authority) | `src/async/scheduler.cpp` (`try_steal`, `fiber_owner_`, wake routing), `scheduler_park_wake.cpp` | e8-ownership-transfer | 10 inv (`InvLocalMatchesOwner` etc.) | none | BuggyOwner (steal without owner transfer) → `InvLocalMatchesOwner` — **now name-asserted by the audit** | scheduler steal/routing tests | REPAIRED (empty binding filled; verifier upgraded from any-cex to named; issue #184 retired the unreachable `W*Inbox`/`MoveInboxToLocal`/`InvInboxMatchesOwner` compatibility tier left after #170 — pre-change `InvNoInboxTicket` probe PASSed 341/100/11, producer-injection probe FAILed; checked graph unchanged) |
 | Suspend-switch steal exclusion (I47-F2 `suspend_switch_pending`: wake-before-physical-context-save window vs work stealing) | `src/async/scheduler.cpp` (`commit_suspend_locked`, `run_next_on`, `try_steal`), `include/sluice/async/scheduler.hpp` (`WorkerState::suspend_switch_pending`), `src/async/fiber_ctx.cpp` (physical save) | **e8-suspend-switch (NEW, closes MODEL-007(a) from audit #162 / umbrella #171)** | 4 inv (`InvNoResumeBeforeContextSaved` core — only unsafe RESUME forbidden, deliberately not pre-save ticket movement; `InvUnsavedSuspensionProtected` protocol authority; E7-T2 ticket structure; pending-committed binding) | none (safety-only by design; 2 workers / 1 fiber / 1 resolver) | NEG-SS1/2/3 cfg-flip defects (ignore-pending steal / old P1-1 late raise / old Select early clear) each name-asserted + NEG-SS2 chain gate + 3 specificity cfgs (co-victim exclusions documented per-defect) | `tests/select_multi_worker_test.cpp` `suspend_lw_mw_steal_before_switch_excluded` (seam-parked window + steal-refusal + mechanical counts), `tests/event_primitive_test.cpp` I47-F1 snapshot (asserts the R1 transient itself) | NEW (SC protocol abstraction only — no C++ weak-memory claim; comment-drift at the `suspend_switch_pending` field docs corrected to the as-built raise-under-G ordering in the same change) |
-| Scheduler/backend wake convergence (park domains, epoch, split-wait bridge, R1–R4) | `src/async/scheduler_park_wake.cpp`, `scheduler.cpp` (park commit, `signal_wake_locked`, bridge) | e9-park-wake | Inv2/4/6/8/9/10 + Life1/3/5 | Life2/4/7/8 under worker/self fairness (producers deliberately unfair — justified) | DrainParks (temporal), MixedSource, PrePark (pre-Phase-G snapshots), NoBridge (one-line Phase-G mutant) | scheduler park/wake deterministic tests, `threadpool_wait_drain_deadlock_test` | REPAIRED (reference-config vacuity: the unconditional `~SplitWait` LeavePark disjunct made Inv2/Inv4/InvLife1 and Life2/Life4 near-trivial under SplitWait=FALSE — see suite README note; empty binding filled) |
+| Scheduler/backend wake convergence (park domains, epoch, split-wait bridge, R1–R4) | `src/async/scheduler_park_wake.cpp`, `scheduler.cpp` (park commit, `signal_wake_locked`, bridge) | e9-park-wake | Inv2/4/6/8/9/10 + Life1/3/5 | Life2/4/7/8 under worker/self fairness (producers deliberately unfair — justified) | DrainParks (temporal), MixedSource, PrePark (pre-Phase-G snapshots), NoBridge (one-line Phase-G mutant) | scheduler park/wake deterministic tests, `threadpool_wait_drain_deadlock_test` | REPAIRED, then **vacuity characterized 2026-08-23 (issue #185, B6 STOP)**: the unconditional `~SplitWait` LeavePark disjunct mechanically demonstrated unfaithful to the as-built park (`scheduler_park_wake.cpp:412-469` — only an entry-armed observation or deadline bounds the park); the faithful escape makes `InvLife1DrainNoMW3Park` fail with a legal-C++ CEX → **CONTRACT/MODEL CLAIM MISMATCH**, repair routed to #185 follow-ups (register row: ACTIVE-NOW); see the debt register below and the suite README note |
 | Spawn-to-busy-worker wake obligation (#115: a runnable ticket on a busy worker's queue must advance the wake epoch; committed-parked peer + commit-recheck refusal) | `src/async/scheduler.cpp` (`spawn`/`spawn_on`/`route_runnable_locked`, `unguarded_progress_pending_locked`), `src/async/scheduler_park_wake.cpp` (`signal_wake_locked`, park commit + cv predicate), `include/sluice/async/scheduler.hpp` | **spawn-wake-epoch (NEW, closes MODEL-007(d) from audit #162 / umbrella #171; child #176; historical defect #115)** | 4 inv (wake obligation — the violating state IS the persistent stranded shape; baseline soundness; steal-requires-awake; consumed-requires-publication) | none (safety/accounting only — the strand is the violated state predicate, no temporal formula; no fairness) | NegNoSignal (#115 pre-fix publication: push + inert inbox notify, no epoch advance) + NegNoRecheck (pre-G1 consumed-baseline commit) — both EXACT historical defect behaviors, name-asserted on `InvWakeObligation`; NegNoRecheck excludes entailed co-victim `InvStealRequiresAwake` | `tests/issue115_runnable_publication_wake_test.cpp` (seam-parked W0 + pinned-busy W1 + strictly post-commit production spawn/spawn_on) | NEW (SC abstraction; two-layer protection — publication signals + commit recheck — each with its exact historical mutant) |
 | Worker-retirement runnable-ticket rescue (G1 epilogue: a worker leaving the loop must move local_runnable tickets to the pre-run domain; survivor loop-top redispatch re-records the dead owner) | `src/async/scheduler.cpp` (worker_loop retire epilogue :1230-1270, loop-top pending_spawn_ pop + fiber_owner_ re-record :485-545, run() setup redistribution :383-393), `include/sluice/async/scheduler.hpp` (WorkerState::active/loop_exited) | **worker-retire-rescue (NEW, closes MODEL-007(e) from audit #162 / umbrella #171; child #178)** | 4 inv (no ticket on a retired worker's queue; single live ticket per fiber — transport never publishes; runnable fiber's ticket recoverable from an ACTIVE queue or the pre-run domain; owner/location consistency with the dead-owner-rides-the-ticket semantics) | none (safety only; retire-with-empty-queue and the #161 idle-dance terms are outside — e12's domain) | NegNoRescue (pre-G1 strand) / NegRescueCopies (copy-not-move) / NegNoRerecord (dispatch drops the owner re-record) — one-rule cfg flips, all name-asserted + 3 specificity cfgs | C++ bridge classified as CAUSAL SEAM + ADJACENT BRIDGES (`WorkerState::loop_exited`, phase_g no-progress-exit stranded-inbox shape, the D2 setup redistribution in issue161_idle_dance) — no exact deterministic topology assertion exists (coverage note, review-fix) | NEW (review-fix: retire guarded to the unconsumed-ticket epilogue state; RunFiber carries make_running's Runnable precondition; 5 strengthened witnesses incl. the full survivor-resume chain) |
 | CancelToken request-epoch isolation (reuse = `clear()`+`request()` + per-consumer `acked_epoch`; single-shot delivery per epoch per consumer **between the two explicit re-arm authorities** — token `rearm()` and per-consumer `reset_acknowledgement()`; protection (protected cancel-point) blocks delivery; the ADR `cancel_rearm_re_enables_delivery` / `cancel_clear_then_request_is_a_fresh_request` sticky-ack semantics) | `include/sluice/async/cancel.hpp`, `src/async/cancel.cpp` (`request`/`rearm`/`clear`/`reset_acknowledgement`/`check_cancel`, atomic `state_` bit 0 pending + request-epoch bits 1..63; ADR-cancel-request-epoch), consumers `future.hpp` / `group.hpp` / `application_runtime.cpp` (Group shares one token across tasks) | **cancel-token-epoch (NEW, closes MODEL-007(c) from audit #162 / umbrella #171; child #180)** | 7 inv (`InvSingleShotPerEpoch` — review-fix restated law: no duplicate delivery WITHOUT an explicit re-arm authority, `dupDelivered` = a delivery with `acked[c]=epoch`; `InvNoDeliveryWhenIdle`; `InvProtectionBlocksDelivery`; `InvClearRemovesIntent`; `InvNoStaleAckStarvesDelivery`; `InvDeliveredWasRequested`; `InvAckIsRealEpoch`) | none (safety-only; rearm() is the alternative generation-advance path, no fairness clause) | NEG-CT1..5 one-rule cfg flips, name-asserted (sticky-bool ack / clear-keeps-pending / drop single-shot / drop pending gate / drop protection) + 5 specificity cfgs (documented entailed co-victim exclusions, e.g. NegStickyAck ⊂ InvNoStaleAckStarvesDelivery) + 9 reachability witnesses (clear+request SAME-consumer reuse pinned on the fresh request's exact epoch `lastClearedEpoch + 1` — round-3 tightening, so a clear→request→rearm→deliver-later-epoch chain cannot impersonate it; shared-consumer redelivery; protected-request SAME-consumer blocked-not-delivered on per-consumer `blockedCheckedEpochs[c]`; rearm SAME-consumer redelivery pinned on `RearmedFromEpoch`; reset_acknowledgement per-consumer re-arm; cleared-idle no delivery) | `tests/cancel_token_test.cpp` (`cancel_rearm_re_enables_delivery`, `cancel_clear_then_request_is_a_fresh_request` — ADR pre-fix RED / post-fix GREEN; `cancel_shared_token_two_consumers_deliver_and_rearm` executes `b.reset_acknowledgement()` — the per-consumer re-arm bridge) | NEW (AS-BUILT MODELED — no C++ defect candidate, zero production edits; request-epoch not task-incarnation; SC protocol abstraction only; review-fix round: `reset_acknowledgement` modeled, single-shot restated with its explicit re-arm authorities, the four key witnesses same-consumer-pinned with impersonation continuations proven excluded; round-3: fresh-request witness tightened to `lastClearedEpoch + 1`, the fake rearm chain proven excluded by an INIT probe) |
@@ -115,14 +116,75 @@ obligation that must not be misread as a leaf guarantee:
   upgraded from any-counterexample to **named-invariant** assertions
   (matching what the manifest always claimed).
 
-## Debt register (with revisit triggers)
+## Debt register (rebaselined 2026-08-23, issue #186)
 
-| Debt | Trigger |
-| ---- | ------- |
-| request-arena multi-slot ready-ring ORDER (capacity-2 variant) | any change to the Decision-9 ordering rule |
-| RequestArena + backend-progress compositional refinement (discharging the Layer-B WF obligations against the real submit/progress loops instead of assuming them) | a production backend starts driving reap/enqueue liveness compositionally, or any suspected lost-progress defect between submit path and progress loop |
-| e9 reference-config (SplitWait=FALSE) gates are weaker than they look (vacuity note) | next e9 model edit; fold the reference exit conditions into real wake-source predicates |
-| e7 into e8 fold-in via `StealEnabled` | next e7/e8 protocol change |
-| e9 pre-Phase-G negative snapshots as one-line mutants | next e9 negative addition |
-| uring full submission path (RequestArena interplay) under real liburing | already partially covered via request-arena + d1; revisit on Uring Phase F restart |
-| e12-event deadline-precedence admission (SET beats due) unmodeled | next event admission change |
+Every entry was re-audited against current `master` (5227eb2, post-#187): the
+register format now records, per debt, its classification, the exact evidence
+boundary today, why it is not being paid now, the revisit trigger, and the done
+condition. Classes: `ACTIVE-NOW` (known current defect; repair due — a row may
+route the payment to a specific reviewed change) · `TRIGGERED-DEFERRED`
+(trigger fired; repair scoped and evidenced but blocked on a reviewed change)
+· `ON-TOUCH` (pay when the trigger fires; idle otherwise) · `PHASE-BOUND`
+(blocked on a scheduled phase) · `PLATFORM-BOUND` (blocked on an environment)
+· `COVERAGE-BOUNDARY` (a deliberate authority split, not an omission) ·
+`RESOLVED` / `RETIRED` / `UNKNOWN`.
+
+| Debt | Class | Current evidence boundary | Why not now | Revisit trigger | Done condition |
+| ---- | ----- | ------------------------- | ----------- | --------------- | -------------- |
+| request-arena multi-slot ready-ring ORDER (capacity-2 variant) | ON-TOUCH | single-slot suite: 18 inv, NEG-RA-1..6, W1–W5, C++ C2b–C2e mutation matrix; post-audit churn in `request_arena.hpp` (b50cc41 docs, 521c081 phase-g tests) contains **zero** ready-ring hunks — the Decision-9 ordering rule is unchanged since the audit | no ordering-rule change; a capacity-2 model without a driving defect is ceremonial (AGENTS.md §17) | any change to the Decision-9 ready-ring FIFO ordering rule | capacity-2 suite variant in `verify-request-arena.sh` with its own negative proving the ORDER law can fail |
+| RequestArena + backend-progress compositional refinement (discharge the Layer-B WF obligations against the real submit/progress loops instead of assuming them) | COVERAGE-BOUNDARY | leaf suite CONDITIONAL on WF(Enqueue)/WF(Reap) by design; `record_canceled` still has no production caller; no backend composes reap/enqueue liveness today | the Layer-A/Layer-B authority split is the reviewed design (PR #125 P1); discharging Layer-B obligations requires a backend that actually composes — none exists yet | a production backend starts driving reap/enqueue liveness compositionally, or a suspected lost-progress defect between submit path and progress loop | a compositional (or focused-loop) model discharging both WF obligations against the real call sites, with a negative control |
+| e9 reference-config (SplitWait=FALSE) gate vacuity | **ACTIVE-NOW** (2026-08-23, issue #185 B6 STOP) | mechanically characterized: ghost detector `InvNoCauselessReturn` fires on the as-shipped `~SplitWait` escape AND on the naive `ExternalWakePossible` repair; the C++-faithful armed-observation escape (mirroring `scheduler.cpp:988-999` + `scheduler_park_wake.cpp:412-469`) makes `InvLife1DrainNoMW3Park` fail with a CEX whose C++ counterpart is legal (terminate-mediated convergence; `Life2DrainMWS3Returns` holds — liveness-minus-Life1 PASS). Classification: **CONTRACT/MODEL CLAIM MISMATCH**. The `RetireWorkerQuiescent` dead action found alongside it is a distinct root cause, registered as its own row below (#189). Full matrix: #185 STOP comment | not deferred by priority — the defect is current and mechanically demonstrated; this register-only rebaseline (#186) carries no semantic model repairs (B6), so the repair is routed to a separate reviewed e9 change under #185 follow-ups 1–3 (reformulate/scope InvLife1, correct the `E9ParkWake.tla:860-864` comment) | the #185 follow-up change — i.e. the next e9 semantic edit | e9 model carries the as-built escape; InvLife1 re-expressed (temporal) or scoped to armed parks with negative controls; reference-config gates citable as signal-correctness evidence |
+| e9 `RetireWorkerQuiescent` dead transition → `FairRetire` vacuous | **ACTIVE-NOW** (child issue #189) | static + mechanical: the action (`E9ParkWake.tla:594-610`) conjoins `BridgeEffect(1 - wakeEpoch)` — which primes `wakeEpoch'`/`bridgePending'` (lines 266-269) — while its own `UNCHANGED` list pins both variables; unsatisfiable for `wakeEpoch ∈ {0,1}` in **every** config, so the action is dead and `WF_vars(RetireWorkerQuiescent(w))` (`FairRetire`) proves nothing; TLC emits "changed while it is specified as UNCHANGED" on the pristine source. Co-located hygiene: the `vars` tuple (lines 696-701) lists `terminateFlag` twice | distinct root cause from the SplitWait row above (found during #185 but dead in every config); the repair must decide the as-built retire shape against the C++ retire path — routed to #189, not carried by this register-only rebaseline | the #189 repair change | contradiction repaired to the as-built shape; reachability witness proving the retire action fires; fairness gates rerun with `FairRetire` non-vacuous; negative/mutation proof if practical |
+| e7 into e8 fold-in via `StealEnabled` | ON-TOUCH | both suites green with name-asserted negatives; e7 ⊂ e8 recorded in the duplication ledger; no e7/e8 protocol change since the audit (post-audit churn is vocabulary only: #170 comment alignment and #187's E8-suite vocabulary retirement, both merged — neither touched the steal/publication protocol) | churning a passing gate without a driving defect; the fold-in is a simplification, not a correctness need | next e7/e8 protocol change | one suite with a `StealEnabled` CONSTANT flipping the steal law; e7's historical duplicate-publication negative preserved as a cfg constant assignment |
+| e9 pre-Phase-G negative snapshots (BuggyPrePark, BuggyMixedSource) as one-line mutants | ON-TOUCH | both snapshots still name-assert the right named properties (~1140 duplicated lines); #170 (2026-08-22) maintained their comments — they are actively kept-correct duplicates, not rotting ones | pure cleanup without a semantic driver; snapshot regeneration touches negative evidence and needs its own review | next e9 negative addition | snapshots regenerated as one-line mutants of the main module by a generator with a `--check` freshness gate (same pattern as e12-async-mutex M4/M5 and the rwlock negatives) |
+| uring full submission path (RequestArena interplay) under real liburing | PLATFORM-BOUND | request-arena + d1-poison cover the abstracted arena/ledger paths with stub-safe evidence; **note**: the production submission transaction churned post-audit (7f74a65 centralization, 1a6de37 Stage-0 ring-gate alignment) — the C++ shape a future model must abstract has changed, though no abstracted C++ bridge was affected | no real-liburing environment in the default gate; Uring Phase F is not scheduled | Uring Phase F restart, or a real-liburing defect report | submission-path model (or documented compositional argument) validated with real liburing runs, reported separately from stub evidence (AGENTS.md §16.5) |
+| e12-event deadline-precedence admission (SET beats due) unmodeled | ON-TOUCH | e12-event E1/E2/E3/E5/E6 + NEG-1..3 green; the timed-admission precedence pattern IS modeled one suite over (e12-rwlock `InvResourceFirstDeadline` + the DeadlinePrecedence negative, MODEL-003); post-audit `scheduler_event.cpp` churn (7e9dbb6) was dead-call removal, not admission | no event admission change since the audit; the rwlock model pins the pattern if the event side ever adopts it | next event admission change | e12-event models the set-vs-due admission order with a precedence negative mirroring the rwlock control |
+
+**Retirement check (2026-08-23, post-#187): none of the eight rows is
+RESOLVED or RETIRED.** Each was re-verified live against `master`: the
+request-arena multi-slot scope note still matches `spec/tla/manifest.json`
+(`coverage_gaps` entry `request-arena-lifecycle`, `PARTIALLY MODELED`); the
+e9 vacuity debt upgraded from an informational note to ACTIVE-NOW with
+attached evidence, and the `RetireWorkerQuiescent` dead action (#185
+co-finding, distinct root cause) was registered as a new eighth row (#189)
+rather than folded into it; #187's E8 vocabulary retirement retired model
+vocabulary only — no registered debt; the remaining five have un-fired
+triggers and accurate boundaries.
+
+**Marker audit (2026-08-23):** debt/vacuity markers are consolidated in
+three authoritative places — this register and matrix, the
+`formal-models.md` coverage-gap entry, and `spec/tla/manifest.json`
+(`coverage_gaps`). Everything else carrying `vacuity`/`unmodeled`/`DEBT`
+wording lives under `docs/history/` (immutable audit/review records) and is
+correctly scoped there. No stray `TODO`-formal marker exists outside
+history. No marker contradicts the register; the one wording that the #185
+evidence now qualifies — the e9 README's "reference topology's parks are
+timeout-bounded" rationale for the unconditional escape (true only for the
+MW-S2 MIXED-WAKE participant park, `scheduler.cpp:818`) — is recorded in the
+e9 ACTIVE-NOW row and will be corrected by the #185 follow-up change,
+not by this governance-only rebaseline.
+
+## Not TLA debt: next evidence layers (issue #163 V2+)
+
+The register above is **TLA+ debt only**: abstraction faithfulness and
+protocol-model coverage of the C++ design. The following #163 layers are
+separate evidence technologies, not missing models, and must not be recorded
+(or paid) as TLA+ debt — nor may a TLA+ debt be claimed paid by pointing at
+them:
+
+- **V2 — trace conformance** (`ObservedBehaviors(C++ tests at R) ⊆
+  Behaviors(as-built model at R)`, with a mandatory broken-trace negative
+  control): not started. Scope: semantic trace events emitted from the
+  deterministic test seams, mapped to the same-revision model.
+- **V3 — weak-memory kernels** (extract the real production atomic order
+  for Completion publication/reset, RequestSlot generation/reuse, terminal
+  arbitration, park-commit vs wake; GenMC-class checker; broken-order
+  negative control): not started. TLA+ does not prove C++20
+  acquire/release/RMW behavior — this layer does.
+- **V4 / V6** — the deterministic-schedule corpus and guarantee-cost
+  accounting: partially served today by the `SLUICE_ASYNC_INTERNAL_TESTING`
+  phase seams, the issue-#115/#161 deterministic regressions, and the
+  performance-attribution methodology respectively, but the consolidated
+  corpus/cost artifacts do not exist yet.
+
+A gap in V2/V3 is recorded on the #163 roadmap, never in this register.
