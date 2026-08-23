@@ -375,10 +375,12 @@ check), so runnable/running may remain after `global_terminate_`.
   TLC verifies both (it stops at the first violation otherwise).
 - `E9ParkWakeNegRetireDead.tla/.cfg` — the EXACT pre-fix defect
   (contradiction reintroduced). The witness invariants **HOLD** here
-  (fail-closed): a reintroduced dead retire is detected. State space is
-  byte-identical to the pre-#189 pristine model (46456 generated / 14472
-  distinct), and the positive invariants still pass on the mutant — the
-  witness gate is the sole detector, which is why #189 existed.
+  (fail-closed): a reintroduced dead retire is detected. Reachable-state
+  counts / semantic-graph cardinality match the pre-#189 model (46456
+  generated / 14472 distinct; the mutant also carries the `retireFired`
+  ghost and the post-fix `InvLife3` scope), and the positive invariants
+  still pass on the mutant — the witness gate is the sole detector, which
+  is why #189 existed.
 
 ### Fairness (`FairRetire`) non-vacuity
 
@@ -420,4 +422,4 @@ TRUE` (a participant exists) — AND an explicit `bridgePending' = FALSE`
 (probe: 1055 states), so the interrupted-0-progress participant exit (exit
 class C) is entirely unmodeled. This is out of #189's scope (different
 action, different root cause); registered in the debt register and the
-manifest notes as a follow-up.
+manifest notes, and tracked independently in issue #191.

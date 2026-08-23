@@ -564,8 +564,14 @@ LeavePark(w) ==
       with ~external_wake_possible -> global terminate). The departure
       publishes the UNCONDITIONAL R3 wake and leaves the alive set.
 
-   2. RetireWorkerQuiescent: the last-idle terminate — only at true
-      quiescence (no executable work, no backend work, no waits).
+   2. RetireWorkerQuiescent (historical name): non-participant
+      worker-loop retirement. It covers BOTH:
+      - true-quiescent last-idle retirement; and
+      - terminate-observed retirement after another worker has already
+        published invocation termination (may be non-quiescent: the
+        loop-top pop+run precedes the terminate check).
+      Only the former is classified ReturnedQuiescent; a last-alive
+      non-quiescent retirement is ReturnedStalled.
 
    A Worker that merely REFUSED to park beside unguarded backend progress
       (R1) satisfies NEITHER precondition: it must re-loop and elect as
