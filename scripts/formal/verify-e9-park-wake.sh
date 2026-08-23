@@ -4,6 +4,11 @@
 #   E9ParkWake (safety, split-wait)     -> all invariants PASS
 #   E9ParkWake (liveness, split-wait)   -> liveness PASS
 #   E9ParkWake (reference safety)       -> non-split E9 rule PASS (DIV-05)
+#   E9ParkWakeWitnessRetire             -> NoReach* violated = causal witness
+#                                         (#189 non-vacuity: RetireWorkerQuiescent
+#                                         fires with the departure wake)
+#   NegRetireDead                       -> NoReach* HOLD (witness fail-closed on the
+#                                         exact pre-#189 contradictory action)
 #   BuggyDrainParks                     -> counterexample (liveness property violated)
 #   BuggyMixedSource                    -> Inv7StateForm violated
 #   BuggyPrePark                        -> Inv2NoLostWake / Inv4ExternalReadyWakes violated
@@ -91,6 +96,17 @@ expect_pass "E9ParkWake [safety, split-wait]" E9ParkWake E9ParkWake.cfg safety |
 expect_pass "E9ParkWake [liveness, split-wait]" E9ParkWake E9ParkWakeLiveness.cfg liveness || rc=1
 expect_pass "E9ParkWake [safety, reference]" E9ParkWake E9ParkWakeReference.cfg reference || rc=1
 expect_pass "E9ParkWake [liveness, reference]" E9ParkWake E9ParkWakeReferenceLiveness.cfg ref_liveness || rc=1
+# #189 non-vacuity witnesses: RetireWorkerQuiescent MUST fire, and the
+# all-retired ReturnedQuiescent-at-quiescence chain MUST be reachable
+# (NoReach* violated). Each witness in its own cfg so TLC checks both.
+expect_fail "WitnessRetire (retire fires)" E9ParkWake \
+  E9ParkWakeWitnessRetire.cfg NoReachRetireFired retire_witness || rc=1
+expect_fail "WitnessTerminate (quiescent terminal chain)" E9ParkWake \
+  E9ParkWakeWitnessTerminate.cfg NoReachQuiescentTerminate retire_terminate || rc=1
+# #189 negative control: the exact pre-fix contradictory action keeps the
+# retire dead, so the witness invariants HOLD -> the witness gate fails closed.
+expect_pass "NegRetireDead (witness fail-closed)" E9ParkWakeNegRetireDead \
+  E9ParkWakeNegRetireDead.cfg neg_retire_dead || rc=1
 expect_cex "BuggyDrainParks" E9ParkWakeBuggyDrainParks \
   E9ParkWakeBuggyDrainParks.cfg buggy_drain || rc=1
 expect_fail "BuggyMixedSource" E9ParkWakeBuggyMixedSource \

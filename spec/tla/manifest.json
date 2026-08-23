@@ -223,8 +223,8 @@
         "smoke"
       ],
       "positive_gate_count": 4,
-      "negative_gate_count": 4,
-      "reachability_gate_count": 0,
+      "negative_gate_count": 5,
+      "reachability_gate_count": 2,
       "owner_docs": [
         "docs/history/closeout/e9-0-wake-source-topology-audit.md"
       ],
@@ -232,7 +232,7 @@
         "src/async/scheduler_park_wake.cpp",
         "src/async/scheduler.cpp"
       ],
-      "notes": "Protocol: scheduler/backend wake convergence (park domains, wake epoch, split-wait bridge, R1-R4). Phase G closeout (R1-R4 + bridge): split-wait safety/liveness + reference safety/liveness; buggy models DrainParks, MixedSource, PrePark, NoBridge (model-level M1). AUDIT NOTE: the reference (SplitWait=FALSE) gates are satisfied largely by the E9 bounded-observation timeout (DIV-05), not by signal-correctness — the load-bearing no-lost-wake evidence is the SplitWait=TRUE gates; see README."
+      "notes": "Protocol: scheduler/backend wake convergence (park domains, wake epoch, split-wait bridge, R1-R4). Phase G closeout (R1-R4 + bridge): split-wait safety/liveness + reference safety/liveness; buggy models DrainParks, MixedSource, PrePark, NoBridge (model-level M1). #189 repair (2026-08-23): RetireWorkerQuiescent revived (BridgeEffect vs UNCHANGED contradiction removed; faithful terminal classification; InvLife3 scoped to ~terminateFlag; vars dedupe) with a causal non-vacuity witness (WitnessRetire: NoReach* violated) and the exact pre-fix defect as a fail-closed negative (NegRetireDead). AUDIT NOTE: the reference (SplitWait=FALSE) gates are satisfied largely by the E9 bounded-observation timeout (DIV-05), not by signal-correctness — the load-bearing no-lost-wake evidence is the SplitWait=TRUE gates; see README. KNOWN SEPARATE DEFECT (documented, not repaired here): ParticipantNoProgressExit is also dead (BridgeEffect primes bridgePending'=TRUE while the action body sets bridgePending'=FALSE — double-prime, guard reachable), a distinct root cause from #189; follow-up."
     },
     {
       "id": "e9-wake-handle-lifetime",
