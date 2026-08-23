@@ -127,7 +127,8 @@ VARIABLES
     idleCount,
     terminateFlag,
     runMode,
-    runState
+    runState,
+    retireFired      \* causal history witness: RetireWorkerQuiescent executed
 
 PhaseVal == {"Active", "ParkCandidate", "ParkCommitted", "Parked"}
 PartVal  == {NONE, W0, W1}
@@ -280,7 +281,7 @@ ExternalReadyPublish ==
                    externalWaitRegistered,
                    workerPhase, observedEpoch, backendWaitParticipant,
                    workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A Scheduler Worker observes externalReady and routes the waiting Fiber
    to runnable (DrainExternalReady). *)
@@ -296,7 +297,7 @@ DrainExternalReady ==
     /\ UNCHANGED <<runningVisible, backendOutstanding, backendReady,
                    workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A backend op becomes ready. Persistent state first; the MW-S2 BACKEND
    participant observes it via its wait_one return (LeavePark's backend
@@ -311,7 +312,7 @@ BackendReadyPublish ==
                    backendOutstanding, externalWaitRegistered,
                    externalReady, wakeEpoch, bridgePending,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* A running Fiber submits a backend op. *)
 SubmitBackend ==
@@ -323,7 +324,7 @@ SubmitBackend ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A Scheduler Worker drains backendReady into runnable. *)
 DrainBackendReady ==
@@ -337,7 +338,7 @@ DrainBackendReady ==
     /\ UNCHANGED <<runningVisible, externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* A Fiber publishes runnable work from inside a Worker (route + wake). *)
 PublishRunnable ==
@@ -349,7 +350,7 @@ PublishRunnable ==
     /\ UNCHANGED <<runningVisible, backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* =========================================================================
    Park-admission actions (Worker side). Globally coordinated under the
@@ -371,7 +372,7 @@ BeginParkCandidate(w) ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* FinalParkRecheckAndCommit: the candidate does a final drain + classify,
    OBSERVES the wake epoch, and COMMITS to park (recording observedEpoch).
@@ -402,7 +403,7 @@ FinalParkRecheckAndCommit(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* AbandonParkCandidate: the candidate returns to Active without
    committing. R1: the refusal beside unguarded progress must SIGNAL the
@@ -424,7 +425,7 @@ AbandonParkCandidate(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState>>
+                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired>>
 
 (* EnterPhysicalPark: the committed Worker releases the wake mutex and
    parks on its chosen domain. Domain selection (P3 + Phase G):
@@ -487,7 +488,7 @@ EnterPhysicalPark(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   observedEpoch, workerAlive, terminateFlag, runMode, runState>>
+                   observedEpoch, workerAlive, terminateFlag, runMode, runState, retireFired>>
 
 (* LeavePark: a parked Worker returns to Active to re-drain.
 
@@ -548,7 +549,7 @@ LeavePark(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, observedEpoch, workerAlive,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* =========================================================================
    R3: terminate-path retire — TWO production exit paths, neither of which
@@ -589,7 +590,7 @@ ParticipantNoProgressExit(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   observedEpoch, idleCount, runMode>>
+                   observedEpoch, idleCount, runMode, retireFired>>
 
 RetireWorkerQuiescent(w) ==
     /\ workerAlive[w]
@@ -600,13 +601,16 @@ RetireWorkerQuiescent(w) ==
     /\ BridgeEffect(1 - wakeEpoch)
     /\ workerAlive' = [workerAlive EXCEPT ![w] = FALSE]
     /\ terminateFlag' = TRUE
+    /\ retireFired' = TRUE
     /\ runState' = IF \A v \in Workers : v = w \/ ~workerAlive[v]
-                   THEN "ReturnedQuiescent"
+                   THEN IF Quiescent
+                        THEN "ReturnedQuiescent"
+                        ELSE "ReturnedStalled"
                    ELSE runState
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   wakeEpoch, bridgePending, workerPhase, observedEpoch,
+                   workerPhase, observedEpoch,
                    backendWaitParticipant, idleCount, runMode>>
 
 (* =========================================================================
@@ -624,7 +628,7 @@ ReturnStalled ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   runMode>>
+                   runMode, retireFired>>
 
 ReturnQuiescent ==
     /\ runState = "Active"
@@ -636,7 +640,7 @@ ReturnQuiescent ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   runMode>>
+                   runMode, retireFired>>
 
 (* ShutdownSignal: a coordinated termination condition. Advances the wake
    epoch (bridging into a parked participant) and ends the invocation. *)
@@ -649,7 +653,7 @@ ShutdownSignal ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, runMode>>
+                   workerAlive, idleCount, runMode, retireFired>>
 
 (* =========================================================================
    Fiber lifecycle (collapsed).
@@ -666,7 +670,7 @@ RunFiber ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 SuspendFiber ==
     /\ runState = "Active"
@@ -677,7 +681,7 @@ SuspendFiber ==
     /\ UNCHANGED <<runnableVisible, backendOutstanding, backendReady,
                    externalReady, wakeEpoch, bridgePending, workerPhase,
                    observedEpoch, backendWaitParticipant, workerAlive,
-                   idleCount, terminateFlag, runMode, runState>>
+                   idleCount, terminateFlag, runMode, runState, retireFired>>
 
 FinishFiber ==
     /\ runState = "Active"
@@ -687,7 +691,7 @@ FinishFiber ==
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
                    backendWaitParticipant, workerAlive, idleCount,
-                   terminateFlag, runMode, runState>>
+                   terminateFlag, runMode, runState, retireFired>>
 
 (* =========================================================================
    Next, Init, Spec
@@ -699,7 +703,7 @@ vars ==
       externalWaitRegistered, externalReady,
       wakeEpoch, workerPhase, observedEpoch,
       backendWaitParticipant, bridgePending, workerAlive, idleCount,
-      terminateFlag, terminateFlag, runMode, runState>>
+      terminateFlag, runMode, runState, retireFired>>
 
 TerminalStutter ==
     /\ runState # "Active"
@@ -780,6 +784,7 @@ Init ==
     /\ terminateFlag = FALSE
     /\ runMode \in {"Drain", "Live"}
     /\ runState = "Active"
+    /\ retireFired = FALSE
 
 Spec == Init /\ [][Next]_vars
 
@@ -890,7 +895,7 @@ InvLife1DrainNoMW3Park ==
 
 InvLife3LiveExternalParkAdmitted ==
     (runMode = "Live" /\ GlobalClass = "MWS3" /\ ExternalWakePossible
-     /\ runState = "Active")
+     /\ runState = "Active" /\ ~terminateFlag)
     => ParkAdmitted
 
 InvLife5QuiescenceClassifierDefined ==
@@ -992,4 +997,33 @@ LifeProps ==
     /\ Life4LiveNonWakeableMWS3Returns
     /\ Life7ExternalReadyEventuallyDrained
     /\ Life8BackendReadyEventuallyObserved
+
+(* =========================================================================
+   Reachability / non-vacuity witnesses (#189). NoReach* are DELIBERATELY
+   FALSE at the target: TLC's counterexample is the causal witness.
+
+   NoReachRetireFired: the ghost retireFired is set ONLY inside
+   RetireWorkerQuiescent's action body - which conjoins BridgeEffect - so a
+   witness trace with retireFired = TRUE proves the full as-built retire
+   step executed, INCLUDING the unconditional departure wake
+   (wakeEpoch' = 1 - wakeEpoch; the C++ signal_wake_locked() in the worker
+   epilogue, scheduler.cpp:1242-1249). Pre-#189 the action was
+   unsatisfiable (BridgeEffect primed wakeEpoch'/bridgePending' while the
+   action's own UNCHANGED pinned them); the witness fails closed.
+
+   NoReachQuiescentTerminate: the terminal chain - every worker retired and
+   the invocation classified ReturnedQuiescent at true quiescence. This
+   final shape is reachable ONLY through a last-alive RetireWorkerQuiescent
+   step (ReturnQuiescent never retires a worker; ParticipantNoProgressExit
+   classifies ReturnedStalled), and it pins the C++-faithful terminal
+   classification: a retire that ends the run at NON-quiescence must
+   classify ReturnedStalled (the terminate-observed / E4-E5 caller-re-entry
+   boundary), never ReturnedQuiescent (InvLife5). *)
+NoReachRetireFired ==
+    ~retireFired
+
+NoReachQuiescentTerminate ==
+    ~( /\ \A v \in Workers : ~workerAlive[v]
+       /\ runState = "ReturnedQuiescent"
+       /\ Quiescent )
 ====
