@@ -49,7 +49,12 @@ to that obligation).
   model-level M1 mutation — wake publications advance `wakeEpoch` but
   never set `bridgePending`. Produces an `Inv8BridgeReachesBackendPark`
   counterexample (a parked participant that can never observe an
-  external publication).
+  external publication). GENERATED from the current positive model by
+  `_gen_neg.py` (#192; freshness-gated, do not edit by hand).
+- `_gen_neg.py`                  — generates the duplicated-snapshot
+  negatives (`NegRetireDead`, `BuggyNoBridge`) from the current
+  `E9ParkWake.tla`; `--check` is the read-only freshness gate the
+  verifier runs before any TLC invocation (#192).
 - `E9ParkWakeBuggyDrainParks.tla/.cfg` — negative model C (E9-CORRECTIVE,
   historical): the shipped Drain-park defect. `Life2Buggy`
   counterexample.
@@ -70,8 +75,31 @@ delete them.
 bash scripts/formal/verify-e9-park-wake.sh
 ```
 
-(four positive gates + four negative gates; TLC runs in an isolated
-mktemp workspace — never in this directory.)
+(four positive gates + two reachability-witness gates + five negative
+gates; TLC runs in an isolated mktemp workspace — never in this
+directory.)
+
+## Generated negatives + freshness gate (#192)
+
+`NegRetireDead` and `BuggyNoBridge` are FULL DUPLICATED SNAPSHOTS of the
+positive model, so they are GENERATED from the current `E9ParkWake.tla`
+by `_gen_neg.py` (each mutation is a declared exact-fragment swap whose
+anchor must match exactly one location — zero or multiple matches aborts
+generation fail-closed) and freshness-gated:
+`verify-e9-park-wake.sh` runs `_gen_neg.py --check` BEFORE any TLC run,
+so a stale, missing, or unexpected generated artifact fails the formal
+gate without starting TLC (a stale negative would keep checking an
+outdated mutation while CI stays green). Never edit those four files by
+hand — regenerate with `python3 spec/tla/e9_park_wake/_gen_neg.py`.
+
+`BuggyPrePark` / `BuggyMixedSource` (pre-Phase-G protocol snapshots) and
+`BuggyDrainParks` (an EXTENDS-based minimal mutant that auto-tracks the
+positive model) are intentionally NOT generated: the first two are
+frozen historical controls, the third has no drift risk. A future
+negative that is a single-rule mutation of the current model (e.g. the
+#191 `ParticipantNoProgressExit` exact-old mutant) should join the
+generator's CASES — mutation spec + cfg + verifier expectation — not add
+another hand-copied snapshot.
 
 ## Model domain (finite, exhaustive TLC)
 
@@ -374,10 +402,15 @@ check), so runnable/running may remain after `global_terminate_`.
   a last-alive `RetireWorkerQuiescent`). Each witness has its own cfg so
   TLC verifies both (it stops at the first violation otherwise).
 - `E9ParkWakeNegRetireDead.tla/.cfg` — the EXACT pre-fix defect
-  (contradiction reintroduced). The witness invariants **HOLD** here
+  (contradiction reintroduced). GENERATED from the current positive
+  model by `_gen_neg.py` (#192): the mutation restores `wakeEpoch,
+  bridgePending` into `RetireWorkerQuiescent`'s UNCHANGED; the stale
+  pre-#189 header comments of the old hand-copied snapshot are gone by
+  regeneration. The witness invariants **HOLD** here
   (fail-closed): a reintroduced dead retire is detected. Reachable-state
   counts / semantic-graph cardinality match the pre-#189 model (46456
-  generated / 14472 distinct; the mutant also carries the `retireFired`
+  generated / 14472 distinct, re-verified after generatorization; the
+  mutant also carries the `retireFired`
   ghost and the post-fix `InvLife3` scope), and the positive invariants
   still pass on the mutant — the witness gate is the sole detector, which
   is why #189 existed.
