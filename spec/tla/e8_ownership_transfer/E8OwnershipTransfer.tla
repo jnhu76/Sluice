@@ -67,6 +67,15 @@
   consume the ticket without publishing. E8 adds ONE new action, StealRunnable,
   which is MOVE + OWNER-RECORD TRANSFER (never PUBLISH).
 
+  ISSUE #184 (2026-08-22): the former W*Inbox ticket tier (InboxOf,
+  MoveInboxToLocal, InvInboxMatchesOwner) is RETIRED, matching the E7/#170
+  retirement. The tier was unreachable vocabulary — no action ever assigned
+  a W*Inbox location (proven mechanically: InvNoInboxTicket held on the
+  pre-change graph, 341/100/depth 11, and a producer-injection probe
+  violated it at depth 3) — and production deleted the dead
+  WorkerState::inbox storage in #170. The reachable graph is unchanged:
+  341/100/11 before and after.
+
   Domain (finite, exhaustive TLC): Workers = {W0, W1}, Fibers = {F0, F1}.
 
   Models ONLY the state relevant to ownership transfer / wake routing:
@@ -89,7 +98,7 @@ VARIABLES
     waitOwner          \* [Fibers -> Workers \cup {NA}]  -- WAITING wait-epoch resume owner; set by Suspend, read by Wake
 
 FiberState == {"Created", "Waiting", "Runnable", "Running", "Done"}
-TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local", "W0Inbox", "W1Inbox"}
+TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local"}
 
 ASSUME
     /\ Fibers # {}
@@ -106,15 +115,11 @@ ASSUME
    Helpers
    ========================================================================= *)
 
-(* Total over Workers \cup {NA}: return "None" for NA so the helpers never
-   throw a no-true-CASE branch. Callers that read the result also guard on
+(* Total over Workers \cup {NA}: return "None" for NA so the helper never
+   throws a no-true-CASE branch. Callers that read the result also guard on
    ownerRecord/waitOwner \in Workers where the value must be a real local. *)
 LocalOf(w) == CASE w = W0 -> "W0Local"
                     [] w = W1 -> "W1Local"
-                    [] OTHER -> "None"
-
-InboxOf(w) == CASE w = W0 -> "W0Inbox"
-                    [] w = W1 -> "W1Inbox"
                     [] OTHER -> "None"
 
 TicketLive(f) == ticketLocation[f] # "None"
@@ -183,18 +188,6 @@ WakeReady(f) ==
     /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]   \* resume owner consumed
     /\ UNCHANGED <<ownerRecord, execWorker>>
 
-(* MOVE: owner inbox -> owner local. Cardinality unchanged. Retained as
-   an unreachable vocabulary tier: the production inbox storage never
-   existed as a live queue (E8-0 audit O5/O6) and was DELETED in #170
-   (the E7 tier was retired there). Guarded on
-   ownerRecord \in Workers so the LocalOf/InboxOf CASE helpers (which are
-   total only over {W0,W1}) are never evaluated at NA. *)
-MoveInboxToLocal(f) ==
-    /\ ownerRecord[f] \in Workers
-    /\ ticketLocation[f] = InboxOf(ownerRecord[f])
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(ownerRecord[f])]
-    /\ UNCHANGED <<fiberState, waitReg, ownerRecord, execWorker, waitOwner>>
-
 (* CONSUME: pop a runnable ticket; Runnable -> Running; ticket consumed.
    Requires the ticket be on THIS worker's local queue == the current
    ownerRecord's queue (E8-AUTH-Inv3 / former Inv10). The consumer becomes
@@ -258,7 +251,6 @@ Next ==
     \/ \E f \in Fibers : MovePendingToOwnerLocal(f)
     \/ \E f \in Fibers : SuspendFiber(f)
     \/ \E f \in Fibers : WakeReady(f)
-    \/ \E f \in Fibers : MoveInboxToLocal(f)
     \/ \E w \in Workers, f \in Fibers : PopRunnable(w, f)
     \/ \E victim \in Workers, thief \in Workers, f \in Fibers :
         StealRunnable(victim, thief, f)
@@ -304,12 +296,6 @@ InvLocalMatchesOwner ==
     \A f \in Fibers :
         /\ (ticketLocation[f] = "W0Local" => ownerRecord[f] = W0)
         /\ (ticketLocation[f] = "W1Local" => ownerRecord[f] = W1)
-
-(* E8-AUTH-Inv3b: Inbox destination matches runnable owner record. *)
-InvInboxMatchesOwner ==
-    \A f \in Fibers :
-        /\ (ticketLocation[f] = "W0Inbox" => ownerRecord[f] = W0)
-        /\ (ticketLocation[f] = "W1Inbox" => ownerRecord[f] = W1)
 
 (* E8-AUTH-Inv4: Running authority consistency.
    fiberState = Running => execWorker is a real Worker, no ticket, no wait
@@ -387,7 +373,6 @@ Inv ==
     /\ InvTicketImpliesRunnable
     /\ InvRunnableAuthority
     /\ InvLocalMatchesOwner
-    /\ InvInboxMatchesOwner
     /\ InvRunningAuthority
     /\ InvWaitingAuthority
     /\ InvDoneDetached
