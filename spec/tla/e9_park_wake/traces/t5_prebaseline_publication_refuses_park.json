@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "suite": "e9_park_wake",
+  "test": "t5_prebaseline_publication_refuses_park",
+  "cpp_revision": "d98d70dd57c85b5e4c59d92b384ffa95b6027e4a",
+  "model_revision": "d98d70dd57c85b5e4c59d92b384ffa95b6027e4a",
+  "split_wait": false,
+  "run_mode": "live",
+  "prehistory": "external_wait_registered",
+  "events": [
+    {"seq": 1, "event": "WakePublished", "epoch": 1, "cause": "runnable_route"},
+    {"seq": 2, "event": "ParkRefused", "worker": 0},
+    {"seq": 3, "event": "WakePublished", "epoch": 2, "cause": "refuse"}
+  ]
+}

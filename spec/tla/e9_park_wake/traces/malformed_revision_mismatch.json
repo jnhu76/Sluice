@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "suite": "e9_park_wake",
+  "test": "malformed_revision_mismatch",
+  "cpp_revision": "d98d70dd57c85b5e4c59d92b384ffa95b6027e4a",
+  "model_revision": "ffffffffffffffffffffffffffffffffffffffff",
+  "split_wait": true,
+  "run_mode": "live",
+  "prehistory": "external_wait_registered",
+  "events": [
+    {
+      "seq": 1,
+      "event": "ParkCommitted",
+      "worker": 0,
+      "epoch": 0,
+      "armed": false
+    },
+    {
+      "seq": 2,
+      "event": "ParkEntered",
+      "worker": 0
+    },
+    {
+      "seq": 3,
+      "event": "ParkReturned",
+      "worker": 0,
+      "immediate": false,
+      "causes": []
+    }
+  ]
+}
