@@ -221,17 +221,32 @@ them:
 
 - **V2 — trace conformance** (`ObservedBehaviors(C++ tests at R) ⊆
   Behaviors(as-built model at R)`, with a mandatory broken-trace negative
-  control): not started. Scope: semantic trace events emitted from the
-  deterministic test seams, mapped to the same-revision model.
+  control): not started; **owned by child issue #196** (pilot scope:
+  semantic trace events emitted from the deterministic test seams, mapped
+  to the same-revision model).
 - **V3 — weak-memory kernels** (extract the real production atomic order
   for Completion publication/reset, RequestSlot generation/reuse, terminal
   arbitration, park-commit vs wake; GenMC-class checker; broken-order
-  negative control): not started. TLA+ does not prove C++20
-  acquire/release/RMW behavior — this layer does.
-- **V4 / V6** — the deterministic-schedule corpus and guarantee-cost
-  accounting: partially served today by the `SLUICE_ASYNC_INTERNAL_TESTING`
-  phase seams, the issue-#115/#161 deterministic regressions, and the
-  performance-attribution methodology respectively, but the consolidated
-  corpus/cost artifacts do not exist yet.
+  negative control): not started; **owned by child issue #197**. TLA+ does
+  not prove C++20 acquire/release/RMW behavior — this layer does.
+- **V4 — deterministic-schedule corpus**: partially served by the
+  `SLUICE_ASYNC_INTERNAL_TESTING` phase seams and the issue-#115/#161
+  deterministic regressions; the #163 acceptance criterion (≥1 historical
+  intermittent failure as a deterministic schedule) is MET. The
+  consolidated corpus stays deliberately unbuilt until a second
+  intermittent bug shows which seams to generalize.
+- **V5 — failure-envelope matrix** (machine-checkable phase × fault ×
+  required-outcome): **owned by child issue #198** — consolidates
+  failure-model.md and the C2b–C2e / D2–D4 mutation matrices without
+  manufacturing evidence.
+- **V6 — guarantee-cost accounting**: partially served by the
+  performance-attribution methodology; the explicit per-mechanism cost
+  vectors and sustained-overload backpressure measurement are **owned by
+  child issue #199**.
+- **V7 — claim-policy enforcement**: partially served by manifest
+  notes / AGENTS.md §21 / formal-models.md (a 2026-08-23 grep found no
+  overclaim); revision-naming discipline and the mechanical changed-lines
+  overclaim guard are **owned by child issue #200**.
 
-A gap in V2/V3 is recorded on the #163 roadmap, never in this register.
+A gap in V2/V3 is recorded on the #163 roadmap (children #196/#197),
+never in this register.
