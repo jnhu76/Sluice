@@ -272,6 +272,17 @@ sluice_internal_async_test("phase_g_backend_progress_wake_test")
 -- x86_64 (fiber_ctx::supported).
 sluice_internal_async_test("issue115_runnable_publication_wake_test")
 
+-- e9_trace_conformance_test — #196 V2 trace-conformance pilot: captures
+-- minimal semantic E9 park/wake traces (ParkCommitted / ParkEntered /
+-- ParkRefused / WakePublished / ParkReturned) from REAL deterministic
+-- executions via the controller recorder (#196; SLUICE_ASYNC_INTERNAL_TESTING
+-- only), asserts each corpus trace's deterministic shape, and emits JSON
+-- artifacts (SLUICE_E9_TRACE_OUT / SLUICE_E9_TRACE_REVISION) for the
+-- same-revision model validation (scripts/formal/e9_trace_validate.py).
+-- Deterministic (phase seams + wake_mtx_-hold barriers + bounded watchdogs);
+-- NO sleep-ordering. Gated to x86_64 (fiber_ctx::supported).
+sluice_internal_async_test("e9_trace_conformance_test")
+
 -- Issue #161 deterministic causal regression: an idle-dance contribution
 -- orphaned by a ticketed worker's unlocked idle_workers_ store(0) leaves the
 -- run one short of the last-idle termination forever (the async_rwlock T22

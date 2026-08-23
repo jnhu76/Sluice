@@ -28,6 +28,7 @@
 #include <array>
 #include <cstddef>
 #include <list>
+#include <vector>
 
 namespace sluice_async_test {
 
@@ -845,6 +846,30 @@ struct SelectRollbackSeam {
 
     // The synthetic exception type (rethrown to the test by select_admit's catch).
     using FailureException = sluice_async_test::SelectRegistrationFailure;
+};
+
+// ---- #196 E9 trace-conformance recorder facade ----
+// Opens/closes the controller's semantic-event capture window and snapshots
+// the recorded events. The vocabulary enums and TraceEvent live in
+// async_test_control_internal.hpp. This is the E9 pilot's ONLY trace surface
+// (issue #196): not a general tracing facility, never compiled into the
+// production target.
+struct E9TraceRecorder {
+    static void enable(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::trace_enable(s);
+    }
+    static void disable(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::trace_disable(s);
+    }
+    static void clear(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::trace_clear(s);
+    }
+    static bool overflow(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::trace_overflow(s);
+    }
+    static std::vector<TraceEvent> events(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::trace_events(s);
+    }
 };
 
 // Short alias used by the P6 tests.

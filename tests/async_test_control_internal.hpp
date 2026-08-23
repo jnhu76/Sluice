@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <mutex>
 #include <stdexcept>
+#include <vector>
 
 namespace sluice_async_test {
 
@@ -233,6 +234,56 @@ enum class PhaseTag : unsigned char {
 // conversely) cannot be expressed with global arming alone.
 inline constexpr unsigned kAnyWorker = static_cast<unsigned>(-1);
 
+// ---- #196 E9 trace-conformance recorder vocabulary ----
+//
+// Minimal ARCHITECTURE-LEVEL semantic events for the E9 park/wake protocol
+// ONLY (issue #196 pilot; NOT a general tracing facility). Every event is
+// emitted from a guarded call site inside the production park/wake paths and
+// recorded into a fixed-size ring on the per-Scheduler controller. Production
+// builds compile none of the call sites (SLUICE_ASYNC_INTERNAL_TESTING off).
+enum class TraceEventKind : unsigned char {
+    park_committed = 1,  // wake-epoch baseline recorded (park admission commit)
+    park_entered = 2,    // physical cv wait about to begin (predicate false)
+    park_refused = 3,    // G1 refuse: unguarded progress / dance count -> no park
+    wake_published = 4,  // signal_wake_locked advanced the wake epoch
+    park_returned = 5,   // the cv wait returned (cause bits below)
+};
+
+// The producer-side attribution of a wake publication. Set by the guarded
+// marker at each semantic call site immediately BEFORE signal_wake_locked on
+// the SAME thread; consumed by the next wake_published record on that thread.
+enum class WakeCause : unsigned char {
+    none = 0,             // unattributed (validator fail-closes on it)
+    external_notify = 1,  // SchedulerWakeHandle::notify -> notify_external_wake
+    runnable_route = 2,   // spawn / spawn_on / route_runnable_locked
+    park_refuse = 3,      // the G1 park-commit refusal signal
+    terminate = 4,        // global_terminate_ publication signals
+    retire_epilogue = 5,  // the worker-loop retire epilogue departure signal
+    idle_dance = 6,       // the not-last idle-dance convergence signal
+};
+
+// ParkReturned cause bits: which cv-predicate terms (or the timeout) held at
+// the wait's return, evaluated under wake_mtx_ (+inbox_mtx for runnable).
+inline constexpr std::uint16_t kReturnCauseEpoch = 0x1;
+inline constexpr std::uint16_t kReturnCauseTerminate = 0x2;
+inline constexpr std::uint16_t kReturnCauseRunnable = 0x4;
+inline constexpr std::uint16_t kReturnCauseTimeout = 0x8;
+
+// Sentinel worker id for events with no worker attribution.
+inline constexpr unsigned char kTraceNoWorker = 0xFF;
+
+inline constexpr std::size_t kTraceCapacity = 64;
+
+struct TraceEvent {
+    unsigned char kind{0};        // TraceEventKind
+    unsigned char worker{kTraceNoWorker};
+    unsigned char cause{0};       // WakeCause (wake_published only)
+    unsigned char immediate{0};   // park_returned: predicate true at wait entry
+    std::uint16_t return_causes{0};  // park_returned: kReturnCause* bits
+    std::uint16_t armed{0};       // park_committed: entry-armed observation
+    std::uint64_t epoch{0};       // wake epoch at the event
+};
+
 // Per-PhaseTag controller state. Owned by the controller registry, keyed on
 // Scheduler*. All fields are guarded by `mtx` (the phase's own coordination
 // mutex — distinct from any production lock).
@@ -345,6 +396,26 @@ struct SchedulerController {
         rollback_arm_order_kinds{};  // ArmKind as raw (0=event,1=timer)
     std::array<bool, sluice::async::kSelectMaxArms>
         rollback_event_linked_before{};
+
+    // ---- #196 E9 trace-conformance recorder ----
+    // Fixed-size ring (no allocation on the record path). Guarded by
+    // trace_mtx (the controller's own leaf mutex — never taken by, and never
+    // holding, any production lock). trace_enabled defines the capture
+    // window: the recording helpers are no-ops while disabled, so a test
+    // records exactly the deterministic segment it controls.
+    std::mutex trace_mtx;
+    bool trace_enabled{false};
+    bool trace_overflow{false};
+    std::size_t trace_len{0};
+    std::array<TraceEvent, kTraceCapacity> trace_events{};
+    // One-shot pending wake-cause slot: the guarded producer-site marker sets
+    // it immediately BEFORE signal_wake_locked; the next wake_published record
+    // consumes it (resets to none). The marker and the signal are adjacent in
+    // one function on one thread; a foreign interleaved signal in between
+    // would surface as an unattributed (none) wake, which the validator and
+    // the corpus tests fail closed on — never silently mis-binned.
+    unsigned char pending_wake_cause{0};
+    unsigned char pending_wake_worker{kTraceNoWorker};
 };
 
 // --- Called from scheduler.cpp (under SLUICE_ASYNC_INTERNAL_TESTING) ---
@@ -512,6 +583,37 @@ struct RollbackObservation {
 // The throw itself happens in select_admit (the controller never throws).
 bool rollback_should_inject_after(sluice::async::Scheduler& s,
                                   std::size_t successful) noexcept;
+
+// ---- #196 E9 trace-conformance recorder (controller-owned; see the
+// vocabulary block above SchedulerController). The recording entry points are
+// called from guarded production park/wake call sites; the enable/disable/
+// read entry points are called by the test coordinator. All are no-ops
+// without a registered controller; recording is additionally a no-op while
+// the window is disabled. No allocation on any record path.
+
+// Test coordinator: open/close the capture window and reset the ring.
+void trace_enable(sluice::async::Scheduler& s) noexcept;
+void trace_disable(sluice::async::Scheduler& s) noexcept;
+void trace_clear(sluice::async::Scheduler& s) noexcept;
+bool trace_overflow(sluice::async::Scheduler& s) noexcept;
+
+// Test coordinator: snapshot-copy the recorded events (allocation happens on
+// the TEST side only).
+std::vector<TraceEvent> trace_events(sluice::async::Scheduler& s) noexcept;
+
+// Guarded production call sites: record one semantic event (drop, not crash,
+// past capacity — the overflow flag fail-closes the test's shape assertion).
+void record_trace_event(sluice::async::Scheduler& s,
+                        const TraceEvent& ev) noexcept;
+
+// Guarded producer-site marker: attribute the NEXT wake_published event.
+void set_trace_wake_cause(sluice::async::Scheduler& s, WakeCause cause,
+                          unsigned worker) noexcept;
+
+// Guarded signal_wake_locked site: record wake_published (consuming the
+// pending cause marker).
+void record_trace_wake(sluice::async::Scheduler& s,
+                       std::uint64_t new_epoch) noexcept;
 
 // Internal hooks called by the production rollback path (under global_mtx_) to
 // record the observation. All are no-ops without a registered controller.

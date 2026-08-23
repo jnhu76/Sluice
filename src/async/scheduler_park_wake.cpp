@@ -122,6 +122,13 @@ void Scheduler::notify_external_wake() noexcept {
     // External producer entry point. Publishes a wake obligation: advance
     // the wake epoch and notify wake_cv_. Safe to call from any thread.
     // Refinement map: TLA+ ExternalReadyPublish (signal half).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // #196 trace: attribute the upcoming wake publication to the external
+    // notify producer (consumed by signal_wake_locked's wake record).
+    sluice_async_test::set_trace_wake_cause(
+        *this, sluice_async_test::WakeCause::external_notify,
+        static_cast<unsigned>(-1));
+#endif
     signal_wake_locked();
 }
 
@@ -133,6 +140,12 @@ void Scheduler::signal_wake_locked() {
     {
         LockGuard lk(wake_mtx_);
         ++wake_epoch_;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // #196 trace: the single chokepoint every wake publication passes.
+        // Records wake_published with the pending producer attribution (or
+        // cause=none when unattributed — the validator fail-closes on it).
+        sluice_async_test::record_trace_wake(*this, wake_epoch_);
+#endif
     }
     wake_cv_.notify_all();
     // Phase G (P5-CORRECTIVE bridge): a Scheduler wake-domain publication
@@ -351,6 +364,19 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
             // the signal a non-electable refuser would spin between
             // refuse and re-loop while the only electable worker sleeps
             // on a stale classification).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // #196 trace: the refusal decision, then its bundled signal
+            // (TLA+ AbandonParkCandidate's signaling branch is one fused
+            // step — the two trace events compile to that single action).
+            sluice_async_test::TraceEvent refuse_ev{};
+            refuse_ev.kind = static_cast<unsigned char>(
+                sluice_async_test::TraceEventKind::park_refused);
+            refuse_ev.worker = static_cast<unsigned char>(ws->id);
+            sluice_async_test::record_trace_event(*this, refuse_ev);
+            sluice_async_test::set_trace_wake_cause(
+                *this, sluice_async_test::WakeCause::park_refuse,
+                static_cast<unsigned>(-1));
+#endif
             signal_wake_locked();
             ws->park_domain = WorkerState::ParkDomain::None;
             return;
@@ -358,6 +384,19 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         LockGuard wlk(wake_mtx_);
         ws->observed_epoch = wake_epoch_;  // arm UNDER the state authority
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // #196 trace: the park admission commit — the baseline this park
+        // will trust (TLA+ FinalParkRecheckAndCommit's observedEpoch capture).
+        // The armed flag records whether the E5-A2/#185 entry-armed bounded
+        // observation (2 ms reference park) applies to THIS park.
+        {
+            sluice_async_test::TraceEvent commit_ev{};
+            commit_ev.kind = static_cast<unsigned char>(
+                sluice_async_test::TraceEventKind::park_committed);
+            commit_ev.worker = static_cast<unsigned char>(ws->id);
+            commit_ev.armed = bounded_backend_observation ? 1 : 0;
+            commit_ev.epoch = wake_epoch_;
+            sluice_async_test::record_trace_event(*this, commit_ev);
+        }
         // Baseline point: the wake epoch this park will trust. Publications
         // that advanced the epoch BEFORE this line are consumed by the
         // baseline (the predicate compares against it); the ledger preserves
@@ -384,6 +423,69 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         sluice_async_test::PhaseTag::scheduler_park_baseline_recorded);
 #endif
     std::unique_lock<Mutex> lk(wake_mtx_);
+    // The cv predicate (both wait forms below share it).
+    auto park_pred = [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+        // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The deque
+        // is protected by inbox_mtx (route_runnable_locked pushes under it);
+        // reading it under wake_mtx_ alone was a data race. Acquire inbox_mtx
+        // for the read (nested under wake_mtx_ — never the reverse order).
+        // This closes the lost-wake window where a runnable publication
+        // advanced the epoch BEFORE observed_epoch was recorded.
+        // route_runnable_locked also signals the epoch, so the epoch clause
+        // usually fires first; the inbox term is the authoritative backstop
+        // for the routed-but-epoch-already-observed case.
+        if (wake_epoch_ != ws->observed_epoch ||
+            global_terminate_.load(std::memory_order_acquire)) {
+            return true;
+        }
+        std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
+        return !ws->local_runnable.empty();
+    };
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // #196 trace: record the physical-wait boundary and, at the return,
+    // WHICH predicate terms held (evaluated under the same lock the wait
+    // reacquired — the exact cause set the as-built park returned on).
+    // park_entered + an immediate park_returned (predicate already true at
+    // entry, so cv.wait would return without blocking) compile to the model
+    // EnterPhysicalPark predicate-true branch; a blocking return compiles
+    // to LeavePark. The timeout bit marks a wait_until expiry with the
+    // predicate still false.
+    const auto e9t_record_entered = [this, ws]() {
+        sluice_async_test::TraceEvent ev{};
+        ev.kind = static_cast<unsigned char>(
+            sluice_async_test::TraceEventKind::park_entered);
+        ev.worker = static_cast<unsigned char>(ws->id);
+        sluice_async_test::record_trace_event(*this, ev);
+    };
+    const auto e9t_record_returned = [this, ws](bool immediate,
+                                                bool timed_out)
+                                     SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+        sluice_async_test::TraceEvent ev{};
+        ev.kind = static_cast<unsigned char>(
+            sluice_async_test::TraceEventKind::park_returned);
+        ev.worker = static_cast<unsigned char>(ws->id);
+        ev.immediate = immediate ? 1 : 0;
+        if (timed_out) {
+            ev.return_causes = sluice_async_test::kReturnCauseTimeout;
+        } else {
+            std::uint16_t causes = 0;
+            if (wake_epoch_ != ws->observed_epoch) {
+                causes |= sluice_async_test::kReturnCauseEpoch;
+            }
+            if (global_terminate_.load(std::memory_order_acquire)) {
+                causes |= sluice_async_test::kReturnCauseTerminate;
+            }
+            {
+                std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
+                if (!ws->local_runnable.empty()) {
+                    causes |= sluice_async_test::kReturnCauseRunnable;
+                }
+            }
+            ev.return_causes = causes;
+        }
+        sluice_async_test::record_trace_event(*this, ev);
+    };
+#endif
     // Phase G timeout policy: bound the wake wait by the earliest active
     // deadline so an active deadline cannot park a Worker indefinitely past
     // it (E11 I6), and by the bounded observation interval only when this
@@ -414,24 +516,21 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         // terminate / runnable predicate only). No periodic wake exists.
         // R4 note: the idle-dance backstop is enforced at the park COMMIT
         // (above), not here — see the R4 redesign comment there.
-        wake_cv_.wait(lk, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-            if (wake_epoch_ != ws->observed_epoch ||
-                global_terminate_.load(std::memory_order_acquire)) {
-                return true;
-            }
-            // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The
-            // deque is protected by inbox_mtx (route_runnable_locked pushes
-            // under it); reading it under wake_mtx_ alone was a data race.
-            // Acquire inbox_mtx for the read. This closes the lost-wake
-            // window where a runnable publication advanced the epoch BEFORE
-            // observed_epoch was recorded (the parked Worker would otherwise
-            // wait for the timeout, opening a steal window).
-            // route_runnable_locked also signals the epoch, so the epoch
-            // clause usually fires first; this is the authoritative backstop
-            // for the routed-but-epoch-already-observed case.
-            std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
-            return !ws->local_runnable.empty();
-        });
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // #196 trace: an entry-true predicate is an immediate return (the
+        // model's EnterPhysicalPark predicate-true branch); the manual check
+        // is behaviorally identical to cv.wait's own entry evaluation.
+        e9t_record_entered();
+        if (park_pred()) {
+            e9t_record_returned(/*immediate=*/true, /*timed_out=*/false);
+            ws->park_domain = WorkerState::ParkDomain::None;
+            return;
+        }
+        wake_cv_.wait(lk, park_pred);
+        e9t_record_returned(/*immediate=*/false, /*timed_out=*/false);
+#else
+        wake_cv_.wait(lk, park_pred);
+#endif
         ws->park_domain = WorkerState::ParkDomain::None;
         return;
     }
@@ -467,23 +566,24 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         // observation interval (reference/legacy MIXED-WAKE only).
         wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     }
-    wake_cv_.wait_until(lk, wake_deadline, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-        if (wake_epoch_ != ws->observed_epoch ||
-            global_terminate_.load(std::memory_order_acquire)) {
-            return true;
-        }
-        // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The deque
-        // is protected by inbox_mtx (route_runnable_locked pushes under it);
-        // reading it under wake_mtx_ alone was a data race. Acquire inbox_mtx
-        // for the read. This closes the lost-wake window where a runnable
-        // publication advanced the epoch BEFORE observed_epoch was recorded
-        // (the parked Worker would otherwise wait for the 2ms timeout, opening
-        // a steal window). route_runnable_locked also signals the epoch, so
-        // the epoch clause usually fires first; this is the authoritative
-        // backstop for the routed-but-epoch-already-observed case.
-        std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
-        return !ws->local_runnable.empty();
-    });
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // #196 trace: see the unbounded branch above (same entry/immediate/
+    // blocking discipline; a wait_until expiry with the predicate still
+    // false records the timeout bit — the E5-A2/#185 entry-armed
+    // observation return).
+    e9t_record_entered();
+    if (park_pred()) {
+        e9t_record_returned(/*immediate=*/true, /*timed_out=*/false);
+        ws->park_domain = WorkerState::ParkDomain::None;
+        return;
+    }
+    {
+        const bool satisfied = wake_cv_.wait_until(lk, wake_deadline, park_pred);
+        e9t_record_returned(/*immediate=*/false, /*timed_out=*/!satisfied);
+    }
+#else
+    wake_cv_.wait_until(lk, wake_deadline, park_pred);
+#endif
     ws->park_domain = WorkerState::ParkDomain::None;
 }
 
