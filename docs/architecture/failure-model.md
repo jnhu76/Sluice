@@ -279,6 +279,13 @@ auto-allowed only when its own expression proves the macro.
   empty, so manual mode would scan nothing there) and echoes the scanned
   range in the log. Fail-closed: no `|| true`, first failure wins,
   reproduction command printed.
+- `scripts/gates/failure-envelope.py` validates the machine-checkable
+  `phase × fault ⇒ required outcome` matrix
+  (`docs/verification/failure-envelope.json`, issue #198) that consolidates
+  this taxonomy with the C2b–C2e / D2–D4 mutation-evidence layers. Fail-closed
+  on unknown vocabulary, unresolvable evidence pointers, VERIFIED rows with no
+  evidence, silently green open rows, PENDING spanning rows, and phases that
+  lose their last VERIFIED row.
 - **Grandfathered**: pre-existing sites are not flagged (changed-lines only).
   The backlog of historical sites is tracked in issue #144; cleaning them is
   deliberate, reviewed work — never a drive-by bulk rewrite.

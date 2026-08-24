@@ -1,0 +1,1218 @@
+{
+  "schema": "sluice-failure-envelope/1",
+  "issue": 198,
+  "core_invariant": "accepted -> cannot disappear",
+  "owner_doc": "docs/verification/failure-envelope.md",
+  "vocab_authority": "scripts/gates/failure-envelope.py",
+  "tiers_evidence_order": [
+    "deterministic-fake",
+    "syscall-boundary",
+    "kernel-scripted",
+    "platform-real"
+  ],
+  "rows": [
+    {
+      "id": "FE-001",
+      "phase": "construction",
+      "fault": "worker-spawn-failure",
+      "layer": "threadpool",
+      "required_outcome": "spawn-failure-propagates",
+      "taxonomy": "T1",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M5",
+          "case": "tp_c2d_partial_worker_startup_failure",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M4",
+          "case": "tp_c2d_partial_worker_startup_failure",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "M5: swallowed spawn failure (partial pool silently accepted) is caught; M4: catch path joins already-started workers before propagating."
+    },
+    {
+      "id": "FE-002",
+      "phase": "reserve",
+      "fault": "capacity-exhausted",
+      "layer": "threadpool",
+      "required_outcome": "sync-rejection-zero-residue",
+      "taxonomy": "T2",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/threadpool_backend_c2e_close_drain_test.cpp",
+          "case": "tp_c2e_capacity_full_malformed_rejected_would_block",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M12",
+          "case": "tp_c2d_reserve_failure_injection_zero_residue",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Full window rejects would_block before acceptance; reserve-stage failure injection leaves zero slot/accounting residue."
+    },
+    {
+      "id": "FE-003",
+      "phase": "reserve",
+      "fault": "capacity-exhausted",
+      "layer": "uring",
+      "required_outcome": "sync-rejection-idle-completion",
+      "taxonomy": "T2",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M7",
+          "case": "uring_d2_poison_rejects_after_capacity_is_recycled",
+          "target": "uring_d2_failure_noalloc_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Real liburing: after poison recovery and capacity recycle, new submissions are still rejected (poison/admission checks cannot be bypassed)."
+    },
+    {
+      "id": "FE-004",
+      "phase": "reserve",
+      "fault": "descriptor-malformed",
+      "layer": "threadpool",
+      "required_outcome": "malformed-descriptor-invalid-argument",
+      "taxonomy": "T3",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/threadpool_backend_test.cpp",
+          "case": "tp_offset_past_native_max_is_rejected_before_enqueue",
+          "target": "threadpool_backend_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/threadpool_backend_c2e_close_drain_test.cpp",
+          "case": "tp_c2e_capacity_full_malformed_rejected_would_block",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "AGENTS 9.1: representationally malformed descriptors return invalid_argument synchronously, Completion idle, no enqueue."
+    },
+    {
+      "id": "FE-005",
+      "phase": "reserve",
+      "fault": "descriptor-malformed",
+      "layer": "uring",
+      "required_outcome": "sync-rejection-zero-residue",
+      "taxonomy": "T3",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M11",
+          "case": "uring_d2_precommit_size_rejections_leave_zero_new_residue",
+          "target": "uring_d2_failure_noalloc_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Malformed size-descriptor rejection must roll back the reserved slot (M11 removed the rollback; quiescence fail-fast fired)."
+    },
+    {
+      "id": "FE-006",
+      "phase": "prepare",
+      "fault": "stage-failure-injection",
+      "layer": "threadpool",
+      "required_outcome": "full-rollback",
+      "taxonomy": "T2",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M13",
+          "case": "tp_c2d_prepare_failure_injection_slot_rollback",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Prepare-stage failure rejects invalid_state and rolls the reserved slot back (zero residue)."
+    },
+    {
+      "id": "FE-007",
+      "phase": "prepare",
+      "fault": "waiter-borrow-window",
+      "layer": "arena",
+      "required_outcome": "full-rollback",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "A",
+          "case": "arena_borrow_lifecycle_full_matrix",
+          "target": "request_waiter_borrow_lease_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "I7: the fd/buffer borrow begins only at commit; borrow-at-prepare is a caught defect class."
+    },
+    {
+      "id": "FE-008",
+      "phase": "commit",
+      "fault": "cas-loss-contention",
+      "layer": "threadpool",
+      "required_outcome": "sync-rejection-zero-residue",
+      "taxonomy": "T3",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M6",
+          "case": "tp_c2d_cas_loss_rejection_zero_side_effects",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Binding-CAS loss must roll back the candidate slot; a leaked slot (slot_in_use residue) is a caught defect."
+    },
+    {
+      "id": "FE-009",
+      "phase": "commit",
+      "fault": "stage-failure-injection",
+      "layer": "threadpool",
+      "required_outcome": "binding-rollback",
+      "taxonomy": "T3",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M11",
+          "case": "tp_c2d_commit_failure_injection_rollback_binding_before_accept",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Commit-failure rollback must call rollback_binding_before_accept; a Completion stuck in binding is a caught defect."
+    },
+    {
+      "id": "FE-010",
+      "phase": "commit",
+      "fault": "publication-order",
+      "layer": "arena",
+      "required_outcome": "payload-visible-on-outstanding",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/completion_binding_test.cpp",
+          "case": "binding_cas_elects_one_context",
+          "target": "completion_binding_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/completion_binding_test.cpp",
+          "case": "concurrent_binding_exactly_one_wins",
+          "target": "completion_binding_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "I2 contract tier: exactly one context wins the binding CAS and the payload (release capability + slot handle) is installed before the binding->outstanding commit (ADR Decision 5 / I2). The memory-order tier (acquire/release visibility of the payload) is the #197 weak-memory kernel layer and may be added as additional evidence once that layer merges."
+    },
+    {
+      "id": "FE-011",
+      "phase": "enqueue",
+      "fault": "dispatch-failure",
+      "layer": "threadpool",
+      "required_outcome": "accepted-cannot-disappear",
+      "taxonomy": "T1",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M1",
+          "case": "tp_c2d_dispatch_failure_injection_size_op",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M2",
+          "case": "tp_c2d_dispatch_failure_injection_size_op",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M3",
+          "case": "tp_c2d_dispatch_failure_injection_size_op",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Post-commit dispatch failure records exactly one backend_error terminal and preserves the ready-domain wake; pushing the handle anyway (M1), wrong error code (M2), or a lost wake (M3) are each caught defects."
+    },
+    {
+      "id": "FE-012",
+      "phase": "enqueue",
+      "fault": "allocation-failure",
+      "layer": "threadpool",
+      "required_outcome": "allocation-free-post-commit",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M7",
+          "case": "tp_c2d_real_worker_post_commit_no_allocation",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Post-accept liveness must not depend on heap allocation (Decision 14 / I9): an added post-commit allocation aborts under always-throw."
+    },
+    {
+      "id": "FE-013",
+      "phase": "enqueue",
+      "fault": "allocation-failure",
+      "layer": "fake-async",
+      "required_outcome": "allocation-free-post-commit",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M8",
+          "case": "fake_full_window_alloc_failure_defined_error_terminal",
+          "target": "reference_backend_no_alloc_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Reference backend manual-terminal path is allocation-free; under always-throw it must still produce the defined error terminal."
+    },
+    {
+      "id": "FE-014",
+      "phase": "enqueue",
+      "fault": "allocation-failure",
+      "layer": "uring",
+      "required_outcome": "allocation-free-post-commit",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M1",
+          "case": "uring_d2_ordinary_size_path_is_allocation_free",
+          "target": "uring_d2_failure_noalloc_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Real liburing ordinary size path is allocation-free post-commit."
+    },
+    {
+      "id": "FE-015",
+      "phase": "dispatch",
+      "fault": "stale-identity",
+      "layer": "threadpool",
+      "required_outcome": "generation-safe-reuse",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "A",
+          "case": "arena_stale_handle_leaves_live_occupant_untouched",
+          "target": "request_lifecycle_scheme_b_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "A stale (old-generation) terminal must leave the live N+1 occupant untouched."
+    },
+    {
+      "id": "FE-016",
+      "phase": "syscall",
+      "fault": "eintr",
+      "layer": "core",
+      "required_outcome": "retry-or-single-terminal",
+      "taxonomy": "T7",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/posix_retry_test.cpp",
+          "case": "retry_on_eintr_retries_then_succeeds",
+          "target": "posix_retry_test",
+          "tier": "syscall-boundary"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/posix_retry_test.cpp",
+          "case": "retry_on_eintr_does_not_retry_non_eintr_error",
+          "target": "posix_retry_test",
+          "tier": "syscall-boundary"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/posix_retry_test.cpp",
+          "case": "retry_on_eintr_returns_zero_unchanged",
+          "target": "posix_retry_test",
+          "tier": "syscall-boundary"
+        }
+      ],
+      "notes": "Repository retry authority (detail::retry_on_eintr): retry EINTR, never retry other errors, zero stays zero."
+    },
+    {
+      "id": "FE-017",
+      "phase": "syscall",
+      "fault": "eintr",
+      "layer": "core",
+      "required_outcome": "retry-or-single-terminal",
+      "taxonomy": "T7",
+      "spanning": false,
+      "status": "PLATFORM-BOUND",
+      "evidence": [],
+      "status_note": "The deterministic retry authority is FE-016; a REAL kernel EINTR arriving on a blocked syscall inside a blocking-backend worker is not injectable on this host (no deterministic seam at the real-syscall boundary). Re-open when a real-kernel fault-injection tier exists.",
+      "notes": "Honest open state, not a silently green row."
+    },
+    {
+      "id": "FE-018",
+      "phase": "syscall",
+      "fault": "syscall-error",
+      "layer": "threadpool",
+      "required_outcome": "verbatim-result-wins",
+      "taxonomy": "T1",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "B2",
+          "case": "tp_running_cancel_intent_real_result_verbatim",
+          "target": "threadpool_backend_scheme_b_race_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "An ordinary syscall success/error remains eligible to win verbatim; a live cancel intent must not rewrite it into canceled (DIV-10 / ADR Decision 11)."
+    },
+    {
+      "id": "FE-019",
+      "phase": "cancel",
+      "fault": "cancel-intent-accounting",
+      "layer": "threadpool",
+      "required_outcome": "cancel-accounting-exact",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "B1",
+          "case": "tp_running_cancel_intent_does_not_tally",
+          "target": "threadpool_backend_scheme_b_race_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "A cancel that only records intent must not tally canceled_ops; the accounting invariant is independent of the verbatim-result invariant (two separate mutants)."
+    },
+    {
+      "id": "FE-020",
+      "phase": "transfer",
+      "fault": "short-transfer",
+      "layer": "core",
+      "required_outcome": "short-valid-loop-owner",
+      "taxonomy": "T7",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/reader_test.cpp",
+          "case": "read_exact_assembles_short_reads",
+          "target": "reader_test",
+          "tier": "syscall-boundary"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/reader_test.cpp",
+          "case": "read_exact_returns_eof_when_source_too_short",
+          "target": "reader_test",
+          "tier": "syscall-boundary"
+        }
+      ],
+      "notes": "read_some/write_some may be short; exact/all helpers loop at the owner layer."
+    },
+    {
+      "id": "FE-021",
+      "phase": "transfer",
+      "fault": "zero-progress-write",
+      "layer": "core",
+      "required_outcome": "zero-progress-invalid-state",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/writer_test.cpp",
+          "case": "write_all_rejects_zero_progress_on_non_empty_input",
+          "target": "writer_test",
+          "tier": "syscall-boundary"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/sync_contract_negative_test.cpp",
+          "case": "contract_write_all_zero_progress_is_invalid_state",
+          "target": "sync_contract_negative_test",
+          "tier": "syscall-boundary"
+        }
+      ],
+      "notes": "Zero progress on a non-empty write is an invalid backend state, never an infinite retry loop (AGENTS 9)."
+    },
+    {
+      "id": "FE-022",
+      "phase": "uring-submit",
+      "fault": "submit-transient-error",
+      "layer": "uring",
+      "required_outcome": "transient-recovered-next-poll",
+      "taxonomy": "T7",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M2",
+          "case": "uring_submit_transient_error_recovers_on_next_poll",
+          "target": "uring_submit_failure_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Transient EINTR/EAGAIN/EBUSY at submit routes to recovery, not permanent poison (real liburing)."
+    },
+    {
+      "id": "FE-023",
+      "phase": "uring-submit",
+      "fault": "submit-zero-progress",
+      "layer": "uring",
+      "required_outcome": "state-unchanged",
+      "taxonomy": "T7",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M3",
+          "case": "uring_submit_zero_progress_does_not_change_request_state",
+          "target": "uring_submit_failure_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "submit()==0 does not retroactively reject or mutate accepted requests."
+    },
+    {
+      "id": "FE-024",
+      "phase": "uring-submit",
+      "fault": "submit-partial",
+      "layer": "uring",
+      "required_outcome": "suffix-remains-owned",
+      "taxonomy": "T7",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M4",
+          "case": "uring_scripted_partial_return_does_not_mutate_request_state",
+          "target": "uring_submit_failure_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "A positive partial submit prefix must not terminalize any operation; the unsubmitted suffix remains owned/tracked."
+    },
+    {
+      "id": "FE-025",
+      "phase": "uring-submit",
+      "fault": "submit-permanent-failure",
+      "layer": "uring",
+      "required_outcome": "accepted-cannot-disappear",
+      "taxonomy": "T1",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M6",
+          "case": "uring_permanent_submit_failure_retires_physical_batch_and_local_fifo",
+          "target": "uring_submit_failure_test",
+          "tier": "kernel-scripted"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M5",
+          "case": "uring_poison_wait_drains_old_kernel_work_without_resubmitting_class_a",
+          "target": "uring_submit_failure_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Class-A permanent failure retires the physical batch and local FIFO exactly once; older kernel work is drained without resubmitting Class-A."
+    },
+    {
+      "id": "FE-026",
+      "phase": "uring-submit",
+      "fault": "submit-permanent-failure",
+      "layer": "uring",
+      "required_outcome": "quarantine-held",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md",
+          "anchor": "M8",
+          "case": "uring_d2_poison_wait_never_submits_quarantined_write",
+          "target": "uring_d2_failure_noalloc_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Poisoned wait never flushes the quarantined staged SQE. Includes the documented surviving-mutant correction (first M8 attempt was a false green; the detector was rebuilt on a transport-state invariant)."
+    },
+    {
+      "id": "FE-027",
+      "phase": "cancel",
+      "fault": "cancel-races-dispatch",
+      "layer": "threadpool",
+      "required_outcome": "exactly-one-terminal",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M10",
+          "case": "tp_c2d_cancel_wins_before_enqueue_injection_armed",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Enqueue/cancel arbitration under one request-state authority: a cancel that wins before enqueue terminalizes exactly once and the injection must not fire on the terminal_noop path."
+    },
+    {
+      "id": "FE-028",
+      "phase": "cancel",
+      "fault": "double-terminal",
+      "layer": "arena",
+      "required_outcome": "exactly-one-terminal",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "C",
+          "case": "exactly_one_terminal_winner",
+          "target": "request_lifecycle_scheme_b_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "D",
+          "case": "tp_canceled_ops_tallied_only_on_terminal_won",
+          "target": "threadpool_backend_scheme_b_race_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "First valid backend-ready wins; losers cannot overwrite, re-enter the ready ring, or double-decrement accounting."
+    },
+    {
+      "id": "FE-029",
+      "phase": "cancel",
+      "fault": "stale-identity",
+      "layer": "uring",
+      "required_outcome": "generation-safe-reuse",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d3-uring-identity-waiter-mutation-evidence.md",
+          "anchor": "D3-M2",
+          "case": "uring_c2b_stale_slothandle_cancel_harmless",
+          "target": "uring_backend_c2b_identity_test",
+          "tier": "kernel-scripted"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "H",
+          "case": "fake_stale_waiter_authority_harmless",
+          "target": "backend_c2c_waiter_borrow_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Stale SlotHandle/cookie authority resolves to not_found against a reused occupant (fake + real liburing)."
+    },
+    {
+      "id": "FE-030",
+      "phase": "wait",
+      "fault": "lost-wake",
+      "layer": "threadpool",
+      "required_outcome": "wake-preserved",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2d-failure-injection-mutation-evidence.md",
+          "anchor": "M3",
+          "case": "tp_c2d_dispatch_failure_injection_size_op",
+          "target": "threadpool_backend_c2d_failure_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M5",
+          "case": "tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Every progress-enabling path signals the ready domain; a skipped signal (C2d-M3) or a sticky control wake that prevents re-parking (C2e-M5) are caught defects."
+    },
+    {
+      "id": "FE-031",
+      "phase": "wait",
+      "fault": "waiter-conflict",
+      "layer": "arena",
+      "required_outcome": "single-waiter-registration",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "C",
+          "case": "arena_single_waiter_first_registration_survives",
+          "target": "request_waiter_borrow_lease_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Second waiter registration is rejected invalid_state; the first registration survives."
+    },
+    {
+      "id": "FE-032",
+      "phase": "wait",
+      "fault": "wait-cancel-overreach",
+      "layer": "arena",
+      "required_outcome": "wait-cancel-independent",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "D",
+          "case": "arena_waiter_cancel_removes_only_the_waiter",
+          "target": "request_waiter_borrow_lease_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "E",
+          "case": "arena_cancel_waiter_vs_reap_race",
+          "target": "request_waiter_borrow_lease_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "F",
+          "case": "arena_lease_transfer_chain_reap_path",
+          "target": "request_waiter_borrow_lease_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Wait-cancel removes only the waiter (never steals I/O authority); the delivery lease has exactly one owner in the cancel-vs-reap race."
+    },
+    {
+      "id": "FE-033",
+      "phase": "wait",
+      "fault": "interrupt-races-ready",
+      "layer": "context",
+      "required_outcome": "wake-preserved",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M4",
+          "case": "tp_c2e_interrupt_final_reap_closes_ready_race",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M12",
+          "case": "ctx_wait_one_interrupt_final_poll_closes_ready_race",
+          "target": "async_io_context_split_wait_c2e_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "An interrupt (control) wake must not swallow a request that became backend-ready inside the interrupt window: final reap/poll closes the race at both the backend and context layers."
+    },
+    {
+      "id": "FE-034",
+      "phase": "reap",
+      "fault": "double-terminal",
+      "layer": "arena",
+      "required_outcome": "exactly-one-terminal",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "C",
+          "case": "exactly_one_terminal_winner",
+          "target": "request_lifecycle_scheme_b_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "F",
+          "case": "fake_binding_identity_and_publication_boundary",
+          "target": "backend_scheme_b_race_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "formal",
+          "ref": "scripts/formal/verify-e7-publication.sh",
+          "tier": "formal-tla"
+        }
+      ],
+      "notes": "No double publication, no result delivered to the wrong Completion (binding identity), backed by the E7 publication TLA+ gate."
+    },
+    {
+      "id": "FE-035",
+      "phase": "reap",
+      "fault": "publication-order",
+      "layer": "arena",
+      "required_outcome": "reap-gates-publication",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "G",
+          "case": "tp_publication_boundary_reap_gates_ready",
+          "target": "threadpool_backend_scheme_b_race_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md",
+          "anchor": "I",
+          "case": "arena_borrow_publication_order",
+          "target": "request_waiter_borrow_lease_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Only designated reap code publishes Completion-ready; the borrow ends before the publication (I18 order)."
+    },
+    {
+      "id": "FE-036",
+      "phase": "reap",
+      "fault": "stale-identity",
+      "layer": "arena",
+      "required_outcome": "generation-safe-reuse",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2b-identity-mutation-evidence.md",
+          "anchor": "A",
+          "case": "arena_stale_handle_leaves_live_occupant_untouched",
+          "target": "request_lifecycle_scheme_b_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Stale generation cannot mutate a reused slot; on the reuse round the reset's release ordering is load-bearing (#197 K2 P3b, control N4)."
+    },
+    {
+      "id": "FE-037",
+      "phase": "reset-reuse",
+      "fault": "reset-releases-slot",
+      "layer": "arena",
+      "required_outcome": "generation-safe-reuse",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M9",
+          "case": "drain_then_reset_releases_slot",
+          "target": "backend_conformance_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "reset()/ready-destruction releases the slot (generation++) exactly once; the reuse round's publication visibility is additionally weak-memory-checked (#197)."
+    },
+    {
+      "id": "FE-038",
+      "phase": "close",
+      "fault": "close-races-acceptance",
+      "layer": "threadpool",
+      "required_outcome": "close-serializes-acceptance",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M11",
+          "case": "tp_c2e_close_waits_for_inflight_acceptance_lp",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M1",
+          "case": "close_rejects_future_submit",
+          "target": "backend_conformance_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M10",
+          "case": "close_rejects_future_submit",
+          "target": "backend_conformance_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Close rejects future submits and serializes against an in-flight acceptance LP (the binding->outstanding release-store, ADR Decision 15)."
+    },
+    {
+      "id": "FE-039",
+      "phase": "close",
+      "fault": "close-races-accepted-work",
+      "layer": "threadpool",
+      "required_outcome": "close-preserves-accepted",
+      "taxonomy": "T6",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M2",
+          "case": "tp_c2e_close_while_pending_preserves_accepted_request",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M3",
+          "case": "tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin",
+          "target": "threadpool_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Close does NOT cancel accepted work (spanning invariant at shutdown admission) and wakes a parked waiter exactly once (no busy spin)."
+    },
+    {
+      "id": "FE-040",
+      "phase": "close",
+      "fault": "close-races-acceptance",
+      "layer": "fake-async",
+      "required_outcome": "close-serializes-acceptance",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M11-fake",
+          "case": "fake_c2e_close_waits_for_inflight_acceptance_lp",
+          "target": "fake_backend_c2e_close_drain_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Same acceptance-LP serialization defect class proven on the reference backend."
+    },
+    {
+      "id": "FE-041",
+      "phase": "drain",
+      "fault": "interrupt-races-ready",
+      "layer": "context",
+      "required_outcome": "wake-preserved",
+      "taxonomy": "T4",
+      "spanning": true,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
+          "anchor": "M12",
+          "case": "ctx_wait_one_interrupt_final_poll_closes_ready_race",
+          "target": "async_io_context_split_wait_c2e_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Drain convergence: the context-level interrupted branch keeps its final poll so accepted work cannot stall behind an interrupt."
+    },
+    {
+      "id": "FE-042",
+      "phase": "destruction",
+      "fault": "non-quiescent-destruction",
+      "layer": "threadpool",
+      "required_outcome": "non-quiescent-fail-fast",
+      "taxonomy": "T6",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "death",
+          "ref": "tests/threadpool_backend_death_test.cpp",
+          "case": "tp_death_destroy_with_enqueued",
+          "target": "threadpool_backend_death_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "death",
+          "ref": "tests/threadpool_backend_death_test.cpp",
+          "case": "tp_death_destroy_with_pending",
+          "target": "threadpool_backend_death_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "death",
+          "ref": "tests/threadpool_backend_death_test.cpp",
+          "case": "tp_death_destroy_with_backend_ready",
+          "target": "threadpool_backend_death_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "death",
+          "ref": "tests/threadpool_backend_death_test.cpp",
+          "case": "tp_death_destroy_with_completion_ready",
+          "target": "threadpool_backend_death_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Death matrix proves non-quiescent destruction fail-fasts in Debug AND Release. C2e M6/M7 are documented NEGATIVE results: the ThreadPool-level slot_in_use/backend_ready checks are defense-in-depth redundancy (the ARENA destructor is the covering authority) — kept for fail-fast site locality, recorded as redundancy, not independent contract lines."
+    },
+    {
+      "id": "FE-043",
+      "phase": "destruction",
+      "fault": "non-quiescent-destruction",
+      "layer": "arena",
+      "required_outcome": "non-quiescent-fail-fast",
+      "taxonomy": "T6",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "death",
+          "ref": "tests/request_arena_death_test.cpp",
+          "case": "arena_death_destroy_with_slot_in_use",
+          "target": "request_arena_death_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "death",
+          "ref": "tests/failure_model_high_risk_death_test.cpp",
+          "case": "SB-B",
+          "target": "failure_model_high_risk_death_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "The arena destructor is the covering destruction authority (per the C2e M6/M7 note)."
+    },
+    {
+      "id": "FE-044",
+      "phase": "destruction",
+      "fault": "non-quiescent-destruction",
+      "layer": "uring",
+      "required_outcome": "non-quiescent-fail-fast",
+      "taxonomy": "T6",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "mutation",
+          "ref": "docs/verification/phase-d4-uring-wait-close-drain-mutation-evidence.md",
+          "anchor": "D4-RM11",
+          "case": "uring_c2e_death_preflight_before_queue_exit_order",
+          "target": "uring_backend_c2e_death_test",
+          "tier": "kernel-scripted"
+        }
+      ],
+      "notes": "Real liburing destructor preflight (before queue_exit) is load-bearing; bypassing it is a caught defect (D4 round-2)."
+    },
+    {
+      "id": "FE-045",
+      "phase": "destruction",
+      "fault": "close-races-accepted-work",
+      "layer": "context",
+      "required_outcome": "quiescent-destroy-succeeds",
+      "taxonomy": "T6",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "death",
+          "ref": "tests/failure_model_high_risk_death_test.cpp",
+          "case": "SB-C",
+          "target": "failure_model_high_risk_death_test",
+          "tier": "deterministic-fake"
+        }
+      ],
+      "notes": "Quiescent teardown completes silently (control case): destruction itself is not the violation, the non-quiescent state is."
+    },
+    {
+      "id": "FE-046",
+      "phase": "syscall",
+      "fault": "syscall-error",
+      "layer": "core",
+      "required_outcome": "t1-error-surfaces-via-result",
+      "taxonomy": "T1",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "test",
+          "ref": "tests/async_completion_test.cpp",
+          "case": "completion_complete_with_error_surfaces_via_result",
+          "target": "async_completion_test",
+          "tier": "deterministic-fake"
+        },
+        {
+          "kind": "test",
+          "ref": "tests/threadpool_backend_test.cpp",
+          "case": "tp_cancel_best_effort_op_completes_with_real_result",
+          "target": "threadpool_backend_test",
+          "tier": "syscall-boundary"
+        }
+      ],
+      "notes": "Expected operation failures surface as Result/IoError (never assert/terminate); best-effort cancel preserves the real result."
+    },
+    {
+      "id": "FE-047",
+      "phase": "transfer",
+      "fault": "wal-decode-corruption",
+      "layer": "core",
+      "required_outcome": "wal-decode-rejected-deterministic",
+      "taxonomy": "T1",
+      "spanning": false,
+      "status": "VERIFIED",
+      "evidence": [
+        {
+          "kind": "fuzz",
+          "ref": "docs/verification/wal-copy-fuzz-mutation-evidence.md",
+          "anchor": "Mutation",
+          "tier": "fuzz"
+        }
+      ],
+      "notes": "libFuzzer + ASan/UBSan corpus with deterministic mutation proof for the WAL decoder and copy_all surfaces."
+    },
+    {
+      "id": "FE-048",
+      "phase": "uring-submit",
+      "fault": "kernel-fault",
+      "layer": "uring",
+      "required_outcome": "accepted-cannot-disappear",
+      "taxonomy": "T1",
+      "spanning": true,
+      "status": "PLATFORM-BOUND",
+      "evidence": [],
+      "status_note": "D2-D4 script failures at the kernel edge (highest available tier on this host: real liburing with scripted submit/CQE results). A REAL kernel/backend fault (e.g. medium error on an in-flight operation) is not injectable here; the row re-opens when a kernel-fault tier exists.",
+      "notes": "Honest open state; the scripted tier rows are FE-022..FE-026."
+    },
+    {
+      "id": "FE-049",
+      "phase": "dispatch",
+      "fault": "scheduler-dispatch-fault",
+      "layer": "scheduler",
+      "required_outcome": "retry-or-single-terminal",
+      "taxonomy": "T4",
+      "spanning": false,
+      "status": "COVERAGE-BOUNDARY",
+      "evidence": [],
+      "status_note": "No mechanism-level fault-injection evidence exists for Scheduler-tier dispatch (fiber routing / runnable publication) — the C2e/D4 rows cover backend and context tiers only. Deliberately not filled; tracked as a coverage boundary, not a silent green row.",
+      "notes": "Adding this row's evidence requires a new injection seam (a #198 non-goal); recorded so the boundary is visible."
+    }
+  ]
+}
