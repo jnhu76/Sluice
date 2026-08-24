@@ -1,0 +1,97 @@
+# Architecture — Classification Index
+
+This directory mixes two kinds of material at one path level: **current
+architecture authority** and **point-in-time compliance/audit evidence**. This
+index separates them so a reader can find current truth without archaeology,
+and so future archive moves (issue #167 Step 5) know which documents are
+path-pinned.
+
+Classification baseline: `master@28284da` (2026-08-24, issue #167 Step 3).
+Re-classify when documents change role, not on a schedule.
+
+## Classes
+
+- **CURRENT** — describes the as-built architecture, an active invariant, an
+  active contract, or an active process/policy authority.
+- **EVIDENCE** — point-in-time compliance, gate, audit, or closeout record.
+  Still navigated by scripts, CI, spec manifests, tests, or current documents;
+  not current authority for new decisions, but not dead history either.
+- **HISTORICAL** — superseded planning/design record kept for provenance only.
+
+Move policy: **classify before move**. A document moves to
+[`docs/history/`](../history/README.md) only when its exact-path consumers are
+inventoried and updated atomically, a historical banner is added, and no
+active #163 verification anchor depends on the current path. "Blocked" below
+means a script, spec manifest, or test hard-codes the current path.
+
+## CURRENT — current architecture authority
+
+| Document | Current purpose | Move? |
+|----------|-----------------|------|
+| [`architecture-constitution.md`](architecture-constitution.md) | AC-N engineering principles; pinned by `AGENTS.md` and `scripts/verify-architecture-docs.py` | No |
+| [`overview.md`](overview.md) | Architecture entry point; linked from root READMEs | No |
+| [`async-runtime.md`](async-runtime.md) | Scheduler/Fiber/execution architecture | No |
+| [`async-synchronization.md`](async-synchronization.md) | WaitNode/WaitQueue + synchronization primitives | No |
+| [`async-io-foundation.md`](async-io-foundation.md) | Completion/AsyncBackend/AsyncIoContext layer | No |
+| [`async-request-lifecycle.md`](async-request-lifecycle.md) | Per-request lifecycle narrative (as-built) | No |
+| [`sync-io-architecture.md`](sync-io-architecture.md) | Synchronous I/O model | No |
+| [`sync-durability-model.md`](sync-durability-model.md) | Durability contracts (`sync_data`/`sync_all`) | No |
+| [`sync-backend-taxonomy.md`](sync-backend-taxonomy.md) | Sync backend boundary decisions | No |
+| [`failure-model.md`](failure-model.md) | T1–T7 failure taxonomy + assert policy; consumed by `AGENTS.md` §9.2, assert-hygiene gates, `scripts/gates/pre-push.sh`, failure-model tests | No |
+| [`divergence-registry.md`](divergence-registry.md) | Live Zig-divergence registry; pinned by `AGENTS.md` and `scripts/verify-architecture-docs.py` | No |
+| [`design-compliance-gate.md`](design-compliance-gate.md) | Generic Gate 0–4 compliance-gate template; referenced by `AGENTS.md` §8 | No |
+| [`zig-io-conformance-map.md`](zig-io-conformance-map.md) | Zig std.Io conformance/divergence map; pinned by `scripts/verify-architecture-docs.py` | No |
+| [`foundation-freeze.md`](foundation-freeze.md) | Active freeze policy: entry conditions for any foundation change | No |
+
+## EVIDENCE — point-in-time compliance/audit records
+
+| Document | Records | Move? |
+|----------|---------|------|
+| [`as-built-async-architecture.md`](as-built-async-architecture.md) | Commit-pinned as-built snapshot + subsystem update blocks; pinned by `scripts/verify-architecture-docs.py` | Blocked |
+| [`current-architecture-findings.md`](current-architecture-findings.md) | Audit findings with resolution notes; pinned by `scripts/verify-architecture-docs.py` | Blocked |
+| [`remediation-roadmap.md`](remediation-roadmap.md) | Phase A–G ordering record (all COMPLETE); pinned by `scripts/verify-architecture-docs.py` | Blocked |
+| [`phase-b-compliance-gate.md`](phase-b-compliance-gate.md) | RequestKey/RequestSlot reference lifecycle gate | Deferred |
+| [`phase-c1-conformance-gate.md`](phase-c1-conformance-gate.md) | Backend conformance framework; pinned by `scripts/tests/test_backend_conformance_manifest.py` | Blocked |
+| [`phase-c2a-compliance-gate.md`](phase-c2a-compliance-gate.md) | Capacity/admission/accounting conformance | Deferred |
+| [`phase-c2b-compliance-gate.md`](phase-c2b-compliance-gate.md) | Generation/stale-key/cancel-winner conformance | Deferred |
+| [`phase-c2c-compliance-gate.md`](phase-c2c-compliance-gate.md) | Waiter/borrow/delivery-lease conformance | Deferred |
+| [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md) | Failure-injection/allocator-failure conformance | Deferred |
+| [`phase-c2e-compliance-gate.md`](phase-c2e-compliance-gate.md) | Close/drain/reset/destruction conformance | Deferred |
+| [`phase-d1-uring-frozen-design.md`](phase-d1-uring-frozen-design.md) | Uring private-ring migration frozen design; pinned by `spec/tla/manifest.json` | Blocked |
+| [`phase-d1-uring-permanent-submit-failure-audit.md`](phase-d1-uring-permanent-submit-failure-audit.md) | `io_uring_submit()` permanent-failure audit; pinned by `spec/tla/manifest.json` | Blocked |
+| [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md) | Uring failure/no-allocation gate | Deferred |
+| [`phase-d3-uring-identity-waiter-gate.md`](phase-d3-uring-identity-waiter-gate.md) | Uring identity/cancel/borrow/waiter gate | Candidate (zero external consumers) |
+| [`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md) | Uring wait/close/drain/destruction gate | Candidate (zero external consumers) |
+| [`phase-e-compliance-gate.md`](phase-e-compliance-gate.md) | ThreadPoolBackend bounded migration gate | Deferred |
+| [`phase-f-compliance-gate.md`](phase-f-compliance-gate.md) | Scheduler/Batch identity-bearing reap gate | Candidate (zero external consumers) |
+| [`phase-f1-compliance-gate.md`](phase-f1-compliance-gate.md) | Scheduler identity-bearing reap gate; pinned by `tests/scheduler_identity_wake_test.cpp`, `tests/uring_f1_scheduler_routing_test.cpp` | Blocked |
+| [`phase-f3-compliance-gate.md`](phase-f3-compliance-gate.md) | Public RequestHandle gate | Deferred |
+| [`phase-g-compliance-gate.md`](phase-g-compliance-gate.md) | backend-ready progress wake integration gate | Deferred |
+| [`c7-runtime-await-helpers-compliance-gate.md`](c7-runtime-await-helpers-compliance-gate.md) | Await helpers/task-result bridge gate | Candidate (zero external consumers) |
+| [`issue-115-runnable-publication-wake-gate.md`](issue-115-runnable-publication-wake-gate.md) | Runnable-publication wake obligation gate | Deferred |
+| [`issue-116-reentry-liveness-gate.md`](issue-116-reentry-liveness-gate.md) | Invocation-boundary lost re-entry liveness gate; pinned by `scripts/gates/mechanical-facts.py` (`TEST_TOTAL_EXTRA_DOCS`) | Blocked |
+| [`issue-137-submission-transaction-compliance-gate.md`](issue-137-submission-transaction-compliance-gate.md) | Centralized submission transaction gate | Candidate (zero external consumers) |
+| [`issue-137-submission-transaction-design.md`](issue-137-submission-transaction-design.md) | Submission-transaction design. Note: its internal status block still says PROPOSED/blocked, but issue #137 is CLOSED — the block is stale, the record is evidence | Candidate (zero external consumers) |
+| [`issue-137-submission-transaction-mutation-evidence.md`](issue-137-submission-transaction-mutation-evidence.md) | RED-validity mutation evidence for the transaction gate | Candidate (zero external consumers) |
+| [`issue-161-idle-dance-contribution-generation-gate.md`](issue-161-idle-dance-contribution-generation-gate.md) | Idle-dance contribution generation gate; pinned by `spec/tla/manifest.json` and `spec/tla/e12_rwlock_scheduler_liveness/README.md` | Blocked |
+
+## HISTORICAL — superseded records (provenance only)
+
+| Document | Records | Move? |
+|----------|---------|------|
+| [`phase-d-uring-migration-plan.md`](phase-d-uring-migration-plan.md) | Phase D plan; self-declares historical banner, superseded by the frozen design + completed gates | Deferred (5 docs consumers to update atomically) |
+| [`phase-d2-uring-failure-noalloc-implementation-plan.md`](phase-d2-uring-failure-noalloc-implementation-plan.md) | Executed Phase D2 implementation plan | Candidate (zero consumers) |
+
+## Recommended first move set (issue #167 Step 5)
+
+After the #163 audit snapshot is fixed, the zero-consumer records are the
+safest first moves to `docs/history/`:
+
+- `phase-d2-uring-failure-noalloc-implementation-plan.md`
+- `issue-137-submission-transaction-{design,compliance-gate,mutation-evidence}.md`
+- `c7-runtime-await-helpers-compliance-gate.md`
+- `phase-{f,d3,d4}` gate records
+
+Each move requires: a historical banner, an update to this index, and a
+`git grep` proof that no live reference remains. Blocked documents move only
+together with the script/spec/test pins that reference them.
