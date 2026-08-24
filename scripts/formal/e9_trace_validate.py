@@ -13,12 +13,13 @@ second protocol implementation):
   2. The documented event -> model-action COMPILATION (the mapping table,
      including the two fusions below).
   3. A generated TLC replay wrapper (EXTENDS E9ParkWake) in an isolated
-     temp workspace: required trace steps fire in order; only the
-     non-wake-advancing actions may fire silently (bounded budget); TLC
-     searches for ANY behavior of the model that realizes the compiled
-     action sequence. Invariant TraceIncomplete is VIOLATED iff a behavior
-     consumes the whole trace (ACCEPT, with TLC's counterexample as the
-     witness behavior); it HOLDS iff no behavior does (REJECT).
+     temp workspace: required steps fire in order — the compiled
+     pre-history actions (if any) first, then the compiled trace actions;
+     only the non-wake-advancing actions may fire silently (bounded
+     budget); TLC searches for ANY behavior of the model that realizes the
+     compiled action sequence. Invariant TraceIncomplete is VIOLATED iff a
+     behavior consumes the whole trace (ACCEPT, with TLC's counterexample
+     as the witness behavior); it HOLDS iff no behavior does (REJECT).
 
 Event -> model action mapping (#196; C++ origins in
 src/async/scheduler_park_wake.cpp + src/async/scheduler.cpp):
@@ -58,15 +59,22 @@ design: the model ends the invocation; the C++ physically drains it):
                             causeless or un-armed-escape return is rejected
                             even post-terminal)
 
-Pre-history (TraceStart): C++ pre-run fiber admission / pre-run backend
-submit publish NO wake; the model reaches those states only through
-epoch-advancing producers. Each declared pre-history is therefore encoded
-as its exact REACHABLE model state (behaviors from a reachable state are
-suffixes of spec behaviors — sound):
+Pre-history (compiled, #202): C++ pre-run fiber admission / pre-run
+backend submit publish NO wake; the model reaches those states only
+through epoch-advancing producers. Each declared pre-history is therefore
+COMPILED into those real model actions and replayed from the TRUE Init as
+the FIRST required steps of the wrapper — TLC must fire them under their
+actual guards, so the pre-history state's reachability is mechanically
+established by the same search (no hand-written state formula, no Init
+disjunct). The pre-history is a PINNED prefix: no silent step may fire
+until it is consumed (the C++ pre-run is a fixed contiguous sequence
+before the recorded window opens; a silent interleave would drift the
+pre-history state — e.g. a silent SubmitBackend turning the MWS3 wait
+into MWS2, which the self-test REJECT leg guards against):
 
-  external_wait_registered == Init · PublishRunnable · RunFiber · SuspendFiber
-  backend_outstanding      == Init · PublishRunnable · RunFiber · SubmitBackend
-                              · FinishFiber
+  external_wait_registered == Init -> PublishRunnable -> RunFiber -> SuspendFiber
+  backend_outstanding      == Init -> PublishRunnable -> RunFiber
+                              -> SubmitBackend -> FinishFiber
 
 Claim supported by an ACCEPT: TRACE-CONFORMANT (TESTED EXECUTIONS) for this
 trace only — never implementation verification, never all executions.
@@ -238,8 +246,25 @@ def compile_actions(events):
 
 def gen_wrapper(actions, split_wait, run_mode, prehistory, test):
     """Generates the TLC replay wrapper module + cfg text."""
+    # The declared pre-history is compiled into the REAL model actions that
+    # reach it from the true Init (see the module docstring): the C++ pre-run
+    # — fiber admission / backend submit — publishes no wake, and the model
+    # reaches those states only through these epoch-advancing producers.
+    # TLC must fire them under their actual guards, so the pre-history
+    # state's reachability is mechanically established by the same replay
+    # search (no hand-written state formula, no Init disjunct).
+    pre_actions = {
+        "external_wait_registered": [
+            ("PublishRunnable", None), ("RunFiber", None),
+            ("SuspendFiber", None)],
+        "backend_outstanding": [
+            ("PublishRunnable", None), ("RunFiber", None),
+            ("SubmitBackend", None), ("FinishFiber", None)],
+    }.get(prehistory, [])
+
+    all_actions = pre_actions + actions
     steps = []
-    for idx, (act, worker) in enumerate(actions, start=1):
+    for idx, (act, worker) in enumerate(all_actions, start=1):
         call = act if worker is None else f"{act}(W{worker})"
         steps.append(
             f"Step{idx} ==\n"
@@ -248,74 +273,55 @@ def gen_wrapper(actions, split_wait, run_mode, prehistory, test):
             f"    /\\ tstep' = {idx}\n"
             f"    /\\ UNCHANGED <<sbudget, failed>>\n")
     steps_txt = "\n".join(steps) + "\n\n" + "StepsDef ==\n    " + "\n    \\/ ".join(
-        f"Step{i}" for i in range(1, len(actions) + 1))
+        f"Step{i}" for i in range(1, len(all_actions) + 1))
 
-    if prehistory == "external_wait_registered":
-        extra_outstanding, extra_registered = "FALSE", "TRUE"
-        pre_chain = "Init . PublishRunnable . RunFiber . SuspendFiber"
-    elif prehistory == "backend_outstanding":
-        extra_outstanding, extra_registered = "TRUE", "FALSE"
-        pre_chain = ("Init . PublishRunnable . RunFiber . SubmitBackend . "
-                     "FinishFiber")
+    # The trace records the observed run mode; pin Init to it so the replay
+    # realizes the trace under exactly the observed configuration.
+    if pre_actions:
+        init2 = ("Init2 == Init /\\ runMode = \"%s\" /\\ tstep = 0 /\\ "
+                 "sbudget = %d /\\ failed = FALSE"
+                 % (run_mode.capitalize(), SILENT_BUDGET))
     else:
-        extra_outstanding = extra_registered = None
-        pre_chain = None
+        init2 = ("Init2 == Init /\\ tstep = 0 /\\ sbudget = %d /\\ "
+                 "failed = FALSE" % SILENT_BUDGET)
 
-    trace_start = ""
-    init2 = "Init2 == Init /\\ tstep = 0 /\\ sbudget = %d /\\ failed = FALSE" \
-        % SILENT_BUDGET
-    if pre_chain is not None:
-        trace_start = f"""
-(* The declared pre-history: the EXACT state reached by {pre_chain}
-   from Init (the C++ counterpart — pre-run fiber admission / pre-run
-   backend submit — publishes no wake). Behaviors from a reachable state
-   are suffixes of spec behaviors, so admitting this Init disjunct keeps
-   every wrapper behavior a behavior of the pristine model. *)
-TraceStart ==
-    /\\ runnableVisible = FALSE
-    /\\ runningVisible = FALSE
-    /\\ backendOutstanding = {extra_outstanding}
-    /\\ backendReady = FALSE
-    /\\ externalWaitRegistered = {extra_registered}
-    /\\ externalReady = FALSE
-    /\\ wakeEpoch = 1
-    /\\ workerPhase = [w \\in Workers |-> "Active"]
-    /\\ observedEpoch = [w \\in Workers |-> 0]
-    /\\ backendWaitParticipant = NONE
-    /\\ bridgePending = FALSE
-    /\\ workerAlive = [w \\in Workers |-> TRUE]
-    /\\ idleCount = 0
-    /\\ terminateFlag = FALSE
-    /\\ runMode = "{run_mode.capitalize()}"
-    /\\ runState = "Active"
-    /\\ retireFired = FALSE
-    /\\ participantExitFired = FALSE
-    /\\ participantExitEndedRun = FALSE
-    /\\ observationArmed = [w \\in Workers |-> FALSE]
-"""
-        init2 = ("Init2 == (Init \\/ TraceStart) /\\ tstep = 0 /\\ "
-                 "sbudget = %d /\\ failed = FALSE" % SILENT_BUDGET)
+    if pre_actions:
+        pre_comment = (
+            f"   The first {len(pre_actions)} steps are the COMPILED\n"
+            "   PRE-HISTORY (Step1..Step%d) — real model actions replayed\n"
+            "   from the TRUE Init as a PINNED prefix (no silent step may\n"
+            "   fire until they are consumed, matching the contiguous C++\n"
+            "   pre-run). The trace steps follow.\n" % len(pre_actions))
+    else:
+        pre_comment = ""
 
     module = f"""---------------------------- MODULE E9TraceReplay -------------------------------
 (* GENERATED by scripts/formal/e9_trace_validate.py (#196) — do not edit.
    Replay wrapper for trace {test!r} over the PRISTINE E9ParkWake model.
 
    Existential trace conformance: TLC accepts iff SOME behavior of the
-   model fires the compiled action sequence in order. The trace steps
-   (StepN) may interleave with SILENT steps — only actions that advance
-   NO wake epoch and NO observable park boundary (the C++ trace observes
-   every wake publication and every scheduler-domain park transition):
-   fiber lifecycle, backend submit/ready, the candidate decision, and
-   backend-branch park enter/leave (outside the pilot's vocabulary).
-   GiveUp/FailedLoop keep every state successorful (no false deadlocks);
-   DoneLoop terminates a completed trace. Invariant TraceIncomplete is
-   violated iff the whole trace was consumed. *)
+   model fires the compiled action sequence in order. {pre_comment}
+   Required steps may interleave with SILENT steps — only actions that
+   advance NO wake epoch and NO observable park boundary (the C++ trace
+   observes every wake publication and every scheduler-domain park
+   transition): fiber lifecycle, backend submit/ready, the candidate
+   decision, and backend-branch park enter/leave (outside the pilot's
+   vocabulary). GiveUp/FailedLoop keep every state successorful (no false
+   deadlocks); DoneLoop terminates a completed trace. Invariant
+   TraceIncomplete is violated iff the whole trace was consumed. *)
 EXTENDS E9ParkWake
 
 VARIABLES tstep, sbudget, failed
 
-TraceLen == {len(actions)}
-{trace_start}
+(* The compiled pre-history is a PINNED prefix: while tstep < PreLen only
+   the pre-history steps may fire — the C++ pre-run (fiber admission /
+   backend submit) is a fixed contiguous sequence before the recorded
+   window opens, so no other model action may interleave and drift the
+   pre-history state (e.g. a silent SubmitBackend turning the MWS3 wait
+   into MWS2). Silent steps re-arm only after the pre-history is consumed. *)
+PreLen == {len(pre_actions)}
+
+TraceLen == {len(all_actions)}
 {init2}
 
 {steps_txt}
@@ -339,6 +345,7 @@ SilentStep(w) ==
     \\/ FinishFiber
 
 Silent ==
+    /\\ tstep >= PreLen
     /\\ sbudget > 0
     /\\ (\\E w \\in Workers : SilentStep(w))
     /\\ sbudget' = sbudget - 1
@@ -509,7 +516,12 @@ def self_test(jar):
         print(f"PASS  selftest TLC accept leg ({verdict})")
         neg = json.loads(json.dumps(base))
         # NEG-A mutant: the wake is REMOVED and the return carries no cause
-        # (a return the as-built cv predicate cannot make).
+        # (a return the as-built cv predicate cannot make). Under the
+        # compiled-pre-history wrapper this leg ALSO guards the PINNED
+        # pre-history prefix (#202): without the pin, a silent SubmitBackend
+        # could interleave between RunFiber and SuspendFiber, drift the MWS3
+        # wait into MWS2 (backend-domain park), and fabricate this
+        # acceptance.
         neg["events"] = neg["events"][:2] + [
             {"seq": 3, "event": "ParkReturned", "worker": 0,
              "immediate": False, "causes": []}]

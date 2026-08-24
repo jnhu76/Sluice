@@ -35,10 +35,13 @@ the validator is not a second protocol implementation.
 Every trace artifact carries `cpp_revision` and `model_revision` (both
 required, 40-hex, and EQUAL — the validator fail-closes otherwise). The
 checked-in canonical corpus (`spec/tla/e9_park_wake/traces/`) is bound to
-the pilot's merge revision. The gate's `--fresh` mode re-runs the C++
-corpus test bound to the CURRENT `git rev-parse HEAD` and validates every
-emitted trace — the strongest evidence; run it after any C++ change to the
-park/wake paths.
+`82acdd3` (the trace-capture revision; the C++ test's per-case shape
+assertions are the freshness link between that corpus and the live
+binary). The gate's `--fresh` mode re-runs the C++ corpus test bound to
+the CURRENT `git rev-parse HEAD` and validates every emitted trace — the
+strongest same-revision evidence; run it after any change to the C++
+park/wake paths or to the model, and (when the emitted shapes move) update
+the canonical corpus to the new HEAD.
 
 ## Real trace corpus
 
@@ -100,12 +103,27 @@ Documented mapping notes:
   post-terminal `ParkReturned` whose causes include `terminate` is the
   physical teardown the model collapses. NEVER dropped: `causes=[]` or
   timeout-only returns (those reject even post-terminal).
-- **Pre-history**: C++ pre-run fiber admission / pre-run backend submits
-  publish no wake; the model reaches those states only via
-  epoch-advancing producers. Each declared pre-history is encoded as its
-  exact REACHABLE model state (`Init ⋅ PublishRunnable ⋅ RunFiber ⋅
-  SuspendFiber`, resp. `… ⋅ SubmitBackend ⋅ FinishFiber`) added as an Init
-  disjunct in the generated wrapper — sound (suffixes of spec behaviors).
+- **Pre-history (compiled, #202 review)**: C++ pre-run fiber admission /
+  pre-run backend submits publish no wake; the model reaches those states
+  only via epoch-advancing producers. Each declared pre-history is
+  therefore COMPILED into those real model actions as the FIRST required
+  steps of the replay wrapper, fired from the true `Init` under their
+  actual guards — the pre-history state's reachability is mechanically
+  established by the same TLC search (no hand-written state formula, no
+  Init disjunct):
+
+  ```text
+  external_wait_registered == Init -> PublishRunnable -> RunFiber -> SuspendFiber
+  backend_outstanding      == Init -> PublishRunnable -> RunFiber
+                                  -> SubmitBackend -> FinishFiber
+  ```
+
+  The pre-history is a PINNED prefix: no silent step may fire until it is
+  consumed, matching the contiguous C++ pre-run. Without the pin, a silent
+  `SubmitBackend` could interleave between `RunFiber` and `SuspendFiber`
+  and drift the pre-history state (turning the MWS3 external wait into
+  MWS2, which changes the park domain and could fabricate an acceptance) —
+  the validator self-test REJECT leg guards exactly this.
 - **Silent actions**: only non-wake-advancing actions may fire between
   trace steps (fiber lifecycle, backend submit/ready, the candidate
   decision, backend-bound commits, backend-branch park enter/leave).
