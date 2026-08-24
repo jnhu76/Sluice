@@ -226,6 +226,25 @@ run_gate "assert-hygiene self-test" "${ASSERT_HYGIENE_SELFTEST_REPRO}" \
     python3 scripts/gates/assert-hygiene.py --self-test
 
 # ---------------------------------------------------------------------------
+# Gate 5d: failure-envelope matrix (#198, child of #163 V5).
+#
+# docs/verification/failure-envelope.json is the machine-checkable
+# phase x fault x required-outcome matrix consolidating failure-model.md
+# (T1-T7) and the C2b-C2e / D2-D4 mutation-evidence layers. The gate is
+# FILE-SCOPED (no diff dependence): a row going stale — unknown vocabulary,
+# a VERIFIED row losing its evidence, a dangling ref/case/target/anchor
+# pointer, a silently green open row, a PENDING spanning row, or a phase
+# losing its last VERIFIED row — fails the gate even if the row itself was
+# not touched in the pushed range.
+FAIL_ENV_SELFTEST_REPRO="python3 scripts/gates/failure-envelope.py --self-test"
+run_gate "failure-envelope self-test" "${FAIL_ENV_SELFTEST_REPRO}" \
+    python3 scripts/gates/failure-envelope.py --self-test
+
+FAIL_ENV_REPRO="python3 scripts/gates/failure-envelope.py"
+run_gate "failure-envelope matrix" "${FAIL_ENV_REPRO}" \
+    python3 scripts/gates/failure-envelope.py
+
+# ---------------------------------------------------------------------------
 # Gate 6: whitespace / conflict-marker damage + assert-hygiene changed-lines
 # scan across the selected revision range(s).
 #

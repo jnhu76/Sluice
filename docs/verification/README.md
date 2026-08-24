@@ -166,6 +166,7 @@ pre-push; #197 non-goal). Current kernel:
 | Formal models | `spec/tla/` (inventory: `spec/tla/manifest.json`) |
 | Formal model documentation | [`formal-models.md`](formal-models.md), [`formal/`](formal/) |
 | Weak-memory kernel evidence (#197) | [`weak-memory/completion-publication-kernel.md`](weak-memory/completion-publication-kernel.md) |
+| Failure envelope matrix (#198) | [`failure-envelope.md`](failure-envelope.md) (artifact: [`failure-envelope.json`](failure-envelope.json); gate: `scripts/gates/failure-envelope.py`) |
 | io_uring / liburing validation runbook | [`io-uring-liburing-validation.md`](io-uring-liburing-validation.md) |
 | Local hardening gate | [`hardening.md`](hardening.md) |
 | Sync benchmark methodology (W1–W4) | [`sync-bench-methodology.md`](sync-bench-methodology.md) |
