@@ -14,9 +14,12 @@ Markdown files under docs/ and spec/, plus the root README.md and AGENTS.md.
 Fail-closed under-allowing exceptions (an escape must be provable, never a
 pattern-match coincidence):
 
-  1. NEGATION — a negation token on the same line (`never`, `not`, `no`,
-     `cannot`, `must not`, `does not`, `doesn't`, `neither`, `nor`, `rather
-     than`, `instead of`). A negated mention is policy/prohibition text.
+  1. NEGATION — a negation token (`never`, `not`, `no`, `cannot`, `must
+     not`, `does not`, `doesn't`, `neither`, `nor`, `rather than`,
+     `instead of`) in the SAME CLAUSE as the matched occurrence. The line is
+     segmented on clause delimiters (`;`, `,`, `:`, em/en dash, sentence
+     punctuation); a negation in a different clause does not excuse an
+     affirmative overclaim. A negated mention is policy/prohibition text.
   2. QUOTED — the matched phrase occurrence is wrapped in quotes or
      backticks (mentioned-as-a-phrase, e.g. vocabulary definitions).
   3. ALLOWLIST — a site-level entry `path-glob | substring | reason` in
@@ -63,15 +66,35 @@ OVERCLAIM_PATTERNS = [
                re.IGNORECASE),
 ]
 
-# Negation tokens (line-level, fail-closed under-allowing: ANY of these
-# anywhere on the line makes the line policy text, not an affirmative claim).
+# Negation tokens (clause-level, fail-closed under-allowing: a negation
+# excuses an overclaim ONLY when it shares the SAME clause as the matched
+# occurrence. 'This is not a proof; the model formally verifies the
+# implementation.' is NOT exempt — the 'not' belongs to a different clause).
 NEGATION_RE = re.compile(
     r"\b(never|not|no|cannot|can't|must\s+not|does\s+not|doesn't|isn't|"
     r"neither|nor|rather\s+than|instead\s+of|without\s+claiming)\b",
     re.IGNORECASE)
 
+# Clause delimiters: semicolon, comma, colon, em/en dash, CJK/ASCII sentence
+# punctuation, and a period followed by whitespace or end-of-line.
+CLAUSE_BREAK = re.compile(r"[;:,。!?]|—|–|\.(?=\s|$)")
+
 # Quote/backtick pair immediately around the matched occurrence.
 WRAP_CHARS = "\"'`"
+
+
+def negation_in_clause(line: str, start: int) -> bool:
+    """True when a negation token shares the matched occurrence's clause.
+
+    The line is segmented on clause delimiters; a negation anywhere else on
+    the line (a different clause, e.g. after a semicolon) does NOT excuse an
+    affirmative overclaim in the matched clause."""
+    seg_start = 0
+    for m in CLAUSE_BREAK.finditer(line):
+        if start < m.start():
+            return NEGATION_RE.search(line[seg_start:m.start()]) is not None
+        seg_start = m.end()
+    return NEGATION_RE.search(line[seg_start:]) is not None
 
 
 def load_allowlist(path: Path) -> list[tuple[str, str, str]]:
@@ -132,8 +155,8 @@ def check_added_line(entries, path: str, line: str):
     if hit is None:
         return None
     _pat, m = hit
-    if NEGATION_RE.search(line):
-        return None  # policy/negated mention
+    if negation_in_clause(line, m.start()):
+        return None  # negated mention in the SAME clause as the claim
     if is_quoted(line, m.start(), m.end()):
         return None  # mentioned-as-a-phrase
     if allowlisted(entries, path, line):
@@ -145,22 +168,36 @@ def check_added_line(entries, path: str, line: str):
 
 
 def parse_diff(diff_text: str):
-    """Minimal unified-diff state machine: yields (path, '+', content) for
-    added lines. Paths come ONLY from ---/+++ header pairs, so a content line
-    beginning with '+' (or '+++') inside a hunk is content, not a header."""
+    """Unified-diff state machine: yields (path, '+', content) for added
+    lines. Paths come ONLY from ---/+++ header pairs OUTSIDE hunks; once a
+    @@ hunk is entered, every '+' line is added content — so an added
+    Markdown line whose content begins with '++ ' (diff form '+++ ...') can
+    never be mistaken for a +++ file header."""
     old_path = new_path = None
+    in_hunk = False
     for raw in diff_text.splitlines():
-        if raw.startswith("--- "):
-            old_path = raw[4:].split("\t")[0].strip()
+        if raw.startswith("diff --git"):
+            old_path = new_path = None
+            in_hunk = False
             continue
-        if raw.startswith("+++ "):
-            new_path = raw[4:].split("\t")[0].strip()
+        if raw.startswith("@@") and " @@" in raw:
+            in_hunk = True
+            continue
+        if not in_hunk:
+            # ---/+++ pairs are file headers ONLY outside hunks; inside a
+            # hunk a '+++ ...' line is added content and must be scanned.
+            if raw.startswith("--- "):
+                old_path = raw[4:].split("\t")[0].strip()
+                continue
+            if raw.startswith("+++ "):
+                new_path = raw[4:].split("\t")[0].strip()
+                continue
             continue
         if raw.startswith("+"):
             path = (new_path or old_path or "")
             path = path[2:] if path.startswith("b/") else path
             yield path, raw[1:]
-        # '-'/'@@'/context lines carry no additions
+        # '-', context, and '\ No newline' lines inside a hunk are not additions
 
 
 def scan_diff(diff_text: str, entries) -> list[str]:
@@ -245,6 +282,18 @@ def self_test() -> int:
                  "diff --git a/docs/x.md b/docs/x.md\n--- a/docs/x.md\n"
                  "+++ b/docs/x.md\n@@ -1 +1,2 @@\n context\n"
                  "+++not-a-header content line\n")
+    # Regression (review): a REAL added line whose content begins with
+    # '++ ' has diff form '+++ ...' and must NOT be swallowed as a +++ file
+    # header once we are inside a @@ hunk.
+    expect_fire("+++ content line inside hunk is scanned",
+                "diff --git a/docs/x.md b/docs/x.md\n--- a/docs/x.md\n"
+                "+++ b/docs/x.md\n@@ -1 +1,2 @@\n context\n"
+                "+++ formally verified implementation\n")
+    # Regression (review): a negation in a DIFFERENT clause does not excuse
+    # the affirmative overclaim in the matched clause.
+    expect_fire("negation in another clause does not excuse the claim",
+                md("This is not a proof; the model formally verifies the "
+                   "implementation."))
     # spec/ markdown is in scope; README.md/AGENTS.md root files are in scope
     expect_fire("spec md scope",
                 md("the model formally verifies the implementation")
