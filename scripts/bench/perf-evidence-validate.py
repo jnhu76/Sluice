@@ -60,6 +60,15 @@ MD5_RE = re.compile(r"^[0-9a-f]{32}$")
 VALID_DATA_EXIT_CODES = {0, 1}  # grep family: 0=match 1=no-match 2=error
 HEX40_TOLERANCE_MEDIAN = 1.0  # ns; %.1f rounding + mean-of-middle pair
 
+# Sustained RSS boundedness: the #199 overload bench records a separate
+# sustained phase (fixed capacity, no latency sampling, fixed-size sample
+# reservoirs) and the validator requires the RSS to plateau. delta_kb is the
+# signed end-minus-start RSS over that interval; a delta above this bound is
+# a growth trend the harness cannot explain (its own storage is bounded).
+RSS_PLATEAU_MAX_KB = 256
+# A sustained phase shorter than this cannot support a boundedness claim.
+SUSTAINED_ROUNDS_MIN = 500
+
 REQUIRED_SCHEMA = 2
 # Measured-command exit classifiers (runner --exit-semantics): which exit
 # codes still count as measurement data.
@@ -388,9 +397,15 @@ def check_overload(art: dict) -> list[str]:
     if not isinstance(caps, list) or not caps or             any(not isinstance(c, int) or c < 1 for c in caps):
         errs.append("params.capacities: expected non-empty list of ints >= 1")
         caps = []
-    for k in ("rounds", "burst", "complete_k", "rss_every"):
+    for k in ("rounds", "burst", "complete_k", "rss_every",
+              "sustained_rss_every", "reservoir"):
         if not isinstance(params.get(k), int) or params.get(k, 0) < 1:
             errs.append(f"params.{k}: expected int >= 1")
+    if not isinstance(params.get("sustained_rounds"), int) or \
+            params.get("sustained_rounds", 0) < SUSTAINED_ROUNDS_MIN:
+        errs.append(f"params.sustained_rounds: expected int >= "
+                    f"{SUSTAINED_ROUNDS_MIN} (a boundedness claim needs a "
+                    f"sustained interval)")
     rows = art.get("rows")
     if not isinstance(rows, list) or not rows:
         return errs + ["rows: empty"]
@@ -494,6 +509,60 @@ def check_overload(art: dict) -> list[str]:
                     errs.append(f"{where}: rss rounds not strictly increasing")
                     break
                 prev_round = pt[0]
+        # --- sustained RSS boundedness phase (separate from latency stats) ---
+        # The bench runs a fixed-capacity interval with NO latency recording
+        # and fixed-size reservoirs, so no harness allocation can grow. The
+        # validator requires the overload to have been sustained (counts) and
+        # the RSS to plateau (delta <= bound).
+        sus = r.get("sustained")
+        if not isinstance(sus, dict):
+            errs.append(f"{where}: sustained block missing (RSS boundedness "
+                        f"phase required)")
+        else:
+            sr = params.get("sustained_rounds")
+            if isinstance(sr, int):
+                exp_refusals = sr * burst if burst else None
+                if exp_refusals is not None and sus.get("refusals") != exp_refusals:
+                    errs.append(f"{where}: sustained.refusals "
+                                f"{sus.get('refusals')} != expected "
+                                f"{exp_refusals} (sustained overload not "
+                                f"maintained)")
+                exp_refills = sr * k_complete if k_complete else None
+                if exp_refills is not None and sus.get("refills") != exp_refills:
+                    errs.append(f"{where}: sustained.refills {sus.get('refills')} "
+                                f"!= expected {exp_refills} (capacity not "
+                                f"reclaimed during sustained phase)")
+            sus_rss = sus.get("rss_series_kb")
+            if not isinstance(sus_rss, list) or len(sus_rss) < 3:
+                errs.append(f"{where}: sustained.rss_series_kb must have "
+                            f">= 3 points (start/mid/end)")
+            else:
+                prev_round = None
+                for pt in sus_rss:
+                    if not (isinstance(pt, list) and len(pt) == 2 and
+                            isinstance(pt[0], int) and isinstance(pt[1], int) and
+                            pt[1] >= 0):
+                        errs.append(f"{where}: sustained rss point malformed "
+                                    f"{pt!r}")
+                        break
+                    if prev_round is not None and pt[0] <= prev_round:
+                        errs.append(f"{where}: sustained rss rounds not "
+                                    f"strictly increasing")
+                        break
+                    prev_round = pt[0]
+                if prev_round is not None:
+                    first = sus_rss[0][1]
+                    last = sus_rss[-1][1]
+                    recomputed = last - first
+                    delta = sus.get("delta_kb")
+                    if delta != recomputed:
+                        errs.append(f"{where}: sustained.delta_kb {delta} != "
+                                    f"recomputed {recomputed} from the series")
+                    if recomputed > RSS_PLATEAU_MAX_KB:
+                        errs.append(f"{where}: sustained RSS delta "
+                                    f"{recomputed} kB exceeds the plateau "
+                                    f"bound {RSS_PLATEAU_MAX_KB} kB — RSS is "
+                                    f"not bounded at fixed capacity")
     if isinstance(caps, list) and sorted(seen_caps) != sorted(caps):
         errs.append(f"rows: capacities {sorted(seen_caps)} do not cover "
                     f"params.capacities {sorted(caps)}")
@@ -538,7 +607,8 @@ def _valid_overload() -> dict:
     samples = [10, 20, 30, 40, 50]
     srt = sorted(samples)
     art["params"] = {"capacities": [16], "rounds": 5, "burst": 2,
-                     "complete_k": 1, "rss_every": 2}
+                     "complete_k": 1, "rss_every": 2, "sustained_rounds": 600,
+                     "sustained_rss_every": 200, "reservoir": 4096}
 
     def nr(p):
         return srt[min(int(p / 100.0 * len(srt)), len(srt) - 1)]
@@ -553,6 +623,11 @@ def _valid_overload() -> dict:
                        "high_water_inflight": 16, "final_inflight": 0,
                        "drain_ns": 100, "post_drain_probe_ns": 50,
                        "post_drain_probe_accepted": True},
+        "sustained": {"refusals": 1200, "expected_refusals": 1200,
+                      "refills": 600, "expected_refills": 600,
+                      "delta_kb": 24,
+                      "rss_series_kb": [[0, 4100], [200, 4112],
+                                        [400, 4108], [600, 4124]]},
         "accept": {"n": 5, "p50_ns": nr(50), "p95_ns": nr(95),
                    "p99_ns": nr(99), "samples_ns": samples},
         "refuse": {"n": 5, "p50_ns": nr(50), "p95_ns": nr(95),
@@ -836,6 +911,32 @@ class ValidatorSelfTest(unittest.TestCase):
         art = _valid_overload()
         art["rows"][0]["rss_series_kb"] = [[0, 3800], [0, 3810], [5, 3820]]
         self.assert_invalid(art, "not strictly increasing")
+        # sustained phase missing entirely (boundedness unproven)
+        art = _valid_overload()
+        del art["rows"][0]["sustained"]
+        self.assert_invalid(art, "sustained block missing")
+        # sustained interval too short for a boundedness claim
+        art = _valid_overload()
+        art["params"]["sustained_rounds"] = 10
+        self.assert_invalid(art, "sustained_rounds")
+        # sustained overload not maintained (counts wrong)
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["refusals"] = 0
+        self.assert_invalid(art, "sustained.refusals")
+        # sustained series collapsed to one point
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["rss_series_kb"] = [[0, 4100]]
+        self.assert_invalid(art, ">= 3 points")
+        # sustained delta inconsistent with the recorded series
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["delta_kb"] = 1
+        self.assert_invalid(art, "delta_kb 1 != recomputed")
+        # RSS NOT plateauing during the sustained phase (growth trend)
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["rss_series_kb"] = [[0, 4100], [200, 4300],
+                                                        [400, 4550], [600, 4800]]
+        art["rows"][0]["sustained"]["delta_kb"] = 700
+        self.assert_invalid(art, "exceeds the plateau bound")
         # capacity row not declared in params
         art = _valid_overload()
         art["rows"][0]["capacity"] = 32

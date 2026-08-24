@@ -803,7 +803,10 @@ def cmd_overload(args) -> dict:
         cmd = [str(OVERLOAD_BIN), "--capacity", str(cap),
                "--rounds", str(args.rounds), "--burst", str(args.burst),
                "--complete-k", str(args.complete_k),
-               "--rss-every", str(args.rss_every)]
+               "--rss-every", str(args.rss_every),
+               "--sustained-rounds", str(args.sustained_rounds),
+               "--sustained-rss-every", str(args.sustained_rss_every),
+               "--reservoir", str(args.reservoir)]
         out = run(cmd)
         try:
             row = json.loads(out.stdout)
@@ -817,7 +820,10 @@ def cmd_overload(args) -> dict:
         "binary": binary_provenance(OVERLOAD_BIN),
         "params": {"capacities": caps, "rounds": args.rounds,
                    "burst": args.burst, "complete_k": args.complete_k,
-                   "rss_every": args.rss_every},
+                   "rss_every": args.rss_every,
+                   "sustained_rounds": args.sustained_rounds,
+                   "sustained_rss_every": args.sustained_rss_every,
+                   "reservoir": args.reservoir},
         "rows": rows,
         "derived": overload_derived(rows),
     }
@@ -994,6 +1000,16 @@ def main() -> int:
                    dest="complete_k")
     p.add_argument("--rss-every", type=_positive_int, default=50,
                    dest="rss_every")
+    p.add_argument("--sustained-rounds", type=_positive_int, default=2000,
+                   dest="sustained_rounds",
+                   help="fixed-capacity rounds after measurement with no "
+                        "latency recording (RSS boundedness phase)")
+    p.add_argument("--sustained-rss-every", type=_positive_int, default=500,
+                   dest="sustained_rss_every")
+    p.add_argument("--reservoir", type=_positive_int, default=4096,
+                   dest="reservoir",
+                   help="fixed reservoir size for latency samples (bounds "
+                        "harness memory regardless of rounds)")
     p.add_argument("--output", default="")
     p.add_argument("--note", default="",
                    help="provenance note embedded in the artifact")

@@ -16,16 +16,23 @@
 //     accepted — this is the resource-bound distinction: the bound that
 //     fired was admission capacity, and it is reclaimed after completions);
 //   - bench-side in-flight high-water (must equal capacity exactly);
-//   - RSS sampled every N rounds from /proc/self/status (a series, so a
+//   - RSS during the measurement phase sampled every N rounds (a series, so a
 //     growth trend is visible, not hidden behind a single number);
+//   - a SEPARATE sustained RSS boundedness phase: after the measurement
+//     rounds, more rounds at the same fixed capacity run WITHOUT recording
+//     latency, so no harness allocation can grow; RSS is sampled across the
+//     whole sustained interval and the validator enforces the plateau
+//     (delta <= a bound). The harness cannot pollute this phase: the sample
+//     reservoirs below are fixed-size (reservoir sampling), so bench memory
+//     is bounded regardless of round count;
 //   - recovery: post-sustained drain wall time and a post-drain admission
 //     probe (one fresh submit must be accepted);
 //   - static probes: sizeof of the production identity/public types.
 //
 // Output: one JSON object on stdout; the perf-attribution runner wraps it
 // with the environment fingerprint + binary provenance (schema 2, kind
-// "overload"). Raw per-attempt samples are emitted so the validator can
-// recompute percentiles — a hand-typed table must not pass.
+// "overload"). Latency percentiles are recomputed by the validator from the
+// recorded reservoir samples — a hand-typed table must not pass.
 //
 // Environment-sensitive Release evidence (WSL2 host limitation is recorded by
 // the runner): NO absolute-speed claims, no universal thresholds (§16.7).
@@ -35,9 +42,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -74,6 +83,36 @@ struct RssPoint {
     long rss_kb;
 };
 
+// Fixed-size reservoir (Algorithm R): the harness's latency storage is
+// bounded by `cap` no matter how many rounds run, so a later RSS plateau
+// cannot be attributed to (or hidden by) harness sample-buffer growth.
+class Reservoir {
+public:
+    Reservoir(std::size_t cap, std::uint64_t seed)
+        : cap_(cap), rng_(seed) {
+        samples_.reserve(cap);
+    }
+
+    void add(long long v) {
+        if (seen_ < cap_) {
+            samples_.push_back(v);
+        } else {
+            std::uniform_int_distribution<std::size_t> dist(0, seen_);
+            std::size_t j = dist(rng_);
+            if (j < cap_) samples_[j] = v;
+        }
+        ++seen_;
+    }
+
+    const std::vector<long long>& samples() const { return samples_; }
+
+private:
+    std::vector<long long> samples_;
+    std::size_t cap_;
+    std::size_t seen_ = 0;
+    std::mt19937_64 rng_;
+};
+
 bool refusal(const Result<void>& r) {
     return !r.has_value() && r.error().code == IoError::Code::would_block;
 }
@@ -100,11 +139,20 @@ long long pct(std::vector<long long> v, double p) {
     return v[idx];
 }
 
+void emit_rss_series(const std::vector<RssPoint>& rss) {
+    std::printf("[");
+    for (std::size_t i = 0; i < rss.size(); ++i) {
+        std::printf("%s[%ld,%ld]", i ? "," : "", rss[i].round, rss[i].rss_kb);
+    }
+    std::printf("]");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::size_t capacity = 64, rounds = 400, burst = 32, complete_k = 8,
-                rss_every = 50;
+                rss_every = 50, sustained_rounds = 2000,
+                sustained_rss_every = 500, reservoir = 4096;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         auto next = [&](std::size_t& out) {
@@ -116,9 +164,13 @@ int main(int argc, char** argv) {
         else if (a == "--burst") next(burst);
         else if (a == "--complete-k") next(complete_k);
         else if (a == "--rss-every") next(rss_every);
+        else if (a == "--sustained-rounds") next(sustained_rounds);
+        else if (a == "--sustained-rss-every") next(sustained_rss_every);
+        else if (a == "--reservoir") next(reservoir);
         else { std::fprintf(stderr, "unknown flag %s\n", a.c_str()); return 2; }
     }
-    if (capacity < 1 || rounds < 1 || burst < 1 || complete_k < 1) {
+    if (capacity < 1 || rounds < 1 || burst < 1 || complete_k < 1 ||
+        sustained_rounds < 1 || sustained_rss_every < 1 || reservoir < 1) {
         fatal("parameters must be >= 1");
     }
     if (complete_k > capacity) fatal("--complete-k must be <= --capacity");
@@ -135,22 +187,21 @@ int main(int argc, char** argv) {
     Completion<std::size_t>* probe = &pool[capacity];
     std::byte buf[16];
 
-    std::vector<long long> accept_samples;   // refill submits under overload
-    std::vector<long long> refuse_samples;   // burst rejections
-    std::vector<long long> fill0_samples;    // first-round cold fill
-    accept_samples.reserve(rounds * complete_k);
-    refuse_samples.reserve(rounds * burst);
+    // Bounded latency reservoirs (fixed size regardless of rounds).
+    Reservoir accept_samples(reservoir, 0xC0FFEE);
+    Reservoir refuse_samples(reservoir, 0x5EED01);
+    Reservoir fill0_samples(reservoir, 0xF1110);
 
     std::size_t in_flight = 0, high_water = 0;
     std::size_t refill_accepts = 0, refusals = 0;
     std::deque<Completion<std::size_t>*> accepted_order;  // FIFO = fake's oldest order
     std::deque<Completion<std::size_t>*> freed;           // reset, awaiting reuse
 
-    auto submit_one = [&](Completion<std::size_t>* c, std::vector<long long>* sample) {
+    auto submit_one = [&](Completion<std::size_t>* c, Reservoir* sample) {
         long long t0 = now_ns();
         Result<void> r = ctx.submit_read(ReadOp{-1, buf, sizeof buf, 0}, *c);
         long long dt = now_ns() - t0;
-        if (sample) sample->push_back(dt);
+        if (sample) sample->add(dt);
         if (r.has_value()) {
             ++in_flight;
             high_water = high_water > in_flight ? high_water : in_flight;
@@ -171,14 +222,15 @@ int main(int argc, char** argv) {
         long long dt = now_ns() - t0;
         if (r.has_value()) fatal("probe accepted on a full window");
         ++refusals;
-        refuse_samples.push_back(dt);
+        refuse_samples.add(dt);
     }
     if (in_flight != capacity) fatal("fill did not reach capacity");
 
     std::vector<RssPoint> rss;
     rss.push_back({0, read_rss_kb()});
 
-    // Sustained overload rounds: burst refusals -> complete K -> refill K.
+    // Measurement phase: burst refusals -> complete K -> refill K. This is
+    // the warm-up for the RSS phase below AND the latency-measurement phase.
     for (std::size_t r = 1; r <= rounds; ++r) {
         for (std::size_t b = 0; b < burst; ++b) {
             long long t0 = now_ns();
@@ -186,7 +238,7 @@ int main(int argc, char** argv) {
             long long dt = now_ns() - t0;
             if (!refusal(res)) fatal("burst attempt accepted on a full window");
             ++refusals;
-            refuse_samples.push_back(dt);
+            refuse_samples.add(dt);
         }
         for (std::size_t k = 0; k < complete_k; ++k) {
             fake->complete_oldest_with_bytes(8);
@@ -214,6 +266,48 @@ int main(int argc, char** argv) {
     if (rss.empty() || rss.back().round != static_cast<long>(rounds)) {
         rss.push_back({static_cast<long>(rounds), read_rss_kb()});
     }
+
+    // Sustained RSS boundedness phase: the SAME fixed-capacity overload
+    // continues, but no latency is recorded (reservoirs stay full), so no
+    // harness allocation can grow with these rounds. RSS is sampled across
+    // the whole interval; the validator requires the plateau (delta <= bound).
+    std::vector<RssPoint> sustained_rss;
+    std::size_t sustained_refusals = 0, sustained_refills = 0;
+    sustained_rss.push_back({0, read_rss_kb()});
+    for (std::size_t r = 1; r <= sustained_rounds; ++r) {
+        for (std::size_t b = 0; b < burst; ++b) {
+            Result<void> res = ctx.submit_read(ReadOp{-1, buf, sizeof buf, 0}, *probe);
+            if (!refusal(res)) fatal("sustained burst attempt accepted on a full window");
+            ++sustained_refusals;
+        }
+        for (std::size_t k = 0; k < complete_k; ++k) {
+            fake->complete_oldest_with_bytes(8);
+            ctx.poll();
+            Completion<std::size_t>* c = accepted_order.front();
+            accepted_order.pop_front();
+            if (!c->ready()) fatal("sustained completion not ready after complete+poll");
+            c->reset();
+            --in_flight;
+            freed.push_back(c);
+        }
+        for (std::size_t k = 0; k < complete_k; ++k) {
+            Completion<std::size_t>* c = freed.front();
+            freed.pop_front();
+            if (!submit_one(c, nullptr)) {
+                fatal("sustained refill rejected after reclaim");
+            }
+            ++sustained_refills;
+        }
+        if (in_flight != capacity) fatal("sustained round ended below capacity");
+        if (r % sustained_rss_every == 0) {
+            sustained_rss.push_back({static_cast<long>(r), read_rss_kb()});
+        }
+    }
+    if (sustained_rss.empty() ||
+        sustained_rss.back().round != static_cast<long>(sustained_rounds)) {
+        sustained_rss.push_back({static_cast<long>(sustained_rounds), read_rss_kb()});
+    }
+    long sustained_delta_kb = sustained_rss.back().rss_kb - sustained_rss.front().rss_kb;
 
     // Recovery: drain everything, measure wall time, prove admission returns.
     long long t_drain0 = now_ns();
@@ -248,6 +342,9 @@ int main(int argc, char** argv) {
     std::printf("  \"burst\": %zu,\n", burst);
     std::printf("  \"complete_k\": %zu,\n", complete_k);
     std::printf("  \"rss_every\": %zu,\n", rss_every);
+    std::printf("  \"sustained_rounds\": %zu,\n", sustained_rounds);
+    std::printf("  \"sustained_rss_every\": %zu,\n", sustained_rss_every);
+    std::printf("  \"reservoir\": %zu,\n", reservoir);
     std::printf("  \"static\": {\n");
     std::printf("    \"sizeof_slot_handle\": %zu,\n", sizeof(detail::SlotHandle));
     std::printf("    \"sizeof_completion_size_t\": %zu,\n",
@@ -267,30 +364,37 @@ int main(int argc, char** argv) {
     std::printf("    \"post_drain_probe_ns\": %lld,\n", probe_ns);
     std::printf("    \"post_drain_probe_accepted\": true\n");
     std::printf("  },\n");
+    std::printf("  \"sustained\": {\n");
+    std::printf("    \"refusals\": %zu,\n", sustained_refusals);
+    std::printf("    \"expected_refusals\": %zu,\n", sustained_rounds * burst);
+    std::printf("    \"refills\": %zu,\n", sustained_refills);
+    std::printf("    \"expected_refills\": %zu,\n", sustained_rounds * complete_k);
+    std::printf("    \"delta_kb\": %ld,\n", sustained_delta_kb);
+    std::printf("    \"rss_series_kb\": ");
+    emit_rss_series(sustained_rss);
+    std::printf("\n  },\n");
     std::printf("  \"accept\": {\n");
-    std::printf("    \"n\": %zu,\n", accept_samples.size());
-    std::printf("    \"p50_ns\": %lld,\n", pct(accept_samples, 50));
-    std::printf("    \"p95_ns\": %lld,\n", pct(accept_samples, 95));
-    std::printf("    \"p99_ns\": %lld,\n", pct(accept_samples, 99));
+    std::printf("    \"n\": %zu,\n", accept_samples.samples().size());
+    std::printf("    \"p50_ns\": %lld,\n", pct(accept_samples.samples(), 50));
+    std::printf("    \"p95_ns\": %lld,\n", pct(accept_samples.samples(), 95));
+    std::printf("    \"p99_ns\": %lld,\n", pct(accept_samples.samples(), 99));
     std::printf("    \"samples_ns\": ");
-    emit_samples(accept_samples);
+    emit_samples(accept_samples.samples());
     std::printf("\n  },\n");
     std::printf("  \"refuse\": {\n");
-    std::printf("    \"n\": %zu,\n", refuse_samples.size());
-    std::printf("    \"p50_ns\": %lld,\n", pct(refuse_samples, 50));
-    std::printf("    \"p95_ns\": %lld,\n", pct(refuse_samples, 95));
-    std::printf("    \"p99_ns\": %lld,\n", pct(refuse_samples, 99));
+    std::printf("    \"n\": %zu,\n", refuse_samples.samples().size());
+    std::printf("    \"p50_ns\": %lld,\n", pct(refuse_samples.samples(), 50));
+    std::printf("    \"p95_ns\": %lld,\n", pct(refuse_samples.samples(), 95));
+    std::printf("    \"p99_ns\": %lld,\n", pct(refuse_samples.samples(), 99));
     std::printf("    \"samples_ns\": ");
-    emit_samples(refuse_samples);
+    emit_samples(refuse_samples.samples());
     std::printf("\n  },\n");
     std::printf("  \"initial_fill\": {\n");
-    std::printf("    \"n\": %zu,\n", fill0_samples.size());
-    std::printf("    \"p50_ns\": %lld\n", pct(fill0_samples, 50));
+    std::printf("    \"n\": %zu,\n", fill0_samples.samples().size());
+    std::printf("    \"p50_ns\": %lld\n", pct(fill0_samples.samples(), 50));
     std::printf("  },\n");
-    std::printf("  \"rss_series_kb\": [");
-    for (std::size_t i = 0; i < rss.size(); ++i) {
-        std::printf("%s[%ld,%ld]", i ? "," : "", rss[i].round, rss[i].rss_kb);
-    }
-    std::printf("]\n}\n");
+    std::printf("  \"rss_series_kb\": ");
+    emit_rss_series(rss);
+    std::printf("\n}\n");
     return 0;
 }

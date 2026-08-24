@@ -21,7 +21,7 @@ experiment.
 | **enqueue-pin acknowledged reap gate** | no reap vs enqueue/cancel race; interrupt-window final reap/poll (C2e mutants M4/M12 detectors `tp_c2e_interrupt_final_reap_closes_ready_race`, `ctx_wait_one_interrupt_final_poll_closes_ready_race`) | DYNAMIC (fused) | folded into the reap path inside the measured aggregate; **not separately measurable at this layer** (recorded honestly, not guessed) |
 | **terminal-winner arbitration** | exactly one terminal; losers never overwrite (C2b mutants C/D; FE-tier evidence in the mutation docs) | DYNAMIC (one CAS per terminal) | inside the measured complete+poll+reset refill cycle aggregate (refill accept p50 above); **no decomposition claim** |
 | **split-wait bridge + wake epoch** (#190/#194/#195 model subjects) | no causeless park return; no lost wake (E9 19-gate suite with non-vacuity witnesses; `scripts/formal/verify-e9-park-wake.sh`) | DYNAMIC (wake-path locked RMW + epoch advance) | same locked-RMW write class as the #161 A/B precedent (`bench/idle_erase_ab_bench.cpp`: store(0) vs exchange(0)+conditional bump on the pop/dance hot path, Release, same-session protocol); **cited precedent, no new attribution** |
-| **bounded arena admission** (`would_block` refusal path) | pre-acceptance refusal with zero residue (C2d mutants M12/M13; D2-M7/M11) | **OVERLOAD-RELEVANT (measured)** | measured under sustained overload (§2): refusal p50 40 ns, p99 ≤ 61 ns — **cheaper than the accepted path** (the refusal fires before slot reserve/binding); refusal share of sustained attempts ≈ 80 % at the operating point |
+| **bounded arena admission** (`would_block` refusal path) | pre-acceptance refusal with zero residue (C2d mutants M12/M13; D2-M7/M11) | **OVERLOAD-RELEVANT (measured)** | measured under sustained overload (§2): refusal p50 40 ns, p99 ≤ 60 ns — **cheaper than the accepted path** (the refusal fires before slot reserve/binding); refusal share of sustained attempts ≈ 80 % at the operating point |
 | **BlockingIoPool bounded dispatch storage** | no unbounded growth (AC-7 class implementation-resource tests) | OVERLOAD-RELEVANT | boundedness proven by tests; overload cost **not separately measured in this pilot** — the async arena admission path is the measured proxy; recorded as an honest gap, not filled |
 
 ## 2. Sustained-overload backpressure experiment
@@ -35,20 +35,28 @@ resource is unambiguous per the AGENTS.md §12 resource distinction: the
 pipeline depth).
 
 Protocol per capacity {16, 64, 256}: cold-fill to the first `would_block`;
-then 400 rounds of {32 further attempts (all must refuse — measured refusal
-latency) → complete 8 → refill 8 (all must be accepted)}; then drain-all
-(recovery) and a post-drain admission probe. The validator enforces the
-resource-bound distinction fail-closed: refusals == rounds×burst+1, refills
-== rounds×k, high-water == capacity, final in-flight == 0, post-drain probe
-accepted.
+then 400 measurement rounds of {32 further attempts (all must refuse —
+measured refusal latency) → complete 8 → refill 8 (all must be accepted)};
+then a separate **sustained RSS boundedness phase** — 2000 more rounds at
+the same fixed capacity with NO latency recording (the sample reservoirs are
+already full, so no harness allocation can grow), with RSS sampled across
+the whole interval; then drain-all (recovery) and a post-drain admission
+probe. Latency samples are stored in fixed-size reservoirs (4096 entries
+max per phase), so bench memory is bounded regardless of round count. The
+validator enforces the resource-bound distinction fail-closed: refusals ==
+rounds×burst+1, refills == rounds×k, high-water == capacity, final in-flight
+== 0, post-drain probe accepted — and the RSS plateau: sustained refusals/
+refills match their expected counts (the overload was actually maintained)
+and the sustained RSS end-minus-start delta is ≤ 256 kB (recomputed from
+the series; a growth trend the bounded harness cannot explain fails).
 
 Observed (this host, WSL2 — environment-sensitive, no absolute claims):
 
 | capacity | refuse p50 / p99 (ns) | accept-under-overload p50 / p99 (ns) | high-water | drain (ns) |
 |---|---|---|---|---|
-| 16 | 40 / 51 | 70 / 90 | 16 | 1 854 |
-| 64 | 40 / 51 | 70 / 90 | 64 | 10 521 |
-| 256 | 40 / 61 | 70 / 111 | 256 | 120 053 |
+| 16 | 40 / 60 | 70 / 90 | 16 | 1 724 |
+| 64 | 40 / 50 | 70 / 90 | 64 | 9 439 |
+| 256 | 40 / 51 | 70 / 90 | 256 | 98 983 |
 
 - **Backpressure behaves as designed**: the refusal path is a cheap
   synchronous rejection (p50 40 ns — well under half the accepted submit's
@@ -61,10 +69,16 @@ Observed (this host, WSL2 — environment-sensitive, no absolute claims):
   in µs-to-100 µs at these scales and the post-drain admission probe is
   accepted — the bound that fired was admission capacity and it is fully
   reclaimed (validator-enforced).
-- **No unbounded growth**: RSS series recorded per 50 rounds (10 points per
-  capacity); observed drift over the run is ~+350 kB, which includes the
-  bench's own growing sample buffers — the series is recorded so a real
-  growth trend cannot be hidden by a summary number.
+- **No unbounded growth (sustained RSS phase)**: the harness's own latency
+  storage is bounded (fixed-size reservoirs), and the RSS boundedness phase
+  runs at fixed capacity with no further harness allocation. Observed
+  sustained RSS delta on this host: **0 kB at every capacity** (the series
+  is flat at 5 points over 2000 rounds) — the arena's working set does not
+  grow under sustained fixed-capacity overload. The validator requires the
+  delta to stay ≤ 256 kB and recomputes it from the recorded series, so a
+  growth trend cannot hide behind a summary number. RSS is a coarse signal
+  (page granularity, ~4 kB): a sub-page steady-state drift is below its
+  resolution and is not claimed away.
 - **A/B shape**: accepted-path vs refusal-path latency in the same build
   plus a capacity sweep. No production mutants (prohibited); no internal
   decomposition of the accepted-path aggregate.
