@@ -313,6 +313,24 @@ mixed):
 - E4/E5 caller re-entry after a no-progress return (the run-return
   boundary is modeled; the caller's re-entry policy is out of scope).
 
+## #196 trace-conformance pilot (2026-08-24): real C++ traces vs this model
+
+`traces/` holds the canonical semantic-trace corpus and
+`scripts/formal/e9_trace_validate.py` (driven by
+`scripts/formal/verify-e9-trace-conformance.sh`, manifest suite
+`e9-trace-conformance`) validates each trace against THIS module unchanged:
+the validator generates a TLC replay wrapper (`EXTENDS E9ParkWake`) and TLC
+answers whether SOME behavior of the model realizes the compiled action
+sequence — the repository model is the authority (no second protocol
+implementation). Claim: **TRACE-CONFORMANT (TESTED EXECUTIONS)** for the
+corpus only; the event→action mapping table, terminal-collapse rules,
+pre-history states, and the discovered model-scope boundaries (the E5-A2
+ready-flag observation return under SplitWait=TRUE; delegation/quiescent/
+drain-dance park classes; backend-domain parks) are documented in
+`docs/verification/formal/e9-trace-conformance.md`. The C++ side is
+`tests/e9_trace_conformance_test.cpp` (controller recorder, macro-guarded
+call sites; production builds compile none of it).
+
 ## Reproducible verification
 
 The committed `.cfg` files reproduce the gate above from the repo
