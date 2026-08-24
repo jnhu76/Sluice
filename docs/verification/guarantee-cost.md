@@ -12,17 +12,47 @@ cost proves the cost exists; it does **not** decompose it among internal
 mechanisms. No row below claims internal attribution without a decomposition
 experiment.
 
+## 0. Pilot acceptance scope (rescoped, review #205 P1)
+
+#199 acceptance says *"named guarantee + measured cost + evidence pointer
+per mechanism"*. Review (PR #205) correctly rejected that reading: several
+row-level costs were "not measured" rather than measured. This pilot
+therefore rescopes the acceptance to a **cost vector per mechanism**, being
+one of:
+
+- **MEASURED** — timing under the validated overload artifact
+  (OVERLOAD-RELEVANT rows);
+- **STATIC** — an exact per-operation count of atomic ops (CAS/release
+  stores) and/or bytes, resolved from production sources with file:line;
+- **PRECEDENT-CITED** — a same-class measurement already accepted by a
+  named precedent (the #161 A/B bench), with no new attribution claim.
+
+Explicitly **out of pilot scope** (recorded, not filled): internal timing
+decomposition of the accepted-path aggregate (claim/commit/publish/reap/
+reset split requires a staged isolating experiment), and a dedicated
+park/wake or BlockingIoPool overload timing run. These are follow-up work,
+not silently claimed. No row below is both "not measured" and presented as
+the measured per-mechanism cost.
+
+The machine-checked claim stays: **in-flight request state remained bounded
+by RequestArena capacity under sustained overload, with bounded harness
+memory** (§2); "no unbounded growth" is not claimed beyond that scope.
+
 ## 1. Mechanism cost vectors
+
+Every row carries a **cost vector**: either a measured timing number
+(OVERLOAD-RELEVANT rows, from the validated artifact) or an exact static
+per-operation count resolved from production sources (file:line below).
 
 | Mechanism | Guarantee bought (evidence) | Cost class | Cost paid (evidence) |
 |---|---|---|---|
-| **Completion publication / reap authority** (reap-only publication, slot-bound capability) | exactly-one terminal publication; no worker publishes a Completion (C2b mutants C/F/G: `docs/verification/phase-c2b-identity-mutation-evidence.md`; memory-order tier: #197 weak-memory kernels) | DYNAMIC + STATIC | per accepted op: claim CAS + commit CAS + publish CAS + release store + seq_cst reap RMW (orderings are the #197 kernel subjects, not decomposed here); measured **aggregate** accepted-path submit p50 70 ns under overload ([v6 artifact](../results/performance-attribution/v6-overload-backpressure.json)); static: `sizeof(Completion<std::size_t>)` = 64 B, `sizeof(Completion<void>)` = 48 B (artifact `static` block) |
-| **RequestSlot generation advance before reuse** | a stale key cannot act on a reused slot (C2b mutant A; C2c mutant H; D3-M1/M2) | STATIC (+ release-path RMW) | generation lives inside the slot (generation advances fused into slot release); the release path is inside the measured refill/accept aggregate — **no separate attribution claim** (decomposition experiment not run) |
-| **enqueue-pin acknowledged reap gate** | no reap vs enqueue/cancel race; interrupt-window final reap/poll (C2e mutants M4/M12 detectors `tp_c2e_interrupt_final_reap_closes_ready_race`, `ctx_wait_one_interrupt_final_poll_closes_ready_race`) | DYNAMIC (fused) | folded into the reap path inside the measured aggregate; **not separately measurable at this layer** (recorded honestly, not guessed) |
-| **terminal-winner arbitration** | exactly one terminal; losers never overwrite (C2b mutants C/D; FE-tier evidence in the mutation docs) | DYNAMIC (one CAS per terminal) | inside the measured complete+poll+reset refill cycle aggregate (refill accept p50 above); **no decomposition claim** |
-| **split-wait bridge + wake epoch** (#190/#194/#195 model subjects) | no causeless park return; no lost wake (E9 19-gate suite with non-vacuity witnesses; `scripts/formal/verify-e9-park-wake.sh`) | DYNAMIC (wake-path locked RMW + epoch advance) | same locked-RMW write class as the #161 A/B precedent (`bench/idle_erase_ab_bench.cpp`: store(0) vs exchange(0)+conditional bump on the pop/dance hot path, Release, same-session protocol); **cited precedent, no new attribution** |
-| **bounded arena admission** (`would_block` refusal path) | pre-acceptance refusal with zero residue (C2d mutants M12/M13; D2-M7/M11) | **OVERLOAD-RELEVANT (measured)** | measured under sustained overload (§2): refusal p50 40 ns, p99 ≤ 60 ns — **cheaper than the accepted path** (the refusal fires before slot reserve/binding); refusal share of sustained attempts ≈ 80 % at the operating point |
-| **BlockingIoPool bounded dispatch storage** | no unbounded growth (AC-7 class implementation-resource tests) | OVERLOAD-RELEVANT | boundedness proven by tests; overload cost **not separately measured in this pilot** — the async arena admission path is the measured proxy; recorded as an honest gap, not filled |
+| **Completion publication / reap authority** (reap-only publication, slot-bound capability) | exactly-one terminal publication; no worker publishes a Completion (C2b mutants C/F/G: `docs/verification/phase-c2b-identity-mutation-evidence.md`; memory-order tier: #197 weak-memory kernels) | DYNAMIC + STATIC | **static, per full accept→reap→reset cycle** (`include/sluice/async/completion.hpp`): 4 CAS — binding claim `:323`, binding→outstanding commit `:340`, outstanding→publishing winner `:406`, ready→resetting reset claim `:249` — + 2 release stores (ready `:414`, idle `:273`) = **6 atomic ops / op** (all acq_rel/release; orderings are the #197 kernel subjects). Static bytes: `sizeof(Completion<std::size_t>)` = 64 B, `sizeof(Completion<void>)` = 48 B (artifact `static` block). Measured **aggregate** accepted-path submit p50 70 ns under overload ([v6 artifact](../results/performance-attribution/v6-overload-backpressure.json)) — aggregate only, no intra-path decomposition |
+| **RequestSlot generation advance before reuse** | a stale key cannot act on a reused slot (C2b mutant A; C2c mutant H; D3-M1/M2) | STATIC | **0 per-op atomic ops**: `free_slot_locked_` (`include/sluice/async/detail/request_arena.hpp:1171`) advances the 64-bit generation as an ordinary load+store **under the arena leaf mutex** (`mutex_`, :1193) — generation is not a slot-level RMW. The leaf domain's serialization IS the arena mutex (1 lock/unlock per reserve/release), already inside the measured aggregate |
+| **enqueue-pin acknowledged reap gate** | no reap vs enqueue/cancel race; interrupt-window final reap/poll (C2e mutants M4/M12 detectors `tp_c2e_interrupt_final_reap_closes_ready_race`, `ctx_wait_one_interrupt_final_poll_closes_ready_race`) | STATIC | **0 per-op atomic ops**: `enqueue_in_flight_pin_` is a plain bool (`request_slot.hpp:177`), set/cleared/acquire-checked only under the arena mutex — no separate RMW beyond the mutex itself |
+| **terminal-winner arbitration** | exactly one terminal; losers never overwrite (C2b mutants C/D; FE-tier evidence in the mutation docs) | STATIC (winner CAS) + mutex | loser/winner arbitration happens under the arena mutex (slot state ordinary enum, `request_slot.hpp`); the single atomic arbitration point is the publish winner CAS outstanding→publishing (`completion.hpp:387` — counted above). **1 CAS is the only atomic terminal race**; refill-cycle aggregate p50 above |
+| **split-wait bridge + wake epoch** (#190/#194/#195 model subjects) | no causeless park return; no lost wake (E9 19-gate suite with non-vacuity witnesses; `scripts/formal/verify-e9-park-wake.sh`) | DYNAMIC (wake-path locked RMW + epoch advance) | same locked-RMW write class as the #161 A/B precedent (`bench/idle_erase_ab_bench.cpp`: store(0) vs exchange(0)+conditional bump on the pop/dance hot path, Release, same-session protocol); **cited precedent, no new attribution** (isolating park/wake experiment is out of pilot scope — see §0) |
+| **bounded arena admission** (`would_block` refusal path) | pre-acceptance refusal with zero residue (C2d mutants M12/M13; D2-M7/M11) | **OVERLOAD-RELEVANT (measured)** | measured under sustained overload (§2): refusal p50 40 ns, p99 ≤ 60 ns — **cheaper than the accepted path** (refusal path: 1 arena-mutex lock + free-list empty check + counter++, no CAS, no slot write — `request_arena.hpp:242-253`); refusal share of sustained attempts ≈ 80 % at the operating point |
+| **BlockingIoPool bounded dispatch storage** | no unbounded growth (AC-7 class implementation-resource tests) | STATIC (bounded) + RESCOPED | bounded by construction: fixed `worker_count` + `max_queue_depth` (`include/sluice/blocking_io_pool.hpp:47-56`), queue depth is the bounded dispatch storage; overload timing **not separately measured in this pilot** — rescoped to the static bound + the async arena admission proxy (see §0); recorded as an honest gap, not filled |
 
 ## 2. Sustained-overload backpressure experiment
 
@@ -91,11 +121,17 @@ Observed (this host, WSL2 — environment-sensitive, no absolute claims):
 
 ## 3. Honest open items
 
-- BlockingIoPool dispatch-storage overload: not measured (async arena
-  admission is the measured proxy; same refusal contract class).
-- Park/wake epoch path: cost class cited via the #161 A/B precedent; a
-  dedicated decomposition experiment would be required for any split of the
-  accepted-path aggregate among claim/commit/publish/reap/reset.
+- BlockingIoPool dispatch-storage overload timing: rescoped out of pilot
+  scope (§0) — the static construction bound
+  (`include/sluice/blocking_io_pool.hpp:47-56`) plus the async arena
+  admission proxy stand in; a dedicated timing run is follow-up work, not
+  claimed.
+- Park/wake epoch path: cited via the #161 A/B precedent; a dedicated
+  decomposition experiment would be required for any split of the
+  accepted-path aggregate among claim/commit/publish/reap/reset (rescoped
+  in §0).
 - All numbers are single-host (WSL2) Release evidence; the runner embeds the
   environment fingerprint and the binary sha256, and the validator rejects
-  hand-typed tables (percentiles are recomputed from raw samples).
+  hand-typed tables (percentiles are recomputed from raw samples). Static
+  counts are resolved against production sources at the artifact revision
+  and should be re-verified if the atomic shape of those paths changes.
