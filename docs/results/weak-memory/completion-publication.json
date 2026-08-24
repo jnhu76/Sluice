@@ -1,0 +1,244 @@
+{
+  "schema": "sluice-weakmem-completion-publication/1",
+  "generated_utc": "2026-08-24T03:44:37Z",
+  "repo_revision": "5b962972cb19adf45505d42fd64af22d9f0dceac",
+  "claim": "MEMORY-MODEL-CHECKED (BOUNDED KERNEL)",
+  "tool": {
+    "name": "genmc",
+    "version": "v0.17.0",
+    "commit": "29b03a6",
+    "llvm": "18.1.8",
+    "binary": "/home/hoo/tools/genmc-src/build/bin/genmc"
+  },
+  "host": {
+    "uname": "Linux 6.18.33.2-microsoft-standard-WSL2"
+  },
+  "models": [
+    "rc11",
+    "sc",
+    "tso",
+    "ra"
+  ],
+  "kernels": [
+    {
+      "name": "K1",
+      "file": "spec/weakmem/completion-publication/kernel_publication.cpp",
+      "provenance_revision": "d98d70dd57c85b5e4c59d92b384ffa95b6027e4a",
+      "threads": 2,
+      "publication_rounds": 1,
+      "wait_budget": null,
+      "results": {
+        "rc11": {
+          "verdict": "PASS",
+          "executions": 5
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 5
+        },
+        "tso": {
+          "verdict": "PASS",
+          "executions": 5
+        },
+        "ra": {
+          "verdict": "PASS",
+          "executions": 5
+        }
+      }
+    },
+    {
+      "name": "K2",
+      "file": "spec/weakmem/completion-publication/kernel_reset_reuse.cpp",
+      "provenance_revision": "d98d70dd57c85b5e4c59d92b384ffa95b6027e4a",
+      "threads": 3,
+      "publication_rounds": 2,
+      "wait_budget": 3,
+      "results": {
+        "rc11": {
+          "verdict": "PASS",
+          "executions": 67244
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 67244
+        },
+        "tso": {
+          "verdict": "PASS",
+          "executions": 67244
+        },
+        "ra": {
+          "verdict": "PASS",
+          "executions": 67244
+        }
+      }
+    }
+  ],
+  "controls": [
+    {
+      "name": "N1_pub_ready_store_relaxed",
+      "base_kernel": "K1",
+      "gated_must_fail_models": [
+        "rc11",
+        "ra"
+      ],
+      "recorded_ungated_models": [
+        "sc",
+        "tso"
+      ],
+      "results": {
+        "rc11": {
+          "verdict": "REJECTED",
+          "executions": 4
+        },
+        "ra": {
+          "verdict": "REJECTED",
+          "executions": 4
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 5
+        },
+        "tso": {
+          "verdict": "REJECTED",
+          "executions": 4
+        }
+      }
+    },
+    {
+      "name": "N1b_observer_load_relaxed",
+      "base_kernel": "K1",
+      "gated_must_fail_models": [
+        "rc11",
+        "ra"
+      ],
+      "recorded_ungated_models": [
+        "sc",
+        "tso"
+      ],
+      "results": {
+        "rc11": {
+          "verdict": "REJECTED",
+          "executions": 2
+        },
+        "ra": {
+          "verdict": "REJECTED",
+          "executions": 2
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 5
+        },
+        "tso": {
+          "verdict": "REJECTED",
+          "executions": 2
+        }
+      }
+    },
+    {
+      "name": "N3_commit_cas_relaxed",
+      "base_kernel": "K1",
+      "gated_must_fail_models": [
+        "rc11",
+        "ra"
+      ],
+      "recorded_ungated_models": [
+        "sc",
+        "tso"
+      ],
+      "results": {
+        "rc11": {
+          "verdict": "REJECTED",
+          "executions": 2
+        },
+        "ra": {
+          "verdict": "REJECTED",
+          "executions": 2
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 5
+        },
+        "tso": {
+          "verdict": "REJECTED",
+          "executions": 2
+        }
+      }
+    },
+    {
+      "name": "N2_late_observer_load_relaxed",
+      "base_kernel": "K2",
+      "gated_must_fail_models": [
+        "rc11",
+        "ra"
+      ],
+      "recorded_ungated_models": [
+        "sc",
+        "tso"
+      ],
+      "results": {
+        "rc11": {
+          "verdict": "REJECTED",
+          "executions": 1702
+        },
+        "ra": {
+          "verdict": "REJECTED",
+          "executions": 1702
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 67244
+        },
+        "tso": {
+          "verdict": "REJECTED",
+          "executions": 1702
+        }
+      }
+    },
+    {
+      "name": "N4_reset_idle_store_relaxed",
+      "base_kernel": "K2",
+      "gated_must_fail_models": [
+        "rc11",
+        "ra"
+      ],
+      "recorded_ungated_models": [
+        "sc",
+        "tso"
+      ],
+      "results": {
+        "rc11": {
+          "verdict": "REJECTED",
+          "executions": 1692
+        },
+        "ra": {
+          "verdict": "REJECTED",
+          "executions": 1692
+        },
+        "sc": {
+          "verdict": "PASS",
+          "executions": 67244
+        },
+        "tso": {
+          "verdict": "REJECTED",
+          "executions": 1692
+        }
+      }
+    }
+  ],
+  "redundancy_observations": [
+    {
+      "RA1_begin_binding_cas_relaxed": {
+        "model": "rc11",
+        "verdict": "PASS",
+        "executions": 5
+      }
+    }
+  ],
+  "limitations": [
+    "bounded kernel: 2-3 threads, 1-2 publication rounds, wait budget 3",
+    "assertion class + RC11 data-race detection only; no liveness claim",
+    "not whole-program verification of Sluice",
+    "round-2 reap gating uses bounded waits as a stand-in for the arena backend-ready linkage (documented in the kernel header)",
+    "sc/tso control results are recorded ungated: sc repairs every control; tso rejects them too (a relaxed publication leaves the non-atomic payload accesses racy under C++ model semantics even on a TSO-shaped machine)"
+  ]
+}

@@ -135,6 +135,16 @@ bug-free.
 | `scripts/formal/verify-e9-park-wake.sh` | Available now |
 | `scripts/formal/verify-e10-waitnode.sh` | Available now |
 
+## Weak-memory model checking
+
+Bounded kernels carrying the exact production atomic ordering, checked
+exhaustively under GenMC (RC11 and RA+RLX), with mandatory broken-order
+negative controls — a **separately-run evidence layer** (not wired into CI or
+pre-push; #197 non-goal). Current kernel:
+[Completion publication/reset](weak-memory/completion-publication-kernel.md)
+(`scripts/weakmem/verify-completion-weak-memory.sh`). Claim vocabulary:
+`MEMORY-MODEL-CHECKED (BOUNDED KERNEL)` — never a whole-program claim.
+
 ## Evidence status
 
 | Evidence | Status |
@@ -146,6 +156,7 @@ bug-free.
 | Valgrind | **Environment-dependent** — requires valgrind installed |
 | Real liburing validation | **Environment-dependent** — requires liburing-equipped host |
 | TLA+ TLC model checker | **Environment-dependent** — requires `tla2tools.jar` |
+| GenMC weak-memory kernels | **Environment-dependent** — requires GenMC (user-local build documented in the kernel evidence doc) |
 | Automated mutation testing | **Planned** — no repository-wide tooling yet |
 
 ## Navigation
@@ -154,6 +165,7 @@ bug-free.
 |-------|----------|
 | Formal models | `spec/tla/` (inventory: `spec/tla/manifest.json`) |
 | Formal model documentation | [`formal-models.md`](formal-models.md), [`formal/`](formal/) |
+| Weak-memory kernel evidence (#197) | [`weak-memory/completion-publication-kernel.md`](weak-memory/completion-publication-kernel.md) |
 | io_uring / liburing validation runbook | [`io-uring-liburing-validation.md`](io-uring-liburing-validation.md) |
 | Local hardening gate | [`hardening.md`](hardening.md) |
 | Sync benchmark methodology (W1–W4) | [`sync-bench-methodology.md`](sync-bench-methodology.md) |
