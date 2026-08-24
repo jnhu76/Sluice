@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "suite": "e9_park_wake",
+  "test": "malformed_unknown_event",
+  "cpp_revision": "82acdd30ec7f5bba75b50ea5215b12b66184e875",
+  "model_revision": "82acdd30ec7f5bba75b50ea5215b12b66184e875",
+  "split_wait": true,
+  "run_mode": "live",
+  "prehistory": "external_wait_registered",
+  "events": [
+    {
+      "seq": 1,
+      "event": "SchedulerTeleported",
+      "worker": 0
+    }
+  ]
+}

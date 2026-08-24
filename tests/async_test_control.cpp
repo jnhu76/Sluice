@@ -458,4 +458,101 @@ RollbackObservation read_rollback_observation(
     return o;
 }
 
+// ---- #196 E9 trace-conformance recorder ----
+// Controller-owned fixed ring; every entry point is a no-op without a
+// registered controller, and recording is a no-op outside the test's capture
+// window. trace_mtx is a controller leaf: the guarded production call sites
+// invoke these while holding wake_mtx_ / global_mtx_ (the same discipline as
+// test_phase, which also takes a controller mutex under production locks).
+
+void trace_enable(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    c->trace_enabled = true;
+}
+
+void trace_disable(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    c->trace_enabled = false;
+}
+
+void trace_clear(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    c->trace_len = 0;
+    c->trace_overflow = false;
+    c->pending_wake_cause = 0;
+    c->pending_wake_worker = TraceEvent{}.worker;
+}
+
+bool trace_overflow(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return false;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    return c->trace_overflow;
+}
+
+std::vector<TraceEvent> trace_events(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return {};
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    return std::vector<TraceEvent>(c->trace_events.begin(),
+                                   c->trace_events.begin() +
+                                       static_cast<std::ptrdiff_t>(c->trace_len));
+}
+
+void record_trace_event(sluice::async::Scheduler& s,
+                        const TraceEvent& ev) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    if (!c->trace_enabled) return;
+    if (c->trace_len >= c->trace_events.size()) {
+        c->trace_overflow = true;  // drop; the test's shape check fail-closes
+        return;
+    }
+    c->trace_events[c->trace_len++] = ev;
+}
+
+void set_trace_wake_cause(sluice::async::Scheduler& s, WakeCause cause,
+                          unsigned worker) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    c->pending_wake_cause = static_cast<unsigned char>(cause);
+    c->pending_wake_worker = worker == static_cast<unsigned>(-1)
+                                 ? TraceEvent{}.worker
+                                 : static_cast<unsigned char>(worker);
+}
+
+void record_trace_wake(sluice::async::Scheduler& s,
+                       std::uint64_t new_epoch) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->trace_mtx);
+    if (!c->trace_enabled) {
+        // Consume the marker even outside the window so a stale attribution
+        // can never attach to a later in-window wake.
+        c->pending_wake_cause = 0;
+        c->pending_wake_worker = TraceEvent{}.worker;
+        return;
+    }
+    TraceEvent ev;
+    ev.kind = static_cast<unsigned char>(TraceEventKind::wake_published);
+    ev.cause = c->pending_wake_cause;
+    ev.worker = c->pending_wake_worker;
+    ev.epoch = new_epoch;
+    c->pending_wake_cause = 0;
+    c->pending_wake_worker = TraceEvent{}.worker;
+    if (c->trace_len >= c->trace_events.size()) {
+        c->trace_overflow = true;
+        return;
+    }
+    c->trace_events[c->trace_len++] = ev;
+}
+
 }  // namespace sluice_async_test

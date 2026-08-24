@@ -281,6 +281,12 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
         // predicate holds wake_mtx_ while inspecting the worker's
         // local_runnable — never invert that edge). Safe under global_mtx_:
         // signal_wake_locked only acquires wake_mtx_.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // #196 trace: attribute the wake to the runnable publication.
+        sluice_async_test::set_trace_wake_cause(
+            *this, sluice_async_test::WakeCause::runnable_route,
+            static_cast<unsigned>(-1));
+#endif
         signal_wake_locked();
     } else {
         pending_spawn_.push_back(&fiber);
@@ -320,6 +326,12 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
     // Issue #115: same wake obligation as spawn()/route_runnable_locked — the
     // explicit target can be a BUSY worker that cannot drain its queue, and a
     // parked steal-capable peer must observe the publication (see spawn()).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // #196 trace: attribute the wake to the runnable publication.
+    sluice_async_test::set_trace_wake_cause(
+        *this, sluice_async_test::WakeCause::runnable_route,
+        static_cast<unsigned>(-1));
+#endif
     signal_wake_locked();
 }
 
@@ -963,6 +975,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // ops is treated as a no-progress boundary, NOT busy-spin.
                         global_terminate_.store(true, std::memory_order_release);
                         // E9: wake any Worker parked on the wake source.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                        // #196 trace: attribute to the terminate publication.
+                        sluice_async_test::set_trace_wake_cause(
+                            *this, sluice_async_test::WakeCause::terminate,
+                            static_cast<unsigned>(-1));
+#endif
                         signal_wake_locked();
                         // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: release any paused
                         // admission seam via the controller (test variant only).
@@ -1043,6 +1061,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             MwState still = classify_locked(run_workers, ws);
                             if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                                 global_terminate_.store(true, std::memory_order_release);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                                // #196 trace: attribute to the terminate
+                                // publication (E14-F1 last-idle exit).
+                                sluice_async_test::set_trace_wake_cause(
+                                    *this, sluice_async_test::WakeCause::terminate,
+                                    static_cast<unsigned>(-1));
+#endif
                                 signal_wake_locked();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                             sluice_async_test::release_all_phases(*this);
@@ -1067,6 +1092,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             // the last idle worker — wake the domain so the
                             // dance converges (see the plain idle path below
                             // for the full race analysis).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                            // #196 trace: the not-last idle-dance signal.
+                            sluice_async_test::set_trace_wake_cause(
+                                *this,
+                                sluice_async_test::WakeCause::idle_dance,
+                                static_cast<unsigned>(-1));
+#endif
                             signal_wake_locked();
                         }
                     } else {
@@ -1102,6 +1134,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             // effective wake source, or true quiescence.
                             global_terminate_.store(true, std::memory_order_release);
                             // E9: wake any Worker parked on the wake source.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                            // #196 trace: attribute to the terminate
+                            // publication (last-idle exit).
+                            sluice_async_test::set_trace_wake_cause(
+                                *this, sluice_async_test::WakeCause::terminate,
+                                static_cast<unsigned>(-1));
+#endif
                             signal_wake_locked();
                             // Release any paused test phase so parked test
                             // workers can observe termination.
@@ -1141,6 +1180,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // first, then notify (AGENTS.md §13.2); the dance
                         // re-checks under global_mtx_, so the signal is
                         // advisory only and coalesces safely (G-I3).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                        // #196 trace: the not-last idle-dance signal.
+                        sluice_async_test::set_trace_wake_cause(
+                            *this, sluice_async_test::WakeCause::idle_dance,
+                            static_cast<unsigned>(-1));
+#endif
                         signal_wake_locked();
                     }
                 }
@@ -1246,6 +1291,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // parked after counting itself (or parked via a delegation
         // fall-through) must re-check the shrunk convergence threshold and
         // the moved tickets.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // #196 trace: the retire-epilogue departure signal (attributed to
+        // the RETIRING worker — the model's RetireWorkerQuiescent(w) step).
+        sluice_async_test::set_trace_wake_cause(
+            *this, sluice_async_test::WakeCause::retire_epilogue, ws->id);
+#endif
         signal_wake_locked();
     }
 
@@ -1555,6 +1606,12 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     // The inbox lock must already be released: the park predicate holds
     // wake_mtx_ before it inspects the inbox, so holding inbox_mtx here would
     // invert that order.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // #196 trace: attribute the wake to the runnable publication.
+    sluice_async_test::set_trace_wake_cause(
+        *this, sluice_async_test::WakeCause::runnable_route,
+        static_cast<unsigned>(-1));
+#endif
     signal_wake_locked();
 }
 

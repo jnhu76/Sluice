@@ -82,6 +82,11 @@ KNOWN_TRACKER_REFS = {
     170,                                # inert worker-inbox notification surface
                                        # removal (2026-08-22, LOC-only delta in this
                                        # report; wake authority unchanged)
+    196,                                # E9 trace-conformance pilot (2026-08-24,
+                                       # test-only recorder call sites — LOC delta
+                                       # attribution in this report; see
+                                       # docs/verification/formal/
+                                       # e9-trace-conformance.md)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

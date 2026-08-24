@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "suite": "e9_park_wake",
+  "test": "neg_b_unconditional_escape_claim",
+  "cpp_revision": "82acdd30ec7f5bba75b50ea5215b12b66184e875",
+  "model_revision": "82acdd30ec7f5bba75b50ea5215b12b66184e875",
+  "split_wait": false,
+  "run_mode": "drain",
+  "prehistory": "backend_outstanding",
+  "events": [
+    {
+      "seq": 1,
+      "event": "ParkCommitted",
+      "worker": 1,
+      "epoch": 0,
+      "armed": false
+    },
+    {
+      "seq": 2,
+      "event": "ParkEntered",
+      "worker": 1
+    },
+    {
+      "seq": 3,
+      "event": "ParkReturned",
+      "worker": 1,
+      "immediate": false,
+      "causes": [
+        "timeout"
+      ]
+    }
+  ]
+}

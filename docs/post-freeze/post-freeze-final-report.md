@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1193 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1293 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 506 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 317 | semaphore waits |
@@ -39,7 +39,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_condition.cpp` | 265 | condition waits |
 | `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2065 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2122 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -81,7 +81,16 @@ fallback), and the dead `make_runnable()` calls on the current RUNNING
 fiber removed from every inline admission-resolution path (no-op from
 running; comments now state the no-publication invariant). No reachable
 behavior change; see
-`docs/history/closeout/e12-cross-primitive-terminal-audit.md` §11.7).
+`docs/history/closeout/e12-cross-primitive-terminal-audit.md` §11.7);
+`scheduler_park_wake.cpp` 1193 → 1293 and `scheduler.cpp` 2065 → 2122
+(2026-08-24, Issue #196 — test-only `SLUICE_ASYNC_INTERNAL_TESTING` E9
+trace-conformance recorder call sites (wake publication / park commit /
+entered / returned / refused / wake-cause markers), plus the two
+duplicated cv-predicate lambdas in `park_on_wake_source` unified into one
+`park_pred` (behavior-identical; the guarded entry-evaluation uses it to
+observe the immediate-return boundary). Production park/wake behavior
+unchanged — the release library carries zero trace symbols; see
+`docs/verification/formal/e9-trace-conformance.md`).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

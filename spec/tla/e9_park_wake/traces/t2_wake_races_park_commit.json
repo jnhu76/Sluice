@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "suite": "e9_park_wake",
+  "test": "t2_wake_races_park_commit",
+  "cpp_revision": "82acdd30ec7f5bba75b50ea5215b12b66184e875",
+  "model_revision": "82acdd30ec7f5bba75b50ea5215b12b66184e875",
+  "split_wait": true,
+  "run_mode": "live",
+  "prehistory": "external_wait_registered",
+  "events": [
+    {"seq": 1, "event": "ParkCommitted", "worker": 0, "epoch": 0, "armed": false},
+    {"seq": 2, "event": "WakePublished", "epoch": 1, "cause": "external"},
+    {"seq": 3, "event": "ParkEntered", "worker": 0},
+    {"seq": 4, "event": "ParkReturned", "worker": 0, "immediate": true, "causes": ["epoch"]}
+  ]
+}
