@@ -455,8 +455,8 @@ platforms; it is limited to the platforms and compilers actually verified
 ## Async Synchronization
 
 The async synchronization primitives are built on the `WaitNode`/`WaitQueue` substrate
-and the deadline/timer integration. See `docs/history/closeout/e10-e12-api-semantic-closure.md` for the
-cross-primitive authority.
+and the deadline/timer integration. See `docs/architecture/async-synchronization.md` for
+the current architecture; the E10–E12 closeout is historical implementation evidence.
 
 ### `sluice::async::WaitOutcome`
 
@@ -671,8 +671,8 @@ or move-assignable.
 `Cancelled` result**. `close()` and deadline expiry are distinct Queue
 state-machine causes (`closed` / `expired` statuses), not cancellation. There
 is no `cancel(WaitNode&)` on `AsyncQueue<T>`; per-wait-epoch cancellation is
-deferred to a future authority (see
-`docs/history/closeout/e10-e12-api-semantic-closure.md` D4).
+not part of the current public contract. Historical rationale is retained in
+`docs/history/closeout/e10-e12-api-semantic-closure.md` (D4).
 
 ```cpp
 template <class T>

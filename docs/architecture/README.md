@@ -71,7 +71,7 @@ means a script, spec manifest, or test hard-codes the current path.
 | [`issue-115-runnable-publication-wake-gate.md`](issue-115-runnable-publication-wake-gate.md) | Runnable-publication wake obligation gate | Deferred |
 | [`issue-116-reentry-liveness-gate.md`](issue-116-reentry-liveness-gate.md) | Invocation-boundary lost re-entry liveness gate; pinned by `scripts/gates/mechanical-facts.py` (`TEST_TOTAL_EXTRA_DOCS`) | Blocked |
 | [`issue-137-submission-transaction-compliance-gate.md`](issue-137-submission-transaction-compliance-gate.md) | Centralized submission transaction gate | Candidate (zero external consumers) |
-| [`issue-137-submission-transaction-design.md`](issue-137-submission-transaction-design.md) | Submission-transaction design. Note: its internal status block still says PROPOSED/blocked, but issue #137 is CLOSED — the block is stale, the record is evidence | Candidate (zero external consumers) |
+| [`issue-137-submission-transaction-design.md`](issue-137-submission-transaction-design.md) | Submission-transaction design — ACCEPTED with five binding amendments; provenance banner at top marks the record as evidence and flags the §4 `arena.commit` sketch as known-inverted (do not copy literally) | Candidate (zero external consumers) |
 | [`issue-137-submission-transaction-mutation-evidence.md`](issue-137-submission-transaction-mutation-evidence.md) | RED-validity mutation evidence for the transaction gate | Candidate (zero external consumers) |
 | [`issue-161-idle-dance-contribution-generation-gate.md`](issue-161-idle-dance-contribution-generation-gate.md) | Idle-dance contribution generation gate; pinned by `spec/tla/manifest.json` and `spec/tla/e12_rwlock_scheduler_liveness/README.md` | Blocked |
 

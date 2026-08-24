@@ -107,11 +107,11 @@ Semantics:
     after partial bytes are both defined (eof), matching read_exact.
 ```
 
-**Deferred (documented, not ambiguous):** `read_vec_at_all` / `write_vec_at_all`
-(positional vector-all). If implementing them is too invasive, single-buffer
-positional helpers (`read_at_exact`/`write_at_all`) ship first and vector-at-all
-is documented as deferred. The semantics will not be left ambiguous either way —
-the decision is recorded in job 019S.
+**Not part of the current public surface:** `read_vec_at_all` / `write_vec_at_all`
+(positional vector-all). The public positional all-helpers are the single-buffer
+`read_at_exact` / `write_at_all`; no vector-all form is provided. The historical
+decision (single-buffer helpers first, vector-all not shipped) is recorded in job
+019S (`docs/history/implementation-plans/sync-io-next-jobs.md`).
 
 ## File handle semantics
 
