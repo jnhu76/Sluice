@@ -85,7 +85,8 @@ class FileReader final : public Reader {
     // open() rather than a synthetic code.
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
     // POSIX readv override: gathers into all non-empty slices in one (chunked)
-    // syscall. See src/file.cpp and docs/readv-writev-design-note.md.
+    // syscall. See src/file.cpp and docs/reference/sync-io-model.md
+    // (Vector I/O semantics).
     Result<std::size_t> read_vec(std::span<IoSlice> dsts) override;
 
     // Positional read (sluice-CORE-018S): pread at an explicit byte offset.
@@ -167,7 +168,8 @@ class FileWriter final : public Writer, public SyncableWriter {
     // open() rather than a synthetic code.
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
     // POSIX writev override: scatters from all non-empty slices in (chunked)
-    // syscalls. See src/file.cpp and docs/readv-writev-design-note.md.
+    // syscalls. See src/file.cpp and docs/reference/sync-io-model.md
+    // (Vector I/O semantics).
     Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs) override;
     // Positional write (sluice-CORE-018S): pwrite at an explicit byte offset.
     // Does NOT move the shared file cursor. Returns bytes written (0 on

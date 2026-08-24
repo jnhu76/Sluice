@@ -106,7 +106,8 @@ struct UringStats {
 // (the FileReader/FileWriter readv/writev overrides). That split is the whole
 // point of these stats: it tells the decision matrix (CPPIO-CORE-011) how often
 // vector I/O actually reached the kernel as a single gather/scatter syscall vs.
-// degenerated to the per-slice fallback. See docs/readv-writev-design-note.md.
+// degenerated to the per-slice fallback. See docs/reference/sync-io-model.md
+// (Vector I/O semantics).
 struct VectorStats {
     std::uint64_t read_vec_calls = 0;
     std::uint64_t read_vec_bytes = 0;

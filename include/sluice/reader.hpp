@@ -52,7 +52,7 @@ class Reader {
     // filling the same slice on a short read. A concrete reader (FileReader)
     // overrides this with a single readv, exposing the same stop-on-short
     // semantics. EOF before any progress returns 0. See
-    // docs/readv-writev-design-note.md.
+    // docs/reference/sync-io-model.md (Vector I/O semantics).
     virtual Result<std::size_t> read_vec(std::span<IoSlice> dsts);
 
     // Exact-read over multiple slices (CPPIO-CORE-015A): fill every byte of every

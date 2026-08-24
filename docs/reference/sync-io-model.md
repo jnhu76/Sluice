@@ -1,12 +1,11 @@
 # Sync I/O model — blocking primitive contract
 
-**Status: SYNC-IO-COMPLETE Phase 3 (sync doc reconciliation).** This is the
+**Status: Current.** This is the
 *contract* layer: the blocking primitive semantics stated as testable
 propositions. It is the authoritative behavioral contract for the synchronous I/O
-surface. Existing behavior (v0.1) is recorded as-is; new positional helpers
-(`read_at`/`write_at`, job 018S) and derived-helper closeout (job 019S) are marked
-**[NEW]** where they extend the surface. Implementation follows the code sessions
-(phases 4–5); this doc fixes the contract first.
+surface. The positional helpers (`read_at`/`write_at`) and the derived
+exact/all helpers are marked **[NEW]** where they extend the original v0.1
+surface; the markers distinguish contract vintage, not implementation status.
 
 Companion docs: architecture in `docs/architecture/sync-io-architecture.md`; durability in
 `docs/architecture/sync-durability-model.md`; planning/gaps in `docs/history/closeout/sync-io-model-gap-audit.md`.
@@ -108,11 +107,11 @@ Semantics:
     after partial bytes are both defined (eof), matching read_exact.
 ```
 
-**Deferred (documented, not ambiguous):** `read_vec_at_all` / `write_vec_at_all`
-(positional vector-all). If implementing them is too invasive, single-buffer
-positional helpers (`read_at_exact`/`write_at_all`) ship first and vector-at-all
-is documented as deferred. The semantics will not be left ambiguous either way —
-the decision is recorded in job 019S.
+**Not part of the current public surface:** `read_vec_at_all` / `write_vec_at_all`
+(positional vector-all). The public positional all-helpers are the single-buffer
+`read_at_exact` / `write_at_all`; no vector-all form is provided. The historical
+decision (single-buffer helpers first, vector-all not shipped) is recorded in job
+019S (`docs/history/implementation-plans/sync-io-next-jobs.md`).
 
 ## File handle semantics
 

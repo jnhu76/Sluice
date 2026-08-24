@@ -18,22 +18,10 @@ start at the root [README](../README.md) instead.
 
 ## Authority and conflict resolution
 
-[`AGENTS.md` §3](../AGENTS.md) is the canonical authority chain. This document
-must not invent a second hierarchy. In abbreviated form, resolve conflicts in
-this order:
-
-```text
-1. Explicit current task / approved issue scope / accepted review finding
-2. Accepted ADRs and active subsystem design or closeout documents
-3. architecture/architecture-constitution.md
-4. AGENTS.md
-5. Public headers under include/sluice/ + reference/api.md
-6. Production implementation under src/
-7. Contract / regression / causal / formal tests
-8. xmake target and feature-gate definitions
-9. GitHub workflow merge gates
-10. Root README for orientation and common commands
-```
+[`AGENTS.md` §3](../AGENTS.md) is the canonical, complete authority chain. This
+page is navigation, not an independent authority definition — when sources
+disagree, resolve the conflict through that chain, fix the stale artifact, and
+record intentional divergence rather than silently picking a winner.
 
 Scanner reports, investigations, roadmap notes, comments, commit messages, and
 historical documents are **evidence**, not automatic authority. Documents under
@@ -44,7 +32,7 @@ historical documents are **evidence**, not automatic authority. Documents under
 | Directory | Question it answers | Audience |
 |-----------|--------------------|----------|
 | [`reference/`](reference/) | What exactly is the public contract? | All |
-| [`architecture/`](architecture/) | How does it work? | Contributor |
+| [`architecture/`](architecture/README.md) | How does it work? Start at the [classification index](architecture/README.md) for current vs evidence/history documents. | Contributor |
 | [`adr/`](adr/) | Why was it designed this way? | Contributor |
 | [`verification/`](verification/) | How do we prove it works? | Contributor |
 | [`applications/`](applications/) | What have real workloads taught us? | Contributor |

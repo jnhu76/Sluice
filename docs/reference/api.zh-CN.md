@@ -66,7 +66,7 @@ if (!ok) return ok.error();
 |---|---|
 | `make_unexpected<T>(IoError)` | 创建错误结果 |
 
-**复制 / 移动 / 赋值语义 (E15-P1-01/02)：**
+**复制 / 移动 / 赋值语义：**
 
 - `Result<T>` 可复制、可移动；`Result<void>` 可平凡复制。
 - 复制/移动**构造**和复制/移动**赋值**都在存储区中对 `T` 执行 placement-new
@@ -416,7 +416,7 @@ Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户�
 ## 异步同步原语 (E10–E12)
 
 异步同步原语建立在 E10 `WaitNode`/`WaitQueue` 基底与 E11 截止期/计时器集成之上。
-跨原语权威文档见 `docs/history/closeout/e10-e12-api-semantic-closure.md`。
+当前同步架构见 `docs/architecture/async-synchronization.md`；E10–E12 closeout 保留为历史实现证据。
 
 > **注意：** `include/sluice/async/mutex.hpp` 中的 `Mutex` 是 Scheduler 内部线程阻塞锁
 > （TSA 注解的 `std::mutex` 包装），**不是** Fiber 挂起式 `AsyncMutex`。二者不可在
@@ -627,7 +627,8 @@ nothrow 可析构。`T` **不必**可默认构造或可移动赋值。
 `AsyncQueue<T>` v1 **没有**公开的 wait-epoch 取消 API，也**没有** `Cancelled`
 结果。`close()` 与截止期到期是 Queue 状态机的独立原因（`closed` / `expired`
 状态），**不是**取消。`AsyncQueue<T>` 上没有 `cancel(WaitNode&)`；按 wait-epoch
-的取消推迟到未来的权威机构（见 `docs/history/closeout/e10-e12-api-semantic-closure.md` D4）。
+的取消不属于当前公开契约。历史理由保留在
+`docs/history/closeout/e10-e12-api-semantic-closure.md`（D4）。
 
 ```cpp
 template <class T>
@@ -876,7 +877,7 @@ public:
     Result<T> result() const noexcept;   // 仅 ready 时有效
     void reset() noexcept;               // 回到 idle 可复用
 
-    std::size_t next_reap_seq() const noexcept;  // reap 顺序（E15-P1-04）
+    std::size_t next_reap_seq() const noexcept;  // reap 顺序
 };
 ```
 
@@ -899,8 +900,8 @@ public:
 
 ### `sluice::async::AsyncIoContext`
 
-公开 L1 异步 API 表面（E17）。拥有 `AsyncBackend`。不可复制；移动语义
-遵循 E15-P1-03 / E15-P2-06。
+公开 L1 异步 API 表面。拥有 `AsyncBackend`（经 `std::unique_ptr`）。
+不可复制；遵循移动语义。
 
 ```cpp
 class AsyncIoContext {
@@ -941,8 +942,9 @@ public:
 
 ### `sluice::async::ThreadPoolBackend`
 
-可移植的真实后端（sluice-CORE-020A）。每个未完成操作一个 `std::thread`。
-始终可构建；无外部依赖。
+可移植的真实阻塞 I/O 后端。始终可构建；无外部依赖。使用固定数量的持久
+阻塞 I/O worker 与构造期有界的 dispatch ring（有界显式 I/O 后端；
+详见英文参考与 ADR-explicit-io-request-contract）。
 
 ```cpp
 class ThreadPoolBackend : public AsyncBackend {
@@ -953,7 +955,7 @@ public:
 
 ### `sluice::async::UringAsyncBackend`
 
-Linux io_uring 后端（sluice-CORE-020B）。构建门控在 liburing 之后。没有
+Linux io_uring 后端。构建门控在 liburing 之后。没有
 `SLUICE_HAS_LIBURING` 时是不支持的 stub：`submit_*` 同步返回
 `IoError::backend_error`；`poll()` / `wait_one()` 不 reap 任何内容。
 

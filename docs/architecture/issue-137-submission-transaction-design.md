@@ -1,5 +1,21 @@
 # Issue #137 Design — Centralizing the Explicit-I/O Submission Transaction
 
+> **EVIDENCE RECORD — read as history, not current status.** Issue #137 is
+> CLOSED. This design was subsequently **ACCEPTED with five binding
+> corrections** (independent review: issue #137 comment `issuecomment-5357295925`;
+> corrections recorded in
+> [issue-137-submission-transaction-compliance-gate.md](issue-137-submission-transaction-compliance-gate.md)).
+> The `STATUS:` block and the code sketch in §4 below are preserved as
+> historical text. In particular, the §4 `arena.commit` conditional is known
+> **INVERTED** — `Result` truth means success, so the sketch as written rolls
+> back on commit *success* — and MUST NOT be copied literally; the reviewed
+> form is `if (auto m = arena.commit(...); !m.has_value())`. Current
+> authority:
+> [ADR-explicit-io-request-contract.md](../adr/ADR-explicit-io-request-contract.md),
+> [async-request-lifecycle.md](async-request-lifecycle.md), and the
+> implemented shared transaction
+> `include/sluice/async/detail/submit_transaction.hpp`.
+
 ```text
 STATUS: PROPOSED — AWAITING INDEPENDENT REVIEW
 IMPLEMENTATION: STILL BLOCKED (issue #137 gate; only an accepted review lifts it)
