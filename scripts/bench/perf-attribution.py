@@ -73,6 +73,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 BENCH_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "grep_attribution_bench"
+OVERLOAD_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "overload_backpressure_bench"
 GEN_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "grep_workload_gen"
 GREP_APPS = {
     "sluice-grep": REPO / "build" / "linux" / "x86_64" / "release" / "sluice-grep",
@@ -759,6 +760,75 @@ def _nonneg_int(s: str) -> int:
     return v
 
 
+
+# ---------------------------------------------------------------------------
+# overload (#199 / V6: sustained-overload backpressure, guarantee-cost)
+# ---------------------------------------------------------------------------
+
+def overload_derived(rows: list[dict]) -> list[dict]:
+    """Aggregate per-capacity ratios with units (§7: no invented scores).
+
+    accept/refuse p50 ratios compare the two measured paths of the SAME
+    build (accepted-under-overload vs refusal) — an A/B between paths, not
+    an attribution of the aggregate to internal mechanisms (#127 lesson).
+    """
+    out = []
+    for r in rows:
+        acc = float(r["accept"]["p50_ns"])
+        ref = float(r["refuse"]["p50_ns"])
+        a = r["accounting"]
+        attempts = a["refusals"] + a["refill_accepts"]
+        out.append({
+            "capacity": r["capacity"],
+            "accept_p50_ns": acc,
+            "refuse_p50_ns": ref,
+            "accept_over_refuse_p50_ratio": (acc / ref) if ref > 0 else None,
+            "refusal_share_of_sustained_attempts":
+                (a["refusals"] / attempts) if attempts else None,
+            "drain_ns": a["drain_ns"],
+        })
+    return out
+
+
+def cmd_overload(args) -> dict:
+    if not OVERLOAD_BIN.exists():
+        sys.exit(f"missing {OVERLOAD_BIN} "
+                 f"(xmake f -m release --toolchain=clang -y; "
+                 f"xmake build overload_backpressure_bench)")
+    caps = [int(c) for c in str(args.capacities).split(",") if c.strip()]
+    if not caps or any(c < 1 for c in caps) or len(set(caps)) != len(caps):
+        sys.exit("--capacities must be a comma list of unique positive ints")
+    rows = []
+    for cap in caps:
+        cmd = [str(OVERLOAD_BIN), "--capacity", str(cap),
+               "--rounds", str(args.rounds), "--burst", str(args.burst),
+               "--complete-k", str(args.complete_k),
+               "--rss-every", str(args.rss_every),
+               "--sustained-rounds", str(args.sustained_rounds),
+               "--sustained-rss-every", str(args.sustained_rss_every),
+               "--reservoir", str(args.reservoir)]
+        out = run(cmd)
+        try:
+            row = json.loads(out.stdout)
+        except json.JSONDecodeError as e:
+            sys.exit(f"capacity {cap}: bench stdout is not JSON ({e})")
+        row["capacity"] = cap
+        rows.append(row)
+    return {
+        "schema": SCHEMA,
+        "kind": "overload",
+        "binary": binary_provenance(OVERLOAD_BIN),
+        "params": {"capacities": caps, "rounds": args.rounds,
+                   "burst": args.burst, "complete_k": args.complete_k,
+                   "rss_every": args.rss_every,
+                   "sustained_rounds": args.sustained_rounds,
+                   "sustained_rss_every": args.sustained_rss_every,
+                   "reservoir": args.reservoir},
+        "rows": rows,
+        "derived": overload_derived(rows),
+    }
+
+
 class RunnerSelfTest(unittest.TestCase):
     def test_median_even_and_odd(self):
         self.assertEqual(median([3.0, 1.0, 2.0]), 2.0)
@@ -781,6 +851,22 @@ class RunnerSelfTest(unittest.TestCase):
         self.assertEqual(_cxx_from_toolchain("gcc"), "g++")
         self.assertEqual(_cxx_from_toolchain("mytc"), "mytc++")
         self.assertIsNone(_cxx_from_toolchain(None))
+
+    def test_overload_derived_ratios(self):
+        rows = [{
+            "capacity": 16,
+            "accept": {"p50_ns": 70},
+            "refuse": {"p50_ns": 35},
+            "accounting": {"refusals": 161, "refill_accepts": 80,
+                           "drain_ns": 2354},
+        }]
+        d = overload_derived(rows)[0]
+        self.assertEqual(d["accept_over_refuse_p50_ratio"], 2.0)
+        self.assertAlmostEqual(d["refusal_share_of_sustained_attempts"],
+                               161 / 241)
+        # refuse p50 == 0 must degrade to None, never a divide-by-zero.
+        rows[0]["refuse"]["p50_ns"] = 0
+        self.assertIsNone(overload_derived(rows)[0]["accept_over_refuse_p50_ratio"])
 
     def test_binary_provenance_binds_content(self):
         import hashlib as _hl
@@ -903,6 +989,31 @@ def main() -> int:
                    help="provenance note embedded in the artifact")
     p.add_argument("cmd", nargs=argparse.REMAINDER)
 
+    p = sub.add_parser("overload",
+                       help="#199 sustained-overload backpressure "
+                            "(overload_backpressure_bench over a capacity list)")
+    p.add_argument("--capacities", default="16,64,256",
+                   help="comma list of arena capacities to sweep")
+    p.add_argument("--rounds", type=_positive_int, default=400)
+    p.add_argument("--burst", type=_positive_int, default=32)
+    p.add_argument("--complete-k", type=_positive_int, default=8,
+                   dest="complete_k")
+    p.add_argument("--rss-every", type=_positive_int, default=50,
+                   dest="rss_every")
+    p.add_argument("--sustained-rounds", type=_positive_int, default=2000,
+                   dest="sustained_rounds",
+                   help="fixed-capacity rounds after measurement with no "
+                        "latency recording (RSS boundedness phase)")
+    p.add_argument("--sustained-rss-every", type=_positive_int, default=500,
+                   dest="sustained_rss_every")
+    p.add_argument("--reservoir", type=_positive_int, default=4096,
+                   dest="reservoir",
+                   help="fixed reservoir size for latency samples (bounds "
+                        "harness memory regardless of rounds)")
+    p.add_argument("--output", default="")
+    p.add_argument("--note", default="",
+                   help="provenance note embedded in the artifact")
+
     p = sub.add_parser("compare", help="before/after table")
     p.add_argument("baseline")
     p.add_argument("optimized")
@@ -930,6 +1041,8 @@ def main() -> int:
         result.update(cmd_ladder(args))
     elif args.command == "cli":
         result.update(cmd_cli(args))
+    elif args.command == "overload":
+        result.update(cmd_overload(args))
     elif args.command == "perf":
         if args.cmd and args.cmd[0] == "--":
             args.cmd = args.cmd[1:]

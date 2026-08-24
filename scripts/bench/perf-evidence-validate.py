@@ -60,6 +60,15 @@ MD5_RE = re.compile(r"^[0-9a-f]{32}$")
 VALID_DATA_EXIT_CODES = {0, 1}  # grep family: 0=match 1=no-match 2=error
 HEX40_TOLERANCE_MEDIAN = 1.0  # ns; %.1f rounding + mean-of-middle pair
 
+# Sustained RSS boundedness: the #199 overload bench records a separate
+# sustained phase (fixed capacity, no latency sampling, fixed-size sample
+# reservoirs) and the validator requires the RSS to plateau. delta_kb is the
+# signed end-minus-start RSS over that interval; a delta above this bound is
+# a growth trend the harness cannot explain (its own storage is bounded).
+RSS_PLATEAU_MAX_KB = 256
+# A sustained phase shorter than this cannot support a boundedness claim.
+SUSTAINED_ROUNDS_MIN = 500
+
 REQUIRED_SCHEMA = 2
 # Measured-command exit classifiers (runner --exit-semantics): which exit
 # codes still count as measurement data.
@@ -102,8 +111,8 @@ def check_common(art: dict) -> list[str]:
     if not isinstance(art, dict):
         return ["artifact is not a JSON object"]
     kind = art.get("kind")
-    if kind not in ("ladder", "cli", "perf"):
-        errs.append(f"kind: expected ladder|cli|perf, got {kind!r}")
+    if kind not in ("ladder", "cli", "perf", "overload"):
+        errs.append(f"kind: expected ladder|cli|perf|overload, got {kind!r}")
     if art.get("schema") != REQUIRED_SCHEMA:
         errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
                     f"{art.get('schema')!r} (re-measure with the current "
@@ -373,7 +382,196 @@ def check_perf(art: dict) -> list[str]:
     return errs
 
 
-CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf}
+
+def check_overload(art: dict) -> list[str]:
+    """#199 sustained-overload artifact: the accounting must prove the bound
+    that fired was ADMISSION CAPACITY (every burst attempt refused, every
+    refill accepted, high-water == capacity, final in-flight 0, post-drain
+    admission probe accepted); the latency percentiles must be recomputable
+    from the raw samples (anti-hand-typing, same class as ladder/cli)."""
+    errs = []
+    params = art.get("params")
+    if not isinstance(params, dict):
+        return ["params: missing (capacities/rounds/burst/complete_k/rss_every)"]
+    caps = params.get("capacities")
+    if not isinstance(caps, list) or not caps or             any(not isinstance(c, int) or c < 1 for c in caps):
+        errs.append("params.capacities: expected non-empty list of ints >= 1")
+        caps = []
+    for k in ("rounds", "burst", "complete_k", "rss_every",
+              "sustained_rss_every", "reservoir"):
+        if not isinstance(params.get(k), int) or params.get(k, 0) < 1:
+            errs.append(f"params.{k}: expected int >= 1")
+    if not isinstance(params.get("sustained_rounds"), int) or \
+            params.get("sustained_rounds", 0) < SUSTAINED_ROUNDS_MIN:
+        errs.append(f"params.sustained_rounds: expected int >= "
+                    f"{SUSTAINED_ROUNDS_MIN} (a boundedness claim needs a "
+                    f"sustained interval)")
+    rows = art.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return errs + ["rows: empty"]
+    seen_caps = set()
+    for i, r in enumerate(rows):
+        where = f"rows[{i}] (capacity {r.get('capacity')})"
+        cap = r.get("capacity")
+        if not isinstance(cap, int) or cap < 1:
+            errs.append(f"{where}: capacity missing/invalid")
+            continue
+        if cap in seen_caps:
+            errs.append(f"{where}: duplicate capacity row")
+        seen_caps.add(cap)
+        if isinstance(caps, list) and cap not in caps:
+            errs.append(f"{where}: capacity not declared in params.capacities")
+        rounds, burst, k_complete = (params.get("rounds"), params.get("burst"),
+                                     params.get("complete_k"))
+        # --- accounting: the resource-bound distinction, fail-closed ---
+        a = r.get("accounting")
+        if not isinstance(a, dict):
+            errs.append(f"{where}: accounting missing")
+        else:
+            if a.get("high_water_inflight") != cap:
+                errs.append(f"{where}: high_water_inflight "
+                            f"{a.get('high_water_inflight')} != capacity {cap}")
+            if a.get("final_inflight") != 0:
+                errs.append(f"{where}: final_inflight != 0")
+            if a.get("post_drain_probe_accepted") is not True:
+                errs.append(f"{where}: post_drain_probe_accepted is not true "
+                            f"(recovery not proven)")
+            exp_refusals = rounds * burst + 1 if rounds and burst else None
+            if exp_refusals is not None and a.get("refusals") != exp_refusals:
+                errs.append(f"{where}: refusals {a.get('refusals')} != expected "
+                            f"{exp_refusals} (a burst attempt was accepted — the "
+                            f"window was not full)")
+            exp_refills = rounds * k_complete if rounds and k_complete else None
+            if exp_refills is not None and a.get("refill_accepts") != exp_refills:
+                errs.append(f"{where}: refill_accepts {a.get('refill_accepts')} != "
+                            f"expected {exp_refills} (capacity not reclaimed)")
+            for key in ("drain_ns", "post_drain_probe_ns"):
+                v = a.get(key)
+                if not isinstance(v, (int, float)) or v < 0:
+                    errs.append(f"{where}: accounting.{key} missing/negative")
+        # --- static probes from production types ---
+        st = r.get("static")
+        if not isinstance(st, dict):
+            errs.append(f"{where}: static probes missing")
+        else:
+            for key in ("sizeof_slot_handle", "sizeof_completion_size_t",
+                        "sizeof_completion_void", "sizeof_request_handle",
+                        "sizeof_read_op"):
+                v = st.get(key)
+                if not isinstance(v, int) or v < 1:
+                    errs.append(f"{where}: static.{key} missing/invalid")
+        # --- percentile consistency with raw samples ---
+        for ph in ("accept", "refuse"):
+            blk = r.get(ph)
+            if not isinstance(blk, dict) or not isinstance(blk.get("samples_ns"), list):
+                errs.append(f"{where}: {ph}.samples_ns missing")
+                continue
+            samples = blk["samples_ns"]
+            if not samples:
+                errs.append(f"{where}: {ph}.samples_ns empty")
+                continue
+            if blk.get("n") != len(samples):
+                errs.append(f"{where}: {ph}.n {blk.get('n')} != sample count "
+                            f"{len(samples)}")
+            p50, p95, p99 = (blk.get("p50_ns"), blk.get("p95_ns"),
+                             blk.get("p99_ns"))
+            for name, val in (("p50_ns", p50), ("p95_ns", p95), ("p99_ns", p99)):
+                if not isinstance(val, (int, float)) or val < 0:
+                    errs.append(f"{where}: {ph}.{name} missing/invalid")
+            if all(isinstance(v, (int, float)) for v in (p50, p95, p99)):
+                if not (p50 <= p95 <= p99):
+                    errs.append(f"{where}: {ph} p50<=p95<=p99 violated")
+                srt = sorted(samples)
+
+                def nearest_rank(pct_val):
+                    idx = int(pct_val / 100.0 * len(srt))
+                    return srt[min(idx, len(srt) - 1)]
+
+                for name, val, want in (("p50_ns", p50, nearest_rank(50)),
+                                        ("p95_ns", p95, nearest_rank(95)),
+                                        ("p99_ns", p99, nearest_rank(99))):
+                    if val != want:
+                        errs.append(f"{where}: {ph}.{name} {val} != recomputed "
+                                    f"nearest-rank {want}")
+        # --- RSS series shape (growth must be visible, not summarized away) ---
+        rss = r.get("rss_series_kb")
+        if not isinstance(rss, list) or len(rss) < 2:
+            errs.append(f"{where}: rss_series_kb must have >= 2 points")
+        else:
+            prev_round = None
+            for pt in rss:
+                if not (isinstance(pt, list) and len(pt) == 2 and
+                        isinstance(pt[0], int) and isinstance(pt[1], int) and
+                        pt[1] >= 0):
+                    errs.append(f"{where}: rss point malformed {pt!r}")
+                    break
+                if prev_round is not None and pt[0] <= prev_round:
+                    errs.append(f"{where}: rss rounds not strictly increasing")
+                    break
+                prev_round = pt[0]
+        # --- sustained RSS boundedness phase (separate from latency stats) ---
+        # The bench runs a fixed-capacity interval with NO latency recording
+        # and fixed-size reservoirs, so no harness allocation can grow. The
+        # validator requires the overload to have been sustained (counts) and
+        # the RSS to plateau (delta <= bound).
+        sus = r.get("sustained")
+        if not isinstance(sus, dict):
+            errs.append(f"{where}: sustained block missing (RSS boundedness "
+                        f"phase required)")
+        else:
+            sr = params.get("sustained_rounds")
+            if isinstance(sr, int):
+                exp_refusals = sr * burst if burst else None
+                if exp_refusals is not None and sus.get("refusals") != exp_refusals:
+                    errs.append(f"{where}: sustained.refusals "
+                                f"{sus.get('refusals')} != expected "
+                                f"{exp_refusals} (sustained overload not "
+                                f"maintained)")
+                exp_refills = sr * k_complete if k_complete else None
+                if exp_refills is not None and sus.get("refills") != exp_refills:
+                    errs.append(f"{where}: sustained.refills {sus.get('refills')} "
+                                f"!= expected {exp_refills} (capacity not "
+                                f"reclaimed during sustained phase)")
+            sus_rss = sus.get("rss_series_kb")
+            if not isinstance(sus_rss, list) or len(sus_rss) < 3:
+                errs.append(f"{where}: sustained.rss_series_kb must have "
+                            f">= 3 points (start/mid/end)")
+            else:
+                prev_round = None
+                for pt in sus_rss:
+                    if not (isinstance(pt, list) and len(pt) == 2 and
+                            isinstance(pt[0], int) and isinstance(pt[1], int) and
+                            pt[1] >= 0):
+                        errs.append(f"{where}: sustained rss point malformed "
+                                    f"{pt!r}")
+                        break
+                    if prev_round is not None and pt[0] <= prev_round:
+                        errs.append(f"{where}: sustained rss rounds not "
+                                    f"strictly increasing")
+                        break
+                    prev_round = pt[0]
+                if prev_round is not None:
+                    first = sus_rss[0][1]
+                    last = sus_rss[-1][1]
+                    recomputed = last - first
+                    delta = sus.get("delta_kb")
+                    if delta != recomputed:
+                        errs.append(f"{where}: sustained.delta_kb {delta} != "
+                                    f"recomputed {recomputed} from the series")
+                    if recomputed > RSS_PLATEAU_MAX_KB:
+                        errs.append(f"{where}: sustained RSS delta "
+                                    f"{recomputed} kB exceeds the plateau "
+                                    f"bound {RSS_PLATEAU_MAX_KB} kB — RSS is "
+                                    f"not bounded at fixed capacity")
+    if isinstance(caps, list) and sorted(seen_caps) != sorted(caps):
+        errs.append(f"rows: capacities {sorted(seen_caps)} do not cover "
+                    f"params.capacities {sorted(caps)}")
+    if not isinstance(art.get("derived"), list) or not art.get("derived"):
+        errs.append("derived: missing per-capacity aggregate ratios")
+    return errs
+
+
+CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf, "overload": check_overload}
 
 
 def validate_artifact(art: dict) -> list[str]:
@@ -401,6 +599,44 @@ def validate_path(path: Path) -> list[str]:
 def _valid_binary() -> dict:
     return {"path": "/build/bin/grep_attribution_bench",
             "sha256": "a" * 64, "size": 123456, "mtime": 1755475200.0}
+
+
+def _valid_overload() -> dict:
+    art = _valid_ladder()
+    art["kind"] = "overload"
+    samples = [10, 20, 30, 40, 50]
+    srt = sorted(samples)
+    art["params"] = {"capacities": [16], "rounds": 5, "burst": 2,
+                     "complete_k": 1, "rss_every": 2, "sustained_rounds": 600,
+                     "sustained_rss_every": 200, "reservoir": 4096}
+
+    def nr(p):
+        return srt[min(int(p / 100.0 * len(srt)), len(srt) - 1)]
+
+    art["rows"] = [{
+        "capacity": 16,
+        "static": {"sizeof_slot_handle": 16, "sizeof_completion_size_t": 64,
+                   "sizeof_completion_void": 48, "sizeof_request_handle": 32,
+                   "sizeof_read_op": 32},
+        "accounting": {"refill_accepts": 5, "refusals": 11,
+                       "expected_refusals": 11, "expected_refills": 5,
+                       "high_water_inflight": 16, "final_inflight": 0,
+                       "drain_ns": 100, "post_drain_probe_ns": 50,
+                       "post_drain_probe_accepted": True},
+        "sustained": {"refusals": 1200, "expected_refusals": 1200,
+                      "refills": 600, "expected_refills": 600,
+                      "delta_kb": 24,
+                      "rss_series_kb": [[0, 4100], [200, 4112],
+                                        [400, 4108], [600, 4124]]},
+        "accept": {"n": 5, "p50_ns": nr(50), "p95_ns": nr(95),
+                   "p99_ns": nr(99), "samples_ns": samples},
+        "refuse": {"n": 5, "p50_ns": nr(50), "p95_ns": nr(95),
+                   "p99_ns": nr(99), "samples_ns": samples},
+        "initial_fill": {"n": 16, "p50_ns": 30},
+        "rss_series_kb": [[0, 3800], [2, 3810], [5, 3820]],
+    }]
+    art["derived"] = [{"capacity": 16}]
+    return art
 
 
 def _valid_ladder() -> dict:
@@ -630,6 +866,89 @@ class ValidatorSelfTest(unittest.TestCase):
         art = _valid_ladder()
         art["derived"] = []
         self.assert_invalid(art, "full-matrix")
+
+    def test_valid_overload_passes(self):
+        self.assertEqual(validate_artifact(_valid_overload()), [])
+
+    def test_overload_detectors_fire(self):
+        # high-water below capacity (window never filled)
+        art = _valid_overload()
+        art["rows"][0]["accounting"]["high_water_inflight"] = 15
+        self.assert_invalid(art, "high_water_inflight")
+        # a burst attempt was accepted -> refusals mismatch
+        art = _valid_overload()
+        art["rows"][0]["accounting"]["refusals"] = 10
+        self.assert_invalid(art, "refusals 10 != expected 11")
+        # capacity not reclaimed after completions
+        art = _valid_overload()
+        art["rows"][0]["accounting"]["refill_accepts"] = 4
+        self.assert_invalid(art, "refill_accepts 4 != expected 5")
+        # recovery not proven
+        art = _valid_overload()
+        art["rows"][0]["accounting"]["post_drain_probe_accepted"] = False
+        self.assert_invalid(art, "post_drain_probe_accepted")
+        # hand-typed percentile (recomputed nearest-rank mismatch)
+        art = _valid_overload()
+        art["rows"][0]["accept"]["p99_ns"] = 999
+        self.assert_invalid(art, "recomputed nearest-rank")
+        # percentile ordering violated
+        art = _valid_overload()
+        art["rows"][0]["refuse"]["p95_ns"] = 1
+        self.assert_invalid(art, "p50<=p95<=p99 violated")
+        # n contradicting the raw sample count
+        art = _valid_overload()
+        art["rows"][0]["accept"]["n"] = 4
+        self.assert_invalid(art, "!= sample count")
+        # static probe dropped
+        art = _valid_overload()
+        del art["rows"][0]["static"]["sizeof_slot_handle"]
+        self.assert_invalid(art, "static.sizeof_slot_handle")
+        # RSS summarized to a single point (a growth trend must be visible)
+        art = _valid_overload()
+        art["rows"][0]["rss_series_kb"] = [[0, 3800]]
+        self.assert_invalid(art, ">= 2 points")
+        # RSS rounds not increasing
+        art = _valid_overload()
+        art["rows"][0]["rss_series_kb"] = [[0, 3800], [0, 3810], [5, 3820]]
+        self.assert_invalid(art, "not strictly increasing")
+        # sustained phase missing entirely (boundedness unproven)
+        art = _valid_overload()
+        del art["rows"][0]["sustained"]
+        self.assert_invalid(art, "sustained block missing")
+        # sustained interval too short for a boundedness claim
+        art = _valid_overload()
+        art["params"]["sustained_rounds"] = 10
+        self.assert_invalid(art, "sustained_rounds")
+        # sustained overload not maintained (counts wrong)
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["refusals"] = 0
+        self.assert_invalid(art, "sustained.refusals")
+        # sustained series collapsed to one point
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["rss_series_kb"] = [[0, 4100]]
+        self.assert_invalid(art, ">= 3 points")
+        # sustained delta inconsistent with the recorded series
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["delta_kb"] = 1
+        self.assert_invalid(art, "delta_kb 1 != recomputed")
+        # RSS NOT plateauing during the sustained phase (growth trend)
+        art = _valid_overload()
+        art["rows"][0]["sustained"]["rss_series_kb"] = [[0, 4100], [200, 4300],
+                                                        [400, 4550], [600, 4800]]
+        art["rows"][0]["sustained"]["delta_kb"] = 700
+        self.assert_invalid(art, "exceeds the plateau bound")
+        # capacity row not declared in params
+        art = _valid_overload()
+        art["rows"][0]["capacity"] = 32
+        self.assert_invalid(art, "not declared in params.capacities")
+        # missing derived ratios
+        art = _valid_overload()
+        art["derived"] = []
+        self.assert_invalid(art, "derived: missing")
+        # non-zero final in-flight
+        art = _valid_overload()
+        art["rows"][0]["accounting"]["final_inflight"] = 3
+        self.assert_invalid(art, "final_inflight")
 
     def test_validate_path_reports_filename(self):
         with tempfile.TemporaryDirectory() as d:

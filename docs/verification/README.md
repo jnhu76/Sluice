@@ -167,6 +167,7 @@ pre-push; #197 non-goal). Current kernel:
 | Formal model documentation | [`formal-models.md`](formal-models.md), [`formal/`](formal/) |
 | Weak-memory kernel evidence (#197) | [`weak-memory/completion-publication-kernel.md`](weak-memory/completion-publication-kernel.md) |
 | Failure envelope matrix (#198) | [`failure-envelope.md`](failure-envelope.md) (artifact: [`failure-envelope.json`](failure-envelope.json); gate: `scripts/gates/failure-envelope.py`) |
+| Guarantee-cost vectors + sustained overload (#199) | [`guarantee-cost.md`](guarantee-cost.md) (artifact: [`v6-overload-backpressure.json`](../results/performance-attribution/v6-overload-backpressure.json); runner `scripts/bench/perf-attribution.py overload`) |
 | io_uring / liburing validation runbook | [`io-uring-liburing-validation.md`](io-uring-liburing-validation.md) |
 | Local hardening gate | [`hardening.md`](hardening.md) |
 | Sync benchmark methodology (W1–W4) | [`sync-bench-methodology.md`](sync-bench-methodology.md) |
