@@ -75,3 +75,12 @@ do
         target_end()
     end
 end
+
+-- overload_backpressure_bench (#199 / V6 guarantee-cost): sustained overload
+-- of the bounded RequestArena admission capacity on FakeAsyncBackend —
+-- refusal-path latency, accepted-path latency under overload, in-flight
+-- high-water, RSS series, drain recovery, and static sizeof probes. Release
+-- evidence only; driven/wrapped by scripts/bench/perf-attribution.py
+-- `overload` (schema 2, kind "overload").
+sluice_one_file_target("binary", "bench", "overload_backpressure_bench", "bench",
+                      {"sluice_core", "sluice_async"})
