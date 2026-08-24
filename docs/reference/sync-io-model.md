@@ -1,12 +1,11 @@
 # Sync I/O model — blocking primitive contract
 
-**Status: SYNC-IO-COMPLETE Phase 3 (sync doc reconciliation).** This is the
+**Status: Current.** This is the
 *contract* layer: the blocking primitive semantics stated as testable
 propositions. It is the authoritative behavioral contract for the synchronous I/O
-surface. Existing behavior (v0.1) is recorded as-is; new positional helpers
-(`read_at`/`write_at`, job 018S) and derived-helper closeout (job 019S) are marked
-**[NEW]** where they extend the surface. Implementation follows the code sessions
-(phases 4–5); this doc fixes the contract first.
+surface. The positional helpers (`read_at`/`write_at`) and the derived
+exact/all helpers are marked **[NEW]** where they extend the original v0.1
+surface; the markers distinguish contract vintage, not implementation status.
 
 Companion docs: architecture in `docs/architecture/sync-io-architecture.md`; durability in
 `docs/architecture/sync-durability-model.md`; planning/gaps in `docs/history/closeout/sync-io-model-gap-audit.md`.

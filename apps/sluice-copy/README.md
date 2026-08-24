@@ -250,7 +250,7 @@ ownership, xattrs, or other metadata beyond the permission bits.
 
 - `ApplicationRuntime` lifecycle is usable from a real program;
 - a Runtime task can submit async I/O **and cooperatively await** it via
-  `RuntimeTaskContext::await_completion` (the M1-A API gap, Candidate A — see
+  `RuntimeTaskContext::await_completion` (see
   `docs/history/implementation-plans/m1-runtime-io-await-race.md`);
 - positional async read/write with partial-I/O handling works end-to-end on a
   real filesystem through `ThreadPoolBackend`;

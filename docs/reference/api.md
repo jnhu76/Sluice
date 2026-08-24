@@ -32,7 +32,7 @@ struct IoError {
 request contract (ADR-explicit-io-request-contract, Decision 6). They keep admission
 rejection, stale-key lookup, and capability refusal distinct from one another and from
 configured-capacity `would_block`, lifecycle `invalid_state`, and genuine-init `no_space`.
-Phase B reference backends (FakeAsyncBackend, SyncBackend) emit them; the cancel disposition
+The reference backends (`FakeAsyncBackend`, `SyncBackend`) emit them; the cancel disposition
 lookup returns `not_found` for an absent or stale generation rather than overloading
 `invalid_state`.
 
@@ -77,7 +77,7 @@ if (!ok) return ok.error();
 |---|---|
 | `make_unexpected<T>(IoError)` | Create an error-result |
 
-**Copy / move / assignment semantics (E15-P1-01/02):**
+**Copy / move / assignment semantics:**
 
 - `Result<T>` is copyable and movable; `Result<void>` is trivially copyable.
 - Copy/move **construction** and copy/move **assignment** all perform
@@ -452,10 +452,10 @@ platforms; it is limited to the platforms and compilers actually verified
 
 ---
 
-## Async Synchronization (E10–E12)
+## Async Synchronization
 
-The async synchronization primitives are built on the E10 `WaitNode`/`WaitQueue` substrate
-and the E11 deadline/timer integration. See `docs/history/closeout/e10-e12-api-semantic-closure.md` for the
+The async synchronization primitives are built on the `WaitNode`/`WaitQueue` substrate
+and the deadline/timer integration. See `docs/history/closeout/e10-e12-api-semantic-closure.md` for the
 cross-primitive authority.
 
 ### `sluice::async::WaitOutcome`
@@ -768,7 +768,7 @@ are constraints of `AsyncQueue<T>` itself. The result members remain declared
 `noexcept` exactly as shown.
 
 Both result types are move-only. Move-assignment uses destroy-and-rebuild so
-`T` need not be move-assignable (PR #12 corrective).
+`T` need not be move-assignable.
 
 ### `sluice::async::AsyncRwLock`
 
@@ -832,9 +832,9 @@ public:
 
 ---
 
-## Async Runtime (E13+)
+## Async Runtime
 
-The async runtime types build on the E10–E12 synchronization substrate. See
+The async runtime types build on the synchronization substrate. See
 `docs/architecture/async-runtime.md` and `docs/architecture/async-io-foundation.md`
 for the architectural context.
 
@@ -912,13 +912,13 @@ primitives (`Event`, `Semaphore`, `AsyncMutex`, `AsyncCondition`,
 machine. Production code MUST NOT call them directly:
 
 - `await_ready_flag`, `await_wait`, `wake_wait_one`, `cancel_wait` (WaitQueue seams)
-- `monotonic_now`, `await_wait_deadline`, `expire_wait` (E11 timer seams)
-- `event_set_broadcast`, `event_reset`, `await_event_wait`, `await_event_wait_deadline`, `event_cancel_wait` (E12-A)
-- `sem_try_acquire`, `sem_acquire`, `sem_acquire_until`, `sem_cancel`, `sem_release` (E12-B)
-- `mutex_try_lock`, `mutex_lock`, `mutex_lock_until`, `mutex_cancel`, `mutex_unlock` (E12-C)
-- `condition_wait_prepare`, `condition_wait_prepare_until`, `condition_notify_one`, `condition_notify_all`, `condition_cancel_wait` (E12-D)
-- `queue_push_admit`, `queue_pop_admit`, `queue_push_admit_until`, `queue_pop_admit_until`, `queue_cancel` (E12-E, accept `detail::QueuePort&` / `detail::QueueItemLease&`)
-- `rwlock_try_read_lock`, `rwlock_read_lock`, `rwlock_read_lock_until`, `rwlock_try_write_lock`, `rwlock_write_lock`, `rwlock_write_lock_until`, `rwlock_unlock_read`, `rwlock_unlock_write`, `rwlock_cancel` (E12-F)
+- `monotonic_now`, `await_wait_deadline`, `expire_wait` (timer seams)
+- `event_set_broadcast`, `event_reset`, `await_event_wait`, `await_event_wait_deadline`, `event_cancel_wait` (Event seams)
+- `sem_try_acquire`, `sem_acquire`, `sem_acquire_until`, `sem_cancel`, `sem_release` (Semaphore seams)
+- `mutex_try_lock`, `mutex_lock`, `mutex_lock_until`, `mutex_cancel`, `mutex_unlock` (AsyncMutex seams)
+- `condition_wait_prepare`, `condition_wait_prepare_until`, `condition_notify_one`, `condition_notify_all`, `condition_cancel_wait` (AsyncCondition seams)
+- `queue_push_admit`, `queue_pop_admit`, `queue_push_admit_until`, `queue_pop_admit_until`, `queue_cancel` (AsyncQueue seams, accept `detail::QueuePort&` / `detail::QueueItemLease&`)
+- `rwlock_try_read_lock`, `rwlock_read_lock`, `rwlock_read_lock_until`, `rwlock_try_write_lock`, `rwlock_write_lock`, `rwlock_write_lock_until`, `rwlock_unlock_read`, `rwlock_unlock_write`, `rwlock_cancel` (AsyncRwLock seams)
 - `attach_ready_wake`, `owner_of`, `owner_id_of` (internal diagnostics)
 - `run_live(unsigned, bool(*)(void*), void*)` — Group-scoped live invocation with raw predicate lifetime constraints
 
@@ -1134,7 +1134,7 @@ WaitPolicy& default_wait_policy() noexcept;
 
 ### `sluice::async::SelectResult`
 
-E13 Select winner descriptor. `SelectKind` is `event` or `timer`.
+`Select` winner descriptor. `SelectKind` is `event` or `timer`.
 `SelectTimerOutcome` is `fired` (timer winner only).
 
 ```cpp
@@ -1174,7 +1174,7 @@ inline constexpr std::size_t kSelectMaxArms = 8;
 
 ### `sluice::async::Completion<T>`
 
-Single outstanding operation's state (E17). Caller-owned, address-stable,
+Single outstanding operation's state. Caller-owned, address-stable,
 non-copyable, non-movable (ADR-explicit-io-completion-authority). Publication
 mutators (`try_claim`, `publish`, `rollback_claim_before_accept`) are PRIVATE
 — ordinary non-backend callers cannot forge state transitions. `result()` is
@@ -1207,7 +1207,7 @@ public:
 };
 ```
 
-Phase B (ADR-explicit-io-request-contract, Accepted, Decision 15): `reset()` from
+ADR-explicit-io-request-contract (Accepted, Decision 15): `reset()` from
 `ready` is also the slot-release handshake for a request accepted through the
 reference backends (FakeAsyncBackend, SyncBackend). The slot bound at commit
 remains in use (`slot_in_use` accounting) until `reset()` — or ready-Completion
@@ -1248,7 +1248,7 @@ capability OR the non-blocking contract, and rejects anything else with
 BLOCKING serialized wait (a participant parked while holding the context lock
 starves every other poll/reap path and deadlocks drain).
 
-Phase G review P1b (PR #108) makes BOUNDED parking a separate, truthful
+BOUNDED parking is a separate, truthful
 capability on `BackendWaitSource`: `supports_bounded_wait()` (default false)
 reports whether the bounded `wait_for_change(observed, max_park)` overload
 actually bounds the physical park — the base implementation of that overload
@@ -1266,14 +1266,14 @@ default returns false, preserving the pre-Phase-G behavior) but not
 layout/ABI-compatible; Sluice is an experimental library and does not
 promise vtable stability across releases.
 
-Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5) adds the
+ADR-explicit-io-request-contract (Accepted, Decision 5) adds the
 protected two-stage **binding** helpers (`begin_binding` / `commit_binding` /
-`rollback_binding_before_accept`) used by the migrated backends (Fake/Sync, and
-— as of Phase E — ThreadPool) to install the RequestKey/context/release-
+`rollback_binding_before_accept`) used by the migrated backends (Fake/Sync,
+ThreadPool, Uring) to install the RequestKey/context/release-
 capability payload before the `Completion` becomes observable as outstanding.
-The legacy single-step `try_claim` remains for the not-yet-migrated backends
-(Uring); the two paths do not race because a given `Completion` is driven by
-exactly one backend.
+The legacy single-step `try_claim` remains on the protected backend-author
+surface, but no production backend uses it; a given `Completion` is driven by
+exactly one backend, so the two paths cannot race.
 
 ```cpp
 class AsyncBackend {
@@ -1340,8 +1340,8 @@ struct SyncAllOp { int fd = -1; };
 
 ### `sluice::async::RequestHandle` / `sluice::async::RequestHandleState`
 
-Opaque public identity for one accepted I/O request (Phase F3 /
-ADR-public-request-handle). **Identity, not ownership**: copying a handle
+Opaque public identity for one accepted I/O request
+(ADR-public-request-handle). **Identity, not ownership**: copying a handle
 allocates nothing and does not extend the Completion, fd/buffer borrow, slot,
 or routing-lease lifetime. Construction-controlled (non-forgeable): the only
 producer of a valid handle is a successful `submit_*_request`; the identity
@@ -1368,7 +1368,7 @@ public:
 
 ### `sluice::async::AsyncIoContext`
 
-Public L1 async API surface (E17). Owns an `AsyncBackend` via
+Public L1 async API surface. Owns an `AsyncBackend` via
 `std::unique_ptr`. Non-copyable; move-semantic. `wait_one()` returns the
 reap count for that wait, **not** the op's byte result — read the op result
 from the `Completion` after it is ready.
@@ -1390,7 +1390,7 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    // Identity-returning submission (Phase F3 / ADR-public-request-handle).
+    // Identity-returning submission (ADR-public-request-handle).
     // Additive: on success returns the accepted request's RequestHandle
     // (Decision 4: success => exactly one valid handle); on synchronous
     // rejection returns the error and NO handle; not_supported (with no side
@@ -1425,7 +1425,7 @@ public:
     // park capped at `max_park` so a deadline-driven caller re-drains in
     // time. A wait source WITHOUT the bounded transport
     // (supports_bounded_wait() == false) gets a synchronous not_supported —
-    // never a silently discarded bound (PR #108 review P1b). Check
+    // never a silently discarded bound. Check
     // has_bounded_split_wait_capability() first when a deadline obligation
     // exists.
     Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
@@ -1466,7 +1466,7 @@ struct BatchOp {
     enum class Kind : std::uint8_t { read, write, sync_data, sync_all } kind = Kind::read;
 };
 
-// Admission origin (Phase F2 / ADR Decision 9): orthogonal to success/error.
+// Admission origin (ADR Decision 9): orthogonal to success/error.
 //   rejected               — submit failed before commit/accept (no accepted
 //                            request existed). The Result carries the rejection.
 //   accepted_and_completed — submit crossed commit and later reached a terminal
@@ -1504,7 +1504,7 @@ public:
 Portable real blocking-I/O backend. Always buildable; no external dependency.
 Construct directly; there is no factory function.
 
-Phase E (ADR-explicit-io-request-contract, Accepted): `ThreadPoolBackend` is now
+Per ADR-explicit-io-request-contract (Accepted): `ThreadPoolBackend` is now
 a **bounded explicit-I/O backend** — the first production backend to drive real
 POSIX syscalls through the `detail::RequestArena` / `RequestSlot` lifecycle. It
 uses a fixed pool of persistent blocking-I/O workers and a construction-time
@@ -1588,7 +1588,7 @@ Deterministic test backend. Construct directly and configure `auto_bytes()`,
 `auto_error()`, `auto_eof()`, `auto_short_then_full()`; or drive
 `complete_oldest_with_bytes()` / `complete_oldest_with_error()` manually.
 
-Phase B (ADR-explicit-io-request-contract, Accepted): `FakeAsyncBackend` now
+Per ADR-explicit-io-request-contract (Accepted): `FakeAsyncBackend` now
 drives the bounded `detail::RequestArena` five-stage admission and the unified
 reap path with a `detail::SynchronousReadySink`. The public submit/cancel/
 complete surface is unchanged (ADR Decision 7); the optional `request_capacity`
@@ -1596,7 +1596,7 @@ constructor argument bounds the arena (default 64). Test-only introspection
 (`arena_slot_in_use()`, `arena_capacity_rejections()`, `sink_deliveries()`)
 exposes the arena lifecycle for regression tests.
 
-Phase C2e (ADR Decision 15 reference semantics): `FakeAsyncBackend` exposes the
+Per ADR Decision 15 (reference semantics), `FakeAsyncBackend` exposes the
 same production admission close as `ThreadPoolBackend` — `close_admission()`
 rejects new `submit_*` with `invalid_state` (Completion idle, no borrow) while
 existing accepted requests continue; cancel/poll/wait_one/reap remain legal.
@@ -1745,7 +1745,7 @@ terminal result. The result stays in the `Completion` — read it via
 `c.result()` after this returns, then `c.reset()` before reuse (`Completion`
 L7/L9 lifecycle).
 
-Phase F1 (issue #98): the wait is now a REAL arena waiter registration plus a
+The wait is a REAL arena waiter registration plus a
 Scheduler routing record, resumed by the identity-bearing reap through the
 Scheduler-owned `ReadyRoutingSink` (ADR Decisions 9/10) — the legacy
 `Completion*`-keyed re-scan is gone from the production path. The return value
@@ -1771,7 +1771,7 @@ Preconditions:
 
 #### `cancel_waiter`
 
-Phase F1 (ADR Decision 10) waiter cancellation: removes only the Scheduler
+Waiter cancellation (ADR Decision 10): removes only the Scheduler
 wait registration — never the I/O operation, never the borrow, never a
 terminal result. Callable from any thread while the task's await is suspended
 (the Scheduler wakes the task with the `canceled` outcome; the I/O still
@@ -1792,7 +1792,7 @@ extra copies, one suspend + one resume per unresolved await, supports multiple
 simultaneously outstanding `Completion`s. See
 `docs/history/implementation-plans/m1-runtime-io-await-race.md`.
 
-### Await-style op helpers (`await_op_helpers.hpp`, C7 / issue #135)
+### Await-style op helpers (`await_op_helpers.hpp`)
 
 The await-shaped siblings of the polling coordinators above, for use INSIDE a
 Runtime task (`RuntimeTaskContext`). They move the duplicated application
@@ -1847,7 +1847,7 @@ operation is driven to its terminal, and the task's cooperative cancellation
 checks stay at its own loop boundaries. The caller owns the Completion (L7:
 address-stable for the duration of one call).
 
-### Task-result bridge (`task_result.hpp`, C7 / issue #135)
+### Task-result bridge (`task_result.hpp`)
 
 ```cpp
 template <class T> class TaskResultSlot {  // T: nothrow move constructible

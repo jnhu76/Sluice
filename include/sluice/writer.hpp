@@ -36,7 +36,7 @@ class Writer {
     // progress — mirrors write_all's "errors returned, not swallowed"). A
     // concrete writer (FileWriter) may override this to issue a single writev.
     // Default fallback loops over write_some so every Writer works out of the
-    // box. See docs/readv-writev-design-note.md.
+    // box. See docs/reference/sync-io-model.md (Vector I/O semantics).
     virtual Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs);
 
     // Vector derived: write every byte of every (non-empty) slice, retrying
