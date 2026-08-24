@@ -12,7 +12,7 @@ of Sluice, and no liveness property is claimed.
 | Issue | #197 (child of #163, V3) |
 | Kernel provenance revision | `d98d70dd57c85b5e4c59d92b384ffa95b6027e4a` (`master`) |
 | Production source | `include/sluice/async/completion.hpp`, entry `include/sluice/async/async_io_context.hpp:345-388` |
-| Kernels | [`spec/weakmem/completion-publication/kernel_publication.cpp`](../../spec/weakmem/completion-publication/kernel_publication.cpp) (K1), [`kernel_reset_reuse.cpp`](../../spec/weakmem/completion-publication/kernel_reset_reuse.cpp) (K2) |
+| Kernels | [`spec/weakmem/completion-publication/kernel_publication.cpp`](../../../spec/weakmem/completion-publication/kernel_publication.cpp) (K1), [`kernel_reset_reuse.cpp`](../../../spec/weakmem/completion-publication/kernel_reset_reuse.cpp) (K2) |
 | Runner | `scripts/weakmem/verify-completion-weak-memory.sh` (+ `_gen_mutants.py`) |
 | Machine-readable artifact | [`docs/results/weak-memory/completion-publication.json`](../../results/weak-memory/completion-publication.json) (runner-generated, never hand-created) |
 | Checker | GenMC v0.17.0 (commit `29b03a6`), built with LLVM 18.1.8 |
