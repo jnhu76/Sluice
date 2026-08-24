@@ -70,6 +70,15 @@ Examples: async I/O ownership, RequestKey/RequestSlot lifecycle, Completion publ
 
 ## C++ ↔ formal evidence (only if formal/model claims are involved)
 
+### Evidence classes used in this PR (#163 §12 — name the class, never an unscoped "verified")
+
+- [ ] Implementation evidence (deterministic C++ counterexample / pre-fix RED → post-fix GREEN)
+- [ ] Model evidence (MODELED / AS-BUILT MODELED / FORMAL PROPERTY PASS with fairness + bounds)
+- [ ] Negative control (NEGATIVE-CONTROL SENSITIVE: named mutant/witness produces the expected CEX)
+- [ ] Trace conformance (TRACE-CONFORMANT (TESTED EXECUTIONS) at a named revision)
+- [ ] Weak-memory kernel (MEMORY-MODEL-CHECKED (BOUNDED KERNEL) with checker + bounds)
+- [ ] Fault/platform evidence (FAULT-VALIDATED / PLATFORM-VALIDATED, or an honest open state)
+
 - [ ] Current/repaired **as-built C++** state machine was recovered before finalizing the repository model.
 - [ ] Each load-bearing TLA+ action names the C++ region/lock/atomic sequence it represents.
 - [ ] C++ intermediate states observable by competitors are not incorrectly fused into one atomic model step.

@@ -316,11 +316,17 @@ if [ "$MODE" = "manual" ]; then
     run_gate "assert-hygiene (working tree; manual invocation)" \
         "python3 scripts/gates/assert-hygiene.py" \
         python3 scripts/gates/assert-hygiene.py
+    echo "==> pre-push gate: claim-hygiene (working tree; manual invocation)"
+    run_gate "claim-hygiene (working tree; manual invocation)" \
+        "python3 scripts/gates/claim-hygiene.py" \
+        python3 scripts/gates/claim-hygiene.py
 elif [ "${#DIFF_ARGS[@]}" -eq 0 ]; then
     # Hook mode where every pushed pair was a deletion: nothing to check.
     echo "==> pre-push gate: git diff --check (${MODE} ranges)"
     echo "    (no pushable content: all refs deleted; nothing to check)"
     echo "==> pre-push gate: assert-hygiene (${MODE} ranges)"
+    echo "    (no pushable content: all refs deleted; nothing to check)"
+    echo "==> pre-push gate: claim-hygiene (${MODE} ranges)"
     echo "    (no pushable content: all refs deleted; nothing to check)"
 else
     # Reproduction for a failure lists the exact ranges scanned. The ranges
@@ -332,6 +338,9 @@ else
     run_gate "assert-hygiene (${MODE} ranges)" \
         "python3 scripts/gates/assert-hygiene.py ${DIFF_ARGS[*]}" \
         python3 scripts/gates/assert-hygiene.py "${DIFF_ARGS[@]}"
+    run_gate "claim-hygiene (${MODE} ranges)" \
+        "python3 scripts/gates/claim-hygiene.py ${DIFF_ARGS[*]}" \
+        python3 scripts/gates/claim-hygiene.py "${DIFF_ARGS[@]}"
 fi
 
 # ---------------------------------------------------------------------------
