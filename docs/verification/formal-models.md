@@ -27,6 +27,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | e8-suspend-switch | E8 Suspend-Switch Steal Exclusion (MODEL-007a) | `spec/tla/e8_suspend_switch/` | `scripts/formal/verify-e8-suspend-switch.sh` |
 | e9-park-wake | E9 Park/Wake | `spec/tla/e9_park_wake/` | `scripts/formal/verify-e9-park-wake.sh` |
 | e9-wake-handle-lifetime | E9 Wake Handle Lifetime | `spec/tla/e9_wake_handle_lifetime/` | `scripts/formal/verify-e9-wake-handle-lifetime.sh` |
+| e9-trace-conformance | E9 real-C++ trace conformance pilot (#196; replays C++ traces against the pristine e9-park-wake model — claim: TRACE-CONFORMANT (TESTED EXECUTIONS), corpus only) | `spec/tla/e9_park_wake/` | `scripts/formal/verify-e9-trace-conformance.sh` |
 | e10-waitnode | E10 WaitNode | `spec/tla/e10_waitnode/` | `scripts/formal/verify-e10-waitnode.sh` |
 | e11-timer-wait | E11 Timer Wait | `spec/tla/e11_timer_wait/` | `scripts/formal/verify-timer-wait.sh` |
 | e12-event | E12 Event | `spec/tla/e12_event/` | `scripts/formal/verify-event.sh` |

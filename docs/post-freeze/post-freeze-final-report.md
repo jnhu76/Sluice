@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1297 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1293 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 506 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 317 | semaphore waits |
@@ -82,7 +82,7 @@ fiber removed from every inline admission-resolution path (no-op from
 running; comments now state the no-publication invariant). No reachable
 behavior change; see
 `docs/history/closeout/e12-cross-primitive-terminal-audit.md` §11.7);
-`scheduler_park_wake.cpp` 1193 → 1297 and `scheduler.cpp` 2065 → 2122
+`scheduler_park_wake.cpp` 1193 → 1293 and `scheduler.cpp` 2065 → 2122
 (2026-08-24, Issue #196 — test-only `SLUICE_ASYNC_INTERNAL_TESTING` E9
 trace-conformance recorder call sites (wake publication / park commit /
 entered / returned / refused / wake-cause markers), plus the two
