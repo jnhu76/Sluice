@@ -271,6 +271,16 @@ def self_test() -> int:
     if not errs:
         failures.append("[allowlist site] whole-file escape must not happen")
 
+    # --- CLI arg shape: a bare range (how pre-push.sh/CI invoke this gate)
+    #     and a `--`-prefixed range must resolve to the same diff args. ---
+    for argv, want in ([["a..b"], ["a..b"]],
+                       [["--", "a..b"], ["a..b"]],
+                       [["ref1", "ref2"], ["ref1", "ref2"]],
+                       [["--", "ref1", "ref2"], ["ref1", "ref2"]]):
+        got = _parse_diff_args(argv)
+        if got != want:
+            failures.append(f"[cli shape] _parse_diff_args({argv!r}) = {got!r}, want {want!r}")
+
     if failures:
         for f in failures:
             print("self-test FAIL", f)
@@ -280,17 +290,20 @@ def self_test() -> int:
     return 0
 
 
+def _parse_diff_args(argv: list) -> list:
+    # Optional `--` separator before git-diff args — same CLI convention as
+    # assert-hygiene.py, so pre-push.sh can invoke both with a bare range
+    # (CI's `claim-hygiene.py <base>..<head>` has no separator).
+    if argv and argv[0] == "--":
+        return argv[1:]
+    return list(argv)
+
+
 def main() -> int:
     args = sys.argv[1:]
     if args and args[0] == "--self-test":
         return self_test()
-    diff_args = []
-    if args:
-        if args[0] != "--":
-            print("usage: claim-hygiene.py --self-test | [-- <git-diff-args>...]",
-                  file=sys.stderr)
-            return 2
-        diff_args = args[1:]
+    diff_args = _parse_diff_args(args)
     if not diff_args:
         diff_args = ["HEAD"]  # manual mode: staged + working tree vs HEAD
         print("    (no ranges given; checking staged + working tree vs HEAD)")

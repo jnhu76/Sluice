@@ -316,7 +316,6 @@ if [ "$MODE" = "manual" ]; then
     run_gate "assert-hygiene (working tree; manual invocation)" \
         "python3 scripts/gates/assert-hygiene.py" \
         python3 scripts/gates/assert-hygiene.py
-    echo "==> pre-push gate: claim-hygiene (working tree; manual invocation)"
     run_gate "claim-hygiene (working tree; manual invocation)" \
         "python3 scripts/gates/claim-hygiene.py" \
         python3 scripts/gates/claim-hygiene.py
