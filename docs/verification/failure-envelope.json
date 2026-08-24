@@ -919,7 +919,7 @@
           "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
           "anchor": "M9",
           "case": "drain_then_reset_releases_slot",
-          "target": "threadpool_backend_c2e_close_drain_test",
+          "target": "backend_conformance_test",
           "tier": "deterministic-fake"
         }
       ],
@@ -948,7 +948,7 @@
           "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
           "anchor": "M1",
           "case": "close_rejects_future_submit",
-          "target": "threadpool_backend_c2e_close_drain_test",
+          "target": "backend_conformance_test",
           "tier": "deterministic-fake"
         },
         {
@@ -956,7 +956,7 @@
           "ref": "docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md",
           "anchor": "M10",
           "case": "close_rejects_future_submit",
-          "target": "threadpool_backend_c2e_close_drain_test",
+          "target": "backend_conformance_test",
           "tier": "deterministic-fake"
         }
       ],

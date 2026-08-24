@@ -46,6 +46,15 @@ constraints: `anchor` (token that must appear in `ref`, e.g. a mutant id),
 target name that must appear under `xmake/`). A pointer that stops resolving
 fails the gate.
 
+When a pointer carries both `case` and `target`, the gate enforces the full
+provenance chain `case ∈ source ∈ target`: the case name must occur in at
+least one source file the named xmake target actually builds (resolved
+statically from the `target("...")` / helper declarations under `xmake/`).
+A case that exists *somewhere* under `tests/` and a target that exists
+*somewhere* under `xmake/` are not enough — if the tuple has no owning source
+file, it is a fake tuple and fails the gate. The self-test plants that shape
+explicitly (every token real, wrong combination).
+
 Evidence tiers follow the #163 §10 order — deterministic internal/fake
 injection → syscall-boundary → kernel/backend fault (real liburing, scripted)
 → real platform — plus `bounded-model` (#197 weak-memory kernels) and

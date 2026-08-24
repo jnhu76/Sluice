@@ -11,15 +11,24 @@ Validates docs/verification/failure-envelope.json fail-closed:
       - anchor: the token appears in the referenced file (mutant id, section);
       - case:   the test-case name appears under tests/;
       - target: the xmake target name appears under xmake/;
+  * provenance: when a pointer carries BOTH case and target, the case must
+    actually occur in a source file the target builds (case in source, source
+    in target). A case that exists somewhere under tests/ and a target that
+    exists somewhere under xmake/ but with no owning-source relation is a fake
+    tuple and fails the gate;
   * open states (PENDING / PLATFORM-BOUND / COVERAGE-BOUNDARY) REQUIRE a
     status_note — never a silently green row;
-  * spanning rows (the `accepted -> cannot disappear` class) must be VERIFIED;
+  * spanning rows (the `accepted -> cannot disappear` class) must not be bare
+    PENDING; PLATFORM-BOUND / COVERAGE-BOUNDARY are honest bounded-open states
+    and allowed with a status_note;
   * coverage floor: every phase in the vocabulary has >= 1 VERIFIED row, and
     >= 5 spanning VERIFIED rows exist.
 
 --self-test plants each violation shape against a copy of the real matrix and
 requires the corresponding detector to fire (plus a false-positive check that
-the unmodified real matrix passes).
+the unmodified real matrix passes). The provenance shape is covered by BOTH a
+dangling-pointer plant (missing token) and a wrong-tuple plant (every token
+real, but combined into a tuple the owning source does not support).
 """
 
 import json
@@ -101,6 +110,223 @@ def _target_known(target: str, xmake_blob: str) -> bool:
     return False
 
 
+class XmakeTargetSources:
+    """Best-effort static resolver: xmake target name -> source file set.
+
+    xmake configuration is imperative Lua; a perfect resolver would need a Lua
+    interpreter. This scanner covers the declaration shapes actually used in
+    xmake/ and FAILS CLOSED: an evidence target whose source set cannot be
+    resolved fails the gate (no silent pass). Covered shapes:
+
+      * target("NAME") blocks with add_files(...) — terminated by the next
+        target( line or by an `end` that closes the target (tracking
+        if/do/for/while/function scopes so an inner `end` does not end the
+        target early);
+      * `local <var> = R .. "path"` assignments, scope-aware (a `local` is
+        visible only from its enclosing do/if block inward, so repeated
+        `local p = ...` in sibling blocks do not shadow each other);
+      * sluice_one_file_target(kind, group, "NAME", subdir, ...) -> subdir/NAME.cpp;
+      * sluice_one_file_test / sluice_internal_async_test /
+        sluice_production_async_test("NAME", {source = ..., ...}) ->
+        tests/NAME.cpp or the source override;
+      * fallback: tests/<NAME>.cpp when the file exists (covers the core.lua
+        stem-loop-generated one-file tests, whose names are concatenated at
+        Lua runtime and cannot be parsed statically).
+
+    Globs are expanded only for the fixed production manifests
+    (src/*.cpp, src/async/*.cpp).
+    """
+
+    def __init__(self, repo: Path):
+        self.repo = repo
+        self._by_target = {}
+        self._loaded = False
+
+    def sources(self, target: str):
+        if target not in self._by_target:
+            self._load()
+        if self._by_target.get(target):
+            return self._by_target[target]
+        # Fallback: a one-file test target whose name maps directly to
+        # tests/<name>.cpp (core.lua stem loops and platform-gated helpers are
+        # declared by concatenation and are not statically parseable).
+        f = self.repo / "tests" / f"{target}.cpp"
+        if f.is_file():
+            return (f"tests/{target}.cpp",)
+        return ()
+
+    def _load(self):
+        if self._loaded:
+            return
+        self._loaded = True
+        for lf in sorted((self.repo / "xmake").rglob("*.lua")):
+            self._scan_file(lf)
+
+    @staticmethod
+    def _strip_comment(line: str) -> str:
+        """Cut a `--` comment, ignoring `--` inside quoted strings."""
+        inquote = False
+        for i, ch in enumerate(line):
+            if ch == '"':
+                inquote = not inquote
+            elif ch == "-" and i + 1 < len(line) and line[i + 1] == "-" and not inquote:
+                return line[:i]
+        return line
+
+    @staticmethod
+    def _block_tokens(line: str):
+        """Return (opens, closes) Lua block tokens approximated for one line.
+
+        Opens: if...then, for...do, while...do, function, repeat, bare do.
+        Closes: end, until. The bare-do count deliberately excludes the `do`
+        that belongs to for/while so one line cannot open twice by accident.
+        """
+        opens = closes = 0
+        if re.search(r'\bif\b.*\bthen\b', line) or \
+           re.search(r'\bfor\b.*\bdo\b', line) or \
+           re.search(r'\bwhile\b.*\bdo\b', line):
+            opens += 1
+        elif re.search(r'\bfunction\b', line) or re.search(r'\brepeat\b', line):
+            opens += 1
+        elif re.search(r'(?<!\w)do(?!\w)', line):
+            opens += 1
+        closes += len(re.findall(r'\bend\b', line))
+        closes += len(re.findall(r'\buntil\b', line))
+        return opens, closes
+
+    def _scan_file(self, lf: Path):
+        text = lf.read_text(errors="replace")
+        # Scope stack of locals dicts; file scope first.
+        scopes = [{}]
+        cur_target = None
+        targets = {}
+
+        def resolve(expr, lookup):
+            expr = expr.strip()
+            m = re.match(r'^R\s*\.\.\s*(.+)$', expr)
+            if m:
+                expr = m.group(1).strip()
+            m = re.match(r'^"([^"]+)"$', expr)
+            if m:
+                return m.group(1).lstrip("./")
+            if re.fullmatch(r'\w+', expr):
+                return lookup(expr)
+            m = re.match(r'^(\w+)\s*\.\.\s*"([^"]+)"$', expr)
+            if m:
+                base = lookup(m.group(1))
+                if base:
+                    return base.rstrip("/") + "/" + m.group(2).lstrip("./")
+            return None
+
+        def scope_lookup(name):
+            for scope in reversed(scopes):
+                if name in scope:
+                    return scope[name]
+            return None
+
+        for raw in text.splitlines():
+            line = self._strip_comment(raw).strip()
+            if not line:
+                continue
+            # `local <var> = <expr>` binds in the innermost scope.
+            lm = re.match(r'^local\s+(\w+)\s*=\s*(.+)$', line)
+            if lm:
+                val = resolve(lm.group(2), scope_lookup)
+                if val:
+                    scopes[-1][lm.group(1)] = val
+                continue
+            # A target( line both ends any previous target and starts a new one.
+            tm = re.match(r'^target\s*\(\s*"([^"]+)"\s*\)\s*$', line)
+            if tm:
+                cur_target = tm.group(1)
+                targets.setdefault(cur_target, set())
+                continue
+            if cur_target:
+                for fm in re.finditer(r'add_files\s*\(([^)]*)\)', line):
+                    args = fm.group(1)
+                    for tok in re.findall(r'"([^"]+)"', args):
+                        for f in self._expand(tok):
+                            targets[cur_target].add(f)
+                    for var in re.findall(r'\b(\w+)\b', args):
+                        val = scope_lookup(var)
+                        if val:
+                            for f in self._expand(val):
+                                targets[cur_target].add(f)
+            # Scope close: `end`/`until` with nothing else on the line closes
+            # a Lua block; when no Lua block is open it closes the target.
+            opens, closes = self._block_tokens(line)
+            for _ in range(closes):
+                if len(scopes) > 1:
+                    scopes.pop()
+                else:
+                    cur_target = None
+            for _ in range(opens):
+                scopes.append({})
+
+        for name, files in targets.items():
+            if files:
+                self._by_target.setdefault(name, set()).update(files)
+
+        # Helper declarations (sluice_one_file_target / one-file test helpers).
+        for m in re.finditer(r'sluice_one_file_target\s*\(([^)]*)\)', text):
+            args = [a.strip() for a in m.group(1).split(",")]
+            if len(args) >= 4:
+                name = args[2].strip('"')
+                subdir = args[3].strip('"')
+                if name and subdir:
+                    p = f"{subdir}/{name}.cpp"
+                    if (self.repo / p).is_file():
+                        self._by_target.setdefault(name, set()).add(p)
+        for helper in ("sluice_one_file_test", "sluice_internal_async_test",
+                       "sluice_production_async_test"):
+            for m in re.finditer(helper + r'\s*\(', text):
+                call = self._balanced_call(text, m.end())
+                if call is None:
+                    continue
+                nm = re.match(r'\s*"([^"]+)"', call)
+                if not nm:
+                    continue
+                name = nm.group(1)
+                src = f"tests/{name}.cpp"
+                sm = re.search(r'source\s*=\s*([^,}]+)', call)
+                if sm:
+                    val = resolve(sm.group(1).strip(), scope_lookup)
+                    if val:
+                        src = val
+                if (self.repo / src).is_file():
+                    self._by_target.setdefault(name, set()).add(src)
+
+    @staticmethod
+    def _balanced_call(text: str, start: int):
+        depth = 0
+        inquote = False
+        i = start
+        while i < len(text):
+            c = text[i]
+            if c == '"' and (i == 0 or text[i - 1] != "\\"):
+                inquote = not inquote
+            elif not inquote:
+                if c == "(":
+                    depth += 1
+                elif c == ")":
+                    if depth == 0:
+                        return text[start:i]
+                    depth -= 1
+            i += 1
+        return None
+
+    def _expand(self, rel: str):
+        rel = rel.lstrip("./")
+        if rel.endswith("*.cpp"):
+            base = rel[: -len("*.cpp")]
+            root = self.repo / base
+            if root.is_dir():
+                return sorted(str(p.relative_to(self.repo))
+                              for p in root.glob("*.cpp") if p.is_file())
+            return ()
+        return (rel,) if (self.repo / rel).is_file() else ()
+
+
 class Resolver:
     """Aggressive caching content resolver for pointer checks."""
 
@@ -109,6 +335,7 @@ class Resolver:
         self._files = {}
         self._tests = None
         self._xmake = None
+        self._targets = XmakeTargetSources(repo)
 
     def file_text(self, rel: str):
         if rel not in self._files:
@@ -125,6 +352,9 @@ class Resolver:
         if self._xmake is None:
             self._xmake = _corpus(self.repo / "xmake")
         return self._xmake
+
+    def target_sources(self, target: str):
+        return self._targets.sources(target)
 
 
 def validate(doc, resolver: Resolver):
@@ -226,6 +456,20 @@ def validate(doc, resolver: Resolver):
             target = ev.get("target")
             if target and not _target_known(target, resolver.xmake_blob()):
                 err(f"{where}: unknown xmake target {target!r} (not present under xmake/)")
+            # Provenance: case in source, source in target. A pointer that
+            # carries both must name a case the cited target actually builds.
+            # Every token existing *somewhere* is not enough — the tuple must
+            # be supported by an owning source file.
+            if case and target:
+                sources = resolver.target_sources(target)
+                if not sources:
+                    err(f"{where}: cannot resolve any source file for target "
+                        f"{target!r} (provenance uncheckable)")
+                elif not any(case in (resolver.file_text(s) or "")
+                             for s in sources):
+                    err(f"{where}: case {case!r} is not found in any source file "
+                        f"built by target {target!r} — the evidence tuple does "
+                        f"not resolve (case in source, source in target)")
 
     for phase, n in verified_by_phase.items():
         if n == 0:
@@ -278,6 +522,17 @@ def self_test() -> int:
     plant("unknown xmake target", "unknown xmake target",
           lambda d: by_id(d, "FE-016")["evidence"][0].__setitem__(
               "target", "target_that_does_not_exist"))
+    plant("wrong tuple: case real but not in target's source",
+          "does not resolve",
+          lambda d: by_id(d, "FE-016")["evidence"][0].__setitem__(
+              "case", "read_exact_assembles_short_reads"))
+    plant("wrong tuple: target real but does not build the case's source",
+          "does not resolve",
+          lambda d: by_id(d, "FE-016")["evidence"][0].__setitem__(
+              "target", "reader_test"))
+    plant("target without resolvable sources", "cannot resolve any source",
+          lambda d: by_id(d, "FE-016")["evidence"][0].__setitem__(
+              "target", "sluice_core"))
     plant("duplicate id", "duplicate id",
           lambda d: d["rows"].append(dict(by_id(d, "FE-016"), notes="dup")))
     plant("open row without status_note", "requires a non-empty status_note",

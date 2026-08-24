@@ -233,9 +233,11 @@ run_gate "assert-hygiene self-test" "${ASSERT_HYGIENE_SELFTEST_REPRO}" \
 # (T1-T7) and the C2b-C2e / D2-D4 mutation-evidence layers. The gate is
 # FILE-SCOPED (no diff dependence): a row going stale — unknown vocabulary,
 # a VERIFIED row losing its evidence, a dangling ref/case/target/anchor
-# pointer, a silently green open row, a PENDING spanning row, or a phase
-# losing its last VERIFIED row — fails the gate even if the row itself was
-# not touched in the pushed range.
+# pointer, a case/target tuple whose owning source does not support it
+# (provenance: the case must occur in a source file the target builds), a
+# silently green open row, a PENDING spanning row, or a phase losing its
+# last VERIFIED row — fails the gate even if the row itself was not touched
+# in the pushed range.
 FAIL_ENV_SELFTEST_REPRO="python3 scripts/gates/failure-envelope.py --self-test"
 run_gate "failure-envelope self-test" "${FAIL_ENV_SELFTEST_REPRO}" \
     python3 scripts/gates/failure-envelope.py --self-test
