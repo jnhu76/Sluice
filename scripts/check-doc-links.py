@@ -2,9 +2,16 @@
 """check-doc-links.py — repository documentation link validator.
 
 Checks:
-  - Git-tracked Markdown only: root README files (README.md, README.zh-CN.md),
+  - Git-tracked Markdown: root README files (README.md, README.zh-CN.md),
     AGENTS.md, and every tracked Markdown under docs/. Generated/gitignored
     Markdown is excluded so the local and CI scan sets are identical.
+  - Public-header doc references: tracked include/sluice/**/*.hpp comments are
+    scanned for explicit repo-relative `docs/...` tokens. Broken or
+    known-moved targets fail unless grandfathered per site in
+    HEADER_STALE_ALLOWLIST (the #167 Step 4 backlog registry). Added after
+    stale header pointers escaped the Markdown-only scan surface — the
+    KNOWN_MOVED remap table never saw them because headers were never
+    scanned (PR #207 review finding 1).
   - Markdown links [text](path) resolve to existing files/directories.
   - Backtick-quoted repository-relative paths (`path/to/file`) resolve.
   - Fails on broken links and stale moved-path references.
@@ -93,9 +100,173 @@ def _discover_scan_files() -> list[Path]:
     return sorted(files)
 
 
+# Public headers to scan for `docs/...` comment references. Same git-ls-files
+# discovery discipline as the Markdown scan set. Scope is deliberately the
+# USER surface (installed public headers); src/ comments are #167 Step 4.
+_HEADER_TRACKED_PATTERNS = [
+    "include/sluice/*.hpp",
+    "include/sluice/**/*.hpp",
+]
+
+
+def _discover_header_files() -> list[Path]:
+    """Return the list of public headers to scan for docs/ references."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "--", *_HEADER_TRACKED_PATTERNS],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return sorted((ROOT / "include" / "sluice").rglob("*.hpp"))
+
+    files = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line:
+            files.append(ROOT / line)
+    return sorted(files)
+
+
 # Files to scan (resolved lazily at import so self_test() can construct its
 # own scan targets without depending on the work tree).
 SCAN_FILES = _discover_scan_files()
+
+# Public headers to scan for docs/ references (PR #207 review finding 1).
+HEADER_SCAN_FILES = _discover_header_files()
+
+# Grandfathered stale header doc references — the explicit, per-site registry
+# of the pre-existing backlog. Root cause of the backlog: until the header
+# scan existed, stale `docs/...` pointers in public headers escaped every
+# gate because the checker scanned Git-tracked Markdown only (the KNOWN_MOVED
+# remap table never even saw them — it only reports STALE MOVED PATH errors
+# for scanned Markdown; it never silently remapped anything).
+#
+# Rules (fail-closed, mirroring scripts/gates/assert-hygiene.allowlist):
+#   - exemptions are per site (header path + exact token), never per file;
+#   - an entry whose token no longer occurs in the named header is itself an
+#     error (zombie entries fail the gate — no amnesty for registry rot);
+#   - #167 Step 4 (source-comment pass) re-points each comment at the current
+#     authority and deletes its entry here in the same change.
+HEADER_STALE_ALLOWLIST: dict[str, dict[str, str]] = {
+    # --- async public headers (Step 4 largest mass) ---
+    "include/sluice/async/async_queue.hpp": {
+        "docs/e12-queue-scheduler-integration.md":
+            "pre-move path, now at docs/history/implementation-plans/e12-queue-scheduler-integration.md",
+    },
+    "include/sluice/async/async_rwlock.hpp": {
+        "docs/e12-rwlock.md":
+            "pre-move path, now at docs/history/implementation-plans/e12-rwlock.md",
+    },
+    "include/sluice/async/condition.hpp": {
+        "docs/e12-condition.md":
+            "pre-move path, now at docs/history/closeout/e12-condition.md",
+    },
+    "include/sluice/async/detail/fail_fast.hpp": {
+        "docs/e13-select-timer-adapter.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-timer-adapter.md",
+        "docs/e13-select-locking-and-publication.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-locking-and-publication.md",
+    },
+    "include/sluice/async/detail/queue_item.hpp": {
+        "docs/e12-queue-scheduler-integration.md":
+            "pre-move path, now at docs/history/implementation-plans/e12-queue-scheduler-integration.md",
+    },
+    "include/sluice/async/detail/queue_port.hpp": {
+        "docs/e12-queue-scheduler-integration.md":
+            "pre-move path, now at docs/history/implementation-plans/e12-queue-scheduler-integration.md",
+    },
+    "include/sluice/async/detail/select_port.hpp": {
+        "docs/e13-select-type-and-lifetime.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-type-and-lifetime.md",
+        "docs/e13-select-locking-and-publication.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-locking-and-publication.md",
+        "docs/e13-select-formal-production-mapping.md":
+            "pre-move path, now at docs/history/formal-design/e13-select-formal-production-mapping.md",
+    },
+    "include/sluice/async/detail/select_registration.hpp": {
+        "docs/e13-select-timer-adapter.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-timer-adapter.md",
+    },
+    "include/sluice/async/event.hpp": {
+        "docs/e12-sync-primitives-plan.md":
+            "pre-move path, now at docs/history/implementation-plans/e12-sync-primitives-plan.md",
+        "docs/e12-event.md":
+            "pre-move path, now at docs/history/closeout/e12-event.md",
+    },
+    "include/sluice/async/scheduler.hpp": {
+        "docs/e13-select-production-test-plan.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-production-test-plan.md",
+        "docs/e8-formal-corrective":
+            "pre-move path, now at docs/history/closeout/e8-formal-corrective",
+        "docs/e13-select-timer-adapter.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-timer-adapter.md",
+        "docs/e13-select-locking-and-publication.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-locking-and-publication.md",
+        "docs/e13-select-formal-production-mapping.md":
+            "pre-move path, now at docs/history/formal-design/e13-select-formal-production-mapping.md",
+        "docs/e13-select-public-api.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-public-api.md",
+        "docs/e13-select-p7-rollback-closeout.md":
+            "pre-move path, now at docs/history/closeout/e13-select-p7-rollback-closeout.md",
+        "docs/e13-select-type-and-lifetime.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-type-and-lifetime.md",
+    },
+    "include/sluice/async/select.hpp": {
+        "docs/e13-select-public-api.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-public-api.md",
+        "docs/e13-select-production-architecture.md":
+            "pre-move path, now at docs/history/implementation-plans/e13-select-production-architecture.md",
+    },
+    "include/sluice/async/wait_node.hpp": {
+        "docs/e10-waitnode-wait-queue.md":
+            "pre-move path, now at docs/history/closeout/e10-waitnode-wait-queue.md",
+    },
+    "include/sluice/async/wait_queue.hpp": {
+        "docs/e10-waitnode-wait-queue.md":
+            "pre-move path, now at docs/history/closeout/e10-waitnode-wait-queue.md",
+    },
+    # --- sync-core and experimental public headers ---
+    "include/sluice/blocking_io_pool.hpp": {
+        "docs/adr/ADR-024S":
+            "§-shorthand without suffix; target is docs/adr/ADR-024S-sync-runtime-contract.md",
+    },
+    "include/sluice/buffered_readable.hpp": {
+        "docs/buffered-fast-path.md":
+            "pre-move path, now at docs/history/implementation-plans/design-buffered-fast-path.md",
+    },
+    "include/sluice/copy_strategy.hpp": {
+        "docs/copy-strategy.md":
+            "pre-move path, now at docs/history/implementation-plans/design-copy-strategy.md",
+    },
+    "include/sluice/experimental/uring_io_context.hpp": {
+        "docs/io-uring-spike.md":
+            "pre-move path, now at docs/history/implementation-plans/io-uring-spike.md",
+    },
+    "include/sluice/experimental/uring_write_batch.hpp": {
+        "docs/io-uring-spike.md":
+            "pre-move path, now at docs/history/implementation-plans/io-uring-spike.md",
+    },
+    "include/sluice/file.hpp": {
+        "docs/flush-sync-durability.md":
+            "pre-move path, now at docs/history/implementation-plans/design-flush-sync-durability.md",
+    },
+    "include/sluice/io_context.hpp": {
+        "docs/io-context.md":
+            "pre-move path, now at docs/history/implementation-plans/design-io-context.md",
+    },
+    "include/sluice/sync.hpp": {
+        "docs/flush-sync-durability.md":
+            "pre-move path, now at docs/history/implementation-plans/design-flush-sync-durability.md",
+    },
+    "include/sluice/wal.hpp": {
+        "docs/flush-sync-durability.md":
+            "pre-move path, now at docs/history/implementation-plans/design-flush-sync-durability.md",
+    },
+}
 
 # Directories whose content is generated and should be skipped entirely
 SKIP_DIRS = [
@@ -290,6 +461,15 @@ KNOWN_MOVED = {
     "docs/async-runtime-construction-method.md": "docs/history/implementation-plans/async-runtime-construction-method.md",
     "docs/async-runtime-plan.md": "docs/history/implementation-plans/async-runtime-plan.md",
     "docs/e12-rwlock.md": "docs/history/implementation-plans/e12-rwlock.md",
+    # Root-level paths whose stale references were first observed in public
+    # headers (PR #207 review finding 1) — the Markdown scan surface never
+    # saw them. New locations verified against the current tree. NOTE:
+    # docs/e13-select-formal-production-mapping.md deliberately NOT added —
+    # historical documents still backtick-reference that old path, and a
+    # KNOWN_MOVED entry would flip them from the historical exemption into
+    # STALE errors; the header-side grandfather registry covers it instead.
+    "docs/flush-sync-durability.md": "docs/history/implementation-plans/design-flush-sync-durability.md",
+    "docs/e8-formal-corrective": "docs/history/closeout/e8-formal-corrective",
 }
 
 # Regex patterns
@@ -297,6 +477,17 @@ KNOWN_MOVED = {
 MD_LINK_RE = re.compile(r'\[([^\]]*)\]\(([^)#]+)(?:#[^)]*)?\)')
 # Backtick path: `some/path/to/file` (relative-looking, no spaces, has /)
 BACKTICK_PATH_RE = re.compile(r'`([^`\s]*/[^`\s]+)`')
+
+# Public-header docs/ token: `docs/<alnum>...`. The lookbehind excludes
+# tokens embedded inside URLs (https://clang.llvm.org/docs/Foo.html) and
+# identifiers glued onto the token (e.g. `godocs/`).
+HEADER_DOC_REF_RE = re.compile(r'(?<![\w:./-])docs/[A-Za-z0-9][A-Za-z0-9_./-]*')
+# Comment-wrap continuation: a token ending in `-` may continue on the next
+# comment line — `docs/e13-select-locking-and-` + `// publication.md` — with
+# an optional `//` or ` * ` comment prefix on the continuation line.
+HEADER_WRAP_CONT_RE = re.compile(
+    r'\s*\n[ \t]*(?://+[ \t]*|\*+[ \t]*)?([A-Za-z0-9][A-Za-z0-9_./-]*)'
+)
 
 # Patterns that look like file paths but are actually code identifiers / non-paths
 # These are skipped to avoid false positives.
@@ -872,11 +1063,101 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     return broken, stale, historical, envcond
 
 
+def extract_header_doc_refs(text: str) -> list[tuple[str, int]]:
+    """Extract repo-relative `docs/...` tokens from header text.
+
+    Returns (token, 1-based line of the token start). Sentence punctuation is
+    stripped from the token tail; a token ending in `-` is joined with its
+    comment-wrap continuation on the next line before resolution.
+    """
+    refs = []
+    for m in HEADER_DOC_REF_RE.finditer(text):
+        token = m.group(0)
+        line = text[: m.start()].count("\n") + 1
+        if token.endswith("-"):
+            cont = HEADER_WRAP_CONT_RE.match(text, m.end())
+            if cont is not None:
+                token += cont.group(1)
+        token = token.rstrip(".,;:!?)\"'")
+        refs.append((token, line))
+    return refs
+
+
+def _header_allowlist_key(path: Path) -> str:
+    """Registry key for a header: repo-relative posix path when inside the
+    repository, else the resolved absolute posix path (self-test scratch)."""
+    try:
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
+def check_header_file(
+    path: Path,
+    allowlist: dict[str, dict[str, str]] | None = None,
+) -> tuple[list[str], list[str], list[str]]:
+    """Check one public header for stale/broken docs/ references.
+
+    Returns (broken, stale, grandfathered) message lists. A broken or
+    known-moved token registered in the allowlist is reported as grandfathered
+    (informational); an unregistered one is actionable. Allowlist entries
+    whose token no longer occurs in the header are reported as broken — the
+    registry must shrink with the backlog, not outlive it.
+    """
+    if allowlist is None:
+        allowlist = HEADER_STALE_ALLOWLIST
+    key = _header_allowlist_key(path)
+    entries = allowlist.get(key, {})
+
+    broken: list[str] = []
+    stale: list[str] = []
+    grandfathered: list[str] = []
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        broken.append(f"{key}: cannot read: {e}")
+        return broken, stale, grandfathered
+
+    seen: set[str] = set()
+    for token, line in extract_header_doc_refs(text):
+        clean = strip_line_ref(token)
+        moved = is_known_moved(clean)
+        if (ROOT / clean).exists():
+            continue
+        if moved:
+            msg = (
+                f"{key}:{line}: STALE HEADER DOC REF: `{clean}` "
+                f"-> should reference `{moved}`"
+            )
+            if clean in entries:
+                grandfathered.append(msg + f" [grandfathered: {entries[clean]}]")
+                seen.add(clean)
+            else:
+                stale.append(msg)
+        else:
+            msg = f"{key}:{line}: BROKEN HEADER DOC REF: `{clean}`"
+            if clean in entries:
+                grandfathered.append(msg + f" [grandfathered: {entries[clean]}]")
+                seen.add(clean)
+            else:
+                broken.append(msg)
+
+    for token in sorted(set(entries) - seen):
+        broken.append(
+            f"{key}: HEADER ALLOWLIST ZOMBIE: `{token}` no longer appears in "
+            f"this header (remove the registry entry)"
+        )
+    return broken, stale, grandfathered
+
+
 def main() -> int:
     all_broken = []
     all_stale = []
     all_historical = []
     all_envcond = []
+    all_grandfathered = []
+    scanned_header_keys = set()
 
     for f in SCAN_FILES:
         if not f.exists():
@@ -889,6 +1170,25 @@ def main() -> int:
         all_stale.extend(s)
         all_historical.extend(h)
         all_envcond.extend(e)
+
+    for f in HEADER_SCAN_FILES:
+        if not f.exists():
+            print(f"WARNING: header scan target does not exist: {f}")
+            continue
+        scanned_header_keys.add(_header_allowlist_key(f))
+        hb, hs, hg = check_header_file(f)
+        all_broken.extend(hb)
+        all_stale.extend(hs)
+        all_grandfathered.extend(hg)
+
+    # Registry hygiene: entries naming headers that are no longer scanned
+    # (renamed/moved/deleted) are zombies — the backlog must stay anchored to
+    # the real tree.
+    for key in sorted(set(HEADER_STALE_ALLOWLIST) - scanned_header_keys):
+        all_broken.append(
+            f"{key}: HEADER ALLOWLIST ZOMBIE: header is not in the scan set "
+            f"(remove the registry entry)"
+        )
 
     # Report
     print("=" * 60)
@@ -923,6 +1223,13 @@ def main() -> int:
     else:
         print(f"HISTORICAL_REFERENCES: 0")
 
+    if all_grandfathered:
+        print(f"\nHEADER_DOC_REFERENCES (grandfathered #167 Step 4 backlog, informational): {len(all_grandfathered)}")
+        for item in all_grandfathered:
+            print(f"  {item}")
+    else:
+        print(f"HEADER_DOC_REFERENCES (grandfathered): 0")
+
     # Final verdict
     problems = len(all_broken) + len(all_stale)
     print(f"\n{'=' * 60}")
@@ -942,6 +1249,11 @@ def self_test() -> int:
       2. A deliberately stale moved-path reference (known-moved doc).
       3. A markdown link that matches a former NON_PATH_PATTERNS entry
          (e.g. `e12-event.md`) — must be flagged, not silently skipped.
+      8. A public-header docs/ reference scan miss: stale-moved token, broken
+         token, URL-embedded docs/ (must be excluded), comment-wrapped token
+         (must be joined) — the PR #207 review finding 1 regression guard.
+      9. The header grandfather registry: registered tokens pass as
+         grandfathered; zombie entries (token gone from the header) fail.
 
     Returns the number of test failures (0 = all passed).
     """
@@ -1115,6 +1427,65 @@ def self_test() -> int:
             print("SELF-TEST FAIL: gitignored-dir refs not flagged as environment-conditional")
         failures += 1
     tmp7.unlink(missing_ok=True)
+
+    # --- Test 8: public-header docs/ reference scan (PR #207 review finding 1) ---
+    # Root cause this guards against: stale `docs/...` pointers in public
+    # headers historically escaped every gate because the checker scanned
+    # Markdown only. The header scan must catch stale-moved and broken tokens,
+    # must NOT flag docs/ embedded in URLs, and must join comment-wrapped
+    # tokens before resolving.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".hpp", delete=False, encoding="utf-8"
+    ) as f:
+        f.write("// See docs/e12-event.md for the model.\n")
+        f.write("// Broken: docs/reference/does_not_exist_anywhere.md\n")
+        f.write("// URL-embedded: https://clang.llvm.org/docs/ThreadSafetyAnalysis.html\n")
+        f.write("// Wrapped: docs/e10-waitnode-wait-\n")
+        f.write("// queue.md\n")
+        tmp8 = Path(f.name)
+
+    hb, hs, _ = check_header_file(tmp8, allowlist={})
+    ok_stale = any("docs/e12-event.md" in x for x in hs)
+    ok_broken = any("docs/reference/does_not_exist_anywhere.md" in x for x in hb)
+    ok_url = not any("ThreadSafetyAnalysis" in x for x in hb + hs)
+    ok_wrap = any("docs/e10-waitnode-wait-queue.md" in x for x in hs)
+    if ok_stale and ok_broken and ok_url and ok_wrap:
+        print("SELF-TEST PASS: header stale/broken/URL/wrap classification correct")
+    else:
+        print(
+            "SELF-TEST FAIL: header scan classification "
+            f"(stale={ok_stale} broken={ok_broken} url_excluded={ok_url} wrap_joined={ok_wrap})"
+        )
+        failures += 1
+    tmp8.unlink(missing_ok=True)
+
+    # --- Test 9: header grandfather registry is honored AND self-pruning ---
+    # A registered stale token passes as grandfathered; a registry entry whose
+    # token no longer occurs in the header is itself an error (no zombie
+    # amnesty for the #167 Step 4 backlog).
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".hpp", delete=False, encoding="utf-8"
+    ) as f:
+        f.write("// docs/e12-event.md\n")
+        tmp9 = Path(f.name)
+
+    key9 = tmp9.resolve().as_posix()
+    al9 = {key9: {
+        "docs/e12-event.md": "test grandfather reason",
+        "docs/totally-gone.md": "test zombie entry",
+    }}
+    hb, hs, hg = check_header_file(tmp9, allowlist=al9)
+    ok_grand = any("docs/e12-event.md" in x for x in hg) and not hs
+    ok_zombie = any("HEADER ALLOWLIST ZOMBIE" in x and "docs/totally-gone.md" in x for x in hb)
+    if ok_grand and ok_zombie:
+        print("SELF-TEST PASS: header grandfather honored and zombie entry detected")
+    else:
+        print(
+            "SELF-TEST FAIL: header registry semantics "
+            f"(grandfathered={ok_grand} zombie_detected={ok_zombie})"
+        )
+        failures += 1
+    tmp9.unlink(missing_ok=True)
 
     return failures
 
