@@ -1,5 +1,16 @@
 # C++ ↔ TLA+ Model Coverage Matrix
 
+> **Claim scope** (#163 §12 vocabulary) — **C++ revision**: rebaselined per
+> audit (the governing audit and date are named below); each suite's as-built
+> C++ revision binding lives in `spec/tla/manifest.json`. **Model scope**:
+> abstraction faithfulness and protocol-model coverage of the C++ design
+> (what each suite abstracts, which C++ code owns the protocol, where the
+> executable regression bridge lives, what remains debt) — not implementation
+> verification. **Fairness / bounds**: per-suite (manifest fields).
+> **Unsupported regions**: trace conformance, weak-memory kernels, and fault
+> envelopes are separate evidence technologies (the "Not TLA debt" section
+> below) and are never paid — or claimed — as TLA+ debt or TLA+ credit.
+
 > Current developer document (2026-08-18 formal realignment audit
 > `audit/formal-cpp-tla-realignment`; debt register rebaselined 2026-08-23,
 > issue #186). This is the authoritative map of what each TLA+ suite

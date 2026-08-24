@@ -1,0 +1,14 @@
+# claim-hygiene.allowlist — site-level entries for LEGITIMATE affirmative
+# statements that match the #163 §12 overclaim detector.
+#
+# Entry shape (exactly three fields, '|'-separated):
+#     path-glob | source-line-substring | reason
+# The exemption applies ONLY when BOTH the changed file path matches the glob
+# AND the substring occurs in the ADDED line. Whole-file exemption is
+# deliberately unsupported (same policy as assert-hygiene.allowlist):
+# a new unregistered line in an already-allowlisted file still fails.
+#
+# Currently empty: the 2026-08-23 repository audit found zero violations,
+# and all in-tree mentions of the phrase class are negations or
+# mentioned-as-a-phrase (policy text), which the line-level negation and
+# quote escapes already cover.

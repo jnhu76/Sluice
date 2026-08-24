@@ -1,5 +1,20 @@
 # E9 Scheduler Park Admission and Unified Wake-Source Protocol — TLA+ Model
 
+> **Claim scope** (#163 §12 vocabulary) — **C++ revision**: the as-built C++
+> binding is recorded per-suite in `spec/tla/manifest.json` (the E9 repairs
+> #189/#191/#185 each cite their C++ facts and model revisions in their closeout
+> notes). **Model scope**: the park-admission / wake-source protocol only —
+> the Scheduler wake bridge is abstract (one wake action), park domains are
+> 1-bit toggles, and the C++ cv/mutex/epoch machinery is not modeled
+> instruction-for-instruction. **Fairness**: the liveness configurations
+> state weak-fairness assumptions; the reference configuration
+> (`SplitWait=FALSE`) is scoped by the #185 observationArmed ghost. **Bounds**:
+> workers ≤ 2 (`{W0, W1}`), bounded runnables/observers per `E9ParkWake.cfg`. **Unsupported
+> regions**: weak-memory ordering of the C++ atomics (separate evidence
+> layer), real backend timing, and implementation verification — a green TLC
+> run here is a FORMAL PROPERTY PASS of the model, never an implementation
+> claim.
+
 Narrow TLA+ model of the E9 park-admission and wake-source protocol,
 realizing the architecture decision in
 `docs/adr/ADR-execution-model.md` §9.4 (Model P3, decoupled wake domains),
