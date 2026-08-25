@@ -334,7 +334,7 @@ coverage).
     set passed. See
     [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md),
     [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md)
-    and [`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md).
+    and [`phase-d4-uring-wait-close-drain-gate.md`](../history/closeout/phase-d4-uring-wait-close-drain-gate.md).
 
   - **C2e — close / drain / destruction: COMPLETE.** Row 15 (close/drain/reset
     sequence) is now FULL and row 16 (quiescent destruction) is FULL
@@ -435,7 +435,7 @@ integration matrix; D4 complete via PR #84 (branch
 `feat/phase-d4-uring-wait-close-drain`) implementing the wait source,
 close/drain/destruction proof and lifting the KernelIo fail-closed gate only
 after the complete mandatory real-mode evidence set passed
-([`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md)).
+([`phase-d4-uring-wait-close-drain-gate.md`](../history/closeout/phase-d4-uring-wait-close-drain-gate.md)).
 Full Phase D is complete; the KernelIo profile is ELIGIBLE in real mode and
 honestly INCOMPLETE in stub builds.
 

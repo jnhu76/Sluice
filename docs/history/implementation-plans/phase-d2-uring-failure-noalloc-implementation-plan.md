@@ -1,5 +1,10 @@
 # Phase D2 Uring failure/no-allocation implementation plan
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: HISTORICAL (executed
+> implementation plan). Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Status:** EXECUTED — all Phase D2 command gates passed; D3/D4 remain pending.
 
 > Execute this plan in order. Preserve Phase D1 production semantics; stop if a detector requires

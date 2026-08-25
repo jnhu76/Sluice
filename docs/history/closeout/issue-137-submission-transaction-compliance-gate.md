@@ -1,9 +1,14 @@
 # Issue #137 Implementation Compliance Gate — Shared Submission Transaction
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (point-in-time
+> compliance/gate record). Body preserved as-written; see
+> `docs/history/README.md`.
+
 Phase-specific gate for the #137 implementation (centralized pre-accept
 submission transaction). Covers every Gate 0–4 field of
-[design-compliance-gate.md](design-compliance-gate.md) and links to it as the
-generic authority. Design: [issue-137-submission-transaction-design.md](issue-137-submission-transaction-design.md)
+[design-compliance-gate.md](../../architecture/design-compliance-gate.md) and links to it as the
+generic authority. Design: [issue-137-submission-transaction-design.md](../implementation-plans/issue-137-submission-transaction-design.md)
 (PR #157, merged). Independent review: issue #137 comment
 `issuecomment-5357295925` — verdict **ACCEPTED** with five binding corrections
 (schematic commit-branch inversion, honest hook budget, `stage0_precheck`

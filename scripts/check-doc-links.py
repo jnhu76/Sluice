@@ -361,6 +361,29 @@ KNOWN_MOVED = {
     # STALE errors; the header-side grandfather registry covers it instead.
     "docs/flush-sync-durability.md": "docs/history/implementation-plans/design-flush-sync-durability.md",
     "docs/e8-formal-corrective": "docs/history/closeout/e8-formal-corrective",
+    # #167 Step 5 archive moves (2026-08-25): zero-consumer evidence/history
+    # records moved out of docs/architecture/. The one public-header pointer
+    # (submit_transaction.hpp -> issue-137 design) was removed by PR #208's
+    # authority repoint; every other live reference was updated in the same
+    # change. docs/history contains no stale references to these old paths
+    # (verified before adding the entries), so the historical exemption is
+    # not affected.
+    "docs/architecture/phase-d2-uring-failure-noalloc-implementation-plan.md":
+        "docs/history/implementation-plans/phase-d2-uring-failure-noalloc-implementation-plan.md",
+    "docs/architecture/issue-137-submission-transaction-design.md":
+        "docs/history/implementation-plans/issue-137-submission-transaction-design.md",
+    "docs/architecture/issue-137-submission-transaction-compliance-gate.md":
+        "docs/history/closeout/issue-137-submission-transaction-compliance-gate.md",
+    "docs/architecture/issue-137-submission-transaction-mutation-evidence.md":
+        "docs/history/closeout/issue-137-submission-transaction-mutation-evidence.md",
+    "docs/architecture/c7-runtime-await-helpers-compliance-gate.md":
+        "docs/history/closeout/c7-runtime-await-helpers-compliance-gate.md",
+    "docs/architecture/phase-f-compliance-gate.md":
+        "docs/history/closeout/phase-f-compliance-gate.md",
+    "docs/architecture/phase-d3-uring-identity-waiter-gate.md":
+        "docs/history/closeout/phase-d3-uring-identity-waiter-gate.md",
+    "docs/architecture/phase-d4-uring-wait-close-drain-gate.md":
+        "docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md",
 }
 
 # Regex patterns

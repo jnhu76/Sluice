@@ -1,18 +1,22 @@
 # Issue #137 Design — Centralizing the Explicit-I/O Submission Transaction
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (accepted design
+> record). Body preserved as-written; see `docs/history/README.md`.
+
 > **EVIDENCE RECORD — read as history, not current status.** Issue #137 is
 > CLOSED. This design was subsequently **ACCEPTED with five binding
 > corrections** (independent review: issue #137 comment `issuecomment-5357295925`;
 > corrections recorded in
-> [issue-137-submission-transaction-compliance-gate.md](issue-137-submission-transaction-compliance-gate.md)).
+> [issue-137-submission-transaction-compliance-gate.md](../closeout/issue-137-submission-transaction-compliance-gate.md)).
 > The `STATUS:` block and the code sketch in §4 below are preserved as
 > historical text. In particular, the §4 `arena.commit` conditional is known
 > **INVERTED** — `Result` truth means success, so the sketch as written rolls
 > back on commit *success* — and MUST NOT be copied literally; the reviewed
 > form is `if (auto m = arena.commit(...); !m.has_value())`. Current
 > authority:
-> [ADR-explicit-io-request-contract.md](../adr/ADR-explicit-io-request-contract.md),
-> [async-request-lifecycle.md](async-request-lifecycle.md), and the
+> [ADR-explicit-io-request-contract.md](../../adr/ADR-explicit-io-request-contract.md),
+> [async-request-lifecycle.md](../../architecture/async-request-lifecycle.md), and the
 > implemented shared transaction
 > `include/sluice/async/detail/submit_transaction.hpp`.
 
@@ -26,7 +30,7 @@ anatomy, authority map, ≥3 compared candidates, failure matrix, adversarial
 audit, evaluation criteria, migration plan). It changes no production code.
 Baseline: master 2026-08-20. The per-request narrative and the as-built
 authority table it builds on live in
-[async-request-lifecycle.md](async-request-lifecycle.md) (#139).
+[async-request-lifecycle.md](../../architecture/async-request-lifecycle.md) (#139).
 
 ---
 
@@ -77,7 +81,7 @@ The ladder itself has NOT drifted today (the DIV C2b–C2e mutation matrix
 constrains the copies), but every other dimension has: admission lock,
 Stage-0 checks, validation bounds, scratch shape, pause seams, enqueue
 scoping, stats tally policy (see the drift table in
-[async-request-lifecycle.md §5](async-request-lifecycle.md)).
+[async-request-lifecycle.md §5](../../architecture/async-request-lifecycle.md)).
 
 ---
 

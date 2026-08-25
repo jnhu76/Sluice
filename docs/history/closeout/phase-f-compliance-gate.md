@@ -1,5 +1,10 @@
 # Phase F Closeout Compliance Gate — Scheduler/Batch consume identity-bearing reap
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (point-in-time
+> compliance/gate record). Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Phase:** F (issue #98) — F1 + F2 + F3. **Status: COMPLETE.**
 **Baseline:** `e2b9f37` (`master`, PR #105 / Phase F1 merged).
 **Closeout lineage (semantic commits on `feat/phase-f-remaining`, this PR):**
@@ -26,7 +31,7 @@ bridge, which is Phase G (separate, untouched).
   `ReadyRoutingSink`; the O(N) `Completion::ready()` re-scan is removed from the
   arena path; duplicate-waiter `invalid_state` + cross-context provenance on the
   Scheduler side; `cancel_waiter` removes only the waiter. Gate:
-  [phase-f1-compliance-gate](phase-f1-compliance-gate.md) (COMPLETE).
+  [phase-f1-compliance-gate](../../architecture/phase-f1-compliance-gate.md) (COMPLETE).
 - **F2 (commit `d096f1f`):** `BatchResultOrigin` (`rejected` vs
   `accepted_and_completed`) on `BatchResult` — ADR Decision 9 (Batch consumes
   outcome origin explicitly, orthogonal to success/error).
@@ -36,7 +41,7 @@ bridge, which is Phase G (separate, untouched).
   `identity_of` / `request_handle_state` / private virtual
   `resolve_identity_state`, sole friend `AsyncIoContext`; overrides private;
   negative-compile 9/9). Gate:
-  [phase-f3-compliance-gate](phase-f3-compliance-gate.md) (COMPLETE).
+  [phase-f3-compliance-gate](../../architecture/phase-f3-compliance-gate.md) (COMPLETE).
 
 ## Gate 0 — scope and authority
 

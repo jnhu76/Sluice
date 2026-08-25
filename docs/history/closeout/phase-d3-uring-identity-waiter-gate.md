@@ -1,5 +1,10 @@
 # Phase D3 — Uring C2b / C2c Identity, Cancel, Borrow and Waiter Integration Gate
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (point-in-time
+> compliance/gate record). Body preserved as-written; see
+> `docs/history/README.md`.
+
 Status: COMPLETE (2026-08-09, branch test/phase-d3-uring-identity-waiter-conformance)
 
 Governing authority chain (AGENTS.md §3):

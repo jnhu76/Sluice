@@ -171,7 +171,7 @@ Scheduler/Batch consumption. The ADR decision alone is not resolution evidence.
 > (P0-D recovery), and accepted-terminal paths that allocate nothing. The
 > finding text below describes the pre-Phase-D legacy model and is retained as
 > the historical audit record. Evidence: `docs/architecture/phase-d2-uring-failure-noalloc-gate.md`,
-> `phase-d4-uring-wait-close-drain-gate.md`; real-liburing conformance run
+> `docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md`; real-liburing conformance run
 > (audit issue #94): KernelIo ELIGIBLE.
 
 **Current finding:** PR #61 made claim authority atomic and added a narrow
@@ -406,7 +406,7 @@ authority leak.
 > covers all four backends: `SQE.user_data` carries a 64-bit op cookie
 > (generation-safe; `uring_backend.cpp:101-119`), and the arena's per-slot
 > `Generation` increment-on-release rejects stale keys across every post-reserve
-> authority (C2b real-mode evidence, `phase-d3-uring-identity-waiter-gate.md`).
+> authority (C2b real-mode evidence, `docs/history/closeout/phase-d3-uring-identity-waiter-gate.md`).
 > The finding text below describes the pre-Phase-B/D state and is retained as
 > the historical audit record.
 

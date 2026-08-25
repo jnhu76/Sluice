@@ -176,8 +176,8 @@ wait_one()
 > ELIGIBLE in real mode and honestly INCOMPLETE in stub builds. See
 > `docs/architecture/phase-d-uring-migration-plan.md`,
 > `phase-d2-uring-failure-noalloc-gate.md`,
-> `phase-d3-uring-identity-waiter-gate.md`, and
-> `phase-d4-uring-wait-close-drain-gate.md`. P0-02, P1-06, and DIV-14 are
+> `docs/history/closeout/phase-d3-uring-identity-waiter-gate.md`, and
+> `docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md`. P0-02, P1-06, and DIV-14 are
 > resolved for Uring (see §9, `current-architecture-findings.md`, and
 > `divergence-registry.md`).
 
@@ -562,7 +562,7 @@ P1-09 (arena), P1-10, P2-03. See `current-architecture-findings.md` summary
 table and `phase-b-compliance-gate.md` for the evidence ledger. Production
 backend migration is complete: ThreadPool in Phase E (PR #64 — see
 `phase-e-compliance-gate.md` and §2.2) and Uring in Phase D (PR #78/#80/#83/#84
-— see `phase-d4-uring-wait-close-drain-gate.md` and §2.3).
+— see `docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md` and §2.3).
 
 ### 9.1 Phase F1 delta — production Scheduler consumes identity-bearing reap
 
