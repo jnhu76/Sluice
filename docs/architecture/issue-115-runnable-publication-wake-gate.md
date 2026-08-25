@@ -4,7 +4,7 @@
 **Baseline master SHA:** `fbb3ea074db8c7c2aafc3c5e4599166e2381f458` (post #119).
 **Generic gate:** `docs/architecture/design-compliance-gate.md` (this document
 covers every Gate 0–4 field for the fix and links back).
-**Investigation:** `docs/investigations/issue-115-runnable-publication-wake.md`
+**Investigation:** `docs/history/issues/issue-115-runnable-publication-wake.md`
 
 **One-line defect:** `Scheduler::spawn()` / `Scheduler::spawn_on()` published a
 runnable ticket onto a participant's `local_runnable` and notified only the

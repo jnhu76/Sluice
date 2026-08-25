@@ -395,6 +395,14 @@ KNOWN_MOVED = {
         "docs/history/issues/issue-110-dequeue-gate-generation-handshake.md",
     "docs/investigations/issue-123-phase-g-closeout-parallel-flake.md":
         "docs/history/issues/issue-123-phase-g-closeout-parallel-flake.md",
+    # #167 Step 5d (2026-08-25): issue-115 moved to docs/history/issues/ after
+    # disposition adjudication (deferred-to-application-evidence = superseded
+    # by the implemented evidence-derived corrective). Consumers updated
+    # atomically: issue-115-runnable-publication-wake-gate.md and
+    # post-freeze-final-report.md. docs/history contains no stale references to
+    # the old path (verified), so the historical exemption is not affected.
+    "docs/investigations/issue-115-runnable-publication-wake.md":
+        "docs/history/issues/issue-115-runnable-publication-wake.md",
     "docs/design/phase-b-request-slot-reference.md":
         "docs/history/implementation-plans/phase-b-request-slot-reference.md",
 }
