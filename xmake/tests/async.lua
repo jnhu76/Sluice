@@ -9,8 +9,9 @@ sluice_production_async_test("async_completion_test")
 
 -- Phase B reference lifecycle — bounded RequestSlot arena unit tests. The arena
 -- is an internal detail:: type but its capacity/reserve/release/generation
--- contract is a deliberate test seam (design: docs/design/phase-b-request-slot-
--- reference.md). Links sluice_async for the detail/ headers (header-only so far).
+-- contract is a deliberate test seam (design:
+-- docs/history/implementation-plans/phase-b-request-slot-reference.md). Links
+-- sluice_async for the detail/ headers (header-only so far).
 sluice_production_async_test("request_arena_test")
 
 -- Phase B reference lifecycle — Completion binding transient tests (idle ->

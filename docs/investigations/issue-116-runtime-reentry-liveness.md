@@ -367,7 +367,7 @@ known concurrent-starvation flake classes on record):
   second, never-coming advance. Fixed by reading the baseline before the
   release and replacing the spin with a blocking epoch observer + case
   watchdog — see
-  `docs/investigations/issue-123-phase-g-closeout-parallel-flake.md`.
+  `docs/history/issues/issue-123-phase-g-closeout-parallel-flake.md`.
 
 Mechanical/documentation gates: executed individually (table above);
 `bash scripts/gates/pre-push.sh` reproduces the same set.

@@ -1,6 +1,6 @@
 # Phase B Compliance Gate — Bounded RequestKey / RequestSlot Reference Lifecycle
 
-**Design:** [`docs/design/phase-b-request-slot-reference.md`](../design/phase-b-request-slot-reference.md)
+**Design:** [`docs/history/implementation-plans/phase-b-request-slot-reference.md`](../history/implementation-plans/phase-b-request-slot-reference.md)
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Branch:** `feat/bounded-request-slot-reference`
 **Status:** Gate 0–3 complete at design time; Gate 4 evidence filled as each commit lands

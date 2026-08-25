@@ -1,5 +1,10 @@
 # Issue #110 — Scheme-B Pause-Gate Cross-Iteration Protocol Hole: Root-Cause Investigation
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/investigations/`; classification at move: CLOSED-HISTORY (fixed
+> test-infrastructure defect; production impact NONE). Body preserved
+> as-written; see `docs/history/README.md`.
+
 **Status:** TEST_PROTOCOL_ROOT_CAUSE_FIXED
 **Baseline master SHA:** `28f30d7e708544f45c608798412295c9587dad86`
 **Fix branch:** `fix/issue-110-test-gate-generation`
