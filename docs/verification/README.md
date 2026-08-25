@@ -159,6 +159,16 @@ pre-push; #197 non-goal). Current kernel:
 | GenMC weak-memory kernels | **Environment-dependent** — requires GenMC (user-local build documented in the kernel evidence doc) |
 | Automated mutation testing | **Planned** — no repository-wide tooling yet |
 
+## Stable evidence identifiers (issue #167 Step 5, 2026-08-25)
+
+The `phase-c2b..c2e` / `phase-d2..d4` mutation-evidence filenames under this
+directory are **stable identifiers, not phase-era sediment**: each is
+machine-pinned as `evidence[].ref` rows in `failure-envelope.json` (validated
+by `scripts/gates/failure-envelope.py` in pre-push) and referenced by the
+compliance gates, the divergence registry, and `guarantee-cost.md`.
+**Decision: KEEP — do not rename.** Step 5 completion does not require
+renaming stable evidence identifiers.
+
 ## Navigation
 
 | Topic | Document |
