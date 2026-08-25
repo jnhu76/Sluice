@@ -529,7 +529,7 @@ which is a separate, untouched phase.
   `ReadyRoutingSink` routes the by-value `ReadyEvent{key, token, lease}` from
   every arena-backed backend reap to the pinned Scheduler wait record; the
   drain routes the resumed fiber exactly once under `global_mtx_` (design:
-  `docs/design/phase-f1-scheduler-ready-sink.md`; gate:
+  `docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md`; gate:
   `docs/architecture/phase-f1-compliance-gate.md`);
 - the O(N) `Completion::ready()` re-scan is removed from the
   completion-progress path for arena backends. The legacy

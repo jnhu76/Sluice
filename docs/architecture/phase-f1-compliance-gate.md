@@ -1,7 +1,7 @@
 # Phase F1 Compliance Gate — Scheduler consumes identity-bearing reap
 
 **Phase:** F1 (Issue #98, re-baselined after the 2026-08-13 corrective pass)
-**Design:** `docs/design/phase-f1-scheduler-ready-sink.md`
+**Design:** `docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md`
 **Status:** COMPLETE — Gate 4 evidence filled from executed runs (2026-08-13).
 **Authority:** ADR-explicit-io-request-contract (Accepted) Decisions 9/10;
 AGENTS.md §4.1/§4.3/§4.4, §10, §13.1/§13.2; Constitution AC-13/AC-14/AC-15.

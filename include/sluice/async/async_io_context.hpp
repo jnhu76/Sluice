@@ -177,11 +177,12 @@ public:
     // this sink instead of the backend's internal no-op ReferenceReadySink.
     // The sink runs with NO slot/backend/admission lock held (arena contract)
     // and MUST NOT acquire backend-progress locks; the Scheduler-owned sink
-    // only marks routing records under its own leaf domain (design
-    // docs/design/phase-f1-scheduler-ready-sink.md §5). Null restores the
-    // no-op default. Mirrors attach_stats: a narrow, non-virtual, non-owning
-    // setter. The Scheduler installs its sink at construction and detaches at
-    // destruction; a standalone context (no Scheduler) keeps the no-op sink.
+    // only marks routing records under its own leaf domain (see
+    // docs/architecture/async-request-lifecycle.md, ReadySink contract).
+    // Null restores the no-op default. Mirrors attach_stats: a narrow,
+    // non-virtual, non-owning setter. The Scheduler installs its sink at
+    // construction and detaches at destruction; a standalone context (no
+    // Scheduler) keeps the no-op sink.
     void attach_ready_sink(detail::SynchronousReadySink* sink) noexcept {
         routing_sink_ = sink;
     }
