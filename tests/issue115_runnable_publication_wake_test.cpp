@@ -2,7 +2,7 @@
 // regression: runnable publication onto a BUSY worker's queue must publish a
 // Scheduler wake obligation (RP-1/RP-2), not only a target-inbox notify.
 //
-// Defect class (pre-fix master, docs/investigations/issue-115-*.md):
+// Defect class (pre-fix master, docs/history/issues/issue-115-runnable-publication-wake.md):
 //   Scheduler::spawn() / spawn_on() pushed the runnable ticket onto the
 //   target worker's local_runnable and called target->inbox_cv.notify_one().
 //   NO thread ever waits on inbox_cv (all parks are on the unified Scheduler
