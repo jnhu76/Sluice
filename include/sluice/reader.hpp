@@ -55,13 +55,13 @@ class Reader {
     // docs/reference/sync-io-model.md (Vector I/O semantics).
     virtual Result<std::size_t> read_vec(std::span<IoSlice> dsts);
 
-    // Exact-read over multiple slices (CPPIO-CORE-015A): fill every byte of every
+    // Exact-read over multiple slices: fill every byte of every
     // non-empty slice, retrying the SAME slice on a short read (unlike read_vec,
     // which stops on a short read). Symmetric to Writer::write_all_vec. Empty
     // slices are skipped. Returns void on success. On EOF before completion
     // returns IoError::eof; other read errors propagate immediately, even after
     // partial progress (matching read_exact). Naming note: the writer side is
-    // write_all_vec; this is read_vec_all per the task spec.
+    // write_all_vec; the reader side is read_vec_all.
     Result<void> read_vec_all(std::span<IoSlice> dsts);
 };
 

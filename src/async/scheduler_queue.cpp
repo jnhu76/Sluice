@@ -1,9 +1,8 @@
-// Scheduler queue admit/grant seams — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler queue admit/grant seams — implementation TU split from
+// scheduler.cpp (docs/post-freeze/structural-audit.md §6).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
-// and wake contracts remain in include/sluice/async/scheduler.hpp.
+// The class declaration, lock domains, atomic orderings, and wake contracts
+// remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -45,7 +44,7 @@ void Scheduler::queue_timer_on_resolve(void* owner_ctx,
 
 void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
                                  detail::QueueItemLease& lease) {
-    // P5 blocking push. Register on the producer FIFO under G + S +
+    // Blocking push. Register on the producer FIFO under G + S +
     // producer.mtx(); admission recheck commits inline if admissible (Open +
     // space + FIFO head) — else suspend. The reconciler (a consumer's try_pop
     // that freed a slot, or close) commits the lease into a ring slot in the
@@ -65,7 +64,7 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         LockGuard qlk(port.waiters_[0].mtx());
         if (!port.waiters_[0].register_wait_locked(node, me)) {
-            return;  // C8 contract violation
+            return;  // registration contract violation
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
@@ -82,7 +81,7 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;  // committed inline
         }
-        // Closed at admission: resolve Woken with the lease retained (P7).
+        // Closed at admission: resolve Woken with the lease retained.
         if (port.closed_) {
             port.waiters_[0].wake_node_locked(node);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -99,7 +98,7 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // F.2 corrective: this fiber has now RESUMED from a suspended-winner
+    // This fiber has now RESUMED from a suspended-winner
     // publication. Decrement the per-port `granted_not_resumed_` counter under
     // G (the publication side incremented it under G in the grant seam).
     {
@@ -112,7 +111,7 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
 
 void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
                                 detail::QueueItemLease& out) {
-    // P5 blocking pop. Symmetric. Admission recheck pops inline if the ring is
+    // Blocking pop. Symmetric. Admission recheck pops inline if the ring is
     // non-empty + FIFO head; else suspend. The reconciler (a producer's
     // try_push that added an item, or close) moves a ring item into `out`.
     WorkerState* ws = g_worker;
@@ -125,7 +124,7 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         LockGuard qlk(port.waiters_[1].mtx());
         if (!port.waiters_[1].register_wait_locked(node, me)) {
-            return;  // C8
+            return;  // registration contract violation
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
@@ -157,7 +156,7 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // F.2 corrective: this fiber has RESUMED from a suspended-winner
+    // This fiber has RESUMED from a suspended-winner
     // publication. Decrement granted_not_resumed_ under G.
     {
         LockGuard lk(global_mtx_);
@@ -168,7 +167,7 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
 void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
                                        detail::QueueItemLease& lease,
                                        deadline_t deadline) {
-    // P4 timed push. Composes queue_push_admit with E11 timer registration and
+    // Timed push. Composes queue_push_admit with timer registration and
     // the already-due inline-Expired precedence (resource-first). On expired
     // the lease is retained (caller returns expired).
     WorkerState* ws = g_worker;
@@ -183,13 +182,13 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         LockGuard qlk(port.waiters_[0].mtx());
         if (!port.waiters_[0].register_wait_locked(node, me)) {
-            return;  // C8
+            return;  // registration contract violation
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
         timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
         reg = &timer_pool_.back();
-        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // F.1/F.2 wiring
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
         reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
         ++active_deadline_count_;
@@ -220,7 +219,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;
         }
-        // Admission precedence 2: already-due => Expired inline (I5).
+        // Admission precedence 2: already-due => Expired inline.
         if (clock_now_unlocked() >= deadline) {
             if (port.waiters_[0].expire_locked(node)) {
                 reg->try_claim_expiry();
@@ -242,7 +241,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // F.2 corrective: this fiber has RESUMED from a suspended-winner
+    // This fiber has RESUMED from a suspended-winner
     // publication (or a timer-expiry publication). Decrement
     // granted_not_resumed_ under G.
     {
@@ -254,7 +253,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
 void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
                                       detail::QueueItemLease& out,
                                       deadline_t deadline) {
-    // P4 timed pop. Symmetric.
+    // Timed pop. Symmetric.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncQueue::pop_until requires a running Fiber");
     Fiber* me = ws->current;
@@ -266,13 +265,13 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         LockGuard qlk(port.waiters_[1].mtx());
         if (!port.waiters_[1].register_wait_locked(node, me)) {
-            return;  // C8
+            return;  // registration contract violation
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
         timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
         reg = &timer_pool_.back();
-        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // F.1/F.2 wiring
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
         reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
         ++active_deadline_count_;
@@ -347,7 +346,7 @@ bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
     Fiber* f = node.fiber();
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
     }
@@ -364,8 +363,8 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
     WaitNode* won = port.waiters_[1].wake_one_locked();  // resolve FIFO head Woken + unlink
     if (won == nullptr) return nullptr;  // no consumer parked / head lost
     auto* ctx = static_cast<QueueWaitCtx*>(won->user());
-    // ---- retire BEFORE commit (§12 verbatim order; F.6 corrective) ----
-    retire_timer_for_node_locked(*won);  // E11 I4 (fires F.2 thunk if Queue timer)
+    // ---- retire BEFORE commit (§12 verbatim order) ----
+    retire_timer_for_node_locked(*won);  // timer-lifetime closure (fires the on-resolve thunk if Queue timer)
     // ---- resource commit BEFORE publication ----
     if (!port.ring_empty_locked()) {
         const std::size_t head = port.ring_head_;
@@ -378,9 +377,9 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr && f->make_runnable()) {  // publication LAST
-        ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
+        ++port.granted_not_resumed_;  // published suspended-winner ticket
         WorkerState* owner = owner_for_fiber_locked(f);
         route_runnable_locked(f, owner);
     }
@@ -399,7 +398,7 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
     WaitNode* won = port.waiters_[0].wake_one_locked();
     if (won == nullptr) return nullptr;
     auto* ctx = static_cast<QueueWaitCtx*>(won->user());
-    // ---- retire BEFORE commit (§12 verbatim order; F.6 corrective) ----
+    // ---- retire BEFORE commit (§12 verbatim order) ----
     retire_timer_for_node_locked(*won);
     // ---- resource commit BEFORE publication ----
     if (!port.closed_ && !port.ring_full_locked()) {
@@ -414,9 +413,9 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr && f->make_runnable()) {
-        ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
+        ++port.granted_not_resumed_;  // published suspended-winner ticket
         WorkerState* owner = owner_for_fiber_locked(f);
         route_runnable_locked(f, owner);
     }
@@ -425,7 +424,7 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
 
 bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
     SLUICE_REQUIRES(global_mtx_) {
-    // P7 teardown precondition query. Caller holds global_mtx_; we take each
+    // Teardown precondition query. Caller holds global_mtx_; we take each
     // role mtx() SEQUENTIALLY under G (the canonical G -> exactly-one-role
     // lock order — the two role mutexes are NEVER held together). The
     // QueuePort is not a friend of WaitQueue (only the Scheduler is), so this
@@ -447,11 +446,11 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
 //
 
 
-// E12-E AsyncQueue private seams (sluice-CORE-E12-E).
+// AsyncQueue private seams.
 //
 // Blocking/timed wait admission + reconciliation. A QueuePort owns a producer
 // and a consumer WaitQueue (waiters_[2]); the Scheduler is the authoritative
-// resolution + publication executor, as for E12-A/B/C/D. Lock order:
+// resolution + publication executor, as for the other wait primitives. Lock order:
 // G (global_mtx_) -> S (QueuePort::state_mtx_) -> exactly one role mtx();
 // the two role mutexes are NEVER held together.
 //
@@ -478,7 +477,7 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
 // make_runnable/route_runnable_locked (publication). A woken Fiber observes
 // the final state on resume.
 //
-// E12-E Queue timer bookkeeping (Corrective-2 §8 supersession). The
+// Queue timer bookkeeping (Corrective-2 §8 supersession). The
 // non-template QueuePort owns TWO per-port counters that bracket a Queue
 // timed wait:
 //   - `active_wait_associations_` (incremented on every successful
@@ -499,6 +498,6 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
 // `--waiting_waitq_count_` accounting applies unchanged.
 //
 // The §8 PreparedQueueTimer/prepare/activate/discard substrate is
-// SUPERSEDED by this minimal model (see docs/e12-queue-corrective-3.md).
+// SUPERSEDED by this minimal model.
 //
 }  // namespace sluice::async

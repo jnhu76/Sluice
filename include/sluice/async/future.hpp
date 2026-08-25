@@ -1,4 +1,4 @@
-// sluice::async::Future — single-task awaitable (sluice-CORE-028, T2).
+// sluice::async::Future — single-task awaitable.
 //
 // Derived from Zig std.Io Future (Io.zig:1176-1206). In Zig a Future is
 // { any_future, result } — caller-provided result storage + a backend handle,
@@ -9,7 +9,7 @@
 //   - a producer side (complete_with) that may run on a worker thread, a manual
 //     driver, or synchronously inline;
 //   - idempotent await() — returns the result once ready, never re-blocks;
-//   - a CancelToken (027) for cooperative cancellation — a producer observes
+//   - a CancelToken for cooperative cancellation — a producer observes
 //     the token at its cancel points.
 //
 // Layering: ABOVE Completion (it composes one) and ABOVE cancel.hpp. It does
@@ -18,11 +18,11 @@
 // type is itself just {handle, result} — the scheduler lives in the backend.
 //
 // Non-goals (deferred):
-//   - No fiber/coroutine suspension (cppio has no fiber runtime yet — PHASE E).
+//   - No fiber/coroutine suspension (cppio has no fiber runtime yet).
 //     await() BLOCKS THE CALLING THREAD on a condition variable until ready.
 //     This is the Threaded-equivalent shape, not the Evented shape.
 //   - No multi-task grouping (that's Group, T3).
-//   - No timeout (timers are out of scope, 016B O2).
+//   - No timeout (timers are out of scope).
 #pragma once
 
 #include <sluice/async/cancel.hpp>
@@ -47,7 +47,7 @@ template <class T>
 class Future {
 public:
     // Construct with the default (Threaded) wait policy. A caller may inject a
-    // different policy (e.g. an Evented fiber-yield policy in E5) via the
+    // different policy (e.g. an Evented fiber-yield policy) via the
     // WaitPolicy& overload. The policy is BORROWED (not owned); it must outlive
     // the Future.
     Future() : policy_(&default_wait_policy()) {}
@@ -73,7 +73,7 @@ public:
             first_publication = true;
         }
         cv_.notify_all();
-        // E14 D-E14-1 (T-WAKE-3/8): notify the WaitPolicy AFTER the first
+        // Notify the WaitPolicy AFTER the first
         // terminal publication wins, OUTSIDE mtx_. Only the winning first
         // complete_with reaches here (the exactly-once gate above ensures a
         // repeated call that loses returns early). Threaded: no-op. Evented:
@@ -95,9 +95,9 @@ public:
     // Not thread-safe for concurrent awaiters (Zig: "not threadsafe",
     // Io.zig:1198) — one awaiter per Future.
     //
-    // The PHYSICAL mechanism is delegated to the injected WaitPolicy (E0 ADR
+    // The PHYSICAL mechanism is delegated to the injected WaitPolicy (ADR
     // §3): the Threaded default blocks the calling thread; an Evented policy
-    // (E5) suspends the current fiber. The Future does not embed either.
+    // suspends the current fiber. The Future does not embed either.
     Result<T> await() {
         if (!ready_.load(std::memory_order::acquire)) {
             policy_->wait_until_ready(ready_, mtx_, cv_);
@@ -121,7 +121,7 @@ public:
     }
 
 private:
-    WaitPolicy* policy_;            // borrowed; the physical-wait seam (E0A)
+    WaitPolicy* policy_;            // borrowed; the physical-wait seam
     mutable std::mutex mtx_;
     std::condition_variable cv_;
     // No result until ready (cppcoding-standards: avoid the meaningless state

@@ -1,9 +1,8 @@
-// Scheduler timer/deadline domain — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler timer/deadline domain — implementation TU split from
+// scheduler.cpp (docs/post-freeze/structural-audit.md §6).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
-// and wake contracts remain in include/sluice/async/scheduler.hpp.
+// The class declaration, lock domains, atomic orderings, and wake contracts
+// remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -74,11 +73,12 @@ void Scheduler::advance_clock(deadline_t t) {
 }
 
 void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline) {
-    // E11 deadline wait admission. I47-F2: unified suspend protocol.
+    // Deadline wait admission. Unified suspend protocol.
     // Extends await_wait with: (1) a TimerRegistration control block bound to
     // this wait epoch, and (2) an already-due-deadline recheck that resolves
-    // Expired immediately through the SAME resolve_ authority (I5 admission
-    // closure — the fiber is never stranded by a due deadline).
+    // Expired immediately through the SAME resolve_ authority (the
+    // already-due admission closure — the fiber is never stranded by a due
+    // deadline).
     //
     // The admission critical section establishes, atomically w.r.t. every
     // resolver (wake_wait_one / cancel_wait / expire_wait / pump_deadlines all
@@ -88,8 +88,9 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
     //   3. create TimerRegistration R_E       (ACTIVE, bound {node,q,deadline})
     //   4. push R_E into the deadline heap
     //   5. recheck: if node already terminal -> undo + return (defense-in-depth)
-    //   6. recheck: if deadline already due  -> resolve Expired + return (I5)
-    //   7. commit_suspend_locked(ws, me)      (I47-F2: authority + Waiting)
+    //   6. recheck: if deadline already due  -> resolve Expired + return (the
+    //      already-due closure)
+    //   7. commit_suspend_locked(ws, me)      (authority + Waiting)
     // Only context_switch is outside the lock.
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
@@ -98,7 +99,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
         if (!q.register_wait_locked(node, me)) {
-            // Node already registered or terminal (C8): contract violation.
+            // Node already registered or terminal: contract violation.
             return;
         }
         ++waiting_waitq_count_;
@@ -111,7 +112,8 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();  // publish to the park-timeout cache
 
-        // I5 admission closure: if the deadline is ALREADY due, resolve Expired
+        // Already-due admission closure: if the deadline is ALREADY due, resolve
+        // Expired
         // through the same resolve_ authority NOW — the fiber must NOT suspend
         // and wait for a future timer scan merely because registration happened
         // after the deadline was due. expire_locked is the winner CAS; on win,
@@ -124,10 +126,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
                 recompute_earliest_deadline_locked();  // reg no longer Active
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // The current Fiber is RUNNING and continues inline; no
-                // publication. The former `if (me->make_runnable())
-                // route_runnable_locked(me, g_worker)` was doubly dead: the
-                // condition is always false from running, so the route never
-                // executed (audit #162 CPP-002).
+                // publication.
                 // The consumed block stays in the heap/pool for lazy removal:
                 // its deadline is already due, so the next pump_deadlines_locked
                 // (worker-loop drain, or the test driver's advance_clock) pops
@@ -163,7 +162,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
 }
 
 bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
-    // The E11 third resolution cause: resolve `node` with Expired and route the
+    // The third resolution cause: resolve `node` with Expired and route the
     // winner's fiber. Mirrors wake_wait_one / cancel_wait EXACTLY:
     // global_mtx_ + q.mtx() -> resolve_(Expired) -> unlink_locked ->
     // --waiting_waitq_count_ -> make_runnable + route_runnable_locked.
@@ -180,7 +179,7 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
     if (!q.expire_locked(node)) return false;  // already terminal (loser)
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         if (publish_waiting_fiber_runnable_locked(f)) {
             return true;
@@ -198,7 +197,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
     // them from the heap without dereferencing the node). Returns the number of
     // expiries that won the resolve_ CAS.
     //
-    // I4 (Timer Lifetime Closure) is the load-bearing property here: a retired
+    // The timer-lifetime closure is the load-bearing property here: a retired
     // registration is observed via its atomic state BEFORE its node pointer is
     // touched. The heap may retain a stale physical entry for a retired timer
     // whose WaitNode has since been destroyed; pump skips it inertly.
@@ -207,7 +206,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
     while (!deadline_heap_.empty()) {
         const detail::DeadlineHeapEntry front = deadline_heap_.front();
         if (front.deadline > now) break;  // earliest not yet due
-        // E13 P3: the deadline heap holds tagged entries (Ordinary | Select).
+        // The deadline heap holds tagged entries (Ordinary | Select).
         // Pop the min regardless of kind (lazy removal: inert entries leave
         // the heap here without their target ever being dereferenced for a
         // non-ACTIVE state). Copy `front` because pop invalidates the ref.
@@ -216,7 +215,8 @@ std::size_t Scheduler::pump_deadlines_locked() {
             // Select timer branch (Addendum D/E). State-before-arm: the branch
             // body loads state first; non-ACTIVE skips (PumpSkip), ACTIVE
             // fails fast (a due ACTIVE Select entry is unreachable in valid
-            // P3 — no admission path). Physical reclamation only here: the
+            // production state — no admission path). Physical reclamation only
+            // here: the
             // retire/consume helper already decremented active_deadline_count_
             // exactly once; the stale-pop path MUST NOT decrement again.
             select_timer_pump_entry_locked(*front.target.select);
@@ -224,7 +224,8 @@ std::size_t Scheduler::pump_deadlines_locked() {
             continue;
         }
         TimerRegistration* top = front.target.ordinary;
-        // I4 gate: claim the timer authority BEFORE dereferencing the node. If
+        // Timer-lifetime gate: claim the timer authority BEFORE dereferencing the
+        // node. If
         // the registration is RETIRED (non-timer winner closed it) or already
         // CONSUMED (an earlier expiry won), skip — do NOT touch node/queue.
         // The active count was already decremented when the registration was
@@ -233,7 +234,8 @@ std::size_t Scheduler::pump_deadlines_locked() {
             // Inert stale entry, now dropped from the heap. Erase its pool block
             // too so the pool never accumulates dead registrations (the block's
             // node may already be destroyed; erase_popped_registration_locked
-            // matches by ADDRESS without reading node/queue — I4-safe).
+            // matches by ADDRESS without reading node/queue — timer-lifetime
+            // safe).
             erase_popped_registration_locked(top);
             continue;
         }
@@ -250,7 +252,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
         // publication guard. Erasing keeps the pool bounded by live deadline
         // waits (no accumulation across epochs).
         if (n != nullptr && q != nullptr) {
-            // E12-F RwLock timer: route to rwlock_expire_wait (expire + head
+            // RwLock timer: route to rwlock_expire_wait (expire + head
             // reconcile + publish). Identified by the on_resolve function ptr.
             // rwlock_expire_wait acquires W internally, so we must NOT hold it.
             if (top->on_resolve_ == &rwlock_timer_expire_reconcile) {
@@ -281,7 +283,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
             LockGuard qlk(q->mtx());
             if (q->expire_locked(*n)) {
                 Fiber* f = n->fiber();
-                // E12-E Queue (F.1 + F.2): for a Queue-bound registration the
+                // Queue-bound registration: the
                 // pump performs the per-port `--active_wait_associations_`
                 // (via owner_ctx) and `--active_queue_timers_` (via the
                 // on-resolve thunk) decrements. Non-Queue registrations have
@@ -296,7 +298,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
                     top->fire_on_resolve_locked(/*timer_won=*/true);
                 }
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+                // Route to the Fiber's recorded owner (NOT g_worker).
                 if (f != nullptr && f->make_runnable()) {
                     WorkerState* owner = owner_for_fiber_locked(f);
                     route_runnable_locked(f, owner);
@@ -313,7 +315,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
 }
 
 void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
-    // E11 Phase 5 (Timer Lifetime Closure). Called by the non-timer winner
+    // Timer Lifetime Closure. Called by the non-timer winner
     // (wake_wait_one / cancel_wait) in the SAME global_mtx_ CS as the resolve
     // CAS, BEFORE runnable publication. Performs ACTIVE->RETIRED on the bound
     // registration's independently-stable state. A later stale expiry then
@@ -321,7 +323,7 @@ void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
     // dereference the node (which may have been destroyed after the fiber
     // resumed).
     //
-    // I4-safe scan: only ACTIVE registrations are inspected for a node match.
+    // Timer-lifetime-safe scan: only ACTIVE registrations are inspected for a node match.
     // An ACTIVE registration is provably bound to a LIVE, still-Registered node
     // (a node is destroyed only after its wait epoch resolves, and resolving
     // retires/consumes the registration in the SAME CS — so while a block is
@@ -330,11 +332,11 @@ void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
     // load-bearing difference: we never read the node() of a block whose node
     // may be gone. The ACTIVE block matching the live `node` is retired.
     for (auto& r : timer_pool_) {
-        if (!r.is_active()) continue;  // inert: node may be destroyed; skip (I4)
+        if (!r.is_active()) continue;  // inert: node may be destroyed; skip
         if (r.node() == &node) {
             if (r.retire()) {  // ACTIVE->RETIRED
                 --active_deadline_count_;
-                // E12-E Queue (F.2): a Queue-bound timer's retire decrements
+                // Queue-bound timer: a retire decrements
                 // the per-port active_queue_timers_ counter via the on-resolve
                 // thunk. timer_won=false (the timer LOST — a non-timer winner
                 // retired it). Idempotent: the CAS above is the single
@@ -351,17 +353,17 @@ bool Scheduler::any_active_deadline_locked() const {
     // True if any registration is still ACTIVE (an unresolved deadline wait).
     // Uses the O(1) active_deadline_count_ maintained across all state
     // transitions. Called by external_wake_possible_locked so a Live run with
-    // an active deadline parks (I6) and MW classification treats the deadline
+    // an active deadline parks and MW classification treats the deadline
     // as an external-wake source.
     return active_deadline_count_ > 0;
 }
 
 bool Scheduler::earliest_active_deadline_locked(deadline_t& out) const {
     // Return the earliest ACTIVE deadline (min-heap front, skipping inert
-    // entries). Used to bound park_on_wake_source (I6). The heap is lazily
+    // entries). Used to bound park_on_wake_source. The heap is lazily
     // cleaned by pump_deadlines_locked; here we just scan for the min ACTIVE.
-    // E13 P3: Select ACTIVE deadlines participate exactly like ordinary ones
-    // (docs/e13-select-timer-adapter.md §4.2), so both pools are scanned.
+    // Select ACTIVE deadlines participate exactly like ordinary ones,
+    // so both pools are scanned.
     bool found = false;
     deadline_t best = 0;
     for (const auto& r : timer_pool_) {
@@ -388,7 +390,7 @@ void Scheduler::recompute_earliest_deadline_locked() {
     // park_on_wake_source can read it LOCK-FREE (avoiding a wake_mtx_ ->
     // global_mtx_ lock-order inversion). O(pool); the pool holds at most one
     // entry per concurrent deadline wait.
-    // E13 P3: Select ACTIVE deadlines participate exactly like ordinary ones,
+    // Select ACTIVE deadlines participate exactly like ordinary ones,
     // so both pools are scanned.
     deadline_t best = kNoDeadline;
     bool found = false;
@@ -415,7 +417,8 @@ void Scheduler::erase_popped_registration_locked(TimerRegistration* r) {
     // (pump_deadlines_locked) has ALREADY popped the block from the deadline
     // heap, so no live heap slot still holds its pointer. The block is
     // non-ACTIVE (retired/consumed) and is erased by ADDRESS match (no
-    // node()/queue() read) — I4-safe. O(pool size): the pool holds at most one
+    // node()/queue() read) — timer-lifetime safe. O(pool size): the pool holds
+    // at most one
     // entry per concurrent deadline wait, so this scan is small.
     if (r == nullptr) return;
     for (auto it = timer_pool_.begin(); it != timer_pool_.end(); ++it) {
@@ -429,7 +432,7 @@ void Scheduler::erase_popped_registration_locked(TimerRegistration* r) {
 TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
                                                             WaitQueue* q,
                                                             deadline_t deadline) {
-    // E11-T17 (F2) narrow test hook. Creates an ACTIVE TimerRegistration for
+    // Narrow test hook. Creates an ACTIVE TimerRegistration for
     // {node, q, deadline}, pushes it into the deadline heap, refreshes the
     // earliest-deadline park cache, AND registers `node` into `q` (Detached ->
     // Registered) so the pump's expire path can resolve it. This mirrors the
@@ -438,7 +441,7 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     // and registers the node, but does NOT suspend a fiber, so the coordinator
     // can install a NEW deadline from a NON-worker thread while the worker is
     // held at the park-commit seam (global_mtx_ is released at that seam).
-    // Called by the test coordinator. See tests/e11_timer_wait_test.cpp T17.
+    // Called by the test coordinator. See tests/timer_wait_test.cpp T17.
     // TEST-ONLY; no production caller.
     if (clock_now_unlocked() >= deadline) return nullptr;  // already due: skip
     if (q != nullptr) {
@@ -455,7 +458,7 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
 }
 
 // ---- deadline heap helpers (min-heap on deadline) ----
-// E13 P3: the heap stores unified DeadlineHeapEntry values (Ordinary | Select).
+// The heap stores unified DeadlineHeapEntry values (Ordinary | Select).
 // The comparator (detail::heap_less_entry) compares cached deadlines only;
 // equal-deadline order is unspecified. sift/pop operate on vector entries and
 // no longer touch any registration's heap_index (the entry's vector position

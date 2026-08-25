@@ -1,9 +1,9 @@
-// UringWriteBatch implementation (CPPIO-CORE-013C).
+// UringWriteBatch implementation.
 //
 // Two compile modes:
 //   * SLUICE_HAS_LIBURING defined: real io_uring path via liburing.
 //   * otherwise: unsupported stub (construction ok, write_all -> backend_error).
-// The stub keeps the project buildable with no liburing dependency (013B gate).
+// The stub keeps the project buildable with no liburing dependency.
 #include <sluice/experimental/uring_write_batch.hpp>
 
 #include <sluice/detail/io_validation.hpp>

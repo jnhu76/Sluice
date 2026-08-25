@@ -1,4 +1,4 @@
-// Implementation of Batch (sluice-CORE-030, T4). See batch.hpp for the model.
+// Implementation of Batch. See batch.hpp for the model.
 #include <sluice/async/batch.hpp>
 
 #include <utility>
@@ -20,7 +20,7 @@ std::size_t Batch::add(BatchOp op) {
 }
 
 Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
-    // Phase 1: submit every not-yet-submitted op to ctx. A submit may fail
+    // Step 1: submit every not-yet-submitted op to ctx. A submit may fail
     // (queue full / invalid); on failure the slot is marked ready with the
     // error so next() surfaces it (mirrors ADR E5: submit-time errors are
     // synchronous, but a batch surfaces them through the completion channel
@@ -45,7 +45,7 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
                 break;
         }
         if (!sr.has_value()) {
-            // F2: submit failed BEFORE commit/accept. No accepted request
+            // Submit failed BEFORE commit/accept. No accepted request
             // existed (never outstanding, never reaped). Record the admission
             // origin explicitly so BatchResult distinguishes a submit rejection
             // from an accepted request that later terminated with an error.
@@ -59,7 +59,7 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
         }
     }
 
-    // Phase 2: if no UNPOPPED slot is ready yet AND there is outstanding work,
+    // Step 2: if no UNPOPPED slot is ready yet AND there is outstanding work,
     // drive ctx.wait_one() until >=1 ready. Counting only not-popped slots
     // matters: a popped-but-not-cleared slot (ready still true) must not fool
     // us into skipping the wait while another op is still in flight.
@@ -67,7 +67,7 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
     for (const auto& sp : slots_) {
         if (sp->ready && !sp->popped) { any_ready = true; break; }
     }
-    // E15-P2-01: capture a backend wait_one() error rather than discarding it.
+    // Capture a backend wait_one() error rather than discarding it.
     // The error propagates as the await_one() return value (see below). Slots
     // already made ready this call (submit-time errors above, or completions
     // reaped in earlier iterations of this loop) REMAIN ready and poppable via
@@ -112,7 +112,7 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
     for (const auto& sp : slots_) {
         if (sp->ready && !sp->popped) ++ready_count;
     }
-    // E15-P2-01: a captured backend wait error takes precedence over the
+    // A captured backend wait error takes precedence over the
     // ready-count return so callers cannot mistake a backend failure for "no
     // newly ready items". Ready slots remain poppable via next().
     if (wait_err.has_value()) {
@@ -122,7 +122,7 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
 }
 
 std::optional<BatchResult> Batch::next() noexcept {
-    // E15-P1-04: return the ready-but-not-popped slot with the SMALLEST reap
+    // Return the ready-but-not-popped slot with the SMALLEST reap
     // sequence (i.e. the one the backend reaped earliest), not the lowest
     // index. The reap sequence is stamped on each Completion by complete_with
     // at backend reap time, so this preserves true backend reap order across
@@ -153,7 +153,7 @@ std::optional<BatchResult> Batch::next() noexcept {
     ++popped_;
     BatchResult r;
     r.index = best;
-    // F2: expose the admission origin recorded at submit time. A submit-rejected
+    // Expose the admission origin recorded at submit time. A submit-rejected
     // slot never reached publish_from_reap; every other ready slot did.
     r.origin = s.submit_rejected ? BatchResultOrigin::rejected
                                  : BatchResultOrigin::accepted_and_completed;

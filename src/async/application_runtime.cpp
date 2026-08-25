@@ -1,6 +1,6 @@
-// sluice::async::ApplicationRuntime — E16 implementation.
+// sluice::async::ApplicationRuntime — application lifecycle implementation.
 // ADR: docs/adr/ADR-application-runtime.md (Accepted).
-// Design: docs/history/implementation-plans/e16-application-runtime.md.
+// Design record (history): docs/history/implementation-plans/e16-application-runtime.md.
 #include <sluice/async/application_runtime.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -14,7 +14,7 @@
 namespace sluice::async {
 
 // ---------------------------------------------------------------------------
-// Fiber-local execution identity (P1-04).
+// Fiber-local execution identity.
 // The tag is stored IN Fiber state (Fiber::execution_tag_), not thread_local,
 // so it survives Fiber suspend/resume and is correct under multiplexing.
 // These helpers access the current Fiber's tag via the Scheduler's public
@@ -47,7 +47,7 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
     return ctx_->submit_sync_all(op, c);
 }
 
-// Phase F3 (ADR-public-request-handle): identity-returning submit.
+// ADR-public-request-handle: identity-returning submit.
 Result<RequestHandle> RuntimeTaskContext::submit_read_request(ReadOp op,
                                                               Completion<std::size_t>& c) {
     return ctx_->submit_read_request(op, c);
@@ -65,7 +65,7 @@ Result<RequestHandle> RuntimeTaskContext::submit_sync_all_request(SyncAllOp op,
     return ctx_->submit_sync_all_request(op, c);
 }
 
-// M1-A: cooperative Completion wait. Delegates to the already-audited
+// Cooperative Completion wait. Delegates to the already-audited
 // Scheduler::await_completion_* primitive (one suspend + one resume per
 // unresolved await; already-ready returns inline under the Scheduler's
 // registration critical section). The Scheduler* is private; task code never
@@ -75,12 +75,12 @@ Result<RequestHandle> RuntimeTaskContext::submit_sync_all_request(SyncAllOp op,
 // underlying Scheduler primitive has no idle check of its own: it registers
 // the Fiber for wake and, if the Completion is idle, nothing will ever
 // complete it and the Fiber parks permanently. Enforce the documented
-// "Debug asserts; Release documents" contract here (M1-A Known limitations).
+// "Debug asserts; Release documents" contract here.
 Result<void> RuntimeTaskContext::await_completion(Completion<std::size_t>& c) {
     assert(!c.idle() &&
            "await_completion requires a submitted or ready Completion "
            "(idle-await is a caller contract violation: M1-A)");
-    // Phase F1: the Scheduler primitive now returns the wait outcome (success,
+    // The Scheduler primitive now returns the wait outcome (success,
     // synchronous invalid_state for duplicate/provenance misuse, or canceled
     // when the wait was cancelled via cancel_waiter). Forward verbatim so task
     // code can distinguish "completion ready" from "wait cancelled".
@@ -95,7 +95,7 @@ Result<void> RuntimeTaskContext::await_completion(Completion<void>& c) {
 }
 
 Result<bool> RuntimeTaskContext::cancel_waiter(Completion<std::size_t>& c) {
-    // Phase F1: production waiter-cancel caller (ADR Decision 10). Removes
+    // Production waiter-cancel caller (ADR Decision 10). Removes
     // ONLY the waiter — the I/O continues; the Completion stays outstanding.
     return sched_->cancel_waiter(c);
 }
@@ -131,7 +131,7 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
     if (workers_ == 0) {
         workers_ = 1;
     }
-    // Issue #67 (D3): the multi-participant runtime path MUST NOT fall back to
+    // The multi-participant runtime path MUST NOT fall back to
     // a BLOCKING serialized wait_one — a participant parked while holding
     // access_mtx_ starves every other poll/reap path and deadlocks drain. A
     // backend is accepted only if it exposes the split wait capability
@@ -144,7 +144,7 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
         return make_unexpected<std::unique_ptr<ApplicationRuntime>>(
             IoError{IoError::Code::invalid_state});
     }
-    // Construct on the heap for stable address (P1-02).
+    // Construct on the heap for stable address.
     // Cannot use make_unique because the constructor is private.
     std::unique_ptr<ApplicationRuntime> rt(
         new ApplicationRuntime(std::move(backend_), workers_));
@@ -210,7 +210,7 @@ Result<void> ApplicationRuntime::start() {
     // must still tear down its already-constructed components (Group/Scheduler/
     // AsyncIoContext/backend) before reporting canceled. The start owner is the
     // close owner here (no driver was spawned): elect close owner and funnel
-    // through the UNIFIED close_resources() authority (C1) so component
+    // through the UNIFIED close_resources() authority so component
     // destruction completes before Stopped is published. Without this, stop-
     // before-start would publish no Stopped at all and leave resources alive
     // until ~ApplicationRuntime.
@@ -242,10 +242,10 @@ Result<void> ApplicationRuntime::start() {
 
     // If the driver already exited (abort won before barrier was observed),
     // complete the abort path. The start owner is the close owner: join the
-    // driver, then funnel through the UNIFIED close_resources() authority (C1)
+    // driver, then funnel through the UNIFIED close_resources() authority
     // so component destruction completes before Stopped is published. A
     // concurrent shutdown() waiter that observed Starting observes the final
-    // Closed publication from close_resources() (E16-CORR-ABORT-2: there is
+    // Closed publication from close_resources() (there is
     // exactly one close owner — the start owner here, shutdown() only waits).
     if (driver_state_ == DriverState::exited) {
         // Elect close owner so a concurrent shutdown() waiter does not also
@@ -278,9 +278,9 @@ Result<void> ApplicationRuntime::start() {
     }
 #endif
     if (stop_requested_) {
-        // Stop won the race pre-commit (P1-03 abort path). The start owner is
+        // Stop won the race pre-commit. The start owner is
         // the close owner: signal the driver to abort, wait for it to exit,
-        // join, then close via the UNIFIED close_resources() authority (C1).
+        // join, then close via the UNIFIED close_resources() authority.
         startup_abort_requested_ = true;
         close_state_ = CloseState::InProgress;
         control_epoch_++;
@@ -320,7 +320,7 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
         return make_unexpected_void(IoError{IoError::Code::invalid_state});
     }
 
-    // Reserve admission slot. Reset stale drain_complete_ (P0-1 fix: the
+    // Reserve admission slot. Reset stale drain_complete_ (the
     // driver may have set it in a prior quiescent window before this admission;
     // a new task invalidates any prior drain observation).
     admitted_count_++;
@@ -341,7 +341,7 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             set_current_fiber_tag(this);
 
             // RuntimeTaskContext delegates I/O to io_ctx_ and the cooperative
-            // Completion wait to sched_ (M1-A). The Scheduler* is private to
+            // Completion wait to sched_. The Scheduler* is private to
             // the context and never escapes to task code. Both production and
             // internal-testing builds share the same constructor signature.
             RuntimeTaskContext ctx(*io_ctx_, token, *sched_);
@@ -376,10 +376,10 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
         lk.unlock();
         runtime_cv_.notify_all();
         wake_handle_.notify();
-        throw;  // Propagate bad_alloc (P2-02: NOT mapped to invalid_state).
+        throw;  // Propagate bad_alloc (NOT mapped to invalid_state).
     }
 
-    // Successful submit: publish epoch++ + dual-wake (P1-07).
+    // Successful submit: publish epoch++ + dual-wake.
     {
         std::lock_guard slk(lifecycle_mtx_);
         control_epoch_++;
@@ -403,7 +403,7 @@ void ApplicationRuntime::request_stop() noexcept {
         // Close admission.
         admission_open_ = false;
         admission_closed_snapshot_.store(true, std::memory_order::release);
-        // Publish root cancellation under lifecycle_mutex (P1-01).
+        // Publish root cancellation under lifecycle_mutex.
         if (!root_cancel_published_ && root_group_) {
             root_group_->group_token().request();
             root_cancel_published_ = true;
@@ -421,7 +421,7 @@ void ApplicationRuntime::request_stop() noexcept {
     }
     // Stopping/Draining/Stopped/StartFailed/Fatal: no additional action.
 
-    // Issue #67 (I6): wake every participant parked in the backend ready wait.
+    // Wake every participant parked in the backend ready wait.
     // Without this, an MW-S2 participant parked in wait_one's observe phase
     // would never learn that the run must terminate, the coordinated run could
     // not reach its stop-predicate boundary, and drain_complete_ would never
@@ -481,7 +481,7 @@ Result<void> ApplicationRuntime::join() {
         return make_unexpected_void(IoError{IoError::Code::invalid_state});
     }
 
-    // Close owner election (P1-05).
+    // Close owner election.
     if (close_state_ == CloseState::Closed) {
         return {};  // Already closed (idempotent).
     }
@@ -532,13 +532,13 @@ Result<void> ApplicationRuntime::shutdown() {
         return {};
     }
 
-    // State-dispatched close (P1-05).
+    // State-dispatched close.
     switch (state_) {
     case State::Constructed:
     case State::StartFailed: {
         // Direct close: no driver, no tasks. Elect this caller as the SOLE
         // close owner (Open -> InProgress), then funnel through the UNIFIED
-        // close_resources() authority (C1): component destruction happens
+        // close_resources() authority: component destruction happens
         // before Stopped publication, exactly once, outside lifecycle_mtx_.
         // close_resources() publishes State::Stopped / CloseState::Closed as
         // the single terminal authority. A concurrent caller that lost the
@@ -627,7 +627,7 @@ void ApplicationRuntime::driver_main() {
 #endif
     runtime_cv_.notify_all();
 
-    // Park at startup barrier until commit or abort (P1-03).
+    // Park at startup barrier until commit or abort.
     runtime_cv_.wait(lk, [this] {
         return state_ != State::Starting || startup_abort_requested_;
     });
@@ -644,7 +644,7 @@ void ApplicationRuntime::driver_main() {
     observed_epoch_ = control_epoch_;
     lk.unlock();
 
-    // Driver re-entry loop (P1-07): run_live may return at QUIESCENT /
+    // Driver re-entry loop: run_live may return at QUIESCENT /
     // MW-S3-no-wake / stop-predicate-true boundaries without all work done.
     for (;;) {
         // Enter run_live with the stop predicate.
@@ -662,7 +662,7 @@ void ApplicationRuntime::driver_main() {
         }
 
         // Check drain_complete: all tasks terminal + no outstanding I/O.
-        // P0-1 fix: only publish drain_complete_ in Stopping/Draining. In
+        // Only publish drain_complete_ in Stopping/Draining. In
         // Running, a quiescent window (zero admitted tasks or momentary gap
         // between task completions) must NOT set drain_complete_ because
         // future submissions are still legal and would see a stale true.
@@ -672,7 +672,7 @@ void ApplicationRuntime::driver_main() {
             drain_complete_ = true;
             runtime_cv_.notify_all();
 
-            // Post-drain park (P2-03): wait until exit requested or epoch change.
+            // Post-drain park: wait until exit requested or epoch change.
             // All admitted tasks are terminal, admission is closed, and no I/O
             // remains, so control changes observed during the completed run no
             // longer carry a Scheduler re-entry obligation.
@@ -722,7 +722,7 @@ void ApplicationRuntime::driver_main() {
         // Re-enter immediately instead. The next invocation re-elects the
         // MW-S2 participant and parks in ctx_.wait_one() — a true park whose
         // own wake protocol (ready/control epochs) is closed — so this is not
-        // a poll loop: each re-entry consumes one control interrupt (D4-RM13
+        // a poll loop: each re-entry consumes one control interrupt (
         // one-shot baseline), and between interrupts the driver is parked
         // inside wait_one, not spinning here.
         //
@@ -739,7 +739,7 @@ void ApplicationRuntime::driver_main() {
             continue;
         }
 
-        // Not done yet: park on persistent CV predicate (P1-07).
+        // Not done yet: park on persistent CV predicate.
         runtime_cv_.wait(lk, [this] {
             return driver_exit_requested_ ||
                    fatal_snapshot_.load(std::memory_order::acquire) ||
@@ -767,7 +767,7 @@ void ApplicationRuntime::driver_main() {
 bool ApplicationRuntime::stop_predicate_fn() {
     // The stop predicate fires only when the Runtime is shutting down AND all
     // work is done. admission_closed_snapshot_ prevents premature run_live
-    // exit during Running (P0-1): without it, a quiescent gap between task
+    // exit during Running: without it, a quiescent gap between task
     // completions would terminate the driver while admission is still open.
     return fatal_snapshot_.load(std::memory_order::acquire) ||
            driver_exit_snapshot_.load(std::memory_order::acquire) ||

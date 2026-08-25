@@ -1,5 +1,5 @@
 // scheduler_internal.hpp — non-installed internals shared by the Scheduler
-// implementation TUs (split from scheduler.cpp in post-freeze R1; see
+// implementation TUs (split from scheduler.cpp; see
 // docs/post-freeze/structural-audit.md §6).
 //
 // NOT public API: never install, never include from an installed header.
@@ -24,14 +24,13 @@ namespace sluice::async {
 // Fiber and scheduler context. This is genuine Worker-local state (one Worker
 // per OS thread) — NOT a process-global slot shared across Workers.
 // inline thread_local: ONE per-thread entity shared by every Scheduler
-// implementation TU (pre-split it was a single-TU anonymous-namespace object
-// with identical program-wide reach).
+// implementation TU.
 inline thread_local WorkerState* g_worker = nullptr;
 
-// ---- E9 SchedulerWakeHandle::Control (full definition; forward-declared in
+// ---- SchedulerWakeHandle::Control (full definition; forward-declared in
 // the header so the shared_ptr member is pimpl-friendly) ----
 struct SchedulerWakeHandle::Control {
-    // E9-LIFETIME-CORRECTIVE: Control::mtx is the CALLBACK LEASE.
+    // Control::mtx is the CALLBACK LEASE.
     //
     // notify() holds this mutex from the validity check through the ENTIRE
     // Scheduler wake callback (notify_external_wake -> signal_wake_locked).
@@ -52,7 +51,7 @@ struct SchedulerWakeHandle::Control {
     Scheduler* scheduler SLUICE_GUARDED_BY(mtx){nullptr};
     bool alive SLUICE_GUARDED_BY(mtx){false};
 
-    // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
+    // Deterministic lifetime test seam (spec 13). TEST-ONLY.
     // When armed, notify() pauses at the exact causal boundary - AFTER it
     // has validated alive under Control::mtx and BEFORE notify_external_wake
     // - while STILL HOLDING the lease. This forces the notifier-wins

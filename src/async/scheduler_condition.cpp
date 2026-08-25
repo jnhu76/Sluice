@@ -1,9 +1,8 @@
-// Scheduler Condition primitive — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler Condition primitive — implementation TU split from scheduler.cpp
+// (docs/post-freeze/structural-audit.md §6).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
-// and wake contracts remain in include/sluice/async/scheduler.hpp.
+// The class declaration, lock domains, atomic orderings, and wake contracts
+// remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -39,7 +38,7 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
     // the lost-notify closure (docs §6): a notify CANNOT interleave between
     // Condition registration and Mutex release.
     //
-    // `released_mutex` mirrors condition_wait_prepare_until: false on the C8
+    // `released_mutex` mirrors condition_wait_prepare_until: false on the
     // registration-failure path (the Mutex is NOT released — the caller retains
     // ownership and runs NO reacquire epoch), true after the Mutex has been
     // released/handed off (the caller MUST run the reacquire epoch). The untimed
@@ -57,15 +56,15 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
         {
             LockGuard qlk(cond_waiters.mtx());
             if (!cond_waiters.register_wait_locked(cond_node, me)) {
-                // C8 contract violation (node already registered/terminal). Do
-                // NOT release the Mutex; the caller retains ownership. Return
-                // the node's (terminal) outcome.
+                // Registration contract violation (node already
+                // registered/terminal). Do NOT release the Mutex; the caller
+                // retains ownership. Return the node's (terminal) outcome.
                 released_mutex = false;
                 return cond_node.outcome();
             }
             ++waiting_waitq_count_;
         }
-        // E12-D deterministic phase seam (test variant only): the Condition node
+        // Deterministic phase seam (test variant only): the Condition node
         // is now Registered AND linked in the Condition queue, while the bound
         // Mutex is STILL owned by `me`. A test observing this phase can prove
         // the register-before-release ordering (InvNoLostNotifyWindow / NEG-C8)
@@ -94,7 +93,7 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
         }
         // Step 3: commit the calling Fiber to Waiting (inside global_mtx_, so a
         // concurrent resolver's make_runnable is the publication guard).
-        // I47-F2: unified suspend protocol.
+        // Unified suspend protocol.
         commit_suspend_locked(ws, me);
     }
     // ONLY context_switch is outside global_mtx_ (mirrors await_wait /
@@ -140,12 +139,12 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
         {
             LockGuard qlk(cond_waiters.mtx());
             if (!cond_waiters.register_wait_locked(cond_node, me)) {
-                // C8 contract violation: do NOT release the Mutex.
+                // Registration contract violation: do NOT release the Mutex.
                 released_mutex = false;
                 return cond_node.outcome();
             }
             ++waiting_waitq_count_;
-            // Install the E11 timer for the Condition epoch ONLY (C-H4). The
+            // Install the timer for the Condition epoch ONLY (C-H4). The
             // registration binds {cond_node, cond_waiters} so a later expiry
             // resolves the Condition node Expired through pump_deadlines_locked.
             timer_pool_.emplace_back(&cond_node, &cond_waiters, deadline);
@@ -154,7 +153,8 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
             heap_push_ordinary_locked(reg);
             recompute_earliest_deadline_locked();
         }
-        // Admission precedence 1: E11 I5 — if the deadline is ALREADY due, the
+        // Admission precedence 1: already-due admission closure — if the
+        // deadline is ALREADY due, the
         // Condition node resolves Expired INLINE. The Mutex is NOT released
         // (the caller retains ownership), the Fiber does NOT suspend, and no
         // reacquire epoch is created. This is WaitDueInline /
@@ -166,8 +166,7 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication
-                // (audit #162 CPP-002).
+                // Fiber is RUNNING and continues inline; no publication.
                 released_mutex = false;  // Mutex NOT released; no reacquire
                 return WaitOutcome::expired;  // resolved at admission; do NOT
                                              // release Mutex or suspend
@@ -225,7 +224,7 @@ std::size_t Scheduler::condition_notify_all(WaitQueue& cond_waiters) {
     // container is needed. Does NOT mutate Mutex state.
     std::size_t woken = 0;
     LockGuard lk(global_mtx_);
-    // E12-D deterministic phase seam: global authority acquired, before the
+    // Deterministic phase seam: global authority acquired, before the
     // drain begins. A test observing this phase can prove late registration /
     // cancel / expiry serialize AFTER the snapshot (they need global_mtx_).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -255,7 +254,7 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     retire_timer_for_node_locked(cond_node);
     Fiber* f = cond_node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
     }

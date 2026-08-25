@@ -5,7 +5,7 @@
 // "no measurement" and costs nothing — the wired-in call sites guard on null
 // before incrementing. These do NOT change I/O semantics; they only count.
 //
-// Design rule (CPPIO-CORE-004): stats are caller-owned and never global. The
+// Design rule: stats are caller-owned and never global. The
 // core holds raw pointers; callers keep the storage alive for the reader/
 // writer/copy operation's lifetime.
 #pragma once
@@ -45,7 +45,7 @@ struct BufferStats {
 };
 
 // Counts copy_all loop behavior and the reason each copy stopped. The
-// fast/scratch counters (CPPIO-CORE-006E) split the copy work between the
+// fast/scratch counters split the copy work between the
 // buffered fast path (draining already-buffered bytes via BufferedReadable) and
 // the scratch read path. They are observability hooks, not throughput numbers.
 struct CopyStats {
@@ -66,7 +66,7 @@ struct CopyStats {
     // count that was actually written through scratch.
     std::uint64_t scratch_path_calls = 0;
     std::uint64_t scratch_path_bytes = 0;
-    // Strategy selection counters (CPPIO-CORE-007F). Exactly one strategy counter
+    // Strategy selection counters. Exactly one strategy counter
     // is incremented per top-level copy_all call, recording the SELECTED strategy
     // (after Auto resolution and deferred-fallback). These answer "which
     // strategy was selected?", distinct from the path counters above which answer
@@ -79,7 +79,7 @@ struct CopyStats {
     std::uint64_t strategy_deferred_fallback_calls = 0;
 };
 
-// Counts explicit sync operations on a SyncableWriter (CPPIO-CORE-008D). Opt-in
+// Counts explicit sync operations on a SyncableWriter. Opt-in
 // and caller-owned like the other stats structs; null means no counting.
 struct SyncStats {
     std::uint64_t sync_data_calls = 0;
@@ -88,7 +88,7 @@ struct SyncStats {
     std::uint64_t sync_all_errors = 0;
 };
 
-// Counts experimental io_uring activity (CPPIO-CORE-013E). Opt-in and
+// Counts experimental io_uring activity. Opt-in and
 // caller-owned; null means no counting. Lives in namespace sluice (not
 // experimental) so bench/CSV helpers can treat it like the other stats structs.
 struct UringStats {
@@ -104,8 +104,8 @@ struct UringStats {
 // "used the default read_some/write_some loop" (e.g. an ObservedReader around a
 // MemoryReader, or any non-overriding reader) from "used a real vector syscall"
 // (the FileReader/FileWriter readv/writev overrides). That split is the whole
-// point of these stats: it tells the decision matrix (CPPIO-CORE-011) how often
-// vector I/O actually reached the kernel as a single gather/scatter syscall vs.
+// point of these stats: it shows how often vector I/O actually reached the
+// kernel as a single gather/scatter syscall vs.
 // degenerated to the per-slice fallback. See docs/reference/sync-io-model.md
 // (Vector I/O semantics).
 struct VectorStats {
@@ -119,7 +119,7 @@ struct VectorStats {
     std::uint64_t write_vec_fallback_calls = 0;
 };
 
-// Async runtime observability (sluice-CORE-017). Caller-owned, nullable, never
+// Async runtime observability. Caller-owned, nullable, never
 // global — same rule as the structs above. Attached to AsyncIoContext via a raw
 // pointer (set_stats); null means no counting. Defined here (not in async/) so
 // it sits with the other Stats types and is visible to both the async core and
@@ -140,7 +140,7 @@ struct AsyncStats {
     std::uint64_t queue_full_retries = 0;
     // Submit rejected for a CALLER lifecycle violation (invalid_state: non-idle
     // Completion, admission closed, lifecycle misuse) — NOT capacity pressure.
-    // Counted separately so queue_full_retries never conflates the two (P1-05).
+    // Counted separately so queue_full_retries never conflates the two.
     std::uint64_t invalid_state_rejections = 0;
 };
 

@@ -61,7 +61,7 @@ Result<std::uint64_t> Reader::stream_to(Writer& writer, CopyLimit limit) {
 }
 
 // Default vector fallback: drive each non-empty slice through read_some in
-// order. A conservative vector primitive (CPPIO-CORE-005B): like a single
+// order. A conservative vector primitive: like a single
 // readv-style operation, it STOPS as soon as a slice is not fully satisfied —
 // i.e. on a clean EOF (n==0) OR on a positive short read (0 < n < slice size).
 // An error is propagated immediately, even after partial progress (consistent

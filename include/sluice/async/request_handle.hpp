@@ -1,5 +1,5 @@
 // sluice::async::RequestHandle — opaque public identity for one accepted I/O
-// request (ADR-public-request-handle, Phase F3 / issue #98).
+// request (ADR-public-request-handle).
 //
 // Identity, NOT ownership (ADR Decision 1): a handle names the logical request
 // the internal detail::RequestKey encodes — (ContextIdentity, SlotIndex,

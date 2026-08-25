@@ -1,12 +1,11 @@
-// sluice::async::detail — E12-E Queue non-template authority implementation.
+// sluice::async::detail — Queue non-template authority implementation.
 //
 // This translation unit owns the non-template Queue authority and lifecycle
-// transitions (docs/e12-queue-scheduler-integration.md). P2+P3 scope: the
-// QueuePort structural skeleton (ring, lifecycle, close, counters), the
-// ordinary CallGuard, the fast paths (try_push / try_pop / close / snapshot),
-// and the QueueTeardownSession. The blocking/timed wait-admission paths
-// (push / push_until / pop / pop_until) and the Scheduler reconciliation /
-// publication are declared but throw std::logic_error until P4-P6 land.
+// transitions. Scope: the QueuePort structural skeleton (ring, lifecycle,
+// close, counters), the ordinary CallGuard, the fast paths (try_push /
+// try_pop / close / snapshot), and the QueueTeardownSession. The blocking/
+// timed wait-admission paths (push / push_until / pop / pop_until) delegate
+// to the Scheduler admit/reconcile seams (scheduler_queue.cpp).
 //
 // All out-of-line Queue work lives here so the Scheduler TU keeps a single
 // Queue reconciliation surface and the Queue authority is reviewable in one
@@ -29,14 +28,14 @@
 namespace sluice::async::detail {
 
 // ---------------------------------------------------------------------------
-// Fail-fast entry for Queue lease/control invariant violations. (P1)
+// Fail-fast entry for Queue lease/control invariant violations.
 // ---------------------------------------------------------------------------
 [[noreturn]] void queue_lease_fail_fast() noexcept {
     std::terminate();
 }
 
 // ---------------------------------------------------------------------------
-// QueueItemLease out-of-line bodies. (P1)
+// QueueItemLease out-of-line bodies.
 // ---------------------------------------------------------------------------
 void QueueItemLease::require_empty_or_terminate() const noexcept {
     if (control_ != nullptr) {
@@ -59,7 +58,7 @@ QueueItemLease::~QueueItemLease() noexcept {
 // define here.)
 
 // ===========================================================================
-// P2+P3 — QueuePort structural skeleton + fast paths.
+// QueuePort structural skeleton + fast paths.
 // ===========================================================================
 
 // Ordinary CallGuard: brackets the time inside the non-template QueuePort
@@ -74,7 +73,7 @@ QueueItemLease::~QueueItemLease() noexcept {
 // serializes against this counter — once tearing_down, active_port_calls_ is
 // frozen at 0 and any ordinary entry is rejected before construction).
 //
-// #86-A corrective: the decrement MUST run in the SAME synchronization domain
+// The decrement MUST run in the SAME synchronization domain
 // (G+S) as the increment and the begin_teardown read. A lock-free decrement
 // here was BOTH (a) a C++ data race — the unsynchronized non-atomic write
 // raced with the G+S increment on a concurrent ordinary call and with the
@@ -101,8 +100,8 @@ struct QueuePort::CallGuard final {
     struct adopt_tag {};
     // Adopt form: the caller has ALREADY incremented active_port_calls_ under
     // G+S; the guard owns the matching decrement (under G+S) at scope exit.
-    // (The legacy increment-then-manage ctor that incremented WITHOUT G+S is
-    // removed — it embodied the #86-A race pattern and had no callers.)
+    // Only the adopt form exists: an increment-then-manage ctor that
+    // incremented WITHOUT G+S would embody the same race pattern.
     //
     // The ctor accepts a const QueuePort& because the snapshot projections
     // are const methods that participate in the same lifecycle entry; the
@@ -159,10 +158,9 @@ QueuePort::~QueuePort() {
     }
 }
 
-// --- snapshot projections (ordinary lifecycle-gated calls; P3) --------------
+// --- snapshot projections (ordinary lifecycle-gated calls) ------------------
 //
-// #86-D corrective: the three snapshots are ordinary QueuePort calls per §7
-// and MUST obey the same lifecycle arbitration as every other ordinary entry:
+// The three snapshots are ordinary QueuePort calls and MUST obey the same lifecycle arbitration as every other ordinary entry:
 // the F.4-style G+S entry (lifecycle check + active_port_calls_ increment
 // atomic w.r.t. begin_teardown), then the adopt CallGuard whose dtor decrements
 // under G+S. Before this corrective the bodies performed no lifecycle entry,
@@ -172,7 +170,7 @@ QueuePort::~QueuePort() {
 // an ordinary call was in flight.
 //
 // The projections themselves:
-//   - is_closed reads the F.5 atomic close state (acquire load retained);
+//   - is_closed reads the atomic close state (acquire load retained);
 //   - capacity reads the immutable construction-time bound;
 //   - size reads ring_count_ under state_mtx_ for a consistent observation.
 //
@@ -239,22 +237,20 @@ std::size_t QueuePort::size() const noexcept {
     return ring_count_;
 }
 
-// --- fast paths (P3) -------------------------------------------------------
+// --- fast paths ------------------------------------------------------------
 
-// try_push (P2 FastPushCommit / P4 TryPushWouldBlock, no Scheduler):
+// try_push (FastPushCommit / TryPushWouldBlock, no Scheduler):
 //   - lifecycle must be operational (CallGuard rejects tearing_down)
 //   - lease must be non-empty, owner_port == this, location == detached
-//   - if closed: P3 PushClosed — return the exact lease as `closed`
-//   - if ring has space AND no older eligible producer: P2 FastPushCommit —
+//   - if closed: PushClosed — return the exact lease as `closed`
+//   - if ring has space AND no older eligible producer: FastPushCommit —
 //       detached -> producer_operation -> ring; return committed
-//   - else (full OR an older producer is linked): P4 TryPushWouldBlock —
+//   - else (full OR an older producer is linked): TryPushWouldBlock —
 //       return the exact lease as `would_block`
 //
-// In P2+P3 the no-older-eligible-producer check is trivially true: there are
-// no linked producers until P5 lands. So the only fast-path branches are
-// closed / space / would_block(full). The producer-WaitQueue FIFO check is
-// added in P5 (it serializes under global_mtx_ which the fast path does not
-// take; for P3 the fast path correctly returns would_block when full).
+// The no-older-eligible-producer check (producer-WaitQueue FIFO) serializes
+// under global_mtx_ together with the commit step: a fast-path commit may
+// not bypass an older parked producer when a slot opens.
 QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
     // F.4 corrective: the lifecycle gate + active_port_calls_ increment MUST
     // be atomic with respect to begin_teardown (which takes G+S and checks
@@ -285,25 +281,25 @@ QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
     // producer operation).
     c->location_ = QueueItemControl::Location::producer_operation;
 
-    // G -> S (P5 lock order). Reconciliation of the OTHER role happens under
+    // G -> S (the Queue lock order). Reconciliation of the OTHER role happens under
     // these same locks so a fast-path commit + wake is atomic with respect to
     // blocking admission.
     LockGuard glk(scheduler_.global_mtx_);
     LockGuard lk(state_mtx_);
-    // P3 PushClosed: closed rejects the producer; return the EXACT original
+    // PushClosed: closed rejects the producer; return the EXACT original
     // lease (producer_operation -> detached; no copy / alias / default).
     if (closed_) {
         c->location_ = QueueItemControl::Location::detached;
         return QueueOpaquePushResult::failed(
             QueueOpaquePushStatus::closed, std::move(lease));
     }
-    // P4 TryPushWouldBlock (full): return the exact lease as would_block.
+    // TryPushWouldBlock (full): return the exact lease as would_block.
     if (ring_full_locked()) {
         c->location_ = QueueItemControl::Location::detached;
         return QueueOpaquePushResult::failed(
             QueueOpaquePushStatus::would_block, std::move(lease));
     }
-    // P2 FastPushCommit: producer_operation -> ring. Move the WHOLE lease
+    // FastPushCommit: producer_operation -> ring. Move the WHOLE lease
     // (control custody included) into the empty tail slot. The destination
     // slot is empty (ring invariant); move ctor empties the source `lease`.
     const std::size_t tail =
@@ -311,7 +307,7 @@ QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
     c->location_ = QueueItemControl::Location::ring;
     ring_[tail] = std::move(lease);  // source `lease` now empty
     ++ring_count_;
-    // P5 reconciliation: a new item arrived. If a consumer is parked, grant it
+    // Reconciliation: a new item arrived. If a consumer is parked, grant it
     // the OLDEST ring item (ring_[head] — FIFO) atomically, winner-before-
     // publication (resolve Woken + ring move + retire + publish in one critical
     // section inside queue_grant_consumer_locked).
@@ -319,15 +315,13 @@ QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
     return QueueOpaquePushResult::committed();
 }
 
-// try_pop (P3 FastPopCommit / C2 PopClosedEmpty / C3 TryPopWouldBlock):
+// try_pop (FastPopCommit / PopClosedEmpty / TryPopWouldBlock):
 //   - lifecycle operational
-//   - if ring non-empty (and no older eligible consumer): C1 FastPopCommit —
+//   - if ring non-empty (and no older eligible consumer): FastPopCommit —
 //       ring -> consumer_operation; return item with the lease
-//   - if closed AND ring empty: C2 PopClosedEmpty — return closed
-//   - else (empty, open; or older consumer linked): C3 TryPopWouldBlock —
+//   - if closed AND ring empty: PopClosedEmpty — return closed
+//   - else (empty, open; or older consumer linked): TryPopWouldBlock —
 //       return would_block
-//
-// As with try_push, the older-consumer check is trivially true until P5.
 QueueOpaquePopResult QueuePort::try_pop() {
     // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
@@ -340,10 +334,10 @@ QueueOpaquePopResult QueuePort::try_pop() {
     }
     CallGuard guard(*this, CallGuard::adopt_tag{});
 
-    // G -> S (P5 lock order).
+    // G -> S (the Queue lock order).
     LockGuard glk(scheduler_.global_mtx_);
     LockGuard lk(state_mtx_);
-    // C1 FastPopCommit: move the head slot's lease out; ring slot becomes
+    // FastPopCommit: move the head slot's lease out; ring slot becomes
     // empty; control location ring -> consumer_operation.
     if (!ring_empty_locked()) {
         const std::size_t head = ring_head_;
@@ -355,22 +349,22 @@ QueueOpaquePopResult QueuePort::try_pop() {
         // Mark the moved-out control at consumer_operation (friend access).
         out.control_->location_ =
             QueueItemControl::Location::consumer_operation;
-        // P5 reconciliation: a slot opened. If a producer is parked, grant it
+        // Reconciliation: a slot opened. If a producer is parked, grant it
         // the freed slot atomically (queue_grant_producer_locked moves the
         // winner's lease into the slot, winner-before-publication).
         (void)scheduler_.queue_grant_producer_locked(*this);
         return QueueOpaquePopResult::item(std::move(out));
     }
-    // C2 PopClosedEmpty: closed + empty consumer terminal.
+    // PopClosedEmpty: closed + empty consumer terminal.
     if (closed_) {
         return QueueOpaquePopResult::closed();
     }
-    // C3 TryPopWouldBlock: empty + open.
+    // TryPopWouldBlock: empty + open.
     return QueueOpaquePopResult::would_block();
 }
 
 // close (CL1 / CL2): monotonic Open -> Closed. Idempotent on Closed.
-// P5 closed-reconciliation: wake every blocked producer (P7 closed outcome —
+// Closed-reconciliation: wake every blocked producer (closed outcome —
 // each retains its lease) and every blocked consumer (consumers pop buffered
 // items on resume while the ring still has them; once empty, remaining
 // consumers get the closed outcome). The wake is signaling only; each woken
@@ -394,7 +388,7 @@ void QueuePort::close() noexcept {
     // CL1 Open -> Closed; CL2 Closed -> Closed (idempotent). Monotone.
     // F.5 corrective: release store pairs with the acquire load in is_closed().
     closed_.store(true, std::memory_order::release);
-    // Closed-reconciliation (P5/P7): drain the consumer FIFO by granting each
+    // Closed-reconciliation: drain the consumer FIFO by granting each
     // parked consumer the next buffered item until the ring is empty; further
     // consumers are granted closed+empty (queue_grant_consumer_locked leaves
     // their out empty when the ring is empty). Then drain the producer FIFO:
@@ -410,7 +404,7 @@ void QueuePort::close() noexcept {
     }
 }
 
-// --- blocking / timed (P4-P6) ---------------------------------------------
+// --- blocking / timed ------------------------------------------------------
 //
 // The blocking/timed substrate. Each sets up the per-op context (control
 // location detached -> producer_operation for push; an empty out-lease for
@@ -524,7 +518,7 @@ QueueOpaquePopResult QueuePort::pop_until(queue_deadline_t deadline) {
                    : QueueOpaquePopResult::closed();
 }
 
-// --- teardown (P7) ---------------------------------------------------------
+// --- teardown ---------------------------------------------------------
 //
 // begin_teardown performs the irreversible operational -> tearing_down
 // transition. It does NOT enter the ordinary CallGuard (§7) — teardown is the
@@ -607,7 +601,7 @@ QueueTeardownSession::~QueueTeardownSession() noexcept {
     if (!port_->ring_empty_locked()) {
         queue_lease_fail_fast();
     }
-    // P7 marks the unique teardown authority complete here.
+    // The unique teardown authority completes here.
 }
 
 }  // namespace sluice::async::detail

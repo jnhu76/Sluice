@@ -35,9 +35,9 @@ template <class T> struct result_storage {
     explicit result_storage(error_tag, IoError e) : error_(e), has_value_(false) {}
 
     result_storage(const result_storage& o) : has_value_(false) {
-        // E15-P1-01: initialize has_value_ to false so that if T's copy ctor
-        // below throws, the discriminator is already false and the unwind's
-        // ~result_storage() does NOT run ~T() on never-constructed storage.
+        // Initialize has_value_ to false so that if T's copy ctor below throws,
+        // the discriminator is already false and the unwind's ~result_storage()
+        // does NOT run ~T() on never-constructed storage.
         if (o.has_value_) {
             ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
             has_value_ = true;
@@ -47,7 +47,8 @@ template <class T> struct result_storage {
     }
     result_storage(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>)
         : has_value_(false) {
-        // E15-P1-01: see copy ctor — construct first, publish has_value_ last.
+        // Same protocol as the copy ctor: construct first, publish has_value_
+        // last.
         if (o.has_value_) {
             ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
             has_value_ = true;
@@ -57,7 +58,7 @@ template <class T> struct result_storage {
     }
     result_storage& operator=(const result_storage& o) {
         if (this != &o) {
-            // E15-P1-01: clear the discriminator BEFORE doing anything else so
+            // Clear the discriminator BEFORE doing anything else so
             // the storage is in a destroy-safe state (no live T, has_value_
             // false) for the duration of the transition. destroy() runs the
             // old ~T() (if any); then if the placement-new copy construction
@@ -76,7 +77,7 @@ template <class T> struct result_storage {
         }
         return *this;
     }
-    // E15-P1-02: this operator performs placement-new move CONSTRUCTION (never
+    // This operator performs placement-new move CONSTRUCTION (never
     // T::operator=); its noexcept must therefore track
     // is_nothrow_move_CONSTRUCTIBLE_v<T>, NOT is_nothrow_move_assignable_v<T>.
     // (The public Result<T>::operator=(Result&&) below forwards here and is
@@ -84,7 +85,7 @@ template <class T> struct result_storage {
     result_storage&
     operator=(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>) {
         if (this != &o) {
-            // E15-P1-01: see copy-assign — clear first, construct second,
+            // Same protocol as copy-assign: clear first, construct second,
             // publish last. A throwing move construction leaves has_value_
             // false and the storage destroy-safe.
             destroy_and_clear();
@@ -100,11 +101,11 @@ template <class T> struct result_storage {
     }
     ~result_storage() { destroy(); }
 
-    // Tear down the live value (if any) AND reset the discriminator. E15-P1-01:
-    // the reset must happen here so that any subsequent throwing construction
-    // cannot leave the discriminator claiming a value is live when it is not.
+    // Tear down the live value (if any) AND reset the discriminator: the reset
+    // must happen here so that any subsequent throwing construction cannot
+    // leave the discriminator claiming a value is live when it is not.
     //
-    // E15-P1-01 (F-00 closeout): unconditionally write a deterministic error
+    // Also unconditionally write a deterministic error
     // sentinel so that if the FOLLOWING placement-new throws, the object is not
     // merely destroy-safe but is a VALID error-state Result: has_value()==false
     // AND error() returns a meaningful code. Without this, a value→value
@@ -161,7 +162,7 @@ template <class T> class [[nodiscard]] Result {
     Result(const Result&) = default;
     Result(Result&&) noexcept(std::is_nothrow_move_constructible_v<T>) = default;
     Result& operator=(const Result&) = default;
-    // E15-P1-02: the storage move-assign does placement-new move CONSTRUCTION
+    // The storage move-assign does placement-new move CONSTRUCTION
     // (never T::operator=), so its noexcept is governed by
     // is_nothrow_move_constructible_v<T>. The previous condition
     // (is_nothrow_move_assignable_v<T>) was a different trait and could

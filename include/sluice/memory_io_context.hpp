@@ -1,5 +1,5 @@
-// sluice::MemoryIoContext — deterministic in-memory IoContext for tests/examples
-// (CPPIO-CORE-015C). Seeded paths open as MemoryReader (independent copy of the
+// sluice::MemoryIoContext — deterministic in-memory IoContext for tests/examples.
+// Seeded paths open as MemoryReader (independent copy of the
 // stored bytes); open_writer returns a fresh independent MemoryWriter. Does NOT
 // change BlockingIoContext or default backend selection. There is no persistent
 // backing store: writes go to the returned MemoryWriter's own sink, not back

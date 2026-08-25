@@ -1,4 +1,4 @@
-// sluice::async::ApplicationRuntime — E16 application lifecycle layer.
+// sluice::async::ApplicationRuntime — application lifecycle layer.
 //
 // A builder-constructed, one-shot, injected-backend Application Runtime driven
 // by a single dedicated driver thread. Owns AsyncIoContext, Scheduler, root
@@ -6,11 +6,11 @@
 // start / submit / request_stop / drain / join / shutdown contract.
 //
 // ADR: docs/adr/ADR-application-runtime.md (Accepted 2026-07-29).
-// Design: docs/history/implementation-plans/e16-application-runtime.md.
+// API reference: docs/reference/api.md.
 // Formal: spec/tla/e16_application_runtime/.
 //
 // Non-copyable, non-movable. Constructed on the heap via RuntimeBuilder::build()
-// which returns Result<std::unique_ptr<ApplicationRuntime>> (P1-02: stable
+// which returns Result<std::unique_ptr<ApplicationRuntime>> (a stable
 // address anchors driver captures, Fiber-local tag, lifecycle mutex/CV).
 #pragma once
 
@@ -41,17 +41,17 @@ class Fiber;
 class ApplicationRuntime;
 
 // ---------------------------------------------------------------------------
-// RuntimeTaskContext (P1-04): restricted, non-owning task execution context.
+// RuntimeTaskContext: restricted, non-owning task execution context.
 // Valid only during one RuntimeTaskFn invocation; delegates I/O to the
-// Runtime-owned AsyncIoContext. No spawn capability in E16 v1.
+// Runtime-owned AsyncIoContext. No spawn capability.
 //
-// M1-A (docs/history/implementation-plans/m1-runtime-io-await-race.md): added a cooperative
-// Completion wait (await_completion) so a task can suspend until a submitted,
-// caller-owned Completion reaches a terminal result. This is the application-
-// discovered Runtime I/O wait gap (M1-API-GAP-1). The capability is backed by
-// the already-audited Scheduler::await_completion_* primitive (E6-T2/E10/E11
-// regression-proven against ThreadPoolBackend); the Scheduler* is PRIVATE and
-// set only by ApplicationRuntime (friend), never escaping to task code.
+// A cooperative Completion wait (await_completion) lets a task suspend
+// until a submitted, caller-owned Completion reaches a terminal result.
+// This is the Runtime I/O wait capability (an application-discovered
+// gap). The capability is backed by the audited Scheduler::
+// await_completion_* primitive (regression-proven against
+// ThreadPoolBackend); the Scheduler* is PRIVATE and set only by
+// ApplicationRuntime (friend), never escaping to task code.
 // ---------------------------------------------------------------------------
 class RuntimeTaskContext {
 public:
@@ -62,7 +62,7 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    // Phase F3 (ADR-public-request-handle): identity-returning submit variants.
+    // ADR-public-request-handle: identity-returning submit variants.
     // Delegates to AsyncIoContext::submit_*_request. On success returns the
     // accepted request's public RequestHandle; on synchronous rejection returns
     // the error and no handle; not_supported if this backend lacks the identity
@@ -72,18 +72,18 @@ public:
     Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
     Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
 
-    // M1-A: cooperatively await a submitted, outstanding Completion. Returns
+    // Cooperatively await a submitted, outstanding Completion. Returns
     // inline (no suspend) if the Completion is already ready; otherwise
     // suspends the calling Fiber exactly once and resumes exactly once when
     // the Completion reaches a terminal result. The result remains in the
     // Completion — read it via c.result() after this returns, then c.reset()
     // before reuse (L7/L9 lifecycle).
     //
-    // Phase F1 (issue #98): the wait is an identity-bearing arena waiter
+    // The wait is an identity-bearing arena waiter
     // registration routed through the Scheduler-owned ReadySink. Returns:
     //   - success       — the Completion is ready (c.result() valid).
     //   - invalid_state — synchronous rejection: a second waiter is already
-    //                     registered on this Completion (I13), or the
+    //                     registered on this Completion, or the
     //                     Completion is not bound to THIS Runtime's context
     //                     (cross-context / idle — provenance misuse). The
     //                     task is NOT suspended.
@@ -109,7 +109,7 @@ public:
     Result<void> await_completion(Completion<std::size_t>& c);
     Result<void> await_completion(Completion<void>& c);
 
-    // Phase F1: waiter cancellation (ADR Decision 10). Removes ONLY this
+    // Waiter cancellation (ADR Decision 10). Removes ONLY this
     // Runtime's waiter registration for `c` — never the I/O, never the
     // borrow. The suspended task (if any) resumes exactly once with the
     // wait-cancelled outcome (its await_completion returns IoError::canceled).
@@ -137,12 +137,12 @@ public:
 private:
     friend class ApplicationRuntime;
 
-    // M1-A: the Scheduler* is now part of the PRODUCTION object layout so the
-    // cooperative Completion wait can delegate to await_completion_*. Only
-    // ApplicationRuntime (friend) constructs the context; the pointer never
-    // escapes and task code cannot retrieve it. The internal-testing
-    // constructor previously carried the Scheduler for the test-only suspend();
-    // both builds now share the same layout (sched_ is no longer test-only).
+    // The Scheduler* is part of the PRODUCTION object layout so the
+    // cooperative Completion wait can delegate to await_completion_*.
+    // Only ApplicationRuntime (friend) constructs the context; the pointer
+    // never escapes and task code cannot retrieve it. Both the production
+    // and internal-testing builds share this layout (sched_ is not
+    // test-only).
     RuntimeTaskContext(AsyncIoContext& ctx, CancelToken& token,
                        Scheduler& sched) noexcept
         : ctx_(&ctx), token_(&token), sched_(&sched) {}
@@ -158,7 +158,7 @@ using RuntimeTaskFn = std::function<void(RuntimeTaskContext&)>;
 
 // ---------------------------------------------------------------------------
 // RuntimeBuilder: collects configuration; build() validates, constructs on the
-// heap, and returns Result<std::unique_ptr<ApplicationRuntime>> (P1-02).
+// heap, and returns Result<std::unique_ptr<ApplicationRuntime>>.
 // ---------------------------------------------------------------------------
 class RuntimeBuilder {
 public:
@@ -169,7 +169,7 @@ public:
     // capability (wait_source() != nullptr — ThreadPoolBackend) or guarantee a
     // non-blocking wait_one (wait_one_is_nonblocking() — SyncBackend /
     // FakeAsyncBackend): the multi-participant runtime path cannot use a
-    // BLOCKING legacy serialized wait_one (issue #67 — a participant parked
+    // BLOCKING legacy serialized wait_one (a participant parked
     // while holding access_mtx_ starves every other poll/reap path and
     // deadlocks drain). build() rejects anything else with invalid_state.
     RuntimeBuilder& backend(std::unique_ptr<AsyncBackend> b);
@@ -187,7 +187,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// ApplicationRuntime: the E16 lifecycle owner.
+// ApplicationRuntime: the application lifecycle owner.
 //
 // Lifecycle: Constructed → Starting → Running → Stopping → Draining → Stopped.
 // Failure: StartFailed, Fatal (std::terminate).
@@ -218,7 +218,7 @@ public:
     Result<void> submit(RuntimeTaskFn task);
 
     // Request cooperative stop. noexcept, idempotent, worker-safe.
-    // Publishes root cancellation under lifecycle_mutex in Running (P1-01).
+    // Publishes root cancellation under lifecycle_mutex in Running.
     void request_stop() noexcept;
 
     // Wait for all admitted tasks to complete and all outstanding I/O to drain.
@@ -230,7 +230,7 @@ public:
     // Legal only after drain_complete. Returns invalid_state from a Runtime task.
     Result<void> join();
 
-    // State-dispatched lifecycle operation (P1-05). Correct in every state.
+    // State-dispatched lifecycle operation. Correct in every state.
     // One close owner elected across all concurrent callers.
     Result<void> shutdown();
 
@@ -318,14 +318,14 @@ private:
         Fatal,
     };
 
-    // --- Close ownership (P1-05) ---
+    // --- Close ownership ---
     enum class CloseState : std::uint8_t {
         Open,
         InProgress,
         Closed,
     };
 
-    // --- Driver state machine (P1-07) ---
+    // --- Driver state machine ---
     enum class DriverState : std::uint8_t {
         not_started,
         barrier_wait,
@@ -380,7 +380,7 @@ private:
     std::thread driver_thread_;
     bool driver_spawned_{false};
 
-    // --- Fiber-local execution identity (P1-04 worker-call detection) ---
+    // --- Fiber-local execution identity (worker-call detection) ---
     // Tag value is `this`; stored in the current Fiber's execution_tag_ field
     // so it survives Fiber suspend/resume and is correct under multiplexing.
     // Unlike thread_local, a Fiber-local tag follows the Fiber across context

@@ -1,4 +1,4 @@
-// Template + Task<T> implementation for sluice::BlockingIoPool (sluice-CORE-024S).
+// Template + Task<T> implementation for sluice::BlockingIoPool.
 // Included by blocking_io_pool.hpp; not meant to be included directly.
 //
 // Task<T> uses a shared state (mutex + condition_variable + optional<T> +

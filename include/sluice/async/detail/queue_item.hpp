@@ -1,8 +1,7 @@
-// sluice::async::detail::QueueItemControl / QueueItemLease — the E12-E Queue
+// sluice::async::detail::QueueItemControl / QueueItemLease — the Queue's
 // one-shot, move-only, unforgeable item ownership capability.
 //
-// This header installs the LINEAR-CAPABILITY FOUNDATION of the Queue
-// (E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2 §4). It defines:
+// This header defines the LINEAR-CAPABILITY FOUNDATION of the Queue:
 //
 //   QueueItemControl  - the per-item control block (location + identity), whose
 //                       address is the abstract ItemId. Non-copyable,
@@ -40,8 +39,6 @@
 // `require_empty_or_terminate`) live in `src/async/queue_port.cpp`. The
 // `QueueItemFactory` (typed node + make/release*) is defined alongside
 // `QueuePort` in `queue_port.hpp`; it is only forward-declared here.
-//
-// The authoritative type graph is docs/e12-queue-scheduler-integration.md §4.
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>  // for the queue fail-fast prototype below
@@ -116,7 +113,7 @@ private:
     friend class QueueItemLease;
     friend class QueueTeardownSession;
     friend class QueueItemFactory;
-    friend class ::sluice::async::Scheduler;  // E12-E admit closures commit
+    friend class ::sluice::async::Scheduler;  // admit closures commit
                                               // location_ under G+S+role
 };
 
@@ -168,7 +165,7 @@ private:
     friend class QueueOpaquePopResult;
     friend class QueueTeardownSession;
     friend class QueueItemFactory;
-    friend class ::sluice::async::Scheduler;  // E12-E admit closures read/
+    friend class ::sluice::async::Scheduler;  // admit closures read/
                                               // mutate control_ custody
 };
 

@@ -1,11 +1,11 @@
 // copy_all implementation. The strategy-aware overload is the source of truth;
 // the CopyLimit / back-compat / convenience overloads delegate to it.
 //
-// The loop tries the buffered fast path first (CPPIO-CORE-006D) when the
-// strategy allows it: when the reader also implements BufferedReadable,
-// already-buffered unread bytes are drained via peek_buffered/consume_buffered
-// before any scratch read, mirroring Zig std.Io's Reader.stream (Reader.zig:168).
-// CPPIO-CORE-007C made that an explicit CopyStrategy choice.
+// The loop tries the buffered fast path first when the strategy allows it:
+// when the reader also implements BufferedReadable, already-buffered unread
+// bytes are drained via peek_buffered/consume_buffered before any scratch read,
+// mirroring Zig std.Io's Reader.stream (Reader.zig:168). Whether the fast path
+// is used is an explicit CopyStrategy choice.
 #include <sluice/copy.hpp>
 #include <sluice/buffered_readable.hpp>
 
@@ -17,7 +17,7 @@ namespace sluice {
 namespace {
 
 // Whether a strategy is one of the deferred (not-yet-implemented) reserved
-// slots. They never execute their named path this stage.
+// slots. They never execute their named path.
 bool is_deferred(CopyStrategy s) {
     return s == CopyStrategy::VectorDeferred || s == CopyStrategy::FileRangeDeferred ||
            s == CopyStrategy::SendfileDeferred || s == CopyStrategy::SpliceDeferred;
@@ -40,8 +40,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     dec.used_scratch_path = false;
     dec.unsupported_requested = false;
 
-    // --- Deferred strategies: explicitly unsupported this stage (007E). ---
-    // Kept here (not in 007E only) so the intermediate is never silently broken.
+    // --- Deferred strategies: explicitly unsupported. ---
     if (is_deferred(options.strategy)) {
         if (options.unsupported_policy == UnsupportedStrategyPolicy::FallbackToAuto) {
             dec.unsupported_requested = true;
@@ -64,8 +63,8 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         }
     }
 
-    // Resolve Auto: currently Auto == BufferedFirst (006 made buffered-first the
-    // default). Documented and tested; may change after measurement (010). Auto
+    // Resolve Auto: currently Auto == BufferedFirst (buffered-first is the
+    // default). Documented and tested; may change after measurement. Auto
     // keeps its own requested value but reports what it ran as.
     bool use_fast_path =
         (options.strategy == CopyStrategy::BufferedFirst || options.strategy == CopyStrategy::Auto);
@@ -78,7 +77,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     // this runs in addition to strategy_deferred_fallback_calls above (the call
     // was both a deferred fallback AND resolved to Auto/BufferedFirst). counts
     // the SELECTED strategy, so Auto is recorded as Auto even though it executes
-    // as BufferedFirst. (007F semantics.)
+    // as BufferedFirst.
     if (stats) {
         switch (options.strategy) {
         case CopyStrategy::Auto:

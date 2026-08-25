@@ -1,23 +1,22 @@
-// sluice::async::WaitNode — one canonical wait lifecycle (sluice-CORE-E10).
+// sluice::async::WaitNode — one canonical wait lifecycle.
 //
-// E10 establishes the minimal cancellation-safe waiting primitive required by
-// later deadline/timer integration, async synchronization primitives, and
-// multi-wait/select. This is DELIBERATELY NARROW (see docs/e10-waitnode-wait-
-// queue.md §1 scope):
+// WaitNode is the minimal cancellation-safe waiting primitive required by
+// deadline/timer integration, async synchronization primitives, and
+// multi-wait/select. This is DELIBERATELY NARROW (scope):
 //
 //   IN scope:  one WaitNode lifecycle, one cancellation-safe WaitQueue
 //              protocol, single-wait registration, wake-vs-cancel winner
 //              protocol, safe unlink/removal, one canonical terminal seam.
-//              E11 extends the terminal outcomes with `expired` (deadline
-//              expiry), reached ONLY through the Scheduler expiry seam and
-//              the private WaitQueue::expire_locked resolver — still one
+//              The terminal outcomes extend to `expired` (deadline expiry),
+//              reached ONLY through the Scheduler expiry seam and the
+//              private WaitQueue::expire_locked resolver — still one
 //              resolve_ authority, no second winner protocol.
 //   OUT scope: mutex/sem/condvar/event/channel/select/multi-wait/wait-any/
 //              wait-all, I/O/io_uring cancellation, task cancellation
 //              propagation, structured concurrency, high-level sleep/timerfd
 //              public APIs, timer-wheel optimization.
 //
-// E10 wait cancellation is NOT task cancellation and is NOT I/O operation
+// Wait cancellation is NOT task cancellation and is NOT I/O operation
 // cancellation. Cancel here means only: resolve THIS registered wait with the
 // Cancelled terminal outcome (§6 cancellation boundary).
 //
@@ -55,7 +54,7 @@
 // the waiting fiber/task and destroyed when that frame exits. The node MUST be
 // terminal (Woken/Cancelled) — or never registered — before its owning frame
 // is destroyed; a debug assert enforces that a Registered node is never
-// destroyed (§10/C9).
+// destroyed (§10).
 //
 // Layering: BELOW the Scheduler. WaitNode carries NO scheduler reference and
 // NO future-specific state (no timer_id/deadline/select_group/...). The Fiber
@@ -74,8 +73,8 @@ class Fiber;      // forward (the scheduler-facing handle)
 class WaitQueue;  // forward (friend: link fields + register/detach)
 
 // The terminal outcome of a wait resolution (§2/§6). Repository-native names
-// for the allowed terminal outcomes. E10 introduced woken/cancelled; E11 adds
-// `expired` (a monotonic deadline elapsed) as a THIRD terminal outcome that is
+// for the allowed terminal outcomes: woken/cancelled, plus `expired` (a
+// monotonic deadline elapsed) as a THIRD terminal outcome that is
 // observably distinct from cancellation and competes for the SAME resolve_
 // authority (no second winner protocol).
 enum class WaitOutcome : std::uint8_t {
@@ -86,11 +85,11 @@ enum class WaitOutcome : std::uint8_t {
     // winner made the waiting execution runnable through the canonical
     // scheduler seam.
     woken = 1,
-    // The wait was resolved by cancellation (WaitQueue::cancel). E10 cancel is
-    // wait-cancellation only — see the header banner.
+    // The wait was resolved by cancellation (WaitQueue::cancel). This cancel
+    // is wait-cancellation only — see the header banner.
     cancelled = 2,
-    // The wait was resolved by a monotonic deadline elapsing (E11
-    // TIMER_EXPIRE). Distinct from cancellation: the deadline elapsed, the
+    // The wait was resolved by a monotonic deadline elapsing
+    // (TIMER_EXPIRE). Distinct from cancellation: the deadline elapsed, the
     // resource did not become ready and the wait was not cancelled. Reached
     // only through the Scheduler expiry seam (expire_wait) which calls the
     // private WaitQueue::expire_locked -> resolve_(expired), exactly mirroring
@@ -103,7 +102,7 @@ enum class WaitOutcome : std::uint8_t {
 // non-movable: identity is the object address (the intrusive link fields and
 // the scheduler's wait map key on it), exactly like Completion<T>.
 //
-// State machine (§2, extended for E11):
+// State machine (§2):
 //
 //   Detached ──register──> Registered ─┬─resolve(Woken)─────> Woken      [T]
 //        ▲                              ├─resolve(Cancelled)─> Cancelled [T]
@@ -129,8 +128,8 @@ public:
     // route the resumed fiber. May be null for pure-protocol tests.
     explicit WaitNode(Fiber* fiber) noexcept : fiber_(fiber) {}
 
-    // A Registered node may not be destroyed (§10/C9): it is still linked in a
-    // queue and destroying it would leave a dangling queue pointer (§3 Q7).
+    // A Registered node may not be destroyed (§10): it is still linked in a
+    // queue and destroying it would leave a dangling queue pointer (§3).
     // Debug asserts; release is a no-op. The canonical recovery is to cancel
     // (or wake) the wait first — the winner unlinks it.
     ~WaitNode() {
@@ -138,12 +137,12 @@ public:
                "WaitNode destroyed while Registered (resolve the wait first)");
     }
 
-    // ---- Per-operation context hook (E12-E Queue / E12-F RwLock) ----
+    // ---- Per-operation context hook (AsyncQueue / AsyncRwLock) ----
     // An optional, caller-owned opaque pointer stashed on the node BEFORE
     // registration, so a reconciler that resolves THIS node (via
     // wake_one_locked, which returns the winning WaitNode*) can reach the
     // per-operation context it needs to finalize atomically. Authorized
-    // production users: AsyncQueue (E12-E) and AsyncRwLock (E12-F); it is never
+    // production users: AsyncQueue and AsyncRwLock; it is never
     // dereferenced by WaitQueue or by the generic Scheduler wake path. Null by
     // default; each primitive sets it to its wait-node context (QueueWaitCtx*
     // or RwWaitCtx*) before registration and clears it after terminal
@@ -183,7 +182,7 @@ public:
     bool was_cancelled() const noexcept {
         return state_.load(std::memory_order::acquire) == State::cancelled;
     }
-    // E11: the wait resolved by a monotonic deadline elapsing (distinct from
+    // The wait resolved by a monotonic deadline elapsing (distinct from
     // cancellation). Lock-free acquire, like was_woken/was_cancelled.
     bool was_expired() const noexcept {
         return state_.load(std::memory_order::acquire) == State::expired;
@@ -208,14 +207,14 @@ private:
         registered = 1,  // linked in exactly one queue; resolvable
         woken = 2,       // terminal: resolved by wake (absorbing)
         cancelled = 3,   // terminal: resolved by cancel (absorbing)
-        expired = 4,     // terminal: resolved by deadline expiry (E11, absorbing)
+        expired = 4,     // terminal: resolved by deadline expiry (absorbing)
     };
 
     // Register this node into `q` (Detached -> Registered) and record the
     // scheduler-facing `fiber` handle. Called by WaitQueue under its mtx_
     // during enqueue. Returns false (no transition) if the node is already
-    // registered or terminal (incl. E11's expired) — register is single-shot
-    // per wait, which is the C8 reuse-rejection contract.
+    // registered or terminal (including expired) — register is single-shot
+    // per wait, which is the reuse-rejection contract.
     bool register_(WaitQueue* q, Fiber* fiber) noexcept {
         State expected = State::detached;
         if (!state_.compare_exchange_strong(expected, State::registered,
@@ -233,11 +232,11 @@ private:
     // ONLY when this call is the unique winner (CAS succeeded). Every losing
     // caller returns false and MUST perform no second wake/unlink.
     //
-    // E11: `expired` is a third terminal outcome reached only via the Scheduler
+    // `expired` is a third terminal outcome reached only via the Scheduler
     // expiry seam. It is outcome-agnostic to the CAS: the same Registered
     // guard + acq_rel CAS is the single authority. A losing timer expiry (a
     // node already woken/cancelled/expired) sees the CAS fail and does nothing
-    // — exactly the E10 loser semantic (§6 truth table).
+    // — exactly the loser semantic (§6 truth table).
     bool resolve_(WaitOutcome outcome) noexcept {
         State target;
         if (outcome == WaitOutcome::woken) target = State::woken;
@@ -252,7 +251,7 @@ private:
 
     Fiber* fiber_{nullptr};
     std::atomic<State> state_{State::detached};
-    void* user_{nullptr};  // E12-E Queue / E12-F RwLock per-op context; else null
+    void* user_{nullptr};  // AsyncQueue / AsyncRwLock per-op context; else null
 };
 
 }  // namespace sluice::async

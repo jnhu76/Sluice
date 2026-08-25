@@ -1,4 +1,4 @@
-// sluice::async::fiber_ctx — x86_64 fiber context switch (sluice-CORE-E2/E3).
+// sluice::async::fiber_ctx — x86_64 fiber context switch.
 //
 // ISOLATED execution primitive, source-derived from Zig's
 // lib/std/Io/fiber.zig x86_64 Context + contextSwitch (fiber.zig:18-24, 244-254,
@@ -7,11 +7,11 @@
 // any scheduler. It is gated to x86_64; other architectures get an explicit
 // unsupported stub so non-Evented builds compile cleanly.
 //
-// WHAT E2/E3 PROVES:
+// WHAT THIS FILE PROVES:
 //   - isolated context switching and trampoline correctness.
-// WHAT E2/E3 DOES NOT PROVE (do not conflate):
+// WHAT THIS FILE DOES NOT PROVE (do not conflate):
 //   - Evented I/O correctness.
-//   - scheduler liveness (the E4 success criterion).
+//   - scheduler liveness (the Evented success criterion).
 //   - pending async operation behavior.
 //   - Future/WaitPolicy integration.
 //   - Group-on-Evented semantics.
@@ -62,7 +62,7 @@
 
 namespace sluice::async::fiber_ctx {
 
-// Whether this build supports a real fiber context switch. E15-P2-04: the
+// Whether this build supports a real fiber context switch. The
 // accepted Evented scope is Linux x86_64 ONLY. The previous gate checked
 // architecture alone (__x86_64__), which would admit x86_64 macOS/BSD targets
 // into the System V AMD64 fiber asm without a verified ELF/stack/asan story on
@@ -145,9 +145,9 @@ using Entry = void (*)(Switch* resumed_by, void* user_data);
 Switch* context_switch(Switch* s) noexcept;
 
 #else  // non-x86_64: unsupported stub. Compiles; calling it aborts so a misuse
-       // fails loudly rather than silently emulating threads-per-task (E0 ADR §7).
+       // fails loudly rather than silently emulating threads-per-task (execution-model ADR §7).
 inline Switch* context_switch(Switch* /*s*/) noexcept {
-    // No supported context switch on this architecture. The scheduler (E4+)
+    // No supported context switch on this architecture. The scheduler
     // must gate on `supported` and fail/disable cleanly rather than call here.
     return nullptr;
 }

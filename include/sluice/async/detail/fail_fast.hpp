@@ -30,16 +30,16 @@ namespace sluice::async::detail {
 // catch (...) boundaries; never returns.
 [[noreturn]] void async_mutex_lock_fail_fast() noexcept;
 
-// E13 P3 stage-boundary fail-fast (docs/e13-select-timer-adapter.md §5,
-// Mandatory Addendum D). A due ACTIVE SelectTimerRegistration is UNREACHABLE
-// in valid P3 production state: there is no admission path, so no ACTIVE
-// Select heap entry should ever be observed by the pump. If the pump pops an
-// ACTIVE Select entry, that is an invariant violation (either a stale entry
-// was observed before a CAS completed, the registration protocol has a bug,
-// or a test advanced the clock past an ACTIVE synthetic entry). The pump
-// MUST NOT claim a winner, mark CandidateReady, retire/consume, erase, or
-// busy-loop; it fails fast instead. This is NOT supported production Select
-// behavior — P4 (claim/finalize) is denied pending independent P3 review.
+// Stage-boundary fail-fast for the Select timer pump. A due ACTIVE
+// SelectTimerRegistration is UNREACHABLE in valid production state: there is
+// no admission path, so no ACTIVE Select heap entry should ever be observed
+// by the pump. If the pump pops an ACTIVE Select entry, that is an invariant
+// violation (either a stale entry was observed before a CAS completed, the
+// registration protocol has a bug, or a test advanced the clock past an
+// ACTIVE synthetic entry). The pump MUST NOT claim a winner, mark
+// CandidateReady, retire/consume, erase, or busy-loop; it fails fast instead.
+// This is NOT supported production Select behavior — claim/finalize of a
+// popped ACTIVE Select entry is denied at this boundary.
 //
 // Same contract as async_mutex_lock_fail_fast: [[noreturn]] noexcept, no
 // allocation / locking / I/O / dynamic string, no state recovery, ultimately
@@ -47,23 +47,22 @@ namespace sluice::async::detail {
 // caller; adding one would invite logging on the pump hot path).
 [[noreturn]] void select_timer_pump_active_fail_fast() noexcept;
 
-// E13 P6 stage-boundary fail-fast: multi-group shared Event (P8, DENIED).
-// docs/e13-select-locking-and-publication.md §6 / production-test-plan.md §7.8.
-// One Event::set() broadcast may observe arms belonging to MORE THAN ONE
-// distinct eligible SelectGroup (phase==Armed). P8 (multi-group Event
-// intrusive worklist + per-group iteration) is not implemented at the P6
-// boundary. P6 must therefore detect >1 distinct eligible group BEFORE any
-// group winner CAS / candidate mutation / authority close and fail fast,
-// rather than silently resolving only one group (a lost resolution) or
-// attempting an unsupported multi-group publish. The same Event appearing
-// twice in ONE group is NOT this case and is supported (P6-D1).
+// Stage-boundary fail-fast: multi-group shared Event. One Event::set()
+// broadcast may observe arms belonging to MORE THAN ONE distinct eligible
+// SelectGroup (phase==Armed). Multi-group Event handling (intrusive worklist
+// + per-group iteration) is not implemented at this boundary. The stage must
+// therefore detect >1 distinct eligible group BEFORE any group winner CAS /
+// candidate mutation / authority close and fail fast, rather than silently
+// resolving only one group (a lost resolution) or attempting an unsupported
+// multi-group publish. The same Event appearing twice in ONE group is NOT
+// this case and is supported.
 //
 // Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
 // allocation / locking / I/O / dynamic string, no state recovery, ultimately
 // std::terminate(). No parameter (the operation is known only to the caller).
 [[noreturn]] void select_multi_group_event_stage_fail_fast() noexcept;
 
-// E13 P5 CORRECTIVE: general-purpose Select invariant fail-fast. Called when
+// General-purpose Select invariant fail-fast. Called when
 // the admission core receives a structurally invalid descriptor/count argument
 // (descs==nullptr, count==0, count>kSelectMaxArms) or encounters an unknown
 // descriptor kind in Release builds. Provides defense-in-depth against
@@ -73,7 +72,7 @@ namespace sluice::async::detail {
 // Same contract as the other fail-fast entries.
 [[noreturn]] void select_invariant_fail_fast() noexcept;
 
-// E14 D-E14-F2a: Group lifetime fail-fast. Called from ~Group when an Evented
+// Group lifetime fail-fast. Called from ~Group when an Evented
 // task Future is still pending at destruction time. This is a caller-contract
 // violation (the caller must await or cancel before destroying an Evented
 // Group). The destructor MUST NOT call Evented Future::await from a non-Fiber
@@ -86,7 +85,7 @@ namespace sluice::async::detail {
 // std::terminate().
 [[noreturn]] void group_lifetime_fail_fast() noexcept;
 
-// E14 D-E14-2: Evented admission fail-fast. Called when an Evented public
+// Evented admission fail-fast. Called when an Evented public
 // admission boundary is reached on a target where fiber_ctx::supported is
 // false. Deterministically testable via the bool parameter (production passes
 // fiber_ctx::supported; death tests pass false).
@@ -94,7 +93,7 @@ namespace sluice::async::detail {
 // Same contract as the other fail-fast entries.
 [[noreturn]] void evented_admission_fail_fast() noexcept;
 
-// E15-P1-03 / E15-P2-06: AsyncIoContext outstanding-Completion fail-fast.
+// AsyncIoContext outstanding-Completion fail-fast.
 // Called from AsyncIoContext::~AsyncIoContext() and operator=(AsyncIoContext&&)
 // when the context still owns a backend with >0 outstanding Completions. Per
 // ADR §5 L11 this is a caller-contract violation: outstanding Completions are
@@ -110,7 +109,7 @@ namespace sluice::async::detail {
 // std::terminate(). No parameter (the operation is known only to the caller).
 [[noreturn]] void async_context_outstanding_fail_fast() noexcept;
 
-// E14 D-E14-2: internal testable guard. Production code calls
+// Internal testable guard for Evented admission. Production code calls
 // require_evented_supported(fiber_ctx::supported). On supported targets this
 // is an optimized no-op (the parameter is a compile-time true constant). On
 // unsupported targets or when called with false (death test), it calls
@@ -121,14 +120,14 @@ inline void require_evented_supported(bool supported) noexcept {
     }
 }
 
-// E14 D-E14-2: Evented admission check. Returns the effective fiber support
+// Evented admission check. Returns the effective fiber support
 // status. Production: returns fiber_ctx::supported (compile-time constant on
 // the target). Internal-testing: may be overridden via
 // AsyncTestAccess::set_evented_admission_override to simulate unsupported
 // targets on x86_64. Defined out-of-line in fail_fast.cpp.
 bool evented_admission_check() noexcept;
 
-// I47-F3: invalid runnable-ticket consumption fail-fast. Called from
+// Invalid runnable-ticket consumption fail-fast. Called from
 // run_next_on when make_running() fails (the Fiber is NOT in Runnable state).
 // A worker that consumes a ticket whose Fiber is not Runnable would enter an
 // invalid context (rsp/rbp/rip not saved). This is process-fatal: the
@@ -139,7 +138,7 @@ bool evented_admission_check() noexcept;
 // std::terminate(). No parameter (the operation is known only to the caller).
 [[noreturn]] void scheduler_invalid_runnable_ticket_fail_fast() noexcept;
 
-// I47-F2: invalid suspend transition fail-fast. Called from
+// Invalid suspend transition fail-fast. Called from
 // commit_suspend_locked when make_waiting() fails (the Fiber is NOT Running).
 // A Fiber that cannot transition Running->Waiting is in an impossible protocol
 // state: the caller believed it was the current Running Fiber, but the state
@@ -148,7 +147,7 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void scheduler_invalid_suspend_transition_fail_fast() noexcept;
 
-// I47-F1: missing Fiber owner fail-fast. Called from owner_for_fiber_locked
+// Missing Fiber owner fail-fast. Called from owner_for_fiber_locked
 // when a previously-running Fiber has no recorded owner in fiber_owner_. A
 // Fiber that has run and entered Waiting MUST have an owner entry (set at
 // spawn/spawn_on/steal). A missing entry is a fatal Scheduler invariant
@@ -158,7 +157,7 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void scheduler_missing_fiber_owner_fail_fast() noexcept;
 
-// Phase F1: wait-registry invariant fail-fast (issue #98). Called when the
+// Wait-registry invariant fail-fast. Called when the
 // Scheduler wait registry's record state machine is violated (a retire on a
 // non-registered record, an out-of-range record index from a lease pin, ...).
 // The registry is a leaf domain whose state transitions are exactly
@@ -168,7 +167,7 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void scheduler_wait_registry_invariant_fail_fast() noexcept;
 
-// Phase F1: non-quiescent wait-registry fail-fast. Called from ~Scheduler
+// Non-quiescent wait-registry fail-fast. Called from ~Scheduler
 // when wait_record_live_count_ != 0 — a registered Completion waiter was
 // neither delivered (drained) nor cancelled, i.e. a suspended Fiber's wake
 // obligation was abandoned before the Scheduler was destroyed. Process-fatal
@@ -191,12 +190,12 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void completion_authority_fail_fast() noexcept;
 
-// Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5): the Completion
-// claim path gains a private `binding` transient between `idle` and `outstanding`.
-// Only the backend that wins the idle → binding CAS may install the binding
-// payload (RequestKey, ContextIdentity, slot-release capability); a second
-// submitting context, a cancel path, a waiter-registration path, reset, and the
-// destructor MUST NOT observe or act on a half-installed binding (I15). These
+// Completion claim path (ADR-explicit-io-request-contract, Accepted, Decision 5):
+// the claim path has a private `binding` transient between `idle` and
+// `outstanding`. Only the backend that wins the idle → binding CAS may install
+// the binding payload (RequestKey, ContextIdentity, slot-release capability); a
+// second submitting context, a cancel path, a waiter-registration path, reset,
+// and the destructor MUST NOT observe or act on a half-installed binding. These
 // entries fire on the binding-state violations:
 //   - completion_binding_destruction_fail_fast: ~Completion while state==binding
 //   - completion_binding_reset_fail_fast:       reset() while state==binding
@@ -208,28 +207,27 @@ bool evented_admission_check() noexcept;
 [[noreturn]] void completion_binding_destruction_fail_fast() noexcept;
 [[noreturn]] void completion_binding_reset_fail_fast() noexcept;
 
-// Phase B (ADR Decision 15 / AC-13 :566-572): slot release (via Completion reset
-// or ready-Completion destruction) is allocation-free and acquires the leaf
-// slot-lifecycle domain after reap has left it. Release is a contract violation
-// (fail-fast in BOTH Debug and Release) when the slot is not in a releasable
-// state — specifically when the enqueue-in-flight pin is still live, or the
-// waiter registration is still open, or a stored waiter token/routing-lease has
-// not been consumed. None of those may be silently discarded to make teardown
-// pass. (Commit 2 declares the entry; commit 3 wires it into the release path
-// once the pin and waiter-registration fields exist on the slot.)
+// Slot release (ADR Decision 15 / AC-13 :566-572): release (via Completion
+// reset or ready-Completion destruction) is allocation-free and acquires the
+// leaf slot-lifecycle domain after reap has left it. Release is a contract
+// violation (fail-fast in BOTH Debug and Release) when the slot is not in a
+// releasable state — specifically when the enqueue-in-flight pin is still
+// live, or the waiter registration is still open, or a stored waiter
+// token/routing-lease has not been consumed. None of those may be silently
+// discarded to make teardown pass.
 //
 // Same contract as the other fail-fast entries.
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
 
-// Phase B (design §9 pending -> enqueued failure row): enqueue has exactly two
-// legal outcomes (pending -> enqueued, or observing backend_ready -> successful
-// no-op). Entering enqueue from any other slot state (reserved/prepared =
-// enqueue before commit, enqueued/running = double enqueue, completion_ready =
-// enqueue after reap) is an invariant violation of the Scheme-B arbitration and
-// fails fast in BOTH Debug and Release rather than silently stranding the op.
+// Enqueue has exactly two legal outcomes (pending -> enqueued, or observing
+// backend_ready -> successful no-op). Entering enqueue from any other slot
+// state (reserved/prepared = enqueue before commit, enqueued/running = double
+// enqueue, completion_ready = enqueue after reap) is an invariant violation of
+// the Scheme-B arbitration and fails fast in BOTH Debug and Release rather
+// than silently stranding the op.
 [[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept;
 
-// Phase B (ADR Decision 15 / AC-13): quiescent arena destruction requires every
+// Quiescent arena destruction (ADR Decision 15 / AC-13) requires every
 // slot free (slot_in_use == 0). Destroying the arena — via backend/context
 // destruction — while slots are still bound (e.g. the caller holds ready
 // Completions it never reset) is a contract violation in BOTH Debug and Release:
@@ -237,15 +235,15 @@ bool evented_admission_check() noexcept;
 // must never dangle.
 [[noreturn]] void request_arena_destruction_fail_fast() noexcept;
 
-// Phase B (review C2 / I4 / I5 / I11): reap reached a backend_ready slot whose
-// Completion publication binding was never installed. The binding is installed
+// Reap reached a backend_ready slot whose Completion publication binding was
+// never installed. The binding is installed
 // before commit; a missing binding means the accepted op cannot be published —
 // silently skipping it would lose an accepted request (AC-4) and strand the
 // Completion outstanding forever. Invariant violation: fail-fast in BOTH Debug
 // and Release instead of a silent drop.
 [[noreturn]] void request_arena_missing_binding_fail_fast() noexcept;
 
-// Phase B (review I2): record_terminal/cancel reached a slot that is not a
+// record_terminal/cancel reached a slot that is not a
 // legal terminal candidate (reserved/prepared = not yet accepted; free =
 // never reserved). Storing a terminal before acceptance would strand the op
 // forever (dispatch's later record_terminal would see the terminal already
@@ -253,28 +251,27 @@ bool evented_admission_check() noexcept;
 // fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_terminal_state_fail_fast() noexcept;
 
-// Phase B (review finding #4 — stale enqueue masked as a successful no-op).
-// enqueue() has exactly two LEGAL outcomes (ADR Decision 5 / I17): it wins and
-// publishes pending linkage, or it observes backend_ready from a LEGITIMATE
-// prior terminal winner and completes as a successful no-op. A STALE handle
-// (generation mismatch) is neither: it means the committed submit path's slot
-// moved on (released/reused) while its identity-bound enqueue pin was still
-// live — an I19 reuse-before-acknowledgement disaster, not a normal race.
-// Treating stale as terminal_noop (the prior behavior) silently masqueraded as
-// a Scheme-B success and masked the pin/reuse violation. It now fails fast in
-// BOTH Debug and Release.
+// Stale enqueue must not masquerade as a successful no-op. enqueue() has
+// exactly two LEGAL outcomes (ADR Decision 5): it wins and publishes pending
+// linkage, or it observes backend_ready from a LEGITIMATE prior terminal
+// winner and completes as a successful no-op. A STALE handle (generation
+// mismatch) is neither: it means the committed submit path's slot moved on
+// (released/reused) while its identity-bound enqueue pin was still live — a
+// reuse-before-acknowledgement violation, not a normal race. Treating stale
+// as terminal_noop silently masquerades as a Scheme-B success and masks the
+// pin/reuse violation. It fails fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_enqueue_stale_fail_fast() noexcept;
 
-// Phase B (review finding #5 — generation wrap re-introduces ABA). A 64-bit
+// Generation wrap would re-introduce ABA. A 64-bit
 // generation makes ABA practically impossible, but a silent wrap at UINT64_MAX
-// would still violate I6's absolute wording ("a stale key can never mutate the
+// would still violate the stale-key rule ("a stale key can never mutate the
 // new occupant"). The arena instead fail-fasts on generation EXHAUSTION when a
 // slot's generation reaches UINT64_MAX on release (~585 years at 1 release/ns
 // is unreachable in practice), so the ABA guard can never actually wrap.
 // Detected in BOTH Debug and Release.
 [[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept;
 
-// Phase B (CodeRabbit finding): the read-only introspection accessors
+// The read-only introspection accessors
 // (key_of/generation_of/state_of/...) index the fixed slot array without the
 // bounds check validate_ applies to handle-taking methods. An out-of-range
 // SlotIndex would be an out-of-bounds read. They are a deliberate test surface
@@ -282,8 +279,8 @@ bool evented_admission_check() noexcept;
 // violation, not a recoverable error — fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_slot_index_out_of_range_fail_fast() noexcept;
 
-// Phase B (review round-4 finding 2): record_terminal was given a default-
-// constructed TerminalResult (stored == false). Recording it would publish a
+// record_terminal is given a default-constructed TerminalResult (stored ==
+// false). Recording it would publish a
 // phantom 0-byte success (terminal_to_size treats an unstored result as
 // success) and would leave cancel() unable to recognize the existing terminal
 // (it keys the already-terminal check on stored), risking a second ready-ring
@@ -292,17 +289,16 @@ bool evented_admission_check() noexcept;
 // violation: fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_invalid_terminal_fail_fast() noexcept;
 
-// Phase B (review round-4): the dispatch path (mark_running, enqueued ->
+// The dispatch path (mark_running, enqueued ->
 // running) reached a slot that is neither enqueued nor backend_ready. Entering
 // dispatch from free/reserved/prepared/pending (dispatch before enqueue),
 // running (double dispatch), or completion_ready (dispatch after reap) is an
-// invariant violation of the unified state machine (design §9: "only
-// unknown/illegal state is an invariant violation (fail-fast)"). The Phase B
-// reference backends never call mark_running; it makes the shared arena correct
-// for the later ThreadPool/Uring migration. Detected in BOTH Debug and Release.
+// invariant violation of the unified state machine ("only
+// unknown/illegal state is an invariant violation (fail-fast)"). Detected in
+// BOTH Debug and Release.
 [[noreturn]] void request_arena_dispatch_state_fail_fast() noexcept;
 
-// Phase B (review round-4): the dispatch path (mark_running) was given a STALE
+// The dispatch path (mark_running) is given a STALE
 // dispatch identity — validate_ rejected the handle (stale generation, free
 // slot, out-of-range index, or wrong context provenance). `mark_running`
 // returning false is RESERVED for the legitimate dispatch backoff: a
@@ -313,7 +309,7 @@ bool evented_admission_check() noexcept;
 // in BOTH Debug and Release rather than masquerading as a backoff.
 [[noreturn]] void request_arena_dispatch_stale_fail_fast() noexcept;
 
-// Phase B (review round-4 finding 2; round-5 tail hardening): the ready-ring
+// The ready-ring
 // push invariants were violated — a push landed on a slot that is not
 // backend_ready, has no stored terminal, is already linked onto the ring
 // (ready_next_ != kNotOnReadyRing for a non-tail node, or the slot IS the
@@ -326,7 +322,7 @@ bool evented_admission_check() noexcept;
 // is an invariant violation. Fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept;
 
-// Phase E (ThreadPoolBackend): non-quiescent destruction. The backend's
+// ThreadPoolBackend non-quiescent destruction. The backend's
 // destructor is called while accepted work remains (active workers, enqueued ops,
 // backend-ready slots, or bound slots). Quiescent teardown requires the caller
 // to close admission, drain all outstanding Completions, and reset them so that
@@ -357,7 +353,7 @@ bool evented_admission_check() noexcept;
 [[noreturn]] void async_condition_lifetime_fail_fast() noexcept;
 [[noreturn]] void wait_queue_lifetime_fail_fast() noexcept;
 
-// Phase D1 (UringAsyncBackend): non-quiescent destruction. The backend's
+// UringAsyncBackend non-quiescent destruction. The backend's
 // destructor is called while accepted work remains (an enqueued local dispatch
 // entry, a live operation cookie / ring-owned request, a backend-ready unreaped
 // terminal, an accepted-outstanding request, or a bound slot). Quiescent

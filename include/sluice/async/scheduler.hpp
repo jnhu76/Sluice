@@ -1,20 +1,19 @@
-// sluice::async::Scheduler — multi-worker Evented scheduler (sluice-CORE-E7).
+// sluice::async::Scheduler — multi-worker Evented scheduler.
 //
-// E7-A: worker-local execution state + multi-worker run skeleton.
-// Each Worker owns its own scheduler Context + current Fiber (E7-C1). Fibers
-// are pinned to their first-execution Worker (E7-C2). Wake routing + MW
-// coordination are added in E7-B/E7-C.
+// Each Worker owns its own scheduler Context + current Fiber. Fibers are
+// pinned to their first-execution Worker; wake routing and multi-worker
+// coordination are owned by the seams documented below.
 //
-// See docs/adr/ADR-execution-model.md §9.2 for the accepted E7 contract.
+// See docs/adr/ADR-execution-model.md §9.2 for the accepted worker contract.
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/fail_fast.hpp>
-#include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
-#include <sluice/async/detail/ready_sink.hpp>  // detail::SynchronousReadySink / ReadyEvent (Phase F1)
-#include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration (E13 P3)
-#include <sluice/async/select_fwd.hpp>  // E13 P5 CORRECTIVE: select() template declaration + forward decls
+#include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (Queue seams)
+#include <sluice/async/detail/ready_sink.hpp>  // detail::SynchronousReadySink / ReadyEvent
+#include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration
+#include <sluice/async/select_fwd.hpp>  // select() template declaration + forward decls
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/lock_guard.hpp>
@@ -42,15 +41,15 @@
 namespace sluice::async {
 
 class Event;
-class SelectResult;  // P5: full definition lives in select.hpp (included by select.cpp)
-class ApplicationRuntime;  // C2: friend grant for the Fiber identity write seam.
+class SelectResult;  // full definition lives in select.hpp (included by select.cpp)
+class ApplicationRuntime;  // friend grant for the Fiber identity write seam.
 
 namespace detail {
 class SelectGroup;
 class SelectPort;
 struct SelectArmSlot;
 enum class ArmState : std::uint8_t;
-class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (sealed fields)
+class SelectCaseDescriptor;  // full definition in select.hpp (sealed fields)
 }  // namespace detail
 
 // ----------------------------------------------------------------------------
@@ -64,8 +63,8 @@ class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (se
 // grant, because the type NAME was published by this installed header. That
 // forgeable authority is now REMOVED.
 //
-// Deterministic test causal seams (E7 admission, E9 park, E11 clock/timer, E12
-// event set/admission) are realized by a SEPARATE non-installed internal-
+// Deterministic test causal seams (admission, park candidate/commit,
+// clock/timer, event set/admission) are realized by a SEPARATE non-installed internal-
 // testing runtime (`sluice_async_internal_testing`), compiled from the same
 // authoritative sources with the private macro SLUICE_ASYNC_INTERNAL_TESTING
 // defined. Only that variant links the test-support objects and the controller
@@ -74,7 +73,7 @@ class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (se
 // both runtime variants.
 // ----------------------------------------------------------------------------
 
-// E9 external wake handle (ADR §9.4.10). A control-block-backed handle that
+// External wake handle (ADR §9.4.10). A control-block-backed handle that
 // an EXTERNAL producer thread holds so it can wake a parked Scheduler Worker
 // without holding a raw Scheduler* (which would be use-after-free across
 // Scheduler destruction).
@@ -87,7 +86,7 @@ class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (se
 //     shared_ptr); the destructor flips alive=false under Control::mtx.
 //   - notify() holds Control::mtx (the CALLBACK LEASE) from the validity
 //     check through the Scheduler wake callback, so destruction cannot
-//     interleave with an in-flight callback (E9-LIFETIME-CORRECTIVE).
+//     interleave with an in-flight callback.
 //   - The producer MUST NOT call any other Scheduler method via this handle.
 //   - The producer MUST NOT touch Scheduler queues, registrations, or Fibers.
 //
@@ -132,34 +131,34 @@ private:
     std::shared_ptr<Control> control_;
 };
 
-// E9-CORRECTIVE: Run invocation lifetime contract (ADR §9.4.0). RunMode is
+// Run invocation lifetime contract (ADR §9.4.0). RunMode is
 // an EXPLICIT invocation policy, separate from wake capability. It is the
 // ONLY axis along which the idle action differs; the classifier,
 // publication protocol, ownership protocol, and backend admission are
 // shared (one worker loop, one classifier).
 //
-//   drain — E7/E8 compatibility. MW-S3 returns STALLED; the run invocation
+//   drain — Drain-mode semantics. MW-S3 returns STALLED; the run invocation
 //           MUST NOT park merely because an external-wake-capable wait
-//           exists. Existing callers and E7/E8 tests use Drain.
-//   live  — explicit E9 entry. The run remains resident while an
+//           exists. Existing callers and tests use Drain.
+//   live  — explicit Live-mode entry. The run remains resident while an
 //           unresolved wait has an effective Scheduler wake source
 //           (MW-S3 + external-wake-capable may park). No effective wake
 //           source still returns STALLED.
 //
-// A wake handle NEVER implicitly switches Drain <-> Live (E9-LIFE-6).
+// A wake handle NEVER implicitly switches Drain <-> Live.
 enum class RunMode : unsigned char {
     drain,
     live,
 };
 
-// Per-worker execution state (E7-C1). Each Worker thread owns one of these.
+// Per-worker execution state. Each Worker thread owns one of these.
 // The scheduler Context + current Fiber are NEVER shared across concurrent
 // Workers. Accessed by the owning Worker thread without locks for the
 // execution-state fields; local_runnable is concurrency-safe for cross-worker
-// publication (E7-B).
+// publication.
 struct WorkerState {
     fiber_ctx::Context sched_ctx{};   // this worker's saved scheduler continuation
-    // Phase G review P2a: `current` is read cross-thread ONLY by the
+    // `current` is read cross-thread ONLY by the
     // internal-testing forensics dump; the atomic closes that data race
     // (Fiber::state() is itself atomic, so the dump's follow-up read is
     // defined). Same-thread uses (run_next_on, the await/select paths) are
@@ -174,14 +173,13 @@ struct WorkerState {
     // read (acquired inside wake_mtx_ — that one-way wake_mtx_->inbox_mtx
     // edge is load-bearing). Parked-worker notification authority is the
     // Scheduler wake domain (wake_epoch_/wake_cv_ via signal_wake_locked()),
-    // NOT any per-worker condition_variable. The name is historical (the
-    // E7-B "routed inbox" design); renaming is deferred to an on-touch pass.
+    // NOT any per-worker condition_variable. The name is historical; renaming
+    // is deferred to an on-touch pass.
     std::mutex inbox_mtx;
     std::atomic<bool> active{false};  // this worker is part of a coordinated run
 
-    // E13 P6-C1 / I47-F2 (unified suspend-switch authority): suspend-switch
-    // execution authority that closes the wake-before-physical-context-switch
-    // window. Raised UNDER global_mtx_ by commit_suspend_locked BEFORE
+    // Unified suspend-switch authority: closes the wake-before-physical-
+    // context-switch window. Raised UNDER global_mtx_ by commit_suspend_locked BEFORE
     // make_waiting() — a resolver, which also needs global_mtx_, can therefore
     // never publish a Runnable ticket onto this worker's local_runnable
     // between Waiting-visibility and protection-publication (it MAY publish
@@ -197,15 +195,15 @@ struct WorkerState {
     // the clear-store and the thief's subsequent load.
     std::atomic<bool> suspend_switch_pending{false};
 
-    // E9 park-admission per-worker state (ADR §9.4.2 / §9.4.5).
+    // Park-admission per-worker state (ADR §9.4.2 / §9.4.5).
     // observed_epoch is the wake_epoch_ value observed at the instant this
     // worker COMMITTED to park (recorded under wake_mtx_). The cv.wait
     // predicate is "wake_epoch != observed_epoch OR wake-worthy persistent
     // state OR terminate" — this closes the commit-to-physical-wait window.
     // park_domain records which domain this worker is parked in (SCHEDULER
     // vs BACKEND) for diagnostics + the at-most-one-backend-participant
-    // rule. Phase G review P2a: written by the owning worker outside any
-    // lock and read cross-thread by the forensics dump — atomic, never a
+    // rule. Written by the owning worker outside any lock and read
+    // cross-thread by the forensics dump — atomic, never a
     // plain field (a "best-effort" racy read is still UB).
     std::uint64_t observed_epoch{0};
 
@@ -243,7 +241,7 @@ struct WorkerState {
     enum class ParkDomain : unsigned char { None, Scheduler, Backend };
     std::atomic<ParkDomain> park_domain{ParkDomain::None};
 
-    // G1 repair R4 (idle-dance backstop): 1 while this worker's +1 is
+    // Idle-dance backstop: 1 while this worker's +1 is
     // (believed to be) counted in Scheduler::idle_workers_ — set at the
     // dance fetch_add, cleared conservatively at each loop-iteration top
     // (an under-clear is safe: the park-commit check then treats the
@@ -252,12 +250,12 @@ struct WorkerState {
     // The park commit compares idle_workers_ AGAINST this value so a
     // counted dancer can sleep holding its count (the count's persistence
     // is what damps the not-last wake chain) while a worker that never
-    // danced still refuses to park behind an unfinished dance (E9-LIFE-8
-    // closure). Plain production atomic; read under global_mtx_ at the
+    // danced still refuses to park behind an unfinished dance.
+    // Plain production atomic; read under global_mtx_ at the
     // park commit alongside idle_workers_.
     std::atomic<unsigned> idle_dance_contributed_{0};
 
-    // Issue #161 (contribution-identity law): the value of
+    // Contribution-identity law: the value of
     // Scheduler::dance_epoch_ at the moment this worker's dance contribution
     // was made — loaded BEFORE the idle_workers_ fetch_add (see the
     // refinement argument on Scheduler::dance_epoch_). Meaningful only
@@ -277,7 +275,7 @@ struct WorkerState {
     // design).
     std::atomic<std::uint64_t> dance_epoch_at_contribution_{0};
 
-    // E13: owner Scheduler identity. Set exactly once when WorkerState is
+    // Owner Scheduler identity. Set exactly once when WorkerState is
     // attached to a Scheduler. Immutable by contract; not used for routing.
     Scheduler* owner_scheduler{nullptr};
 
@@ -286,17 +284,17 @@ struct WorkerState {
     WorkerState& operator=(const WorkerState&) = delete;
 };
 
-// E12-F: forward-declared so the AsyncTestAccess death-test accessors (under
+// Forward-declared so the AsyncTestAccess death-test accessors (under
 // SLUICE_ASYNC_INTERNAL_TESTING) can name AsyncRwLock& without pulling the
 // full public header into every Scheduler TU.
 class AsyncRwLock;
 
 class Scheduler {
 public:
-    // Phase F1 P1-2 (PR #105 review): wait_capacity bounds the WaitRecord pool.
+    // wait_capacity bounds the WaitRecord pool.
     // Records are preallocated at construction; acquire_wait_record_locked
     // returns nullptr (no_space) when the free list is exhausted. Default is
-    // 256 (a fixed floor; see design §8). Construction MAY allocate for the
+    // 256 (a fixed floor). Construction MAY allocate for the
     // pool and is therefore NOT noexcept — a failure is construction failure,
     // not a silent no-space Scheduler.
     explicit Scheduler(AsyncIoContext& ctx,
@@ -312,38 +310,38 @@ public:
     // the stack; this wires the fiber's ctx to that stack + the bridge + &fiber.
     bool init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size);
 
-    // Enqueue a Fiber as runnable. Round-robin assignment to a Worker (E7-B
-    // refines). E7-A: assigns to worker 0 (single-worker compatible).
-    // Issue #115: an active-run publication advances the Scheduler wake
+    // Enqueue a Fiber as runnable. Round-robin assignment to a Worker
+    // (single-worker compatible: assigns to worker 0).
+    // An active-run publication advances the Scheduler wake
     // epoch (same obligation as every runnable publication) so a worker
     // already parked on the wake domain observes the new ticket even when
     // the assigned target worker is busy inside a Fiber.
     void spawn(Fiber& fiber) noexcept;
 
-    // E8 test seam: spawn `fiber` directly onto worker `worker_id`'s
-    // local_runnable. Narrow deterministic-test hook (mirrors the E7-T11
-    // admission seam discipline); exposes no public production contract.
-    // Used by E8 tests to place a victim on a specific worker without the
-    // round-robin nondeterminism of spawn(). Records the owner. Publishes
-    // the same Scheduler wake obligation as spawn() (Issue #115).
+    // Test seam: spawn `fiber` directly onto worker `worker_id`'s
+    // local_runnable. Narrow deterministic-test hook; exposes no public
+    // production contract. Used by deterministic tests to place a victim on
+    // a specific worker without the round-robin nondeterminism of spawn().
+    // Records the owner. Publishes the same Scheduler wake obligation as
+    // spawn().
     void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
 
     // Run the scheduler with `worker_count` worker threads until global idle
-    // (E7 coordinated run, DRAIN mode). `worker_count` must be >= 1. With 1
-    // worker, this is the single-worker path (E4-E6 compatible). Drain
+    // (coordinated run, DRAIN mode). `worker_count` must be >= 1. With 1
+    // worker, this is the single-worker path. Drain
     // semantics (ADR §9.4.0): MW-S3 returns STALLED; the run does NOT park
     // merely because an external-wake-capable wait exists.
     void run(unsigned worker_count);
 
-    // E9-CORRECTIVE: explicit LIVE entry. Same worker loop and classifier as
+    // Explicit LIVE entry. Same worker loop and classifier as
     // run(); differs ONLY at the idle-action selection boundary. In Live, an
     // unresolved MW-S3 wait with an effective Scheduler wake source may keep
     // the run resident (park). MW-S3 without an effective wake source still
-    // returns STALLED. Used by E9-T1..T14 (the no-re-entry external-wake
-    // proof). See ADR §9.4.0 / §9.4.3.
+    // returns STALLED. Used by the no-re-entry external-wake
+    // proofs. See ADR §9.4.0 / §9.4.3.
     void run_live(unsigned worker_count);
 
-    // E14-F1 Group-scoped Live invocation. Identical to run_live(worker_count)
+    // Group-scoped Live invocation. Identical to run_live(worker_count)
     // EXCEPT the MW-S3 park decision additionally checks a caller-supplied
     // invocation stop predicate. If the predicate returns true, the run
     // terminates (returns to the caller) instead of parking, even if unrelated
@@ -358,22 +356,21 @@ public:
     // stored as a raw pointer pair, not copied). Pass nullptr to disable.
     void run_live(unsigned worker_count, bool (*stop_fn)(void*), void* stop_ctx);
 
-    // Legacy single-worker entry point (E4-E6 compatibility). Delegates to
-    // run(1) (Drain).
+    // Legacy single-worker entry point. Delegates to run(1) (Drain).
     void run_until_idle() { run(1); }
 
-    // ---- E5/E6 suspension primitives (called from Fiber bodies) ----
-    // Phase F1 (issue #98): the Completion wait now registers a real
-    // Scheduler routing record + arena waiter (ADR Decision 10) instead of a
-    // Completion*-keyed map entry, and the wake arrives through the
-    // identity-bearing ReadySink instead of an O(N) ready() re-scan.
+    // ---- Suspension primitives (called from Fiber bodies) ----
+    // The Completion wait registers a real Scheduler routing record + arena
+    // waiter (ADR Decision 10) instead of a Completion*-keyed map entry;
+    // the wake arrives through the identity-bearing ReadySink instead of an
+    // O(N) ready() re-scan.
     //
     // Returns:
     //   - success        — the Completion reached its terminal result (already
     //                      ready at registration, or the fiber was resumed by
     //                      the identity route); read c.result() then c.reset().
     //   - invalid_state  — synchronous rejection: a second waiter is already
-    //                      registered on this Completion (I13), or the
+    //                      registered on this Completion, or the
     //                      Completion is not bound to this context's backend
     //                      (cross-context / idle / stale — provenance misuse,
     //                      Decision 6). The fiber is NOT suspended.
@@ -386,7 +383,7 @@ public:
     Result<void> await_completion_void(Completion<void>& c);
     void await_ready_flag(const std::atomic<bool>& ready);
 
-    // ---- Phase F1: waiter cancellation (ADR Decision 10) ----
+    // ---- Waiter cancellation (ADR Decision 10) ----
     // Removes ONLY the waiter registration for `c` (arena cancel_waiter) and
     // retires the Scheduler routing record. It NEVER cancels the I/O, never
     // ends the fd/buffer borrow, and never chooses a terminal result.
@@ -401,7 +398,7 @@ public:
     Result<bool> cancel_waiter(Completion<std::size_t>& c);
     Result<bool> cancel_waiter(Completion<void>& c);
 
-    // ---- E10 WaitQueue suspension (sluice-CORE-E10) ----
+    // ---- WaitQueue suspension ----
     // Suspend the calling Fiber on `q`, registering `node`. `node` must be
     // Detached (fresh) and outlive this call's suspend until it is resumed
     // (woken or cancelled). The fiber resumes when EXACTLY ONE resolver wins:
@@ -411,7 +408,7 @@ public:
     // the loser performs no second wake. Cancellation here is wait-cancellation
     // ONLY (not task / I/O cancellation).
     //
-    // FIBER LIFETIME (E10-CORRECTIVE Sec.6). `await_wait` is called by the
+    // FIBER LIFETIME. `await_wait` is called by the
     // running fiber itself (me = ws->current); the node is registered with that
     // fiber as its handle, and the fiber then suspends INSIDE this call
     // (make_waiting + context_switch). The fiber cannot return from await_wait
@@ -441,13 +438,13 @@ public:
 
     // Resolve `node` (registered in `q`) with Cancelled and route the winner's
     // fiber. Returns true iff this call won (the node was Registered and is now
-    // Cancelled). A losing call (node already woken) is a no-op. E10 cancel is
-    // wait-cancellation only: it does NOT cancel the task/fiber/I/O op.
+    // Cancelled). A losing call (node already woken) is a no-op. WaitQueue
+    // cancel is wait-cancellation only: it does NOT cancel the task/fiber/I/O op.
     bool cancel_wait(WaitQueue& q, WaitNode& node);
 
 
-    // ---- E10/E11 boundary: deadline / timer wait (sluice-CORE-E11) ----
-    // The E11 Deadline type: a monotonic absolute time point. The protocol
+    // ---- Deadline / timer wait ----
+    // The Deadline type: a monotonic absolute time point. The protocol
     // authority is the absolute deadline (`expired iff now >= deadline`); a
     // relative duration is converted to a deadline by the caller via
     // `monotonic_now() + duration`. Wall-clock time never participates.
@@ -455,10 +452,10 @@ public:
 
     // Read the Scheduler's monotonic clock. Production: steady_clock ticks
     // since process start. Tests: a controllable logical clock advanced by
-    // advance_clock() (M7 deterministic causal seam).
+    // advance_clock() (the deterministic causal seam).
     deadline_t monotonic_now() const noexcept;
 
-    // TEST-ONLY causal seam (M7): advance the controllable logical clock to
+    // TEST-ONLY causal seam: advance the controllable logical clock to
     // `t` and pump any due timers. No-op in production mode (the clock runs
     // on steady_clock). In test mode this is the deterministic timer driver:
     // it advances time and resolves due deadlines through expire_wait, WITHOUT
@@ -478,18 +475,19 @@ public:
     // A deadline already due at admission MUST NOT strand the fiber: under the
     // admission critical section, after registration the deadline is rechecked
     // and, if due, resolved as Expired through the same resolve_ authority
-    // before suspension (I5 admission closure). The fiber never suspends
-    // merely because timer registration happened after the deadline was due.
+    // before suspension (the already-due admission closure). The fiber never
+    // suspends merely because timer registration happened after the deadline
+    // was due.
     //
     // A TimerRegistration control block (independently-stable retirement
     // state) is created for this wait epoch and owned by the Scheduler. A
     // non-timer winner retires it in the SAME critical section that resolves
     // the node, before runnable publication — so a stale expiry cannot
-    // dereference the destroyed WaitNode (I4 lifetime closure).
+    // dereference the destroyed WaitNode (the timer-lifetime closure).
     void await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline);
 
     // Resolve `node` (registered in `q`) with Expired and route the winner's
-    // fiber. The E11 third resolution cause, reached when the bound deadline
+    // fiber. The third resolution cause, reached when the bound deadline
     // elapses. Returns true iff this call won (the node was Registered and is
     // now Expired). A losing call (node already woken/cancelled, or retired)
     // is a no-op. Mirrors wake_wait_one / cancel_wait exactly:
@@ -499,7 +497,7 @@ public:
     bool expire_wait(WaitQueue& q, WaitNode& node);
 
 
-    // ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
+    // ---- Event wait admission / broadcast ----
     // The Event persistent-readiness substrate. Event owns a persistent
     // std::atomic<bool> set_ + a WaitQueue waiters_; these seams implement the
     // lost-set admission closure and set-all broadcast under global_mtx_ (the
@@ -518,8 +516,9 @@ public:
     // resolved through the canonical path (wake_wait_one_locked: resolve_(Woken)
     // + unlink + retire timer + dec count + make_runnable + route). Idempotent:
     // set() on SET is a no-op (the store is a no-op; the drain finds the queue
-    // in whatever state the registered waiters left it). P2: also performs
-    // Phase-1 Select scan on `select_port` inside the same global_mtx_ CS.
+    // in whatever state the registered waiters left it). Also performs the
+    // readiness-offer Select scan on `select_port` inside the same
+    // global_mtx_ CS.
     // Returns the number of waiters resolved by THIS call.
     // Safe to call from an external OS thread.
     std::size_t event_set_broadcast(Event& event);
@@ -538,22 +537,23 @@ public:
     void await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
                           WaitNode& node);
 
-    // Deadline-aware Event wait. Composes await_event_wait with E11
-    // TimerRegistration. The wait resolves when EXACTLY ONE cause wins the
-    // resolve_ CAS: set() broadcast (Woken), cancel_wait (Cancelled), or the
-    // deadline elapsing (Expired). If set_ is observed at admission, resolves
-    // Woken inline (no suspend). If the deadline is already due at admission,
-    // the E11 I5 path resolves Expired inline (no suspend). The deadline
-    // registration is retired by a non-timer winner in the same CS (E11 I4).
+    // Deadline-aware Event wait. Composes await_event_wait with a
+    // deadline TimerRegistration. The wait resolves when EXACTLY ONE cause
+    // wins the resolve_ CAS: set() broadcast (Woken), cancel_wait
+    // (Cancelled), or the deadline elapsing (Expired). If set_ is observed
+    // at admission, resolves Woken inline (no suspend). If the deadline is
+    // already due at admission, the already-due path resolves Expired inline
+    // (no suspend). The deadline registration is retired by a non-timer
+    // winner in the same CS.
     //
-    // Deadline precedence (F-EVENT-DEADLINE): at admission, Event SET readiness
+    // Deadline precedence: at admission, Event SET readiness
     // is checked BEFORE the already-due deadline predicate. Therefore Event SET
     // + already-due deadline -> Woken inline (the resource is ready; the
     // deadline is moot). This is the accepted production behavior.
     void await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>& set_flag,
                                    WaitNode& node, deadline_t deadline);
 
-    // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
+    // The narrow Event cancellation authority with
     // EXACT queue-membership validation. Resolves `node` with Cancelled only if
     // it is currently linked in `q` (scanned under global_mtx_ + q.mtx()). Does
     // NOT expose `q` to the caller (Event::cancel passes its private waiters_).
@@ -566,7 +566,7 @@ public:
     bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
 
-    // ---- E12-B Semaphore admission / release (sluice-CORE-E12-B) ----
+    // ---- Semaphore admission / release ----
     // The Semaphore counting-permit substrate. A Semaphore owns an
     // std::atomic<permit_count_t> available_ + a private WaitQueue waiters_ +
     // a const max_permits_. These NARROW private seams implement the
@@ -609,17 +609,17 @@ public:
                      std::atomic<std::uint32_t>& available, WaitNode& node);
 
     // Deadline-aware acquire admission closure. Composes sem_acquire's
-    // admission closure with E11 TimerRegistration. Mandatory precedence
-    // (under global_mtx_ + waiters_.mtx()):
+    // admission closure with a deadline TimerRegistration. Mandatory
+    // precedence (under global_mtx_ + waiters_.mtx()):
     //   1. authoritative permit admission (if available > 0 AND node is FIFO
     //      head): resolve Woken inline (no suspend). Permit admission wins over
     //      a due deadline.
-    //   2. else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   2. else if the deadline is already due: resolve Expired inline.
     //   3. else: commit suspension.
     // For a registered timed wait, RESOURCE_WAKE (release) / TIMER_EXPIRE /
     // CANCEL compete through the existing exactly-once WaitNode resolution
-    // authority. Reuses E11 timer registration/retirement. No Semaphore-local
-    // deadline mechanism.
+    // authority. Reuses the deadline timer registration/retirement. No
+    // Semaphore-local deadline mechanism.
     void sem_acquire_until(WaitQueue& waiters,
                            std::atomic<std::uint32_t>& available, WaitNode& node,
                            deadline_t deadline);
@@ -651,7 +651,7 @@ public:
                                    std::uint32_t max_permits);
 
 
-    // ---- E12-C AsyncMutex admission / handoff (sluice-CORE-E12-C) ----
+    // ---- AsyncMutex admission / handoff ----
     // The Fiber-suspending Mutex substrate. An AsyncMutex owns a Fiber* owner_
     // (the SOLE ownership authority — no redundant locked_) + a private
     // WaitQueue waiters_. These NARROW private seams implement the admission
@@ -695,17 +695,17 @@ public:
     void mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node);
 
     // Deadline-aware lock admission closure. Composes mutex_lock's admission
-    // closure with E11 TimerRegistration. Mandatory precedence (under
+    // closure with a deadline TimerRegistration. Mandatory precedence (under
     // global_mtx_ + waiters_.mtx()):
     //   1. authoritative ownership admission (owner free AND node is FIFO head):
     //      resolve Woken inline (no suspend). Ownership admission wins over a
     //      due deadline (resource-first).
-    //   2. else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   2. else if the deadline is already due: resolve Expired inline.
     //   3. else: commit suspension.
     // For a registered timed wait, RESOURCE_WAKE (unlock handoff) /
     // TIMER_EXPIRE / CANCEL compete through the existing exactly-once WaitNode
-    // resolution authority. Reuses E11 timer registration/retirement. No
-    // Mutex-local deadline mechanism.
+    // resolution authority. Reuses the deadline timer registration/retirement.
+    // No Mutex-local deadline mechanism.
     void mutex_lock_until(WaitQueue& waiters, Fiber*& owner, WaitNode& node,
                           deadline_t deadline);
 
@@ -746,7 +746,7 @@ public:
         SLUICE_REQUIRES(global_mtx_);
 
 
-    // ---- E12-D AsyncCondition (sluice-CORE-E12-D) ----
+    // ---- AsyncCondition ----
     // The Fiber-suspending condition variable substrate. An AsyncCondition owns
     // a private Condition WaitQueue `cond_waiters` and is bound to one AsyncMutex
     // (whose `mutex_waiters` + `owner` are passed BY REFERENCE, exactly as the
@@ -756,7 +756,8 @@ public:
     // global_mtx_ CS), the Condition notify_one/notify_all resolution, the
     // queue-identity-gated Condition cancel, and the deadline-aware variant.
     //
-    // Synchronization domain: same as the E12-A/B/C seams — global_mtx_ (and the
+    // Synchronization domain: same as the Event/Semaphore/Mutex seams —
+    // global_mtx_ (and the
     // relevant queue mtx() inside it). The Condition queue mtx and the Mutex
     // queue mtx are taken SEQUENTIALLY under global_mtx_, NEVER simultaneously
     // (docs §6.3): the prepare seam locks cond_waiters.mtx() to register the
@@ -791,7 +792,7 @@ public:
     // CALLER (AsyncCondition::wait) after this returns, NOT by this seam.
     //
     // `released_mutex` mirrors the timed seam (condition_wait_prepare_until):
-    // false on the C8 registration-failure path (the Mutex was NOT released —
+    // false on the registration-failure path (the Mutex was NOT released —
     // the caller retains ownership and must run NO reacquire epoch), and true
     // after the Mutex has been released/handed off (the caller MUST run the
     // reacquire epoch). The untimed path has no inline-Expired-at-admission
@@ -802,8 +803,9 @@ public:
                                        bool& released_mutex);
 
     // Deadline-aware CONDITION-WAIT-PREPARE. Composes condition_wait_prepare
-    // with an E11 TimerRegistration on `cond_node` (C-H4: deadline governs ONLY
-    // the Condition epoch). Admission precedence (under global_mtx_):
+    // with a deadline TimerRegistration on `cond_node`
+    // (deadline governs ONLY the Condition epoch). Admission precedence (under
+    // global_mtx_):
     //   1. if the deadline is ALREADY due at admission: resolve `cond_node`
     //      Expired INLINE — do NOT release the Mutex, do NOT suspend, do NOT
     //      create a reacquire epoch. Return Expired; the caller RETAINS
@@ -846,10 +848,11 @@ public:
     [[nodiscard]] bool condition_cancel_wait(WaitQueue& cond_waiters,
                                              WaitNode& cond_node);
 
-    // ---- E12-E Queue wait admission + reconciliation (sluice-CORE-E12-E) ----
+    // ---- Queue wait admission + reconciliation ----
     // The Queue blocking/timed substrate. A QueuePort owns a producer and a
     // consumer WaitQueue (waiters_[2]); the Scheduler is the authoritative
-    // resolution + publication executor, exactly as for E12-A/B/C/D. ALL seams
+    // resolution + publication executor, exactly as for the other
+    // synchronization seams. ALL seams
     // take global_mtx_ (and the role queue mtx() inside it); the QueuePort
     // passes its private waiters_[role] BY REFERENCE so the Scheduler can
     // resolve under the canonical locks without exposing them. No public
@@ -868,7 +871,7 @@ public:
     //   - queue_cancel                                          -> Cancelled
     //   - the deadline elapses (push_until/pop_until only)      -> Expired
 
-    // Blocking push admission (P5). Registers the producer node on the
+    // Blocking push admission. Registers the producer node on the
     // producer role FIFO under G + S + producer.mtx(); admission recheck
     // commits the item to the ring inline if space opened with no older
     // producer; otherwise suspends. On return, `lease` is:
@@ -878,16 +881,16 @@ public:
     // calling and pass its lease by reference.
     void queue_push_admit(detail::QueuePort& port, WaitNode& node,
                           detail::QueueItemLease& lease);
-    // Blocking pop admission (P5). Symmetric: consumer node on the consumer
+    // Blocking pop admission. Symmetric: consumer node on the consumer
     // role FIFO; admission recheck pops an item inline if one arrived with no
     // older consumer; otherwise suspends. On return, `out` is:
     //   - non-empty (the popped item's lease) if an item was granted;
     //   - empty if closed+empty (the caller returns `closed`).
     void queue_pop_admit(detail::QueuePort& port, WaitNode& node,
                          detail::QueueItemLease& out);
-    // Deadline-aware variants (P4-timed). Resource-first admission wins over a
+    // Deadline-aware variants. Resource-first admission wins over a
     // due deadline; an already-due deadline with no admissible resource
-    // resolves Expired inline (E11 I5). On expired, the push caller's `lease`
+    // resolves Expired inline. On expired, the push caller's `lease`
     // remains non-empty (original); the pop caller's `out` remains empty.
     void queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
                                 detail::QueueItemLease& lease,
@@ -901,7 +904,7 @@ public:
     [[nodiscard]] bool queue_cancel(detail::QueuePort& port, detail::QueueRole role,
                                     WaitNode& node);
 
-    // ---- E12-E reconciler grant seams (winner-before-publication) ----
+    // ---- Queue reconciler grant seams (winner-before-publication) ----
     // Called by QueuePort fast paths under G + S (caller-held) to grant the
     // role FIFO head atomically: resolve_(Woken) + per-winner resource commit
     // (read from won->user()) + retire any bound timer + make_runnable /
@@ -924,7 +927,7 @@ public:
     // the winner Woken with the lease RETAINED (the producer returns closed).
     WaitNode* queue_grant_producer_locked(detail::QueuePort& port);
 
-    // E12-E P7 teardown precondition helper. Reports whether BOTH role FIFOs
+    // Queue teardown precondition helper. Reports whether BOTH role FIFOs
     // of `port` are empty (no producer parked, no consumer parked). Called by
     // QueuePort::begin_teardown under global_mtx_; the QueuePort itself is not
     // a friend of WaitQueue (only the Scheduler is), so the emptiness query is
@@ -935,7 +938,7 @@ public:
     bool queue_role_waiters_empty_locked(detail::QueuePort& port)
         SLUICE_REQUIRES(global_mtx_);
 
-    // E12-E Queue timer-counter on-resolve thunk (F.1/F.2 corrective). A
+    // Queue timer-counter on-resolve thunk. A
     // Queue-bound TimerRegistration installs this as its on_resolve_ hook +
     // `&port` as owner_ctx_ at admit time. The Scheduler fires it exactly once
     // per ACTIVE->terminal timer transition (pump on consume,
@@ -946,12 +949,12 @@ public:
     static void queue_timer_on_resolve(void* owner_ctx, bool timer_won) noexcept;
 
 
-    // ---- E12-F AsyncRwLock (sluice-CORE-E12-F) ----
+    // ---- AsyncRwLock ----
     // Writer-fair, phase-batched Read-Write Lock seams. AsyncRwLock owns a
     // single unified FIFO WaitQueue (readers + writers) and passes its state
     // BY REFERENCE into these Scheduler seams. ALL authoritative RwLock state
     // mutations occur under global_mtx_ -> waiters_.mtx() (same lock order as
-    // E12-A/B/C/D/E). No RwLock-local lock is introduced.
+    // the other synchronization seams). No RwLock-local lock is introduced.
     //
     // The unified grant helper (rwlock_grant_from_head_locked) dispatches to
     // reader batch grant or single writer grant depending on the queue head
@@ -1029,7 +1032,7 @@ public:
         SLUICE_REQUIRES(global_mtx_);
 
 
-    // ---- E9 external wake source (ADR §9.4) ----
+    // ---- External wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes
     // the Scheduler wake source. Safe across Scheduler destruction. The handle
@@ -1050,9 +1053,9 @@ public:
     std::size_t runnable_count() const;
     std::size_t waiting_count() const {
         LockGuard lk(global_mtx_);
-        // Phase F1: Completion waits live in the wait registry (live records);
-        // flag/E10 waits remain counted here. G -> registry is the documented
-        // lock order.
+        // Completion waits live in the wait registry (live records);
+        // flag/WaitQueue waits remain counted here. G -> registry is the
+        // documented lock order.
         LockGuard rlk(wait_registry_mtx_);
         return wait_record_live_count_ + waiting_size_.size() + waiting_void_.size() +
                waiting_ready_.size() + waiting_waitq_count_;
@@ -1062,7 +1065,7 @@ public:
         return waiting_ready_.size();
     }
 
-    // E8 diagnostic (§12): the id of the Worker the caller is currently
+    // Diagnostic: the id of the Worker the caller is currently
     // running on (TLS g_worker), or -1 if not on a worker thread. Safe to
     // call from a Fiber body. Used by tests to record which worker executed
     // a Fiber without racing a non-atomic std::thread::id across threads.
@@ -1071,7 +1074,7 @@ public:
         return w ? w->id : static_cast<unsigned>(-1);
     }
 
-    // E16 P0-1 / C2: READ the execution-identity tag from the current Fiber
+    // READ the execution-identity tag from the current Fiber
     // (or nullptr if not inside a Fiber body). Unlike thread_local, this tag
     // survives Fiber suspend/resume. The ApplicationRuntime task wrapper stores
     // its `this` pointer here to detect worker-call detection. The read path is
@@ -1083,7 +1086,7 @@ public:
     }
 
 private:
-    // C2: WRITE authority for the Fiber execution-identity tag. This is the
+    // WRITE authority for the Fiber execution-identity tag. This is the
     // ONLY public-reachable write path, and it is private: callable solely by
     // ApplicationRuntime (the friend grant above), which sets/restores the tag
     // around user task code. Ordinary application code cannot reach it, so it
@@ -1101,7 +1104,7 @@ private:
 
 public:
 
-    // E8 diagnostic (§12): the CURRENT execution owner of `f`, or nullptr if
+    // Diagnostic: the CURRENT execution owner of `f`, or nullptr if
     // `f` has not been spawned/assigned. Test/DEBUG only — do not make
     // runtime policy depend on this. Returns the WorkerState* that owns `f`
     // at this instant (which may differ from the initial assignment if `f`
@@ -1117,15 +1120,15 @@ public:
     }
 
 private:
-    friend class SchedulerWakeHandle;  // E9: notify() -> notify_external_wake
-    // E12-E: QueuePort reaches global_mtx_, wake_wait_one_locked, and the
+    friend class SchedulerWakeHandle;  // notify() -> notify_external_wake
+    // QueuePort reaches global_mtx_, wake_wait_one_locked, and the
     // queue admit/cancel seams to reconcile the OTHER role on fast-path
     // success. Mirrors how Scheduler friended nothing for Mutex/Semaphore
     // (those pass their private waiters_ by reference); the Queue needs
     //Scheduler-internal wake + global-mtx access for its reconciler.
     friend class ::sluice::async::detail::QueuePort;
 
-    // E13 P5/P6 CORRECTIVE: friend the pre-declared constrained public select()
+    // Friend the pre-declared constrained public select()
     // template (declared in select_fwd.hpp, defined in select.hpp). By
     // friending a concrete function-template entity (not a concrete struct
     // name), an ordinary production TU cannot forge the friend grant: the
@@ -1142,7 +1145,7 @@ private:
         )
     friend SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
-    // ---- E13 Select registry operations (private Scheduler authority) ----
+    // ---- Select registry operations (private Scheduler authority) ----
     // All three require global_mtx_ held. Event must belong to this Scheduler.
     //
     // Link `arm` into `event`'s private SelectPort. Precondition: arm is
@@ -1160,25 +1163,24 @@ private:
 
     // Walk `event`'s SelectPort, marking eligible Event arms CandidateReady.
     // Eligible: kind==Event, state==Registered, group!=nullptr, group.phase==Armed.
-    // Returns the number of arms marked. P2: readiness-offer only; no winner
+    // Returns the number of arms marked. Readiness-offer only; no winner
     // claim, no finalization, no publication.
     std::size_t select_event_scan_locked(Event& event)
         SLUICE_REQUIRES(global_mtx_);
 
-    // Wait registration with owner Worker (E7-B will use owner; E7-A stores
-    // the Fiber only). Used by the ready-FLAG waits (waiting_ready_); the
-    // Completion waits moved to the identity-bearing WaitRecord registry in
-    // Phase F1.
+    // Wait registration with owner Worker. Used by the ready-FLAG waits
+    // (waiting_ready_); the Completion waits live in the identity-bearing
+    // WaitRecord registry.
     struct WaitReg {
         Fiber* fiber;
         WorkerState* owner;
     };
 
-    // ---- Phase F1: identity-bearing waiter routing (ADR Decisions 9/10) ----
+    // ---- Identity-bearing waiter routing (ADR Decisions 9/10) ----
     // One routing record per registered Scheduler Completion-waiter. Records
     // are address-stable for the Scheduler lifetime (never destroyed; reused
     // from a free list with a generation bump so a stale token cannot match a
-    // new occupant — I6). The routing lease pins the record: the record is
+    // new occupant). The routing lease pins the record: the record is
     // NOT retired while a request slot or the synchronous ReadySink owns its
     // lease, and it is consumed exactly once by the winning delivery path
     // (reap sink -> delivered -> drain, or waiter cancel -> cancelled).
@@ -1206,13 +1208,13 @@ private:
         WaitRecord* next_free = nullptr;       // intrusive free-list link
     };
 
-    // The Scheduler-owned identity-bearing ReadySink (Phase F1). The arena
+    // The Scheduler-owned identity-bearing ReadySink. The arena
     // invokes it during backend poll/wait_one with NO slot/backend lock held;
     // it acquires NO Scheduler lock — it marks the matching WaitRecord
     // delivered under the registry leaf and links it into the delivered list
     // for the drain (under global_mtx_) to route. It consumes (acknowledges)
     // the routing lease in every path. Stale/cross-Scheduler tokens and
-    // already-cancelled records drop the lease without routing (Race B/C).
+    // already-cancelled records drop the lease without routing.
     class ReadyRoutingSink final : public detail::SynchronousReadySink {
     public:
         explicit ReadyRoutingSink(Scheduler* scheduler) noexcept
@@ -1242,17 +1244,17 @@ private:
 #endif
     };
 
-    // Wake-path drain (Phase F1): polls the backend — the Scheduler-owned
+    // Wake-path drain: polls the backend — the Scheduler-owned
     // sink marks delivered records during reap — then pops the delivered list
-    // and routes each waiter exactly once (E7-T2 make_runnable + owner
+    // and routes each waiter exactly once (make_runnable + owner
     // routing). Replaces the O(N) Completion::ready() re-scan. Caller MUST
     // hold global_mtx_ (the drain's poll runs under G; the sink takes only
-    // the registry leaf, so no deadlock — design §5.3).
+    // the registry leaf, so no deadlock).
     bool drain_routed_completion_waits_locked() SLUICE_REQUIRES(global_mtx_);
 
     // Registry helpers. `wait_registry_mtx_` is a leaf domain: code holding
     // it MUST NOT acquire global_mtx_, access_mtx_, a worker inbox mutex,
-    // the wake mutex, or a backend-progress lock (design §5.2). All callers
+    // the wake mutex, or a backend-progress lock. All callers
     // hold G.
     WaitRecord* acquire_wait_record_locked(Fiber* fiber, WorkerState* owner,
                                            const void* completion,
@@ -1261,7 +1263,7 @@ private:
     void retire_wait_record_locked(std::uint32_t index) SLUICE_REQUIRES(global_mtx_);
     std::size_t wait_record_live_count_locked() const SLUICE_REQUIRES(global_mtx_);
 
-    // E7-C fixup: explicit global MW-state classification (ADR §9.2.6).
+    // Explicit global MW-state classification (ADR §9.2.6).
     // Physical run termination may occur for both MW_S3_UNRESOLVED and
     // QUIESCENT, but they are LOGICALLY distinct: MW_S3 retains unresolved
     // wait registrations and must never be reported as quiescence.
@@ -1272,9 +1274,9 @@ private:
         quiescent,          // nothing remains
     };
 
-    // E7-C fixup: two-phase MW-S2 admission state machine. An atomic bool is
+    // Two-phase MW-S2 admission state machine. An atomic bool is
     // insufficient (check-to-block race). NONE → CANDIDATE (under global_mtx_,
-    // after Phase-A drain+classify) → COMMITTED (after Phase-B re-drain+
+    // after the first drain+classify) → COMMITTED (after a re-drain+
     // reclassify still shows MW-S2). route_runnable_locked demotes COMMITTED
     // or CANDIDATE back to NONE (new runnable work cancels admission).
     enum class AdmissionState : unsigned {
@@ -1287,13 +1289,13 @@ private:
     void route_runnable(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
     void route_runnable_locked(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
 
-    // I47-F1: owner-authoritative Fiber lookup. Returns the recorded owner
+    // Owner-authoritative Fiber lookup. Returns the recorded owner
     // WorkerState for a Fiber that has already run and suspended. A missing
     // owner is a fatal Scheduler invariant violation (fail-fast). MUST NOT
     // fall back to g_worker, pending_spawn_, or an arbitrary resolver Worker.
     WorkerState* owner_for_fiber_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
 
-    // I47-F1: canonical waiting-Fiber publication helper. Looks up the Fiber's
+    // Canonical waiting-Fiber publication helper. Looks up the Fiber's
     // recorded owner, transitions Waiting->Runnable (exactly-once guard), and
     // routes the runnable ticket through the current topology. A retained owner
     // outside this invocation's first-N participants is rebound under
@@ -1302,14 +1304,14 @@ private:
     // winner resolution, timer retirement, and wait accounting (caller's
     // responsibility).
     bool publish_waiting_fiber_runnable_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
-    // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
+    // The wake_wait_one body with global_mtx_ already held. Resolves the
     // FIFO head with Woken (wake_one_locked), retires any bound timer, decrements
     // waiting_waitq_count_, and routes the winner runnable. Returns the winning
     // node (nullptr if empty or head lost). Used by the public wake_wait_one AND
     // event_set_broadcast's drain loop. Caller MUST hold global_mtx_.
     WaitNode* wake_wait_one_locked(WaitQueue& q) SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E12-F RwLock private helpers ----
+    // ---- RwLock private helpers ----
     // Unified head-driven grant reconcile. Caller MUST hold G; this function
     // acquires W internally (like mutex_handoff_one_locked). Dispatches to
     // reader batch or writer grant based on head mode. Publishes granted
@@ -1320,8 +1322,7 @@ private:
                                        Fiber*& writer_owner)
         SLUICE_REQUIRES(global_mtx_);
 
-    // No-publication head-claim primitive (design: claim_waiter_woken_no_
-    // publish_locked). Caller MUST hold G + W. Resolves the node Woken (the
+    // No-publication head-claim primitive. Caller MUST hold G + W. Resolves the node Woken (the
     // single winner CAS — fail-fast Category B if it loses for a valid linked
     // eligible node), unlinks it from the queue, retires any bound
     // TimerRegistration, decrements waiting_waitq_count_, and clears the
@@ -1341,7 +1342,7 @@ private:
 
     using WorkerSnapshot = std::vector<WorkerState*>;
 
-    // Issue #50 worker-topology authority. Grow the Scheduler-owned topology
+    // Worker-topology authority. Grow the Scheduler-owned topology
     // monotonically and capture exactly the first worker_count stable pointees
     // participating in this invocation. The vector structure is touched only
     // under global_mtx_; captured WorkerState* values remain valid for the
@@ -1350,14 +1351,14 @@ private:
         SLUICE_REQUIRES(global_mtx_);
 
     void worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers);
-    // E9-CORRECTIVE: one internal run implementation parameterized by
+    // One internal run implementation parameterized by
     // RunMode. The worker loop reads run_mode_ to select the idle action
     // (ADR §9.4.0). Drain and Live share the SAME loop, classifier, and
     // publication/ownership protocols.
     void run_impl(unsigned worker_count, RunMode mode);
     void run_next_on(WorkerState* ws, Fiber* fiber);
 
-    // I47-F2: unified suspend-switch authority protocol. Centralizes the
+    // Unified suspend-switch authority protocol. Centralizes the
     // suspend authority raise + Fiber Running->Waiting transition that EVERY
     // suspension path MUST perform under global_mtx_ BEFORE releasing it.
     //
@@ -1381,7 +1382,7 @@ private:
     void commit_suspend_locked(WorkerState* ws, Fiber* fiber)
         SLUICE_REQUIRES(global_mtx_);
 
-    // E8: try to steal one runnable Fiber from another worker's local_runnable
+    // Try to steal one runnable Fiber from another worker's local_runnable
     // to `thief`. Returns true if a Fiber was stolen (and now sits on
     // thief->local_runnable with ownership transferred). Called WITHOUT
     // global_mtx_ held; acquires it internally. Steal is MOVE + OWNER
@@ -1400,7 +1401,7 @@ private:
     // classify evidence (WorkerState::last_classify / classify_seq) used by
     // the internal-testing park ledger — the ledger must attribute the
     // classification the PARKING worker trusted, not a Scheduler-global
-    // last-writer value (Phase G review P2a).
+    // last-writer value.
     MwState classify_locked(const WorkerSnapshot& run_workers,
                             WorkerState* classify_ws = nullptr) const SLUICE_REQUIRES(global_mtx_);
     // classify_locked body. classify_locked wraps it to record the per-worker
@@ -1409,7 +1410,7 @@ private:
     MwState classify_locked_impl(const WorkerSnapshot& run_workers) const SLUICE_REQUIRES(global_mtx_);
 
     // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the deterministic causal pause
-    // seams (E7 admission, E9 park candidate/commit, E12 event set-store/
+    // seams (admission, park candidate/commit, event set-store/
     // admission-before-final-check) NO LONGER live as Scheduler fields. They
     // were pure test-coordination state (mtx/cv/bool) with zero production
     // readers, and the forgeable namespace-level friends that gated them have
@@ -1420,7 +1421,7 @@ private:
     // `sluice_async` target has no such fields, no such call sites, and no such
     // symbols. See tests/async_test_control_internal.hpp for the controller.
 
-    // G1 repair (PR #108 §8.3): true when persistent progress exists in the
+    // True when persistent progress exists in the
     // run domain but NO active observer would remain if the caller parked.
     // Called under global_mtx_ at the wake-domain park commit (the
     // arm→recheck closure in park_on_wake_source). Progress = a runnable
@@ -1429,11 +1430,11 @@ private:
     // backend-ready-unreaped — the reap is progress owed to a waiter).
     // NOT external-wake-capable waits: those are externally resolved by
     // contract (their producers signal the wake domain) and a resident park
-    // while only they remain is the E9 Live design. Observer = a fiber
+    // while only they remain is the Live design. Observer = a fiber
     // currently executing, the MW-S2 participant parked in / committed to
     // the backend-domain wait, or an admission in flight (the admission
     // holder is cycling; if it abandons, it re-evaluates rather than park).
-    // Issue #115 follow-up — CHECK PRIORITY: the runnable-ticket checks
+    // CHECK PRIORITY: the runnable-ticket checks
     // (pending_spawn_ / any local queue) run BEFORE the observer exemption.
     // A runnable ticket is never delegatable to a running Fiber: a running
     // Fiber is an observer for ITSELF, not for another ticket queued behind
@@ -1453,7 +1454,7 @@ private:
 
     // Global coordination state (protected by global_mtx_).
     mutable Mutex global_mtx_;
-    // Phase F1: Completion waits are identity-bearing on RequestArena-backed
+    // Completion waits are identity-bearing on RequestArena-backed
     // backends (the wait registry below, routed via the ReadySink). For a
     // NON-arena backend (custom AsyncBackend that returns not_supported from
     // register_waiter — e.g. test-support backends), the Scheduler falls back
@@ -1465,33 +1466,34 @@ private:
     std::unordered_map<void*, WaitReg> waiting_void_ SLUICE_GUARDED_BY(global_mtx_){};
     std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_ SLUICE_GUARDED_BY(global_mtx_){};
 
-    // E10: count of fibers suspended on a WaitQueue via await_wait (protected
+    // Count of fibers suspended on a WaitQueue via await_wait (protected
     // by global_mtx_). Incremented on registration, decremented on resolution
     // (wake_wait_one winner OR cancel_wait winner). Counted by classify_locked
     // exactly like the other wait maps so MW-S3 (unresolved waits) is correct.
     // We track a COUNT (not a per-node map) because a WaitQueue owns its own
-    // intrusive node list; the scheduler only needs to know SOME E10 wait is
+    // intrusive node list; the scheduler only needs to know SOME WaitQueue
+    // wait is
     // unresolved for MW classification, and the per-node fiber is recovered
     // from the winning node at resolution time.
     std::size_t waiting_waitq_count_ SLUICE_GUARDED_BY(global_mtx_){0};
 
-    // ---- Phase F1 wait registry (ADR Decision 10; design §4.1/§5) ----
+    // ---- Wait registry (ADR Decision 10) ----
     // The registry is a LEAF domain: wait_registry_mtx_ is never held while
     // acquiring global_mtx_, access_mtx_, a worker inbox mutex, the wake
     // mutex, or a backend-progress lock. Inbound edges only: {global_mtx_, access_mtx_}
     // -> registry (registration/drain/cancel under G; ReadyRoutingSink under
     // access_mtx_ during poll/wait_one). Records are address-stable
     // unique_ptrs; the pool is preallocated at construction to exactly
-    // wait_capacity_ records and NEVER grows beyond that bound (P1-2).
-    // Reuse bumps generation before the new occupant is visible (I6).
+    // wait_capacity_ records and NEVER grows beyond that bound.
+    // Reuse bumps generation before the new occupant is visible.
     mutable Mutex wait_registry_mtx_;
-    // Phase F1 P1-2: configured maximum number of WaitRecords. Once
+    // Configured maximum number of WaitRecords. Once
     // constructed, wait_records_.size() == wait_capacity_ and never changes.
     const std::size_t wait_capacity_ SLUICE_GUARDED_BY(wait_registry_mtx_){0};
     std::vector<std::unique_ptr<WaitRecord>> wait_records_
         SLUICE_GUARDED_BY(wait_registry_mtx_);
     // Intrusive free list through the records (a vector free-list would
-    // allocate on the drain/route path — banned after acceptance, I9).
+    // allocate on the drain/route path).
     WaitRecord* wait_record_free_head_ SLUICE_GUARDED_BY(wait_registry_mtx_) = nullptr;
     WaitRecord* wait_delivered_head_ SLUICE_GUARDED_BY(wait_registry_mtx_) = nullptr;
     // Live records = registered + delivered (diagnostics / destructor assert).
@@ -1506,9 +1508,9 @@ private:
     // detached at destruction.
     ReadyRoutingSink ready_sink_{this};
 
-    // E13 P6: count of SelectGroups whose callers have committed Waiting and
-    // whose phase is Armed, but which are not yet Completed (docs/e13-select-
-    // production-test-plan.md §7.1, task §7). Counted BY GROUP (not by arm),
+    // Count of SelectGroups whose callers have committed Waiting and
+    // whose phase is Armed, but which are not yet Completed. Counted BY GROUP
+    // (not by arm),
     // protected by global_mtx_. Incremented once at the no-ready suspension
     // commit; decremented once at suspended publication. An Event-only
     // suspended Select has no active Timer, no ordinary WaitQueue, and no
@@ -1519,7 +1521,7 @@ private:
     std::size_t waiting_select_count_ SLUICE_GUARDED_BY(global_mtx_){0};
 
 
-    // E8: the RUNNABLE ownership / steal-consistency record for each Fiber
+    // The RUNNABLE ownership / steal-consistency record for each Fiber
     // that has been spawned (protected by global_mtx_). It records which
     // Worker's local_runnable queue currently holds the Fiber's runnable
     // ticket. Writers: spawn / spawn_on / run() distribute (initial owner),
@@ -1530,13 +1532,13 @@ private:
     // It is NOT read by any wake/route path: wake_ready_*_locked route by
     // WaitReg.owner (captured as g_worker at suspend time). It is NOT
     // updated by await_* (the wait-epoch resume owner is captured in
-    // WaitReg.owner, not here). See ADR §9.3.5.1 + docs/e8-formal-corrective.
-    // For E7-pinned Fibers this is write-once (spawn sets it; no steal
-    // occurs) and is behaviorally identical to E7; E8 only diverges on steal.
+    // WaitReg.owner, not here). See ADR §9.3.5.1.
+    // For pinned Fibers this is write-once (spawn sets it; no steal
+    // occurs); only steal diverges.
     std::unordered_map<Fiber*, WorkerState*> fiber_owner_ SLUICE_GUARDED_BY(global_mtx_){};
 
-    // Global runnable queue for pre-start assignment (E7-A; E7-B will make this
-    // per-worker). Fibers assigned here are picked up by workers in FIFO order.
+    // Global runnable queue for pre-start assignment. Fibers assigned here
+    // are picked up by workers in FIFO order.
     std::deque<Fiber*> pending_spawn_ SLUICE_GUARDED_BY(global_mtx_){};
     unsigned next_spawn_worker_ SLUICE_GUARDED_BY(global_mtx_) = 0;
 
@@ -1553,7 +1555,7 @@ private:
     std::atomic<unsigned> active_worker_count_{0};
     std::atomic<unsigned> running_fiber_count_{0};
     std::atomic<unsigned> idle_workers_{0};
-    // Issue #161 (contribution-identity law): generation of the CURRENT
+    // Contribution-identity law: generation of the CURRENT
     // idle-dance contribution epoch. idle_workers_ is erased OUTSIDE any
     // lock by two ticketed paths (the popped-ticket branch and the MW-S1
     // fall-through in worker_loop), and such an erase can orphan a peer's
@@ -1562,23 +1564,24 @@ private:
     // the park commit's bare idle>own comparison cannot tell the eraser's
     // fresh count from the peer's stale one (1 == 1) and both workers park
     // with the run permanently one short of the last-idle threshold —
-    // work complete, terminate false, no remaining producer (the #161
-    // stall; TLC counterexample M4, spec/tla/e12_rwlock_scheduler_liveness).
+    // work complete, terminate false, no remaining producer (the
+    // contribution-orphan stall; TLC counterexample M4,
+    // spec/tla/e12_rwlock_scheduler_liveness).
     //
-    // LAW (B3, model-proven): any idle-count reset that CAN orphan a live
+    // LAW (model-proven): any idle-count reset that CAN orphan a live
     // contribution invalidates the identity of ALL live contributions; a
     // dancer may arm a park baseline only while its recorded identity is
     // still current, else it refuses, signals, and re-dances (toward the
     // last-idle threshold or a re-counted park). This field is that
-    // generation. It is advanced at exactly THREE erase sites (B4
-    // classification, re-proven by the split-window model round): the two
+    // generation. It is advanced at exactly THREE erase sites
+    // (re-proven by the split-window model round): the two
     // unlocked ticketed paths above, and the route-publication erase in
     // route_runnable_locked — the split-window model round falsified its
     // old "self-guarded" verdict (a delayed orphan commit can absorb the
     // eraser's final not-last signal with the generation still matching).
     // Every other reset site is self-guarded — and CONDITIONED on the route
-    // bump: same-G-critical-section forced re-loop/continue sites
-    // (:1003/:1054/:1121) are reachable only after work appeared, i.e.
+    // bump: the same-G-critical-section forced re-loop/continue sites in
+    // the worker loop are reachable only after work appeared, i.e.
     // after a route publication whose bump already invalidated whatever it
     // orphaned; the run boundary resets every worker's identity together;
     // the Live-resident reset keeps its bounded-timeout re-drain backstop;
@@ -1618,7 +1621,7 @@ private:
     std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;
     bool in_coordinated_run_ = false;
-    // G1 repair (PR #108 §8.3 "participant disappearance"): participants of
+    // "Participant disappearance" guard: participants of
     // the CURRENT invocation whose worker_loop is still live. The idle-dance
     // termination converges against THIS count, not the invocation snapshot
     // size — a worker that exits its loop early (e.g. the MW-S2 no-progress
@@ -1630,26 +1633,26 @@ private:
     // run_impl entry, decremented in the worker_loop exit retire block.
     unsigned live_loop_workers_ SLUICE_GUARDED_BY(global_mtx_) = 0;
 
-    // E9-CORRECTIVE: the current run invocation's lifetime policy. Set by
+    // The current run invocation's lifetime policy. Set by
     // run_impl before worker_loop starts; read by worker_loop at the idle-
     // action selection boundary. Stable for the duration of a run (a run
     // invocation has ONE mode). Plain bool-storage is safe: it is written
     // once before any worker thread starts and only read thereafter.
     RunMode run_mode_{RunMode::drain};
 
-    // E14-F1: invocation-scoped stop predicate for Group-scoped Live runs.
+    // Invocation-scoped stop predicate for Group-scoped Live runs.
     // Set by run_impl before worker_loop; null for ordinary run/run_live.
     // Checked at the MW-S3+Live+external_wake boundary under global_mtx_.
     // If stop_fn(stop_ctx) returns true, the run terminates instead of parking.
     bool (*invocation_stop_fn_)(void*){nullptr};
     void* invocation_stop_ctx_{nullptr};
 
-    // E14 RT-F3 internal-testing seam: one-shot init_fiber failure injection.
+    // Internal-testing seam: one-shot init_fiber failure injection.
     // When true, the next init_fiber() returns false and resets the flag.
     // Production (SLUICE_ASYNC_INTERNAL_TESTING undefined): never written.
     std::atomic<bool> force_init_fiber_fail_{false};
 
-    // E7-C fixup: MW-S2 admission coordination state (protected by
+    // MW-S2 admission coordination state (protected by
     // global_mtx_). admission_ transitions NONE→CANDIDATE→COMMITTED under
     // global_mtx_; route_runnable_locked demotes to NONE. Only the COMMITTED
     // participant may enter ctx_.wait_one(), and only AFTER releasing
@@ -1657,7 +1660,7 @@ private:
     AdmissionState admission_ SLUICE_GUARDED_BY(global_mtx_){AdmissionState::none};
     unsigned admission_owner_ SLUICE_GUARDED_BY(global_mtx_) = static_cast<unsigned>(-1);  // worker id of candidate/committed
 
-    // ---- E9 wake source (ADR §9.4.5) ----
+    // ---- Wake source (ADR §9.4.5) ----
     // The unified Scheduler wake source. wake_epoch_ is a monotonically
     // non-decreasing counter advanced by every wake-relevant producer
     // (route_runnable_locked, notify_external_wake, termination). wake_cv_ is
@@ -1675,14 +1678,14 @@ private:
     // SchedulerWakeHandle so a post-destruction notify() is a safe no-op.
     std::shared_ptr<SchedulerWakeHandle::Control> wake_control_;
 
-    // Phase G (P5-CORRECTIVE bridge gate): true while the MW-S2 progress
+    // Backend-progress bridge gate: true while the MW-S2 progress
     // participant is parked (or committed to park) in the BACKEND domain
     // (ctx_.wait_one()). Scheduler::signal_wake_locked checks this gate before
     // interrupting the backend waiters, so wake publications cost one atomic
-    // load when no backend participant is parked. Set at the MW-S2 Phase-B
+    // load when no backend participant is parked. Set at the MW-S2 admission
     // commit (inside the same critical section that arms the committed-wait
-    // baseline — the D4-RM14 handshake closes the commit-to-park window,
-    // independent of this gate), cleared when wait_one() returns. The gate is
+    // baseline, which closes the commit-to-park window independently of this
+    // gate), cleared when wait_one() returns. The gate is
     // an optimization only: the epoch protocols are the lost-wake authority.
     std::atomic<bool> backend_wait_active_{false};
 
@@ -1754,32 +1757,32 @@ private:
     // bounded timeout, defense-in-depth). Records observed_epoch_ under
     // wake_mtx_ before sleeping. Returns when wake-worthy state is observed.
     // ws is the calling worker. Called with global_mtx_ RELEASED.
-    // E11: the bounded timeout is min(default wake poll, earliest-deadline-now)
-    // so an active deadline cannot park a Worker indefinitely past it (I6).
-    // Phase G: the timeout is DEADLINE-DRIVEN (uncapped) except when
+    // The bounded timeout is min(default wake poll, earliest-deadline-now)
+    // so an active deadline cannot park a Worker indefinitely past it.
+    // The timeout is DEADLINE-DRIVEN (uncapped) except when
     // `bounded_backend_observation` is set — the MW-S2 MIXED-WAKE park for a
     // non-split-wait (reference/legacy) backend, whose poll-driven readiness
-    // is observed through the 2ms bounded observation interval (the E9
-    // behavior, retained only there). Split-wait backends park their
+    // is observed through the 2ms bounded observation interval (retained
+    // only there). Split-wait backends park their
     // progress participant in ctx_.wait_one() and never reach this function
     // with backend progress pending.
-    // TSA-SUPPRESS-001: uses std::unique_lock + cv.wait (release-wait-reacquire
-    // pattern).  Clang TSA cannot track unique_lock capability semantics through
-    // condition_variable::wait.  The production lock fact (wake_epoch_ is
-    // protected by wake_mtx_) is already independently accepted and proven in E9.
+    // Clang TSA cannot track unique_lock capability semantics through
+    // condition_variable::wait (release-wait-reacquire pattern), so this
+    // function opts out of analysis. The production lock fact (wake_epoch_ is
+    // protected by wake_mtx_) is independently accepted and proven.
     void park_on_wake_source(WorkerState* ws,
                              bool bounded_backend_observation) SLUICE_NO_THREAD_SAFETY_ANALYSIS;
 
-    // ---- E11 timer / deadline subsystem (sluice-CORE-E11) ----
+    // ---- Timer / deadline subsystem ----
     // The deadline container is a binary min-heap over TimerRegistration*,
     // keyed by deadline. Pointer-stable storage (std::list) so a registration's
     // identity survives heap sift operations and outlives any bound WaitNode.
     //
-    // Reclamation contract (proven by e11_t18, F3-corrected): logical
+    // Reclamation contract: logical
     // retirement (ACTIVE->RETIRED) is IMMEDIATE (the non-timer winner performs
     // it in the same CS as the resolve CAS); lifetime safety is IMMEDIATE (the
     // atomic `state` gate makes try_claim_expiry/retire observe RETIRED/CONSUMED
-    // WITHOUT dereferencing a possibly-destroyed node — I4); but PHYSICAL
+    // WITHOUT dereferencing a possibly-destroyed node); but PHYSICAL
     // reclamation (erase from heap + pool) is LAZY-AT-DEADLINE — the pump pops
     // an entry only when `now >= its deadline`, regardless of state, and erases
     // the pool block then. Consequently a far-future RETIRED entry remains
@@ -1788,7 +1791,7 @@ private:
     // (retired/consumed entries whose deadlines have not yet been reached); it
     // is NOT bounded solely by concurrent waits, and "unbounded growth fixed"
     // must not be claimed absolutely. No inert block lingers past its OWN
-    // deadline. Wheel-compaction / eager removal is deferred to E15 and is NOT
+    // deadline. Wheel-compaction / eager removal is deliberately NOT
     // added unless a reviewer proves a mandatory resource-bound violation.
     //
     // All heap state is protected by global_mtx_ (the Scheduler coordination
@@ -1797,16 +1800,16 @@ private:
     // the same CS as the resolve CAS). The clock is atomic so a worker can read
     // it outside the lock for the park-timeout computation.
     std::list<TimerRegistration> timer_pool_ SLUICE_GUARDED_BY(global_mtx_){};
-    // E13 P3 (deadline-heap migration): the heap now stores unified tagged
+    // The heap stores unified tagged
     // DeadlineHeapEntry values (Ordinary | Select) instead of raw
     // TimerRegistration*. Both kinds share one min-heap keyed by the cached
     // deadline; the ordinary branch is byte-for-byte identical in logic (it
     // reads the same deadline, pops the same min, and processes the same
     // TimerRegistration* via entry.target.ordinary). Internal-only type; no
-    // public API exposure. See docs/e13-select-timer-adapter.md §4.
+    // public API exposure.
     std::vector<detail::DeadlineHeapEntry> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
 
-    // E13 P3: Scheduler-owned stable pool of SelectTimerRegistration blocks,
+    // Scheduler-owned stable pool of SelectTimerRegistration blocks,
     // mirroring timer_pool_. Blocks are constructed in a caller-frame
     // std::list outside G and spliced in ONE NODE AT A TIME under G during
     // registration (std::list::splice is O(1), allocation-free). Pointer-
@@ -1874,7 +1877,7 @@ private:
     std::size_t pump_deadlines_locked() SLUICE_REQUIRES(global_mtx_);
 
     // Heap helpers (min-heap on deadline). Called under global_mtx_.
-    // E13 P3: the heap stores unified DeadlineHeapEntry values; the comparator
+    // The heap stores unified DeadlineHeapEntry values; the comparator
     // compares cached deadlines (equal-deadline order is unspecified). sift/pop
     // no longer touch any registration's heap_index (the entry's vector
     // position is the sole position authority).
@@ -1895,12 +1898,12 @@ private:
     // do NOT erase — they leave the block in the heap to be popped+erased by
     // the pump at its deadline (lazy removal). This keeps the pool bounded by
     // live+pending deadline waits with no UAF. Called under global_mtx_.
-    // NEVER reads node()/queue() (I4-safe by construction).
+    // NEVER reads node()/queue() (lifetime-safe by construction).
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E13 P3 Select timer registration (private Scheduler authority) ----
+    // ---- Select timer registration (private Scheduler authority) ----
     // All require global_mtx_ held. These own the registered-state accounting
-    // authority for Select Timer arms (Addendum C): every ACTIVE->terminal
+    // authority for Select Timer arms: every ACTIVE->terminal
     // transition of a registered Select block routes through the two helpers
     // below so active_deadline_count_ is decremented exactly once and the
     // earliest-deadline cache is recomputed. The stale pump-pop path does
@@ -1934,7 +1937,7 @@ private:
     // O(1)-by-address erase of a Select pool block, SAFE only because the
     // caller (pump) has ALREADY popped the block from the deadline heap.
     // Physical reclamation only: does NOT decrement active_deadline_count_
-    // (the retire/consume helper already did, exactly once). I4-safe: matches
+    // (the retire/consume helper already did, exactly once). Lifetime-safe: matches
     // by address, never reads arm_. Mirrors erase_popped_registration_locked.
     void erase_popped_select_registration_locked(
         detail::SelectTimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
@@ -1947,25 +1950,24 @@ private:
         const detail::SelectTimerRegistration& reg) const noexcept
         SLUICE_REQUIRES(global_mtx_);
 
-    // E13 P3 Select timer pump branch body. PRE: global_mtx_ held; the pump
+    // Select timer pump branch body. PRE: global_mtx_ held; the pump
     // has ALREADY popped `reg` from the deadline heap and observed
-    // now >= reg.deadline(). State-before-arm rule (Addendum E): load state
+    // now >= reg.deadline(). State-before-arm rule: load state
     // first; non-ACTIVE -> PumpSkip seam + return stale (do NOT read arm_).
     // ACTIVE -> TimerPumpActive seam, instrument the exact production arm
     // dereference site, then fail fast (a due ACTIVE Select entry is
-    // unreachable in valid P3 — Addendum D). The caller (pump) performs the
+    // unreachable in a valid registration). The caller (pump) performs the
     // physical reclamation via erase_popped_select_registration_locked
     // regardless of the branch. Returns true if the entry was stale (skipped),
     // false if it was ACTIVE (the call does not return in the ACTIVE case).
     bool select_timer_pump_entry_locked(
         detail::SelectTimerRegistration& reg) SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E13 P4 Select central claim + winner/loser finalization core ----
+    // ---- Select central claim + winner/loser finalization core ----
     // All require global_mtx_ held continuously. This is the single loser
-    // processor and the single claim+finalize orchestrator
-    // (docs/e13-select-locking-and-publication.md §1.5,
-    //  docs/e13-select-formal-production-mapping.md §2). P4 does NOT publish a
-    // result, route a runnable, transition the group to Completed/Consumed, or
+    // processor and the single claim+finalize orchestrator. It does NOT
+    // publish a result, route a runnable, transition the group to
+    // Completed/Consumed, or
     // choose a candidate from a readiness snapshot (the caller supplies the
     // candidate index). After a successful process the group is "claimed and
     // finalized but unpublished" — an internal transient state under
@@ -1985,7 +1987,7 @@ private:
                                      std::uint32_t candidate_index)
         SLUICE_REQUIRES(global_mtx_);
 
-    // Validate the entire group BEFORE the irreversible winner CAS (P4 §6).
+    // Validate the entire group BEFORE the irreversible winner CAS.
     // Split into shape (asserts for every call) and claim (asserts for a fresh
     // claim only, after the winner-existence check returns claim-lost). Every
     // check is a debug assertion that fires before any mutation, so an invalid
@@ -2009,7 +2011,7 @@ private:
         SLUICE_REQUIRES(global_mtx_);
 
     // Finalize one loser arm. Timer loser: arm.state = Retired FIRST, then
-    // ACTIVE->RETIRED via select_timer_retire_locked (SN-9: arm classification
+    // ACTIVE->RETIRED via select_timer_retire_locked (arm classification
     // precedes the registration retirement CAS). Event loser: arm.state =
     // Retired, then unlink. No publication; never writes result/runnable.
     void select_finalize_loser_locked(detail::SelectGroup& group,
@@ -2030,7 +2032,7 @@ private:
                                             detail::SelectArmSlot& arm)
         SLUICE_REQUIRES(global_mtx_);
 
-    // The reusable all-authority-closed invariant predicate (SN-10). Returns
+    // The reusable all-authority-closed invariant predicate. Returns
     // true iff: winner != kNoWinner, winner < arm_count, AND for every arm
     //   - Event: state == Retired, home_ == nullptr, next_/prev_ == nullptr
     //   - Timer: state == Retired, stable_reg_ terminal (CONSUMED for the
@@ -2041,11 +2043,7 @@ private:
     bool select_all_authority_closed_locked(const detail::SelectGroup& group) const
         SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E13 Select registration + admission core (inline + suspended) ----
-    // (docs/e13-select-production-test-plan.md §7.5/§7.6,
-    //  docs/e13-select-locking-and-publication.md §3,
-    //  docs/e13-select-public-api.md §3/§4/§5/§7).
-    //
+    // ---- Select registration + admission core (inline + suspended) ----
     // The single non-template admission core, reached ONLY via the friended
     // public variadic select() template (declared in select_fwd.hpp, defined
     // in select.hpp). PRIVATE: ordinary code cannot name it (the friend grant
@@ -2055,16 +2053,16 @@ private:
     // materialization, Timer stable-block construction (before global_mtx_),
     // deadline-heap reserve (the only allocation under the lock), the
     // registration loop, FinishRegistration, the immutable readiness snapshot,
-    // lowest-index tie-break, the single P4 processor call, all-authority-
+    // lowest-index tie-break, the single claim+finalize processor call, all-authority-
     // closed verification, and result completion. NOT a template — compiles
     // once.
     //
-    // The admission name is NEUTRAL (select_admit, formerly select_admit_inline)
-    // because P6 routes BOTH outcomes through this one core: an inline-ready
+    // The admission name is NEUTRAL (select_admit) because BOTH outcomes
+    // route through this one core: an inline-ready
     // admission returns a SelectResult without suspending; a no-ready admission
     // commits the caller Fiber to Waiting + phase Armed, suspends, and is later
     // resumed to consume the published result (Completed -> Consumed). There is
-    // exactly ONE admission core for both paths (task §5). `descs` points at
+    // exactly ONE admission core for both paths. `descs` points at
     // `count` SelectCaseDescriptor values (caller-frame array); the function
     // does not retain the pointer past the call.
     //
@@ -2077,16 +2075,15 @@ private:
     SelectResult select_admit(detail::SelectCaseDescriptor* descs,
                               std::size_t count);
 
-    // ---- E13 P7 Select registration-rollback authority (private) ----
-    // (docs/e13-select-p7-rollback-closeout.md §25,
-    //  docs/e13-select-type-and-lifetime.md §5.2). Refines the formal actions
+    // ---- Select registration-rollback authority (private) ----
+    // Refines the formal actions
     // ContractBeginRollback / ContractRollbackRelease(i) /
     // ContractCloseAuthority(i) / ContractFinishRollback of the closed
     // E13SelectContract.tla model. Rollback is permitted ONLY in the Building
     // domain (phase==Building, winner==kNoWinner, completion_mode==None, caller
     // still Running, FinishRegistration NOT yet occurred). All helpers are
     // noexcept: rollback must never throw and replace the original admission
-    // exception (P7-ABORT-9/10). They may assert/fail-fast on impossible
+    // exception. They may assert/fail-fast on impossible
     // corruption. PRE: global_mtx_ held continuously across the whole rollback.
     //
     // registered_count is the authoritative size of the fully committed
@@ -2102,8 +2099,8 @@ private:
         SLUICE_REQUIRES(global_mtx_);
 
     // Roll back ONE fully-registered arm. Order (normative, matches
-    // E13SelectEventTimer.tla RollbackCancelTimer then RollbackRetireTimer and
-    // the Timer-loser discipline SN-9): classify the arm Retired FIRST, then
+    // E13SelectEventTimer.tla RollbackCancelTimer then RollbackRetireTimer):
+    // classify the arm Retired FIRST, then
     // close its external callback authority.
     //   Event: arm.state = Retired; then select_event_unlink_locked (the single
     //          canonical Event unlink path); Event::set_ is never mutated.
@@ -2120,7 +2117,7 @@ private:
     // is Detached, then set group.phase = Aborted. Does NOT clear admitted_
     // (admitted_ && phase==Aborted is the intended destruction proof). Does NOT
     // publish (no result/runnable). Sets phase ONLY after the postconditions
-    // hold; an open authority (P7-N8) fails fast.
+    // hold; an open authority fails fast.
     void select_finish_rollback_locked(detail::SelectGroup& group,
                                        detail::SelectArmSlot* arms,
                                        std::size_t arm_count,
@@ -2135,16 +2132,13 @@ private:
         std::size_t arm_count, std::size_t registered_count) noexcept
         SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E13 P6 Select unified publication authority ----
-    // (docs/e13-select-locking-and-publication.md §5,
-    //  docs/e13-select-formal-production-mapping.md §5,
-    //  task §8). THE single result/runnable publication function. PRE:
+    // ---- Select unified publication authority ----
+    // THE single result/runnable publication function. PRE:
     // global_mtx_ held continuously; the winner has already been claimed and
     // every winner+loser arm finalized (authority closed) in the SAME critical
     // section that calls this. select_publish_locked:
-    //   - mechanically validates the publication-entry shape (task §8.1),
-    //     fail-fasting on any violation (closes the P4-deferred publication-
-    //     entry shape validation),
+    //   - mechanically validates the publication-entry shape,
+    //     fail-fasting on any violation,
     //   - constructs exactly ONE SelectResult from the winner arm and writes it
     //     to group.result_ (written exactly once),
     //   - branches on entry phase:
@@ -2155,7 +2149,7 @@ private:
     //         make_runnable (false -> fail-fast), route_runnable_locked via
     //         group.caller_owner_ (NEVER the resolver-thread g_worker).
     //
-    // Required source order (task §8.2): all authority closed < group.result_
+    // Required source order: all authority closed < group.result_
     // write < completion mode < phase Completed < runnable publication. There
     // is exactly ONE call site each for Fiber::make_runnable and
     // Scheduler::route_runnable_locked inside Select, both here, both only on
@@ -2163,35 +2157,35 @@ private:
     void select_publish_locked(detail::SelectGroup& group)
         SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E13 P6 suspended Event/Timer resolution ----
-    // (task §11/§12). The post-suspension resolvers, reached ONLY under
+    // ---- Suspended Event/Timer resolution ----
+    // The post-suspension resolvers, reached ONLY under
     // global_mtx_ from event_set_broadcast (Event) and the timer pump (Timer).
-    // Each performs the single-group P8 gate (Event) or ACTIVE validation
+    // Each performs the single-group gate (Event) or ACTIVE validation
     // (Timer), offers CandidateReady to the relevant arm(s), then drives the
-    // single P4 group processor exactly once followed by select_publish_locked
+    // single claim+finalize group processor exactly once followed by select_publish_locked
     // exactly once. No arm finalizer calls make_runnable / route_runnable.
     //
     // select_resolve_event_locked: walks `event`'s SelectPort for THIS Event's
     // eligible (kind==Event, state==Registered, group.phase==Armed, home points
-    // here) arms; applies the single-group P6 gate (P8 multi-group DENIED ->
+    // here) arms; applies the single-group gate (multi-group DENIED ->
     // fail-fast before any CAS); marks every eligible arm CandidateReady;
     // chooses the lowest INDEX (NOT intrusive-list order) ready arm; processes
     // + publishes the group once. Returns true iff a group was published.
     bool select_resolve_event_locked(Event& event)
         SLUICE_REQUIRES(global_mtx_);
 
-    // select_resolve_timer_locked: the ACTIVE path replacement for the P3 due-
+    // select_resolve_timer_locked: the ACTIVE path replacement for the due-
     // ACTIVE stage fail-fast in select_timer_pump_entry_locked. Validates the
     // ACTIVE block (arm kind/state/group/scheduler/phase/pool/reg back-pointer)
     // under the state-before-arm rule, finds the exact arm index by address
     // scan of group.arms_, marks it CandidateReady, processes + publishes the
     // group once. PRE: `reg` is ACTIVE and the pump has popped it. The Timer
-    // registration is NOT consumed before the group winner CAS (P4 owns the
-    // winner/loser finalizer). Returns true iff a group was published.
+    // registration is NOT consumed before the group winner CAS (the claim+finalize
+    // core owns the winner/loser finalizer). Returns true iff a group was published.
     bool select_resolve_timer_locked(detail::SelectTimerRegistration& reg)
         SLUICE_REQUIRES(global_mtx_);
 
-    // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
+    // Narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the
     // full await_wait_deadline admission MINUS the fiber-suspend path: it
     // registers `node` into `q` (Detached->Registered), increments the wait
@@ -2214,12 +2208,12 @@ private:
     // Retire the timer registration (if any) bound to `node`. Called by the
     // non-timer winner path (wake_wait_one / cancel_wait) in the SAME
     // global_mtx_ critical section as the resolve CAS, BEFORE runnable
-    // publication (E11 Phase 5). Performs ACTIVE->RETIRED on the
+    // publication. Performs ACTIVE->RETIRED on the
     // registration's independently-stable state, closing callback authority so
     // a stale/lazy expiry cannot dereference the node after the fiber resumes
-    // and destroys its caller-owned WaitNode (I4).
+    // and destroys its caller-owned WaitNode.
     //
-    // I4-safe scan discipline: the scan considers ONLY ACTIVE registrations.
+    // Lifetime-safe scan discipline: the scan considers ONLY ACTIVE registrations.
     // An ACTIVE registration is provably bound to a live, still-Registered
     // node (the node is destroyed only after its wait epoch resolves, which
     // resolves in the SAME global_mtx_ CS that retires/consumes the registration
@@ -2232,21 +2226,21 @@ private:
 
     // Predicate: is there currently an externally-resolvable wait registered —
     // one whose resolution arrives from OUTSIDE the worker loop (a ready-flag
-    // wait, OR a WaitQueue wait resolved via wake_wait_one/cancel_wait, OR an
-    // E11 deadline wait whose expiry is driven by the timer pump)? Such
+    // wait, OR a WaitQueue wait resolved via wake_wait_one/cancel_wait, OR a
+    // deadline wait whose expiry is driven by the timer pump)? Such
     // resolutions reach signal_wake_locked (the unified Scheduler wake source),
     // NOT a backend reap, so the worker MUST park on the SCHEDULER domain to
     // observe them. When true, the MW-S2 participant must NOT enter a backend-
     // only ctx_.wait_one() — it parks on the SCHEDULER domain instead (the
     // MIXED-WAKE fix, ADR §9.4.7). Call with global_mtx_ held.
     //
-    // E10-CORRECTIVE C1: a WaitQueue wait is externally resolvable exactly like
+    // A WaitQueue wait is externally resolvable exactly like
     // a ready-flag wait (wake_wait_one/cancel_wait run under global_mtx_ +
     // q.mtx() and reach signal_wake_locked via route_runnable_locked). It MUST
     // participate in this classification, or a Live run could park/terminate on
-    // a source that cannot observe the wait's resolution (C1 park-domain gap).
+    // a source that cannot observe the wait's resolution.
     //
-    // E11: an ACTIVE deadline registration is likewise externally resolvable —
+    // An ACTIVE deadline registration is likewise externally resolvable —
     // its expiry is driven by the worker loop's timer pump + the bounded park
     // timeout, not by a backend reap. It participates in this classification
     // for the same reason as the WaitQueue wait.
@@ -2284,7 +2278,7 @@ public:
     std::size_t select_timer_arm_load_count_{0};
 
     // Internal-testing access surface (static observation/mutation helpers).
-    // C4 (issue #135): the 600+ line definition moved OUT-OF-LINE to the
+    // The 600+ line definition lives OUT-OF-LINE in the
     // NON-INSTALLED seam header src/async/scheduler_test_access.hpp, which
     // the bottom of this file includes under the internal-testing macro.
     // Production TUs compile neither the completion of this declaration nor
@@ -2296,7 +2290,7 @@ public:
 }  // namespace sluice::async
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-// C4 (issue #135): the complete AsyncTestAccess definition lives in the
+// The complete AsyncTestAccess definition lives in the
 // NON-INSTALLED seam header src/async/scheduler_test_access.hpp (resolved
 // via the internal-testing-only include path). Including it here keeps every
 // internal-testing TU that names Scheduler::AsyncTestAccess working without

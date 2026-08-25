@@ -28,11 +28,11 @@
 #endif
 
 namespace sluice::async {
-// ---- E9 SchedulerWakeHandle::notify + bound ----
+// ---- SchedulerWakeHandle::notify + bound ----
 
 bool SchedulerWakeHandle::notify() noexcept {
     if (!control_) return false;
-    // E9-LIFETIME-CORRECTIVE: hold Control::mtx (the callback lease) from
+    // Hold Control::mtx (the callback lease) from
     // the validity check THROUGH the Scheduler wake callback. The
     // destructor acquires this same mutex before invalidating, so it
     // BLOCKS while a callback is in flight; invalidation + Scheduler
@@ -44,7 +44,7 @@ bool SchedulerWakeHandle::notify() noexcept {
     if (!control_->alive || control_->scheduler == nullptr) {
         return false;  // post-destruction / unbound: no-op
     }
-    // E9-LIFETIME-CORRECTIVE deterministic seam (spec 13): pause at the
+    // Deterministic lifetime seam (spec 13): pause at the
     // exact boundary - validated + lease held, just before the callback.
     // Lets T1 prove the destructor cannot progress while the notifier
     // owns the lease. The seam blocks on its OWN mtx/cv; Control::mtx
@@ -74,7 +74,7 @@ bool SchedulerWakeHandle::bound() const noexcept {
     return control_->alive && control_->scheduler != nullptr;
 }
 
-// E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
+// Deterministic lifetime test seam (spec 13). TEST-ONLY.
 // Defined here because Control is complete only in this TU. These wrap the
 // Control seam state; they do NOT touch any Scheduler state.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -148,7 +148,7 @@ void Scheduler::signal_wake_locked() {
 #endif
     }
     wake_cv_.notify_all();
-    // Phase G (P5-CORRECTIVE bridge): a Scheduler wake-domain publication
+    // Backend-progress bridge: a Scheduler wake-domain publication
     // (routing, flag/select/waitqueue resolution, deadline pump, external
     // wake handle, termination) must ALSO reach the MW-S2 progress
     // participant when it is parked in the BACKEND domain (ctx_.wait_one()).
@@ -158,8 +158,8 @@ void Scheduler::signal_wake_locked() {
     // §13.2: state first, then notify; the wake is advisory, persistent state
     // is authoritative). The atomic gate keeps the cost at one load when no
     // backend participant is parked; the commit-to-park window is closed by
-    // the D4-RM14 arm_committed_wait handshake (the arm runs in the same
-    // critical section that sets the gate), and the D4-RM13 invocation-level
+    // the arm_committed_wait handshake (the arm runs in the same
+    // critical section that sets the gate), and the invocation-level
     // control baseline keeps the interrupt one-shot per wait_one() (no
     // busy-spin). Lock order: wake_mtx_ is released before the wait-source
     // mutex is taken; the wait source is a leaf that never acquires Scheduler
@@ -173,21 +173,21 @@ void Scheduler::signal_wake_locked() {
 // (release-wait-reacquire pattern).  Clang TSA cannot track unique_lock
 // capability semantics through condition_variable::wait.  The production
 // lock fact (wake_epoch_ is protected by wake_mtx_) is already independently
-// accepted and proven in E9.  Suppression is attached to the smallest exact
+// accepted and proven in the park/wake domain.  Suppression is attached to the smallest exact
 // function.
 void Scheduler::park_on_wake_source(WorkerState* ws,
                                     bool bounded_backend_observation) SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     // Park the calling Worker on the SCHEDULER wake domain (ADR §9.4.5).
     // Record the observed epoch under wake_mtx_, then cv.wait with a bounded
-    // timeout. Phase G: the timeout is DEADLINE-DRIVEN (the earliest active
+    // timeout. The timeout is DEADLINE-DRIVEN (the earliest active
     // deadline, uncapped) so no periodic wake exists without an active
-    // deadline. The E9 2ms bounded observation interval remains ONLY when
+    // deadline. The 2ms bounded observation interval remains ONLY when
     // `bounded_backend_observation` is set — the MW-S2 MIXED-WAKE park for a
     // NON-split-wait (reference/legacy) backend, whose poll-driven readiness
     // is observed through that interval (it is their progress path; split-wait
     // backends park the progress participant in ctx_.wait_one() instead).
     //
-    // E9-CORRECTIVE (Section 10 data-race fix): the predicate no longer
+    // Section 10 data-race fix: the predicate no longer
     // inspects ws->local_runnable (a std::deque protected by inbox_mtx_,
     // NOT wake_mtx_). Reading it under wake_mtx_ was a data race. Runnable
     // publication (route_runnable_locked) already calls signal_wake_locked()
@@ -205,7 +205,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // Lock order: called with global_mtx_ RELEASED.
     ws->park_domain = WorkerState::ParkDomain::Scheduler;
 
-    // E9-CORRECTIVE seam B: pause at the commit boundary with NO wake lock
+    // Deterministic pause seam B: pause at the commit boundary with NO wake lock
     // held, so the test can publish + notify (signal_wake_locked) during
     // the pause without deadlocking.
     // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
@@ -257,7 +257,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         ws->classify_seq.load(std::memory_order_relaxed);
 #endif
 
-    // G1 repair (PR #108 §8.3 conditions 1+4 — the arm→recheck closure):
+    // The arm→recheck closure (conditions 1+4 of the stranded-progress repair):
     // the park commit used to record its wake-epoch baseline AFTER an
     // unlocked classify, so a runnable publication landing in the
     // check-then-arm window was consumed by the baseline and the worker
@@ -281,7 +281,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     //     predicate observes it; a publication before it was visible to
     //     the (a) recheck — no consumed-signal window remains.
     // The cv.wait below runs with BOTH locks released; the predicate
-    // (epoch / terminate / own local_runnable) is unchanged from E9.
+    // (epoch / terminate / own local_runnable) is unchanged from the original park protocol.
     //
     // R4 (persistent-state backstop, final form after the adversarial
     // review): the idle-dance condition is checked HERE, at the COMMIT
@@ -294,7 +294,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // so a woken sleeper always starts its dance from zero, emits its own
     // not-last signal, and wakes its peer — the wake-park-wake chain never
     // damps (the Live-mw_s3 resident livelock). Exempting the worker's
-    // own contribution restores the pre-G1 damping: a counted dancer
+    // own contribution restores the original damping: a counted dancer
     // SLEEPS holding its count, so the woken sleeper's fetch_add reaches
     // the last-idle threshold immediately and its cycle ends in either
     // termination or a SILENT park (no further signal). Meanwhile a
@@ -303,7 +303,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // dancer's fetch_add and not-last signal both hold it), so the dance
     // is either visible here (refuse; re-loop and converge the dance) or
     // its signal advances the epoch past the baseline being recorded
-    // (predicate wake) — the E9-LIFE-8 absorbed-baseline window stays
+    // (predicate wake) — the absorbed-baseline window stays
     // closed with persistent state.
     //
     // Issue #161 (contribution-identity law, third refusal term): the R4
@@ -351,7 +351,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
                      std::memory_order_acquire))) {
             // Persistent progress with no observer, or an unfinished idle
             // dance this worker has not contributed to: parking here is
-            // the G1 violation (stranded progress) or the E9-LIFE-8
+            // the stranded-progress violation or the baseline-absorption
             // violation (a dance count this sleeper's baseline would
             // absorb, leaving the convergence one short forever). Do not
             // record a baseline; the caller's re-loop makes this worker
@@ -425,7 +425,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     std::unique_lock<Mutex> lk(wake_mtx_);
     // The cv predicate (both wait forms below share it).
     auto park_pred = [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-        // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The deque
+        // Section 10 data-race fix: check local_runnable SAFELY. The deque
         // is protected by inbox_mtx (route_runnable_locked pushes under it);
         // reading it under wake_mtx_ alone was a data race. Acquire inbox_mtx
         // for the read (nested under wake_mtx_ — never the reverse order).
@@ -486,9 +486,9 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         sluice_async_test::record_trace_event(*this, ev);
     };
 #endif
-    // Phase G timeout policy: bound the wake wait by the earliest active
+    // Timeout policy: bound the wake wait by the earliest active
     // deadline so an active deadline cannot park a Worker indefinitely past
-    // it (E11 I6), and by the bounded observation interval only when this
+    // it, and by the bounded observation interval only when this
     // park must observe poll-driven backend readiness (non-split-wait
     // MIXED-WAKE). With no deadline and no backend observation the park is
     // unbounded — no periodic wake, no CPU tax. Read the deadline from the
@@ -497,19 +497,19 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // (signal_wake_locked takes them in the opposite order). A stale cache
     // read is safe: it only changes the park timeout slightly; the worker
     // loop's pump_deadlines_locked re-establishes the authoritative deadline
-    // set under global_mtx_ on every iteration, so liveness (I6) holds even
+    // set under global_mtx_ on every iteration, so liveness holds even
     // if the cache briefly lags.
     static constexpr auto kParkBackstop = std::chrono::milliseconds(2);
     static constexpr auto kTestParkPoll = std::chrono::milliseconds(1);
     deadline_t earliest = earliest_active_deadline_.load(std::memory_order::acquire);
-    // Phase G termination-convergence note: this unbounded park is sound ONLY
+    // Termination-convergence note: this unbounded park is sound ONLY
     // because every quiescence-observation path wakes the domain — the
     // worker_loop idle dance signals the wake source when it is NOT the last
     // idle worker (the not-last signal). Without that signal, a Live-mw_s3
     // resident park's idle_workers_ reset can erase the last worker's
     // termination count between its classify and fetch_add, and with no
     // timeout nobody would re-check: the run would never terminate after the
-    // final work completed (E9-LIFE-8 bounded-timeout convergence removed;
+    // final work completed (bounded-timeout convergence removed;
     // st16_multi_worker_owner_routing deterministic hang).
     if (earliest == kNoDeadline && !bounded_backend_observation) {
         // No deadline and no backend observation: unbounded park (epoch /
@@ -546,7 +546,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
                 // advance_clock()'s pump drives expiry deterministically.
                 wake_deadline = std::chrono::steady_clock::now() + kTestParkPoll;
             } else if (bounded_backend_observation) {
-                // E9 MIXED-WAKE observation interval: cap the re-drain at the
+                // MIXED-WAKE observation interval: cap the re-drain at the
                 // 2ms interval so poll-driven backend readiness is observed
                 // promptly (reference/legacy backends only — see the function
                 // comment). Avoids a fixed 1ms poll (~1000 wakeups/s).
@@ -562,7 +562,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
             }
         }
     } else {
-        // Bounded backend observation with no active deadline: the E9 2ms
+        // Bounded backend observation with no active deadline: the 2ms
         // observation interval (reference/legacy MIXED-WAKE only).
         wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     }
@@ -789,13 +789,13 @@ Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(
     if (r != nullptr) {
         wait_record_free_head_ = r->next_free;
         r->next_free = nullptr;
-        // Reuse bumps the generation BEFORE the new occupant is visible (I6):
+        // Reuse bumps the generation BEFORE the new occupant is visible:
         // a stale token can never match the reused record. First use from the
         // initial free list also bumps (generation 0 -> 1), so the first
         // occupant's token always differs from any future occupant's token.
         ++r->generation;
     } else {
-        // Phase F1 P1-2: pool exhausted — synchronous no_space. The
+        // Pool exhausted — synchronous no_space. The
         // configured capacity has been reached; all N records are live
         // (registered or delivered). No allocation is used as recovery.
         return nullptr;
@@ -832,13 +832,13 @@ std::size_t Scheduler::wait_record_live_count_locked() const {
     return wait_record_live_count_;
 }
 
-// ---- Phase F1: Scheduler-owned identity-bearing ReadySink ----
+// ---- Scheduler-owned identity-bearing ReadySink ----
 
 
 Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    // Phase F1 (issue #98): the Completion wait is now a REAL arena waiter
+    // The Completion wait is now a REAL arena waiter
     // registration (ADR Decision 10) + a Scheduler routing record, and the
     // wake arrives through the identity-bearing ReadySink — no Completion*-
     // keyed map entry, no O(N) ready() re-scan.
@@ -850,7 +850,7 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     // the arena leaf serializes registration against reap extraction (C2c
     // arena_register_waiter_vs_reap_race, now on the production path).
     //
-    // I47-F2: commit_suspend_locked raises suspend_switch_pending BEFORE
+    // Suspend protocol: commit_suspend_locked raises suspend_switch_pending BEFORE
     // make_waiting, both under global_mtx_, closing the suspend-before-switch
     // race exactly as before.
     {
@@ -890,11 +890,11 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
                 // was consumed at the by-value boundary by the arena.
                 retire_wait_record_locked(rec->index);
                 if (c.ready()) {
-                    // Reap won (I18 release-store): return WITHOUT suspending
+                    // Reap won (release-store): return WITHOUT suspending
                     // — no wake is lost, the Completion is ready.
                     return Result<void>{};
                 }
-                // Duplicate waiter (I13) or provenance misuse (Decision 6):
+                // Duplicate waiter or provenance misuse (Decision 6):
                 // synchronous invalid_state.
                 return make_unexpected<void>(IoError{IoError::Code::invalid_state});
             }
@@ -902,7 +902,7 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
             commit_suspend_locked(ws, me);
         }
     }
-    // I47-F1: generic suspension phase seam. AFTER wait registration committed
+    // Generic suspension phase seam. AFTER wait registration committed
     // + suspend authority raised + Fiber Waiting + global_mtx_ released,
     // BEFORE the physical context_switch. A coordinator can resolve the wait
     // and prove the authority window is closed.
@@ -914,7 +914,7 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // Phase F1 P1-1: read the frozen winner outcome instead of racy c.ready().
+    // Read the frozen winner outcome instead of racy c.ready().
     // The winning path (drain=reap wins, cancel_waiter=cancel wins) wrote
     // this BEFORE make_runnable; we read it AFTER resume. This eliminates the
     // race where c.ready() could return true even though cancel won the arena
@@ -927,7 +927,7 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
 Result<void> Scheduler::await_completion_void(Completion<void>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    // Phase F1: see await_completion_size for the unified identity
+    // See await_completion_size for the unified identity
     // registration + suspend protocol.
     {
         LockGuard lk(global_mtx_);
@@ -969,16 +969,16 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // Phase F1 P1-1: read the frozen winner outcome instead of racy c.ready().
+    // Read the frozen winner outcome instead of racy c.ready().
     if (me->completion_wait_outcome() == CompletionWaitOutcome::completed)
         return Result<void>{};
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
 Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
-    // Phase F1 (ADR Decision 10): waiter cancellation removes ONLY the waiter
+    // Waiter cancellation (ADR Decision 10): removes ONLY the waiter
     // registration — never the I/O, never the borrow, never a terminal result
-    // (I5). The arena leaf races cancel_waiter against reap extraction exactly
+    // The arena leaf races cancel_waiter against reap extraction exactly
     // once (C2c arena_cancel_waiter_vs_reap_race); the record mirrors the
     // winner.
     LockGuard lk(global_mtx_);
@@ -991,7 +991,7 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
             // Completion ready. Nothing to remove.
             return Result<bool>{false};
         }
-        // Phase F1 P2: non-arena backend (not_supported) — fall back to the
+        // Non-arena backend (not_supported) — fall back to the
         // legacy Completion*-keyed map. The map holds the fiber/owner; erase
         // it, freeze the canceled outcome, and route the fiber runnable.
         if (e.code == IoError::Code::not_supported) {
@@ -1043,10 +1043,10 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
         }
     }
     if (f != nullptr) {
-        // Phase F1 P1-1: freeze the cancel outcome BEFORE make_runnable.
+        // Freeze the cancel outcome BEFORE make_runnable.
         // The fiber reads this AFTER resume instead of racy c.ready().
         f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-        if (f->make_runnable()) {  // E7-T2 exactly-once
+        if (f->make_runnable()) {  // exactly-once
             route_runnable_locked(f, owner);
         }
     }
@@ -1054,7 +1054,7 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
 }
 
 Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
-    // Phase F1: see the size-twin for semantics; identical protocol.
+    // See the size-twin for semantics; identical protocol.
     LockGuard lk(global_mtx_);
     auto rl = ctx_.cancel_waiter(c);
     if (!rl.has_value()) {
@@ -1062,7 +1062,7 @@ Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
         if (e.code == IoError::Code::not_found) {
             return Result<bool>{false};
         }
-        // Phase F1 P2: non-arena backend (not_supported) — fall back to the
+        // Non-arena backend (not_supported) — fall back to the
         // legacy Completion*-keyed map. The map holds the fiber/owner; erase
         // it, freeze the canceled outcome, and route the fiber runnable.
         if (e.code == IoError::Code::not_supported) {
@@ -1120,7 +1120,7 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     if (ready.load(std::memory_order::acquire)) return;
-    // I47-F2: see await_completion_size for the unified suspend protocol.
+    // See await_completion_size for the unified suspend protocol.
     // register + recheck + commit_suspend_locked under global_mtx_; only
     // context_switch is outside.
     {
@@ -1143,7 +1143,7 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
 }
 
 void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
-    // E10 WaitQueue suspension seam. I47-F2: unified suspend protocol.
+    // WaitQueue suspension seam. Unified suspend protocol.
     // register + recheck + commit_suspend_locked are ONE atomic transition
     // w.r.t. the wake path (wake_wait_one / cancel_wait run under global_mtx_);
     // only context_switch is outside. The queue protocol itself creates no
@@ -1161,7 +1161,7 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
         if (!q.register_wait_locked(node, me)) {
-            // Node was already registered or terminal (C8): a contract violation.
+            // Node was already registered or terminal: a contract violation.
             // Do not suspend; return to the caller with the node untouched.
             return;
         }
@@ -1188,9 +1188,9 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
 }
 
 WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
-    // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
+    // The wake_wait_one body with global_mtx_ already held. Resolves the
     // FIFO head with Woken (wake_one_locked), retires any bound timer
-    // (retire_timer_for_node_locked, E11 I4), decrements waiting_waitq_count_,
+    // (retire_timer_for_node_locked), decrements waiting_waitq_count_,
     // and routes the winner runnable through the canonical wake seam. Returns
     // the winning node (nullptr if empty or head lost to a concurrent resolver).
     //
@@ -1199,19 +1199,19 @@ WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
     // event_set_broadcast's drain loop so the drain is atomic w.r.t. reset and
     // admission (all under global_mtx_).
     //
-    // E11 Phase 5 (Timer Lifetime Closure): a RESOURCE_WAKE winner MUST retire
+    // Timer-lifetime closure: a RESOURCE_WAKE winner MUST retire
     // any active timer registration bound to the resolved node, in the SAME
     // global_mtx_ critical section as the resolve CAS and BEFORE runnable
-    // publication (I4).
+    // publication.
     LockGuard qlk(q.mtx());
     WaitNode* won = q.wake_one_locked();
     if (won == nullptr) return nullptr;  // empty, or head lost to a cancel
     retire_timer_for_node_locked(*won);
     Fiber* f = won->fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // Exactly-once: publish a runnable ticket ONLY if waiting->runnable
     // succeeded. The node is terminal; make_runnable is the publication guard.
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
     }
@@ -1233,21 +1233,21 @@ bool Scheduler::wake_wait_one(WaitQueue& q) {
 }
 
 bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
-    // Resolve `node` with Cancelled and route the winner's fiber. E10 cancel is
+    // Resolve `node` with Cancelled and route the winner's fiber. Cancel is
     // wait-cancellation ONLY (not task/fiber/I/O cancellation). The winner is
     // determined by the same resolve CAS authority as wake (§2/§7): a losing
     // cancel (node already Woken) returns false and does nothing.
     //
-    // E11 Phase 5 (Timer Lifetime Closure): as in wake_wait_one, a CANCEL
+    // Timer-lifetime closure: as in wake_wait_one, a CANCEL
     // winner MUST retire the bound active timer registration before runnable
-    // publication (I4).
+    // publication.
     LockGuard lk(global_mtx_);
     LockGuard qlk(q.mtx());
     if (!q.cancel_locked(node)) return false;  // already terminal (loser)
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         if (publish_waiting_fiber_runnable_locked(f)) {
             return true;
@@ -1264,7 +1264,7 @@ void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
     // The handle is bound to THIS Scheduler (make_wake_handle), so an external
     // producer's notify() already routes to signal_wake_locked. This method
     // exists to make the per-wait attachment explicit and to future-proof a
-    // per-wait wake-map (E10). It is a contract assertion + a pre-emptive
+    // per-wait wake-map. It is a contract assertion + a pre-emptive
     // signal: if the flag became ready between the registration and this
     // attach, signal now so a Worker about to park is woken immediately.
     bool need_signal = false;

@@ -1,4 +1,4 @@
-// Implementation of cooperative cancellation primitives (sluice-CORE-027, T1).
+// Implementation of cooperative cancellation primitives.
 //
 // See include/sluice/async/cancel.hpp for the model, Zig provenance, and the
 // ADR-cancel-request-epoch request-epoch representation. This file holds the

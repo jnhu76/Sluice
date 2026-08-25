@@ -31,14 +31,14 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | File | Lines | Domain |
 |---|---|---|
 | `src/async/scheduler_park_wake.cpp` | 1293 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 506 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 400 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 317 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 345 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 677 | rwlock waits, ForgedRwWaitCtx |
-| `src/async/scheduler_condition.cpp` | 265 | condition waits |
-| `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
-| `src/async/scheduler_internal.hpp` | 72 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
+| `src/async/scheduler_timer.cpp` | 509 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 397 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 316 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 344 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 674 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_condition.cpp` | 264 | condition waits |
+| `src/async/scheduler_queue.cpp` | 503 | runnable queue, fiber routing |
+| `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
 | `src/async/scheduler.cpp` | 2122 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`

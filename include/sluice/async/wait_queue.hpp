@@ -1,7 +1,7 @@
-// sluice::async::WaitQueue — one cancellation-safe wait queue (sluice-CORE-E10).
+// sluice::async::WaitQueue — one cancellation-safe wait queue.
 //
 // Implements the minimal queue required for one-node-per-wait registration
-// (§5 WaitQueue protocol). See docs/e10-waitnode-wait-queue.md.
+// (§5 WaitQueue protocol).
 //
 // Scope (§1): IN — enqueue/register, wake one node, cancel a specific node,
 // safe removal/unlink, empty/destruction invariants. OUT — multi-wait, select,
@@ -35,7 +35,7 @@
 //           return true
 //       return false
 //
-//   expire_locked(node):                    // E11 (third resolver)
+//   expire_locked(node):                    // third resolver
 //       if node.resolve_(Expired):          // winner CAS
 //           unlink(node)                    // SAME critical section
 //           return true
@@ -59,7 +59,7 @@
 // and perform the canonical route_runnable_locked. Those Scheduler seams call
 // the private _locked resolver variants here.
 //
-// SEALED AUTHORITY (E10-CORRECTIVE-2 R1+R2). ALL structural operations of a
+// SEALED AUTHORITY. ALL structural operations of a
 // WaitQueue are PRIVATE, with Scheduler the ONLY friend:
 //
 //   - register_wait_locked : the registration integration authority's
@@ -98,7 +98,7 @@
 // authoritative E10 shutdown semantic required it, and its header text
 // ("the Scheduler cancels-all on run termination") was an authority/document
 // drift — the Scheduler does NOT auto-resolve waits on run termination (a
-// stranded MW-S3 wait is left for the caller, like E9's waiting_ready_).
+// stranded MW-S3 wait is left for the caller, like the Scheduler's waiting_ready_).
 //
 // Layering: BELOW the Scheduler. WaitQueue knows nothing about fibers,
 // scheduling, or runnable enqueue. It returns the winning node to the caller,
@@ -130,7 +130,7 @@ public:
     // (ADR-async-primitive-lifetime-failfast; the Debug assert is a
     // diagnostic tripwire only). The Scheduler does NOT auto-resolve waits
     // on run termination (E10-CORRECTIVE C3); an unresolved registered wait
-    // is left for the caller, exactly as E9 treats a stranded waiting_ready_
+    // is left for the caller, exactly as the park protocol treats a stranded waiting_ready_
     // flag (MW-S3 returns STALLED in Drain).
     ~WaitQueue() {
         // head_ == null iff empty (tail_ maintained in lockstep). A non-empty
@@ -172,7 +172,7 @@ private:
     // if `node` is already registered or terminal (C8). _locked variant: caller
     // holds mtx_.
     //
-    // PRIVATE (E10-CORRECTIVE-2 R2): a Scheduler-integrated registration goes
+    // PRIVATE: a Scheduler-integrated registration goes
     // through Scheduler::await_wait, which calls this under global_mtx_ + mtx_,
     // records waiting_waitq_count_, captures ws->current as the Fiber handle,
     // and performs the waiting transition. An external TU cannot express
@@ -261,7 +261,7 @@ private:
 
     // ---- Expire a specific node (E11 third terminal resolver, Expired) ----
     //
-    // PRIVATE (E11-CORRECTIVE seal): the Scheduler resolves a deadline-elapsed
+    // PRIVATE (sealed): the Scheduler resolves a deadline-elapsed
     // wait ONLY via Scheduler::expire_wait, which calls this under global_mtx_
     // + mtx_ and routes the winner through the canonical wake seam. Mirrors
     // wake_one_locked / cancel_locked exactly: the resolve_(Expired) CAS is the

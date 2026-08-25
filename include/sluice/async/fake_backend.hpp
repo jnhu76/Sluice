@@ -1,12 +1,11 @@
-// sluice::async::FakeAsyncBackend (sluice-CORE-019, ADR §4/§10 T1).
+// sluice::async::FakeAsyncBackend (ADR §4/§10 T1).
 //
 // A deterministic async backend for tests: ops submitted are held outstanding
 // across poll() calls UNTIL THE TEST EXPLICITLY COMPLETES THEM. No kernel, no
-// threads. This is the primary unit-test vehicle for all later async work
-// (018/018B/021) and the thing that makes the buffer-lifetime contract (gate
-// item 1) genuinely testable.
+// threads. It is the primary unit-test vehicle for the async stack and the
+// thing that makes the buffer-lifetime contract genuinely testable.
 //
-// Completion model (PR #63 review findings #1, #2 — terminal evidence binds to a
+// Completion model (terminal evidence binds to a
 // stable RequestKey at completion time, NOT at poll time):
 //   - submit_* records the op (no completion produced).
 //   - The test calls one of the complete_*() helpers to resolve a terminal
@@ -25,11 +24,12 @@
 //   - complete_oldest_with_error(IoError) — surface any error (eof/no_space/
 //     backend_error/canceled) on the next poll (ADR E2/E3).
 //   - complete_oldest_with_bytes(n) — surface a (possibly short) byte count for
-//     a read/write op; n < requested is a short completion (exercises 018 retry).
+//     a read/write op; n < requested is a short completion (exercises the
+//     read_all/write_all retry helpers).
 //
-// Phase B (ADR-explicit-io-request-contract, Accepted): FakeAsyncBackend now
-// drives the bounded RequestArena five-stage admission (reserve -> prepare ->
-// commit -> enqueue -> dispatch/reap) and the unified reap path with a
+// FakeAsyncBackend drives the bounded RequestArena five-stage admission
+// (reserve -> prepare -> commit -> enqueue -> dispatch/reap) under
+// ADR-explicit-io-request-contract (Accepted) and the unified reap path with a
 // synchronous identity-bearing ReadySink. The public submit_*/poll/wait_one/
 // cancel/complete_* surface is unchanged (ADR Decision 7); the RequestKey is
 // bound privately during commit and resolved internally for cancel/complete.
@@ -38,18 +38,18 @@
 // outstanding until explicitly completed" contract. Cancel records the canceled
 // terminal directly under Scheme B (pending/enqueued cancel wins).
 //
-// Identity (review C2): the Completion publication binding lives IN the
+// Identity: the Completion publication binding lives IN the
 // RequestSlot record (install_publication_binding before the Completion CAS);
 // reap validates it and publishes Completion-ready through it inside the leaf
 // domain. There is NO parallel unordered_map identity bridge — cancel resolves
 // a Completion* by the arena's bounded O(capacity) scan. Pre-commit
-// bookkeeping is transactional (review C1): the publication binding is
+// bookkeeping is transactional: the publication binding is
 // installed into the slot record (no map insert), every pre-commit failure
 // path rolls the reservation back with zero side effects (Completion untouched,
-// slot freed), and there is no FIFO ring to leave residue (review finding #1
-// removed the side-band HandleRing entirely).
+// slot freed), and there is no FIFO ring to leave residue (the side-band
+// HandleRing was removed entirely).
 //
-// State is instance-owned only (no globals, gate item 6).
+// State is instance-owned only (no globals).
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -78,8 +78,8 @@ class FakeAsyncBackend : public AsyncBackend {
     // --- auto-complete mode ---
     // When set, poll() auto-completes each outstanding op with `auto_bytes_`
     // (read/write) or void-success (sync), WITHOUT the test completing anything.
-    // This lets the synchronous read_all/write_all coordinators (job 018) drive
-    // the fake in a poll-loop, since they submit+poll internally and cannot have
+    // This lets the synchronous read_all/write_all coordinators drive the
+    // fake in a poll-loop, since they submit+poll internally and cannot have
     // the test complete results between their loop steps.
     //   auto_bytes(n)         each outstanding op completes with n bytes
     //                         (n may be < requested => short, exercises retry)
@@ -121,7 +121,7 @@ class FakeAsyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
-    // Phase F3 (ADR-public-request-handle): this backend uses the RequestArena
+    // ADR-public-request-handle: this backend uses the RequestArena
     // identity contract, so it produces and resolves public RequestHandles.
     bool supports_request_identity() const noexcept override { return true; }
 
@@ -143,7 +143,7 @@ class FakeAsyncBackend : public AsyncBackend {
     // that op's RequestKey (arena_.record_terminal); the Completion is published
     // at the next poll()/wait_one(). ---
     //
-    // ADR Decision 12 + review finding #2: terminal evidence attaches to a
+    // ADR Decision 12: terminal evidence attaches to a
     // stable RequestKey at completion-call time, not into an implicit per-kind
     // queue consumed later by guessing. A second call against an op that is
     // already terminal (cancel won, or a prior complete_*) is a record_terminal
@@ -180,15 +180,15 @@ class FakeAsyncBackend : public AsyncBackend {
         return dispatch_and_reap();
     }
 
-    // Issue #67: FakeAsyncBackend intentionally has NO split wait capability.
-    // Its wait_one is NON-BLOCKING by contract (E7 no-progress boundary: an
+    // FakeAsyncBackend intentionally has NO split wait capability.
+    // Its wait_one is NON-BLOCKING by contract (no-progress boundary: an
     // un-staged op returns 0 immediately so a Drain-mode coordinated run can
     // terminate instead of parking on a completion that only an external
     // complete_* call can produce). It advertises that non-blocking contract
-    // so ApplicationRuntime accepts it without a wait source (D3).
+    // so ApplicationRuntime accepts it without a wait source.
     bool wait_one_is_nonblocking() const noexcept override { return true; }
 
-    // Phase F1 (issue #98): production waiter registration / cancellation
+    // Production waiter registration / cancellation
     // (ADR Decision 10). The Completion is resolved to its current SlotHandle
     // by the arena's own bounded scan — the same identity bridge the public
     // cancel path uses — and the call is forwarded verbatim to the REAL arena
@@ -239,8 +239,8 @@ class FakeAsyncBackend : public AsyncBackend {
     // IoError::canceled. We do NOT complete here — A3/O1: completions are
     // produced only inside poll/wait_one. Cancel is POINTER-KEYED (targeted) so
     // it works on any outstanding op, not just the oldest.
-    // Phase B (ADR Decision 11, review round-4 finding 1): resolves Completion*
-    // -> SlotHandle via the arena's bounded slot scan (the slot's own binding is
+    // Identity resolution (ADR Decision 11): the Completion* is resolved to a
+    // SlotHandle via the arena's bounded slot scan (the slot's own binding is
     // the identity — no parallel map), then arena.cancel() acts per state:
     //   - terminal_won    — cancel won the terminal transition under Scheme B
     //                       (pending/enqueued -> backend_ready(canceled)). This
@@ -251,7 +251,7 @@ class FakeAsyncBackend : public AsyncBackend {
     //                       here; a backend that later CONFIRMS the cancellation
     //                       (a valid interruption / cancel CQE winner) records
     //                       TerminalResult::err(canceled) and tallies there. The
-    //                       Phase B reference backends never enter `running`, so
+    //                       reference backends never enter `running`, so
     //                       this branch is dormant here.
     //   - already_terminal / not_found — no-op (losers never overwrite).
     // The Completion stays outstanding; poll/wait_one publishes through reap.
@@ -285,7 +285,7 @@ class FakeAsyncBackend : public AsyncBackend {
     // FakeAsyncBackend has NO split wait capability (its wait_one is
     // non-blocking by contract), so there is no parked participant to wake —
     // the arena admission flag alone is the full reference semantics, and the
-    // shared close/drain suite (C2e) drives this identically for Fake and
+    // shared close/drain suite drives this identically for Fake and
     // ThreadPool. Mirrors ThreadPoolBackend::close_admission. Not noexcept:
     // acquiring admission_mtx_ (lock_guard) may throw std::system_error, and
     // the ThreadPool mirror carries no noexcept either.
@@ -294,12 +294,12 @@ class FakeAsyncBackend : public AsyncBackend {
         arena_.close_admission();
     }
 
-    // Phase B test-only introspection (the arena is a private detail).
+    // Test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
     // Test-only (the production sink is stateless; the delivery counter exists
-    // only under SLUICE_ASYNC_INTERNAL_TESTING — CodeRabbit finding / AGENTS §8).
+    // only under SLUICE_ASYNC_INTERNAL_TESTING — AGENTS §8).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
 #endif
@@ -444,7 +444,7 @@ class FakeAsyncBackend : public AsyncBackend {
     }
 
     // Resolve a terminal result on the OLDEST enqueued read/write op, binding it
-    // to that op's RequestKey immediately (review finding #2: no staging deque,
+    // to that op's RequestKey immediately (no staging deque,
     // no cross-generation pollution). A no-op when no size op is outstanding, or
     // a no-op on record_terminal when the oldest op already went terminal
     // (terminal-winner rule — a second complete_* cannot overwrite). Allocation-
@@ -488,18 +488,18 @@ class FakeAsyncBackend : public AsyncBackend {
         tally_terminal_result(won, res);
     }
 
-    // Five-stage admission, now ONE call into the shared pre-accept ladder
-    // (issue #137; detail::submit_transaction). The whole Stage 1-3 protocol
+    // Five-stage admission: ONE call into the shared pre-accept ladder
+    // (detail::submit_transaction). The whole Stage 1-3 protocol
     // runs under the backend admission transaction lock (ADR :453-462: the
     // winning submit retains its context/admission lock through Step 5).
     // close_admission() takes the same lock, so after it returns no new
     // acceptance LP can occur (Decision 15): an in-flight submit either
     // completes its LP before close returns (submit wins) or observes
     // admission closed at reserve and rejects (close wins). The lock is
-    // released before enqueue (no-fail). Transactional pre-commit path
-    // (review C1): every step before the commit LP rolls back with ZERO side
+    // released before enqueue (no-fail). Transactional pre-commit path:
+    // every step before the commit LP rolls back with ZERO side
     // effects through the shared ladder. Nothing after commit_binding may
-    // throw (I9).
+    // throw.
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind) {
         detail::SlotHandle h{};
@@ -534,11 +534,11 @@ class FakeAsyncBackend : public AsyncBackend {
         return {};
     }
 
-    // The backend's policy for detail::submit_transaction (issue #137): the
+    // The backend's policy for detail::submit_transaction: the
     // fake reference backend adds exactly ONE production divergence to the
     // Sync shape — the deterministic causal pause between the arena commit
-    // and the acceptance LP (wait_submit_pause_, below; the C2e
-    // close-vs-LP window and the Scheme-B cancel window are driven through
+    // and the acceptance LP (wait_submit_pause_, below; the close-vs-LP
+    // window and the Scheme-B cancel window are driven through
     // it). No Stage-0 gate (the arena's own reserve check arbitrates
     // admission under admission_mtx_), no descriptor validation (DIV-14
     // deferred, as in Sync), no prepared-op scratch (test completion is
@@ -597,7 +597,7 @@ class FakeAsyncBackend : public AsyncBackend {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             // Deterministic causal seam: pause between commit and the LP so a
             // backend-level test can interleave cancel exactly in the Scheme-B
-            // window, and so a C2e test can interleave close_admission()
+            // window, and so a test can interleave close_admission()
             // against the in-flight acceptance protocol before the Step 5 LP
             // (the pause is INSIDE the admission transaction, so a close that
             // returned here would permit a new LP after close). The body is
@@ -641,8 +641,8 @@ class FakeAsyncBackend : public AsyncBackend {
             drain_auto_void();
         }
         // Non-auto: complete_*/cancel already recorded their terminals directly
-        // (review finding #2 — no staging step here). Just reap.
-        // Phase F1: deliver identity events to the attached Scheduler-owned
+        // (no staging step here). Just reap.
+        // Deliver identity events to the attached Scheduler-owned
         // routing sink when one is set; otherwise the no-op reference sink.
         return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     }
@@ -688,8 +688,8 @@ class FakeAsyncBackend : public AsyncBackend {
             detail::TerminalResult res = (auto_mode_ == Auto::err)
                                              ? detail::TerminalResult::err(auto_err_)
                                              : detail::TerminalResult::ok_void();
-            // CodeRabbit finding: tally void auto-completions too (parity with
-            // drain_auto_size), so auto_error increments completion_errors for a
+        // Tally void auto-completions too (parity with
+        // drain_auto_size), so auto_error increments completion_errors for a
             // sync op just as it does for a read/write op.
             bool won = arena_.record_terminal(*target, res);
             tally_terminal_result(won, res);
@@ -715,7 +715,7 @@ class FakeAsyncBackend : public AsyncBackend {
         }
     }
 
-    // --- Completion publication (review C2/C3) ---
+    // --- Completion publication ---
     // The arena publishes Completion-ready through the slot-bound thunk INSIDE
     // the leaf domain. The thunks are written here (a trusted backend-author —
     // they reach the protected AsyncBackend::publish helpers) and installed
@@ -777,7 +777,7 @@ class FakeAsyncBackend : public AsyncBackend {
     // the submit paths (reserve .. commit_binding) and close_admission();
     // released before enqueue. Lock order: admission_mtx_ -> arena leaf only.
     mutable std::mutex admission_mtx_;
-    // No side-band HandleRing or staged_* deques (review findings #1, #2): the
+    // No side-band HandleRing or staged_* deques: the
     // submission-order selection is a bounded O(capacity) scan via the arena's
     // oldest_enqueued_of, and terminal evidence binds to a RequestKey at
     // complete_*/cancel call time. This removes the stale-handle accumulation

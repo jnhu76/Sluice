@@ -1,5 +1,5 @@
 // sluice::experimental::UringWriteBatch — narrow experimental io_uring write
-// spike (CPPIO-CORE-013C). See docs/io-uring-spike.md.
+// batch.
 //
 // WITHOUT SLUICE_HAS_LIBURING this header still compiles and the class is an
 // unsupported stub: construction/write_all report unsupported so the project
@@ -40,7 +40,7 @@ class UringWriteBatch {
     Result<UringWriteResult> write_all(int fd, std::span<const std::byte> bytes,
                                        std::uint64_t file_offset);
 
-    // Optional measurement (CPPIO-CORE-013E). Caller-owned; null = no counting.
+    // Optional measurement. Caller-owned; null = no counting.
     void set_stats(UringStats* stats) { stats_ = stats; }
 
   private:

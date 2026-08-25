@@ -1,11 +1,11 @@
-// sluice::async::AsyncRwLock — Fiber-suspending async Read-Write Lock (sluice-CORE-E12-F).
+// sluice::async::AsyncRwLock — Fiber-suspending async Read-Write Lock.
 //
 // A writer-fair, phase-batched Read-Write Lock built on the closed E10/E11/E12
 // wait substrate. Provides shared read acquisition (multiple concurrent readers)
 // and exclusive write acquisition (one writer), with FIFO prefix batching for
 // reader throughput and writer-fair admission preventing writer starvation.
 //
-// Semantic model (docs/e12-rwlock.md):
+// Semantic model (docs/architecture/async-synchronization.md § AsyncRwLock):
 //
 //   active_readers_ > 0, writer_active_ == false  <=>  Read-locked (N readers)
 //   active_readers_ == 0, writer_active_ == true  <=>  Write-locked (one writer)

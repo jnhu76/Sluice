@@ -1,12 +1,12 @@
-// sluice::async::ThreadPoolBackend — Phase E implementation.
+// sluice::async::ThreadPoolBackend — bounded persistent blocking-I/O worker pool.
 //
 // Bounded persistent blocking-I/O backend driving real POSIX syscalls through
 // the RequestArena / RequestSlot lifecycle. See threadpool_backend.hpp and
 // docs/design/phase-e-bounded-threadpool-backend.md for the frozen design.
 // This TU is the worked example in docs/architecture/async-request-lifecycle.md
-// (issue #139): submission transaction §4.1 steps 2-3, worker steps 4-5.
+// (submission transaction §4.1 steps 2-3, worker steps 4-5).
 //
-// Phase E replaces the legacy "one std::thread per op + std::function +
+// Replaces the legacy "one std::thread per op + std::function +
 // Completion* ready deque" model (DIV-03 / DIV-12) with a fixed worker pool, a
 // bounded dispatch ring, and RequestArena as the single request-lifecycle
 // authority. Workers consume SlotHandles, run the syscall, and record
@@ -280,7 +280,7 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
     }
 
     // Stage 4: enqueue + dispatch publication under one work_mtx_ critical
-    // section (P0). No gap between pin clear and ring visibility.
+    // section. No gap between pin clear and ring visibility.
     enqueue_after_commit(h);
     return {};
 }
@@ -309,7 +309,7 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
 }
 
 // ---------------------------------------------------------------------------
-// Unified enqueue + dispatch publication (P0)
+// Unified enqueue + dispatch publication
 // ---------------------------------------------------------------------------
 
 void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
@@ -487,7 +487,7 @@ void ThreadPoolBackend::worker_loop() {
 #endif
             if (have_op) {
                 detail::TerminalResult terminal = run_syscall(op);
-                // Bookkeeping BEFORE terminal publication (P2): an observer must
+                // Bookkeeping BEFORE terminal publication: an observer must
                 // not see a ready Completion with stale worker accounting.
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
                 {
@@ -556,14 +556,14 @@ detail::TerminalResult ThreadPoolBackend::run_syscall(const PreparedBlockingOp& 
 
 std::size_t ThreadPoolBackend::poll() {
     // Reap publishes Completion-ready through the slot binding inside the leaf
-    // domain (ADR Decision 9 / I11). The worker only recorded backend-ready.
-    // Phase F1: deliver identity events to the attached Scheduler-owned
+    // domain (ADR Decision 9). The worker only recorded backend-ready.
+    // Deliver identity events to the attached Scheduler-owned
     // routing sink when one is set; otherwise the no-op reference sink.
     return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
 }
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {
-    // Split-phase ready-epoch protocol (design §4.5; AC-6; issue #67): snapshot
+    // Split-phase ready-epoch protocol (design §4.5; AC-6): snapshot
     // the epochs, reap, and if nothing was reaped, park in the OBSERVE-ONLY
     // ready wait (no backend lock held across the park — the context-level
     // caller keeps access_mtx_ only across this reap). Returns only the reaped
@@ -835,7 +835,7 @@ void ThreadPoolBackend::cancel(Completion<void>& c) {
 }
 
 // ---------------------------------------------------------------------------
-// Phase F1: production waiter registration / cancellation (ADR Decision 10)
+// Production waiter registration / cancellation (ADR Decision 10)
 // ---------------------------------------------------------------------------
 // The waiter registration is ORTHOGONAL to the execution state, so no
 // work_mtx_/dispatch interaction is needed: the arena leaf serializes
@@ -896,7 +896,7 @@ void ThreadPoolBackend::close_admission() {
     // submit either completed its LP first (submit wins) or a later submit
     // observes admission closed at reserve and rejects synchronously (close
     // wins). THEN wake any participant parked in the ready wait so it
-    // re-evaluates (issue #67: the frozen design's "close does not signal"
+    // re-evaluates (the frozen design's "close does not signal"
     // constraint starved a parked wait_one and deadlocked drain). The wake is
     // a one-shot control generation advance — a re-evaluation signal, not a
     // fabricated completion and not a persistent "never park again" state:

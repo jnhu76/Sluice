@@ -1,6 +1,6 @@
-// sluice::async::detail — E13 Select Timer stable block + tagged deadline heap.
+// sluice::async::detail — Select Timer stable block + tagged deadline heap.
 //
-// This header is SELF-CONTAINED (Addendum A): it does NOT include
+// This header is SELF-CONTAINED: it does NOT include
 // scheduler.hpp. It depends only on timer_registration.hpp (for the ordinary
 // TimerRegistration pointer the heap shares) plus forward-declared Scheduler.
 // The internal Timer substrate uses deadline_tick_t (the underlying tick
@@ -13,13 +13,12 @@
 //   block for one active Select Timer arm. Mirrors TimerRegistration's
 //   retirement discipline but binds to Select objects (SelectArmSlot*)
 //   instead of WaitNode. Its atomic state_ is the post-destruction safety
-//   boundary (I4): the pump reads state_ first; if not active, it skips
-//   without dereferencing the arm pointer. See docs/e13-select-timer-adapter.md.
+//   boundary: the pump reads state_ first; if not active, it skips
+//   without dereferencing the arm pointer.
 //
 //   DeadlineHeapEntry — the unified internal entry the Scheduler's deadline
 //   min-heap stores. It tags each entry Ordinary or Select and holds the
 //   matching stable-block pointer. Internal-only; no public API exposure.
-//   See docs/e13-select-timer-adapter.md §4.
 #pragma once
 
 #include <sluice/async/timer_registration.hpp>  // TimerRegistration, deadline_tick_t
@@ -40,13 +39,13 @@ struct SelectArmSlot;  // matches the definition in detail/select_port.hpp (ODR 
 // (its address is its identity for the Scheduler-owned stable pool and for
 // the deadline-heap entry that references it by pointer).
 //
-// NOTE on heap_index (Addendum G): the ordinary TimerRegistration retains its
-// legacy heap_index field to avoid unrelated E11 churn, but no production
-// reader treats it as an authority. SelectTimerRegistration carries NO
+// NOTE on heap_index: the ordinary TimerRegistration retains its legacy
+// heap_index field, but no production reader treats it as an authority.
+// SelectTimerRegistration carries NO
 // heap_index: the DeadlineHeapEntry's vector position is the sole position
 // authority, and there is no indexed-removal behaviour (the pump only ever
 // pops the min). Adding a second heap-position authority is explicitly
-// forbidden (brief §6.1).
+// forbidden.
 class SelectTimerRegistration {
 public:
     enum class State : std::uint8_t {
@@ -89,8 +88,8 @@ private:
     friend class ::sluice::async::Scheduler;
 
     // Single-object CAS with no external side effects. PRIVATE so the
-    // registered-state accounting authority is sealed by the type system
-    // (E13 P3 Corrective closure 3): a registered Select block's ACTIVE->
+    // registered-state accounting authority is sealed by the type system:
+    // a registered Select block's ACTIVE->
     // terminal transition MUST route through the Scheduler helpers
     // select_timer_retire_locked / select_timer_consume_locked, which own the
     // active_deadline_count_ decrement + earliest-deadline cache recompute
@@ -124,9 +123,9 @@ private:
 // The unified internal entry stored by the Scheduler's deadline min-heap.
 // One entry is either Ordinary (an ordinary TimerRegistration*) or Select
 // (a SelectTimerRegistration*); both share the same min-heap ordering keyed
-// by the cached deadline (Addendum B).
+// by the cached deadline.
 //
-// Heap ordering contract (Addendum B): smaller deadline first; the relative
+// Heap ordering contract: smaller deadline first; the relative
 // order of equal-deadline entries is UNSPECIFIED. No test may rely on stable
 // FIFO ordering for equal deadlines.
 //

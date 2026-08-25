@@ -1,14 +1,14 @@
-// sluice::async::WaitPolicy — the physical-wait seam (sluice-CORE-E0A).
+// sluice::async::WaitPolicy — the physical-wait seam.
 //
-// Required by the E0 ADR (docs/adr/ADR-execution-model.md §3): the public task
+// Required by the execution-model ADR (docs/adr/ADR-execution-model.md §3): the public task
 // contract is LOGICAL control-flow waiting ("await = wait until terminal
 // completion"). The PHYSICAL mechanism (block-the-thread vs suspend-a-fiber)
 // is strategy-determined and must NOT be embedded in the task abstractions.
 //
 // This seam is where Future<T> (and via composition, Group/Batch) delegates the
 // physical wait. The default Threaded policy blocks the calling thread on a
-// condition variable — identical to the pre-E0A behavior, so all existing
-// tests pass unchanged. A future Evented policy (job E5) will replace the wait
+// condition variable — identical to the prior behavior, so all existing
+// tests pass unchanged. A future Evented policy will replace the wait
 // with a fiber yield through the scheduler; the Future's state, result,
 // idempotency, and cancel contracts are unchanged.
 //
@@ -27,7 +27,7 @@ namespace sluice::async {
 // The state passed in (ready flag + mutex + cv) is OWNED by the Future (the
 // state is strategy-independent). The policy only decides HOW to wait for the
 // ready flag to flip — blocking the thread (Threaded) or yielding the fiber
-// (Evented, E5). The Threaded default uses the mutex+cv; an Evented policy may
+// (Evented). The Threaded default uses the mutex+cv; an Evented policy may
 // ignore them and yield, but it must still observe `ready` becoming true under
 // the memory model the Future publishes (release on complete_with, acquire on
 // ready check).
@@ -47,7 +47,7 @@ public:
                                   std::mutex& mtx,
                                   std::condition_variable& cv) = 0;
 
-    // E14 D-E14-1: producer notification seam. Called by Future::complete_with
+    // Producer notification seam. Called by Future::complete_with
     // AFTER the first successful terminal publication (ready_ is true) and
     // OUTSIDE the Future's mutex. The default is a no-op (Threaded policy uses
     // cv_.notify_all which is already issued by complete_with). An Evented
@@ -63,8 +63,8 @@ protected:
 };
 
 // The default Threaded policy: blocks the calling OS thread on a condition
-// variable until `ready` is true. This is the portable baseline (E0 ADR §6).
-// Identical to the pre-E0A Future::await behavior, so existing tests pass.
+// variable until `ready` is true. This is the portable baseline (ADR §6).
+// Identical to the prior Future::await behavior, so existing tests pass.
 class ThreadedWaitPolicy : public WaitPolicy {
 public:
     void wait_until_ready(const std::atomic<bool>& ready,

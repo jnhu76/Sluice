@@ -1,6 +1,6 @@
 // sluice::async::detail — synchronous, identity-bearing, non-escaping ReadySink.
 //
-// ADR-explicit-io-request-contract (Accepted) Decision 9 / AC-15 / I11 / I16:
+// ADR-explicit-io-request-contract (Accepted) Decision 9 / AC-15:
 // the reap path makes a Completion ready and synchronously delivers a by-value
 // identity event. The event deliberately carries NO Completion* and NO
 // RequestSlot* — a caller that observes ready may reset/destroy the Completion
@@ -19,15 +19,14 @@
 //   - allocation-independent (no correctness-required allocation in the sink);
 //   - invoked with NO slot/backend/admission lock held (reap leaves the leaf
 //     slot-lifecycle domain before calling the sink);
-//   - does not call user code (the sink IS the seam the Runtime will hook into
-//     in Phase F; Phase B delivers fake stable tokens/leases only);
+//   - does not call user code (the sink IS the seam the Runtime hooks into);
 //   - does not retain the ReadyEvent reference beyond the call;
 //   - the slot may be reset/reused during the callback and the event stays safe.
 //
-// Phase B proves the abstract transfer and exactly-once rules with FAKE stable
-// tokens/leases and NO Scheduler modification (ADR Decision 10 :674-676). Phase
-// F will replace the fake lease with a real Scheduler routing record; the
-// ReadySink contract here is what Phase F must satisfy.
+// The abstract transfer and exactly-once rules hold with the stable
+// tokens/leases defined here (ADR Decision 10 :674-676); the RoutingLease
+// pins the Scheduler routing record. The ReadySink contract here is what the
+// Runtime integration must satisfy.
 #pragma once
 
 #include <sluice/async/detail/request_key.hpp>
@@ -44,11 +43,10 @@ enum class OperationKind : std::uint8_t {
     sync_all,
 };
 
-// Phase B fake waiter token (ADR Decision 10). A stable value identity that
-// Phase F will replace with a real (SchedulerIdentity, RegistrationSlot,
-// RegistrationGeneration) tuple backed by a Scheduler routing record. Phase B
-// proves the exactly-once transfer mechanics; it does NOT prove real Scheduler
-// record lifetime (that is Phase F).
+// Waiter token (ADR Decision 10). A stable value identity:
+// (SchedulerIdentity, RegistrationSlot, RegistrationGeneration), backed by a
+// Scheduler routing record. The exactly-once transfer mechanics ride on the
+// token + lease pair; record lifetime is pinned by the RoutingLease.
 struct WaiterToken {
     std::uint64_t scheduler_identity = 0;
     std::uint32_t registration_slot = 0;
@@ -57,11 +55,10 @@ struct WaiterToken {
     friend bool operator==(const WaiterToken&, const WaiterToken&) noexcept = default;
 };
 
-// Move-only routing lease (ADR Decision 10). Phase B proved the abstract
-// exactly-once transfer with an id-only lease; Phase F (issue #98 F1) makes it
-// pin the Scheduler routing record it was created for: the record index +
-// generation identify the Scheduler-side WaitRecord that must not be retired
-// or reused while a slot or synchronous ReadySink owns this lease. The arena
+// Move-only routing lease (ADR Decision 10). The lease pins the Scheduler
+// routing record it was created for: the record index + generation identify
+// the Scheduler-side WaitRecord that must not be retired or reused while a
+// slot or synchronous ReadySink owns this lease. The arena
 // treats the lease opaquely (stores/moves it into the slot and the ReadyEvent);
 // only the Scheduler creates it (pinning()) and reads the pin on the winning
 // delivery path (reap sink or waiter cancel).
@@ -94,7 +91,7 @@ public:
     bool valid() const noexcept { return lease_id_ != 0; }
     std::uint64_t id() const noexcept { return lease_id_; }
 
-    // Phase F: create a lease that pins the Scheduler routing record
+    // Create a lease that pins the Scheduler routing record
     // (record_index, record_generation). The id remains a unique lease
     // identity; the pin is what the Scheduler's winning delivery path uses to
     // locate and retire the record exactly once.

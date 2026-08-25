@@ -2,7 +2,7 @@
 //
 // How this state machine interleaves with the RequestSlot lifecycle (submit
 // -> ... -> ready -> reset -> slot free): see the annotated walkthrough in
-// docs/architecture/async-request-lifecycle.md (issue #139).
+// docs/architecture/async-request-lifecycle.md.
 //
 // A single outstanding operation's state, CALLER-OWNED so allocation is
 // decoupled from submit (mirrors Zig std.Io Completion). The runtime NEVER
@@ -76,7 +76,7 @@
 // available via `result()`. Exactly-once: once ready, the backend never mutates
 // it again. reset() returns it to idle so it can be reused for a new op.
 //
-// E15-P1-04 reap sequence: every successful publish stamps the Completion with
+// Reap sequence: every successful publish stamps the Completion with
 // a monotonic reap sequence number (next_reap_seq()). This lets Batch::next()
 // surface completions in actual backend reap order (ADR §6 O2). The field is
 // read by Batch; ordinary callers ignore it. reset() zeroes it.
@@ -99,10 +99,10 @@ namespace sluice::async {
 class AsyncBackend;
 
 namespace detail {
-// E15-P1-04: process-wide monotonic reap counter, used by Completion::
+// Process-wide monotonic reap counter, used by Completion::
 // publish_from_reap() to stamp a reap sequence on every reaped Completion.
 // Order reflects the actual sequence in which backends publish under
-// AsyncIoContext::access_mtx_ (ADR E7-C); Batch::next() consumes it to surface
+// AsyncIoContext::access_mtx_; Batch::next() consumes it to surface
 // completions in true reap order (ADR §6 O2). Relaxed ordering is sufficient:
 // the only writer/readers are serialized through the context's access mutex
 // (writes) and the Batch's await_one -> next happens-before chain (reads).
@@ -114,7 +114,7 @@ inline std::uint64_t next_reap_seq() noexcept {
 
 template <class T>
 class Completion {
-    // F-02 closeout: reap_seq is an internal ordering mechanism consumed only
+    // reap_seq is an internal ordering mechanism consumed only
     // by Batch::next(). It is not part of the public caller-facing API.
     friend class Batch;
 
@@ -156,7 +156,7 @@ public:
     // is itself a caller-lifecycle error; the internal state still keeps a
     // consistent fail-fast line.)
     //
-    // Phase B (ADR Decision 15): destroying a READY Completion is allowed and
+    // ADR Decision 15: destroying a READY Completion is allowed and
     // performs the same allocation-free slot release as reset() before the
     // address becomes invalid. The slot was bound at commit (the binding payload
     // holds the arena + slot handle); release returns it to the arena with
@@ -166,7 +166,7 @@ public:
     ~Completion() noexcept {
         State s = state_.load(std::memory_order::acquire);
         if (s == State::binding) {
-            // Phase B (ADR Decision 5 / I15): destroying a Completion while it is
+            // ADR Decision 5: destroying a Completion while it is
             // in the private `binding` transient observes a half-installed
             // RequestKey/context/release-capability payload. Only the backend
             // that won the idle -> binding CAS may finish the binding; a
@@ -180,7 +180,7 @@ public:
         if (s == State::ready && release_arena_ != nullptr) {
             // Ready-Completion destruction releases the bound slot (Decision 15
             // / design §9 completion_ready -> free authority). The completed-
-            // binding release authority fails fast on ANY failure (review I1):
+            // binding release authority fails fast on ANY failure:
             // a release that silently failed would let this address die while
             // its old slot stays permanently slot_in_use (a later context
             // destruction fail-fast) — an internal protocol violation, not a
@@ -202,10 +202,10 @@ public:
     // so it still reports as outstanding. resetting is a caller-lifecycle
     // transient: the prior result is being cleared, so it reports as neither
     // idle nor ready (not outstanding) — the Completion is not yet reusable.
-    // `binding` (Phase B) is a PRIVATE backend publication window between idle
+    // `binding` is a PRIVATE backend publication window between idle
     // and outstanding: it is neither idle, ready, nor outstanding, so cancel /
     // await / waiter-registration paths that gate on outstanding() observe it
-    // as not-yet-accepted and reject synchronously (I15).
+    // as not-yet-accepted and reject synchronously.
     bool outstanding() const noexcept {
         State s = state_.load(std::memory_order::acquire);
         return s == State::outstanding || s == State::publishing;
@@ -235,7 +235,7 @@ public:
         State s = state_.load(std::memory_order::acquire);
         if (s == State::idle) return;  // idempotent no-op (defensive)
         if (s == State::binding) {
-            // Phase B (ADR Decision 5 / I15): reset() during the private binding
+            // ADR Decision 5: reset() during the private binding
             // transient would observe/tear down a half-installed payload.
             detail::completion_binding_reset_fail_fast();
         }
@@ -252,12 +252,12 @@ public:
                 std::memory_order::acquire)) {
             detail::completion_authority_fail_fast();
         }
-        // Phase B (ADR Decision 15 / design §9): reset() is the slot-release
+        // ADR Decision 15 / design §9: reset() is the slot-release
         // half of the completion_ready -> free transition. The bound slot is
         // returned to the arena (generation++) under the leaf slot-lifecycle
         // domain — allocation-free, no I/O/Scheduler/backend-progress wait, no
         // upward lock. The completed-binding release authority fails fast on
-        // ANY failure (review I1): a release that silently failed would let
+        // ANY failure: a release that silently failed would let
         // this Completion become reusable while its old slot stays permanently
         // slot_in_use (a later context destruction fail-fast) — an internal
         // protocol violation, not a recoverable user error. Probe-driven
@@ -298,8 +298,8 @@ private:
             std::memory_order::acquire);
     }
 
-    // --- Phase B binding protocol (ADR-explicit-io-request-contract, Accepted,
-    //     Decision 5 / I2 / I15). The accepted request lifecycle splits the
+    // --- Binding protocol (ADR-explicit-io-request-contract, Accepted,
+    //     Decision 5). The accepted request lifecycle splits the
     //     single idle -> outstanding CAS into a private two-stage claim so the
     //     winning backend can install RequestKey / ContextIdentity / slot-release
     //     capability before the Completion becomes observable as outstanding.
@@ -328,14 +328,14 @@ private:
     void commit_binding_to_outstanding() noexcept {
         // The winner's binding payload writes happen-before this release-store
         // (program order + release). An acquire-load observer of `outstanding`
-        // therefore sees the full binding (I2). The CAS from `binding` enforces
+        // therefore sees the full binding. The CAS from `binding` enforces
         // that ONLY the context that won begin_binding (idle -> binding) may
         // publish outstanding: a derived backend that calls commit_binding()
         // without winning begin_binding() would otherwise manufacture an
         // outstanding Completion with no accepted binding. That is an authority
         // violation (ADR-explicit-io-completion-authority); fail-fast in BOTH
-        // Debug and Release (CodeRabbit finding: validate the binding transition
-        // before committing it).
+        // Debug and Release (the binding transition is validated before it
+        // is committed).
         State expected = State::binding;
         if (!state_.compare_exchange_strong(
                 expected, State::outstanding,
@@ -355,7 +355,7 @@ private:
         }
     }
 
-    // --- Phase B binding payload (ADR Decision 7 / design §8) ---
+    // --- Binding payload (ADR Decision 7 / design §8) ---
     // The idle -> binding CAS winner installs the opaque release capability:
     // the backend-owned arena plus the slot handle (slot index + generation).
     // Ordinary callers cannot forge or replace it (private; negative-compile
@@ -374,7 +374,7 @@ private:
         bound_slot_ = {};
     }
 
-    // ADR §10 (P0-02 bridge): roll back a claim that was won but NOT accepted
+    // ADR §10: roll back a claim that was won but NOT accepted
     // into backend tracking — no register/enqueue/dispatch happened and submit
     // has not returned success; the operation is still entirely userspace-owned
     // (e.g. io_uring SQE acquisition failed after a successful claim). Restores
@@ -414,7 +414,7 @@ private:
         state_.store(State::ready, std::memory_order::release);
     }
 
-    // E15-P1-04: monotonic reap sequence stamped by publish_from_reap().
+    // Monotonic reap sequence stamped by publish_from_reap().
     // 0 means "never reaped" (idle or outstanding); a non-zero value orders
     // ready Completions by their actual reap moment.
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
@@ -425,7 +425,7 @@ private:
     std::atomic<State> state_{State::idle};
     std::uint64_t reap_seq_ = 0;
 
-    // Phase B binding payload (ADR Decision 7 / I2). Written only by the
+    // Binding payload (ADR Decision 7). Written only by the
     // idle -> binding CAS winner via install_binding_for_backend; observed by
     // reset()/ready destruction. Publish ordering: the payload writes happen
     // before the binding -> outstanding release-store, and the Completion-ready
@@ -481,7 +481,7 @@ public:
     ~Completion() noexcept {
         State s = state_.load(std::memory_order::acquire);
         if (s == State::binding) {
-            // Phase B (ADR Decision 5 / I15): the binding transient is an
+            // ADR Decision 5: the binding transient is an
             // exclusive publication window; a destructor cannot finish it.
             detail::completion_binding_destruction_fail_fast();
         }
@@ -492,7 +492,7 @@ public:
         if (s == State::ready && release_arena_ != nullptr) {
             // Ready-Completion destruction releases the bound slot (Decision 15
             // / design §9). The completed-binding release authority fails fast
-            // on ANY failure (review I1 — see the Completion<T> template's
+            // on ANY failure (see the Completion<T> template's
             // destructor note).
             release_arena_->release_completed_binding(bound_slot_);
         }
@@ -504,7 +504,7 @@ public:
     Completion& operator=(Completion&&) = delete;
 
     bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
-    // `binding` (Phase B) reports as neither idle, ready, nor outstanding (see
+    // `binding` reports as neither idle, ready, nor outstanding (see
     // the Completion<T> template's outstanding() note).
     bool outstanding() const noexcept {
         State s = state_.load(std::memory_order::acquire);
@@ -525,7 +525,7 @@ public:
         State s = state_.load(std::memory_order::acquire);
         if (s == State::idle) return;  // idempotent no-op (defensive)
         if (s == State::binding) {
-            // Phase B (ADR Decision 5 / I15): reset during binding observes a
+            // ADR Decision 5: reset during binding observes a
             // half-installed payload.
             detail::completion_binding_reset_fail_fast();
         }
@@ -539,9 +539,9 @@ public:
                 std::memory_order::acquire)) {
             detail::completion_authority_fail_fast();
         }
-        // Phase B (ADR Decision 15 / design §9): reset() releases the bound
+        // ADR Decision 15 / design §9: reset() releases the bound
         // slot (generation++) under the leaf slot-lifecycle domain, failing
-        // fast on ANY release failure (review I1 — see the Completion<T>
+        // fast on ANY release failure (see the Completion<T>
         // template's reset() note). Probe-driven Completions (no arena binding)
         // skip this.
         if (release_arena_ != nullptr) {
@@ -562,7 +562,7 @@ private:
             std::memory_order::acquire);
     }
 
-    // Phase B binding protocol — see the Completion<T> template's note.
+    // Binding protocol — see the Completion<T> template's note.
     bool begin_binding_for_backend() noexcept {
         State expected = State::idle;
         return state_.compare_exchange_strong(
@@ -572,7 +572,7 @@ private:
     }
     void commit_binding_to_outstanding() noexcept {
         // CAS from binding -> outstanding: only the begin_binding winner may
-        // publish outstanding (parity with Completion<T>; CodeRabbit finding).
+        // publish outstanding (parity with Completion<T>).
         State expected = State::binding;
         if (!state_.compare_exchange_strong(
                 expected, State::outstanding,
@@ -591,7 +591,7 @@ private:
         }
     }
 
-    // Phase B binding payload — see the Completion<T> template's note.
+    // Binding payload — see the Completion<T> template's note.
     void install_binding_for_backend(detail::RequestArena* arena,
                                      detail::SlotHandle h) noexcept {
         release_arena_ = arena;
@@ -636,7 +636,7 @@ private:
     IoError error_{IoError::Code::backend_error};
     std::uint64_t reap_seq_ = 0;
 
-    // Phase B binding payload — see the Completion<T> template's note.
+    // Binding payload — see the Completion<T> template's note.
     detail::RequestArena* release_arena_ = nullptr;
     detail::SlotHandle bound_slot_{};
 };

@@ -1,12 +1,12 @@
-// sluice::async::ThreadPoolBackend (sluice-CORE-020A, Phase E).
+// sluice::async::ThreadPoolBackend.
 //
 // The portable, always-buildable REAL async backend: a bounded set of persistent
 // blocking-I/O workers that run pread/pwrite/fdatasync/fsync. This is the
 // FALLBACK where io_uring is absent (ADR §4) and is the first PRODUCTION backend
 // to drive real POSIX syscalls through the bounded RequestArena / RequestSlot
-// lifecycle (ADR-explicit-io-request-contract, Accepted; Phase E).
+// lifecycle (ADR-explicit-io-request-contract, Accepted).
 //
-// Phase E replaces the legacy "one std::thread per op + std::function +
+// The backend replaces the legacy "one std::thread per op + std::function +
 // Completion* ready deque" model (DIV-03 / DIV-12) with:
 //
 //   fixed count of persistent blocking-I/O workers (worker_count)
@@ -35,13 +35,13 @@
 // state machine. pending/enqueued cancel may win the canceled terminal directly
 // (Scheme B); running cancel records intent only (best-effort, DIV-10 — no
 // pthread_kill/tgkill), and the syscall's REAL result wins verbatim. A confirmed
-// interruption would record err(canceled) explicitly and win; Phase E does not
-// implement one. cancel never publishes Completion-ready directly.
+// interruption would record err(canceled) explicitly and win; this backend does
+// not implement one. cancel never publishes Completion-ready directly.
 //
 // Shutdown (ADR Decision 15; AGENTS.md §14): close_admission() rejects new
 // reserve with invalid_state (Completion idle, no borrow) while existing accepted
 // requests continue; cancel/poll/wait_one/reap remain legal. close_admission()
-// ALSO wakes any participant parked in the ready wait (issue #67): a one-shot
+// ALSO wakes any participant parked in the ready wait: a one-shot
 // control wake that re-evaluates — it never fabricates readiness or changes
 // request state, and future waits park normally again (no shutdown busy-spin).
 // Destruction is quiescent and fail-fast: the destructor verifies
@@ -76,7 +76,7 @@
 
 namespace sluice::async {
 
-// Phase E configuration (AC-7, ADR Decision 13). Both MUST be > 0. The default
+// Bounded configuration (AC-7, ADR Decision 13). Both MUST be > 0. The default
 // constructor ThreadPoolBackend() uses ThreadPoolConfig{} below.
 struct ThreadPoolConfig {
     std::size_t request_capacity = 64;  // arena capacity == dispatch ring capacity
@@ -107,7 +107,7 @@ class ThreadPoolBackend : public AsyncBackend {
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
-    // Phase F3 (ADR-public-request-handle): this backend uses the RequestArena
+    // ADR-public-request-handle: this backend uses the RequestArena
     // identity contract, so it produces and resolves public RequestHandles.
     bool supports_request_identity() const noexcept override { return true; }
 
@@ -130,7 +130,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
 
-    // Phase F1 (issue #98): production waiter registration / cancellation
+    // Production waiter registration / cancellation
     // (ADR Decision 10), forwarded verbatim to the REAL arena authorities
     // through the same resolve_completion identity bridge as cancel. No
     // side-band waiter map. register_waiter: success, or invalid_state for a
@@ -150,10 +150,10 @@ class ThreadPoolBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override;
 
-    // Issue #67 split-phase wait capability: the backend's ready wait is a
+    // Split-phase wait capability: the backend's ready wait is a
     // pure observe-only epoch wait (see detail::ReadyWaitSource). AsyncIoContext
     // uses it to park for readiness WITHOUT holding access_mtx_, so a second
-    // participant's poll/reap path always stays reachable (I7).
+    // participant's poll/reap path always stays reachable.
     BackendWaitSource* wait_source() noexcept override { return &ready_wait_; }
 
     // Production admission close (ADR Decision 15). New reserve() returns
@@ -163,11 +163,11 @@ class ThreadPoolBackend : public AsyncBackend {
     // winning submit retains its context/admission lock through the Step 5
     // `binding -> outstanding` release-store, the commit/accept linearization
     // point), so after this returns no new acceptance LP can occur. Wakes any
-    // participant parked in the ready wait (issue #67) as a one-shot
+    // participant parked in the ready wait as a one-shot
     // re-evaluation signal. Idempotent.
     void close_admission();
 
-    // Phase E resource introspection (method-only seams; no member data exposed).
+    // Resource introspection (method-only seams; no member data exposed).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept {
@@ -338,14 +338,14 @@ class ThreadPoolBackend : public AsyncBackend {
     // admission transaction, AFTER reserve (Stage 1.5) so the Reserve-stage
     // rejections — admission closed (invalid_state, Decision 15) and capacity
     // full (would_block) — take precedence over the Prepare-stage
-    // invalid_argument (ADR Decision 5 stage order; review P1). A rejected
+    // invalid_argument (ADR Decision 5 stage order). A rejected
     // descriptor rolls back the reserved slot through
     // rollback_reserved_or_prepared — zero residue.
     template <class Op>
     static Result<void> validate_op(const Op& op) noexcept;
 
-    // Five-stage admission for a byte-carrying / void op, now ONE call into
-    // the shared pre-accept ladder (issue #137; detail::submit_transaction).
+    // Five-stage admission for a byte-carrying / void op: ONE call into
+    // the shared pre-accept ladder (detail::submit_transaction).
     // Records the fixed prepared op into per-slot scratch (the policy's
     // write_scratch) so the worker can run the real syscall after
     // mark_running.
@@ -354,13 +354,13 @@ class ThreadPoolBackend : public AsyncBackend {
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind);
 
-    // The backend's policy for detail::submit_transaction (issue #137): a
+    // The backend's policy for detail::submit_transaction: a
     // REAL syscall backend — descriptor validation (Stage 1.5, AFTER
     // reserve: admission/capacity precedence over malformed descriptors,
-    // ADR Decision 5 stage order; review P1), prepared-op scratch (the
+    // ADR Decision 5 stage order), prepared-op scratch (the
     // worker reads it only after a current-generation running transition,
-    // Scheme B), the C2e pause seam between the arena commit and the
-    // acceptance LP, and the C2d pre-commit stage-failure injection harness
+    // Scheme B), the deterministic pause seam between the arena commit and
+    // the acceptance LP, and the pre-commit stage-failure injection harness
     // (test-guarded). No Stage-0 gate: admission arbitration is the arena's
     // reserve check under admission_mtx_ — this backend has no poison state.
     template <class Op, class Comp>
@@ -444,8 +444,8 @@ class ThreadPoolBackend : public AsyncBackend {
         detail::OperationKind kind_;
     };
 
-    // Unified enqueue + dispatch push under one work_mtx_ critical section
-    // (Phase E P0). Closes the window where the arena pin is cleared but the
+    // Unified enqueue + dispatch push under one work_mtx_ critical section.
+    // Closes the window where the arena pin is cleared but the
     // ring entry is not yet visible. noexcept because the arena lock and the
     // bounded ring push are allocation-free; the caller has already committed
     // the request, so a failure here would strand an accepted op.
@@ -548,10 +548,10 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t active_workers_ = 0;
     bool stopping_ = false;
 
-    // Ready/wake domain (issue #67): persistent progress + control epochs so a
+    // Ready/wake domain: persistent progress + control epochs so a
     // ready recorded between snapshot and wait is not lost (AC-6; design
     // §4.5). A LEAF domain — never nested with work_mtx_ or the arena lock;
-    // waiters park here WITHOUT any context-level lock (I1).
+    // waiters park here WITHOUT any context-level lock.
     detail::ReadyWaitSource ready_wait_;
 
     std::vector<std::thread> workers_;  // fixed worker_count, joined in dtor

@@ -1,4 +1,4 @@
-// sluice::async (internal) — E12-E Queue shared internals.
+// sluice::async (internal) — Queue shared internals.
 //
 // NON-INSTALLED src/ header shared between src/async/queue_port.cpp and
 // src/async/scheduler.cpp. Defines the per-Queue-wait-op context

@@ -1,9 +1,8 @@
-// Scheduler Mutex primitive — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler Mutex primitive — implementation TU split from scheduler.cpp
+// (docs/post-freeze/structural-audit.md §6).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
-// and wake contracts remain in include/sluice/async/scheduler.hpp.
+// The class declaration, lock domains, atomic orderings, and wake contracts
+// remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -57,7 +56,7 @@ bool Scheduler::mutex_try_lock(WaitQueue& waiters, Fiber*& owner) {
 }
 
 void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
-    // E12-C lock admission. The lost-wake closure: register + recheck admission
+    // Mutex lock admission. The lost-wake closure: register + recheck admission
     // + commit suspension — all under one global_mtx_ + waiters_.mtx() critical
     // section (the same domain unlock / cancel / expire / admission use). Only
     // context_switch is outside the lock. Mirrors sem_acquire's lost-set closure
@@ -86,7 +85,7 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
         if (!waiters.register_wait_locked(node, me)) {
-            // Node already registered or terminal (C8): contract violation.
+            // Node already registered or terminal: contract violation.
             return;
         }
         ++waiting_waitq_count_;
@@ -110,8 +109,7 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // The current Fiber is RUNNING (it has not called
                 // make_waiting()) and continues inline without suspending;
-                // no runnable publication is needed (audit #162 CPP-002
-                // removed the dead make_runnable call).
+                // no runnable publication is needed.
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
@@ -124,7 +122,7 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
             --waiting_waitq_count_;
             return;
         }
-        // E12-D-CLOSURE: this fiber's node is registered in the Mutex waiter
+        // This fiber's node is registered in the Mutex waiter
         // queue and the fiber will suspend (no immediate ownership). A test
         // observing this phase proves the node queued (T15a/T15b).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -145,8 +143,8 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
 
 void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
                                  WaitNode& node, deadline_t deadline) {
-    // E12-C deadline-aware lock. Composes mutex_lock's admission closure with
-    // E11 TimerRegistration. The wait resolves when EXACTLY ONE cause wins the
+    // Deadline-aware lock. Composes mutex_lock's admission closure with
+    // TimerRegistration. The wait resolves when EXACTLY ONE cause wins the
     // resolve_ CAS:
     //   - unlock() handoff (mutex_unlock -> mutex_handoff_one_locked) -> Woken
     //   - cancel(node) (mutex_cancel)                              -> Cancelled
@@ -156,9 +154,11 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
     //   1. If ownership is admissible (owner == nullptr AND node is FIFO head):
     //      resolve Woken inline (no suspend). Ownership admission wins over a
     //      due deadline (the resource is ready; the deadline is moot).
-    //   2. Else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   2. Else if the deadline is already due: resolve Expired inline (the
+    //      already-due closure).
     //   3. Else: commit suspension.
-    // A non-timer winner retires the registration in the same CS (E11 I4).
+    // A non-timer winner retires the registration in the same CS (the
+    // timer-lifetime closure).
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncMutex::lock_until requires a running Fiber");
     Fiber* me = ws->current;
@@ -169,7 +169,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
         if (!waiters.register_wait_locked(node, me)) {
-            return;  // C8 contract violation
+            return;  // registration contract violation
         }
         ++waiting_waitq_count_;
         // Create the timer registration control block for this wait epoch.
@@ -191,13 +191,13 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
                 }
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication
-                // (audit #162 CPP-002).
+                // Fiber is RUNNING and continues inline; no publication.
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
 
-        // Admission precedence 2: E11 I5 — if the deadline is ALREADY due (and
+        // Admission precedence 2: already-due closure — if the deadline is
+        // ALREADY due (and
         // ownership is not admissible), resolve Expired inline. The fiber must
         // NOT suspend and wait for a future timer scan merely because
         // registration happened after the deadline was due.
@@ -207,8 +207,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication
-                // (audit #162 CPP-002).
+                // Fiber is RUNNING and continues inline; no publication.
                 return;  // resolved at admission; do NOT suspend
             }
             // If expire_locked lost, a concurrent resolver won; fall through.
@@ -237,7 +236,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
 }
 
 bool Scheduler::mutex_cancel(WaitQueue& waiters, WaitNode& node) {
-    // E12-C queue-identity-safe cancellation. Mirrors sem_cancel exactly.
+    // Queue-identity-safe cancellation. Mirrors sem_cancel exactly.
     // AsyncMutex::cancel passes its private waiters_ here (NOT exposed to the
     // caller). The contract:
     //   returns true ONLY if node is currently Registered AND currently linked
@@ -260,7 +259,7 @@ bool Scheduler::mutex_cancel(WaitQueue& waiters, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
     }
@@ -300,11 +299,11 @@ WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner)
     sluice_async_test::test_phase(
         *this, sluice_async_test::PhaseTag::mutex_handoff_before_publication);
 #endif
-    retire_timer_for_node_locked(*won);  // E11 I4 timer closure (same CS)
+    retire_timer_for_node_locked(*won);  // timer-lifetime closure (same CS)
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // Exactly-once: publish a runnable ticket ONLY if waiting->runnable
     // succeeded. The node is terminal; make_runnable is the publication guard.
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
     }
@@ -312,7 +311,7 @@ WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner)
 }
 
 void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
-    // E12-C unlock with direct ownership handoff. Under global_mtx_, the calling
+    // Unlock with direct ownership handoff. Under global_mtx_, the calling
     // (owner) Fiber releases ownership:
     //   - if the queue has an eligible FIFO head: MUTEX-HANDOFF-ONE resolves it
     //     Woken, commits owner_ = winner Fiber (BEFORE publication), retires the

@@ -44,11 +44,12 @@ Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload
 // Truncated stream -> error::eof. Bad checksum -> error::invalid_state.
 Result<std::vector<std::byte>> read_record(Reader& reader);
 
-// Minimal WAL durability wrapper (CPPIO-CORE-008E). Tracks three LSNs with the
+// Minimal WAL durability wrapper. Tracks three LSNs with the
 // invariant durable_lsn <= flushed_lsn <= written_lsn. This is NOT group commit
 // — each sync() is a single-writer barrier. The record format is unchanged;
 // WalWriter just frames write_record/write_record_vec through its inner writer
-// and advances LSNs on successful flush/sync. See docs/flush-sync-durability.md.
+// and advances LSNs on successful flush/sync. See
+// docs/architecture/sync-durability-model.md.
 class WalWriter {
   public:
     // Without a SyncableWriter, sync() returns invalid_state (nothing to sync).

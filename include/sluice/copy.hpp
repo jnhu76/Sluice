@@ -14,19 +14,20 @@
 
 namespace sluice {
 
-// Strategy-aware primary overload (CPPIO-CORE-007C): selects the copy path from
+// Strategy-aware primary overload: selects the copy path from
 // options.strategy, respects options.limit, and fills *decision (if non-null)
 // with requested vs selected and which path moved bytes. Auto currently behaves
-// as BufferedFirst (006). Scratch forces the scratch read/write loop and never
-// uses the buffered fast path. Deferred strategies are handled in 007E. If
+// as BufferedFirst. Scratch forces the scratch read/write loop and never
+// uses the buffered fast path. Deferred (unimplemented) strategies follow
+// options.unsupported_policy (invalid_state, or fallback to Auto). If
 // `stats` is non-null, copy loop / byte / stop-reason counters are recorded.
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyOptions options, CopyStats* stats = nullptr,
                                CopyDecision* decision = nullptr);
 
 // Bounded copy with caller-provided scratch and an explicit limit. Delegates to
-// the strategy overload with CopyOptions{limit, CopyStrategy::Auto}. Preserves
-// the pre-007 behavior (Auto == BufferedFirst, so a BufferedReadable reader
+// the strategy overload with CopyOptions{limit, CopyStrategy::Auto} (Auto ==
+// BufferedFirst, so a BufferedReadable reader
 // still gets the fast path).
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyLimit limit, CopyStats* stats = nullptr);

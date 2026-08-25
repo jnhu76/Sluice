@@ -1,4 +1,4 @@
-// sluice::async await-style operation helpers (C7, #135) — implementation.
+// sluice::async await-style operation helpers — implementation.
 // See include/sluice/async/await_op_helpers.hpp for the contract.
 #include <sluice/async/await_op_helpers.hpp>
 

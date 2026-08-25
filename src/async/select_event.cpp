@@ -1,10 +1,10 @@
-// sluice::async::Scheduler — E13 P4 Select Event winner/loser finalizers.
+// sluice::async::Scheduler — Select Event winner/loser finalizers.
 //
 // Per-kind finalizer halves for Event arms, called by the single group
 // processor (select_process_group_locked via select_commit_winner_locked /
 // select_finalize_loser_locked) under global_mtx_.
 //
-// Source order (docs/e13-select-locking-and-publication.md §4.3 / §4.4):
+// Source order:
 //
 //   Event winner:
 //     1. group winner CAS already succeeded (the driver's caller did it)
@@ -21,7 +21,7 @@
 //     4. NO publication (never writes result/runnable)
 //
 // Every unlink reuses the existing canonical Scheduler Event unlink helper —
-// no duplicated intrusive-list mutation logic (P4 §8.4). Event::set_ is NEVER
+// no duplicated intrusive-list mutation logic. Event::set_ is NEVER
 // mutated: Select preserves the persistent-readiness property
 // (InvEventPersistentStateNotConsumed).
 #include <sluice/async/scheduler.hpp>
@@ -34,7 +34,7 @@
 
 namespace sluice::async {
 
-// Event winner finalize (§8.3). The winner unlink happens BEFORE arm.state is
+// Event winner finalize. The winner unlink happens BEFORE arm.state is
 // set to Retired, matching the documented source order; the canonical unlink
 // helper accepts the registered/candidate_ready state at entry.
 void Scheduler::select_finalize_event_winner_locked(
@@ -61,7 +61,7 @@ void Scheduler::select_finalize_event_winner_locked(
     (void)group;
 }
 
-// Event loser finalize (§8.4). Arm classification (Retired) PRECEDES the
+// Event loser finalize. Arm classification (Retired) PRECEDES the
 // unlink, matching the documented loser source order.
 void Scheduler::select_finalize_event_loser_locked(
     detail::SelectGroup& group, detail::SelectArmSlot& arm) {

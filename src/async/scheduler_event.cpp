@@ -1,9 +1,8 @@
-// Scheduler Event primitive — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler Event primitive — implementation TU split from scheduler.cpp
+// (docs/post-freeze/structural-audit.md §6).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
-// and wake contracts remain in include/sluice/async/scheduler.hpp.
+// The class declaration, lock domains, atomic orderings, and wake contracts
+// remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -42,11 +41,11 @@ std::size_t Scheduler::event_set_broadcast(Event& event) {
     while (wake_wait_one_locked(event.waiters_) != nullptr) {
         ++woken;
     }
-    // P6: the suspended-Event resolver. Replaces the P2 readiness-offer-only
+    // The suspended-Event resolver, unlike the readiness-offer-only
     // select_event_scan_locked. select_resolve_event_locked walks this Event's
-    // SelectPort, applies the single-group P6 gate (P8 multi-group DENIED ->
+    // SelectPort, applies the single-group gate (multi-group DENIED ->
     // fail-fast before any CAS), marks eligible arms CandidateReady, chooses
-    // the lowest INDEX ready arm, drives the P4 group processor exactly once,
+    // the lowest INDEX ready arm, drives the group processor exactly once,
     // and publishes exactly once. A zero-eligible return is a clean no-op (no
     // suspended Select arms on this Event).
     (void)select_resolve_event_locked(event);
@@ -63,7 +62,7 @@ void Scheduler::event_reset(std::atomic<bool>& set_flag) {
     set_flag.store(false, std::memory_order::release);
 }
 
-// ---- E13 Select registry operations (private Scheduler authority) ----
+// ---- Select registry operations (private Scheduler authority) ----
 
 void Scheduler::select_event_link_locked(Event& event,
                                          detail::SelectArmSlot& arm) {
@@ -160,7 +159,7 @@ std::size_t Scheduler::select_event_scan_locked(Event& event) {
            "select_event_scan_locked: Event does not belong to this Scheduler");
     if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
     // Walk the Event's SelectPort, marking eligible Event Select arms
-    // CandidateReady. P2: readiness-offer only — no claim, no finalization,
+    // CandidateReady. Readiness-offer only — no claim, no finalization,
     // no publication, no unlink, no worklist construction.
     std::size_t marked = 0;
     detail::SelectArmSlot* arm = event.select_port_.head_;
@@ -218,8 +217,8 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // the exactly-once publication guard; a false return (fiber already runnable
     // from a concurrent path, or null fiber) does NOT undo the cancel. Returning
     // false here would mislead the caller into retrying or thinking the wait is
-    // still active (PR#6 review: gemini-code-assist + coderabbitai).
-    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    // still active (the fiber continues running and returns from wait).
+    // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
     }
@@ -228,11 +227,11 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
                                  WaitNode& node) {
-    // E12-A Event wait admission. The lost-set closure: register + check SET +
+    // Event wait admission. The lost-set closure: register + check SET +
     // (if SET) resolve Woken inline, OR commit suspension — all under one
     // global_mtx_ + q.mtx() critical section (the same domain set()/reset() use).
     // Only context_switch is outside the lock. This mirrors await_wait_deadline's
-    // I5 already-due path: always register, then check the admission condition.
+    // already-due path: always register, then check the admission condition.
     //
     // If set_ is observed at admission (after registration), the wait resolves
     // Woken inline via wake_node_locked (resolve_(Woken) + unlink), the timer
@@ -255,7 +254,7 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
         if (!q.register_wait_locked(node, me)) {
-            // Node already registered or terminal (C8): contract violation.
+            // Node already registered or terminal: contract violation.
             return;
         }
         ++waiting_waitq_count_;
@@ -283,8 +282,7 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // The current Fiber is RUNNING (it has not called
                 // make_waiting()) and continues inline; no runnable
-                // publication is needed (audit #162 CPP-002 removed the dead
-                // make_runnable call).
+                // publication is needed.
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
@@ -311,8 +309,8 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
 void Scheduler::await_event_wait_deadline(WaitQueue& q,
                                           const std::atomic<bool>& set_flag,
                                           WaitNode& node, deadline_t deadline) {
-    // E12-A deadline-aware Event wait. Composes await_event_wait's admission
-    // closure with E11 TimerRegistration. The wait resolves when EXACTLY ONE
+    // Deadline-aware Event wait. Composes await_event_wait's admission
+    // closure with TimerRegistration. The wait resolves when EXACTLY ONE
     // cause wins the resolve_ CAS:
     //   - set() broadcast (event_set_broadcast -> wake_wait_one_locked) -> Woken
     //   - cancel_wait(q, node)                                   -> Cancelled
@@ -322,9 +320,11 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
     //   1. If set_ is observed SET after registration: resolve Woken inline
     //      (no suspend). Event readiness wins over a due deadline at admission
     //      (the resource is ready; the deadline is moot).
-    //   2. Else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   2. Else if the deadline is already due: resolve Expired inline (the
+    //      already-due closure).
     //   3. Else: commit suspension.
-    // A non-timer winner retires the registration in the same CS (E11 I4).
+    // A non-timer winner retires the registration in the same CS (the
+    // timer-lifetime closure).
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     TimerRegistration* reg = nullptr;
@@ -332,7 +332,7 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
         if (!q.register_wait_locked(node, me)) {
-            return;  // C8 contract violation
+            return;  // registration contract violation
         }
         ++waiting_waitq_count_;
         // Create the timer registration control block for this wait epoch.
@@ -351,13 +351,12 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
                 }
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication
-                // (audit #162 CPP-002).
+                // Fiber is RUNNING and continues inline; no publication.
             }
             return;  // node.outcome() == woken; do NOT suspend
         }
 
-        // E11 I5 admission closure: if the deadline is ALREADY due (and the
+        // Already-due admission closure: if the deadline is ALREADY due (and the
         // resource is NOT set), resolve Expired inline. The fiber must NOT
         // suspend and wait for a future timer scan merely because registration
         // happened after the deadline was due.
@@ -367,9 +366,7 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication
-                // (audit #162 CPP-002 removed the dead call and the
-                // never-taken route that consumed its result).
+                // Fiber is RUNNING and continues inline; no publication.
                 return;  // resolved at admission; do NOT suspend
             }
             // If expire_locked lost, a concurrent resolver won; fall through.

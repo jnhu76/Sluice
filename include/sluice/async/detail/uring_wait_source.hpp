@@ -1,11 +1,11 @@
 // sluice::async::detail::UringWaitSource — split-phase readiness wait domain
-// for the Uring backend (Phase D4; issue #67 / AGENTS.md §13.2).
+// for the Uring backend (AGENTS.md §13.2).
 //
 // AsyncIoContext::wait_one's split protocol (snapshot -> poll -> park) requires
 // a backend wait source that can block for progress WITHOUT holding
 // access_mtx_. For Uring the progress primitive is the KERNEL: the private
 // io_uring ring fd is poll(2)-able, and POLLIN on it holds exactly while CQEs
-// are pending (empirically verified on the D4 proof kernel, 6.18; empty ring
+// are pending (empirically verified on Linux 6.18; empty ring
 // -> poll returns 0; parked poll wakes with POLLIN exactly when a CQE is
 // delivered; after reap the ring is not readable again). The control plane
 // (close_admission / interrupt_backend_waiters) uses a one-shot control
@@ -29,7 +29,7 @@
 // (both signal_progress() and interrupt_all() publish the epoch under mtx_
 // BEFORE writing).
 //
-// Multi-waiter / durable broadcast (D4-RM14, P0-2): a single eventfd write
+// Multi-waiter / durable broadcast: a single eventfd write
 // DOES wake every poller parked at that moment (Linux wakes the poll
 // waitqueue), but the counter is a single CONSUMABLE token, not a notify_all:
 // after the wake, do_poll() re-runs each fd's poll handler, and a poller whose
@@ -50,7 +50,7 @@
 //     (a persistent predicate + CV notify, AGENTS.md §13.2 — no lost wake, no
 //     busy-spin): it cannot consume the transport token while any old-
 //     generation waiter still needs it, and it re-checks the epochs after the
-//     gate so a wake that belongs to ITS invocation is reported (D4-RM13).
+//     gate so a wake that belongs to ITS invocation is reported.
 // The token therefore stays in the level-triggered counter until every waiter
 // it was published for has rechecked, after which the next park drains it.
 //
@@ -79,8 +79,8 @@
 // Lock order: mtx_ is a LEAF domain; signal_progress() / interrupt_all() are
 // called without holding any other lock (the backend calls signal_ready_
 // progress() after reap, outside dispatch_mtx_ and the arena leaf — and the
-// poison paths defer their wake past dispatch_mtx_, D4-RM16/RM17). The ONE
-// exception is the D4-RM14 commit-to-park registration: arm_committed_wait()
+// poison paths defer their wake past dispatch_mtx_). The ONE
+// exception is the commit-to-park registration: arm_committed_wait()
 // IS called while the Scheduler holds its global_mtx_ (MW-S2 Phase-B commit,
 // via AsyncIoContext::arm_backend_wait_commit). That edge is bounded and
 // acyclic — arm_committed_wait() only reads/writes the armed epoch/state
@@ -88,7 +88,7 @@
 // sink, or the request lifecycle — and the reverse edge (wait-source mtx_
 // -> Scheduler global_mtx_) is forbidden.
 //
-// The wait source is observe-only (issue #67 / D4 §21): it NEVER reaps,
+// The wait source is observe-only: it NEVER reaps,
 // records terminals, publishes Completions, mutates RequestArena state,
 // cancels operations, or changes outstanding. The context continues to own
 // serialized poll/reap under access_mtx_.
@@ -148,12 +148,12 @@ class UringWaitSource final : public BackendWaitSource {
     }
 
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
-        // Phase G: the one-argument form is the unbounded entry; the bounded
+        // The one-argument form is the unbounded entry; the bounded
         // variant carries the deadline-driven park cap (see below).
         return wait_for_change(observed, std::chrono::nanoseconds::max());
     }
 
-    // Phase G review P1b: poll(2) with a finite timeout is a native bounded
+    // poll(2) with a finite timeout is a native bounded
     // transport — truthfully report the capability (BackendWaitSource
     // contract).
     bool supports_bounded_wait() const noexcept override { return true; }
@@ -190,7 +190,7 @@ class UringWaitSource final : public BackendWaitSource {
                 if (progress_epoch_ != observed.progress_generation) {
                     return BackendWakeReason::progress;
                 }
-                // D4-RM15 (P0-2, durable-broadcast gate): an eventfd token
+                // Durable-broadcast gate: an eventfd token
                 // written by a publish is the TRANSPORT for the wake of every
                 // waiter that was parked when it was published. This waiter is
                 // a FUTURE generation relative to any pending token (its
@@ -205,7 +205,7 @@ class UringWaitSource final : public BackendWaitSource {
                 cv_.wait(lk, [this] { return pending_wake_count_ == 0; });
                 // A publish may have landed while THIS waiter was blocked on
                 // the gate: re-check the epochs BEFORE draining, so a wake
-                // that belongs to this invocation is reported (D4-RM13), not
+                // that belongs to this invocation is reported, not
                 // drained away as if it were a past event.
                 if (control_epoch_ != observed.control_generation) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -292,9 +292,9 @@ class UringWaitSource final : public BackendWaitSource {
             pfds[1].fd = control_fd_;
             pfds[1].events = POLLIN;
             pfds[1].revents = 0;
-            // Phase G (bounded park): the deadline-driven cap bounds the
-            // physical poll so the Scheduler's E11 timer pump re-drains before
-            // an active deadline expires. The unbounded sentinel
+            // The deadline-driven cap bounds the physical poll so the
+            // Scheduler's timer pump re-drains before an active deadline
+            // expires. The unbounded sentinel
             // (nanoseconds::max()) keeps the classic infinite kernel park;
             // poll(2) takes milliseconds (int), so larger bounds are clamped.
             int timeout_ms = -1;
@@ -324,8 +324,7 @@ class UringWaitSource final : public BackendWaitSource {
                     // changes no state.
                     // Any OTHER poll failure is a real wait-domain failure
                     // with no Result<> channel here: fail-fast (stderr +
-                    // terminate) rather than busy-spin or fabricate a reason
-                    // (mutant D4-RM12).
+                    // terminate) rather than busy-spin or fabricate a reason.
                     if (errno != EINTR) {
                         std::fprintf(stderr,
                                      "sluice::async::detail::UringWaitSource: "
@@ -407,12 +406,12 @@ class UringWaitSource final : public BackendWaitSource {
     // control generation is a re-evaluation signal, NOT persistent state, so
     // future waits snapshot it and park normally (no shutdown busy-spin).
     // Never fabricates readiness, changes request state, publishes a
-    // Completion, or cancels real I/O (I8).
+    // Completion, or cancels real I/O.
     void interrupt_all() noexcept override {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++control_epoch_;
-            // D4-RM15 (P0-2): every waiter parked right now is an OLD-
+            // Every waiter parked right now is an OLD-
             // generation waiter that this wake must reach. It is counted by
             // the durable-broadcast gate; the gate blocks future-generation
             // waiters from draining the transport token until each counted
@@ -429,7 +428,7 @@ class UringWaitSource final : public BackendWaitSource {
     }
 
     // Real readiness publication: the caller must have published the request
-    // lifecycle state (backend_ready / Completion-ready) FIRST (I4); this
+    // lifecycle state (backend_ready / Completion-ready) FIRST; this
     // bumps the progress epoch under the mutex and wakes all parked waiters so
     // they re-poll (notify_all equivalent; a single wake could strand a second
     // parker on a stale token — lost progress).
@@ -437,7 +436,7 @@ class UringWaitSource final : public BackendWaitSource {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++progress_epoch_;
-            // D4-RM15 (P0-2): same durable-broadcast gate as interrupt_all —
+            // Same durable-broadcast gate as interrupt_all —
             // a progress token must reach every parked-at-publish waiter too.
             pending_wake_count_ = parked_count_;
         }
@@ -450,12 +449,12 @@ class UringWaitSource final : public BackendWaitSource {
 #endif
     }
 
-    // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
+    // Commit-to-park handshake: one-shot committed-wait
     // registration (see BackendWaitSource). Called by the Scheduler's MW-S2
     // Phase-B commit under global_mtx_ BEFORE the participant is exposed as
     // about-to-park; the consumed floor makes the NEXT wait_one() invocation
     // observe any control wake published after the registration, even when it
-    // lands before the invocation's own snapshot (D4-RM13 invocation-begin
+    // lands before the invocation's own snapshot (invocation-begin
     // semantics). One-shot: a FUTURE invocation captures a fresh baseline, so
     // the interrupt stays one-shot.
     BackendWaitToken arm_committed_wait() noexcept override {
@@ -570,7 +569,7 @@ class UringWaitSource final : public BackendWaitSource {
         }
     }
 
-    // D4-RM15 (P0-2): acknowledge one parked waiter's wake (see
+    // Acknowledge one parked waiter's wake (see
     // wait_for_change). Decrements the durable-broadcast gate and notifies
     // future-generation waiters blocked on it when the last parked-at-publish
     // waiter acknowledges. Must be called under mtx_, from a post-poll path
@@ -638,13 +637,13 @@ class UringWaitSource final : public BackendWaitSource {
     std::condition_variable cv_;
     std::uint64_t progress_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
-    // D4-RM15 (P0-2, durable-broadcast gate): parked_count_ = waiters currently
+    // Durable-broadcast gate: parked_count_ = waiters currently
     // registered in poll; pending_wake_count_ = waiters that were parked when
     // the last wake was published and have not yet acknowledged it. All
     // guarded by mtx_.
     std::size_t parked_count_ = 0;
     std::size_t pending_wake_count_ = 0;
-    // D4-RM14 (P0-1, commit-to-park handshake): one-shot armed control floor
+    // Commit-to-park handshake: one-shot armed control floor
     // (see arm_committed_wait / consume_committed_wait). Guarded by mtx_.
     std::uint64_t armed_control_generation_ = 0;
     bool armed_ = false;

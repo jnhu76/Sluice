@@ -1,4 +1,4 @@
-// sluice::async::Batch — grouped completions (sluice-CORE-030, T4).
+// sluice::async::Batch — grouped completions.
 //
 // Derived from Zig std.Io Batch (Io.zig:474-624). The lowest-level awaitable
 // group: N operations submitted together, awaited as a whole, iterated in
@@ -21,11 +21,11 @@
 // once) — using the existing substrate. A future job may introduce a native
 // Operation.Storage if a backend needs to bypass the per-op submit overhead.
 //
-// Layering: ABOVE AsyncIoContext (T0/T1). Composes Future/CancelToken only
+// Layering: ABOVE AsyncIoContext. Composes Future/CancelToken only
 // indirectly (through AsyncIoContext::cancel). No scheduler.
 //
 // Non-goals (deferred):
-//   - awaitConcurrent() (requires a concurrency unit; PHASE E).
+//   - awaitConcurrent() (requires a concurrency unit; deferred).
 //   - Native Operation.Storage / batchAwait vtable entry (future job if needed).
 #pragma once
 
@@ -107,9 +107,9 @@ public:
     // completes.
     //
     // Returns the number of ops made ready this call on success. On a BACKEND
-    // wait_one() error (E15-P2-01), the error is PROPAGATED via Result and any
-    // ops that were made ready this call (Phase 1 submit-time errors, earlier
-    // reaps in the same loop) REMAIN ready for next() to pop — the caller can
+    // wait_one() error, the error is PROPAGATED via Result and any ops that
+    // were made ready this call (submit-time errors, earlier reaps in the
+    // same loop) REMAIN ready for next() to pop — the caller can
     // drain them before observing the error. A success-returning await_one
     // never silently swallows a backend error; a zero return on success
     // genuinely means "nothing newly ready".
@@ -122,12 +122,12 @@ public:
     // nullopt if none ready. Each completion is dequeued exactly once. Mirrors
     // Zig Batch.next (Io.zig:551).
     //
-    // E15-P1-04: ordering is by the monotonic reap sequence stamped on each
+    // Ordering is by the monotonic reap sequence stamped on each
     // Completion by publish_from_reap() at backend reap time (ADR §6 O2). This
     // preserves the backend's true reap order across slot 0/1/2... regardless
     // of submission order: a backend that reaps slot 1 before slot 0 yields
     // next() returning slot 1 first, then slot 0. Submit-time failures
-    // (Batch::await_one Phase 1 rejections) carry reap_seq 0 and surface
+    // (await_one submit-time rejections) carry reap_seq 0 and surface
     // before any backend-reaped completion, in submission order among
     // themselves (ADR E5).
     //
@@ -147,7 +147,7 @@ private:
         Completion<void> void_c;
         bool ready = false;       // result available to pop
         bool popped = false;      // already returned by next()
-        // F2: admission origin. Set true ONLY when submit fails before
+        // Admission origin. Set true ONLY when submit fails before
         // commit/accept (the slot is marked ready without going through
         // publish_from_reap, so its Completion keeps reap_seq 0). An accepted
         // request that later terminates with any result (success, error, or

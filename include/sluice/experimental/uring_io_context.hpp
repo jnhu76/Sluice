@@ -1,7 +1,7 @@
 // sluice::experimental::UringIoContext — minimal standalone wrapper around
 // UringWriteBatch that owns file open/close (RAII) for one write_file_all call.
 // NOT a subclass of sluice::IoContext and NOT plugged into BlockingIoContext
-// (the spike must not touch default backend selection). See docs/io-uring-spike.md.
+// (this experimental wrapper must not touch default backend selection).
 #pragma once
 
 #include <sluice/experimental/uring_write_batch.hpp>
@@ -21,7 +21,7 @@ class UringIoContext {
     Result<UringWriteResult> write_file_all(std::string_view path,
                                             std::span<const std::byte> bytes);
 
-    // Optional measurement (CPPIO-CORE-013E); forwarded to the batch.
+    // Optional measurement; forwarded to the batch.
     void set_stats(UringStats* stats) { batch_.set_stats(stats); }
 
   private:

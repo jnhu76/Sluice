@@ -1,32 +1,32 @@
-// sluice::async default backend for job 017 (ADR §3/§4).
+// sluice::async default backend (ADR §3/§4).
 //
 // SyncBackend completes ops SYNCHRONOUSLY at the next poll()/wait_one(). It
 // holds no kernel state and uses no threads — it is the minimal in-process
-// backend that lets the 017 foundation compile, link, and be tested before the
-// real backends land (019 FakeAsyncBackend, 020A ThreadPool, 020B Uring).
+// backend that lets the async foundation compile, link, and be tested ahead
+// of the real backends (FakeAsyncBackend, ThreadPoolBackend, UringAsyncBackend).
 //
-// Semantics for 017: every submitted op is buffered; poll()/wait_one() marks all
+// Semantics: every submitted op is buffered; poll()/wait_one() marks all
 // of them ready with a synthetic result. ReadOps complete with their full `len`
-// (no actual read — 017 explicitly touches no fd); WriteOps complete with `len`;
+// (no actual read — this backend touches no fd); WriteOps complete with `len`;
 // sync ops complete with void. This is enough to test the Completion lifecycle,
 // submit/poll/wait plumbing, and AsyncStats. It is NOT a correctness backend
-// for real I/O — that comes with 019/020A.
+// for real I/O — FakeAsyncBackend and ThreadPoolBackend provide that.
 //
-// Phase B (ADR-explicit-io-request-contract, Accepted): SyncBackend now drives
-// the bounded RequestArena five-stage admission (reserve -> prepare -> commit
-// -> enqueue -> dispatch/reap) and the unified reap path with a synchronous
-// identity-bearing ReadySink. The public submit_*/poll/wait_one/cancel surface
-// is unchanged (ADR Decision 7); the RequestKey is bound privately during
+// SyncBackend drives the bounded RequestArena five-stage admission
+// (reserve -> prepare -> commit -> enqueue -> dispatch/reap) under
+// ADR-explicit-io-request-contract (Accepted) and the unified reap path with a
+// synchronous identity-bearing ReadySink. The public submit_*/poll/wait_one/cancel
+// surface is unchanged (ADR Decision 7); the RequestKey is bound privately during
 // commit and resolved internally for cancel. The synthetic terminal result is
 // stored at dispatch time (record_terminal) so poll deterministically
 // transitions pending/enqueued -> backend_ready; poll()/wait_one() reaps.
 //
-// Identity (review C2): the Completion publication binding lives IN the
+// Identity: the Completion publication binding lives IN the
 // RequestSlot record (install_publication_binding before the Completion CAS);
 // reap validates it and publishes Completion-ready through it inside the leaf
 // domain. There is NO parallel unordered_map identity bridge — cancel resolves
 // a Completion* by the arena's bounded O(capacity) scan. Pre-commit
-// bookkeeping is transactional (review C1): every pre-commit failure path
+// bookkeeping is transactional: every pre-commit failure path
 // rolls the reservation back with zero side effects (Completion untouched,
 // slot freed).
 //
@@ -35,7 +35,7 @@
 // Completion stays outstanding; poll()/wait_one() publishes the canceled
 // result through the unified reap path.
 //
-// State is instance-owned only (no globals, gate item 6).
+// State is instance-owned only (no globals).
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -80,7 +80,7 @@ class SyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
-    // Phase F3 (ADR-public-request-handle): this backend uses the RequestArena
+    // ADR-public-request-handle: this backend uses the RequestArena
     // identity contract, so it produces and resolves public RequestHandles.
     bool supports_request_identity() const noexcept override { return true; }
 
@@ -105,14 +105,14 @@ class SyncBackend : public AsyncBackend {
     std::size_t poll() override { return dispatch_and_reap(); }
 
     Result<std::size_t> wait_one() override {
-        // No real waiting in 017 (no kernel/threads); just drain like poll().
+        // No real waiting (no kernel/threads); just drain like poll().
         return dispatch_and_reap();
     }
 
-    // Issue #67: SyncBackend intentionally has NO split wait capability. Its
+    // SyncBackend intentionally has NO split wait capability. Its
     // wait_one is NON-BLOCKING by contract (poll drains every outstanding slot,
     // so a wait never needs to park). It advertises that non-blocking contract
-    // so ApplicationRuntime accepts it without a wait source (D3).
+    // so ApplicationRuntime accepts it without a wait source.
     bool wait_one_is_nonblocking() const noexcept override { return true; }
 
     // ADR Decision 11: cancel resolves the Completion* to its slot handle (the
@@ -144,7 +144,7 @@ class SyncBackend : public AsyncBackend {
         }
     }
 
-    // Phase F1 (issue #98): production waiter registration / cancellation
+    // Production waiter registration / cancellation
     // (ADR Decision 10), forwarded verbatim to the REAL arena authorities
     // through the same resolve_completion identity bridge as cancel. No
     // side-band waiter map. register_waiter: success, or invalid_state for a
@@ -190,11 +190,11 @@ class SyncBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
 
-    // Phase B test-only introspection (the arena is a private detail).
+    // Test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
-    // Test-only (production sink is stateless — CodeRabbit finding / AGENTS §8).
+    // Test-only (production sink is stateless — AGENTS §8).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
 #endif
@@ -211,17 +211,17 @@ class SyncBackend : public AsyncBackend {
         return ++id;
     }
 
-    // Five-stage admission for a byte-carrying op, now ONE call into the
-    // shared pre-accept ladder (issue #137; detail::submit_transaction). The
+    // Five-stage admission for a byte-carrying op: ONE call into the
+    // shared pre-accept ladder (detail::submit_transaction). The
     // synthetic terminal is NOT recorded here: it is decided at dispatch
     // (poll) time so a cancel between submit and poll can still win the
     // terminal transition (Scheme B). The requested length is carried in the
     // slot's publication binding for the dispatch step. Transactional
-    // pre-commit path (review C1): the publication binding is installed INTO
+    // pre-commit path: the publication binding is installed INTO
     // the slot record (no map insert, no allocation) and every pre-commit
     // failure rolls the reservation back with zero side effects; a lost
     // Completion CAS rolls back only this submit's slot. Nothing after
-    // commit_binding may throw (I9). Admission serialization is EXTERNAL
+    // commit_binding may throw. Admission serialization is EXTERNAL
     // (the context's access_mtx_); this backend has no admission lock of its
     // own, so the wrapper is lock-free — the ladder runs as-is.
     template <class Op>
@@ -247,7 +247,7 @@ class SyncBackend : public AsyncBackend {
         return {};
     }
 
-    // The backend's policy for detail::submit_transaction (issue #137): the
+    // The backend's policy for detail::submit_transaction: the
     // reference backend's divergence set is empty by construction — no
     // Stage-0 gate (admission is serialized externally by the context's
     // access_mtx_; the arena's own reserve check arbitrates admission), no
@@ -336,17 +336,16 @@ class SyncBackend : public AsyncBackend {
     // Iterates the fixed slot array via the arena's read-only accessors (the
     // slot's own binding carries the dispatch data — no parallel map).
     //
-    // Snapshot consistency (CodeRabbit finding): the composed handle
+    // Snapshot consistency: the composed handle
     // {idx, generation_of(idx)} is built from independent locked snapshots, but
     // record_terminal re-validates the generation under its OWN lock before
     // writing — so if a release_completed_binding (run outside access_mtx_)
     // advanced the generation between the snapshot and the record, record_terminal
     // returns false (no write, no corruption) and the next poll re-dispatches the
     // still-enqueued slot. The benign skip is the authority guarantee; the
-    // Phase B reference backend is also single-threaded under access_mtx_, so the
-    // window does not arise until the multi-threaded backends of later phases
-    // (which will use a single arena-locked dispatch scan, not this composed-
-    // snapshot path).
+    // reference backend is also single-threaded under access_mtx_, so the
+    // window does not arise for it (the multi-threaded backends use a single
+    // arena-locked dispatch scan, not this composed-snapshot path).
     void dispatch_enqueued() {
         for (std::size_t i = 0; i < arena_.capacity(); ++i) {
             detail::SlotIndex idx{static_cast<std::uint32_t>(i)};
@@ -363,12 +362,12 @@ class SyncBackend : public AsyncBackend {
 
     std::size_t dispatch_and_reap() {
         dispatch_enqueued();
-        // Phase F1: deliver identity events to the attached Scheduler-owned
+        // Deliver identity events to the attached Scheduler-owned
         // routing sink when one is set; otherwise the no-op reference sink.
         return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     }
 
-    // --- Completion publication (review C2/C3) ---
+    // --- Completion publication ---
     // The arena publishes Completion-ready through the slot-bound thunk INSIDE
     // the leaf domain. The thunks are written here (a trusted backend-author —
     // they reach the protected AsyncBackend::publish helpers) and installed

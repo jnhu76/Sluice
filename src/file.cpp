@@ -71,7 +71,7 @@ int iovcnt_clamped(std::size_t chunk) {
     return static_cast<int>(std::min<std::size_t>(chunk, static_cast<std::size_t>(INT_MAX)));
 }
 
-// errno-aware close(2) indirection (ERR-001, issue #143). close is the one
+// errno-aware close(2) indirection. close is the one
 // POSIX syscall in this file whose EINTR must NOT go through
 // detail::retry_on_eintr: on EINTR — as on any error return — Linux has
 // already released the descriptor, and a blind retry could close a

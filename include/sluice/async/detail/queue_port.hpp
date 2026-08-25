@@ -1,7 +1,7 @@
-// sluice::async::detail::QueuePort — the E12-E Queue fixed non-template
-// Scheduler boundary (Corrective-2 §3/§5/§6).
+// sluice::async::detail::QueuePort — the Queue's fixed non-template
+// Scheduler boundary.
 //
-// This header installs the NON-TEMPLATE Queue authority surface:
+// This header defines the NON-TEMPLATE Queue authority surface:
 //
 //   QueueOpaquePushStatus / QueueOpaquePushResult
 //   QueueOpaquePopStatus  / QueueOpaquePopResult
@@ -10,20 +10,18 @@
 //   QueueTeardownSession    (irreversible, unique, move-only)
 //   QueuePort               (the only Queue friend of Scheduler)
 //
-// `QueuePort` owns the ring + counters + lifecycle + the (P5/P6) Scheduler
+// `QueuePort` owns the ring + counters + lifecycle + the Scheduler
 // seams. `AsyncQueue<T>` (in async_queue.hpp) is a thin template wrapper that
 // converts opaque results to typed ones and destroys the exact `Node<T>`
 // OUTSIDE all locks. The typed layer cannot name `Node<T>`, cannot reach the
 // private QueuePort embedded in another `AsyncQueue<T>`, and cannot mint a
 // lease from a raw control pointer.
 //
-// P2 scope: the type graph, ring, lifecycle/close state, counters, opaque
+// Scope: the type graph, ring, lifecycle/close state, counters, opaque
 // results, teardown session, and factory are defined here. The blocking/timed
-// wait-admission paths, Scheduler reconciliation, and publication land in P4-P6
-// (they are declared but defer to the Scheduler). The fast paths (try_push /
-// try_pop / close / failed-payload return) are P3.
-//
-// Authority: docs/e12-queue-scheduler-integration.md (Corrective-2 §4-§9).
+// wait-admission paths, Scheduler reconciliation, and publication are declared
+// here but defer to the Scheduler. The fast paths (try_push / try_pop /
+// close / failed-payload return) are non-blocking.
 #pragma once
 
 #include <sluice/async/detail/queue_item.hpp>
@@ -358,11 +356,11 @@ private:
 
 // ---------------------------------------------------------------------------
 // QueuePort — the fixed non-template Scheduler friend. Owns the ring,
-// counters, lifecycle, close state, and the (P5/P6) Scheduler seams.
+// counters, lifecycle, close state, and the Scheduler seams.
 //
-// P2 scope: structural shape, ring, lifecycle, close, counters, teardown
-// session. Fast paths (try_push / try_pop / close) are P3. Blocking/timed
-// wait admission and Scheduler reconciliation are P4-P6.
+// Scope: structural shape, ring, lifecycle, close, counters, teardown
+// session. Fast paths (try_push / try_pop / close) are immediate; blocking/
+// timed wait admission and Scheduler reconciliation defer to the Scheduler.
 // ---------------------------------------------------------------------------
 class QueuePort final {
 public:
@@ -374,13 +372,13 @@ public:
     QueuePort(QueuePort&&) = delete;
     QueuePort& operator=(QueuePort&&) = delete;
 
-    // --- fast paths (P3) ---
+    // --- fast paths ---
     QueueOpaquePushResult try_push(QueueItemLease lease);
     QueueOpaquePopResult try_pop();
     void close() noexcept;
 
-    // --- snapshot projections (ordinary lifecycle-gated calls; P3) ---
-    // is_closed / capacity / size are ordinary QueuePort calls per §7: they
+    // --- snapshot projections (ordinary lifecycle-gated calls) ---
+    // is_closed / capacity / size are ordinary QueuePort calls: they
     // enter through the same G+S lifecycle gate + CallGuard as every other
     // ordinary entry, so begin_teardown serializes against them and a
     // snapshot after tearing_down fail-fasts before CallGuard construction.
@@ -388,14 +386,14 @@ public:
     std::size_t capacity() const noexcept;
     std::size_t size() const noexcept;
 
-    // --- blocking / timed (P4-P6: declared, deferred) ---
+    // --- blocking / timed (declared, deferred) ---
     QueueOpaquePushResult push(QueueItemLease lease);
     QueueOpaquePushResult push_until(QueueItemLease lease,
                                      queue_deadline_t deadline);
     QueueOpaquePopResult pop();
     QueueOpaquePopResult pop_until(queue_deadline_t deadline);
 
-    // --- teardown (P7) ---
+    // --- teardown ---
     QueueTeardownSession begin_teardown() noexcept;
 
 private:
@@ -422,11 +420,11 @@ private:
     // synchronization domain is unchanged (always G+S).
     mutable Mutex state_mtx_;
     QueueLifecycle lifecycle_{QueueLifecycle::operational};
-    // F.5 corrective (preserved): closed_ MUST be atomic — close() stores
-    // under G+S (release), is_closed() loads (acquire). is_closed() now runs
-    // under the G+S lifecycle gate too, so the mutex alone would synchronize;
-    // the atomic + acquire/release pairing is retained verbatim so the F.5
-    // authority (race-free close state across OS threads) cannot regress.
+    // closed_ MUST be atomic — close() stores under G+S (release),
+    // is_closed() loads (acquire). is_closed() also runs under the G+S
+    // lifecycle gate, so the mutex alone would synchronize; the atomic +
+    // acquire/release pairing is retained verbatim so race-free close state
+    // across OS threads cannot regress.
     std::atomic<bool> closed_{false};
 
     // Two role waiter FIFOs. Producer waiters park on push/push_until when
@@ -437,7 +435,7 @@ private:
     // accessor (sealed authority — mirrors Semaphore/AsyncMutex).
     WaitQueue waiters_[2];  // [producer, consumer]
 
-    // Counter ledger (§7). active_port_calls_ counts ordinary QueuePort
+    // Counter ledger. active_port_calls_ counts ordinary QueuePort
     // call intervals ONLY (not typed conversion / arbitrary callers).
     // `mutable`: the const snapshot projections (is_closed/capacity/size)
     // perform the same G+S lifecycle entry + increment as every other

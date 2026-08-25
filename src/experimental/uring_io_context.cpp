@@ -1,4 +1,4 @@
-// UringIoContext implementation (CPPIO-CORE-013D). Owns POSIX open/close around
+// UringIoContext implementation. Owns POSIX open/close around
 // a UringWriteBatch::write_all. Standalone — not a sluice::IoContext subclass.
 #include <sluice/experimental/uring_io_context.hpp>
 

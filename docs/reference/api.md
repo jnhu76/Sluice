@@ -309,7 +309,7 @@ FileWriter(int fd);
 bool opened() const;
 const optional<IoError>& open_error() const;
 
-// Explicit close: reports the close(2) result (ERR-001, issue #143)
+// Explicit close: reports the close(2) result
 Result<void> close();
 ```
 
@@ -1320,7 +1320,7 @@ public:
 protected:
     // Legacy single-step claim (Uring/ThreadPool).
     template <class T> static bool try_claim(Completion<T>& c) noexcept;
-    // Phase B two-stage binding (Fake/Sync — migrated reference backends).
+    // Two-stage binding (Fake/Sync — migrated reference backends).
     template <class T> static bool begin_binding(Completion<T>& c) noexcept;             // idle -> binding
     template <class T> static void commit_binding(Completion<T>& c) noexcept;            // binding -> outstanding (submit-success LP)
     template <class T> static void rollback_binding_before_accept(Completion<T>& c) noexcept; // binding -> idle
@@ -1413,7 +1413,7 @@ public:
     // split-wait-capable backend (wait_source() != nullptr) the wait NEVER
     // holds the serialized access domain: the call loops
     //   snapshot -> poll (serialized) -> park in the observe-only ready wait
-    // so other participants' poll/reap paths stay reachable (issue #67).
+    // so other participants' poll/reap paths stay reachable.
     // A successful return of 0 means the wait was interrupted by the control
     // plane (close_admission / interrupt_backend_waiters) with nothing
     // reaped, or that no work was outstanding — 0 is NOT an error and never
@@ -1421,7 +1421,7 @@ public:
     // contract applies (the whole call, including a backend-side block, runs
     // under the serialized access domain).
     Result<std::size_t> wait_one();
-    // Phase G bounded-park variant: identical semantics, with each physical
+    // Bounded-park variant: identical semantics, with each physical
     // park capped at `max_park` so a deadline-driven caller re-drains in
     // time. A wait source WITHOUT the bounded transport
     // (supports_bounded_wait() == false) gets a synchronous not_supported —
@@ -1435,7 +1435,7 @@ public:
     bool has_split_wait_capability() const noexcept;
     bool has_bounded_split_wait_capability() const noexcept;
 
-    // Control-plane wake (issue #67): unblocks every participant parked in
+    // Control-plane wake: unblocks every participant parked in
     // wait_one()'s observe phase so shutdown / admission close can
     // re-evaluate. No-op for backends without the split wait capability.
     void interrupt_backend_waiters() noexcept;
@@ -1539,7 +1539,7 @@ public:
     // one-shot re-evaluation signal (never fabricates readiness).
     void close_admission();
 
-    // Phase E resource introspection (method-only; no member data exposed).
+    // Resource introspection (method-only; no member data exposed).
     std::size_t arena_capacity() const noexcept;
     std::size_t arena_slot_in_use() const noexcept;
     std::size_t arena_capacity_rejections() const noexcept;
@@ -1624,7 +1624,7 @@ public:
     // Production admission close (ADR Decision 15; reference semantics).
     void close_admission() noexcept;
 
-    // Phase B test-only introspection (the arena is a private detail).
+    // Test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept;
     std::size_t arena_slot_in_use() const noexcept;
     std::size_t arena_capacity_rejections() const noexcept;
@@ -1660,7 +1660,7 @@ All stats structs are caller-owned, default-initialized to zero, and attached vi
 
 ---
 
-## Application Runtime (E16)
+## Application Runtime
 
 Builder-constructed, one-shot, injected-backend application lifecycle layer.
 Owns `AsyncIoContext`, `Scheduler`, root `Group`, root cancellation, and a
@@ -1717,15 +1717,15 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    // M1-A: cooperative Completion wait.
-    // Phase F1 (issue #98): now returns Result<void> — success means the
+    // Cooperative Completion wait.
+    // Returns Result<void> — success means the
     // Completion reached a terminal result (read it via c.result());
     // canceled means the WAIT was cancelled (waiter cancellation, not I/O
     // cancellation: the I/O continues and c remains outstanding).
     Result<void> await_completion(Completion<std::size_t>& c);
     Result<void> await_completion(Completion<void>& c);
 
-    // Phase F1 (ADR Decision 10): waiter cancellation. Removes ONLY the
+    // Waiter cancellation (ADR Decision 10). Removes ONLY the
     // Scheduler wait registration for `c`; the I/O, the borrow, and the
     // terminal result are untouched. Returns true when this call won the
     // waiter (the task's await will resume with canceled); false when the
@@ -1885,7 +1885,7 @@ requested only AFTER the task published), no hidden drain, no fabricated
 outcome.
 
 Exception boundaries: every leg that can throw is netted into a typed result.
-A `submit()`-time throw (P2-02: `ApplicationRuntime::submit` rolls back
+A `submit()`-time throw (`ApplicationRuntime::submit` rolls back
 admission and rethrows, e.g. `bad_alloc` from a bookkeeping reserve) is
 converted after a best-effort `shutdown()` — an escaping exception would
 otherwise unwind into `~ApplicationRuntime` while Running and fail fast
