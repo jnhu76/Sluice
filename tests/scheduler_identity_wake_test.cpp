@@ -13,7 +13,7 @@
 // external-wake protocol — the wake source is the delivery mechanism, no
 // sleeps as proof); the race case uses a barrier plus outcome invariants.
 //
-// Design: docs/design/phase-f1-scheduler-ready-sink.md
+// Design: docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md
 // Gate:   docs/architecture/phase-f1-compliance-gate.md (Gate 4 evidence)
 #include "harness.hpp"
 

@@ -17,7 +17,7 @@
 // the run mode=stub so the aggregate gate records INCOMPLETE (required
 // modes: real) instead of an accidental pass.
 //
-// Design: docs/design/phase-f1-scheduler-ready-sink.md
+// Design: docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md
 // Gate:   docs/architecture/phase-f1-compliance-gate.md (Gate 4 evidence)
 #include "harness.hpp"
 

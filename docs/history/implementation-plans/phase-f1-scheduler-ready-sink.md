@@ -1,5 +1,14 @@
 # Phase F1 — Scheduler consumes identity-bearing reap (focused design)
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from `docs/design/`;
+> classification at move: PINNED-EVIDENCE → CLOSED-HISTORY. F1 is implemented
+> (Issue #98 closed; the production Scheduler-owned ReadyRoutingSink consumes
+> the identity-bearing reap); the in-body "Design (implementation target)"
+> status is preserved as historical text. The live ReadySink protocol is
+> documented in CURRENT authority: `docs/architecture/async-request-lifecycle.md`
+> and ADR-explicit-io-request-contract §9.4. Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Status:** Design (implementation target for Issue #98 F1)
 **Date:** 2026-08-13
 **Authority:** ADR-explicit-io-request-contract (Accepted) Decisions 9/10;

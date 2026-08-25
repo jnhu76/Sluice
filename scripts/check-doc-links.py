@@ -419,6 +419,14 @@ KNOWN_MOVED = {
     # so the historical exemption is not affected.
     "docs/design/phase-e-bounded-threadpool-backend.md":
         "docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md",
+    # #167 Step 5e3 (2026-08-25): phase-f1 design moved to
+    # docs/history/implementation-plans/. Consumers updated atomically
+    # (async_io_context.hpp comment, two tests, phase-f1-compliance-gate.md,
+    # as-built-async-architecture.md, remediation-roadmap.md, design README).
+    # docs/history contains no stale references to the old path (verified),
+    # so the historical exemption is not affected.
+    "docs/design/phase-f1-scheduler-ready-sink.md":
+        "docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md",
 }
 
 # Regex patterns

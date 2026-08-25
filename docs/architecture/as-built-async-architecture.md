@@ -517,7 +517,7 @@ wake_mtx_ (Scheduler park/wake)
 | Completion publication to ready | poll()/wait_one() ONLY (A3/O1) | ADR-async-io-model §6 |
 | Request identity | Completion pointer and backend-specific records; no common context/slot/generation key | `completion.hpp`; backend sources; **`b20bcc7` baseline row** — P1-06 is since CLOSED (Phase B reference, Phase E ThreadPool, Phase D Uring: per-slot Generation + stale-key rejection) and the request-contract ADR is ACCEPTED (`ADR-explicit-io-request-contract`); the current identity owner is the shared `detail::RequestArena` / `RequestSlot` on all four backends (§9, §2.2/§2.3). |
 | Request capacity | No common bounded RequestSlot arena | ThreadPool is unbounded; ring depth is not request capacity; Fake/Sync have no configured capacity. |
-| Identity-bearing reap | Not implemented at the `b20bcc7` baseline; poll/wait_one return a count | Scheduler and Batch recover identity by scanning/reap sequence; P1-07 was open. **Since closed**: the arena owns identity-bearing reap on all four backends (§9) and Phase F1 makes the PRODUCTION Scheduler its consumer (§9 F1 delta, `docs/design/phase-f1-scheduler-ready-sink.md`). |
+| Identity-bearing reap | Not implemented at the `b20bcc7` baseline; poll/wait_one return a count | Scheduler and Batch recover identity by scanning/reap sequence; P1-07 was open. **Since closed**: the arena owns identity-bearing reap on all four backends (§9) and Phase F1 makes the PRODUCTION Scheduler its consumer (§9 F1 delta, `docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md`). |
 | Backend admission gate | ThreadPoolBackend::accepting_new_work() | `threadpool_backend.hpp:159` |
 | Scheduler wake (external) | SchedulerWakeHandle::notify() | `scheduler.hpp:107` |
 | Scheduler wake (internal) | route_runnable_locked → wake epoch | E9 ADR §9.4.4 |
@@ -567,7 +567,7 @@ backend migration is complete: ThreadPool in Phase E (PR #64 — see
 
 ### 9.1 Phase F1 delta — production Scheduler consumes identity-bearing reap
 
-> Added by Phase F1 (issue #98; `docs/design/phase-f1-scheduler-ready-sink.md`,
+> Added by Phase F1 (issue #98; `docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md`,
 > `docs/architecture/phase-f1-compliance-gate.md`). This is the first
 > PRODUCTION consumer of the arena's identity-bearing reap: the Scheduler no
 > longer recovers identity by scanning `Completion*`-keyed maps and re-checking
