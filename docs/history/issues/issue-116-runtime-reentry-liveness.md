@@ -1,5 +1,17 @@
 # Issue #116 — Runtime/Scheduler Lost Re-entry Liveness: Root-Cause Investigation
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/investigations/`. Classification at move: CLOSED-HISTORY (repair live
+> in production; gate record at
+> `docs/architecture/issue-116-reentry-liveness-gate.md`). Body preserved
+> as-written; see `docs/history/README.md`.
+>
+> **Note (Step 5d adjudication, issue #167):** this file's §13 statement that
+> "#115 remains open with its existing disposition" predates the #115 fix.
+> #115 was subsequently fixed (evidence-derived corrective) and its deferred
+> disposition adjudicated **superseded** — see the
+> `issue-115-runnable-publication-wake.md` banner and the issue #167 comment.
+
 **Status:** ROOT_CAUSE_PROVEN_AND_FIXED
 **Baseline master SHA:** `ff003fd8f266eb561e9f4f9062bb73ac71e81ff8` (post-#117)
 **Fix branch:** `fix/issue-116-runtime-reentry-liveness`

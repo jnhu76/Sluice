@@ -1,12 +1,11 @@
 # Investigations — Classification Index
 
-This directory holds root-cause investigations and their repair records. The
-docs/README.md directory map describes it as "What is being diagnosed right
-now?"; in practice it now also holds **completed** investigations whose records
-are still referenced by compliance gates, production comments, or mechanical
-gates. This index separates the two so a reader can tell which investigation
-is still an open work surface and which is a closed record awaiting archive
-(issue #167 Step 5b classification, baseline `master@6d8ebf1`, 2026-08-25).
+This directory held the repository's root-cause investigations and their
+repair records (the docs/README.md directory map describes it as "What is
+being diagnosed right now?"). All four completed investigations were archived
+under `docs/history/issues/` by issue #167 Step 5 (2026-08-25) — see
+"Completed archive moves" below. The classification vocabulary from Step 5b
+(baseline `master@6d8ebf1`) is preserved below for provenance.
 
 ## Classes
 
@@ -31,45 +30,47 @@ content is never deleted. See the architecture index
 
 ## Inventory (issue #167 Step 5b)
 
-| File | Self-declared status | GitHub issue | Class | Current facts' CURRENT home | Pins / consumers | Move candidate | Blocker / rationale |
-|------|----------------------|--------------|-------|-----------------------------|------------------|----------------|---------------------|
-| [`issue-116-runtime-reentry-liveness.md`](issue-116-runtime-reentry-liveness.md) | ROOT_CAUSE_PROVEN_AND_FIXED | #116 CLOSED | **PINNED-EVIDENCE** | Repair is live in production (`ApplicationRuntime::driver_main()` re-enters `run_live` while `outstanding() > 0`); gate record at `docs/architecture/issue-116-reentry-liveness-gate.md` | **`scripts/gates/mechanical-facts.py:462` (`TEST_TOTAL_EXTRA_DOCS`) — hard script pin**: the file's `test:default-gate-targets` row is mechanically validated. Also `issue-116-reentry-liveness-gate.md:35,238`; `tests/issue116_interrupt_reevaluation_regression_test.cpp:3`; `xmake/tests/async_internal.lua:40` | `docs/history/issues/` (MOVE-WITH-CONSUMERS, deferred) | Mechanical gate hard-codes the path. A move must atomically update `mechanical-facts.py` `TEST_TOTAL_EXTRA_DOCS` and keep the doc's test-total claim valid (currently 190). |
+The Step 5b classification table classified all four investigations. All four
+are now archived (see "Completed archive moves"): issue-110 / issue-123
+(CLOSED-HISTORY, Step 5c), issue-115 (PINNED-EVIDENCE → adjudicated
+**superseded**, Step 5d), issue-116 (PINNED-EVIDENCE, Step 5e1 — the hard
+script pin `TEST_TOTAL_EXTRA_DOCS` was updated atomically). The directory
+currently holds no investigation files.
 
 ## LIVE investigations
 
-None. The one file above (issue-116) is a completed investigation; it is not
-an active work surface. issue-110, issue-123 (Step 5c) and issue-115 (Step 5d,
-disposition adjudicated **superseded**) were archived — see "Completed archive
-moves" below.
+None — no active investigation remains; all four completed investigations are
+archived under `docs/history/issues/`.
 
-## Move slices (issue #167 Step 5)
+## Move slices (issue #167 Step 5) — all executed
 
-- **MOVE-NOW** (executed — see "Completed archive moves"):
-  - `issue-110-dequeue-gate-generation-handshake.md` → `docs/history/issues/` (Step 5c)
-  - `issue-123-phase-g-closeout-parallel-flake.md` → `docs/history/issues/` (Step 5c)
-  - `issue-115-runnable-publication-wake.md` → `docs/history/issues/` (Step 5d —
-    deferred disposition adjudicated **superseded**; consumers updated:
-    `issue-115-runnable-publication-wake-gate.md:7`,
-    `docs/post-freeze/post-freeze-final-report.md:54`)
-- **MOVE-WITH-CONSUMERS** (deferred; pin sets recorded above):
-  - `issue-116-runtime-reentry-liveness.md` — requires an atomic
-    `scripts/gates/mechanical-facts.py` update plus the gate/test/lua
-    comment updates listed above
+- issue-110, issue-123 (Step 5c) → `docs/history/issues/`
+- issue-115 (Step 5d, deferred disposition adjudicated **superseded**) →
+  `docs/history/issues/`
+- issue-116 (Step 5e1, atomic `TEST_TOTAL_EXTRA_DOCS` plus gate/test/lua
+  comment updates) → `docs/history/issues/`
 - **KEEP-LIVE**: none.
 
-## Completed archive moves (2026-08-25, issue #167 Step 5c + Step 5d)
+## Completed archive moves (2026-08-25, issue #167 Step 5c / 5d / 5e1)
 
 - [`issue-110-dequeue-gate-generation-handshake.md`](../history/issues/issue-110-dequeue-gate-generation-handshake.md)
   — zero path consumers; pure `git mv` + historical banner.
 - [`issue-123-phase-g-closeout-parallel-flake.md`](../history/issues/issue-123-phase-g-closeout-parallel-flake.md)
   — relocatable consumers updated atomically:
   `docs/design/phase-g-backend-progress-wake.md:19`,
-  `docs/investigations/issue-116-runtime-reentry-liveness.md:370`.
+  `docs/history/issues/issue-116-runtime-reentry-liveness.md:370`.
 - [`issue-115-runnable-publication-wake.md`](../history/issues/issue-115-runnable-publication-wake.md)
   — deferred disposition adjudicated **superseded** (Phase D); relocatable
   consumers updated atomically: `issue-115-runnable-publication-wake-gate.md:7`,
   `docs/post-freeze/post-freeze-final-report.md:54`. The historical banner
   carries the adjudication.
+- [`issue-116-runtime-reentry-liveness.md`](../history/issues/issue-116-runtime-reentry-liveness.md)
+  — mechanical pin `TEST_TOTAL_EXTRA_DOCS` updated atomically in
+  `scripts/gates/mechanical-facts.py`; consumers updated:
+  `issue-116-reentry-liveness-gate.md:35,238`,
+  `tests/issue116_interrupt_reevaluation_regression_test.cpp:3`,
+  `xmake/tests/async_internal.lua:40`. Banner notes the stale §13 #115
+  cross-reference (predates the #115 fix).
 - Old paths registered in `KNOWN_MOVED` (`scripts/check-doc-links.py`); any new
   reference to them fails the docs gate.
 

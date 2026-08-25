@@ -403,6 +403,12 @@ KNOWN_MOVED = {
     # the old path (verified), so the historical exemption is not affected.
     "docs/investigations/issue-115-runnable-publication-wake.md":
         "docs/history/issues/issue-115-runnable-publication-wake.md",
+    # #167 Step 5e1 (2026-08-25): issue-116 moved to docs/history/issues/ with
+    # an atomic TEST_TOTAL_EXTRA_DOCS update in mechanical-facts.py plus the
+    # gate/test/lua comment consumers. docs/history contains no stale references
+    # to the old path (verified), so the historical exemption is not affected.
+    "docs/investigations/issue-116-runtime-reentry-liveness.md":
+        "docs/history/issues/issue-116-runtime-reentry-liveness.md",
     "docs/design/phase-b-request-slot-reference.md":
         "docs/history/implementation-plans/phase-b-request-slot-reference.md",
 }

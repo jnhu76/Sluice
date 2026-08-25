@@ -1,6 +1,6 @@
 // issue116_interrupt_reevaluation_regression_test — deterministic merge-gate
 // regression for the invocation-boundary lost re-entry liveness defect
-// (Issue #116; docs/investigations/issue-116-runtime-reentry-liveness.md).
+// (Issue #116; docs/history/issues/issue-116-runtime-reentry-liveness.md).
 //
 // Failing interleaving (proven on master ff003fd by in-process diagnostic
 // trace + gdb state dump of a live-hung process):
