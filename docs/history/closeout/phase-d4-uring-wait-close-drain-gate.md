@@ -1,5 +1,10 @@
 # Phase D4 — Uring Wait / Close / Drain / Destruction Gate
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (point-in-time
+> compliance/gate record). Body preserved as-written; see
+> `docs/history/README.md`.
+
 Status: COMPLETE (2026-08-11, branch feat/phase-d4-uring-wait-close-drain;
 D3 is MERGED into master, so this branch's base is current master
 `259f0bd2dc5d027fd463132b65db1bef9c33f08f`, the D3 merge commit — no D3-branch

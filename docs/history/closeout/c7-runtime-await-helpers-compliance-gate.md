@@ -1,5 +1,10 @@
 # C7 Runtime Await Helpers + Task-Result Bridge: Compliance Gate
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (point-in-time
+> compliance/gate record). Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Change class:** application-pattern extraction into public async API (#135 C7,
 PR agent/runtime-await-operation-helpers). Adds `await_op_helpers.hpp`,
 `task_result.hpp` (public async API + a synchronization primitive), and the

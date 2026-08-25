@@ -1,5 +1,10 @@
 # Issue #137 — Submission Transaction Mutation Evidence
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/architecture/`; classification at move: EVIDENCE (point-in-time
+> compliance/gate record). Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Purpose:** RED-validity evidence for the centralized submission transaction
 (`detail::submit_transaction` in
 `include/sluice/async/detail/submit_transaction.hpp`). The shared ladder is the
