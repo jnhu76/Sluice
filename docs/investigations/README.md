@@ -13,9 +13,12 @@ is still an open work surface and which is a closed record awaiting archive
 - **LIVE** — the issue is still being investigated; the file is the ongoing
   work surface.
 - **PINNED-EVIDENCE** — a completed investigation whose record is still
-  hard-referenced by a gate, script, test, or production comment (path pin),
-  or that still carries a current open disposition with no other CURRENT home.
-  Not current authority; not movable without the atomic pin set below.
+  hard-referenced by a **mechanical pin** (a script, CI step, or operational
+  verification anchor that hard-codes the path) or a **current code/verification
+  authority** that explicitly depends on the location, or that still carries a
+  current open disposition with no other CURRENT home. A relocatable prose or
+  source/test comment link is **not** a pin. Not current authority; not movable
+  without the atomic pin set below.
 - **CLOSED-HISTORY** — the work is fixed/closed; current facts have a CURRENT
   home (architecture/ADR/reference/test); the file has provenance/forensic
   value only and is an archive-move candidate.
