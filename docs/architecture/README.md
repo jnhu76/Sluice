@@ -22,7 +22,12 @@ Move policy: **classify before move**. A document moves to
 [`docs/history/`](../history/README.md) only when its exact-path consumers are
 inventoried and updated atomically, a historical banner is added, and no
 active #163 verification anchor depends on the current path. "Blocked" below
-means a script, spec manifest, or test hard-codes the current path.
+means a **mechanical pin** — a script, CI step, spec manifest, or operational
+verification anchor that hard-codes the path — or a **current code/verification
+authority** that explicitly depends on the document at that location (Step 5b
+ontology, issue #167). A relocatable prose, source, or test **comment** that
+merely contains the path is a consumer, not a pin: it does not by itself block
+a move, and it MUST be updated atomically with the move.
 
 ## CURRENT — current architecture authority
 
@@ -61,7 +66,7 @@ means a script, spec manifest, or test hard-codes the current path.
 | [`phase-d1-uring-permanent-submit-failure-audit.md`](phase-d1-uring-permanent-submit-failure-audit.md) | `io_uring_submit()` permanent-failure audit; pinned by `spec/tla/manifest.json` | Blocked |
 | [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md) | Uring failure/no-allocation gate | Deferred |
 | [`phase-e-compliance-gate.md`](phase-e-compliance-gate.md) | ThreadPoolBackend bounded migration gate | Deferred |
-| [`phase-f1-compliance-gate.md`](phase-f1-compliance-gate.md) | Scheduler identity-bearing reap gate; pinned by `tests/scheduler_identity_wake_test.cpp`, `tests/uring_f1_scheduler_routing_test.cpp` | Blocked |
+| [`phase-f1-compliance-gate.md`](phase-f1-compliance-gate.md) | Scheduler identity-bearing reap gate; relocatable test-comment consumers `tests/scheduler_identity_wake_test.cpp:17`, `tests/uring_f1_scheduler_routing_test.cpp:21` (updated atomically; no script/spec pin) | Deferred |
 | [`phase-f3-compliance-gate.md`](phase-f3-compliance-gate.md) | Public RequestHandle gate | Deferred |
 | [`phase-g-compliance-gate.md`](phase-g-compliance-gate.md) | backend-ready progress wake integration gate | Deferred |
 | [`issue-115-runnable-publication-wake-gate.md`](issue-115-runnable-publication-wake-gate.md) | Runnable-publication wake obligation gate | Deferred |
@@ -93,4 +98,4 @@ header, the pinned-evidence cross-references, and this index) was updated
 atomically, and the old paths are recorded in `KNOWN_MOVED`
 (`scripts/check-doc-links.py`) so any new reference to them fails the docs
 gate. The remaining moves are the Deferred rows above; Blocked rows move only
-together with the script/spec/test pins that reference them.
+together with the mechanical / current-authority pins that reference them.
