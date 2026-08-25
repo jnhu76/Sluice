@@ -3,10 +3,10 @@
 This directory primarily indexes design documents that are **active** — under
 review, approved but not started, or draft proposals for future work.
 
-A small set of completed `phase-*` design-of-record documents intentionally
-remain here because repository compliance gates still anchor those exact paths.
-They are retained for gate stability and traceability; their presence here does
-**not** make them active proposals.
+All four completed `phase-*` design-of-record documents were archived to
+`docs/history/implementation-plans/` by issue #167 Step 5 (2026-08-25) — see
+"Step 5 archive moves" below. None remain here; the directory now holds only
+active/proposed designs.
 
 ## Status rules
 
@@ -23,10 +23,12 @@ Completed implementation designs are normally moved to historical records under
 `docs/history/formal-design/` (formal models that guided implementation), or
 `docs/history/closeout/` (subsystem closeout reports).
 
-**Exception:** completed `docs/design/phase-*` design-of-record files may stay in
-place when a compliance/mechanical gate explicitly depends on their path. Such
-files are completed records, not active future work, and should be paired with
-the corresponding architecture compliance/closeout evidence.
+**Exception:** a completed `phase-*` design-of-record file may stay in place
+when a compliance/mechanical gate explicitly depends on its path. Such a file
+is a completed record, not active future work, and should be paired with the
+corresponding architecture compliance/closeout evidence. As of issue #167
+Step 5 (2026-08-25) all four phase records are archived, so no completed phase
+record remains in this directory.
 
 ## Current active designs
 
@@ -64,12 +66,11 @@ records are classified in "Phase-record classification" below.
 
 ## Phase-record classification (issue #167 Step 5b, baseline `master@6d8ebf1`)
 
-All remaining `phase-*` files below are **completed** design-of-record
-documents — none is an active proposal (the only active design row is the table
-above). phase-b (Step 5c), phase-e (Step 5e2) and phase-f1 (Step 5e3) were
-archived — see "Step 5 archive moves" below. They are classified per the same
-rule set as
-`docs/architecture/README.md`:
+All four `phase-*` files were **completed** design-of-record documents — none
+was an active proposal. All four are now archived (see "Step 5 archive moves"
+below): phase-b (CLOSED-HISTORY / MOVE-NOW, Step 5c); phase-e, phase-f1,
+phase-g (PINNED-EVIDENCE / MOVE-WITH-CONSUMERS, Steps 5e2 / 5e3 / 5e4). They
+were classified per the same rule set as `docs/architecture/README.md`:
 CURRENT = still consulted design authority; PINNED-EVIDENCE = completed record
 whose path is a **mechanical pin** (a script, CI step, or operational
 verification anchor that hard-codes it) or a **current code/verification
@@ -77,18 +78,14 @@ authority** that explicitly depends on the location; CLOSED-HISTORY = completed
 record whose current facts have a CURRENT home and which is an archive-move
 candidate — a relocatable prose or source/test comment link is **not** a pin
 and does not by itself force PINNED-EVIDENCE. GitHub issue state is not the
-decision.
-
-| File | Self-declared status | Class | Pins / consumers | Move candidate | Rationale |
-|------|----------------------|-------|------------------|----------------|-----------|
-| [`phase-g-backend-progress-wake.md`](phase-g-backend-progress-wake.md) | IMPLEMENTED / COMPLETE | **PINNED-EVIDENCE** | `docs/architecture/foundation-freeze.md:87,103`; `docs/architecture/phase-g-compliance-gate.md:5`; `docs/architecture/remediation-roadmap.md:566`; `docs/post-freeze/structural-audit.md:27`; `include/sluice/async/scheduler.hpp:1702`; `src/async/scheduler_park_wake.cpp:166`; `spec/tla/e9_park_wake/README.md:23`; `tests/phase_g_backend_progress_wake_test.cpp:2`; `tests/phase_g_closeout_test.cpp:3`; `tests/phase_g_closeout_uring_test.cpp:2`; `xmake/tests/async_internal.lua:257,315` | `docs/history/implementation-plans/` (MOVE-WITH-CONSUMERS, deferred; heaviest pin set) | Design-of-record for the current park/wake bridge (R1–R4, interrupt bridge, MIXED-WAKE verdict), referenced by production code, three test suites, the `e9_park_wake` TLA model README, and four architecture records |
+decision. The directory currently holds no completed `phase-*` records.
 
 Move policy: classify before move; a `phase-*` file moves only when its
 exact-path consumers are updated atomically, a historical banner is added, and
 no active verification anchor depends on the current path (mirrors
 `docs/architecture/README.md`).
 
-## Step 5 archive moves (executed 2026-08-25, issue #167 Step 5c / 5e2 / 5e3)
+## Step 5 archive moves (executed 2026-08-25, issue #167 Step 5c / 5e2 / 5e3 / 5e4)
 
 - [`phase-b-request-slot-reference.md`](../history/implementation-plans/phase-b-request-slot-reference.md)
   (CLOSED-HISTORY / MOVE-NOW) — relocatable consumers updated atomically:
@@ -115,8 +112,19 @@ no active verification anchor depends on the current path (mirrors
   `uring_f1_scheduler_routing_test.cpp:20`, `phase-f1-compliance-gate.md:4`,
   `as-built-async-architecture.md:520,570`, `remediation-roadmap.md:532`.
   Old path in `KNOWN_MOVED`.
-- Phase G remains PINNED-EVIDENCE (MOVE-WITH-CONSUMERS, deferred; heaviest
-  pin set).
+- [`phase-g-backend-progress-wake.md`](../history/implementation-plans/phase-g-backend-progress-wake.md)
+  (PINNED-EVIDENCE / MOVE-WITH-CONSUMERS, executed 5e4; heaviest pin set) —
+  IMPLEMENTED / COMPLETE (2026-08-15 closeout). The current park/wake
+  invariants (R1–R4, split-wait bridge, MIXED-WAKE backstop, wake-bridge
+  lost-wake closure) remain documented in CURRENT authority:
+  ADR-execution-model §9.4/§9.4.7.2, foundation-freeze.md,
+  phase-g-compliance-gate.md, `spec/tla/e9_park_wake/`. Consumers updated
+  atomically: `scheduler.hpp:1702`, `scheduler_park_wake.cpp:166`,
+  `foundation-freeze.md:87,103`, `phase-g-compliance-gate.md:5`,
+  `remediation-roadmap.md:566`, `structural-audit.md:27`,
+  `spec/tla/e9_park_wake/README.md:23`, three phase-g test suites, and
+  `async_internal.lua:257,315`. Banner added; old path in `KNOWN_MOVED`.
+- All four `phase-*` records are now archived; none remains in `docs/design/`.
 
 ## Navigation
 

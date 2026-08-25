@@ -254,7 +254,7 @@ sluice_internal_async_test("select_suspended_test")
 sluice_internal_async_test("select_multi_worker_test")
 
 -- phase_g_backend_progress_wake_test — Phase G backend-ready progress wake
--- integration (docs/design/phase-g-backend-progress-wake.md): the unified
+-- integration (docs/history/implementation-plans/phase-g-backend-progress-wake.md): the unified
 -- MW-S2 backend-domain park with the Scheduler wake bridge, the deadline-
 -- driven unbounded wake-domain park, and the E9-LIFE-8 termination-
 -- convergence corrective (not-last idle worker signals the domain).
@@ -312,7 +312,7 @@ sluice_internal_async_test("issue161_pub_erase_orphan_test")
 -- phase_g_closeout_test — Phase G final closeout: deterministic causal
 -- proofs for the commit→park wake protocol (Cases A–D: notify before arm /
 -- after arm / while parked / backend-ready-vs-notify) and the ThreadPool
--- TP-G1..G7 race matrix (docs/design/phase-g-backend-progress-wake.md §5).
+-- TP-G1..G7 race matrix (docs/history/implementation-plans/phase-g-backend-progress-wake.md §5).
 -- Unbounded-park constructions over the production split-wait backend;
 -- epoch + seam observations only; hang watchdogs exit fail-closed (rc 70).
 sluice_internal_async_test("phase_g_closeout_test")

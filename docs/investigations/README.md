@@ -57,7 +57,7 @@ archived under `docs/history/issues/`.
   — zero path consumers; pure `git mv` + historical banner.
 - [`issue-123-phase-g-closeout-parallel-flake.md`](../history/issues/issue-123-phase-g-closeout-parallel-flake.md)
   — relocatable consumers updated atomically:
-  `docs/design/phase-g-backend-progress-wake.md:19`,
+  `docs/history/implementation-plans/phase-g-backend-progress-wake.md:19`,
   `docs/history/issues/issue-116-runtime-reentry-liveness.md:370`.
 - [`issue-115-runnable-publication-wake.md`](../history/issues/issue-115-runnable-publication-wake.md)
   — deferred disposition adjudicated **superseded** (Phase D); relocatable

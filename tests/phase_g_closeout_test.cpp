@@ -1,6 +1,6 @@
 // phase_g_closeout_test — Phase G final closeout: deterministic causal proofs
 // for the commit→park wake protocol (Cases A–D) and the ThreadPool TP-G1..G7
-// race matrix (docs/design/phase-g-backend-progress-wake.md §5).
+// race matrix (docs/history/implementation-plans/phase-g-backend-progress-wake.md §5).
 //
 // The audit question (closeout §2): is the `backend_wait_active_` gate in
 // Scheduler::signal_wake_locked merely an optimization, and can an external

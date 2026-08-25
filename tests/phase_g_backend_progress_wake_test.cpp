@@ -1,5 +1,5 @@
 // phase_g_backend_progress_wake_test — Phase G backend-ready progress wake
-// integration (docs/design/phase-g-backend-progress-wake.md).
+// integration (docs/history/implementation-plans/phase-g-backend-progress-wake.md).
 //
 // Phase G replaces the E9 2ms bounded wake-domain observation with signal-
 // driven progress: split-wait backends park the MW-S2 progress participant in

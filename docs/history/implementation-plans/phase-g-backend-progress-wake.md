@@ -1,5 +1,16 @@
 # Phase G — backend-ready progress wake integration (focused design)
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from `docs/design/`;
+> classification at move: PINNED-EVIDENCE → CLOSED-HISTORY (IMPLEMENTED /
+> COMPLETE 2026-08-15, foundation-freeze closeout). The current park/wake
+> invariants this design governs — R1–R4, the split-wait bridge, the
+> MIXED-WAKE backstop, and the wake-bridge lost-wake closure — remain
+> documented in CURRENT authority: `docs/adr/ADR-execution-model.md`
+> §9.4/§9.4.7.2, `docs/architecture/foundation-freeze.md`,
+> `docs/architecture/phase-g-compliance-gate.md`, and the `e9_park_wake` TLA
+> model (`spec/tla/e9_park_wake/`). Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Status:** IMPLEMENTED / COMPLETE (2026-08-15, closeout branch
 closeout-phase-g-foundation-freeze). Evidence of record:
 `docs/architecture/phase-g-compliance-gate.md` (Gate 4 executed rows),

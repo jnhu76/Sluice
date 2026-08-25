@@ -163,7 +163,7 @@ void Scheduler::signal_wake_locked() {
     // control baseline keeps the interrupt one-shot per wait_one() (no
     // busy-spin). Lock order: wake_mtx_ is released before the wait-source
     // mutex is taken; the wait source is a leaf that never acquires Scheduler
-    // locks (design docs/design/phase-g-backend-progress-wake.md §4).
+    // locks (design docs/history/implementation-plans/phase-g-backend-progress-wake.md §4).
     if (backend_wait_active_.load(std::memory_order_acquire)) {
         ctx_.interrupt_backend_waiters();
     }
