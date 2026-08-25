@@ -623,14 +623,47 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
     SLUICE_CHECK(
         ctx.submit_read(sa::ReadOp{-1, buf, sizeof(buf), 0}, held).has_value());
 
+    // Pin the worker roles BEFORE the run (#210 primary root cause):
+    // run_impl stores each worker's `active` flag INSIDE its own thread, so
+    // under parallel load worker 1's thread can complete its whole loop-top
+    // -> MW-S2 election scan before worker 0's thread has stored
+    // active=true; the R2 election then legitimately picks worker 1 (it is
+    // the lowest-id ALIVE worker at that instant) and the roles swap —
+    // confirmed by the #210 dump (ParkCommitted w=0 first, worker 1 held at
+    // the mw_s2 seam). A swapped trace has no model behavior (the model
+    // pins the participant to W0 while both are alive, so
+    // FinalParkRecheckAndCommit(W0) has no enabled disjunct without a W1
+    // observer the model cannot elect) — the expectation must NOT be
+    // relaxed; the schedule must be pinned.
+    //
+    // Construction: f_w0 (worker 0's inbox, round-robin first) BLOCKS on a
+    // test rendezvous inside its fiber, so worker 0 cannot run its
+    // post-fiber steal pass (which could otherwise steal f_w1 out of
+    // worker 1's not-yet-popped inbox and strand the ticket seam below).
+    // f_w1 (worker 1's inbox) exists only so worker 1's loop-top POP fires
+    // the per-worker ticket seam — the pause sits strictly pre-classify,
+    // pre-election, no locks held, and proves worker 1's thread started
+    // (active=true) and that f_w1 left the inbox (unstealable). Only after
+    // that pause does the coordinator release f_w0: worker 0 then steals
+    // nothing (both inboxes empty), classifies MW-S2, and elects
+    // deterministically — both workers are provably active and worker 0 is
+    // the lowest alive elector. The fibers complete inside the run and
+    // record no trace events (the recorder sees only wake-domain park/wake
+    // sites; the participant parks in the untraced backend domain).
+    Rendezvous hold_w0;
+    Fiber f_w0, f_w1;
+    FiberStack s_w0, s_w1;
+    f_w0.set_entry([&](Fiber&) { hold_w0.wait(); });
+    f_w1.set_entry([](Fiber&) {});
+    SLUICE_CHECK(sched.init_fiber(f_w0, s_w0.base(), s_w0.size()));
+    SLUICE_CHECK(sched.init_fiber(f_w1, s_w1.base(), s_w1.size()));
+    sched.spawn(f_w0);  // pre-run round-robin: first fiber -> worker 0 inbox
+    sched.spawn(f_w1);  // second fiber -> worker 1 inbox (fires the seam)
+    stest::Issue161TicketSeam::arm_for_worker(sched, /*worker_id=*/1);
+
     // Hold the MW-S2 participant (worker 0) after its commit, before its
-    // wait_one. Worker 1 is held at the candidate seam UNTIL worker 0's
-    // commit has landed (backend_wait_active_ = the G1 observer): otherwise
-    // worker 1's early fall-through park recheck could see unguarded backend
-    // progress (admission still none) and refuse — a legal but different
-    // schedule. The pilot pins the parking schedule.
+    // wait_one, so the window below closes deterministically.
     stest::arm(sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
-    stest::Issue161CandidateSeam::arm_for_worker(sched, /*worker_id=*/1);
     // Freeze worker 1 right after its parked return (before it can re-loop,
     // break, and run its own retire epilogue — whose wake would race the
     // window close).
@@ -653,9 +686,10 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
         [&] {
             stest::release(
                 sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
-            stest::Issue161CandidateSeam::release(sched);
+            stest::Issue161TicketSeam::release(sched);
             stest::WorkerParkReturnSeam::release(sched);
             stest::E9TraceRecorder::disable(sched);
+            hold_w0.release();  // free a worker 0 blocked inside its fiber
         },
         [&] {
             // Same drain as the normal path: outstanding==0 before context
@@ -664,10 +698,19 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
             (void)ctx.poll();
         });
 
+    // Worker 1 popped its inbox fiber and is held pre-classify /
+    // pre-election; its pause proves both the thread start (active=true)
+    // and that f_w1 left the inbox. Only now may worker 0 proceed past its
+    // fiber: release the rendezvous, let worker 0 find nothing to steal,
+    // classify MW-S2, and elect as the lowest alive worker.
+    stest::Issue161TicketSeam::wait_paused(sched);
+    hold_w0.release();
     // Worker 0 is the committed participant paused pre-wait_one.
     stest::wait_paused(sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
-    // Now worker 1 may park (the participant is a standing observer).
-    stest::Issue161CandidateSeam::release(sched);
+    // Release worker 1: it runs its fiber to completion, defers the
+    // election (admission is committed — the participant is a standing
+    // G1 observer), and parks unarmed at the MW-S2 non-participant site.
+    stest::Issue161TicketSeam::release(sched);
     // Worker 1 (non-participant) parks unarmed at :1188 (MW-S2, no external
     // wait, no ready-flag wait -> UNARMED unbounded park).
     std::vector<TraceEvent> evs = wait_trace(
@@ -736,6 +779,10 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
     // HoldingBackend discipline).
     backend_ptr->complete_oldest_with_bytes(0);
     (void)ctx.poll();
+
+    // Both role-pinning plumbing fibers ran to completion inside the run.
+    SLUICE_CHECK(f_w0.state() == FiberState::done);
+    SLUICE_CHECK(f_w1.state() == FiberState::done);
 
     // The parked return and the retiring participant's epilogue wake race
     // after the terminate signal — both orders are legal; both validate
