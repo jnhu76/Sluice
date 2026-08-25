@@ -2,7 +2,7 @@
 
 **Phase:** G (final async-foundation phase; roadmap "backend-ready wake
 integration")
-**Design:** `docs/design/phase-g-backend-progress-wake.md`
+**Design:** `docs/history/implementation-plans/phase-g-backend-progress-wake.md`
 **Status:** **COMPLETE (2026-08-15 closeout, branch
 closeout-phase-g-foundation-freeze)** — G1 repaired by R1–R4 (§8.5 of the
 design; deterministic reproducer GREEN), G2–G7 closed by the closeout

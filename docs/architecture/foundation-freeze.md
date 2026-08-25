@@ -84,7 +84,7 @@ the contract, this list is the index.
 | Public sync core (`Reader`/`Writer`/`Result<T>`/`IoError`, short-reads, exact/all loop contracts, positional-I/O offset isolation, `flush` ≠ durability, `sync_data`/`sync_all` distinction) | `AGENTS.md` §9, `docs/reference/sync-io-model.md` |
 | Public async API surface (headers under `include/sluice/async/`, `docs/reference/api.md`) | §16.1 gate discipline; any change needs explicit approval |
 | Operation state transitions (`free→…→completion-ready→free+generation`) and the five-stage submission transaction | `AGENTS.md` §10, `docs/adr/ADR-explicit-io-request-contract.md` |
-| Wakeup semantics: park/wake obligation, predicate protocol, split-wait bridge, MIXED-WAKE backstop | AC-6, `docs/design/phase-g-backend-progress-wake.md` |
+| Wakeup semantics: park/wake obligation, predicate protocol, split-wait bridge, MIXED-WAKE backstop | AC-6, `docs/adr/ADR-execution-model.md` §9.4/§9.4.7.2, `docs/history/implementation-plans/phase-g-backend-progress-wake.md` |
 | Backend wait semantics: `backend_wait_active_` gating of the interrupt bridge; external control wake always has a route into a backend-domain park | Phase G closeout (PR #109), `spec/tla/e9_park_wake` |
 | Deadline behavior: monotonic `deadline_t`, `advance_clock`, `*_until`/`*_deadline` waits, timer-select reconcile | E11 deadline design, `docs/architecture/phase-g-compliance-gate.md` |
 | Interruption behavior: backend-owned interruption only; cancel intent never rewrites an ordinary result | `AGENTS.md` §11 |
@@ -100,7 +100,7 @@ when a row's observable contract itself would change.
 
 ## Governing evidence
 
-- Phase G design: `docs/design/phase-g-backend-progress-wake.md`
+- Phase G design: `docs/history/implementation-plans/phase-g-backend-progress-wake.md`
 - Phase G compliance gate (final): `docs/architecture/phase-g-compliance-gate.md`
 - Deterministic causal proof + TP/UR race matrices:
   `tests/phase_g_closeout_test.cpp`, `tests/phase_g_closeout_uring_test.cpp`

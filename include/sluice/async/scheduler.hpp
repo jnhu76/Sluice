@@ -1699,7 +1699,8 @@ private:
     // happened after the baseline — distinguishing a stale classification
     // from a publication that never crosses the park boundary (AGENTS.md
     // §13.2 wake-obligation audit; design doc
-    // docs/design/phase-g-backend-progress-wake.md park-window finding).
+    // docs/history/implementation-plans/phase-g-backend-progress-wake.md
+    // park-window finding).
     // `last_classify` is the PARKING worker's own per-worker classify pair
     // (WorkerState::last_classify / classify_seq) captured at park time —
     // never a Scheduler-global last-writer value (Phase G review P2a: a

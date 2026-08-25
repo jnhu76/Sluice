@@ -427,6 +427,16 @@ KNOWN_MOVED = {
     # so the historical exemption is not affected.
     "docs/design/phase-f1-scheduler-ready-sink.md":
         "docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md",
+    # #167 Step 5e4 (2026-08-25): phase-g design moved to
+    # docs/history/implementation-plans/ (heaviest pin set). Consumers updated
+    # atomically (scheduler.hpp / scheduler_park_wake.cpp comments, three
+    # phase-g test suites, async_internal.lua, e9_park_wake TLA README,
+    # foundation-freeze, phase-g-compliance-gate, remediation-roadmap,
+    # structural-audit, investigations/design READMEs). docs/history contains
+    # no stale references to the old path (verified), so the historical
+    # exemption is not affected.
+    "docs/design/phase-g-backend-progress-wake.md":
+        "docs/history/implementation-plans/phase-g-backend-progress-wake.md",
 }
 
 # Regex patterns

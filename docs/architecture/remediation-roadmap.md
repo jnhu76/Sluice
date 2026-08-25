@@ -563,7 +563,7 @@ production path. No wake-bridge dependency.
 
 **Status:** COMPLETE (2026-08-15, closeout branch
 closeout-phase-g-foundation-freeze). Design
-`docs/design/phase-g-backend-progress-wake.md` implemented (R1–R4 park
+`docs/history/implementation-plans/phase-g-backend-progress-wake.md` implemented (R1–R4 park
 protocol, split-wait bridge); compliance gate
 `docs/architecture/phase-g-compliance-gate.md`; causal closeout matrices
 `tests/phase_g_closeout_test.cpp` (Cases A–D, TP-G1..G7) and

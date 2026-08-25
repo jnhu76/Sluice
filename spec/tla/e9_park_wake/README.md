@@ -20,7 +20,7 @@ realizing the architecture decision in
 `docs/adr/ADR-execution-model.md` §9.4 (Model P3, decoupled wake domains),
 updated at the Phase G closeout (2026-08-15) to the R1–R4 G1-repair rules,
 the split-wait park domain, and the Scheduler→backend interrupt bridge
-(`docs/design/phase-g-backend-progress-wake.md`).
+(`docs/history/implementation-plans/phase-g-backend-progress-wake.md`).
 
 The load-bearing E9 question:
 

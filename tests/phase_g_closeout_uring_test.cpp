@@ -1,5 +1,5 @@
 // phase_g_closeout_uring_test — Phase G closeout UR-G1..G7 matrix on the
-// REAL io_uring path (docs/design/phase-g-backend-progress-wake.md §5).
+// REAL io_uring path (docs/history/implementation-plans/phase-g-backend-progress-wake.md §5).
 //
 // Required chain under proof (closeout §6):
 //
