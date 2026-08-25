@@ -84,3 +84,13 @@ end
 -- `overload` (schema 2, kind "overload").
 sluice_one_file_target("binary", "bench", "overload_backpressure_bench", "bench",
                       {"sluice_core", "sluice_async"})
+
+-- e1_abstraction_tax_bench (#221 G0 / E1 Core Cost baseline): the
+-- explicit-I/O abstraction-tax ladder (L0 raw pread/pwrite, L1 minimal
+-- std::thread pool, L2 ApplicationRuntime + ThreadPoolBackend) over one
+-- deterministic positional op stream with fail-closed same-work accounting.
+-- Links the PRODUCTION sluice_async only (no internal-testing seams).
+-- Driven by scripts/bench/perf-attribution.py `e1` (schema 2, kind
+-- "e1tax"); methodology docs/verification/explicit-io-abstraction-tax.md.
+sluice_one_file_target("binary", "bench", "e1_abstraction_tax_bench", "bench",
+                      {"sluice_core", "sluice_async"})
