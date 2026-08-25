@@ -51,7 +51,7 @@ Post-freeze corrective deltas update the count here with their attribution:
 (2026-08-17, Issue #115 — test-only post-baseline park seam in the
 internal-testing variant + the spawn/spawn_on runnable-publication wake
 signal, a post-freeze evidence-derived correctness fix; see
-`docs/investigations/issue-115-runnable-publication-wake.md`);
+`docs/history/issues/issue-115-runnable-publication-wake.md`);
 `scheduler.cpp` 1975 → 1986 and `scheduler_park_wake.cpp` 1153 → 1155
 (2026-08-17, Issue #115 review round 2 — G1 park-commit refusal priority:
 runnable tickets refuse unconditionally, the observer exemption covers only

@@ -1,5 +1,24 @@
 # Issue #115 — Runnable-Publication / Parked-Worker Liveness: Investigation
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/investigations/`. Classification at move: CLOSED-HISTORY. Body
+> preserved as-written; see `docs/history/README.md`.
+>
+> **Disposition adjudication (Phase D, issue #167):** the "deferred to
+> application evidence" disposition is **superseded**. The scheduler
+> wake-protocol change was implemented as a post-freeze evidence-derived
+> corrective — `spawn()`/`spawn_on()` advance the wake epoch and the G1
+> park-commit refusal re-check is unconditional for runnable tickets. Current
+> evidence: the gate record
+> (`docs/architecture/issue-115-runnable-publication-wake-gate.md`, Gate 0–4,
+> 168/168), the fix attribution
+> (`docs/post-freeze/post-freeze-final-report.md`), and the formal model
+> `spawn-wake-epoch` (`docs/verification/formal/cpp-model-coverage.md`).
+> #111 is the same root cause (this file §14, ISSUE_111_SAME_ROOT_CAUSE) and
+> is administratively closed. No current obligation remains; the residual
+> delegation window is current architecture (Phase-D MW-S2 bridge, phase-g
+> design).
+
 **Status:** RUNNABLE_WAKE_ROOT_CAUSE_FIXED
 **Baseline master SHA:** `fbb3ea074db8c7c2aafc3c5e4599166e2381f458` (post #119)
 **Fix branch:** `fix/issue-115-runnable-publication-wake`
