@@ -1,19 +1,17 @@
-// sluice::async::Scheduler — E13 P4/P5/P6 Select central claim, finalization,
+// sluice::async::Scheduler — Select central claim, finalization,
 // unified publication authority, and admission core (inline + suspended).
 //
 // This translation unit owns:
 //   - the SINGLE group processor (select_process_group_locked), the preflight
 //     validator, the winner-commit and loser-finalize drivers, and the reusable
-//     all-authority-closed invariant predicate (P4);
-//   - the SINGLE unified publication authority (select_publish_locked, P6),
+//     all-authority-closed invariant predicate;
+//   - the SINGLE unified publication authority (select_publish_locked),
 //     which writes result_ exactly once and publishes exactly one runnable on
 //     the suspended branch;
-//   - the single non-template admission core (select_admit, P5 inline + P6
-//     suspended), reached ONLY via the public variadic select() template.
+//   - the single non-template admission core (select_admit, inline + suspended),
+//     reached ONLY via the public variadic select() template.
 //
-// P6 scope (docs/e13-select-production-test-plan.md §7.6,
-//           docs/e13-select-locking-and-publication.md §3/§5,
-//           docs/e13-select-formal-production-mapping.md §5):
+// Scope:
 //   - exactly one winner linearization point (SelectGroup::claim_winner_locked)
 //   - exactly one result-publication function (select_publish_locked) that
 //     writes result_ exactly once and (suspended branch) publishes exactly one
@@ -66,17 +64,17 @@ static_assert(kPreflightMaxArms == kSelectMaxArms,
 // ---------------------------------------------------------------------------
 // Preflight: validate the ENTIRE group before the irreversible winner CAS.
 //
-// Two-phase structure (P4 §6, §3):
-//   Phase A (select_preflight_shape_locked): structural + identity asserts that
-//     must ALWAYS hold for any process call on this group (scheduler binding,
-//     arms presence, count bounds, candidate-index range, phase). These assert
-//     for every call — including a claim-lost second attempt.
+// Two-phase structure:
+//   Preflight stage 1 (select_preflight_shape_locked): structural + identity
+//   asserts that must ALWAYS hold for any process call on this group (scheduler
+//   binding, arms presence, count bounds, candidate-index range, phase). These
+//   assert for every call — including a claim-lost second attempt.
 //   Then the caller checks winner() != kNoWinner and returns claim-lost WITHOUT
-//     mutation (NOT an assert) before the deeper preflight.
-//   Phase B (select_preflight_claim_locked): candidate-state + every-arm-state +
-//     Event-membership + Timer-ownership asserts that are only meaningful for a
-//     FRESH claim (winner == kNoWinner). These assert only on a real claim
-//     attempt.
+//   mutation (NOT an assert) before the deeper preflight.
+//   Preflight stage 2 (select_preflight_claim_locked): candidate-state +
+//   every-arm-state + Event-membership + Timer-ownership asserts that are only
+//   meaningful for a FRESH claim (winner == kNoWinner). These assert only on a
+//   real claim attempt.
 //
 // This split makes a claim-lost second attempt return false cleanly (it is a
 // valid concurrent/racing outcome) while every genuinely malformed group still
@@ -204,15 +202,15 @@ void Scheduler::select_preflight_claim_locked(
 }
 
 // ---------------------------------------------------------------------------
-// The single group processor (P4 §3, §7).
+// The single group processor.
 // ---------------------------------------------------------------------------
 bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
                                             std::uint32_t candidate_index) {
-    // Phase A: structural + identity shape (asserts for every call).
+    // Stage 1: structural + identity shape (asserts for every call).
     select_preflight_shape_locked(group, candidate_index);
 
     // If another invocation already owns the winner, this invocation performs
-    // NO mutation and returns claim-lost (P4 §6: "winner == kNoWinner at entry,
+    // NO mutation and returns claim-lost ("winner == kNoWinner at entry,
     // or return claim-lost without mutation"). This is a non-asserting return —
     // a racing/sequential second claim is a valid claim-lost outcome. Checked
     // AFTER shape validation but BEFORE the deeper per-arm preflight (a
@@ -222,7 +220,7 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
         return false;
     }
 
-    // Phase B: candidate-state + every-arm + Event-membership + Timer-ownership
+    // Stage 2: candidate-state + every-arm + Event-membership + Timer-ownership
     // preflight (asserts, fresh-claim only).
     select_preflight_claim_locked(group, candidate_index);
 
@@ -237,12 +235,12 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
     }
 
     // Won the claim. Commit the winner, finalize every loser, in this CS.
-    // E13 P5 AdmissionClaimed seam: AFTER the winner CAS succeeds (fresh
+    // AdmissionClaimed seam: AFTER the winner CAS succeeds (fresh
     // claim), BEFORE winner/loser finalization. Fires only on a real won claim.
     // Pure test-only observation (no allocation, no callback, no production
     // effect): it marks the phase reached and blocks ONLY if a controller is
     // registered AND armed; in the production target (and in any test that does
-    // not arm it) it is absent entirely. Does not change P4 finalization order.
+    // not arm it) it is absent entirely. Does not change the finalization order.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(
         *this, sluice_async_test::PhaseTag::select_admission_claimed);
@@ -265,7 +263,7 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
 }
 
 // ---------------------------------------------------------------------------
-// Winner commit driver (P4 §8.1 Timer winner, §8.3 Event winner).
+// Winner commit driver (Timer winner, Event winner).
 // ---------------------------------------------------------------------------
 void Scheduler::select_commit_winner_locked(detail::SelectGroup& group,
                                             std::uint32_t winner_index) {
@@ -278,7 +276,7 @@ void Scheduler::select_commit_winner_locked(detail::SelectGroup& group,
 }
 
 // ---------------------------------------------------------------------------
-// Loser finalize driver (P4 §8.2 Timer loser, §8.4 Event loser).
+// Loser finalize driver (Timer loser, Event loser).
 // ---------------------------------------------------------------------------
 void Scheduler::select_finalize_loser_locked(detail::SelectGroup& group,
                                              std::uint32_t loser_index) {
@@ -291,13 +289,14 @@ void Scheduler::select_finalize_loser_locked(detail::SelectGroup& group,
 }
 
 // ---------------------------------------------------------------------------
-// Reusable all-authority-closed invariant predicate (P4 §10, SN-10).
+// Reusable all-authority-closed invariant predicate (SN-10).
 //
-// In P4 this is called in the same critical section immediately AFTER a
-// successful preflight+claim+finalize, so it can assume group.arms_ is valid,
-// kind is Event/Timer, and Timer regs have passed scheduler/pool/backpointer
-// preflight. select_publish_locked also calls this at its entry (P6 §8.1), and
-// for that path the publication preflight validates basic group shape first.
+// The group processor calls this in the same critical section immediately
+// AFTER a successful preflight+claim+finalize, so it can assume group.arms_ is
+// valid, kind is Event/Timer, and Timer regs have passed scheduler/pool/
+// backpointer preflight. select_publish_locked also calls this at its entry,
+// and for that path the publication preflight validates basic group shape
+// first.
 // ---------------------------------------------------------------------------
 bool Scheduler::select_all_authority_closed_locked(
     const detail::SelectGroup& group) const {
@@ -327,10 +326,10 @@ bool Scheduler::select_all_authority_closed_locked(
     return true;
 }
 // ===========================================================================
-// E13 P6 — unified Select publication authority.
+// Unified Select publication authority.
 //
 // select_publish_locked is THE single result/runnable publication function
-// (docs/e13-select-locking-and-publication.md §5, task §8). It is called after
+// (task §8). It is called after
 // a successful select_process_group_locked (winner claimed + every winner/loser
 // finalized + every adapter authority closed) in the SAME global_mtx_ critical
 // section. There is exactly ONE call site each for Fiber::make_runnable and
@@ -339,10 +338,9 @@ bool Scheduler::select_all_authority_closed_locked(
 // ===========================================================================
 void Scheduler::select_publish_locked(detail::SelectGroup& group) {
     // -------------------------------------------------------------------
-    // P6 §8.1 Release-active publication preflight. Do not rely only on
+    // Release-active publication preflight. Do not rely only on
     // assert: mechanically validate the publication-entry shape and fail fast
-    // on any violation. This closes the P4-deferred publication-entry shape
-    // validation.
+    // on any violation.
     // -------------------------------------------------------------------
     // scheduler identity / arm array / arm count
     if (group.scheduler_ != this ||
@@ -441,7 +439,7 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
 #endif
 
     // -------------------------------------------------------------------
-    // P6 §8.2 Result construction from the winner arm. Required source order:
+    // Result construction from the winner arm. Required source order:
     //   all authority closed
     //   < group.result_ write
     //   < completion mode
@@ -461,7 +459,7 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
                              // guards against a rewrite).
 
     if (suspended) {
-        // ----- Suspended branch (P6 §8.4) -----
+        // ----- Suspended branch -----
         group.completion_mode_ = detail::CompletionMode::suspended;
         group.set_phase(detail::GroupPhase::completed);
 
@@ -518,7 +516,7 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
             *this, sluice_async_test::PhaseTag::select_publish_done);
 #endif
     } else {
-        // ----- Inline branch (P6 §8.3) -----
+        // ----- Inline branch -----
         // NO make_runnable, NO route_runnable_locked, NO waiting_select_count
         // mutation. The admission caller copies result_, sets Consumed, returns.
         group.completion_mode_ = detail::CompletionMode::inline_;
@@ -555,26 +553,26 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
 }
 
 // ===========================================================================
-// E13 P6 — suspended Event / Timer resolution.
+// Suspended Event / Timer resolution.
 //
 // select_resolve_event_locked / select_resolve_timer_locked are the
 // post-suspension resolvers, reached ONLY under global_mtx_ from
 // event_set_broadcast (Event) and the timer pump (Timer). Each performs the
-// single-group P8 gate (Event) or ACTIVE validation (Timer), offers
-// CandidateReady to the relevant arm(s), drives the single P4 group processor
+// single-group gate (Event) or ACTIVE validation (Timer), offers
+// CandidateReady to the relevant arm(s), drives the single group processor
 // exactly once, then select_publish_locked exactly once. No arm finalizer
 // calls make_runnable / route_runnable_locked.
 // ===========================================================================
 
 // Suspended Event resolver (task §11). Walks this Event's SelectPort for
-// eligible arms, applies the single-group P6 gate, marks every eligible arm
+// eligible arms, applies the single-group gate, marks every eligible arm
 // CandidateReady, chooses the lowest INDEX ready arm, processes + publishes
 // the group once. Returns true iff a group was published.
 bool Scheduler::select_resolve_event_locked(Event& event) {
     assert(&event.scheduler_ == this &&
            "select_resolve_event_locked: Event does not belong to this Scheduler");
 
-    // ---- P6 §11.1 single-group gate: collect eligible arms + distinct groups
+    // ---- Single-group gate: collect eligible arms + distinct groups
     // for THIS Event only. ----
     detail::SelectArmSlot* arms_buf[kPreflightMaxArms] = {};
     std::size_t eligible_count = 0;
@@ -596,8 +594,8 @@ bool Scheduler::select_resolve_event_locked(Event& event) {
         if (eligible_count < kPreflightMaxArms) {
             arms_buf[eligible_count++] = arm;
         }
-        // distinct-group accounting for the P8 gate (one Event may legitimately
-        // reach arms in multiple groups — P8 is DENIED at the P6 boundary).
+        // distinct-group accounting for the stage gate (one Event may
+        // legitimately reach arms in multiple groups — multi-group is DENIED).
         bool known = false;
         for (std::size_t g = 0; g < distinct_group_count; ++g) {
             if (distinct_groups[g] == arm->group) { known = true; break; }
@@ -611,8 +609,8 @@ bool Scheduler::select_resolve_event_locked(Event& event) {
         return false;  // nothing eligible for this Event
     }
 
-    // P8 stage-boundary gate: more than one distinct eligible group sharing one
-    // Event is DENIED at P6. Fail fast BEFORE any candidate mutation or winner
+    // Stage-boundary gate: more than one distinct eligible group sharing one
+    // Event is DENIED. Fail fast BEFORE any candidate mutation or winner
     // CAS. (One group with several arms on the same Event is NOT this case and
     // proceeds — the same-Event-twice support.)
     if (distinct_group_count > 1) {
@@ -645,7 +643,7 @@ bool Scheduler::select_resolve_event_locked(Event& event) {
         detail::select_invariant_fail_fast();
     }
 
-    // Process the group exactly once (P4 claim + finalize winner + losers +
+    // Process the group exactly once (claim + finalize winner + losers +
     // close every authority), then publish exactly once. select_process_group_
     // locked returns claim-lost (false) only if another invocation already won
     // — unreachable under one held global_mtx_ unless a racing Timer/Event
@@ -661,8 +659,8 @@ bool Scheduler::select_resolve_event_locked(Event& event) {
     return true;
 }
 
-// Suspended Timer resolver (task §12). Replaces the P3 due-ACTIVE stage
-// fail-fast with the real P6 resolver. PRE: `reg` is ACTIVE and the pump has
+// Suspended Timer resolver (task §12). Replaces the earlier due-ACTIVE stage
+// fail-fast with the real resolver. PRE: `reg` is ACTIVE and the pump has
 // popped it (the caller validates ACTIVE; a non-ACTIVE block takes the stale
 // skip path in select_timer_pump_entry_locked, which never reaches here).
 bool Scheduler::select_resolve_timer_locked(
@@ -718,7 +716,7 @@ bool Scheduler::select_resolve_timer_locked(
         detail::select_invariant_fail_fast();
     }
 
-    // The Timer registration is NOT consumed before the group winner CAS. P4
+    // The Timer registration is NOT consumed before the group winner CAS. The
     // (select_process_group_locked -> select_finalize_timer_winner_locked)
     // owns the winner/loser finalizer, which CONSUMES the winner registration
     // and RETIRES every loser registration.
@@ -746,7 +744,7 @@ SelectResult Scheduler::AsyncTestAccess::group_result(
 #endif
 
 // ===========================================================================
-// E13 P5/P6 — registration + admission core (inline + suspended).
+// Registration + admission core (inline + suspended).
 //
 // select_admit is the single non-template admission core reached ONLY by the
 // public variadic select() bridge (include/sluice/async/select.hpp). It owns
@@ -761,12 +759,12 @@ SelectResult Scheduler::AsyncTestAccess::group_result(
 //   - select the lowest ready index (only admission tie-break)
 //
 //   Inline-ready branch:
-//     - call the P4 central claim/finalization core exactly once
+//     - call the central claim/finalization core exactly once
 //     - call the unified publication authority (Inline completion)
 //     - copy result_, set phase Consumed, return WITHOUT suspending or
 //       publishing a runnable
 //
-//   No-ready branch (P6):
+//   No-ready branch:
 //     - commit the caller Fiber to Waiting + phase Armed +
 //       waiting_select_count_++ (atomic-under-G lost-wake closure)
 //     - release G, context_switch to the owner scheduler context
@@ -929,7 +927,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         // terminates) — §10: no ordinary throwing operation after reserve.
         group.mark_admitted();
 
-        // (6) Register every arm in index order, wrapped in the P7 registration
+        // (6) Register every arm in index order, wrapped in the registration
         // rollback transaction. registered_count is the authoritative size of the
         // fully committed registered prefix [0, registered_count): it is
         // incremented only AFTER one arm has completed ALL registration effects
@@ -1016,14 +1014,14 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
             // (7) FinishRegistration.
             group.set_phase(detail::GroupPhase::selecting);
         } catch (...) {
-            // P7 rollback transaction (§6.2). The catch executes while the
+            // Registration rollback transaction. The catch executes while the
             // ORIGINAL global_mtx_ critical section is still held (this block
             // opened the LockGuard). registered_count is the exact committed
             // prefix size; the orchestrator rolls back [0, registered_count) in
             // reverse order, normalizes the suffix, and finishes to Aborted.
             // The orchestrator is noexcept (it never throws); it fail-fasts on
             // impossible corruption. The original exception is rethrown
-            // UNCHANGED — no translation, no swallow (P7-ABORT-9/10).
+            // UNCHANGED — no translation, no swallow.
             select_rollback_registration_locked(group, arms.data(), count,
                                                 registered_count);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1040,7 +1038,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
 
         // (8) AdmissionArmed seam: AFTER every arm registered, AFTER phase
         // becomes Selecting, BEFORE the readiness snapshot.
-        // P5 CORRECTIVE: capture the boundary snapshot before the seam so the
+        // Corrective: capture the boundary snapshot before the seam so the
         // test can read the mechanical group/arm state without acquiring G.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         {
@@ -1099,8 +1097,8 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         }
 
         if (any_ready) {
-            // ----- Inline-ready branch (P5) -----
-            // (11)-(12) P4 integration: claim + finalize the whole group for the
+            // ----- Inline-ready branch -----
+            // (11)-(12): claim + finalize the whole group for the
             // lowest ready index, EXACTLY ONCE. Because admission and processing
             // occur under the SAME global_mtx_ critical section, an inline
             // admission claim cannot legitimately lose; a false return is an
@@ -1157,16 +1155,16 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
             return return_value;
         }
 
-        // ----- No-ready branch (P6 §9): commit suspension -----
+        // ----- No-ready branch: commit suspension -----
         // Preconditions (task §9): phase==Selecting, winner==kNoWinner, every
         // arm Registered, caller==current Fiber, caller_owner==g_worker. All
         // established by the registration transaction above (phase Selecting,
         // no winner, every arm Registered, caller captured at admission).
         //
-        // I47-F2: unified suspend protocol. commit_suspend_locked raises
+        // Unified suspend protocol. commit_suspend_locked raises
         // suspend_switch_pending BEFORE make_waiting, both under global_mtx_.
         // This closes the publication-before-protection window that the old
-        // P1-1 corrective left open (it raised authority AFTER G release).
+        // corrective left open (it raised authority AFTER G release).
         // A resolver that wins after G unlock routes a Runnable ticket, but a
         // thief sees suspend_switch_pending==true and refuses the steal until
         // run_next_on clears it (scheduler-side, after the physical context
@@ -1181,7 +1179,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         ++waiting_select_count_;
     }  // ---- global_mtx_ released here ----
 
-    // (P6 §9) select_suspend_before_switch seam: AFTER G is released,
+    // select_suspend_before_switch seam: AFTER G is released,
     // BEFORE the physical context_switch. A coordinator thread can resolve the
     // group (Event::set / clock advance) here and prove the wake-before-
     // physical-switch window is closed: the caller is committed Waiting +
@@ -1199,13 +1197,13 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
     (void)fiber_ctx::context_switch(&s);
     // ---- Control resumes here when a resolver publishes + routes the caller ----
     //
-    // I47-F2: suspend_switch_pending is cleared by run_next_on on the SCHEDULER
+    // suspend_switch_pending is cleared by run_next_on on the SCHEDULER
     // continuation (after the physical context switch saves the Fiber CPU
-    // context). The old P1-1 corrective cleared it HERE on the Fiber
+    // context). The old corrective cleared it HERE on the Fiber
     // continuation, which left a window where a thief could steal before the
     // save. That clear is now REMOVED — run_next_on is the single clear point.
 
-    // (P6 §10) Resume + ConsumeResult path. Reacquire global_mtx_ and validate
+    // Resume + ConsumeResult path. Reacquire global_mtx_ and validate
     // the published result before reading it.
     {
         LockGuard lk(global_mtx_);
@@ -1279,13 +1277,13 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
 }
 
 // ===========================================================================
-// E13 P7 — Select registration-rollback authority (private Scheduler members).
-// (docs/e13-select-p7-rollback-closeout.md §25, docs/e13-select-type-and-
-// lifetime.md §5.2). Refines the closed E13SelectContract.tla actions
-// ContractBeginRollback / ContractRollbackRelease(i) / ContractCloseAuthority(i)
-// / ContractFinishRollback. All helpers are noexcept and run under one
-// continuous global_mtx_ critical section; rollback never publishes and never
-// throws (P7-ABORT-9/10). They may assert / fail-fast on impossible corruption.
+// Select registration-rollback authority (private Scheduler members).
+// (docs/history/closeout/e13-select-p7-rollback-closeout.md §25;
+// docs/history/implementation-plans/e13-select-type-and-lifetime.md §5.2).
+// Refines the closed E13SelectContract.tla actions ContractBeginRollback /
+// ContractRollbackRelease(i) / ContractCloseAuthority(i) / ContractFinishRollback.
+// All helpers are noexcept under one continuous global_mtx_ critical section;
+// rollback never publishes and never throws; impossible corruption fails fast.
 // ===========================================================================
 
 // BeginRollback preflight (§8): mechanically validate the rollback domain and
@@ -1327,7 +1325,7 @@ void Scheduler::select_begin_rollback_locked(detail::SelectGroup& group) noexcep
     if (group.result_.has_winner()) {
         detail::select_invariant_fail_fast();
     }
-    // caller must be set and still Running (P7 is pre-suspension rollback).
+    // caller must be set and still Running (rollback is pre-suspension).
     if (group.caller_ == nullptr || group.caller_owner_ == nullptr) {
         detail::select_invariant_fail_fast();
     }
@@ -1373,8 +1371,8 @@ void Scheduler::select_rollback_arm_locked(
         if (arm.state != detail::ArmState::registered) {
             detail::select_invariant_fail_fast();
         }
-        // Mechanical membership: home_ must point at this Event's port (P7-N5
-        // wrong-Event membership fails here BEFORE any unlink mutation).
+        // Mechanical membership: home_ must point at this Event's port — a
+        // wrong-Event membership fails here BEFORE any unlink mutation.
         Event& ev = *arm.event.event_;
         if (arm.home_ != &ev.select_port_) {
             detail::select_invariant_fail_fast();
@@ -1401,11 +1399,11 @@ void Scheduler::select_rollback_arm_locked(
             reg->scheduler() != this ||
             !pool_owns_select_block_locked(*reg) ||
             reg->arm() != &arm) {
-            // P7-N6: Timer block not Scheduler-owned / wrong back-pointer.
+            // Timer block not Scheduler-owned / wrong back-pointer.
             // Fail fast BEFORE any state/accounting mutation.
             detail::select_invariant_fail_fast();
         }
-        // The registration must still be ACTIVE (P7-N7: an already-terminal
+        // The registration must still be ACTIVE (an already-terminal
         // registration is an invariant violation, NOT an idempotent success).
         if (!reg->is_active()) {
             detail::select_invariant_fail_fast();
@@ -1432,7 +1430,7 @@ void Scheduler::select_finish_rollback_locked(
     for (std::size_t i = 0; i < registered_count; ++i) {
         const detail::SelectArmSlot& arm = arms[i];
         if (arm.state != detail::ArmState::retired) {
-            // P7-N8: a registered authority remains open before Aborted.
+            // A registered authority remains open before Aborted.
             detail::select_invariant_fail_fast();
         }
         if (arm.kind == detail::ArmKind::event) {

@@ -1,5 +1,4 @@
-// sluice::async task-result bridge for run-to-completion Runtime tasks
-// (C7, #135).
+// sluice::async task-result bridge for run-to-completion Runtime tasks.
 //
 // The four applications each duplicated the same lifecycle scaffolding around
 // ApplicationRuntime: an app-owned result slot (mutex + condition_variable +
@@ -8,7 +7,7 @@
 // Runtime swallows task exceptions at the Group boundary — without the
 // translation the caller's wait would hang forever), and the
 // submit -> wait-for-publish -> request_stop -> drain -> join teardown
-// sequence (audit #135 C7).
+// sequence.
 //
 // TaskResultSlot<T> is that published-exactly-once result slot.
 // run_task_to_result<T> runs ONE run-to-completion task on a freshly built
@@ -169,7 +168,7 @@ Result<T> translate_task_exception() noexcept {
 // in a non-quiescent state — the destructor fail-fasts there, which would
 // turn a bad_alloc into process termination):
 //   - build/start throw        -> best-effort shutdown, translate_task_exception;
-//   - submit throws            -> same (see the P2-02 contract below);
+//   - submit throws            -> same (see the submit() contract below);
 //   - task body throws         -> published as the translated outcome by the
 //                                 wrapper before the Group boundary swallows it;
 //   - drain/join report errors -> returned as the bridge result (below).
@@ -225,9 +224,8 @@ Result<T> run_task_to_result(unsigned workers,
         return translate_task_exception<T>();
     }
 
-    // Deterministic submit-time-throw injection (P1 regression hook,
-    // #135 C7): one-shot, internal-testing builds only. Compiled out of the
-    // production library entirely.
+    // Deterministic submit-time-throw injection: one-shot, internal-testing
+    // builds only. Compiled out of the production library entirely.
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
     if (detail::task_result_test_inject_next_submit_throw()) {
         rt->test_inject_next_submit_throw();
@@ -238,9 +236,9 @@ Result<T> run_task_to_result(unsigned workers,
     // becomes its published outcome (the Runtime would otherwise swallow it
     // at the Group boundary and the wait below would hang).
     //
-    // submit() is itself an exception boundary (P1, #135): ApplicationRuntime
+    // submit() is itself an exception boundary: ApplicationRuntime
     // ::submit rolls back its admission reservation and RETHROWS what
-    // Group::async threw (P2-02 — e.g. bad_alloc from a bookkeeping reserve),
+    // Group::async threw (e.g. bad_alloc from a bookkeeping reserve),
     // and constructing the std::function task wrapper may allocate. The
     // Runtime is already Running here, so an exception escaping this
     // statement would unwind into ~ApplicationRuntime in a non-quiescent

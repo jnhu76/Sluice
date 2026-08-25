@@ -54,7 +54,7 @@ class MemoryReader final : public Reader {
         return MemoryReader({bs.begin(), bs.end()});
     }
 
-    // Convenience factory from a byte span (CPPIO-CORE-015B). Mirrors
+    // Convenience factory from a byte span. Mirrors
     // from_string; COPIES the span into owned storage so the caller's buffer
     // need not outlive the reader (no dangling reference). Empty span is fine.
     static MemoryReader from_bytes(std::span<const std::byte> bytes) {

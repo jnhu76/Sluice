@@ -1,4 +1,4 @@
-// sluice::async::Group — unordered task set (sluice-CORE-029, T3).
+// sluice::async::Group — unordered task set.
 //
 // Derived from Zig std.Io Group (Io.zig:1218-1303). An unordered set of tasks
 // awaitable/cancelable only as a whole. Group is a CANCEL-PROPAGATION BOUNDARY:
@@ -12,14 +12,14 @@
 // the Future on return. await() blocks until ALL tasks complete; cancel()
 // requests cancel on all tasks then awaits.
 //
-// Layering: composes Future<T> (T2) and CancelToken (T1). No scheduler.
+// Layering: composes Future<T> and CancelToken. No scheduler.
 //
 // Non-goals (deferred):
 //   - No result aggregation (Zig Group is fire-and-forget: tasks return void
 //     after swallowing Cancel; results flow through separate Futures). This
 //     matches Zig's Group.Task (Io.zig:484) which carries no result.
 //   - No concurrent() variant (Zig requires a concurrency unit; cppio has no
-//     notion yet — every async() spawns a thread). Add when PHASE E lands.
+//     notion yet — every async() spawns a thread). Add when one exists.
 //   - await() blocks the calling thread (Threaded-equivalent; not fiber yield).
 #pragma once
 
@@ -31,10 +31,10 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
-#include <new>       // std::bad_alloc (E15-P2-02 test seam)
+#include <new>       // std::bad_alloc (test seam)
 #include <stdexcept>
 #include <thread>
-#include <type_traits>  // std::is_nothrow_move_constructible_v (P2-01 commit static_asserts)
+#include <type_traits>  // std::is_nothrow_move_constructible_v (commit static_asserts)
 #include <utility>
 #include <vector>
 
@@ -45,14 +45,14 @@ namespace sluice::async {
 // is awaited as a whole (await waits for ALL tasks) or canceled as a whole
 // (cancel requests cancel on every task then awaits).
 //
-// Two execution modes (E5-B):
+// Two execution modes:
 //   - Threaded (default): Group() — each async(fn) spawns a std::thread; await
 //     blocks the calling OS thread on each task Future (ThreadedWaitPolicy).
 //   - Evented: Group(Scheduler&) — each async(fn) spawns a Fiber on the
 //     scheduler; the task Future uses EventedWaitPolicy so a Future::await
 //     INSIDE fn suspends the Fiber (not the worker). await drives the scheduler
 //     cooperatively. The task body runs in a Fiber with a valid Scheduler
-//     current-Fiber context (G1/G2).
+//     current-Fiber context.
 class Scheduler;  // forward decl (defined in scheduler.hpp; avoid circular include)
 
 class Group {
@@ -61,13 +61,13 @@ public:
     // the calling thread on each task Future.
     Group() = default;
 
-    // Evented mode (E5-B). Tasks run as Fibers on `sched`; task Futures use
+    // Evented mode. Tasks run as Fibers on `sched`; task Futures use
     // EventedWaitPolicy(sched). The caller MUST drive `sched` (typically via
     // this group's await(), which calls sched.run_live(1) with a Group-scoped
     // stop predicate and parks until all task Futures are terminal). The
     // scheduler is borrowed; it must outlive the group.
     //
-    // Evented await semantics (E14):
+    // Evented await semantics:
     //   - await() waits until ALL tasks admitted to this Group are terminal.
     //   - It may block indefinitely if a required external producer never
     //     completes. External producers are required to publish terminal
@@ -168,14 +168,14 @@ public:
     }
 
 private:
-    // E14-F1: Group-scoped invocation stop predicate for Scheduler::run_live.
+    // Group-scoped invocation stop predicate for Scheduler::run_live.
     // Returns true when all task Futures are terminal. Called under Scheduler
     // global_mtx_ at the MW-S3 boundary; acquires mtx_ (no inversion).
     static bool group_stop_predicate(void* ctx);
 
     // Threaded async: spawn a std::thread per task (existing path).
     //
-    // E15-P2-02 exception safety (F-01 closeout): ALL fallible capacity
+    // Exception safety: ALL fallible capacity
     // preparation (vector reserve) happens BEFORE the worker thread is created.
     // If reserve throws, no thread exists, the task body has NOT executed, and
     // the Group's vectors are unchanged — strong exception safety with correct
@@ -189,7 +189,7 @@ private:
     void async_threaded(Fn fn) {
         auto fut = std::make_shared<Future<void>>();
 
-        // E15-P2-02 (F-01): reserve capacity BEFORE spawning the worker.
+        // Reserve capacity BEFORE spawning the worker.
         // If either reserve throws (std::bad_alloc), no thread has been
         // created, fn has NOT executed, and vectors are unchanged.
         {
@@ -295,7 +295,7 @@ void Group::async_evented(Fn fn) {
     });
     // Init the fiber's context (must happen before spawn). The scheduler's
     // internal bridge will invoke fiber.entry()(*fiber).
-    // E14-F3: propagate init_fiber failure BEFORE any vector mutation or
+    // Propagate init_fiber failure BEFORE any vector mutation or
     // spawn. Strong exception-safety: no Fiber enqueued, no pointer retained,
     // Group vectors unchanged, temporary allocations released normally.
     bool ok = sched_->init_fiber(*fiber_raw, stack_base, kStackBytes);
@@ -304,8 +304,8 @@ void Group::async_evented(Fn fn) {
             "sluice::async::Group::async_evented: init_fiber failed "
             "(invalid stack or unsupported architecture)");
     }
-    // P2-01 (Group transactional admission seam, §13.5): the admission of one
-    // Evented task is now a SINGLE transaction. All fallible bookkeeping
+    // Group transactional admission seam: the admission of one
+    // Evented task is a SINGLE transaction. All fallible bookkeeping
     // preparation (the three vector reserves) happens BEFORE the first
     // push_back, inside one mtx_ critical section. The subsequent push_backs
     // are guaranteed not to allocate (sufficient capacity), so they cannot
@@ -314,8 +314,7 @@ void Group::async_evented(Fn fn) {
     // then does Scheduler::spawn publish the Fiber) or NONE commit (a reserve
     // failure propagates std::bad_alloc with no partial task record, no
     // Scheduler publication, and the user task never runs). This matches the
-    // async_threaded reserve-before-spawn pattern (group.hpp above) and is the
-    // foundation prerequisite for E16 admission rollback (§13.5, P2-01).
+    // async_threaded reserve-before-spawn pattern (group.hpp above).
     //
     // Lock ordering is unchanged: mtx_ is acquired ONLY for the reserve+commit
     // critical section, then released BEFORE spawn(). spawn() acquires

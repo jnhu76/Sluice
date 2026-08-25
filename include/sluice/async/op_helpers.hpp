@@ -1,4 +1,4 @@
-// sluice::async derived "all" helpers (sluice-CORE-018, ADR §6 O5).
+// sluice::async derived "all" helpers (ADR §6 O5).
 //
 // Loop-until-complete over Completions, mirroring the blocking read_exact/
 // write_all factoring. A primitive read/write Completion reports bytes (may be
@@ -13,7 +13,7 @@
 //
 // These are COORDINATORS: they own one Completion internally, drive the context
 // (submit/poll), and reposition the slice across short completions. The offset
-// advances by bytes transferred so a multi-step "all" stays positional (P1).
+// advances by bytes transferred so a multi-step "all" stays positional.
 //
 // IMPORTANT: these block the caller in a poll-loop until done. They are NOT the
 // high-concurrency path — that is the raw submit_* + caller-driven reaping. The
@@ -34,7 +34,7 @@ namespace sluice::async {
 
 // Read exactly dst.size() bytes from fd at `offset`, looping across short
 // completions. Returns the bytes read on success (== dst.size()) or an error.
-// EOF before/within -> IoError::eof (E4). The Completion is internal.
+// EOF before/within -> IoError::eof. The Completion is internal.
 Result<std::size_t> read_all(AsyncIoContext& ctx, int fd,
                              std::span<std::byte> dst, std::uint64_t offset);
 
@@ -44,7 +44,7 @@ Result<std::size_t> read_all(AsyncIoContext& ctx, int fd,
 Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
                               std::span<const std::byte> src, std::uint64_t offset);
 
-// --- Durability ops (sluice-CORE-018B, W4 overlapped durability) ---
+// --- Durability ops (W4 overlapped durability) ---
 //
 // ADR §6 P3: a sync op carries no buffer/offset. Its ordering vs in-flight
 // writes is governed by caller composition — to durably persist writes, AWAIT
@@ -52,7 +52,7 @@ Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
 // Completion<void> to ready via a poll-loop. They complete the SYNCHRONOUS shape
 // of async durability; the W4 value (overlap with the NEXT batch of writes) is
 // realized by submitting a sync op and NOT awaiting it before submitting more
-// writes (see the W4 overlap test). No group commit (016B O5).
+// writes (see the W4 overlap test). No group commit (O5).
 
 // Request fdatasync of `fd`, blocking until the sync completes. Returns void on
 // success or an error. Mirrors blocking SyncableWriter::sync_data semantics.

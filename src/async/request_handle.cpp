@@ -1,4 +1,4 @@
-// Phase F3 (issue #98) — public RequestHandle identity plumbing.
+// Public RequestHandle identity plumbing.
 // ADR-public-request-handle. These definitions need both Completion's and
 // RequestArena's full definitions: identity_of reads the Completion's private
 // arena binding (release_arena_ + bound_slot_, friend access via AsyncBackend)

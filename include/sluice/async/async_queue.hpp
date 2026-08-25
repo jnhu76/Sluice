@@ -1,8 +1,8 @@
 // sluice::async::AsyncQueue<T> — Fiber-suspending async bounded MPMC FIFO
-// channel (sluice-CORE-E12-E).
+// channel (E12-E).
 //
 // The public typed wrapper over the non-template QueuePort authority
-// (docs/e12-queue-scheduler-integration.md, Corrective-2 §3/§5). It is a THIN
+// (docs/architecture/async-synchronization.md § AsyncQueue<T>). It is a THIN
 // typed layer: it converts the opaque QueuePort results to typed ones, drives
 // the QueueItemFactory to mint/recover the exact `Node<T>`, and destroys that
 // `Node<T>` OUTSIDE all locks. It performs NO synchronization, holds NO
@@ -88,7 +88,7 @@ using QueuePopStatus = detail::QueueOpaquePopStatus;
 // destroy-and-rebuild sequence (reset + emplace) rather than `= default`.
 // `= default` would delegate to std::optional<T>::operator=(optional&&),
 // whose SFINAE requires T to be move-assignable — that would exclude every
-// T that satisfies the documented P8 contract (object +
+// T that satisfies the documented type contract (object +
 // nothrow-move-constructible + nothrow-destructible) but is not
 // move-assignable. The hand-written form preserves the contract.
 template <class T>
@@ -108,7 +108,7 @@ public:
     }
 
     QueuePushResult(QueuePushResult&&) noexcept = default;
-    // PR #12 review corrective: hand-written destroy-and-rebuild so T need NOT
+    // Review corrective: hand-written destroy-and-rebuild so T need NOT
     // be move-assignable (only move-constructible + destructible). Steps:
     //   1. self-move guard;
     //   2. destroy destination payload (value_.reset());
@@ -153,7 +153,7 @@ private:
 
 // Public typed pop result. Owns a T payload iff status == item; closed /
 // expired / would_block carry no payload. Move-only. Same storage rationale
-// and hand-written move-assign as QueuePushResult (PR #12 review corrective).
+// and hand-written move-assign as QueuePushResult (same review corrective).
 template <class T>
 class QueuePopResult final {
 public:
@@ -171,7 +171,7 @@ public:
     }
 
     QueuePopResult(QueuePopResult&&) noexcept = default;
-    // PR #12 review corrective: hand-written destroy-and-rebuild (see
+    // Hand-written destroy-and-rebuild move-assign (see
     // QueuePushResult for the rationale — T need NOT be move-assignable).
     QueuePopResult& operator=(QueuePopResult&& other) noexcept {
         if (this == &other) return *this;
@@ -356,7 +356,7 @@ private:
     // T once, marks released, deletes Node<T> outside locks). All factory work
     // happens HERE, after QueuePort has returned and its CallGuard has
     // decremented active_port_calls_ (typed conversion is explicitly NOT
-    // counted — see docs/e12-queue-scheduler-integration.md §7).
+    // counted — see docs/architecture/async-synchronization.md § AsyncQueue<T>).
     QueuePushResult<T> from_opaque_push_(detail::QueueOpaquePushResult&& r) {
         using S = detail::QueueOpaquePushStatus;
         const S s = r.status();

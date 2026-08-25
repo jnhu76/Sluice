@@ -1,10 +1,10 @@
-// sluice::IoContext — abstract backend capability boundary (CPPIO-CORE-009).
+// sluice::IoContext — abstract backend capability boundary.
 //
 // IoContext is an abstract factory for Reader/Writer handles, so future backends
 // (async, io_uring, test fakes) can plug in without callers changing how they
 // obtain handles. The direct FileReader/FileWriter constructors remain valid;
 // IoContext is an additional construction boundary for code that wants backend
-// indirection. See docs/io-context.md.
+// indirection. See docs/reference/api.md (IoContext).
 //
 // IoContext is NOT async. IoContext is NOT io_uring. It is the backend
 // capability boundary.
@@ -55,7 +55,7 @@ class IoContext {
     open_writer(std::string_view path, OpenWriterOptions options = {}) = 0;
 };
 
-// Concrete blocking-POSIX context (CPPIO-CORE-009C). Constructs FileReader/
+// Concrete blocking-POSIX context. Constructs FileReader/
 // FileWriter under the hood and surfaces open errors at open time (rather than
 // deferring to first I/O). No async, no thread pool, no io_uring.
 class BlockingIoContext final : public IoContext {

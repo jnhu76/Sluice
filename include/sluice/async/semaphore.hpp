@@ -1,4 +1,4 @@
-// sluice::async::Semaphore — async counting Semaphore (sluice-CORE-E12-B).
+// sluice::async::Semaphore — async counting Semaphore.
 //
 // The second user-facing async synchronization primitive built on the closed
 // E10/E11/E12-A wait substrate. A counting Semaphore composes:
@@ -30,7 +30,7 @@
 // available() can observe it lock-free; it does NOT authorize lock-free
 // acquisition. No separate Semaphore state mutex is added.
 //
-// SEALED PUBLIC AUTHORITY (mirrors E12-A-EVENT-CORRECTIVE-1 F-EVENT-AUTH). The
+// SEALED PUBLIC AUTHORITY (mirrors the E12-A Event authority seal). The
 // Semaphore's private WaitQueue is NOT publicly reachable: there is no
 // wait_queue() accessor on the production-public surface, and no test friend
 // grants access to it. The ONLY RESOURCE_WAKE authorities on a Semaphore queue
@@ -157,7 +157,7 @@ public:
     //   - cancel(node)               -> Cancelled (CANCEL)
     //   - the deadline elapsing       -> Expired  (TIMER_EXPIRE)
     //
-    // Mandatory precedence (A4):
+    // Mandatory precedence (resource-first):
     //   1. authoritative permit admission
     //   2. already-due deadline
     //   3. timed registration and normal race

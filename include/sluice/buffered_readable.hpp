@@ -1,6 +1,6 @@
 // sluice::BufferedReadable — opt-in capability interface exposing the already
 // buffered, unread bytes of a Reader. This is the seam that copy_all's buffered
-// fast path (CPPIO-CORE-006D) uses to drain buffered bytes before falling back
+// fast path uses to drain buffered bytes before falling back
 // to the scratch read path, mirroring Zig std.Io's Reader.stream which first
 // writes r.buffer[r.seek..r.end] (Reader.zig:168).
 //
@@ -8,7 +8,7 @@
 // class) so that Readers with no internal buffer (FileReader, MemoryReader,
 // FaultReader, ...) carry zero overhead and no dead virtuals. copy_all detects
 // the capability with a dynamic_cast, which is cheap and keeps the core Reader
-// abstraction minimal. See docs/buffered-fast-path.md.
+// abstraction minimal.
 #pragma once
 
 #include <sluice/result.hpp>

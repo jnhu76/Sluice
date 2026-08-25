@@ -23,8 +23,9 @@ class Writer {
 
     // Primitive: push any user-space buffered state to the underlying sink.
     // Layer-specific contract: BufferedWriter drains dirty bytes then calls
-    // inner.flush(); FileWriter::flush() is a documented no-op (no fsync) this
-    // phase. See README "Flush contract". Not the same as a durable commit.
+    // inner.flush(); FileWriter::flush() is a documented no-op (no fsync). See
+    // docs/architecture/sync-durability-model.md. Not the same as a durable
+    // commit.
     virtual Result<void> flush() = 0;
 
     // Derived: retry write_some until all of src is written or an error occurs.

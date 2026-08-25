@@ -151,122 +151,13 @@ HEADER_SCAN_FILES = _discover_header_files()
 #     error (zombie entries fail the gate — no amnesty for registry rot);
 #   - #167 Step 4 (source-comment pass) re-points each comment at the current
 #     authority and deletes its entry here in the same change.
-HEADER_STALE_ALLOWLIST: dict[str, dict[str, str]] = {
-    # --- async public headers (Step 4 largest mass) ---
-    "include/sluice/async/async_queue.hpp": {
-        "docs/e12-queue-scheduler-integration.md":
-            "pre-move path, now at docs/history/implementation-plans/e12-queue-scheduler-integration.md",
-    },
-    "include/sluice/async/async_rwlock.hpp": {
-        "docs/e12-rwlock.md":
-            "pre-move path, now at docs/history/implementation-plans/e12-rwlock.md",
-    },
-    "include/sluice/async/condition.hpp": {
-        "docs/e12-condition.md":
-            "pre-move path, now at docs/history/closeout/e12-condition.md",
-    },
-    "include/sluice/async/detail/fail_fast.hpp": {
-        "docs/e13-select-timer-adapter.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-timer-adapter.md",
-        "docs/e13-select-locking-and-publication.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-locking-and-publication.md",
-    },
-    "include/sluice/async/detail/queue_item.hpp": {
-        "docs/e12-queue-scheduler-integration.md":
-            "pre-move path, now at docs/history/implementation-plans/e12-queue-scheduler-integration.md",
-    },
-    "include/sluice/async/detail/queue_port.hpp": {
-        "docs/e12-queue-scheduler-integration.md":
-            "pre-move path, now at docs/history/implementation-plans/e12-queue-scheduler-integration.md",
-    },
-    "include/sluice/async/detail/select_port.hpp": {
-        "docs/e13-select-type-and-lifetime.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-type-and-lifetime.md",
-        "docs/e13-select-locking-and-publication.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-locking-and-publication.md",
-        "docs/e13-select-formal-production-mapping.md":
-            "pre-move path, now at docs/history/formal-design/e13-select-formal-production-mapping.md",
-    },
-    "include/sluice/async/detail/select_registration.hpp": {
-        "docs/e13-select-timer-adapter.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-timer-adapter.md",
-    },
-    "include/sluice/async/event.hpp": {
-        "docs/e12-sync-primitives-plan.md":
-            "pre-move path, now at docs/history/implementation-plans/e12-sync-primitives-plan.md",
-        "docs/e12-event.md":
-            "pre-move path, now at docs/history/closeout/e12-event.md",
-    },
-    "include/sluice/async/scheduler.hpp": {
-        "docs/e13-select-production-test-plan.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-production-test-plan.md",
-        "docs/e8-formal-corrective":
-            "pre-move path, now at docs/history/closeout/e8-formal-corrective",
-        "docs/e13-select-timer-adapter.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-timer-adapter.md",
-        "docs/e13-select-locking-and-publication.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-locking-and-publication.md",
-        "docs/e13-select-formal-production-mapping.md":
-            "pre-move path, now at docs/history/formal-design/e13-select-formal-production-mapping.md",
-        "docs/e13-select-public-api.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-public-api.md",
-        "docs/e13-select-p7-rollback-closeout.md":
-            "pre-move path, now at docs/history/closeout/e13-select-p7-rollback-closeout.md",
-        "docs/e13-select-type-and-lifetime.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-type-and-lifetime.md",
-    },
-    "include/sluice/async/select.hpp": {
-        "docs/e13-select-public-api.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-public-api.md",
-        "docs/e13-select-production-architecture.md":
-            "pre-move path, now at docs/history/implementation-plans/e13-select-production-architecture.md",
-    },
-    "include/sluice/async/wait_node.hpp": {
-        "docs/e10-waitnode-wait-queue.md":
-            "pre-move path, now at docs/history/closeout/e10-waitnode-wait-queue.md",
-    },
-    "include/sluice/async/wait_queue.hpp": {
-        "docs/e10-waitnode-wait-queue.md":
-            "pre-move path, now at docs/history/closeout/e10-waitnode-wait-queue.md",
-    },
-    # --- sync-core and experimental public headers ---
-    "include/sluice/blocking_io_pool.hpp": {
-        "docs/adr/ADR-024S":
-            "§-shorthand without suffix; target is docs/adr/ADR-024S-sync-runtime-contract.md",
-    },
-    "include/sluice/buffered_readable.hpp": {
-        "docs/buffered-fast-path.md":
-            "pre-move path, now at docs/history/implementation-plans/design-buffered-fast-path.md",
-    },
-    "include/sluice/copy_strategy.hpp": {
-        "docs/copy-strategy.md":
-            "pre-move path, now at docs/history/implementation-plans/design-copy-strategy.md",
-    },
-    "include/sluice/experimental/uring_io_context.hpp": {
-        "docs/io-uring-spike.md":
-            "pre-move path, now at docs/history/implementation-plans/io-uring-spike.md",
-    },
-    "include/sluice/experimental/uring_write_batch.hpp": {
-        "docs/io-uring-spike.md":
-            "pre-move path, now at docs/history/implementation-plans/io-uring-spike.md",
-    },
-    "include/sluice/file.hpp": {
-        "docs/flush-sync-durability.md":
-            "pre-move path, now at docs/history/implementation-plans/design-flush-sync-durability.md",
-    },
-    "include/sluice/io_context.hpp": {
-        "docs/io-context.md":
-            "pre-move path, now at docs/history/implementation-plans/design-io-context.md",
-    },
-    "include/sluice/sync.hpp": {
-        "docs/flush-sync-durability.md":
-            "pre-move path, now at docs/history/implementation-plans/design-flush-sync-durability.md",
-    },
-    "include/sluice/wal.hpp": {
-        "docs/flush-sync-durability.md":
-            "pre-move path, now at docs/history/implementation-plans/design-flush-sync-durability.md",
-    },
-}
+#
+# The registry is intentionally EMPTY: #167 Step 4 re-pointed all 34 backlog
+# sites at their current authorities and removed the entries in the same
+# change. It is kept as a mechanism (not deleted) so any NEW stale `docs/...`
+# reference in a public header fails the gate immediately — there is no
+# grandfathered backlog to extend.
+HEADER_STALE_ALLOWLIST: dict[str, dict[str, str]] = {}
 
 # Directories whose content is generated and should be skipped entirely
 SKIP_DIRS = [

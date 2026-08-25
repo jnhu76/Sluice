@@ -1,4 +1,4 @@
-// Implementation of the x86_64 fiber context switch (sluice-CORE-E2/E3).
+// Implementation of the x86_64 fiber context switch.
 //
 // ISOLATED. No I/O, no scheduler, no Future/WaitPolicy/Group/Batch. See
 // include/sluice/async/fiber_ctx.hpp for the model and provenance (Zig

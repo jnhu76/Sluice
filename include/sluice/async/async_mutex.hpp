@@ -1,4 +1,4 @@
-// sluice::async::AsyncMutex — Fiber-suspending async Mutex (sluice-CORE-E12-C).
+// sluice::async::AsyncMutex — Fiber-suspending async Mutex.
 //
 // The third user-facing async synchronization primitive built on the closed
 // E10/E11/E12-A/E12-B wait substrate. A Fiber-suspending Mutex composes:
@@ -32,7 +32,7 @@
 // reference into the Scheduler seams and is mutated ONLY under global_mtx_.
 //
 // Identity model: ownership is bound to Fiber* identity, independent of which
-// Worker executes the Fiber. After E8 stealing, a Fiber may resume on a thief
+// Worker executes the Fiber. With work stealing, a Fiber may resume on a thief
 // Worker; the owner check uses Fiber*, NOT Worker identity. The current Fiber
 // is g_worker->current (the executing fiber), NOT fiber_owner_ / WaitReg.owner.
 //
@@ -215,9 +215,9 @@ public:
     }
 
 private:
-    // E12-D (construction authorization §1.1): AsyncCondition friends AsyncMutex
+    // E12-D (AsyncCondition) friendship: AsyncCondition friends AsyncMutex
     // SOLELY so it can (a) read scheduler_ to reach the SAME Scheduler as this
-    // Mutex (C-H2), and (b) pass waiters_/owner_ BY REFERENCE into Scheduler's
+    // Mutex, and (b) pass waiters_/owner_ BY REFERENCE into Scheduler's
     // private Condition seams — exactly as this Mutex's own methods pass them
     // into Scheduler's Mutex seams (e.g. scheduler_.mutex_lock(waiters_,
     // owner_, node)). AsyncCondition does NOT write owner_ directly, does NOT

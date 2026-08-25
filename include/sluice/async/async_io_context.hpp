@@ -1,18 +1,18 @@
-// sluice::async foundation (sluice-CORE-017, ADR §3/§4).
+// sluice::async foundation (ADR §3/§4).
 //
 // The L1 async API surface: op descriptors + AsyncIoContext (the public
 // foundation) + AsyncBackend (the internal interface decoupling L1 from how
 // completions are produced). Per the ADR this lives in namespace sluice::async
 // and is OPT-IN; BlockingIoContext and Reader/Writer are untouched (A6).
 //
-// 017 ships the skeleton + a default backend that completes ops SYNCHRONOUSLY
-// at poll() time (no threads, no kernel). Real backends land in later jobs:
-//   - 019 FakeAsyncBackend  (deterministic test vehicle, error/short injection)
-//   - 020A ThreadPoolBackend (portable, std::thread)
-//   - 020B UringAsyncBackend (gated, liburing)
+// The reference backend completes ops SYNCHRONOUSLY at poll() time (no
+// threads, no kernel). Concrete backends:
+//   - FakeAsyncBackend  (deterministic test vehicle, error/short injection)
+//   - ThreadPoolBackend (portable, std::thread)
+//   - UringAsyncBackend (gated, liburing)
 //
 // Reaping is poll() / wait_one() ONLY (A3): no drain/deadline, because a
-// deadline would smuggle in a timer API this job excludes (016B O2).
+// deadline would smuggle in a timer API the async foundation excludes.
 #pragma once
 
 #include <sluice/async/completion.hpp>
@@ -31,8 +31,8 @@
 
 namespace sluice::async {
 
-// --- Op descriptors (ADR §3). All read/write ops are POSITIONAL (P1): they
-// carry an explicit offset. Sync ops carry no buffer/offset (P3). ---
+// --- Op descriptors (ADR §3). All read/write ops are POSITIONAL: they
+// carry an explicit offset. Sync ops carry no buffer/offset. ---
 struct ReadOp {
     int fd = -1;
     std::byte* dst = nullptr;
@@ -52,7 +52,7 @@ struct SyncAllOp {   // fsync (W4)
     int fd = -1;
 };
 
-// --- Split-phase readiness wait (issue #67 / AGENTS.md §13.2) ---------------
+// --- Split-phase readiness wait (AGENTS.md §13.2) ---------------------------
 // A backend MAY expose an observe-only readiness wait so a caller can block
 // for progress WITHOUT holding AsyncIoContext::access_mtx_ (the pre-fix code
 // held it across ThreadPoolBackend::wait_one, starving every other poll/reap
@@ -92,10 +92,10 @@ public:
     // Spurious wakes only re-check the predicate (no state change).
     virtual BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept = 0;
 
-    // Phase G (bounded-park variant): identical epoch protocol, with the
+    // Bounded-park variant: identical epoch protocol, with the
     // physical park capped at `max_park` so the caller can guarantee a
-    // re-drain before an active deadline (the E11 timer pump) — the MW-S2
-    // MIXED-WAKE participant now parks in wait_one() for split-wait backends.
+    // re-drain before an active deadline (the timer pump) — the MW-S2
+    // MIXED-WAKE participant parks in wait_one() for split-wait backends.
     // Bounded parking is a SEPARATE capability (supports_bounded_wait): the
     // base implementation does NOT honor the bound — it parks on the
     // unbounded one-argument contract — so a caller with a deadline
@@ -112,7 +112,7 @@ public:
         return wait_for_change(observed);
     }
 
-    // Phase G review P1b (PR #108): whether the bounded overload above
+    // Whether the bounded overload above
     // actually bounds the physical park. Default false — an external
     // BackendWaitSource that only implements the one-argument unbounded
     // contract truthfully reports no bounded support. Consumers with a
@@ -127,7 +127,7 @@ public:
     // generation and park normally again.
     virtual void interrupt_all() noexcept = 0;
 
-    // D4-RM14 (P0-1, commit-to-park handshake): arm a ONE-SHOT mandatory
+    // Commit-to-park handshake: arm a ONE-SHOT mandatory
     // control-observation baseline for the NEXT wait_one() invocation. Called
     // by the committing authority (the Scheduler's MW-S2 Phase-B commit,
     // under global_mtx_) BEFORE the participant is exposed as about-to-park.
@@ -136,7 +136,7 @@ public:
     // invocation even when it lands in the commit-to-wait_one window, before
     // the invocation captured its own snapshot — without the registration the
     // wake is rebaselined as a past event and the participant can park
-    // forever (the P0-1 runtime shutdown race). The default (no registration)
+    // forever (the runtime shutdown race). The default (no registration)
     // behaves exactly like snapshot(); split-wait backends that must not lose
     // a pre-snapshot interrupt override both methods (ReadyWaitSource /
     // UringWaitSource).
@@ -144,7 +144,7 @@ public:
     // One-shot consume of a previously armed baseline; without one, behaves
     // like snapshot(). wait_one() calls this at invocation start INSTEAD of
     // snapshot() so the commit-to-park registration wins over the entry
-    // snapshot (D4-RM13: the control baseline is captured once per external
+    // snapshot (the control baseline is captured once per external
     // invocation, and the commit is the invocation-begin for a Scheduler
     // participant).
     virtual BackendWaitToken consume_committed_wait() noexcept { return snapshot(); }
@@ -157,9 +157,9 @@ public:
 // helpers it can claim Completions and publish terminal results. This is the
 // deliberate injection seam that decouples L1 from how completions are
 // produced; it is NOT a capability-isolation boundary against deliberately
-// subclassing code. Concrete backends (019/020A/020B) implement this.
+// subclassing code. The concrete backends implement this.
 // Lifecycle: AsyncIoContext OWNS its backend (unique_ptr). State is
-// instance-owned; no globals (gate item 6).
+// instance-owned; no globals.
 class AsyncBackend {
 public:
     virtual ~AsyncBackend() = default;
@@ -168,11 +168,11 @@ public:
 
     // Optional stats sink. The context attaches its caller-owned AsyncStats so
     // the backend can tally per-completion outcomes it knows directly — e.g.
-    // canceled_ops (job 021) and completion_errors — without the context having
+    // canceled_ops and completion_errors — without the context having
     // to re-scan results after poll(). Null = no counting (default).
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
-    // Phase F1 (issue #98): optional identity-bearing ReadySink attachment.
+    // Optional identity-bearing ReadySink attachment.
     // When set, every reap (poll/wait_one) delivers by-value ReadyEvents to
     // this sink instead of the backend's internal no-op ReferenceReadySink.
     // The sink runs with NO slot/backend/admission lock held (arena contract)
@@ -186,10 +186,10 @@ public:
         routing_sink_ = sink;
     }
 
-    // Phase F1: production waiter registration / cancellation (ADR Decision
+    // Production waiter registration / cancellation (ADR Decision
     // 10). Registers ONE waiter (token + routing lease) on the slot bound to
     // the accepted Completion. A second registration returns invalid_state
-    // without overwriting the first (I13); an unresolvable Completion
+    // without overwriting the first; an unresolvable Completion
     // (unbound / cross-context / stale) returns invalid_state (provenance
     // misuse, Decision 6). cancel_waiter removes ONLY the waiter — never the
     // I/O, never the borrow — and returns the moved-out lease on success
@@ -234,19 +234,19 @@ public:
     // the count made ready. Never blocks.
     virtual std::size_t poll() = 0;
     // Blocking reap: wait until >=1 ready, then reap. Returns the count made
-    // ready or a backend error. No deadline (016B O2).
+    // ready or a backend error. No deadline (timers are out of scope).
     virtual Result<std::size_t> wait_one() = 0;
 
-    // ADR §7 X2: best-effort cancel of one outstanding op. Minimal first; the
-    // fuller model is job 021. The completion is marked ready in poll/wait_one
-    // exactly once (X3).
+    // ADR §7 X2: best-effort cancel of one outstanding op — the op may still
+    // complete with its ordinary result. The completion is marked ready in
+    // poll/wait_one exactly once (X3).
     virtual void cancel(Completion<std::size_t>& c) { (void)c; }
     virtual void cancel(Completion<void>& c) { (void)c; }
 
     // Outstanding op count (for AsyncStats.max_outstanding + L11 checks).
     virtual std::size_t outstanding() const noexcept = 0;
 
-    // Issue #67 split-phase wait capability (optional, default absent). A
+    // Split-phase wait capability (optional, default absent). A
     // backend that provides it lets AsyncIoContext::wait_one park for
     // readiness WITHOUT holding access_mtx_ (pure observation, interruptible
     // by the control plane). Backends that return nullptr keep the legacy
@@ -257,7 +257,7 @@ public:
     // it.
     virtual BackendWaitSource* wait_source() noexcept { return nullptr; }
 
-    // Issue #67 (D3): whether wait_one() is guaranteed NON-BLOCKING (returns
+    // Whether wait_one() is guaranteed NON-BLOCKING (returns
     // immediately with whatever is currently reaped — e.g. the reference
     // backends, whose readiness is produced synchronously inside poll).
     // ApplicationRuntime requires EITHER a split wait capability OR this
@@ -267,7 +267,7 @@ public:
     // The default (false) is the conservative choice for external backends.
     virtual bool wait_one_is_nonblocking() const noexcept { return false; }
 
-    // Phase F3 (ADR-public-request-handle): public accepted-request identity.
+    // ADR-public-request-handle: public accepted-request identity.
     // supports_request_identity() is the only PUBLIC part of the seam: whether
     // this backend can produce/resolve a RequestHandle. Default false —
     // external/legacy backends that do not use the RequestArena identity
@@ -324,7 +324,7 @@ private:
 protected:
     AsyncBackend() = default;
     AsyncStats* stats_ = nullptr;
-    // Phase F1: the identity-bearing ReadySink the backend delivers reap
+    // The identity-bearing ReadySink the backend delivers reap
     // events to, when a consumer (the Scheduler) attached one. Null = the
     // backend's internal no-op ReferenceReadySink. Read by the backend's reap
     // call sites; written only by attach_ready_sink (Scheduler construction /
@@ -342,12 +342,12 @@ protected:
         return c.try_claim_for_backend();
     }
 
-    // Phase B/E/D (ADR-explicit-io-request-contract, Accepted, Decision 5): the
-    // accepted request lifecycle splits the claim into a private two-stage
-    // binding so the winning backend can install RequestKey/context/release
-    // capability before the Completion becomes observable as outstanding. All
-    // production backends (Fake, Sync in Phase B; ThreadPool in Phase E; Uring
-    // in Phase D) now use this protocol — the `binding -> outstanding`
+    // Two-stage binding (ADR-explicit-io-request-contract, Accepted,
+    // Decision 5): the accepted request lifecycle splits the claim into a
+    // private two-stage binding so the winning backend can install
+    // RequestKey/context/release capability before the Completion becomes
+    // observable as outstanding. All production backends (Fake, Sync,
+    // ThreadPool, Uring) use this protocol — the `binding -> outstanding`
     // release-store is the acceptance LP (ADR §"Commit / accept" Step 5). The
     // legacy single-step `try_claim` above is retained ONLY as a protected
     // helper for the external-backend-authority negative-compile probe
@@ -368,7 +368,7 @@ protected:
     static void rollback_binding_before_accept(Completion<T>& c) noexcept {
         c.rollback_binding_before_accept();
     }
-    // Phase B (ADR Decision 7 / design §8): the binding CAS winner installs the
+    // ADR Decision 7 / design §8: the binding CAS winner installs the
     // opaque slot-release capability (arena + slot handle) before the Completion
     // becomes observable as outstanding. reset()/ready-destruction use it to
     // return the slot with generation++ (completion_ready -> free handshake).
@@ -401,7 +401,7 @@ protected:
 // routes submit_*/poll/wait_one/cancel to it; tallies AsyncStats.
 // Move-only, non-copyable (L6).
 //
-// E15-P1-03 / E15-P2-06 / ADR §5 L11 — outstanding-Completion lifecycle:
+// ADR §5 L11 — outstanding-Completion lifecycle:
 //   * Publication of a terminal result is done by the BACKEND during reap
 //     (poll/wait_one) through AsyncBackend::publish; the context routes and
 //     reaps but does not itself publish. Destroying this context — OR
@@ -442,7 +442,7 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    // Phase F3 (ADR-public-request-handle): additive submit variants that
+    // ADR-public-request-handle: additive submit variants that
     // return the accepted request's public identity. On success the returned
     // RequestHandle names the committed RequestKey (Decision 4: successful
     // acceptance => exactly one valid handle). On synchronous rejection the
@@ -470,12 +470,12 @@ public:
     // and returns the count of Completions reaped (a plain >0 progress), or
     // 0 when the wait was interrupted by the control plane (close_admission /
     // interrupt_backend_waiters) with nothing reaped — 0 is NOT an error and
-    // fabricates no completion (I8). A 0 with no outstanding work is also
+    // fabricates no completion. A 0 with no outstanding work is also
     // returned (an empty wait is a no-progress boundary, never a park).
     // Without the capability the legacy serialized contract applies (the whole
     // call, including a backend-side block, runs under access_mtx_).
     //
-    // D4-RM13 (control-wake theorem): the CONTROL baseline is captured ONCE
+    // Control-wake theorem: the CONTROL baseline is captured ONCE
     // at the start of this external invocation and held fixed for its whole
     // duration — a control-plane wake landing any time after the call began
     // (including the inter-iteration window between wait_for_change() returning
@@ -485,7 +485,7 @@ public:
     // so the interrupt stays one-shot — never a sticky shutdown flag, never a
     // busy-spin (the one-shot control-generation contract).
     //
-    // D4-RM14 (commit-to-park handshake): the invocation baseline comes from
+    // Commit-to-park handshake: the invocation baseline comes from
     // consume_committed_wait() — a Scheduler MW-S2 participant that armed a
     // committed-wait registration at its Phase-B commit (under global_mtx_,
     // before this call) uses the ARMED control generation as its baseline, so
@@ -494,11 +494,11 @@ public:
     // unchanged (a fresh snapshot at entry).
     Result<std::size_t> wait_one();
 
-    // Phase G (bounded-park variant): identical split-phase semantics to
+    // Bounded-park variant: identical split-phase semantics to
     // wait_one(), with each physical park inside the observe phase capped at
     // `max_park` so the caller can guarantee a re-drain before an active
-    // deadline (the E11 timer pump drives the Scheduler's deadline set; the
-    // MIXED-WAKE progress participant now parks in wait_one() and must still
+    // deadline (the timer pump drives the Scheduler's deadline set; the
+    // MIXED-WAKE progress participant parks in wait_one() and must still
     // return in time for pump_deadlines_locked). `max_park` must be finite
     // (pass nanoseconds::max() only through the no-argument form, which is
     // unbounded). Backends without the split wait capability ignore the bound
@@ -506,11 +506,11 @@ public:
     // but WITHOUT the bounded transport (BackendWaitSource::
     // supports_bounded_wait() == false) returns not_supported SYNCHRONOUSLY:
     // a silently discarded deadline cap is a liveness hole, never a degraded
-    // mode (Phase G review P1b). Callers with a deadline obligation check
+    // mode. Callers with a deadline obligation check
     // has_bounded_split_wait_capability() first.
     Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
 
-    // Phase G: does the backend expose the split-phase readiness wait? The
+    // Does the backend expose the split-phase readiness wait? The
     // Scheduler selects the MW-S2 park domain with this: a split-wait backend
     // parks the progress participant in wait_one() for BOTH backend-only and
     // MIXED-WAKE (external wake publications reach the park through
@@ -519,7 +519,7 @@ public:
     // is poll-driven and cannot self-notify).
     bool has_split_wait_capability() const noexcept;
 
-    // Phase G review P1b: split wait AND a bounded physical park
+    // Split wait AND a bounded physical park
     // (BackendWaitSource::supports_bounded_wait()). The Scheduler's MW-S2
     // participant may park in the BACKEND domain with a finite cap only when
     // this holds; otherwise a deadline-bound park uses the Scheduler wake
@@ -527,9 +527,9 @@ public:
     // construction-stable, like has_split_wait_capability().
     bool has_bounded_split_wait_capability() const noexcept;
 
-    // Control-plane wake for a split-phase wait in progress (issue #67): wakes
+    // Control-plane wake for a split-phase wait in progress: wakes
     // every participant parked in wait_one()'s observe phase so shutdown /
-    // admission close can re-evaluate. Per the D4-RM13 control-wake theorem
+    // admission close can re-evaluate. Per the control-wake theorem
     // the wake is observed by ANY wait_one() invocation in flight at the time
     // of the interrupt (control baseline is per-invocation), including one
     // that has just returned from a progress wake and is between internal
@@ -538,7 +538,7 @@ public:
     // access_mtx_.
     void interrupt_backend_waiters() noexcept;
 
-    // D4-RM14 (P0-1, commit-to-park handshake): register the mandatory
+    // Commit-to-park handshake: register the mandatory
     // control-observation baseline with the backend wait source for the NEXT
     // wait_one() invocation. Called by the Scheduler's MW-S2 participant at
     // its Phase-B commit, under global_mtx_ and BEFORE releasing the
@@ -555,7 +555,7 @@ public:
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
 
-    // Phase F1: attach the identity-bearing ReadySink the backend delivers
+    // Attach the identity-bearing ReadySink the backend delivers
     // reap events to (null restores the no-op default). Serialized under
     // access_mtx_ so attachment never races an in-flight poll/reap of the same
     // backend. The Scheduler installs its routing sink here at construction
@@ -563,7 +563,7 @@ public:
     // io_ctx_; standalone contexts keep the no-op sink).
     void set_ready_sink(detail::SynchronousReadySink* sink);
 
-    // Phase F1: production waiter registration / cancellation (ADR Decision
+    // Production waiter registration / cancellation (ADR Decision
     // 10). See AsyncBackend::register_waiter / cancel_waiter for semantics;
     // these forward under access_mtx_ (the serialized backend domain).
     Result<void> register_waiter(Completion<std::size_t>& c,
@@ -603,13 +603,13 @@ public:
 private:
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
-    // E7-C serialized backend access domain: at most one caller CONSUMES
+    // Serialized backend access domain: at most one caller CONSUMES
     // AsyncBackend at a time (submit_*/cancel/poll/reap/outstanding all
     // acquire this). The split-phase wait's OBSERVE phase (wait_for_change)
     // intentionally runs outside it — it is a pure epoch wait that touches no
     // backend state, so it may run concurrently with serialized consuming
     // operations. No context-level lock is ever held across an unbounded
-    // block (issue #67).
+    // block.
     mutable std::mutex access_mtx_;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

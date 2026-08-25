@@ -4,7 +4,7 @@
 // typed Event/Timer case values, SelectResult, the SelectCaseType concept,
 // and the variadic select() entry point.
 //
-// P5/P6: the public variadic select() template is DEFINED here (a thin bridge).
+// The public variadic select() template is DEFINED here (a thin bridge).
 // A general function-template definition must be visible to arbitrary user TUs,
 // so it cannot live only in src/async/select.cpp. The template materializes a
 // fixed caller-frame std::array of SelectCaseDescriptor (preserving argument
@@ -12,10 +12,10 @@
 // function (Scheduler::select_admit) that owns all centralized admission logic
 // for BOTH the inline-ready and the no-ready suspended paths. No explicit-
 // instantiation combinatorial explosion; the admission core compiles once. See
-// docs/e13-select-public-api.md §3 and docs/e13-select-production-architecture.md
-// §8.
+// docs/architecture/async-synchronization.md (§ Select) for the admission
+// design.
 //
-// See docs/e13-select-public-api.md for the frozen API surface.
+// See docs/architecture/async-synchronization.md (§ Select) for the frozen API surface.
 #pragma once
 
 #include <array>
@@ -31,24 +31,24 @@ namespace sluice::async {
 
 class Event;
 
-// ---- E1: Constants and aliases ----
+// ---- Constants and aliases ----
 
 using select_deadline_t = Scheduler::deadline_t;
 
-// ---- E2: Winning kind ----
+// ---- Winning kind ----
 
 enum class SelectKind : std::uint8_t {
     event = 0,
     timer = 1,
 };
 
-// ---- E3: Timer outcome ----
+// ---- Timer outcome ----
 
 enum class SelectTimerOutcome : std::uint8_t {
     fired = 0,
 };
 
-// ---- E4: SelectResult ----
+// ---- SelectResult ----
 
 class SelectResult {
 public:
@@ -89,11 +89,11 @@ public:
 private:
     friend class Scheduler;
 
-    // P5: the narrow production construction path (docs/e13-select-public-api.md
-    // §6). Scheduler-only: an admitted group builds exactly ONE SelectResult
-    // from the winner index. Losers never construct a result. This is NOT
-    // public — no arbitrary-result constructor is exposed. A default-constructed
-    // SelectResult remains the "no winner" sentinel.
+    // The narrow production construction path (see
+    // docs/architecture/async-synchronization.md § Select). Scheduler-only: an
+    // admitted group builds exactly ONE SelectResult from the winner index.
+    // Losers never construct a result. NOT public (no arbitrary-result
+    // constructor); a default-constructed SelectResult remains "no winner".
     constexpr SelectResult(std::size_t index, SelectKind kind,
                            SelectTimerOutcome timer_outcome) noexcept
         : index_(index), kind_(kind), timer_outcome_(timer_outcome),
@@ -116,7 +116,7 @@ private:
     bool has_winner_{false};
 };
 
-// ---- E5: EventSelectCase ----
+// ---- EventSelectCase ----
 
 class EventSelectCase {
 public:
@@ -128,7 +128,7 @@ private:
     Event* event_;
 };
 
-// ---- E6: TimerSelectCase ----
+// ---- TimerSelectCase ----
 
 class TimerSelectCase {
 public:
@@ -143,9 +143,9 @@ private:
     select_deadline_t deadline_;
 };
 
-// ---- E6b: detail::SelectCaseDescriptor — the sealed variadic bridge type ----
+// ---- detail::SelectCaseDescriptor — the sealed variadic bridge type ----
 //
-// P5 CORRECTIVE: SelectCaseDescriptor is a CLASS with PRIVATE fields. Only
+// SelectCaseDescriptor is a CLASS with PRIVATE fields. Only
 // its typed constructors (from EventSelectCase/TimerSelectCase) can establish
 // descriptors; only friend Scheduler can read the fields. No public raw
 // pointer getter, no public field access. An ordinary TU cannot forge a
@@ -181,12 +181,12 @@ private:
 
 }  // namespace detail
 
-// ---- CORRECTIVE: constrained select() definition (thin variadic bridge) ----
+// ---- constrained select() definition (thin variadic bridge) ----
 //
 // The public variadic entry point. 1 <= sizeof...(Cases) <= kSelectMaxArms.
 // The requires clause rejects empty packs, too-large packs, and non-case types
-// at compile time (SF-1..SF-3) and keeps select() SFINAE-friendly (the P1
-// SF compile-fail tests evaluate SelectInvocable<...> to false on bad inputs).
+// at compile time and keeps select() SFINAE-friendly (the SF compile-fail
+// tests evaluate SelectInvocable<...> to false on bad inputs).
 // Argument order IS the arm index (lowest-index tie-break); the variadic
 // expands into a fixed caller-frame array — no per-call heap for case storage.
 //

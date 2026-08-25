@@ -1,4 +1,4 @@
-// sluice::async cooperative cancellation primitives (sluice-CORE-027, T1).
+// sluice::async cooperative cancellation primitives (T1).
 //
 // Derived from Zig std.Io's cancellation model (Io.zig:1183-1188, 1310-1358):
 //

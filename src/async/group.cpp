@@ -1,9 +1,9 @@
-// Implementation of Group (sluice-CORE-029 + E5-B). See group.hpp for the model.
+// Implementation of Group. See group.hpp for the model.
 //
 // Two execution modes:
 //   - Threaded (Group()): std::thread per task; await blocks + joins.
 //   - Evented  (Group(Scheduler&)): Fiber per task on the scheduler; await
-//     drives sched.run_live(1) until all task Futures are terminal (E14-F1).
+//     drives sched.run_live(1) until all task Futures are terminal.
 #include <sluice/async/group.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -12,7 +12,7 @@
 
 namespace sluice::async {
 
-// E14-F1: Group-scoped invocation stop predicate for run_live. Returns true
+// Group-scoped invocation stop predicate for run_live. Returns true
 // when all of the Group's task Futures are terminal (ready). Called under
 // Scheduler global_mtx_ at the MW-S3 boundary. Acquires Group::mtx_ (no
 // inversion: Group never holds mtx_ while calling into Scheduler).
@@ -26,7 +26,7 @@ bool Group::group_stop_predicate(void* ctx) {
 }
 
 Group::Group(Scheduler& sched) : sched_(&sched) {
-    // E14 D-E14-2: construction-time fail-fast on unsupported targets.
+    // Construction-time fail-fast on unsupported targets.
     // The Scheduler constructor already guards the earliest Evented admission
     // boundary; this is defense-in-depth for the Group-specific surface.
     // Production passes fiber_ctx::supported (compile-time true on x86_64);
@@ -40,7 +40,7 @@ Group::Group(Scheduler& sched) : sched_(&sched) {
 
 void Group::await() {
     if (sched_) {
-        // E14-F1/D-E14-1: Evented Group-scoped Live drive. Drive the scheduler
+        // Evented Group-scoped Live drive. Drive the scheduler
         // in LIVE mode with an invocation stop predicate that returns true when
         // all of THIS Group's task Futures are terminal. This prevents unrelated
         // Scheduler registrations (other Groups/Fibers) from permanently blocking
@@ -70,7 +70,7 @@ void Group::await() {
             // run_live returned: the scheduler run terminated. Loop to verify
             // all futures are ready.
         }
-        // E14-F4/D-E14-3: reap completed task Futures and release Fiber/stack
+        // Reap completed task Futures and release Fiber/stack
         // storage. After a successful await all admitted task Futures are
         // terminal; size() becomes 0 (parity with Threaded). Repeated await
         // is idempotent (vectors already empty). Fiber/stack address stability
@@ -108,7 +108,7 @@ void Group::await() {
 }
 
 Group::~Group() {
-    // E14 D-E14-F2a: Evented destructor fail-fast. If any Evented task Future
+    // Evented destructor fail-fast. If any Evented task Future
     // is still pending, the caller violated the contract (must await/cancel
     // before destroying). Calling Evented Future::await from a non-Fiber
     // context (ordinary caller thread) would dereference null g_worker in

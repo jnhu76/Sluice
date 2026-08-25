@@ -1,10 +1,10 @@
-// sluice::async await-style operation helpers for Runtime tasks (C7, #135).
+// sluice::async await-style operation helpers for Runtime tasks.
 //
 // The four applications (sluice-copy / sluice-hash / sluice-grep / sluice-tail)
 // each hand-rolled the same submit -> await_completion -> result() -> reset()
 // protocol plus the short-read / partial-write retry loops on top of
-// RuntimeTaskContext (audit #135 C7: "the library is a shallow module for its
-// own examples"). These coordinators move that I/O PROTOCOL back into the
+// RuntimeTaskContext (the #135 audit finding: "the library is a shallow module
+// for its own examples"). These coordinators move that I/O PROTOCOL back into the
 // library; the application keeps only its algorithm.
 //
 // They are the await-shaped siblings of the polling op_helpers.hpp
@@ -17,7 +17,7 @@
 //     await_read_fill / await_write_exact.
 //   - EOF: n == 0 from await_read_once; await_read_fill stops at EOF and
 //     returns the bytes filled so far (a partial tail is SUCCESSFUL data —
-//     deliberately different from polling read_all's E4 eof-error parity).
+//     deliberately different from polling read_all's eof-error parity).
 //   - zero progress on a non-empty write: IoError::backend_error (an invalid
 //     backend state, not an infinite retry). DELIBERATE DIVERGENCE from the
 //     canonical polling write_all (src/async/op_helpers.cpp), which returns

@@ -1,15 +1,14 @@
-// sluice::CopyStrategy — explicit copy path selection layer (CPPIO-CORE-007).
+// sluice::CopyStrategy — explicit copy path selection layer.
 //
-// After CPPIO-CORE-006, copy_all had an implicit buffered fast path triggered
-// by a dynamic_cast probe. 007 makes path selection explicit: a CopyOptions
-// selects a CopyStrategy, copy_all executes the selected (existing) path, and a
-// CopyDecision explains what was requested vs what ran. This stops copy_all
-// from becoming a pile of hidden heuristics and makes each path testable.
+// Path selection is explicit: a CopyOptions selects a CopyStrategy, copy_all
+// executes the selected (existing) path, and a CopyDecision explains what was
+// requested vs what ran. This stops copy_all from becoming a pile of hidden
+// heuristics (such as an implicit buffered fast path triggered by a
+// dynamic_cast probe) and makes each path testable.
 //
-// This stage implements Auto / Scratch / BufferedFirst only. The *Deferred
+// Auto / Scratch / BufferedFirst are implemented. The *Deferred
 // strategies are reserved slots that report as unsupported (return invalid_state
-// or fall back to Auto) rather than pretending to work. See
-// docs/copy-strategy.md.
+// or fall back to Auto) rather than pretending to work.
 #pragma once
 
 #include <sluice/limit.hpp>
@@ -19,11 +18,11 @@
 
 namespace sluice {
 
-// Which copy path to use. See docs/copy-strategy.md §4-6.
+// Which copy path to use. See docs/reference/api.md (CopyStrategy).
 enum class CopyStrategy {
     Auto,          // default; currently behaves as BufferedFirst
     Scratch,       // force the scratch read/write loop; never use fast path
-    BufferedFirst, // drain buffered bytes first, then scratch (006 behavior)
+    BufferedFirst, // drain buffered bytes first, then scratch
 
     VectorDeferred,    // reserved slot; NOT implemented
     FileRangeDeferred, // reserved slot; NOT implemented

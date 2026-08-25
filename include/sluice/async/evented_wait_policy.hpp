@@ -1,21 +1,21 @@
 // sluice::async::EventedWaitPolicy — Evented Future wait via the Scheduler's
-// level-triggered ready-flag protocol (sluice-CORE-E5-A2).
+// level-triggered ready-flag protocol.
 //
-// The E0 ADR §2/§9.1 contract: an Evented logical wait must suspend the current
-// user task (Fiber) and return the worker to the scheduler, NOT block the OS
-// thread. This policy implements that by delegating to
-// Scheduler::await_ready_flag (E5-A1), which registers &ready as a waitable
+// The execution-model ADR §2/§9.1 contract: an Evented logical wait must suspend
+// the current user task (Fiber) and return the worker to the scheduler, NOT
+// block the OS thread. This policy implements that by delegating to
+// Scheduler::await_ready_flag, which registers &ready as a waitable
 // identity and suspends the current Fiber until the Scheduler observes the
 // persistent flag true.
 //
 // This is the Evented counterpart to ThreadedWaitPolicy (which blocks the OS
 // thread on a condition variable). Both implement the same WaitPolicy seam.
 //
-// What this commit does:
+// What this policy does:
 //   - adds EventedWaitPolicy, which ignores the mutex/cv (those are the
 //     Threaded mechanism) and calls scheduler_.await_ready_flag(ready).
 //
-// What this commit does NOT do (M3 contract — no Future change):
+// What this policy does NOT do (no Future change):
 //   - does NOT change Future state (Future is unchanged).
 //   - does NOT change Future::complete_with (it already persists ready_).
 //   - does NOT change the WaitPolicy virtual signature.
@@ -44,7 +44,7 @@ public:
     // Borrow the scheduler that drives Fibers using this policy. The scheduler
     // must outlive any Future that uses this policy. Acquires a
     // SchedulerWakeHandle at construction for external-producer notification
-    // (E14 D-E14-1, T-WAKE-1: policy-level, not per-Future/per-registration).
+    // (T-WAKE-1: policy-level, not per-Future/per-registration).
     explicit EventedWaitPolicy(Scheduler& scheduler) noexcept
         : scheduler_(scheduler), wake_handle_(scheduler.make_wake_handle()) {}
 
@@ -58,7 +58,7 @@ public:
         scheduler_.await_ready_flag(ready);
     }
 
-    // E14 D-E14-1 (T-WAKE-5): producer notification. Called by
+    // Producer notification (T-WAKE-5). Called by
     // Future::complete_with AFTER the first terminal publication, OUTSIDE the
     // Future's mutex. Wakes a parked Scheduler Worker so it re-drains and
     // routes the now-ready Fiber via wake_ready_flags_locked.

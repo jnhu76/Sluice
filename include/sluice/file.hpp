@@ -1,11 +1,11 @@
 // sluice FileReader / FileWriter — blocking POSIX file I/O behind the
 // Reader/Writer abstractions. RAII closes the descriptor (best-effort,
 // unreportable); move-only. Callers that need the close(2) result call
-// close() explicitly before destruction (ERR-001, issue #143).
+// close() explicitly before destruction.
 //
 // This is the minimal blocking backend. No durability beyond what is asked
 // for: FileWriter::flush() is a documented no-op for user-space state (no
-// fsync) in this first phase.
+// fsync); durability is requested explicitly via sync_data()/sync_all().
 #pragma once
 
 #include <sluice/measurement.hpp>
@@ -59,8 +59,8 @@ class FileReader final : public Reader {
     // reader is default/moved-from. Exposed so IoContext backends can surface the
     // real open error at open time rather than deferring to first read.
     const std::optional<IoError>& open_error() const { return open_error_; }
-    // Close the descriptor and REPORT the close(2) result (ERR-001, issue
-    // #143). For a reader this is diagnostic (a read-only close has no
+    // Close the descriptor and REPORT the close(2) result. For a reader this
+    // is diagnostic (a read-only close has no
     // writeback semantics); see FileWriter::close for the data-integrity
     // case. Contract (both classes):
     //  - idempotent: closing an already-closed / never-opened / moved-from
@@ -89,15 +89,15 @@ class FileReader final : public Reader {
     // (Vector I/O semantics).
     Result<std::size_t> read_vec(std::span<IoSlice> dsts) override;
 
-    // Positional read (sluice-CORE-018S): pread at an explicit byte offset.
+    // Positional read: pread at an explicit byte offset.
     // Does NOT move the shared file cursor. Returns bytes read (0 == EOF at
     // that offset). See docs/reference/sync-io-model.md (Positional I/O semantics).
     Result<std::size_t> read_at(std::uint64_t offset, std::span<std::byte> dst);
-    // Positional vector read (sluice-CORE-018S): preadv at an explicit byte
+    // Positional vector read: preadv at an explicit byte
     // offset. Same stop-on-short + skip-empty semantics as read_vec. Does NOT
     // move the shared file cursor.
     Result<std::size_t> read_vec_at(std::uint64_t offset, std::span<IoSlice> dsts);
-    // Derived (sluice-CORE-019S): read exactly dst.size() bytes from `offset`
+    // Derived: read exactly dst.size() bytes from `offset`
     // (looping read_at across short reads), or fail on EOF/error. dst.size()==0
     // is immediate success. EOF before/within -> IoError::eof.
     Result<void> read_at_exact(std::uint64_t offset, std::span<std::byte> dst);
@@ -120,7 +120,7 @@ class FileWriter final : public Writer, public SyncableWriter {
     // non-null, syscall counters are recorded there for the writer's lifetime.
     // If `vec_stats` is non-null, write_vec counters (non-fallback — the real
     // writev path) are recorded there. If `sync_stats` is non-null, sync_data/
-    // sync_all counters are recorded there (CPPIO-CORE-008D).
+    // sync_all counters are recorded there.
     explicit FileWriter(const std::string& path, SyscallStats* stats = nullptr,
                         VectorStats* vec_stats = nullptr, SyncStats* sync_stats = nullptr);
     // Adopt an already-open file descriptor (e.g. STDOUT_FILENO). Ownership is
@@ -154,8 +154,8 @@ class FileWriter final : public Writer, public SyncableWriter {
     // writer is default/moved-from. Exposed so IoContext backends can surface the
     // real open error at open time rather than deferring to first write.
     const std::optional<IoError>& open_error() const { return open_error_; }
-    // Close the descriptor and REPORT the close(2) result (ERR-001, issue
-    // #143). close(2) on a file with delayed writeback may fail with
+    // Close the descriptor and REPORT the close(2) result. close(2) on a file
+    // with delayed writeback may fail with
     // EIO/ENOSPC — the kernel's LAST data-integrity report for this file;
     // discarding it (as the RAII destructor must) hides a real write
     // failure. The full contract is on FileReader::close; the writeback
@@ -171,24 +171,26 @@ class FileWriter final : public Writer, public SyncableWriter {
     // syscalls. See src/file.cpp and docs/reference/sync-io-model.md
     // (Vector I/O semantics).
     Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs) override;
-    // Positional write (sluice-CORE-018S): pwrite at an explicit byte offset.
+    // Positional write: pwrite at an explicit byte offset.
     // Does NOT move the shared file cursor. Returns bytes written (0 on
     // non-empty input is invalid_state/backend failure — surfaced by callers).
     // See docs/reference/sync-io-model.md (Positional I/O semantics).
     Result<std::size_t> write_at(std::uint64_t offset, std::span<const std::byte> src);
-    // Positional vector write (sluice-CORE-018S): pwritev at an explicit byte
+    // Positional vector write: pwritev at an explicit byte
     // offset. Same stop-on-short + skip-empty semantics as write_vec. Does NOT
     // move the shared file cursor.
     Result<std::size_t> write_vec_at(std::uint64_t offset, std::span<const ConstIoSlice> srcs);
-    // Derived (sluice-CORE-019S): write all of src at `offset`, looping
+    // Derived: write all of src at `offset`, looping
     // write_at across short writes and advancing offset by bytes written. Zero
     // progress on non-empty remaining input -> IoError::invalid_state.
     Result<void> write_at_all(std::uint64_t offset, std::span<const std::byte> src);
-    // No-op flush of user-space state in this phase (no fsync). Durability is
-    // INTENTIONALLY separate — see sync_data/sync_all below and
-    // docs/flush-sync-durability.md. flush() must never call fsync/fdatasync.
+    // No-op flush of user-space state (no fsync). Durability is INTENTIONALLY
+    // separate — see sync_data/sync_all below and
+    // docs/architecture/sync-durability-model.md. flush() must never call
+    // fsync/fdatasync.
     Result<void> flush() override { return {}; }
-    // Request persistence of file data (fdatasync). See docs/flush-sync-durability.md.
+    // Request persistence of file data (fdatasync). See
+    // docs/architecture/sync-durability-model.md.
     Result<void> sync_data() override;
     // Request persistence of file data + metadata (fsync).
     Result<void> sync_all() override;

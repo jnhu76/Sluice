@@ -1,8 +1,8 @@
-// sluice::async::UringAsyncBackend (sluice-CORE-020B, ADR §4 Option 4).
+// sluice::async::UringAsyncBackend (ADR §4 Option 4).
 //
-// The Linux io_uring backend. Phase D1 migrates it onto the bounded
-// RequestArena / RequestSlot lifecycle with a PRIVATE io_uring ring per
-// backend instance (ADR Decision 18 — Uring execution-ownership amendment):
+// The Linux io_uring backend. It uses the bounded RequestArena /
+// RequestSlot lifecycle with a PRIVATE io_uring ring per backend instance
+// (ADR Decision 18 — Uring execution-ownership amendment):
 //
 //   RequestArena            = logical request lifecycle / generation / terminal
 //   one private io_uring    = execution ownership domain
@@ -79,7 +79,7 @@ struct UringRingState;
 #endif
 
 #if defined(SLUICE_HAS_LIBURING)
-// Phase D1 configuration (AC-7, ADR Decision 13). request_capacity MUST be in
+// Bounded configuration (AC-7, ADR Decision 13). request_capacity MUST be in
 // [1, UINT32_MAX] (the SlotIndex domain); queue_depth MUST be > 0. Validation
 // completes before any backend-state allocation.
 // request_capacity is independent of queue_depth (ADR Decision 13 / 18);
@@ -109,7 +109,7 @@ class UringAsyncBackend : public AsyncBackend {
     explicit UringAsyncBackend(unsigned queue_depth = 64);
 
 #if defined(SLUICE_HAS_LIBURING)
-    // Phase D1 explicit bounded configuration. request_capacity MUST be in
+    // Explicit bounded configuration. request_capacity MUST be in
     // [1, UINT32_MAX] and queue_depth MUST be > 0. Invalid configuration is
     // rejected with std::invalid_argument before backend-state allocation.
     explicit UringAsyncBackend(UringConfig config);
@@ -127,7 +127,7 @@ class UringAsyncBackend : public AsyncBackend {
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
-    // Phase F3 (ADR-public-request-handle): the real-liburing backend uses the
+    // ADR-public-request-handle: the real-liburing backend uses the
     // RequestArena identity contract, so it produces and resolves public
     // RequestHandles. The stub build has no arena, so it inherits the defaults
     // (supports_request_identity == false -> submit_*_request returns
@@ -155,7 +155,7 @@ class UringAsyncBackend : public AsyncBackend {
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
 
-    // Phase F1 (issue #98): production waiter registration / cancellation
+    // Production waiter registration / cancellation
     // (ADR Decision 10), forwarded verbatim to the REAL arena authorities
     // through the same resolve_completion identity bridge as cancel. No
     // side-band waiter map. register_waiter: success, or invalid_state for a
@@ -181,7 +181,7 @@ class UringAsyncBackend : public AsyncBackend {
     // query, not a health query.
     bool available() const noexcept;
 
-    // Phase D4: admission close + drain (ADR Decision 15; mirrors
+    // Admission close + drain (ADR Decision 15; mirrors
     // ThreadPoolBackend::close_admission). Rejects new admission atomically:
     // takes the same dispatch_mtx_ the submit admission transaction (reserve
     // .. commit_binding) holds, so after this returns no new acceptance LP
@@ -195,7 +195,7 @@ class UringAsyncBackend : public AsyncBackend {
     void close_admission();
 
 #if defined(SLUICE_HAS_LIBURING)
-    // Phase D4: split-phase readiness wait (issue #67). wait_for_change()
+    // Split-phase readiness wait. wait_for_change()
     // parks in poll(2) on the private ring fd (POLLIN == CQEs pending) and a
     // one-shot control eventfd; it NEVER reaps, records terminals, publishes
     // Completions, mutates RequestArena state, cancels, or changes
@@ -209,7 +209,7 @@ class UringAsyncBackend : public AsyncBackend {
         return have_ring_ ? wait_source_.get() : nullptr;
     }
 
-    // Phase D1 resource introspection (method-only seams; no member data).
+    // Resource introspection (method-only seams; no member data).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_accepted_outstanding() const noexcept {
@@ -337,7 +337,7 @@ class UringAsyncBackend : public AsyncBackend {
     // is transport routing metadata (ADR Decision 3 backend scratch). The arena
     // re-validates the full handle before any mutation.
     //
-    // Kernel-visible identity discipline (P0-B): the SQE user_data carries the
+    // Kernel-visible identity discipline: the SQE user_data carries the
     // COOKIE VALUE, not a router array index. The cookie is allocated from a
     // no-wrap 64-bit counter and is NEVER reused within backend lifetime (mirors
     // RequestArena generation no-wrap). The router ARRAY slot is recycled via a
@@ -385,27 +385,27 @@ class UringAsyncBackend : public AsyncBackend {
     static Result<void> validate_sync(SyncAllOp op);
     template <class Op> static Result<void> validate_op(const Op& op) noexcept;
 
-    // Five-stage admission mirroring ThreadPoolBackend (ADR Decision 5), now
-    // ONE call into the shared pre-accept ladder (issue #137;
-    // detail::submit_transaction) under this backend's admission discipline
+    // Five-stage admission mirroring ThreadPoolBackend (ADR Decision 5): ONE
+    // call into the shared pre-accept ladder (detail::submit_transaction)
+    // under this backend's admission discipline
     // (dispatch_mtx_, with the in-lock Stage-0 poison/admission gate).
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind);
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind);
 
-    // The backend's policy for detail::submit_transaction (issue #137): the
+    // The backend's policy for detail::submit_transaction: the
     // REAL io_uring backend adds to the ThreadPool shape exactly the Stage-0
-    // ring/poison/admission gate (accepted #157 review hook-internal order:
+    // ring/poison/admission gate (hook-internal order:
     // ring -> poison -> admission; D4-M5 precedence: poison error verbatim
     // BEFORE admission-closed; ring availability is construction-time
     // immutable state — read under dispatch_mtx_ on the Stage-0 admission
     // path, and elsewhere (e.g. wait_source) read lock-free relying on that
-    // immutability plus the quiescent-lifetime guarantee, P0-B/D4-RM1) and
+    // immutability plus the quiescent-lifetime guarantee, D4-RM1) and
     // the native-length scratch normalization (op.len is validated <=
     // UINT_MAX at Stage 1.5, so the dispatch fill uses prep.native_length
-    // directly). The C2d stage-injection harness is ThreadPool-only (this
-    // backend probes the same windows through its D3/D4 pause seams).
+    // directly). The stage-injection harness is ThreadPool-only (this
+    // backend probes the same windows through its own pause seams).
     template <class Op, class Comp>
     struct SubmitPolicy {
         using completion_type = Comp;
@@ -454,7 +454,7 @@ class UringAsyncBackend : public AsyncBackend {
         }
         // --- production hooks ---
         Result<void> stage0_precheck() const noexcept {
-            // Stage 0 (accepted #157 review — hook-internal order
+            // Stage 0 (hook-internal order
             // ring -> poison -> admission): the single authority for
             // every Uring pre-reserve rejection, running under the
             // caller-held dispatch_mtx_.
@@ -475,7 +475,7 @@ class UringAsyncBackend : public AsyncBackend {
             // read ONLY under dispatch_mtx_ — the SAME lock
             // close_admission() and poison_and_recover_locked() write
             // under. There is deliberately NO unlocked fast-path read
-            // of these fields (P0-B; D4-RM1): both are written under
+            // of these fields (D4-RM1): both are written under
             // this mutex, so an unlocked read would be a C++ data race
             // on the exact submit-vs-close arbitration D4 supports.
             if (self_.fatal_error_.has_value()) {
@@ -544,7 +544,7 @@ class UringAsyncBackend : public AsyncBackend {
     // Acquires dispatch_mtx_. Returns false if the request could not be
     // dispatched this pass (SQ full / fatal); true if it became ring-owned.
     bool dispatch_one(detail::SlotHandle h) noexcept;
-    // P0-A peek protocol: assumes dispatch_mtx_ is held AND h == dispatch_
+    // Peek protocol: assumes dispatch_mtx_ is held AND h == dispatch_
     // ->front(). The caller peeks the front and does NOT remove it before this
     // call; on a successful transfer this function removes h exactly once via
     // dispatch_->remove_exact(h) (a miss is an invariant violation -> fail-fast).
@@ -570,7 +570,7 @@ class UringAsyncBackend : public AsyncBackend {
 
     // Classify a submit/submit-and-wait result while dispatch_mtx_ is held.
     // `had_pending_transport` distinguishes a submission failure (eligible for
-    // the D1 zero-consumption theorem) from a pure wait error with to_submit=0.
+    // the zero-consumption theorem) from a pure wait error with to_submit=0.
     void account_transport_result_locked(int rc, bool had_pending_transport) noexcept;
 
     // Consume the proven-zero-consumption theorem after a permanent negative
@@ -646,9 +646,9 @@ class UringAsyncBackend : public AsyncBackend {
     void wait_before_admission_lock_pause_() noexcept;
 #endif
 
-    // Wake the ready domain (Phase D4). Advances the split-phase wait source's
+    // Wake the ready domain. Advances the split-phase wait source's
     // progress epoch and wakes every parked participant AFTER real readiness
-    // is published (I4: state first, then notify). No-op when no wait source
+    // is published (state first, then notify). No-op when no wait source
     // exists (stub / no ring / eventfd unavailable).
     void signal_ready_progress() noexcept {
         if (wait_source_) {
@@ -670,7 +670,7 @@ class UringAsyncBackend : public AsyncBackend {
     // internal-testing transport hooks). One ring per backend (ADR Decision 18).
     std::unique_ptr<UringRingState> ring_state_;
     std::unique_ptr<TransportLedger> transport_ledger_;
-    // Phase D4 split-phase readiness wait (observe-only). Created when the
+    // Split-phase readiness wait (observe-only). Created when the
     // ring initializes; null only in stub mode / ring-init failure (no ring —
     // wait_source() then returns nullptr, the base default). eventfd
     // construction failure THROWS from the ring-init try block (ring torn
@@ -682,11 +682,11 @@ class UringAsyncBackend : public AsyncBackend {
 
     // Backend dispatch domain: local dispatch ring + dispatch/cancel
     // arbitration + cookie/router installation and cancel-side lookup/scratch
-    // mutation. CQE lookup/retirement is serialized by D1's documented
+    // mutation. CQE lookup/retirement is serialized by the documented
     // AsyncIoContext single-driver call domain and intentionally does not take
     // this mutex before arena.record_terminal(). Lock order:
     // dispatch_mtx_ -> arena leaf only — the ready-wait mutex is a LEAF domain
-    // and is NEVER acquired while holding dispatch_mtx_ (D4-RM14 / P1-3:
+    // and is NEVER acquired while holding dispatch_mtx_ (D4-RM14:
     // signal_ready_progress() is called only after dispatch_mtx_ is released —
     // state first, then wake). io_uring_submit() (syscall) is transport
     // progress and may be called under dispatch_mtx_ but NEVER under the

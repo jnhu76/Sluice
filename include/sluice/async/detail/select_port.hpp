@@ -5,7 +5,8 @@
 // TimerArmPayload, and SelectPort. These are detail types, not part of
 // the public API.
 //
-// See docs/e13-select-type-and-lifetime.md for the full property sheet.
+// See docs/architecture/async-synchronization.md for the Select authority
+// overview.
 #pragma once
 
 #include <atomic>
@@ -202,16 +203,15 @@ public:
 private:
     friend class ::sluice::async::Scheduler;
 
-    // P6: the group-owned result slot (docs/e13-select-locking-and-publication.md
-    // §6 / task §6). The group lives on the suspended caller Fiber's stack, so
-    // the result remains valid while the Fiber is waiting. Default: no winner
-    // (SelectResult's default ctor). Written EXACTLY ONCE by
+    // The group-owned result slot. The group lives on the suspended caller
+    // Fiber's stack, so the result remains valid while the Fiber is waiting.
+    // Default: no winner (SelectResult's default ctor). Written EXACTLY ONCE by
     // Scheduler::select_publish_locked under global_mtx_; losers never write it.
     // Read by the resumed caller under global_mtx_ before phase -> Consumed.
     SelectResult result_{};
 
-    // THE single winner linearization point (docs/e13-select-locking-and-
-    // publication.md §1.5, docs/e13-select-formal-production-mapping.md §4).
+    // THE single winner linearization point (modeled by the central-claim
+    // model in spec/tla/e13_select).
     // CAS winner_ kNoWinner -> arm_index, relaxed/relaxed. Synchronization of
     // the surrounding arm-state visibility is provided by global_mtx_, NOT by
     // the CAS memory order (arm finalization happens AFTER the CAS, so a release

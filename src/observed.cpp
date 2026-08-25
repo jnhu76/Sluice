@@ -25,7 +25,7 @@ Result<std::size_t> ObservedReader::read_vec(std::span<IoSlice> dsts) {
     // fallback call, since this layer observes the default-fallback path. The
     // real (non-fallback) readv path is measured by FileReader's own
     // VectorStats; do not wrap a FileReader here for vec stats (it carries its
-    // own). See docs/readv-writev-design-note.md.
+    // own). See docs/reference/sync-io-model.md (Vector I/O semantics).
     auto r = inner_.read_vec(dsts);
     if (vec_stats_) {
         ++vec_stats_->read_vec_calls;

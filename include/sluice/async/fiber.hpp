@@ -1,12 +1,12 @@
-// sluice::async::Fiber — minimal task/fiber state model (sluice-CORE-E1).
+// sluice::async::Fiber — minimal task/fiber state model.
 //
-// Source-derived from Zig std.Io Uring.Fiber (Io/Uring.zig:149-248) and the E0
-// ADR (docs/adr/ADR-execution-model.md §9 E4 cycle). This is the STATE model
-// only — the context-switch (E2) and the scheduler (E4+) come later. A Fiber
-// here is the unit of a user task: its state machine, its cancel state, and a
-// slot for the context (filled by E2).
+// Source-derived from Zig std.Io Uring.Fiber (Io/Uring.zig:149-248) and the
+// execution-model ADR (docs/adr/ADR-execution-model.md §9 task cycle). This
+// is the STATE model only — the context switch lives in fiber_ctx and the
+// scheduler drives it. A Fiber here is the unit of a user task: its state
+// machine, its cancel state, and a slot for the context.
 //
-// The E4 single-worker state-transition proof (the load-bearing cycle):
+// The single-worker state-transition proof (the load-bearing cycle):
 //   running task -> submit op -> waiting -> switch to scheduler -> run another
 //   task -> backend completion -> waiting task runnable -> scheduler selects ->
 //   resume at the original call site.
@@ -16,9 +16,9 @@
 // a fiber is on the ready_queue (runnable), being executed (running), waiting
 // for a completion (waiting), or finished (done). Terminal is absorbing.
 //
-// Layering: ABOVE Future/Group/Batch + WaitPolicy. The Evented scheduler (E4+)
-// drives Fibers through this state machine. No asm yet (E2). No scheduler yet
-// (the seam is here; the driver comes in E4).
+// Layering: ABOVE Future/Group/Batch + WaitPolicy. The Evented scheduler
+// drives Fibers through this state machine. The context-switch asm lives in
+// fiber_ctx; this header holds only the state seam.
 #pragma once
 
 #include <sluice/async/cancel.hpp>
@@ -32,7 +32,7 @@
 
 namespace sluice::async {
 
-// The task lifecycle. Mirrors the E4 cycle and Zig's queue membership:
+// The task lifecycle. Mirrors the scheduler cycle and Zig's queue membership:
 //   created -> runnable (queued) -> running (a worker executes the entry fn)
 //         -> waiting (suspended on a completion/op) -> runnable (requeued on
 //   completion) -> ... -> done (terminal, absorbing).
@@ -45,7 +45,7 @@ enum class FiberState : std::uint8_t {
     done,       // terminal; result published; never scheduled again
 };
 
-// Phase F1 P1-1 (issue #98, PR #105 review): frozen wait-outcome carrier.
+// Frozen wait-outcome carrier (issue #98).
 // The winning path (reap drain or cancel_waiter) writes the outcome BEFORE
 // calling make_runnable; the fiber reads it AFTER resume. This eliminates the
 // race where c.ready() may return true even though cancel won the arena race
@@ -58,16 +58,16 @@ enum class CompletionWaitOutcome : std::uint8_t {
 
 // A minimal user task: state + entry + cancel state + a context slot.
 //
-// The entry function is the task body. On a real scheduler (E4), a worker
+// The entry function is the task body. On the scheduler, a worker
 // calls entry() when the fiber is runnable; entry() runs the task body, which
 // may suspend (transition to waiting) at a cancel/await point and be resumed
-// later. For E1 (no scheduler yet), entry() can be invoked directly to test
-// the state machine; the context switch + real suspension land in E2/E4.
+// later. entry() can also be invoked directly to test the state machine;
+// real suspension goes through context_switch under the scheduler.
 //
-// Lifetime: owned by the scheduler/task layer (E4). Not copyable (identity
-// matters — the context is address-stable). Movable only if no context yet
-// (before E2 wires the context). For E1 we make it non-movable to keep the
-// future context slot address-stable by construction.
+// Lifetime: owned by the scheduler/task layer. Not copyable (identity
+// matters — the context is address-stable). Non-movable by design so the
+// context slot stays address-stable by construction for the fiber's whole
+// lifetime.
 class Fiber {
 public:
     using Entry = std::function<void(Fiber&)>;
@@ -88,33 +88,33 @@ public:
 
     // Transition to runnable. Lawful from: created, waiting. No-op from
     // runnable/running. Forbidden from done (terminal is absorbing). Called by
-    // the scheduler when queueing, or by a completion handler (E4) waking a
+    // the scheduler when queueing, or by a completion handler waking a
     // waiting fiber.
     //
     // Returns true ONLY when the transition actually occurred (created->runnable
     // or waiting->runnable). Returns false if the fiber was already runnable,
-    // running, or done. This is the exactly-once-publication invariant (E7-T2):
+    // running, or done. This is the exactly-once publication invariant:
     // the caller may publish AT MOST ONE runnable ticket, and only when this
     // returns true. A false return MUST NOT be followed by an enqueue — that
     // would create a duplicate live ticket.
     bool make_runnable() noexcept;
 
     // Transition to running. Lawful from: runnable only. Called by the worker
-    // (E4) when it picks the fiber off the ready queue.
+    // when it picks the fiber off the ready queue.
     //
     // Returns true ONLY when the transition actually occurred (runnable->running).
     // Returns false if the fiber was NOT runnable (e.g. already running, done,
     // or still waiting). The caller MUST check this return value: a false return
     // means the ticket is invalid and the Scheduler MUST fail-fast before
-    // entering the Fiber context (I47-F3: invalid runnable-ticket guard).
+    // entering the Fiber context (invalid runnable-ticket guard).
     bool make_running() noexcept;
 
     // Transition to waiting. Lawful from: running only. Called by the fiber's
-    // own entry (E4) when it suspends at an await/cancel point.
+    // own entry when it suspends at an await/cancel point.
     //
     // Returns true ONLY when the transition actually occurred (running->waiting).
     // Returns false if the fiber was NOT running (a contract violation). The
-    // caller MUST check this return value and fail-fast on failure (I47-F2:
+    // caller MUST check this return value and fail-fast on failure (the
     // unified suspend authority protocol).
     bool make_waiting() noexcept;
 
@@ -128,12 +128,12 @@ public:
     const Entry& entry() const noexcept { return entry_; }
     void set_entry(Entry e) { entry_ = std::move(e); }
 
-    // The per-fiber cancel state (composes 027's CancelToken + a per-fiber
+    // The per-fiber cancel state (composes CancelToken + a per-fiber
     // CancelState). Mirrors Zig Fiber.cancel_status + cancel_protection.
     CancelToken& cancel_token() noexcept { return token_; }
     CancelState& cancel_state() noexcept { return cstate_; }
 
-    // ---- Execution-identity tag (E16 P0-1 / C2) ----
+    // ---- Execution-identity tag ----
     //
     // An opaque tag stored IN Fiber state (not thread_local). The Application
     // Runtime task wrapper sets this to `this` (the Runtime*) around user task
@@ -142,7 +142,7 @@ public:
     // suspend/resume and is correct under Fiber multiplexing (one OS worker
     // runs many Fibers; a TLS guard does not follow Fiber context switches).
     //
-    // Authority (C2): the tag is READ-public (narrow introspection) but the
+    // Authority: the tag is READ-public (narrow introspection) but the
     // WRITE path is private. Only the Scheduler may set it (via its private
     // set_current_fiber_execution_tag, in turn callable only by
     // ApplicationRuntime). This prevents ordinary application task code from
@@ -150,7 +150,7 @@ public:
     // is_runtime_task() self-close detection. Do NOT add a public setter.
     void* execution_tag() const noexcept { return execution_tag_; }
 
-    // Phase F1 P1-1: read the frozen wait-outcome after resume. The winner
+    // Read the frozen wait-outcome after resume. The winner
     // (drain or cancel_waiter) wrote this BEFORE make_runnable; the fiber reads
     // it AFTER context_switch returns. This replaces the racy c.ready() check.
     CompletionWaitOutcome completion_wait_outcome() const noexcept {
@@ -158,10 +158,10 @@ public:
     }
 
 private:
-    friend class Scheduler;  // C2: sole write authority for execution_tag_.
+    friend class Scheduler;  // sole write authority for execution_tag_.
     void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
 
-    // Phase F1 P1-1: sole write authority for the frozen wait-outcome.
+    // Sole write authority for the frozen wait-outcome.
     // Written by the Scheduler's winning path (drain or cancel_waiter) BEFORE
     // make_runnable; read by the fiber after resume. Never written by user code.
     void set_completion_wait_outcome(CompletionWaitOutcome o) noexcept {
@@ -177,11 +177,11 @@ private:
 public:
     // The fiber's saved CPU context (sp/fp/pc). Filled by fiber_ctx::init_context
     // before the first run; updated by context_switch each time the fiber
-    // suspends. Public so the Scheduler (E4) can read/write it without friending.
+    // suspends. Public so the Scheduler can read/write it without friending.
     // Address-stable for the fiber's lifetime (Fiber is non-movable).
     fiber_ctx::Context ctx{};
 private:
-    // (context_storage_ removed in E4: superseded by the typed ctx above.)
+    // (context storage is the typed ctx above; no separate raw member.)
 };
 
 }  // namespace sluice::async

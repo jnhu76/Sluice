@@ -1,11 +1,11 @@
-// sluice::async::Event — persistent manual-reset async Event (sluice-CORE-E12-A).
+// sluice::async::Event — persistent manual-reset async Event.
 //
 // The first user-facing asynchronous synchronization primitive built on the
 // closed E10/E11 wait substrate. A manual-reset Event composes:
 //
 //   - a persistent std::atomic<bool> set_ (the level/persistence property,
 //     borrowed from the ready-flag substrate's IDEA but not its single-
-//     registrant MECHANISM — see docs/e12-sync-primitives-plan.md §2.2)
+//     registrant MECHANISM — see docs/architecture/async-synchronization.md)
 //   - an E10 WaitQueue (which holds many waiters in an intrusive FIFO list)
 //     for the blocking path
 //
@@ -13,7 +13,7 @@
 // private timer, WITHOUT an Event-private cancellation winner, and WITHOUT
 // direct Fiber manipulation or runnable enqueue.
 //
-// Semantic model (docs/e12-event.md):
+// Semantic model (docs/architecture/async-synchronization.md § Event):
 //
 //   UNSET ──set()──> SET
 //    SET ──reset()──> UNSET
@@ -33,7 +33,7 @@
 // admission can run. No generation counter or snapshot is needed.
 //
 // SEALED PUBLIC AUTHORITY (ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1 +
-// E12-A-EVENT-CORRECTIVE-1 F-EVENT-AUTH). The Event's private WaitQueue is NOT
+// F-EVENT-AUTH). The Event's private WaitQueue is NOT
 // publicly reachable: there is no wait_queue() accessor on the production-
 // public surface, and no test friend grants access to it. The ONLY Event-
 // specific RESOURCE_WAKE authorities are set() and admission observing SET.
@@ -116,7 +116,7 @@ public:
     // currently registered Event wait epoch. Idempotent: set() on SET is a
     // no-op (no extra wake). Safe to call from an external OS thread. Each
     // winner is an independent resolve_(Woken) CAS + runnable publication.
-    // P2: also performs Phase-1 Select scan inside the same global_mtx_ CS.
+    // Also performs the Select scan inside the same global_mtx_ CS.
     void set() {
         scheduler_.event_set_broadcast(*this);
     }
@@ -146,7 +146,7 @@ public:
     //   - cancel_wait(q, node)    -> Cancelled (CANCEL)
     //   - deadline elapsing       -> Expired  (TIMER_EXPIRE)
     // If SET at admission, resolves Woken inline (no suspend). If the deadline
-    // is already due at admission (and not SET), resolves Expired inline (E11 I5).
+    // is already due at admission (and not SET), resolves Expired inline (E11).
     //
     // Deadline precedence (F-EVENT-DEADLINE, normative): during Event deadline
     // admission, Event SET readiness is checked BEFORE the already-due deadline
@@ -160,11 +160,11 @@ public:
         scheduler_.await_event_wait_deadline(waiters_, set_, node, deadline);
     }
 
-    // Narrow per-wait-epoch CANCELLATION authority (E12-A-EVENT-CORRECTIVE-2).
+    // Narrow per-wait-epoch CANCELLATION authority.
     // Resolves `node` with Cancelled through the Scheduler's cancellation path on
     // THIS Event's private WaitQueue, WITHOUT exposing that queue.
     //
-    // Contract (Corrective C — returns true ONLY if ALL hold):
+    // Contract (returns true ONLY if ALL hold):
     //   - node is currently Registered, AND
     //   - node is currently linked in THIS Event's private WaitQueue, AND
     //   - CANCEL wins node.resolve_(Cancelled).

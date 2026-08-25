@@ -1,5 +1,5 @@
 // sluice::async::AsyncCondition — Fiber-suspending async condition variable
-// (sluice-CORE-E12-D).
+// (E12-D).
 //
 // The fourth user-facing async synchronization primitive built on the closed
 // E10/E11/E12-A/E12-B/E12-C wait substrate. An AsyncCondition is bound to
@@ -14,8 +14,8 @@
 //   - std::atomic_size_t active_waits_  (lifetime diagnostic; debug-asserted
 //                                zero in the destructor)
 //
-// Two-epoch protocol (docs/e12-condition.md §3). Every wait() creates TWO
-// sequential single-wait epochs, NEVER a multi-wait:
+// Two-epoch protocol (docs/architecture/async-synchronization.md § AsyncCondition).
+// Every wait() creates TWO sequential single-wait epochs, NEVER a multi-wait:
 //
 //   Condition epoch  : the caller-supplied Condition WaitNode is registered in
 //                      this AsyncCondition's private waiters_ (the Condition

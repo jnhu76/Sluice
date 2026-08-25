@@ -1,4 +1,4 @@
-// Production BlockingIoPool non-template core (sluice-CORE-024S).
+// Production BlockingIoPool non-template core.
 // Pure C++17/20: std primitives only. No C runtime mixing.
 #include <sluice/blocking_io_pool.hpp>
 #include <sluice/detail/blocking_io_pool_impl.hpp>

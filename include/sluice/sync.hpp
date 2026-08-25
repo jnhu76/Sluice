@@ -1,15 +1,15 @@
 // sluice::SyncableWriter — opt-in capability interface for explicit OS-level
-// persistence of already-written file data (CPPIO-CORE-008B). This is the sync
+// persistence of already-written file data. This is the sync
 // counterpart to the drain-style Writer::flush(): flush moves user-space
 // buffered bytes down the stack, sync asks the OS to persist them. The two are
 // deliberately separate — flush never calls sync — so callers cannot
 // accidentally believe drained bytes are durable. See
-// docs/flush-sync-durability.md.
+// docs/architecture/sync-durability-model.md.
 //
 // It is a separate mixin interface (like BufferedReadable), not a virtual on
 // the Writer base class, so writers with no sync concept (MemoryWriter,
 // BufferedWriter, FaultWriter, ...) carry zero overhead and no dead virtuals.
-// Detection is a dynamic_cast (see WalWriter, 008E).
+// Detection is a dynamic_cast (see WalWriter).
 #pragma once
 
 #include <sluice/result.hpp>

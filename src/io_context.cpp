@@ -1,4 +1,4 @@
-// BlockingIoContext implementation (CPPIO-CORE-009C). Wraps FileReader/
+// BlockingIoContext implementation. Wraps FileReader/
 // FileWriter construction and surfaces open errors at open time.
 #include <sluice/io_context.hpp>
 #include <sluice/file.hpp>

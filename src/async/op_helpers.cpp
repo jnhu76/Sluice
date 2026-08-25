@@ -1,4 +1,4 @@
-// Implementation of the async "all" helpers (sluice-CORE-018). These block the
+// Implementation of the async "all" helpers. These block the
 // caller in a poll-loop driving one internal Completion until the full buffer
 // transfers or an error occurs. Mirrors blocking read_exact/write_all.
 #include <sluice/async/op_helpers.hpp>
@@ -40,7 +40,7 @@ Result<std::size_t> read_all(AsyncIoContext& ctx, int fd,
         if (!r.has_value()) return r;  // error propagates immediately
         std::size_t got = r.value();
         if (got == 0) {
-            // EOF before dst full — partial progress or not, it's eof (E4).
+            // EOF before dst full — partial progress or not, it's eof.
             // Zero bytes on non-empty remaining input is EOF here (backend EOF),
             // not invalid_state (that's for write_all).
             return make_unexpected<std::size_t>(IoError{IoError::Code::eof});

@@ -1,7 +1,6 @@
 // detail::submit_transaction — the ONE pre-accept submission ladder shared
-// by every in-repo explicit-I/O backend (issue #137; accepted design
-// docs/architecture/issue-137-submission-transaction-design.md, independent
-// review issue #137 issuecomment-5357295925).
+// by every in-repo explicit-I/O backend (accepted design:
+// docs/architecture/issue-137-submission-transaction-design.md).
 //
 // Authority (AGENTS.md §4): this function owns ONLY the correctness-critical
 // pre-accept ladder —
@@ -22,7 +21,7 @@
 //   injected/commit fail  -> rollback_binding FIRST (binding -> idle), THEN
 //                            rollback_reserved_or_prepared; return error
 //   — after commit_binding NO failure representation exists: the function
-//     contains no rejection return past the LP (I9); an accidental throw
+//     contains no rejection return past the LP; an accidental throw
 //     hits the noexcept boundary and terminates (fail-fast), never a
 //     rejection-after-accept.
 //
@@ -39,8 +38,8 @@
 // (backend execution ownership, unchanged).
 //
 // Policy contract (per backend; nested in the backend class so the binding
-// trio reaches the protected AsyncBackend statics). Surface budget accepted
-// by review (mechanically countable; any addition requires re-review):
+// trio reaches the protected AsyncBackend statics). Surface budget
+// (mechanically countable; any addition requires re-review):
 //
 //   4 argument/data adapters    (kind, borrow, requested_bytes, publish_thunk)
 //   4 Completion-binding adapters (begin_binding, install_binding,
@@ -100,8 +99,8 @@ Result<SlotHandle> submit_transaction(RequestArena& arena,
                                       Policy& policy) noexcept {
     // Stage 0: backend ring/poison/admission gate, under the CALLER's
     // admission discipline (the hook may assume it). Uring returns its
-    // ring, poison, and admission errors verbatim BEFORE reserve (D4-M5
-    // precedence, hook-internal order ring -> poison -> admission); the
+    // ring, poison, and admission errors verbatim BEFORE reserve
+    // (hook-internal precedence: ring -> poison -> admission); the
     // reference and ThreadPool policies are trivial ok. The shared
     // function never assumes a healthy backend: health is a policy
     // question.
@@ -142,7 +141,7 @@ Result<SlotHandle> submit_transaction(RequestArena& arena,
     }
 #endif
     // Stage 2: prepare (op kind + fd/buffer borrow metadata; borrowing
-    // begins at commit, not here — I7).
+    // begins at commit, not here).
     if (auto ph = arena.prepare(h, policy.kind(), policy.borrow(op));
         !ph.has_value()) {
         (void)arena.rollback_reserved_or_prepared(h);
@@ -193,7 +192,7 @@ Result<SlotHandle> submit_transaction(RequestArena& arena,
         (void)ch; // arena error consumed — invalid_state is the contract
         return make_unexpected<SlotHandle>(IoError{IoError::Code::invalid_state});
     }
-    // Deterministic causal seam (C2e/DIV): between the arena commit and the
+    // Deterministic causal seam: between the arena commit and the
     // binding->outstanding release-store. Bodies are guarded inside the
     // policies; production policies compile an empty inline.
     policy.pause_before_commit_binding();

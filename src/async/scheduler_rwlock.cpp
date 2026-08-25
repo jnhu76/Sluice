@@ -1,9 +1,8 @@
-// Scheduler RwLock primitive — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler RwLock primitive — implementation TU split from scheduler.cpp
+// (docs/post-freeze/structural-audit.md §6).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
-// and wake contracts remain in include/sluice/async/scheduler.hpp.
+// The class declaration, lock domains, atomic orderings, and wake contracts
+// remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -54,7 +53,7 @@ bool Scheduler::rwlock_claim_node_woken_locked(WaitQueue& waiters,
     bool won = waiters.wake_node_locked(node);
     if (!won) {
         // Under continuous G + W, a valid linked eligible node CANNOT lose its
-        // CAS (E10 Unlink Law: terminal transition + unlink occur in the same
+        // CAS (Unlink Law: terminal transition + unlink occur in the same
         // CS; a linked node is therefore Registered and resolvable). A loss
         // here is internal corruption — Category B fail-fast (debug assert +
         // deterministic Release abort). Do NOT silently treat as success.
@@ -182,8 +181,8 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
         }
     }  // W released here
 
-    // Publication under G (W already released). Owner lookup is the I47-F1
-    // authoritative owner_for_fiber_locked (audit #162 CPP-001: the former
+    // Publication under G (W already released). Owner lookup is the
+    // authoritative owner_for_fiber_locked (the former
     // fiber_owner_.find + g_worker fallback duplicated the lookup discipline
     // every other primitive fail-fasts through; fiber_owner_ is never erased,
     // so a missing entry is a Scheduler invariant violation, not a state to
@@ -236,7 +235,7 @@ void Scheduler::rwlock_read_lock(WaitQueue& waiters,
         LockGuard qlk(waiters.mtx());
         if (!waiters.register_wait_locked(node, me)) {
             node.set_user(nullptr);
-            return;  // C8 contract violation
+            return;  // registration contract violation
         }
         ++waiting_waitq_count_;
 
@@ -249,9 +248,8 @@ void Scheduler::rwlock_read_lock(WaitQueue& waiters,
         // ownership). If the queue head were a writer admissible at this
         // instant, the helper would have to commit writer_active +
         // writer_owner — a write-side authority this path has no right to
-        // perform. (Per docs/e12-rwlock.md §"Queued path (read_lock)", grant
-        // is exclusively head-driven and writer ownership is committed only by
-        // the writer-grant authority.)
+        // perform. (Grant is exclusively head-driven and writer ownership
+        // is committed only by the writer-grant authority.)
         //
         // Equivalent authority is preserved by the following invariant: when a
         // reader registers and becomes the queue head, an earlier-registered
@@ -425,8 +423,8 @@ bool Scheduler::rwlock_cancel(WaitQueue& waiters,
         if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
         retire_timer_for_node_locked(node);
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-        // Capture publication data for the cancel winner (I47-F1
-        // authoritative owner lookup; see the grant-path note).
+        // Capture publication data for the cancel winner (authoritative
+        // owner lookup; see the grant-path note).
         cancel_fiber = node.fiber();
         if (cancel_fiber != nullptr) {
             cancel_owner = owner_for_fiber_locked(cancel_fiber);
@@ -460,7 +458,7 @@ bool Scheduler::rwlock_expire_wait(WaitQueue& waiters,
         if (!waiters.expire_locked(node)) return false;  // lost to grant/cancel
         // Timer already CONSUMED by pump. Update accounting.
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-        // Capture publication data (I47-F1 authoritative owner lookup; see
+        // Capture publication data (authoritative owner lookup; see
         // the grant-path note).
         exp_fiber = node.fiber();
         if (exp_fiber != nullptr) {
@@ -527,7 +525,7 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
             }
         }
 
-        // Admission precedence 2: already-due deadline (E11 I5).
+        // Admission precedence 2: already-due deadline.
         // Gate the timer-accounting cleanup on a successful try_claim_expiry():
         // expire_locked won the resolve CAS, but the bound timer is still
         // ACTIVE until claimed. If the claim somehow fails (should be
@@ -544,8 +542,7 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
                 node.set_user(nullptr);
                 // The current Fiber is RUNNING (never called make_waiting());
                 // it continues inline. No runnable publication is needed and
-                // make_runnable would be a no-op from running (audit #162
-                // CPP-002 removed the dead call).
+                // make_runnable would be a no-op from running.
                 return;
             }
         }
@@ -630,7 +627,7 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
                 // Same as read_lock_until: the Fiber is RUNNING and continues
-                // inline; no publication (audit #162 CPP-002).
+                // inline; no publication.
                 return;
             }
         }

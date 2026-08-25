@@ -7,15 +7,14 @@
 // slot/backend lock. The contract is noexcept, allocation-independent, and must
 // not retain the event reference.
 //
-// CURRENT TRUTH (2026-08-13 corrective pass): the name "Reference" and the
-// original "reference backends only" wording are historical. Since Phase E
-// (ThreadPool) and Phase D (Uring) migrated every production backend onto the
-// unified RequestArena lifecycle, ALL four backends hold a
-// `detail::ReferenceReadySink` — it is the temporary stateless no-op ReadySink
-// for RequestArena-backed production reap paths until Phase F installs a
-// Scheduler-owned routing sink (ADR Decision 10 :674-676). Its on_ready
-// therefore proves the by-value transfer and exactly-once mechanics without
-// side effects; the ReadySink contract here is what Phase F must satisfy.
+// The name "Reference" is historical: ALL four production backends hold a
+// `detail::ReferenceReadySink` as their internal default reap sink on the
+// unified RequestArena lifecycle. It is the stateless no-op ReadySink for
+// RequestArena-backed production reap paths; a Scheduler-owned routing sink
+// can be attached per backend (AsyncBackend::attach_ready_sink) and then
+// receives the by-value events instead (ADR Decision 10 :674-676). Its
+// on_ready therefore proves the by-value transfer and exactly-once mechanics
+// without side effects.
 //
 // This is a header-only detail (not installed beyond the async surface). A
 // rename to e.g. `NoopReadySink` is deferred to avoid churn; the class name is
@@ -30,14 +29,15 @@ namespace sluice::async::detail {
 
 // No-op SynchronousReadySink for the RequestArena-backed production backends
 // (Fake, Sync, ThreadPool, Uring). The sink is STATELESS: on_ready does nothing
-// (there is no Scheduler routing record to update until Phase F). The delivery
+// (this no-op holds no Scheduler routing record; the Scheduler-owned sink is
+// attached separately). The delivery
 // counter exists ONLY for
 // test assertions of exactly-once publication, so it is guarded by
-// SLUICE_ASYNC_INTERNAL_TESTING (CodeRabbit finding: keep test-only delivery
+// SLUICE_ASYNC_INTERNAL_TESTING (keep test-only delivery
 // accounting out of the production sink — AGENTS.md §8). Production builds
 // therefore carry no counter field and no exported test surface.
 //
-// C2c: the guarded observation additionally records the LAST delivered event's
+// The guarded observation additionally records the LAST delivered event's
 // waiter payload (has_waiter, token, lease id) as plain by-value scalars — a
 // FIXED-SIZE, allocation-free, test-only observation (AGENTS.md §12: no
 // long-lived per-delivery storage, no heap history). The lease itself is NOT

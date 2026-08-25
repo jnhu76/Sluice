@@ -27,7 +27,7 @@ Result<void> Writer::write_all(std::span<const std::byte> src) {
 }
 
 // Default vector fallback: drive each non-empty slice through write_some in
-// order. A conservative writev-style primitive (CPPIO-CORE-005B): it STOPS
+// order. A conservative writev-style primitive: it STOPS
 // after the first short write (returns the partial total) or on the first
 // error (propagated immediately, even after progress — consistent with
 // write_all). This is NOT write_all over slices; write_all_vec is the

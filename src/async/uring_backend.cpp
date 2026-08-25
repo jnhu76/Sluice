@@ -1,6 +1,6 @@
-// Implementation of UringAsyncBackend (sluice-CORE-020B).
+// Implementation of UringAsyncBackend.
 //
-// Phase D1: migrated onto the bounded RequestArena / RequestSlot lifecycle
+// Migrated onto the bounded RequestArena / RequestSlot lifecycle
 // with a PRIVATE io_uring ring per backend instance (ADR Decision 18 — Uring
 // execution-ownership amendment). See
 // docs/architecture/phase-d1-uring-frozen-design.md.
@@ -116,9 +116,9 @@ bool UringAsyncBackend::available() const noexcept {
 #else // SLUICE_HAS_LIBURING --------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Real io_uring path — Phase D1 private-ring / ring-owned RequestArena model.
+// Real io_uring path — private-ring / ring-owned RequestArena model.
 //
-// Identity (P0-B): SQE.user_data = a 64-bit op_cookie (operation) or the
+// Identity: SQE.user_data = a 64-bit op_cookie (operation) or the
 // high-bit-tagged target cookie (cancel). The op_cookie is allocated from a
 // no-wrap 64-bit counter and is NEVER reused within backend lifetime. The
 // CqeRouter is keyed by cookie VALUE: a CQE carries a cookie, we scan the
@@ -128,7 +128,7 @@ bool UringAsyncBackend::available() const noexcept {
 // was retired) matches no live entry and is dropped — the ABA window that
 // existed when user_data carried router_slot+1 (which recycled) is closed.
 //
-// Dispatch (P0-A + P0-C): under ONE dispatch_mtx_ critical section, peek the
+// Dispatch: under ONE dispatch_mtx_ critical section, peek the
 // dispatch-queue front, obtain an SQE, fill it, set_data64(cookie), install
 // the router entry, mark_running(h) (MUST succeed — the lock discipline means
 // no cancel can have terminalized h first), and remove_exact(h) (MUST
@@ -277,7 +277,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
 };
 
 // ---------------------------------------------------------------------------
-// Bounded physical transport ledger (P0-D).
+// Bounded physical transport ledger.
 //
 // The ledger contains exactly the SQEs obtained via get_sqe() but not yet
 // confirmed consumed by a positive submit return. Its identity is a no-wrap
@@ -641,7 +641,7 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
         // Admission transaction domain: dispatch_mtx_ (one lock for
         // admission + dispatch on this backend). The shared ladder runs
         // under it; its first step is the policy's in-lock Stage-0
-        // ring/poison/admission gate (D4-M5 precedence preserved verbatim).
+        // ring/poison/admission gate (precedence preserved verbatim).
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         SubmitPolicy<Op, Completion<std::size_t>> policy{*this, kind};
         auto r = detail::submit_transaction(arena_, c, op, policy);
@@ -717,13 +717,13 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     {
         std::unique_lock<std::mutex> lk(dispatch_mtx_);
         // fatal_error_ is dispatch_mtx_-authority: read the before/after pair
-        // ONLY inside the lock (D4-RM16/P1-1 — no unlocked reads, the same
+        // ONLY inside the lock (no unlocked reads, the same
         // discipline as the Stage-0 admission check).
         const bool poisoned_before = fatal_error_.has_value();
         outcome = arena_.enqueue(h); // pending -> enqueued OR terminal_noop
         if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_->push_back(h);
-            // P0-A peek protocol: enqueue (push_back) and the best-effort
+            // Peek protocol: enqueue (push_back) and the best-effort
             // FIFO ownership transfers run under ONE dispatch_mtx_ critical
             // section. Always dispatch the current front: h is the newly
             // appended tail and an older request may already be queued after
@@ -755,7 +755,7 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
         }
         // terminal_noop: a pending cancel won first (Scheme B). No dispatch
         // linkage; that winner owns readiness.
-        // D4-RM16/RM17: a permanent transport failure during the
+        // A permanent transport failure during the
         // enqueue-dispatch loop retired the local queue / Class-A ledger to
         // backend-ready terminals under this lock. The before/after poison
         // pair is snapshotted HERE (inside dispatch_mtx_); the wake itself is
@@ -765,16 +765,16 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     if (outcome != detail::EnqueueOutcome::enqueued) {
         // terminal_noop: re-arm the ready condition so the wake is not lost
         // (ADR Decision 4 / I19). Done OUTSIDE the dispatch lock — it is a
-        // no-op seam in D1's single-driver model.
+        // no-op seam in the single-driver model.
         signal_ready_progress();
     }
-    // D4-RM16 (P1-3): a permanent transport failure during this enqueue-
+    // A permanent transport failure during this enqueue-
     // dispatch retired the local queue / Class-A ledger to backend-ready
     // terminals. No reap runs on this path (the caller is a submit, not a
     // poll), so the split-phase waiters must be woken HERE — but only after
     // dispatch_mtx_ is released (state first, then wake; the wait-source
     // mutex is a leaf never acquired under dispatch_mtx_ — frozen lock
-    // order). fatal_error_ was snapshotted under the lock above (P1-1), so
+    // order). fatal_error_ was snapshotted under the lock above, so
     // the before/after compare is exact.
     if (newly_poisoned) {
         signal_ready_progress();
@@ -789,7 +789,7 @@ bool UringAsyncBackend::dispatch_one(detail::SlotHandle h) noexcept {
     return dispatch_one_locked(h);
 }
 
-// The ownership-transfer transaction (frozen design §4 + P0-A/P0-B/P0-C).
+// The ownership-transfer transaction (frozen design §4).
 // Assumes dispatch_mtx_ is held AND h == dispatch_->front() (peek protocol).
 // Returns false if the request could not be dispatched this pass (SQ full /
 // fatal) — in that case h stays at the front of the dispatch queue and a later
@@ -861,7 +861,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     }
     // Kernel-visible identity = the unique op_cookie (integer user_data API).
     // The cookie is never reused, so a stale CQE cannot resolve through a
-    // recycled router ARRAY slot (P0-B ABA fix).
+    // recycled router ARRAY slot (the ABA fix).
     ::io_uring_sqe_set_data64(sqe, op_cookie);
     RouterEntry& route = router_[router_slot.value];
     route = RouterEntry{};
@@ -875,7 +875,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
 
     // mark_running: enqueued -> running (the ownership transfer). Under the
-    // P0-A discipline (enqueue + dispatch share ONE dispatch_mtx_ critical
+    // lock discipline (enqueue + dispatch share ONE dispatch_mtx_ critical
     // section; cancel takes the same lock), no cancel can terminalize h
     // between enqueue and this point. Therefore mark_running == false is an
     // invariant violation, not a legitimate cancel-won race — fail-fast. (We
@@ -887,7 +887,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         std::fflush(stderr);
         std::terminate();
     }
-    // Unlink from the local dispatch ring. P0-A peek protocol: h was the front
+    // Unlink from the local dispatch ring. Peek protocol: h was the front
     // entry under the held lock, so a successful transfer MUST retire it; a
     // miss is an invariant violation (fail-fast) rather than a silent skip.
     if (!dispatch_->remove_exact(h)) {
@@ -905,7 +905,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
 }
 
 // ---------------------------------------------------------------------------
-// Transport progress and P0-D recovery. submit itself remains transport-only;
+// Transport progress and ledger recovery. submit itself remains transport-only;
 // the separate recovery controller consumes the zero-consumption proof.
 // ---------------------------------------------------------------------------
 
@@ -971,7 +971,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
 
     // The syscall is still not terminal authority. The separate controller
     // below consumes the Linux-6.1/liburing-2.14 theorem: permanent negative
-    // return + frozen D1 topology => zero entries from this ledger were
+    // return + the frozen-design topology => zero entries from this ledger were
     // consumed, hence every retained entry is execution-impossible Class-A.
     poison_and_recover_locked(IoError{IoError::Code::backend_error, err});
 }
@@ -1046,7 +1046,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         cancel_scratch_[local.slot.value].cancel_queued = false;
         bump(stats_, &AsyncStats::completion_errors);
     }
-    // NOTE (D4-RM16 / P1-3): NO wake here. poison_and_recover_locked always
+    // NOTE: NO wake here. poison_and_recover_locked always
     // runs under dispatch_mtx_, and the wait-source mutex is a LEAF domain
     // that must never be acquired while holding dispatch_mtx_ (frozen lock
     // order: access_mtx_ -> dispatch_mtx_ -> arena leaf -> wait-source mtx_).
@@ -1058,7 +1058,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
 }
 
 // ---------------------------------------------------------------------------
-// Cookie allocator (P0-B). The operation-cookie domain is [1, 2^63-1]; 0 is
+// Cookie allocator. The operation-cookie domain is [1, 2^63-1]; 0 is
 // unused and the high bit is reserved for tagged control identities. The
 // counter never enters the control range, mirroring RequestArena generation
 // no-wrap discipline. Because the cookie is never reused, a stale
@@ -1188,7 +1188,7 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     }
     if (user_data == 0)
         return; // never emitted by this backend; harmless unknown value
-    // Operation CQE: route by COOKIE VALUE (P0-B). A bounded O(request_capacity)
+    // Operation CQE: route by COOKIE VALUE. A bounded O(request_capacity)
     // scan of the fixed router finds the LIVE entry whose cookie matches. If no
     // live entry matches, this is a STALE cookie (its entry was retired and the
     // array slot may have been reused by a different cookie) — drop it. This is
@@ -1246,7 +1246,7 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
     while ((got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH)) > 0) {
         for (unsigned i = 0; i < got; ++i) {
             io_uring_cqe* cqe = cqes[i];
-            // Integer user_data API end-to-end (P1-64BIT-CQE): the SQE side
+            // Integer user_data API end-to-end: the SQE side
             // installs the op_cookie via io_uring_sqe_set_data64, so the CQE
             // side reads it via io_uring_cqe_get_data64. No pointer/uintptr_t
             // token round-trip — the kernel-visible identity is an integer at
@@ -1293,7 +1293,7 @@ std::size_t UringAsyncBackend::poll() {
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         if (!fatal_error_.has_value()) {
-            // P0-A peek protocol: the dispatch queue owns local execution. We PEEK
+            // Peek protocol: the dispatch queue owns local execution. We PEEK
             // the front, attempt the ownership transfer, and let the successful
             // transfer's remove_exact(h) retire the entry. On NULL SQE we BREAK
             // (ring-wide pressure: the next entry will not get an SQE either) and
@@ -1319,7 +1319,7 @@ std::size_t UringAsyncBackend::poll() {
     (void)reap_cqes();
     const std::size_t n =
         arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
-    // Phase D4 (I4: state first, then notify): after real readiness is
+    // State first, then notify: after real readiness is
     // published, advance the split-phase wait's progress epoch and wake every
     // parked participant so it re-polls (a concurrent wait_one must not sleep
     // through a publication made by this poll).
@@ -1337,7 +1337,7 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     // (work already complete) without a kernel wait.
     {
         // Re-dispatch enqueued work toward ring ownership before flushing.
-        // P0-A peek protocol (see poll() for the full rationale): peek the
+        // Peek protocol (see poll() for the full rationale): peek the
         // front, attempt the transfer, break on NULL SQE. Never pop→dispatch→
         // push_back.
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -1525,7 +1525,7 @@ void UringAsyncBackend::cancel(Completion<void>& c) {
     (void)cancel_handle_(*h);
 }
 
-// Phase F1: production waiter registration / cancellation (ADR Decision 10).
+// Production waiter registration / cancellation (ADR Decision 10).
 // The waiter registration is ORTHOGONAL to the execution state: it needs no
 // ring interaction (no SQE, no dispatch lock) — the arena leaf serializes
 // registration against reap extraction and cancel_waiter against reap, and
@@ -1581,7 +1581,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         // fatal_error_ is dispatch_mtx_-authority: every read here is inside
-        // the lock (D4-RM16/P1-1 — no unlocked reads). An already-poisoned
+        // the lock (no unlocked reads). An already-poisoned
         // backend returns without a wake: the path that set the poison owns
         // the deferred wake.
         if (fatal_error_.has_value())
@@ -1589,7 +1589,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         CancelScratch& scratch = cancel_scratch_[h.slot.value];
         if (scratch.cancel_queued)
             return;
-        // RESOLVE THE TARGET BEFORE get_sqe (P0-C): find h's LIVE router entry
+        // RESOLVE THE TARGET BEFORE get_sqe: find h's LIVE router entry
         // and read its kernel-visible cookie. If h is not currently
         // ring-owned (no LIVE entry), there is nothing to cancel — return
         // WITHOUT obtaining an SQE. This closes the get_sqe-then-discover-
@@ -1609,14 +1609,14 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             std::terminate();
         }
         // From here, the target's cookie cannot change: dispatch/cancel-side
-        // access holds this lock, while CQE retirement is excluded by D1's
+        // access holds this lock, while CQE retirement is excluded by the
         // AsyncIoContext::access_mtx_ single-driver call domain. Obtain the
         // SQE and fill it.
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
         if (sqe == nullptr) {
             (void)submit_transport_locked();
             if (fatal_error_.has_value()) {
-                // D4-RM17 (P0): THIS call's transport flush permanently
+                // THIS call's transport flush permanently
                 // poisoned the backend and retired the retained ledger
                 // entries to backend-ready terminals. No reap runs on this
                 // path, so the parked split-phase waiters MUST still be woken
@@ -1630,7 +1630,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             }
         }
         if (sqe != nullptr) {
-            // NO-FAIL REGION (P0-C): get_sqe committed the SQE. Fill it with
+            // NO-FAIL REGION: get_sqe committed the SQE. Fill it with
             // the resolved target cookie and its exact tagged control
             // user_data. (When sqe is still nullptr — SQ full without a new
             // poison, or the newly-poisoned branch above — there is no SQE to
@@ -1654,12 +1654,12 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
                                       target_cookie, h);
         }
     }
-    // D4-RM16 (P1-3): a permanent transport failure during the cancel-SQE
+    // A permanent transport failure during the cancel-SQE
     // append retired ledger/queue entries to backend-ready terminals. No reap
     // runs on this path, so wake the split-phase waiters here, AFTER
     // dispatch_mtx_ is released (state first, then wake; the wait-source
     // mutex is a leaf never acquired under dispatch_mtx_ — frozen lock
-    // order). fatal_error_ was snapshotted under the lock above (P1-1), so
+    // order). fatal_error_ was snapshotted under the lock above, so
     // newly_poisoned is exact: an already-poisoned backend returned at the
     // top of the lock scope and its poisoner owns the wake.
     if (newly_poisoned) {
@@ -1667,7 +1667,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
     }
 }
 
-// Phase D4 admission close (ADR Decision 15; mirrors ThreadPoolBackend).
+// Admission close (ADR Decision 15; mirrors ThreadPoolBackend).
 // close_admission() takes the SAME lock the submit admission transaction
 // (reserve .. commit_binding, the `binding -> outstanding` release-store being
 // the accept linearization point) holds, so it serializes against an in-flight
@@ -1676,8 +1676,8 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
 // observes admission closed at Stage 0 inside the lock and rejects
 // synchronously with invalid_state (close wins). It does NOT cancel, rewrite,
 // discard, or release accepted work; cancel/poll/wait_one/reap remain legal.
-// THEN wakes every participant parked in the split-phase ready wait (issue
-// #67: close must not starve a parked wait_one). The wake is a one-shot
+// THEN wakes every participant parked in the split-phase ready wait (close
+// must not starve a parked wait_one). The wake is a one-shot
 // control generation advance — a re-evaluation signal, not a fabricated
 // completion and not a persistent "never park again" state: future waits
 // snapshot the advanced generation and park normally, so an admission-closed

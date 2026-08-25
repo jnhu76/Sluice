@@ -1,12 +1,9 @@
-// sluice::async::Scheduler — E13 P3 Select Timer registration substrate.
+// sluice::async::Scheduler — Select Timer registration substrate.
 //
 // This translation unit implements the Scheduler-owned stable Select timer
-// pool and its registered-state accounting authority (Addendum C). It does
-// NOT implement the pump branch body or any Select operation — those land in
-// a later P3 commit. P3 has no admission path; the substrate here exists so
-// the future reserve-then-register protocol is possible without redesign.
+// pool and its registered-state accounting authority (Addendum C).
 //
-// Ownership law (docs/e13-select-timer-adapter.md §4.1):
+// Ownership law:
 //   - before transfer: a caller-frame temporary list owns the block;
 //   - after single-node splice under global_mtx_: the Scheduler pool owns it;
 //   - after heap insertion: the heap holds a stable pointer to the block.
@@ -17,16 +14,13 @@
 // once (on a successful CAS) and recompute the earliest-deadline cache. A
 // failed CAS mutates no counter. The stale pump-pop path performs physical
 // reclamation only and does NOT decrement again.
-//
-// No P4 behavior: no winner claim, no CandidateReady, no finalization, no
-// publication, no fiber suspension/runnable.
 #include <sluice/async/scheduler.hpp>
 
 #include <cassert>
 #include <list>
 
 #include <sluice/async/detail/fail_fast.hpp>
-#include <sluice/async/detail/select_port.hpp>  // complete SelectArmSlot (P4 finalizers)
+#include <sluice/async/detail/select_port.hpp>  // complete SelectArmSlot (finalizers)
 #include <sluice/async/detail/select_registration.hpp>
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls
@@ -72,19 +66,18 @@ detail::SelectTimerRegistration* Scheduler::select_timer_splice_one_locked(
     heap_push_entry_locked(detail::DeadlineHeapEntry::for_select(reg));
 
     // The block starts ACTIVE; account it so it participates in the MW/park
-    // classification + earliest-deadline cache (docs/e13-select-timer-adapter
-    // §4.2). The matching decrement is in the retire/consume helper.
+    // classification + earliest-deadline cache. The matching decrement is in
+    // the retire/consume helper.
     ++active_deadline_count_;
     recompute_earliest_deadline_locked();
 
     return &reg;
 }
 
-// E13 P3/P6 Select timer pump branch body (state-before-arm rule, Addendum
-// E/D + task §12). The stale path (non-ACTIVE) is unchanged from P3: load
-// state first; a RETIRED/CONSUMED block skips WITHOUT reading arm_ (the I4
-// closure). The ACTIVE path is the real P6 resolver (select_resolve_timer_
-// locked), which replaces the P3 due-ACTIVE stage fail-fast.
+// Select timer pump branch body (state-before-arm rule, Addendum
+// E/D + task §12). The stale path (non-ACTIVE): load state first; a
+// RETIRED/CONSUMED block skips WITHOUT reading arm_ (the timer-lifetime
+// closure). The ACTIVE path is the resolver (select_resolve_timer_locked).
 bool Scheduler::select_timer_pump_entry_locked(
     detail::SelectTimerRegistration& reg) {
     // State-before-arm: load state FIRST. A non-ACTIVE state means the arm
@@ -94,7 +87,8 @@ bool Scheduler::select_timer_pump_entry_locked(
     if (state != detail::SelectTimerRegistration::State::active) {
         // Stale entry (RETIRED or CONSUMED). Skip: do not dereference arm_,
         // do not touch SelectGroup, do not claim, do not publish. The caller
-        // physically reclaims the popped block. This is the I4 closure.
+        // physically reclaims the popped block. This is the timer-lifetime
+        // closure.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(
             *this, sluice_async_test::PhaseTag::select_timer_pump_skip);
@@ -103,11 +97,13 @@ bool Scheduler::select_timer_pump_entry_locked(
     }
 
     // ACTIVE: the due-ACTIVE Select entry is the post-suspension Timer winner
-    // path (P6 §12). select_resolve_timer_locked validates the block, finds the
-    // arm index by address scan, drives the P4 group processor exactly once,
+    // path (§12). select_resolve_timer_locked validates the block, finds the
+    // arm index by address scan, drives the group processor exactly once,
     // and publishes exactly once. The Timer registration is NOT consumed
-    // before the group winner CAS (P4 owns the winner/loser finalizer).
-    // ST-13: if an Event already won this group, P4 retired this Timer
+    // before the group winner CAS (the group processor owns the winner/loser
+    // finalizer).
+    // ST-13: if an Event already won this group, the group processor retired
+    // this Timer
     // registration; the pump observes non-ACTIVE on a later pop and takes the
     // stale-skip branch above — it never reads the dead arm.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -166,7 +162,7 @@ bool Scheduler::select_timer_consume_locked(
 
 // Physical reclamation of a popped Select block. SAFE only because the caller
 // (pump) has ALREADY removed the block from the deadline heap. Address match,
-// never reads arm_ (I4-safe). Physical-only: does NOT decrement
+// never reads arm_ (timer-lifetime safe). Physical-only: does NOT decrement
 // active_deadline_count_ (the retire/consume helper already did, exactly
 // once — Addendum C).
 void Scheduler::erase_popped_select_registration_locked(
@@ -196,15 +192,15 @@ bool Scheduler::pool_owns_select_block_locked(
 }
 
 // ===========================================================================
-// E13 P4 Select Timer winner/loser finalizers.
+// Select Timer winner/loser finalizers.
 //
 // Per-kind finalizer halves for Timer arms, called by the single group
 // processor (select_process_group_locked via select_commit_winner_locked /
 // select_finalize_loser_locked) under global_mtx_.
 //
-// Source order (docs/e13-select-locking-and-publication.md §4.1 / §4.2):
+// Source order:
 //
-//   Timer winner (§8.1 / §4.1):
+//   Timer winner:
 //     1. group winner CAS already succeeded (the driver's caller did it)
 //     2. SelectTimerRegistration ACTIVE -> CONSUMED via
 //        select_timer_consume_locked (the Timer registration CAS MUST NOT
@@ -213,7 +209,7 @@ bool Scheduler::pool_owns_select_block_locked(
 //     4. accounting closed exactly once (select_timer_consume_locked did it)
 //     5. NO publication
 //
-//   Timer loser (§8.2 / §4.2):
+//   Timer loser:
 //     1. arm.state = Retired  (classification FIRST — SN-9)
 //     2. SelectTimerRegistration ACTIVE -> RETIRED via
 //        select_timer_retire_locked (the retire CAS comes AFTER arm
@@ -230,7 +226,7 @@ bool Scheduler::pool_owns_select_block_locked(
 // return is an invariant violation that fails fast.
 // ===========================================================================
 
-// Timer winner finalize (§8.1). The registration CAS (ACTIVE->CONSUMED) happens
+// Timer winner finalize. The registration CAS (ACTIVE->CONSUMED) happens
 // AFTER the group winner CAS (the driver's caller) and BEFORE arm.state =
 // Retired. select_timer_consume_locked closes accounting exactly once.
 void Scheduler::select_finalize_timer_winner_locked(
@@ -279,7 +275,7 @@ void Scheduler::select_finalize_timer_winner_locked(
     (void)group;
 }
 
-// Timer loser finalize (§8.2). SN-9: arm.state = Retired is classified FIRST
+// Timer loser finalize. SN-9: arm.state = Retired is classified FIRST
 // (while the registration is still ACTIVE), THEN the registration is retired.
 // An internal-testing phase seam at the classification point lets a test prove
 // the registration is still ACTIVE at that instant (the load-bearing SN-9

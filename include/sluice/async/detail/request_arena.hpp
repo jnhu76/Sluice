@@ -1,8 +1,8 @@
-// sluice::async::detail::RequestArena — bounded RequestSlot arena (Phase B).
+// sluice::async::detail::RequestArena — bounded RequestSlot arena.
 //
 // End-to-end request story (submit -> execution -> reap -> reset -> free),
 // with the authority table and per-transition code anchors:
-// docs/architecture/async-request-lifecycle.md (issue #139).
+// docs/architecture/async-request-lifecycle.md.
 //
 // ADR-explicit-io-request-contract (Accepted):
 //   Decision 2  — one logical capacity and one context-provenance domain per
@@ -13,7 +13,7 @@
 //                 enqueue observing backend_ready performs a successful no-op;
 //                 submit still returns success. The enqueue-in-flight pin keeps
 //                 reap from publishing Completion-ready until enqueue has
-//                 acknowledged (I17, I19).
+//                 acknowledged.
 //   Decision 9  — synchronous identity-bearing non-escaping ReadySink reap. Reap
 //                 preserves identity AND backend-known order.
 //   Decision 10 — single-waiter registration with fake stable token + lease.
@@ -28,9 +28,9 @@
 //                 allocation.
 //
 // slot_in_use (reserve -> release) and accepted_outstanding (commit ->
-// completion-ready publication) are DISTINCT counters (P1-05).
+// completion-ready publication) are DISTINCT counters.
 //
-// READY-RING AUTHORITY (review findings #1 and #3): the arena owns a
+// READY-RING AUTHORITY: the arena owns a
 // construction-time bounded FIFO of backend_ready slot indices (the ready-ring).
 // A terminal-winner transition (record_terminal / pending-or-enqueued cancel)
 // pushes the slot index onto the ring's tail; reap pops from the head. This is
@@ -39,9 +39,9 @@
 // (b) the queue linkage (Decision 5 reserve pre-reserves linkage): there is NO
 // side-band HandleRing or staging deque whose lifecycle is independent of the
 // slot, so a cancelled/reused slot can never leave a stale handle that strands
-// a later accepted op (review finding #1). The ring is single-allocation at
+// a later accepted op. The ring is single-allocation at
 // construction (capacity == request_capacity) and push/pop never allocate, so
-// the accepted terminal path depends on no new allocation (I9 / Decision 14).
+// the accepted terminal path depends on no new allocation (Decision 14).
 //
 // Locking: one leaf slot-lifecycle mutex guards reserve/release/prepare/commit/
 // enqueue/record_terminal/reap/register_waiter/cancel_waiter/cancel and the
@@ -49,21 +49,21 @@
 // mutex MUST NOT call ReadySink, Scheduler, user code, or backend progress
 // (ADR :296-297); the ONLY user-visible publication that happens under the
 // mutex is the Completion-ready release-store, which is the leaf domain's own
-// linearization point (review C3; ADR completion-ready order). The sink is
+// linearization point (ADR completion-ready order). The sink is
 // invoked after the lock is released.
 //
 // Identity: the RequestSlot IS the identity carrier. The slot record holds the
 // type-erased Completion publication binding (install_publication_binding
 // before commit); reap validates it before changing any accounting and
-// publishes Completion-ready through it inside the leaf domain (review C2/C3).
+// publishes Completion-ready through it inside the leaf domain.
 // There is no parallel identity map: cancel resolves a Completion* by a bounded
 // O(capacity) scan of the fixed slot array (resolve_completion).
 //
-// Phase B reference backends (FakeAsyncBackend, SyncBackend) own one arena each.
+// Reference backends (FakeAsyncBackend, SyncBackend) own one arena each.
 // The arena is single-allocation at construction (a fixed array; no per-submit
-// heap traffic). For Phase B it is driven single-threaded by the backend under
+// heap traffic). The reference backends drive it single-threaded under
 // AsyncIoContext::access_mtx_; the mutex + acquire/release ordering make the
-// protocol correct for the multi-threaded backends of later phases.
+// protocol correct for the multi-threaded backends.
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -93,7 +93,7 @@ struct SlotHandle {
     Generation generation;
 };
 
-// Cancel disposition (ADR Decision 11, review round-4 refinement). The cancel
+// Cancel disposition (ADR Decision 11). The cancel
 // lookup resolves a RequestKey to a slot+generation and returns one of:
 //   terminal_won     — cancel WON the terminal transition and stored the
 //                      canceled terminal (pending/enqueued, Scheme B). This is
@@ -139,8 +139,8 @@ public:
         // The ready-ring is a bounded singly-linked FIFO of backend_ready slot
         // indices threaded through each slot's ready_next_ field. No separate
         // storage: push/pop touch only the per-slot link + head/tail/count, so
-        // the accepted terminal path depends on no new allocation (review
-        // #1/#3, I9 / Decision 14). At most one entry per in-flight op.
+        // the accepted terminal path depends on no new allocation
+        // (Decision 14). At most one entry per in-flight op.
     }
 
     // ADR Decision 15 / AC-13: quiescent destruction requires every slot free.
@@ -160,7 +160,8 @@ public:
     std::size_t capacity() const noexcept { return capacity_; }
     ContextIdentity context() const noexcept { return context_; }
 
-    // Phase F3 (ADR-public-request-handle): resolve a public identity tuple to
+    // Public identity resolution (ADR-public-request-handle): resolve a public
+    // identity tuple to
     // the slot's current RequestHandleState, or not_found if the slot is free,
     // the generation has advanced (stale/reused), or the context does not match
     // (cross-context). Read-only; leaf slot-lifecycle domain. Encapsulates the
@@ -237,7 +238,7 @@ public:
     }
 #endif
 
-    // --- Stage 1: reserve (ADR Decision 5 / I8) ---
+    // --- Stage 1: reserve (ADR Decision 5) ---
     Result<SlotHandle> reserve() {
         std::lock_guard<std::mutex> lk(mutex_);
         if (admission_closed_) {
@@ -276,17 +277,17 @@ public:
     // reserved -> prepared. A stale handle returns not_found.
     //
     // Descriptor validation (Decision 6 invalid_argument) is a DECLARED but
-    // DEFERRED vocabulary item for the Phase B reference backends: the reference
+    // DEFERRED vocabulary item for the reference backends: the reference
     // backends perform no real I/O (the fd is a metadata carrier, not a syscall
     // target — the test corpus deliberately uses ReadOp{-1, ...} as an "unused
     // by fake" sentinel), and BorrowMetadata carries no offset, so the
     // invalid_argument causes that ARE representable here (negative fd, null
     // buffer with nonzero length) would reject reference-backend test traffic
     // without backing a real safety property. They are enforced by the full-
-    // backend prepare paths (Phase D/E), where a real syscall would actually
-    // dereference the fd/buffer. This is the ADR closeout's explicit deferral
-    // (see docs/adr/ADR-explicit-io-request-contract.md "Open risks" + the
-    // Phase B closeout note); it is recorded as intentional divergence in
+    // backend prepare paths, where a real syscall would actually
+    // dereference the fd/buffer. This is the ADR's explicit deferral
+    // (see docs/adr/ADR-explicit-io-request-contract.md "Open risks"); it is
+    // recorded as intentional divergence in
     // docs/architecture/divergence-registry.md.
     Result<void> prepare(SlotHandle h, OperationKind kind, BorrowMetadata borrow) {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -297,12 +298,12 @@ public:
         }
         s->op_kind_ = kind;
         s->borrow_ = borrow;
-        s->borrow_.active = false;  // borrowing begins at commit (I7), not at prepare
+        s->borrow_.active = false;  // borrowing begins at commit, not at prepare
         s->state_ = RequestState::prepared;
         return {};
     }
 
-    // --- Stage 2.5: install the Completion publication binding (review C2) ---
+    // --- Stage 2.5: install the Completion publication binding ---
     // The slot record carries the type-erased publication binding: the opaque
     // Completion pointer, the dispatch-time requested_bytes, and the publish
     // thunk (written by the trusted backend-author). MUST be called before
@@ -326,8 +327,8 @@ public:
         if (publish == nullptr) {
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        // CodeRabbit finding: the publication thunk dereferences `completion`
-        // (it publishes Completion-ready through a typed Completion<T>*). A null
+        // The publication thunk dereferences `completion` (it publishes
+        // Completion-ready through a typed Completion<T>*). A null
         // completion would dereference null inside the leaf domain when reap
         // invokes the thunk. Reject it here (the production binding always
         // carries a real Completion pointer). `installed()` keys only on the
@@ -339,9 +340,9 @@ public:
         return {};
     }
 
-    // --- Stage 3: commit / accept (ADR Decision 5 / I2) — the SLOT HALF -----
+    // --- Stage 3: commit / accept (ADR Decision 5) — the SLOT HALF -----
     // prepared -> pending; set the enqueue-in-flight pin; accepted_outstanding++;
-    // begin the fd/buffer borrow (I7). The Completion's idle->binding->outstanding
+    // begin the fd/buffer borrow. The Completion's idle->binding->outstanding
     // transition is driven by the backend AROUND this call (the arena owns the
     // slot side; the backend owns the Completion side). This is the submit-success
     // linearization point's slot half: the FULL acceptance linearization point
@@ -370,17 +371,17 @@ public:
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         s->state_ = RequestState::pending;
-        s->enqueue_in_flight_pin_ = true;  // I19: set before outstanding is published
-        s->borrow_.active = true;          // I7: borrow begins at commit
+        s->enqueue_in_flight_pin_ = true;  // set before outstanding is published
+        s->borrow_.active = true;          // borrow begins at commit
         // Record submission order so a backend can locate the oldest outstanding
-        // enqueued op of a kind by a bounded scan (no side-band FIFO — review
-        // finding #1). Monotonic arena-wide; cleared on release.
+        // enqueued op of a kind by a bounded scan (no side-band FIFO).
+        // Monotonic arena-wide; cleared on release.
         s->submit_seq_ = next_submit_seq_++;
         ++accepted_outstanding_;
         return {};
     }
 
-    // --- Stage 4: enqueue (ADR Decision 5 / I17, Scheme B) ---
+    // --- Stage 4: enqueue (ADR Decision 5, Scheme B) ---
     // Allocation-free, noexcept (returns an outcome, never throws). Two legal
     // outcomes:
     //   enqueued     — pending -> enqueued; the op enters the ready-to-dispatch
@@ -393,20 +394,20 @@ public:
     //                  :341-349).
     // A STALE handle (generation mismatch) is neither outcome: it means the
     // committed submit path's slot moved on (released/reused) while its
-    // identity-bound enqueue pin was still live — an I19 reuse-before-ack
+    // identity-bound enqueue pin was still live — a reuse-before-ack
     // disaster, not a normal race. It fails fast rather than being masked as a
-    // successful no-op (review finding #4). Any other slot state
+    // successful no-op. Any other slot state
     // (reserved/prepared = enqueue before commit, enqueued/running = double
     // enqueue, completion_ready = enqueue after reap) is an invariant violation
-    // and fails fast (design §9: "only unknown/illegal state is an invariant
-    // violation (fail-fast)").
+    // and fails fast ("only unknown/illegal state is an invariant violation
+    // (fail-fast)").
     // In the enqueued / terminal_noop outcomes the enqueue pin is release-
     // cleared as the submit path's FINAL slot access; after this call the
     // submit path must not touch the slot.
     EnqueueOutcome enqueue(SlotHandle h) noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
-        if (!s) request_arena_enqueue_stale_fail_fast();  // stale: I19 violation
+        if (!s) request_arena_enqueue_stale_fail_fast();  // stale: reuse-before-ack
         if (s->state_ == RequestState::pending) {
             s->state_ = RequestState::enqueued;
             // The backend's dispatch path consumes enqueued slots; for the
@@ -426,9 +427,9 @@ public:
         request_arena_enqueue_state_fail_fast();
     }
 
-    // --- Dispatch: enqueued -> running (design §9 dispatch authority) ---
-    // The blocking-syscall dispatch path (a real ThreadPool worker in a later
-    // phase) transitions an enqueued op to `running` BEFORE the syscall blocks.
+    // --- Dispatch: enqueued -> running (dispatch authority) ---
+    // The blocking-syscall dispatch path (a real ThreadPool worker) transitions
+    // an enqueued op to `running` BEFORE the syscall blocks.
     // Legal outcomes:
     //   true  — enqueued -> running; the op is now executing in the backend.
     //   false — the CURRENT-GENERATION slot is already backend_ready (a terminal
@@ -440,14 +441,13 @@ public:
     // index, wrong context provenance) is NEITHER outcome: the backend holds a
     // dispatch identity whose slot moved on (released/reused) — a lifecycle
     // invariant violation, not a normal race — and fails fast in BOTH Debug and
-    // Release (round-5 fix 1) instead of masquerading as a backoff. Any other
+    // Release instead of masquerading as a backoff. Any other
     // current-generation state (reserved/prepared/pending = dispatch before
     // enqueue, running = double dispatch, completion_ready = dispatch after
-    // reap) is an invariant violation and fails fast (design §9: "only
-    // unknown/illegal state is an invariant violation (fail-fast)"). The Phase B
+    // reap) is an invariant violation and fails fast ("only
+    // unknown/illegal state is an invariant violation (fail-fast)"). The
     // reference backends dispatch deterministically (enqueued -> backend_ready)
-    // and never call this; it makes the shared arena correct for the
-    // ThreadPool/Uring migration, and it makes the Decision-11 running-cancel
+    // and never call this; it keeps the Decision-11 running-cancel
     // semantics testable (cancel() on a running slot records intent only).
     bool mark_running(SlotHandle h) noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -465,14 +465,14 @@ public:
         }
     }
 
-    // --- Stage 5: reap (ADR Decision 9 / I11 / I16 / I18 / I9 / review C3) ---
-    // Allocation-free SINGLE-DOMAIN protocol (review C3 — the Completion-ready
-    // release-store is the leaf domain's own linearization point). Pops
-    // backend_ready slots from the ready-ring in terminal-winner order (review
-    // finding #3 — backend-known order, NOT physical slot-index order). Per
+    // --- Stage 5: reap (ADR Decision 9) ---
+    // Allocation-free SINGLE-DOMAIN protocol — the Completion-ready
+    // release-store is the leaf domain's own linearization point. Pops
+    // backend_ready slots from the ready-ring in terminal-winner order
+    // (backend-known order, NOT physical slot-index order). Per
     // popped slot, under ONE lock acquisition, in ADR order:
     //   - validate slot + generation + the Completion publication binding
-    //     BEFORE any accounting change (review C2 / I4 / I5: a missing binding
+    //     BEFORE any accounting change (a missing binding
     //     is a fail-fast invariant violation, never a silent skip — silently
     //     dropping would lose an accepted request and strand the Completion
     //     outstanding forever);
@@ -481,18 +481,18 @@ public:
     //   - end the borrow, transition to completion_ready, decrement
     //     accepted_outstanding / backend_ready_count_;
     //   - publish Completion-ready THROUGH the slot binding (the release-store
-    //     to ready — an acquire observer of ready sees every effect above, I18).
+    //     to ready — an acquire observer of ready sees every effect above).
     // Then release the lock and invoke the sink. The sink is NEVER called under
     // the mutex (ADR :296-297); only the Completion publication is. The state
     // transition itself is the exactly-once authority (a concurrent reap sees
     // completion_ready and the ring no longer references it).
     //
-    // A still-pinned backend_ready slot stays reap-ineligible (I19): the slot
+    // A still-pinned backend_ready slot stays reap-ineligible: the slot
     // stays on the ready-ring; a reap that pops it observes the live pin and
     // leaves it for the next reap (it is NOT re-pushed — already on the ring).
     // Once enqueue acknowledges the pin the next reap publishes it
     // (level-triggered). The slot is never touched after the lock is released
-    // (a caller may reset/reuse it while the sink runs — I16).
+    // (a caller may reset/reuse it while the sink runs).
     //
     // Returns the number of Completions made ready. The arena publishes through
     // the slot's own type-erased binding (no publish callback parameter): the
@@ -509,7 +509,7 @@ public:
                 RequestSlot& s = slots_[*idx];
                 // A terminal-winner push leaves the slot backend_ready with the
                 // enqueue pin possibly still live (Scheme-B cancel won before
-                // the submit path's enqueue acknowledged its pin — I17/I19). A
+                // the submit path's enqueue acknowledged its pin). A
                 // pinned slot is reap-ineligible: leave it at the head of the
                 // ready-ring and STOP this reap. The ready-ring is in
                 // terminal-winner order (ADR Decision 9's backend-known order),
@@ -538,8 +538,8 @@ public:
                     s.waiter_token_ = {};
                     s.waiter_delivery_present_ = false;
                 }
-                // Accounting / borrow / state changes (I18).
-                s.borrow_.active = false;  // borrow ends at completion-ready (I7)
+                // Accounting / borrow / state changes.
+                s.borrow_.active = false;  // borrow ends at completion-ready
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 borrow_end_at_ = ++trace_seq_;  // I18 order trace
 #endif
@@ -547,8 +547,8 @@ public:
                 --accepted_outstanding_;
                 --backend_ready_count_;
                 // Publish Completion-ready INSIDE the leaf domain: the
-                // release-store to ready is the single linearization point
-                // (review C3). The thunk is noexcept + allocation-free.
+                // release-store to ready is the single linearization point.
+                // The thunk is noexcept + allocation-free.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 publish_at_ = ++trace_seq_;  // I18 order trace
 #endif
@@ -564,32 +564,32 @@ public:
         return reaped;
     }
 
-    // --- Terminal winner (ADR Decision 12 / I10 / review I2) ---
+    // --- Terminal winner (ADR Decision 12) ---
     // Record exactly one terminal result. First caller wins: validates that the
     // slot is a legal terminal candidate (pending/enqueued/running — accepted,
     // not yet terminal), stores the result, transitions to backend_ready, bumps
     // backend_ready_count_, PUSHES the slot index onto the ready-ring (so reap
-    // delivers in terminal-winner / backend-known order — Decision 9, review
-    // finding #3), and (for edge-triggered backends) is the readiness signal.
+    // delivers in terminal-winner / backend-known order — Decision 9), and
+    // (for edge-triggered backends) is the readiness signal.
     // A second call (e.g. late cancel after ordinary completion) is a no-op
     // returning false — losers never overwrite and never double-push the ring.
     //
-    // The recorded result is the syscall's REAL result, verbatim (review
-    // round-4 finding 1): a running op whose cancel recorded intent is NOT
-    // rewritten to canceled. Cancel is best-effort (ADR Decision 11 — "if the
-    // syscall later succeeds or fails, the common terminal-winner rule decides
+    // The recorded result is the syscall's REAL result, verbatim: a running op
+    // whose cancel recorded intent is NOT rewritten to canceled. Cancel is
+    // best-effort (ADR Decision 11 — "if the syscall later succeeds or fails,
+    // the common terminal-winner rule decides
     // the result"); a backend that CONFIRMS the cancellation actually took
     // effect (a valid interruption, a cancel CQE winner) records
     // TerminalResult::err(canceled) explicitly. pending/enqueued cancel already
     // stored the canceled terminal directly via cancel() (ADR-legal).
     //
     // A default-constructed TerminalResult (stored == false) is REJECTED up
-    // front in BOTH Debug and Release (review round-4 finding 2): recording it
+    // front in BOTH Debug and Release: recording it
     // would publish a phantom 0-byte success (terminal_to_size treats an
     // unstored result as success) and would leave cancel() unable to recognize
     // the existing terminal, risking a second ready-ring push of the same slot.
     //
-    // The state is validated BEFORE the terminal is written (review I2): on a
+    // The state is validated BEFORE the terminal is written: on a
     // reserved/prepared slot the request has not been accepted; storing a
     // terminal there would strand the op forever (a later dispatch
     // record_terminal would see the terminal already stored and the op could
@@ -614,7 +614,7 @@ public:
         s->terminal_ = result;
         s->state_ = RequestState::backend_ready;
         ++backend_ready_count_;
-        push_ready_locked_(h.slot.value);  // backend-known reap order (review #3)
+        push_ready_locked_(h.slot.value);  // backend-known reap order
         return true;
     }
 
@@ -623,9 +623,9 @@ public:
         return record_terminal(h, TerminalResult::err(IoError{IoError::Code::canceled}));
     }
 
-    // --- Stage 5: reap (ADR Decision 9 / I11 / I16 / I18 / I9 / review C3) ---
+    // --- Stage 5: reap (ADR Decision 9) ---
 
-    // --- Waiter registration (ADR Decision 10 / I13) ---
+    // --- Waiter registration (ADR Decision 10) ---
     // Register one waiter. Second registration while open_registered returns
     // invalid_state without overwriting the first. Registration is ORTHOGONAL
     // to execution state (ADR Decision 10 :668-698): it is legal for any
@@ -643,7 +643,7 @@ public:
     // handle returns not_found. On any failure the candidate lease is consumed
     // at the by-value call boundary and released inline — never transferred to
     // the slot (ADR :661-662: "Scheduler reclaims it or completes inline as
-    // appropriate"; Phase B completes inline).
+    // appropriate"; the arena completes inline).
     Result<void> register_waiter(SlotHandle h, WaiterToken token, RoutingLease lease) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
@@ -684,7 +684,7 @@ public:
         return lease;
     }
 
-    // --- Cancel (ADR Decision 11, review round-4 finding 1) ---
+    // --- Cancel (ADR Decision 11) ---
     // Resolve a RequestKey against the slot+generation and record intent /
     // terminal per the current state. Cancel is BEST-EFFORT (ADR Decision 11):
     // it records intent / stores a canceled terminal, but the syscall's real
@@ -694,20 +694,19 @@ public:
     //     terminal_won — this is the ONLY disposition that establishes a canceled
     //     terminal, so the backend tallies canceled_ops here. For pending the
     //     enqueue pin stays live, so reap cannot publish Completion-ready until
-    //     the submit path's enqueue no-ops and acknowledges the pin (I17/I19).
+    //     the submit path's enqueue no-ops and acknowledges the pin.
     //   - running — cancel records INTENT (cancel_intent_ = true) and returns
     //     intent_recorded, but does NOT store a terminal: the running blocking
     //     syscall's ordinary result, ordinary error, or valid interruption later
     //     competes for the terminal winner via record_terminal, which records
-    //     the REAL result VERBATIM (review round-4 finding 1: best-effort cancel
-    //     must NOT secretly turn an ordinary success into canceled). A backend
+    //     the REAL result VERBATIM (best-effort cancel must NOT secretly turn
+    //     an ordinary success into canceled). A backend
     //     that CONFIRMS the cancellation actually took effect (a valid
     //     interruption, a cancel CQE winner) records
     //     TerminalResult::err(canceled) explicitly and THAT call wins the
     //     terminal — the backend tallies canceled_ops on that confirmed win, not
-    //     here. The Phase B reference backends never enter `running`, so this
-    //     branch is dormant there; it makes the shared arena correct for the
-    //     later ThreadPool/Uring migration.
+    //     here. The reference backends never enter `running`, so this branch
+    //     is dormant there.
     //   - backend_ready with a stored terminal — already_terminal (no overwrite;
     //     ADR Decision 12: losers do not overwrite).
     //   - free/reserved/prepared — not_found (the key has no accepted terminal).
@@ -726,7 +725,7 @@ public:
         case RequestState::enqueued:
             // Cancel WINS the terminal transition directly (Scheme B). Store the
             // canceled terminal, transition to backend_ready, and push the
-            // ready-ring in terminal-winner order (review finding #3). This is
+            // ready-ring in terminal-winner order. This is
             // the confirmed canceled winner — the backend tallies canceled_ops.
             s->cancel_intent_ = false;
             s->terminal_ = TerminalResult::err(IoError{IoError::Code::canceled});
@@ -758,7 +757,7 @@ public:
         return slots_[slot.value].cancel_intent_;
     }
 
-    // --- Release (ADR Decision 15 / AC-13 :566-572 / review I1) ---
+    // --- Release (ADR Decision 15 / AC-13 :566-572) ---
     // Two DISTINCT authorities with different failure contracts:
     //
     //   rollback_reserved_or_prepared(h) — the PRE-COMMIT rollback authority.
@@ -767,7 +766,7 @@ public:
     //     or a lost Completion binding CAS). Failures are ordinary errors
     //     (not_found for a stale handle, invalid_state for a wrong state) that
     //     the backend maps onto its synchronous reject result — zero side
-    //     effects, synchronous rejection stays zero-side-effect (review C1).
+    //     effects, synchronous rejection stays zero-side-effect.
     //
     //   release_completed_binding(h) — the COMPLETED-binding release authority.
     //     Returns a completion_ready slot from Completion::reset() / ready
@@ -779,7 +778,7 @@ public:
     //     waiter registration, or a slot that is not completion_ready.
     //
     // Both paths free the slot under the leaf domain: generation++ BEFORE the
-    // slot becomes visible to a new reserve (I6), binding cleared, counters
+    // slot becomes visible to a new reserve, binding cleared, counters
     // decremented.
     Result<void> rollback_reserved_or_prepared(SlotHandle h) {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -824,7 +823,7 @@ public:
         return admission_closed_;
     }
 
-    // Production quiescence snapshot for ThreadPoolBackend destruction (Phase E P1).
+    // Production quiescence snapshot for ThreadPoolBackend destruction.
     // Returns counts under one arena leaf lock so the backend can verify that no
     // accepted work, active borrow, or backend-ready terminal remains before it
     // begins worker teardown. The destructor MUST NOT implicitly drain/cancel/wait.
@@ -841,9 +840,9 @@ public:
     // Read-only introspection of the slot lifecycle (used by the reference
     // backends' dispatch/reap paths AND by tests; read-only, so it is not a
     // test-only control and does not belong behind SLUICE_ASYNC_INTERNAL_TESTING).
-    // Each accessor bounds-checks the slot index (CodeRabbit finding: these are
-    // the only slot-addressing paths without validate_'s range check — an out-
-    // of-range index would be an out-of-bounds read; fail-fast in BOTH modes).
+    // Each accessor bounds-checks the slot index (these are the only
+    // slot-addressing paths without validate_'s range check — an out-of-range
+    // index would be an out-of-bounds read; fail-fast in BOTH modes).
     RequestKey key_of(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
         std::lock_guard<std::mutex> lk(mutex_);
@@ -852,7 +851,7 @@ public:
     // The slot's current generation (the ABA guard), independent of whether a
     // key is currently installed. After release this is the NEW generation;
     // before the next reserve it exceeds every previously-released key's
-    // generation (I6).
+    // generation.
     Generation generation_of(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
         std::lock_guard<std::mutex> lk(mutex_);
@@ -910,8 +909,7 @@ public:
         return slots_[slot.value].publication_binding_.requested_bytes;
     }
     // Submission order of an accepted op (set at commit). Lets a backend locate
-    // the oldest outstanding enqueued op of a kind without a side-band FIFO
-    // (review finding #1).
+    // the oldest outstanding enqueued op of a kind without a side-band FIFO.
     std::uint64_t submit_seq_of(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
         std::lock_guard<std::mutex> lk(mutex_);
@@ -923,8 +921,8 @@ public:
     // or nullopt when no enqueued op of that kind is outstanding. Bounded
     // O(capacity) scan of the fixed slot array — allocation-free. A slot that
     // already went terminal (cancel/ordinary) is `backend_ready`, not
-    // `enqueued`, so it is naturally skipped (no stale-handle accumulation —
-    // review finding #1). The kind filter lets size and void ops share one arena
+    // `enqueued`, so it is naturally skipped (no stale-handle accumulation).
+    // The kind filter lets size and void ops share one arena
     // while completing independently.
     std::optional<SlotHandle> oldest_enqueued_of(OperationKind kind) const noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -945,7 +943,7 @@ public:
     // Resolve a bound Completion pointer to its current slot+generation (the
     // pointer-keyed bridge for cancel: the public API stays pointer-keyed, ADR
     // Decision 7). Bounded O(capacity) scan of the fixed slot array —
-    // allocation-free, and NO parallel identity map (review C2: the slot's own
+    // allocation-free, and NO parallel identity map (the slot's own
     // binding is the authoritative identity). Returns nullopt when no slot is
     // bound to the pointer (unknown/stale/released Completion).
     std::optional<SlotHandle> resolve_completion(const void* completion) const noexcept {
@@ -1065,7 +1063,7 @@ private:
     std::uint64_t publish_at_ = 0;
 #endif
     // Bounds-check a SlotIndex for the read-only introspection accessors
-    // (CodeRabbit finding: those are the only slot-addressing paths without
+    // (those are the only slot-addressing paths without
     // validate_'s range check). An out-of-range index is an invariant violation,
     // not a recoverable error — fail-fast in BOTH Debug and Release.
     void check_slot_in_range_(SlotIndex slot) const noexcept {
@@ -1075,7 +1073,7 @@ private:
     RequestSlot* validate_(SlotHandle h) noexcept {
         if (h.slot.value >= capacity_) return nullptr;
         RequestSlot& s = slots_[h.slot.value];
-        if (s.generation_ != h.generation) return nullptr;  // stale (I6)
+        if (s.generation_ != h.generation) return nullptr;  // stale
         if (s.state_ == RequestState::free) return nullptr;
         if (s.key_.context != context_) return nullptr;  // wrong domain
         return &s;
@@ -1089,19 +1087,19 @@ private:
         return &s;
     }
 
-    // --- ready-ring (review findings #1 and #3) ---
+    // --- ready-ring ---
     // A bounded FIFO of backend_ready slot indices, sized to request_capacity.
     // Terminal-winner transitions (record_terminal / pending-or-enqueued cancel)
     // push the slot's index onto the tail; reap pops from the head, publishing
     // Completions in terminal-winner / backend-known order (Decision 9). The
     // ring is single-allocation at construction and never grows, so the accepted
-    // terminal path depends on no new allocation (I9 / Decision 14). Because the
+    // terminal path depends on no new allocation (Decision 14). Because the
     // linkage lives IN each slot (ready_next_) and the ring is owned by the
     // arena under one lock, a cancelled/released slot can never leave a stale
-    // side-band handle that strands a later accepted op (review finding #1).
+    // side-band handle that strands a later accepted op.
     // Caller MUST hold mutex_.
     void push_ready_locked_(std::uint32_t idx) noexcept {
-        // Ready-ring invariants (review round-4 finding 2; round-5 fix 2): a
+        // Ready-ring invariants: a
         // terminal-winner push is only legal on a slot that just became
         // backend_ready with a stored terminal, is not ALREADY ON the ring,
         // and whose ring has room. The membership check must cover the TAIL:
@@ -1155,20 +1153,20 @@ private:
 
     // Free a validated slot back to the free list (caller holds the mutex and
     // has already validated the release authority's preconditions). Generation
-    // increments BEFORE the slot becomes visible to a new reserve (I6); at
-    // UINT64_MAX it fail-fasts rather than silently wrapping (review finding #5
-    // — a wrap would re-introduce ABA and violate I6's absolute wording). The
+    // increments BEFORE the slot becomes visible to a new reserve; at
+    // UINT64_MAX it fail-fasts rather than silently wrapping — a wrap would
+    // re-introduce ABA and violate the stale-key rule. The
     // publication binding is cleared so a stale resolve can never match a
     // released slot. The slot must NOT be on the ready-ring at release time
     // (reap pops it before completion_ready; release requires completion_ready).
     void free_slot_locked_(RequestSlot* s, std::uint32_t idx) noexcept {
         s->state_ = RequestState::free;
-        // I6 + review finding #5: 64-bit generation with fail-fast at the max so
-        // a stale key can NEVER collide with a future occupant.
+        // 64-bit generation with fail-fast at the max so a stale key can
+        // NEVER collide with a future occupant.
         if (s->generation_.value == std::numeric_limits<std::uint64_t>::max()) {
             request_arena_generation_exhausted_fail_fast();
         }
-        s->generation_ = Generation{s->generation_.value + 1};  // I6
+        s->generation_ = Generation{s->generation_.value + 1};
         s->key_ = {};
         s->op_kind_ = OperationKind::read;
         s->enqueue_in_flight_pin_ = false;
@@ -1199,14 +1197,14 @@ private:
     std::size_t backend_ready_count_ = 0;
     bool admission_closed_ = false;
 
-    // Monotonic submission sequence assigned at commit (review finding #1: lets a
-    // backend find the oldest enqueued op of a kind without a side-band FIFO).
+    // Monotonic submission sequence assigned at commit (lets a backend find
+    // the oldest enqueued op of a kind without a side-band FIFO).
     std::uint64_t next_submit_seq_ = 1;
 
-    // ready-ring (review findings #1/#3): bounded singly-linked FIFO of
+    // ready-ring: bounded singly-linked FIFO of
     // backend_ready slot indices, in terminal-winner order. Threaded through
     // each slot's ready_next_ field (no separate storage array); head/tail/
-    // count index that linked list. No per-push allocation (I9 / Decision 14).
+    // count index that linked list. No per-push allocation (Decision 14).
     std::uint32_t ready_head_ = RequestSlot::kNotOnReadyRing;
     std::uint32_t ready_tail_ = RequestSlot::kNotOnReadyRing;
     std::size_t ready_count_ = 0;

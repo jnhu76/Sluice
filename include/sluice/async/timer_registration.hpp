@@ -23,7 +23,7 @@
 //              is still alive.
 //   CONSUMED : a timer expiry won; callback authority closed.
 //
-// The decisive check (I4 / TimerLifetimeClosure): an expiry loads `state`
+// The decisive check (TimerLifetimeClosure): an expiry loads `state`
 // BEFORE it dereferences `node`. If the load is not ACTIVE, the expiry returns
 // without touching the node. Because retirement is established by the
 // non-timer winner in the SAME global_mtx_ critical section that publishes the
@@ -45,7 +45,7 @@
 // expiry path can observe retirement without taking global_mtx_. The bound
 // {node, queue} pointers are only read AFTER an ACTIVE observation, and only
 // then under global_mtx_ + queue->mtx() (the expiry enters the canonical
-// resolution critical section). This matches E9's SchedulerWakeHandle
+// resolution critical section). This matches the SchedulerWakeHandle
 // callback-lease discipline.
 #pragma once
 
@@ -69,7 +69,7 @@ using deadline_tick_t = std::uint64_t;
 // `state` is the retirement authority; the raw {node, queue} pointers are the
 // live-wait binding, read only while ACTIVE is observed.
 //
-// E12-E Queue hook (Corrective-2 §8 supersession): a Queue-bound registration
+// E12-E Queue hook: a Queue-bound registration
 // carries an optional `owner_ctx_` + `on_resolve_` thunk so the Scheduler can
 // perform per-port counter bookkeeping at retire/consume. Non-Queue waits
 // (Event/Semaphore/Mutex/Condition) leave both null and the Scheduler's
@@ -103,7 +103,7 @@ public:
     TimerRegistration(TimerRegistration&&) = delete;
     TimerRegistration& operator=(TimerRegistration&&) = delete;
 
-    // The load-bearing expiry gate (I4). Returns true ONLY when this call is
+    // The load-bearing expiry gate. Returns true ONLY when this call is
     // the unique expiry authority: it CAS ACTIVE->CONSUMED. Any other state
     // (RETIRED by a non-timer winner, or CONSUMED by an earlier expiry) makes
     // this return false, and the caller MUST NOT dereference node_/queue_.
@@ -146,7 +146,7 @@ public:
     // ONLY AFTER try_claim_expiry() returned true (ACTIVE->CONSUMED), under
     // global_mtx_ + queue_->mtx(). The node pointer is NEVER dereferenced by
     // a retired/consumed registration — that is the post-destruction safety
-    // boundary (I4).
+    // boundary (the timer-lifetime closure).
     WaitNode* node() const noexcept { return node_; }
     WaitQueue* queue() const noexcept { return queue_; }
     deadline_tick_t deadline() const noexcept { return deadline_; }

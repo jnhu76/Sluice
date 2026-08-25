@@ -1,11 +1,10 @@
 // sluice::async::detail::ReadyWaitSource — split-phase readiness wait domain
-// (issue #67 / AGENTS.md §13.2).
+// (AGENTS.md §13.2).
 //
-// The pre-fix AsyncIoContext::wait_one held access_mtx_ across
-// ThreadPoolBackend::wait_one's ready-cv park, so a second participant's
-// poll/reap (the ONLY reap path for a backend_ready request) blocked forever,
-// the final request stayed un-reaped, and ApplicationRuntime::drain never
-// satisfied drain_complete_.
+// Holding AsyncIoContext::access_mtx_ across ThreadPoolBackend::wait_one's
+// ready-cv park would block a second participant's poll/reap (the ONLY reap
+// path for a backend_ready request) forever: the final request stays
+// un-reaped and ApplicationRuntime::drain never satisfies drain_complete_.
 //
 // This class owns the persistent ready epochs and the interrupt (control)
 // epoch, the ready cv, and the BackendWaitSource capability:
@@ -16,20 +15,20 @@
 //     an epoch advances. A signal between snapshot and poll is seen by poll;
 //     a signal between poll and park advances the epoch so the predicate wait
 //     does not park. wait_for_change NEVER reaps, publishes, or mutates any
-//     request/accounting state (pure observation — I3).
+//     request/accounting state (pure observation).
 //
 //   - two epochs, not one, so a wake reason can be reported without a sticky
 //     interrupt flag (a sticky flag would make every FUTURE wait return
 //     immediately and busy-spin the runtime while outstanding > 0):
 //       * progress_generation — advanced by signal_progress() AFTER real
-//         readiness is published (state first, then notify — I4);
+//         readiness is published (state first, then notify);
 //       * control_generation  — advanced by interrupt_all() as a ONE-SHOT
 //         re-evaluation signal (close_admission / runtime stop). Future waits
 //         snapshot the advanced generation and park normally again.
 //
-//   - interrupt_all() unblocks ALL parked waiters (notify_all — I6). It never
+//   - interrupt_all() unblocks ALL parked waiters (notify_all). It never
 //     fabricates readiness, changes request state, publishes a Completion, or
-//     cancels real I/O (I8). signal_progress() uses notify_all too: the split
+//     cancels real I/O. signal_progress() uses notify_all too: the split
 //     wait allows CONCURRENT observers (multiple parked waiters), and a
 //     single notification could strand a second parker on a stale token.
 //
@@ -37,7 +36,7 @@
 // interrupt_all() are called without holding any other lock, so no cycle can
 // form with work_mtx_, the arena leaf lock, or AsyncIoContext::access_mtx_.
 // A context-level caller may hold access_mtx_ only ACROSS the reap between
-// snapshot and wait_for_change, never into the park (I1).
+// snapshot and wait_for_change, never into the park.
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -60,12 +59,12 @@ class ReadyWaitSource final : public BackendWaitSource {
     }
 
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
-        // Phase G: the one-argument form is the unbounded entry; the bounded
+        // The one-argument form is the unbounded entry; the bounded
         // variant carries the deadline-driven park cap (see below).
         return wait_for_change(observed, std::chrono::nanoseconds::max());
     }
 
-    // Phase G review P1b: cv.wait_for is a native bounded transport —
+    // cv.wait_for is a native bounded transport —
     // truthfully report the capability (BackendWaitSource contract).
     bool supports_bounded_wait() const noexcept override { return true; }
 
@@ -96,10 +95,10 @@ class ReadyWaitSource final : public BackendWaitSource {
             c->notify_all();
         }
 #endif
-        // Phase G (bounded park): the deadline-driven cap bounds the physical
-        // park so the Scheduler's E11 timer pump re-drains before an active
-        // deadline expires. The unbounded sentinel (nanoseconds::max()) keeps
-        // the classic infinite park.
+        // The deadline-driven cap bounds the physical park so the Scheduler's
+        // timer pump re-drains before an active deadline expires. The
+        // unbounded sentinel (nanoseconds::max()) keeps the classic infinite
+        // park.
         if (max_park == std::chrono::nanoseconds::max()) {
             ready_cv_.wait(lk, [&] {
                 return ready_epoch_ != observed.progress_generation ||
@@ -131,14 +130,14 @@ class ReadyWaitSource final : public BackendWaitSource {
         ready_cv_.notify_all();
     }
 
-    // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
+    // Commit-to-park handshake: one-shot committed-wait
     // registration. arm_committed_wait() records the current control
     // generation as the mandatory observation floor for the NEXT wait_one()
     // invocation; consume_committed_wait() hands that floor back exactly once
     // (then behaves like snapshot()). Called by the Scheduler's MW-S2 Phase-B
     // commit under global_mtx_ BEFORE the participant is exposed as about-to-
     // park, so a runtime stop landing between the commit and wait_one()'s own
-    // snapshot is observed by that invocation (D4-RM13 invocation-begin
+    // snapshot is observed by that invocation (invocation-begin
     // semantics) instead of being rebaselined as a past event. The CV
     // predicate below is persistent (per-waiter observed token), so a future
     // waiter can never consume another waiter's wake — no transport token to
@@ -159,7 +158,7 @@ class ReadyWaitSource final : public BackendWaitSource {
     }
 
     // Real readiness publication: the caller must have published the request
-    // lifecycle state (backend_ready) FIRST (I4); this bumps the progress
+    // lifecycle state (backend_ready) FIRST; this bumps the progress
     // epoch under the mutex and notifies. notify_all (not notify_one): with
     // concurrent observers a single notification would strand a second parker
     // on a stale token (lost progress).
@@ -222,7 +221,7 @@ class ReadyWaitSource final : public BackendWaitSource {
     std::condition_variable ready_cv_;
     std::uint64_t ready_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
-    // D4-RM14 (P0-1): one-shot armed control floor (see arm_committed_wait /
+    // One-shot armed control floor (see arm_committed_wait /
     // consume_committed_wait). Guarded by mtx_.
     std::uint64_t armed_control_generation_ = 0;
     bool armed_ = false;
