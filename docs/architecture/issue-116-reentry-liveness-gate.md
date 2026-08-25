@@ -32,7 +32,7 @@ Constitution rules:     AC-4 (accepted operation must terminate, reapable — th
                         re-evaluation signal, not a quiescence proof)
 ```
 
-## Root cause (proven; see docs/investigations/issue-116-runtime-reentry-liveness.md)
+## Root cause (proven; see docs/history/issues/issue-116-runtime-reentry-liveness.md)
 
 Failing interleaving (single-worker runtime, ThreadPoolBackend, diagnosed by
 in-process diagnostic trace + gdb state dump on a live-hung process):
@@ -235,7 +235,7 @@ constitution conformance).
 
 ## Exit-path audit (Phase 6 of the investigation)
 
-See `docs/investigations/issue-116-runtime-reentry-liveness.md` §12 for the
+See `docs/history/issues/issue-116-runtime-reentry-liveness.md` §12 for the
 full table over: mw_s1 terminate observed, mw_s2 no-progress (this fix),
 E14/F1 stop-predicate, last-idle, final park, worker epilogue,
 all-workers-joined boundary, run_live return.

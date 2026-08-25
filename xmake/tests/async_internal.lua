@@ -37,7 +37,7 @@ sluice_internal_async_test("issue116_interrupt_reevaluation_regression_test",
 -- Issue #116 liveness forensics reproducer (investigation Phase 2). Probabilistic
 -- copy-pipeline starvation stress with an in-process watchdog that dumps the
 -- race-free Runtime/Scheduler/backend state and exits 42 on a permanent stall.
--- Diagnosis tooling for docs/investigations/issue-116-runtime-reentry-liveness.md;
+-- Diagnosis tooling for docs/history/issues/issue-116-runtime-reentry-liveness.md;
 -- the deterministic merge-gate regression is the target above.
 --
 -- EXPLICITLY OUT of the default `xmake test` merge gate: probabilistic

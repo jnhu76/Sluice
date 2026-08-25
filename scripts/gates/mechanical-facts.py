@@ -459,7 +459,7 @@ def fact_docs(root_dir=None):
 # scope — these docs quote e.g. `run_live#1` tokens that are not tracker
 # references and would trip the tracker-ref detector).
 TEST_TOTAL_EXTRA_DOCS = [
-    "docs/investigations/issue-116-runtime-reentry-liveness.md",
+    "docs/history/issues/issue-116-runtime-reentry-liveness.md",
     "docs/architecture/issue-116-reentry-liveness-gate.md",
 ]
 
