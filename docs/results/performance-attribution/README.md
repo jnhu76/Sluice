@@ -27,6 +27,22 @@ round-1 case study:
 
 Baseline and candidate were measured on the same machine in the same
 session (fingerprint inside each artifact; the compare command warns on any
-material mismatch). All four artifacts were re-measured with the schema-2
-runner after review round 3; pre-hardening numbers are superseded. See the
+material mismatch). All four were re-measured with the schema-2 runner
+after review round 3; pre-hardening numbers are superseded. See the
 case study for interpretation and its variance caveats.
+
+## E1 Round 1 — explicit-I/O abstraction tax (#221 G0, 2026-08-26)
+
+| Artifact | What it is |
+|----------|------------|
+| `e1-round1-read-smoke.json` | READ smoke matrix (3 sizes × 3 depths × 2 worker counts × 3 ladders), 1 GiB/cell, 7 reps |
+| `e1-round1-write-smoke.json` | WRITE smoke matrix, same geometry |
+| `e1-round1-read-representative.json` | READ representative cells (9 size×depth combos, w=4), 21 reps, per-cell perf counters (user-space-only) |
+| `e1-round1-write-representative.json` | WRITE representative cells, same geometry |
+| `e1-diagnostics/` | Non-canonical diagnostics: L1/L2 flame graphs (perf, dwarf call graphs) + bpftrace syscall/switch counts |
+
+Kind `e1tax` (validated by the same gate): L0 raw `pread`/`pwrite` vs L1
+minimal thread pool vs L2 Sluice `ThreadPoolBackend` over one
+deterministic op stream with fail-closed same-work accounting. Tax
+definitions, environment discipline, and claim boundary:
+[`docs/verification/explicit-io-abstraction-tax.md`](../../verification/explicit-io-abstraction-tax.md).
