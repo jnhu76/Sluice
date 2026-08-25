@@ -411,6 +411,14 @@ KNOWN_MOVED = {
         "docs/history/issues/issue-116-runtime-reentry-liveness.md",
     "docs/design/phase-b-request-slot-reference.md":
         "docs/history/implementation-plans/phase-b-request-slot-reference.md",
+    # #167 Step 5e2 (2026-08-25): phase-e frozen design moved to
+    # docs/history/implementation-plans/. Consumers updated atomically
+    # (threadpool_backend.hpp/.cpp comments, phase-e-compliance-gate.md,
+    # divergence-registry.md, as-built-async-architecture.md, design README).
+    # docs/history contains no stale references to the old path (verified),
+    # so the historical exemption is not affected.
+    "docs/design/phase-e-bounded-threadpool-backend.md":
+        "docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md",
 }
 
 # Regex patterns
