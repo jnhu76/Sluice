@@ -384,6 +384,19 @@ KNOWN_MOVED = {
         "docs/history/closeout/phase-d3-uring-identity-waiter-gate.md",
     "docs/architecture/phase-d4-uring-wait-close-drain-gate.md":
         "docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md",
+    # #167 Step 5c safe archive moves (2026-08-25): issue-110 / issue-123 /
+    # phase-b moved to docs/history/. Every exact-path consumer was updated
+    # atomically in the same change (issue-123: phase-g-backend-progress-wake.md
+    # and issue-116-runtime-reentry-liveness.md; phase-b:
+    # phase-b-compliance-gate.md, request_arena_test.cpp, xmake/tests/async.lua).
+    # docs/history contains no stale references to these old paths (verified
+    # before adding the entries), so the historical exemption is not affected.
+    "docs/investigations/issue-110-dequeue-gate-generation-handshake.md":
+        "docs/history/issues/issue-110-dequeue-gate-generation-handshake.md",
+    "docs/investigations/issue-123-phase-g-closeout-parallel-flake.md":
+        "docs/history/issues/issue-123-phase-g-closeout-parallel-flake.md",
+    "docs/design/phase-b-request-slot-reference.md":
+        "docs/history/implementation-plans/phase-b-request-slot-reference.md",
 }
 
 # Regex patterns

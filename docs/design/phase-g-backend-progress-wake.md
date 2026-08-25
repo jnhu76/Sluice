@@ -16,7 +16,7 @@ observer) with a single fail-closed case-level watchdog; the TP-G5/D1 progress
 baselines are read before the gate release (a baseline-after-release inversion
 caused the documented parallel-Debug false failures). Design semantics are
 unchanged — see
-`docs/investigations/issue-123-phase-g-closeout-parallel-flake.md`.
+`docs/history/issues/issue-123-phase-g-closeout-parallel-flake.md`.
 **Authority:** ADR-execution-model §9.4.7 / §9.4.7.1 (MIXED-WAKE bounded
 observation park; the P5 seam explicitly reserved: "P5 is reserved if P3 proves
 insufficient under the formal gate or the load-bearing tests"); AGENTS.md §4.4

@@ -3,7 +3,8 @@
 // Tests the bounded RequestSlot arena in isolation (the narrowest seam of the
 // request lifecycle) before any backend consumes it. The arena is an internal
 // detail:: type, but its capacity / reserve / release / generation contract is
-// a deliberate test seam documented in docs/design/phase-b-request-slot-reference.md
+// a deliberate test seam documented in
+// docs/history/implementation-plans/phase-b-request-slot-reference.md
 // (the design's tested seam declaration).
 //
 // ADR-explicit-io-request-contract (Accepted):

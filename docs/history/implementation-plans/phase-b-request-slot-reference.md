@@ -1,9 +1,14 @@
 # Design of Phase B — Bounded RequestKey / RequestSlot Reference Lifecycle
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from `docs/design/`;
+> classification at move: CLOSED-HISTORY (implemented design; all four
+> backends on the RequestArena lifecycle). Body preserved as-written; see
+> `docs/history/README.md`.
+
 **Author:** jnhu
 **Date:** 2026-08-02
 **Status:** Accepted (governs the `feat/bounded-request-slot-reference` implementation)
-**Governing ADR:** [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md) (Accepted)
+**Governing ADR:** [ADR-explicit-io-request-contract](../../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Constitution rules touched:** AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-10, AC-11, AC-12,
 AC-13, AC-14, AC-15
 

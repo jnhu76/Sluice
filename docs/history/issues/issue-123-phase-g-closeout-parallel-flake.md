@@ -1,5 +1,10 @@
 # Issue #123 — `phase_g_closeout_test` Parallel-Debug Flake: Root-Cause Investigation
 
+> **Archived 2026-08-25 (issue #167 Step 5).** Moved from
+> `docs/investigations/`; classification at move: CLOSED-HISTORY
+> (test-methodology false failure, not a production defect). Body preserved
+> as-written; see `docs/history/README.md`.
+
 **Status:** ROOT_CAUSE_PROVEN_AND_FIXED (test-infrastructure false-failure mechanism)
 **Baseline master SHA:** `41c392d` (pre-change working tree; issue #123 reported on 2026-08-18)
 **Fix branch:** `fix/issue-123-phase-g-closeout-flake`
