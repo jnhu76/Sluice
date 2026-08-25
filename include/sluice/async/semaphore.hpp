@@ -12,7 +12,7 @@
 // private wake channel, WITHOUT permit-ownership tracking, WITHOUT grant-in-
 // flight / refund state, and WITHOUT direct Fiber manipulation.
 //
-// Semantic model (docs/history/closeout/e12-semaphore.md, spec/tla/e12_semaphore/):
+// Semantic model (docs/architecture/async-synchronization.md § E12-B, spec/tla/e12_semaphore/):
 //
 //   available_ in [0, max_permits_]
 //   Permit conservation law (history counters exist only in the formal model):

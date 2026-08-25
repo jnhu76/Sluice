@@ -1,6 +1,6 @@
 // sluice::async::ApplicationRuntime — application lifecycle implementation.
 // ADR: docs/adr/ADR-application-runtime.md (Accepted).
-// Design: docs/history/implementation-plans/e16-application-runtime.md.
+// Design record (history): docs/history/implementation-plans/e16-application-runtime.md.
 #include <sluice/async/application_runtime.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>

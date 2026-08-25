@@ -774,14 +774,16 @@ SelectResult Scheduler::AsyncTestAccess::group_result(
 // Locking: exactly one global_mtx_ acquisition spans reserve..inline-completion
 // (inline branch) or reserve..suspension-commit (suspended branch, then G is
 // released before context_switch). No external Event::set / timer pump / other
-// Select path may observe a partially-registered group (docs/e13-select-
-// locking-and-publication.md §3.3).
+// Select path may observe a partially-registered group
+// (docs/history/implementation-plans/e13-select-locking-and-publication.md
+// §3.3).
 //
 // Caller-frame storage: SelectGroup + the SelectArmSlot array live in THIS
 // function's frame. arm.home_/next_/prev_ point into them; every Event/Timer
 // authority is closed before the caller is resumed (suspended) or before this
 // frame returns (inline), so no dangling reference survives the call
-// (docs/e13-select-production-architecture.md §4.1).
+// (docs/history/implementation-plans/e13-select-production-architecture.md
+// §4.1).
 // ===========================================================================
 SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
                                      std::size_t count) {
@@ -797,7 +799,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
 
     // -----------------------------------------------------------------------
     // (1) Caller validation — BEFORE any allocation/registration.
-    // docs/e13-select-public-api.md §4.11.
+    // docs/history/implementation-plans/e13-select-public-api.md §4.11.
     // -----------------------------------------------------------------------
     WorkerState* ws = current_worker();          // == g_worker
     if (ws == nullptr) {
@@ -909,8 +911,10 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         LockGuard lk(global_mtx_);
 
         // (5) Reserve deadline-heap capacity for ALL Timer arms BEFORE any
-        // registration mutation (docs/e13-select-public-api.md §5). This is the
-        // ONLY allocation permitted under the lock. Checked overflow guard.
+        // registration mutation (see
+        // docs/history/implementation-plans/e13-select-public-api.md §5).
+        // This is the ONLY allocation permitted under the lock. Checked
+        // overflow guard.
         if (timer_arm_count > deadline_heap_.max_size() - deadline_heap_.size()) {
             throw std::length_error(
                 "select(): deadline heap capacity overflow on reserve");
@@ -1213,10 +1217,13 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         // here: that predicate dereferences Scheduler-owned Timer registrations
         // (arm.timer.stable_reg_), which the timer pump may LAZILY RECLAIM
         // (pop+erase) between publication and resume once their deadline has
-        // elapsed (docs/e13-select-timer-adapter.md §6.1 lazy-at-deadline
-        // reclamation). The publication authority already closed all authority
-        // BEFORE make_runnable (docs/e13-select-type-and-lifetime.md §4.2); the
-        // caller trusts that. The caller validates only caller-owned state
+        // elapsed (see
+        // docs/history/implementation-plans/e13-select-timer-adapter.md §6.1
+        // lazy-at-deadline reclamation). The publication authority already
+        // closed all authority BEFORE make_runnable (see
+        // docs/history/implementation-plans/e13-select-type-and-lifetime.md
+        // §4.2); the caller trusts that. The caller validates only
+        // caller-owned state
         // (phase, completion mode, result, winner, caller Fiber state).
         if (group.phase() != detail::GroupPhase::completed ||
             group.completion_mode_ != detail::CompletionMode::suspended ||

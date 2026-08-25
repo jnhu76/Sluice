@@ -13,7 +13,7 @@
 // a public is_locked()/owner()/wait_queue() accessor, and WITHOUT direct Fiber
 // manipulation beyond the standard admission/handoff seams.
 //
-// Semantic model (docs/history/closeout/e12-async-mutex.md, spec/tla/e12_async_mutex/):
+// Semantic model (docs/architecture/async-synchronization.md § E12-C, spec/tla/e12_async_mutex/):
 //
 //   owner_ == nullptr   <=>  Mutex is unlocked
 //   owner_ != nullptr   <=>  Mutex is owned by exactly that Fiber
