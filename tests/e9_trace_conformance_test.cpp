@@ -80,6 +80,7 @@
 #include <cstdlib>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -173,6 +174,118 @@ const char* cause_name(const TraceEvent& ev) {
         case stest::WakeCause::idle_dance: return "idle_dance";
     }
     return "?";
+}
+
+// ---- #210 fail-safe runner cleanup -----------------------------------------
+// SLUICE_CHECK/SLUICE_FAIL record the failure and RETURN from the testcase
+// (harness.hpp); they do not throw. Any such early return between runner
+// construction and runner.join() used to destroy a JOINABLE std::thread, and
+// ~thread() on a joinable thread calls std::terminate() — a SECONDARY
+// cleanup failure that replaced the real report with
+// "terminate called without an active exception" (issue #210). The guard is
+// declared immediately AFTER the runner (so it runs BEFORE the thread's
+// destructor) and makes every early exit fail-safe:
+//   1. pre_join: release exactly the seams this test armed (release is
+//      idempotent and state-based: a worker paused under the arm wakes, a
+//      worker arriving after the release never pauses) and close the trace
+//      window — the releases let the coordinated run converge on its own
+//      termination semantics (the MW-S2 participant's FakeAsyncBackend
+//      wait_one() is non-blocking by contract and publishes
+//      global_terminate_, which every parked/looping worker observes);
+//   2. join the runner (no joinable std::thread is ever destroyed);
+//   3. post_join: drain test-held backend state so the Completion and
+//      AsyncIoContext destruction contracts hold.
+// The harness then reports the ORIGINAL failure. Not std::jthread (a
+// destructor join could deadlock on an armed seam), not detach (a Scheduler/
+// context lifetime race), not catch(...) (the harness does not throw).
+struct RunnerCleanup {
+    std::thread& runner;
+    std::function<void()> pre_join;
+    std::function<void()> post_join;
+    explicit RunnerCleanup(std::thread& r,
+                           std::function<void()> pre = nullptr,
+                           std::function<void()> post = nullptr)
+        : runner(r), pre_join(std::move(pre)), post_join(std::move(post)) {}
+    ~RunnerCleanup() {
+        if (!runner.joinable()) return;  // testcase joined on the normal path
+        if (pre_join) pre_join();
+        runner.join();
+        if (post_join) post_join();
+    }
+    RunnerCleanup(const RunnerCleanup&) = delete;
+    RunnerCleanup& operator=(const RunnerCleanup&) = delete;
+};
+
+// Bounded variant of the controller's unbounded wait_paused for call sites
+// reachable AFTER a bounded-watchdog failure observation (#210): the fail
+// path must stay bounded — never convert a crash into a hang. Polling
+// observes the same persistent `paused` state the cv wait would; the 1 ms
+// granularity matches wait_trace/wait_flag and proves nothing about
+// ordering (the seams do).
+bool wait_paused_bounded(Scheduler& s, stest::PhaseTag tag, const char* what) {
+    const auto deadline = std::chrono::steady_clock::now() + kWatchdog;
+    while (!stest::is_paused(s, tag)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::fprintf(stderr, "e9-trace: timed out waiting for pause %s\n",
+                         what);
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
+// ---- #210 fail-path forensics (test-only stderr diagnostics) ---------------
+// Print the trace snapshot and the seam states AT the moment a bounded
+// watchdog failed, so the PRIMARY failure (which wait timed out, how far the
+// protocol actually got, which worker held which role) reaches the report
+// instead of being masked by a secondary terminate/hang.
+void dump_trace(const char* what, const std::vector<TraceEvent>& evs) {
+    std::fprintf(stderr, "e9-trace: %s — observed %zu event(s):\n", what,
+                 evs.size());
+    for (std::size_t i = 0; i < evs.size(); ++i) {
+        const TraceEvent& ev = evs[i];
+        std::fprintf(stderr, "  [%zu] %s w=%u", i, kind_name(ev),
+                     static_cast<unsigned>(ev.worker));
+        if (static_cast<stest::TraceEventKind>(ev.kind) ==
+            stest::TraceEventKind::wake_published) {
+            std::fprintf(stderr, " cause=%s epoch=%llu", cause_name(ev),
+                         static_cast<unsigned long long>(ev.epoch));
+        }
+        if (static_cast<stest::TraceEventKind>(ev.kind) ==
+            stest::TraceEventKind::park_committed) {
+            std::fprintf(stderr, " armed=%d epoch=%llu", ev.armed ? 1 : 0,
+                         static_cast<unsigned long long>(ev.epoch));
+        }
+        if (static_cast<stest::TraceEventKind>(ev.kind) ==
+            stest::TraceEventKind::park_returned) {
+            std::fprintf(stderr, " immediate=%d causes=0x%x",
+                         ev.immediate ? 1 : 0,
+                         static_cast<unsigned>(ev.return_causes));
+        }
+        std::fprintf(stderr, "\n");
+    }
+}
+
+void dump_seam_states(Scheduler& s) {
+    const struct {
+        const char* name;
+        stest::PhaseTag tag;
+    } seams[] = {
+        {"mw_s2_committed_before_wait_one",
+         stest::PhaseTag::mw_s2_committed_before_wait_one},
+        {"scheduler_park_candidate", stest::PhaseTag::scheduler_park_candidate},
+        {"scheduler_park_commit", stest::PhaseTag::scheduler_park_commit},
+        {"scheduler_park_baseline_recorded",
+         stest::PhaseTag::scheduler_park_baseline_recorded},
+        {"worker_park_returned", stest::PhaseTag::worker_park_returned},
+    };
+    std::fprintf(stderr, "e9-trace: seam states at failure:\n");
+    for (const auto& e : seams) {
+        std::fprintf(stderr, "  %-36s reached=%d paused=%d\n", e.name,
+                     stest::is_reached(s, e.tag) ? 1 : 0,
+                     stest::is_paused(s, e.tag) ? 1 : 0);
+    }
 }
 
 // Emits the captured window as a #196 trace JSON artifact (bound to the
@@ -312,6 +425,14 @@ SLUICE_TEST_CASE(e9_trace_t1_unarmed_park_external_wake) {
 
     stest::E9TraceRecorder::enable(sched);
     std::thread runner([&] { sched.run_live(1); });
+    // #210: wh.notify() below is checked while the runner is joinable — the
+    // guard makes that (and any other) early exit release the armed
+    // post-park seam, resolve the Event, and join instead of terminating.
+    RunnerCleanup cleanup(runner, [&] {
+        stest::WorkerParkReturnSeam::release(sched);
+        stest::E9TraceRecorder::disable(sched);
+        ev.set();
+    });
 
     // The single worker: runs f -> suspends on the Event -> classifies MW-S3
     // (Live + external-wake-capable) -> commits + enters the UNARMED park.
@@ -386,6 +507,15 @@ SLUICE_TEST_CASE(e9_trace_t2_wake_races_park_commit) {
 
     stest::E9TraceRecorder::enable(sched);
     std::thread runner([&] { sched.run_live(1); });
+    // #210: wh.notify() below is checked while the runner is joinable — the
+    // guard makes that (and any other) early exit release both armed seams,
+    // resolve the Event, and join instead of terminating.
+    RunnerCleanup cleanup(runner, [&] {
+        stest::SchedulerParkBaselineSeam::release(sched);
+        stest::WorkerParkReturnSeam::release(sched);
+        stest::E9TraceRecorder::disable(sched);
+        ev.set();
+    });
 
     // The worker committed its park: baseline recorded, cv NOT yet entered.
     stest::SchedulerParkBaselineSeam::wait_paused(sched);
@@ -508,6 +638,31 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
 
     stest::E9TraceRecorder::enable(sched);
     std::thread runner([&] { sched.run(2); });  // Drain mode
+    // #210: SLUICE_CHECK(w1_parked) below fires while the runner is joinable;
+    // on failure it recorded the primary progress/timeout failure and
+    // returned, and ~thread() then called std::terminate() — the secondary
+    // cleanup failure that masked the real report. The guard instead
+    // releases every seam this case armed (the mw_s2 release lets the
+    // participant's non-blocking wait_one() publish global_terminate_ and
+    // retire; the park-return release — deliberately NOT covered by
+    // release_all_phases — frees a held survivor), joins the runner, and
+    // then drains the held op so the Completion/context destruction
+    // contracts hold (mirroring the normal path's post-join drain).
+    RunnerCleanup cleanup(
+        runner,
+        [&] {
+            stest::release(
+                sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
+            stest::Issue161CandidateSeam::release(sched);
+            stest::WorkerParkReturnSeam::release(sched);
+            stest::E9TraceRecorder::disable(sched);
+        },
+        [&] {
+            // Same drain as the normal path: outstanding==0 before context
+            // destruction, `held` ends ready.
+            backend_ptr->complete_oldest_with_bytes(0);
+            (void)ctx.poll();
+        });
 
     // Worker 0 is the committed participant paused pre-wait_one.
     stest::wait_paused(sched, stest::PhaseTag::mw_s2_committed_before_wait_one);
@@ -526,6 +681,14 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
     const bool w1_parked = evs.size() >= 2 &&
                            is_entered(evs[1], /*worker=*/1) &&
                            is_commit(evs[0], 1, /*armed=*/false);
+    if (!w1_parked) {
+        // #210 fail-path forensics: report WHAT the recorder actually saw
+        // (which worker parked / refused / never committed) and where the
+        // seams hold the workers, BEFORE the early return below hands over
+        // to the fail-safe cleanup guard.
+        dump_trace("T4 worker-1 park miss", evs);
+        dump_seam_states(sched);
+    }
     SLUICE_CHECK(w1_parked);
 
     // Release the participant: its wait_one returns 0 (no progress), it
@@ -553,7 +716,17 @@ SLUICE_TEST_CASE(e9_trace_t4_unarmed_park_terminate_return) {
             return returned && retired_w0;
         },
         "T4 terminate wake + return + retire");
-    stest::WorkerParkReturnSeam::wait_paused(sched);
+    // #210: this wait is reachable AFTER the bounded wait_trace above timed
+    // out (a timeout does NOT early-return) — the unbounded wait_paused here
+    // would convert the old std::terminate into a permanent hang. Bounded:
+    // a miss dumps the trace + seam states, records the failure, and returns
+    // through the fail-safe cleanup guard.
+    if (!wait_paused_bounded(sched, stest::PhaseTag::worker_park_returned,
+                             "T4 worker-1 post-return")) {
+        dump_trace("T4 worker-1 post-return pause miss", evs);
+        dump_seam_states(sched);
+        SLUICE_FAIL("T4: worker 1 never paused at WorkerParkReturnSeam");
+    }
     stest::E9TraceRecorder::disable(sched);
     stest::WorkerParkReturnSeam::release(sched);
     runner.join();
@@ -633,6 +806,17 @@ SLUICE_TEST_CASE(e9_trace_t5_prebaseline_publication_refuses_park) {
 
     stest::E9TraceRecorder::enable(sched);
     std::thread runner([&] { sched.run_live(2); });
+    // #210: the two wait_flag SLUICE_CHECKs below fire while the runner is
+    // joinable — the guard makes those early exits release the (normally
+    // already-released) seams, release the f2 rendezvous, resolve the Event,
+    // and join instead of terminating.
+    RunnerCleanup cleanup(runner, [&] {
+        stest::Issue161CandidateSeam::release(sched);
+        stest::SchedulerParkSeam::release_commit(sched);
+        stest::E9TraceRecorder::disable(sched);
+        hold_f2.release();
+        ev.set();
+    });
 
     // Worker 0: ran f_ext (suspended on the Event), classified MW-S3
     // (Live + external-wake-capable) and sits at its park-commit boundary.
@@ -674,9 +858,19 @@ SLUICE_TEST_CASE(e9_trace_t5_prebaseline_publication_refuses_park) {
     stest::Issue161CandidateSeam::release(sched);
     stest::SchedulerParkSeam::release_commit(sched);  // disarm for worker 1
 
-    SLUICE_CHECK(wait_flag(f2_started, kWatchdog));
+    if (!wait_flag(f2_started, kWatchdog)) {
+        // #210 fail-path forensics: f2 never ran — report what the window
+        // captured and where the seams hold the workers before returning.
+        dump_trace("T5 f2_started miss", evs);
+        dump_seam_states(sched);
+        SLUICE_FAIL("T5: f2 never started after the refusal window closed");
+    }
     hold_f2.release();
-    SLUICE_CHECK(wait_flag(f2_ran, kWatchdog));
+    if (!wait_flag(f2_ran, kWatchdog)) {
+        dump_trace("T5 f2_ran miss", evs);
+        dump_seam_states(sched);
+        SLUICE_FAIL("T5: f2 never completed after the rendezvous release");
+    }
     ev.set();
     runner.join();
 
