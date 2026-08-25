@@ -111,8 +111,9 @@ def check_common(art: dict) -> list[str]:
     if not isinstance(art, dict):
         return ["artifact is not a JSON object"]
     kind = art.get("kind")
-    if kind not in ("ladder", "cli", "perf", "overload"):
-        errs.append(f"kind: expected ladder|cli|perf|overload, got {kind!r}")
+    if kind not in ("ladder", "cli", "perf", "overload", "e1tax"):
+        errs.append(f"kind: expected ladder|cli|perf|overload|e1tax, "
+                    f"got {kind!r}")
     if art.get("schema") != REQUIRED_SCHEMA:
         errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
                     f"{art.get('schema')!r} (re-measure with the current "
@@ -571,7 +572,188 @@ def check_overload(art: dict) -> list[str]:
     return errs
 
 
-CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf, "overload": check_overload}
+# e1tax (#221 G0 / E1): the abstraction-tax matrix artifact. Fail-closed
+# same-work accounting (completed == expected ops/bytes, zero errors, read
+# word sums verified), recomputed medians (anti-hand-typing), and derived
+# tax rows cross-checked against the cell medians they claim to derive
+# from. Ladder keys mirror scripts/bench/perf-attribution.py E1_LADDERS.
+E1_LADDERS = {"L0_raw", "L1_pool", "L2_sluice"}
+E1_OPS = {"read", "write"}
+E1_MEDIAN_TOLERANCE_NS = 1.0
+
+
+def check_e1tax(art: dict) -> list[str]:
+    errs = []
+    params = art.get("params")
+    if not isinstance(params, dict):
+        return ["params: missing (matrix/ops/ladders/sizes/depths/workers/"
+                "total_bytes/reps/warmup)"]
+    if params.get("matrix") not in ("smoke", "full", "custom"):
+        errs.append(f"params.matrix: expected smoke|full|custom, got "
+                    f"{params.get('matrix')!r}")
+    for key, allowed in (("ops", E1_OPS), ("ladders", E1_LADDERS)):
+        vals = params.get(key)
+        if not isinstance(vals, list) or not vals or \
+                any(v not in allowed for v in vals):
+            errs.append(f"params.{key}: expected non-empty subset of "
+                        f"{sorted(allowed)}, got {vals!r}")
+    if params.get("matrix") == "custom":
+        for key in ("sizes", "depths", "workers"):
+            if not isinstance(params.get(key), list) or not params.get(key):
+                errs.append(f"params.{key}: custom matrix requires the "
+                            f"explicit sweep axes")
+    for k in ("total_bytes", "reps"):
+        if not isinstance(params.get(k), int) or params.get(k, 0) < 1:
+            errs.append(f"params.{k}: expected int >= 1")
+    if not isinstance(params.get("warmup"), int) or params.get("warmup", -1) < 0:
+        errs.append("params.warmup: expected int >= 0")
+
+    cells = art.get("cells")
+    if not isinstance(cells, list) or not cells:
+        return errs + ["cells: empty"]
+    seen_keys = set()
+    by_group: dict = {}
+    for i, c in enumerate(cells):
+        where = (f"cells[{i}] ({c.get('op')}/{c.get('request_size')}/"
+                 f"d{c.get('depth')}/w{c.get('workers')}/{c.get('ladder')})")
+        if c.get("op") not in E1_OPS or c.get("ladder") not in E1_LADDERS:
+            errs.append(f"{where}: unknown op/ladder")
+            continue
+        key = (c.get("op"), c.get("request_size"), c.get("depth"),
+               c.get("workers"), c.get("ladder"))
+        if key in seen_keys:
+            errs.append(f"{where}: duplicate cell key")
+        seen_keys.add(key)
+        rs = c.get("request_size")
+        tb = c.get("bytes")
+        if not isinstance(rs, int) or rs < 4096 or rs % 4096 != 0:
+            errs.append(f"{where}: request_size must be a multiple of 4096")
+            continue
+        if not isinstance(tb, int) or tb < rs or tb % rs != 0:
+            errs.append(f"{where}: bytes must be a positive multiple of "
+                        f"request_size")
+            continue
+        expected_ops = tb // rs
+        for k, want in (("ops", expected_ops),
+                        ("expected_ops", expected_ops),
+                        ("completed_ops", expected_ops),
+                        ("bytes", tb), ("expected_bytes", tb),
+                        ("completed_bytes", tb)):
+            if c.get(k) != want:
+                errs.append(f"{where}: {k} is {c.get(k)!r}, must equal "
+                            f"{want} (same-work guarantee)")
+        if c.get("errors") != 0:
+            errs.append(f"{where}: errors {c.get('errors')} recorded (row "
+                        f"is not valid evidence)")
+        if c.get("op") == "read" and c.get("word_sum_ok") is not True:
+            errs.append(f"{where}: word_sum_ok missing/false — read cells "
+                        f"must verify the deterministic word sum")
+        samples = c.get("wall_ns_samples")
+        if not isinstance(samples, list) or not samples:
+            errs.append(f"{where}: wall_ns_samples missing/empty (zero "
+                        f"repetitions are not evidence)")
+            continue
+        if any(not isinstance(s, (int, float)) or s <= 0 for s in samples):
+            errs.append(f"{where}: wall_ns_samples contains a non-positive "
+                        f"or non-numeric value (unknown unit / corruption)")
+            continue
+        reps = params.get("reps")
+        if isinstance(reps, int) and len(samples) != reps:
+            errs.append(f"{where}: {len(samples)} samples != params.reps "
+                        f"{reps}")
+        s_min, s_med, s_max = (c.get("wall_ns_min"), c.get("wall_ns_med"),
+                               c.get("wall_ns_max"))
+        for k in ("wall_ns_min", "wall_ns_med", "wall_ns_max"):
+            if not isinstance(c.get(k), (int, float)):
+                errs.append(f"{where}: {k} missing")
+        if all(isinstance(v, (int, float)) for v in (s_min, s_med, s_max)):
+            if not (s_min <= s_med <= s_max):
+                errs.append(f"{where}: wall_ns_min<=med<=max violated")
+            if abs(min(samples) - s_min) > 0 or abs(max(samples) - s_max) > 0:
+                errs.append(f"{where}: wall_ns_min/max do not match samples")
+            srt = sorted(samples)
+            n = len(srt)
+            med = srt[n // 2] if n % 2 == 1 else (srt[n // 2 - 1] +
+                                                  srt[n // 2]) / 2
+            if abs(med - s_med) > E1_MEDIAN_TOLERANCE_NS:
+                errs.append(f"{where}: wall_ns_med {s_med} != recomputed "
+                            f"median {med}")
+        if not isinstance(c.get("lifecycle_setup_ns"), int) or \
+                not isinstance(c.get("lifecycle_teardown_ns"), int):
+            errs.append(f"{where}: lifecycle setup/teardown timings missing "
+                        f"(steady-state scope must be explicit, not assumed)")
+        g = (c.get("op"), c.get("request_size"), c.get("depth"),
+             c.get("workers"))
+        by_group.setdefault(g, {})[c.get("ladder")] = c
+
+    # diagnostics: unavailable tooling must carry a reason, never fake zeros
+    diag = art.get("diagnostics")
+    if not isinstance(diag, dict):
+        errs.append("diagnostics: missing perf/bpftrace availability block")
+    else:
+        for tool in ("perf", "bpftrace"):
+            blk = diag.get(tool)
+            if not isinstance(blk, dict):
+                errs.append(f"diagnostics.{tool}: missing availability block")
+            elif blk.get("available") is not True and \
+                    not str(blk.get("reason", "")).strip():
+                errs.append(f"diagnostics.{tool}: available=false without a "
+                            f"reason (missing counters must be recorded as "
+                            f"unavailable, never as zeros)")
+
+    # derived: recomputed from the cell medians (anti-hand-typing); a run
+    # that measured all three ladders must carry its tax rows.
+    derived = art.get("derived")
+    if not isinstance(derived, list):
+        errs.append("derived: missing tax metrics")
+        derived = []
+    recomputed: dict = {}
+    for g, per in by_group.items():
+        if not all(l in per for l in E1_LADDERS):
+            continue
+        recomputed[g] = (per["L0_raw"]["wall_ns_med"],
+                         per["L1_pool"]["wall_ns_med"],
+                         per["L2_sluice"]["wall_ns_med"])
+    ladders = params.get("ladders") if isinstance(params.get("ladders"),
+                                                  list) else []
+    if set(ladders) == E1_LADDERS and not recomputed:
+        errs.append("derived: full-ladder run produced no comparable "
+                    "L0/L1/L2 groups")
+    seen_derived = set()
+    for d in derived:
+        g = (d.get("op"), d.get("request_size"), d.get("depth"),
+             d.get("workers"))
+        where = f"derived ({'/'.join(str(x) for x in g)})"
+        if g in seen_derived:
+            errs.append(f"{where}: duplicate derived row")
+        seen_derived.add(g)
+        if g not in recomputed:
+            errs.append(f"{where}: no matching L0/L1/L2 cells")
+            continue
+        l0, l1, l2 = recomputed[g]
+        for k, want in (("l0_ns_med", l0), ("l1_ns_med", l1),
+                        ("l2_ns_med", l2),
+                        ("threadpool_direct_tax_ns", l1 - l0),
+                        ("sluice_incremental_tax_ns", l2 - l1)):
+            got = d.get(k)
+            if not isinstance(got, (int, float)) or abs(got - want) > 1.0:
+                errs.append(f"{where}: {k} is {got!r}, cells say {want}")
+        ops_count = by_group[g]["L0_raw"].get("ops")
+        if isinstance(ops_count, int) and ops_count > 0:
+            got = d.get("l2_l1_per_request_ns")
+            want = (l2 - l1) / ops_count
+            if not isinstance(got, (int, float)) or abs(got - want) > 1e-9:
+                errs.append(f"{where}: l2_l1_per_request_ns is {got!r}, "
+                            f"expected {want}")
+    if set(ladders) == E1_LADDERS and seen_derived != set(recomputed):
+        for g in set(recomputed) - seen_derived:
+            errs.append(f"derived: missing tax row for "
+                        f"{'/'.join(str(x) for x in g)}")
+    return errs
+
+
+CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf,
+          "overload": check_overload, "e1tax": check_e1tax}
 
 
 def validate_artifact(art: dict) -> list[str]:
@@ -669,6 +851,47 @@ def _valid_ladder() -> dict:
         }],
         "derived": [{"workload": "w"}],
     }
+
+
+def _valid_e1tax() -> dict:
+    """A minimal structurally-valid e1tax artifact (one L0/L1/L2 group)."""
+    art = _valid_ladder()
+    art["kind"] = "e1tax"
+    art["params"] = {"matrix": "custom", "ops": ["read"],
+                     "ladders": ["L0_raw", "L1_pool", "L2_sluice"],
+                     "sizes": [4096], "depths": [1], "workers": [1],
+                     "total_bytes": 4096, "reps": 3, "warmup": 1,
+                     "latency": False}
+    def cell(ladder, samples):
+        med = sorted(samples)[1]
+        return {"op": "read", "ladder": ladder, "request_size": 4096,
+                "depth": 1, "workers": 1, "ops": 1, "bytes": 4096,
+                "expected_ops": 1, "completed_ops": 1,
+                "expected_bytes": 4096, "completed_bytes": 4096,
+                "errors": 0, "word_sum_ok": True,
+                "wall_ns_samples": samples, "wall_ns_min": min(samples),
+                "wall_ns_med": med, "wall_ns_max": max(samples),
+                "wall_ns_p25": samples[0], "wall_ns_p75": samples[2],
+                "user_ns_med": 100, "sys_ns_med": 100, "maxrss_kb_max": 4096,
+                "lifecycle_setup_ns": 500, "lifecycle_teardown_ns": 500}
+
+    cells = [cell("L0_raw", [1000, 1100, 1200]),
+             cell("L1_pool", [1400, 1500, 1600]),
+             cell("L2_sluice", [2150, 2250, 2350])]
+    art["cells"] = cells
+    art["derived"] = [{
+        "op": "read", "request_size": 4096, "depth": 1, "workers": 1,
+        "ops": 1, "l0_ns_med": 1100, "l1_ns_med": 1500, "l2_ns_med": 2250,
+        "threadpool_direct_tax_ns": 400, "sluice_incremental_tax_ns": 750,
+        "sluice_overhead_ratio": 0.5, "l1_l0_per_request_ns": 400.0,
+        "l2_l1_per_request_ns": 750.0,
+    }]
+    art["diagnostics"] = {
+        "perf": {"available": False, "reason": "not requested (--perf)",
+                 "mode": None, "perf_event_paranoid": 2},
+        "bpftrace": {"available": False, "reason": "not requested"},
+    }
+    return art
 
 
 class ValidatorSelfTest(unittest.TestCase):
@@ -956,6 +1179,72 @@ class ValidatorSelfTest(unittest.TestCase):
             p.write_text("{not json")
             errs = validate_path(p)
             self.assertTrue(any("invalid JSON" in e for e in errs))
+
+    def test_valid_e1tax_passes(self):
+        self.assertEqual(validate_artifact(_valid_e1tax()), [])
+
+    def test_e1tax_detectors_fire(self):
+        # completed ops below the same-work expectation (the ladder did
+        # less work than it claims — timings are not comparable)
+        art = _valid_e1tax()
+        art["cells"][2]["completed_ops"] = 0
+        self.assert_invalid(art, "completed_ops")
+        # zero repetitions are not evidence
+        art = _valid_e1tax()
+        art["cells"][0]["wall_ns_samples"] = []
+        self.assert_invalid(art, "wall_ns_samples missing/empty")
+        # a non-numeric sample (unknown unit / corrupted artifact)
+        art = _valid_e1tax()
+        art["cells"][0]["wall_ns_samples"] = [1000, "1100ns", 1200]
+        self.assert_invalid(art, "non-numeric value")
+        # sample count contradicting params.reps
+        art = _valid_e1tax()
+        art["cells"][0]["wall_ns_samples"] = [1000, 1200]
+        self.assert_invalid(art, "!= params.reps")
+        # median inconsistent with the raw samples (hand-typed table)
+        art = _valid_e1tax()
+        art["cells"][1]["wall_ns_med"] = 9999
+        self.assert_invalid(art, "recomputed median")
+        # min/max ordering violated
+        art = _valid_e1tax()
+        art["cells"][0]["wall_ns_min"] = 5000
+        self.assert_invalid(art, "wall_ns_min<=med<=max")
+        # recorded I/O errors invalidate the row
+        art = _valid_e1tax()
+        art["cells"][0]["errors"] = 2
+        self.assert_invalid(art, "errors 2 recorded")
+        # a read cell without the word-sum verification
+        art = _valid_e1tax()
+        art["cells"][0]["word_sum_ok"] = False
+        self.assert_invalid(art, "word_sum_ok missing/false")
+        # derived tax row contradicting the cell medians
+        art = _valid_e1tax()
+        art["derived"][0]["sluice_incremental_tax_ns"] = 1
+        self.assert_invalid(art, "cells say")
+        # a full-ladder run missing one group's tax row
+        art = _valid_e1tax()
+        art["derived"] = []
+        self.assert_invalid(art, "missing tax row")
+        # duplicate cell keys
+        art = _valid_e1tax()
+        art["cells"].append(dict(art["cells"][0]))
+        self.assert_invalid(art, "duplicate cell key")
+        # unavailable diagnostics without a reason (fake-zero class)
+        art = _valid_e1tax()
+        art["diagnostics"]["perf"] = {"available": False}
+        self.assert_invalid(art, "without a reason")
+        # diagnostics block missing entirely
+        art = _valid_e1tax()
+        del art["diagnostics"]
+        self.assert_invalid(art, "diagnostics")
+        # lifecycle scope must be explicit (steady-state claim)
+        art = _valid_e1tax()
+        del art["cells"][0]["lifecycle_setup_ns"]
+        self.assert_invalid(art, "lifecycle setup/teardown")
+        # unknown ladder in params
+        art = _valid_e1tax()
+        art["params"]["ladders"] = ["L0_raw", "L3_uring"]
+        self.assert_invalid(art, "params.ladders")
 
 
 def main() -> int:
