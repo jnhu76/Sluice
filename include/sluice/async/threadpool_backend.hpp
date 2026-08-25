@@ -16,8 +16,9 @@
 // + worker consumes a SlotHandle, runs the syscall, records backend-ready ONLY
 // + reap (poll/wait_one) is the SOLE Completion-ready publication authority
 //
-// See docs/design/phase-e-bounded-threadpool-backend.md (the frozen design) and
-// docs/architecture/phase-e-compliance-gate.md (the evidence ledger).
+// See docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md
+// (the frozen design record) and docs/architecture/phase-e-compliance-gate.md
+// (the evidence ledger).
 //
 // Resource bounds (AC-7, ADR Decision 13) — these are DISTINCT resources:
 //   request_capacity  : arena slots == dispatch ring entries (backend-owned)

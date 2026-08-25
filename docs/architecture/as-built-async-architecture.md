@@ -101,8 +101,9 @@ corrected by PR #61 to name the backend as the claim authority.
 > `PreparedBlockingOp` per slot (no `std::function`/`Completion*`); workers that
 > record `backend-ready` ONLY via `record_terminal`; reap-only Completion-ready
 > publication; real-syscall descriptor validation before commit; and a
-> persistent ready-epoch wake. See `docs/design/phase-e-bounded-threadpool-
-> backend.md` and `docs/architecture/phase-e-compliance-gate.md`. DIV-03 and
+> persistent ready-epoch wake. See
+> `docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md` and
+> `docs/architecture/phase-e-compliance-gate.md`. DIV-03 and
 > DIV-12 are Resolved; DIV-14 is partially resolved for ThreadPool.
 
 ```text

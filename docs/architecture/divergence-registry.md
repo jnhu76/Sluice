@@ -99,7 +99,7 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | Benefit (historical) | Evented scheduler workers remained free during blocking I/O; a simple functional prototype under normal resource availability. |
 | Cost (historical) | Thread creation per op (expensive); unbounded thread count; misleading name suggested a bounded pool; violated AC-7. |
 | Resolution | Phase E (`feat/phase-e-bounded-threadpool-explicit-io`) replaced the per-op-thread model with a fixed pool of persistent blocking-I/O workers + a construction-time bounded dispatch ring + `RequestArena` / `RequestSlot` as the single request-lifecycle authority. Workers are created only at construction and worker storage never grows; the thread-per-OP model is gone. The name is retained for API continuity but the backend is now a bounded blocking-I/O offload mechanism, not a Zig `Threaded` translation. |
-| Current evidence | `include/sluice/async/threadpool_backend.hpp` (ThreadPoolConfig, persistent workers, bounded dispatch ring, RequestArena); `tests/threadpool_backend_reap_test.cpp` (workers_spawned_for_test == worker_count for the backend's whole life); `docs/design/phase-e-bounded-threadpool-backend.md`. |
+| Current evidence | `include/sluice/async/threadpool_backend.hpp` (ThreadPoolConfig, persistent workers, bounded dispatch ring, RequestArena); `tests/threadpool_backend_reap_test.cpp` (workers_spawned_for_test == worker_count for the backend's whole life); `docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md`. |
 | Revisit trigger | None for the per-op model. The naming (ThreadPoolBackend) is retained for continuity; a future rename would be a separate API ADR. |
 
 ---

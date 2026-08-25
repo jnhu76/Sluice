@@ -1,6 +1,6 @@
 # Phase E Compliance Gate — Bounded Blocking-I/O Backend (ThreadPoolBackend → RequestArena)
 
-**Design:** [`docs/design/phase-e-bounded-threadpool-backend.md`](../design/phase-e-bounded-threadpool-backend.md)
+**Design:** [`docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md`](../history/implementation-plans/phase-e-bounded-threadpool-backend.md)
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Generic gate:** [`design-compliance-gate.md`](design-compliance-gate.md)
 **Branch:** `feat/phase-e-bounded-threadpool-explicit-io` (merged to master as PR #64)
