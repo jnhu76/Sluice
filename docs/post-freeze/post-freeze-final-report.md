@@ -39,7 +39,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_condition.cpp` | 264 | condition waits |
 | `src/async/scheduler_queue.cpp` | 499 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2122 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2128 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -93,7 +93,13 @@ unchanged — the release library carries zero trace symbols; see
 `docs/verification/formal/e9-trace-conformance.md`);
 `scheduler_queue.cpp` 503 → 499 (2026-08-26, Issue #227 Phase 0 — removal of
 a dangling empty `// ====...====` banner comment left over from the R1
-split; comment-only, no behavior change).
+split; comment-only, no behavior change);
+`scheduler.cpp` 2122 → 2128 (2026-08-26, Issue #229 — the internal-testing
+`AsyncTestAccess::active_deadline_count` accessor gains a `global_mtx_`
+locked snapshot (TSan data race repair: the coordinator fiber polled the
+unlocked counter while workers mutated it); test-only vocabulary, production
+behavior/layout unchanged — see
+`docs/architecture/issue-229-deadline-test-seam-lock-gate.md`).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different
