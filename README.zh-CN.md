@@ -229,7 +229,7 @@ Sluice 是研究质量的实验性软件：平台支持以 Linux 为中心（fib
 - [应用轨道：真实工作负载带来的发现](docs/applications/README.md)
 - [验证矩阵](docs/verification/README.md) —— sanitizer、确定性因果
   测试、形式化模型
-- [路线图](docs/roadmap/README.md) · [变更日志](docs/changelog.md)
+- [路线图](docs/roadmap/README.md) · [变更日志](CHANGELOG.md)
 
 ## 许可证
 

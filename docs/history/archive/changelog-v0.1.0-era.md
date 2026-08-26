@@ -1,4 +1,12 @@
-# Changelog
+# Changelog (v0.1.0 era — archived)
+
+> **Historical note (2026-08-26):**
+> Status: Historical / Superseded. This was the pre-v0.0.1 changelog record
+> (the v0.1.0-era tag and the unreleased development entries accumulated
+> before the `v0.0.1` reference baseline `a38df5e`).
+> Superseded by the root `CHANGELOG.md` (Keep a Changelog 2.0.0; version
+> history starts at `v0.0.1`).
+> This document is not current authority.
 
 ## Unreleased — documentation information-architecture reorientation
 

@@ -243,7 +243,7 @@ made beyond the measured application evidence.
 - [Applications: what real workloads taught us](docs/applications/README.md)
 - [Verification matrix](docs/verification/README.md) — sanitizers,
   deterministic causal tests, formal models
-- [Roadmap](docs/roadmap/README.md) · [Changelog](docs/changelog.md)
+- [Roadmap](docs/roadmap/README.md) · [Changelog](CHANGELOG.md)
 
 ## License
 
