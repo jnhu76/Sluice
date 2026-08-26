@@ -207,11 +207,11 @@ int main() {
 
 ## 项目状态
 
-- **最新 tag 发布：** `v0.1.0` —— 运行时基础：同步核心、异步调度器与
-  fiber 运行时、同步原语。
-- **当前开发（master，超出 tag）：** 跨后端的 explicit-I/O 请求生命周期、
-  `ApplicationRuntime` 层，以及第一批真实应用（copy / hash / grep /
-  tail，2026-08 合并）。
+- **参考基线：** `v0.0.1` —— 为六域审计战役冻结的 explicit-I/O 产品面：
+  同步核心、异步调度器与 fiber 运行时、同步原语、后端集合，以及第一批
+  真实应用（copy / hash / grep / tail）。见 #227。
+- **开发在 master 上继续**，超出 tag——见
+  [路线图](docs/roadmap/README.md)。
 - **实验性：** `UringAsyncBackend` —— real-liburing 验证证据仍依赖环境。
 - **未实现：** 网络与外存数据结构（KV / B+ tree / LSM）。它们是未来的
   工作负载方向——用于产生 API 压力的证据生成器，不是当前能力——见

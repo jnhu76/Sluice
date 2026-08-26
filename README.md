@@ -215,11 +215,12 @@ Backend internals, conformance evidence, and the io_uring runbook live under
 
 ## Project status
 
-- **Latest tagged release:** `v0.1.0` — the runtime foundation: synchronous
-  core, async scheduler and fiber runtime, and the synchronization primitives.
-- **Current development (master, beyond the tag):** the explicit-I/O request
-  lifecycle across backends, the `ApplicationRuntime` layer, and the first
-  real applications (copy / hash / grep / tail, merged 2026-08).
+- **Reference baseline:** `v0.0.1` — the explicit-I/O product surface frozen
+  for the six-domain audit campaign: synchronous core, async scheduler and
+  fiber runtime, synchronization primitives, the backend set, and the first
+  real applications (copy / hash / grep / tail). See #227.
+- **Development continues on master** beyond the tag — see the
+  [roadmap](docs/roadmap/README.md).
 - **Experimental:** `UringAsyncBackend` — real-liburing validation evidence
   remains environment-dependent.
 - **Not implemented:** networking and external-memory data structures
