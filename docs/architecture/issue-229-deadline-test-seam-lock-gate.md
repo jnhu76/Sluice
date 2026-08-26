@@ -124,11 +124,17 @@ class of observation.
 
 ## Seam contract (issue §8)
 
-A test observation accessor returning mutex-governed Scheduler timer state
-returns a synchronized snapshot under the authoritative production lock —
-one safe instantaneous observation per call. The fix promises no
-transactional consistency across separate calls, no lock-free observation,
-no real-time monotonicity, and no atomicity across multiple timer structures.
+A timer-state test accessor that may execute concurrently with production
+mutation must observe that state under its authoritative synchronization
+domain. `active_deadline_count()` therefore takes `global_mtx_`. Existing
+sibling diagnostics remain quiescent-only and are NOT generalized by this
+fix: `timer_pool_size`, `deadline_heap_size`, `timer_pool_count_in_state` and
+the select-timer accessors stay unlocked with their quiescent-use
+precondition (audit table above), to be revisited by a later observability
+audit. Per fixed accessor the contract is one safe instantaneous
+observation per call — no transactional consistency across separate calls,
+no lock-free observation, no real-time monotonicity, and no atomicity across
+multiple timer structures.
 
 ---
 
@@ -160,8 +166,9 @@ FAILURE MODEL:    LockGuard cannot fail (no throw, no allocation). The
 
 ```text
 WAKE/PROGRESS MODEL: unchanged — the fix adds no wake, no park, no timeout,
-                     and no polling dependency. The locked observation itself
-                     is a bounded wait for the existing Scheduler authority.
+                     and no polling dependency. The observation may briefly
+                     block acquiring the existing Scheduler authority; this
+                     adds no new wait-for edge or circular dependency.
 
 DEADLOCK/LIVENESS PROOF (issue §9):
   9.1 Park discipline: no physical Fiber context switch occurs while
