@@ -176,6 +176,53 @@ class ThreadPoolBackend : public AsyncBackend {
     }
     std::size_t configured_worker_count() const noexcept { return workers_.size(); }
 
+    // AC-1a (issues #234/#227) minimal resource observations. These are
+    // PRODUCTION read-only forwarders over state that ALREADY has a single
+    // authority; no new counter, lock, or atomic is added, and the submit /
+    // dispatch / reap hot paths are unchanged.
+    //
+    // Terms follow the R4 four-quantity discipline: capacity (bounded amount),
+    // occupancy (currently consumed units), high-water (peak occupancy since
+    // construction). "Demand" and "pressure" are NOT reported here: demand is
+    // not observable in AC-1a and no time/progress-loss dimension exists at
+    // this tier (rejection counts are refusals, not PSI-style pressure).
+    //
+    // Peak occupancy of the request slots since construction (maintained by
+    // the arena itself where slot_in_use changes). Monotonic; <= capacity.
+    std::size_t arena_high_water_mark() const noexcept { return arena_.high_water_mark(); }
+    // Current dispatch-ring occupancy (enqueued-but-not-yet-dequeued accepted
+    // requests) under the backend work domain.
+    std::size_t dispatch_occupancy() const;
+    // Peak dispatch-ring occupancy since construction. Monotonic; <= capacity.
+    std::size_t dispatch_high_water_mark() const;
+    // Workers currently between mark_running success and their post-syscall
+    // bookkeeping decrement — i.e. threads OWNING AND EXECUTING one operation.
+    // This is not "thread exists" and not "thread is awake"; an idle parked
+    // worker counts as 0. Bounded by configured_worker_count().
+    std::size_t active_workers() const;
+
+    // Component-wise coherent by-value snapshot: each field is read under its
+    // OWN existing authoritative lock (arena leaf mutex_ for the arena fields,
+    // work_mtx_ for the dispatch/worker fields), but the combined struct is a
+    // SEQUENCE of separate critical sections. It is NOT a globally atomic
+    // snapshot and MUST NOT be used to prove cross-field consistency at one
+    // instant; use individual accessors + tests when a single-domain fact is
+    // needed. Convenient for RX-1 sampling loops where approximate totality is
+    // acceptable and documented staleness is fine.
+    struct ResourceSnapshot {
+        std::size_t arena_capacity = 0;
+        std::size_t arena_slot_in_use = 0;
+        std::size_t arena_high_water_mark = 0;
+        std::size_t arena_capacity_rejections = 0;
+        std::size_t accepted_outstanding = 0;
+        std::size_t dispatch_capacity = 0;
+        std::size_t dispatch_occupancy = 0;
+        std::size_t dispatch_high_water_mark = 0;
+        std::size_t configured_workers = 0;
+        std::size_t active_workers = 0;
+    };
+    ResourceSnapshot resource_snapshot() const noexcept;
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // ---- internal-testing control plane (C4 / issue #135) ----
     // The pause-gate / failure-injection struct definitions, the bodies of

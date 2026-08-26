@@ -1544,6 +1544,26 @@ public:
     std::size_t arena_slot_in_use() const noexcept;
     std::size_t arena_capacity_rejections() const noexcept;
     std::size_t configured_worker_count() const noexcept;
+
+    // AC-1a minimal resource observations (read-only production surface).
+    std::size_t arena_high_water_mark() const noexcept;
+    std::size_t dispatch_occupancy() const;
+    std::size_t dispatch_high_water_mark() const;
+    std::size_t active_workers() const;
+
+    struct ResourceSnapshot {
+        std::size_t arena_capacity = 0;
+        std::size_t arena_slot_in_use = 0;
+        std::size_t arena_high_water_mark = 0;
+        std::size_t arena_capacity_rejections = 0;
+        std::size_t accepted_outstanding = 0;
+        std::size_t dispatch_capacity = 0;
+        std::size_t dispatch_occupancy = 0;
+        std::size_t dispatch_high_water_mark = 0;
+        std::size_t configured_workers = 0;
+        std::size_t active_workers = 0;
+    };
+    ResourceSnapshot resource_snapshot() const noexcept;   // component-wise coherent
 };
 ```
 
@@ -1558,6 +1578,35 @@ cancel/drain/publish; the caller must `close_admission` + drain to
 beyond `off_t`, length beyond `SSIZE_MAX`) runs before commit; a non-negative
 but closed fd is accepted and later completes with the real `EBADF` terminal
 (AGENTS.md §9.1 — no `fcntl(F_GETFD)` preflight).
+
+#### ThreadPoolBackend resource observations (AC-1a)
+
+Minimal read-only resource facts over the backend's OWN bounded resources
+(#234 L1 tier). No new counters, locks, or synchronization authority: every
+field is pre-existing authoritative state read under its existing domain.
+Terms follow the R4 four-quantity discipline; "demand" is NOT observable at
+this tier and no field is a PSI-style pressure metric (occupancy/rejection
+counts carry no time/progress-loss dimension).
+
+| Field / accessor | Meaning | Unit | Authority (read sync) | Snapshot guarantee |
+|---|---|---|---|---|
+| `arena_capacity()` / `snapshot.arena_capacity` | configured request slots (== dispatch ring entries) | slots | construction-time fixed | exact |
+| `arena_slot_in_use()` / `snapshot.arena_slot_in_use` | slots currently reserved..completion-ready | slots | arena leaf mutex | per-domain current |
+| `arena_high_water_mark()` / `snapshot.arena_high_water_mark` | peak slot occupancy since construction; monotonic; <= capacity | slots | arena leaf mutex (maintained where occupancy changes) | per-domain current |
+| `arena_capacity_rejections()` / `snapshot.arena_capacity_rejections` | submits refused with `would_block` because the arena was full | rejections (count) | arena leaf mutex | per-domain current |
+| `outstanding()` / `snapshot.accepted_outstanding` | accepted-not-yet-completion-ready requests | requests | arena leaf mutex | per-domain current |
+| `dispatch_occupancy()` / `snapshot.dispatch_occupancy` | enqueued-but-not-yet-dequeued accepted requests on the bounded dispatch ring | entries | `work_mtx_` | per-domain current |
+| `dispatch_high_water_mark()` / `snapshot.dispatch_high_water_mark` | peak dispatch-ring occupancy since construction; monotonic; <= capacity | entries | `work_mtx_`-maintained ring state | per-domain current |
+| `configured_worker_count()` / `snapshot.configured_workers` | fixed persistent blocking-I/O workers | workers | fixed at construction | exact |
+| `active_workers()` / `snapshot.active_workers` | workers between successful `mark_running` and their post-syscall decrement — i.e. threads OWNING AND EXECUTING one operation (not "thread exists", not "thread awake") | workers | `work_mtx_` (worker bookkeeping) | per-domain current |
+
+`resource_snapshot()` reads the two lock domains in sequence (arena leaf mutex,
+then `work_mtx_`) into one caller-owned by-value struct. The result is
+**component-wise coherent but NOT globally atomic**: fields taken from
+different domains are never from one instant. Do not use it to prove
+cross-field consistency; use the individual accessors when a single-domain
+fact matters (and quiescent state for equality assertions). Occupancy fields
+can change concurrently with any observation.
 
 ### `sluice::async::UringAsyncBackend`
 
