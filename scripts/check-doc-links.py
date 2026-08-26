@@ -53,11 +53,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # the local scan set identical to the CI scan set.
 #
 # The patterns mirror the historical hard-coded set: root README files,
-# AGENTS.md, and every tracked Markdown under docs/.
+# AGENTS.md, the root CHANGELOG.md, and every tracked Markdown under docs/.
 _TRACKED_PATTERNS = [
     "README.md",
     "README.zh-CN.md",
     "AGENTS.md",
+    "CHANGELOG.md",
     "docs/*.md",
     "docs/**/*.md",
 ]
@@ -68,7 +69,8 @@ def _discover_scan_files() -> list[Path]:
 
     Prefers `git ls-files` so generated/gitignored Markdown under docs/ is
     excluded (this is the structural reason the docs gate was originally
-    deleted — see docs/changelog.md). Falls back to a direct rglob walk only
+    deleted — see `docs/history/archive/changelog-v0.1.0-era.md`). Falls back
+    to a direct rglob walk only
     when git is unavailable or the script runs outside a work tree, e.g. in
     the --self-test scratch path.
     """
