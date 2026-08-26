@@ -37,7 +37,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_mutex.cpp` | 344 | AsyncMutex waits |
 | `src/async/scheduler_rwlock.cpp` | 674 | rwlock waits, ForgedRwWaitCtx |
 | `src/async/scheduler_condition.cpp` | 264 | condition waits |
-| `src/async/scheduler_queue.cpp` | 503 | runnable queue, fiber routing |
+| `src/async/scheduler_queue.cpp` | 499 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
 | `src/async/scheduler.cpp` | 2122 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
@@ -90,7 +90,10 @@ duplicated cv-predicate lambdas in `park_on_wake_source` unified into one
 `park_pred` (behavior-identical; the guarded entry-evaluation uses it to
 observe the immediate-return boundary). Production park/wake behavior
 unchanged — the release library carries zero trace symbols; see
-`docs/verification/formal/e9-trace-conformance.md`).
+`docs/verification/formal/e9-trace-conformance.md`);
+`scheduler_queue.cpp` 503 → 499 (2026-08-26, Issue #227 Phase 0 — removal of
+a dangling empty `// ====...====` banner comment left over from the R1
+split; comment-only, no behavior change).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

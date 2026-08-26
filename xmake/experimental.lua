@@ -7,7 +7,7 @@ local R = SLUICE_ROOT
 --
 -- Normal builds have NO liburing dependency. Pass `--with-liburing=true` (and
 -- have liburing available via xrepo/system) to enable the experimental uring
--- targets and define CPPIO_HAS_LIBURING. Without it, the experimental sources
+-- targets and define SLUICE_HAS_LIBURING. Without it, the experimental sources
 -- compile as unsupported-stubs so the rest of the project is unaffected.
 -- ---------------------------------------------------------------------------
 option("with-liburing")
@@ -229,7 +229,7 @@ end
 
 -- Experimental uring library. Always defined so the headers/sources exist; the
 -- implementation compiles either the real uring path or the unsupported stub
--- based on CPPIO_HAS_LIBURING.
+-- based on SLUICE_HAS_LIBURING.
 target("sluice_experimental_uring")
     set_kind("static")
     set_default(false)

@@ -8,7 +8,7 @@
 # Minimum version: Lefthook >= 1.10.0. This floor is required for the `jobs:`
 # key and the `use_stdin` option used below. Older releases only support the
 # legacy `commands:` key and do not pass the pre-push stdin ref-pairs to the
-# script, which would silently degrade the whitespace gate (Gate 5) back to a
+# script, which would silently degrade the whitespace gate (Gate 6) back to a
 # working-tree-only check. Check with:
 #
 #     lefthook --version
@@ -34,7 +34,7 @@ pre-push:
     - name: sluice-pre-push
       # use_stdin: true forwards the pre-push stdin ref-pairs
       # (<local-ref> <local-sha> <remote-ref> <remote-sha> per line) to the
-      # script so Gate 5 can check the actual pushed ranges, not just the
+      # script so Gate 6 can check the actual pushed ranges, not just the
       # working tree. Without this Lefthook uses a pseudo-TTY whose stdin
       # never closes and the script would hang on `while read`.
       use_stdin: true

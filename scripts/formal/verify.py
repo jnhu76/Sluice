@@ -561,12 +561,6 @@ def cmd_check(manifest: dict) -> int:
         print("WARN  docs/verification/formal-models.md not found")
 
     # 7. No committed jar
-    for rel, content in files.items():
-        if "tla2tools.jar" in content and rel not in (
-            "scripts/formal/tla2tools.lock.json",
-        ):
-            # Only flag if the jar itself is tracked (not just mentioned)
-            pass
     tracked = subprocess.run(
         ["git", "ls-files"],
         cwd=str(REPO_ROOT),
@@ -579,14 +573,8 @@ def cmd_check(manifest: dict) -> int:
     else:
         print("OK    tla2tools.jar is not tracked")
 
-    # 8. Workflow references valid paths
+    # 8. Workflow file present
     if WORKFLOW_FILE.is_file():
-        wf_content = WORKFLOW_FILE.read_text()
-        for s in manifest.get("suites", []):
-            verifier = s.get("verifier", "")
-            if verifier and verifier not in wf_content:
-                # Not all verifiers need to be in the workflow; smoke/all cover them.
-                pass
         print("OK    workflow file exists")
     else:
         print("WARN  .github/workflows/formal.yml not found")

@@ -207,7 +207,6 @@ class UringAsyncBackend::BoundedDispatchQueue {
     explicit BoundedDispatchQueue(std::size_t capacity) : storage_(capacity), capacity_(capacity) {}
     bool empty() const noexcept { return size_ == 0; }
     std::size_t size() const noexcept { return size_; }
-    std::size_t capacity() const noexcept { return capacity_; }
 
     // Peek the front entry WITHOUT removing it. The dispatch ownership model
     // (frozen design §4.2 peek protocol) is "queue membership == local
@@ -310,7 +309,6 @@ class UringAsyncBackend::TransportLedger {
 
     bool empty() const noexcept { return size_ == 0; }
     std::size_t size() const noexcept { return size_; }
-    std::size_t capacity() const noexcept { return capacity_; }
 
     void append(Kind kind, std::uint32_t physical_position, std::uint64_t cookie,
                 detail::SlotHandle handle) noexcept {

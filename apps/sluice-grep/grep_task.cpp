@@ -26,7 +26,6 @@ using sluice::IoError;
 struct GrepTask {
     std::string pattern;
     std::vector<GrepInput> inputs;
-    std::size_t buffer_size;
     std::size_t max_line_bytes;
     MatchSink sink;
     std::vector<std::uint8_t> buffer;
@@ -158,9 +157,9 @@ std::vector<GrepFileResult> run_grep_engine(
         return all_error(inputs, IoError{IoError::Code::no_space});
     }
 
-    GrepTask task{pattern,        std::move(inputs), buffer_size,
-                  max_line_bytes, std::move(sink),   std::move(buffer),
-                  {}};
+    GrepTask task{pattern,          std::move(inputs),
+                  max_line_bytes,   std::move(sink),
+                  std::move(buffer), {}};
 
     // The library bridge runs the full lifecycle (build/start/submit/wait
     // publish/stop/drain/join + the task exception boundary). A lifecycle

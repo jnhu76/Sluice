@@ -17,7 +17,7 @@
 #   #2  reach1            -> FAIL (NoReachOrdThenReq 可达, 即期望违反)
 #   #3  reach2            -> FAIL (NoReachReqThenOrd 可达, 即期望违反)
 #   #4-#13 NEG-C1..NEG-C10 -> FAIL (各自违反其命名不变式)
-# 预期结果 (Queue, via verify-async-queue-formal.sh):
+# 预期结果 (Queue, via verify-async-queue.sh):
 #   Model A (E12Queue)      -> PASS (12 invariants)
 #   Model B (E12QueueClosed)-> PASS (7 invariants)
 #   NEG-QUEUE-1..7          -> FAIL (各自违反其命名不变式)

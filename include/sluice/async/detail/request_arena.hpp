@@ -623,8 +623,6 @@ public:
         return record_terminal(h, TerminalResult::err(IoError{IoError::Code::canceled}));
     }
 
-    // --- Stage 5: reap (ADR Decision 9) ---
-
     // --- Waiter registration (ADR Decision 10) ---
     // Register one waiter. Second registration while open_registered returns
     // invalid_state without overwriting the first. Registration is ORTHOGONAL

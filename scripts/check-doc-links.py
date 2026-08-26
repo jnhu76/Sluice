@@ -253,7 +253,6 @@ KNOWN_MOVED = {
     "docs/zig-std-io-source-inventory.md": "docs/history/implementation-plans/zig-std-io-source-inventory.md",
     "docs/zig-std-io-gap-calibration.md": "docs/history/archive/zig-std-io-gap-calibration.md",
     "docs/async-backend-parity.md": "docs/history/closeout/async-backend-parity.md",
-    "docs/async-next-jobs.md": "docs/history/implementation-plans/async-next-jobs.md",
     "docs/buffered-fast-path.md": "docs/history/implementation-plans/design-buffered-fast-path.md",
     "docs/copy-strategy.md": "docs/history/implementation-plans/design-copy-strategy.md",
     "docs/io-context.md": "docs/history/implementation-plans/design-io-context.md",
@@ -288,53 +287,18 @@ KNOWN_MOVED = {
     "docs/design-flush-sync-durability.md": "docs/history/implementation-plans/design-flush-sync-durability.md",
     "docs/design-copy-strategy.md": "docs/history/implementation-plans/design-copy-strategy.md",
     "docs/design-buffered-fast-path.md": "docs/history/implementation-plans/design-buffered-fast-path.md",
-    "docs/design-io-context.md": "docs/history/implementation-plans/design-io-context.md",
     "docs/design-wal-durability.md": "docs/history/implementation-plans/design-wal-durability.md",
     "docs/design-readv-writev.md": "docs/history/implementation-plans/design-readv-writev.md",
-    "docs/mvp-closeout.md": "docs/history/archive/mvp-closeout.md",
     "docs/mvp-core-model.md": "docs/history/archive/mvp-core-model.md",
-    "docs/next-steps-after-011.md": "docs/history/archive/next-steps-after-011.md",
     "docs/release-v0.1-mvp-checklist.md": "docs/history/archive/release-v0.1-mvp-checklist.md",
-    "docs/zig-std-io-gap-calibration.md": "docs/history/archive/zig-std-io-gap-calibration.md",
-    "docs/zig-std-io-parity-audit.md": "docs/history/implementation-plans/zig-std-io-parity-audit.md",
-    "docs/zig-std-io-source-inventory.md": "docs/history/implementation-plans/zig-std-io-source-inventory.md",
-    "docs/zig-stdio-async-port-map.md": "docs/history/implementation-plans/zig-stdio-async-port-map.md",
-    "docs/zig-stdio-migration-jobs.md": "docs/history/implementation-plans/zig-stdio-migration-jobs.md",
-    "docs/async-backend-parity.md": "docs/history/closeout/async-backend-parity.md",
     "docs/async-mutex-nothrow-implementation.md": "docs/history/closeout/async-mutex-nothrow-implementation.md",
     "docs/async-runtime-hang-and-gcc-corrective.md": "docs/history/closeout/async-runtime-hang-and-gcc-corrective.md",
     "docs/e0a-waiting-policy-audit.md": "docs/history/closeout/e0a-waiting-policy-audit.md",
-    "docs/sync-before-async-readiness-gate.md": "docs/history/closeout/sync-before-async-readiness-gate.md",
-    "docs/sync-io-model-gap-audit.md": "docs/history/closeout/sync-io-model-gap-audit.md",
     "docs/sync-runtime-bench-notes.md": "docs/history/closeout/sync-runtime-bench-notes.md",
-    "docs/sync-runtime-bench-notes.md": "docs/history/closeout/sync-runtime-bench-notes.md",
-    "docs/io-uring-spike.md": "docs/history/implementation-plans/io-uring-spike.md",
-    "docs/io-uring-readiness-gate.md": "docs/history/implementation-plans/io-uring-readiness-gate.md",
-    "docs/async-source-inventory.md": "docs/history/implementation-plans/async-source-inventory.md",
-    "docs/async-problem-statement.md": "docs/history/implementation-plans/async-problem-statement.md",
-    "docs/async-design-alternatives.md": "docs/history/implementation-plans/async-design-alternatives.md",
-    "docs/async-readiness-gate.md": "docs/history/implementation-plans/async-readiness-gate.md",
-    "docs/async-next-jobs.md": "docs/history/implementation-plans/async-next-jobs.md",
-    "docs/sync-io-next-jobs.md": "docs/history/implementation-plans/sync-io-next-jobs.md",
     "docs/async-deferred-until-sync-baseline.md": "docs/history/implementation-plans/async-deferred-until-sync-baseline.md",
-    "docs/async-design-alternatives.md": "docs/history/implementation-plans/async-design-alternatives.md",
-    "docs/async-problem-statement.md": "docs/history/implementation-plans/async-problem-statement.md",
-    "docs/async-readiness-gate.md": "docs/history/implementation-plans/async-readiness-gate.md",
-    "docs/async-source-inventory.md": "docs/history/implementation-plans/async-source-inventory.md",
     "docs/bench-optimization-runbook.md": "docs/history/implementation-plans/bench-optimization-runbook.md",
     "docs/bench-results-sample.csv": "docs/history/implementation-plans/bench-results-sample.csv",
     "docs/bench-summary-sample.txt": "docs/history/implementation-plans/bench-summary-sample.txt",
-    "docs/design-copy-strategy.md": "docs/history/implementation-plans/design-copy-strategy.md",
-    "docs/design-flush-sync-durability.md": "docs/history/implementation-plans/design-flush-sync-durability.md",
-    "docs/design-io-context.md": "docs/history/implementation-plans/design-io-context.md",
-    "docs/design-readv-writev.md": "docs/history/implementation-plans/design-readv-writev.md",
-    "docs/design-wal-durability.md": "docs/history/implementation-plans/design-wal-durability.md",
-    "docs/io-uring-readiness-gate.md": "docs/history/implementation-plans/io-uring-readiness-gate.md",
-    "docs/io-uring-spike.md": "docs/history/implementation-plans/io-uring-spike.md",
-    "docs/zig-std-io-parity-audit.md": "docs/history/implementation-plans/zig-std-io-parity-audit.md",
-    "docs/zig-std-io-source-inventory.md": "docs/history/implementation-plans/zig-std-io-source-inventory.md",
-    "docs/zig-stdio-async-port-map.md": "docs/history/implementation-plans/zig-stdio-async-port-map.md",
-    "docs/zig-stdio-migration-jobs.md": "docs/history/implementation-plans/zig-stdio-migration-jobs.md",
     "docs/e13-select-event-adapter.md": "docs/history/implementation-plans/e13-select-event-adapter.md",
     "docs/e13-select-locking-and-publication.md": "docs/history/implementation-plans/e13-select-locking-and-publication.md",
     "docs/e13-select-production-architecture.md": "docs/history/implementation-plans/e13-select-production-architecture.md",
@@ -345,13 +309,6 @@ KNOWN_MOVED = {
     "docs/e13-select-timer-adapter.md": "docs/history/implementation-plans/e13-select-timer-adapter.md",
     "docs/e13-select-type-and-lifetime.md": "docs/history/implementation-plans/e13-select-type-and-lifetime.md",
     "docs/e14-threaded-evented-parity-preparation.md": "docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md",
-    "docs/e10-e12-api-semantic-closure.md": "docs/history/closeout/e10-e12-api-semantic-closure.md",
-    "docs/e12-queue-scheduler-integration.md": "docs/history/implementation-plans/e12-queue-scheduler-integration.md",
-    "docs/e12-queue-state-machine.md": "docs/history/implementation-plans/e12-queue-state-machine.md",
-    "docs/async-mutex-nothrow-authority.md": "docs/history/implementation-plans/async-mutex-nothrow-authority.md",
-    "docs/async-runtime-construction-method.md": "docs/history/implementation-plans/async-runtime-construction-method.md",
-    "docs/async-runtime-plan.md": "docs/history/implementation-plans/async-runtime-plan.md",
-    "docs/e12-rwlock.md": "docs/history/implementation-plans/e12-rwlock.md",
     # Root-level paths whose stale references were first observed in public
     # headers (PR #207 review finding 1) — the Markdown scan surface never
     # saw them. New locations verified against the current tree. NOTE:
@@ -560,15 +517,10 @@ NON_PATH_PATTERNS = [
     r'^tests/e12_async_condition_test\.cpp$',
     r'^tests/e12_async_mutex_test\.cpp$',
     r'^tests/e12_async_queue_test\.cpp$',
-    r'^tests/e12_cross_primitive_parity_test\.cpp$',
     r'^tests/e12_async_mutex_death_test\.cpp$',
-    r'^tests/e12_async_mutex_nothrow_authority_probe\.cpp$',
     r'^tests/e12_async_condition_authority_probe\.cpp$',
     r'^tests/e12_async_mutex_authority_probe\.cpp$',
     r'^tests/e12_semaphore_authority_probe\.cpp$',
-    r'^tests/e12_api_contract_probes\.cpp$',
-    r'^tests/e11_timer_wait_test\.cpp$',
-    r'^tests/e8_steal_test\.cpp$',
     # Code state names
     r'^Detached/ProducerOp/Ring/ConsumerOp/Released$',
     r'^head_/tail_$',
@@ -631,7 +583,6 @@ NON_PATH_PATTERNS = [
     r'^experimental/uring_io_context\.hpp$',
     # Code types / expressions with spaces (won't match backtick regex, but just in case)
     r'^Result<size_t>',
-    r'^auto&$',
     r'^auto&',
     # More test case IDs with letter suffixes or multiple segments
     r'^cond_t\d+[a-z]*/t\d+[a-z]*$',
@@ -1294,7 +1245,7 @@ def self_test() -> int:
         print("SELF-TEST PASS: formerly-masked doc name detected")
     tmp3.unlink()
 
-    # --- Test 4: markdown link is NEVER skipped by is_non_path heuristic ---
+    # --- Test 5: markdown link is NEVER skipped by is_non_path heuristic ---
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as f:
@@ -1313,7 +1264,7 @@ def self_test() -> int:
         print("SELF-TEST PASS: markdown link to old doc name is flagged")
     tmp4.unlink()
 
-    # --- Test 5: nested doc with repo-root-looking link (P1-04 regression) ---
+    # --- Test 6: nested doc with repo-root-looking link (P1-04 regression) ---
     # This is the critical regression test: a markdown link that looks like a
     # repo-root-relative path (e.g. `docs/spec/e12_event/`) but is in a nested
     # document. GitHub resolves it relative to the current document, so it
@@ -1334,7 +1285,7 @@ def self_test() -> int:
         else:
             print("SELF-TEST PASS: nested doc repo-root-looking link is flagged as broken")
 
-    # --- Test 6: scan set excludes untracked / gitignored Markdown ---
+    # --- Test 7: scan set excludes untracked / gitignored Markdown ---
     # Structural regression guard: the scan set MUST come from `git ls-files`
     # so generated Markdown under docs/ (e.g. build artifacts) is never
     # validated. A stray untracked .md in the work tree must not appear in
@@ -1366,7 +1317,7 @@ def self_test() -> int:
                 if not existed:
                     untracked.unlink(missing_ok=True)
 
-    # --- Test 7: refs to intentionally-untracked dirs are environment-conditional ---
+    # --- Test 8: refs to intentionally-untracked dirs are environment-conditional ---
     # Documents like docs/adr/ADR-execution-model.md reference the Zig design
     # reference tree (zig/, gitignored per AGENTS.md §1) via `Io/fiber.zig`
     # etc. These resolve locally (ZIG_ROOT) but NOT in CI (actions/checkout
@@ -1395,7 +1346,7 @@ def self_test() -> int:
         failures += 1
     tmp7.unlink(missing_ok=True)
 
-    # --- Test 8: public-header docs/ reference scan (PR #207 review finding 1) ---
+    # --- Test 9: public-header docs/ reference scan (PR #207 review finding 1) ---
     # Root cause this guards against: stale `docs/...` pointers in public
     # headers historically escaped every gate because the checker scanned
     # Markdown only. The header scan must catch stale-moved and broken tokens,
@@ -1426,7 +1377,7 @@ def self_test() -> int:
         failures += 1
     tmp8.unlink(missing_ok=True)
 
-    # --- Test 9: header grandfather registry is honored AND self-pruning ---
+    # --- Test 10: header grandfather registry is honored AND self-pruning ---
     # A registered stale token passes as grandfathered; a registry entry whose
     # token no longer occurs in the header is itself an error (no zombie
     # amnesty for the #167 Step 4 backlog).
