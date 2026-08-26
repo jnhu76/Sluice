@@ -45,7 +45,7 @@ struct FiberStack {
 // A waiter fiber suspends on a WaitQueue via await_wait. A waker fiber calls
 // wake_wait_one. The waiter must resume EXACTLY ONCE (entered twice: before and
 // after the await). This proves the canonical seam delivers exactly one
-// runnable enqueue and the winner transition routes through route_runnable.
+// runnable enqueue and the winner transition routes through route_runnable_locked.
 SLUICE_TEST_CASE(schedwait_wake_resumes_once_via_canonical_seam) {
     if constexpr (!fiber_ctx::supported) return;
 

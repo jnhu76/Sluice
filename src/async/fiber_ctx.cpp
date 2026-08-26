@@ -251,10 +251,12 @@ void context_switch_final(Context& old, const Context& new_) noexcept {
 
 // ---- init_context (x86_64) -----------------------------------------------
 // Set up a fresh Context so its first context_switch enters the trampoline,
-// which `callq`s entry(resumed_by, user_data). The init frame holds
-// [entry, resumed_by, user_data] high->low; initial rsp points at `entry` so
-// the trampoline's first `popq %rax` loads it. See the alignment-math comment
-// inside the function body for the SysV-AMD64 invariant.
+// which calls fiber_entry_trampoline_bridge(resumed_by, user_data, entry).
+// The init frame holds [user_data, alignment slot, entry] high->low; initial
+// rsp points at `entry` (the trampoline's first `popq %rdx`), and the real
+// resumed_by Switch* arrives in rsi from context_switch. See the
+// alignment-math comment inside the function body for the SysV-AMD64
+// invariant.
 bool init_context(Context& ctx, Entry entry, void* user_data,
                   std::byte* stack_base, std::size_t stack_size) noexcept {
     if (entry == nullptr || stack_base == nullptr || stack_size < 64) {

@@ -442,10 +442,6 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
     return true;
 }
 
-// ===========================================================================
-//
-
-
 // AsyncQueue private seams.
 //
 // Blocking/timed wait admission + reconciliation. A QueuePort owns a producer
