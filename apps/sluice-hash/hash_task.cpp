@@ -41,7 +41,6 @@ void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out,
 
 struct HashTask {
     std::vector<HashInput> inputs;
-    std::size_t buffer_size;
     std::vector<std::uint8_t> buffer;
 
     // Hash one file: positional reads into the shared buffer via
@@ -148,7 +147,7 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
         return out;
     }
 
-    HashTask task{std::move(inputs), buffer_size, std::move(buffer)};
+    HashTask task{std::move(inputs), std::move(buffer)};
 
     // The library bridge runs the full lifecycle (build/start/submit/wait
     // publish/stop/drain/join + the task exception boundary). A lifecycle

@@ -59,8 +59,6 @@ public:
     // file's total line count for exit-code-free statistics.
     std::uint64_t complete_lines() const { return line_no_; }
 
-    std::size_t pattern_size() const { return pattern_.size(); }
-
 private:
     // V2 chunk scanner: process the complete-line region [i, end) of one
     // feed buffer (see matcher.cpp). `p` is the feed base pointer; `i` is a

@@ -75,8 +75,7 @@ struct ScopedFd {
     ScopedFd& operator=(const ScopedFd&) = delete;
 };
 
-void print_copy_result(const char* prog, const Result<CopyStats>& result,
-                       const CliArgs& args) {
+void print_copy_result(const char* prog, const Result<CopyStats>& result) {
     IoError e = result.error();
     std::fprintf(stderr, "%s: copy failed: %s%s%s\n", prog,
                  sluice_copy::cli::code_name(e.code),
@@ -119,7 +118,7 @@ int main(int argc, char** argv) {
             args.workers, args.sync);
         if (!result.has_value()) {
             sluice_copy::discard_atomic_copy(oc);
-            print_copy_result(argv[0], result, args);
+            print_copy_result(argv[0], result);
             return (result.error().code == IoError::Code::canceled) ? 3 : 2;
         }
 
@@ -193,7 +192,7 @@ int main(int argc, char** argv) {
                                                    args.pipeline_depth,
                                                    args.workers, args.sync);
     if (!result.has_value()) {
-        print_copy_result(argv[0], result, args);
+        print_copy_result(argv[0], result);
         // Canceled exit code vs I/O error.
         return (result.error().code == IoError::Code::canceled) ? 3 : 2;
     }
