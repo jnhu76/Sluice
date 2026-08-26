@@ -164,7 +164,8 @@ def check_added_line(entries, path: str, line: str):
     return (f"{path}: added line makes an affirmative overclaim of the "
             f"#163 §12 class: {line.strip()!r} — name the evidence class "
             f"(MODEL / TRACE-CONFORMANT / MEMORY-MODEL-CHECKED / ...) "
-            f"instead; see scripts/gates/claim-hygiene.py --help")
+            f"instead; to allowlist a proven-safe site pattern see "
+            f"scripts/gates/claim-hygiene.allowlist")
 
 
 def parse_diff(diff_text: str):

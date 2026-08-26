@@ -34,7 +34,6 @@ real, but combined into a tuple the owning source does not support).
 import json
 import re
 import sys
-import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent

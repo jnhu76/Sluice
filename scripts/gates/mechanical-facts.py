@@ -242,7 +242,7 @@ def check_split_layout(doc_paths, root=None):
     for path, where in documented.items():
         if where == "duplicate":
             errs.append(f"split layout: '{path}' listed more than once in doc tables")
-    doc_set = set(documentated_keys_no_dup := {
+    doc_set = set(documented_keys_no_dup := {
         p for p, w in documented.items() if w != "duplicate"})
     for missing in sorted(actual - doc_set):
         errs.append(f"split layout: file '{missing}' exists but is not in any doc table")
