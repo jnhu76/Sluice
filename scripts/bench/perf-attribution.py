@@ -22,6 +22,16 @@ Commands:
   compare   Side-by-side before/after table from two result JSON files,
             with environment-compatibility warnings.
   env       Print the environment fingerprint only.
+  e1        #221 G0 / E1 abstraction-tax matrix: L0 raw pread/pwrite vs
+            L1 minimal thread pool vs L2 Sluice ThreadPoolBackend, over
+            the request-size x depth x workers sweep, per-cell process
+            isolation, repetitions, provenance, and derived tax metrics
+            (docs/verification/explicit-io-abstraction-tax.md).
+  flame     Diagnostic CPU flame graph for one command: `perf record -g`
+            -> `perf script` -> folded stacks -> self-contained SVG (no
+            external FlameGraph checkout needed).
+  e1bpf     Diagnostic eBPF counters for one command via bpftrace
+            (pread64/pwrite64 entries, sched switches, migrations).
   self-test Hermetic unit tests for this runner's pure logic (no builds).
 
 Competitor parity: GNU grep and ripgrep are invoked with `-a` (--text) so
@@ -74,6 +84,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 BENCH_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "grep_attribution_bench"
 OVERLOAD_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "overload_backpressure_bench"
+E1_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "e1_abstraction_tax_bench"
 GEN_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "grep_workload_gen"
 GREP_APPS = {
     "sluice-grep": REPO / "build" / "linux" / "x86_64" / "release" / "sluice-grep",
@@ -829,6 +840,522 @@ def cmd_overload(args) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# e1 (#221 G0 / E1): explicit-I/O abstraction-tax matrix.
+# ---------------------------------------------------------------------------
+
+# Ladder keys as produced by bench/e1_abstraction_tax_bench.cpp. L0 uses
+# depth as raw-thread parallelism (workers ignored); L1/L2 use workers as
+# the pool/backend worker count. The uring ladder (raw liburing / Sluice
+# UringAsyncBackend) is DEFERRED by design: it requires a real-liburing
+# host validation, not the WSL2 environment this round runs on.
+E1_LADDERS = ["L0_raw", "L1_pool", "L2_sluice"]
+E1_OPS = ["read", "write"]
+
+E1_SMOKE_SIZES = [4096, 65536, 1 << 20]
+E1_SMOKE_DEPTHS = [1, 8, 64]
+E1_SMOKE_WORKERS = [1, 4]
+
+E1_FULL_SIZES = [4096, 16384, 65536, 262144, 1 << 20, 4 << 20]
+E1_FULL_DEPTHS = [1, 2, 4, 8, 16, 32, 64, 128]
+E1_FULL_WORKERS = [1, 2, 4, 8]
+
+# Buffer-budget guard mirrors the bench's own 1 GiB depth*size bound.
+E1_MAX_DEPTH_BYTES = 1 << 30
+
+
+def e1_matrix(mode, sizes, depths, workers, ops, ladders):
+    """Expand the sweep into (op, size, depth, workers, ladder) cells.
+
+    Pure function (self-tested): the smoke/full presets live here so the
+    runner and the validator can never disagree about what a full run is.
+    """
+    if mode == "smoke":
+        sizes, depths, workers = E1_SMOKE_SIZES, E1_SMOKE_DEPTHS, E1_SMOKE_WORKERS
+    elif mode == "full":
+        sizes, depths, workers = E1_FULL_SIZES, E1_FULL_DEPTHS, E1_FULL_WORKERS
+    elif mode != "custom":
+        sys.exit(f"--matrix must be smoke|full|custom, got {mode!r}")
+    cells = []
+    for op in ops:
+        for s in sizes:
+            for d in depths:
+                if d * s > E1_MAX_DEPTH_BYTES:
+                    continue
+                for w in workers:
+                    for lad in ladders:
+                        cells.append((op, s, d, w, lad))
+    return cells
+
+
+def _e1_percentiles(samples: list[int]) -> dict:
+    srt = sorted(samples)
+    n = len(srt)
+
+    def nearest_rank(pct: float) -> float:
+        idx = min(int(pct / 100.0 * n), n - 1)
+        return float(srt[idx])
+
+    return {"p25": nearest_rank(25), "p50": nearest_rank(50),
+            "p75": nearest_rank(75)}
+
+
+def _e1_run_cell(args, op, size, depth, workers, ladder, data_file,
+                 reps, latency) -> dict:
+    """Run ONE bench process (per-cell process isolation) and check it."""
+    cmd = [str(E1_BIN), "--ladder", ladder[:2], "--op", op,
+           "--file", str(data_file), "--request-size", str(size),
+           "--total-bytes", str(args.total_bytes), "--depth", str(depth),
+           "--workers", str(workers), "--reps", str(reps),
+           "--warmup", str(args.warmup)]
+    if latency:
+        cmd.append("--latency")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        sys.exit(f"e1 cell ({op}, {size}, d{depth}, w{workers}, {ladder}) "
+                 f"failed (exit {proc.returncode}):\n{proc.stderr}")
+    try:
+        out = json.loads(proc.stdout)
+    except json.JSONDecodeError as e:
+        sys.exit(f"e1 cell ({op}, {size}, d{depth}, w{workers}, {ladder}): "
+                 f"bench stdout is not JSON ({e})")
+    if not out.get("all_reps_ok"):
+        sys.exit(f"e1 cell ({op}, {size}, d{depth}, w{workers}, {ladder}): "
+                 f"bench reported failed repetition accounting")
+    return out
+
+
+def e1_derived(cells: list[dict]) -> list[dict]:
+    """Per-configuration tax metrics from the L0/L1/L2 cell medians.
+
+    Naming follows docs/verification/explicit-io-abstraction-tax.md:
+      ThreadPool direct tax  = T_L1 - T_L0
+      Sluice incremental tax = T_L2 - T_L1  (L1 already contains the
+      concurrent execution machinery; T_L2 - T_L0 is NOT reported as
+      "Sluice overhead").
+    """
+    grouped: dict = {}
+    for c in cells:
+        k = (c["op"], c["request_size"], c["depth"], c["workers"])
+        grouped.setdefault(k, {})[c["ladder"]] = c
+    out = []
+    for k in sorted(grouped):
+        per = grouped[k]
+        if not all(l in per for l in E1_LADDERS):
+            continue
+        op, size, depth, workers = k
+        l0 = per["L0_raw"]["wall_ns_med"]
+        l1 = per["L1_pool"]["wall_ns_med"]
+        l2 = per["L2_sluice"]["wall_ns_med"]
+        ops_count = per["L0_raw"]["ops"]
+        inc_pool = l1 - l0
+        inc_sluice = l2 - l1
+        out.append({
+            "op": op, "request_size": size, "depth": depth,
+            "workers": workers, "ops": ops_count,
+            "l0_ns_med": l0, "l1_ns_med": l1, "l2_ns_med": l2,
+            "threadpool_direct_tax_ns": inc_pool,
+            "sluice_incremental_tax_ns": inc_sluice,
+            "sluice_overhead_ratio": (inc_sluice / l1) if l1 > 0 else None,
+            "l1_l0_per_request_ns": inc_pool / ops_count,
+            "l2_l1_per_request_ns": inc_sluice / ops_count,
+        })
+    return out
+
+
+def _perf_tool_block(use_sudo: bool) -> dict:
+    """perf availability probe for the artifact's diagnostics block.
+
+    User-space counting works unprivileged at perf_event_paranoid <= 2;
+    kernel-side counting (cycles etc. without :u) needs root. Never fake
+    availability: on failure the block records the reason.
+    """
+    perf = shutil.which("perf")
+    block = {"available": False, "reason": "", "mode": None,
+             "perf_event_paranoid": None}
+    if perf is None:
+        block["reason"] = "perf not found in PATH"
+        return block
+    try:
+        block["perf_event_paranoid"] = int(
+            Path("/proc/sys/kernel/perf_event_paranoid").read_text().strip())
+    except (OSError, ValueError):
+        pass
+    probe = subprocess.run([perf, "stat", "-x,", "-e", "task-clock", "--",
+                            "/bin/true"], capture_output=True, text=True)
+    if probe.returncode == 0 and "task-clock" in probe.stderr:
+        block.update({"available": True, "mode": "user"})
+    elif use_sudo:
+        sudo_probe = subprocess.run(["sudo", "-n", perf, "stat", "-x,", "-e",
+                                     "task-clock", "--", "/bin/true"],
+                                    capture_output=True, text=True)
+        if sudo_probe.returncode == 0 and "task-clock" in sudo_probe.stderr:
+            block.update({"available": True, "mode": "kernel-via-sudo"})
+        else:
+            block["reason"] = ("unprivileged perf rejected and sudo -n "
+                               "failed (prime sudo or run as root)")
+    else:
+        block["reason"] = ("unprivileged perf stat failed (perf_event_"
+                           "paranoid or virtualization); pass --perf-sudo "
+                           "after priming sudo credentials")
+    return block
+
+
+def _e1_perf_counters(cell_cmd: list[str], use_sudo: bool) -> dict | None:
+    """Run one bench invocation under `perf stat -x,` (diagnostic).
+
+    Counters come from a separate 1-rep invocation, so they never perturb
+    the timed repetitions. Returns parsed counters or None.
+    """
+    perf = shutil.which("perf")
+    if perf is None:
+        return None
+    argv = [perf, "stat", "-x,", "-e", ",".join(PERF_EVENTS), "--"] + cell_cmd
+    if use_sudo:
+        argv = ["sudo", "-n"] + argv
+    env = dict(os.environ, LC_ALL="C")
+    out = subprocess.run(argv, capture_output=True, text=True, env=env)
+    if out.returncode != 0:
+        return None
+    counters = parse_perf_stat(out.stderr)
+    return counters or None
+
+
+def cmd_e1(args) -> dict:
+    if not E1_BIN.exists():
+        sys.exit(f"missing {E1_BIN} (xmake f -m release --toolchain=clang; "
+                 f"xmake build e1_abstraction_tax_bench)")
+    if args.matrix == "custom":
+        for name, vals in (("--sizes", args.sizes), ("--depths", args.depths),
+                           ("--workers", args.workers)):
+            if not vals:
+                sys.exit(f"{name} is required with --matrix custom")
+    sizes = [int(v) for v in (args.sizes or "").split(",") if v.strip()]
+    depths = [int(v) for v in (args.depths or "").split(",") if v.strip()]
+    workers = [int(v) for v in (args.workers or "").split(",") if v.strip()]
+    ops = [o for o in args.op.split(",") if o]
+    ladders = [l for l in args.ladders.split(",") if l]
+    for l in ladders:
+        if l not in E1_LADDERS:
+            sys.exit(f"--ladders entry {l!r} not in {E1_LADDERS} "
+                     f"(uring ladder is DEFERRED for G0; see the doc)")
+    cells_plan = e1_matrix(args.matrix, sizes, depths, workers, ops, ladders)
+    if not cells_plan:
+        sys.exit("e1 matrix expanded to zero cells (check sweep bounds)")
+
+    data_dir = Path(args.data_dir or
+                    tempfile.mkdtemp(prefix="sluice-e1-"))
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    perf_block = _perf_tool_block(args.perf_sudo) if args.perf else \
+        {"available": False, "reason": "not requested (--perf)",
+         "mode": None, "perf_event_paranoid": _perf_paranoid_or_none()}
+    bpf_block = _bpftrace_tool_block() if args.bpftrace else \
+        {"available": False, "reason": "not requested (--bpftrace)"}
+
+    cells = []
+    n = len(cells_plan)
+    for idx, (op_v, size_v, depth_v, workers_v, ladder_v) in \
+            enumerate(cells_plan):
+        data_file = data_dir / f"e1_{op_v}_{args.total_bytes}.bin"
+        print(f"[e1 {idx + 1}/{n}] op={op_v} size={size_v} "
+              f"depth={depth_v} workers={workers_v} ladder={ladder_v}",
+              file=sys.stderr)
+        out = _e1_run_cell(args, op_v, size_v, depth_v, workers_v, ladder_v,
+                           data_file, args.reps, args.latency)
+        walls = [r["wall_ns"] for r in out["reps_out"]]
+        users = [r["user_ns"] for r in out["reps_out"]]
+        syss = [r["sys_ns"] for r in out["reps_out"]]
+        pct = _e1_percentiles(walls)
+        cell = {
+            "op": out["op"], "ladder": out["ladder"],
+            "request_size": out["request_size"], "depth": out["depth"],
+            "workers": out["workers"], "ops": out["ops"],
+            "bytes": out["total_bytes"],
+            "expected_ops": out["ops"], "completed_ops": out["reps_out"][-1]["ops"],
+            "expected_bytes": out["total_bytes"],
+            "completed_bytes": out["reps_out"][-1]["bytes"],
+            "errors": sum(r["errors"] for r in out["reps_out"]),
+            "word_sum_ok": (out["op"] != "read") or all(
+                r["word_sum"] == out["expected_word_sum"]
+                for r in out["reps_out"]),
+            "wall_ns_samples": walls,
+            "wall_ns_min": min(walls), "wall_ns_med": median(walls),
+            "wall_ns_max": max(walls), "wall_ns_p25": pct["p25"],
+            "wall_ns_p75": pct["p75"],
+            "user_ns_med": median(users), "sys_ns_med": median(syss),
+            "maxrss_kb_max": max(r["maxrss_kb"] for r in out["reps_out"]),
+            "lifecycle_setup_ns": out["lifecycle_setup_ns"],
+            "lifecycle_teardown_ns": out["lifecycle_teardown_ns"],
+        }
+        if args.latency:
+            cell["latency"] = {
+                "p50_ns_med": median([r["lat_p50_ns"] for r in out["reps_out"]]),
+                "p95_ns_med": median([r["lat_p95_ns"] for r in out["reps_out"]]),
+                "p99_ns_med": median([r["lat_p99_ns"] for r in out["reps_out"]]),
+            }
+        if args.perf and perf_block["available"]:
+            # Separate 1-rep invocation so counters never perturb the timed
+            # repetitions (PMU counters are diagnostic evidence, not
+            # optimization authorization).
+            counter_cmd = [str(E1_BIN), "--ladder", ladder_v[:2], "--op",
+                           op_v, "--file", str(data_file), "--request-size",
+                           str(size_v), "--total-bytes",
+                           str(args.total_bytes), "--depth", str(depth_v),
+                           "--workers", str(workers_v),
+                           "--reps", "1", "--warmup", "1"]
+            got = _e1_perf_counters(counter_cmd, args.perf_sudo)
+            if got:
+                cell["counters"] = got
+                cell["counters_note"] = "1-rep diagnostic invocation"
+        cells.append(cell)
+
+    if not args.keep_files and args.data_dir is None:
+        shutil.rmtree(data_dir, ignore_errors=True)
+    else:
+        print(f"data dir kept: {data_dir}", file=sys.stderr)
+
+    return {
+        "schema": SCHEMA,
+        "kind": "e1tax",
+        "binary": binary_provenance(E1_BIN),
+        "params": {
+            "matrix": args.matrix, "ops": ops, "ladders": ladders,
+            "sizes": sizes or None, "depths": depths or None,
+            "workers": workers or None, "total_bytes": args.total_bytes,
+            "reps": args.reps, "warmup": args.warmup,
+            "latency": bool(args.latency),
+        },
+        "diagnostics": {"perf": perf_block, "bpftrace": bpf_block},
+        "cells": cells,
+        "derived": e1_derived(cells),
+    }
+
+
+def _perf_paranoid_or_none():
+    try:
+        return int(
+            Path("/proc/sys/kernel/perf_event_paranoid").read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _bpftrace_tool_block() -> dict:
+    bpf = shutil.which("bpftrace")
+    if bpf is None:
+        return {"available": False, "reason": "bpftrace not found in PATH"}
+    probe = subprocess.run(["sudo", "-n", bpf, "-e",
+                            "BEGIN { exit(); }"], capture_output=True,
+                           text=True)
+    if probe.returncode != 0:
+        return {"available": False,
+                "reason": "bpftrace present but requires root and "
+                          "sudo -n failed (unprivileged_bpf_disabled)",
+                "version": _first_line([bpf, "--version"])}
+    return {"available": True, "version": _first_line([bpf, "--version"]),
+            "requires": "root (unprivileged_bpf_disabled)"}
+
+
+# ---------------------------------------------------------------------------
+# flame: diagnostic CPU flame graph (perf record -g -> perf script -> fold
+# -> self-contained SVG; no external FlameGraph checkout).
+# ---------------------------------------------------------------------------
+
+
+def fold_perf_script(script_text: str) -> dict:
+    """Fold `perf script` output into {"root;...;leaf": count}.
+
+    perf script emits one header line per sample (comm pid ts: event:)
+    followed by the frame lines (address symbol, leaf first) — the frame
+    list is reversed to root-first. Pure function (self-tested).
+    """
+    folded: dict = {}
+    frames: list = []
+    for line in script_text.splitlines():
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            if frames:
+                key = ";".join(reversed(frames))
+                folded[key] = folded.get(key, 0) + 1
+                frames = []
+            continue
+        fields = line.strip().split(None, 1)
+        if len(fields) == 2 and not fields[1][0].isdigit():
+            # "address symbol" line with a real symbol name
+            frames.append(fields[1])
+        elif len(fields) == 1:
+            frames.append(fields[0])
+    if frames:
+        key = ";".join(reversed(frames))
+        folded[key] = folded.get(key, 0) + 1
+    return folded
+
+
+def flamegraph_svg(folded: dict, title: str, width: int = 1200,
+                   row_h: int = 16) -> str:
+    """Render folded stacks as a self-contained flame-graph SVG.
+
+    Classic layout: every frame's width is proportional to its sample
+    count; children are laid out left-to-right inside the parent's span.
+    """
+    def esc(s):
+        return (s.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace("'", "&apos;"))
+
+    palette = ["#c4521f", "#e8902c", "#ebbd4b", "#d4d464", "#8fbf5f",
+               "#4e9a51", "#3e8f83", "#416e9c", "#6a4e9f", "#9a4e8f"]
+    total = sum(folded.values())
+    if total == 0:
+        return (f"<svg xmlns='http://www.w3.org/2000/svg' width='{width}' "
+                f"height='{row_h * 2}'><text x='4' y='14' font-size='12'>"
+                f"{esc(title)} (no samples)</text></svg>")
+    # Frame aggregation: (depth, stack prefix) -> samples passing through.
+    frames: dict = {}
+    for stack, cnt in folded.items():
+        parts = stack.split(";")
+        for d in range(1, len(parts) + 1):
+            key = (d - 1, tuple(parts[:d]))
+            frames[key] = frames.get(key, 0) + cnt
+    max_depth = max(d for d, _ in frames) + 1
+    height = row_h * (max_depth + 2)
+    out = ["<svg xmlns='http://www.w3.org/2000/svg' "
+           f"width='{width}' height='{height}' font-family='monospace'>",
+           f"<text x='4' y='12' font-size='13'>{esc(title)} — "
+           f"{total} samples</text>"]
+    spans = {(): (0.0, float(width))}
+    for d in range(max_depth):
+        cumulative: dict = {}
+        for (dd, path), cnt in sorted(
+                ((k, v) for k, v in frames.items() if k[0] == d),
+                key=lambda kv: kv[0][1]):
+            parent = path[:-1]
+            px, _ = spans.get(parent, (0.0, float(width)))
+            sibs = cumulative.get(parent, 0)
+            x = px + width * sibs / total
+            w = width * cnt / total
+            spans[path] = (x, w)
+            cumulative[parent] = sibs + cnt
+            if w < 0.4:
+                continue
+            color = palette[hash(path[-1]) % len(palette)]
+            label = path[-1][: max(int(w / 6), 3)]
+            y = 18 + d * row_h
+            out.append(
+                f"<rect x='{x:.1f}' y='{y}' width='{w:.1f}' "
+                f"height='{row_h - 1}' fill='{color}' stroke='#333' "
+                f"stroke-width='0.3'><title>{esc(';'.join(path))} "
+                f"({cnt} samples, {100.0 * cnt / total:.1f}%)</title>"
+                f"</rect>")
+            out.append(f"<text x='{x + 2:.1f}' y='{y + row_h - 4}' "
+                       f"font-size='10' fill='#111'>{esc(label)}</text>")
+    out.append("</svg>")
+    return "\n".join(out)
+
+
+def cmd_flame(args) -> int:
+    perf = shutil.which("perf")
+    if perf is None:
+        sys.exit("perf not found in PATH")
+    if not args.cmd or args.cmd[0] == "--":
+        args.cmd = args.cmd[1:] if args.cmd else []
+    if not args.cmd:
+        sys.exit("flame requires a command after --")
+    work = Path(tempfile.mkdtemp(prefix="sluice-flame-"))
+    data = work / "perf.data"
+    record = [perf, "record", "-F", str(args.freq), "-g", "-o", str(data),
+              "--"] + args.cmd
+    if args.sudo:
+        record = ["sudo", "-n"] + record
+    env = dict(os.environ, LC_ALL="C")
+    print(f"recording: {' '.join(record)}", file=sys.stderr)
+    rec = subprocess.run(record, capture_output=True, text=True, env=env)
+    if rec.returncode != 0:
+        sys.exit(f"perf record failed ({rec.returncode}):\n{rec.stderr}")
+    script_cmd = [perf, "script", "-i", str(data)]
+    if args.sudo:
+        script_cmd = ["sudo", "-n"] + script_cmd
+    scr = subprocess.run(script_cmd, capture_output=True, text=True, env=env)
+    if scr.returncode != 0:
+        sys.exit(f"perf script failed ({scr.returncode}):\n{scr.stderr}")
+    folded = fold_perf_script(scr.stdout)
+    title = " ".join(os.path.basename(args.cmd[0]).split())
+    svg = flamegraph_svg(folded, f"{title} ({args.freq}Hz)")
+    prefix = args.output_prefix or str(work / "flame")
+    Path(prefix + ".folded").write_text(
+        "\n".join(f"{k} {v}" for k, v in sorted(folded.items())) + "\n")
+    Path(prefix + ".svg").write_text(svg)
+    print(f"wrote {prefix}.folded ({len(folded)} stacks) and "
+          f"{prefix}.svg", file=sys.stderr)
+    if not args.keep:
+        shutil.rmtree(work, ignore_errors=True)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# e1bpf: diagnostic eBPF counters via bpftrace (requires root here:
+# unprivileged_bpf_disabled=2 on the G0 host).
+# ---------------------------------------------------------------------------
+
+BPFTRACE_E1_PROG = """
+tracepoint:syscalls:sys_enter_pread64 { @pread64 = count(); }
+tracepoint:syscalls:sys_enter_pwrite64 { @pwrite64 = count(); }
+tracepoint:syscalls:sys_enter_fsync { @fsync = count(); }
+tracepoint:syscalls:sys_enter_fdatasync { @fdatasync = count(); }
+tracepoint:sched:sched_switch { @sched_switch = count(); }
+tracepoint:sched:sched_migrate_task { @sched_migrate = count(); }
+interval:s:{seconds} {{ print(@pread64); print(@pwrite64);
+    print(@sched_switch); print(@sched_migrate); exit(); }}
+"""
+
+
+def _parse_bpftrace_counts(text: str) -> dict:
+    """Parse bpftrace's `@name: N` map-print lines into a dict."""
+    counts: dict = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("@") and ":" in line:
+            name, _, val = line.partition(":")
+            name = name.strip().lstrip("@")
+            try:
+                counts[name] = int(val.strip().replace(",", ""))
+            except ValueError:
+                pass
+    return counts
+
+
+def cmd_e1bpf(args) -> int:
+    bpf = shutil.which("bpftrace")
+    if bpf is None:
+        sys.exit("bpftrace not found in PATH (diagnostic only; the e1 "
+                 "matrix never requires it)")
+    if args.cmd and args.cmd[0] == "--":
+        args.cmd = args.cmd[1:]
+    if not args.cmd:
+        sys.exit("e1bpf requires a command after --")
+    prog = BPFTRACE_E1_PROG.replace("{seconds}", str(args.seconds))
+    cmd = ["sudo", "-n", bpf, "-e", prog, "-c", " ".join(args.cmd)]
+    print(f"tracing: {' '.join(args.cmd)} for <= {args.seconds}s",
+          file=sys.stderr)
+    out = subprocess.run(cmd, capture_output=True, text=True)
+    if out.returncode != 0:
+        result = {"tool": "bpftrace", "available": False,
+                  "reason": out.stderr.strip()[-400:],
+                  "cmd": args.cmd}
+    else:
+        result = {"tool": "bpftrace", "available": True, "cmd": args.cmd,
+                  "seconds": args.seconds,
+                  "counts": _parse_bpftrace_counts(out.stdout + out.stderr),
+                  "raw_tail": (out.stdout + out.stderr).strip()[-2000:]}
+    text = json.dumps(result, indent=2)
+    if args.output:
+        Path(args.output).write_text(text + "\n")
+        print(f"wrote {args.output}", file=sys.stderr)
+    else:
+        print(text)
+    return 0
+
+
 class RunnerSelfTest(unittest.TestCase):
     def test_median_even_and_odd(self):
         self.assertEqual(median([3.0, 1.0, 2.0]), 2.0)
@@ -942,6 +1469,71 @@ class RunnerSelfTest(unittest.TestCase):
         self.assertEqual(c, {"task-clock": 1.23, "instructions": 4567.0,
                              "cycles": 389384.0})
 
+    def test_e1_matrix_presets_and_budget(self):
+        smoke = e1_matrix("smoke", [], [], [], ["read"], E1_LADDERS)
+        # 3 sizes x 3 depths x 2 workers x 3 ladders, all within budget.
+        self.assertEqual(len(smoke), 3 * 3 * 2 * 3)
+        full = e1_matrix("full", [], [], [], ["read"], E1_LADDERS)
+        # 128 x 4MiB = 512MiB stays under the 1 GiB buffer budget: kept.
+        self.assertIn(("read", 4 << 20, 128, 1, "L0_raw"), full)
+        # The budget guard drops depth*size over 1 GiB (bench refuses too).
+        over = e1_matrix("custom", [8 << 20], [256], [1], ["read"],
+                         E1_LADDERS)
+        self.assertEqual(over, [])
+        custom = e1_matrix("custom", [4096], [1], [2], ["read", "write"],
+                           ["L2_sluice"])
+        self.assertEqual(custom, [("read", 4096, 1, 2, "L2_sluice"),
+                                  ("write", 4096, 1, 2, "L2_sluice")])
+
+    def test_e1_percentiles_nearest_rank(self):
+        p = _e1_percentiles([10, 30, 20, 40, 50])
+        self.assertEqual(p["p50"], 30.0)
+        self.assertEqual(p["p25"], 20.0)
+        self.assertEqual(p["p75"], 40.0)
+
+    def test_e1_derived_tax_math(self):
+        def cell(op, lad, wall):
+            return {"op": op, "request_size": 4096, "depth": 1, "workers": 1,
+                    "ladder": lad, "wall_ns_med": wall, "ops": 100}
+        cells = [cell("read", "L0_raw", 1000), cell("read", "L1_pool", 1500),
+                 cell("read", "L2_sluice", 2250),
+                 # An incomplete group must be skipped, not half-reported.
+                 cell("write", "L0_raw", 500)]
+        d = e1_derived(cells)
+        self.assertEqual(len(d), 1)
+        self.assertEqual(d[0]["threadpool_direct_tax_ns"], 500)
+        self.assertEqual(d[0]["sluice_incremental_tax_ns"], 750)
+        self.assertAlmostEqual(d[0]["sluice_overhead_ratio"], 0.5)
+        self.assertAlmostEqual(d[0]["l2_l1_per_request_ns"], 7.5)
+
+    def test_fold_perf_script(self):
+        script = ("bench 123 100.0: cycles:\n"
+                  "        7fff leaf\n"
+                  "        7fff mid\n"
+                  "        7fff root\n"
+                  "\n"
+                  "bench 123 100.1: cycles:\n"
+                  "        7fff other\n"
+                  "        7fff root\n")
+        folded = fold_perf_script(script)
+        self.assertEqual(folded, {"root;mid;leaf": 1, "root;other": 1})
+
+    def test_flamegraph_svg_shape(self):
+        svg = flamegraph_svg({"root;a": 3, "root;b": 1}, "t")
+        self.assertIn("<svg", svg)
+        self.assertIn("</svg>", svg)
+        self.assertIn("4 samples", svg)
+        empty = flamegraph_svg({}, "t")
+        self.assertIn("no samples", empty)
+
+    def test_parse_bpftrace_counts(self):
+        text = ("@pread64: 4,096\n"
+                "@sched_switch: 12\n"
+                "Attaching 6 probes...\n"
+                "@bogus: not-a-number\n")
+        self.assertEqual(_parse_bpftrace_counts(text),
+                         {"pread64": 4096, "sched_switch": 12})
+
 
 def cmd_self_test(_args) -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(RunnerSelfTest)
@@ -1014,6 +1606,64 @@ def main() -> int:
     p.add_argument("--note", default="",
                    help="provenance note embedded in the artifact")
 
+    p = sub.add_parser("e1",
+                       help="#221 G0 explicit-I/O abstraction-tax matrix "
+                            "(L0 raw / L1 pool / L2 Sluice)")
+    p.add_argument("--op", default="read",
+                   help="comma list: read,write")
+    p.add_argument("--matrix", default="smoke",
+                   choices=["smoke", "full", "custom"])
+    p.add_argument("--sizes", default="",
+                   help="comma list of request sizes (--matrix custom)")
+    p.add_argument("--depths", default="",
+                   help="comma list of in-flight depths (--matrix custom)")
+    p.add_argument("--workers", default="",
+                   help="comma list of worker counts (--matrix custom)")
+    p.add_argument("--ladders", default=",".join(E1_LADDERS),
+                   help="comma list subset of " + ",".join(E1_LADDERS))
+    p.add_argument("--total-bytes", type=int, default=256 << 20)
+    p.add_argument("--reps", type=_positive_int, default=7,
+                   help="measured repetitions per cell (>= 20 recommended "
+                        "for representative evidence)")
+    p.add_argument("--warmup", type=_nonneg_int, default=1)
+    p.add_argument("--latency", action="store_true",
+                   help="also record per-op latency percentiles (separate "
+                        "invocations so throughput cells stay clean)")
+    p.add_argument("--perf", action="store_true",
+                   help="capture perf stat counters per cell (diagnostic; "
+                        "separate 1-rep invocation)")
+    p.add_argument("--perf-sudo", action="store_true", dest="perf_sudo",
+                   help="use `sudo -n perf` for kernel-side counters "
+                        "(prime sudo credentials first)")
+    p.add_argument("--bpftrace", action="store_true",
+                   help="record bpftrace availability in diagnostics")
+    p.add_argument("--data-dir", default=None, dest="data_dir",
+                   help="directory for workload files (default: fresh "
+                        "temp dir, removed unless --keep-files)")
+    p.add_argument("--keep-files", action="store_true", dest="keep_files")
+    p.add_argument("--output", default="")
+    p.add_argument("--note", default="",
+                   help="provenance note embedded in the artifact")
+
+    p = sub.add_parser("flame",
+                       help="diagnostic CPU flame graph for one command "
+                            "(perf record -g -> folded -> SVG)")
+    p.add_argument("--freq", type=_positive_int, default=199)
+    p.add_argument("--sudo", action="store_true",
+                   help="run perf under sudo -n (kernel frames; prime sudo)")
+    p.add_argument("--output-prefix", default="", dest="output_prefix",
+                   help="write <prefix>.folded and <prefix>.svg")
+    p.add_argument("--keep", action="store_true",
+                   help="keep the intermediate perf.data work dir")
+    p.add_argument("cmd", nargs=argparse.REMAINDER)
+
+    p = sub.add_parser("e1bpf",
+                       help="diagnostic eBPF counters for one command "
+                            "(bpftrace; requires root)")
+    p.add_argument("--seconds", type=_positive_int, default=30)
+    p.add_argument("--output", default="")
+    p.add_argument("cmd", nargs=argparse.REMAINDER)
+
     p = sub.add_parser("compare", help="before/after table")
     p.add_argument("baseline")
     p.add_argument("optimized")
@@ -1029,13 +1679,24 @@ def main() -> int:
         return 0
     if args.command == "self-test":
         return cmd_self_test(args)
+    # Diagnostics that produce no canonical artifact (no env fingerprint).
+    if args.command == "flame":
+        return cmd_flame(args)
+    if args.command == "e1bpf":
+        return cmd_e1bpf(args)
 
     # CLI captures competitor stdout under the temp dir; the ladder writes
     # suppressed output only, and `perf` measures an arbitrary user command
     # whose output filesystem we cannot know — record null there instead of
-    # guessing.
+    # guessing. e1 workload files live in --data-dir (default: temp dir).
     tmpdir = os.environ.get("TMPDIR", "/tmp")
-    out_fs = tmpdir if args.command == "cli" else None
+    if args.command == "cli":
+        out_fs = tmpdir
+    elif args.command == "e1":
+        out_fs = None
+        tmpdir = args.data_dir or tmpdir
+    else:
+        out_fs = None
     result = {"env": env_fingerprint(input_path=tmpdir, output_path=out_fs)}
     if args.command == "ladder":
         result.update(cmd_ladder(args))
@@ -1043,6 +1704,8 @@ def main() -> int:
         result.update(cmd_cli(args))
     elif args.command == "overload":
         result.update(cmd_overload(args))
+    elif args.command == "e1":
+        result.update(cmd_e1(args))
     elif args.command == "perf":
         if args.cmd and args.cmd[0] == "--":
             args.cmd = args.cmd[1:]
