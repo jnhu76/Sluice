@@ -87,6 +87,9 @@ KNOWN_TRACKER_REFS = {
                                        # attribution in this report; see
                                        # docs/verification/formal/
                                        # e9-trace-conformance.md)
+    227,                                # v0.0.1 baseline campaign (2026-08-26,
+                                       # Phase 0 comment-only cleanup — LOC delta
+                                       # attribution in this report)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")
