@@ -2029,8 +2029,14 @@ std::size_t Scheduler::AsyncTestAccess::deadline_heap_size(
     return s.deadline_heap_.size();
 }
 
+// Synchronized snapshot (issue #229): active_deadline_count_ is mutated under
+// global_mtx_ by every registration/retire path, and the coordinator may poll
+// this seam while a live worker fiber registers/retires deadlines, so the
+// observation acquires the same lock. Unlike the sizes above, this counter is
+// polled from live-run coordinator loops (timer_wait_test), not quiescent-only.
 std::size_t Scheduler::AsyncTestAccess::active_deadline_count(
-    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    const Scheduler& s) noexcept {
+    LockGuard lk(s.global_mtx_);
     return s.active_deadline_count_;
 }
 

@@ -90,6 +90,10 @@ KNOWN_TRACKER_REFS = {
     227,                                # v0.0.1 baseline campaign (2026-08-26,
                                        # Phase 0 comment-only cleanup — LOC delta
                                        # attribution in this report)
+    229,                                # TSan deadline test-seam observation race
+                                       # (2026-08-26, test-only locked snapshot —
+                                       # LOC delta attribution in this report;
+                                       # gate doc in docs/architecture/)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

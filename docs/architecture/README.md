@@ -72,6 +72,7 @@ a move, and it MUST be updated atomically with the move.
 | [`issue-115-runnable-publication-wake-gate.md`](issue-115-runnable-publication-wake-gate.md) | Runnable-publication wake obligation gate | Deferred |
 | [`issue-116-reentry-liveness-gate.md`](issue-116-reentry-liveness-gate.md) | Invocation-boundary lost re-entry liveness gate; pinned by `scripts/gates/mechanical-facts.py` (`TEST_TOTAL_EXTRA_DOCS`) | Blocked |
 | [`issue-161-idle-dance-contribution-generation-gate.md`](issue-161-idle-dance-contribution-generation-gate.md) | Idle-dance contribution generation gate; pinned by `spec/tla/manifest.json` and `spec/tla/e12_rwlock_scheduler_liveness/README.md` | Blocked |
+| [`issue-229-deadline-test-seam-lock-gate.md`](issue-229-deadline-test-seam-lock-gate.md) | Timer test-seam observation race repair gate (locked snapshot under `global_mtx_`) | Deferred |
 
 ## HISTORICAL — superseded records (provenance only)
 
