@@ -88,6 +88,24 @@ THRESHOLDS_V1 = {
 }
 
 
+# perf stat prints task-clock with an explicit unit column (observed `msec`
+# on the RX-1 host: "32537.12;msec;task-clock:u;..."). Counts (cycles etc.)
+# carry no unit. One conversion authority for the harness parser AND the
+# preserved-raw re-parse below; an unrecognized unit yields None (treated as
+# absent) rather than silently re-scaling the value.
+PERF_TIME_UNIT_TO_S = {
+    "": 1.0, "sec": 1.0, "s": 1.0,
+    "msec": 1e-3, "ms": 1e-3,
+    "usec": 1e-6, "us": 1e-6,
+    "nsec": 1e-9, "ns": 1e-9,
+}
+
+
+def perf_task_clock_seconds(value: float, unit: str) -> float | None:
+    f = PERF_TIME_UNIT_TO_S.get(unit.strip())
+    return value * f if f is not None else None
+
+
 # ---------------------------------------------------------------------------
 # Feature extraction (whitelist — the ONLY classifier input)
 # ---------------------------------------------------------------------------
@@ -138,10 +156,13 @@ def extract_features(run: dict) -> dict:
     f["psi_io_full_us_per_s"] = psi.get("io_full_delta_us", 0.0) / wall_s if wall_s > 0 else 0.0
     f["psi_mem_some_us_per_s"] = psi.get("memory_some_delta_us", 0.0) / wall_s if wall_s > 0 else 0.0
     # perf stat (optional; absent events recorded as None, treated as 0).
-    # Harness defect note: the run-time perf decoder dropped the ":u" event
-    # suffix perf_event_paranoid=2 adds, so stored `perf` dicts are empty for
-    # the v1 formal matrix; re-parse the preserved raw evidence here. No
-    # frozen rule reads these features (verified: prediction diff = 0).
+    # Harness defect notes (both disclosed in RX1_REPORT.md): the run-time
+    # perf decoder (a) dropped the ":u" event suffix perf_event_paranoid=2
+    # adds, so stored `perf` dicts are empty for the v1 formal matrix —
+    # re-parse the preserved raw evidence here; and (b) stored the raw
+    # msec-scale task-clock value under `task_clock_s` — the re-parse now
+    # converts by the perf unit column. No frozen rule reads these features
+    # (verified: prediction diff = 0 across all runs).
     perf = dict(run["external"].get("perf") or {})
     raw = run["external"].get("perf_raw") or ""
     if raw and "cycles_per_op" not in perf:
@@ -149,21 +170,23 @@ def extract_features(run: dict) -> dict:
         for line in raw.splitlines():
             fields = line.split(";")
             if len(fields) >= 3:
-                val, ev = fields[0], fields[2].split(":")[0]
+                val, unit, ev = fields[0], fields[1], fields[2].split(":")[0]
                 if ev and not val.startswith("<"):
                     try:
-                        got[ev] = float(val.replace(",", ""))
+                        got[ev] = (float(val.replace(",", "")), unit)
                     except ValueError:
                         pass
         if "task-clock" in got:
-            perf["task_clock_s"] = got["task-clock"]
+            tcs = perf_task_clock_seconds(*got["task-clock"])
+            if tcs is not None:
+                perf["task_clock_s"] = tcs
         if "cycles" in got and ops:
-            perf["cycles_per_op"] = got["cycles"] / ops
+            perf["cycles_per_op"] = got["cycles"][0] / ops
         if "instructions" in got and ops:
-            perf["instructions_per_op"] = got["instructions"] / ops
+            perf["instructions_per_op"] = got["instructions"][0] / ops
         for ev in ("context-switches", "cpu-migrations", "branches", "branch-misses"):
             if ev in got:
-                perf[ev] = got[ev]
+                perf[ev] = got[ev][0]
     for key, out in (
         ("cycles_per_op", "cycles_per_op"),
         ("instructions_per_op", "instructions_per_op"),

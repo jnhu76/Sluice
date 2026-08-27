@@ -1,0 +1,23 @@
+{
+ "label": "SPEC-CONSISTENCY SENSITIVITY \u2014 POST-HOC, NOT PRIMARY",
+ "why": "frozen protocol rule_precedence text says E APP / E CONTROL inherit ALL corresponding C external predicates; the frozen executable classifier omits depth_over_capacity<=0.10 (_rule_app_e) and PSI-quiet (_rule_control_e). Discrepancy predates formal execution (both texts at freeze commit 45a993d, classifier git blob c1e4fce0b6a95e3893d01d68d41a32691c041c3b); it is a protocol-to-executable consistency defect, not post-hoc tuning. Primary results remain the executable classifier's.",
+ "n_attribution_runs": 240,
+ "e_prediction_diff_all": 0,
+ "e_prediction_diff_all_runs": [],
+ "n_valid": 222,
+ "e_prediction_diff_valid": 0,
+ "scored_mismatch_vs_stored": 0,
+ "accuracy_c_literal_baseline": 0.9954954954954955,
+ "accuracy_e_literal": 0.9819819819819819,
+ "delta_accuracy_literal": -0.013513513513513598,
+ "delta_ci95_literal": [
+  -0.036036036036036,
+  0.0045045045045045695
+ ],
+ "wrong_cause_rate_c": 0.0045045045045045045,
+ "wrong_cause_rate_e_literal": 0.018018018018018018,
+ "primary_verdict": "NOT SUPPORTED / STOP EXPANSION",
+ "verdict_gate_literal": "NOT SUPPORTED / STOP EXPANSION",
+ "verdict_unchanged": true,
+ "static_argument": "literal E CONTROL is executable-equivalent on any run reaching the CONTROL branch (CPU rule precedes it and fires exactly when the added PSI conjunct would fail); literal E APP is strictly tighter, so only executable-APP predictions with depth_over_capacity>0.10 can move \u2014 none exist in this matrix (I1 depth=2, capacity=64 gives 0.031)"
+}

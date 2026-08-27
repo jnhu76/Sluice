@@ -29,9 +29,11 @@ performance bottleneck beyond ordinary external system telemetry?
 - H0: external telemetry is sufficient, or Sluice L1 signals do not improve
   attribution enough to justify deeper observability work.
 
-**H0 is supported.** Falsification of H_RX1 succeeded on the frozen verdict
-gate: Δaccuracy(E−C) = **−1.35 pp** ≤ 0 (criterion 1), and E materially
-increased confident wrong-cause predictions 0.45% → 1.80% (criterion 2).
+**H_RX1 is not supported under the preregistered decision rule; the
+results are consistent with H0 within the tested scope.** Falsification of
+H_RX1 succeeded on the frozen verdict gate: Δaccuracy(E−C) = **−1.35 pp** ≤ 0
+(criterion 1), and E materially increased confident wrong-cause predictions
+0.45% → 1.80% (criterion 2).
 
 ## ENVIRONMENT
 
@@ -114,6 +116,9 @@ rejections_delta > 0 ∧ frac_slot_at_capacity ≥ 0.30; WORKER =
 frac_active_at_configured ≥ 0.55 ∧ dispatch_occ_mean ≥ 10 ∧ PSI quiet ∧ no
 rejections; APP adds slot_occ ≤ 0.10 ∧ frac_active ≤ 0.30; CONTROL adds
 frac_active < 0.55 ∧ frac_slot < 0.30. Same precedence and UNKNOWN policy.
+(These are the executable semantics as frozen and scored; the protocol
+text's "same external conditions" wording differs on two E conjuncts —
+see the preregistration-integrity section.)
 
 ## FORMAL MATRIX
 
@@ -189,28 +194,30 @@ E (four errors: WORKER→CONTROL at 4K read ×3 and 4K write ×1):
 | **wrong → right** | **1** |
 | unknown → right / right → unknown / others | 0 |
 
-### OBSERVABILITY TAX (paired per shape against the same-shape OBS-OFF baseline; n=8 per shape/mode)
+### OBSERVABILITY TAX (shape-matched ratio of medians vs same-shape OBS-OFF; n=8 per shape/mode)
 
-Each OBS-LOW / OBS-HIGH measurement is normalized against the same-shape
-OBS-OFF baseline first; normalized effects are aggregated afterward (median
-of per-shape taxes). Shapes are never pooled into one raw aggregate.
+Methodology: for each workload shape and mode,
+tax = (median(OFF runs) − median(MODE runs)) / median(OFF runs); the
+aggregate is the median of these per-shape effects. Runs are NOT
+individually paired or run-level normalized — only the shape matches.
+Shapes are never pooled into one raw aggregate.
 
 | shape | OBS-OFF MB/s | OBS-LOW MB/s (tax) | OBS-HIGH MB/s (tax) | p99 tax LOW | p99 tax HIGH |
 |---|---|---|---|---|---|
 | read/64K | 12192 | 11932 (+2.1%) | 11933 (+2.1%) | +1.4% | −1.9% |
 | read/1M | 5728 | 5646 (+1.4%) | 5502 (+4.0%) | +22.0% | +9.1% |
 
-Aggregate (median of per-shape normalized effects): OBS-LOW +1.8%,
-OBS-HIGH +3.0% throughput tax; p99 tax aggregate +11.7% (LOW) / +3.6%
-(HIGH). Sample spreads overlap across modes (64K OFF 10244–12898 vs LOW
-9366–12387 MB/s) and neither the throughput nor the p99 effect is monotonic
-in sampling rate (HIGH repeatedly reads cheaper or cheaper-tailed than
-LOW, which more sampling cannot produce). **No reproducible or monotonic
-observation-tax signal was established at the current sample size.**
-Information gain / observation cost is therefore reported as two honest
-numbers, not one score: attribution gain ≤ 0 at v1 (≤ +0.45 pp at the
-exploratory ceiling); OBS-LOW throughput-tax point estimates +1.4–2.1%
-per shape.
+Aggregate (median of per-shape effects; each effect is a shape-matched
+ratio of medians): OBS-LOW +1.8%, OBS-HIGH +3.0% throughput tax; p99 tax
+aggregate +11.7% (LOW) / +3.6% (HIGH). Sample spreads overlap across modes
+(64K OFF 10244–12898 vs LOW 9366–12387 MB/s) and neither the throughput
+nor the p99 effect is monotonic in sampling rate (HIGH repeatedly reads
+cheaper or cheaper-tailed than LOW, which more sampling cannot produce).
+**No reproducible or monotonic observation-tax signal was established at
+the current sample size.** Information gain / observation cost is therefore
+reported as two honest numbers, not one score: attribution gain ≤ 0 at v1
+(≤ +0.45 pp under the exploratory E2 rule); OBS-LOW throughput-tax point
+estimates +1.4–2.1% per shape.
 
 ### GENERALIZATION / HOLD-OUT
 
@@ -251,10 +258,12 @@ rule keyed on deep-queue alone (dropping the shape-unstable frac_active
 conjunct) reaches E2 = 1.000 accuracy, fixing all four 4K errors while
 keeping the 1M gain — Δ(E2−C) = **+0.45 pp [95% CI +0.00, +1.35]**. Even
 granting E the best plausible rule over the same frozen features, the
-information ceiling of the AC-1a signal set on this workload family is
-below half a percentage point over the strong external baseline — an order
-of magnitude short of the +15 pp SUPPORTED bar. This is the strongest form
-the negative result can take.
+empirical Top-1 accuracy headroom over C on this frozen dataset / label
+space is below half a percentage point — an order of magnitude short of
+the +15 pp SUPPORTED bar. E2 = 100% demonstrates that this benchmark
+leaves only +0.45 pp of Top-1 headroom above C = 99.55%; it does NOT
+establish an information-theoretic bound on the AC-1a signals. This is
+the strongest form the negative result can take.
 
 ## FALSIFICATION RESULT
 
@@ -265,7 +274,7 @@ Both pre-registered NOT-SUPPORTED criteria fired:
 2. E materially increased confident wrong-cause predictions (×4 in count).
 
 Additionally the generalization criterion fired at v1: E's calibration-point
-parity became a net loss on hold-out shapes, and the exploratory ceiling
+parity became a net loss on hold-out shapes, and the exploratory E2 result
 (+0.45 pp) shows the deficit is not a rule-composition artifact.
 
 ## RESEARCH IMPLICATION
@@ -276,7 +285,9 @@ family RX-1 was authorized to test — conventional external telemetry
 for bottleneck attribution: a strong external classifier reached 99.5%.
 The AC-1a internal signals add a real but tiny quantum of separable
 information (the busy-vs-bottleneck queue signal: +1 run, −4 runs at v1,
-≤ +0.45 pp at the exploratory ceiling). H_RX1 is not supported; H0 stands.
+≤ +0.45 pp under the exploratory E2 rule). H_RX1 is not supported under the
+preregistered decision rule; the results are consistent with H0 within the
+tested scope.
 This resolves the "PROMISING BUT NOVELTY UNCLEAR" verdict of #234 §15 for
 the attribution half of the thesis: the cheap falsification killed the
 cheap version of the hypothesis, as designed.
@@ -285,10 +296,15 @@ Scope: RX-1 falsifies the incremental attribution value of AC-1a for the
 tested family — **single-machine, ThreadPool backend, cache-hot (tmpfs,
 page-cache-warm), known-configuration, controlled pipeline workloads**. It
 does NOT establish a universal theorem that explicit-I/O observability can
-never add value. Not tested and not covered by this verdict: multi-tenant
-or device-bound regimes (I5 was environment-invalid), degraded-telemetry
-environments (no PSI / no perf), cross-layer identity joins (RX-4/eBPF
-territory), and non-pipeline workload shapes.
+never add value. A known-configuration limitation is explicit: RX-1 is an
+INCREMENTAL diagnostic-value benchmark — it measures what AC-1a adds AFTER
+the runtime configuration is known (both classifiers see the static
+workload config) and AFTER per-run manifestation validity is established
+by the harness; it is not blind root-cause discovery, and it does not
+measure configuration identification. Not tested and not covered by this
+verdict: multi-tenant or device-bound regimes (I5 was environment-invalid),
+degraded-telemetry environments (no PSI / no perf), cross-layer identity
+joins (RX-4/eBPF territory), and non-pipeline workload shapes.
 
 The roadmap consequence remains: **no evidence currently justifies L2
 timestamps, RequestKey telemetry, eBPF integration, RX-2/RX-3, or other
@@ -332,13 +348,81 @@ different, preregistered hypothesis and new evidence.
 
 ## Harness defect disclosure (post-freeze, documented per §15)
 
-The run-time perf decoder dropped the `:u` event-name suffix that
-`perf_event_paranoid=2` adds, so the stored perf feature dicts were empty.
-Fixed in a separate commit by re-parsing the preserved raw perf evidence at
-feature-extraction time. No frozen rule reads perf features; the fix was
-verified prediction-invariant (C/E predictions and validity identical on
-all 288 runs before/after). No protocol field changed; no rerun required.
-Raw artifacts were never modified (scoring writes `.scored.json` siblings).
+Two run-time perf decoder defects, both post-freeze repairs with
+prediction-invariance proofs; no protocol field changed; no rerun
+required; raw artifacts were never modified (scoring writes
+`.scored.json` siblings):
+
+1. The decoder dropped the `:u` event-name suffix that
+   `perf_event_paranoid=2` adds, so the stored perf feature dicts were
+   empty. Fixed by re-parsing the preserved raw perf evidence at
+   feature-extraction time.
+2. `perf stat` emits task-clock with an explicit unit column (observed
+   `msec`); the decoder stored the raw value under the seconds-named
+   `task_clock_s` field. Fixed with unit-aware conversion (one conversion
+   authority, `rc.perf_task_clock_seconds`) in both the harness parser and
+   the preserved-raw re-parse; the self-test locks
+   32537.12 msec → 32.53712 s.
+
+No frozen rule reads perf features. After the unit fix, all 316 scored
+runs were re-scored: C/E prediction diff = 0, validity diff = 0; the only
+formal-run feature value that moved is `task_clock_s` (288/288, pure unit
+rescale). The 28 pilot scored siblings, stale since the earlier `:u`
+re-parse fix, were regenerated in the same pass. Raw artifacts remain
+byte-identical (`ARTIFACT_MANIFEST.json` re-verified: 316/316 + protocol).
+
+## Preregistration integrity: protocol-vs-executable discrepancy
+
+Discovered in the final evidence-integrity review: the frozen protocol's
+textual `rule_precedence` and the frozen executable classifier disagree on
+two E predicates:
+
+- **Rule 5 (APP)**: the protocol says "E = same external conditions AND
+  …" where "same external conditions" is C's full conjunction including
+  `depth/capacity <= 0.10`; the executable `_rule_app_e` omits that
+  conjunct.
+- **Rule 6 (CONTROL)**: the protocol says "E = same AND …" where "same"
+  includes the PSI-quiet predicate; the executable `_rule_control_e` omits
+  it.
+
+Both texts existed in this form at the freeze commit 45a993d, before
+formal execution — the classifier rule functions are verified
+byte-identical from freeze through the formal run (post-freeze edits
+touched only feature extraction and analysis helpers). The discrepancy is
+therefore NOT post-hoc classifier tuning: the executable classifier is the
+preregistered primary (it is what the freeze-time synthetic vectors locked
+and what produced the primary scores). It is nonetheless a
+protocol-to-executable consistency defect and is disclosed as such. The
+frozen `rx1_protocol_v1.json` is not edited.
+
+**SPEC-CONSISTENCY SENSITIVITY — POST-HOC, NOT PRIMARY**
+(`scripts/rx1_evidence_integrity.py sensitivity`; machine source
+`results/analysis/spec_sensitivity.json`): re-evaluating the preserved
+formal artifacts under the literal protocol semantics — E APP and E
+CONTROL inherit ALL corresponding C external predicates, everything else
+including precedence and UNKNOWN policy unchanged — changes **0 of 240**
+attribution-run E predictions and **0 of 222** valid-run predictions;
+accuracy C/E, Δ = −1.35 pp, CI, and the verdict are identical. A static
+argument shows this is structural, not luck: the literal CONTROL rule's
+added PSI-quiet conjunct is implied on every run reaching the CONTROL
+branch (the CPU rule precedes it and fires exactly when that conjunct
+would fail), and the literal APP rule is strictly tighter while every
+executable-APP prediction in this matrix has depth/capacity = 0.031 ≤
+0.10. The preregistered verdict does not change under the literal spec.
+
+**Future-freeze lesson** (recorded; `rx1.py freeze` now prints the
+binding): threshold and label-set equality is INSUFFICIENT to prove
+protocol consistency — rule semantics were bound only by prose in v1.
+Future campaigns must record the exact classifier source hash at freeze
+and mechanically bind the protocol to executable classifier semantics or
+frozen behavioral test vectors. Freeze-time hashes for this campaign:
+
+```text
+protocol SHA256   = cae8052accd26a073aad79f0fc41b979dd9202e3d34b04dde6dd5b9fec7dcdf7
+classifier SHA256 = 468a4e0c2321b47859a87e8dd13474f62ce086859b45b844d5ff1fcd57abc56a
+classifier blob   = c1e4fce0b6a95e3893d01d68d41a32691c041c3b  (git, @45a993d)
+synth cases SHA256= 42b1f37006d4cac0be865e85d8cce108e966061437681c104d96639fdfc5ebf8
+```
 
 ## Evidence-artifact retention
 
@@ -371,6 +455,41 @@ No classifier rule, threshold, or UNKNOWN policy changed, no raw formal
 artifact was modified, and C/E predictions plus validity were re-verified
 identical across all 288 runs after every code touch (diff = 0). The
 preregistered primary verdict is unchanged.
+
+## Post-review corrections, round 2 (evidence-integrity only)
+
+Final review round; no experiment rerun, no raw-artifact or frozen-protocol
+edits, no classifier-rule / threshold / UNKNOWN-policy / primary-score /
+verdict changes:
+
+- Preregistration discrepancy disclosed and a literal-spec SPEC-CONSISTENCY
+  SENSITIVITY added (see the preregistration-integrity section): 0/240 and
+  0/222 prediction diffs, verdict unchanged. Future-freeze lesson recorded
+  with freeze-time classifier/protocol/synth hashes; `rx1.py freeze` now
+  prints the classifier-source binding.
+- `task_clock_s` unit defect fixed (perf emits task-clock with an explicit
+  unit column, observed msec); unit-aware conversion in the harness parser
+  and the preserved-raw re-parse; self-test locks 32537.12 msec → 32.53712 s
+  and the unitless-seconds passthrough. Artifacts re-scored with proof:
+  C/E prediction diff = 0, validity diff = 0 on all 316 scored runs; only
+  `task_clock_s` moved (formal 288/288, pure unit rescale); pilot scored
+  siblings refreshed from their stale pre-`:u`-fix state; manifest
+  re-verified 316/316 raw artifacts + protocol.
+- Observability-tax methodology wording corrected to "shape-matched ratio
+  of medians": per shape and mode, (median(OFF) − median(MODE)) /
+  median(OFF); runs are not individually paired or run-level normalized.
+  Generator, `analysis.json`, and `tables.md` regenerated consistently.
+- "Information ceiling of AC-1a" replaced by the narrower "empirical Top-1
+  accuracy headroom over C on this frozen dataset / label space" claim.
+- Hypothesis phrasing standardized: "H_RX1 is not supported under the
+  preregistered decision rule; results are consistent with H0 within the
+  tested scope" (replaces "H0 is supported / H0 stands").
+- Known-configuration limitation made explicit in the scope paragraph:
+  RX-1 is an incremental diagnostic-value benchmark after runtime
+  configuration is known and after manifestation validity is established —
+  not blind root-cause discovery.
+- New durable evidence-integrity gate `scripts/rx1_evidence_integrity.py`
+  (`invariance` / `sensitivity` / `manifest`), all green.
 
 ## FINAL STOP
 

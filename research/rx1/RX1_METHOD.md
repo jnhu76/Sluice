@@ -164,10 +164,24 @@ RX-1 (scope statement in the PR).
 
 ## 10. Freeze record
 
-- protocol file: `research/rx1/rx1_protocol_v1.json` (SHA256 printed by
-  `rx1.py freeze` at commit time)
-- freeze commit: see PR description (commit message
-  `research(rx1): freeze attribution protocol v1`)
+- protocol file: `research/rx1/rx1_protocol_v1.json`, SHA256
+  `cae8052accd26a073aad79f0fc41b979dd9202e3d34b04dde6dd5b9fec7dcdf7`
+- freeze commit: `45a993d` (`research(rx1): freeze attribution protocol v1`)
+- classifier source at freeze:
+  `research/rx1/scripts/rx1_classify.py`, SHA256
+  `468a4e0c2321b47859a87e8dd13474f62ce086859b45b844d5ff1fcd57abc56a`
+  (git blob `c1e4fce0b6a95e3893d01d68d41a32691c041c3b`)
+- synth behavioral vectors at freeze: SHA256
+  `42b1f37006d4cac0be865e85d8cce108e966061437681c104d96639fdfc5ebf8`
 - after freeze: classifier rules/thresholds/intervals/severities/matrix/seed
   are immutable; a harness bug requires `protocol_version` bump and a full
   formal rerun.
+- **Freeze lesson (v1 post-mortem)**: `rx1.py freeze` v1 cross-checked only
+  threshold and label-set equality, which did NOT prove the executable
+  classifier implements the protocol's textual rule semantics — two E
+  predicates drifted (see RX1_REPORT.md, preregistration-integrity
+  section; literal-spec sensitivity: 0/240 prediction diff). Future
+  campaigns must record the classifier source hash at freeze (now printed
+  by `rx1.py freeze`) and bind the protocol to machine-readable rules or
+  frozen behavioral test vectors so the coupling is mechanically
+  checkable.

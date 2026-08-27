@@ -168,28 +168,35 @@ PERF_EVENTS = "task-clock,context-switches,cpu-migrations,cycles,instructions,br
 
 
 def parse_perf(stderr_text: str, ops: int) -> dict:
-    """Parse `perf stat -x ';'` output. Absent/zero counters stay None."""
+    """Parse `perf stat -x ';'` output. Absent/zero counters stay None.
+
+    task-clock arrives with an explicit unit column (observed `msec` on this
+    host) and is converted to seconds via rc.perf_task_clock_seconds so the
+    `task_clock_s` name is honest; an unrecognized unit drops the event.
+    """
     got = {}
     for line in stderr_text.splitlines():
         fields = line.split(";")
         if len(fields) >= 3:
-            val, _unit, event = fields[0], fields[1], fields[2]
+            val, unit, event = fields[0], fields[1], fields[2]
             # perf_event_paranoid=2 renames every event with a ":u" suffix
             event = event.split(":")[0]
             if event and not val.startswith("<"):
                 try:
-                    got[event] = float(val.replace(",", ""))
+                    got[event] = (float(val.replace(",", "")), unit)
                 except ValueError:
                     pass
     out = {}
     if "task-clock" in got:
-        out["task_clock_s"] = got["task-clock"]
+        tcs = rc.perf_task_clock_seconds(*got["task-clock"])
+        if tcs is not None:
+            out["task_clock_s"] = tcs
     for ev, key in (("cycles", "cycles_per_op"), ("instructions", "instructions_per_op")):
         if ev in got and ops:
-            out[key] = got[ev] / ops
+            out[key] = got[ev][0] / ops
     for ev in ("context-switches", "cpu-migrations", "branches", "branch-misses"):
         if ev in got:
-            out[ev] = got[ev]
+            out[ev] = got[ev][0]
     return out
 
 
@@ -547,7 +554,7 @@ def cmd_analyze(args):
         "note": "does not replace or modify the frozen run-level primary result",
     }
 
-    # ---- observability tax (paired per shape, see tax_analysis) ----
+    # ---- observability tax (shape-matched ratio of medians, see tax_analysis) ----
     tax = tax_analysis(arts)
 
     analysis = {
@@ -629,7 +636,7 @@ def cmd_analyze(args):
         rc_ = per_c.get(L, {}).get("recall", 0.0)
         re_ = per_e.get(L, {}).get("recall", 0.0)
         md.append(f"| {L} | {rc_:.3f} | {re_:.3f} |")
-    md.append("\n### Observability tax (paired per shape vs same-shape OBS-OFF)\n")
+    md.append("\n### Observability tax (shape-matched ratio of medians vs same-shape OBS-OFF)\n")
     md.append("| shape | mode | n | throughput MB/s (median) | thr tax % | p99 µs (median) | p99 tax % |")
     md.append("|---|---|---|---|---|---|---|")
     for shape, row in tax.get("per_shape", {}).items():
@@ -643,7 +650,8 @@ def cmd_analyze(args):
                       f"{t['p99_ns_median']/1000:.0f} | {p99_tax} |")
     agg = tax.get("aggregate", {})
     md.append("")
-    md.append(f"- aggregate (median of per-shape normalized effects): OBS-LOW throughput tax "
+    md.append(f"- aggregate (median of per-shape effects; each effect is a "
+              f"shape-matched ratio of medians): OBS-LOW throughput tax "
               f"{agg.get('low', {}).get('throughput_tax_pct_median_of_shapes', float('nan')):+.1f}%, "
               f"OBS-HIGH {agg.get('high', {}).get('throughput_tax_pct_median_of_shapes', float('nan')):+.1f}%")
     md.append(f"- {tax['conclusion']}")
@@ -659,11 +667,15 @@ def cmd_analyze(args):
 
 
 def tax_analysis(arts: list[dict]) -> dict:
-    """Observability tax from the dedicated tax block, PAIRED PER WORKLOAD
-    SHAPE: each OBS-LOW / OBS-HIGH measurement is normalized against the
-    same-shape OBS-OFF baseline first; normalized effects are aggregated
-    afterward. Shapes with different throughput scales are never pooled
-    into one aggregate percentage. Raw formal artifacts are not modified.
+    """Observability tax from the dedicated tax block using a SHAPE-MATCHED
+    RATIO OF MEDIANS: for each workload shape and mode,
+
+        tax = (median(OFF runs) - median(MODE runs)) / median(OFF runs)
+
+    per-shape effects are aggregated (median) afterward. Runs are NOT
+    individually paired or run-level normalized — only the shape matches.
+    Shapes are never pooled into one raw aggregate. Raw formal artifacts
+    are not modified.
     """
     by = {}  # (op, request_size, mode) -> rows
     for a in arts:
@@ -729,8 +741,9 @@ def tax_analysis(arts: list[dict]) -> dict:
                 "p99_tax_pct_per_shape": p99_taxes,
             }
     return {
-        "method": ("per-shape pairing against the same-shape OBS-OFF median; "
-                   "aggregate = median of per-shape normalized effects"),
+        "method": ("shape-matched ratio of medians: per shape and mode, "
+                   "(median(OFF) - median(MODE)) / median(OFF); aggregate = "
+                   "median of per-shape effects; runs are not individually paired"),
         "per_shape": per_shape,
         "aggregate": aggregate,
         "conclusion": ("No reproducible or monotonic observation-tax signal was "
@@ -762,6 +775,15 @@ def cmd_freeze(args):
     print("RX1 FORMAL PROTOCOL FROZEN")
     print(f"PROTOCOL_SHA256={sha}")
     print(f"protocol_version={proto['protocol_version']}")
+    # Freeze lesson (RX-1 preregistration-integrity review): threshold and
+    # label-set equality do NOT prove the executable classifier implements
+    # the protocol's textual rule semantics (v1 drifted on two E predicates).
+    # Future campaigns must record the classifier source hash at freeze time
+    # and bind the protocol to machine-readable rules or a frozen behavioral
+    # test vector (synth cases) so the coupling is mechanically checkable.
+    for label, p in (("CLASSIFIER_SOURCE_SHA256", RX1 / "scripts" / "rx1_classify.py"),
+                     ("SYNTH_CASES_SHA256", RX1 / "synth" / "synth_cases.json")):
+        print(f"{label}={hashlib.sha256(p.read_bytes()).hexdigest()}")
     print("commit the protocol BEFORE running: rx1.py run --phase formal")
 
 
@@ -868,8 +890,9 @@ def cmd_self_test(args):
     psi = read_psi()
     check("psi cpu some present", "cpu_some_total_us" in psi)
     # perf_event_paranoid=2 renames every event with a ":u" suffix and may
-    # emit "<not counted>" rows — this case locks the decoder regression that
-    # emptied the perf feature dicts for the v1 formal matrix.
+    # emit "<not counted>" rows — this case locks two decoder regressions
+    # that degraded the v1 formal perf features: the dropped ":u" suffix
+    # (empty perf dicts) and the raw msec value stored under task_clock_s.
     pf = parse_perf(
         "32537.12;msec;task-clock:u;32537123405;100.00;;\n"
         "6562985309;;cycles:u;32537123405;100.00;;\n"
@@ -877,9 +900,12 @@ def cmd_self_test(args):
         "<not counted>;;branches:u;32537123405;100.00;;\n", 1000)
     check("perf parse :u-suffixed cycles_per_op",
           abs(pf.get("cycles_per_op", 0) - 6562985.309) < 1e-6)
-    check("perf parse :u-suffixed task_clock_s",
-          abs(pf.get("task_clock_s", 0) - 32537.12) < 1e-9)
+    check("perf parse task-clock msec -> seconds (32537.12 msec = 32.53712 s)",
+          abs(pf.get("task_clock_s", 0) - 32.53712) < 1e-9)
     check("perf parse skips <not counted>", "branches" not in pf)
+    pf2 = parse_perf("1.234;;task-clock;100.00;;\n5678;;cycles;100.00;;\n", 1000)
+    check("perf parse unitless task-clock stays seconds",
+          abs(pf2.get("task_clock_s", 0) - 1.234) < 1e-12)
     print(f"\nrx1 self-test: {ok[0]} checks passed")
 
 

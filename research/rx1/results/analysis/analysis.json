@@ -276,7 +276,7 @@
   "note": "does not replace or modify the frozen run-level primary result"
  },
  "observability_tax": {
-  "method": "per-shape pairing against the same-shape OBS-OFF median; aggregate = median of per-shape normalized effects",
+  "method": "shape-matched ratio of medians: per shape and mode, (median(OFF) - median(MODE)) / median(OFF); aggregate = median of per-shape effects; runs are not individually paired",
   "per_shape": {
    "read/65536": {
     "off": {

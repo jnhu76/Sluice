@@ -56,7 +56,7 @@ UNKNOWN | 0 | 0 | 0 | 0 | 0 | 0 | 0
 | IO_SERVICE_CONTENDED | 0.000 | 0.000 |
 | UNKNOWN | 0.000 | 0.000 |
 
-### Observability tax (paired per shape vs same-shape OBS-OFF)
+### Observability tax (shape-matched ratio of medians vs same-shape OBS-OFF)
 
 | shape | mode | n | throughput MB/s (median) | thr tax % | p99 µs (median) | p99 tax % |
 |---|---|---|---|---|---|---|
@@ -67,7 +67,7 @@ UNKNOWN | 0 | 0 | 0 | 0 | 0 | 0 | 0
 | read/1048576 | low | 8 | 5646.1 | +1.4 | 5288 | +22.0 |
 | read/1048576 | high | 8 | 5501.8 | +4.0 | 4729 | +9.1 |
 
-- aggregate (median of per-shape normalized effects): OBS-LOW throughput tax +1.8%, OBS-HIGH +3.0%
+- aggregate (median of per-shape effects; each effect is a shape-matched ratio of medians): OBS-LOW throughput tax +1.8%, OBS-HIGH +3.0%
 - No reproducible or monotonic observation-tax signal was established at the current sample size.
 
 **Verdict gate: NOT SUPPORTED / STOP EXPANSION**

@@ -239,7 +239,7 @@
   "psi_mem_some_us_per_s": 0.0,
   "cycles_per_op": 22619.350992838543,
   "instructions_per_op": 23941.923583984375,
-  "task_clock_s": 3687.79,
+  "task_clock_s": 3.68779,
   "perf_available": 1.0,
   "sluice_sample_count": 92.0,
   "sluice_arena_capacity": 4.0,
