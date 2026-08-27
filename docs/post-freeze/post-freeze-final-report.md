@@ -31,13 +31,13 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | File | Lines | Domain |
 |---|---|---|
 | `src/async/scheduler_park_wake.cpp` | 1293 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 509 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 397 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 316 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 344 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 674 | rwlock waits, ForgedRwWaitCtx |
-| `src/async/scheduler_condition.cpp` | 264 | condition waits |
-| `src/async/scheduler_queue.cpp` | 499 | runnable queue, fiber routing |
+| `src/async/scheduler_timer.cpp` | 539 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 393 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 312 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 340 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 677 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_condition.cpp` | 263 | condition waits |
+| `src/async/scheduler_queue.cpp` | 504 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
 | `src/async/scheduler.cpp` | 2128 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
@@ -99,7 +99,17 @@ split; comment-only, no behavior change);
 locked snapshot (TSan data race repair: the coordinator fiber polled the
 unlocked counter while workers mutated it); test-only vocabulary, production
 behavior/layout unchanged — see
-`docs/architecture/issue-229-deadline-test-seam-lock-gate.md`).
+`docs/architecture/issue-229-deadline-test-seam-lock-gate.md`);
+`scheduler_timer.cpp` 509 → 539, `scheduler_queue.cpp` 499 → 504,
+`scheduler_rwlock.cpp` 674 → 677, `scheduler_mutex.cpp` 344 → 340,
+`scheduler_semaphore.cpp` 316 → 312, `scheduler_event.cpp` 397 → 393,
+`scheduler_condition.cpp` 264 → 263 (2026-08-27, AC-2b — ordinary deadline
+lifecycle authority: the ten ordinary arming sites and the inline
+consume/retire sites now route through `arm_ordinary_deadline_locked` /
+`consume_ordinary_deadline_locked` / `retire_ordinary_deadline_locked`
+(declared in `include/sluice/async/scheduler.hpp`); cache-recompute timing and
+on_resolve hook firing stay at each call site; Select timers untouched;
+behavior-preserving authority compression).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different
