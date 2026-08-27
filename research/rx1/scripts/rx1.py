@@ -174,6 +174,8 @@ def parse_perf(stderr_text: str, ops: int) -> dict:
         fields = line.split(";")
         if len(fields) >= 3:
             val, _unit, event = fields[0], fields[1], fields[2]
+            # perf_event_paranoid=2 renames every event with a ":u" suffix
+            event = event.split(":")[0]
             if event and not val.startswith("<"):
                 try:
                     got[event] = float(val.replace(",", ""))

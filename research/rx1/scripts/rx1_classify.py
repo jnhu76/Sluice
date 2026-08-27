@@ -137,8 +137,33 @@ def extract_features(run: dict) -> dict:
     f["psi_io_some_us_per_s"] = psi.get("io_some_delta_us", 0.0) / wall_s if wall_s > 0 else 0.0
     f["psi_io_full_us_per_s"] = psi.get("io_full_delta_us", 0.0) / wall_s if wall_s > 0 else 0.0
     f["psi_mem_some_us_per_s"] = psi.get("memory_some_delta_us", 0.0) / wall_s if wall_s > 0 else 0.0
-    # perf stat (optional; absent events recorded as None, treated as 0)
-    perf = run["external"].get("perf") or {}
+    # perf stat (optional; absent events recorded as None, treated as 0).
+    # Harness defect note: the run-time perf decoder dropped the ":u" event
+    # suffix perf_event_paranoid=2 adds, so stored `perf` dicts are empty for
+    # the v1 formal matrix; re-parse the preserved raw evidence here. No
+    # frozen rule reads these features (verified: prediction diff = 0).
+    perf = dict(run["external"].get("perf") or {})
+    raw = run["external"].get("perf_raw") or ""
+    if raw and "cycles_per_op" not in perf:
+        got = {}
+        for line in raw.splitlines():
+            fields = line.split(";")
+            if len(fields) >= 3:
+                val, ev = fields[0], fields[2].split(":")[0]
+                if ev and not val.startswith("<"):
+                    try:
+                        got[ev] = float(val.replace(",", ""))
+                    except ValueError:
+                        pass
+        if "task-clock" in got:
+            perf["task_clock_s"] = got["task-clock"]
+        if "cycles" in got and ops:
+            perf["cycles_per_op"] = got["cycles"] / ops
+        if "instructions" in got and ops:
+            perf["instructions_per_op"] = got["instructions"] / ops
+        for ev in ("context-switches", "cpu-migrations", "branches", "branch-misses"):
+            if ev in got:
+                perf[ev] = got[ev]
     for key, out in (
         ("cycles_per_op", "cycles_per_op"),
         ("instructions_per_op", "instructions_per_op"),
