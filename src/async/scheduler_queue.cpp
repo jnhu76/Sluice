@@ -186,14 +186,20 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
-        // Arm via the ordinary deadline authority, then attach the Queue-only
-        // per-port binding (hook + ctx + counter) INSIDE the same G critical
-        // section — the pre-arm ordering relative to resource admission below
-        // is preserved (nothing external observes the block until G releases).
-        reg = arm_ordinary_deadline_locked(node, &port.waiters_[0], deadline,
-                                           &Scheduler::queue_timer_on_resolve,
-                                           &port);
+        // Intentionally LOCAL arming (AC-2b review corrective): NOT routed
+        // through arm_ordinary_deadline_locked. The historical order bumps
+        // active_queue_timers_ BEFORE the ACTIVE count / heap / cache
+        // publication, and earliest_active_deadline_ is an atomic read by
+        // parked workers WITHOUT global_mtx_ — so this interleaving is
+        // externally observable in principle and is preserved verbatim.
+        timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
+        reg = &timer_pool_.back();
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
+        reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
+        ++active_deadline_count_;
+        heap_push_ordinary_locked(reg);
+        recompute_earliest_deadline_locked();
         // Admission precedence 1: resource admissible => commit + resolve.
         if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
             c->location_ = detail::QueueItemControl::Location::ring;
@@ -272,13 +278,18 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
-        // Arm via the ordinary deadline authority, then attach the Queue-only
-        // per-port binding (hook + ctx + counter) INSIDE the same G critical
-        // section — see queue_push_admit_until.
-        reg = arm_ordinary_deadline_locked(node, &port.waiters_[1], deadline,
-                                           &Scheduler::queue_timer_on_resolve,
-                                           &port);
+        // Intentionally LOCAL arming (AC-2b review corrective) — see
+        // queue_push_admit_until for why Queue does not route through
+        // arm_ordinary_deadline_locked. The consume/retire transitions below
+        // DO go through the authority (uniform facts).
+        timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
+        reg = &timer_pool_.back();
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
+        reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
+        ++active_deadline_count_;
+        heap_push_ordinary_locked(reg);
+        recompute_earliest_deadline_locked();
         if (!port.ring_empty_locked() && node.prev_ == nullptr) {
             const std::size_t head = port.ring_head_;
             out = std::move(port.ring_[head]);

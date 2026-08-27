@@ -174,7 +174,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
         ++waiting_waitq_count_;
         // Arm the timer registration control block for this wait epoch (pool
         // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(node, &waiters, deadline);
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline);
 
         // Admission precedence 1: ownership admission wins over a due deadline.
         // If owner_ is free AND this node is the FIFO head (no earlier waiter —

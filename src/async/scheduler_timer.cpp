@@ -105,7 +105,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         ++waiting_waitq_count_;
         // Arm the timer registration control block for this wait epoch (pool
         // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(node, &q, deadline);
+        reg = arm_ordinary_deadline_locked(&node, &q, deadline);
 
         // Already-due admission closure: if the deadline is ALREADY due, resolve
         // Expired
@@ -314,12 +314,12 @@ std::size_t Scheduler::pump_deadlines_locked() {
 // on_resolve hook firing stay at the call sites where their ordering is
 // proven per-primitive.
 
-TimerRegistration* Scheduler::arm_ordinary_deadline_locked(WaitNode& node,
+TimerRegistration* Scheduler::arm_ordinary_deadline_locked(WaitNode* node,
                                                            WaitQueue* q,
                                                            deadline_t deadline,
                                                            TimerRegistration::OnResolveFn on_resolve,
                                                            void* owner_ctx) {
-    timer_pool_.emplace_back(&node, q, deadline);
+    timer_pool_.emplace_back(node, q, deadline);
     TimerRegistration* reg = &timer_pool_.back();
     reg->on_resolve_ = on_resolve;
     reg->owner_ctx_ = owner_ctx;
@@ -473,18 +473,15 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     // Called by the test coordinator. See tests/timer_wait_test.cpp T17.
     // TEST-ONLY; no production caller.
     if (clock_now_unlocked() >= deadline) return nullptr;  // already due: skip
-    // Defensive: every caller passes a live node; arming binds by reference.
-    // (The historical raw-pointer form could store a null node unevaluated;
-    // no caller ever did.)
-    if (node == nullptr) return nullptr;
     if (q != nullptr) {
         LockGuard qlk(q->mtx());
         if (!q->register_wait_locked(*node, nullptr)) return nullptr;  // not Detached
     }
     ++waiting_waitq_count_;  // mirror admission accounting (pump decrements on win)
-    // Arm through the ordinary deadline authority: pool construction + ACTIVE
-    // count + heap push + park-cache refresh, identical to await_wait_deadline.
-    return arm_ordinary_deadline_locked(*node, q, deadline);
+    // Arm through the ordinary deadline authority. The raw-pointer form
+    // preserves this seam's historical contract exactly — including the
+    // never-dereferenced null-node binding the old emplace_back accepted.
+    return arm_ordinary_deadline_locked(node, q, deadline);
 }
 
 // ---- deadline heap helpers (min-heap on deadline) ----

@@ -337,7 +337,7 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
         ++waiting_waitq_count_;
         // Arm the timer registration control block for this wait epoch (pool
         // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(node, &q, deadline);
+        reg = arm_ordinary_deadline_locked(&node, &q, deadline);
 
         // Admission closure — Event SET takes precedence: if the resource is
         // ready, the wait resolves Woken inline (the deadline is moot).

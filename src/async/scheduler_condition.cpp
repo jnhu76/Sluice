@@ -149,7 +149,7 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
             // resolves the Condition node Expired through pump_deadlines_locked.
             // Arming = pool construction + ACTIVE count + heap push + park-cache
             // refresh via the ordinary deadline authority.
-            reg = arm_ordinary_deadline_locked(cond_node, &cond_waiters, deadline);
+            reg = arm_ordinary_deadline_locked(&cond_node, &cond_waiters, deadline);
         }
         // Admission precedence 1: already-due admission closure — if the
         // deadline is ALREADY due, the

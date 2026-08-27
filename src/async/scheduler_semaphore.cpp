@@ -167,7 +167,7 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
         ++waiting_waitq_count_;
         // Arm the timer registration control block for this wait epoch (pool
         // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(node, &waiters, deadline);
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline);
 
         // Admission precedence 1: permit admission wins over a due deadline. If
         // a stored permit is available AND this node is the FIFO head (no earlier

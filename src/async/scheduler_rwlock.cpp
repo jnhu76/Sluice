@@ -502,7 +502,7 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
         ++waiting_waitq_count_;
         // Arm via the ordinary deadline authority, then attach the RwLock-only
         // expire/reconcile binding INSIDE the same G critical section.
-        reg = arm_ordinary_deadline_locked(node, &waiters, deadline,
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline,
                                            &rwlock_timer_expire_reconcile,
                                            expire_ctx);
 
@@ -597,7 +597,7 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
         ++waiting_waitq_count_;
         // Arm via the ordinary deadline authority, then attach the RwLock-only
         // expire/reconcile binding INSIDE the same G critical section.
-        reg = arm_ordinary_deadline_locked(node, &waiters, deadline,
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline,
                                            &rwlock_timer_expire_reconcile,
                                            expire_ctx);
 

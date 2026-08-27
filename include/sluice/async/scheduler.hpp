@@ -1929,20 +1929,34 @@ private:
     //
     // All three require global_mtx_ held (the existing G-required timer CS).
 
-    // Arm one ordinary deadline registration for wait epoch {node, q, deadline}:
-    // construct the block in timer_pool_, publish it into the deadline heap,
-    // increment active_deadline_count_ exactly once, and refresh the
-    // earliest-deadline park cache at this same critical-section boundary
-    // (matching every pre-existing arming site). Returns the stable
-    // TimerRegistration* (pointer-stable std::list storage). `q` is the bound
-    // resolution queue; it may be null ONLY for the narrow test-only
-    // registration hook (register_test_deadline_locked), which mirrors the
-    // historical null-queue admission there. Optional {on_resolve, owner_ctx}
-    // install the per-port resolution hook BEFORE any external observation
-    // (all within the caller's G critical section, so the binding is invisible
-    // to other threads until G is released).
+    // Arm one ordinary deadline registration for wait epoch {node, q,
+    // deadline}: construct the block in timer_pool_, publish it into the
+    // deadline heap, increment active_deadline_count_ exactly once, and
+    // refresh the earliest-deadline park cache at this same critical-section
+    // boundary (matching every pre-existing NON-Queue arming site). Returns
+    // the stable TimerRegistration* (pointer-stable std::list storage).
+    //
+    // Raw-pointer parameters are deliberate (AC-2b review corrective): the
+    // narrow test-only hook register_test_deadline_locked historically admits
+    // a null `node` binding — stored unevaluated and never dereferenced until
+    // an expiry gates on ACTIVE — and this authority MUST NOT tighten that
+    // seam contract as a side effect of centralization. Production callers
+    // always pass live pointers.
+    //
+    // Optional {on_resolve, owner_ctx} install the per-port resolution hook
+    // atomically with publication, all within the caller's global_mtx_
+    // critical section.
+    //
+    // INTENTIONALLY NOT MIGRATED (AC-2b review corrective): Queue arming in
+    // queue_push/pop_admit_until stays local. Its historical order bumps
+    // active_queue_timers_ BETWEEN hook binding and ACTIVE-count publication,
+    // and the arming-time recompute publishes earliest_active_deadline_ to an
+    // atomic that parked workers read WITHOUT global_mtx_; ordering against
+    // the per-port counter is therefore externally observable in principle
+    // and is preserved verbatim at those call sites. Semantic compression
+    // over completeness — see queue_push_admit_until for the local sequence.
     TimerRegistration* arm_ordinary_deadline_locked(
-        WaitNode& node, WaitQueue* q, deadline_t deadline,
+        WaitNode* node, WaitQueue* q, deadline_t deadline,
         TimerRegistration::OnResolveFn on_resolve = nullptr,
         void* owner_ctx = nullptr) SLUICE_REQUIRES(global_mtx_);
 
