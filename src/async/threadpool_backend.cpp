@@ -888,6 +888,31 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
     return arena_.accepted_outstanding();
 }
 
+// --- AC-1a production resource observations (read-only; no new authority) ---
+
+// Dispatch occupancy/high-water read under the work domain's own lock —
+// BoundedDispatchQueue lives entirely under work_mtx_ (push/pop/remove are
+// called only with it held). No arena lock is taken here, and no caller of
+// these accessors holds work_mtx_, so no new lock-order edge is introduced.
+// Each accessor holds exactly ONE lock: work_mtx_ -> (nothing).
+std::size_t ThreadPoolBackend::dispatch_occupancy() const {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    return dispatch_.size();
+}
+
+std::size_t ThreadPoolBackend::dispatch_high_water_mark() const {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    return dispatch_.high_water();
+}
+
+// active_workers_ is written only under work_mtx_ (worker_loop ++ on successful
+// mark_running, -- after the syscall before terminal publication). Same single-
+// domain discipline as dispatch_occupancy.
+std::size_t ThreadPoolBackend::active_workers() const {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    return active_workers_;
+}
+
 void ThreadPoolBackend::close_admission() {
     // ADR §"Commit / accept" (:453-462) + Decision 15: close_admission()
     // takes the backend admission transaction lock so it serializes against an

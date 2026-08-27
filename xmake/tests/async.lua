@@ -101,6 +101,13 @@ sluice_production_async_test("threadpool_backend_test")
 -- the SLUICE_ASYNC_INTERNAL_TESTING-only count seams are no-ops in production.
 sluice_production_async_test("threadpool_backend_phase_e_test")
 
+-- AC-1a (#234/#227) minimal resource-observation semantics: the production
+-- ThreadPoolBackend introspection surface (occupancy / high-water / rejection
+-- counts / active workers / component-wise snapshot). Uses ONLY the public
+-- production API — no SLUICE_ASYNC_INTERNAL_TESTING, no new counters; the
+-- accessors read existing authoritative state under its existing locks.
+sluice_production_async_test("threadpool_resource_observability_test")
+
 -- Shared AsyncBackend conformance suite (sluice-CORE-024, B1). One parameterized
 -- harness asserting every genuinely-shared backend semantic against every
 -- backend. The suite impl is compiled into the driver target alongside the
