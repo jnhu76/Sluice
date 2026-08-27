@@ -94,8 +94,9 @@ KNOWN_TRACKER_REFS = {
                                        # (2026-08-26, test-only locked snapshot —
                                        # LOC delta attribution in this report;
                                        # gate doc in docs/architecture/)
-    237,                                # post-freeze architecture review (two-tax
-                                       # theorem / AC-2a wait-authority and
+    237,                                # post-freeze architecture review
+                                       # (two-cost empirical decomposition /
+                                       # AC-2a wait-authority and
                                        # frontend-neutrality separation;
                                        # 2026-08-27 AC-2c-b LOC delta attribution
                                        # in this report references it)
