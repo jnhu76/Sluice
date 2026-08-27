@@ -167,7 +167,7 @@ def extract_features(run: dict) -> dict:
     for key, out in (
         ("cycles_per_op", "cycles_per_op"),
         ("instructions_per_op", "instructions_per_op"),
-        ("task_clock_ratio", "task_clock_ratio"),
+        ("task_clock_s", "task_clock_s"),
     ):
         f[out] = perf.get(key) if perf.get(key) is not None else 0.0
     f["perf_available"] = 1.0 if perf.get("cycles_per_op") is not None else 0.0
@@ -461,6 +461,42 @@ def paired_bootstrap_delta(pairs_c, pairs_e, iters=10000, seed=1701):
     deltas = []
     for _ in range(iters):
         idx = [rng.randrange(n) for _ in range(n)]
+        dc = [pairs_c[i] for i in idx]
+        de = [pairs_e[i] for i in idx]
+        deltas.append(accuracy(de) - accuracy(dc))
+    deltas.sort()
+
+    def pct(p):
+        k = min(len(deltas) - 1, max(0, int(round(p * (len(deltas) - 1)))))
+        return deltas[k]
+
+    return acc_e - acc_c, pct(0.025), pct(0.975)
+
+
+def paired_block_bootstrap_delta(pairs_c, pairs_e, blocks, iters=10000, seed=1702):
+    """Post-hoc ROBUSTNESS analysis — NOT the preregistered primary score.
+
+    Same pairing as paired_bootstrap_delta, but the resampling unit is the
+    workload-shape × intervention CELL (blocks = list of index lists
+    partitioning range(n)) rather than the individual run. This answers:
+    do the C/E disagreements, which cluster by cell (e.g. I3@4K), drag the
+    run-level interval once the clustering is respected? Cells are resampled
+    with replacement; each draw contributes all of its runs.
+    """
+    assert len(pairs_c) == len(pairs_e)
+    acc_c = accuracy(pairs_c)
+    acc_e = accuracy(pairs_e)
+    nonempty = [b for b in blocks if b]
+    if not nonempty:
+        return float("nan"), float("nan"), float("nan")
+    import random
+
+    rng = random.Random(seed)
+    deltas = []
+    for _ in range(iters):
+        idx: list[int] = []
+        for _ in range(len(nonempty)):
+            idx.extend(nonempty[rng.randrange(len(nonempty))])
         dc = [pairs_c[i] for i in idx]
         de = [pairs_e[i] for i in idx]
         deltas.append(accuracy(de) - accuracy(dc))

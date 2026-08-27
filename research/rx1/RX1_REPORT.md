@@ -131,13 +131,22 @@ excluded them; invalid-rate is reported, never scored.
 
 | metric | C (external) | E (external + AC-1a) |
 |---|---|---|
-| Top-1 accuracy (222 valid) | **0.9955** | 0.9820 |
+| Top-1 accuracy (222 valid of 240 attribution-matrix runs) | **0.9955** | 0.9820 |
 | wrong-cause rate | 0.45% (1) | 1.80% (4) |
 | UNKNOWN rate | 0 | 0 |
 | macro-F1 | 0.9945 | 0.9788 |
 
-**Primary comparison: Δaccuracy = accuracy(E) − accuracy(C) = −1.35 pp,
-paired bootstrap 95% CI [−3.60, +0.45].**
+**Primary comparison (preregistered, run-level paired bootstrap):
+Δaccuracy = accuracy(E) − accuracy(C) = −1.35 pp, 95% CI [−3.60, +0.45].**
+
+**ROBUSTNESS ANALYSIS — NOT PRIMARY PREREGISTERED SCORE.** Because the
+disagreements cluster by workload × intervention cell (notably I3@4K), a
+post-hoc paired block bootstrap with the workload-shape × intervention cell
+as the resampling unit (28 non-empty cells of 6×5, seed 1702) gives
+Δ = −1.35 pp, 95% CI [−4.55, +0.91]. The cell-clustered interval is wider,
+as expected when the effective sample shrinks from 222 runs to 28 cells,
+and still straddles zero on the same side; it does not replace or modify
+the frozen run-level primary result or the verdict.
 
 ### CONFUSION MATRICES (rows = ground truth)
 
@@ -180,22 +189,28 @@ E (four errors: WORKER→CONTROL at 4K read ×3 and 4K write ×1):
 | **wrong → right** | **1** |
 | unknown → right / right → unknown / others | 0 |
 
-### OBSERVABILITY TAX (control workload, per shape, n=8 per mode)
+### OBSERVABILITY TAX (paired per shape against the same-shape OBS-OFF baseline; n=8 per shape/mode)
 
-| shape | OBS-OFF MB/s | OBS-LOW MB/s (tax) | OBS-HIGH MB/s (tax) |
-|---|---|---|---|
-| read/64K | 12192 | 11932 (+2.1%) | 11933 (+2.1%) |
-| read/1M | 5728 | 5646 (+1.4%) | 5502 (+4.0%) |
+Each OBS-LOW / OBS-HIGH measurement is normalized against the same-shape
+OBS-OFF baseline first; normalized effects are aggregated afterward (median
+of per-shape taxes). Shapes are never pooled into one raw aggregate.
 
-Pooled per-mode medians are non-monotonic (HIGH can exceed LOW); sample
-spreads overlap heavily (e.g. 64K OFF 10244–12898 vs LOW 9366–12387), so at
-this power OBS-LOW tax is statistically indistinguishable from zero with a
-point estimate ≤ ~2%. p99 at 64K is flat across modes (254–263 µs); at 1M
-p99 is non-monotonic across modes and cannot be attributed to sampling.
+| shape | OBS-OFF MB/s | OBS-LOW MB/s (tax) | OBS-HIGH MB/s (tax) | p99 tax LOW | p99 tax HIGH |
+|---|---|---|---|---|---|
+| read/64K | 12192 | 11932 (+2.1%) | 11933 (+2.1%) | +1.4% | −1.9% |
+| read/1M | 5728 | 5646 (+1.4%) | 5502 (+4.0%) | +22.0% | +9.1% |
+
+Aggregate (median of per-shape normalized effects): OBS-LOW +1.8%,
+OBS-HIGH +3.0% throughput tax; p99 tax aggregate +11.7% (LOW) / +3.6%
+(HIGH). Sample spreads overlap across modes (64K OFF 10244–12898 vs LOW
+9366–12387 MB/s) and neither the throughput nor the p99 effect is monotonic
+in sampling rate (HIGH repeatedly reads cheaper or cheaper-tailed than
+LOW, which more sampling cannot produce). **No reproducible or monotonic
+observation-tax signal was established at the current sample size.**
 Information gain / observation cost is therefore reported as two honest
 numbers, not one score: attribution gain ≤ 0 at v1 (≤ +0.45 pp at the
-exploratory ceiling), observation cost ≈ 0–2% (not distinguishable from
-noise at OBS-LOW).
+exploratory ceiling); OBS-LOW throughput-tax point estimates +1.4–2.1%
+per shape.
 
 ### GENERALIZATION / HOLD-OUT
 
@@ -266,12 +281,19 @@ This resolves the "PROMISING BUT NOVELTY UNCLEAR" verdict of #234 §15 for
 the attribution half of the thesis: the cheap falsification killed the
 cheap version of the hypothesis, as designed.
 
-Scope honesty: RX-1 did NOT test (and this verdict does not cover)
-multi-tenant or device-bound regimes (I5 was environment-invalid), degraded
-telemetry environments (no PSI / no perf), cross-layer identity joins
-(RX-4/eBPF territory), or non-pipeline workload shapes. Those remain
-unmeasured — and per the verdict below, they should stay unmeasured unless
-new authorization argues a concrete case.
+Scope: RX-1 falsifies the incremental attribution value of AC-1a for the
+tested family — **single-machine, ThreadPool backend, cache-hot (tmpfs,
+page-cache-warm), known-configuration, controlled pipeline workloads**. It
+does NOT establish a universal theorem that explicit-I/O observability can
+never add value. Not tested and not covered by this verdict: multi-tenant
+or device-bound regimes (I5 was environment-invalid), degraded-telemetry
+environments (no PSI / no perf), cross-layer identity joins (RX-4/eBPF
+territory), and non-pipeline workload shapes.
+
+The roadmap consequence remains: **no evidence currently justifies L2
+timestamps, RequestKey telemetry, eBPF integration, RX-2/RX-3, or other
+observability expansion.** Future reopening requires a materially
+different, preregistered hypothesis and new evidence.
 
 ## ARCHITECTURE IMPLICATION
 
@@ -292,6 +314,9 @@ new authorization argues a concrete case.
   NOT authorized by RX-1.
 - Continue the architecture roadmap (#225/#227 sequencing: Wait-domain
   refactors, AC-2) using justified engineering metrics only.
+- Reopening observability research later requires a materially different,
+  preregistered hypothesis and new evidence — not a re-tuned version of the
+  falsified one.
 
 ## DEFERRED QUESTIONS
 
@@ -314,6 +339,38 @@ feature-extraction time. No frozen rule reads perf features; the fix was
 verified prediction-invariant (C/E predictions and validity identical on
 all 288 runs before/after). No protocol field changed; no rerun required.
 Raw artifacts were never modified (scoring writes `.scored.json` siblings).
+
+## Evidence-artifact retention
+
+Decision: **KEEP RAW IN GIT.** All 288 raw formal run artifacts
+(`results/formal/run_*.json`, ~4.6 MB) and the 28 pilot artifacts are
+retained verbatim in the repository; the derived `.scored.json` siblings
+and `results/analysis/` are deterministically regenerable from the raw
+artifacts by `classify`/`analyze`. Integrity anchor:
+`results/ARTIFACT_MANIFEST.json` records the SHA256 of every raw run
+artifact plus the frozen protocol at review-correction time, so any later
+mutation of raw evidence is detectable by re-hashing. Nothing was deleted
+for aesthetics; no storage-form change was made, so no byte/hash
+correspondence proof is required beyond the manifest itself.
+
+## Post-review corrections (evidence-package only; raw data untouched)
+
+Per review: attribution denominator clarified (222 valid of 240
+attribution-matrix runs; the 48 observation-tax runs are a separate matrix
+and never enter the attribution denominator); observability-tax aggregation
+reworked to per-shape pairing with aggregate-of-normalized-effects;
+a cell-level paired block bootstrap added as a clearly labeled robustness
+analysis; tax wording standardized ("no reproducible or monotonic
+observation-tax signal was established at the current sample size" — no
+equivalence claim); scope and reopening conditions tightened; retention
+decision + artifact manifest added; the generated `tables.md` EOF blank
+line that failed the CI range-mode `git diff --check` repaired in the
+generator; the perf `:u` decoder regression locked in self-test and the
+dead `task_clock_ratio` feature renamed to the protocol's `task_clock_s`.
+No classifier rule, threshold, or UNKNOWN policy changed, no raw formal
+artifact was modified, and C/E predictions plus validity were re-verified
+identical across all 288 runs after every code touch (diff = 0). The
+preregistered primary verdict is unchanged.
 
 ## FINAL STOP
 

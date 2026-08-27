@@ -1,7 +1,8 @@
 # RX-1 analysis tables (machine source: analysis.json)
 
-- valid attribution runs: 222 / 288 (invalid: 18)
-- accuracy C = 0.9955, E = 0.9820, Δ = -1.35 pp [95% CI -3.60, +0.45]
+- attribution-matrix runs: 240; valid: 222; invalid: 18; observation-tax runs: 48 (separate matrix, excluded from the attribution denominator)
+- accuracy C = 0.9955, E = 0.9820, Δ = -1.35 pp [95% CI -3.60, +0.45] (preregistered run-level paired bootstrap)
+- ROBUSTNESS ANALYSIS — NOT PRIMARY PREREGISTERED SCORE: cell-level paired block bootstrap (unit = workload-shape × intervention, 28 cells): Δ = -1.35 pp [95% CI -4.55, +0.91]
 - macro-F1 C = 0.9945, E = 0.9788
 - UNKNOWN rate C = 0.000, E = 0.000; wrong-cause C = 0.005, E = 0.018
 
@@ -55,13 +56,18 @@ UNKNOWN | 0 | 0 | 0 | 0 | 0 | 0 | 0
 | IO_SERVICE_CONTENDED | 0.000 | 0.000 |
 | UNKNOWN | 0.000 | 0.000 |
 
-### Observability tax
+### Observability tax (paired per shape vs same-shape OBS-OFF)
 
-| mode | n | throughput MB/s (median) | thr tax % | p50 ns | p99 ns | cpu cores | ctxt/kop |
-|---|---|---|---|---|---|---|---|
-| obs_off | 16 | 8331.5 | +0.00 | 1268889 | 2095006 | 3.90 | 281.5 |
-| obs_low | 16 | 7728.3 | +7.24 | 1309047 | 2065014 | 3.88 | 326.9 |
-| obs_high | 16 | 8571.6 | -2.88 | 1312176 | 2065866 | 3.74 | 311.5 |
+| shape | mode | n | throughput MB/s (median) | thr tax % | p99 µs (median) | p99 tax % |
+|---|---|---|---|---|---|---|
+| read/65536 | off | 8 | 12191.8 | baseline | 259 | baseline |
+| read/65536 | low | 8 | 11931.6 | +2.1 | 263 | +1.4 |
+| read/65536 | high | 8 | 11933.2 | +2.1 | 254 | -1.9 |
+| read/1048576 | off | 8 | 5728.1 | baseline | 4335 | baseline |
+| read/1048576 | low | 8 | 5646.1 | +1.4 | 5288 | +22.0 |
+| read/1048576 | high | 8 | 5501.8 | +4.0 | 4729 | +9.1 |
+
+- aggregate (median of per-shape normalized effects): OBS-LOW throughput tax +1.8%, OBS-HIGH +3.0%
+- No reproducible or monotonic observation-tax signal was established at the current sample size.
 
 **Verdict gate: NOT SUPPORTED / STOP EXPANSION**
-

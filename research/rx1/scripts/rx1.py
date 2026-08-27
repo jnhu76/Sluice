@@ -506,10 +506,12 @@ def cmd_analyze(args):
         arts.append(json.loads(p.read_text()))
     if not arts:
         raise SystemExit("rx1: no scored formal runs; run classify --phase formal first")
-    # Attribution set: validity-checked, OBS-on, NOT tax-block runs.
-    attr = [a for a in arts if a.get("ground_truth_valid") and not a.get("tax")]
-    invalid = [a for a in arts if not a.get("ground_truth_valid")
-               and a["observation_mode"] != "OBS-OFF" and not a.get("tax")]
+    # Attribution matrix: the 240 non-tax runs ONLY. The 48 observation-tax
+    # runs are a separate matrix and never enter the attribution denominator.
+    attribution_runs = [a for a in arts if not a.get("tax") and a.get("bench_json")]
+    tax_runs_all = [a for a in arts if a.get("tax")]
+    attr = [a for a in attribution_runs if a.get("ground_truth_valid")]
+    invalid = [a for a in attribution_runs if not a.get("ground_truth_valid")]
     pairs_c = [(a["classifier_C_prediction"], a["ground_truth_label"]) for a in attr]
     pairs_e = [(a["classifier_E_prediction"], a["ground_truth_label"]) for a in attr]
     acc_c = rc.accuracy(pairs_c)
@@ -525,13 +527,39 @@ def cmd_analyze(args):
     conf_c = rc.confusion(pairs_c)
     conf_e = rc.confusion(pairs_e)
 
-    # ---- observability tax (matched control workload, OBS off/low/high) ----
-    tax_runs = tax_analysis(arts)
+    # Post-hoc robustness: paired bootstrap with the workload-shape x
+    # intervention cell as resampling unit (disagreements cluster by cell).
+    cell_of = []
+    cells = {}
+    for i, a in enumerate(attr):
+        w = a["workload"]
+        key = (w["op"], w["request_size"], a["intervention"])
+        cells.setdefault(key, []).append(i)
+    cell_list = list(cells.values())
+    rb_delta, rb_lo, rb_hi = rc.paired_block_bootstrap_delta(pairs_c, pairs_e, cell_list)
+    robustness = {
+        "label": "ROBUSTNESS ANALYSIS — NOT PRIMARY PREREGISTERED SCORE",
+        "method": "paired block bootstrap; resampling unit = workload-shape x intervention cell",
+        "n_cells": len(cell_list),
+        "seed": 1702,
+        "delta_accuracy": rb_delta,
+        "delta_ci95": [rb_lo, rb_hi],
+        "note": "does not replace or modify the frozen run-level primary result",
+    }
+
+    # ---- observability tax (paired per shape, see tax_analysis) ----
+    tax = tax_analysis(arts)
 
     analysis = {
         "n_scored": len(arts),
+        "n_attribution_runs": len(attribution_runs),
         "n_attribution_valid": len(attr),
-        "n_invalid": len(invalid),
+        "n_attribution_invalid": len(invalid),
+        "n_observation_tax_runs": len(tax_runs_all),
+        "attribution_denominator_note": (
+            "valid/total counts the 240 attribution-matrix runs only; the 48 "
+            "observation-tax runs are a separate matrix and never enter the "
+            "attribution denominator"),
         "invalid_reasons": {a["run_index"]: a.get("invalid_reason") for a in invalid},
         "accuracy_c": acc_c,
         "accuracy_e": acc_e,
@@ -548,17 +576,19 @@ def cmd_analyze(args):
         "transitions": trans,
         "confusion_c": conf_c,
         "confusion_e": conf_e,
-        "observability_tax": tax_runs,
+        "robustness_block_bootstrap": robustness,
+        "observability_tax": tax,
         "verdict_inputs": {
             "delta_accuracy_pp": delta * 100,
             "ci_excludes_zero_positive": lo > 0,
             "wrong_cause_increase": wrong_e > wrong_c,
         },
     }
-    # verdict gate (book §26 defaults)
+    # verdict gate (book §26 defaults; unchanged from the frozen protocol)
     v = analysis["verdict_inputs"]
+    low_tax = tax.get("aggregate", {}).get("low", {}).get("throughput_tax_pct_median_of_shapes", 99)
     if (v["delta_accuracy_pp"] >= 15 and v["ci_excludes_zero_positive"]
-            and not v["wrong_cause_increase"] and tax_runs.get("obs_low", {}).get("throughput_tax_pct_median", 99) <= 2):
+            and not v["wrong_cause_increase"] and low_tax <= 2):
         verdict = "SUPPORTED ENOUGH TO DEEPEN"
     elif delta > 0:
         verdict = "PROMISING BUT INSUFFICIENT"
@@ -573,9 +603,15 @@ def cmd_analyze(args):
 
     labels = rc.CLASSIFIER_LABELS
     md = ["# RX-1 analysis tables (machine source: analysis.json)", ""]
-    md.append(f"- valid attribution runs: {len(attr)} / {len(arts)} (invalid: {len(invalid)})")
+    md.append(f"- attribution-matrix runs: {len(attribution_runs)}; valid: {len(attr)}; "
+              f"invalid: {len(invalid)}; observation-tax runs: {len(tax_runs_all)} "
+              f"(separate matrix, excluded from the attribution denominator)")
     md.append(f"- accuracy C = {acc_c:.4f}, E = {acc_e:.4f}, Δ = {delta*100:+.2f} pp "
-              f"[95% CI {lo*100:+.2f}, {hi*100:+.2f}]")
+              f"[95% CI {lo*100:+.2f}, {hi*100:+.2f}] (preregistered run-level paired bootstrap)")
+    md.append(f"- ROBUSTNESS ANALYSIS — NOT PRIMARY PREREGISTERED SCORE: cell-level "
+              f"paired block bootstrap (unit = workload-shape × intervention, "
+              f"{len(cell_list)} cells): Δ = {rb_delta*100:+.2f} pp "
+              f"[95% CI {rb_lo*100:+.2f}, {rb_hi*100:+.2f}]")
     md.append(f"- macro-F1 C = {mf1_c:.4f}, E = {mf1_e:.4f}")
     md.append(f"- UNKNOWN rate C = {unk_c:.3f}, E = {unk_e:.3f}; wrong-cause C = {wrong_c:.3f}, E = {wrong_e:.3f}")
     md.append("")
@@ -593,57 +629,113 @@ def cmd_analyze(args):
         rc_ = per_c.get(L, {}).get("recall", 0.0)
         re_ = per_e.get(L, {}).get("recall", 0.0)
         md.append(f"| {L} | {rc_:.3f} | {re_:.3f} |")
-    md.append("\n### Observability tax\n")
-    md.append("| mode | n | throughput MB/s (median) | thr tax % | p50 ns | p99 ns | cpu cores | ctxt/kop |")
-    md.append("|---|---|---|---|---|---|---|---|")
-    for mode in ("obs_off", "obs_low", "obs_high"):
-        t = tax_runs.get(mode)
-        if t:
-            md.append(f"| {mode} | {t['n']} | {t['throughput_mbs_median']:.1f} | {t['throughput_tax_pct_median']:+.2f} | "
-                      f"{t['lat_p50_ns_median']:.0f} | {t['lat_p99_ns_median']:.0f} | {t['cpu_cores_median']:.2f} | {t['ctxt_per_kop_median']:.1f} |")
-    md.append(f"\n**Verdict gate: {verdict}**\n")
-    (outdir / "tables.md").write_text("\n".join(md) + "\n")
-    print(json.dumps({k: analysis[k] for k in ("accuracy_c", "accuracy_e", "delta_accuracy",
+    md.append("\n### Observability tax (paired per shape vs same-shape OBS-OFF)\n")
+    md.append("| shape | mode | n | throughput MB/s (median) | thr tax % | p99 µs (median) | p99 tax % |")
+    md.append("|---|---|---|---|---|---|---|")
+    for shape, row in tax.get("per_shape", {}).items():
+        for mode in ("off", "low", "high"):
+            t = row.get(mode)
+            if not t:
+                continue
+            tax_txt = f"{t['throughput_tax_pct']:+.1f}" if "throughput_tax_pct" in t else "baseline"
+            p99_tax = f"{t['p99_tax_pct']:+.1f}" if "p99_tax_pct" in t else "baseline"
+            md.append(f"| {shape} | {mode} | {t['n']} | {t['throughput_mbs_median']:.1f} | {tax_txt} | "
+                      f"{t['p99_ns_median']/1000:.0f} | {p99_tax} |")
+    agg = tax.get("aggregate", {})
+    md.append("")
+    md.append(f"- aggregate (median of per-shape normalized effects): OBS-LOW throughput tax "
+              f"{agg.get('low', {}).get('throughput_tax_pct_median_of_shapes', float('nan')):+.1f}%, "
+              f"OBS-HIGH {agg.get('high', {}).get('throughput_tax_pct_median_of_shapes', float('nan')):+.1f}%")
+    md.append(f"- {tax['conclusion']}")
+    md.append("")
+    md.append(f"**Verdict gate: {verdict}**")
+    text = "\n".join(md).rstrip() + "\n"
+    (outdir / "tables.md").write_text(text)
+    print(json.dumps({k: analysis[k] for k in ("n_attribution_runs", "n_attribution_valid",
+                                               "accuracy_c", "accuracy_e", "delta_accuracy",
                                                "delta_ci95", "verdict_gate")}, indent=1))
+    print(f"robustness block bootstrap: {robustness['delta_accuracy']*100:+.2f} pp {robustness['delta_ci95']}")
     print(f"rx1: wrote {outdir}/analysis.json and tables.md")
 
 
 def tax_analysis(arts: list[dict]) -> dict:
-    """Group control-workload runs by OBS mode. Only runs carrying the tax
-    marker (the dedicated observability-tax block) participate — attribution
-    matrix control runs are excluded."""
-    groups = {"obs_off": [], "obs_low": [], "obs_high": []}
+    """Observability tax from the dedicated tax block, PAIRED PER WORKLOAD
+    SHAPE: each OBS-LOW / OBS-HIGH measurement is normalized against the
+    same-shape OBS-OFF baseline first; normalized effects are aggregated
+    afterward. Shapes with different throughput scales are never pooled
+    into one aggregate percentage. Raw formal artifacts are not modified.
+    """
+    by = {}  # (op, request_size, mode) -> rows
     for a in arts:
         if not a.get("tax") or a.get("intervention") != "I0_CONTROL" or not a.get("bench_json"):
             continue
-        mode = {"OBS-OFF": "obs_off", "OBS-LOW": "obs_low", "OBS-HIGH": "obs_high"}[a["observation_mode"]]
+        w = a["workload"]
+        mode = {"OBS-OFF": "off", "OBS-LOW": "low", "OBS-HIGH": "high"}[a["observation_mode"]]
         b = a["bench_json"]
         f = rc.extract_features(a)
-        groups[mode].append({
+        by.setdefault((w["op"], w["request_size"], mode), []).append({
             "thr": b["outcome"]["throughput_mbs_median"],
             "p50": b["outcome"]["lat_p50_ns_median"],
             "p99": b["outcome"]["lat_p99_ns_median"],
             "cores": f["cpu_cores_used"],
             "ctxt": f["ctxt_per_kop"],
         })
-    out = {}
-    base_thr = statistics.median([g["thr"] for g in groups["obs_off"]]) if groups["obs_off"] else None
-    for mode, rows in groups.items():
-        if not rows:
+    shapes = sorted({(k[0], k[1]) for k in by})
+    per_shape = {}
+    for sh in shapes:
+        off = by.get((sh[0], sh[1], "off"), [])
+        if not off:
             continue
-        med = lambda k: statistics.median([r[k] for r in rows])
-        out[mode] = {
-            "n": len(rows),
-            "throughput_mbs_median": med("thr"),
-            "throughput_tax_pct_median": (base_thr - med("thr")) / base_thr * 100 if base_thr else float("nan"),
-            "lat_p50_ns_median": med("p50"),
-            "lat_p99_ns_median": med("p99"),
-            "cpu_cores_median": med("cores"),
-            "ctxt_per_kop_median": med("ctxt"),
-            "throughput_samples": [r["thr"] for r in rows],
-            "p99_samples": [r["p99"] for r in rows],
+        med = lambda rows, k: statistics.median([r[k] for r in rows])
+        off_thr = med(off, "thr")
+        off_p99 = med(off, "p99")
+        row = {
+            "off": {
+                "n": len(off),
+                "throughput_mbs_median": off_thr,
+                "p99_ns_median": off_p99,
+                "cpu_cores_median": med(off, "cores"),
+                "ctxt_per_kop_median": med(off, "ctxt"),
+                "throughput_samples": [r["thr"] for r in off],
+                "p99_samples": [r["p99"] for r in off],
+            }
         }
-    return out
+        for mode in ("low", "high"):
+            rs = by.get((sh[0], sh[1], mode), [])
+            if not rs:
+                continue
+            m_thr, m_p99 = med(rs, "thr"), med(rs, "p99")
+            row[mode] = {
+                "n": len(rs),
+                "throughput_mbs_median": m_thr,
+                "throughput_tax_pct": (off_thr - m_thr) / off_thr * 100 if off_thr else float("nan"),
+                "p99_ns_median": m_p99,
+                "p99_tax_pct": (m_p99 - off_p99) / off_p99 * 100 if off_p99 else float("nan"),
+                "cpu_cores_median": med(rs, "cores"),
+                "ctxt_per_kop_median": med(rs, "ctxt"),
+                "throughput_samples": [r["thr"] for r in rs],
+                "p99_samples": [r["p99"] for r in rs],
+            }
+        per_shape[f"{sh[0]}/{sh[1]}"] = row
+    aggregate = {}
+    for mode in ("low", "high"):
+        thr_taxes = [per_shape[k][mode]["throughput_tax_pct"] for k in per_shape if mode in per_shape[k]]
+        p99_taxes = [per_shape[k][mode]["p99_tax_pct"] for k in per_shape if mode in per_shape[k]]
+        if thr_taxes:
+            aggregate[mode] = {
+                "throughput_tax_pct_median_of_shapes": statistics.median(thr_taxes),
+                "throughput_tax_pct_per_shape": thr_taxes,
+                "p99_tax_pct_median_of_shapes": statistics.median(p99_taxes),
+                "p99_tax_pct_per_shape": p99_taxes,
+            }
+    return {
+        "method": ("per-shape pairing against the same-shape OBS-OFF median; "
+                   "aggregate = median of per-shape normalized effects"),
+        "per_shape": per_shape,
+        "aggregate": aggregate,
+        "conclusion": ("No reproducible or monotonic observation-tax signal was "
+                       "established at the current sample size."),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -775,9 +867,19 @@ def cmd_self_test(args):
     print("rx1 self-test: env + telemetry parsers")
     psi = read_psi()
     check("psi cpu some present", "cpu_some_total_us" in psi)
-    pf = parse_perf("1.234;;task-clock;100.00;;\n5678;;cycles;Umpf;;\n", 1000)
-    check("perf parse cycles_per_op", abs(pf.get("cycles_per_op", 0) - 5.678) < 1e-9)
-    check("perf parse task_clock", abs(pf.get("task_clock_s", 0) - 1.234) < 1e-9)
+    # perf_event_paranoid=2 renames every event with a ":u" suffix and may
+    # emit "<not counted>" rows — this case locks the decoder regression that
+    # emptied the perf feature dicts for the v1 formal matrix.
+    pf = parse_perf(
+        "32537.12;msec;task-clock:u;32537123405;100.00;;\n"
+        "6562985309;;cycles:u;32537123405;100.00;;\n"
+        "0;;context-switches:u;32537123405;100.00;;\n"
+        "<not counted>;;branches:u;32537123405;100.00;;\n", 1000)
+    check("perf parse :u-suffixed cycles_per_op",
+          abs(pf.get("cycles_per_op", 0) - 6562985.309) < 1e-6)
+    check("perf parse :u-suffixed task_clock_s",
+          abs(pf.get("task_clock_s", 0) - 32537.12) < 1e-9)
+    check("perf parse skips <not counted>", "branches" not in pf)
     print(f"\nrx1 self-test: {ok[0]} checks passed")
 
 

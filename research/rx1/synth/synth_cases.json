@@ -30,7 +30,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 64.0,
@@ -45,7 +44,8 @@
     "sluice_dispatch_occ_max": 8.0,
     "sluice_arena_high_water_frac": 0.25,
     "sluice_dispatch_high_water": 8.0,
-    "sluice_rejections_delta": 0.0
+    "sluice_rejections_delta": 0.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -77,7 +77,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 64.0,
@@ -92,7 +91,8 @@
     "sluice_dispatch_occ_max": 2.0,
     "sluice_arena_high_water_frac": 0.03,
     "sluice_dispatch_high_water": 2.0,
-    "sluice_rejections_delta": 0.0
+    "sluice_rejections_delta": 0.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -124,7 +124,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 4.0,
@@ -139,7 +138,8 @@
     "sluice_dispatch_occ_max": 3.0,
     "sluice_arena_high_water_frac": 1.0,
     "sluice_dispatch_high_water": 3.0,
-    "sluice_rejections_delta": 40960.0
+    "sluice_rejections_delta": 40960.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -171,7 +171,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 64.0,
@@ -186,7 +185,8 @@
     "sluice_dispatch_occ_max": 31.0,
     "sluice_arena_high_water_frac": 0.5,
     "sluice_dispatch_high_water": 31.0,
-    "sluice_rejections_delta": 0.0
+    "sluice_rejections_delta": 0.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -218,7 +218,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 64.0,
@@ -233,7 +232,8 @@
     "sluice_dispatch_occ_max": 15.0,
     "sluice_arena_high_water_frac": 0.25,
     "sluice_dispatch_high_water": 15.0,
-    "sluice_rejections_delta": 0.0
+    "sluice_rejections_delta": 0.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -265,7 +265,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 64.0,
@@ -280,7 +279,8 @@
     "sluice_dispatch_occ_max": 12.0,
     "sluice_arena_high_water_frac": 0.5,
     "sluice_dispatch_high_water": 12.0,
-    "sluice_rejections_delta": 0.0
+    "sluice_rejections_delta": 0.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -312,7 +312,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 64.0,
@@ -327,7 +326,8 @@
     "sluice_dispatch_occ_max": 12.0,
     "sluice_arena_high_water_frac": 0.25,
     "sluice_dispatch_high_water": 12.0,
-    "sluice_rejections_delta": 0.0
+    "sluice_rejections_delta": 0.0,
+    "task_clock_s": 0.0
    }
   },
   {
@@ -359,7 +359,6 @@
     "psi_mem_some_us_per_s": 0.0,
     "cycles_per_op": 0.0,
     "instructions_per_op": 0.0,
-    "task_clock_ratio": 0.0,
     "perf_available": 0.0,
     "sluice_sample_count": 120.0,
     "sluice_arena_capacity": 4.0,
@@ -374,7 +373,8 @@
     "sluice_dispatch_occ_max": 3.0,
     "sluice_arena_high_water_frac": 1.0,
     "sluice_dispatch_high_water": 3.0,
-    "sluice_rejections_delta": 50000.0
+    "sluice_rejections_delta": 50000.0,
+    "task_clock_s": 0.0
    }
   }
  ]

@@ -1,7 +1,10 @@
 {
  "n_scored": 288,
+ "n_attribution_runs": 240,
  "n_attribution_valid": 222,
- "n_invalid": 18,
+ "n_attribution_invalid": 18,
+ "n_observation_tax_runs": 48,
+ "attribution_denominator_note": "valid/total counts the 240 attribution-matrix runs only; the 48 observation-tax runs are a separate matrix and never enter the attribution denominator",
  "invalid_reasons": {
   "83": "control run workers pathologically saturated",
   "86": "control run workers pathologically saturated",
@@ -260,142 +263,223 @@
    "UNKNOWN": 0
   }
  },
+ "robustness_block_bootstrap": {
+  "label": "ROBUSTNESS ANALYSIS \u2014 NOT PRIMARY PREREGISTERED SCORE",
+  "method": "paired block bootstrap; resampling unit = workload-shape x intervention cell",
+  "n_cells": 28,
+  "seed": 1702,
+  "delta_accuracy": -0.013513513513513598,
+  "delta_ci95": [
+   -0.045454545454545525,
+   0.009090909090909038
+  ],
+  "note": "does not replace or modify the frozen run-level primary result"
+ },
  "observability_tax": {
-  "obs_off": {
-   "n": 16,
-   "throughput_mbs_median": 8331.48,
-   "throughput_tax_pct_median": 0.0,
-   "lat_p50_ns_median": 1268889.25,
-   "lat_p99_ns_median": 2095006.25,
-   "cpu_cores_median": 3.9012175637942175,
-   "ctxt_per_kop_median": 281.51448567708337,
-   "throughput_samples": [
-    12898.379,
-    12133.23,
-    12265.818,
-    12119.715,
-    12677.297,
-    10244.178,
-    11550.213,
-    12250.347,
-    6020.959,
-    5920.473,
-    5774.989,
-    5211.656,
-    5033.036,
-    5681.268,
-    6418.782,
-    5559.557
-   ],
-   "p99_samples": [
-    235688.7,
-    256959.7,
-    252573.7,
-    251781.3,
-    261543.3,
-    366365.5,
-    318087.3,
-    269078.3,
-    3874524.8,
-    3908399.5,
-    4045853.5,
-    4787024.2,
-    5863333.5,
-    4624941.8,
-    3823647.0,
-    4742632.2
-   ]
+  "method": "per-shape pairing against the same-shape OBS-OFF median; aggregate = median of per-shape normalized effects",
+  "per_shape": {
+   "read/65536": {
+    "off": {
+     "n": 8,
+     "throughput_mbs_median": 12191.788499999999,
+     "p99_ns_median": 259251.5,
+     "cpu_cores_median": 3.5141256147724316,
+     "ctxt_per_kop_median": 185.58756510416669,
+     "throughput_samples": [
+      12898.379,
+      12133.23,
+      12265.818,
+      12119.715,
+      12677.297,
+      10244.178,
+      11550.213,
+      12250.347
+     ],
+     "p99_samples": [
+      235688.7,
+      256959.7,
+      252573.7,
+      251781.3,
+      261543.3,
+      366365.5,
+      318087.3,
+      269078.3
+     ]
+    },
+    "low": {
+     "n": 8,
+     "throughput_mbs_median": 11931.6055,
+     "throughput_tax_pct": 2.134083936905558,
+     "p99_ns_median": 262995.35,
+     "p99_tax_pct": 1.444099648410897,
+     "cpu_cores_median": 3.503027473651416,
+     "ctxt_per_kop_median": 190.75520833333334,
+     "throughput_samples": [
+      12386.898,
+      11749.685,
+      10784.89,
+      12035.498,
+      11827.713,
+      9366.114,
+      12151.181,
+      12387.058
+     ],
+     "p99_samples": [
+      238860.7,
+      269247.0,
+      303396.5,
+      247952.7,
+      256743.7,
+      330386.5,
+      269861.7,
+      241324.8
+     ]
+    },
+    "high": {
+     "n": 8,
+     "throughput_mbs_median": 11933.2195,
+     "throughput_tax_pct": 2.1208455182764983,
+     "p99_ns_median": 254405.5,
+     "p99_tax_pct": -1.869227371876344,
+     "cpu_cores_median": 3.5473032949532524,
+     "ctxt_per_kop_median": 185.90291341145831,
+     "throughput_samples": [
+      12533.941,
+      12365.825,
+      12084.035,
+      11857.712,
+      11973.766,
+      11049.406,
+      11892.673,
+      11657.241
+     ],
+     "p99_samples": [
+      249389.3,
+      237925.0,
+      243723.5,
+      259421.7,
+      233111.5,
+      332546.7,
+      260714.0,
+      284667.3
+     ]
+    }
+   },
+   "read/1048576": {
+    "off": {
+     "n": 8,
+     "throughput_mbs_median": 5728.1285,
+     "p99_ns_median": 4335397.65,
+     "cpu_cores_median": 4.430300705080967,
+     "ctxt_per_kop_median": 544.43359375,
+     "throughput_samples": [
+      6020.959,
+      5920.473,
+      5774.989,
+      5211.656,
+      5033.036,
+      5681.268,
+      6418.782,
+      5559.557
+     ],
+     "p99_samples": [
+      3874524.8,
+      3908399.5,
+      4045853.5,
+      4787024.2,
+      5863333.5,
+      4624941.8,
+      3823647.0,
+      4742632.2
+     ]
+    },
+    "low": {
+     "n": 8,
+     "throughput_mbs_median": 5646.0725,
+     "throughput_tax_pct": 1.432509763005484,
+     "p99_ns_median": 5287682.7,
+     "p99_tax_pct": 21.9653449782167,
+     "cpu_cores_median": 4.473659937837862,
+     "ctxt_per_kop_median": 511.3118489583333,
+     "throughput_samples": [
+      5215.722,
+      5602.809,
+      5163.683,
+      5689.336,
+      5456.393,
+      6090.499,
+      5820.534,
+      6082.992
+     ],
+     "p99_samples": [
+      5293896.7,
+      5406207.7,
+      5785377.8,
+      5281468.7,
+      5556830.7,
+      3799640.7,
+      3894472.5,
+      3843488.7
+     ]
+    },
+    "high": {
+     "n": 8,
+     "throughput_mbs_median": 5501.798,
+     "throughput_tax_pct": 3.9512119883483763,
+     "p99_ns_median": 4728822.25,
+     "p99_tax_pct": 9.07470621524186,
+     "cpu_cores_median": 4.417234187807824,
+     "ctxt_per_kop_median": 577.4739583333333,
+     "throughput_samples": [
+      5313.866,
+      5280.725,
+      5375.24,
+      5359.347,
+      6093.814,
+      5873.361,
+      5919.258,
+      5628.356
+     ],
+     "p99_samples": [
+      5180751.7,
+      4389826.5,
+      5067818.0,
+      5410331.3,
+      3799186.0,
+      3976222.2,
+      4086141.7,
+      5741353.8
+     ]
+    }
+   }
   },
-  "obs_low": {
-   "n": 16,
-   "throughput_mbs_median": 7728.3065,
-   "throughput_tax_pct_median": 7.239692107524712,
-   "lat_p50_ns_median": 1309046.9,
-   "lat_p99_ns_median": 2065013.6,
-   "cpu_cores_median": 3.880471286512413,
-   "ctxt_per_kop_median": 326.88395182291663,
-   "throughput_samples": [
-    12386.898,
-    11749.685,
-    10784.89,
-    12035.498,
-    11827.713,
-    9366.114,
-    12151.181,
-    12387.058,
-    5215.722,
-    5602.809,
-    5163.683,
-    5689.336,
-    5456.393,
-    6090.499,
-    5820.534,
-    6082.992
-   ],
-   "p99_samples": [
-    238860.7,
-    269247.0,
-    303396.5,
-    247952.7,
-    256743.7,
-    330386.5,
-    269861.7,
-    241324.8,
-    5293896.7,
-    5406207.7,
-    5785377.8,
-    5281468.7,
-    5556830.7,
-    3799640.7,
-    3894472.5,
-    3843488.7
-   ]
+  "aggregate": {
+   "low": {
+    "throughput_tax_pct_median_of_shapes": 1.783296849955521,
+    "throughput_tax_pct_per_shape": [
+     2.134083936905558,
+     1.432509763005484
+    ],
+    "p99_tax_pct_median_of_shapes": 11.704722313313798,
+    "p99_tax_pct_per_shape": [
+     1.444099648410897,
+     21.9653449782167
+    ]
+   },
+   "high": {
+    "throughput_tax_pct_median_of_shapes": 3.0360287533124373,
+    "throughput_tax_pct_per_shape": [
+     2.1208455182764983,
+     3.9512119883483763
+    ],
+    "p99_tax_pct_median_of_shapes": 3.6027394216827586,
+    "p99_tax_pct_per_shape": [
+     -1.869227371876344,
+     9.07470621524186
+    ]
+   }
   },
-  "obs_high": {
-   "n": 16,
-   "throughput_mbs_median": 8571.61,
-   "throughput_tax_pct_median": -2.8822010015027466,
-   "lat_p50_ns_median": 1312176.4,
-   "lat_p99_ns_median": 2065866.35,
-   "cpu_cores_median": 3.74150977209142,
-   "ctxt_per_kop_median": 311.5132649739583,
-   "throughput_samples": [
-    12533.941,
-    12365.825,
-    12084.035,
-    11857.712,
-    11973.766,
-    11049.406,
-    11892.673,
-    11657.241,
-    5313.866,
-    5280.725,
-    5375.24,
-    5359.347,
-    6093.814,
-    5873.361,
-    5919.258,
-    5628.356
-   ],
-   "p99_samples": [
-    249389.3,
-    237925.0,
-    243723.5,
-    259421.7,
-    233111.5,
-    332546.7,
-    260714.0,
-    284667.3,
-    5180751.7,
-    4389826.5,
-    5067818.0,
-    5410331.3,
-    3799186.0,
-    3976222.2,
-    4086141.7,
-    5741353.8
-   ]
-  }
+  "conclusion": "No reproducible or monotonic observation-tax signal was established at the current sample size."
  },
  "verdict_inputs": {
   "delta_accuracy_pp": -1.3513513513513598,
