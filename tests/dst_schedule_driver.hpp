@@ -18,7 +18,12 @@
 // Identity: participants are small test-assigned integers bound to Fiber
 // objects BEFORE the run. Replay vectors reference only these ids — never
 // Fiber addresses. The ids are rendered as letters (Run(A) == id 0) in the
-// vector text.
+// vector text. Scope: inline run(1) (driver and worker are the same thread);
+// install strictly before sched.run() ON THE SAME THREAD — a multi-worker or
+// cross-thread run never activates the script. Capacities are fixed (64
+// steps, 8 fibers, 8 actions) and every append is bounds-checked: an
+// out-of-range id or a full script fails loudly instead of corrupting
+// memory or silently truncating the vector.
 #pragma once
 
 #include "async_test_control_internal.hpp"
@@ -27,6 +32,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <utility>
@@ -49,8 +56,12 @@ public:
     DstScheduleDriver& operator=(const DstScheduleDriver&) = delete;
 
     // Bind a participant identity (0..7) to a Fiber BEFORE arming. Replay
-    // vectors use only this id.
+    // vectors use only this id. An out-of-range id fails loudly (never a
+    // silent out-of-bounds write — review P1-4).
     DstScheduleDriver& bind(unsigned char id, sluice::async::Fiber& f) {
+        if (id >= kMaxFibers) {
+            fail("bind: participant id out of range", id);
+        }
         plan_.fiber_ptrs[id] = &f;
         if (id >= plan_.fiber_count) plan_.fiber_count = id + 1;
         return *this;
@@ -59,9 +70,12 @@ public:
     // Register an action closure for Invoke steps. The closure reuses the
     // repository's existing controllable seams (backend completion,
     // advance_clock, cancel_wait); the label appears in the replay vector and
-    // the failure diagnostic.
+    // the failure diagnostic. An out-of-range id fails loudly.
     DstScheduleDriver& on_action(unsigned char action_id, const char* label,
                                  std::function<void(sluice::async::Scheduler&)> fn) {
+        if (action_id >= kMaxActions) {
+            fail("on_action: action id out of range", action_id);
+        }
         plan_.actions[action_id] = std::move(fn);
         plan_.action_labels[action_id] = label;
         if (action_id >= plan_.action_count) {
@@ -72,9 +86,13 @@ public:
 
     // Append a Run decision: the bound Fiber must be already-runnable when
     // the worker reaches this step, else the run aborts with the
-    // deterministic diagnostic (no silent fallback).
+    // deterministic diagnostic (no silent fallback). The script capacity and
+    // the id are checked here, at append time.
     DstScheduleDriver& run(unsigned char fiber_id) {
-        plan_.steps[plan_.step_count++] = {StepKind::run, fiber_id};
+        if (fiber_id >= kMaxFibers) {
+            fail("run: fiber id out of range", fiber_id);
+        }
+        append_step(StepKind::run, fiber_id);
         replay_ += replay_.empty() ? "" : " -> ";
         replay_ += "Run(";
         replay_ += render_id(fiber_id);
@@ -83,9 +101,14 @@ public:
     }
 
     // Append an Invoke decision: execute the registered action INLINE at the
-    // decision point (no scheduler lock held).
+    // decision point (no scheduler lock, no script mutex held). The action id
+    // is validated BEFORE any label/array access, and the script capacity is
+    // checked at append time.
     DstScheduleDriver& invoke(unsigned char action_id) {
-        plan_.steps[plan_.step_count++] = {StepKind::invoke, action_id};
+        if (action_id >= kMaxActions) {
+            fail("invoke: action id out of range", action_id);
+        }
+        append_step(StepKind::invoke, action_id);
         replay_ += replay_.empty() ? "" : " -> ";
         replay_ += plan_.action_labels[action_id] != nullptr
                        ? plan_.action_labels[action_id]
@@ -112,6 +135,35 @@ private:
     using StepKind =
         sluice_async_test::SchedulerController::ScheduleScriptStep::Kind;
     using Install = sluice_async_test::ScheduleScriptInstall;
+
+    static constexpr std::size_t kMaxSteps =
+        sluice_async_test::SchedulerController::kScheduleMaxSteps;
+    static constexpr std::size_t kMaxFibers =
+        sluice_async_test::SchedulerController::kScheduleMaxFibers;
+    static constexpr std::size_t kMaxActions =
+        sluice_async_test::SchedulerController::kScheduleMaxActions;
+
+    // A test-only driver must fail loudly on capacity violations, never
+    // silently truncate the decision vector or index out of bounds (the
+    // review P1-4 contract). The abort is deliberate: it is the same
+    // fail-fast contract the illegal-decision pick uses.
+    [[noreturn]] static void fail(const char* what, unsigned long value) {
+        std::fprintf(stderr,
+                     "\n=== DST SCHEDULE DRIVER FAILURE (capacity) ===\n"
+                     "%s: %lu\n"
+                     "capacities: %zu steps, %zu fibers, %zu actions\n"
+                     "===================================================\n",
+                     what, value, kMaxSteps, kMaxFibers, kMaxActions);
+        std::fflush(stderr);
+        std::abort();
+    }
+
+    void append_step(StepKind kind, unsigned char payload) {
+        if (plan_.step_count >= kMaxSteps) {
+            fail("script exceeds kScheduleMaxSteps", plan_.step_count);
+        }
+        plan_.steps[plan_.step_count++] = {kind, payload};
+    }
 
     static std::string render_id(unsigned char id) {
         if (id < 26) {

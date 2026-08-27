@@ -28,9 +28,15 @@
 //       probe — a PARKED PRODUCER vs a blocking pop's inline success path
 //       (the AC-2a matrix documents try_pop/close as the ONLY producer
 //       reconcilers; whether queue_pop_admit's inline path also reconciles
-//       is exactly the drift specimen this campaign makes executable).
-//       Verdict recorded in the DST-PV-1 report; NO production Queue change
-//       is made in this campaign.
+//       is exactly the drift specimen this campaign makes executable). The
+//       V1 assertion is a KNOWN-DRIFT CHARACTERIZATION WITNESS: it proves
+//       the as-built defect exists today; a future Queue repair slice must
+//       consciously flip or replace that expectation. NO production Queue
+//       change is made in this campaign.
+//   T6  harness contract (review P1-2): an Invoke action may re-enter the
+//       test control surface (uninstall) without self-deadlock. Plus the
+//       review P1-4 death children inside T3: out-of-range driver ids and
+//       unregistered actions abort loudly instead of corrupting memory.
 //
 // All ordering evidence is script steps + scheduler semantic state (node
 // outcomes, Completion results, queue result statuses, event lists). NO
@@ -55,6 +61,7 @@
 #if defined(__unix)
 #include "death_test_runner_posix.hpp"
 
+#include <poll.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -488,7 +495,15 @@ struct QueueFixture {
 // Ring pre-filled from the main thread (try_push, no fiber needed); P parks
 // (push onto a full ring); C's BLOCKING pop succeeds inline. The AC-2a
 // matrix documents try_pop/close as the producer reconcilers; whether this
-// path also reconciles is executed here, and the observed outcome is pinned.
+// path also reconciles is executed here.
+//
+// The assertion below is a KNOWN-DRIFT CHARACTERIZATION WITNESS, NOT a
+// statement of desired contract: today it proves the as-built defect exists
+// (a parked blocking producer is NOT reconciled by the inline pop success
+// path — no queue_grant_producer_locked). A future Queue repair slice must
+// consciously FLIP or REPLACE this expectation (the producer would commit
+// from the pop); the review P2 agreement is that no Queue change is made in
+// this campaign.
 // Structure: run -> capture -> dispose -> assert (a failing check returns
 // from the case, so the queue's ring-empty destruction contract must be
 // satisfied BEFORE any assertion).
@@ -504,13 +519,13 @@ SLUICE_TEST_CASE(dst_t5_v1_parked_producer_vs_inline_pop) {
     fx.sched.spawn(fx.fc);
     fx.sched.run(1);
 
-    // Observed as-built verdict (pinned as the regression guard for the
-    // AC-2a/#234 drift specimen): the blocking pop's inline success does
-    // NOT reconcile the parked producer — the documented reconciler set is
-    // try_pop/close only (queue_port.cpp try_pop's FastPopCommit carries
+    // KNOWN-DRIFT CHARACTERIZATION WITNESS: the blocking pop's inline success
+    // does NOT reconcile the parked producer — the documented reconciler set
+    // is try_pop/close only (queue_port.cpp try_pop's FastPopCommit carries
     // queue_grant_producer_locked; queue_pop_admit's inline path does not).
-    // P therefore remains waiting at run end; the drain-mode run STALLED;
-    // close resolves P closed with its lease retained.
+    // P therefore remains WAITING at run end (the drain-mode run STALLED);
+    // close resolves P closed with its lease retained. A Queue repair slice
+    // must flip this expectation (P:committed from the pop), not preserve it.
     const std::string ev = join(fx.events);
     const FiberState p_state_at_run_end = fx.fp.state();
     const FiberState c_state = fx.fc.state();
@@ -526,11 +541,14 @@ SLUICE_TEST_CASE(dst_t5_v1_parked_producer_vs_inline_pop) {
                       ")")
                          .c_str());
     SLUICE_CHECK(c_state == FiberState::done);
-    SLUICE_CHECK_MSG(p_state_at_run_end == FiberState::waiting,
-                     "the blocking pop's inline success leaves the parked "
-                     "producer UNRECONCILED (as-built drift specimen)");
+    SLUICE_CHECK_MSG(
+        p_state_at_run_end == FiberState::waiting,
+        "KNOWN-DRIFT CHARACTERIZATION WITNESS: the blocking pop's inline "
+        "success leaves the parked producer UNRECONCILED (as-built defect, "
+        "AC-2a/#234; a Queue repair must flip this expectation)");
     SLUICE_CHECK_MSG(ev.find("P:committed") == std::string::npos,
-                     "no inline reconcile: P must not commit from the pop");
+                     "witness: no inline reconcile under the pop — P:committed "
+                     "is the future-repair expectation, not today's behavior");
     SLUICE_CHECK_MSG(
         ev_after_cleanup.find("P:closed") != std::string::npos,
         ("close-cleanup resolves the stranded producer (events: " +
@@ -713,6 +731,45 @@ SLUICE_TEST_CASE(dst_t5_v3_timed_consumer_ladder) {
     }
 }
 
+// T6 — review P1-2 harness contract: an Invoke action MAY re-enter the test
+// control surface (uninstall_schedule_script here) without self-deadlock.
+// Pre-fix the action ran while holding the script mutex, so this call locked
+// the same mutex and hung; post-fix the action runs with NO script mutex
+// held, the seam deactivates mid-run, and the run continues on the plain FIFO
+// pop (a free run).
+SLUICE_TEST_CASE(dst_t6_action_reenters_control_surface) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    ControllerGuard ctrl(sched);
+    sluice_dst::DstScheduleDriver driver(sched, "dst_t6");
+
+    WaitQueue qa;
+    WaitNode na;
+    Fiber fa, fb;
+    fa.set_entry([&](Fiber&) { (void)sched.await_wait(qa, na); });
+    fb.set_entry([&](Fiber&) {});
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(fb, sb.base(), sb.size()));
+
+    driver.on_action(0, "Uninstall", [&](Scheduler& s) {
+        sluice_async_test::uninstall_schedule_script(s);  // re-entry
+    });
+    driver.bind(0, fa).bind(1, fb);
+    driver.run(0).invoke(0);  // A runs + suspends; action uninstalls mid-run
+    driver.arm();
+    sched.spawn(fa);
+    sched.spawn(fb);
+    sched.run(1);  // script deactivated; B completes via the FIFO pop
+    SLUICE_CHECK(fb.state() == FiberState::done);
+    SLUICE_CHECK(fa.state() == FiberState::waiting);  // MW-S3 STALLED return
+    (void)sched.cancel_wait(qa, na);
+    sched.run(1);
+    SLUICE_CHECK(fa.state() == FiberState::done);
+}
+
 // ============================================================================
 // T3 — illegal decision aborts with the deterministic package (death child).
 // ============================================================================
@@ -777,6 +834,38 @@ void dst_t3_child_control() {
     std::_Exit(0);
 }
 
+// Child (review P1-4): an out-of-range participant id must fail loudly at
+// bind time — never an out-of-bounds write or a silently truncated vector.
+void dst_t3_child_driver_bounds() {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    ControllerGuard ctrl(sched);
+    sluice_dst::DstScheduleDriver driver(sched, "dst_t3_driver_bounds");
+    Fiber fb;
+    FiberStack sb;
+    if (!sched.init_fiber(fb, sb.base(), sb.size())) std::_Exit(88);
+    driver.bind(8, fb);  // 8 >= kScheduleMaxFibers -> driver fail-fast abort
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// Child (review P1-4 / P1-2 defense-in-depth): an Invoke step referencing a
+// NEVER-registered action aborts at the pick with the configuration package.
+void dst_t3_child_unregistered_action() {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    ControllerGuard ctrl(sched);
+    sluice_dst::DstScheduleDriver driver(sched, "dst_t3_unregistered_action");
+    Fiber fb;
+    FiberStack sb;
+    if (!sched.init_fiber(fb, sb.base(), sb.size())) std::_Exit(88);
+    driver.bind(0, fb);
+    driver.invoke(0);  // no on_action(0) registered -> config fail at pick
+    driver.arm();
+    sched.spawn(fb);
+    sched.run(1);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 // Fork a child re-execing THIS binary with --death-child=<case>, capturing
 // the child's stderr through a pipe (the runner's self-exec discipline: the
 // child is the same internal-testing binary; post-fork work is restricted to
@@ -820,44 +909,68 @@ CapturedChild run_child_captured(const std::string& case_name) {
         ::execv(argv[0], argv);
         std::_Exit(88);
     }
-    // Parent: read the pipe to EOF, then a bounded waitpid.
+    // Parent: bounded capture loop — drain the pipe AND reap the child under
+    // ONE deadline. A child that hangs with its stderr pipe still open must
+    // reach the watchdog: a blocking read-to-EOF performed before waitpid
+    // would never return (review P1-3), so the pipe is polled with the
+    // remaining budget and the child is reaped with waitpid(WNOHANG) on every
+    // iteration. The poll paces the loop even once EOF is seen (a live child
+    // with its stderr closed), so there is no busy spin and no unbounded
+    // wait. The watchdog is the only time bound in this harness.
     ::close(pipefd[1]);
     std::string text;
     char buf[512];
-    for (;;) {
-        const ssize_t n = ::read(pipefd[0], buf, sizeof(buf));
-        if (n > 0) {
-            text.append(buf, static_cast<std::size_t>(n));
-            continue;
+    constexpr auto kTimeout = std::chrono::seconds{60};
+    const auto deadline = std::chrono::steady_clock::now() + kTimeout;
+    bool exited = false;
+    bool eof = false;
+    bool reap_error = false;
+    while ((!exited || !eof) && !reap_error) {
+        if (std::chrono::steady_clock::now() >= deadline) break;
+        if (!exited) {
+            int status = 0;
+            const pid_t w = ::waitpid(pid, &status, WNOHANG);
+            if (w == pid) {
+                exited = true;
+                out.status = status;
+            } else if (w < 0 && errno != EINTR) {
+                std::perror("dst death: waitpid");
+                reap_error = true;  // status stays -1: the caller fails loudly
+            }
         }
-        if (n == 0) break;
-        if (errno == EINTR) continue;
-        break;
+        struct pollfd pfd;
+        pfd.fd = pipefd[0];
+        pfd.events = static_cast<short>(POLLIN | POLLHUP);
+        pfd.revents = 0;
+        const auto remain = std::chrono::duration_cast<
+            std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        const int pr = ::poll(&pfd, 1,
+                              static_cast<int>(remain.count() > 0
+                                                   ? remain.count()
+                                                   : 1));
+        if (pr > 0 && !eof) {
+            const ssize_t n = ::read(pipefd[0], buf, sizeof(buf));
+            if (n > 0) {
+                text.append(buf, static_cast<std::size_t>(n));
+            } else if (n == 0) {
+                eof = true;  // child closed stderr (or died)
+            } else if (errno != EINTR) {
+                eof = true;  // read error: no further data
+            }
+        } else if (pr < 0 && errno != EINTR && !eof) {
+            eof = true;  // poll error: no further data
+        }
     }
     ::close(pipefd[0]);
-    const auto start = std::chrono::steady_clock::now();
-    constexpr auto kTimeout = std::chrono::seconds{60};
-    for (;;) {
-        int status = 0;
-        const pid_t w = ::waitpid(pid, &status, WNOHANG);
-        if (w == pid) {
-            out.status = status;
-            break;
-        }
-        if (w < 0 && errno == EINTR) continue;
-        if (w < 0) {
-            std::perror("dst death: waitpid");
-            break;
-        }
-        if (std::chrono::steady_clock::now() - start >= kTimeout) {
+    if (!exited) {
+        (void)::kill(pid, SIGKILL);
+        if (!reap_error) {
             out.timed_out = true;
-            (void)::kill(pid, SIGKILL);
             int status2 = 0;
             while (::waitpid(pid, &status2, 0) < 0 && errno == EINTR) {}
             out.status = status2;
-            break;
         }
-        ::usleep(10000);
     }
     out.stderr_text = std::move(text);
     return out;
@@ -892,6 +1005,27 @@ SLUICE_TEST_CASE(dst_t3_illegal_decision_aborts) {
     SLUICE_CHECK_MSG(!ctl.timed_out, "control child must not hang");
     SLUICE_CHECK_MSG(WIFEXITED(ctl.status) && WEXITSTATUS(ctl.status) == 0,
                      "legal script completes cleanly (control)");
+
+    // Review P1-4: driver capacity violations abort loudly with the driver's
+    // own package (id 8 >= the 8-fiber capacity), and an Invoke referencing an
+    // action that was never registered aborts with the configuration package.
+    const CapturedChild bnd = run_child_captured("dst_t3_driver_bounds");
+    SLUICE_CHECK_MSG(!bnd.timed_out, "driver-bounds child must not hang");
+    SLUICE_CHECK_MSG(WIFSIGNALED(bnd.status) && WTERMSIG(bnd.status) == SIGABRT,
+                     "out-of-range driver ids must abort loudly");
+    SLUICE_CHECK_MSG(contains(bnd.stderr_text, "DST SCHEDULE DRIVER FAILURE"),
+                     "driver capacity header present");
+    SLUICE_CHECK_MSG(contains(bnd.stderr_text, "bind: participant id out of range"),
+                     "the violating id is named");
+
+    const CapturedChild ua = run_child_captured("dst_t3_unregistered_action");
+    SLUICE_CHECK_MSG(!ua.timed_out, "unregistered-action child must not hang");
+    SLUICE_CHECK_MSG(WIFSIGNALED(ua.status) && WTERMSIG(ua.status) == SIGABRT,
+                     "unregistered Invoke must abort loudly");
+    SLUICE_CHECK_MSG(contains(ua.stderr_text, "DST-PV-1 SCHEDULE SCRIPT FAILURE"),
+                     "script failure header present");
+    SLUICE_CHECK_MSG(contains(ua.stderr_text, "unregistered action id"),
+                     "the missing action is named");
 }
 
 #else
@@ -909,6 +1043,14 @@ int main(int argc, char** argv) {
     }
     if (child == "dst_t3_control") {
         dst_t3_child_control();
+        std::_Exit(0);
+    }
+    if (child == "dst_t3_driver_bounds") {
+        dst_t3_child_driver_bounds();
+        std::_Exit(0);
+    }
+    if (child == "dst_t3_unregistered_action") {
+        dst_t3_child_unregistered_action();
         std::_Exit(0);
     }
 #else
