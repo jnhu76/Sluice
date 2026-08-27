@@ -430,10 +430,15 @@ struct SchedulerController {
     // advance_clock, cancel_wait) INLINE at the decision point. Script
     // exhaustion returns control to the normal FIFO pop — a free run.
     //
-    // Capacities are fixed at install time; the pick path allocates nothing.
-    // `mtx` is a leaf controller mutex (precedent: trace_mtx); it guards ONLY
-    // the script records (step index, executed ring): it is never held while
-    // an action runs and never held while acquiring any production lock.
+    // Capacities are fixed at install time; the pick path allocates nothing
+    // (Invoke actions run through stable references into the fixed action
+    // array — no std::function copy). Re-install / re-arm inside Invoke is
+    // FAIL-CLOSED; uninstall inside Invoke remains supported, and the
+    // post-action epilogue then records into the old state without
+    // reactivating (activation is the TLS pair alone). `mtx` is a leaf
+    // controller mutex (precedent: trace_mtx); it guards ONLY the script
+    // records (step index, executed ring): it is never held while an action
+    // runs and never held while acquiring any production lock.
     // Install must happen before run() starts, ON THE SAME THREAD (the PV
     // model is single-threaded inline run(1): driver and worker are one
     // thread). The worker pop gate is a thread-local activation — no lock,
@@ -464,6 +469,10 @@ struct SchedulerController {
 
         // Driver-registered action closures (invoke steps). Installed before
         // run(); invoked with no script-mutex and no production lock held.
+        // Fixed-size storage inside the controller (retained until process
+        // teardown): the pick invokes actions through STABLE REFERENCES
+        // (no copy, no allocation); re-install / re-arm inside Invoke is
+        // fail-closed, and uninstall never rewrites this array.
         std::array<std::function<void(sluice::async::Scheduler&)>,
                    kScheduleMaxActions>
             actions{};
@@ -713,10 +722,17 @@ bool schedule_script_active(sluice::async::Scheduler& s) noexcept;
 
 // Consume script steps at the worker pop decision. Run(id) removes the bound
 // Fiber from ws->local_runnable (under inbox_mtx) and returns it; Invoke(id)
-// copies its action out under the script mutex, executes it with NO script
-// mutex and NO production lock held (actions may re-enter any test control
-// surface, including install/uninstall, without self-deadlock), records the
-// step, and TERMINATES the hook visit (returns nullptr) — actions may stage
+// takes a STABLE REFERENCE to its action under the script mutex — no
+// std::function copy, the pick path allocates nothing after install — and
+// executes it with NO script mutex and NO production lock held. Actions may
+// re-enter SUPPORTED NON-REPLACING test-control surfaces
+// (uninstall_schedule_script, advance_clock, cancel_wait, fake/scripted I/O
+// completion); installing or re-arming a schedule script inside Invoke is
+// FAIL-CLOSED (install_schedule_script aborts). If the action uninstalled
+// the script mid-run, the epilogue still records the step into the OLD
+// controller state and never reactivates (activation is the TLS pair alone,
+// which uninstall cleared). The step is then recorded and the hook visit
+// TERMINATES (returns nullptr) — actions may stage
 // effects that become runnable only after the worker's next drain, and the
 // intervening normal pop -> drain -> FIFO path publishes them; a singleton
 // publication needs no script step (Run(X) is a CHOICE among >= 2 legal
@@ -731,8 +747,12 @@ sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
 // Test-side install/uninstall (BEFORE run(); the PV model is single-threaded
 // inline run(1) — install and the worker loop must run on the SAME thread; a
 // multi-worker or cross-thread run never activates the script and a test that
-// scripts such a run fails its own deterministic assertions). `install_schedule_script` fills the controller state owned
-// by `s`'s registered controller (register_controller must already have run).
+// scripts such a run fails its own deterministic assertions).
+// `install_schedule_script` fills the controller state owned by `s`'s
+// registered controller (register_controller must already have run), and
+// FAILS LOUDLY if called from inside an Invoke action (re-install / re-arm
+// is forbidden while an action runs — the old script's epilogue would
+// corrupt a replaced replay vector).
 struct ScheduleScriptInstall {
     std::array<SchedulerController::ScheduleScriptStep,
                SchedulerController::kScheduleMaxSteps>
