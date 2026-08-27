@@ -248,9 +248,7 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     // Cancelled nodes.
     LockGuard lk(global_mtx_);
     LockGuard qlk(cond_waiters.mtx());
-    if (!cond_waiters.contains_locked(cond_node)) return false;
-    if (!cond_waiters.cancel_locked(cond_node)) return false;  // loser
-    retire_timer_for_node_locked(cond_node);
+    if (!cancel_primitive_wait_locked(cond_waiters, cond_node)) return false;
     Fiber* f = cond_node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // Route to the Fiber's recorded owner (NOT g_worker).

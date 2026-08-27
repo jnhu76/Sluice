@@ -206,9 +206,7 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // Membership gate: a node not linked in THIS queue is not cancellable here.
     // Covers wrong-Event (same/different Scheduler), detached, and (because a
     // terminal winner is already unlinked) Woken/Expired/Cancelled nodes.
-    if (!q.contains_locked(node)) return false;
-    if (!q.cancel_locked(node)) return false;  // concurrent resolver won (loser)
-    retire_timer_for_node_locked(node);
+    if (!cancel_primitive_wait_locked(q, node)) return false;
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // The cancel CAS won: the node is terminal+unlinked and the count is closed.

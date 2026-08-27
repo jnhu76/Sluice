@@ -94,6 +94,12 @@ KNOWN_TRACKER_REFS = {
                                        # (2026-08-26, test-only locked snapshot —
                                        # LOC delta attribution in this report;
                                        # gate doc in docs/architecture/)
+    237,                                # post-freeze architecture review
+                                       # (two-cost empirical decomposition /
+                                       # AC-2a wait-authority and
+                                       # frontend-neutrality separation;
+                                       # 2026-08-27 AC-2c-b LOC delta attribution
+                                       # in this report references it)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

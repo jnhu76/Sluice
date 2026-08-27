@@ -356,9 +356,7 @@ bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
     LockGuard lk(global_mtx_);
     const std::size_t roleIdx = static_cast<std::size_t>(role);
     LockGuard qlk(port.waiters_[roleIdx].mtx());
-    if (!port.waiters_[roleIdx].contains_locked(node)) return false;
-    if (!port.waiters_[roleIdx].cancel_locked(node)) return false;
-    retire_timer_for_node_locked(node);
+    if (!cancel_primitive_wait_locked(port.waiters_[roleIdx], node)) return false;
     Fiber* f = node.fiber();
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;

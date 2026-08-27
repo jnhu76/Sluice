@@ -77,13 +77,15 @@
 //
 // A Scheduler-integrated wait (registered via Scheduler::await_wait, which owns
 // waiting_waitq_count_ + the runnable-route obligation) may be terminally
-// resolved ONLY through Scheduler::wake_wait_one / cancel_wait / expire_wait,
-// and registered ONLY through Scheduler::await_wait. Calling WaitQueue
-// registration or resolution directly would bypass Scheduler accounting: an
-// arbitrary Fiber* could be injected into a queue that Scheduler resolution
-// later trusts (R2 P1/P2/P5), or a node could be resolved + unlinked WITHOUT
-// decrementing waiting_waitq_count_ and WITHOUT routing the resumed fiber
-// (stranding the fiber and leaving MW classification stale).
+// resolved ONLY through Scheduler::wake_wait_one / cancel_wait / expire_wait /
+// the primitive cancel seams (Scheduler::cancel_primitive_wait_locked
+// callers), and registered ONLY through Scheduler::await_wait. Calling
+// WaitQueue registration or resolution directly would bypass Scheduler
+// accounting: an arbitrary Fiber* could be injected into a queue that
+// Scheduler resolution later trusts (R2 P1/P2/P5), or a node could be
+// resolved + unlinked WITHOUT decrementing waiting_waitq_count_ and WITHOUT
+// routing the resumed fiber (stranding the fiber and leaving MW
+// classification stale).
 //
 // There is NO test friend and NO publicly nameable access type. A downstream TU
 // cannot reach mtx_, register_wait_locked, wake_one_locked, cancel_locked, or
@@ -221,8 +223,10 @@ private:
 
     // ---- Cancel a specific node (canonical terminal resolver, Cancelled) ----
     //
-    // PRIVATE (C2): the Scheduler resolves via Scheduler::cancel_wait, which
-    // calls this and routes the winner. See wake_one_locked.
+    // PRIVATE (C2): the Scheduler resolves via Scheduler::cancel_wait (generic
+    // seam, caller-guaranteed membership) or via cancel_primitive_wait_locked
+    // (primitive seams, contains_locked-gated), which route the winner. See
+    // wake_one_locked.
 
     // Resolve `node` with Cancelled and unlink the winner. Returns true iff
     // this call is the winner (node was Registered and is now Cancelled). A
@@ -286,15 +290,19 @@ private:
     // intrusive list? Scans head_ -> next_ while the caller holds mtx_.
     //
     // PRIVATE + Scheduler-friend-gated. This is the structural authority for
-    // Event::cancel queue-identity validation: Scheduler::event_cancel_wait
-    // scans the TARGET Event's own queue for &node before attempting cancel,
-    // so a wrong-Event / detached / terminal node returns false WITHOUT reading
-    // a foreign node's home_ or locking a foreign Event/Scheduler. O(waiters).
+    // primitive-cancel queue-identity validation: Scheduler's
+    // cancel_primitive_wait_locked — used by the Event / Semaphore / Mutex /
+    // Condition / Queue / RwLock cancel seams — scans the TARGET primitive's
+    // own queue for &node before attempting cancel, so a wrong-object /
+    // detached / terminal node returns false WITHOUT reading a foreign node's
+    // home_ or locking a foreign primitive/Scheduler. O(waiters).
     //
-    // This is an Event-specific authority check; generic Scheduler::cancel_wait
-    // is unchanged and does NOT call it (its caller contract already guarantees
-    // the node belongs to the passed queue). The resolve_ CAS remains the
-    // terminal-winner authority; contains_locked is the membership gate.
+    // Introduced as an Event-specific corrective (wrong-Event cancel safety)
+    // and since generalized to the whole primitive family. Generic
+    // Scheduler::cancel_wait does NOT call it (its caller contract already
+    // guarantees the node belongs to the passed queue). The resolve_ CAS
+    // remains the terminal-winner authority; contains_locked is the
+    // membership gate.
     bool contains_locked(const WaitNode& node) const noexcept SLUICE_REQUIRES(mtx_) {
         for (WaitNode* cur = head_; cur != nullptr; cur = cur->next_) {
             if (cur == &node) return true;

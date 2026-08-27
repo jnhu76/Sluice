@@ -1232,6 +1232,22 @@ bool Scheduler::wake_wait_one(WaitQueue& q) {
     return wake_wait_one_locked(q) != nullptr;
 }
 
+bool Scheduler::cancel_primitive_wait_locked(WaitQueue& waiters,
+                                             WaitNode& node) {
+    // Caller holds G + this exact W. Primitive-facing cancel APIs accept an
+    // arbitrary WaitNode&, so target-queue membership must be proven before
+    // the terminal CAS. The winning WaitQueue operation owns unlink in this
+    // same W critical section; AC-2b owns ordinary timer retirement. The
+    // closure stops here: waiting_waitq_count_ retirement stays at each
+    // caller because that counter is current stackful-frontend bookkeeping
+    // (MW classification), not frontend-neutral authority — the exactly-once
+    // retirement obligation is semantic, the concrete counter is not.
+    if (!waiters.contains_locked(node)) return false;
+    if (!waiters.cancel_locked(node)) return false;
+    retire_timer_for_node_locked(node);
+    return true;
+}
+
 bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
     // Resolve `node` with Cancelled and route the winner's fiber. Cancel is
     // wait-cancellation ONLY (not task/fiber/I/O cancellation). The winner is
