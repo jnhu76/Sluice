@@ -1902,6 +1902,68 @@ private:
     // NEVER reads node()/queue() (lifetime-safe by construction).
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
 
+    // ---- Ordinary deadline lifecycle authority (AC-2b) ----
+    // The single owner of the UNIFORM ordinary-TimerRegistration lifecycle
+    // facts: pool publication + ACTIVE count, and the exactly-once
+    // ACTIVE->{CONSUMED,RETIRED} transitions that decrement the count.
+    //
+    // Authority boundary (distinct from WaitNode::resolve_): the resolve CAS on
+    // the bound WaitNode remains the ONE wait-outcome winner authority; these
+    // helpers own ONLY timer callback/lifetime state + active_deadline_count_
+    // accounting. A timer consume never publishes a Completion/runnable, and a
+    // WaitNode winner never fabricates timer accounting outside these helpers.
+    //
+    // Deliberately NOT centralized here:
+    //   - recompute_earliest_deadline_locked() timing: pump_deadlines_locked
+    //     amortizes one recompute AFTER its whole loop; inline already-due paths
+    //     recompute immediately. Keep each caller's existing horizon.
+    //   - fire_on_resolve_locked(): Queue/RwLock per-port hook ordering differs
+    //     between retire and consume sites; it stays at each call site.
+    //   - primitive-specific bookkeeping (resource commit, waiting_waitq_count_,
+    //     per-port counters): not uniform across arming sites.
+    //
+    // SelectTimerRegistration is a sibling implementation of the same
+    // high-level invariant with different admission/reclamation mechanics
+    // (spliced caller-frame blocks, ownership validation); it keeps its own
+    // select_timer_{retire,consume}_locked helpers. No shared hierarchy.
+    //
+    // All three require global_mtx_ held (the existing G-required timer CS).
+
+    // Arm one ordinary deadline registration for wait epoch {node, q, deadline}:
+    // construct the block in timer_pool_, publish it into the deadline heap,
+    // increment active_deadline_count_ exactly once, and refresh the
+    // earliest-deadline park cache at this same critical-section boundary
+    // (matching every pre-existing arming site). Returns the stable
+    // TimerRegistration* (pointer-stable std::list storage). `q` is the bound
+    // resolution queue; it may be null ONLY for the narrow test-only
+    // registration hook (register_test_deadline_locked), which mirrors the
+    // historical null-queue admission there. Optional {on_resolve, owner_ctx}
+    // install the per-port resolution hook BEFORE any external observation
+    // (all within the caller's G critical section, so the binding is invisible
+    // to other threads until G is released).
+    TimerRegistration* arm_ordinary_deadline_locked(
+        WaitNode& node, WaitQueue* q, deadline_t deadline,
+        TimerRegistration::OnResolveFn on_resolve = nullptr,
+        void* owner_ctx = nullptr) SLUICE_REQUIRES(global_mtx_);
+
+    // Consume an ordinary registration as the timer-expiry winner: CAS
+    // ACTIVE->CONSUMED; on success decrement active_deadline_count_ exactly
+    // once. Returns true iff THIS call won. On failed CAS: no count mutation;
+    // the caller MUST NOT dereference node()/queue() (timer-lifetime closure).
+    // Does NOT recompute the earliest-deadline cache: callers keep their own
+    // horizon (pump amortizes once per drain; inline paths recompute once).
+    bool consume_ordinary_deadline_locked(TimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Retire an ordinary registration as a non-timer winner closing timer
+    // callback authority: CAS ACTIVE->RETIRED; on success decrement
+    // active_deadline_count_ exactly once. Returns true iff THIS call retired
+    // an active registration. On failed CAS (already terminal): no count
+    // mutation. Does NOT fire on_resolve hooks or recompute the cache — both
+    // stay at the call site where their ordering is proven per-primitive.
+    bool retire_ordinary_deadline_locked(TimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
+
     // ---- Select timer registration (private Scheduler authority) ----
     // All require global_mtx_ held. These own the registered-state accounting
     // authority for Select Timer arms: every ACTIVE->terminal

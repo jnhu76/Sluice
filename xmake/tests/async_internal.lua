@@ -94,6 +94,17 @@ sluice_internal_async_test("wake_handle_lifetime_test")
 -- driver (NO sleep_for causal proof). Gated to x86_64 (fiber_ctx::supported).
 sluice_internal_async_test("timer_wait_test")
 
+-- ordinary_deadline_authority_test — AC-2b executable invariant witness.
+-- Proves the uniform ordinary TimerRegistration lifecycle facts now owned by
+-- the Scheduler deadline authority: arm (+1 exactly once), pump consume
+-- (ACTIVE->CONSUMED, -1 exactly once), non-timer retire (ACTIVE->RETIRED, -1
+-- exactly once), stale repeated terminal attempts never double-decrement,
+-- physically retained far-future RETIRED entries stay inert until their OWN
+-- deadline pop (no re-activation), and mixed retire+consume accounting with a
+-- correct earliest-deadline cache. Deterministic clock + timer driver only
+-- (NO sleep_for causal proof). Gated to x86_64 (fiber_ctx::supported).
+sluice_internal_async_test("ordinary_deadline_authority_test")
+
 -- event_primitive_test — Async Event synchronization primitive (sluice-CORE-E12-A).
 -- Persistent manual-reset Event on the E10/E11 substrate: basic semantics,
 -- lost-set admission closure, set-all broadcast, deadline/cancel composition,

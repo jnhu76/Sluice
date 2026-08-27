@@ -103,14 +103,9 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
             return;
         }
         ++waiting_waitq_count_;
-        // Create the timer registration control block for this wait epoch.
-        // It lives in timer_pool_ (pointer-stable std::list) so its identity
-        // survives heap operations and it outlives the caller-owned WaitNode.
-        timer_pool_.emplace_back(&node, &q, deadline);
-        reg = &timer_pool_.back();
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();  // publish to the park-timeout cache
+        // Arm the timer registration control block for this wait epoch (pool
+        // construction + ACTIVE count + heap push + park-cache refresh).
+        reg = arm_ordinary_deadline_locked(node, &q, deadline);
 
         // Already-due admission closure: if the deadline is ALREADY due, resolve
         // Expired
@@ -121,8 +116,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         // retire the registration, dec count) and return WITHOUT suspending.
         if (clock_now_unlocked() >= deadline) {
             if (q.expire_locked(node)) {
-                reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
-                --active_deadline_count_;
+                (void)consume_ordinary_deadline_locked(*reg);  // ACTIVE->CONSUMED
                 recompute_earliest_deadline_locked();  // reg no longer Active
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // The current Fiber is RUNNING and continues inline; no
@@ -143,9 +137,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         if (node.is_terminal()) {
             q.unlink_locked(node);
             --waiting_waitq_count_;
-            if (reg->retire()) {  // ACTIVE->RETIRED (closes callback authority)
-                --active_deadline_count_;
-            }
+            (void)retire_ordinary_deadline_locked(*reg);  // ACTIVE->RETIRED
             recompute_earliest_deadline_locked();
             return;
         }
@@ -230,7 +222,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
         // CONSUMED (an earlier expiry won), skip — do NOT touch node/queue.
         // The active count was already decremented when the registration was
         // retired/consumed by the non-timer winner path.
-        if (!top->try_claim_expiry()) {
+        if (!consume_ordinary_deadline_locked(*top)) {
             // Inert stale entry, now dropped from the heap. Erase its pool block
             // too so the pool never accumulates dead registrations (the block's
             // node may already be destroyed; erase_popped_registration_locked
@@ -239,7 +231,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
             erase_popped_registration_locked(top);
             continue;
         }
-        --active_deadline_count_;  // ACTIVE->CONSUMED
+        // ACTIVE->CONSUMED won (count decremented inside the helper).
         // ACTIVE->CONSUMED won: this expiry owns the timer authority. Resolve
         // the bound node through the canonical seam. The {node, queue} pointers
         // are valid: retirement happens only in the non-timer winner's
@@ -314,6 +306,41 @@ std::size_t Scheduler::pump_deadlines_locked() {
     return won;
 }
 
+// ---- Ordinary deadline lifecycle authority (AC-2b) ----
+// Implementations of the three helpers declared in scheduler.hpp. See the
+// header block for the authority boundary: these own ONLY the uniform
+// ordinary-TimerRegistration facts (pool publication + ACTIVE count, exactly-
+// once ACTIVE->terminal with count decrement). Cache-recompute timing and
+// on_resolve hook firing stay at the call sites where their ordering is
+// proven per-primitive.
+
+TimerRegistration* Scheduler::arm_ordinary_deadline_locked(WaitNode& node,
+                                                           WaitQueue* q,
+                                                           deadline_t deadline,
+                                                           TimerRegistration::OnResolveFn on_resolve,
+                                                           void* owner_ctx) {
+    timer_pool_.emplace_back(&node, q, deadline);
+    TimerRegistration* reg = &timer_pool_.back();
+    reg->on_resolve_ = on_resolve;
+    reg->owner_ctx_ = owner_ctx;
+    ++active_deadline_count_;
+    heap_push_ordinary_locked(reg);
+    recompute_earliest_deadline_locked();
+    return reg;
+}
+
+bool Scheduler::consume_ordinary_deadline_locked(TimerRegistration& reg) {
+    if (!reg.try_claim_expiry()) return false;  // lost: no count mutation
+    --active_deadline_count_;
+    return true;
+}
+
+bool Scheduler::retire_ordinary_deadline_locked(TimerRegistration& reg) {
+    if (!reg.retire()) return false;  // already terminal: no count mutation
+    --active_deadline_count_;
+    return true;
+}
+
 void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
     // Timer Lifetime Closure. Called by the non-timer winner
     // (wake_wait_one / cancel_wait) in the SAME global_mtx_ CS as the resolve
@@ -334,8 +361,10 @@ void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
     for (auto& r : timer_pool_) {
         if (!r.is_active()) continue;  // inert: node may be destroyed; skip
         if (r.node() == &node) {
-            if (r.retire()) {  // ACTIVE->RETIRED
-                --active_deadline_count_;
+            // ACTIVE->RETIRED (closes callback authority). The helper owns the
+            // count decrement; the per-port hook fires here because its
+            // timer_won=false ordering is retire-specific.
+            if (retire_ordinary_deadline_locked(r)) {
                 // Queue-bound timer: a retire decrements
                 // the per-port active_queue_timers_ counter via the on-resolve
                 // thunk. timer_won=false (the timer LOST — a non-timer winner
@@ -444,17 +473,18 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     // Called by the test coordinator. See tests/timer_wait_test.cpp T17.
     // TEST-ONLY; no production caller.
     if (clock_now_unlocked() >= deadline) return nullptr;  // already due: skip
+    // Defensive: every caller passes a live node; arming binds by reference.
+    // (The historical raw-pointer form could store a null node unevaluated;
+    // no caller ever did.)
+    if (node == nullptr) return nullptr;
     if (q != nullptr) {
         LockGuard qlk(q->mtx());
         if (!q->register_wait_locked(*node, nullptr)) return nullptr;  // not Detached
     }
     ++waiting_waitq_count_;  // mirror admission accounting (pump decrements on win)
-    timer_pool_.emplace_back(node, q, deadline);
-    TimerRegistration* reg = &timer_pool_.back();
-    ++active_deadline_count_;
-    heap_push_ordinary_locked(reg);
-    recompute_earliest_deadline_locked();  // publish to the park-timeout cache
-    return reg;
+    // Arm through the ordinary deadline authority: pool construction + ACTIVE
+    // count + heap push + park-cache refresh, identical to await_wait_deadline.
+    return arm_ordinary_deadline_locked(*node, q, deadline);
 }
 
 // ---- deadline heap helpers (min-heap on deadline) ----
