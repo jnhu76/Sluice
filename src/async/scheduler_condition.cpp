@@ -147,11 +147,9 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
             // Install the timer for the Condition epoch ONLY (C-H4). The
             // registration binds {cond_node, cond_waiters} so a later expiry
             // resolves the Condition node Expired through pump_deadlines_locked.
-            timer_pool_.emplace_back(&cond_node, &cond_waiters, deadline);
-            reg = &timer_pool_.back();
-            ++active_deadline_count_;
-            heap_push_ordinary_locked(reg);
-            recompute_earliest_deadline_locked();
+            // Arming = pool construction + ACTIVE count + heap push + park-cache
+            // refresh via the ordinary deadline authority.
+            reg = arm_ordinary_deadline_locked(cond_node, &cond_waiters, deadline);
         }
         // Admission precedence 1: already-due admission closure — if the
         // deadline is ALREADY due, the
@@ -162,8 +160,9 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
         if (clock_now_unlocked() >= deadline) {
             LockGuard qlk(cond_waiters.mtx());
             if (cond_waiters.expire_locked(cond_node)) {
-                reg->try_claim_expiry();  // ACTIVE->CONSUMED (timer winner)
-                --active_deadline_count_;
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // Fiber is RUNNING and continues inline; no publication.

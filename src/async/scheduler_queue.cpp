@@ -186,14 +186,14 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
-        timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
-        reg = &timer_pool_.back();
-        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
-        reg->owner_ctx_ = &port;
+        // Arm via the ordinary deadline authority, then attach the Queue-only
+        // per-port binding (hook + ctx + counter) INSIDE the same G critical
+        // section — the pre-arm ordering relative to resource admission below
+        // is preserved (nothing external observes the block until G releases).
+        reg = arm_ordinary_deadline_locked(node, &port.waiters_[0], deadline,
+                                           &Scheduler::queue_timer_on_resolve,
+                                           &port);
         ++port.active_queue_timers_;
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
         // Admission precedence 1: resource admissible => commit + resolve.
         if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
             c->location_ = detail::QueueItemControl::Location::ring;
@@ -202,7 +202,8 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
             port.ring_[tail] = std::move(lease);
             ++port.ring_count_;
             port.waiters_[0].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -212,7 +213,8 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         // Closed => resolve (lease retained).
         if (port.closed_) {
             port.waiters_[0].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -222,8 +224,9 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         // Admission precedence 2: already-due => Expired inline.
         if (clock_now_unlocked() >= deadline) {
             if (port.waiters_[0].expire_locked(node)) {
-                reg->try_claim_expiry();
-                --active_deadline_count_;
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 reg->fire_on_resolve_locked(/*timer_won=*/true);
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -269,14 +272,13 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
-        timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
-        reg = &timer_pool_.back();
-        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
-        reg->owner_ctx_ = &port;
+        // Arm via the ordinary deadline authority, then attach the Queue-only
+        // per-port binding (hook + ctx + counter) INSIDE the same G critical
+        // section — see queue_push_admit_until.
+        reg = arm_ordinary_deadline_locked(node, &port.waiters_[1], deadline,
+                                           &Scheduler::queue_timer_on_resolve,
+                                           &port);
         ++port.active_queue_timers_;
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
         if (!port.ring_empty_locked() && node.prev_ == nullptr) {
             const std::size_t head = port.ring_head_;
             out = std::move(port.ring_[head]);
@@ -285,7 +287,8 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
             out.control_->location_ =
                 detail::QueueItemControl::Location::consumer_operation;
             port.waiters_[1].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -294,7 +297,8 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         if (port.ring_empty_locked() && port.closed_) {
             port.waiters_[1].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -303,8 +307,9 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         if (clock_now_unlocked() >= deadline) {
             if (port.waiters_[1].expire_locked(node)) {
-                reg->try_claim_expiry();
-                --active_deadline_count_;
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 reg->fire_on_resolve_locked(/*timer_won=*/true);
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
