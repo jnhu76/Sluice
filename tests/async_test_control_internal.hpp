@@ -431,10 +431,15 @@ struct SchedulerController {
     // exhaustion returns control to the normal FIFO pop — a free run.
     //
     // Capacities are fixed at install time; the pick path allocates nothing.
-    // `mtx` is a leaf controller mutex (precedent: trace_mtx); it is never
-    // held while an action runs and never held while acquiring any
-    // production lock. Install must happen before run() starts (the PV model
-    // is single-threaded inline run(1): driver and worker are one thread).
+    // `mtx` is a leaf controller mutex (precedent: trace_mtx); it guards ONLY
+    // the script records (step index, executed ring): it is never held while
+    // an action runs and never held while acquiring any production lock.
+    // Install must happen before run() starts, ON THE SAME THREAD (the PV
+    // model is single-threaded inline run(1): driver and worker are one
+    // thread). The worker pop gate is a thread-local activation — no lock,
+    // no atomic — so a worker on any other thread (every multi-worker run)
+    // never sees the script and stays on the FIFO pop: multi-worker
+    // scheduling space is structurally untouched by the seam.
     static constexpr std::size_t kScheduleMaxSteps = 64;
     static constexpr std::size_t kScheduleMaxFibers = 8;
     static constexpr std::size_t kScheduleMaxActions = 8;
@@ -696,14 +701,21 @@ RollbackObservation read_rollback_observation(
 
 // ---- DST-PV-1 schedule script (test-only next-runnable choice) ----
 //
-// Worker-side hooks (guarded call sites in scheduler.cpp worker_loop):
-// schedule_script_active is the cheap gate; schedule_script_pick consumes the
-// next decision. Both are no-ops without an installed script.
+// Worker-side hooks (guarded call sites in scheduler.cpp worker_loop): the
+// worker pop consults schedule_script_active FIRST; it is a no-lock fast gate
+// — one thread-local activation pair + a Scheduler identity compare, with NO
+// registry mutex, NO script mutex, and NO atomic on the inactive path (the
+// registered-controller registry is NOT consulted per pop). A script is
+// visible ONLY on its installing thread, so every other worker in every
+// multi-worker run pays exactly one TLS load + compare and returns false —
+// those runs stay on the FIFO pop, unperturbed.
 bool schedule_script_active(sluice::async::Scheduler& s) noexcept;
 
 // Consume script steps at the worker pop decision. Run(id) removes the bound
 // Fiber from ws->local_runnable (under inbox_mtx) and returns it; Invoke(id)
-// executes the registered action with no production lock held, records the
+// copies its action out under the script mutex, executes it with NO script
+// mutex and NO production lock held (actions may re-enter any test control
+// surface, including install/uninstall, without self-deadlock), records the
 // step, and TERMINATES the hook visit (returns nullptr) — actions may stage
 // effects that become runnable only after the worker's next drain, and the
 // intervening normal pop -> drain -> FIFO path publishes them; a singleton
@@ -717,7 +729,9 @@ sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
                                            sluice::async::WorkerState* ws) noexcept;
 
 // Test-side install/uninstall (BEFORE run(); the PV model is single-threaded
-// inline run(1)). `install_schedule_script` fills the controller state owned
+// inline run(1) — install and the worker loop must run on the SAME thread; a
+// multi-worker or cross-thread run never activates the script and a test that
+// scripts such a run fails its own deterministic assertions). `install_schedule_script` fills the controller state owned
 // by `s`'s registered controller (register_controller must already have run).
 struct ScheduleScriptInstall {
     std::array<SchedulerController::ScheduleScriptStep,

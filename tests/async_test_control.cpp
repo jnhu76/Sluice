@@ -559,15 +559,35 @@ void record_trace_wake(sluice::async::Scheduler& s,
 
 // ---- DST-PV-1 schedule script (test-only next-runnable choice) ----
 
-bool schedule_script_active(sluice::async::Scheduler& s) noexcept {
-    SchedulerController* c = find_controller(s);
-    if (c == nullptr) return false;
-    std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
-    return c->schedule_script.enabled &&
-           c->schedule_script.next_step < c->schedule_script.step_count;
-}
-
 namespace {
+
+// The installing thread's script activation (review P1-1: the INACTIVE
+// worker-pop path must be a no-lock fast path — one TLS pair + a Scheduler
+// identity compare; NO registry mutex, NO script mutex, NO atomic). The
+// script is visible ONLY on the installing thread: the PV model installs
+// before an inline run(1), which runs worker_loop on the SAME thread
+// (scheduler.cpp single-worker fast path). A worker on any other thread —
+// every multi-worker run — never activates and stays on the FIFO pop:
+// multi-worker scheduling space is structurally untouched.
+struct ActiveScript {
+    const sluice::async::Scheduler* sched = nullptr;
+    SchedulerController::ScheduleScriptState* state = nullptr;
+};
+thread_local ActiveScript t_active_script;
+
+// Fail loudly on a script-configuration violation (capacity overflow or a
+// step referencing an unregistered action). A test-only harness must never
+// silently truncate a decision vector or fall back (review P1-4).
+[[noreturn]] void schedule_script_config_fail(const char* what,
+                                              std::size_t value) noexcept {
+    std::fprintf(stderr,
+                 "\n=== DST-PV-1 SCHEDULE SCRIPT FAILURE (configuration) ===\n"
+                 "%s: %zu\n"
+                 "===================================================\n",
+                 what, value);
+    std::fflush(stderr);
+    std::abort();
+}
 
 // Render the failure diagnostic package and abort. NEVER falls back to
 // another runnable: a replay that requests an illegal decision is a replay
@@ -644,11 +664,24 @@ namespace {
 
 }  // namespace
 
+bool schedule_script_active(sluice::async::Scheduler& s) noexcept {
+    // No-lock gate: a TLS activation pair is set ONLY by
+    // install_schedule_script on the installing thread and the inline run(1)
+    // worker loop runs on that same thread, so `enabled` / `next_step` are
+    // same-thread reads — no mutex, no atomic, no registry lookup on the
+    // per-pop path. Every other thread (multi-worker runs) has an empty pair
+    // and returns false here.
+    const ActiveScript& a = t_active_script;
+    if (a.sched != &s || a.state == nullptr) return false;
+    const SchedulerController::ScheduleScriptState& st = *a.state;
+    return st.enabled && st.next_step < st.step_count;
+}
+
 sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
                                            sluice::async::WorkerState* ws) noexcept {
-    SchedulerController* c = find_controller(s);
-    if (c == nullptr) return nullptr;
-    SchedulerController::ScheduleScriptState& st = c->schedule_script;
+    const ActiveScript& a = t_active_script;
+    if (a.sched != &s || a.state == nullptr) return nullptr;
+    SchedulerController::ScheduleScriptState& st = *a.state;
     while (true) {
         SchedulerController::ScheduleScriptStep step;
         {
@@ -657,18 +690,26 @@ sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
             step = st.steps[st.next_step];
         }
         if (step.kind == SchedulerController::ScheduleScriptStep::Kind::invoke) {
-            // Invoke the registered action while holding the script mutex —
-            // but with NO production lock held: actions call the existing
-            // controllable seams (backend completion staging, advance_clock
-            // -> global_mtx_ -> pump, cancel_wait -> global_mtx_). The script
-            // mutex is a leaf (install releases registry_mtx before taking
-            // it), so script.mtx -> registry_mtx (via a seam inside an
-            // action) has no inverse edge. Install must complete before
-            // run() starts, so the invoked closure is stable.
-            if (step.payload < st.action_count) {
+            // Review P1-2: the action is copied out under the script mutex,
+            // executed AFTER release, and the step is recorded on re-acquire
+            // — the script mutex is NEVER held while an action runs. Actions
+            // call the existing controllable seams (backend completion
+            // staging, advance_clock -> global_mtx_ -> pump, cancel_wait ->
+            // global_mtx_) and may re-enter any test control surface
+            // (including install/uninstall) without self-deadlock; the invoke
+            // closure itself is stable (installed before run() starts).
+            std::function<void(sluice::async::Scheduler&)> action;
+            {
                 std::lock_guard<std::mutex> lk(st.mtx);
-                if (st.actions[step.payload]) st.actions[step.payload](s);
+                if (step.payload >= st.action_count ||
+                    !st.actions[step.payload]) {
+                    schedule_script_config_fail(
+                        "Invoke step references an unregistered action id",
+                        step.payload);
+                }
+                action = st.actions[step.payload];
             }
+            action(s);  // no script mutex, no production lock held
             {
                 std::lock_guard<std::mutex> lk(st.mtx);
                 if (st.executed_len < st.executed.size()) {
@@ -735,32 +776,58 @@ sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
 
 void install_schedule_script(sluice::async::Scheduler& s,
                              const ScheduleScriptInstall& plan) noexcept {
+    // Fail loudly on capacity violations instead of silently truncating the
+    // decision vector (review P1-4; DstScheduleDriver already validates at
+    // append time — this is defense in depth for hand-built plans).
+    if (plan.step_count > SchedulerController::kScheduleMaxSteps) {
+        schedule_script_config_fail(
+            "step_count exceeds kScheduleMaxSteps", plan.step_count);
+    }
+    if (plan.fiber_count > SchedulerController::kScheduleMaxFibers) {
+        schedule_script_config_fail(
+            "fiber_count exceeds kScheduleMaxFibers", plan.fiber_count);
+    }
+    if (plan.action_count > SchedulerController::kScheduleMaxActions) {
+        schedule_script_config_fail(
+            "action_count exceeds kScheduleMaxActions", plan.action_count);
+    }
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
     // find_controller released registry_mtx before we take the script mutex:
     // the controller object itself is retained until process teardown
     // (retired_controllers), so the pointer stays valid.
-    std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
-    SchedulerController::ScheduleScriptState& st = c->schedule_script;
-    st.enabled = true;
-    st.steps = plan.steps;
-    st.step_count = plan.step_count;
-    st.next_step = 0;
-    st.fiber_ptrs = plan.fiber_ptrs;
-    st.fiber_count = plan.fiber_count;
-    st.actions = plan.actions;
-    st.action_labels = plan.action_labels;
-    st.action_count = plan.action_count;
-    st.executed.fill(SchedulerController::ScheduleScriptStep{});
-    st.executed_len = 0;
-    st.test_name = plan.test_name;
-    st.replay_vector = plan.replay_vector;
-    st.failed = false;
-    st.failed_step = 0;
-    st.requested_id = 0;
+    {
+        std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
+        SchedulerController::ScheduleScriptState& st = c->schedule_script;
+        st.enabled = true;
+        st.steps = plan.steps;
+        st.step_count = plan.step_count;
+        st.next_step = 0;
+        st.fiber_ptrs = plan.fiber_ptrs;
+        st.fiber_count = plan.fiber_count;
+        st.actions = plan.actions;
+        st.action_labels = plan.action_labels;
+        st.action_count = plan.action_count;
+        st.executed.fill(SchedulerController::ScheduleScriptStep{});
+        st.executed_len = 0;
+        st.test_name = plan.test_name;
+        st.replay_vector = plan.replay_vector;
+        st.failed = false;
+        st.failed_step = 0;
+        st.requested_id = 0;
+    }
+    // Activate on THIS thread only: the inline run(1) worker is the same
+    // thread (the PV model). A multi-worker or cross-thread run never
+    // activates the script (see schedule_script_active).
+    t_active_script = ActiveScript{&s, &c->schedule_script};
 }
 
 void uninstall_schedule_script(sluice::async::Scheduler& s) noexcept {
+    // Deactivate on this thread first so a same-thread gate cannot observe a
+    // half-disabled script; the enabled flag below is defense in depth.
+    if (t_active_script.sched == &s) {
+        t_active_script = ActiveScript{};
+    }
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
     std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
