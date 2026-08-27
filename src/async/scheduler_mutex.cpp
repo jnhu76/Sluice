@@ -250,11 +250,8 @@ bool Scheduler::mutex_cancel(WaitQueue& waiters, WaitNode& node) {
     LockGuard lk(global_mtx_);
     LockGuard qlk(waiters.mtx());
     // Membership gate: a node not linked in THIS queue is not cancellable here.
-    if (!waiters.contains_locked(node)) return false;
-    if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
-    retire_timer_for_node_locked(node);
+    if (!cancel_primitive_wait_locked(waiters, node)) return false;
     Fiber* f = node.fiber();
-    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);

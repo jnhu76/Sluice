@@ -224,6 +224,77 @@ SLUICE_TEST_CASE(parity_d4_event_cancel_wrong_event_returns_false) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
 
+// ---- D4-CLOSE: membership loser is inert; winner closes the whole epoch ---
+// This is the independent public-behavior witness for the frontend-neutral
+// primitive cancellation closure. A wrong-object attempt must leave the node,
+// timer authority, and Scheduler wait accounting untouched. The correct
+// object then owns one Cancelled terminal, retires the active deadline, retires
+// the wait count, and resumes the waiter. The test observes outcomes only; it
+// does not name or inspect the private authority that implements them.
+SLUICE_TEST_CASE(parity_d4_timed_cancel_closes_terminal_timer_and_wait_accounting) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);
+    Event wrong_event(sched);
+    Event target_event(sched);
+
+    std::atomic<bool> waiter_entered{false};
+    WaitNode node;
+
+    Fiber waiter;
+    waiter.set_entry([&](Fiber&) {
+        waiter_entered.store(true, std::memory_order_release);
+        target_event.wait_until(node, Scheduler::deadline_t{1000});
+    });
+    Fiber canceller;
+    canceller.set_entry([&](Fiber&) {
+        sched.await_ready_flag(waiter_entered);
+
+        SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 1,
+                         "timed epoch is active before cancellation");
+        SLUICE_CHECK_MSG(sched.waiting_count() == 1,
+                         "one WaitQueue epoch is registered");
+
+        SLUICE_CHECK_MSG(!wrong_event.cancel(node),
+                         "wrong-object cancellation loses membership");
+        SLUICE_CHECK_MSG(!node.is_terminal(),
+                         "membership loser does not resolve the node");
+        SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 1,
+                         "membership loser does not retire the timer");
+        SLUICE_CHECK_MSG(sched.waiting_count() == 1,
+                         "membership loser does not retire wait accounting");
+
+        SLUICE_CHECK_MSG(target_event.cancel(node),
+                         "correct-object cancellation owns the terminal");
+        SLUICE_CHECK_MSG(node.was_cancelled(),
+                         "winner records the Cancelled node outcome");
+        SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                         "winner retires the active timer exactly once");
+        SLUICE_CHECK_MSG(sched.waiting_count() == 0,
+                         "winner retires Scheduler wait accounting");
+    });
+
+    FiberStack sw, sc;
+    SLUICE_CHECK(sched.init_fiber(waiter, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(canceller, sc.base(), sc.size()));
+    sched.spawn(waiter);
+    sched.spawn(canceller);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(node.was_cancelled(), "timed epoch remains Cancelled");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+
+    // The retired registration is reclaimed lazily at its own deadline and
+    // cannot re-resolve or decrement either accounting domain again.
+    sched.advance_clock(1001);
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "stale timer reclamation is accounting-inert");
+    SLUICE_CHECK_MSG(node.was_cancelled(),
+                     "stale expiry cannot overwrite the cancel winner");
+}
+
 // ---- D4-SEM: Semaphore cancel against a node in a DIFFERENT Semaphore ------
 SLUICE_TEST_CASE(parity_d4_semaphore_cancel_wrong_semaphore_returns_false) {
     if constexpr (!fiber_ctx::supported) return;

@@ -1232,6 +1232,19 @@ bool Scheduler::wake_wait_one(WaitQueue& q) {
     return wake_wait_one_locked(q) != nullptr;
 }
 
+bool Scheduler::cancel_primitive_wait_locked(WaitQueue& waiters,
+                                             WaitNode& node) {
+    // Caller holds G + this exact W. Primitive-facing cancel APIs accept an
+    // arbitrary WaitNode&, so target-queue membership must be proven before
+    // the terminal CAS. The winning WaitQueue operation owns unlink in this
+    // same W critical section; AC-2b owns ordinary timer retirement.
+    if (!waiters.contains_locked(node)) return false;
+    if (!waiters.cancel_locked(node)) return false;
+    retire_timer_for_node_locked(node);
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    return true;
+}
+
 bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
     // Resolve `node` with Cancelled and route the winner's fiber. Cancel is
     // wait-cancellation ONLY (not task/fiber/I/O cancellation). The winner is

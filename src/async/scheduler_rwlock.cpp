@@ -419,10 +419,7 @@ bool Scheduler::rwlock_cancel(WaitQueue& waiters,
     {
         LockGuard qlk(waiters.mtx());
         // Membership gate.
-        if (!waiters.contains_locked(node)) return false;
-        if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
-        retire_timer_for_node_locked(node);
-        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        if (!cancel_primitive_wait_locked(waiters, node)) return false;
         // Capture publication data for the cancel winner (authoritative
         // owner lookup; see the grant-path note).
         cancel_fiber = node.fiber();
