@@ -18,9 +18,11 @@
 //   C. Workers: configured_worker_count stable; active_workers returns to 0
 //      after drain (bookkeeping leak detector for the mark_running ->
 //      post-syscall-decrement window).
-//   D. Snapshot: on QUIESCENT state every field equals the corresponding
-//      single-domain accessor — the only state where exact cross-field
-//      agreement is defined for a component-wise coherent snapshot.
+//
+// There is deliberately NO combined snapshot API (review of PR #235): a struct
+// assembled from individual accessors is no stronger than calling them
+// sequentially, so cross-domain sampling composition belongs to the RX-1
+// experiment harness, not Core.
 //
 // The new accessors share the SAME lock domains as the pre-existing hot paths
 // (arena leaf mutex_ / work_mtx_), so reader/writer concurrency of those
@@ -91,7 +93,6 @@ std::size_t drain(ThreadPoolBackend& b) {
 
 SLUICE_TEST_CASE(resource_observations_rest_state_zero) {
     ThreadPoolBackend be(ThreadPoolConfig{8, 2});
-    auto snap = be.resource_snapshot();
     SLUICE_CHECK(be.arena_capacity() == 8);
     SLUICE_CHECK(be.configured_worker_count() == 2);
     SLUICE_CHECK(be.arena_slot_in_use() == 0);
@@ -100,15 +101,6 @@ SLUICE_TEST_CASE(resource_observations_rest_state_zero) {
     SLUICE_CHECK(be.dispatch_occupancy() == 0);
     SLUICE_CHECK(be.dispatch_high_water_mark() == 0);
     SLUICE_CHECK(be.active_workers() == 0);
-    SLUICE_CHECK(snap.arena_capacity == 8);
-    SLUICE_CHECK(snap.configured_workers == 2);
-    SLUICE_CHECK(snap.arena_slot_in_use == 0);
-    SLUICE_CHECK(snap.accepted_outstanding == 0);
-    SLUICE_CHECK(snap.arena_high_water_mark == 0);
-    SLUICE_CHECK(snap.arena_capacity_rejections == 0);
-    SLUICE_CHECK(snap.dispatch_occupancy == 0);
-    SLUICE_CHECK(snap.dispatch_high_water_mark == 0);
-    SLUICE_CHECK(snap.active_workers == 0);
 }
 
 SLUICE_TEST_CASE(arena_occupancy_lifecycle_boundaries_and_saturation_rejection) {
@@ -256,44 +248,43 @@ SLUICE_TEST_CASE(capacity_rejection_counter_tracks_only_would_block_refusals) {
     ::close(fd);
 }
 
-SLUICE_TEST_CASE(snapshot_fields_equal_single_domain_accessors_when_quiescent) {
-    ThreadPoolBackend be(ThreadPoolConfig{6, 3});
-    auto snap = be.resource_snapshot();
-    // Quiescence removes inter-domain motion, so field-wise equality with the
-    // individual accessors is well-defined and required.
-    SLUICE_CHECK(snap.arena_capacity == be.arena_capacity());
-    SLUICE_CHECK(snap.arena_slot_in_use == be.arena_slot_in_use());
-    SLUICE_CHECK(snap.arena_high_water_mark == be.arena_high_water_mark());
-    SLUICE_CHECK(snap.arena_capacity_rejections == be.arena_capacity_rejections());
-    SLUICE_CHECK(snap.accepted_outstanding == be.outstanding());
-    SLUICE_CHECK(snap.dispatch_capacity == 6);
-    SLUICE_CHECK(snap.dispatch_occupancy == be.dispatch_occupancy());
-    SLUICE_CHECK(snap.dispatch_high_water_mark == be.dispatch_high_water_mark());
-    SLUICE_CHECK(snap.configured_workers == be.configured_worker_count());
-    SLUICE_CHECK(snap.active_workers == be.active_workers());
-}
-
 SLUICE_TEST_CASE(concurrent_observer_sampling_while_io_runs) {
     // TSan-focused: the observation accessors are NEW readers on the EXISTING
     // authority locks (arena leaf mutex_ / work_mtx_). A dedicated observer
-    // thread samples snapshots and single accessors while a producer runs real
-    // I/O through the backend, forcing the new reader/writer pairs (snapshot
-    // vs worker bookkeeping, accessor vs submit enqueue) to execute
+    // thread samples the individual accessors while a producer runs real I/O
+    // through the backend, forcing the new reader/writer pairs (accessors vs
+    // worker bookkeeping, accessors vs submit enqueue) to execute
     // concurrently. Deterministic end-state assertions only; the loop is a
-    // sampling driver, not an ordering proof.
+    // sampling driver, not an ordering proof. Violations are recorded into an
+    // atomic and asserted after join (SLUICE_CHECK early-returns, which would
+    // silently stop the sampling loop).
     TempPath tmp;
     int fd = open_temp(tmp);
 
     ThreadPoolBackend be(ThreadPoolConfig{/*capacity=*/8, /*workers=*/2});
     std::atomic<bool> producer_done{false};
+    std::atomic<bool> invariant_violation{false};
     std::thread observer([&] {
         while (!producer_done.load(std::memory_order_acquire)) {
-            auto snap = be.resource_snapshot();
-            // Per-field semantic bounds that hold at ANY instant.
-            SLUICE_CHECK(snap.arena_slot_in_use <= snap.arena_capacity);
-            SLUICE_CHECK(snap.accepted_outstanding <= snap.arena_slot_in_use);
-            SLUICE_CHECK(snap.dispatch_occupancy <= snap.dispatch_capacity);
-            SLUICE_CHECK(snap.active_workers <= snap.configured_workers);
+            // Bounds against IMMUTABLE quantities (capacity, configured
+            // workers) hold at any instant, so sequential accessor calls
+            // compare against them robustly. Mutating-vs-mutating cross-field
+            // comparisons are deliberately absent: without a same-instant
+            // snapshot they are not well-defined, and no snapshot API exists
+            // (PR #235 review).
+            if (be.arena_slot_in_use() > be.arena_capacity()) {
+                invariant_violation.store(true, std::memory_order_relaxed);
+            }
+            if (be.dispatch_occupancy() > be.arena_capacity()) {
+                invariant_violation.store(true, std::memory_order_relaxed);
+            }
+            if (be.active_workers() > be.configured_worker_count()) {
+                invariant_violation.store(true, std::memory_order_relaxed);
+            }
+            // High-water reads exercise the same lock domains; values are
+            // monotonic per domain and asserted in the end state below.
+            (void)be.arena_high_water_mark();
+            (void)be.dispatch_high_water_mark();
         }
     });
 
@@ -313,6 +304,7 @@ SLUICE_TEST_CASE(concurrent_observer_sampling_while_io_runs) {
     }
     producer_done.store(true, std::memory_order_release);
     observer.join();
+    SLUICE_CHECK(!invariant_violation.load());
 
     drain(be);
     SLUICE_CHECK(be.outstanding() == 0);

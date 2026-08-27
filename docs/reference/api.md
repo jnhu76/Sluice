@@ -1550,20 +1550,8 @@ public:
     std::size_t dispatch_occupancy() const;
     std::size_t dispatch_high_water_mark() const;
     std::size_t active_workers() const;
-
-    struct ResourceSnapshot {
-        std::size_t arena_capacity = 0;
-        std::size_t arena_slot_in_use = 0;
-        std::size_t arena_high_water_mark = 0;
-        std::size_t arena_capacity_rejections = 0;
-        std::size_t accepted_outstanding = 0;
-        std::size_t dispatch_capacity = 0;
-        std::size_t dispatch_occupancy = 0;
-        std::size_t dispatch_high_water_mark = 0;
-        std::size_t configured_workers = 0;
-        std::size_t active_workers = 0;
-    };
-    ResourceSnapshot resource_snapshot() const noexcept;   // component-wise coherent
+    // No combined snapshot method (deliberate): sequential accessors already
+    // provide the strongest guarantee Core can offer — per-domain coherence.
 };
 ```
 
@@ -1583,30 +1571,34 @@ but closed fd is accepted and later completes with the real `EBADF` terminal
 
 Minimal read-only resource facts over the backend's OWN bounded resources
 (#234 L1 tier). No new counters, locks, or synchronization authority: every
-field is pre-existing authoritative state read under its existing domain.
+value is pre-existing authoritative state read under its existing domain.
 Terms follow the R4 four-quantity discipline; "demand" is NOT observable at
 this tier and no field is a PSI-style pressure metric (occupancy/rejection
 counts carry no time/progress-loss dimension).
 
-| Field / accessor | Meaning | Unit | Authority (read sync) | Snapshot guarantee |
-|---|---|---|---|---|
-| `arena_capacity()` / `snapshot.arena_capacity` | configured request slots (== dispatch ring entries) | slots | construction-time fixed | exact |
-| `arena_slot_in_use()` / `snapshot.arena_slot_in_use` | slots currently reserved..completion-ready | slots | arena leaf mutex | per-domain current |
-| `arena_high_water_mark()` / `snapshot.arena_high_water_mark` | peak slot occupancy since construction; monotonic; <= capacity | slots | arena leaf mutex (maintained where occupancy changes) | per-domain current |
-| `arena_capacity_rejections()` / `snapshot.arena_capacity_rejections` | submits refused with `would_block` because the arena was full | rejections (count) | arena leaf mutex | per-domain current |
-| `outstanding()` / `snapshot.accepted_outstanding` | accepted-not-yet-completion-ready requests | requests | arena leaf mutex | per-domain current |
-| `dispatch_occupancy()` / `snapshot.dispatch_occupancy` | enqueued-but-not-yet-dequeued accepted requests on the bounded dispatch ring | entries | `work_mtx_` | per-domain current |
-| `dispatch_high_water_mark()` / `snapshot.dispatch_high_water_mark` | peak dispatch-ring occupancy since construction; monotonic; <= capacity | entries | `work_mtx_`-maintained ring state | per-domain current |
-| `configured_worker_count()` / `snapshot.configured_workers` | fixed persistent blocking-I/O workers | workers | fixed at construction | exact |
-| `active_workers()` / `snapshot.active_workers` | workers between successful `mark_running` and their post-syscall decrement — i.e. threads OWNING AND EXECUTING one operation (not "thread exists", not "thread awake") | workers | `work_mtx_` (worker bookkeeping) | per-domain current |
+| Accessor | Meaning | Unit | Authority (read sync) |
+|---|---|---|---|
+| `arena_capacity()` | configured request slots (== dispatch ring entries) | slots | construction-time fixed |
+| `arena_slot_in_use()` | slots currently reserved..completion-ready | slots | arena leaf mutex |
+| `arena_high_water_mark()` | peak slot occupancy since construction; monotonic; <= capacity | slots | arena leaf mutex (maintained where occupancy changes) |
+| `arena_capacity_rejections()` | submits refused with `would_block` because the arena was full | rejections (count) | arena leaf mutex |
+| `outstanding()` | accepted-not-yet-completion-ready requests | requests | arena leaf mutex |
+| `dispatch_occupancy()` | enqueued-but-not-yet-dequeued accepted requests on the bounded dispatch ring | entries | `work_mtx_` |
+| `dispatch_high_water_mark()` | peak dispatch-ring occupancy since construction; monotonic; <= capacity | entries | `work_mtx_`-maintained ring state |
+| `configured_worker_count()` | fixed persistent blocking-I/O workers | workers | fixed at construction |
+| `active_workers()` | workers between successful `mark_running` and their post-syscall decrement — i.e. threads OWNING AND EXECUTING one operation (not "thread exists", not "thread awake") | workers | `work_mtx_` (worker bookkeeping) |
 
-`resource_snapshot()` reads the two lock domains in sequence (arena leaf mutex,
-then `work_mtx_`) into one caller-owned by-value struct. The result is
-**component-wise coherent but NOT globally atomic**: fields taken from
-different domains are never from one instant. Do not use it to prove
-cross-field consistency; use the individual accessors when a single-domain
-fact matters (and quiescent state for equality assertions). Occupancy fields
-can change concurrently with any observation.
+Each accessor returns a **per-domain-current** value read under exactly one
+existing lock; each locking accessor holds exactly one lock and never nests
+domains. There is deliberately NO combined snapshot method: a by-value struct
+assembled from these accessors is no stronger than calling them sequentially
+(there is no cross-domain atomicity to preserve), and a batching
+implementation would either hold two domain locks at once or duplicate
+authoritative state. Consumers that can tolerate component-wise staleness —
+such as the RX-1 experiment harness — compose individual accessors
+themselves. Occupancy values can change concurrently with any observation;
+bounds against immutable quantities (capacity, configured workers) are the
+only cross-accessor facts that hold robustly under sequential sampling.
 
 ### `sluice::async::UringAsyncBackend`
 

@@ -894,8 +894,7 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
 // BoundedDispatchQueue lives entirely under work_mtx_ (push/pop/remove are
 // called only with it held). No arena lock is taken here, and no caller of
 // these accessors holds work_mtx_, so no new lock-order edge is introduced.
-// Lock order observed: work_mtx_ -> (nothing); the snapshot below never holds
-// two locks at once.
+// Each accessor holds exactly ONE lock: work_mtx_ -> (nothing).
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return dispatch_.size();
@@ -912,32 +911,6 @@ std::size_t ThreadPoolBackend::dispatch_high_water_mark() const {
 std::size_t ThreadPoolBackend::active_workers() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return active_workers_;
-}
-
-// Component-wise coherent snapshot: SEPARATE critical sections per resource
-// domain (see the header comment). The declaration is noexcept even though the
-// member accessors take locks: every critical section is a non-blocking leaf
-// acquisition whose body cannot throw, matching quiescence_snapshot()'s
-// precedent. Fields are read in a fixed order (arena -> dispatch/workers) to
-// keep the documented staleness pattern deterministic for tests.
-ThreadPoolBackend::ResourceSnapshot ThreadPoolBackend::resource_snapshot() const noexcept {
-    ResourceSnapshot s{};
-    // arena leaf mutex_ ...
-    const auto q = arena_.quiescence_snapshot();
-    // ... then the work domain. Never two locks at once: quiescence_snapshot()
-    // has already released the arena mutex before work_mtx_ is taken.
-    std::lock_guard<std::mutex> lk(work_mtx_);
-    s.arena_capacity = arena_.capacity();
-    s.arena_slot_in_use = q.slot_in_use;
-    s.arena_high_water_mark = arena_.high_water_mark();
-    s.arena_capacity_rejections = arena_.capacity_rejections();
-    s.accepted_outstanding = q.accepted_outstanding;
-    s.dispatch_capacity = dispatch_.capacity();
-    s.dispatch_occupancy = dispatch_.size();
-    s.dispatch_high_water_mark = dispatch_.high_water();
-    s.configured_workers = workers_.size();
-    s.active_workers = active_workers_;
-    return s;
 }
 
 void ThreadPoolBackend::close_admission() {

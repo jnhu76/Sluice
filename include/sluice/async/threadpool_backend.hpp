@@ -200,28 +200,13 @@ class ThreadPoolBackend : public AsyncBackend {
     // This is not "thread exists" and not "thread is awake"; an idle parked
     // worker counts as 0. Bounded by configured_worker_count().
     std::size_t active_workers() const;
-
-    // Component-wise coherent by-value snapshot: each field is read under its
-    // OWN existing authoritative lock (arena leaf mutex_ for the arena fields,
-    // work_mtx_ for the dispatch/worker fields), but the combined struct is a
-    // SEQUENCE of separate critical sections. It is NOT a globally atomic
-    // snapshot and MUST NOT be used to prove cross-field consistency at one
-    // instant; use individual accessors + tests when a single-domain fact is
-    // needed. Convenient for RX-1 sampling loops where approximate totality is
-    // acceptable and documented staleness is fine.
-    struct ResourceSnapshot {
-        std::size_t arena_capacity = 0;
-        std::size_t arena_slot_in_use = 0;
-        std::size_t arena_high_water_mark = 0;
-        std::size_t arena_capacity_rejections = 0;
-        std::size_t accepted_outstanding = 0;
-        std::size_t dispatch_capacity = 0;
-        std::size_t dispatch_occupancy = 0;
-        std::size_t dispatch_high_water_mark = 0;
-        std::size_t configured_workers = 0;
-        std::size_t active_workers = 0;
-    };
-    ResourceSnapshot resource_snapshot() const noexcept;
+    // Deliberately NO combined snapshot method: a by-value struct assembled
+    // from these accessors provides no stronger guarantee than calling them
+    // sequentially (no cross-domain atomicity exists to preserve), and any
+    // implementation that batches reads under one lock would either hold two
+    // domain locks at once or duplicate state. Consumers that can tolerate
+    // component-wise staleness — such as the RX-1 experiment harness — compose
+    // individual accessors themselves.
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // ---- internal-testing control plane (C4 / issue #135) ----
