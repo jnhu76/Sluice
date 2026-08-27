@@ -30,14 +30,14 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1306 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1309 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 536 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 390 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 309 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 337 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 674 | rwlock waits, ForgedRwWaitCtx |
-| `src/async/scheduler_condition.cpp` | 260 | condition waits |
-| `src/async/scheduler_queue.cpp` | 512 | runnable queue, fiber routing |
+| `src/async/scheduler_event.cpp` | 391 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 310 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 338 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 675 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_condition.cpp` | 261 | condition waits |
+| `src/async/scheduler_queue.cpp` | 513 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
 | `src/async/scheduler.cpp` | 2128 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
@@ -118,22 +118,26 @@ consume/retire transitions DO route through the authority; the raw-pointer
 arm form preserves register_test_deadline_locked's null-node seam contract;
 cache-recompute timing and on_resolve hook firing stay at each call site;
 Select timers untouched; behavior-preserving authority compression).
-`scheduler_park_wake.cpp` 1293 → 1306, `scheduler_queue.cpp` 515 → 512,
-`scheduler_rwlock.cpp` 677 → 674, `scheduler_mutex.cpp` 340 → 337,
-`scheduler_semaphore.cpp` 312 → 309, `scheduler_event.cpp` 393 → 390,
-`scheduler_condition.cpp` 263 → 260 (2026-08-27, Issue #227 AC-2c-b /
-[PR 237 context](https://github.com/jnhu76/Sluice/pull/237) — six
+`scheduler_park_wake.cpp` 1293 → 1309, `scheduler_queue.cpp` 515 → 513,
+`scheduler_rwlock.cpp` 677 → 675, `scheduler_mutex.cpp` 340 → 338,
+`scheduler_semaphore.cpp` 312 → 310, `scheduler_event.cpp` 393 → 391,
+`scheduler_condition.cpp` 263 → 261 (2026-08-27, Issue #227 AC-2c-b /
+[issue #237 context](https://github.com/jnhu76/Sluice/issues/237) — six
 primitive-gated cancellation paths now reuse the
 private `cancel_primitive_wait_locked` authority for exact-queue membership,
-the Cancelled terminal winner/unlink, AC-2b timer retirement, and global wait
-accounting retirement. Event, Semaphore, AsyncMutex, AsyncCondition, Queue,
-and AsyncRwLock retain their local Fiber publication and primitive-specific
-counter/reconcile policy; generic `Scheduler::cancel_wait`, Select,
-Completion-waiter, task, and I/O cancellation remain local and unchanged.
-This adds one out-of-line helper call and no new allocation, lock, traversal,
-or callback. AC-2b timer retirement still fires any already-installed Queue
-timer-accounting hook. There is no public API, ABI, or object-layout change;
-therefore public API reference documentation is unaffected.)
+the Cancelled terminal winner/unlink, and AC-2b timer retirement.
+`waiting_waitq_count_` retirement deliberately stays at each call site: the
+exactly-once wait-epoch retirement obligation is semantic, but that concrete
+counter is current stackful Scheduler bookkeeping (MW classification), per the
+AC-2a/#237 frontend-neutrality separation (review-corrected). Event,
+Semaphore, AsyncMutex, AsyncCondition, Queue, and AsyncRwLock retain their
+local Fiber publication and primitive-specific counter/reconcile policy;
+generic `Scheduler::cancel_wait`, Select, Completion-waiter, task, and I/O
+cancellation remain local and unchanged. This adds one out-of-line helper
+call and no new allocation, lock, traversal, or callback. AC-2b timer
+retirement still fires any already-installed Queue timer-accounting hook.
+There is no public API, ABI, or object-layout change; therefore public API
+reference documentation is unaffected.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

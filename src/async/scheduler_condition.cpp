@@ -250,6 +250,7 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     LockGuard qlk(cond_waiters.mtx());
     if (!cancel_primitive_wait_locked(cond_waiters, cond_node)) return false;
     Fiber* f = cond_node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);

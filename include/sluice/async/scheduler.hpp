@@ -1308,11 +1308,16 @@ private:
     // Frontend-neutral primitive cancellation terminal closure. The caller
     // MUST hold global_mtx_ + this exact WaitQueue's mtx(). Membership is
     // checked before mutation; a winner resolves Cancelled and unlinks through
-    // WaitQueue authority, retires any ordinary deadline through AC-2b, and
-    // retires waiting_waitq_count_ exactly once. Returns true iff this call won
-    // that terminal transition. Does NOT inspect/publish a Fiber, directly
-    // mutate primitive-local resource policy, reconcile a queue head, acquire
-    // a lock, or allocate. AC-2b retirement may fire an already-installed
+    // WaitQueue authority and retires any ordinary deadline through AC-2b.
+    // Returns true iff this call won that terminal transition. The closure is
+    // frontend-neutral ONLY through those steps: the winning CALLER still
+    // decrements waiting_waitq_count_ itself — the exactly-once wait-epoch
+    // retirement obligation is semantic, but that concrete counter is current
+    // stackful-frontend bookkeeping (MW classification), not shared authority
+    // (AC-2a frontend-neutrality separation). Does NOT inspect/publish a
+    // Fiber, directly mutate primitive-local resource policy, reconcile a
+    // queue head, acquire a lock, allocate, or touch Scheduler wait
+    // accounting. AC-2b retirement may fire an already-installed
     // TimerRegistration on_resolve hook (Queue timer accounting); this helper
     // adds no callback authority.
     bool cancel_primitive_wait_locked(WaitQueue& waiters, WaitNode& node)

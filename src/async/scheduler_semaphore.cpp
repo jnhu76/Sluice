@@ -247,6 +247,7 @@ bool Scheduler::sem_cancel(WaitQueue& waiters, WaitNode& node) {
     // Membership gate: a node not linked in THIS queue is not cancellable here.
     if (!cancel_primitive_wait_locked(waiters, node)) return false;
     Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);

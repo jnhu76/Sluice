@@ -208,6 +208,7 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // terminal winner is already unlinked) Woken/Expired/Cancelled nodes.
     if (!cancel_primitive_wait_locked(q, node)) return false;
     Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // The cancel CAS won: the node is terminal+unlinked and the count is closed.
     // Return true unconditionally — the winner identity is the resolve_ CAS, not
     // the runnable publication (mirrors wake_wait_one_locked). make_runnable is

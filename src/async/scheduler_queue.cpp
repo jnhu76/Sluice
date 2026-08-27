@@ -359,6 +359,7 @@ bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
     if (!cancel_primitive_wait_locked(port.waiters_[roleIdx], node)) return false;
     Fiber* f = node.fiber();
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // Route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr) {
         publish_waiting_fiber_runnable_locked(f);
