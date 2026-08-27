@@ -1,0 +1,147 @@
+{
+  "protocol_version": 1,
+  "campaign": "RX-1 controlled attribution falsification gate",
+  "governing_issues": [221, 225, 226, 227, 234, 235],
+  "base_sha": "1e6af0824f98d12753d1cc48308b8b6e56834069",
+  "v0_0_1_sha": "a38df5e9a7bee3603a439857f036de2b5a136bf2",
+  "ac1a_merge_sha": "1e6af0824f98d12753d1cc48308b8b6e56834069",
+
+  "hypothesis": {
+    "H_RX1": "First-class explicit resource state exposed by Sluice (AC-1a accessors) materially improves bottleneck attribution over conventional process/kernel telemetry for controlled ThreadPool workloads.",
+    "H0": "External telemetry is sufficient, or Sluice L1 signals do not improve attribution enough to justify deeper observability work."
+  },
+
+  "label_set": [
+    "CONTROL",
+    "APP_PIPELINE_LIMITED",
+    "REQUEST_CAPACITY_LIMITED",
+    "THREADPOOL_WORKER_LIMITED",
+    "CPU_CONTENDED",
+    "IO_SERVICE_CONTENDED",
+    "UNKNOWN"
+  ],
+  "label_set_note": "UNKNOWN is a legitimate classifier response (insufficient or contradictory evidence), never a ground-truth injection class. IO_SERVICE_CONTENDED is DEFERRED: workload files live on tmpfs (no device service), iostat is unavailable, and WSL2 virtual storage makes device-level ground truth ambiguous. ENVIRONMENT INVALID / DEFERRED.",
+
+  "interventions": {
+    "I0_CONTROL": {"depth": 16, "capacity": 64, "workers": 4, "affinity": "default", "stress": null},
+    "I1_APP_PIPELINE_LIMITED": {"depth": 2, "capacity": 64, "workers": 4, "affinity": "default", "stress": null},
+    "I2_REQUEST_CAPACITY_LIMITED": {"depth": 32, "capacity": 4, "workers": 4, "affinity": "default", "stress": null},
+    "I3_THREADPOOL_WORKER_LIMITED": {"depth": 32, "capacity": 64, "workers": 1, "affinity": "default", "stress": null},
+    "I4_CPU_CONTENDED": {"depth": 16, "capacity": 64, "workers": 4, "affinity": "0,1", "stress": {"mechanism": "taskset+pinned python busy loop", "count": 4, "cpus": "0,1"}}
+  },
+
+  "sampling": {
+    "obs_off_ms": 0,
+    "obs_low_ms": 10,
+    "obs_high_ms": 1,
+    "formal_matrix_mode": "obs_low_ms",
+    "observer": "sequential individual AC-1a accessor calls, sleep_until pacing, bounded preallocated storage, aggregates-only output; no combined snapshot exists by design",
+    "accessors_sampled": ["arena_slot_in_use", "outstanding", "active_workers", "dispatch_occupancy", "arena_capacity_rejections", "arena_capacity", "configured_worker_count", "arena_high_water_mark (post-window)", "dispatch_high_water_mark (post-window)"]
+  },
+
+  "feature_definitions": {
+    "units_note": "see research/rx1/scripts/rx1_classify.py extract_features(); the whitelist there is normative",
+    "common_static_config": ["op_is_write", "request_size", "app_depth", "capacity", "workers", "depth_over_capacity"],
+    "common_outcome": ["throughput_mbs", "lat_p50_ns", "lat_p95_ns", "lat_p99_ns", "app_submit_rejections (caller-visible would_block outcomes)"],
+    "common_os_accounting": ["cpu_cores_used ((user+sys)/wall, all threads)", "per_worker_util", "ctxt_per_kop", "invol_ctxt_frac", "sched_wait_per_run", "sched_slices_per_kop"],
+    "common_psi": ["psi_cpu_some_us_per_s", "psi_cpu_full_us_per_s", "psi_io_some_us_per_s", "psi_io_full_us_per_s", "psi_mem_some_us_per_s"],
+    "common_perf": ["cycles_per_op", "instructions_per_op", "task_clock_s (perf unavailable events recorded as absent)"],
+    "e_only_sluice": ["sluice_slot_occ_mean", "sluice_frac_slot_at_capacity", "sluice_frac_active_at_configured", "sluice_frac_dispatch_nonzero", "sluice_dispatch_occ_mean", "sluice_dispatch_occ_max", "sluice_active_mean", "sluice_outstanding_mean", "sluice_arena_high_water_frac", "sluice_dispatch_high_water", "sluice_rejections_delta"],
+    "fairness": "identical static config, outcome, OS accounting, PSI and perf features are available to BOTH classifiers; E adds exactly the AC-1a accessor aggregates; neither classifier ever sees intervention identity, affinity, stress parameters, run index or ground-truth metadata"
+  },
+
+  "thresholds": {
+    "psi_cpu_some_us_per_s": 250000.0,
+    "psi_io_some_us_per_s": 50000.0,
+    "app_rejections_gt": 0,
+    "per_worker_util_sat": 1.10,
+    "app_cores_used_max": 2.0,
+    "app_depth_over_capacity_max": 0.10,
+    "control_cores_used_min": 0.75,
+    "frac_slot_at_capacity_sat": 0.30,
+    "frac_active_at_configured_sat": 0.55,
+    "dispatch_occ_mean_sat": 10.0,
+    "e_app_slot_occ_mean_max": 0.10,
+    "e_app_frac_active_max": 0.30,
+    "e_control_frac_active_max": 0.55
+  },
+
+  "rule_precedence": [
+    "1 CPU_CONTENDED if psi_cpu_some > 250000 us/s (CPU contention legitimately produces secondary internal queueing; it outranks internal rules)",
+    "2 UNKNOWN if capacity and worker rules fire simultaneously (incompatible strong causes)",
+    "3 REQUEST_CAPACITY_LIMITED: C = caller-observed rejections > 0; E = sluice rejections_delta > 0 AND frac_slot_at_capacity >= 0.30",
+    "4 THREADPOOL_WORKER_LIMITED: C = per_worker_util >= 1.10 AND psi quiet AND no rejections; E = frac_active_at_configured >= 0.55 AND dispatch_occ_mean >= 10 AND psi quiet AND no rejections",
+    "5 APP_PIPELINE_LIMITED: C = cpu_cores_used <= 2.0 AND depth/capacity <= 0.10 AND no rejections; E = same external conditions AND slot_occ_mean <= 0.10 AND frac_active <= 0.30 AND no rejections",
+    "6 CONTROL: C = cpu_cores_used >= 0.75 AND no rejections AND psi quiet; E = same AND frac_active < 0.55 AND frac_slot_at_capacity < 0.30 AND no rejections",
+    "7 IO_SERVICE_CONTENDED if psi_io_some > 50000 us/s (deferred class; rule present, expected never to fire on tmpfs)",
+    "8 UNKNOWN otherwise"
+  ],
+  "unknown_policy": "UNKNOWN when no rule crosses its threshold, or when capacity+worker rules fire together. UNKNOWN rate is reported separately from wrong-cause rate.",
+
+  "formal_matrix": {
+    "shapes": [
+      {"op": "read", "request_size": 4096, "total_bytes": 536870912},
+      {"op": "read", "request_size": 65536, "total_bytes": 536870912},
+      {"op": "read", "request_size": 1048576, "total_bytes": 1073741824},
+      {"op": "write", "request_size": 4096, "total_bytes": 536870912},
+      {"op": "write", "request_size": 65536, "total_bytes": 536870912},
+      {"op": "write", "request_size": 1048576, "total_bytes": 1073741824}
+    ],
+    "interventions": ["I0_CONTROL", "I1_APP_PIPELINE_LIMITED", "I2_REQUEST_CAPACITY_LIMITED", "I3_THREADPOOL_WORKER_LIMITED", "I4_CPU_CONTENDED"],
+    "reps_per_cell": 8,
+    "calibration_cell": "read/65536 (the pilot shape; other 5 cells are hold-out)"
+  },
+
+  "observability_tax": {
+    "shapes": [
+      {"op": "read", "request_size": 65536, "total_bytes": 536870912},
+      {"op": "read", "request_size": 1048576, "total_bytes": 1073741824}
+    ],
+    "modes": [0, 10, 1],
+    "reps_per_mode": 8,
+    "intervention": "I0_CONTROL"
+  },
+
+  "run_policy": {
+    "internal_reps": 6,
+    "internal_warmup": 1,
+    "file_policy": "tmpfs /tmp, one file per size shared by read/write (identical deterministic pattern), pre-created and cache-warmed by one unrecorded read pass before each phase; NO drop_caches; experiment tests runtime/resource attribution, not physical-device service",
+    "external_counters_window": "PSI/perf/wall span the whole bench process (recorded); bench-internal counters span the measured window only",
+    "perf_events": "task-clock,context-switches,cpu-migrations,cycles,instructions,branches,branch-misses (perf_event_paranoid=2: user-space only; missing events recorded as absent)"
+  },
+
+  "randomization_seed": 1380708657,
+  "randomization_note": "random.Random(seed); cell order shuffled independently per workload block and for the tax block; controls interleaved by construction; seed fixed BEFORE formal execution",
+
+  "warmup_policy": "1 unrecorded in-process warmup repetition before the measured window (page-cache + steady state), plus the pre-recorded file pre-creation pass",
+
+  "invalid_rules": {
+    "general": "a run is INVALID_RUN (excluded from scoring, reported in invalid-rate) when its ground truth did not manifest; INVALID is not classifier failure or success",
+    "CONTROL": "no rejections; arena not persistently at capacity (frac < 0.30); workers not saturated (frac_active < 0.55); PSI cpu below gate",
+    "APP_PIPELINE_LIMITED": "no rejections; no internal saturation; injected depth <= 4",
+    "REQUEST_CAPACITY_LIMITED": "rejections_delta > 0 AND arena_high_water == capacity AND capacity < offered depth",
+    "THREADPOOL_WORKER_LIMITED": "frac_active >= 0.50 AND frac_dispatch_nonzero >= 0.25 AND capacity rejection not dominant AND workers < offered depth",
+    "CPU_CONTENDED": "stressor ran AND psi_cpu_some > 10000 us/s",
+    "IO_SERVICE_CONTENDED": "deferred; always invalid in this environment",
+    "correctness": "any incorrect output/byte accounting/lifecycle failure invalidates the run (bench exits non-zero; all_reps_ok false)"
+  },
+
+  "primary_metrics": [
+    "Top-1 attribution accuracy (C, E) over valid runs",
+    "confusion matrices (C, E)",
+    "per-class precision/recall, macro-F1",
+    "wrong-cause rate (confident misattribution) reported separately from UNKNOWN rate",
+    "primary comparison: delta accuracy = accuracy(E) - accuracy(C) with paired bootstrap 95% CI (10000 resamples, bootstrap seed 1701)",
+    "paired transition table wrong->right / unknown->right / right->wrong / right->unknown",
+    "observability tax: OFF/LOW/HIGH throughput, p50/p99 latency, cpu cores, context switches per kop"
+  ],
+
+  "verdict_thresholds": {
+    "SUPPORTED ENOUGH TO DEEPEN": "delta accuracy >= +15pp AND paired 95% CI excludes zero on the positive side AND improvement not solely from one trivial class AND E does not materially increase wrong-cause rate AND OBS-LOW median throughput tax <= 2% with no convincing systematic tail regression > ~5%",
+    "PROMISING BUT INSUFFICIENT": "positive direction but one or more gates unmet; does NOT authorize AC-1b",
+    "ENGINEERING VALUE ONLY": "AC-1a useful for direct debugging/resource display but attribution gain too small for the research thesis; keep cheap metrics, do not deepen research infrastructure",
+    "NOT SUPPORTED / STOP EXPANSION": "delta <= 0, or E materially increases wrong-cause rate, or gain tiny relative to observation tax, or failure to generalize outside calibration cells; recommend stopping deeper observability research"
+  },
+
+  "freeze_note": "Committed before formal execution. Classifier rules, thresholds, sampling intervals, severities, matrix, seed and verdict thresholds are immutable from this point; any harness bug requires a protocol_version bump and full formal rerun. Pilot data (results/pilot/) is calibration evidence only and is never counted as formal evaluation data."
+}

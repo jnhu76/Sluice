@@ -94,3 +94,24 @@ sluice_one_file_target("binary", "bench", "overload_backpressure_bench", "bench"
 -- "e1tax"); methodology docs/verification/explicit-io-abstraction-tax.md.
 sluice_one_file_target("binary", "bench", "e1_abstraction_tax_bench", "bench",
                       {"sluice_core", "sluice_async"})
+
+-- rx1_workload_bench (#234 RX-1 — controlled attribution falsification gate):
+-- single-shape ApplicationRuntime + ThreadPoolBackend pipeline driver with
+-- would_block-aware submission (intervention I2), an AC-1a pull-based
+-- observation thread, and process-level OS accounting over the measured
+-- window. Links the PRODUCTION sluice_async only. Driven by
+-- research/rx1/scripts/rx1.py; methodology research/rx1/RX1_METHOD.md.
+-- Lives under research/ (experiment harness, not an E1 ladder stage).
+do
+    local R = SLUICE_ROOT
+    if os.isfile(R .. "research/rx1/bench/rx1_workload_bench.cpp") then
+        target("rx1_workload_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include")
+            add_files(R .. "research/rx1/bench/rx1_workload_bench.cpp")
+        target_end()
+    end
+end
