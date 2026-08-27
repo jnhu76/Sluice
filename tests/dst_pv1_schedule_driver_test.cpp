@@ -33,10 +33,20 @@
 //       the as-built defect exists today; a future Queue repair slice must
 //       consciously flip or replace that expectation. NO production Queue
 //       change is made in this campaign.
-//   T6  harness contract (review P1-2): an Invoke action may re-enter the
-//       test control surface (uninstall) without self-deadlock. Plus the
-//       review P1-4 death children inside T3: out-of-range driver ids and
-//       unregistered actions abort loudly instead of corrupting memory.
+//   T6  harness contract (review P1-2 / R3): an Invoke action may re-enter
+//       SUPPORTED NON-REPLACING test-control surfaces; uninstall is
+//       explicitly supported, re-install / re-arm is fail-closed (T7).
+//       Plus the review P1-4 death children inside T3: out-of-range driver
+//       ids and unregistered actions abort loudly instead of corrupting
+//       memory.
+//   T7  fail-closed re-arm (review R3 P1): an Invoke action attempting to
+//       install / re-arm a schedule script aborts with the named diagnostic
+//       (death child) — the old script's epilogue can never advance a
+//       replaced replay vector.
+//   T8  watchdog pacing (review R3 P2): a death child that closes its
+//       stderr pipe and then hangs must be bounded by the parent's
+//       watchdog — no busy spin on the HUP'd pipe, SIGKILL at the deadline,
+//       timed_out reported (parent CPU stays far below wall time).
 //
 // All ordering evidence is script steps + scheduler semantic state (node
 // outcomes, Completion results, queue result statuses, event lists). NO
@@ -62,6 +72,7 @@
 #include "death_test_runner_posix.hpp"
 
 #include <poll.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -731,12 +742,14 @@ SLUICE_TEST_CASE(dst_t5_v3_timed_consumer_ladder) {
     }
 }
 
-// T6 — review P1-2 harness contract: an Invoke action MAY re-enter the test
-// control surface (uninstall_schedule_script here) without self-deadlock.
-// Pre-fix the action ran while holding the script mutex, so this call locked
-// the same mutex and hung; post-fix the action runs with NO script mutex
-// held, the seam deactivates mid-run, and the run continues on the plain FIFO
-// pop (a free run).
+// T6 — review P1-2 harness contract (review R3 wording): an Invoke action
+// MAY re-enter SUPPORTED NON-REPLACING test-control surfaces;
+// uninstall_schedule_script is explicitly supported, re-install / re-arm is
+// fail-closed (T7). Pre-fix the action ran while holding the script mutex, so
+// this call locked the same mutex and hung; post-fix the action runs with NO
+// script mutex held, the seam deactivates mid-run, the epilogue records the
+// executed step into the old state without reactivating, and the run
+// continues on the plain FIFO pop (a free run).
 SLUICE_TEST_CASE(dst_t6_action_reenters_control_surface) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -866,6 +879,57 @@ void dst_t3_child_unregistered_action() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
+// Child (review R3 P1): an Invoke action attempting to ARM a SECOND script
+// (re-install / re-arm) must abort with the re-install diagnostic — the OLD
+// script's post-action epilogue must never advance a replaced replay vector.
+// The abort fires inside install_schedule_script under the same-thread
+// invoke-active guard; reaching here means the re-arm was silently allowed.
+void dst_t7_child_reinstall_inside_invoke() {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    ControllerGuard ctrl(sched);
+    sluice_dst::DstScheduleDriver driver_a(sched, "dst_t7_a");
+    sluice_dst::DstScheduleDriver driver_b(sched, "dst_t7_b");
+
+    WaitQueue qa;
+    WaitNode na;
+    Fiber fa, fb;
+    fa.set_entry([&](Fiber&) { (void)sched.await_wait(qa, na); });
+    fb.set_entry([&](Fiber&) {});
+    FiberStack sa, sb;
+    if (!sched.init_fiber(fa, sa.base(), sa.size())) std::_Exit(88);
+    if (!sched.init_fiber(fb, sb.base(), sb.size())) std::_Exit(88);
+
+    // B is a COMPLETE, legal plan: the guard must reject the re-arm ATTEMPT,
+    // not some half-built script (no silent B-step skipping, no fallback).
+    driver_b.bind(0, fa).bind(1, fb);
+    driver_b.run(0).run(1);
+
+    sluice_dst::DstScheduleDriver* b = &driver_b;
+    driver_a.bind(0, fa).bind(1, fb);
+    driver_a.on_action(0, "ReArmB", [b](sluice::async::Scheduler&) {
+        b->arm();  // re-install inside Invoke -> fail-loud abort (T7)
+    });
+    driver_a.invoke(0);  // the first pop-site visit executes the action
+    driver_a.arm();
+    sched.spawn(fa);
+    sched.spawn(fb);
+    sched.run(1);
+    // Reaching here means the re-arm was silently allowed — must not happen.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// Child (review R3 P2): close stderr (the captured pipe) at a known point,
+// then hang forever. The parent must NOT busy-spin on the HUP'd pipe: the
+// watchdog paces, reaches its (test-local, short) deadline, SIGKILLs the
+// child, and reports timed_out.
+void dst_t8_child_close_stderr_then_hang() {
+    std::fprintf(stderr, "dst_t8: closing stderr; hanging\n");
+    std::fflush(stderr);
+    ::close(STDERR_FILENO);
+    for (;;) ::pause();
+}
+
 // Fork a child re-execing THIS binary with --death-child=<case>, capturing
 // the child's stderr through a pipe (the runner's self-exec discipline: the
 // child is the same internal-testing binary; post-fork work is restricted to
@@ -876,7 +940,14 @@ struct CapturedChild {
     bool timed_out = false;
 };
 
-CapturedChild run_child_captured(const std::string& case_name) {
+// Watchdog pacing interval (ms). This paces ONLY a bounded watchdog
+// observation (review R3 P2) — it must never be used to order a schedule;
+// sleep-for-ordering is forbidden repository-wide, watchdog pacing is
+// observation, not causality.
+inline constexpr int kWatchdogPacingMs = 10;
+
+CapturedChild run_child_captured_with_timeout(const std::string& case_name,
+                                              std::chrono::milliseconds timeout) {
     CapturedChild out;
     const std::string self = sluice_death_test::resolve_self_executable_path();
     if (self.empty()) {
@@ -909,19 +980,20 @@ CapturedChild run_child_captured(const std::string& case_name) {
         ::execv(argv[0], argv);
         std::_Exit(88);
     }
-    // Parent: bounded capture loop — drain the pipe AND reap the child under
+    // Parent: ONE bounded capture loop — drain the pipe AND reap the child under
     // ONE deadline. A child that hangs with its stderr pipe still open must
     // reach the watchdog: a blocking read-to-EOF performed before waitpid
     // would never return (review P1-3), so the pipe is polled with the
     // remaining budget and the child is reaped with waitpid(WNOHANG) on every
-    // iteration. The poll paces the loop even once EOF is seen (a live child
-    // with its stderr closed), so there is no busy spin and no unbounded
-    // wait. The watchdog is the only time bound in this harness.
+    // iteration. Once EOF is seen while the child still lives, the HUP'd
+    // pipe would make poll return IMMEDIATELY — bounded but CPU-burning
+    // (review R3 P2) — so the loop then switches to a fixed
+    // kWatchdogPacingMs pacing interval. The watchdog is the only time bound
+    // in this harness; the pacing never orders a schedule.
     ::close(pipefd[1]);
     std::string text;
     char buf[512];
-    constexpr auto kTimeout = std::chrono::seconds{60};
-    const auto deadline = std::chrono::steady_clock::now() + kTimeout;
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
     bool exited = false;
     bool eof = false;
     bool reap_error = false;
@@ -938,6 +1010,13 @@ CapturedChild run_child_captured(const std::string& case_name) {
                 reap_error = true;  // status stays -1: the caller fails loudly
             }
         }
+        if (eof) {
+            // EOF while the child still lives: a poll on the HUP'd pipe would
+            // return immediately (busy spin), so pace the watchdog with a
+            // fixed small interval instead. Bounded-CPU observation only.
+            ::poll(nullptr, 0, kWatchdogPacingMs);
+            continue;
+        }
         struct pollfd pfd;
         pfd.fd = pipefd[0];
         pfd.events = static_cast<short>(POLLIN | POLLHUP);
@@ -949,7 +1028,7 @@ CapturedChild run_child_captured(const std::string& case_name) {
                               static_cast<int>(remain.count() > 0
                                                    ? remain.count()
                                                    : 1));
-        if (pr > 0 && !eof) {
+        if (pr > 0) {
             const ssize_t n = ::read(pipefd[0], buf, sizeof(buf));
             if (n > 0) {
                 text.append(buf, static_cast<std::size_t>(n));
@@ -958,7 +1037,7 @@ CapturedChild run_child_captured(const std::string& case_name) {
             } else if (errno != EINTR) {
                 eof = true;  // read error: no further data
             }
-        } else if (pr < 0 && errno != EINTR && !eof) {
+        } else if (pr < 0 && errno != EINTR) {
             eof = true;  // poll error: no further data
         }
     }
@@ -974,6 +1053,13 @@ CapturedChild run_child_captured(const std::string& case_name) {
     }
     out.stderr_text = std::move(text);
     return out;
+}
+
+CapturedChild run_child_captured(const std::string& case_name) {
+    // Repository default watchdog (60s). The T8 regression uses a short
+    // TEST-LOCAL timeout through the _with_timeout form; there is no public
+    // or production timeout API.
+    return run_child_captured_with_timeout(case_name, std::chrono::seconds{60});
 }
 
 bool contains(const std::string& hay, const char* needle) {
@@ -1028,9 +1114,86 @@ SLUICE_TEST_CASE(dst_t3_illegal_decision_aborts) {
                      "the missing action is named");
 }
 
+// T7 — review R3 P1: re-install / re-arm is FAIL-CLOSED inside Invoke. The
+// child arms script A whose sole step is Invoke(action); the action attempts
+// to arm a second complete script B. The guard aborts inside
+// install_schedule_script (same-thread invoke-active flag) with the named
+// diagnostic — no silent replacement, no skipped B step, no hang.
+SLUICE_TEST_CASE(dst_t7_reinstall_inside_invoke_aborts) {
+    const CapturedChild bad = run_child_captured("dst_t7_reinstall");
+    SLUICE_CHECK(bad.status != -1);
+    SLUICE_CHECK_MSG(!bad.timed_out, "re-install child must not hang");
+    SLUICE_CHECK_MSG(WIFSIGNALED(bad.status) && WTERMSIG(bad.status) == SIGABRT,
+                     "re-install inside Invoke must abort loudly");
+    SLUICE_CHECK_MSG(contains(bad.stderr_text, "SCHEDULE SCRIPT FAILURE"),
+                     "re-install diagnostic header present");
+    SLUICE_CHECK_MSG(
+        contains(bad.stderr_text, "install/re-arm forbidden inside Invoke"),
+        "re-install diagnostic names the violation");
+    SLUICE_CHECK_MSG(contains(bad.stderr_text, "current script: dst_t7_a"),
+                     "re-install diagnostic names the CURRENT script");
+    SLUICE_CHECK_MSG(contains(bad.stderr_text, "step index:"),
+                     "re-install diagnostic names the step");
+}
+
+// T8 — review R3 P2: the death watchdog must not busy-spin once a child
+// closes its stderr (pipe EOF) and then hangs. The child case closes stderr
+// at a known point and hangs forever; the parent uses a short TEST-LOCAL
+// timeout (no public/production timeout API), must WAIT for the deadline
+// (no early return), SIGKILL the child, report timed_out, and burn parent
+// CPU far below the wall time (a spin loop would burn ~100% of a core; the
+// 10ms pacing makes the loop bounded regardless of the timeout).
+SLUICE_TEST_CASE(dst_t8_watchdog_hang_after_stderr_close) {
+    struct rusage ru_before{};
+    ::getrusage(RUSAGE_SELF, &ru_before);
+    const auto wall_before = std::chrono::steady_clock::now();
+    constexpr auto kShortWatchdog = std::chrono::milliseconds{500};
+    const CapturedChild c = run_child_captured_with_timeout(
+        "dst_t8_close_stderr_then_hang", kShortWatchdog);
+    const auto wall_after = std::chrono::steady_clock::now();
+    struct rusage ru_after{};
+    ::getrusage(RUSAGE_SELF, &ru_after);
+
+    SLUICE_CHECK_MSG(contains(c.stderr_text, "dst_t8: closing stderr"),
+                     "the pre-hang diagnostic was captured before the close");
+    SLUICE_CHECK_MSG(c.timed_out,
+                     "EOF + live child must reach the watchdog deadline");
+    SLUICE_CHECK_MSG(WIFSIGNALED(c.status) && WTERMSIG(c.status) == SIGKILL,
+                     "the hung child is SIGKILLed at the deadline");
+    const auto wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        wall_after - wall_before);
+    SLUICE_CHECK_MSG(wall_ms >= std::chrono::milliseconds{400},
+                     "the parent WAITED for the deadline (no early return)");
+    // No-busy-spin proof: the parent's CPU in the window must stay far below
+    // the wall time. A spin loop burns ~100% of one core; the 10ms watchdog
+    // pacing costs a few microseconds per iteration even under TSan.
+    const double cpu_s =
+        static_cast<double>(ru_after.ru_utime.tv_sec -
+                            ru_before.ru_utime.tv_sec) +
+        static_cast<double>(ru_after.ru_utime.tv_usec -
+                            ru_before.ru_utime.tv_usec) /
+            1e6 +
+        static_cast<double>(ru_after.ru_stime.tv_sec -
+                            ru_before.ru_stime.tv_sec) +
+        static_cast<double>(ru_after.ru_stime.tv_usec -
+                            ru_before.ru_stime.tv_usec) /
+            1e6;
+    const double wall_s = wall_ms.count() / 1000.0;
+    SLUICE_CHECK_MSG(cpu_s < wall_s * 0.5,
+                     "watchdog pacing keeps parent CPU far below wall time "
+                     "(no busy spin)");
+}
+
 #else
 SLUICE_TEST_CASE(dst_t3_illegal_decision_aborts) {
     // POSIX-only death harness; the seam itself is exercised by T1/T2/T4/T5.
+}
+SLUICE_TEST_CASE(dst_t7_reinstall_inside_invoke_aborts) {
+    // POSIX-only death probe; the fail-closed re-install guard is compiled
+    // into the controller on every platform.
+}
+SLUICE_TEST_CASE(dst_t8_watchdog_hang_after_stderr_close) {
+    // POSIX-only death probe (watchdog pacing).
 }
 #endif  // __unix
 
@@ -1051,6 +1214,14 @@ int main(int argc, char** argv) {
     }
     if (child == "dst_t3_unregistered_action") {
         dst_t3_child_unregistered_action();
+        std::_Exit(0);
+    }
+    if (child == "dst_t7_reinstall") {
+        dst_t7_child_reinstall_inside_invoke();
+        std::_Exit(0);
+    }
+    if (child == "dst_t8_close_stderr_then_hang") {
+        dst_t8_child_close_stderr_then_hang();
         std::_Exit(0);
     }
 #else
