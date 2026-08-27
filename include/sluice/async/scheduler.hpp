@@ -1903,9 +1903,10 @@ private:
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
 
     // ---- Ordinary deadline lifecycle authority (AC-2b) ----
-    // The single owner of the UNIFORM ordinary-TimerRegistration lifecycle
-    // facts: pool publication + ACTIVE count, and the exactly-once
-    // ACTIVE->{CONSUMED,RETIRED} transitions that decrement the count.
+    // Single authority for ordinary ACTIVE->{CONSUMED,RETIRED} transitions
+    // and their exactly-once active_deadline_count_ decrements; SHARED arming
+    // authority for NON-Queue registrations only (Queue-local arming stays
+    // local — see below).
     //
     // Authority boundary (distinct from WaitNode::resolve_): the resolve CAS on
     // the bound WaitNode remains the ONE wait-outcome winner authority; these

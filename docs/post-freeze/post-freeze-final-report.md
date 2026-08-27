@@ -104,14 +104,16 @@ behavior/layout unchanged — see
 `scheduler_rwlock.cpp` 674 → 677, `scheduler_mutex.cpp` 344 → 340,
 `scheduler_semaphore.cpp` 316 → 312, `scheduler_event.cpp` 397 → 393,
 `scheduler_condition.cpp` 264 → 263 (2026-08-27, AC-2b — ordinary deadline
-lifecycle authority: nine of the ten ordinary arming sites and every inline
-consume/retire site now route through `arm_ordinary_deadline_locked` /
+lifecycle authority: eight of the ten ordinary arming sites and every inline
+consume/retire transition now route through `arm_ordinary_deadline_locked` /
 `consume_ordinary_deadline_locked` / `retire_ordinary_deadline_locked`
-(declared in `include/sluice/async/scheduler.hpp`); Queue arming stays
-intentionally LOCAL — its historical interleave of `++active_queue_timers_`
-with the ACTIVE-count/cache publication is observable through the lock-free
-earliest-deadline cache that parked workers read without `global_mtx_`, so
-the order is preserved verbatim at those call sites — while Queue
+(declared in `include/sluice/async/scheduler.hpp`); the two remaining arming
+sites are Queue push/pop, which stay intentionally LOCAL — their historical
+interleave of `++active_queue_timers_` with the ACTIVE-count/cache publication
+is observable through the lock-free earliest-deadline cache that parked
+workers read without `global_mtx_`, so that order — including those two
+call sites' direct `++active_deadline_count_` arming increments — is
+preserved verbatim — while Queue
 consume/retire transitions DO route through the authority; the raw-pointer
 arm form preserves register_test_deadline_locked's null-node seam contract;
 cache-recompute timing and on_resolve hook firing stay at each call site;
