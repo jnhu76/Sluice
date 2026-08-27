@@ -55,3 +55,15 @@ include/sluice/async/wait_queue.hpp | assert(head_ == nullptr && | diagnostic | 
 # Category 3 — internal-testing preconditions inside guarded seams are
 # auto-allowed via guard detection; entries here only for seam code that
 # cannot self-guard (none currently).
+
+# AC-2b (PR: refactor/ac2b-ordinary-deadline-authority): the two E12-F
+# already-due-unreachable fail-fast sites in rwlock_{read,write}_lock_until
+# were pre-existing asserts; the ordinary-deadline-authority migration
+# re-indented/re-wrapped their lines (consume_ordinary_deadline_locked now
+# owns the CAS + count), so the changed-lines gate sees them as added.
+# Category: L9-shaped pure diagnostic on an unreachable-under-G+W invariant —
+# the CAS+count is inside the authority helper and typed (bool return); this
+# assert only flags the never-reachable Category-B "lost claim after a
+# resolve-CAS win under continuous global_mtx_". Behavior unchanged.
+src/async/scheduler_rwlock.cpp | assert(false && "E12-F read_lock_until: try_claim_expiry | diagnostic | AC-2b migration re-lineated pre-existing unreachable-claim fail-fast; CAS/count moved into consume_ordinary_deadline_locked, assertion retained as Category-B tripwire
+src/async/scheduler_rwlock.cpp | assert(false && "E12-F write_lock_until: try_claim_expiry | diagnostic | AC-2b migration re-lineated pre-existing unreachable-claim fail-fast; CAS/count moved into consume_ordinary_deadline_locked, assertion retained as Category-B tripwire

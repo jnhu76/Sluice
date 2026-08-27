@@ -500,14 +500,11 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
             return;
         }
         ++waiting_waitq_count_;
-        // Create timer registration.
-        timer_pool_.emplace_back(&node, &waiters, deadline);
-        reg = &timer_pool_.back();
-        reg->on_resolve_ = &rwlock_timer_expire_reconcile;
-        reg->owner_ctx_ = expire_ctx;
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
+        // Arm via the ordinary deadline authority, then attach the RwLock-only
+        // expire/reconcile binding INSIDE the same G critical section.
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline,
+                                           &rwlock_timer_expire_reconcile,
+                                           expire_ctx);
 
         // Admission precedence 1: resource admission wins over due deadline.
         // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
@@ -534,8 +531,12 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
         // for a timer we did not consume.
         if (clock_now_unlocked() >= deadline) {
             if (waiters.expire_locked(node)) {
-                if (reg->try_claim_expiry()) --active_deadline_count_;
-                else assert(false && "E12-F read_lock_until: try_claim_expiry "
+                // ACTIVE->CONSUMED via the ordinary deadline authority. A false
+                // return (timer already terminal after a resolve-CAS win) is
+                // the same Category B unreachable state as before; under
+                // continuous G+W the node is terminal and the timer unclaimed.
+                if (!consume_ordinary_deadline_locked(*reg))
+                    assert(false && "E12-F read_lock_until: try_claim_expiry "
                                      "failed after expire_locked win (Category B)");
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
@@ -550,7 +551,8 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
         if (node.is_terminal()) {
             waiters.unlink_locked(node);
             --waiting_waitq_count_;
-            if (reg->retire()) --active_deadline_count_;
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             node.set_user(nullptr);
             return;
@@ -593,13 +595,11 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
             return;
         }
         ++waiting_waitq_count_;
-        timer_pool_.emplace_back(&node, &waiters, deadline);
-        reg = &timer_pool_.back();
-        reg->on_resolve_ = &rwlock_timer_expire_reconcile;
-        reg->owner_ctx_ = expire_ctx;
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
+        // Arm via the ordinary deadline authority, then attach the RwLock-only
+        // expire/reconcile binding INSIDE the same G critical section.
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline,
+                                           &rwlock_timer_expire_reconcile,
+                                           expire_ctx);
 
         // Admission precedence 1: resource admission.
         // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
@@ -620,8 +620,10 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
         // (same reasoning as rwlock_read_lock_until).
         if (clock_now_unlocked() >= deadline) {
             if (waiters.expire_locked(node)) {
-                if (reg->try_claim_expiry()) --active_deadline_count_;
-                else assert(false && "E12-F write_lock_until: try_claim_expiry "
+                // ACTIVE->CONSUMED via the ordinary deadline authority. Same
+                // Category B reasoning as rwlock_read_lock_until above.
+                if (!consume_ordinary_deadline_locked(*reg))
+                    assert(false && "E12-F write_lock_until: try_claim_expiry "
                                      "failed after expire_locked win (Category B)");
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
@@ -635,7 +637,8 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
         if (node.is_terminal()) {
             waiters.unlink_locked(node);
             --waiting_waitq_count_;
-            if (reg->retire()) --active_deadline_count_;
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             node.set_user(nullptr);
             return;

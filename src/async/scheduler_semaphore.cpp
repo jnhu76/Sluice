@@ -165,12 +165,9 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
             return;  // registration contract violation
         }
         ++waiting_waitq_count_;
-        // Create the timer registration control block for this wait epoch.
-        timer_pool_.emplace_back(&node, &waiters, deadline);
-        reg = &timer_pool_.back();
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
+        // Arm the timer registration control block for this wait epoch (pool
+        // construction + ACTIVE count + heap push + park-cache refresh).
+        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline);
 
         // Admission precedence 1: permit admission wins over a due deadline. If
         // a stored permit is available AND this node is the FIFO head (no earlier
@@ -182,9 +179,9 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
                 available.store(
                     available.load(std::memory_order::acquire) - 1,
                     std::memory_order::release);
-                if (reg->retire()) {  // ACTIVE->RETIRED (closes timer)
-                    --active_deadline_count_;
-                }
+                // ACTIVE->RETIRED via the ordinary deadline authority (no
+                // Semaphore on_resolve hook exists; count decrement inside).
+                (void)retire_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // Fiber is RUNNING and continues inline; no publication.
@@ -199,8 +196,9 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
         // happened after the deadline was due.
         if (clock_now_unlocked() >= deadline) {
             if (waiters.expire_locked(node)) {
-                reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
-                --active_deadline_count_;
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 // Fiber is RUNNING and continues inline; no publication.
@@ -213,9 +211,7 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
         if (node.is_terminal()) {
             waiters.unlink_locked(node);
             --waiting_waitq_count_;
-            if (reg->retire()) {
-                --active_deadline_count_;
-            }
+            (void)retire_ordinary_deadline_locked(*reg);  // ACTIVE->RETIRED
             recompute_earliest_deadline_locked();
             return;
         }

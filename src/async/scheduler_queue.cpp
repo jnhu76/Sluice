@@ -186,6 +186,12 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
+        // Intentionally LOCAL arming (AC-2b review corrective): NOT routed
+        // through arm_ordinary_deadline_locked. The historical order bumps
+        // active_queue_timers_ BEFORE the ACTIVE count / heap / cache
+        // publication, and earliest_active_deadline_ is an atomic read by
+        // parked workers WITHOUT global_mtx_ — so this interleaving is
+        // externally observable in principle and is preserved verbatim.
         timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
         reg = &timer_pool_.back();
         reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
@@ -202,7 +208,8 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
             port.ring_[tail] = std::move(lease);
             ++port.ring_count_;
             port.waiters_[0].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -212,7 +219,8 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         // Closed => resolve (lease retained).
         if (port.closed_) {
             port.waiters_[0].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -222,8 +230,9 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         // Admission precedence 2: already-due => Expired inline.
         if (clock_now_unlocked() >= deadline) {
             if (port.waiters_[0].expire_locked(node)) {
-                reg->try_claim_expiry();
-                --active_deadline_count_;
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 reg->fire_on_resolve_locked(/*timer_won=*/true);
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -269,6 +278,10 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         ++port.active_wait_associations_;
         ++waiting_waitq_count_;
+        // Intentionally LOCAL arming (AC-2b review corrective) — see
+        // queue_push_admit_until for why Queue does not route through
+        // arm_ordinary_deadline_locked. The consume/retire transitions below
+        // DO go through the authority (uniform facts).
         timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
         reg = &timer_pool_.back();
         reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
@@ -285,7 +298,8 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
             out.control_->location_ =
                 detail::QueueItemControl::Location::consumer_operation;
             port.waiters_[1].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -294,7 +308,8 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         if (port.ring_empty_locked() && port.closed_) {
             port.waiters_[1].wake_node_locked(node);
-            if (reg->retire()) { --active_deadline_count_; }
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
             reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
@@ -303,8 +318,9 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         }
         if (clock_now_unlocked() >= deadline) {
             if (port.waiters_[1].expire_locked(node)) {
-                reg->try_claim_expiry();
-                --active_deadline_count_;
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 reg->fire_on_resolve_locked(/*timer_won=*/true);
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
