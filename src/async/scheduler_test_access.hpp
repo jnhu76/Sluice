@@ -648,6 +648,104 @@ struct Scheduler::AsyncTestAccess {
     // Global (not per-Scheduler) because it gates construction.
     static void set_evented_admission_override(bool supported) noexcept;
     static bool evented_admission_override() noexcept;
+
+    // ---- FE-2 minimal stackless frontend seams (fe2-frontend-seam
+    // compliance gate; non-installed control plane per AGENTS.md §15) ----
+    //
+    // FeDeferredRecord is the experimental stackless frontend's continuation
+    // record: frame-embedded (same address-stability rule as the WaitNode
+    // itself, FE-1b L2), holding the exactly-once PUBLICATION guard that is
+    // SUBORDINATE to the WaitNode terminal winner (the resolve_ CAS decides;
+    // this record only dedups delivery of an already-decided terminal).
+    //
+    //   unarmed --arm(admission CS, under G, L7)--> armed
+    //   armed   --try_consume(drain, no lock)-----> consumed   [exactly once]
+    //
+    // A try_consume on an unarmed record returns false and the drain loop
+    // treats it as a loud contract violation (resume-before-armed = L8
+    // broken); the PoV test asserts it is unreachable.
+    struct FeDeferredRecord {
+        enum class State : std::uint8_t { unarmed = 0, armed = 1, consumed = 2 };
+        std::atomic<State> state{State::unarmed};
+        void* handle_address = nullptr;  // bound BEFORE registration (L2)
+        // PublicationEligibilityCommit (FE-1b L7). Called ONLY by
+        // event_wait_deferred_*_for_test inside the resolver-excluded
+        // admission critical section, after the ladder authorizes. Plain
+        // release store: the single armer is the admission CS; G orders it
+        // against every resolver.
+        void arm(std::memory_order order = std::memory_order_release) noexcept {
+            state.store(State::armed, order);
+        }
+        // Exactly-once delivery guard (FE-1b L8). acq_rel: the winner pairs
+        // with arming; a losing discharger observes `consumed` and does
+        // nothing. Returns false for unarmed (contract violation observed by
+        // the caller) and for consumed (loser law).
+        bool try_consume() noexcept {
+            State expected = State::armed;
+            return state.compare_exchange_strong(expected, State::consumed,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire);
+        }
+    };
+
+    // Deferred-kind Event wait admission over the SHARED ladder (the ONE
+    // textual admission sequence — no duplicated admission law). Runs the
+    // ladder for a WaitResume::deferred token; on `authorized` commits the
+    // PublicationEligibility (record.arm) INSIDE the same resolver-excluded
+    // critical section (FE-1b L7) and returns true (the caller suspends /
+    // await_suspend returns true). `rejected` / inline `resolved_inline`
+    // return false with the outcome on the node — the caller must NOT
+    // suspend (FE-1b L6: inline resolution publishes nothing).
+    //
+    // Out-of-line (defined in scheduler_fe2_test_seam.cpp): these methods
+    // touch Event's private state (via Scheduler friendship) and therefore
+    // need the complete Event type, which the installed header's include
+    // footprint must NOT gain (the seam header is included by every
+    // internal-testing TU at the bottom of scheduler.hpp).
+    static bool event_wait_deferred_for_test(Scheduler& s, Event& event,
+                                             WaitNode& node,
+                                             FeDeferredRecord& record);
+    // Deadline-aware variant: same shared ladder with the ordinary deadline
+    // authority (timed=true) — the SAME prepare/publish/already-due/retire
+    // lifecycle the fiber entry uses. No second timer authority.
+    static bool event_wait_deferred_deadline_for_test(Scheduler& s,
+                                                      Event& event,
+                                                      WaitNode& node,
+                                                      FeDeferredRecord& record,
+                                                      deadline_t deadline);
+    // Event cancel through the SAME production seam the fiber frontend uses
+    // (event_cancel_wait). The winner tail switches on the deferred kind and
+    // commits the delivery obligation; the record must be armed (it is —
+    // resolvers run only after the admission CS that armed it released).
+    static bool event_cancel_deferred_for_test(Scheduler& s, Event& event,
+                                               WaitNode& node);
+    // Drain chunk: move out pending deferred delivery records under G. The
+    // caller discharges each with NO lock held (FE-1b L9).
+    static std::size_t take_deferred_for_test(Scheduler& s, void** out,
+                                              std::size_t cap) {
+        return s.take_deferred_publications(out, cap);
+    }
+    // Transit-list depth probe (teardown precondition observations).
+    static std::size_t deferred_depth_for_test(Scheduler& s) {
+        LockGuard lk(s.global_mtx_);
+        return s.deferred_publications_.size();
+    }
+    // FE-2 §22 no-user-code-under-lock witness probe: non-blocking G
+    // acquisition. A resumed continuation calls this from its body; true
+    // proves G was FREE at that instant (the discharge path holds no
+    // authoritative lock). If a mutated drain resumed under G, try_lock
+    // would deterministically return false (and never deadlock — unlike a
+    // blocking probe). TSA suppressed: the paired try_lock/unlock cannot be
+    // expressed with annotated RAII guards (same shape as
+    // worker_park_domain_try above).
+    static bool try_lock_global_for_test(Scheduler& s) noexcept
+        SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+        return s.global_mtx_.try_lock();
+    }
+    static void unlock_global_for_test(Scheduler& s) noexcept
+        SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+        s.global_mtx_.unlock();
+    }
 };  // struct Scheduler::AsyncTestAccess
 
 }  // namespace sluice::async

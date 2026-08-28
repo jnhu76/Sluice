@@ -643,3 +643,12 @@ do
         add_files(validity, impl)
         add_tests("capacity_validity_test")
 end
+
+-- FE-2 minimal stackless frontend proof-of-value (FE campaign;
+-- docs/architecture/fe2-frontend-seam-compliance-gate.md). The tiny
+-- coroutine task/awaiter/record are test-only; everything semantically
+-- load-bearing (shared Event admission ladder, WaitResume token, defer/take
+-- delivery split, winner-tail kind switch) is production code. Needs the
+-- non-installed scheduler_test_access.hpp seam header (src/async).
+sluice_internal_async_test("fe2_stackless_event_pov_test",
+                           {includedirs = {"include", "tests", "src/async"}})
