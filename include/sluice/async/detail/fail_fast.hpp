@@ -353,6 +353,20 @@ bool evented_admission_check() noexcept;
 [[noreturn]] void async_condition_lifetime_fail_fast() noexcept;
 [[noreturn]] void wait_queue_lifetime_fail_fast() noexcept;
 
+// FE-3 RwLock writer-ownership contract violations (the historical debug
+// asserts over writer_owner_, re-based onto ActorId — FE-1b A1). All are
+// reachable caller-contract violations, so enforcement is a named fail-fast
+// active in Debug AND Release (§9.2; ADR-async-primitive-lifetime-failfast
+// pattern). Same contract as the other entries: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, ultimately std::terminate().
+// Blocking write acquisition while the caller's actor already owns the
+// writer (recursive acquisition — the try form returns false instead).
+[[noreturn]] void async_rwlock_recursive_write_fail_fast() noexcept;
+// write-release while no writer is active.
+[[noreturn]] void async_rwlock_unlock_write_inactive_fail_fast() noexcept;
+// write-release by an actor that does not own the writer.
+[[noreturn]] void async_rwlock_unlock_write_not_owner_fail_fast() noexcept;
+
 // FE deferred-publication teardown gate (fe2-frontend-seam compliance gate,
 // Gate 1/2). Destroying the Scheduler while its deferred-publication transit
 // list is non-empty means a winner committed a delivery obligation for a

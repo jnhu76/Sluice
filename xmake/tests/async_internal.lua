@@ -662,3 +662,11 @@ sluice_internal_async_test("fe2_stackless_event_pov_test",
 -- seam headers (src/async).
 sluice_internal_async_test("fe3_stackless_queue_slice_test",
                            {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 RwLock vertical slice (FE campaign): the stackless frontend drives
+-- the shared read/write admission ladders, the head reconcile (writer
+-- fairness / reader batching), cancel/expiry reconcile, and the
+-- ActorIdentity writer-ownership seam (FE-1b A1). Test-only coroutine/
+-- awaiter/record/actor-token vocabulary.
+sluice_internal_async_test("fe3_stackless_rwlock_slice_test",
+                           {includedirs = {"include", "tests", "src/async"}})

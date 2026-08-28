@@ -320,3 +320,116 @@ Sanitizers: TSan run above; ASan+UBSan + Release deferred to the FE-4
   frame-embedded ctx/lease is the FE-1a property under test).
 Benchmark: NO performance claim (structural authority sharing; §37).
 ```
+
+## FE-3 RwLock vertical-slice addendum (writer ownership as ActorIdentity)
+
+The FE-3 RwLock slice extends the FE-2 seam to `AsyncRwLock` under the SAME
+classification and the same four gates; only the deltas are stated here (the
+parent sections and the FE-3 Queue addendum remain authoritative).
+
+### Gate 0 — Classification delta
+
+- Authority touched: RwLock admission/reconciliation + writer OWNERSHIP
+  identity (AC-4 wait/wake) — same gate class as FE-2/FE-3-Queue.
+- Production surface: `Scheduler::rwlock_read_admit_locked` /
+  `rwlock_write_admit_locked` (ONE textual admission ladder per mode,
+  blocking+timed, parameterized by `WaitResume` + the caller's actor),
+  `WaitAdmitDisposition` (renamed from the FE-2 `EventAdmitDisposition` —
+  shared vocabulary, same three values), the shared ownership cores
+  `rwlock_try_write_admission_locked` / `rwlock_unlock_write_core_locked`
+  (consumed by BOTH the fiber entries and the deferred seam), and
+  `rwlock_grant_from_head_locked` committing `writer_owner = winner's
+  ActorId` at grant time.
+- Identity change (FE-1b corrective A1): `AsyncRwLock::writer_owner_` moves
+  from `Fiber*` to the new public plain-data token `ActorId`
+  {none, fiber(Fiber*), frontend(void*)}. ActorIdentity is deliberately a
+  DIFFERENT type from `WaitResume` (delivery/ResumeTarget): ownership
+  comparisons never inspect how a winner will be resumed, and a fiber
+  pointer can never equal a frontend token by address coincidence (kind tag
+  participates in equality). `RwWaitCtx` gains the `actor` field and moves
+  to the non-installed `scheduler_internal.hpp` — NO `WaitNode` layout
+  change; `AsyncRwLock` grows by 8 bytes (ActorId vs raw pointer), an
+  accepted internal layout cost of one lock instance per contention domain.
+- Fail-fast conversions (§9.2): the reachable caller-contract asserts at the
+  recursive-write check and the unlock-write owner checks become named
+  Release-active entries (`async_rwlock_recursive_write_fail_fast`,
+  `async_rwlock_unlock_write_inactive_fail_fast`,
+  `async_rwlock_unlock_write_not_owner_fail_fast`); the grandfathered
+  E12-F expiry-ladder asserts are preserved verbatim (moved, not edited).
+- Test-only surface (DIV-16): deferred read/write/try/unlock/cancel
+  admission entries in `scheduler_fe2_test_seam.cpp` (out-of-line; the seam
+  header forward-declares `AsyncRwLock`/`RwWaitCtx` to avoid the installed
+  circular include) plus the `fe3_stackless_rwlock_slice_test` target.
+
+### Gate 1 — State machine delta
+
+- Write ladder: `register -> [timed: LOCAL publish] -> precedence`
+  (head-prefix inline claim commits `writer_active = true; writer_owner =
+  actor` / already-due expire / terminal recheck) `-> authorized`. The
+  REGISTRATION-ADMISSION-DRIFT note lives ONCE at the read ladder; both
+  ladders claim through the ONE `rwlock_claim_node_woken_locked` primitive
+  (resolve/unlink/retire/accounting sequence shared with
+  `grant_from_head_locked`).
+- Ownership law location: the inline claim and `unlock_write_core_locked`
+  are the ONLY two sites that write `writer_owner`; grant-from-head is the
+  only site that writes it for a PARKED winner. All three commit the
+  winner's/caller's ACTOR, so "same ActorIdentity + different ResumeTarget"
+  still owns and releases (proved by a dedicated slice case).
+- Cancel/expiry: unchanged winner law (head reconcile after unlink); the
+  captured-free tails publish through `publish_wait_winner_locked`.
+
+### Gate 2 — Resource model delta
+
+No new resource. Reader batching, waiting counts, and timer retirement are
+unchanged (ladder body = moved code). The deferred transit list stays
+bounded by CONCURRENT suspended deferred waiters (FE-2 Gate 2).
+
+### Gate 3 — Wake model delta
+
+Identical shape to the FE-3 Queue addendum Gate 3: the deferred arm lands
+inside the resolver-excluded admission CS (L7); grants resolve under
+G + W with publication under G after W release (reader batch collected
+under W, published after); discharge resumes with NO lock held (L9). No
+new polling, no lost-wake window.
+
+### Gate 4 — Evidence (FE-3 RwLock slice)
+
+```text
+BASE: feat/frontend-semantic-reuse @ FE-3 Queue slice (PR #243 Draft)
+Commands (actual results):
+  xmake f -m debug --toolchain=clang -y
+  xmake build sluice_core / sluice_async / -g test     -> OK
+  xmake test -v                                        -> 196/196 PASS
+    (incl. fe3_stackless_rwlock_slice_test: 7 cases — deferred writer
+     owns+releases on ActorId alone; same actor + different resume
+     target; deferred writer granted by FIBER unlock_write; writer
+     fairness (parked reader must not bypass parked writer); reader
+     prefix batch from one reconcile; cancel of a parked deferred
+     writer (loser-exactly-once, terminal cancel is a loser); timed
+     expiry via the pump with timer retirement)
+  xmake f -m tsan --toolchain=clang -y; build; xmake test
+                                                       -> 196/196 PASS
+    (race classes: rwlock admission vs grant-from-head, unlock vs
+     batch grant, cancel vs resolve, expiry vs resolve, deferred
+     discharge with no lock held)
+  python3 scripts/gates/mechanical-facts.py            -> OK
+  python3 scripts/check-doc-links.py                   -> PASS
+  python3 scripts/verify-architecture-docs.py          -> OK
+  python3 scripts/gates/assert-hygiene.py              -> OK (moved
+      assert strings kept verbatim; new enforcement is named
+      fail-fasts, not assert-family)
+  git diff --check                                     -> clean
+Observed one-off (NOT this slice's class): during the first TSan suite
+  run, select_event_registry_test
+  (test_phase_seam_reset_serialization — a 4-thread causal phase-seam
+  test outside the rwlock change surface) hung once and was killed;
+  it then passed standalone, passed 20/20 in a repeated-run loop under
+  TSan, and the full suite passed 196/196 on re-run. Debug passes the
+  same test repeatedly. Classified: rare test-infrastructure flake in
+  the phase-seam causal test, no rwlock-slice attribution; tracked for
+  observation, not repaired in this slice (§19 no-batching).
+Sanitizers: TSan run above; ASan+UBSan + Release deferred to the FE-4
+  full-campaign gate (no new lifetime surface: ownership identity is
+  plain data; the frame-embedded ctx/record is the FE-1a property).
+Benchmark: NO performance claim (structural authority sharing; §37).
+```

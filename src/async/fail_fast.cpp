@@ -60,6 +60,17 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// FE-3 RwLock writer-ownership contract violations (see fail_fast.hpp).
+[[noreturn]] void async_rwlock_recursive_write_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void async_rwlock_unlock_write_inactive_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void async_rwlock_unlock_write_not_owner_fail_fast() noexcept {
+    std::terminate();
+}
+
 // FE deferred-publication teardown gate (see fail_fast.hpp).
 [[noreturn]] void scheduler_deferred_publication_stranded_fail_fast() noexcept {
     std::terminate();

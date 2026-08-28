@@ -120,6 +120,50 @@ private:
     Kind kind_ = Kind::none;
 };
 
+// ActorIdentity (FE-1b A1): the stable logical identity of an execution
+// ACTOR for ownership / recursive-detection comparisons (e.g. the RwLock
+// writer-owner model). Deliberately DISTINCT from WaitResume (the
+// ResumeTarget delivery token above): a Fiber frontend's actor and resume
+// token coincide (the same Fiber*), while a stackless frontend's actor is
+// its own stable token and its resume target is the delivery record —
+// ownership semantics must not depend on WHERE control resumes (FE-3 slice
+// contract: "same ActorIdentity + different ResumeTarget" and "ownership
+// semantics do not depend on ResumeTarget identity"). Never a
+// coroutine_handle: identity is an opaque stable token, not a resumable
+// capability. The Core compares ActorIds; it never dereferences the token.
+class ActorId {
+public:
+    enum class Kind : std::uint8_t { none = 0, fiber = 1, frontend = 2 };
+
+    constexpr ActorId() noexcept = default;
+
+    static constexpr ActorId none() noexcept { return ActorId{}; }
+    static constexpr ActorId fiber(Fiber* f) noexcept {
+        return ActorId{f, Kind::fiber};
+    }
+    // A frontend-owned stable token (e.g. a frame-embedded actor record).
+    static constexpr ActorId frontend(void* token) noexcept {
+        return ActorId{token, Kind::frontend};
+    }
+
+    constexpr Kind kind() const noexcept { return kind_; }
+    constexpr void* token() const noexcept { return ptr_; }
+
+    friend constexpr bool operator==(const ActorId& a,
+                                     const ActorId& b) noexcept {
+        return a.ptr_ == b.ptr_ && a.kind_ == b.kind_;
+    }
+    friend constexpr bool operator!=(const ActorId& a,
+                                     const ActorId& b) noexcept {
+        return !(a == b);
+    }
+
+private:
+    constexpr ActorId(void* p, Kind k) noexcept : ptr_(p), kind_(k) {}
+    void* ptr_ = nullptr;
+    Kind kind_ = Kind::none;
+};
+
 // The terminal outcome of a wait resolution (§2/§6). Repository-native names
 // for the allowed terminal outcomes: woken/cancelled, plus `expired` (a
 // monotonic deadline elapsed) as a THIRD terminal outcome that is

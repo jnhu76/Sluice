@@ -35,11 +35,11 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_event.cpp` | 407 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
 | `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 685 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_rwlock.cpp` | 692 | rwlock waits, ActorId writer ownership |
 | `src/async/scheduler_condition.cpp` | 267 | condition waits |
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
-| `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler_fe2_test_seam.cpp` | 210 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
+| `src/async/scheduler_fe2_test_seam.cpp` | 333 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
 | `src/async/scheduler.cpp` | 2206 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
@@ -235,6 +235,33 @@ deferred Queue admission entries (lifecycle gate + `active_port_calls_`
 interval + control transition reproduced) and the 12-case slice test
 live in the internal-testing seam TU / test target; no public API
 change.)
+`scheduler_rwlock.cpp` 685 → 692, `scheduler_internal.hpp` 71 → 89,
+`scheduler_fe2_test_seam.cpp` 210 → 333, `scheduler.hpp` +
+`wait_node.hpp` (declarations only), and the new test target
+`fe3_stackless_rwlock_slice_test` (2026-08-28, FE-3 RwLock vertical
+slice — the read/write admission closures are extracted into the ONE
+shared `rwlock_read_admit_locked` / `rwlock_write_admit_locked` ladders
+and the try-write/unlock-write ownership laws into the shared
+`rwlock_try_write_admission_locked` / `rwlock_unlock_write_core_locked`
+cores, consumed by BOTH the fiber entries and the stackless deferred
+seam entries. Writer ownership identity moves from `Fiber*` to the new
+`ActorId` token (FE-1b corrective A1 — ActorIdentity is deliberately
+distinct from the `WaitResume` delivery token; "same actor + different
+resume target" still owns/releases): the inline claim and the
+grant-from-head commit `writer_owner = winner's ActorId`; the
+recursive-write / unlock-not-owner checks become named Release-active
+fail-fasts (`async_rwlock_recursive_write_fail_fast`,
+`async_rwlock_unlock_write_inactive_fail_fast`,
+`async_rwlock_unlock_write_not_owner_fail_fast`) replacing the
+grandfathered debug asserts at reachable caller-contract sites.
+`RwWaitCtx` moves to the non-installed `scheduler_internal.hpp` and
+gains the `actor` field (no `WaitNode` layout change). Test-only
+deferred rwlock admission entries reproduce the fiber CS shapes over
+the shared ladders; the 7-case slice test covers deferred
+own/release, actor-vs-resume-target independence, fiber-unlock grant,
+writer fairness, reader batch, cancel, and deadline expiry. The
+additive public `ActorId` name is documented in
+`docs/reference/api.md`.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

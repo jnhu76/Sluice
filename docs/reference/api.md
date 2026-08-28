@@ -500,6 +500,34 @@ public:
 };
 ```
 
+### `sluice::async::ActorId`
+
+The frontend-neutral ActorIdentity token for ownership semantics (FE-3
+RwLock slice; FE-1b frozen contract corrective A1). Plain data: no
+behavior, no ownership, no allocation. `AsyncRwLock` writer ownership
+compares THIS value — deliberately distinct from `WaitResume`, which is
+the delivery (ResumeTarget) token: the same actor remains the owner
+across different resume targets, and ownership comparisons never inspect
+how a winner will be resumed. The Core never dereferences the payload;
+the kind tag exists so a fiber pointer and a frontend token can never
+compare equal by address coincidence.
+
+```cpp
+class ActorId {
+public:
+    enum class Kind : std::uint8_t { none = 0, fiber = 1, frontend = 2 };
+
+    static constexpr ActorId none() noexcept;              // no owner
+    static constexpr ActorId fiber(Fiber* f) noexcept;     // stackful frontend
+    static constexpr ActorId frontend(void* token) noexcept; // frontend-owned
+                                                             // stable token
+    constexpr Kind kind() const noexcept;
+    constexpr void* token() const noexcept;
+    friend constexpr bool operator==(const ActorId&, const ActorId&) noexcept;
+    friend constexpr bool operator!=(const ActorId&, const ActorId&) noexcept;
+};
+```
+
 ### `sluice::async::WaitNode`
 
 One canonical wait lifecycle. Caller-owned, address-stable, non-copyable, non-movable.
@@ -808,6 +836,9 @@ Non-copyable, non-movable. Multiple concurrent readers OR one exclusive writer.
 
 Writer-fair policy: new readers cannot barge past queued writers. When the queue
 head is a reader, the maximal consecutive reader prefix is granted as one batch.
+Writer ownership is recorded as an `ActorId` (FE-3): recursive
+`try_write_lock` and `unlock_write` compare the caller's ACTOR identity, never
+the `WaitResume` delivery token — see `ActorId` above.
 
 ```cpp
 class AsyncRwLock {

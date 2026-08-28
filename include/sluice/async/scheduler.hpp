@@ -565,7 +565,8 @@ public:
     // cancel_wait is unchanged (Event-specific membership gate only).
     bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
-    // ---- FE shared Event admission ladder (FE-1c; ONE textual ladder) ----
+    // ---- FE shared wait admission ladder disposition (FE-1c; ONE textual
+    // ladder per primitive direction) ----
     // The register → SET-precedence → already-due → terminal-recheck ladder
     // shared by EVERY Event wait frontend. Caller holds G + q.mtx(). Binds the
     // frontend's ResumeTarget token, evaluates Event precedence exactly once,
@@ -575,18 +576,18 @@ public:
     // frontend record arm) and then performs its physical suspension outside
     // the lock. No duplicated admission law exists: this is the only textual
     // ladder (FE-1c verdict).
-    enum class EventAdmitDisposition : std::uint8_t {
+    enum class WaitAdmitDisposition : std::uint8_t {
         rejected,         // registration contract violation; epoch untouched
         resolved_inline,  // epoch terminal at admission (woken/expired);
                           // consume the outcome inline — publish nothing (L6)
         authorized,       // suspension authorized; commit eligibility in THIS CS
     };
-    EventAdmitDisposition event_wait_admit_locked(WaitQueue& q,
-                                                  const std::atomic<bool>& set_flag,
-                                                  WaitNode& node,
-                                                  const WaitResume& resume,
-                                                  bool timed,
-                                                  deadline_t deadline)
+    WaitAdmitDisposition event_wait_admit_locked(WaitQueue& q,
+                                                 const std::atomic<bool>& set_flag,
+                                                 WaitNode& node,
+                                                 const WaitResume& resume,
+                                                 bool timed,
+                                                 deadline_t deadline)
         SLUICE_REQUIRES(global_mtx_, q.mtx());
 
 
@@ -1064,38 +1065,49 @@ public:
                                 bool& writer_active, WaitNode& node,
                                 deadline_t deadline, void* expire_ctx);
 
+    // Writer ownership identity (FE-3): `writer_owner` carries the holder's
+    // ActorId (FE-1b A1) — NOT the ResumeTarget delivery token. The Fiber
+    // frontend binds ActorId::fiber(current Fiber) (coincident with the
+    // historical Fiber* identity); a stackless frontend binds its own stable
+    // actor token. Recursive detection, non-owner unlock, and the grant-time
+    // ownership commit all compare/commit ACTOR identity, so ownership
+    // semantics do not depend on where control resumes.
+
     // Attempt inline write acquisition. Under G + W: if active_readers == 0
     // AND writer_active == false AND waiters empty AND current Fiber exists
-    // AND current Fiber != writer_owner: commit ownership; return true.
-    // Recursive call by current owner returns false. External thread: forbidden.
+    // AND writer_owner != ActorId::fiber(me): commit ownership; return true.
+    // Recursive call by the current owner actor returns false. External
+    // thread: forbidden.
     [[nodiscard]] bool rwlock_try_write_lock(WaitQueue& waiters,
                                              std::size_t& active_readers,
                                              bool& writer_active,
-                                             Fiber*& writer_owner);
+                                             ActorId& writer_owner);
 
     // Blocking write admission. Register node at FIFO tail, recheck via
     // grant_from_head_locked. If granted inline: return (node Woken). Otherwise
-    // suspend. Internally manages RwWaitCtx{mode=write} on node.user().
+    // suspend. Internally manages RwWaitCtx{mode=write, actor} on node.user().
     void rwlock_write_lock(WaitQueue& waiters, std::size_t& active_readers,
-                           bool& writer_active, Fiber*& writer_owner,
+                           bool& writer_active, ActorId& writer_owner,
                            WaitNode& node);
 
     // Deadline-aware write admission (resource-first precedence).
     // `expire_ctx` is stored on the TimerRegistration for pump routing.
     void rwlock_write_lock_until(WaitQueue& waiters, std::size_t& active_readers,
-                                 bool& writer_active, Fiber*& writer_owner,
+                                 bool& writer_active, ActorId& writer_owner,
                                  WaitNode& node, deadline_t deadline,
                                  void* expire_ctx);
 
     // Release one read share. Under G + W: active_readers--; if reaches 0,
     // reconcile queue head via grant_from_head_locked. Allows external thread.
     void rwlock_unlock_read(WaitQueue& waiters, std::size_t& active_readers,
-                            bool& writer_active, Fiber*& writer_owner);
+                            bool& writer_active, ActorId& writer_owner);
 
-    // Release exclusive write ownership. Under G + W: clear writer state,
-    // reconcile queue head. Non-owner unlock is a debug assert.
+    // Release exclusive write ownership. Under G + W: verify writer_active
+    // AND writer_owner == ActorId::fiber(current Fiber) (named fail-fast in
+    // Debug AND Release on violation — the historical debug-only asserts),
+    // clear writer state, reconcile queue head.
     void rwlock_unlock_write(WaitQueue& waiters, std::size_t& active_readers,
-                             bool& writer_active, Fiber*& writer_owner);
+                             bool& writer_active, ActorId& writer_owner);
 
     // Queue-identity-safe RwLock cancellation with head reconcile. Returns true
     // ONLY if node is Registered AND linked in `waiters` AND CANCEL wins. After
@@ -1103,7 +1115,7 @@ public:
     // OS thread.
     [[nodiscard]] bool rwlock_cancel(WaitQueue& waiters,
                                      std::size_t& active_readers,
-                                     bool& writer_active, Fiber*& writer_owner,
+                                     bool& writer_active, ActorId& writer_owner,
                                      WaitNode& node);
 
     // RwLock-specific deadline expiry with head reconcile. Called ONLY by
@@ -1113,8 +1125,62 @@ public:
     // A losing race (concurrent resolver won) returns false; the caller must
     // NOT increment its won counter in that case.
     bool rwlock_expire_wait(WaitQueue& waiters, std::size_t& active_readers,
-                            bool& writer_active, Fiber*& writer_owner,
+                            bool& writer_active, ActorId& writer_owner,
                             WaitNode& node)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // ---- FE shared RwLock admission ladders (FE-3; ONE textual ladder per
+    // mode) ----
+    // The prepare(timed) -> register -> counters -> ordinary-deadline publish
+    // -> head-prefix claim -> already-due -> terminal-recheck sequence shared
+    // by EVERY RwLock read (resp. write) frontend. Caller holds G + W. The
+    // ENTRY commits its own PublicationEligibility in the SAME critical
+    // section when `authorized` and performs physical suspension outside the
+    // lock. `actor` is the caller's ActorIdentity (stashed by the entry into
+    // its frame RwWaitCtx for the grant-time ownership commit; read mode
+    // ignores it — v1 has no per-reader identity).
+    WaitAdmitDisposition rwlock_read_admit_locked(WaitQueue& waiters,
+                                                  std::size_t& active_readers,
+                                                  bool& writer_active,
+                                                  WaitNode& node,
+                                                  const WaitResume& resume,
+                                                  bool timed,
+                                                  deadline_t deadline,
+                                                  void* expire_ctx)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx());
+    WaitAdmitDisposition rwlock_write_admit_locked(WaitQueue& waiters,
+                                                   std::size_t& active_readers,
+                                                   bool& writer_active,
+                                                   ActorId& writer_owner,
+                                                   WaitNode& node,
+                                                   const WaitResume& resume,
+                                                   const ActorId& actor,
+                                                   bool timed,
+                                                   deadline_t deadline,
+                                                   void* expire_ctx)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx());
+
+    // Shared inline try-write admission core (ONE textual decision: recursive
+    // owner-actor detection + free-resource commit). Caller holds G + W.
+    // Both the Fiber entry (actor = current Fiber) and the test-only deferred
+    // seam (actor = frontend token) consume it — no duplicated ownership law.
+    bool rwlock_try_write_admission_locked(WaitQueue& waiters,
+                                           std::size_t& active_readers,
+                                           bool& writer_active,
+                                           ActorId& writer_owner,
+                                           const ActorId& caller)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx());
+
+    // Shared checked write-release core (ONE textual ownership check +
+    // release + head reconcile). Caller holds G. The ownership checks are
+    // named fail-fasts (Debug AND Release): not write-active, or caller
+    // actor != writer_owner. Used by the Fiber entry and the test-only
+    // deferred seam.
+    void rwlock_unlock_write_core_locked(WaitQueue& waiters,
+                                         std::size_t& active_readers,
+                                         bool& writer_active,
+                                         ActorId& writer_owner,
+                                         const ActorId& caller)
         SLUICE_REQUIRES(global_mtx_);
 
 
@@ -1459,7 +1525,7 @@ private:
     void rwlock_grant_from_head_locked(WaitQueue& waiters,
                                        std::size_t& active_readers,
                                        bool& writer_active,
-                                       Fiber*& writer_owner)
+                                       ActorId& writer_owner)
         SLUICE_REQUIRES(global_mtx_);
 
     // No-publication head-claim primitive. Caller MUST hold G + W. Resolves the node Woken (the

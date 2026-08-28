@@ -217,7 +217,7 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     return true;
 }
 
-Scheduler::EventAdmitDisposition Scheduler::event_wait_admit_locked(
+Scheduler::WaitAdmitDisposition Scheduler::event_wait_admit_locked(
     WaitQueue& q, const std::atomic<bool>& set_flag, WaitNode& node,
     const WaitResume& resume, bool timed, deadline_t deadline) {
     // FE shared Event admission ladder — the ONE textual
@@ -239,7 +239,7 @@ Scheduler::EventAdmitDisposition Scheduler::event_wait_admit_locked(
         // prepared block was never published; erase it so no orphan pool
         // block outlives this epoch.
         if (timed) erase_popped_registration_locked(reg);
-        return EventAdmitDisposition::rejected;
+        return WaitAdmitDisposition::rejected;
     }
     ++waiting_waitq_count_;
     if (timed) {
@@ -278,7 +278,7 @@ Scheduler::EventAdmitDisposition Scheduler::event_wait_admit_locked(
             }
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
         }
-        return EventAdmitDisposition::resolved_inline;
+        return WaitAdmitDisposition::resolved_inline;
     }
     if (timed) {
         // Already-due admission closure: if the deadline is ALREADY due (and
@@ -292,7 +292,7 @@ Scheduler::EventAdmitDisposition Scheduler::event_wait_admit_locked(
                 (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return EventAdmitDisposition::resolved_inline;
+                return WaitAdmitDisposition::resolved_inline;
             }
             // If expire_locked lost, a concurrent resolver won; fall through
             // to the terminal recheck.
@@ -308,13 +308,13 @@ Scheduler::EventAdmitDisposition Scheduler::event_wait_admit_locked(
             (void)retire_ordinary_deadline_locked(*reg);  // ACTIVE->RETIRED
             recompute_earliest_deadline_locked();
         }
-        return EventAdmitDisposition::resolved_inline;
+        return WaitAdmitDisposition::resolved_inline;
     }
     // Suspension authorized. The epoch is Registered, un-resolved, and every
     // resolver is excluded until THIS critical section releases; the entry
     // commits its PublicationEligibility now (contract L7) and suspends
     // physically afterwards (L10).
-    return EventAdmitDisposition::authorized;
+    return WaitAdmitDisposition::authorized;
 }
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
@@ -348,7 +348,7 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
         if (event_wait_admit_locked(q, set_flag, node, WaitResume::fiber(me),
                                     /*timed=*/false,
                                     deadline_t{}) !=
-            EventAdmitDisposition::authorized) {
+            WaitAdmitDisposition::authorized) {
             return;  // rejected or resolved inline: do NOT suspend
         }
         // Fiber-kind PublicationEligibility commit (FE-1b L7): same critical
@@ -388,7 +388,7 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
         LockGuard qlk(q.mtx());
         if (event_wait_admit_locked(q, set_flag, node, WaitResume::fiber(me),
                                     /*timed=*/true, deadline) !=
-            EventAdmitDisposition::authorized) {
+            WaitAdmitDisposition::authorized) {
             return;  // rejected or resolved inline: do NOT suspend
         }
         // Fiber-kind PublicationEligibility commit (FE-1b L7).

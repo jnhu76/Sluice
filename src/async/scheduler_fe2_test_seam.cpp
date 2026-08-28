@@ -23,10 +23,12 @@
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
+#include <sluice/async/async_rwlock.hpp>
 #include <sluice/async/event.hpp>
 #include <sluice/async/detail/select_port.hpp>
 
 #include "queue_detail.hpp"
+#include "scheduler_internal.hpp"  // RwWaitCtx (shared, non-installed)
 #include "scheduler_test_access.hpp"
 
 namespace sluice::async {
@@ -39,7 +41,7 @@ bool Scheduler::AsyncTestAccess::event_wait_deferred_for_test(
                                   WaitResume::deferred(&record),
                                   /*timed=*/false,
                                   deadline_t{}) !=
-        Scheduler::EventAdmitDisposition::authorized) {
+        Scheduler::WaitAdmitDisposition::authorized) {
         return false;
     }
     record.arm();
@@ -54,7 +56,7 @@ bool Scheduler::AsyncTestAccess::event_wait_deferred_deadline_for_test(
     if (s.event_wait_admit_locked(event.waiters_, event.set_, node,
                                   WaitResume::deferred(&record),
                                   /*timed=*/true, deadline) !=
-        Scheduler::EventAdmitDisposition::authorized) {
+        Scheduler::WaitAdmitDisposition::authorized) {
         return false;
     }
     record.arm();
@@ -203,6 +205,127 @@ bool Scheduler::AsyncTestAccess::queue_pop_core_(
     if (grant) (void)s.queue_grant_producer_locked(port);
     if (port.active_port_calls_ > 0) --port.active_port_calls_;
     return disp == QueueAdmitDisposition::authorized;
+}
+
+// ---- FE-3 RwLock deferred-frontend seams ----
+//
+// Each entry stashes the frame-embedded RwWaitCtx (mode + ACTOR identity) on
+// the WaitNode, runs the SHARED production ladder for a WaitResume::deferred
+// token under G + W, and commits the PublicationEligibility (record.arm)
+// INSIDE that resolver-excluded critical section on `authorized` (FE-1b L7).
+// The write entries pass the caller's ActorId to the ladder so the inline
+// claim (and, via ctx->actor, the grant claim) commits ACTOR ownership —
+// never the ResumeTarget.
+
+bool Scheduler::AsyncTestAccess::rwlock_read_deferred_for_test(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+    RwWaitCtx& ctx, FeDeferredRecord& record) {
+    return rwlock_read_core_(s, lock, node, actor_token, ctx, record,
+                             /*timed=*/false, deadline_t{});
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_read_deferred_until_for_test(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+    RwWaitCtx& ctx, FeDeferredRecord& record, deadline_t deadline) {
+    return rwlock_read_core_(s, lock, node, actor_token, ctx, record,
+                             /*timed=*/true, deadline);
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_write_deferred_for_test(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+    RwWaitCtx& ctx, FeDeferredRecord& record) {
+    return rwlock_write_core_(s, lock, node, actor_token, ctx, record,
+                              /*timed=*/false, deadline_t{});
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_write_deferred_until_for_test(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+    RwWaitCtx& ctx, FeDeferredRecord& record, deadline_t deadline) {
+    return rwlock_write_core_(s, lock, node, actor_token, ctx, record,
+                              /*timed=*/true, deadline);
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_read_core_(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+    RwWaitCtx& ctx, FeDeferredRecord& record, bool timed, deadline_t deadline) {
+    ctx = RwWaitCtx{RwWaitCtx::Mode::read, ActorId::frontend(actor_token)};
+    node.set_user(&ctx);
+    LockGuard glk(s.global_mtx_);
+    LockGuard qlk(lock.waiters_.mtx());
+    if (s.rwlock_read_admit_locked(lock.waiters_, lock.active_readers_,
+                                   lock.writer_active_, node,
+                                   WaitResume::deferred(&record), timed,
+                                   deadline, &lock.expire_ctx_) !=
+        Scheduler::WaitAdmitDisposition::authorized) {
+        return false;
+    }
+    record.arm();
+    return true;
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_write_core_(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+    RwWaitCtx& ctx, FeDeferredRecord& record, bool timed, deadline_t deadline) {
+    const ActorId actor = ActorId::frontend(actor_token);
+    ctx = RwWaitCtx{RwWaitCtx::Mode::write, actor};
+    node.set_user(&ctx);
+    LockGuard glk(s.global_mtx_);
+    LockGuard qlk(lock.waiters_.mtx());
+    if (s.rwlock_write_admit_locked(lock.waiters_, lock.active_readers_,
+                                    lock.writer_active_, lock.writer_owner_,
+                                    node, WaitResume::deferred(&record), actor,
+                                    timed, deadline, &lock.expire_ctx_) !=
+        Scheduler::WaitAdmitDisposition::authorized) {
+        return false;
+    }
+    record.arm();
+    return true;
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_try_write_deferred_for_test(
+    Scheduler& s, AsyncRwLock& lock, void* actor_token) {
+    LockGuard glk(s.global_mtx_);
+    LockGuard qlk(lock.waiters_.mtx());
+    return s.rwlock_try_write_admission_locked(
+        lock.waiters_, lock.active_readers_, lock.writer_active_,
+        lock.writer_owner_, ActorId::frontend(actor_token));
+}
+
+void Scheduler::AsyncTestAccess::rwlock_unlock_write_deferred_for_test(
+    Scheduler& s, AsyncRwLock& lock, void* actor_token) {
+    LockGuard lk(s.global_mtx_);
+    s.rwlock_unlock_write_core_locked(lock.waiters_, lock.active_readers_,
+                                      lock.writer_active_, lock.writer_owner_,
+                                      ActorId::frontend(actor_token));
+}
+
+void Scheduler::AsyncTestAccess::rwlock_unlock_read_for_test(
+    Scheduler& s, AsyncRwLock& lock) {
+    s.rwlock_unlock_read(lock.waiters_, lock.active_readers_,
+                         lock.writer_active_, lock.writer_owner_);
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_try_read_for_test(
+    Scheduler& s, AsyncRwLock& lock) {
+    return s.rwlock_try_read_lock(lock.waiters_, lock.active_readers_,
+                                  lock.writer_active_);
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_cancel_deferred_for_test(
+    Scheduler& s, AsyncRwLock& lock, WaitNode& node) {
+    return s.rwlock_cancel(lock.waiters_, lock.active_readers_,
+                           lock.writer_active_, lock.writer_owner_, node);
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_writer_active_for_test(
+    const AsyncRwLock& lock) {
+    return lock.writer_active_;
+}
+
+bool Scheduler::AsyncTestAccess::rwlock_owned_by_for_test(
+    const AsyncRwLock& lock, const void* actor_token) {
+    return lock.writer_owner_ ==
+           ActorId::frontend(const_cast<void*>(actor_token));
 }
 
 }  // namespace sluice::async

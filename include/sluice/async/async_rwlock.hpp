@@ -23,9 +23,14 @@
 // Scheduler::global_mtx_ -> AsyncRwLock waiters_.mtx() (the existing coordination
 // domain; same lock order as E10/E11/E12-A/B/C/D/E).
 //
-// Identity model: writer ownership is bound to Fiber* identity (writer_owner_),
-// matching AsyncMutex's owner_ model. Reader ownership is a global count (v1
-// does NOT track per-fiber reader identity).
+// Identity model (FE-3 ActorIdentity seam, FE-1b A1): writer ownership is
+// bound to an ActorId — the stable ACTOR identity of the holding execution —
+// NOT to the winner's ResumeTarget delivery token. For the Fiber frontend
+// the actor is ActorId::fiber(current Fiber) (coincident with the old
+// Fiber* identity; recursive/non-owner detection is unchanged). A stackless
+// frontend binds its own stable actor token, so ownership semantics do not
+// depend on where control resumes. Reader ownership is a global count (v1
+// does NOT track per-reader actor identity).
 //
 // SEALED PUBLIC AUTHORITY (mirrors E12-A/B/C/D/E). The AsyncRwLock's private
 // WaitQueue is NOT publicly reachable. The ONLY resource-grant authorities are
@@ -71,7 +76,7 @@ public:
         : scheduler_(scheduler),
           active_readers_(0),
           writer_active_(false),
-          writer_owner_(nullptr),
+          writer_owner_(ActorId::none()),
           expire_ctx_{&waiters_, &active_readers_, &writer_active_,
                       &writer_owner_} {}
 
@@ -132,10 +137,10 @@ public:
     // Attempt to acquire exclusive write ownership WITHOUT suspending.
     // Under G + W:
     //   if active_readers_ == 0 AND writer_active_ == false AND waiters_ empty
-    //      AND current Fiber exists AND current Fiber != writer_owner_:
-    //       writer_active_ = true; writer_owner_ = current Fiber; return true
+    //      AND current Fiber exists AND writer_owner_ != ActorId::fiber(me):
+    //       writer_active_ = true; writer_owner_ = ActorId::fiber(me); return true
     //   otherwise: return false (no mutation)
-    // Recursive call by current owner returns false (no assertion).
+    // Recursive call by the current owner ACTOR returns false (no assertion).
     // External OS thread: FORBIDDEN (no current Fiber to record as owner).
     [[nodiscard]] bool try_write_lock() {
         return scheduler_.rwlock_try_write_lock(waiters_, active_readers_,
@@ -167,8 +172,9 @@ public:
     }
 
     // Release exclusive write ownership. Requires: writer_active_ == true AND
-    // writer_owner_ == current Fiber. Non-owner unlock is a caller contract
-    // violation (debug assert).
+    // writer_owner_ == ActorId::fiber(current Fiber). A non-owner (or
+    // inactive) unlock is a caller contract violation: named fail-fast active
+    // in Debug AND Release (ADR-async-primitive-lifetime-failfast pattern).
     void unlock_write() noexcept {
         scheduler_.rwlock_unlock_write(waiters_, active_readers_,
                                        writer_active_, writer_owner_);
@@ -200,13 +206,13 @@ private:
         WaitQueue* waiters;
         std::size_t* active_readers;
         bool* writer_active;
-        Fiber** writer_owner;
+        ActorId* writer_owner;
     };
 
     Scheduler& scheduler_;
     std::size_t active_readers_;
     bool writer_active_;
-    Fiber* writer_owner_;
+    ActorId writer_owner_;
     WaitQueue waiters_;
     ExpireCtx expire_ctx_;  // stable context for timer hook
 };

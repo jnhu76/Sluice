@@ -27,6 +27,16 @@
 #include "queue_detail.hpp"  // QueueWaitCtx (FE-3 queue deferred seams; non-installed)
 
 namespace sluice::async {
+// Defined in async_rwlock.hpp / the non-installed scheduler_internal.hpp;
+// the rwlock deferred-seam signatures only need the names (all bodies are
+// out-of-line in scheduler_fe2_test_seam.cpp — a complete-type include here
+// would be circular: async_rwlock.hpp includes scheduler.hpp, whose guarded
+// bottom include pulls this header).
+class AsyncRwLock;
+struct RwWaitCtx;
+}
+
+namespace sluice::async {
 
 // Internal-testing access surface. Reached only via the non-installed
 // test-support controller; not part of the public API.
@@ -821,6 +831,74 @@ struct Scheduler::AsyncTestAccess {
                                 detail::QueueItemLease& out, WaitNode& node,
                                 FeDeferredRecord& record, bool timed,
                                 deadline_t deadline);
+
+    // ---- FE-3 RwLock deferred-frontend seams (FE campaign slice; same
+    // test-only scope as the Event/Queue seams above) ----
+    //
+    // The deferred RWLOCK admission entries run the SHARED production
+    // read/write ladders (rwlock_read_admit_locked / rwlock_write_admit_locked)
+    // for a WaitResume::deferred token and commit the PublicationEligibility
+    // (record.arm) INSIDE the resolver-excluded admission CS on `authorized`.
+    // `actor_token` is the caller's stable ACTOR identity (ActorId::frontend;
+    // FE-1b A1 — never the resume target, never a coroutine_handle): the
+    // writer-grant commits it into writer_owner, and the checked release core
+    // compares it. `ctx` is the COROUTINE-FRAME-EMBEDDED RwWaitCtx (the grant
+    // reads ctx->actor after suspension). Defined out-of-line in
+    // scheduler_fe2_test_seam.cpp (needs the complete AsyncRwLock + the shared
+    // RwWaitCtx internal).
+    static bool rwlock_read_deferred_for_test(Scheduler& s, AsyncRwLock& lock,
+                                              WaitNode& node, void* actor_token,
+                                              RwWaitCtx& ctx,
+                                              FeDeferredRecord& record);
+    static bool rwlock_read_deferred_until_for_test(
+        Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+        RwWaitCtx& ctx, FeDeferredRecord& record, deadline_t deadline);
+    static bool rwlock_write_deferred_for_test(Scheduler& s, AsyncRwLock& lock,
+                                               WaitNode& node,
+                                               void* actor_token,
+                                               RwWaitCtx& ctx,
+                                               FeDeferredRecord& record);
+    static bool rwlock_write_deferred_until_for_test(
+        Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+        RwWaitCtx& ctx, FeDeferredRecord& record, deadline_t deadline);
+    // Inline try-write through the SHARED admission core (the ONE textual
+    // ownership decision) with a frontend actor: recursive detection by the
+    // same actor returns false; a DIFFERENT actor is refused while
+    // writer_active — both independently of any ResumeTarget.
+    static bool rwlock_try_write_deferred_for_test(Scheduler& s,
+                                                   AsyncRwLock& lock,
+                                                   void* actor_token);
+    // Release through the SHARED checked core with a frontend actor: a
+    // non-owner (or inactive) release fail-fasts on the ACTOR comparison.
+    static void rwlock_unlock_write_deferred_for_test(Scheduler& s,
+                                                      AsyncRwLock& lock,
+                                                      void* actor_token);
+    // CS cores shared by the blocking/timed rwlock entries above (defined in
+    // scheduler_fe2_test_seam.cpp).
+    static bool rwlock_read_core_(Scheduler& s, AsyncRwLock& lock,
+                                  WaitNode& node, void* actor_token,
+                                  RwWaitCtx& ctx, FeDeferredRecord& record,
+                                  bool timed, deadline_t deadline);
+    static bool rwlock_write_core_(Scheduler& s, AsyncRwLock& lock,
+                                   WaitNode& node, void* actor_token,
+                                   RwWaitCtx& ctx, FeDeferredRecord& record,
+                                   bool timed, deadline_t deadline);
+    // Read-share release through the production seam (no actor: v1 reader
+    // ownership is a count). Head reconcile included.
+    static void rwlock_unlock_read_for_test(Scheduler& s, AsyncRwLock& lock);
+    // Try-read through the production seam (no barging observation; a true
+    // result commits one read share).
+    static bool rwlock_try_read_for_test(Scheduler& s, AsyncRwLock& lock);
+    // RwLock cancel through the SAME production seam the fiber frontend uses
+    // (rwlock_cancel; head reconcile included).
+    static bool rwlock_cancel_deferred_for_test(Scheduler& s,
+                                                AsyncRwLock& lock,
+                                                WaitNode& node);
+    // Writer-state observations for the ownership tests (authority-private
+    // fields; the Fiber-free frontend has no other way to observe them).
+    static bool rwlock_writer_active_for_test(const AsyncRwLock& lock);
+    static bool rwlock_owned_by_for_test(const AsyncRwLock& lock,
+                                         const void* actor_token);
 };  // struct Scheduler::AsyncTestAccess
 
 }  // namespace sluice::async

@@ -27,6 +27,24 @@ namespace sluice::async {
 // implementation TU.
 inline thread_local WorkerState* g_worker = nullptr;
 
+// Per-operation context stored on WaitNode::user_ for RwLock waiters.
+// Stack-local for the Fiber frontend (alive for the entire suspension epoch
+// because the fiber stack persists); COROUTINE-FRAME-EMBEDDED for the
+// deferred frontend (FE-1a lifetime rule — the grant winner's ownership
+// commit reads ctx->actor after suspension, so the address must be stable).
+// Shared here (non-installed) so scheduler_rwlock.cpp and the internal-testing
+// seam TU read ONE type (no duplicated wait-node context).
+//
+// `actor` is the waiter's ActorIdentity (FE-1b A1): committed into
+// writer_owner by the writer-grant authority. The Fiber entry binds
+// ActorId::fiber(me); a frontend binds its own stable token. Read mode
+// ignores it (v1 has no per-reader identity).
+struct RwWaitCtx {
+    enum class Mode : std::uint8_t { read, write };
+    Mode mode;
+    ActorId actor;
+};
+
 // ---- SchedulerWakeHandle::Control (full definition; forward-declared in
 // the header so the shared_ptr member is pimpl-friendly) ----
 struct SchedulerWakeHandle::Control {
