@@ -60,6 +60,11 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// FE deferred-publication teardown gate (see fail_fast.hpp).
+[[noreturn]] void scheduler_deferred_publication_stranded_fail_fast() noexcept {
+    std::terminate();
+}
+
 // Evented admission fail-fast. Unsupported target.
 [[noreturn]] void evented_admission_fail_fast() noexcept {
     std::terminate();

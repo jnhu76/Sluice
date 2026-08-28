@@ -207,29 +207,123 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // Covers wrong-Event (same/different Scheduler), detached, and (because a
     // terminal winner is already unlinked) Woken/Expired/Cancelled nodes.
     if (!cancel_primitive_wait_locked(q, node)) return false;
-    Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // The cancel CAS won: the node is terminal+unlinked and the count is closed.
     // Return true unconditionally — the winner identity is the resolve_ CAS, not
-    // the runnable publication (mirrors wake_wait_one_locked). make_runnable is
-    // the exactly-once publication guard; a false return (fiber already runnable
-    // from a concurrent path, or null fiber) does NOT undo the cancel. Returning
-    // false here would mislead the caller into retrying or thinking the wait is
-    // still active (the fiber continues running and returns from wait).
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        publish_waiting_fiber_runnable_locked(f);
-    }
+    // the runnable publication (mirrors wake_wait_one_locked). The publication
+    // edge switches on the winner's ResumeTarget kind (fiber route / deferred
+    // obligation / none); its result does NOT undo the cancel.
+    publish_wait_winner_locked(node);
     return true;
+}
+
+Scheduler::EventAdmitDisposition Scheduler::event_wait_admit_locked(
+    WaitQueue& q, const std::atomic<bool>& set_flag, WaitNode& node,
+    const WaitResume& resume, bool timed, deadline_t deadline) {
+    // FE shared Event admission ladder — the ONE textual
+    // register → SET-precedence → already-due → terminal-recheck sequence
+    // (FE-1c verdict: no duplicated admission law). Caller holds
+    // global_mtx_ + q.mtx(). Returns the disposition; the ENTRY commits its
+    // own PublicationEligibility in THIS critical section when `authorized`
+    // (fiber: commit_suspend_locked; deferred: frontend record arm) and
+    // performs physical suspension outside the lock. Inline resolutions
+    // (resolved_inline) publish nothing — the caller never suspended (L6).
+    TimerRegistration* reg = nullptr;
+    if (timed) {
+        // R2-ALLOC: allocations before any admission state mutation (a
+        // bad_alloc here leaves the node Detached and all counters intact).
+        reg = prepare_ordinary_deadline_locked(&node, &q, deadline);
+    }
+    if (!q.register_wait_locked(node, resume)) {
+        // Node already registered or terminal: contract violation. The
+        // prepared block was never published; erase it so no orphan pool
+        // block outlives this epoch.
+        if (timed) erase_popped_registration_locked(reg);
+        return EventAdmitDisposition::rejected;
+    }
+    ++waiting_waitq_count_;
+    if (timed) {
+        // Publish the timer registration control block for this wait epoch
+        // (pool publication + ACTIVE count + heap push + park-cache refresh).
+        publish_ordinary_deadline_locked(reg);
+    }
+    // E12-A-EVENT-CORRECTIVE-1 (Corrective D): deterministic admission-before-
+    // final-set-check phase seam. When armed, pause the admission thread
+    // AFTER registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE
+    // the final SET check. This lets a causal test mechanically prove:
+    //   - admission-first: set()'s drain cannot complete until admission
+    //     releases serialization (a competing setter blocks on global_mtx_).
+    //   - set-first: if the setter stores SET first, admission (paused here
+    //     or about to run) cannot complete its drain until the setter
+    //     releases; admission then observes SET and resolves Woken inline.
+    // The seam blocks on its OWN mtx/cv (the production locks remain held),
+    // which is precisely the guarantee under test.
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::event_admission_before_final_check);
+#endif
+    // Admission closure — Event SET takes precedence: if the resource is
+    // ready, the wait resolves Woken inline through the canonical resolve_
+    // authority (wake_node_locked, unlink in the same CS). The deadline is
+    // moot (the resource is ready). No publication: the caller never
+    // suspended (L6).
+    if (set_flag.load(std::memory_order::acquire)) {
+        if (q.wake_node_locked(node)) {
+            if (timed) {
+                // ACTIVE->RETIRED via the ordinary deadline authority (no
+                // Event on_resolve hook exists; count decrement inside).
+                (void)retire_ordinary_deadline_locked(*reg);
+                recompute_earliest_deadline_locked();
+            }
+            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        }
+        return EventAdmitDisposition::resolved_inline;
+    }
+    if (timed) {
+        // Already-due admission closure: if the deadline is ALREADY due (and
+        // the resource is NOT set), resolve Expired inline. The caller must
+        // NOT suspend and wait for a future timer scan merely because
+        // registration happened after the deadline was due.
+        if (clock_now_unlocked() >= deadline) {
+            if (q.expire_locked(node)) {
+                // ACTIVE->CONSUMED via the ordinary deadline authority; the
+                // already-due inline path keeps its immediate cache recompute.
+                (void)consume_ordinary_deadline_locked(*reg);
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                return EventAdmitDisposition::resolved_inline;
+            }
+            // If expire_locked lost, a concurrent resolver won; fall through
+            // to the terminal recheck.
+        }
+    }
+    // Defense-in-depth: if the node was resolved concurrently (it cannot be,
+    // since register_wait_locked just moved it to Registered under both
+    // locks and every resolver takes global_mtx_), undo and do not suspend.
+    if (node.is_terminal()) {
+        q.unlink_locked(node);
+        --waiting_waitq_count_;
+        if (timed) {
+            (void)retire_ordinary_deadline_locked(*reg);  // ACTIVE->RETIRED
+            recompute_earliest_deadline_locked();
+        }
+        return EventAdmitDisposition::resolved_inline;
+    }
+    // Suspension authorized. The epoch is Registered, un-resolved, and every
+    // resolver is excluded until THIS critical section releases; the entry
+    // commits its PublicationEligibility now (contract L7) and suspends
+    // physically afterwards (L10).
+    return EventAdmitDisposition::authorized;
 }
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
                                  WaitNode& node) {
-    // Event wait admission. The lost-set closure: register + check SET +
-    // (if SET) resolve Woken inline, OR commit suspension — all under one
-    // global_mtx_ + q.mtx() critical section (the same domain set()/reset() use).
-    // Only context_switch is outside the lock. This mirrors await_wait_deadline's
-    // already-due path: always register, then check the admission condition.
+    // Event wait admission — stackful (Fiber) frontend entry over the shared
+    // ladder. The lost-set closure: register + check SET + (if SET) resolve
+    // Woken inline, OR commit suspension — all under one global_mtx_ + q.mtx()
+    // critical section (the same domain set()/reset() use). Only
+    // context_switch is outside the lock.
     //
     // If set_ is observed at admission (after registration), the wait resolves
     // Woken inline via wake_node_locked (resolve_(Woken) + unlink), the timer
@@ -251,47 +345,14 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
-        if (!q.register_wait_locked(node, me)) {
-            // Node already registered or terminal: contract violation.
-            return;
+        if (event_wait_admit_locked(q, set_flag, node, WaitResume::fiber(me),
+                                    /*timed=*/false,
+                                    deadline_t{}) !=
+            EventAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: do NOT suspend
         }
-        ++waiting_waitq_count_;
-        // E12-A-EVENT-CORRECTIVE-1 (Corrective D): deterministic admission-before-
-        // final-set-check phase seam. When armed, pause the admission thread
-        // AFTER registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE
-        // the final SET check. This lets a causal test mechanically prove:
-        //   - admission-first: set()'s drain cannot complete until admission
-        //     releases serialization (a competing setter blocks on global_mtx_).
-        //   - set-first: if the setter stores SET first, admission (paused here
-        //     or about to run) cannot complete its drain until the setter
-        //     releases; admission then observes SET and resolves Woken inline.
-        // The seam blocks on its OWN mtx/cv (the production locks remain held),
-        // which is precisely the guarantee under test.
-        // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(*this,
-            sluice_async_test::PhaseTag::event_admission_before_final_check);
-#endif
-        // Admission closure: if SET is observed after registration, resolve this
-        // wait as Woken inline through the canonical resolve_ authority. The node
-        // is unlinked in the same critical section (wake_node_locked). No suspend.
-        if (set_flag.load(std::memory_order::acquire)) {
-            if (q.wake_node_locked(node)) {
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // The current Fiber is RUNNING (it has not called
-                // make_waiting()) and continues inline; no runnable
-                // publication is needed.
-            }
-            return;  // node.outcome() == woken; do NOT suspend
-        }
-        // Defense-in-depth: if the node was resolved concurrently (it cannot be,
-        // since register_wait_locked just moved it to Registered under both
-        // locks and every resolver takes global_mtx_), undo and do not suspend.
-        if (node.is_terminal()) {
-            q.unlink_locked(node);
-            --waiting_waitq_count_;
-            return;
-        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7): same critical
+        // section, after authorization.
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -307,79 +368,30 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
 void Scheduler::await_event_wait_deadline(WaitQueue& q,
                                           const std::atomic<bool>& set_flag,
                                           WaitNode& node, deadline_t deadline) {
-    // Deadline-aware Event wait. Composes await_event_wait's admission
-    // closure with TimerRegistration. The wait resolves when EXACTLY ONE
-    // cause wins the resolve_ CAS:
+    // Deadline-aware Event wait — stackful (Fiber) frontend entry over the
+    // shared ladder. The wait resolves when EXACTLY ONE cause wins the
+    // resolve_ CAS:
     //   - set() broadcast (event_set_broadcast -> wake_wait_one_locked) -> Woken
     //   - cancel_wait(q, node)                                   -> Cancelled
     //   - the deadline elapsing (pump_deadlines_locked)           -> Expired
     //
-    // Admission precedence (under global_mtx_ + q.mtx()):
-    //   1. If set_ is observed SET after registration: resolve Woken inline
-    //      (no suspend). Event readiness wins over a due deadline at admission
-    //      (the resource is ready; the deadline is moot).
-    //   2. Else if the deadline is already due: resolve Expired inline (the
-    //      already-due closure).
-    //   3. Else: commit suspension.
-    // A non-timer winner retires the registration in the same CS (the
+    // Deadline precedence: at admission, Event SET readiness is checked
+    // BEFORE the already-due deadline predicate. Therefore Event SET +
+    // already-due deadline -> Woken inline (the resource is ready; the
+    // deadline is moot). This is the accepted production behavior. A
+    // non-timer winner retires the registration in the same CS (the
     // timer-lifetime closure).
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    TimerRegistration* reg = nullptr;
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
-        // R2-ALLOC: allocations before any admission state mutation (a
-        // bad_alloc here leaves the node Detached and all counters intact).
-        reg = prepare_ordinary_deadline_locked(&node, &q, deadline);
-        if (!q.register_wait_locked(node, me)) {
-            erase_popped_registration_locked(reg);  // never published
-            return;  // registration contract violation
+        if (event_wait_admit_locked(q, set_flag, node, WaitResume::fiber(me),
+                                    /*timed=*/true, deadline) !=
+            EventAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: do NOT suspend
         }
-        ++waiting_waitq_count_;
-        // Publish the timer registration control block for this wait epoch
-        // (pool publication + ACTIVE count + heap push + park-cache refresh).
-        publish_ordinary_deadline_locked(reg);
-
-        // Admission closure — Event SET takes precedence: if the resource is
-        // ready, the wait resolves Woken inline (the deadline is moot).
-        if (set_flag.load(std::memory_order::acquire)) {
-            if (q.wake_node_locked(node)) {
-                // ACTIVE->RETIRED via the ordinary deadline authority (no
-                // Event on_resolve hook exists; count decrement inside).
-                (void)retire_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication.
-            }
-            return;  // node.outcome() == woken; do NOT suspend
-        }
-
-        // Already-due admission closure: if the deadline is ALREADY due (and the
-        // resource is NOT set), resolve Expired inline. The fiber must NOT
-        // suspend and wait for a future timer scan merely because registration
-        // happened after the deadline was due.
-        if (clock_now_unlocked() >= deadline) {
-            if (q.expire_locked(node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority; the
-                // already-due inline path keeps its immediate cache recompute.
-                (void)consume_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication.
-                return;  // resolved at admission; do NOT suspend
-            }
-            // If expire_locked lost, a concurrent resolver won; fall through.
-        }
-
-        // Defense-in-depth: if the node was resolved concurrently, undo + return.
-        if (node.is_terminal()) {
-            q.unlink_locked(node);
-            --waiting_waitq_count_;
-            (void)retire_ordinary_deadline_locked(*reg);  // ACTIVE->RETIRED
-            recompute_earliest_deadline_locked();
-            return;
-        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

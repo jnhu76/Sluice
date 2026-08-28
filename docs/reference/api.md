@@ -476,6 +476,30 @@ NOT use `WaitOutcome`; it returns the typed `QueuePushResult<T>` /
 `QueuePopResult<T>` whose `status()` carries `committed`/`item`/`closed`/
 `expired`/`would_block`.
 
+### `sluice::async::WaitResume`
+
+The frontend-neutral ResumeTarget token bound to a wait epoch at
+registration (FE-1b frozen contract; FE-1c type strategy). Plain data: no
+behavior, no ownership, no allocation. The winner publication tail switches
+on `kind()` to select the delivery mechanism; the Core never dereferences
+the payload for a semantic decision. NOT an actor identity: Mutex/RwLock
+ownership semantics never compare this value.
+
+```cpp
+class WaitResume {
+public:
+    enum class Kind : std::uint8_t { none = 0, fiber = 1, deferred = 2 };
+
+    static constexpr WaitResume none() noexcept;          // publishes nothing
+    static constexpr WaitResume fiber(Fiber* f) noexcept; // stackful frontend
+    static constexpr WaitResume deferred(void* record) noexcept; // experimental
+                                                                 // stackless frontend
+    constexpr Kind kind() const noexcept;
+    constexpr Fiber* as_fiber() const noexcept;    // pre: kind() == fiber
+    constexpr void*  as_deferred() const noexcept; // pre: kind() == deferred
+};
+```
+
 ### `sluice::async::WaitNode`
 
 One canonical wait lifecycle. Caller-owned, address-stable, non-copyable, non-movable.
@@ -491,7 +515,8 @@ they do not by themselves prevent terminal-node reuse.
 class WaitNode {
 public:
     WaitNode() noexcept = default;
-    explicit WaitNode(Fiber* fiber) noexcept;
+    explicit WaitNode(WaitResume resume) noexcept;  // ResumeTarget token
+    explicit WaitNode(Fiber* fiber) noexcept;       // == WaitResume::fiber(fiber)
     ~WaitNode();  // assert(!is_registered())
 
     void* user() const noexcept;
@@ -508,7 +533,8 @@ public:
     bool was_woken() const noexcept;
     bool was_cancelled() const noexcept;
     bool was_expired() const noexcept;  // E11
-    Fiber* fiber() const noexcept;
+    const WaitResume& resume() const noexcept;  // bound at registration
+    Fiber* fiber() const noexcept;  // stackful view of the token
 
     // Public in the installed header for intrusive implementation access;
     // not a supported user-mutation surface. WaitQueue owns these under mtx_.
@@ -517,6 +543,11 @@ public:
     WaitQueue* home_{nullptr};
 };
 ```
+
+Layout note (FE-2, accepted and documented in
+`docs/architecture/fe2-frontend-seam-compliance-gate.md` Gate 2): the token
+widened the node from a bare `Fiber*` to `WaitResume` (pointer + kind tag),
++8 bytes per live wait node. No other layout change.
 
 ### `sluice::async::WaitQueue` and `sluice::async::TimerRegistration`
 

@@ -65,7 +65,7 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         {
             LockGuard qlk(port.waiters_[0].mtx());
-            if (!port.waiters_[0].register_wait_locked(node, me)) {
+            if (!port.waiters_[0].register_wait_locked(node, WaitResume::fiber(me))) {
                 return;  // registration contract violation
             }
             ++port.active_wait_associations_;
@@ -144,7 +144,7 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         {
             LockGuard qlk(port.waiters_[1].mtx());
-            if (!port.waiters_[1].register_wait_locked(node, me)) {
+            if (!port.waiters_[1].register_wait_locked(node, WaitResume::fiber(me))) {
                 return;  // registration contract violation
             }
             ++port.active_wait_associations_;
@@ -225,7 +225,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
             // Detached, the port counters untouched, and no timer orphan.
             reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[0],
                                                    deadline);
-            if (!port.waiters_[0].register_wait_locked(node, me)) {
+            if (!port.waiters_[0].register_wait_locked(node, WaitResume::fiber(me))) {
                 erase_popped_registration_locked(reg);  // never published
                 return;  // registration contract violation
             }
@@ -336,7 +336,7 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
             // admission state mutation — see queue_push_admit_until.
             reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[1],
                                                    deadline);
-            if (!port.waiters_[1].register_wait_locked(node, me)) {
+            if (!port.waiters_[1].register_wait_locked(node, WaitResume::fiber(me))) {
                 erase_popped_registration_locked(reg);  // never published
                 return;  // registration contract violation
             }

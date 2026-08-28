@@ -30,16 +30,17 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1309 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 609 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 395 | SchedulerEvent wake targets |
+| `src/async/scheduler_park_wake.cpp` | 1318 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_timer.cpp` | 631 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 407 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
 | `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
 | `src/async/scheduler_rwlock.cpp` | 685 | rwlock waits, ForgedRwWaitCtx |
 | `src/async/scheduler_condition.cpp` | 267 | condition waits |
 | `src/async/scheduler_queue.cpp` | 591 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2146 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler_fe2_test_seam.cpp` | 69 | non-installed: FE-2 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler.cpp` | 2206 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -192,6 +193,24 @@ deadlines). The R2-ALLOC contract is unchanged — every allocation still
 precedes `register_wait_locked`, the publish tail stays noexcept, and
 `reserve()` keeps the strong guarantee on throw. Growth curve
 regression-pinned by `od_alloc_a3_heap_growth_stays_geometric`.)
+`scheduler_park_wake.cpp` 1309 → 1318, `scheduler_timer.cpp` 609 → 631,
+`scheduler_event.cpp` 395 → 407, `scheduler.cpp` 2146 → 2206, and the new
+internal-testing-only `scheduler_fe2_test_seam.cpp` (69 lines; empty TU
+under the production `sluice_async` target) (2026-08-29, FE-2 — the
+frontend-neutral ResumeTarget seam: `WaitNode::fiber_` widens to the
+`WaitResume {void*, Kind}` token (DIV-15, +8 bytes per live node), all
+winner publication tails route through the ONE
+`publish_wait_winner_locked` kind switch (fiber branch bit-identical;
+`none` preserves the old null-token semantics), the Event untimed/timed
+admission closures are extracted into the ONE shared
+`Scheduler::event_wait_admit_locked` ladder consumed by both frontends
+(no duplicated admission law), and the deferred-publication transit list
+(`defer_publication_locked` / `take_deferred_publications`, teardown-gated)
+implements the FE-1b L9 commit/discharge delivery split. The stackless
+frontend itself (tiny coroutine task + awaiter + FeDeferredRecord) is
+test-only (DIV-16) via `AsyncTestAccess` seams; no public API change beyond
+the additive `WaitResume`/`resume()` widening documented in
+`docs/reference/api.md`.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

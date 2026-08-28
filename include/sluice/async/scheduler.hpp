@@ -565,6 +565,30 @@ public:
     // cancel_wait is unchanged (Event-specific membership gate only).
     bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
+    // ---- FE shared Event admission ladder (FE-1c; ONE textual ladder) ----
+    // The register → SET-precedence → already-due → terminal-recheck ladder
+    // shared by EVERY Event wait frontend. Caller holds G + q.mtx(). Binds the
+    // frontend's ResumeTarget token, evaluates Event precedence exactly once,
+    // and returns the disposition; the ENTRY (fiber wrapper / deferred
+    // awaiter) commits its own PublicationEligibility in the SAME critical
+    // section when `authorized` (fiber: commit_suspend_locked; deferred:
+    // frontend record arm) and then performs its physical suspension outside
+    // the lock. No duplicated admission law exists: this is the only textual
+    // ladder (FE-1c verdict).
+    enum class EventAdmitDisposition : std::uint8_t {
+        rejected,         // registration contract violation; epoch untouched
+        resolved_inline,  // epoch terminal at admission (woken/expired);
+                          // consume the outcome inline — publish nothing (L6)
+        authorized,       // suspension authorized; commit eligibility in THIS CS
+    };
+    EventAdmitDisposition event_wait_admit_locked(WaitQueue& q,
+                                                  const std::atomic<bool>& set_flag,
+                                                  WaitNode& node,
+                                                  const WaitResume& resume,
+                                                  bool timed,
+                                                  deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_, q.mtx());
+
 
     // ---- Semaphore admission / release ----
     // The Semaphore counting-permit substrate. A Semaphore owns an
@@ -1307,6 +1331,41 @@ private:
     // winner resolution, timer retirement, and wait accounting (caller's
     // responsibility).
     bool publish_waiting_fiber_runnable_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
+
+    // ---- FE frontend-neutral publication edge (FE-1b contract L8/L9) ----
+    // Canonical winner publication: switches on the winning node's ResumeTarget
+    // kind. `fiber` -> publish_waiting_fiber_runnable_locked (unchanged stackful
+    // path); `deferred` -> defer_publication_locked (commit the delivery
+    // obligation under G; the frontend discharges it outside authoritative
+    // locks); `none` -> publish nothing (pure-protocol epochs, exactly like the
+    // null Fiber* previously guarded at each tail). The terminal winner remains
+    // the node's resolve_ CAS; this seam only delivers an already-decided
+    // terminal. Caller MUST hold global_mtx_.
+    void publish_wait_winner_locked(WaitNode& won) SLUICE_REQUIRES(global_mtx_);
+
+    // Commit a deferred delivery obligation: move the frontend record address
+    // onto the transient transit list under G. NO user continuation executes
+    // here (FE-1b L9); discharge happens in take_deferred_publications chunks
+    // with no lock held. Allocation: possible vector growth bounded by
+    // CONCURRENT suspended deferred-kind waiters (transient, drained per
+    // discharge — the same resource class as worker inboxes; grows with
+    // outstanding, never with historical submissions).
+    void defer_publication_locked(void* delivery_record)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Drain chunk: move out up to `cap` pending delivery records (FIFO) under
+    // G. The caller discharges each record (frontend resume) with NO
+    // Scheduler/primitive lock held, then may call again; an empty take means
+    // the list is drained. ~Scheduler requires this list EMPTY (a stranded
+    // entry is a published-but-unconsumed winner: fail-fast teardown
+    // precondition, mirrors the QueuePort granted_not_resumed_ gate).
+    std::size_t take_deferred_publications(void** out, std::size_t cap);
+
+    // Transient deferred-publication transit (FE-2; compliance gate
+    // docs/architecture/fe2-frontend-seam-compliance-gate.md Gate 1/2).
+    // Entries are raw frontend delivery records (experimental stackless
+    // frontend). Producer: winner tails under G. Consumer: frontend drain.
+    std::vector<void*> deferred_publications_ SLUICE_GUARDED_BY(global_mtx_){};
 
     // Frontend-neutral primitive cancellation terminal closure. The caller
     // MUST hold global_mtx_ + this exact WaitQueue's mtx(). Membership is

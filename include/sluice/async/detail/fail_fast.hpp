@@ -353,6 +353,16 @@ bool evented_admission_check() noexcept;
 [[noreturn]] void async_condition_lifetime_fail_fast() noexcept;
 [[noreturn]] void wait_queue_lifetime_fail_fast() noexcept;
 
+// FE deferred-publication teardown gate (fe2-frontend-seam compliance gate,
+// Gate 1/2). Destroying the Scheduler while its deferred-publication transit
+// list is non-empty means a winner committed a delivery obligation for a
+// suspended continuation that was never discharged — a published-but-
+// unconsumed winner (the same teardown class the QueuePort
+// granted_not_resumed_ gate enforces). Silent destruction would strand the
+// suspended continuation; a destructor has no Result channel. Fail-fast in
+// BOTH Debug and Release; same contract as the other entries.
+[[noreturn]] void scheduler_deferred_publication_stranded_fail_fast() noexcept;
+
 // UringAsyncBackend non-quiescent destruction. The backend's
 // destructor is called while accepted work remains (an enqueued local dispatch
 // entry, a live operation cookie / ring-owned request, a backend-ready unreaped

@@ -169,21 +169,21 @@ private:
     // ---- Registration (single-wait) ----
 
     // Register `node` (Detached -> Registered) and link it at the FIFO tail.
-    // `fiber` is recorded on the node as the scheduler-facing handle (opaque to
-    // WaitNode; the Scheduler uses it to route the resumed fiber). Returns false
-    // if `node` is already registered or terminal (C8). _locked variant: caller
-    // holds mtx_.
+    // `resume` is bound on the node as the frontend-neutral ResumeTarget
+    // (FE-1b L2/L11: opaque data; the winner publication tail switches on its
+    // kind). Returns false if `node` is already registered or terminal (C8).
+    // _locked variant: caller holds mtx_.
     //
     // PRIVATE: a Scheduler-integrated registration goes
     // through Scheduler::await_wait, which calls this under global_mtx_ + mtx_,
-    // records waiting_waitq_count_, captures ws->current as the Fiber handle,
+    // records waiting_waitq_count_, captures ws->current as the Fiber ResumeTarget,
     // and performs the waiting transition. An external TU cannot express
-    // register_wait(node, arbitrary_fiber): that would inject an arbitrary
-    // Fiber* into a queue the Scheduler later trusts at resolution time, outside
-    // Scheduler accounting. Scheduler is the only friend; there is no public
-    // wrapper and no test hook.
-    bool register_wait_locked(WaitNode& node, Fiber* fiber = nullptr) SLUICE_REQUIRES(mtx_) {
-        if (!node.register_(this, fiber)) return false;  // already registered/terminal (C8)
+    // register_wait(node, arbitrary_token): that would inject an arbitrary
+    // continuation token into a queue the Scheduler later trusts at resolution
+    // time, outside Scheduler accounting. Scheduler is the only friend; there
+    // is no public wrapper and no test hook.
+    bool register_wait_locked(WaitNode& node, const WaitResume& resume = WaitResume::none()) SLUICE_REQUIRES(mtx_) {
+        if (!node.register_(this, resume)) return false;  // already registered/terminal (C8)
         // FIFO tail-link.
         node.next_ = nullptr;
         node.prev_ = tail_;

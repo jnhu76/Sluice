@@ -84,7 +84,7 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
-        if (!waiters.register_wait_locked(node, me)) {
+        if (!waiters.register_wait_locked(node, WaitResume::fiber(me))) {
             // Node already registered or terminal: contract violation.
             return;
         }
@@ -171,7 +171,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
         // R2-ALLOC: allocations before any admission state mutation (a
         // bad_alloc here leaves the node Detached and all counters intact).
         reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
-        if (!waiters.register_wait_locked(node, me)) {
+        if (!waiters.register_wait_locked(node, WaitResume::fiber(me))) {
             erase_popped_registration_locked(reg);  // never published
             return;  // registration contract violation
         }

@@ -108,7 +108,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         // pool node) BEFORE any state mutation, so a bad_alloc escaping here
         // leaves the node Detached and every counter unchanged.
         reg = prepare_ordinary_deadline_locked(&node, &q, deadline);
-        if (!q.register_wait_locked(node, me)) {
+        if (!q.register_wait_locked(node, WaitResume::fiber(me))) {
             // Node already registered or terminal: contract violation. The
             // prepared block was never published (no count/heap/cache);
             // erase it so no orphan pool block outlives this epoch.
@@ -183,13 +183,24 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
     LockGuard lk(global_mtx_);
     LockGuard qlk(q.mtx());
     if (!q.expire_locked(node)) return false;  // already terminal (loser)
-    Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        if (publish_waiting_fiber_runnable_locked(f)) {
-            return true;
+    // Route to the Fiber's recorded owner (NOT g_worker). Publication edge
+    // switches on the ResumeTarget kind: a fiber returns the exactly-once
+    // publication result; a deferred winner's delivery obligation is
+    // committed (published) — the epoch is delivered.
+    const WaitResume& r = node.resume();
+    if (r.kind() == WaitResume::Kind::fiber) {
+        Fiber* f = r.as_fiber();
+        if (f != nullptr) {
+            if (publish_waiting_fiber_runnable_locked(f)) {
+                return true;
+            }
         }
+        return false;
+    }
+    if (r.kind() == WaitResume::Kind::deferred) {
+        defer_publication_locked(r.as_deferred());
+        return true;
     }
     return false;
 }
@@ -288,7 +299,6 @@ std::size_t Scheduler::pump_deadlines_locked() {
             // CAS is the publication guard.
             LockGuard qlk(q->mtx());
             if (q->expire_locked(*n)) {
-                Fiber* f = n->fiber();
                 // Queue-bound registration: the
                 // pump performs the per-port `--active_wait_associations_`
                 // (via owner_ctx) and `--active_queue_timers_` (via the
@@ -304,10 +314,21 @@ std::size_t Scheduler::pump_deadlines_locked() {
                     top->fire_on_resolve_locked(/*timer_won=*/true);
                 }
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Route to the Fiber's recorded owner (NOT g_worker).
-                if (f != nullptr && f->make_runnable()) {
-                    WorkerState* owner = owner_for_fiber_locked(f);
-                    route_runnable_locked(f, owner);
+                // Publication edge switches on the ResumeTarget kind (fiber
+                // route keeps the make_runnable exactly-once guard; deferred
+                // commits the delivery obligation — the epoch resolved, count
+                // it; none publishes nothing, matching the old null-fiber
+                // guard).
+                const WaitResume& r = n->resume();
+                if (r.kind() == WaitResume::Kind::fiber) {
+                    Fiber* f = r.as_fiber();
+                    if (f != nullptr && f->make_runnable()) {
+                        WorkerState* owner = owner_for_fiber_locked(f);
+                        route_runnable_locked(f, owner);
+                        ++won;
+                    }
+                } else if (r.kind() == WaitResume::Kind::deferred) {
+                    defer_publication_locked(r.as_deferred());
                     ++won;
                 }
             }
@@ -548,7 +569,8 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     if (clock_now_unlocked() >= deadline) return nullptr;  // already due: skip
     if (q != nullptr) {
         LockGuard qlk(q->mtx());
-        if (!q->register_wait_locked(*node, nullptr)) return nullptr;  // not Detached
+        if (!q->register_wait_locked(*node, WaitResume::none()))
+            return nullptr;  // not Detached
     }
     ++waiting_waitq_count_;  // mirror admission accounting (pump decrements on win)
     // Arm through the ordinary deadline authority. The raw-pointer form

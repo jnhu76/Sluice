@@ -55,7 +55,7 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
         // a DIFFERENT queue from the Mutex queue (InvNoDualQueueMembership).
         {
             LockGuard qlk(cond_waiters.mtx());
-            if (!cond_waiters.register_wait_locked(cond_node, me)) {
+            if (!cond_waiters.register_wait_locked(cond_node, WaitResume::fiber(me))) {
                 // Registration contract violation (node already
                 // registered/terminal). Do NOT release the Mutex; the caller
                 // retains ownership. Return the node's (terminal) outcome.
@@ -143,7 +143,7 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
             // unreleased, and every counter intact).
             reg = prepare_ordinary_deadline_locked(&cond_node, &cond_waiters,
                                                    deadline);
-            if (!cond_waiters.register_wait_locked(cond_node, me)) {
+            if (!cond_waiters.register_wait_locked(cond_node, WaitResume::fiber(me))) {
                 erase_popped_registration_locked(reg);  // never published
                 // Registration contract violation: do NOT release the Mutex.
                 released_mutex = false;

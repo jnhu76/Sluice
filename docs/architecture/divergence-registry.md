@@ -284,6 +284,38 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 
 ---
 
+## DIV-15: FE-2 WaitNode Resume-Target Token Widening (+8 bytes)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-15 |
+| Status | Accepted |
+| Introduced by | FE campaign (FE-2; compliance gate `docs/architecture/fe2-frontend-seam-compliance-gate.md`) |
+| Governing ADR | FE-1b frozen contract (`docs/history/reviews/FE-1B-FRONTEND-NEUTRAL-CONTRACT-FREEZE.md`, untracked design authority) |
+| Reason | The stackless second frontend cannot pass a continuation through the SAME registration/winner/publication authorities while the epoch token is typed `Fiber*` (FE-1a F1). `WaitResume {void*, Kind}` is the minimal earned representation (FE-1c strategy A). |
+| Benefit | One semantic Core serves both frontends; no duplicated admission/terminal/deadline/cancel authority. |
+| Cost | +8 bytes per live WaitNode (token field widened from bare `Fiber*` to pointer + kind tag); one kind compare at winner publication tails. Stackful behavior is bit-identical (fiber branch unchanged; `none` preserves the old null-token semantics). |
+| Current evidence | `include/sluice/async/wait_node.hpp` (WaitResume), `src/async/scheduler.cpp` (`publish_wait_winner_locked` / defer / take), tests/fe2_stackless_event_pov_test.cpp (Clang Debug 194/194). |
+| Revisit trigger | If ActorIdentity separation (FE-3 Mutex/RwLock) lands, re-audit whether the token should carry both roles; if a third frontend emerges, re-rank the type strategy. |
+
+---
+
+## DIV-16: Test-Only Stackless Frontend (No Public Coroutine API)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-16 |
+| Status | Accepted |
+| Introduced by | FE campaign (FE-2) |
+| Governing ADR | FE-1b frozen contract; campaign §44 (public API decision deferred) |
+| Reason | The second frontend exists as proof-of-value: tiny test-local coroutine task + awaiter + `FeDeferredRecord`, reached only through `Scheduler::AsyncTestAccess` seams compiled into `sluice_async_internal_testing` (AGENTS.md §15 C4 mechanism). |
+| Benefit | Proves cross-frontend semantic reuse without spending public-API stability or ABI surface. |
+| Cost | The deferred delivery branch (`publish_wait_winner_locked` deferred kind + transit list) is exercised only by internal-testing builds until a production consumer exists; drain-point placement at public resolver seams is deliberately NOT production-wired yet (FE-3+ scope). |
+| Current evidence | `src/async/scheduler_fe2_test_seam.cpp` (empty TU in production builds), `src/async/scheduler_test_access.hpp`, xmake/tests/async_internal.lua. |
+| Revisit trigger | FE-3 representative slices or any public coroutine-API ADR. |
+
+---
+
 ## Summary
 
 | ID | Status | Area |
@@ -302,3 +334,5 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | DIV-12 | Resolved (Phase E) | Resource bounds |
 | DIV-13 | Accepted | Backend extension point |
 | DIV-14 | Resolved for real syscall backends (ThreadPool + Uring); reference-only exemption remains | prepare() descriptor validation deferred for reference backends |
+| DIV-15 | Accepted | FE-2 WaitNode token widening |
+| DIV-16 | Accepted | FE-2 test-only stackless frontend |
