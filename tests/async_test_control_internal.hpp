@@ -398,6 +398,18 @@ struct SchedulerController {
     std::array<bool, sluice::async::kSelectMaxArms>
         rollback_event_linked_before{};
 
+    // ---- R2-ALLOC: ordinary timed-admission allocation-failure injection ----
+    // One-shot arm: the NEXT prepare_ordinary_deadline_locked call on this
+    // Scheduler throws std::bad_alloc at prepare entry (before either
+    // container is touched), then the flag auto-clears so the very next
+    // admission on the same Scheduler runs the healthy path — the regression
+    // shape is "fail once, then prove zero residue by reusing everything".
+    // Guarded by its own leaf controller mutex (never held while acquiring
+    // any production lock; the guarded hook in prepare runs under
+    // global_mtx_, the same discipline as the phase states).
+    std::mutex ordinary_deadline_alloc_fail_mtx;
+    bool ordinary_deadline_alloc_fail_armed{false};
+
     // ---- #196 E9 trace-conformance recorder ----
     // Fixed-size ring (no allocation on the record path). Guarded by
     // trace_mtx (the controller's own leaf mutex — never taken by, and never
@@ -661,6 +673,29 @@ struct RollbackObservation {
 // The throw itself happens in select_admit (the controller never throws).
 bool rollback_should_inject_after(sluice::async::Scheduler& s,
                                   std::size_t successful) noexcept;
+
+// ---- R2-ALLOC: ordinary timed-admission allocation-failure injection ----
+//
+// The production library MUST NOT expose any injection symbol (same rule as
+// the P7 select seam). prepare_ordinary_deadline_locked (compiled in the
+// variant) queries this one-shot flag at entry, under global_mtx_, and throws
+// std::bad_alloc when armed — simulating the pool-node / heap-growth
+// allocation failing BEFORE any admission state is mutated. The flag, the
+// mutex, and these entry points live ONLY under SLUICE_ASYNC_INTERNAL_TESTING
+// and are absent from production symbols.
+
+// Arm/disarm the one-shot failure (test side). Arming twice without an
+// intervening prepare call keeps it armed (still one shot). No-op without a
+// registered controller.
+void arm_ordinary_deadline_alloc_failure(
+    sluice::async::Scheduler& s) noexcept;
+void disarm_ordinary_deadline_alloc_failure(
+    sluice::async::Scheduler& s) noexcept;
+
+// Guarded production hook (called at prepare entry, under global_mtx_):
+// returns true iff the one-shot flag was armed; consuming it clears the flag.
+bool ordinary_deadline_alloc_should_fail(
+    sluice::async::Scheduler& s) noexcept;
 
 // ---- #196 E9 trace-conformance recorder (controller-owned; see the
 // vocabulary block above SchedulerController). The recording entry points are

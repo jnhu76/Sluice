@@ -329,13 +329,17 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
+        // R2-ALLOC: allocations before any admission state mutation (a
+        // bad_alloc here leaves the node Detached and all counters intact).
+        reg = prepare_ordinary_deadline_locked(&node, &q, deadline);
         if (!q.register_wait_locked(node, me)) {
+            erase_popped_registration_locked(reg);  // never published
             return;  // registration contract violation
         }
         ++waiting_waitq_count_;
-        // Arm the timer registration control block for this wait epoch (pool
-        // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(&node, &q, deadline);
+        // Publish the timer registration control block for this wait epoch
+        // (pool publication + ACTIVE count + heap push + park-cache refresh).
+        publish_ordinary_deadline_locked(reg);
 
         // Admission closure — Event SET takes precedence: if the resource is
         // ready, the wait resolves Woken inline (the deadline is moot).

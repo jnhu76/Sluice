@@ -405,6 +405,37 @@ bool rollback_should_inject_after(sluice::async::Scheduler& s,
     return successful >= boundary;
 }
 
+// ---- R2-ALLOC: ordinary timed-admission allocation-failure injection.
+// Controller-only; the production target has none of it. The guarded hook
+// runs at prepare_ordinary_deadline_locked entry under global_mtx_; this
+// leaf controller mutex is held only for the flag check/clear (the phase-
+// state discipline — never held while acquiring any production lock).
+void arm_ordinary_deadline_alloc_failure(
+    sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->ordinary_deadline_alloc_fail_mtx);
+    c->ordinary_deadline_alloc_fail_armed = true;
+}
+
+void disarm_ordinary_deadline_alloc_failure(
+    sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->ordinary_deadline_alloc_fail_mtx);
+    c->ordinary_deadline_alloc_fail_armed = false;
+}
+
+bool ordinary_deadline_alloc_should_fail(
+    sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return false;
+    std::lock_guard<std::mutex> lk(c->ordinary_deadline_alloc_fail_mtx);
+    if (!c->ordinary_deadline_alloc_fail_armed) return false;
+    c->ordinary_deadline_alloc_fail_armed = false;  // one-shot
+    return true;
+}
+
 void rollback_record_begin(sluice::async::Scheduler& s,
                            std::size_t successful_registrations) noexcept {
     SchedulerController* c = find_controller(s);

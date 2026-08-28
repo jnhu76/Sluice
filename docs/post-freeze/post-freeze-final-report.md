@@ -31,13 +31,13 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | File | Lines | Domain |
 |---|---|---|
 | `src/async/scheduler_park_wake.cpp` | 1309 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 536 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 391 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 310 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 338 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 675 | rwlock waits, ForgedRwWaitCtx |
-| `src/async/scheduler_condition.cpp` | 261 | condition waits |
-| `src/async/scheduler_queue.cpp` | 582 | runnable queue, fiber routing |
+| `src/async/scheduler_timer.cpp` | 596 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 395 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 685 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_condition.cpp` | 267 | condition waits |
+| `src/async/scheduler_queue.cpp` | 591 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
 | `src/async/scheduler.cpp` | 2141 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
@@ -151,6 +151,32 @@ lease semantics, close semantics, and AC-2b local Queue timer arming are
 unchanged; the DST-PV-1 known-drift witness is flipped into the post-fix
 regression. No new allocation, lock, or traversal; one grant call added on
 each of the four inline-commit paths.)
+`scheduler_timer.cpp` 536 → 596, `scheduler_queue.cpp` 582 → 591,
+`scheduler_mutex.cpp` 338 → 342, `scheduler_semaphore.cpp` 310 → 314,
+`scheduler_event.cpp` 391 → 395, `scheduler_condition.cpp` 261 → 267,
+`scheduler_rwlock.cpp` 675 → 685 (2026-08-28, R2 review round 2 P1 —
+allocation-atomic timed admission: the ordinary arming authority is split
+into a MAY-THROW `prepare_ordinary_deadline_locked` (deadline-heap slot
+reserve with checked max_size guard + `timer_pool_` node allocation, the
+select.cpp step-(5) reserve pattern) and a noexcept
+`publish_ordinary_deadline_locked` (hook install + ACTIVE count + heap push
+within the reserved capacity + earliest-deadline cache recompute); every
+ordinary timed admission now performs ALL of its allocations BEFORE
+`register_wait_locked`, so an escaping `bad_alloc` leaves the node Detached
+and every counter untouched. Queue's two timed admits keep their LOCAL
+publish sequence verbatim (AC-2b corrective order preserved: hooks →
+`active_queue_timers_` → ACTIVE count → heap → cache) and share only the
+prepare phase. `arm_ordinary_deadline_locked` remains as the composed form
+for the test-only hook. No public API, ABI, or object-layout change; no new
+lock, lock-order edge, or wake-path change; the admission tail after
+registration is now provably allocation-free. `push_until`'s value-carrying
+lease has no rejection status in the result vocabulary, so its allocation
+failure surfaces through the pre-existing non-empty-lease fail-fast boundary
+(Debug AND Release) — death-pinned by
+`queue_lifecycle_death_push_until_alloc_fail_fast`; the failure-free
+`pop_until`/generic/primitive paths are catchable and regression-pinned by
+`od_alloc_a1_generic_admission_atomic`, `od_alloc_a2_event_admission_atomic`,
+and `queue_alloc_pop_admission_atomic`.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

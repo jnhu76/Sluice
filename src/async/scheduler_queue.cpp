@@ -220,19 +220,25 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         {
             LockGuard qlk(port.waiters_[0].mtx());
+            // R2-ALLOC: allocations (heap slot reserve + pool node) BEFORE any
+            // admission state mutation — a bad_alloc here leaves the node
+            // Detached, the port counters untouched, and no timer orphan.
+            reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[0],
+                                                   deadline);
             if (!port.waiters_[0].register_wait_locked(node, me)) {
+                erase_popped_registration_locked(reg);  // never published
                 return;  // registration contract violation
             }
             ++port.active_wait_associations_;
             ++waiting_waitq_count_;
-            // Intentionally LOCAL arming (AC-2b review corrective): NOT routed
-            // through arm_ordinary_deadline_locked. The historical order bumps
-            // active_queue_timers_ BEFORE the ACTIVE count / heap / cache
+            // Intentionally LOCAL publish (AC-2b review corrective): NOT routed
+            // through publish_ordinary_deadline_locked. The historical order
+            // bumps active_queue_timers_ BEFORE the ACTIVE count / heap / cache
             // publication, and earliest_active_deadline_ is an atomic read by
             // parked workers WITHOUT global_mtx_ — so this interleaving is
-            // externally observable in principle and is preserved verbatim.
-            timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
-            reg = &timer_pool_.back();
+            // externally observable in principle and is preserved verbatim
+            // (only the allocation phase above was split out; the heap push
+            // consumes the capacity reserved by prepare, allocation-free).
             reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
             reg->owner_ctx_ = &port;
             ++port.active_queue_timers_;
@@ -326,17 +332,20 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         LockGuard slk(port.state_mtx_);
         {
             LockGuard qlk(port.waiters_[1].mtx());
+            // R2-ALLOC: allocations (heap slot reserve + pool node) BEFORE any
+            // admission state mutation — see queue_push_admit_until.
+            reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[1],
+                                                   deadline);
             if (!port.waiters_[1].register_wait_locked(node, me)) {
+                erase_popped_registration_locked(reg);  // never published
                 return;  // registration contract violation
             }
             ++port.active_wait_associations_;
             ++waiting_waitq_count_;
-            // Intentionally LOCAL arming (AC-2b review corrective) — see
-            // queue_push_admit_until for why Queue does not route through
-            // arm_ordinary_deadline_locked. The consume/retire transitions below
+            // Intentionally LOCAL publish (AC-2b review corrective) — see
+            // queue_push_admit_until for why Queue does not route through the
+            // shared publish helper. The consume/retire transitions below
             // DO go through the authority (uniform facts).
-            timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
-            reg = &timer_pool_.back();
             reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
             reg->owner_ctx_ = &port;
             ++port.active_queue_timers_;

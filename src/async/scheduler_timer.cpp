@@ -17,6 +17,9 @@
 #include <utility>
 #include <cstdio>
 #include <cstdlib>
+#include <new>
+#include <stdexcept>
+#include <type_traits>
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
 // the non-installed test-control header so the phase call sites below resolve to
@@ -83,14 +86,17 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
     // The admission critical section establishes, atomically w.r.t. every
     // resolver (wake_wait_one / cancel_wait / expire_wait / pump_deadlines all
     // run under global_mtx_):
+    //   0. prepare TimerRegistration storage (R2-ALLOC: heap slot reserve +
+    //      pool node — the admission's ONLY allocations, BEFORE any mutation;
+    //      a throw here leaves the node Detached and every counter unchanged)
     //   1. register node into q               (Detached -> Registered)
     //   2. ++waiting_waitq_count_             (MW-S3 accounting)
-    //   3. create TimerRegistration R_E       (ACTIVE, bound {node,q,deadline})
-    //   4. push R_E into the deadline heap
-    //   5. recheck: if node already terminal -> undo + return (defense-in-depth)
-    //   6. recheck: if deadline already due  -> resolve Expired + return (the
+    //   3. publish R_E                        (ACTIVE, bound {node,q,deadline};
+    //      count + heap push + park-cache refresh — noexcept)
+    //   4. recheck: if deadline already due  -> resolve Expired + return (the
     //      already-due closure)
-    //   7. commit_suspend_locked(ws, me)      (authority + Waiting)
+    //   5. recheck: if node already terminal -> undo + return (defense-in-depth)
+    //   6. commit_suspend_locked(ws, me)      (authority + Waiting)
     // Only context_switch is outside the lock.
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
@@ -98,14 +104,22 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
+        // R2-ALLOC: perform the admission's allocations (heap slot reserve +
+        // pool node) BEFORE any state mutation, so a bad_alloc escaping here
+        // leaves the node Detached and every counter unchanged.
+        reg = prepare_ordinary_deadline_locked(&node, &q, deadline);
         if (!q.register_wait_locked(node, me)) {
-            // Node already registered or terminal: contract violation.
+            // Node already registered or terminal: contract violation. The
+            // prepared block was never published (no count/heap/cache);
+            // erase it so no orphan pool block outlives this epoch.
+            erase_popped_registration_locked(reg);
             return;
         }
         ++waiting_waitq_count_;
-        // Arm the timer registration control block for this wait epoch (pool
-        // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(&node, &q, deadline);
+        // Publish the timer registration control block for this wait epoch
+        // (hook install + ACTIVE count + heap push + park-cache refresh) —
+        // noexcept within the capacity prepared above.
+        publish_ordinary_deadline_locked(reg);
 
         // Already-due admission closure: if the deadline is ALREADY due, resolve
         // Expired
@@ -307,25 +321,71 @@ std::size_t Scheduler::pump_deadlines_locked() {
 }
 
 // ---- Ordinary deadline lifecycle authority (AC-2b) ----
-// Implementations of the three helpers declared in scheduler.hpp. See the
-// header block for the authority boundary: these own ONLY the uniform
-// ordinary-TimerRegistration facts (pool publication + ACTIVE count, exactly-
-// once ACTIVE->terminal with count decrement). Cache-recompute timing and
+// Implementations of the helpers declared in scheduler.hpp. See the header
+// block for the authority boundary: these own ONLY the uniform ordinary
+// TimerRegistration facts (pool publication + ACTIVE count, exactly-once
+// ACTIVE->terminal with count decrement). Cache-recompute timing and
 // on_resolve hook firing stay at the call sites where their ordering is
 // proven per-primitive.
 
-TimerRegistration* Scheduler::arm_ordinary_deadline_locked(WaitNode* node,
-                                                           WaitQueue* q,
-                                                           deadline_t deadline,
-                                                           TimerRegistration::OnResolveFn on_resolve,
-                                                           void* owner_ctx) {
+// R2-ALLOC: publish is noexcept by trivially-copyable heap entries + the
+// prepare-phase capacity reservation. The static_asserts below fail closed
+// if a future DeadlineHeapEntry shape reintroduces a throwing copy/swap into
+// the post-registration admission tail.
+static_assert(std::is_nothrow_copy_constructible_v<detail::DeadlineHeapEntry>,
+              "publish_ordinary_deadline_locked noexcept relies on a "
+              "trivially copyable deadline heap entry");
+static_assert(std::is_nothrow_swappable_v<detail::DeadlineHeapEntry>,
+              "heap sift swaps must stay nothrow under the admission publish");
+
+TimerRegistration* Scheduler::prepare_ordinary_deadline_locked(
+    WaitNode* node, WaitQueue* q, deadline_t deadline) {
+    // MAY THROW (std::length_error from the max_size guard, std::bad_alloc
+    // from either allocation) with the STRONG guarantee: no semantic state is
+    // mutated here (a reserved-but-unused heap capacity is not observable).
+    // Callers invoke this BEFORE register_wait_locked so an escaping
+    // allocation failure leaves the admission fully unmutated — see the
+    // header block for the R2-ALLOC contract.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Test-only synthetic allocation failure (one-shot): simulates the pool
+    // node / heap growth allocation failing at prepare entry, before any
+    // container is touched. Absent in production builds.
+    if (sluice_async_test::ordinary_deadline_alloc_should_fail(*this)) {
+        throw std::bad_alloc();
+    }
+#endif
+    if (deadline_heap_.max_size() - deadline_heap_.size() < 1) {
+        throw std::length_error(
+            "timed admission: deadline heap capacity overflow on reserve");
+    }
+    deadline_heap_.reserve(deadline_heap_.size() + 1);
     timer_pool_.emplace_back(node, q, deadline);
-    TimerRegistration* reg = &timer_pool_.back();
+    return &timer_pool_.back();
+}
+
+void Scheduler::publish_ordinary_deadline_locked(
+    TimerRegistration* reg, TimerRegistration::OnResolveFn on_resolve,
+    void* owner_ctx) noexcept {
+    // Noexcept publish of a prepared block (see header proof). The heap push
+    // consumes the capacity reserved by prepare — no allocation here.
     reg->on_resolve_ = on_resolve;
     reg->owner_ctx_ = owner_ctx;
     ++active_deadline_count_;
     heap_push_ordinary_locked(reg);
     recompute_earliest_deadline_locked();
+}
+
+TimerRegistration* Scheduler::arm_ordinary_deadline_locked(
+    WaitNode* node, WaitQueue* q, deadline_t deadline,
+    TimerRegistration::OnResolveFn on_resolve, void* owner_ctx) {
+    // Composed historical form: prepare + publish in one call. Production
+    // timed admissions call the two phases around their registration boundary
+    // instead (R2-ALLOC); this composition remains for callers whose
+    // registration cannot interleave an allocation failure with admission
+    // state (the narrow test-only hook).
+    TimerRegistration* reg =
+        prepare_ordinary_deadline_locked(node, q, deadline);
+    publish_ordinary_deadline_locked(reg, on_resolve, owner_ctx);
     return reg;
 }
 

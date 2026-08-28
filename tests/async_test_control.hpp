@@ -315,6 +315,15 @@ struct TimerTestControl {
         return sluice::async::Scheduler::AsyncTestAccess::register_test_deadline(
             s, node, q, deadline);
     }
+    // R2-ALLOC regression seam: one-shot synthetic allocation failure at the
+    // next ordinary timed-admission prepare entry (throws std::bad_alloc
+    // BEFORE any admission state is mutated). Internal-testing variant only.
+    static void arm_alloc_failure(sluice::async::Scheduler& s) noexcept {
+        arm_ordinary_deadline_alloc_failure(s);
+    }
+    static void disarm_alloc_failure(sluice::async::Scheduler& s) noexcept {
+        disarm_ordinary_deadline_alloc_failure(s);
+    }
     // Park-commit seam delegation (E11 reuses the E9 park-commit seam).
     static void arm_park_commit(sluice::async::Scheduler& s) noexcept {
         SchedulerParkSeam::arm_commit(s);

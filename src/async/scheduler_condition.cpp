@@ -138,18 +138,24 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
         LockGuard lk(global_mtx_);
         {
             LockGuard qlk(cond_waiters.mtx());
+            // R2-ALLOC: allocations before any admission state mutation (a
+            // bad_alloc here leaves the Condition node Detached, the Mutex
+            // unreleased, and every counter intact).
+            reg = prepare_ordinary_deadline_locked(&cond_node, &cond_waiters,
+                                                   deadline);
             if (!cond_waiters.register_wait_locked(cond_node, me)) {
+                erase_popped_registration_locked(reg);  // never published
                 // Registration contract violation: do NOT release the Mutex.
                 released_mutex = false;
                 return cond_node.outcome();
             }
             ++waiting_waitq_count_;
-            // Install the timer for the Condition epoch ONLY (C-H4). The
+            // Publish the timer for the Condition epoch ONLY (C-H4). The
             // registration binds {cond_node, cond_waiters} so a later expiry
             // resolves the Condition node Expired through pump_deadlines_locked.
-            // Arming = pool construction + ACTIVE count + heap push + park-cache
-            // refresh via the ordinary deadline authority.
-            reg = arm_ordinary_deadline_locked(&cond_node, &cond_waiters, deadline);
+            // Publication = pool publication + ACTIVE count + heap push +
+            // park-cache refresh via the ordinary deadline authority.
+            publish_ordinary_deadline_locked(reg);
         }
         // Admission precedence 1: already-due admission closure — if the
         // deadline is ALREADY due, the

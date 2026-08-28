@@ -23,6 +23,7 @@
 #include "async_test_control.hpp"
 
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/event.hpp>
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/scheduler.hpp>
@@ -30,6 +31,7 @@
 #include <sluice/async/wait_queue.hpp>
 
 #include <atomic>
+#include <new>
 
 using namespace sluice::async;
 using sluice::Result;
@@ -282,6 +284,134 @@ SLUICE_TEST_CASE(od_w3_mixed_causes_exact_accounting_and_cache) {
                      "A reclaimed by its own deadline pop");
     SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "count untouched by pure reclamation");
+}
+
+// =============================================================================
+// R2-ALLOC (allocation-atomic timed admission). The admission's allocations
+// (deadline-heap slot reserve + pool node) run in
+// prepare_ordinary_deadline_locked BEFORE register_wait_locked, so a
+// std::bad_alloc injected at prepare entry (one-shot internal-testing seam)
+// must leave the admission fully unmutated — node Detached, wait and timer
+// accounting zero, no pool/heap orphan, no earliest-deadline cache
+// publication — and the SAME node + Scheduler must admit a healthy timed wait
+// immediately after. These cases regress if any allocation is reintroduced
+// after registration on any ordinary arming path.
+// =============================================================================
+
+// A1 (generic admission): await_wait_deadline throws cleanly, leaves zero
+// residue, and the same node re-admits through the full healthy
+// prepare -> register -> publish -> already-due consume path.
+SLUICE_TEST_CASE(od_alloc_a1_generic_admission_atomic) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    TimerCtl::enable_test_clock(sched);
+    sluice_async_test::ControllerGuard cg(sched);
+    TimerCtl::arm_alloc_failure(sched);
+
+    WaitQueue q;
+    WaitNode n;
+    std::atomic<bool> failed{false};
+    std::atomic<bool> node_clean{false};
+    std::atomic<bool> healthy_after{false};
+
+    Fiber fwait;
+    fwait.set_entry([&](Fiber&) {
+        try {
+            sched.await_wait_deadline(q, n, Scheduler::deadline_t{50});
+        } catch (const std::bad_alloc&) {
+            failed.store(true, std::memory_order_release);
+        }
+        // Zero-residue witness AT THE FAILURE SITE (before any re-admission
+        // legitimately moves the node): the failed admission must have left
+        // the node Detached and every authority untouched.
+        node_clean.store(!n.is_registered() && !n.is_terminal(),
+                         std::memory_order_release);
+        // Healthy re-admission on the SAME node + Scheduler: an already-due
+        // deadline resolves Expired inline through the full admission path
+        // (prepare -> register -> publish -> consume), no driver needed.
+        sched.await_wait_deadline(q, n, Scheduler::deadline_t{0});
+        healthy_after.store(n.was_expired(), std::memory_order_release);
+        // The consumed block is lazily reclaimed by its own (already-due)
+        // deadline: advance past it so the pool drains deterministically.
+        sched.advance_clock(1);
+    });
+
+    FiberStack sw;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    sched.spawn(fwait);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(failed.load(),
+                     "injected bad_alloc escaped the timed admission");
+    SLUICE_CHECK_MSG(node_clean.load(),
+                     "alloc failure left the node Detached (no dead epoch)");
+    SLUICE_CHECK_MSG(healthy_after.load(),
+                     "node + Scheduler re-admitted a healthy timed wait");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0,
+                     "alloc failure left no wait-accounting residue");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "alloc failure left no timer-accounting residue");
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == 0 &&
+                         TimerCtl::deadline_heap_size(sched) == 0,
+                     "alloc failure orphaned no pool/heap block");
+    Scheduler::deadline_t earliest = 0;
+    SLUICE_CHECK_MSG(!TimerCtl::earliest_active_deadline(sched, earliest),
+                     "alloc failure published no earliest-deadline obligation");
+}
+
+// A2 (public primitive admission): the same invariant through the Event
+// public API (Event::wait_until) — the failure is catchable at the caller and
+// the primitive is immediately reusable.
+SLUICE_TEST_CASE(od_alloc_a2_event_admission_atomic) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    TimerCtl::enable_test_clock(sched);
+    sluice_async_test::ControllerGuard cg(sched);
+    TimerCtl::arm_alloc_failure(sched);
+
+    Event ev(sched);
+    WaitNode n;
+    std::atomic<bool> failed{false};
+    std::atomic<bool> node_clean{false};
+    std::atomic<bool> healthy_after{false};
+
+    Fiber fwait;
+    fwait.set_entry([&](Fiber&) {
+        try {
+            ev.wait_until(n, Scheduler::deadline_t{50});
+        } catch (const std::bad_alloc&) {
+            failed.store(true, std::memory_order_release);
+        }
+        node_clean.store(!n.is_registered() && !n.is_terminal(),
+                         std::memory_order_release);
+        // Unset Event + already-due deadline: the healthy admission resolves
+        // Expired inline through the full prepare -> publish -> consume path.
+        ev.wait_until(n, Scheduler::deadline_t{0});
+        healthy_after.store(n.was_expired(), std::memory_order_release);
+        sched.advance_clock(1);
+    });
+
+    FiberStack sw;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    sched.spawn(fwait);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(failed.load(),
+                     "injected bad_alloc escaped Event::wait_until");
+    SLUICE_CHECK_MSG(node_clean.load(),
+                     "alloc failure left the Event node Detached");
+    SLUICE_CHECK_MSG(healthy_after.load(),
+                     "Event re-admitted a healthy timed wait after the failure");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0 &&
+                         TimerCtl::active_deadline_count(sched) == 0,
+                     "no accounting residue after the failed Event admission");
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == 0 &&
+                         TimerCtl::deadline_heap_size(sched) == 0,
+                     "no pool/heap orphan after the failed Event admission");
 }
 
 SLUICE_MAIN()
