@@ -37,7 +37,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_mutex.cpp` | 338 | AsyncMutex waits |
 | `src/async/scheduler_rwlock.cpp` | 675 | rwlock waits, ForgedRwWaitCtx |
 | `src/async/scheduler_condition.cpp` | 261 | condition waits |
-| `src/async/scheduler_queue.cpp` | 513 | runnable queue, fiber routing |
+| `src/async/scheduler_queue.cpp` | 582 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
 | `src/async/scheduler.cpp` | 2141 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
@@ -138,6 +138,19 @@ call and no new allocation, lock, traversal, or callback. AC-2b timer
 retirement still fires any already-installed Queue timer-accounting hook.
 There is no public API, ABI, or object-layout change; therefore public API
 reference documentation is unaffected.)
+`scheduler_queue.cpp` 513 → 582 (2026-08-28, Q-LIV-1 — blocking/timed Queue
+admit inline-success paths now reconcile the opposite-role FIFO head via the
+existing `queue_grant_consumer_locked` / `queue_grant_producer_locked`
+authority (the reconcile `try_push`/`try_pop` FastPush/FastPopCommit always
+performed); the grant runs after the admitting role mutex is released, under
+`global_mtx_` + `state_mtx_` only — the same lock shape as the fast paths, the
+two role mutexes still never held together — and the inline path returns
+before the suspend switch because the admitting fiber never suspended.
+Queue liveness repair, NOT a structural refactor: role FIFO, ring order,
+lease semantics, close semantics, and AC-2b local Queue timer arming are
+unchanged; the DST-PV-1 known-drift witness is flipped into the post-fix
+regression. No new allocation, lock, or traversal; one grant call added on
+each of the four inline-commit paths.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different
