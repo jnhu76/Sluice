@@ -15,6 +15,8 @@
 
 #include <sluice/async/scheduler.hpp>
 
+#include <cstdio>
+#include <cstdlib>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -553,6 +555,331 @@ void record_trace_wake(sluice::async::Scheduler& s,
         return;
     }
     c->trace_events[c->trace_len++] = ev;
+}
+
+// ---- DST-PV-1 schedule script (test-only next-runnable choice) ----
+
+namespace {
+
+// The installing thread's script activation (review P1-1: the INACTIVE
+// worker-pop path must be a no-lock fast path — one TLS pair + a Scheduler
+// identity compare; NO registry mutex, NO script mutex, NO atomic). The
+// script is visible ONLY on the installing thread: the PV model installs
+// before an inline run(1), which runs worker_loop on the SAME thread
+// (scheduler.cpp single-worker fast path). A worker on any other thread —
+// every multi-worker run — never activates and stays on the FIFO pop:
+// multi-worker scheduling space is structurally untouched.
+struct ActiveScript {
+    const sluice::async::Scheduler* sched = nullptr;
+    SchedulerController::ScheduleScriptState* state = nullptr;
+};
+thread_local ActiveScript t_active_script;
+
+// Review R3 P1: while an Invoke action runs, installing / re-arming a
+// schedule script is FORBIDDEN (fail-loud; see install_schedule_script). If
+// it were allowed, the OLD script's post-action epilogue would advance the
+// NEW script's step counter — silent deterministic-replay corruption.
+// Same-thread flag only: the pick and the action run on the installing
+// thread, so no atomic is needed. Cleared after the action returns; if the
+// action aborts, no cleanup is required beyond process teardown.
+thread_local bool t_schedule_invoke_active = false;
+
+// Fail loudly on a script-configuration violation (capacity overflow or a
+// step referencing an unregistered action). A test-only harness must never
+// silently truncate a decision vector or fall back (review P1-4).
+[[noreturn]] void schedule_script_config_fail(const char* what,
+                                              std::size_t value) noexcept {
+    std::fprintf(stderr,
+                 "\n=== DST-PV-1 SCHEDULE SCRIPT FAILURE (configuration) ===\n"
+                 "%s: %zu\n"
+                 "===================================================\n",
+                 what, value);
+    std::fflush(stderr);
+    std::abort();
+}
+
+// Render the failure diagnostic package and abort. NEVER falls back to
+// another runnable: a replay that requests an illegal decision is a replay
+// bug, and silently choosing a different schedule would destroy replay
+// fidelity (the whole point of the decision vector).
+[[noreturn]] void schedule_script_fail(
+    SchedulerController::ScheduleScriptState& st,
+    sluice::async::Scheduler& s, sluice::async::WorkerState* ws,
+    std::size_t step_index, unsigned char requested_id,
+    const std::vector<sluice::async::Fiber*>& legal) noexcept {
+    st.failed = true;
+    st.failed_step = step_index;
+    st.requested_id = requested_id;
+    std::fprintf(stderr,
+                 "\n=== DST-PV-1 SCHEDULE SCRIPT FAILURE (deterministic "
+                 "replay diagnostic) ===\n"
+                 "test:            %s\n"
+                 "step index:      %zu\n"
+                 "requested:       Run(%u)\n"
+                 "logical clock:   %llu\n"
+                 "replay vector:   %s\n",
+                 st.test_name != nullptr ? st.test_name : "<unnamed>",
+                 step_index, static_cast<unsigned>(requested_id),
+                 static_cast<unsigned long long>(
+                     sluice::async::Scheduler::AsyncTestAccess::clock_now(s)),
+                 st.replay_vector != nullptr ? st.replay_vector->c_str()
+                                             : "<none>");
+    std::fprintf(stderr, "legal runnable:  ");
+    if (legal.empty()) {
+        std::fprintf(stderr, "<empty>");
+    }
+    for (sluice::async::Fiber* f : legal) {
+        // Render bound participants as their test-assigned id; unbound
+        // fibers as <unbound> (addresses are NOT replay syntax).
+        bool bound = false;
+        for (std::size_t i = 0; i < st.fiber_count; ++i) {
+            if (st.fiber_ptrs[i] == f) {
+                std::fprintf(stderr, "%sRun(%u)", f == legal.front() ? "" : ", ",
+                             static_cast<unsigned>(i));
+                bound = true;
+                break;
+            }
+        }
+        if (!bound) {
+            std::fprintf(stderr, "%s<unbound>", f == legal.front() ? "" : ", ");
+        }
+    }
+    std::fprintf(stderr, "\nqueue depth:     %zu\n",
+                 [&] {
+                     std::lock_guard<std::mutex> lk(ws->inbox_mtx);
+                     return ws->local_runnable.size();
+                 }());
+    std::fprintf(stderr, "executed prefix: ");
+    if (st.executed_len == 0) std::fprintf(stderr, "<none>");
+    for (std::size_t i = 0; i < st.executed_len; ++i) {
+        const auto& e = st.executed[i];
+        if (e.kind == SchedulerController::ScheduleScriptStep::Kind::run) {
+            std::fprintf(stderr, "%sRun(%u)", i == 0 ? "" : " -> ",
+                         static_cast<unsigned>(e.payload));
+        } else {
+            const char* label = "<action>";
+            if (e.payload < st.action_count &&
+                st.action_labels[e.payload] != nullptr) {
+                label = st.action_labels[e.payload];
+            }
+            std::fprintf(stderr, "%s%s", i == 0 ? "" : " -> ", label);
+        }
+    }
+    std::fprintf(stderr, "\n=========================================="
+                         "=======================\n");
+    std::fflush(stderr);
+    std::abort();
+}
+
+}  // namespace
+
+bool schedule_script_active(sluice::async::Scheduler& s) noexcept {
+    // No-lock gate: a TLS activation pair is set ONLY by
+    // install_schedule_script on the installing thread and the inline run(1)
+    // worker loop runs on that same thread, so `enabled` / `next_step` are
+    // same-thread reads — no mutex, no atomic, no registry lookup on the
+    // per-pop path. Every other thread (multi-worker runs) has an empty pair
+    // and returns false here.
+    const ActiveScript& a = t_active_script;
+    if (a.sched != &s || a.state == nullptr) return false;
+    const SchedulerController::ScheduleScriptState& st = *a.state;
+    return st.enabled && st.next_step < st.step_count;
+}
+
+sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
+                                           sluice::async::WorkerState* ws) noexcept {
+    const ActiveScript& a = t_active_script;
+    if (a.sched != &s || a.state == nullptr) return nullptr;
+    SchedulerController::ScheduleScriptState& st = *a.state;
+    while (true) {
+        SchedulerController::ScheduleScriptStep step;
+        {
+            std::lock_guard<std::mutex> lk(st.mtx);
+            if (!st.enabled || st.next_step >= st.step_count) return nullptr;
+            step = st.steps[st.next_step];
+        }
+        if (step.kind == SchedulerController::ScheduleScriptStep::Kind::invoke) {
+            // Review R3 P1: the action is invoked THROUGH A STABLE POINTER
+            // into the controller's fixed action array — NO std::function
+            // copy on the pick path, so the pick allocates nothing after
+            // install. The pointer is stable because: the array is fixed
+            // storage inside the controller (retained until process
+            // teardown); re-install / re-arm is fail-closed during Invoke
+            // (install_schedule_script below); and uninstall never rewrites
+            // the array. The script mutex guards only the lookup, then the
+            // action runs AFTER release and the step is recorded on
+            // re-acquire — the mutex is NEVER held while an action runs.
+            // Actions may re-enter SUPPORTED NON-REPLACING test-control
+            // surfaces (uninstall_schedule_script, advance_clock,
+            // cancel_wait, fake/scripted I/O completion); installing or
+            // re-arming a schedule script from inside an action is
+            // FAIL-CLOSED. If the action uninstalled the script mid-run, the
+            // epilogue below still records the executed step into the OLD
+            // controller state (documented) — it never reactivates:
+            // activation is governed solely by the TLS pair, which an
+            // uninstall already cleared.
+            std::function<void(sluice::async::Scheduler&)>* action = nullptr;
+            {
+                std::lock_guard<std::mutex> lk(st.mtx);
+                if (step.payload >= st.action_count ||
+                    !st.actions[step.payload]) {
+                    schedule_script_config_fail(
+                        "Invoke step references an unregistered action id",
+                        step.payload);
+                }
+                action = &st.actions[step.payload];
+            }
+            t_schedule_invoke_active = true;
+            (*action)(s);  // no script mutex, no production lock held
+            t_schedule_invoke_active = false;
+            {
+                std::lock_guard<std::mutex> lk(st.mtx);
+                if (st.executed_len < st.executed.size()) {
+                    st.executed[st.executed_len++] = step;
+                }
+                ++st.next_step;
+            }
+            // An Invoke TERMINATES this hook visit (return nullptr): some
+            // actions stage effects that become runnable only after the
+            // worker's next drain (e.g. a staged fake-backend completion is
+            // applied by wake_ready_completions, not by the staging call).
+            // Ending the visit lets the normal pop -> drain -> FIFO path
+            // publish those runnables; the next scripted Run is consumed at
+            // the next pop-site visit. Run(X) is a CHOICE among >= 2 legal
+            // runnables — a singleton publication is deterministic FIFO and
+            // needs no script step.
+            return nullptr;
+        }
+        // Run(id): remove the bound Fiber from THIS worker's deque, or fail
+        // loudly. The pick holds inbox_mtx alone (leaf; the park predicate's
+        // wake_mtx_ -> inbox_mtx edge is never inverted from here). The
+        // success path allocates nothing; the failure diagnostic may.
+        sluice::async::Fiber* chosen = nullptr;
+        {
+            std::lock_guard<std::mutex> lk(ws->inbox_mtx);
+            if (step.payload < st.fiber_count) {
+                sluice::async::Fiber* want = st.fiber_ptrs[step.payload];
+                for (auto it = ws->local_runnable.begin();
+                     it != ws->local_runnable.end(); ++it) {
+                    if (*it == want) {
+                        chosen = want;
+                        ws->local_runnable.erase(it);
+                        break;
+                    }
+                }
+            }
+        }
+        if (chosen == nullptr) {
+            // Failure diagnostic only: collect the legal set + step index.
+            std::vector<sluice::async::Fiber*> legal;
+            std::size_t failed_step = 0;
+            {
+                std::lock_guard<std::mutex> lk(ws->inbox_mtx);
+                for (sluice::async::Fiber* f : ws->local_runnable) {
+                    legal.push_back(f);
+                }
+            }
+            {
+                std::lock_guard<std::mutex> lk(st.mtx);
+                failed_step = st.next_step;
+            }
+            schedule_script_fail(st, s, ws, failed_step, step.payload, legal);
+        }
+        {
+            std::lock_guard<std::mutex> lk(st.mtx);
+            if (st.executed_len < st.executed.size()) {
+                st.executed[st.executed_len++] = step;
+            }
+            ++st.next_step;
+        }
+        return chosen;
+    }
+}
+
+void install_schedule_script(sluice::async::Scheduler& s,
+                             const ScheduleScriptInstall& plan) noexcept {
+    // Review R3 P1: installing / re-arming a script from inside an Invoke
+    // action would let the OLD script's post-action epilogue advance the NEW
+    // script's step counter — silent deterministic-replay corruption. Fail
+    // loudly instead (no generations, no nested schedules, no transactional
+    // replacement; this PV driver has no such capability).
+    if (t_schedule_invoke_active) {
+        std::size_t step_index = 0;
+        const char* current_test = nullptr;
+        if (SchedulerController* c = find_controller(s); c != nullptr) {
+            std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
+            step_index = c->schedule_script.next_step;
+            current_test = c->schedule_script.test_name;
+        }
+        std::fprintf(stderr,
+                     "\n=== DST-PV-1 SCHEDULE SCRIPT FAILURE ===\n"
+                     "install/re-arm forbidden inside Invoke: "
+                     "install_schedule_script is not allowed from inside an "
+                     "Invoke action\n"
+                     "current script: %s\n"
+                     "step index:     %zu\n"
+                     "======================================\n",
+                     current_test != nullptr ? current_test : "<unnamed>",
+                     step_index);
+        std::fflush(stderr);
+        std::abort();
+    }
+    // Fail loudly on capacity violations instead of silently truncating the
+    // decision vector (review P1-4; DstScheduleDriver already validates at
+    // append time — this is defense in depth for hand-built plans).
+    if (plan.step_count > SchedulerController::kScheduleMaxSteps) {
+        schedule_script_config_fail(
+            "step_count exceeds kScheduleMaxSteps", plan.step_count);
+    }
+    if (plan.fiber_count > SchedulerController::kScheduleMaxFibers) {
+        schedule_script_config_fail(
+            "fiber_count exceeds kScheduleMaxFibers", plan.fiber_count);
+    }
+    if (plan.action_count > SchedulerController::kScheduleMaxActions) {
+        schedule_script_config_fail(
+            "action_count exceeds kScheduleMaxActions", plan.action_count);
+    }
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    // find_controller released registry_mtx before we take the script mutex:
+    // the controller object itself is retained until process teardown
+    // (retired_controllers), so the pointer stays valid.
+    {
+        std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
+        SchedulerController::ScheduleScriptState& st = c->schedule_script;
+        st.enabled = true;
+        st.steps = plan.steps;
+        st.step_count = plan.step_count;
+        st.next_step = 0;
+        st.fiber_ptrs = plan.fiber_ptrs;
+        st.fiber_count = plan.fiber_count;
+        st.actions = plan.actions;
+        st.action_labels = plan.action_labels;
+        st.action_count = plan.action_count;
+        st.executed.fill(SchedulerController::ScheduleScriptStep{});
+        st.executed_len = 0;
+        st.test_name = plan.test_name;
+        st.replay_vector = plan.replay_vector;
+        st.failed = false;
+        st.failed_step = 0;
+        st.requested_id = 0;
+    }
+    // Activate on THIS thread only: the inline run(1) worker is the same
+    // thread (the PV model). A multi-worker or cross-thread run never
+    // activates the script (see schedule_script_active).
+    t_active_script = ActiveScript{&s, &c->schedule_script};
+}
+
+void uninstall_schedule_script(sluice::async::Scheduler& s) noexcept {
+    // Deactivate on this thread first so a same-thread gate cannot observe a
+    // half-disabled script; the enabled flag below is defense in depth.
+    if (t_active_script.sched == &s) {
+        t_active_script = ActiveScript{};
+    }
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->schedule_script.mtx);
+    c->schedule_script.enabled = false;
 }
 
 }  // namespace sluice_async_test

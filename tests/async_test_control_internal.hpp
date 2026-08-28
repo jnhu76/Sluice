@@ -31,6 +31,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <stdexcept>
 #include <vector>
@@ -416,6 +417,83 @@ struct SchedulerController {
     // the corpus tests fail closed on — never silently mis-binned.
     unsigned char pending_wake_cause{0};
     unsigned char pending_wake_worker{kTraceNoWorker};
+
+    // ---- DST-PV-1 schedule script (test-only next-runnable choice) ----
+    //
+    // A deterministic schedule driver installs a bounded decision vector
+    // BEFORE sched.run(); the worker_loop pop site consults it through
+    // schedule_script_active/schedule_script_pick (guarded call sites).
+    //
+    // Vocabulary: Run(fiber_id) chooses WHICH already-runnable Fiber the
+    // worker dequeues next; Invoke(action_id) executes a driver-registered
+    // closure (the existing controllable seams: fake/scripted I/O completion,
+    // advance_clock, cancel_wait) INLINE at the decision point. Script
+    // exhaustion returns control to the normal FIFO pop — a free run.
+    //
+    // Capacities are fixed at install time; the pick path allocates nothing
+    // (Invoke actions run through stable references into the fixed action
+    // array — no std::function copy). Re-install / re-arm inside Invoke is
+    // FAIL-CLOSED; uninstall inside Invoke remains supported, and the
+    // post-action epilogue then records into the old state without
+    // reactivating (activation is the TLS pair alone). `mtx` is a leaf
+    // controller mutex (precedent: trace_mtx); it guards ONLY the script
+    // records (step index, executed ring): it is never held while an action
+    // runs and never held while acquiring any production lock.
+    // Install must happen before run() starts, ON THE SAME THREAD (the PV
+    // model is single-threaded inline run(1): driver and worker are one
+    // thread). The worker pop gate is a thread-local activation — no lock,
+    // no atomic — so a worker on any other thread (every multi-worker run)
+    // never sees the script and stays on the FIFO pop: multi-worker
+    // scheduling space is structurally untouched by the seam.
+    static constexpr std::size_t kScheduleMaxSteps = 64;
+    static constexpr std::size_t kScheduleMaxFibers = 8;
+    static constexpr std::size_t kScheduleMaxActions = 8;
+    static constexpr std::size_t kScheduleMaxExecuted = 64;
+
+    struct ScheduleScriptStep {
+        enum class Kind : std::uint8_t { run, invoke };
+        Kind kind{Kind::run};
+        unsigned char payload{0};  // run: fiber id; invoke: action id
+    };
+    struct ScheduleScriptState {
+        std::mutex mtx;
+        bool enabled{false};
+        std::array<ScheduleScriptStep, kScheduleMaxSteps> steps{};
+        std::size_t step_count{0};
+        std::size_t next_step{0};
+
+        // Test-assigned participant identity (small integers), bound before
+        // run(). Replay syntax uses ONLY these ids — never Fiber addresses.
+        std::array<sluice::async::Fiber*, kScheduleMaxFibers> fiber_ptrs{};
+        std::size_t fiber_count{0};
+
+        // Driver-registered action closures (invoke steps). Installed before
+        // run(); invoked with no script-mutex and no production lock held.
+        // Fixed-size storage inside the controller (retained until process
+        // teardown): the pick invokes actions through STABLE REFERENCES
+        // (no copy, no allocation); re-install / re-arm inside Invoke is
+        // fail-closed, and uninstall never rewrites this array.
+        std::array<std::function<void(sluice::async::Scheduler&)>,
+                   kScheduleMaxActions>
+            actions{};
+        std::array<const char*, kScheduleMaxActions> action_labels{};
+        std::size_t action_count{0};
+
+        // Executed-step ring for the failure diagnostic (kind + payload).
+        std::array<ScheduleScriptStep, kScheduleMaxExecuted> executed{};
+        std::size_t executed_len{0};
+
+        // Diagnostic context captured at install (single death-time reader;
+        // the PV model installs before run and never mutates during run).
+        const char* test_name{nullptr};
+        const std::string* replay_vector{nullptr};
+
+        // Failure record (filled once, immediately before the loud abort).
+        bool failed{false};
+        std::size_t failed_step{0};
+        unsigned char requested_id{0};
+    };
+    ScheduleScriptState schedule_script{};
 };
 
 // --- Called from scheduler.cpp (under SLUICE_ASYNC_INTERNAL_TESTING) ---
@@ -629,5 +707,72 @@ void rollback_record_finish(sluice::async::Scheduler& s) noexcept;
 // observation if no controller is registered for `s`.
 RollbackObservation read_rollback_observation(
     sluice::async::Scheduler& s) noexcept;
+
+// ---- DST-PV-1 schedule script (test-only next-runnable choice) ----
+//
+// Worker-side hooks (guarded call sites in scheduler.cpp worker_loop): the
+// worker pop consults schedule_script_active FIRST; it is a no-lock fast gate
+// — one thread-local activation pair + a Scheduler identity compare, with NO
+// registry mutex, NO script mutex, and NO atomic on the inactive path (the
+// registered-controller registry is NOT consulted per pop). A script is
+// visible ONLY on its installing thread, so every other worker in every
+// multi-worker run pays exactly one TLS load + compare and returns false —
+// those runs stay on the FIFO pop, unperturbed.
+bool schedule_script_active(sluice::async::Scheduler& s) noexcept;
+
+// Consume script steps at the worker pop decision. Run(id) removes the bound
+// Fiber from ws->local_runnable (under inbox_mtx) and returns it; Invoke(id)
+// takes a STABLE REFERENCE to its action under the script mutex — no
+// std::function copy, the pick path allocates nothing after install — and
+// executes it with NO script mutex and NO production lock held. Actions may
+// re-enter SUPPORTED NON-REPLACING test-control surfaces
+// (uninstall_schedule_script, advance_clock, cancel_wait, fake/scripted I/O
+// completion); installing or re-arming a schedule script inside Invoke is
+// FAIL-CLOSED (install_schedule_script aborts). If the action uninstalled
+// the script mid-run, the epilogue still records the step into the OLD
+// controller state and never reactivates (activation is the TLS pair alone,
+// which uninstall cleared). The step is then recorded and the hook visit
+// TERMINATES (returns nullptr) — actions may stage
+// effects that become runnable only after the worker's next drain, and the
+// intervening normal pop -> drain -> FIFO path publishes them; a singleton
+// publication needs no script step (Run(X) is a CHOICE among >= 2 legal
+// runnables). Returns nullptr when the script is exhausted (free run). An
+// illegal decision (requested Fiber not in ws->local_runnable) prints the
+// deterministic diagnostic package (step index, requested id, legal runnable
+// set, executed prefix, replay vector, logical clock) to stderr and aborts —
+// it NEVER silently falls back to another runnable.
+sluice::async::Fiber* schedule_script_pick(sluice::async::Scheduler& s,
+                                           sluice::async::WorkerState* ws) noexcept;
+
+// Test-side install/uninstall (BEFORE run(); the PV model is single-threaded
+// inline run(1) — install and the worker loop must run on the SAME thread; a
+// multi-worker or cross-thread run never activates the script and a test that
+// scripts such a run fails its own deterministic assertions).
+// `install_schedule_script` fills the controller state owned by `s`'s
+// registered controller (register_controller must already have run), and
+// FAILS LOUDLY if called from inside an Invoke action (re-install / re-arm
+// is forbidden while an action runs — the old script's epilogue would
+// corrupt a replaced replay vector).
+struct ScheduleScriptInstall {
+    std::array<SchedulerController::ScheduleScriptStep,
+               SchedulerController::kScheduleMaxSteps>
+        steps{};
+    std::size_t step_count{0};
+    std::array<sluice::async::Fiber*, SchedulerController::kScheduleMaxFibers>
+        fiber_ptrs{};
+    std::size_t fiber_count{0};
+    std::array<std::function<void(sluice::async::Scheduler&)>,
+               SchedulerController::kScheduleMaxActions>
+        actions{};
+    std::array<const char*, SchedulerController::kScheduleMaxActions>
+        action_labels{};
+    std::size_t action_count{0};
+    const char* test_name{nullptr};
+    const std::string* replay_vector{nullptr};
+};
+
+void install_schedule_script(sluice::async::Scheduler& s,
+                             const ScheduleScriptInstall& plan) noexcept;
+void uninstall_schedule_script(sluice::async::Scheduler& s) noexcept;
 
 }  // namespace sluice_async_test

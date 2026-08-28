@@ -519,7 +519,20 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         ws->idle_dance_contributed_.store(0, std::memory_order_release);
         // 1. Get a runnable Fiber.
         Fiber* f = nullptr;
-        {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // DST-PV-1 (test-only; compiles out of the production build): an
+        // installed schedule script may choose WHICH already-runnable Fiber
+        // this worker dequeues next — the deterministic next-runnable-choice
+        // seam. The hook runs with NO scheduler lock held (it may execute
+        // script actions that acquire global_mtx_ or backend state); a Run
+        // pick removes its Fiber from ws->local_runnable under inbox_mtx.
+        // Script exhaustion returns nullptr and the FIFO pop below runs
+        // unchanged — a free run.
+        if (sluice_async_test::schedule_script_active(*this)) {
+            f = sluice_async_test::schedule_script_pick(*this, ws);
+        }
+#endif
+        if (!f) {
             std::lock_guard<std::mutex> lk(ws->inbox_mtx);
             if (!ws->local_runnable.empty()) {
                 f = ws->local_runnable.front();

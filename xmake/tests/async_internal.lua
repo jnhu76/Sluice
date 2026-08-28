@@ -4,6 +4,13 @@
 
 local R = SLUICE_ROOT
 
+-- DST-PV-1 proof-of-value: deterministic next-runnable-choice schedule
+-- script over the worker_loop pop-site seam. Manually supplied replay
+-- vectors only — NOT a DST framework (no search/seeds/random scheduler).
+-- POSIX-only death child (T3) via the self-exec runner; the case bodies are
+-- in-process on other platforms.
+sluice_internal_async_test("dst_pv1_schedule_driver_test")
+
 -- E7-C coordination tests (sluice-CORE-E7-C). Serialized backend access probe,
 -- quiescence, MW-S3. Gated to x86_64.
 sluice_internal_async_test("multi_worker_coord_test")
