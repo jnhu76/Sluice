@@ -295,6 +295,11 @@ struct TimerTestControl {
         const sluice::async::Scheduler& s) noexcept {
         return sluice::async::Scheduler::AsyncTestAccess::deadline_heap_size(s);
     }
+    static std::size_t deadline_heap_capacity(
+        const sluice::async::Scheduler& s) noexcept {
+        return sluice::async::Scheduler::AsyncTestAccess::deadline_heap_capacity(
+            s);
+    }
     static std::size_t timer_pool_count_in_state(
         const sluice::async::Scheduler& s,
         sluice::async::TimerRegistration::State st) noexcept {

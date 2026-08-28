@@ -414,4 +414,65 @@ SLUICE_TEST_CASE(od_alloc_a2_event_admission_atomic) {
                      "no pool/heap orphan after the failed Event admission");
 }
 
+// =============================================================================
+// A3 (heap growth curve): the prepare-phase heap reserve must preserve
+// vector's geometric growth — forcing the growth allocation only when the
+// heap is exactly full — so reaching N concurrent deadlines costs O(log N)
+// reallocations, not the O(N) reallocations / O(N^2) element moves of an
+// unconditional size+1 reserve. Drives the REAL production prepare path K
+// times via the coordinator registration seam, sampling capacity after every
+// arm; then drains through the pump to prove the grown heap still pops
+// correctly.
+// =============================================================================
+SLUICE_TEST_CASE(od_alloc_a3_heap_growth_stays_geometric) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    TimerCtl::enable_test_clock(sched);
+    sluice_async_test::ControllerGuard cg(sched);
+    TimerCtl::set_clock(sched, 100);
+
+    constexpr std::size_t kArms = 64;
+    WaitNode nodes[kArms];
+    WaitQueue queues[kArms];
+
+    std::size_t prev_cap = TimerCtl::deadline_heap_capacity(sched);
+    std::size_t growths = 0;
+    for (std::size_t i = 0; i < kArms; ++i) {
+        TimerRegistration* reg = TimerCtl::register_test_deadline(
+            sched, &nodes[i], &queues[i], Scheduler::deadline_t{1000});
+        SLUICE_CHECK_MSG(reg != nullptr,
+                         "arm went through the production prepare path");
+        SLUICE_CHECK_MSG(TimerCtl::deadline_heap_size(sched) == i + 1,
+                         "each arm pushed exactly one heap entry");
+        const std::size_t cap = TimerCtl::deadline_heap_capacity(sched);
+        SLUICE_CHECK_MSG(cap >= i + 1,
+                         "capacity always covers size (publish push stays "
+                         "within prepare's reservation)");
+        if (cap != prev_cap) {
+            SLUICE_CHECK_MSG(cap > prev_cap, "capacity never shrinks");
+            ++growths;
+            prev_cap = cap;
+        }
+    }
+    // Drain FIRST (before the growth-curve verdict): a failing growth
+    // assertion must not abandon registered waiters into the WaitQueue
+    // destructors — the drain itself is part of the evidence.
+    sched.advance_clock(1001);
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "all 64 deadlines consumed exactly once");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0,
+                     "pump wins balanced every coordinator wait increment");
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == 0 &&
+                         TimerCtl::deadline_heap_size(sched) == 0,
+                     "grown heap drained to empty with full reclamation");
+
+    // Doubling from empty reaches 64 within 7 steps (1,2,4,...,64); allow one
+    // step of slack. The rejected one-slot reserve walks capacity up 63 times
+    // across these same 64 arms.
+    SLUICE_CHECK_MSG(growths <= 8,
+                     "heap growth stayed geometric, not one-slot-per-admission");
+}
+
 SLUICE_MAIN()

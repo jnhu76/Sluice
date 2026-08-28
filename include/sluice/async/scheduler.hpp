@@ -1975,10 +1975,15 @@ private:
     // because arm's two internal allocation points (heap growth + pool node)
     // would each need partial-failure rollback under the lock.
     //
-    // Prepare performs, in order: one-slot deadline_heap_ capacity reserve
-    // (with a checked max_size guard, mirroring select) and the
-    // timer_pool_.emplace_back node allocation. Both containers' subsequent
-    // admission mutations are then allocation-free. The block is constructed
+    // Prepare performs, in order: a deadline_heap_ capacity-growth reserve
+    // and the timer_pool_.emplace_back node allocation. The heap reserve
+    // fires only when size == capacity (heap exactly full) and takes the
+    // next geometric doubling step, checked against max_size, so the
+    // amortized-O(1) append curve of vector::push_back is preserved — an
+    // unconditional one-slot reserve would degrade N concurrent admissions
+    // into O(N) reallocations and O(N^2) element moves. Once prepare
+    // returns, both containers' subsequent admission mutations are then
+    // allocation-free. The block is constructed
     // with the {node, q, deadline} binding and default-null hooks; it is NOT
     // ACTIVE-published (no count, no heap entry, no cache recompute) until
     // publish. Between prepare and publish the caller holds global_mtx_ for

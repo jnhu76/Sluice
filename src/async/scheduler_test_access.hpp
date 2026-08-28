@@ -208,6 +208,7 @@ struct Scheduler::AsyncTestAccess {
     // suppression (the pool sizes are not load-bearing for correctness).
     static std::size_t timer_pool_size(const Scheduler& s) noexcept;
     static std::size_t deadline_heap_size(const Scheduler& s) noexcept;
+    static std::size_t deadline_heap_capacity(const Scheduler& s) noexcept;
     // Synchronized snapshot (issue #229): the active-deadline accounting
     // counter is read under global_mtx_ because the coordinator may poll it
     // while live workers mutate deadlines; the sizes above are quiescent-only

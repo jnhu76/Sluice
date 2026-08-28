@@ -354,11 +354,24 @@ TimerRegistration* Scheduler::prepare_ordinary_deadline_locked(
         throw std::bad_alloc();
     }
 #endif
-    if (deadline_heap_.max_size() - deadline_heap_.size() < 1) {
-        throw std::length_error(
-            "timed admission: deadline heap capacity overflow on reserve");
+    // Reserve push_back headroom WITHOUT defeating vector geometric growth:
+    // an unconditional size+1 reserve walks capacity up one slot per
+    // admission (O(N) reallocations and O(N^2) element moves reaching N
+    // concurrent deadlines), so the growth allocation is forced only when
+    // the heap is exactly full, at the next doubling step. reserve() has the
+    // strong guarantee, so a throw here still leaves admission state
+    // untouched (the MAY-THROW contract above).
+    if (deadline_heap_.size() == deadline_heap_.capacity()) {
+        const std::size_t cap = deadline_heap_.capacity();
+        const std::size_t max_cap = deadline_heap_.max_size();
+        std::size_t grown = cap < max_cap / 2 ? cap * 2 : max_cap;
+        if (grown == 0) grown = 1;  // first allocation on an empty heap
+        if (grown <= deadline_heap_.size()) {
+            throw std::length_error(
+                "timed admission: deadline heap capacity overflow on reserve");
+        }
+        deadline_heap_.reserve(grown);
     }
-    deadline_heap_.reserve(deadline_heap_.size() + 1);
     timer_pool_.emplace_back(node, q, deadline);
     return &timer_pool_.back();
 }
