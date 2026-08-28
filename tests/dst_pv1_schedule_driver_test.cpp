@@ -502,19 +502,20 @@ struct QueueFixture {
 
 }  // namespace
 
-// V1 — THE SHARP PROBE: parked producer vs blocking pop's inline success.
-// Ring pre-filled from the main thread (try_push, no fiber needed); P parks
-// (push onto a full ring); C's BLOCKING pop succeeds inline. The AC-2a
-// matrix documents try_pop/close as the producer reconcilers; whether this
-// path also reconciles is executed here.
+// V1 — THE SHARP PROBE (Q-LIV-1 REGRESSION): parked producer vs blocking
+// pop's inline success. Ring pre-filled from the main thread (try_push, no
+// fiber needed); P parks (push onto a full ring); C's BLOCKING pop succeeds
+// inline and frees a ring slot. The Q-LIV-1 repair (scheduler_queue.cpp
+// queue_pop_admit) reconciles the opposite-role FIFO head at that inline
+// success — the same queue_grant_producer_locked authority try_pop's
+// FastPopCommit has always performed (queue_port.cpp).
 //
-// The assertion below is a KNOWN-DRIFT CHARACTERIZATION WITNESS, NOT a
-// statement of desired contract: today it proves the as-built defect exists
-// (a parked blocking producer is NOT reconciled by the inline pop success
-// path — no queue_grant_producer_locked). A future Queue repair slice must
-// consciously FLIP or REPLACE this expectation (the producer would commit
-// from the pop); the review P2 agreement is that no Queue change is made in
-// this campaign.
+// HISTORY: this case originated as the DST-PV-1 KNOWN-DRIFT CHARACTERIZATION
+// WITNESS and became the post-fix regression. Pre-fix it proved the as-built
+// defect: the inline pop success left the parked producer stranded (no
+// reconcile; only a later try_pop/close released it). The Q-LIV-1 Queue
+// repair consciously FLIPPED the expectation: the producer now commits from
+// the pop's freed slot, and no close is required merely to release it.
 // Structure: run -> capture -> dispose -> assert (a failing check returns
 // from the case, so the queue's ring-empty destruction contract must be
 // satisfied BEFORE any assertion).
@@ -524,19 +525,12 @@ SLUICE_TEST_CASE(dst_t5_v1_parked_producer_vs_inline_pop) {
     QueueFixture fx("dst_t5_v1");
     fx.build_fibers();
     SLUICE_CHECK(fx.q.try_push(7).status() == QueuePushStatus::committed);
-    fx.driver.run(0).run(1);  // P parks, C pops inline
+    fx.driver.run(0).run(1);  // P parks, C pops inline (and reconciles P)
     fx.driver.arm();
     fx.sched.spawn(fx.fp);
     fx.sched.spawn(fx.fc);
     fx.sched.run(1);
 
-    // KNOWN-DRIFT CHARACTERIZATION WITNESS: the blocking pop's inline success
-    // does NOT reconcile the parked producer — the documented reconciler set
-    // is try_pop/close only (queue_port.cpp try_pop's FastPopCommit carries
-    // queue_grant_producer_locked; queue_pop_admit's inline path does not).
-    // P therefore remains WAITING at run end (the drain-mode run STALLED);
-    // close resolves P closed with its lease retained. A Queue repair slice
-    // must flip this expectation (P:committed from the pop), not preserve it.
     const std::string ev = join(fx.events);
     const FiberState p_state_at_run_end = fx.fp.state();
     const FiberState c_state = fx.fc.state();
@@ -545,26 +539,165 @@ SLUICE_TEST_CASE(dst_t5_v1_parked_producer_vs_inline_pop) {
     const std::string ev_after_cleanup = join(fx.events);
     fx.dispose();
 
-    // Exactly-once resource invariant: C received THE pre-filled item.
-    SLUICE_CHECK_MSG(ev == "P:parked,C:item:7" || ev == "C:item:7,P:parked" ||
-                         ev.find("C:item:7") != std::string::npos,
+    // Exactly-once resource invariant: C received THE pre-filled item, and
+    // P's lease committed exactly once into the slot the pop freed (no item
+    // duplication, no capacity-1 slot double occupancy).
+    SLUICE_CHECK_MSG(ev.find("C:item:7") != std::string::npos,
                      ("consumer must get the pre-filled item (events: " + ev +
                       ")")
                          .c_str());
     SLUICE_CHECK(c_state == FiberState::done);
+    // Q-LIV-1 REGRESSION (flipped witness): the blocking pop's inline success
+    // must reconcile the parked producer — the drain run finishes BOTH
+    // fibers, with P committing BEFORE any close.
     SLUICE_CHECK_MSG(
-        p_state_at_run_end == FiberState::waiting,
-        "KNOWN-DRIFT CHARACTERIZATION WITNESS: the blocking pop's inline "
-        "success leaves the parked producer UNRECONCILED (as-built defect, "
-        "AC-2a/#234; a Queue repair must flip this expectation)");
-    SLUICE_CHECK_MSG(ev.find("P:committed") == std::string::npos,
-                     "witness: no inline reconcile under the pop — P:committed "
-                     "is the future-repair expectation, not today's behavior");
-    SLUICE_CHECK_MSG(
-        ev_after_cleanup.find("P:closed") != std::string::npos,
-        ("close-cleanup resolves the stranded producer (events: " +
-         ev_after_cleanup + ")")
+        p_state_at_run_end == FiberState::done,
+        ("Q-LIV-1: blocking pop inline success must reconcile the parked "
+         "producer instead of stranding it (events: " +
+         ev + ")")
             .c_str());
+    SLUICE_CHECK_MSG(ev.find("P:committed") != std::string::npos,
+                     ("producer must commit from the pop's inline reconcile "
+                      "without a close (events: " +
+                      ev + ")")
+                         .c_str());
+    SLUICE_CHECK_MSG(ev.find("P:closed") == std::string::npos,
+                     "close must not be needed merely to release the producer");
+}
+
+// V1-SYM — Q-LIV-1 SYMMETRIC DIRECTION: parked consumer vs blocking push's
+// inline success. Ring starts EMPTY; C parks (pop on an empty ring); P's
+// BLOCKING push commits inline and fills a ring slot. The Q-LIV-1 repair
+// (scheduler_queue.cpp queue_push_admit) reconciles the parked consumer at
+// that inline success — the same queue_grant_consumer_locked authority
+// try_push's FastPushCommit has always performed (queue_port.cpp). The
+// consumer pops the just-committed item; no close is required merely to
+// release it. Exactly-once item accounting: the single item goes to exactly
+// one role (P commits it, C consumes it).
+SLUICE_TEST_CASE(dst_t5_v1s_parked_consumer_vs_inline_push) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    QueueFixture fx("dst_t5_v1s");
+    fx.build_fibers();
+    fx.driver.run(1).run(0);  // C parks (empty ring), P commits inline
+    fx.driver.arm();
+    fx.sched.spawn(fx.fp);
+    fx.sched.spawn(fx.fc);
+    fx.sched.run(1);
+
+    const std::string ev = join(fx.events);
+    const FiberState p_state_at_run_end = fx.fp.state();
+    const FiberState c_state = fx.fc.state();
+    fx.q.close();
+    fx.sched.run(1);
+    const std::string ev_after_cleanup = join(fx.events);
+    fx.dispose();
+
+    SLUICE_CHECK_MSG(ev.find("P:committed") != std::string::npos,
+                     ("producer must commit inline (events: " + ev + ")")
+                         .c_str());
+    SLUICE_CHECK_MSG(
+        ev.find("C:item:9") != std::string::npos,
+        ("Q-LIV-1 symmetric: blocking push inline success must reconcile the "
+         "parked consumer, which consumes THE committed item (events: " +
+         ev + ")")
+            .c_str());
+    SLUICE_CHECK(p_state_at_run_end == FiberState::done);
+    SLUICE_CHECK(c_state == FiberState::done);
+    SLUICE_CHECK_MSG(ev.find("C:closed") == std::string::npos,
+                     "close must not be needed merely to release the consumer");
+}
+
+// V1-T — Q-LIV-1 x AC-2b: TIMED producer parked on a full ring; C's BLOCKING
+// pop succeeds inline and the grant reconciles P. The grant seam must retire
+// P's ordinary deadline EXACTLY ONCE (retire_timer_for_node_locked inside
+// queue_grant_producer_locked): the active count returns to 0 and a later
+// clock advance past the deadline produces no second terminal (no P:expired
+// after P:committed — the terminal-winner law absorbs the stale timer).
+SLUICE_TEST_CASE(dst_t5_v1t_timed_producer_inline_pop_reconcile) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    QueueFixture fx("dst_t5_v1t");
+    fx.timed_producer = true;
+    fx.build_fibers();
+    SLUICE_CHECK(fx.q.try_push(7).status() == QueuePushStatus::committed);
+    fx.driver.run(0).run(1);  // P parks (timed), C pops inline (and grants P)
+    fx.driver.arm();
+    fx.sched.spawn(fx.fp);
+    fx.sched.spawn(fx.fc);
+    fx.sched.run(1);
+
+    const std::string ev = join(fx.events);
+    const FiberState p_state_at_run_end = fx.fp.state();
+    const unsigned active_timers =
+        TimerTestControl::active_deadline_count(fx.sched);
+    fx.q.close();
+    fx.sched.run(1);
+    fx.dispose();
+
+    SLUICE_CHECK_MSG(ev.find("C:item:7") != std::string::npos,
+                     ("consumer must get the pre-filled item (events: " + ev +
+                      ")")
+                         .c_str());
+    SLUICE_CHECK_MSG(ev.find("P:committed") != std::string::npos,
+                     ("Q-LIV-1: inline pop must reconcile the parked TIMED "
+                      "producer (events: " +
+                      ev + ")")
+                         .c_str());
+    SLUICE_CHECK(p_state_at_run_end == FiberState::done);
+    // AC-2b closure: the grant retired the winner's timer exactly once.
+    SLUICE_CHECK_MSG(active_timers == 0,
+                     "grant-side retire must drain the parked producer's timer");
+    // Exactly-once terminal: a stale clock advance finds no live registration.
+    fx.sched.advance_clock(Scheduler::deadline_t{60});
+    fx.sched.run(1);
+    SLUICE_CHECK_MSG(join(fx.events).find("P:expired") == std::string::npos,
+                     "terminal winner law: no second terminal after commit");
+}
+
+// V1-TS — Q-LIV-1 symmetric x AC-2b: TIMED consumer parked on an empty ring;
+// P's BLOCKING push succeeds inline and the grant reconciles C. The grant
+// seam retires C's ordinary deadline exactly once; a later clock advance
+// produces no second terminal (no C:expired after C:item).
+SLUICE_TEST_CASE(dst_t5_v1ts_timed_consumer_inline_push_reconcile) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    QueueFixture fx("dst_t5_v1ts");
+    fx.timed_consumer = true;
+    fx.build_fibers();
+    fx.driver.run(1).run(0);  // C parks (timed), P commits inline (grants C)
+    fx.driver.arm();
+    fx.sched.spawn(fx.fp);
+    fx.sched.spawn(fx.fc);
+    fx.sched.run(1);
+
+    const std::string ev = join(fx.events);
+    const FiberState p_state_at_run_end = fx.fp.state();
+    const FiberState c_state = fx.fc.state();
+    const unsigned active_timers =
+        TimerTestControl::active_deadline_count(fx.sched);
+    fx.q.close();
+    fx.sched.run(1);
+    fx.dispose();
+
+    SLUICE_CHECK_MSG(ev.find("P:committed") != std::string::npos,
+                     ("producer must commit inline (events: " + ev + ")")
+                         .c_str());
+    SLUICE_CHECK_MSG(ev.find("C:item:9") != std::string::npos,
+                     ("Q-LIV-1 symmetric: inline push must reconcile the "
+                      "parked TIMED consumer (events: " +
+                      ev + ")")
+                         .c_str());
+    SLUICE_CHECK(p_state_at_run_end == FiberState::done);
+    SLUICE_CHECK(c_state == FiberState::done);
+    // AC-2b closure: the grant retired the winner's timer exactly once.
+    SLUICE_CHECK_MSG(active_timers == 0,
+                     "grant-side retire must drain the parked consumer's timer");
+    // Exactly-once terminal: a stale clock advance finds no live registration.
+    fx.sched.advance_clock(Scheduler::deadline_t{60});
+    fx.sched.run(1);
+    SLUICE_CHECK_MSG(join(fx.events).find("C:expired") == std::string::npos,
+                     "terminal winner law: no second terminal after grant");
 }
 
 // V2 — timed producer push_until(50): expiry / documented-reconciler /

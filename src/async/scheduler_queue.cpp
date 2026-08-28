@@ -59,36 +59,55 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
            detail::QueueItemControl::Location::producer_operation);
     QueueWaitCtx ctx{&port, detail::QueueRole::producer, c, &lease, nullptr};
     node.set_user(&ctx);
+    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
-        LockGuard qlk(port.waiters_[0].mtx());
-        if (!port.waiters_[0].register_wait_locked(node, me)) {
-            return;  // registration contract violation
+        {
+            LockGuard qlk(port.waiters_[0].mtx());
+            if (!port.waiters_[0].register_wait_locked(node, me)) {
+                return;  // registration contract violation
+            }
+            ++port.active_wait_associations_;
+            ++waiting_waitq_count_;
+            // Admission recheck: Open + space + FIFO head => commit inline (the
+            // common no-contention case; the reconciler path handles the rest).
+            if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
+                c->location_ = detail::QueueItemControl::Location::ring;
+                const std::size_t tail =
+                    (port.ring_head_ + port.ring_count_) % port.capacity_;
+                port.ring_[tail] = std::move(lease);  // caller lease now empty
+                ++port.ring_count_;
+                port.waiters_[0].wake_node_locked(node);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // Q-LIV-1: the slot-occupancy change must reconcile the parked
+                // consumer head before this op returns; the grant runs below,
+                // after the producer role mutex is released (the two role
+                // mutexes are NEVER held together).
+                inline_committed = true;
+            }
+            // Closed at admission: resolve Woken with the lease retained.
+            else if (port.closed_) {
+                port.waiters_[0].wake_node_locked(node);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                return;  // lease retained; caller returns closed
+            } else {
+                commit_suspend_locked(ws, me);
+            }
         }
-        ++port.active_wait_associations_;
-        ++waiting_waitq_count_;
-        // Admission recheck: Open + space + FIFO head => commit inline (the
-        // common no-contention case; the reconciler path handles the rest).
-        if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
-            c->location_ = detail::QueueItemControl::Location::ring;
-            const std::size_t tail =
-                (port.ring_head_ + port.ring_count_) % port.capacity_;
-            port.ring_[tail] = std::move(lease);  // caller lease now empty
-            ++port.ring_count_;
-            port.waiters_[0].wake_node_locked(node);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;  // committed inline
+        // Q-LIV-1 liveness reconcile: this inline success changed ring
+        // occupancy — exactly the resource transition that makes the opposite
+        // role's FIFO head eligible — so grant that head BEFORE returning, the
+        // same authority try_push's FastPushCommit performs. Held locks here
+        // are G + S only (identical to the try_push FastPopCommit critical
+        // section); every Queue actor that could touch either role FIFO or the
+        // ring needs G, so no third party can interleave in this window.
+        if (inline_committed) {
+            (void)queue_grant_consumer_locked(port);
+            return;  // committed inline; this fiber never suspended
         }
-        // Closed at admission: resolve Woken with the lease retained.
-        if (port.closed_) {
-            port.waiters_[0].wake_node_locked(node);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;  // lease retained; caller returns closed
-        }
-        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -119,34 +138,52 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
     Fiber* me = ws->current;
     QueueWaitCtx ctx{&port, detail::QueueRole::consumer, nullptr, nullptr, &out};
     node.set_user(&ctx);
+    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
-        LockGuard qlk(port.waiters_[1].mtx());
-        if (!port.waiters_[1].register_wait_locked(node, me)) {
-            return;  // registration contract violation
+        {
+            LockGuard qlk(port.waiters_[1].mtx());
+            if (!port.waiters_[1].register_wait_locked(node, me)) {
+                return;  // registration contract violation
+            }
+            ++port.active_wait_associations_;
+            ++waiting_waitq_count_;
+            if (!port.ring_empty_locked() && node.prev_ == nullptr) {
+                const std::size_t head = port.ring_head_;
+                out = std::move(port.ring_[head]);
+                port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
+                --port.ring_count_;
+                out.control_->location_ =
+                    detail::QueueItemControl::Location::consumer_operation;
+                port.waiters_[1].wake_node_locked(node);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // Q-LIV-1: the freed slot must reconcile the parked producer
+                // head before this op returns; the grant runs below, after
+                // the consumer role mutex is released (the two role mutexes
+                // are NEVER held together).
+                inline_committed = true;
+            } else if (port.ring_empty_locked() && port.closed_) {
+                port.waiters_[1].wake_node_locked(node);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                return;  // closed+empty
+            } else {
+                commit_suspend_locked(ws, me);
+            }
         }
-        ++port.active_wait_associations_;
-        ++waiting_waitq_count_;
-        if (!port.ring_empty_locked() && node.prev_ == nullptr) {
-            const std::size_t head = port.ring_head_;
-            out = std::move(port.ring_[head]);
-            port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
-            --port.ring_count_;
-            out.control_->location_ =
-                detail::QueueItemControl::Location::consumer_operation;
-            port.waiters_[1].wake_node_locked(node);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;  // item granted inline
+        // Q-LIV-1 liveness reconcile: this inline success changed ring
+        // occupancy — exactly the resource transition that makes the opposite
+        // role's FIFO head eligible — so grant that head BEFORE returning, the
+        // same authority try_pop's FastPopCommit performs. Held locks here are
+        // G + S only (identical to the try_pop FastPopCommit critical
+        // section); every Queue actor that could touch either role FIFO or
+        // the ring needs G, so no third party can interleave in this window.
+        if (inline_committed) {
+            (void)queue_grant_producer_locked(port);
+            return;  // committed inline; this fiber never suspended
         }
-        if (port.ring_empty_locked() && port.closed_) {
-            port.waiters_[1].wake_node_locked(node);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;  // closed+empty
-        }
-        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -177,59 +214,66 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
     QueueWaitCtx ctx{&port, detail::QueueRole::producer, c, &lease, nullptr};
     node.set_user(&ctx);
     TimerRegistration* reg = nullptr;
+    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
-        LockGuard qlk(port.waiters_[0].mtx());
-        if (!port.waiters_[0].register_wait_locked(node, me)) {
-            return;  // registration contract violation
-        }
-        ++port.active_wait_associations_;
-        ++waiting_waitq_count_;
-        // Intentionally LOCAL arming (AC-2b review corrective): NOT routed
-        // through arm_ordinary_deadline_locked. The historical order bumps
-        // active_queue_timers_ BEFORE the ACTIVE count / heap / cache
-        // publication, and earliest_active_deadline_ is an atomic read by
-        // parked workers WITHOUT global_mtx_ — so this interleaving is
-        // externally observable in principle and is preserved verbatim.
-        timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
-        reg = &timer_pool_.back();
-        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
-        reg->owner_ctx_ = &port;
-        ++port.active_queue_timers_;
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
-        // Admission precedence 1: resource admissible => commit + resolve.
-        if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
-            c->location_ = detail::QueueItemControl::Location::ring;
-            const std::size_t tail =
-                (port.ring_head_ + port.ring_count_) % port.capacity_;
-            port.ring_[tail] = std::move(lease);
-            ++port.ring_count_;
-            port.waiters_[0].wake_node_locked(node);
-            // ACTIVE->RETIRED via the ordinary deadline authority.
-            (void)retire_ordinary_deadline_locked(*reg);
+        {
+            LockGuard qlk(port.waiters_[0].mtx());
+            if (!port.waiters_[0].register_wait_locked(node, me)) {
+                return;  // registration contract violation
+            }
+            ++port.active_wait_associations_;
+            ++waiting_waitq_count_;
+            // Intentionally LOCAL arming (AC-2b review corrective): NOT routed
+            // through arm_ordinary_deadline_locked. The historical order bumps
+            // active_queue_timers_ BEFORE the ACTIVE count / heap / cache
+            // publication, and earliest_active_deadline_ is an atomic read by
+            // parked workers WITHOUT global_mtx_ — so this interleaving is
+            // externally observable in principle and is preserved verbatim.
+            timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
+            reg = &timer_pool_.back();
+            reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
+            reg->owner_ctx_ = &port;
+            ++port.active_queue_timers_;
+            ++active_deadline_count_;
+            heap_push_ordinary_locked(reg);
             recompute_earliest_deadline_locked();
-            reg->fire_on_resolve_locked(/*timer_won=*/false);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;
-        }
-        // Closed => resolve (lease retained).
-        if (port.closed_) {
-            port.waiters_[0].wake_node_locked(node);
-            // ACTIVE->RETIRED via the ordinary deadline authority.
-            (void)retire_ordinary_deadline_locked(*reg);
-            recompute_earliest_deadline_locked();
-            reg->fire_on_resolve_locked(/*timer_won=*/false);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;
-        }
-        // Admission precedence 2: already-due => Expired inline.
-        if (clock_now_unlocked() >= deadline) {
-            if (port.waiters_[0].expire_locked(node)) {
+            // Admission precedence 1: resource admissible => commit + resolve.
+            if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
+                c->location_ = detail::QueueItemControl::Location::ring;
+                const std::size_t tail =
+                    (port.ring_head_ + port.ring_count_) % port.capacity_;
+                port.ring_[tail] = std::move(lease);
+                ++port.ring_count_;
+                port.waiters_[0].wake_node_locked(node);
+                // ACTIVE->RETIRED via the ordinary deadline authority.
+                (void)retire_ordinary_deadline_locked(*reg);
+                recompute_earliest_deadline_locked();
+                reg->fire_on_resolve_locked(/*timer_won=*/false);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // Q-LIV-1: the slot-occupancy change must reconcile the parked
+                // consumer head before this op returns; the grant runs below,
+                // after the producer role mutex is released (the two role
+                // mutexes are NEVER held together).
+                inline_committed = true;
+            }
+            // Closed => resolve (lease retained).
+            else if (port.closed_) {
+                port.waiters_[0].wake_node_locked(node);
+                // ACTIVE->RETIRED via the ordinary deadline authority.
+                (void)retire_ordinary_deadline_locked(*reg);
+                recompute_earliest_deadline_locked();
+                reg->fire_on_resolve_locked(/*timer_won=*/false);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                return;
+            }
+            // Admission precedence 2: already-due => Expired inline (a losing
+            // expire CAS falls through to suspend, as before).
+            else if (clock_now_unlocked() >= deadline &&
+                     port.waiters_[0].expire_locked(node)) {
                 // ACTIVE->CONSUMED via the ordinary deadline authority; the
                 // already-due inline path keeps its immediate cache recompute.
                 (void)consume_ordinary_deadline_locked(*reg);
@@ -238,9 +282,16 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 return;  // expired; lease retained
+            } else {
+                commit_suspend_locked(ws, me);
             }
         }
-        commit_suspend_locked(ws, me);
+        // Q-LIV-1 liveness reconcile (timed push): identical authority and
+        // lock position to the untimed inline path above.
+        if (inline_committed) {
+            (void)queue_grant_consumer_locked(port);
+            return;  // committed inline; this fiber never suspended
+        }
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -269,55 +320,62 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
     QueueWaitCtx ctx{&port, detail::QueueRole::consumer, nullptr, nullptr, &out};
     node.set_user(&ctx);
     TimerRegistration* reg = nullptr;
+    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
-        LockGuard qlk(port.waiters_[1].mtx());
-        if (!port.waiters_[1].register_wait_locked(node, me)) {
-            return;  // registration contract violation
-        }
-        ++port.active_wait_associations_;
-        ++waiting_waitq_count_;
-        // Intentionally LOCAL arming (AC-2b review corrective) — see
-        // queue_push_admit_until for why Queue does not route through
-        // arm_ordinary_deadline_locked. The consume/retire transitions below
-        // DO go through the authority (uniform facts).
-        timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
-        reg = &timer_pool_.back();
-        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
-        reg->owner_ctx_ = &port;
-        ++port.active_queue_timers_;
-        ++active_deadline_count_;
-        heap_push_ordinary_locked(reg);
-        recompute_earliest_deadline_locked();
-        if (!port.ring_empty_locked() && node.prev_ == nullptr) {
-            const std::size_t head = port.ring_head_;
-            out = std::move(port.ring_[head]);
-            port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
-            --port.ring_count_;
-            out.control_->location_ =
-                detail::QueueItemControl::Location::consumer_operation;
-            port.waiters_[1].wake_node_locked(node);
-            // ACTIVE->RETIRED via the ordinary deadline authority.
-            (void)retire_ordinary_deadline_locked(*reg);
+        {
+            LockGuard qlk(port.waiters_[1].mtx());
+            if (!port.waiters_[1].register_wait_locked(node, me)) {
+                return;  // registration contract violation
+            }
+            ++port.active_wait_associations_;
+            ++waiting_waitq_count_;
+            // Intentionally LOCAL arming (AC-2b review corrective) — see
+            // queue_push_admit_until for why Queue does not route through
+            // arm_ordinary_deadline_locked. The consume/retire transitions below
+            // DO go through the authority (uniform facts).
+            timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
+            reg = &timer_pool_.back();
+            reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
+            reg->owner_ctx_ = &port;
+            ++port.active_queue_timers_;
+            ++active_deadline_count_;
+            heap_push_ordinary_locked(reg);
             recompute_earliest_deadline_locked();
-            reg->fire_on_resolve_locked(/*timer_won=*/false);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;
-        }
-        if (port.ring_empty_locked() && port.closed_) {
-            port.waiters_[1].wake_node_locked(node);
-            // ACTIVE->RETIRED via the ordinary deadline authority.
-            (void)retire_ordinary_deadline_locked(*reg);
-            recompute_earliest_deadline_locked();
-            reg->fire_on_resolve_locked(/*timer_won=*/false);
-            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-            return;
-        }
-        if (clock_now_unlocked() >= deadline) {
-            if (port.waiters_[1].expire_locked(node)) {
+            if (!port.ring_empty_locked() && node.prev_ == nullptr) {
+                const std::size_t head = port.ring_head_;
+                out = std::move(port.ring_[head]);
+                port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
+                --port.ring_count_;
+                out.control_->location_ =
+                    detail::QueueItemControl::Location::consumer_operation;
+                port.waiters_[1].wake_node_locked(node);
+                // ACTIVE->RETIRED via the ordinary deadline authority.
+                (void)retire_ordinary_deadline_locked(*reg);
+                recompute_earliest_deadline_locked();
+                reg->fire_on_resolve_locked(/*timer_won=*/false);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // Q-LIV-1: the freed slot must reconcile the parked producer
+                // head before this op returns; the grant runs below, after
+                // the consumer role mutex is released (the two role mutexes
+                // are NEVER held together).
+                inline_committed = true;
+            } else if (port.ring_empty_locked() && port.closed_) {
+                port.waiters_[1].wake_node_locked(node);
+                // ACTIVE->RETIRED via the ordinary deadline authority.
+                (void)retire_ordinary_deadline_locked(*reg);
+                recompute_earliest_deadline_locked();
+                reg->fire_on_resolve_locked(/*timer_won=*/false);
+                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                return;
+            }
+            // Already-due => Expired inline (a losing expire CAS falls
+            // through to suspend, as before).
+            else if (clock_now_unlocked() >= deadline &&
+                     port.waiters_[1].expire_locked(node)) {
                 // ACTIVE->CONSUMED via the ordinary deadline authority; the
                 // already-due inline path keeps its immediate cache recompute.
                 (void)consume_ordinary_deadline_locked(*reg);
@@ -326,9 +384,16 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 return;  // expired; out stays empty
+            } else {
+                commit_suspend_locked(ws, me);
             }
         }
-        commit_suspend_locked(ws, me);
+        // Q-LIV-1 liveness reconcile (timed pop): identical authority and
+        // lock position to the untimed inline path above.
+        if (inline_committed) {
+            (void)queue_grant_producer_locked(port);
+            return;  // committed inline; this fiber never suspended
+        }
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -465,17 +530,21 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
 // the two role mutexes are NEVER held together.
 //
 // DESIGN (atomic reconciler commit, single suspend). The reconciler is the
-// OTHER role's fast-path success: e.g. a producer's try_push that commits an
-// item to the ring WAKES the consumer FIFO head via wake_wait_one_locked and,
-// in the SAME G + S + role.mtx() critical section, moves the just-committed
-// item into that specific consumer's out-lease (read via won->user()). The
-// consumer's admit did a SINGLE register + suspend; on wake its out-lease is
-// already non-empty (item granted) — no re-check loop, no per-node reuse
-// problem. The producer direction is symmetric: a consumer's try_pop that
-// opened a slot wakes the producer FIFO head and commits the producer's lease
-// into the freed slot. close() wakes every parked producer (closed outcome —
-// lease retained) and every parked consumer (pop remaining items, else
-// closed).
+// OTHER role's resource-changing success — EITHER its fast-path success
+// (try_push/try_pop) OR its blocking/timed admit's inline success (Q-LIV-1).
+// E.g. a producer's try_push that commits an item to the ring WAKES the
+// consumer FIFO head via wake_wait_one_locked and, in the SAME G + S +
+// role.mtx() critical section, moves the just-committed item into that
+// specific consumer's out-lease (read via won->user()). The consumer's admit
+// did a SINGLE register + suspend; on wake its out-lease is already non-empty
+// (item granted) — no re-check loop, no per-node reuse problem. The producer
+// direction is symmetric: a consumer's try_pop that opened a slot wakes the
+// producer FIFO head and commits the producer's lease into the freed slot.
+// The blocking/timed admit inline successes perform the same reconcile (their
+// own role mutex released first — the two role mutexes are NEVER held
+// together; the grant then runs under G + S, the same lock shape as the fast
+// paths). close() wakes every parked producer (closed outcome — lease
+// retained) and every parked consumer (pop remaining items, else closed).
 //
 // Per-operation context: the admit caller stashes a QueueWaitCtx* on the
 // WaitNode (node.set_user) BEFORE registering. The ctx carries the producer
