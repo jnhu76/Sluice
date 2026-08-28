@@ -31,15 +31,15 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | File | Lines | Domain |
 |---|---|---|
 | `src/async/scheduler_park_wake.cpp` | 1309 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 536 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 391 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 310 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 338 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 675 | rwlock waits, ForgedRwWaitCtx |
-| `src/async/scheduler_condition.cpp` | 261 | condition waits |
-| `src/async/scheduler_queue.cpp` | 513 | runnable queue, fiber routing |
+| `src/async/scheduler_timer.cpp` | 609 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 395 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 685 | rwlock waits, ForgedRwWaitCtx |
+| `src/async/scheduler_condition.cpp` | 267 | condition waits |
+| `src/async/scheduler_queue.cpp` | 591 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2141 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2146 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -138,6 +138,60 @@ call and no new allocation, lock, traversal, or callback. AC-2b timer
 retirement still fires any already-installed Queue timer-accounting hook.
 There is no public API, ABI, or object-layout change; therefore public API
 reference documentation is unaffected.)
+`scheduler_queue.cpp` 513 → 582 (2026-08-28, Q-LIV-1 — blocking/timed Queue
+admit inline-success paths now reconcile the opposite-role FIFO head via the
+existing `queue_grant_consumer_locked` / `queue_grant_producer_locked`
+authority (the reconcile `try_push`/`try_pop` FastPush/FastPopCommit always
+performed); the grant runs after the admitting role mutex is released, under
+`global_mtx_` + `state_mtx_` only — the same lock shape as the fast paths, the
+two role mutexes still never held together — and the inline path returns
+before the suspend switch because the admitting fiber never suspended.
+Queue liveness repair, NOT a structural refactor: role FIFO, ring order,
+lease semantics, close semantics, and AC-2b local Queue timer arming are
+unchanged; the DST-PV-1 known-drift witness is flipped into the post-fix
+regression. No new allocation, mutex object, or lock-order edge; each inline
+commit adds one opposite-role mutex acquisition (inside the grant, the
+opposite role's `WaitQueue::mtx_`, under the same `global_mtx_` +
+`state_mtx_` shape as the fast paths) plus an O(1) FIFO head/empty check —
+one grant call added on each of the four inline-commit paths.)
+`scheduler_timer.cpp` 536 → 596, `scheduler_queue.cpp` 582 → 591,
+`scheduler_mutex.cpp` 338 → 342, `scheduler_semaphore.cpp` 310 → 314,
+`scheduler_event.cpp` 391 → 395, `scheduler_condition.cpp` 261 → 267,
+`scheduler_rwlock.cpp` 675 → 685 (2026-08-28, R2 review round 2 P1 —
+allocation-atomic timed admission: the ordinary arming authority is split
+into a MAY-THROW `prepare_ordinary_deadline_locked` (deadline-heap slot
+reserve with checked max_size guard + `timer_pool_` node allocation, the
+select.cpp step-(5) reserve pattern) and a noexcept
+`publish_ordinary_deadline_locked` (hook install + ACTIVE count + heap push
+within the reserved capacity + earliest-deadline cache recompute); every
+ordinary timed admission now performs ALL of its allocations BEFORE
+`register_wait_locked`, so an escaping `bad_alloc` leaves the node Detached
+and every counter untouched. Queue's two timed admits keep their LOCAL
+publish sequence verbatim (AC-2b corrective order preserved: hooks →
+`active_queue_timers_` → ACTIVE count → heap → cache) and share only the
+prepare phase. `arm_ordinary_deadline_locked` remains as the composed form
+for the test-only hook. No public API, ABI, or object-layout change; no new
+lock, lock-order edge, or wake-path change; the admission tail after
+registration is now provably allocation-free. `push_until`'s value-carrying
+lease has no rejection status in the result vocabulary, so its allocation
+failure surfaces through the pre-existing non-empty-lease fail-fast boundary
+(Debug AND Release) — death-pinned by
+`queue_lifecycle_death_push_until_alloc_fail_fast`; the failure-free
+`pop_until`/generic/primitive paths are catchable and regression-pinned by
+`od_alloc_a1_generic_admission_atomic`, `od_alloc_a2_event_admission_atomic`,
+and `queue_alloc_pop_admission_atomic`.)
+`scheduler_timer.cpp` 596 → 609, `scheduler.cpp` 2141 → 2146
+(`AsyncTestAccess::deadline_heap_capacity` observation seam for the growth
+regression) (2026-08-28, R2 review round 3 P1 — the
+prepare-phase heap reserve now preserves vector's geometric growth: the
+growth allocation fires ONLY when the heap is exactly full and takes the
+next doubling step, checked against max_size, instead of round 2's
+unconditional size+1 reserve, which walked capacity up one slot per
+admission (O(N) reallocations, O(N^2) element moves reaching N concurrent
+deadlines). The R2-ALLOC contract is unchanged — every allocation still
+precedes `register_wait_locked`, the publish tail stays noexcept, and
+`reserve()` keeps the strong guarantee on throw. Growth curve
+regression-pinned by `od_alloc_a3_heap_growth_stays_geometric`.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

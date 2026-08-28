@@ -905,7 +905,10 @@ public:
                                     WaitNode& node);
 
     // ---- Queue reconciler grant seams (winner-before-publication) ----
-    // Called by QueuePort fast paths under G + S (caller-held) to grant the
+    // Called by QueuePort fast paths (try_push / try_pop / close) AND by the
+    // blocking/timed admit inline-success paths (scheduler_queue.cpp, Q-LIV-1)
+    // under G + S (caller-held; the admit releases its own role mutex first —
+    // the two role mutexes are never held together) to grant the
     // role FIFO head atomically: resolve_(Woken) + per-winner resource commit
     // (read from won->user()) + retire any bound timer + make_runnable /
     // route_runnable_locked (publication LAST). These mirror
@@ -1911,13 +1914,16 @@ private:
     void heap_sift_down_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
 
     // O(1) erase of a registration's pool block by its pool_self_ self-link.
-    // SAFE ONLY when the block has ALREADY been popped from the deadline heap
-    // (so no live heap slot still holds its pointer). The pump is the sole
-    // legitimate caller: it pops the min (removing it from the heap), then
-    // erases the pool block. Other paths (admission-expired, non-timer retire)
-    // do NOT erase — they leave the block in the heap to be popped+erased by
-    // the pump at its deadline (lazy removal). This keeps the pool bounded by
-    // live+pending deadline waits with no UAF. Called under global_mtx_.
+    // SAFE ONLY when no live heap slot holds the block's pointer: either it
+    // has ALREADY been popped from the deadline heap (the pump path: pop the
+    // min, then erase the pool block), or it was NEVER published to the heap
+    // (the R2-ALLOC admission path: register_wait_locked failed after
+    // prepare_ordinary_deadline_locked, so the caller discards the
+    // prepared-but-never-published block before returning). Other paths
+    // (admission-expired, non-timer retire) do NOT erase — they leave the
+    // block in the heap to be popped+erased by the pump at its deadline
+    // (lazy removal). This keeps the pool bounded by live+pending deadline
+    // waits with no UAF. Called under global_mtx_.
     // NEVER reads node()/queue() (lifetime-safe by construction).
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
 
@@ -1949,12 +1955,70 @@ private:
     //
     // All three require global_mtx_ held (the existing G-required timer CS).
 
+    // R2-ALLOC corrective: split arming into a MAY-THROW prepare phase and a
+    // noexcept publish phase so a timed admission can perform every
+    // allocation BEFORE it mutates any admission state (node registration,
+    // waiting_waitq_count_, per-primitive counters). The admission order at
+    // every production timed site is:
+    //
+    //   prepare_ordinary_deadline_locked(...)   // may throw; NOTHING mutated
+    //   register_wait_locked(node, ...)         // noexcept pointer linking
+    //   ++waiting_waitq_count_ (+ per-site)     // noexcept
+    //   publish (or the local Queue publish)    // noexcept
+    //
+    // A std::bad_alloc / std::length_error escaping prepare therefore leaves:
+    // node Detached, wait accounting unchanged, timer accounting unchanged,
+    // no pool block, no heap entry, no earliest-deadline cache change, no
+    // publication — the strong admission-atomicity contract. This is the
+    // ordinary-path mirror of the Select admission's reserve-before-register
+    // (select.cpp step (5)); a catch-based rollback alternative was rejected
+    // because arm's two internal allocation points (heap growth + pool node)
+    // would each need partial-failure rollback under the lock.
+    //
+    // Prepare performs, in order: a deadline_heap_ capacity-growth reserve
+    // and the timer_pool_.emplace_back node allocation. The heap reserve
+    // fires only when size == capacity (heap exactly full) and takes the
+    // next geometric doubling step, checked against max_size, so the
+    // amortized-O(1) append curve of vector::push_back is preserved — an
+    // unconditional one-slot reserve would degrade N concurrent admissions
+    // into O(N) reallocations and O(N^2) element moves. Once prepare
+    // returns, both containers' subsequent admission mutations are then
+    // allocation-free. The block is constructed
+    // with the {node, q, deadline} binding and default-null hooks; it is NOT
+    // ACTIVE-published (no count, no heap entry, no cache recompute) until
+    // publish. Between prepare and publish the caller holds global_mtx_ for
+    // the whole admission, so no pump/scan can observe the intermediate
+    // block; if register_wait_locked fails (registration contract violation),
+    // the caller MUST erase the never-published block via
+    // erase_popped_registration_locked (safe: no heap slot holds its pointer).
+    TimerRegistration* prepare_ordinary_deadline_locked(
+        WaitNode* node, WaitQueue* q, deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Publish a prepared block: install {on_resolve, owner_ctx}, increment
+    // active_deadline_count_ exactly once, push the block into the deadline
+    // heap (within the capacity reserved by prepare), and refresh the
+    // earliest-deadline park cache at this same critical-section boundary —
+    // the exact externally-observable sequence every pre-existing NON-Queue
+    // arming site performed. noexcept PROOF: the heap entry type is trivially
+    // copyable (static_assert in scheduler_timer.cpp), push_back within
+    // reserved capacity cannot throw for it, sift swaps are nothrow, and
+    // recompute only scans and stores an atomic. After publication the
+    // admission tail is exception-free by construction — mirroring the §10.2
+    // rule that a committed transaction must not gain a throwing path.
+    void publish_ordinary_deadline_locked(
+        TimerRegistration* reg,
+        TimerRegistration::OnResolveFn on_resolve = nullptr,
+        void* owner_ctx = nullptr) noexcept SLUICE_REQUIRES(global_mtx_);
+
     // Arm one ordinary deadline registration for wait epoch {node, q,
-    // deadline}: construct the block in timer_pool_, publish it into the
-    // deadline heap, increment active_deadline_count_ exactly once, and
-    // refresh the earliest-deadline park cache at this same critical-section
-    // boundary (matching every pre-existing NON-Queue arming site). Returns
-    // the stable TimerRegistration* (pointer-stable std::list storage).
+    // deadline}: prepare + publish in one call. Kept as the composed
+    // historical form for callers whose registration happens outside this
+    // helper and cannot interleave an allocation failure with admission state
+    // (the narrow test-only hook). PRODUCTION timed admissions MUST NOT use
+    // the composed form across their registration boundary — they call
+    // prepare BEFORE register_wait_locked and publish after their counters,
+    // per the R2-ALLOC split above.
     //
     // Raw-pointer parameters are deliberate (AC-2b review corrective): the
     // narrow test-only hook register_test_deadline_locked historically admits
@@ -1973,8 +2037,10 @@ private:
     // and the arming-time recompute publishes earliest_active_deadline_ to an
     // atomic that parked workers read WITHOUT global_mtx_; ordering against
     // the per-port counter is therefore externally observable in principle
-    // and is preserved verbatim at those call sites. Semantic compression
-    // over completeness — see queue_push_admit_until for the local sequence.
+    // and is preserved verbatim at those call sites (they use the shared
+    // prepare for the allocation phase and keep their local publish
+    // sequence). Semantic compression over completeness — see
+    // queue_push_admit_until for the local sequence.
     TimerRegistration* arm_ordinary_deadline_locked(
         WaitNode* node, WaitQueue* q, deadline_t deadline,
         TimerRegistration::OnResolveFn on_resolve = nullptr,

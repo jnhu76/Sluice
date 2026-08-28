@@ -940,6 +940,81 @@ SLUICE_TEST_CASE(queue_g1_pop_until_expires) {
     SLUICE_CHECK(session.empty());
 }
 
+// ---- R2-ALLOC: timed pop admission allocation failure leaves zero residue --
+//
+// The Queue's LOCAL arming path (queue_pop_admit_until) now performs its
+// allocations in prepare_ordinary_deadline_locked BEFORE register_wait_locked
+// and the per-port counter bumps. A one-shot injected std::bad_alloc at
+// prepare entry must therefore escape pop_until catchably (the pop failure
+// path carries no value lease), leave every Scheduler-wide and per-port
+// counter intact, and the SAME port must immediately admit a healthy
+// try_push + timed pop. The closing begin_teardown is the F.1 counter
+// fail-fast: any per-port residue (active_wait_associations_,
+// active_queue_timers_) terminates here instead of passing silently.
+SLUICE_TEST_CASE(queue_alloc_pop_admission_atomic) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
+    sluice_async_test::ControllerGuard cg(sched);
+    TimerCtl::arm_alloc_failure(sched);
+    QueuePort port(sched, 2);
+
+    std::atomic<bool> failed{false};
+    std::atomic<bool> healthy_after{false};
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        try {
+            // Empty open ring, future deadline: a real would-park consumer
+            // admission. The injection fires at prepare entry — BEFORE the
+            // node registration and every counter bump.
+            auto r = port.pop_until(/*deadline=*/100);
+            (void)r;
+        } catch (const std::bad_alloc&) {
+            failed.store(true, std::memory_order_release);
+        }
+        // Healthy re-admission on the SAME port: commit an item, then a timed
+        // pop whose resource-first precedence resolves Woken inline through
+        // the full local prepare -> register -> publish -> retire sequence.
+        {
+            auto lease = QueueItemFactory::make<int>(port, 7);
+            (void)port.try_push(std::move(lease));
+        }
+        auto r = port.pop_until(/*deadline=*/0);  // already due + item present
+        healthy_after.store(r.status() == QueueOpaquePopStatus::item,
+                            std::memory_order_release);
+        if (r.status() == QueueOpaquePopStatus::item) {
+            (void)release_popped<int>(port, std::move(r));
+        }
+        // The inline-retired block is lazily reclaimed by its own (already
+        // due) deadline: advance_clock(0) runs the pump unconditionally, so
+        // the pool/heap drain is deterministic before run() returns.
+        sched.advance_clock(0);
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(failed.load(),
+                     "injected bad_alloc escaped QueuePort::pop_until");
+    SLUICE_CHECK_MSG(healthy_after.load(),
+                     "port re-admitted a healthy timed pop after the failure");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0,
+                     "alloc failure left no wait-accounting residue");
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
+                     "alloc failure left no timer-accounting residue");
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == 0 &&
+                         TimerCtl::deadline_heap_size(sched) == 0,
+                     "alloc failure orphaned no pool/heap block");
+    // F.1 counter fail-fast: proves the per-port counters (including
+    // active_queue_timers_ / active_wait_associations_) returned to 0 despite
+    // the failed admission between the two healthy epochs.
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());
+}
+
 // ---- G2: multi-worker producer-consumer migration -------------------------
 // Producer parks on a full ring on W0. Consumer (spawned on W1) frees a slot.
 // The producer's reconcile-grant publishes it runnable; W0 or W1 resumes it

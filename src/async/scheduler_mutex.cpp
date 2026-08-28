@@ -168,13 +168,17 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
+        // R2-ALLOC: allocations before any admission state mutation (a
+        // bad_alloc here leaves the node Detached and all counters intact).
+        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
         if (!waiters.register_wait_locked(node, me)) {
+            erase_popped_registration_locked(reg);  // never published
             return;  // registration contract violation
         }
         ++waiting_waitq_count_;
-        // Arm the timer registration control block for this wait epoch (pool
-        // construction + ACTIVE count + heap push + park-cache refresh).
-        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline);
+        // Publish the timer registration control block for this wait epoch
+        // (pool publication + ACTIVE count + heap push + park-cache refresh).
+        publish_ordinary_deadline_locked(reg);
 
         // Admission precedence 1: ownership admission wins over a due deadline.
         // If owner_ is free AND this node is the FIFO head (no earlier waiter —

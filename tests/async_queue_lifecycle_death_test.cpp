@@ -29,6 +29,7 @@
 
 #if defined(__unix__) || defined(__APPLE__)
 
+#include "async_test_control.hpp"  // R2-ALLOC injection controller
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/detail/queue_port.hpp>
@@ -303,6 +304,61 @@ void child_snapshot_then_teardown() {
     std::_Exit(0);
 }
 
+// ---- Child: timed push admission allocation failure -> lease fail-fast -----
+//
+// R2-ALLOC: push_until's timed admission allocates (prepare) BEFORE any state
+// mutation, so an allocation failure leaves the port, node, and timer
+// authorities unmutated. The value-carrying QueueItemLease has NO rejection
+// status in the result vocabulary, so the caller-visible response is the
+// pre-existing lease destruction contract: a non-empty lease must fail-fast
+// (named boundary, Debug AND Release). The child arms the one-shot bad_alloc
+// injection and runs a real producer admission (full ring, future deadline);
+// the throw at prepare entry unwinds through push_until's by-value lease and
+// the fail-fast fires -> deterministic terminate -> exit 86.
+//
+// This pins the RESPONSE BOUNDARY, not merely "the process dies": a
+// regression that reintroduced an allocation after registration would
+// terminate via a DIFFERENT authority mid-admission (registered-node
+// destruction assert / counter corruption) rather than at the lease
+// contract; a regression that swallowed the failure would make push_until
+// return and the child exits 87 here.
+void child_push_until_alloc_fail_fast() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+
+    // Pre-fill the ring so the producer's push_until is a real would-park
+    // admission on a full ring.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 1);
+        (void)port.try_push(std::move(lease));
+    }
+
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 777);
+        // Throws std::bad_alloc at prepare entry (BEFORE registration). The
+        // unwinding destroys this by-value lease with its control block still
+        // held -> lease fail-fast -> terminate. Never returns.
+        auto r = port.push_until(std::move(lease), /*deadline=*/100);
+        (void)r;
+    });
+    FiberStack sp;
+    if (!sched.init_fiber(producer, sp.base(), sp.size())) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    // The injection controller must be registered BEFORE the producer runs:
+    // one-shot arm on this Scheduler, then single-worker FIFO.
+    sluice_async_test::ControllerGuard cg(sched);
+    sluice_async_test::arm_ordinary_deadline_alloc_failure(sched);
+    sched.spawn(producer);
+    sched.run(1);
+    // push_until returned without terminating: the lease fail-fast boundary
+    // is broken (e.g. the failure was swallowed or the lease emptied).
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 }  // namespace
 
 // ---- Parent test cases ------------------------------------------------------
@@ -367,6 +423,17 @@ SLUICE_TEST_CASE(queue_lifecycle_death_control_snapshot_then_teardown) {
         "(active_port_calls_ == 0)");
 }
 
+// R2-ALLOC: a synthetic allocation failure in push_until's timed admission
+// (prepare entry, before any state mutation) must surface through the lease
+// fail-fast boundary — terminate, never a silent loss or a swallowed return.
+SLUICE_TEST_CASE(queue_lifecycle_death_push_until_alloc_fail_fast) {
+    auto r = sluice_death_test::run_death_case("push-until-alloc-fail-fast");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "push_until allocation failure must fail-fast via the non-empty "
+        "lease destruction contract");
+}
+
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
     if (!child_case.empty()) {
@@ -384,6 +451,8 @@ int main(int argc, char** argv) {
             child_teardown_while_snapshot_active();
         } else if (child_case == "control-snapshot-then-teardown") {
             child_snapshot_then_teardown();
+        } else if (child_case == "push-until-alloc-fail-fast") {
+            child_push_until_alloc_fail_fast();
         } else {
             std::cerr << "[death] unknown child case: " << child_case << "\n";
             std::_Exit(sluice_death_test::kChildTestFailExit);

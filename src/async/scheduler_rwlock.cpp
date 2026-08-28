@@ -493,16 +493,21 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
+        // R2-ALLOC: allocations before any admission state mutation (a
+        // bad_alloc here leaves the node Detached and all counters intact).
+        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
         if (!waiters.register_wait_locked(node, me)) {
+            erase_popped_registration_locked(reg);  // never published
             node.set_user(nullptr);
             return;
         }
         ++waiting_waitq_count_;
-        // Arm via the ordinary deadline authority, then attach the RwLock-only
-        // expire/reconcile binding INSIDE the same G critical section.
-        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline,
-                                           &rwlock_timer_expire_reconcile,
-                                           expire_ctx);
+        // Publish via the ordinary deadline authority, attaching the
+        // RwLock-only expire/reconcile binding INSIDE the same G critical
+        // section.
+        publish_ordinary_deadline_locked(reg,
+                                         &rwlock_timer_expire_reconcile,
+                                         expire_ctx);
 
         // Admission precedence 1: resource admission wins over due deadline.
         // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
@@ -588,16 +593,21 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
+        // R2-ALLOC: allocations before any admission state mutation (a
+        // bad_alloc here leaves the node Detached and all counters intact).
+        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
         if (!waiters.register_wait_locked(node, me)) {
+            erase_popped_registration_locked(reg);  // never published
             node.set_user(nullptr);
             return;
         }
         ++waiting_waitq_count_;
-        // Arm via the ordinary deadline authority, then attach the RwLock-only
-        // expire/reconcile binding INSIDE the same G critical section.
-        reg = arm_ordinary_deadline_locked(&node, &waiters, deadline,
-                                           &rwlock_timer_expire_reconcile,
-                                           expire_ctx);
+        // Publish via the ordinary deadline authority, attaching the
+        // RwLock-only expire/reconcile binding INSIDE the same G critical
+        // section.
+        publish_ordinary_deadline_locked(reg,
+                                         &rwlock_timer_expire_reconcile,
+                                         expire_ctx);
 
         // Admission precedence 1: resource admission.
         // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the

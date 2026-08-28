@@ -295,6 +295,11 @@ struct TimerTestControl {
         const sluice::async::Scheduler& s) noexcept {
         return sluice::async::Scheduler::AsyncTestAccess::deadline_heap_size(s);
     }
+    static std::size_t deadline_heap_capacity(
+        const sluice::async::Scheduler& s) noexcept {
+        return sluice::async::Scheduler::AsyncTestAccess::deadline_heap_capacity(
+            s);
+    }
     static std::size_t timer_pool_count_in_state(
         const sluice::async::Scheduler& s,
         sluice::async::TimerRegistration::State st) noexcept {
@@ -314,6 +319,15 @@ struct TimerTestControl {
         sluice::async::Scheduler::deadline_t deadline) {
         return sluice::async::Scheduler::AsyncTestAccess::register_test_deadline(
             s, node, q, deadline);
+    }
+    // R2-ALLOC regression seam: one-shot synthetic allocation failure at the
+    // next ordinary timed-admission prepare entry (throws std::bad_alloc
+    // BEFORE any admission state is mutated). Internal-testing variant only.
+    static void arm_alloc_failure(sluice::async::Scheduler& s) noexcept {
+        arm_ordinary_deadline_alloc_failure(s);
+    }
+    static void disarm_alloc_failure(sluice::async::Scheduler& s) noexcept {
+        disarm_ordinary_deadline_alloc_failure(s);
     }
     // Park-commit seam delegation (E11 reuses the E9 park-commit seam).
     static void arm_park_commit(sluice::async::Scheduler& s) noexcept {
