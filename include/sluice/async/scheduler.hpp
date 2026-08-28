@@ -928,6 +928,65 @@ public:
     [[nodiscard]] bool queue_cancel(detail::QueuePort& port, detail::QueueRole role,
                                     WaitNode& node);
 
+    // ---- FE shared Queue admission ladders (FE-3; ONE textual ladder per
+    // direction) ----
+    // The prepare(timed) -> register -> counters -> LOCAL timer publish ->
+    // resource-precedence -> closed -> already-due admission sequence shared by
+    // EVERY push (resp. pop) frontend. Caller holds G + S + the direction's
+    // role mtx(). Binds the frontend's ResumeTarget token, evaluates Queue
+    // admission precedence exactly once, and returns the disposition; the
+    // ENTRY (fiber admit / deferred awaiter) commits its own
+    // PublicationEligibility in the SAME critical section when `authorized`
+    // (fiber: commit_suspend_locked; deferred: frontend record arm) and then
+    // performs its physical suspension outside the lock. No duplicated
+    // admission law exists per direction.
+    //
+    // The LOCAL timer publish below the ladder is the AC-2b review-corrective
+    // Queue interleave (active_queue_timers_ bumped BEFORE the ACTIVE count /
+    // heap / cache publication; earliest_active_deadline_ is read lock-free by
+    // parked workers) and is preserved verbatim inside the ladder.
+    enum class QueueAdmitDisposition : std::uint8_t {
+        rejected,  // registration contract violation; epoch untouched
+        resolved_inline,  // epoch terminal at admission (committed / closed /
+                          // expired) with NO ring-occupancy change; consume
+                          // the outcome inline — publish nothing (L6)
+        resolved_inline_grant,  // ring-occupancy-changing inline success; the
+                                // ENTRY must run the Q-LIV-1 opposite-role
+                                // grant under G + S AFTER releasing the role
+                                // mutex, then consume the outcome inline (L6)
+        authorized,  // suspension authorized; commit eligibility in THIS CS
+    };
+    QueueAdmitDisposition queue_push_admit_locked(detail::QueuePort& port,
+                                                  detail::QueueItemLease& lease,
+                                                  WaitNode& node,
+                                                  const WaitResume& resume,
+                                                  bool timed,
+                                                  deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_, port.state_mtx_, port.waiters_[0].mtx());
+    QueueAdmitDisposition queue_pop_admit_locked(detail::QueuePort& port,
+                                                 detail::QueueItemLease& out,
+                                                 WaitNode& node,
+                                                 const WaitResume& resume,
+                                                 bool timed,
+                                                 deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_, port.state_mtx_, port.waiters_[1].mtx());
+
+    // FE winner publication for the Queue grant seams: the ONE textual
+    // publication tail parameterized by the winner's ResumeTarget kind. Fiber
+    // kind keeps the stackful route verbatim (exactly-once make_runnable
+    // guard -> the port's granted_not_resumed_ pair -> owner routing).
+    // Deferred kind commits the delivery obligation and deliberately does NOT
+    // touch granted_not_resumed_: that counter pairs the grant-side increment
+    // with the fiber winner's post-resume decrement under G, and a deferred
+    // winner's resume (transit-list discharge) never touches the port again —
+    // the coroutine frame carries its QueueWaitCtx + lease/out. The in-flight
+    // deferred window is owned by the Scheduler-level deferred_publications_
+    // teardown gate instead; QueuePort::begin_teardown may legitimately
+    // proceed once both role FIFOs drain (the post-resume body reads frame
+    // memory only). None kind publishes nothing (the old null-Fiber skip).
+    void queue_publish_winner_locked(detail::QueuePort& port, WaitNode& won)
+        SLUICE_REQUIRES(global_mtx_);
+
     // ---- Queue reconciler grant seams (winner-before-publication) ----
     // Called by QueuePort fast paths (try_push / try_pop / close) AND by the
     // blocking/timed admit inline-success paths (scheduler_queue.cpp, Q-LIV-1)

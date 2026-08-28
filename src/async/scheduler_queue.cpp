@@ -42,15 +42,231 @@ void Scheduler::queue_timer_on_resolve(void* owner_ctx,
 }
 
 
+// ---- FE shared Queue admission ladders (FE-3) ------------------------------
+//
+// ONE textual admission sequence per direction, shared by EVERY frontend
+// (stackful Fiber admit / deferred awaiter). The ladder is pure admission
+// law: it touches no Fiber, no g_worker, and no coroutine knowledge — only
+// the ResumeTarget token. The ENTRY owns its frontend-specific
+// PublicationEligibility commit (fiber: commit_suspend_locked; deferred:
+// frontend record arm) inside the SAME critical section when the ladder
+// returns `authorized`, then suspends physically outside the lock (FE-1b
+// L7/L10). Inline dispositions publish nothing — the entry never suspended
+// (L6); resolved_inline_grant additionally obliges the entry to run the
+// Q-LIV-1 opposite-role grant under G + S after the role mutex is released
+// (the two role mutexes are NEVER held together).
+
+Scheduler::QueueAdmitDisposition Scheduler::queue_push_admit_locked(
+    detail::QueuePort& port, detail::QueueItemLease& lease, WaitNode& node,
+    const WaitResume& resume, bool timed, deadline_t deadline)
+    SLUICE_REQUIRES(global_mtx_) {
+    // Push ladder. Caller holds G + S + producer.mtx().
+    detail::QueueItemControl* c = lease.control_;
+    TimerRegistration* reg = nullptr;
+    if (timed) {
+        // R2-ALLOC: allocations (heap slot reserve + pool node) BEFORE any
+        // admission state mutation — a bad_alloc here leaves the node
+        // Detached, the port counters untouched, and no timer orphan.
+        reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[0],
+                                               deadline);
+    }
+    if (!port.waiters_[0].register_wait_locked(node, resume)) {
+        if (timed) erase_popped_registration_locked(reg);  // never published
+        return QueueAdmitDisposition::rejected;  // registration contract violation
+    }
+    ++port.active_wait_associations_;
+    ++waiting_waitq_count_;
+    if (timed) {
+        // Intentionally LOCAL publish (AC-2b review corrective): NOT routed
+        // through publish_ordinary_deadline_locked. The historical order
+        // bumps active_queue_timers_ BEFORE the ACTIVE count / heap / cache
+        // publication, and earliest_active_deadline_ is an atomic read by
+        // parked workers WITHOUT global_mtx_ — so this interleaving is
+        // externally observable in principle and is preserved verbatim
+        // (only the allocation phase above was split out; the heap push
+        // consumes the capacity reserved by prepare, allocation-free).
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
+        reg->owner_ctx_ = &port;
+        ++port.active_queue_timers_;
+        ++active_deadline_count_;
+        heap_push_ordinary_locked(reg);
+        recompute_earliest_deadline_locked();
+    }
+    // Admission precedence 1: resource admissible (Open + space + FIFO head)
+    // => commit + resolve inline (the common no-contention case; the
+    // reconciler path handles the rest).
+    if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
+        c->location_ = detail::QueueItemControl::Location::ring;
+        const std::size_t tail =
+            (port.ring_head_ + port.ring_count_) % port.capacity_;
+        port.ring_[tail] = std::move(lease);  // caller lease now empty
+        ++port.ring_count_;
+        port.waiters_[0].wake_node_locked(node);
+        if (timed) {
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
+        }
+        if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        // Q-LIV-1: the slot-occupancy change must reconcile the parked
+        // consumer head before this op returns; the grant runs in the ENTRY,
+        // after the producer role mutex is released (the two role mutexes
+        // are NEVER held together).
+        return QueueAdmitDisposition::resolved_inline_grant;
+    }
+    // Closed at admission: resolve Woken with the lease retained.
+    if (port.closed_) {
+        port.waiters_[0].wake_node_locked(node);
+        if (timed) {
+            (void)retire_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
+        }
+        if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        return QueueAdmitDisposition::resolved_inline;  // lease retained
+    }
+    if (timed) {
+        // Admission precedence 2: already-due => Expired inline (a losing
+        // expire CAS falls through to suspension authorization, as before).
+        if (clock_now_unlocked() >= deadline &&
+            port.waiters_[0].expire_locked(node)) {
+            // ACTIVE->CONSUMED via the ordinary deadline authority; the
+            // already-due inline path keeps its immediate cache recompute.
+            (void)consume_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/true);
+            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+            return QueueAdmitDisposition::resolved_inline;  // expired; lease retained
+        }
+    }
+    // Suspension authorized. The epoch is Registered, un-resolved, and every
+    // resolver is excluded until THIS critical section releases; the entry
+    // commits its PublicationEligibility now (contract L7) and suspends
+    // physically afterwards (L10).
+    return QueueAdmitDisposition::authorized;
+}
+
+Scheduler::QueueAdmitDisposition Scheduler::queue_pop_admit_locked(
+    detail::QueuePort& port, detail::QueueItemLease& out, WaitNode& node,
+    const WaitResume& resume, bool timed, deadline_t deadline)
+    SLUICE_REQUIRES(global_mtx_) {
+    // Pop ladder. Symmetric. Caller holds G + S + consumer.mtx(). Inline
+    // admission pops the OLDEST ring item if non-empty + FIFO head (open OR
+    // closed — remaining items stay poppable after close); closed+empty is
+    // the terminal disposition.
+    TimerRegistration* reg = nullptr;
+    if (timed) {
+        // R2-ALLOC: allocations before any admission state mutation — see
+        // queue_push_admit_locked.
+        reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[1],
+                                               deadline);
+    }
+    if (!port.waiters_[1].register_wait_locked(node, resume)) {
+        if (timed) erase_popped_registration_locked(reg);  // never published
+        return QueueAdmitDisposition::rejected;  // registration contract violation
+    }
+    ++port.active_wait_associations_;
+    ++waiting_waitq_count_;
+    if (timed) {
+        // Intentionally LOCAL publish (AC-2b review corrective) — see the
+        // push ladder. The consume/retire transitions below DO route through
+        // the authority (uniform facts).
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
+        reg->owner_ctx_ = &port;
+        ++port.active_queue_timers_;
+        ++active_deadline_count_;
+        heap_push_ordinary_locked(reg);
+        recompute_earliest_deadline_locked();
+    }
+    // Admission precedence 1: item admissible (non-empty ring + FIFO head).
+    if (!port.ring_empty_locked() && node.prev_ == nullptr) {
+        const std::size_t head = port.ring_head_;
+        out = std::move(port.ring_[head]);
+        port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
+        --port.ring_count_;
+        out.control_->location_ =
+            detail::QueueItemControl::Location::consumer_operation;
+        port.waiters_[1].wake_node_locked(node);
+        if (timed) {
+            (void)retire_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
+        }
+        if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        // Q-LIV-1: the freed slot must reconcile the parked producer head
+        // before this op returns; the grant runs in the ENTRY, after the
+        // consumer role mutex is released (the two role mutexes are NEVER
+        // held together).
+        return QueueAdmitDisposition::resolved_inline_grant;
+    }
+    // Closed + empty: resolve Woken with `out` empty (the caller returns
+    // closed).
+    if (port.ring_empty_locked() && port.closed_) {
+        port.waiters_[1].wake_node_locked(node);
+        if (timed) {
+            (void)retire_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
+        }
+        if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        return QueueAdmitDisposition::resolved_inline;
+    }
+    if (timed) {
+        // Already-due => Expired inline (a losing expire CAS falls through
+        // to suspension authorization, as before).
+        if (clock_now_unlocked() >= deadline &&
+            port.waiters_[1].expire_locked(node)) {
+            (void)consume_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/true);
+            if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
+            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+            return QueueAdmitDisposition::resolved_inline;  // expired; out stays empty
+        }
+    }
+    return QueueAdmitDisposition::authorized;
+}
+
+// FE winner publication for the Queue grant seams (the ONE textual tail; see
+// scheduler.hpp for the granted_not_resumed_ deferred-kind rationale).
+void Scheduler::queue_publish_winner_locked(detail::QueuePort& port,
+                                            WaitNode& won)
+    SLUICE_REQUIRES(global_mtx_) {
+    const WaitResume& r = won.resume();
+    switch (r.kind()) {
+    case WaitResume::Kind::fiber: {
+        Fiber* f = r.as_fiber();
+        if (f->make_runnable()) {  // publication LAST
+            ++port.granted_not_resumed_;  // published suspended-winner ticket
+            WorkerState* owner = owner_for_fiber_locked(f);
+            route_runnable_locked(f, owner);
+        }
+        break;
+    }
+    case WaitResume::Kind::deferred:
+        defer_publication_locked(r.as_deferred());
+        break;
+    case WaitResume::Kind::none:
+        break;
+    }
+}
+
 void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
                                  detail::QueueItemLease& lease) {
-    // Blocking push. Register on the producer FIFO under G + S +
-    // producer.mtx(); admission recheck commits inline if admissible (Open +
-    // space + FIFO head) — else suspend. The reconciler (a consumer's try_pop
-    // that freed a slot, or close) commits the lease into a ring slot in the
-    // same critical section as the resolve CAS. On resume the caller reads
-    // lease.control_: null => committed (ring owns it); non-null => closed/
-    // cancelled/expired (caller returns the lease).
+    // Blocking push — stackful (Fiber) frontend entry over the SHARED push
+    // ladder. Per-op context: the caller stashes a QueueWaitCtx* on the
+    // WaitNode (node.set_user) BEFORE registering; on a Fiber the ctx (and
+    // the caller's lease) live on the fiber stack, which persists across the
+    // context switch. The reconciler reads won->user() after the grant seam
+    // returns the winner. On resume the caller reads lease.control_: null =>
+    // committed (ring owns it); non-null => closed/cancelled/expired (caller
+    // returns the lease).
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncQueue::push requires a running Fiber");
     Fiber* me = ws->current;
@@ -59,55 +275,32 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
            detail::QueueItemControl::Location::producer_operation);
     QueueWaitCtx ctx{&port, detail::QueueRole::producer, c, &lease, nullptr};
     node.set_user(&ctx);
-    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
+        QueueAdmitDisposition disp;
         {
             LockGuard qlk(port.waiters_[0].mtx());
-            if (!port.waiters_[0].register_wait_locked(node, WaitResume::fiber(me))) {
-                return;  // registration contract violation
-            }
-            ++port.active_wait_associations_;
-            ++waiting_waitq_count_;
-            // Admission recheck: Open + space + FIFO head => commit inline (the
-            // common no-contention case; the reconciler path handles the rest).
-            if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
-                c->location_ = detail::QueueItemControl::Location::ring;
-                const std::size_t tail =
-                    (port.ring_head_ + port.ring_count_) % port.capacity_;
-                port.ring_[tail] = std::move(lease);  // caller lease now empty
-                ++port.ring_count_;
-                port.waiters_[0].wake_node_locked(node);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Q-LIV-1: the slot-occupancy change must reconcile the parked
-                // consumer head before this op returns; the grant runs below,
-                // after the producer role mutex is released (the two role
-                // mutexes are NEVER held together).
-                inline_committed = true;
-            }
-            // Closed at admission: resolve Woken with the lease retained.
-            else if (port.closed_) {
-                port.waiters_[0].wake_node_locked(node);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return;  // lease retained; caller returns closed
-            } else {
-                commit_suspend_locked(ws, me);
-            }
+            disp = queue_push_admit_locked(port, lease, node,
+                                           WaitResume::fiber(me),
+                                           /*timed=*/false, deadline_t{});
         }
-        // Q-LIV-1 liveness reconcile: this inline success changed ring
+        // Q-LIV-1 liveness reconcile: an inline success changed ring
         // occupancy — exactly the resource transition that makes the opposite
         // role's FIFO head eligible — so grant that head BEFORE returning, the
         // same authority try_push's FastPushCommit performs. Held locks here
         // are G + S only (identical to the try_push FastPopCommit critical
         // section); every Queue actor that could touch either role FIFO or the
         // ring needs G, so no third party can interleave in this window.
-        if (inline_committed) {
+        if (disp == QueueAdmitDisposition::resolved_inline_grant) {
             (void)queue_grant_consumer_locked(port);
-            return;  // committed inline; this fiber never suspended
         }
+        if (disp != QueueAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspended
+        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7): same critical
+        // section, after authorization.
+        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -130,60 +323,34 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
 
 void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
                                 detail::QueueItemLease& out) {
-    // Blocking pop. Symmetric. Admission recheck pops inline if the ring is
-    // non-empty + FIFO head; else suspend. The reconciler (a producer's
-    // try_push that added an item, or close) moves a ring item into `out`.
+    // Blocking pop — stackful frontend entry over the SHARED pop ladder.
+    // Symmetric. The reconciler (a producer's try_push that added an item, or
+    // close) moves a ring item into `out`.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncQueue::pop requires a running Fiber");
     Fiber* me = ws->current;
     QueueWaitCtx ctx{&port, detail::QueueRole::consumer, nullptr, nullptr, &out};
     node.set_user(&ctx);
-    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
+        QueueAdmitDisposition disp;
         {
             LockGuard qlk(port.waiters_[1].mtx());
-            if (!port.waiters_[1].register_wait_locked(node, WaitResume::fiber(me))) {
-                return;  // registration contract violation
-            }
-            ++port.active_wait_associations_;
-            ++waiting_waitq_count_;
-            if (!port.ring_empty_locked() && node.prev_ == nullptr) {
-                const std::size_t head = port.ring_head_;
-                out = std::move(port.ring_[head]);
-                port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
-                --port.ring_count_;
-                out.control_->location_ =
-                    detail::QueueItemControl::Location::consumer_operation;
-                port.waiters_[1].wake_node_locked(node);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Q-LIV-1: the freed slot must reconcile the parked producer
-                // head before this op returns; the grant runs below, after
-                // the consumer role mutex is released (the two role mutexes
-                // are NEVER held together).
-                inline_committed = true;
-            } else if (port.ring_empty_locked() && port.closed_) {
-                port.waiters_[1].wake_node_locked(node);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return;  // closed+empty
-            } else {
-                commit_suspend_locked(ws, me);
-            }
+            disp = queue_pop_admit_locked(port, out, node,
+                                          WaitResume::fiber(me),
+                                          /*timed=*/false, deadline_t{});
         }
-        // Q-LIV-1 liveness reconcile: this inline success changed ring
-        // occupancy — exactly the resource transition that makes the opposite
-        // role's FIFO head eligible — so grant that head BEFORE returning, the
-        // same authority try_pop's FastPopCommit performs. Held locks here are
-        // G + S only (identical to the try_pop FastPopCommit critical
-        // section); every Queue actor that could touch either role FIFO or
-        // the ring needs G, so no third party can interleave in this window.
-        if (inline_committed) {
+        // Q-LIV-1 liveness reconcile: identical authority and lock position
+        // to the push entry above.
+        if (disp == QueueAdmitDisposition::resolved_inline_grant) {
             (void)queue_grant_producer_locked(port);
-            return;  // committed inline; this fiber never suspended
         }
+        if (disp != QueueAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspended
+        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
+        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -204,100 +371,38 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
 void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
                                        detail::QueueItemLease& lease,
                                        deadline_t deadline) {
-    // Timed push. Composes queue_push_admit with timer registration and
-    // the already-due inline-Expired precedence (resource-first). On expired
-    // the lease is retained (caller returns expired).
+    // Timed push — stackful frontend entry over the SHARED push ladder with
+    // the ordinary deadline authority (timed=true): the SAME
+    // prepare/publish/already-due/retire lifecycle the blocking entry uses
+    // through the ladder. Composes the resource-first precedence (an inline
+    // commit wins over a due deadline) with the already-due inline-Expired
+    // closure. On expired the lease is retained (caller returns expired).
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncQueue::push_until requires a running Fiber");
     Fiber* me = ws->current;
     detail::QueueItemControl* c = lease.control_;
     QueueWaitCtx ctx{&port, detail::QueueRole::producer, c, &lease, nullptr};
     node.set_user(&ctx);
-    TimerRegistration* reg = nullptr;
-    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
+        QueueAdmitDisposition disp;
         {
             LockGuard qlk(port.waiters_[0].mtx());
-            // R2-ALLOC: allocations (heap slot reserve + pool node) BEFORE any
-            // admission state mutation — a bad_alloc here leaves the node
-            // Detached, the port counters untouched, and no timer orphan.
-            reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[0],
-                                                   deadline);
-            if (!port.waiters_[0].register_wait_locked(node, WaitResume::fiber(me))) {
-                erase_popped_registration_locked(reg);  // never published
-                return;  // registration contract violation
-            }
-            ++port.active_wait_associations_;
-            ++waiting_waitq_count_;
-            // Intentionally LOCAL publish (AC-2b review corrective): NOT routed
-            // through publish_ordinary_deadline_locked. The historical order
-            // bumps active_queue_timers_ BEFORE the ACTIVE count / heap / cache
-            // publication, and earliest_active_deadline_ is an atomic read by
-            // parked workers WITHOUT global_mtx_ — so this interleaving is
-            // externally observable in principle and is preserved verbatim
-            // (only the allocation phase above was split out; the heap push
-            // consumes the capacity reserved by prepare, allocation-free).
-            reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
-            reg->owner_ctx_ = &port;
-            ++port.active_queue_timers_;
-            ++active_deadline_count_;
-            heap_push_ordinary_locked(reg);
-            recompute_earliest_deadline_locked();
-            // Admission precedence 1: resource admissible => commit + resolve.
-            if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
-                c->location_ = detail::QueueItemControl::Location::ring;
-                const std::size_t tail =
-                    (port.ring_head_ + port.ring_count_) % port.capacity_;
-                port.ring_[tail] = std::move(lease);
-                ++port.ring_count_;
-                port.waiters_[0].wake_node_locked(node);
-                // ACTIVE->RETIRED via the ordinary deadline authority.
-                (void)retire_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                reg->fire_on_resolve_locked(/*timer_won=*/false);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Q-LIV-1: the slot-occupancy change must reconcile the parked
-                // consumer head before this op returns; the grant runs below,
-                // after the producer role mutex is released (the two role
-                // mutexes are NEVER held together).
-                inline_committed = true;
-            }
-            // Closed => resolve (lease retained).
-            else if (port.closed_) {
-                port.waiters_[0].wake_node_locked(node);
-                // ACTIVE->RETIRED via the ordinary deadline authority.
-                (void)retire_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                reg->fire_on_resolve_locked(/*timer_won=*/false);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return;
-            }
-            // Admission precedence 2: already-due => Expired inline (a losing
-            // expire CAS falls through to suspend, as before).
-            else if (clock_now_unlocked() >= deadline &&
-                     port.waiters_[0].expire_locked(node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority; the
-                // already-due inline path keeps its immediate cache recompute.
-                (void)consume_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                reg->fire_on_resolve_locked(/*timer_won=*/true);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return;  // expired; lease retained
-            } else {
-                commit_suspend_locked(ws, me);
-            }
+            disp = queue_push_admit_locked(port, lease, node,
+                                           WaitResume::fiber(me),
+                                           /*timed=*/true, deadline);
         }
         // Q-LIV-1 liveness reconcile (timed push): identical authority and
-        // lock position to the untimed inline path above.
-        if (inline_committed) {
+        // lock position to the untimed entry above.
+        if (disp == QueueAdmitDisposition::resolved_inline_grant) {
             (void)queue_grant_consumer_locked(port);
-            return;  // committed inline; this fiber never suspended
         }
+        if (disp != QueueAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspended
+        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
+        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -319,90 +424,32 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
 void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
                                       detail::QueueItemLease& out,
                                       deadline_t deadline) {
-    // Timed pop. Symmetric.
+    // Timed pop — stackful frontend entry over the SHARED pop ladder. Symmetric.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncQueue::pop_until requires a running Fiber");
     Fiber* me = ws->current;
     QueueWaitCtx ctx{&port, detail::QueueRole::consumer, nullptr, nullptr, &out};
     node.set_user(&ctx);
-    TimerRegistration* reg = nullptr;
-    bool inline_committed = false;
     {
         LockGuard lk(global_mtx_);
         LockGuard slk(port.state_mtx_);
+        QueueAdmitDisposition disp;
         {
             LockGuard qlk(port.waiters_[1].mtx());
-            // R2-ALLOC: allocations (heap slot reserve + pool node) BEFORE any
-            // admission state mutation — see queue_push_admit_until.
-            reg = prepare_ordinary_deadline_locked(&node, &port.waiters_[1],
-                                                   deadline);
-            if (!port.waiters_[1].register_wait_locked(node, WaitResume::fiber(me))) {
-                erase_popped_registration_locked(reg);  // never published
-                return;  // registration contract violation
-            }
-            ++port.active_wait_associations_;
-            ++waiting_waitq_count_;
-            // Intentionally LOCAL publish (AC-2b review corrective) — see
-            // queue_push_admit_until for why Queue does not route through the
-            // shared publish helper. The consume/retire transitions below
-            // DO go through the authority (uniform facts).
-            reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // timer bookkeeping
-            reg->owner_ctx_ = &port;
-            ++port.active_queue_timers_;
-            ++active_deadline_count_;
-            heap_push_ordinary_locked(reg);
-            recompute_earliest_deadline_locked();
-            if (!port.ring_empty_locked() && node.prev_ == nullptr) {
-                const std::size_t head = port.ring_head_;
-                out = std::move(port.ring_[head]);
-                port.ring_head_ = (port.ring_head_ + 1) % port.capacity_;
-                --port.ring_count_;
-                out.control_->location_ =
-                    detail::QueueItemControl::Location::consumer_operation;
-                port.waiters_[1].wake_node_locked(node);
-                // ACTIVE->RETIRED via the ordinary deadline authority.
-                (void)retire_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                reg->fire_on_resolve_locked(/*timer_won=*/false);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Q-LIV-1: the freed slot must reconcile the parked producer
-                // head before this op returns; the grant runs below, after
-                // the consumer role mutex is released (the two role mutexes
-                // are NEVER held together).
-                inline_committed = true;
-            } else if (port.ring_empty_locked() && port.closed_) {
-                port.waiters_[1].wake_node_locked(node);
-                // ACTIVE->RETIRED via the ordinary deadline authority.
-                (void)retire_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                reg->fire_on_resolve_locked(/*timer_won=*/false);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return;
-            }
-            // Already-due => Expired inline (a losing expire CAS falls
-            // through to suspend, as before).
-            else if (clock_now_unlocked() >= deadline &&
-                     port.waiters_[1].expire_locked(node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority; the
-                // already-due inline path keeps its immediate cache recompute.
-                (void)consume_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                reg->fire_on_resolve_locked(/*timer_won=*/true);
-                if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                return;  // expired; out stays empty
-            } else {
-                commit_suspend_locked(ws, me);
-            }
+            disp = queue_pop_admit_locked(port, out, node,
+                                          WaitResume::fiber(me),
+                                          /*timed=*/true, deadline);
         }
         // Q-LIV-1 liveness reconcile (timed pop): identical authority and
-        // lock position to the untimed inline path above.
-        if (inline_committed) {
+        // lock position to the untimed entry above.
+        if (disp == QueueAdmitDisposition::resolved_inline_grant) {
             (void)queue_grant_producer_locked(port);
-            return;  // committed inline; this fiber never suspended
         }
+        if (disp != QueueAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspended
+        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
+        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -426,18 +473,16 @@ bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
     // Queue-identity-safe cancellation. Mirrors mutex_cancel. Resolves the
     // node Cancelled ONLY if Registered + linked in this port's role FIFO +
     // CANCEL CAS wins. Safe from any OS thread; no ring/lease mutation (the
-    // caller retains its lease / empty out on cancel).
+    // caller retains its lease / empty out on cancel). The publication edge
+    // switches on the winner's ResumeTarget kind (fiber route / deferred
+    // obligation / none); its result does NOT undo the cancel.
     LockGuard lk(global_mtx_);
     const std::size_t roleIdx = static_cast<std::size_t>(role);
     LockGuard qlk(port.waiters_[roleIdx].mtx());
     if (!cancel_primitive_wait_locked(port.waiters_[roleIdx], node)) return false;
-    Fiber* f = node.fiber();
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        publish_waiting_fiber_runnable_locked(f);
-    }
+    publish_wait_winner_locked(node);
     return true;
 }
 
@@ -464,13 +509,9 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
     }  // else: ring empty (close race) => leave out empty; caller returns closed
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    Fiber* f = won->fiber();
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr && f->make_runnable()) {  // publication LAST
-        ++port.granted_not_resumed_;  // published suspended-winner ticket
-        WorkerState* owner = owner_for_fiber_locked(f);
-        route_runnable_locked(f, owner);
-    }
+    // Publication LAST: the ONE textual winner-kind tail (fiber stackful
+    // route verbatim / deferred delivery obligation / none).
+    queue_publish_winner_locked(port, *won);
     return won;
 }
 
@@ -500,13 +541,9 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
        // producer resume returns it as closed.
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    Fiber* f = won->fiber();
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr && f->make_runnable()) {
-        ++port.granted_not_resumed_;  // published suspended-winner ticket
-        WorkerState* owner = owner_for_fiber_locked(f);
-        route_runnable_locked(f, owner);
-    }
+    // Publication LAST: the ONE textual winner-kind tail (fiber stackful
+    // route verbatim / deferred delivery obligation / none).
+    queue_publish_winner_locked(port, *won);
     return won;
 }
 

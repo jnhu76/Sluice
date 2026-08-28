@@ -229,3 +229,94 @@ Benchmark: NO performance claim in FE-2 (inspection only; §37 of campaign).
 - [ ] AGENTS.md change-class gates: Debug (always), TSan (§16.3 — scheduler/
       synchronization change), ASan+UBSan (§16.2 — new lifetime), Release
       (§16.1 — installed header change: wait_node.hpp/wait_queue.hpp)
+
+---
+
+## FE-3 Addendum — Queue Vertical Slice (Gate 0–4 recheck)
+
+The FE-3 Queue slice extends the FE-2 seam to `AsyncQueue`/`QueuePort` under
+the SAME classification and the same four gates; only the deltas are stated
+here (the parent sections above remain authoritative).
+
+### Gate 0 — Classification delta
+
+- Authority touched: Queue admission/reconciliation (AC-4 wait/wake, AC-6
+  queue capacity) — same gate class as FE-2; no new subsystem, no public API.
+- Production surface: `Scheduler::queue_push_admit_locked` /
+  `queue_pop_admit_locked` (ONE textual admission ladder per direction,
+  blocking+timed, parameterized by `WaitResume`), `QueueAdmitDisposition`
+  {rejected, resolved_inline, resolved_inline_grant, authorized},
+  `queue_publish_winner_locked` (the ONE grant publication tail),
+  `queue_cancel` tail switched to `publish_wait_winner_locked`.
+  The four Fiber admit entries become thin frontend entries; their
+  instruction sequences are preserved (ladder body = moved code).
+- Test-only surface (DIV-16): deferred Queue admission entries in
+  `scheduler_fe2_test_seam.cpp` reproducing the QueuePort ordinary-entry
+  protocol (lifecycle gate + `active_port_calls_` interval + control
+  transition + frame-embedded `QueueWaitCtx`), plus the
+  `fe3_stackless_queue_slice_test` target.
+
+### Gate 1 — State machine delta
+
+- Ladder: `register -> counters -> [timed: LOCAL publish] -> precedence`
+  (commit / closed / already-due-expire) `-> authorized`. The disposition
+  RE-USES the existing WaitNode `resolve_` winner; no new epoch state.
+- `resolved_inline_grant` obliges the ENTRY to run the Q-LIV-1
+  opposite-role grant after its role-mutex release — the grant lock
+  position (G + S only) is unchanged; the two role mutexes are still never
+  held together.
+- Deferred-kind grant publication: `defer_publication_locked` WITHOUT the
+  `granted_not_resumed_` increment. Rationale: that counter pairs the grant
+  increment with the FIBER winner's post-resume decrement under G; a
+  deferred winner's discharge path never touches the port again (the
+  coroutine frame carries `QueueWaitCtx` + lease/out), so there is no
+  pairing decrement and no FIFO-empty teardown window change:
+  `begin_teardown` may proceed once both role FIFOs drain; the in-flight
+  deferred obligation is owned by the Scheduler-level
+  `deferred_publications_` teardown gate (stranded fail-fast, FE-2).
+
+### Gate 2 — Resource model delta
+
+No new resource. `active_port_calls_` bracket reproduced for the deferred
+entry (single-exit decrement); ring/lease custody unchanged; the transit
+list stays bounded by CONCURRENT suspended deferred waiters (FE-2 Gate 2).
+
+### Gate 3 — Wake model delta
+
+Fiber path: unchanged (commit_suspend -> context_switch -> post-resume
+`--granted_not_resumed_`). Deferred path: grant resolves the node under
+G + S + role, writes the transit entry under G (persistent state) BEFORE
+release; the drain take is a G-scoped move-out; discharge resumes with NO
+lock held (L9). No new polling, no lost-wake window: the deferred arm
+lands inside the resolver-excluded admission CS (L7), so every resolver
+observes either pre-registration (membership fail) or post-arm state.
+
+### Gate 4 — Evidence (FE-3 Queue slice)
+
+```text
+BASE: feat/frontend-semantic-reuse @ FE-2 closeout (PR #243 Draft)
+Commands (actual results):
+  xmake f -m debug --toolchain=clang -y
+  xmake build sluice_core / sluice_async / -g test     -> OK
+  xmake test -v                                        -> 195/195 PASS
+    (incl. fe3_stackless_queue_slice_test: 12 cases — inline push/pop,
+     deferred push granted by try_pop Q-LIV-1, deferred pop granted by
+     try_push, close dispositions (push retained / pop closed+empty),
+     cancel loser-exactly-once, timed expiry (pump retire + defer),
+     FIFO close drain of two parked deferred producers, and two
+     cross-frontend worker mixes)
+  xmake f -m tsan --toolchain=clang -y; build; xmake run -g test
+                                                       -> ALL TESTS PASSED
+    (race classes: queue submit vs dequeue, grant vs drain, cancel vs
+     admission, teardown balance with deferred winners)
+  python3 scripts/gates/mechanical-facts.py            -> OK
+  python3 scripts/check-doc-links.py                   -> PASS
+  python3 scripts/verify-architecture-docs.py          -> OK
+  python3 scripts/gates/assert-hygiene.py              -> OK (no new
+      assert sites: fail-fast reuses existing named authorities)
+  git diff --check                                     -> clean
+Sanitizers: TSan run above; ASan+UBSan + Release deferred to the FE-4
+  full-campaign gate (same class as FE-2; no new lifetime surface — the
+  frame-embedded ctx/lease is the FE-1a property under test).
+Benchmark: NO performance claim (structural authority sharing; §37).
+```

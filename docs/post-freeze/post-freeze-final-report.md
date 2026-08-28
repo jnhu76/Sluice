@@ -37,9 +37,9 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
 | `src/async/scheduler_rwlock.cpp` | 685 | rwlock waits, ForgedRwWaitCtx |
 | `src/async/scheduler_condition.cpp` | 267 | condition waits |
-| `src/async/scheduler_queue.cpp` | 591 | runnable queue, fiber routing |
+| `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler_fe2_test_seam.cpp` | 69 | non-installed: FE-2 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler_fe2_test_seam.cpp` | 210 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
 | `src/async/scheduler.cpp` | 2206 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
@@ -211,6 +211,30 @@ frontend itself (tiny coroutine task + awaiter + FeDeferredRecord) is
 test-only (DIV-16) via `AsyncTestAccess` seams; no public API change beyond
 the additive `WaitResume`/`resume()` widening documented in
 `docs/reference/api.md`.)
+`scheduler_queue.cpp` 591 → 628, `scheduler_fe2_test_seam.cpp` 69 → 210,
+`scheduler.hpp` (declarations only), and the new test target
+`fe3_stackless_queue_slice_test` (2026-08-28, FE-3 Queue vertical slice —
+the push/pop admission closures are extracted into the ONE shared
+`queue_push_admit_locked` / `queue_pop_admit_locked` ladders (one textual
+admission law per direction, blocking+timed, parameterized by the
+frontend's `WaitResume` token; `QueueAdmitDisposition` returns
+rejected / resolved_inline / resolved_inline_grant / authorized — the
+entry commits its own PublicationEligibility in the same CS on
+`authorized` and runs the Q-LIV-1 opposite-role grant on the `_grant`
+disposition after its role mutex release). The four fiber admit entries
+become thin frontend entries; their sequences are byte-equivalent
+motions. The two grant seams and `queue_cancel` route publication through
+the winner-kind tails (`queue_publish_winner_locked` /
+`publish_wait_winner_locked`): the fiber branch is bit-identical
+(including the `granted_not_resumed_` pairing), a deferred winner commits
+the delivery obligation WITHOUT the `granted_not_resumed_` increment
+(no post-resume port access exists to pair with; the Scheduler-level
+deferred transit teardown gate owns the in-flight window, and the
+winner's post-resume body reads coroutine-frame memory only). Test-only
+deferred Queue admission entries (lifecycle gate + `active_port_calls_`
+interval + control transition reproduced) and the 12-case slice test
+live in the internal-testing seam TU / test target; no public API
+change.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

@@ -24,6 +24,8 @@
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
+#include "queue_detail.hpp"  // QueueWaitCtx (FE-3 queue deferred seams; non-installed)
+
 namespace sluice::async {
 
 // Internal-testing access surface. Reached only via the non-installed
@@ -746,6 +748,79 @@ struct Scheduler::AsyncTestAccess {
         SLUICE_NO_THREAD_SAFETY_ANALYSIS {
         s.global_mtx_.unlock();
     }
+
+    // ---- FE-3 Queue deferred-frontend seams (FE campaign slice; same
+    // test-only scope as the Event seams above) ----
+    //
+    // The deferred QUEUE admission entries run the SHARED production push/pop
+    // ladders (queue_push_admit_locked / queue_pop_admit_locked) for a
+    // WaitResume::deferred token, reproduce the QueuePort ordinary-entry
+    // protocol (lifecycle gate + active_port_calls_ interval + the
+    // detached->producer_operation control transition + QueueWaitCtx stashing)
+    // that QueuePort::push/pop perform for the fiber frontend, commit the
+    // PublicationEligibility (record.arm) INSIDE the resolver-excluded
+    // admission CS on `authorized`, and run the Q-LIV-1 opposite-role grant
+    // under G + S after the role mutex is released. All semantic authority is
+    // production code; this TU adds none.
+    //
+    // `ctx` is the COROUTINE-FRAME-EMBEDDED wait context (FE-1a lifetime rule:
+    // the grant winner writes through ctx->prod_lease / ctx->cons_out AFTER
+    // suspension, so it must be address-stable — never a C++ stack frame that
+    // dies at await_suspend). Defined out-of-line in
+    // scheduler_fe2_test_seam.cpp (needs the complete QueuePort + queue_detail
+    // internals).
+    static bool queue_push_deferred_for_test(Scheduler& s,
+                                             detail::QueuePort& port,
+                                             detail::QueueItemLease& lease,
+                                             WaitNode& node, QueueWaitCtx& ctx,
+                                             FeDeferredRecord& record);
+    static bool queue_push_deferred_until_for_test(
+        Scheduler& s, detail::QueuePort& port, detail::QueueItemLease& lease,
+        WaitNode& node, QueueWaitCtx& ctx, FeDeferredRecord& record,
+        deadline_t deadline);
+    static bool queue_pop_deferred_for_test(Scheduler& s,
+                                            detail::QueuePort& port,
+                                            detail::QueueItemLease& out,
+                                            WaitNode& node, QueueWaitCtx& ctx,
+                                            FeDeferredRecord& record);
+    static bool queue_pop_deferred_until_for_test(
+        Scheduler& s, detail::QueuePort& port, detail::QueueItemLease& out,
+        WaitNode& node, QueueWaitCtx& ctx, FeDeferredRecord& record,
+        deadline_t deadline);
+    // Queue cancel through the SAME production seam the fiber frontend uses
+    // (queue_cancel). The winner tail switches on the deferred kind and
+    // commits the delivery obligation.
+    static bool queue_cancel_deferred_for_test(Scheduler& s,
+                                               detail::QueuePort& port,
+                                               detail::QueueRole role,
+                                               WaitNode& node) {
+        return s.queue_cancel(port, role, node);
+    }
+    // Lease-emptiness observation for the post-resume status mapping
+    // (QueueItemLease::control_ is authority-private; the test coroutines map
+    // outcome + emptiness to push/pop statuses exactly as QueuePort does).
+    static bool queue_lease_empty_for_test(const detail::QueueItemLease& l) {
+        return l.control_ == nullptr;
+    }
+    // An EMPTY lease for coroutine-frame pop out-parameters. QueueItemLease's
+    // default ctor is authority-private; the fiber frontend gets its empty
+    // out-lease inside QueuePort::pop (friend). The deferred frontend's frame
+    // needs the same object without minting a control: returns an empty lease
+    // by value (the public move ctor performs the transfer).
+    static detail::QueueItemLease queue_make_empty_lease_for_test() {
+        return detail::QueueItemLease{};
+    }
+    // CS cores shared by the blocking/timed entries above (defined in
+    // scheduler_fe2_test_seam.cpp). Assume the entry protocol (validation +
+    // control transition + ctx stash) already ran.
+    static bool queue_push_core_(Scheduler& s, detail::QueuePort& port,
+                                 detail::QueueItemLease& lease, WaitNode& node,
+                                 FeDeferredRecord& record, bool timed,
+                                 deadline_t deadline);
+    static bool queue_pop_core_(Scheduler& s, detail::QueuePort& port,
+                                detail::QueueItemLease& out, WaitNode& node,
+                                FeDeferredRecord& record, bool timed,
+                                deadline_t deadline);
 };  // struct Scheduler::AsyncTestAccess
 
 }  // namespace sluice::async
