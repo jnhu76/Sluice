@@ -905,7 +905,10 @@ public:
                                     WaitNode& node);
 
     // ---- Queue reconciler grant seams (winner-before-publication) ----
-    // Called by QueuePort fast paths under G + S (caller-held) to grant the
+    // Called by QueuePort fast paths (try_push / try_pop / close) AND by the
+    // blocking/timed admit inline-success paths (scheduler_queue.cpp, Q-LIV-1)
+    // under G + S (caller-held; the admit releases its own role mutex first —
+    // the two role mutexes are never held together) to grant the
     // role FIFO head atomically: resolve_(Woken) + per-winner resource commit
     // (read from won->user()) + retire any bound timer + make_runnable /
     // route_runnable_locked (publication LAST). These mirror

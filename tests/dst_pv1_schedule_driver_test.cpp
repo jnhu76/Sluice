@@ -23,16 +23,17 @@
 //       flips the cancel-vs-expiry precedence deterministically, both ways.
 //   T5  AC-2d-relevant falsification: the AsyncQueue admission paths. Forces
 //       every legal interleaving around the registration -> suspend window
-//       (close-before-admit, resource-before-admit, already-due, documented
-//       reconcilers after suspend, close after suspend) and — the sharpest
-//       probe — a PARKED PRODUCER vs a blocking pop's inline success path
-//       (the AC-2a matrix documents try_pop/close as the ONLY producer
-//       reconcilers; whether queue_pop_admit's inline path also reconciles
-//       is exactly the drift specimen this campaign makes executable). The
-//       V1 assertion is a KNOWN-DRIFT CHARACTERIZATION WITNESS: it proves
-//       the as-built defect exists today; a future Queue repair slice must
-//       consciously flip or replace that expectation. NO production Queue
-//       change is made in this campaign.
+//       (close-before-admit, resource-before-admit, already-due, reconcilers
+//       after suspend, close after suspend) and — the sharpest probe — a
+//       PARKED PRODUCER vs a blocking pop's inline success path.
+//       HISTORY: V1 originated as the DST-PV-1 KNOWN-DRIFT CHARACTERIZATION
+//       WITNESS (it proved the as-built defect: the blocking admit's inline
+//       success did not reconcile the parked opposite-role waiter; only
+//       try_push/try_pop/close did). The Q-LIV-1 repair
+//       (fix(async): reconcile queue inline admission wake) closed that
+//       defect at all four admit inline-commit sites and V1 was consciously
+//       FLIPPED into the post-fix regression; V1-S/V1-T/V1-TS pin the
+//       symmetric direction and the exactly-once timer retirement.
 //   T6  harness contract (review P1-2 / R3): an Invoke action may re-enter
 //       SUPPORTED NON-REPLACING test-control surfaces; uninstall is
 //       explicitly supported, re-install / re-arm is fail-closed (T7).
