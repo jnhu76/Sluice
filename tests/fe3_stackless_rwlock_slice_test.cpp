@@ -741,4 +741,48 @@ SLUICE_TEST_CASE(fe3_rwlock_expire_deferred) {
     AsyncTestAccess::rwlock_unlock_write_deferred_for_test(sched, lock,
                                                            &actor_b);
 }
+
+// ---- FE-CORRECTIVE-1 P1-3: concurrent write-ownership turnover -------------
+//
+// Two worker threads hammer blocking write_lock/unlock_write on the SAME
+// lock. Every writer_owner read and write must occur under global_mtx_
+// (the ladder's recursive-owner check, try-write, unlock core, grant). This
+// case is the deterministic-behavior witness (both fibers complete, exactly
+// one owner at a time) AND the focused TSan witness: restoring the
+// historical pre-G owner read in rwlock_write_lock makes every entry an
+// unsynchronized read racing the other fiber's G-protected ownership
+// writes, which TSan reports on this case.
+SLUICE_TEST_CASE(fe3_rwlock_write_turnover_two_workers) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock lock(sched);
+
+    constexpr int kIters = 3000;
+    std::atomic<bool> a_done{false};
+    std::atomic<bool> b_done{false};
+    auto body = [&](std::atomic<bool>& done) {
+        for (int i = 0; i < kIters; ++i) {
+            WaitNode wn;
+            lock.write_lock(wn);  // parks while the peer holds the write
+            lock.unlock_write();
+        }
+        done.store(true, std::memory_order::release);
+    };
+    Fiber fa, fb;
+    fa.set_entry([&](Fiber&) { body(a_done); });
+    fb.set_entry([&](Fiber&) { body(b_done); });
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(fb, sb.base(), sb.size()));
+    sched.spawn(fa);
+    sched.spawn(fb);
+    std::thread runner([&] { sched.run_live(2); });
+    runner.join();
+
+    SLUICE_CHECK(a_done.load(std::memory_order_acquire));
+    SLUICE_CHECK(b_done.load(std::memory_order_acquire));
+    // The lock ended free; no waiter leaked into the queue.
+    SLUICE_CHECK(!AsyncTestAccess::rwlock_writer_active_for_test(lock));
+}
 SLUICE_MAIN()

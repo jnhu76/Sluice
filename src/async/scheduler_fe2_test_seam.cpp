@@ -364,12 +364,17 @@ bool Scheduler::AsyncTestAccess::rwlock_cancel_deferred_for_test(
 }
 
 bool Scheduler::AsyncTestAccess::rwlock_writer_active_for_test(
-    const AsyncRwLock& lock) {
+    AsyncRwLock& lock) {
+    // writer_active_ / writer_owner_ are G-serialized state; the observation
+    // takes the same authority the resolvers use (FE-CORRECTIVE-1 P1-3: no
+    // unsynchronized reads of ownership state remain, including test seams).
+    LockGuard lk(lock.scheduler_.global_mtx_);
     return lock.writer_active_;
 }
 
 bool Scheduler::AsyncTestAccess::rwlock_owned_by_for_test(
-    const AsyncRwLock& lock, const void* actor_token) {
+    AsyncRwLock& lock, const void* actor_token) {
+    LockGuard lk(lock.scheduler_.global_mtx_);
     return lock.writer_owner_ ==
            ActorId::frontend(const_cast<void*>(actor_token));
 }

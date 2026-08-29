@@ -941,8 +941,10 @@ struct Scheduler::AsyncTestAccess {
                                                 WaitNode& node);
     // Writer-state observations for the ownership tests (authority-private
     // fields; the Fiber-free frontend has no other way to observe them).
-    static bool rwlock_writer_active_for_test(const AsyncRwLock& lock);
-    static bool rwlock_owned_by_for_test(const AsyncRwLock& lock,
+    // Both read G-serialized ownership state under global_mtx_ — the same
+    // authority the resolvers use (FE-CORRECTIVE-1 P1-3).
+    static bool rwlock_writer_active_for_test(AsyncRwLock& lock);
+    static bool rwlock_owned_by_for_test(AsyncRwLock& lock,
                                          const void* actor_token);
 
     // ---- FE-3 Condition slice: deferred CONDITION-WAIT-PREPARE entries -----

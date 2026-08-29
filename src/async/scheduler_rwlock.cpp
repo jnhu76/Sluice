@@ -321,6 +321,18 @@ Scheduler::WaitAdmitDisposition Scheduler::rwlock_write_admit_locked(
     ActorId& writer_owner, WaitNode& node, const WaitResume& resume,
     const ActorId& actor, bool timed, deadline_t deadline, void* expire_ctx)
     SLUICE_REQUIRES(global_mtx_, waiters.mtx()) {
+    // Recursive-owner decision UNDER G, BEFORE registration and any resource
+    // or timer mutation. writer_owner is G-serialized state: every write and
+    // the try-write/unlock comparisons run under global_mtx_ (+ W). A
+    // recursive check outside this authority is a data race against
+    // concurrent ownership transitions (FE-CORRECTIVE-1 P1-3); both the
+    // stackful and the deferred frontend consume this ONE rule through the
+    // shared ladder. Named fail-fast active in Debug AND Release (the
+    // historical debug-only assert, re-based onto ActorId; the try form
+    // returns false instead — see rwlock_try_write_admission_locked).
+    if (writer_owner == actor) {
+        detail::async_rwlock_recursive_write_fail_fast();
+    }
     TimerRegistration* reg = nullptr;
     if (timed) {
         reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
@@ -450,15 +462,12 @@ void Scheduler::rwlock_write_lock(WaitQueue& waiters,
                                   ActorId& writer_owner,
                                   WaitNode& node) {
     // Blocking write — stackful frontend entry over the SHARED write ladder.
+    // The recursive-owner check lives INSIDE the ladder under G (see
+    // rwlock_write_admit_locked): reading writer_owner here, before
+    // global_mtx_, would race every G-protected ownership transition.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::write_lock requires a running Fiber");
     Fiber* me = ws->current;
-    // Recursive acquisition is a caller precondition violation: named
-    // fail-fast active in Debug AND Release (the historical debug-only
-    // assert, re-based onto ActorId; the try form returns false instead).
-    if (writer_owner == ActorId::fiber(me)) {
-        detail::async_rwlock_recursive_write_fail_fast();
-    }
     assert(node.user() == nullptr && "AsyncRwLock::write_lock: node.user() must "
                                      "be nullptr on entry (caller contract)");
     RwWaitCtx ctx{RwWaitCtx::Mode::write, ActorId::fiber(me)};
@@ -635,14 +644,12 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
                                         deadline_t deadline,
                                         void* expire_ctx) {
     // Timed write — stackful frontend entry over the SHARED write ladder.
+    // The recursive-owner check lives INSIDE the ladder under G (see
+    // rwlock_write_admit_locked): reading writer_owner here, before
+    // global_mtx_, would race every G-protected ownership transition.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::write_lock_until requires a running Fiber");
     Fiber* me = ws->current;
-    // Recursive acquisition: named fail-fast (Debug AND Release) — see
-    // rwlock_write_lock.
-    if (writer_owner == ActorId::fiber(me)) {
-        detail::async_rwlock_recursive_write_fail_fast();
-    }
     assert(node.user() == nullptr && "AsyncRwLock::write_lock_until: node.user() "
                                      "must be nullptr on entry");
     RwWaitCtx ctx{RwWaitCtx::Mode::write, ActorId::fiber(me)};
