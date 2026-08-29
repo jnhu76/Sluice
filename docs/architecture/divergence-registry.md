@@ -291,7 +291,7 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | ID | DIV-15 |
 | Status | Accepted |
 | Introduced by | FE campaign (FE-2; compliance gate `docs/architecture/fe2-frontend-seam-compliance-gate.md`) |
-| Governing ADR | FE-1b frozen contract (`docs/history/reviews/FE-1B-FRONTEND-NEUTRAL-CONTRACT-FREEZE.md`, untracked design authority) |
+| Governing ADR | FE-1b frozen contract (`docs/history/reviews/FE-1B-FRONTEND-NEUTRAL-CONTRACT-FREEZE.md`, design authority) |
 | Reason | The stackless second frontend cannot pass a continuation through the SAME registration/winner/publication authorities while the epoch token is typed `Fiber*` (FE-1a F1). `WaitResume {void*, Kind}` is the minimal earned representation (FE-1c strategy A). |
 | Benefit | One semantic Core serves both frontends; no duplicated admission/terminal/deadline/cancel authority. |
 | Cost | +8 bytes per live WaitNode (token field widened from bare `Fiber*` to pointer + kind tag); one kind compare at winner publication tails. Stackful behavior is bit-identical (fiber branch unchanged; `none` preserves the old null-token semantics). |
