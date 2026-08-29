@@ -1024,13 +1024,18 @@ public:
     // guard -> the port's granted_not_resumed_ pair -> owner routing).
     // Deferred kind commits the delivery obligation and deliberately does NOT
     // touch granted_not_resumed_: that counter pairs the grant-side increment
-    // with the fiber winner's post-resume decrement under G, and a deferred
-    // winner's resume (transit-list discharge) never touches the port again —
-    // the coroutine frame carries its QueueWaitCtx + lease/out. The in-flight
-    // deferred window is owned by the Scheduler-level deferred_publications_
-    // teardown gate instead; QueuePort::begin_teardown may legitimately
-    // proceed once both role FIFOs drain (the post-resume body reads frame
-    // memory only). None kind publishes nothing (the old null-Fiber skip).
+    // with the fiber winner's post-resume decrement under G. A deferred
+    // winner's QueuePort LIFETIME obligation is instead the ordinary-call pin
+    // (active_port_calls_) TRANSFERRED at admission from the seam entry to
+    // the frontend frame (FE-CORRECTIVE-1 P1-2): the fiber frontend spans the
+    // same interval with its CallGuard alive on the suspended fiber stack,
+    // while the deferred frontend's awaiter holds the pin through the
+    // transit-list discharge and releases it in await_resume AFTER the
+    // port-dependent result conversion (release_popped / release_failed
+    // validate owner_port_ against a live port). begin_teardown therefore
+    // cannot pass until the deferred result has been consumed — the
+    // Scheduler-level transit list is NOT a QueuePort lifetime authority.
+    // None kind publishes nothing (the old null-Fiber skip).
     void queue_publish_winner_locked(detail::QueuePort& port, WaitNode& won)
         SLUICE_REQUIRES(global_mtx_);
 

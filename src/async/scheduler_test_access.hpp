@@ -823,6 +823,18 @@ struct Scheduler::AsyncTestAccess {
     // CS cores shared by the blocking/timed entries above (defined in
     // scheduler_fe2_test_seam.cpp). Assume the entry protocol (validation +
     // control transition + ctx stash) already ran.
+    //
+    // PIN CONTRACT (FE-CORRECTIVE-1 P1-2): every NON-throw return transfers
+    // one QueuePort ordinary-call pin (active_port_calls_) to the CALLER —
+    // the fiber frontend's CallGuard stays on the suspended fiber stack
+    // through resume-side conversion; the deferred frontend's awaiter holds
+    // the obligation instead and MUST release it in await_resume, AFTER the
+    // port-dependent result conversion (release_popped/release_failed
+    // validate owner_port_ against a live port), via
+    // queue_release_deferred_pin_for_test — exactly once per non-throw
+    // call. A throw releases inside the core (await_resume never runs).
+    // An abandoned suspended frame leaves the pin held: begin_teardown
+    // fail-fasts on it (mechanically visible abandonment).
     static bool queue_push_core_(Scheduler& s, detail::QueuePort& port,
                                  detail::QueueItemLease& lease, WaitNode& node,
                                  FeDeferredRecord& record, bool timed,
@@ -831,6 +843,39 @@ struct Scheduler::AsyncTestAccess {
                                 detail::QueueItemLease& out, WaitNode& node,
                                 FeDeferredRecord& record, bool timed,
                                 deadline_t deadline);
+    // Release one transferred ordinary-call pin under G + S (the production
+    // CallGuard dtor's exact domain/shape). Call with NO lock held.
+    // Over-release (counter already zero) fail-fasts.
+    static void queue_release_deferred_pin_for_test(detail::QueuePort& port);
+    // Ordinary-call pin observation (QPIN phase witnesses): the deferred-op
+    // lifetime obligation is 1 from entry acceptance until resume-side
+    // result consumption completes.
+    static std::size_t queue_active_port_calls_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.active_port_calls_;
+    }
+    // Remaining QueuePort teardown counters (QPIN accounting-table
+    // witnesses; all G+S-synchronized fields).
+    static std::size_t queue_active_wait_associations_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.active_wait_associations_;
+    }
+    static std::size_t queue_active_queue_timers_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.active_queue_timers_;
+    }
+    static std::size_t queue_granted_not_resumed_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.granted_not_resumed_;
+    }
 
     // ---- FE-3 RwLock deferred-frontend seams (FE campaign slice; same
     // test-only scope as the Event/Queue seams above) ----

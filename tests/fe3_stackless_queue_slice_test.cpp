@@ -151,6 +151,11 @@ struct FeQueuePushAwaiter {
             recovered =
                 QueueItemFactory::release_failed<int>(port, std::move(lease));
         }
+        // FE-CORRECTIVE-1 P1-2: the QueuePort lifetime pin acquired at
+        // deferred entry is released ONLY NOW — after the port-dependent
+        // conversion above — mirroring the fiber frontend's CallGuard, whose
+        // stack frame spans suspension through result conversion.
+        AsyncTestAccess::queue_release_deferred_pin_for_test(port);
     }
 };
 
@@ -194,6 +199,9 @@ struct FeQueuePopAwaiter {
         } else {
             status = kPopClosed;
         }
+        // FE-CORRECTIVE-1 P1-2: release the QueuePort lifetime pin after the
+        // port-dependent conversion (see FeQueuePushAwaiter).
+        AsyncTestAccess::queue_release_deferred_pin_for_test(port);
     }
 };
 
@@ -907,5 +915,144 @@ SLUICE_TEST_CASE(fe3_q_cross_coroutine_waiter_fiber_resolver) {
             SLUICE_CHECK(release_teardown<int>(port, std::move(l)) == 22);
         }
     }
+}
+// ---- FE-CORRECTIVE-1 P1-2: QPIN phase witnesses ----------------------------
+//
+// The deferred Queue ordinary operation holds the QueuePort ordinary-call
+// pin (active_port_calls_) from entry acceptance THROUGH suspension, terminal
+// resolution, deferred publication, and resumption, until resume-side result
+// conversion (release_popped / release_failed — both validate owner_port_
+// against a LIVE port) completes. The fiber frontend spans the same interval
+// with its CallGuard living on the suspended fiber stack; the deferred
+// frontend transfers the pin to the awaiter, which releases it in
+// await_resume. The death child QD1 (async_queue_lifecycle_death_test)
+// proves begin_teardown itself fail-fasts inside the window.
+
+// QPIN-1 — granted item: the pin survives the winner + publication phase.
+SLUICE_TEST_CASE(fe3_q_qpin1_pop_pin_through_result_consumption) {
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+    std::atomic<int> resumed{0};
+    std::atomic<int> guard_failures{0};
+
+    struct Case {
+        Scheduler& sched;
+        QueuePort& port;
+        std::atomic<int>& resumed;
+        FePopStatus observed = kPopClosed;
+        int got = -1;
+        FeTask run() {
+            FeQueuePopAwaiter aw{sched, port};
+            co_await aw;  // parks: ring empty
+            resumed.fetch_add(1, std::memory_order_relaxed);
+            observed = aw.status;
+            got = aw.recovered;
+            co_return;
+        }
+    };
+    Case c{sched, port, resumed};
+    FeTask t = c.run();
+    t.start();  // parked; the pin transferred to the awaiter
+
+    // Phase: parked — entry accepted, suspension authorized.
+    SLUICE_CHECK(AsyncTestAccess::queue_active_port_calls_for_test(port) == 1);
+    SLUICE_CHECK(AsyncTestAccess::queue_active_wait_associations_for_test(
+                     port) == 1);
+    SLUICE_CHECK(AsyncTestAccess::deferred_depth_for_test(sched) == 0);
+
+    // Grant: FastPushCommit resolves the parked consumer Woken (terminal
+    // winner + resource commit + unlinks the role FIFO) and defers the
+    // publication.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 7);
+        (void)port.try_push(std::move(lease));
+    }
+    // Phase: publication pending, BEFORE discharge/result consumption. This
+    // is the exact pre-corrective window in which every OTHER begin_teardown
+    // precondition was already zero — the pin is the only surviving
+    // obligation, and it belongs to the deferred op.
+    SLUICE_CHECK(AsyncTestAccess::queue_active_port_calls_for_test(port) == 1);
+    SLUICE_CHECK(AsyncTestAccess::queue_active_wait_associations_for_test(
+                     port) == 0);
+    SLUICE_CHECK(AsyncTestAccess::queue_active_queue_timers_for_test(port) ==
+                 0);
+    SLUICE_CHECK(
+        AsyncTestAccess::queue_granted_not_resumed_for_test(port) == 0);
+    SLUICE_CHECK(AsyncTestAccess::deferred_depth_for_test(sched) == 1);
+    SLUICE_CHECK(resumed.load() == 0);  // continuation NOT yet discharged
+
+    // Discharge + resume + resume-side conversion; the pin releases in
+    // await_resume after release_popped consumed the granted lease.
+    (void)drain_all(sched, guard_failures);
+    SLUICE_CHECK(resumed.load() == 1);
+    SLUICE_CHECK(guard_failures.load() == 0);
+    SLUICE_CHECK(c.observed == kPopItem);
+    SLUICE_CHECK(c.got == 7);
+
+    // Phase: result consumed — every counter back to zero; teardown passes.
+    SLUICE_CHECK(AsyncTestAccess::queue_active_port_calls_for_test(port) == 0);
+    { (void)port.begin_teardown(); }
+}
+
+// QPIN-2 — failed/closed producer path: the pin survives through the
+// retained-lease conversion (release_failed) on resume.
+SLUICE_TEST_CASE(fe3_q_qpin2_push_pin_through_closed_result) {
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+    std::atomic<int> resumed{0};
+    std::atomic<int> guard_failures{0};
+    {
+        auto lease = QueueItemFactory::make<int>(port, 5);
+        (void)port.try_push(std::move(lease));
+    }
+
+    struct Case {
+        Scheduler& sched;
+        QueuePort& port;
+        std::atomic<int>& resumed;
+        FePushStatus observed = kPushCommitted;
+        int got = -1;
+        FeTask run() {
+            FeQueuePushAwaiter aw{sched, port, 6};
+            co_await aw;  // parks: ring full
+            resumed.fetch_add(1, std::memory_order_relaxed);
+            observed = aw.status;
+            got = aw.recovered;
+            co_return;
+        }
+    };
+    Case c{sched, port, resumed};
+    FeTask t = c.run();
+    t.start();
+
+    // Phase: parked.
+    SLUICE_CHECK(AsyncTestAccess::queue_active_port_calls_for_test(port) == 1);
+
+    // Close resolves the parked producer (closed disposition, lease
+    // RETAINED) and defers the publication.
+    port.close();
+    // Phase: publication pending; pin still held; role FIFO already drained.
+    SLUICE_CHECK(AsyncTestAccess::queue_active_port_calls_for_test(port) == 1);
+    SLUICE_CHECK(AsyncTestAccess::queue_active_wait_associations_for_test(
+                     port) == 0);
+    SLUICE_CHECK(AsyncTestAccess::deferred_depth_for_test(sched) == 1);
+
+    (void)drain_all(sched, guard_failures);
+    SLUICE_CHECK(resumed.load() == 1);
+    SLUICE_CHECK(guard_failures.load() == 0);
+    SLUICE_CHECK(c.observed == kPushClosed);
+    SLUICE_CHECK(c.got == 6);  // release_failed consumed the retained lease
+
+    // Phase: result consumed.
+    SLUICE_CHECK(AsyncTestAccess::queue_active_port_calls_for_test(port) == 0);
+    // Drain the buffered item (destruction contract), then teardown passes.
+    {
+        auto rp = port.try_pop();
+        SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+        SLUICE_CHECK(release_popped<int>(port, std::move(rp)) == 5);
+    }
+    { (void)port.begin_teardown(); }
 }
 SLUICE_MAIN()

@@ -162,10 +162,22 @@ bool Scheduler::AsyncTestAccess::queue_push_core_(
     // NOTE-DRIFT-COUPLING: this hand-rolled F.4 entry interval mirrors
     // QueuePort::push's RAII CallGuard (CallGuard is a private nested type,
     // not reachable from a seam TU). If QueuePort's entry/teardown protocol
-    // evolves, THIS text must move with it. The interval close below is
-    // exception-safe: the timed ladder MAY throw (R2-ALLOC
-    // prepare_ordinary_deadline_locked, incl. the test-only bad_alloc
-    // injection), and a skipped decrement would strand begin_teardown.
+    // evolves, THIS text must move with it. Exception safety: the timed
+    // ladder MAY throw (R2-ALLOC prepare_ordinary_deadline_locked, incl. the
+    // test-only bad_alloc injection), and the catch below releases the pin —
+    // await_resume never runs when await_suspend throws, so the caller
+    // cannot share the release.
+    //
+    // PIN TRANSFER (FE-CORRECTIVE-1 P1-2): on every NON-throw return the pin
+    // is TRANSFERRED to the caller (the coroutine awaiter). The fiber
+    // frontend keeps its CallGuard alive on the suspended fiber STACK
+    // through resume-side result conversion; the deferred frontend has no
+    // such stack, so the awaiter holds the obligation and releases it in
+    // await_resume AFTER the port-dependent conversion
+    // (release_popped/release_failed validate owner_port_ against a LIVE
+    // port). Releasing here — as the pre-corrective code did — opened a
+    // window with every begin_teardown precondition satisfied while the
+    // suspended continuation still needed the port.
     ++port.active_port_calls_;
     QueueAdmitDisposition disp;
     bool grant = false;
@@ -187,7 +199,7 @@ bool Scheduler::AsyncTestAccess::queue_push_core_(
     // Q-LIV-1 grant (production authority; G + S only — the producer role
     // mutex was released above).
     if (grant) (void)s.queue_grant_consumer_locked(port);
-    if (port.active_port_calls_ > 0) --port.active_port_calls_;
+    // NO pin release: the caller owns it now (see PIN TRANSFER above).
     return disp == QueueAdmitDisposition::authorized;
 }
 
@@ -199,8 +211,9 @@ bool Scheduler::AsyncTestAccess::queue_pop_core_(
     if (port.lifecycle_ != detail::QueueLifecycle::operational) {
         detail::queue_lease_fail_fast();
     }
-    // NOTE-DRIFT-COUPLING: see queue_push_core_ (same F.4 entry-interval
-    // mirror + exception-safe close).
+    // NOTE-DRIFT-COUPLING + PIN TRANSFER: see queue_push_core_ (same F.4
+    // entry-interval mirror, exception-safe catch close, and pin transfer to
+    // the awaiter on every non-throw return).
     ++port.active_port_calls_;
     QueueAdmitDisposition disp;
     bool grant = false;
@@ -218,8 +231,26 @@ bool Scheduler::AsyncTestAccess::queue_pop_core_(
         throw;
     }
     if (grant) (void)s.queue_grant_producer_locked(port);
-    if (port.active_port_calls_ > 0) --port.active_port_calls_;
+    // NO pin release: the caller owns it now.
     return disp == QueueAdmitDisposition::authorized;
+}
+
+void Scheduler::AsyncTestAccess::queue_release_deferred_pin_for_test(
+    detail::QueuePort& port) {
+    // Release the ordinary-call pin a deferred Queue admission transferred
+    // to the awaiter (FE-CORRECTIVE-1 P1-2). Same synchronization domain as
+    // the increment and the begin_teardown read: G + S (the production
+    // CallGuard dtor's exact shape). The awaiter calls this from
+    // await_resume with NO lock held, AFTER the port-dependent result
+    // conversion (release_popped / release_failed) completed. An
+    // over-release (counter already zero) is a lifecycle invariant
+    // violation, not a tolerable drift.
+    LockGuard glk(port.scheduler_.global_mtx_);
+    LockGuard slk(port.state_mtx_);
+    if (port.active_port_calls_ == 0) {
+        detail::queue_lease_fail_fast();
+    }
+    --port.active_port_calls_;
 }
 
 // ---- FE-3 RwLock deferred-frontend seams ----
