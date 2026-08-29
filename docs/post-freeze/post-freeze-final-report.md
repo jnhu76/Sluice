@@ -36,10 +36,10 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
 | `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
 | `src/async/scheduler_rwlock.cpp` | 692 | rwlock waits, ActorId writer ownership |
-| `src/async/scheduler_condition.cpp` | 267 | condition waits |
+| `src/async/scheduler_condition.cpp` | 281 | condition waits, shared admit ladder |
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
-| `src/async/scheduler_fe2_test_seam.cpp` | 333 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler_fe2_test_seam.cpp` | 380 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
 | `src/async/scheduler.cpp` | 2206 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
@@ -262,6 +262,32 @@ own/release, actor-vs-resume-target independence, fiber-unlock grant,
 writer fairness, reader batch, cancel, and deadline expiry. The
 additive public `ActorId` name is documented in
 `docs/reference/api.md`.)
+`scheduler_condition.cpp` 267 → 281, `scheduler_fe2_test_seam.cpp`
+333 → 380, `scheduler.hpp` + `scheduler_test_access.hpp` (declarations
+only), and the new test target `fe3_stackless_condition_slice_test`
+(2026-08-28, FE-3 Condition vertical slice — the CONDITION-WAIT-PREPARE
+combined step is extracted into the ONE shared
+`condition_wait_admit_locked` ladder (register-before-handoff single
+`global_mtx_` CS: [timed: R2-ALLOC prepare → register → LOCAL timer
+publish] → already-due inline Expired → register-before-handoff phase
+seam → the ONE `mutex_handoff_one_locked` handoff → terminal recheck →
+authorized). `ConditionAdmitDisposition` encodes the released_mutex law
+so the fiber entries and the deferred seam derive their reacquire
+obligation from ONE source; both fiber entries become thin frontend
+entries whose guard scope still ends BEFORE the physical context switch.
+`condition_cancel_wait` publishes through the winner-kind tail
+(`publish_wait_winner_locked`) instead of reading `cond_node.fiber()`
+directly — behavior-equal for the fiber branch, and a deferred cancelled
+waiter is no longer stranded. Test-only deferred condition entries
+(notify_one/notify_all/cancel one-liners + the wait entries over the
+shared ladder) and the 5-case slice test cover deferred
+notify/notify_all (own-reacquire separation witnessed by the presented
+owner staying released), cancel loser-exactly-once, terminal re-wait
+rejection, due-inline retention, and pump expiry. The presented state is
+BARE WaitQueues (Mutex ownership re-typing is its own later slice per
+FE-1b A1 §12; the full AsyncCondition choreography composition stays
+covered by the unchanged fiber tests over the SAME ladder). No public
+API change beyond the additive internal disposition enum.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

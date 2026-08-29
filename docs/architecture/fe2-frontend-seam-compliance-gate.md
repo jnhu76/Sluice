@@ -433,3 +433,95 @@ Sanitizers: TSan run above; ASan+UBSan + Release deferred to the FE-4
   plain data; the frame-embedded ctx/record is the FE-1a property).
 Benchmark: NO performance claim (structural authority sharing; §37).
 ```
+
+## FE-3 Condition vertical-slice addendum (shared CONDITION-WAIT-PREPARE ladder)
+
+Extends the FE-2 seam to the Condition epoch under the SAME classification and
+the same four gates; only the deltas are stated (the parent sections and the
+FE-3 Queue/RwLock addenda remain authoritative).
+
+### Gate 0 — Classification delta
+
+- Authority touched: Condition admission/reconciliation (AC-4 wait/wake) +
+  the register-before-handoff combined step — same gate class as FE-2 and the
+  other FE-3 slices.
+- Production surface: `Scheduler::condition_wait_admit_locked` (the ONE
+  textual admission law for the Condition epoch, blocking+timed,
+  parameterized by `WaitResume`), `ConditionAdmitDisposition`
+  {rejected_retain, resolved_inline_retain, resolved_inline_released,
+  authorized} — the disposition ENCODES the released_mutex/reacquire
+  obligation so both frontends derive it from one source. The two fiber
+  entries (`condition_wait_prepare` / `_until`) become thin frontend entries
+  over the ladder; their sequences are preserved (ladder body = moved code).
+  `condition_cancel_wait` publishes through `publish_wait_winner_locked`
+  instead of the direct `cond_node.fiber()` fiber route — behavior-equal for
+  the fiber branch, and a DEFERRED cancelled waiter is no longer stranded
+  (its cancelled terminal is delivered through the deferred branch).
+- Scope boundary (documented, FE-1b A1 §12): Condition has NO identity of its
+  own — it inherits Mutex choreography. Mutex ownership re-typing is its own
+  later slice (RwLock is done); the deferred PoV therefore presents BARE
+  WaitQueues (empty bound Mutex queue ⇒ the documented UnlockNoWaiter no-op)
+  and the full AsyncCondition choreography composition stays covered by the
+  UNCHANGED fiber tests running over the SAME ladder.
+- Test-only surface (DIV-16): deferred condition wait entries +
+  notify_one/notify_all/cancel one-liners over the presented bare queues in
+  `scheduler_fe2_test_seam.cpp` / `scheduler_test_access.hpp`, plus the
+  `fe3_stackless_condition_slice_test` target.
+
+### Gate 1 — State machine delta
+
+- Ladder: `[timed: R2-ALLOC prepare -> register -> LOCAL timer publish] ->
+  register -> already-due inline Expired (Mutex RETAINED) ->
+  register-before-handoff phase seam -> Mutex handoff (the ONE accepted
+  mutex_handoff_one_locked; owner committed BEFORE publication) -> terminal
+  recheck -> authorized`. The lost-notify closure is unchanged: a
+  notify/cancel/expire needs global_mtx_ and cannot interleave between
+  registration and Mutex release.
+- SUSPENSION DISCIPLINE (repair recorded): the fiber entries' `global_mtx_`
+  guard scope still ends BEFORE the physical `context_switch` — the
+  first draft of this slice held the guard across the switch (an
+  immediate self-deadlock in the fiber condition tests); the extraction now
+  mirrors the pre-extraction brace structure exactly.
+
+### Gate 2 — Resource model delta
+
+No new resource. Timer pool / heap behavior unchanged (R2-ALLOC prepare
+order preserved); the deferred transit list stays bounded by CONCURRENT
+suspended deferred waiters (FE-2 Gate 2).
+
+### Gate 3 — Wake model delta
+
+Unchanged for fibers. Deferred: the arm lands inside the resolver-excluded
+`global_mtx_` CS (L7); the discharge resumes with NO lock held (L9). The
+winner's reacquire epoch is the BODY'S OWN step after resume — witnessed in
+the slice by the presented owner slot staying released at resume time for
+Woken, suspended-Expired, and Cancelled resolutions alike, and NOT run for
+`released=false` dispositions (rejected / already-due Expired retain the
+Mutex).
+
+### Gate 4 — Evidence (FE-3 Condition slice)
+
+```text
+BASE: feat/frontend-semantic-reuse @ FE-3 RwLock slice (PR #243 Draft)
+Commands (actual results):
+  xmake f -m debug --toolchain=clang -y
+  xmake build sluice_core / sluice_async / -g test     -> OK
+  xmake test -v                                        -> 197/197 PASS
+    (incl. fe3_stackless_condition_slice_test: 5 cases — deferred
+     notify_one (own-reacquire separation), already-due inline Expired
+     with Mutex RETAINED (owner sentinel observable), pump expiry
+     (suspended Expired still reacquires), cancel loser-exactly-once +
+     terminal re-wait rejection, notify_all two-winner drain; plus the
+     UNCHANGED async_condition_primitive_test fiber suite over the SAME
+     ladder)
+  xmake f -m tsan --toolchain=clang -y; build; xmake test   -> see below
+  python3 scripts/gates/mechanical-facts.py            -> OK
+  python3 scripts/check-doc-links.py                   -> PASS
+  python3 scripts/verify-architecture-docs.py          -> OK
+  python3 scripts/gates/assert-hygiene.py              -> OK
+  git diff --check                                     -> clean
+Sanitizers: TSan + ASan/UBSan + Release deferred to / covered by the
+  FE-4 full-campaign gate (no new lifetime surface; the guard-scope
+  repair above is verified by the full suite).
+Benchmark: NO performance claim (structural authority sharing; §37).
+```

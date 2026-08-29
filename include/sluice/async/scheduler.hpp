@@ -827,6 +827,52 @@ public:
                                        WaitQueue& mutex_waiters, Fiber*& owner,
                                        bool& released_mutex);
 
+    // FE-3 shared CONDITION-WAIT-PREPARE admission ladder: the ONE textual
+    // admission law for the Condition epoch (blocking+timed), parameterized by
+    // the frontend's WaitResume token. Caller MUST hold global_mtx_; the
+    // Condition queue mtx is taken and released INSIDE (sequential topology —
+    // the Condition queue mtx and the Mutex queue mtx are NEVER held
+    // simultaneously), and the Mutex handoff acquires the Mutex queue mtx
+    // internally, exactly as the fiber entries did before the extraction.
+    //
+    // Ladder: [timed: R2-ALLOC prepare -> register -> LOCAL timer publish]
+    // -> [untimed: register] -> already-due inline Expired (Mutex RETAINED)
+    // -> register-before-handoff phase seam -> Mutex handoff (the ONE accepted
+    // mutex_handoff_one_locked; owner committed BEFORE publication) ->
+    // terminal recheck -> authorized. The entry commits its own
+    // PublicationEligibility in the SAME global_mtx_ CS on `authorized`
+    // (fiber: commit_suspend_locked; deferred: record.arm()) and physically
+    // suspends outside the lock.
+    //
+    // The disposition encodes the caller's REACQUIRE obligation (the
+    // released_mutex law), so the fiber entries and the deferred seam derive
+    // it from one source:
+    //   rejected_retain           registration failed; Mutex retained; no
+    //                             suspend; the node's outcome is latched.
+    //   resolved_inline_retain    already-due deadline resolved Expired
+    //                             inline; Mutex retained; no suspend; no
+    //                             reacquire epoch (InvDueInlineRetains
+    //                             Ownership).
+    //   resolved_inline_released  the node was resolved concurrently before
+    //                             suspension (post-handoff recheck); Mutex
+    //                             RELEASED; no suspend; the caller MUST run
+    //                             the reacquire epoch.
+    //   authorized                registered (+ timer published when timed)
+    //                             and the Mutex released/handed off; the
+    //                             caller suspends and MUST run the reacquire
+    //                             epoch after resume.
+    enum class ConditionAdmitDisposition : std::uint8_t {
+        rejected_retain = 0,
+        resolved_inline_retain = 1,
+        resolved_inline_released = 2,
+        authorized = 3,
+    };
+    ConditionAdmitDisposition condition_wait_admit_locked(
+        WaitQueue& cond_waiters, WaitNode& cond_node, const WaitResume& resume,
+        WaitQueue& mutex_waiters, Fiber*& owner, bool timed,
+        deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_);
+
     // Deadline-aware CONDITION-WAIT-PREPARE. Composes condition_wait_prepare
     // with a deadline TimerRegistration on `cond_node`
     // (deadline governs ONLY the Condition epoch). Admission precedence (under

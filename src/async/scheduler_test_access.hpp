@@ -899,6 +899,72 @@ struct Scheduler::AsyncTestAccess {
     static bool rwlock_writer_active_for_test(const AsyncRwLock& lock);
     static bool rwlock_owned_by_for_test(const AsyncRwLock& lock,
                                          const void* actor_token);
+
+    // ---- FE-3 Condition slice: deferred CONDITION-WAIT-PREPARE entries -----
+    //
+    // The Condition epoch over the ONE shared admission ladder
+    // (condition_wait_admit_locked): register -> [timed: R2-ALLOC prepare +
+    // LOCAL publish] -> already-due inline Expired -> register-before-handoff
+    // phase seam -> Mutex handoff -> terminal recheck -> authorized, all under
+    // ONE global_mtx_ CS. On `authorized` the seam commits the deferred
+    // PublicationEligibility (record.arm) in the SAME CS and returns true
+    // (the caller suspends). On any other disposition it returns false (the
+    // caller continues inline) and latches `released` from the disposition —
+    // the released_mutex law (false = the presented Mutex state was NOT
+    // released: no reacquire epoch; true = released/handed off: the resumed
+    // body runs its OWN reacquire epoch; the notify/cancel/expire resolver
+    // NEVER runs it for the winner).
+    //
+    // `cond_waiters` / `mutex_waiters` / `owner` are the presented Condition +
+    // bound-Mutex state (the same by-reference shape the fiber seam takes).
+    // The v1 PoV presents BARE WaitQueues: Mutex ownership identity re-typing
+    // (FE-1b A1 §12: "Mutex/RwLock owner fields are re-typed") is its own
+    // later slice — RwLock is done; until then a stackless coroutine cannot
+    // lawfully OWN an AsyncMutex, so the full AsyncCondition choreography
+    // composition stays covered by the unchanged fiber tests running over the
+    // SAME ladder. With an empty presented mutex queue the handoff is the
+    // documented UnlockNoWaiter no-op (`owner = nullptr`); the deferred entry
+    // never dereferences `owner`.
+    //
+    // Returns true when the caller must suspend (record armed); false when the
+    // ladder resolved inline (`node.outcome()` is terminal, `released` latched).
+    static bool condition_wait_deferred_for_test(Scheduler& s,
+                                                 WaitQueue& cond_waiters,
+                                                 WaitNode& cond_node,
+                                                 WaitQueue& mutex_waiters,
+                                                 Fiber*& owner,
+                                                 FeDeferredRecord& record,
+                                                 bool& released);
+    static bool condition_wait_deferred_until_for_test(
+        Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+        WaitQueue& mutex_waiters, Fiber*& owner, deadline_t deadline,
+        FeDeferredRecord& record, bool& released);
+
+    // One-liner resolvers over the presented BARE Condition queue (the public
+    // AsyncCondition::notify_* / cancel cannot be used: the PoV presents bare
+    // WaitQueues, not a bound AsyncCondition). All three already route
+    // publication through the ONE winner-kind tail.
+    static void condition_notify_one_for_test(Scheduler& s,
+                                              WaitQueue& cond_waiters) {
+        s.condition_notify_one(cond_waiters);
+    }
+    static std::size_t condition_notify_all_for_test(Scheduler& s,
+                                                     WaitQueue& cond_waiters) {
+        return s.condition_notify_all(cond_waiters);
+    }
+    static bool condition_cancel_for_test(Scheduler& s,
+                                          WaitQueue& cond_waiters,
+                                          WaitNode& cond_node) {
+        return s.condition_cancel_wait(cond_waiters, cond_node);
+    }
+
+    // Shared body of the two deferred condition entries (out-of-line; holds
+    // G for the ladder + the arm commit, derives `released` from the
+    // disposition).
+    static bool condition_wait_deferred_core_(
+        Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+        WaitQueue& mutex_waiters, Fiber*& owner, FeDeferredRecord& record,
+        bool timed, deadline_t deadline, bool& released);
 };  // struct Scheduler::AsyncTestAccess
 
 }  // namespace sluice::async

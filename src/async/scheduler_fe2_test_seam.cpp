@@ -328,6 +328,53 @@ bool Scheduler::AsyncTestAccess::rwlock_owned_by_for_test(
            ActorId::frontend(const_cast<void*>(actor_token));
 }
 
+// ---- FE-3 Condition slice: deferred CONDITION-WAIT-PREPARE ----------------
+
+bool Scheduler::AsyncTestAccess::condition_wait_deferred_for_test(
+    Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+    WaitQueue& mutex_waiters, Fiber*& owner, FeDeferredRecord& record,
+    bool& released) {
+    return condition_wait_deferred_core_(s, cond_waiters, cond_node,
+                                         mutex_waiters, owner, record,
+                                         /*timed=*/false, deadline_t{},
+                                         released);
+}
+
+bool Scheduler::AsyncTestAccess::condition_wait_deferred_until_for_test(
+    Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+    WaitQueue& mutex_waiters, Fiber*& owner, deadline_t deadline,
+    FeDeferredRecord& record, bool& released) {
+    return condition_wait_deferred_core_(s, cond_waiters, cond_node,
+                                         mutex_waiters, owner, record,
+                                         /*timed=*/true, deadline, released);
+}
+
+bool Scheduler::AsyncTestAccess::condition_wait_deferred_core_(
+    Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+    WaitQueue& mutex_waiters, Fiber*& owner, FeDeferredRecord& record,
+    bool timed, deadline_t deadline, bool& released) {
+    // One global_mtx_ CS for the shared ladder + the deferred
+    // PublicationEligibility commit (FE-1b L7: the arm lands inside the
+    // resolver-excluded CS, so a later resolver observes either
+    // pre-registration (membership fail) or post-arm state — no lost wake).
+    LockGuard lk(s.global_mtx_);
+    const auto disp = s.condition_wait_admit_locked(
+        cond_waiters, cond_node, WaitResume::deferred(&record),
+        mutex_waiters, owner, timed, deadline);
+    switch (disp) {
+    case Scheduler::ConditionAdmitDisposition::authorized:
+        released = true;  // the Mutex state was released/handed off
+        record.arm();
+        return true;  // the caller suspends; the body runs its OWN reacquire
+    case Scheduler::ConditionAdmitDisposition::resolved_inline_released:
+        released = true;  // resolved concurrently post-handoff; STILL reacquire
+        return false;
+    default:
+        released = false;  // rejected / due-inline Expired: Mutex retained
+        return false;
+    }
+}
+
 }  // namespace sluice::async
 
 #endif  // SLUICE_ASYNC_INTERNAL_TESTING

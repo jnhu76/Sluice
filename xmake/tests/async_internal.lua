@@ -670,3 +670,9 @@ sluice_internal_async_test("fe3_stackless_queue_slice_test",
 -- awaiter/record/actor-token vocabulary.
 sluice_internal_async_test("fe3_stackless_rwlock_slice_test",
                            {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 Condition vertical slice: the stackless frontend over the ONE shared
+-- condition_wait_admit_locked ladder (register-before-handoff single CS;
+-- released_mutex law; own-reacquire separation; notify/cancel/deadline).
+sluice_internal_async_test("fe3_stackless_condition_slice_test",
+                           {includedirs = {"include", "tests", "src/async"}})
