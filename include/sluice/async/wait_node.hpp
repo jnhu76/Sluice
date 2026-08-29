@@ -98,8 +98,13 @@ public:
     constexpr WaitResume() noexcept = default;
 
     static constexpr WaitResume none() noexcept { return WaitResume{}; }
+    // kind==fiber implies a valid non-null Fiber*: a null token normalizes
+    // to `none` at this single construction point (one coherent rule — the
+    // publication tails switch on kind and never see a null fiber-kind; the
+    // null-skip guards in the legacy expire/cancel tails are exactly the
+    // incoherence this removes).
     static constexpr WaitResume fiber(Fiber* f) noexcept {
-        return WaitResume{f, Kind::fiber};
+        return f != nullptr ? WaitResume{f, Kind::fiber} : WaitResume{};
     }
     static constexpr WaitResume deferred(void* delivery_record) noexcept {
         return WaitResume{delivery_record, Kind::deferred};

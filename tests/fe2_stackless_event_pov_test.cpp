@@ -497,4 +497,22 @@ SLUICE_TEST_CASE(fe2_pov_record_guard_unit) {
     SLUICE_CHECK(rec.state.load() == FeRecord::State::consumed);
     SLUICE_CHECK(!rec.try_consume());
 }
+
+// ---- FE-CORRECTIVE-1 P2: Kind::fiber implies a valid non-null Fiber* ------
+SLUICE_TEST_CASE(fe2_pov_null_fiber_token_normalizes_to_none) {
+    // The ResumeTarget factory normalizes a null Fiber* to `none` at the
+    // single construction point: no publication branch can ever observe a
+    // fiber-kind with a null payload (one coherent rule; the legacy
+    // null-skip guards in the expire/cancel tails become tautologies).
+    WaitResume n = WaitResume::fiber(nullptr);
+    SLUICE_CHECK(n.kind() == WaitResume::Kind::none);
+    static_assert(WaitResume::fiber(nullptr).kind() ==
+                  WaitResume::Kind::none);
+    int fake_actor = 0;
+    WaitResume f = WaitResume::fiber(reinterpret_cast<Fiber*>(&fake_actor));
+    SLUICE_CHECK(f.kind() == WaitResume::Kind::fiber);
+    WaitResume d = WaitResume::deferred(&fake_actor);
+    SLUICE_CHECK(d.kind() == WaitResume::Kind::deferred);
+    SLUICE_CHECK(WaitResume::none().kind() == WaitResume::Kind::none);
+}
 SLUICE_MAIN()
