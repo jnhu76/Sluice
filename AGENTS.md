@@ -12,7 +12,7 @@ Sluice 是实验性的 C++20 显式 I/O 与控制流库，核心目标是让 I/O
 
 - `sluice_core`：同步 `Reader` / `Writer`、`Result<T>` / `IoError`、文件与持久化语义以及 `BlockingIoPool`；
 - `sluice_async`：可选异步运行时、`AsyncIoContext`、`Completion<T>`、Scheduler 和后端集成；
-- `sluice_async_internal_testing`：使用生产源文件和编译期保护测试 seam 的测试专用目标；生产目标不得依赖或同时链接它；
+- `sluice_async_internal_testing`：使用生产源文件和编译期保护测试 seam 的测试专用目标；生产目标不得依赖它，任何 executable 不得同时链接两个 async variant；
 - `sluice_experimental_uring`：默认关闭的实验性 io_uring 后端；io_uring 是机制，不是整体架构；
 - `zig/`：源代码派生的设计参考，不是生产依赖，也不能机械照搬。
 
@@ -35,6 +35,7 @@ Sluice 是实验性的 C++20 显式 I/O 与控制流库，核心目标是让 I/O
 | 问题 | 权威入口 |
 | --- | --- |
 | 项目与子系统导航 | `docs/README.md` |
+| Build target、实现边界与代码入口 | `docs/architecture/overview.md`、`xmake.lua` 与 `xmake/*.lua` |
 | 当前架构文档分类 | `docs/architecture/README.md` |
 | 异步 I/O 最高层工程原则 | `docs/architecture/architecture-constitution.md` |
 | Accepted/Proposed/Superseded 决策 | `docs/adr/README.md` 与对应 ADR |
@@ -56,7 +57,7 @@ Sluice 是实验性的 C++20 显式 I/O 与控制流库，核心目标是让 I/O
 - 公共 header 与 API reference 共同承担对外契约；不一致时属于缺陷；
 - CURRENT 架构文档描述设计和 as-built 结构，生产代码描述实际执行；
 - 测试、脚本、形式化模型和结果文件提供各自证据类别，不自行创造产品或架构语义；
-- `xmake.lua` 是目标、依赖、feature gate 和测试接线权威；CI workflow 是远端门禁接线权威；
+- `xmake.lua` 与其包含的 `xmake/*.lua` 是目标、依赖、feature gate 和测试接线权威；CI workflow 是远端门禁接线权威；
 - Roadmap、Proposed 设计和 Issue 只授权其明确范围内的未来工作；
 - scanner、review summary、注释、commit message、EVIDENCE/HISTORICAL 文档只提供证据或历史。
 
@@ -68,7 +69,7 @@ Sluice 是实验性的 C++20 显式 I/O 与控制流库，核心目标是让 I/O
 4. 在获批范围内同步接口、实现、测试和权威文档；
 5. 将有意差异登记到 `divergence-registry.md`，不隐藏分叉。
 
-existing code is evidence, not precedent。Accepted ADR 不得被改写成“历史上从未做过该决定”；需要改变时新增 superseding decision。
+现有代码只是证据，不自动构成先例。Accepted ADR 不得被改写成“历史上从未做过该决定”；需要改变时新增 superseding decision。
 
 ## 4. 显式权威分离
 
@@ -374,6 +375,8 @@ TLA+ 模型、GenMC kernel 和 C++ 测试是不同证据层：
 应当保留无法从代码可靠推导的 `WHY`、`INVARIANT`、`OWNERSHIP`、`LOCK ORDER`、`PROTOCOL`、`INTENTIONAL` 信息，尤其是容易被“简化”后破坏的约束。可以机器验证的约束优先编码为类型、capability、assertion、测试、形式化模型或静态 gate；注释保留不可执行的原因和边界。修改相关代码时必须同步审查附近注释，失效注释属于缺陷。
 
 文档负责概念、架构、契约、导航和代码无法自然表达的唯一信息，不复述实现流程。当前文档描述当前完整状态，不包含施工报告；历史与过程属于 Git、Issue、PR、EVIDENCE 或 `docs/history/`。修改 authority、lifecycle、ownership、failure、resource、lock、wake、cancel、shutdown、API、target、feature gate、formal binding 或 Zig divergence 时，必须更新相应唯一权威。
+
+实现导航只指向稳定的 target、目录、公共入口、构建清单和验证接线，不手工复制完整 source/test inventory、数量、Phase 或迁移比例。精确 target/source membership 以 `xmake.lua` 和 `xmake/*.lua` 为准；移动或重命名导航目标时必须在同一变更中更新引用，并运行 `python3 scripts/check-doc-links.py` 与 `python3 scripts/verify-architecture-docs.py`。
 
 禁止无作用域地声称性能提升、sanitizer/real-liburing 覆盖、形式化实现证明或完整迁移；所有 claim 必须命名证据类别与适用边界。
 
