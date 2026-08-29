@@ -10,6 +10,7 @@ start at the root [README](../README.md) instead.
 |------------|------------|
 | Any contributor or coding agent | [`AGENTS.md`](../AGENTS.md) — the repository operating contract |
 | Understanding the architecture | [`architecture/overview.md`](architecture/overview.md) |
+| Locating production code or build ownership | [`architecture/overview.md`](architecture/overview.md#authoritative-implementation-map) → `xmake/*.lua` |
 | Changing the public API | [`reference/api.md`](reference/api.md) + the relevant [ADR](adr/README.md) |
 | Changing the async runtime | [`architecture/async-runtime.md`](architecture/async-runtime.md) → ADR → [verification](verification/README.md) |
 | Working on applications | [`applications/README.md`](applications/README.md) |
@@ -47,34 +48,34 @@ historical documents are **evidence**, not automatic authority. Documents under
 
 ## Subsystem map
 
-Statuses: **Implemented** (production headers + sources + tests),
-**Experimental** (build-gated, off by default).
+The capability rows below route to semantic authorities. For production
+directories, build/source ownership, and executable verification wiring, use the
+[`authoritative implementation map`](architecture/overview.md#authoritative-implementation-map).
+Exact target membership remains executable in `xmake.lua` and `xmake/*.lua`.
 
 ### Synchronous core (`sluice_core`)
 
-| Capability | Current documentation | ADR | Verification |
-|------------|-----------------------|-----|--------------|
-| Reader / Writer | [`reference/api.md`](reference/api.md), [`reference/sync-io-model.md`](reference/sync-io-model.md) | [ADR-024S](adr/ADR-024S-sync-runtime-contract.md) | `tests/sync_contract_negative_test.cpp` |
-| Partial I/O / error semantics | [`reference/sync-error-semantics.md`](reference/sync-error-semantics.md) | ADR-024S | same |
-| File and positional I/O | [`architecture/sync-io-architecture.md`](architecture/sync-io-architecture.md) | ADR-024S | `tests/file_positional_test.cpp` |
-| Sync backend boundary | [`architecture/sync-backend-taxonomy.md`](architecture/sync-backend-taxonomy.md) | ADR-024S | — |
-| WAL and durability | [`architecture/sync-durability-model.md`](architecture/sync-durability-model.md) | ADR-024S | `tests/wal_test.cpp` |
-| BlockingIoPool | [`reference/api.md`](reference/api.md) | ADR-024S | `tests/blocking_io_pool_test.cpp` |
+| Capability | Current documentation | ADR |
+|------------|-----------------------|-----|
+| Reader / Writer | [`reference/api.md`](reference/api.md), [`reference/sync-io-model.md`](reference/sync-io-model.md) | [ADR-024S](adr/ADR-024S-sync-runtime-contract.md) |
+| Partial I/O / error semantics | [`reference/sync-error-semantics.md`](reference/sync-error-semantics.md) | ADR-024S |
+| File and positional I/O | [`architecture/sync-io-architecture.md`](architecture/sync-io-architecture.md) | ADR-024S |
+| Sync backend boundary | [`architecture/sync-backend-taxonomy.md`](architecture/sync-backend-taxonomy.md) | ADR-024S |
+| WAL and durability | [`architecture/sync-durability-model.md`](architecture/sync-durability-model.md) | ADR-024S |
+| BlockingIoPool | [`reference/api.md`](reference/api.md) | ADR-024S |
 
 ### Async runtime (`sluice_async`)
 
-| Capability | Current documentation | ADR | Verification | Status |
-|------------|-----------------------|-----|--------------|--------|
-| Scheduler / Fiber | [`architecture/async-runtime.md`](architecture/async-runtime.md) | [ADR-execution-model](adr/ADR-execution-model.md) | deterministic causal tests, multi-worker tests | Implemented |
-| WaitNode / WaitQueue | [`architecture/async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | `tests/wait_queue_test.cpp` + formal TLA+ | Implemented |
-| Event / Semaphore / AsyncMutex / AsyncCondition / AsyncQueue / AsyncRwLock | [`architecture/async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | per-primitive `tests/*_test.cpp` | Implemented |
-| Select | [`architecture/async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | `tests/select_*_test.cpp` | Implemented |
-| CancellationToken | [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-cancel-request-epoch](adr/ADR-cancel-request-epoch.md) | `tests/cancel_token_test.cpp` | Implemented |
-| Future / Group / Batch | [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-async-io-model](adr/ADR-async-io-model.md) | `tests/future_test.cpp` etc. | Implemented |
-| Completion / AsyncIoContext | [`reference/api.md`](reference/api.md), [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-explicit-io-request-contract](adr/ADR-explicit-io-request-contract.md) | `tests/async_io_context_test.cpp` | Implemented |
-| ApplicationRuntime / RuntimeTaskContext | [`reference/api.md`](reference/api.md) | [ADR-application-runtime](adr/ADR-application-runtime.md) | `tests/application_runtime_test.cpp` | Implemented |
-| AsyncBackend / ThreadPoolBackend | [`reference/api.md`](reference/api.md), [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-explicit-io-request-contract | `tests/threadpool_backend_test.cpp` | Implemented |
-| UringAsyncBackend | [`reference/api.md`](reference/api.md), [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-explicit-io-request-contract | `tests/uring_backend_test.cpp` | Experimental |
+| Capability | Current documentation | ADR |
+|------------|-----------------------|-----|
+| Scheduler / Fiber | [`architecture/async-runtime.md`](architecture/async-runtime.md) | [ADR-execution-model](adr/ADR-execution-model.md) |
+| WaitNode / WaitQueue | [`architecture/async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model |
+| Event / Semaphore / AsyncMutex / AsyncCondition / AsyncQueue / AsyncRwLock / Select | [`architecture/async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model |
+| CancellationToken | [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-cancel-request-epoch](adr/ADR-cancel-request-epoch.md) |
+| Future / Group / Batch | [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-async-io-model](adr/ADR-async-io-model.md) |
+| Completion / AsyncIoContext | [`reference/api.md`](reference/api.md), [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-explicit-io-request-contract](adr/ADR-explicit-io-request-contract.md) |
+| ApplicationRuntime / RuntimeTaskContext | [`reference/api.md`](reference/api.md) | [ADR-application-runtime](adr/ADR-application-runtime.md) |
+| AsyncBackend / ThreadPoolBackend / UringAsyncBackend | [`reference/api.md`](reference/api.md), [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-explicit-io-request-contract |
 
 ## Reading order before changing a subsystem
 
@@ -91,6 +92,19 @@ Statuses: **Implemented** (production headers + sources + tests),
 
 For historical context, see [`history/`](history/README.md). Historical
 documents are not current authority.
+
+## Navigation stability
+
+- Prefer target, package, and directory boundaries over exhaustive source-file
+  inventories.
+- Name an exact file only when it is a durable public entry, registry, build
+  manifest, schema, or verification driver.
+- Do not store test counts, line counts, migration percentages, benchmark
+  values, or Phase completion in navigation tables.
+- Update moved or renamed targets in the same change. The existing
+  `python3 scripts/check-doc-links.py` gate verifies local Markdown paths;
+  `python3 scripts/verify-architecture-docs.py` verifies architecture
+  classification and implementation-map target names against Xmake.
 
 ## Status metadata
 
