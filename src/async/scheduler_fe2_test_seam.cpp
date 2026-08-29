@@ -159,10 +159,17 @@ bool Scheduler::AsyncTestAccess::queue_push_core_(
     if (port.lifecycle_ != detail::QueueLifecycle::operational) {
         detail::queue_lease_fail_fast();
     }
+    // NOTE-DRIFT-COUPLING: this hand-rolled F.4 entry interval mirrors
+    // QueuePort::push's RAII CallGuard (CallGuard is a private nested type,
+    // not reachable from a seam TU). If QueuePort's entry/teardown protocol
+    // evolves, THIS text must move with it. The interval close below is
+    // exception-safe: the timed ladder MAY throw (R2-ALLOC
+    // prepare_ordinary_deadline_locked, incl. the test-only bad_alloc
+    // injection), and a skipped decrement would strand begin_teardown.
     ++port.active_port_calls_;
     QueueAdmitDisposition disp;
     bool grant = false;
-    {
+    try {
         LockGuard qlk(port.waiters_[0].mtx());
         disp = s.queue_push_admit_locked(port, lease, node,
                                          WaitResume::deferred(&record), timed,
@@ -173,6 +180,9 @@ bool Scheduler::AsyncTestAccess::queue_push_core_(
             record.arm();
         }
         grant = disp == QueueAdmitDisposition::resolved_inline_grant;
+    } catch (...) {
+        if (port.active_port_calls_ > 0) --port.active_port_calls_;
+        throw;
     }
     // Q-LIV-1 grant (production authority; G + S only — the producer role
     // mutex was released above).
@@ -189,10 +199,12 @@ bool Scheduler::AsyncTestAccess::queue_pop_core_(
     if (port.lifecycle_ != detail::QueueLifecycle::operational) {
         detail::queue_lease_fail_fast();
     }
+    // NOTE-DRIFT-COUPLING: see queue_push_core_ (same F.4 entry-interval
+    // mirror + exception-safe close).
     ++port.active_port_calls_;
     QueueAdmitDisposition disp;
     bool grant = false;
-    {
+    try {
         LockGuard qlk(port.waiters_[1].mtx());
         disp = s.queue_pop_admit_locked(port, out, node,
                                         WaitResume::deferred(&record), timed,
@@ -201,6 +213,9 @@ bool Scheduler::AsyncTestAccess::queue_pop_core_(
             record.arm();
         }
         grant = disp == QueueAdmitDisposition::resolved_inline_grant;
+    } catch (...) {
+        if (port.active_port_calls_ > 0) --port.active_port_calls_;
+        throw;
     }
     if (grant) (void)s.queue_grant_producer_locked(port);
     if (port.active_port_calls_ > 0) --port.active_port_calls_;

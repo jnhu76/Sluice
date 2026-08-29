@@ -33,13 +33,13 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_park_wake.cpp` | 1318 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 631 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 407 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
+| `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 343 | AsyncMutex waits |
 | `src/async/scheduler_rwlock.cpp` | 692 | rwlock waits, ActorId writer ownership |
 | `src/async/scheduler_condition.cpp` | 281 | condition waits, shared admit ladder |
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
-| `src/async/scheduler_fe2_test_seam.cpp` | 380 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler_fe2_test_seam.cpp` | 395 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
 | `src/async/scheduler.cpp` | 2206 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
@@ -300,6 +300,15 @@ reader as ONE reader prefix. No production or seam changes; the Queue
 direction pairs already live in the Queue slice
 (`fe3_q_cross_fiber_waiter_coroutine_resolver` /
 `fe3_q_cross_coroutine_waiter_fiber_resolver`).)
+`scheduler_mutex.cpp` 342 → 343, `scheduler_semaphore.cpp` 314 → 315,
+`scheduler_fe2_test_seam.cpp` 380 → 395 (2026-08-28, FE-4 adversarial
+review round — `mutex_cancel` / `sem_cancel` publish through the
+winner-kind tail instead of `node.fiber()` + the direct fiber route
+(behavior-equal for the fiber branch; the staged
+`mutex_handoff_one_locked` owner-commit hazard is registered as
+DIV-18); the deferred queue cores' `active_port_calls_` interval close
+becomes exception-safe against the MAY-THROW timed ladder with
+drift-coupling notes).
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

@@ -316,6 +316,39 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 
 ---
 
+## DIV-17: Deferred-Discharge Eligibility Rule (Resume-Before-Suspend Window)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-17 |
+| Status | Accepted (contract rule for the staged frontend; v1 discipline stated) |
+| Introduced by | FE-4 adversarial review A (finding 2) |
+| Governing ADR | FE-1b frozen contract (L2/L7/L9); FE-1c seam design |
+| Reason | A deferred delivery obligation becomes visible to any thread the moment the admission CS releases G. A drain driver on another thread could take the record and call `handle.resume()` while the admitting thread is still inside its `bool await_suspend` tail (the coroutine has not finished suspending) — the P2426/Gamarjoba concurrent-resume hazard. |
+| Rule (v1) | Discharge is only lawful from the thread that armed the record, AFTER its `await_suspend` tail completed (the test drain helpers discharge on the admitting thread, after `start()`/`join()`). `FeTask` uses `final_suspend{suspend_always}`, so an early resume cannot destroy the frame — the current shape is safe under the stated discipline, not under an arbitrary concurrent drainer. |
+| Benefit | Names the hazard now, so the production-frontend slice cannot inherit it silently. |
+| Cost | The v1 PoV cannot discharge from a foreign thread; a production frontend must adopt symmetric transfer or a suspend-completed acknowledgment gate before draining concurrently. |
+| Current evidence | Adversarial review A (this branch); single-threaded discharge in every FE-2/FE-3 test. |
+| Revisit trigger | The production stackless-frontend slice (first concurrent drain driver), or any public coroutine-API ADR. |
+
+---
+
+## DIV-18: Mutex/Semaphore Cancel Tails Migrated; Handoff Owner-Commit Staged
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-18 |
+| Status | Partially resolved (cancel tails migrated to the winner-kind tail; `mutex_handoff_one_locked` owner-commit staged) |
+| Introduced by | FE-4 adversarial reviews A+B (converging finding: fiber-only publication tails) |
+| Governing ADR | FE-1b frozen contract L8; FE-3 equivalence audit |
+| Reason | `mutex_cancel` and `sem_cancel` published via `node.fiber()` + the direct fiber route — for a deferred token that reinterprets the delivery record as a `Fiber*` and strands the continuation. Both are migrated onto `publish_wait_winner_locked` (behavior-equal for the fiber branch). `mutex_handoff_one_locked` still commits `owner = won->fiber()` BEFORE publication: that owner commit is inherently Fiber-typed until the Mutex owner field is re-typed to `ActorId` (the declared Mutex-identity slice), so migrating its publication call alone would NOT close the hazard. |
+| Benefit | Cancel/expire delivery of a deferred waiter can no longer corrupt memory on the Mutex/Semaphore paths; the remaining staged hazard is registered instead of latent. |
+| Cost | Until the Mutex slice, a deferred epoch MUST NOT reach a Mutex/Semaphore queue (the deferred Condition PoV presents bare queues with an empty bound mutex — enforced by test construction, documented in the seam header). |
+| Current evidence | `scheduler_mutex.cpp` / `scheduler_semaphore.cpp` cancel tails (this branch); `mutex_handoff_one_locked` owner commit; audit row #7 (F1-open). |
+| Revisit trigger | The Mutex owner-identity slice (re-types `owner`, migrates the handoff commit + publication, and admits deferred Mutex waiters). |
+
+---
+
 ## Summary
 
 | ID | Status | Area |
@@ -336,3 +369,5 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | DIV-14 | Resolved for real syscall backends (ThreadPool + Uring); reference-only exemption remains | prepare() descriptor validation deferred for reference backends |
 | DIV-15 | Accepted | FE-2 WaitNode token widening |
 | DIV-16 | Accepted | FE-2 test-only stackless frontend |
+| DIV-17 | Accepted | FE deferred-discharge eligibility rule (resume-before-suspend window) |
+| DIV-18 | Partially resolved | FE Mutex/Semaphore cancel tails migrated; handoff owner-commit staged |

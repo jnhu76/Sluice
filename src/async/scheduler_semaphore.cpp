@@ -250,12 +250,13 @@ bool Scheduler::sem_cancel(WaitQueue& waiters, WaitNode& node) {
     LockGuard qlk(waiters.mtx());
     // Membership gate: a node not linked in THIS queue is not cancellable here.
     if (!cancel_primitive_wait_locked(waiters, node)) return false;
-    Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        publish_waiting_fiber_runnable_locked(f);
-    }
+    // Publish through the ONE winner-kind tail (FE-1b L8): the fiber branch
+    // is the unchanged stackful route, the deferred branch commits the
+    // delivery obligation, none publishes nothing. Reading node.fiber()
+    // directly here would strand a deferred (stackless) waiter and — for a
+    // deferred token — reinterpret the delivery record as a Fiber*.
+    publish_wait_winner_locked(node);
     return true;
 }
 

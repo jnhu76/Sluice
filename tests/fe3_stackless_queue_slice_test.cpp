@@ -732,6 +732,79 @@ SLUICE_TEST_CASE(fe3_q_close_drains_deferred_producers_fifo) {
     { (void)port.begin_teardown(); }
 }
 
+// ---- Fiber BLOCKING pop entry as resolver: the ladder's Q-LIV-1 grant
+// obligation (resolved_inline_grant) delivers the parked deferred head -----
+SLUICE_TEST_CASE(fe3_q_fiber_blocking_pop_grants_deferred_producer) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);  // capacity 1: the deferred producer parks
+    std::atomic<int> resumed{0};
+    std::atomic<int> guard_failures{0};
+    {
+        auto lease = QueueItemFactory::make<int>(port, 31);
+        (void)port.try_push(std::move(lease));
+    }
+
+    struct Case {
+        Scheduler& sched;
+        QueuePort& port;
+        std::atomic<int>& resumed;
+        FePushStatus observed = kPushCommitted;
+        FeTask run() {
+            FeQueuePushAwaiter aw{sched, port, 32};
+            co_await aw;  // parks: ring full
+            resumed.fetch_add(1, std::memory_order_relaxed);
+            observed = aw.status;
+            co_return;
+        }
+    };
+    Case c{sched, port, resumed};
+    FeTask t = c.run();
+    t.start();  // parked (armed); nothing in flight yet
+    SLUICE_CHECK(!t.done());  // parked (the eligibility record is frame-arm)
+    SLUICE_CHECK(AsyncTestAccess::deferred_depth_for_test(sched) == 0);
+
+    // The resolver is the FIBER BLOCKING pop ADMISSION ENTRY (port.pop, not
+    // the try_pop reconcile): its inline consume MUST return
+    // resolved_inline_grant, and the ENTRY must run the grant after its
+    // consumer role mutex release. Skipping the obligation strands the
+    // parked deferred producer (caught by the resumed check below).
+    Fiber resolver;
+    std::atomic<bool> resolver_done{false};
+    int got = -1;
+    resolver.set_entry([&](Fiber&) {
+        auto rp = port.pop();
+        if (rp.status() == QueueOpaquePopStatus::item) {
+            got = release_popped<int>(port, std::move(rp));
+        }
+        resolver_done.store(true, std::memory_order::release);
+    });
+    FiberStack sr;
+    SLUICE_CHECK(sched.init_fiber(resolver, sr.base(), sr.size()));
+    sched.spawn(resolver);
+    std::thread runner([&] { sched.run_live(1); });
+    SLUICE_CHECK(bounded_wait(resolver_done));
+    runner.join();
+
+    // The ladder grant committed the deferred producer's delivery obligation.
+    SLUICE_CHECK(AsyncTestAccess::deferred_depth_for_test(sched) == 1);
+    (void)drain_all(sched, guard_failures);
+    SLUICE_CHECK(resumed.load() == 1);
+    SLUICE_CHECK(guard_failures.load() == 0);
+    SLUICE_CHECK(c.observed == kPushCommitted);  // lease 32 committed
+    SLUICE_CHECK(t.done());
+    SLUICE_CHECK(got == 31);
+    SLUICE_CHECK(port.size() == 1);
+    {  // drain the ring; teardown balance across both frontends
+        auto session = port.begin_teardown();
+        auto l = session.take_next();
+        if (static_cast<bool>(l)) {
+            SLUICE_CHECK(release_teardown<int>(port, std::move(l)) == 32);
+        }
+    }
+}
+
 // ---- Cross-frontend: coroutine resolver publishes a parked FIBER waiter ---
 SLUICE_TEST_CASE(fe3_q_cross_fiber_waiter_coroutine_resolver) {
     if (!fiber_ctx::supported) return;
