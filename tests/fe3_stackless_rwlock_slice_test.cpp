@@ -115,7 +115,10 @@ struct FeRwWriteAwaiter {
         return did_suspend;
     }
     // true when the admission resolved INLINE (the caller never suspended).
-    bool await_resume() const noexcept { return !did_suspend; }
+    bool await_resume() noexcept {
+        node.set_user(nullptr);
+        return !did_suspend;
+    }
 };
 
 // Awaiter over the shared READ ladder. Symmetric (actor bound but ignored by
@@ -143,7 +146,10 @@ struct FeRwReadAwaiter {
         }
         return did_suspend;
     }
-    bool await_resume() const noexcept { return !did_suspend; }
+    bool await_resume() noexcept {
+        node.set_user(nullptr);
+        return !did_suspend;
+    }
 };
 
 // Drain helper (FE-2/FE-3 shape): discharge ALL pending deferred

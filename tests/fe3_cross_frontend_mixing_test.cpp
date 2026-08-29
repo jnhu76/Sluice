@@ -161,7 +161,10 @@ SLUICE_TEST_CASE(fe3_mix_event_set_resolves_fiber_and_deferred) {
                 sched, ev, node, rec);
             return did_suspend;
         }
-        bool await_resume() const noexcept { return did_suspend; }
+        bool await_resume() noexcept {
+            node.set_user(nullptr);  // set/clear symmetry (see rwlock slice)
+            return did_suspend;
+        }
     };
     struct Case {
         Scheduler& sched;
@@ -260,7 +263,10 @@ SLUICE_TEST_CASE(fe3_mix_rwlock_batch_grants_fiber_and_deferred_readers) {
                 sched, lock, node, actor, ctx, rec);
             return did_suspend;
         }
-        bool await_resume() const noexcept { return did_suspend; }
+        bool await_resume() noexcept {
+            node.set_user(nullptr);  // set/clear symmetry (see rwlock slice)
+            return did_suspend;
+        }
     };
     struct ReadCase {
         Scheduler& sched;
