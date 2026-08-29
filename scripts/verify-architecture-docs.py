@@ -5,6 +5,7 @@ Checks:
 - Required architecture documents exist.
 - Constitution rule IDs (AC-N) are unique.
 - Divergence registry entries have required fields.
+- Implementation-map target rows resolve to Xmake target declarations.
 - PR template references the architecture gate.
 - AGENTS.md references the constitution.
 
@@ -13,17 +14,20 @@ structural completeness of the documentation governance files.
 
 Usage:
     python3 scripts/verify-architecture-docs.py
+    python3 scripts/verify-architecture-docs.py --self-test
 
 Exit code 0 = all checks pass. Non-zero = at least one failure.
 """
 
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 REQUIRED_DOCS = [
+    "docs/architecture/overview.md",
     "docs/architecture/as-built-async-architecture.md",
     "docs/architecture/zig-io-conformance-map.md",
     "docs/architecture/architecture-constitution.md",
@@ -35,6 +39,17 @@ REQUIRED_DOCS = [
 ]
 
 failures: list[str] = []
+
+IMPLEMENTATION_MAP_RE = re.compile(
+    r"^## Authoritative implementation map\s*$"
+    r"(?P<body>.*?)"
+    r"(?=^## |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+IMPLEMENTATION_TARGET_ROW_RE = re.compile(
+    r"^\|\s*`(?P<target>[^`]+)`\s*\|", re.MULTILINE
+)
+XMAKE_TARGET_RE = re.compile(r'target\(\s*["\']([^"\']+)["\']\s*\)')
 
 
 def fail(msg: str) -> None:
@@ -105,6 +120,48 @@ def check_divergence_fields() -> None:
                 )
 
 
+def strip_lua_comments(text: str) -> str:
+    text = re.sub(r"--\[(=*)\[.*?\]\1\]", "", text, flags=re.DOTALL)
+    return "\n".join(line.split("--", 1)[0] for line in text.splitlines())
+
+
+def check_implementation_map_targets(root: Path = REPO_ROOT) -> list[str]:
+    overview = root / "docs/architecture/overview.md"
+    if not overview.is_file():
+        return []
+
+    text = overview.read_text(encoding="utf-8")
+    section = IMPLEMENTATION_MAP_RE.search(text)
+    if not section:
+        return ["IMPLEMENTATION MAP: authoritative map section not found"]
+
+    targets = IMPLEMENTATION_TARGET_ROW_RE.findall(section.group("body"))
+    if not targets:
+        return ["IMPLEMENTATION MAP: no backticked Xmake target rows found"]
+
+    errors: list[str] = []
+    duplicates = sorted({target for target in targets if targets.count(target) > 1})
+    for target in duplicates:
+        errors.append(f"IMPLEMENTATION MAP: duplicate target row: {target}")
+
+    xmake_files = [root / "xmake.lua"]
+    xmake_dir = root / "xmake"
+    if xmake_dir.is_dir():
+        xmake_files.extend(sorted(xmake_dir.rglob("*.lua")))
+    declared: set[str] = set()
+    for path in xmake_files:
+        if path.is_file():
+            xmake_text = strip_lua_comments(path.read_text(encoding="utf-8"))
+            declared.update(XMAKE_TARGET_RE.findall(xmake_text))
+
+    for target in targets:
+        if target not in declared:
+            errors.append(
+                f"IMPLEMENTATION MAP: target `{target}` has no Xmake declaration"
+            )
+    return errors
+
+
 def check_pr_template() -> None:
     path = REPO_ROOT / ".github/pull_request_template.md"
     if not path.is_file():
@@ -135,6 +192,7 @@ def main() -> int:
     check_required_docs()
     check_constitution_ids()
     check_divergence_fields()
+    failures.extend(check_implementation_map_targets())
     check_pr_template()
     check_agents_md()
 
@@ -148,5 +206,77 @@ def main() -> int:
     return 0
 
 
+def self_test() -> int:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "docs/architecture").mkdir(parents=True)
+        (root / "xmake").mkdir()
+        (root / "xmake/libraries.lua").write_text(
+            'target("sluice_core")\n', encoding="utf-8"
+        )
+        overview = root / "docs/architecture/overview.md"
+
+        overview.write_text(
+            "# Overview\n\n## Authoritative implementation map\n\n"
+            "| Boundary | Authority |\n| --- | --- |\n"
+            "| `sluice_core` | `xmake/libraries.lua` |\n",
+            encoding="utf-8",
+        )
+        if check_implementation_map_targets(root):
+            print("SELF-TEST FAIL: valid target row was rejected")
+            return 1
+
+        overview.write_text(
+            "# Overview\n\n## Authoritative implementation map\n\n"
+            "| Boundary | Authority |\n| --- | --- |\n"
+            "| `missing_target` | `xmake/libraries.lua` |\n",
+            encoding="utf-8",
+        )
+        if not check_implementation_map_targets(root):
+            print("SELF-TEST FAIL: unknown target row was accepted")
+            return 1
+
+        (root / "xmake/libraries.lua").write_text(
+            '-- target("sluice_core")\n', encoding="utf-8"
+        )
+        overview.write_text(
+            "# Overview\n\n## Authoritative implementation map\n\n"
+            "| Boundary | Authority |\n| --- | --- |\n"
+            "| `sluice_core` | `xmake/libraries.lua` |\n",
+            encoding="utf-8",
+        )
+        if not check_implementation_map_targets(root):
+            print("SELF-TEST FAIL: commented-out target was accepted")
+            return 1
+
+        (root / "xmake/libraries.lua").write_text(
+            'target("sluice_core")\n', encoding="utf-8"
+        )
+        overview.write_text(
+            "# Overview\n\n## Authoritative implementation map\n\n"
+            "| Boundary | Authority |\n| --- | --- |\n"
+            "| `sluice_core` | `xmake/libraries.lua` |\n"
+            "| `sluice_core` | `xmake/libraries.lua` |\n",
+            encoding="utf-8",
+        )
+        duplicate_errors = check_implementation_map_targets(root)
+        if not any("duplicate" in error for error in duplicate_errors):
+            print("SELF-TEST FAIL: duplicate target row was accepted")
+            return 1
+
+        overview.write_text("# Overview\n", encoding="utf-8")
+        if not check_implementation_map_targets(root):
+            print("SELF-TEST FAIL: missing map section was accepted")
+            return 1
+
+    print("OK: architecture documentation self-test passed.")
+    return 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--self-test"]:
+        sys.exit(self_test())
+    if sys.argv[1:]:
+        print("usage: verify-architecture-docs.py [--self-test]", file=sys.stderr)
+        sys.exit(2)
     sys.exit(main())

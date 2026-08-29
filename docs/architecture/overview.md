@@ -24,63 +24,35 @@ implemented capability) is the canonical asset
 [`docs/assets/architecture/sluice-high-level-layered-view.png`](../assets/architecture/sluice-high-level-layered-view.png).
 Application-driven development context: `docs/applications/README.md`.
 
-## Build boundaries
+## Authoritative implementation map
 
-```
-sluice_core (synchronous, always builds)
-├── Result<T> / IoError
-├── Reader / Writer + buffered/fault/observed wrappers
-├── copy_all / CopyStrategy
-├── FileReader / FileWriter (POSIX)
-├── BlockingIoContext (POSIX factory)
-├── BlockingIoPool (bounded OS-thread pool)
-├── SyncableWriter (sync_data / sync_all)
-├── WAL (write-ahead log)
-└── MemoryIoContext (deterministic in-memory)
+This is the single current routing surface for build boundaries. It answers
+where a change starts without copying the exact source manifest. The linked
+Xmake files remain executable authority for target membership, dependencies,
+feature gates, and test wiring.
 
-sluice_async (opt-in, separate static library)
-├── Scheduler (M:N fiber scheduler, multi-worker, work stealing)
-├── Fiber / fiber_ctx (context-switch, x86_64 only)
-├── WaitNode / WaitQueue (E10)
-├── TimerRegistration / deadline (E11)
-├── Event (E12-A)
-├── Semaphore (E12-B)
-├── AsyncMutex (E12-C)
-├── AsyncCondition (E12-D)
-├── AsyncQueue<T> (E12-E)
-├── AsyncRwLock (E12-F)
-├── Select (E13)
-├── CancellationToken / CancelState (E27)
-├── Future<T> (E28)
-├── Group (E29)
-├── Batch (E30)
-├── Completion<T> / AsyncIoContext
-├── ApplicationRuntime / RuntimeBuilder / RuntimeTaskContext
-│   (lifecycle layer: build → start → submit → stop → drain → join; ADR-application-runtime)
-├── AsyncBackend (public backend extension point; trusted backend-author API)
-│   ├── FakeAsyncBackend (deterministic test vehicle)
-│   ├── ThreadPoolBackend (fixed persistent blocking-I/O worker pool)
-│   └── UringAsyncBackend (experimental, liburing-gated)
-└── EventedWaitPolicy / ThreadedWaitPolicy
+| Boundary | Stable responsibility and dependency rule | Public or shared surface | Implementation | Build and verification authority |
+|----------|-------------------------------------------|--------------------------|----------------|----------------------------------|
+| `sluice_core` | Synchronous `Result<T>` / `IoError`, Reader/Writer, buffering, copy, WAL, positional and durable file I/O, and `BlockingIoPool`; no dependency on async | [`include/sluice/`](../../include/sluice/) excluding opt-in async and experimental subdirectories | Synchronous translation units directly under [`src/`](../../src/) | [`xmake/libraries.lua`](../../xmake/libraries.lua), [`xmake/tests/core.lua`](../../xmake/tests/core.lua) |
+| `sluice_async` | Opt-in production async runtime, Completion/AsyncIoContext, backends, Runtime/Scheduler integration, and explicit request lifecycle; depends on `sluice_core` | [`include/sluice/async/`](../../include/sluice/async/) | [`src/async/`](../../src/async/) | [`xmake/libraries.lua`](../../xmake/libraries.lua), [`xmake/experimental.lua`](../../xmake/experimental.lua), [`xmake/tests/async.lua`](../../xmake/tests/async.lua), and [`verification/`](../verification/) |
+| `sluice_async_internal_testing` | Test-only build of the authoritative async production sources plus guarded deterministic controls; production targets must not depend on it, and no executable may link both async variants | Production async headers plus guarded non-installed seam headers in [`src/async/`](../../src/async/) | The same async production sources plus the controller under [`tests/`](../../tests/) | [`xmake/libraries.lua`](../../xmake/libraries.lua), [`xmake/tests/async_internal.lua`](../../xmake/tests/async_internal.lua) |
+| `sluice_experimental_uring` | Optional standalone io_uring helpers; depends on `sluice_core`, is off by default, and builds stubs without liburing | [`include/sluice/experimental/`](../../include/sluice/experimental/) | [`src/experimental/`](../../src/experimental/) | [`xmake/experimental.lua`](../../xmake/experimental.lua); real and stub evidence are reported separately |
+| Applications | Real workloads using installed public headers only, with no test seams or private include path | Installed public Sluice headers | [`apps/`](../../apps/) | [`xmake/apps.lua`](../../xmake/apps.lua) and [`docs/applications/`](../applications/) |
+| Zig design reference | Source-derived design reference only; no production target may build, link, vendor, or mechanically copy it | None | [`zig/`](../../zig/) | Differences are classified in [`divergence-registry.md`](divergence-registry.md) |
 
-sluice_async_internal_testing (test-only variant)
-├── Same authoritative sources as sluice_async
-├── Guarded by SLUICE_ASYNC_INTERNAL_TESTING
-├── Exposes deterministic causal phase seams
-└── MUST NOT be linked alongside sluice_async; no executable links both
+The liburing option also selects the real `UringAsyncBackend` path inside
+`sluice_async`; that backend and the standalone `sluice_experimental_uring`
+target are distinct boundaries. io_uring remains one mechanism, not the
+architecture.
 
-sluice_experimental_uring (optional, build-gated)
-└── UringWriteBatch / UringIoContext (stub without liburing)
-```
+### Map stability rules
 
-## Dependency graph
-
-```
-sluice_core           ← no dependency on sluice_async
-sluice_async          ← depends on sluice_core (Result, IoError)
-sluice_async_internal_testing ← test-only variant of sluice_async
-sluice_experimental_uring ← depends on sluice_core, optional liburing
-```
+- Keep exact source membership in Xmake target declarations, not in this table.
+- Route to stable directories or named authorities; do not copy every header,
+  source, test, count, or current migration percentage.
+- When a boundary moves, update the build authority and this map together.
+  `check-doc-links.py` detects stale paths; `verify-architecture-docs.py`
+  verifies every backticked target row against Xmake declarations.
 
 ## Capability classification
 
