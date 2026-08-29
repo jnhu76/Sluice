@@ -153,8 +153,13 @@ run_gate "doc-links full scan" "${DOC_LINKS_SCAN_REPRO}" \
 #
 # Mirrors the third sub-step of the CI "Documentation verification" step.
 # Checks structural completeness of governance files (constitution rule ID
-# uniqueness, divergence-registry required fields, PR template refs,
-# AGENTS.md references). Pure structural checks, no semantic correctness.
+# uniqueness, divergence-registry required fields, implementation-map target
+# references, PR template refs, AGENTS.md references). Pure structural checks,
+# no semantic correctness.
+ARCH_DOCS_SELFTEST_REPRO="python3 scripts/verify-architecture-docs.py --self-test"
+run_gate "architecture docs self-test" "${ARCH_DOCS_SELFTEST_REPRO}" \
+    python3 scripts/verify-architecture-docs.py --self-test
+
 ARCH_DOCS_REPRO="python3 scripts/verify-architecture-docs.py"
 run_gate "architecture docs" "${ARCH_DOCS_REPRO}" \
     python3 scripts/verify-architecture-docs.py
