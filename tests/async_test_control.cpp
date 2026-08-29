@@ -436,6 +436,35 @@ bool ordinary_deadline_alloc_should_fail(
     return true;
 }
 
+// ---- FE-CORRECTIVE-1 P1-1: deferred-publication storage-failure injection.
+// Same controller discipline as the R2 pair; the guarded hook runs at the
+// defer_publication_locked insertion edge under global_mtx_.
+void arm_deferred_publication_alloc_failure(
+    sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->deferred_publication_alloc_fail_mtx);
+    c->deferred_publication_alloc_fail_armed = true;
+}
+
+void disarm_deferred_publication_alloc_failure(
+    sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    std::lock_guard<std::mutex> lk(c->deferred_publication_alloc_fail_mtx);
+    c->deferred_publication_alloc_fail_armed = false;
+}
+
+bool deferred_publication_alloc_should_fail(
+    sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return false;
+    std::lock_guard<std::mutex> lk(c->deferred_publication_alloc_fail_mtx);
+    if (!c->deferred_publication_alloc_fail_armed) return false;
+    c->deferred_publication_alloc_fail_armed = false;  // one-shot
+    return true;
+}
+
 void rollback_record_begin(sluice::async::Scheduler& s,
                            std::size_t successful_registrations) noexcept {
     SchedulerController* c = find_controller(s);

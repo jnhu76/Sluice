@@ -329,6 +329,18 @@ struct TimerTestControl {
     static void disarm_alloc_failure(sluice::async::Scheduler& s) noexcept {
         disarm_ordinary_deadline_alloc_failure(s);
     }
+    // FE-CORRECTIVE-1 P1-1 regression seam: one-shot synthetic allocation
+    // failure at the next deferred-publication transit insertion (AFTER the
+    // terminal winner is committed; the witness asserts the named
+    // process-terminal fail-fast). Internal-testing variant only.
+    static void arm_deferred_publication_failure(
+        sluice::async::Scheduler& s) noexcept {
+        arm_deferred_publication_alloc_failure(s);
+    }
+    static void disarm_deferred_publication_failure(
+        sluice::async::Scheduler& s) noexcept {
+        disarm_deferred_publication_alloc_failure(s);
+    }
     // Park-commit seam delegation (E11 reuses the E9 park-commit seam).
     static void arm_park_commit(sluice::async::Scheduler& s) noexcept {
         SchedulerParkSeam::arm_commit(s);

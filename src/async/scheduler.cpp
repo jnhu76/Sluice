@@ -30,6 +30,7 @@
 #include <utility>
 #include <cstdio>   // Phase G park-window forensics dump (internal testing)
 #include <cstdlib>  // std::abort (E12-F Category B fail-fast)
+#include <new>      // std::bad_alloc (deferred-publication failure boundary)
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
 // the non-installed test-control header so the phase call sites below resolve to
@@ -1684,13 +1685,37 @@ void Scheduler::publish_wait_winner_locked(WaitNode& won) {
     }
 }
 
-void Scheduler::defer_publication_locked(void* delivery_record) {
+void Scheduler::defer_publication_locked(void* delivery_record) noexcept {
     // Producer half of the FE delivery split: persistent state written under
     // G before the producer releases it, so the next take (any thread) sees
     // the obligation — no lost publication. Transient transit list (Gate 2):
     // bounded by CONCURRENT suspended deferred-kind waiters, drained per
     // discharge; growth tracks outstanding, never historical submissions.
-    deferred_publications_.push_back(delivery_record);
+    //
+    // FAILURE POSTURE (FE-CORRECTIVE-1 P1-1): this insertion runs AFTER the
+    // terminal winner is irreversible (resolve_ CAS, unlink, resource
+    // commit, timer retirement, accounting). The vector growth MAY
+    // allocate; a bad_alloc escaping here would strand the delivery
+    // obligation — the suspended continuation is never resumed, and
+    // ~Scheduler's empty-list teardown gate cannot even see the loss. The
+    // obligation is therefore NOT recoverable: a storage failure enters the
+    // named process-terminal fail-fast, the SAME boundary ~Scheduler uses
+    // for a stranded entry. This is a process-terminal failure boundary,
+    // NOT an allocation-free publication tail (the R2 prepare/publish
+    // pattern); the FE compliance evidence documents that posture.
+    try {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Test-only synthetic allocation failure (one-shot) at EXACTLY this
+        // insertion edge — the narrowest local seam; no generic allocator
+        // fault-injection machinery. Absent in production builds.
+        if (sluice_async_test::deferred_publication_alloc_should_fail(*this)) {
+            throw std::bad_alloc();
+        }
+#endif
+        deferred_publications_.push_back(delivery_record);
+    } catch (...) {
+        detail::scheduler_deferred_publication_stranded_fail_fast();
+    }
 }
 
 std::size_t Scheduler::take_deferred_publications(void** out, std::size_t cap) {

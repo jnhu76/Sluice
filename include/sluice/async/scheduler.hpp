@@ -1521,13 +1521,28 @@ private:
     // CONCURRENT suspended deferred-kind waiters (transient, drained per
     // discharge — the same resource class as worker inboxes; grows with
     // outstanding, never with historical submissions).
-    void defer_publication_locked(void* delivery_record)
+    //
+    // FAILURE POSTURE (FE-CORRECTIVE-1 P1-1): the insertion runs after the
+    // terminal winner is irreversible; an allocation failure here is NOT
+    // recoverable (the suspended continuation's delivery obligation would be
+    // lost with no residue the teardown gate can observe). A storage failure
+    // therefore enters the NAMED process-terminal fail-fast
+    // (scheduler_deferred_publication_stranded_fail_fast — the same boundary
+    // ~Scheduler uses for a stranded entry). This is a process-terminal
+    // failure boundary, deliberately NOT the R2-style allocation-free
+    // publication tail: the stackless frontend is experimental/test-gated
+    // and its evidence documents this posture. noexcept: no exception
+    // escapes (the only throwing op is contained by the boundary).
+    void defer_publication_locked(void* delivery_record) noexcept
         SLUICE_REQUIRES(global_mtx_);
 
     // Drain chunk: move out up to `cap` pending delivery records (FIFO) under
     // G. The caller discharges each record (frontend resume) with NO
     // Scheduler/primitive lock held, then may call again; an empty take means
-    // the list is drained. ~Scheduler requires this list EMPTY (a stranded
+    // the TRANSIT LIST is drained (records already taken but not yet
+    // discharged are the discharging caller's obligation — take ownership;
+    // only the ~Scheduler-empty precondition covers the never-taken
+    // remainder). ~Scheduler requires this list EMPTY (a stranded
     // entry is a published-but-unconsumed winner: fail-fast teardown
     // precondition, mirrors the QueuePort granted_not_resumed_ gate).
     std::size_t take_deferred_publications(void** out, std::size_t cap);

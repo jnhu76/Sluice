@@ -167,6 +167,16 @@ end
 -- POSIX-only (fork/exec/waitpid).
 sluice_internal_async_test("async_queue_lifecycle_death_test", {platform_gate = {"linux", "macosx"}})
 
+-- fe2_publication_atomicity_death_test — FE-CORRECTIVE-1 P1-1 witness. A
+-- committed terminal winner + a one-shot storage-failure injection at the
+-- deferred-publication transit insertion edge MUST enter the NAMED
+-- process-terminal fail-fast (exit 86, Debug AND Release); an escaping
+-- bad_alloc (mutation shape) is detected by the child's own catch and fails
+-- the case. The control case proves the healthy publication path. Links
+-- sluice_async_internal_testing (the injection controller + the deferred
+-- admission seam). POSIX-only (fork/exec/waitpid).
+sluice_internal_async_test("fe2_publication_atomicity_death_test", {platform_gate = {"linux", "macosx"}})
+
 -- threadpool_backend_death_test — Phase E ThreadPoolBackend non-quiescent
 -- destruction fail-fast. Verifies that destroying a backend with enqueued ops,
 -- running workers, backend-ready unreaped terminals, or completion-ready
