@@ -419,15 +419,24 @@ Commands (actual results):
       assert strings kept verbatim; new enforcement is named
       fail-fasts, not assert-family)
   git diff --check                                     -> clean
-Observed one-off (NOT this slice's class): during the first TSan suite
-  run, select_event_registry_test
-  (test_phase_seam_reset_serialization — a 4-thread causal phase-seam
-  test outside the rwlock change surface) hung once and was killed;
-  it then passed standalone, passed 20/20 in a repeated-run loop under
-  TSan, and the full suite passed 196/196 on re-run. Debug passes the
-  same test repeatedly. Classified: rare test-infrastructure flake in
-  the phase-seam causal test, no rwlock-slice attribution; tracked for
-  observation, not repaired in this slice (§19 no-batching).
+Observed pre-existing flake (NOT this slice's class): twice in ~24
+  TSan full-suite runs, select_event_registry_test
+  (test_phase_seam_reset_serialization) hung and was killed; it passed
+  standalone, passed 20/20 in a repeated-run loop, and both full suites
+  passed on re-run (196/196, then 197/197 and 198/198). Debug never
+  flaked. Mechanism (thread-signature + source analysis): run_live's
+  MW-S2 no-progress termination fires when the single worker's park
+  takes a no-progress wake while the fiber sits on a PLAIN Event wait
+  with no attached external wake source; the termination calls
+  release_all_phases, disarming the armed set-store-before-drain seam,
+  so set() completes without pausing and the test's unwatchdoged
+  spin_wait(waiter_registered/reset_attempted) spins forever. The FE
+  branch touches none of the park/wait_one/MW-S2/external-wake paths
+  (diff-scoped to the primitive admission ladders + winner-kind tails),
+  and the test file predates the branch. Classified: pre-existing
+  test-infrastructure hazard (residency assumption + no watchdog);
+  follow-up repair candidate (watchdoged spin or external-wake attach)
+  tracked OUTSIDE this slice (§19 no-batching).
 Sanitizers: TSan run above; ASan+UBSan + Release deferred to the FE-4
   full-campaign gate (no new lifetime surface: ownership identity is
   plain data; the frame-embedded ctx/record is the FE-1a property).
@@ -525,3 +534,30 @@ Sanitizers: TSan + ASan/UBSan + Release deferred to / covered by the
   repair above is verified by the full suite).
 Benchmark: NO performance claim (structural authority sharing; §37).
 ```
+
+## FE-3 cross-frontend mixing addendum (representative Fiber+deferred pairs)
+
+No production or seam changes; this round adds ONLY the mixing test target
+(`fe3_cross_frontend_mixing_test`) that the FE-3 stage requires on top of the
+per-slice cases (the Queue slice already carries the two Queue-direction
+pairs). What the slices proved separately — the fiber path and the deferred
+path over the SAME ladders — this round proves JOINTLY:
+
+- Event: a parked FIBER waiter and a parked deferred waiter on ONE Event; ONE
+  `set()` broadcast resolves both through the same
+  `wake_wait_one_locked` drain, publishing EACH winner exactly once through
+  its OWN ResumeTarget kind (fiber → `make_runnable` + worker routing;
+  deferred → transit obligation + L9 discharge). `waiting_count()` is used
+  ONLY as a bounded liveness settle (it sums queue registrations AND fiber
+  Waiting state — the exact total is not a stable cross-domain contract);
+  every semantic assertion holds under either pickup interleaving.
+- AsyncRwLock: a fiber writer holder; a parked DEFERRED reader and a parked
+  FIBER reader; ONE `unlock_write` head-reconcile batch-grants BOTH readers
+  as ONE reader prefix — mixed kinds inside the single batch publication.
+  Runs under `run_live(2)`: the holder OCCUPIES one worker while stepping on
+  the test flag; the fiber reader needs the second worker to reach
+  `read_lock`.
+
+Evidence (actual results): Clang Debug 198/198 PASS; TSan 198/198 PASS;
+mechanical-facts / doc-links / architecture-docs / assert-hygiene clean;
+`git diff --check` clean. Benchmark: NO performance claim (§37).

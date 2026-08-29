@@ -288,6 +288,18 @@ BARE WaitQueues (Mutex ownership re-typing is its own later slice per
 FE-1b A1 §12; the full AsyncCondition choreography composition stays
 covered by the unchanged fiber tests over the SAME ladder). No public
 API change beyond the additive internal disposition enum.)
+`tests/fe3_cross_frontend_mixing_test.cpp` (new test target
+`fe3_cross_frontend_mixing_test`, 2026-08-28, FE-3 cross-frontend
+mixing — representative Fiber+deferred waiter sets on ONE primitive
+resolved by ONE resolver, closing the FE-3 stage: Event — one set()
+broadcast resolves a parked FIBER waiter and a parked deferred waiter
+(each delivered exactly once through its OWN ResumeTarget kind: worker
+route vs transit obligation); AsyncRwLock — one unlock_write
+head-reconcile batch-grants a parked FIBER reader and a parked deferred
+reader as ONE reader prefix. No production or seam changes; the Queue
+direction pairs already live in the Queue slice
+(`fe3_q_cross_fiber_waiter_coroutine_resolver` /
+`fe3_q_cross_coroutine_waiter_fiber_resolver`).)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

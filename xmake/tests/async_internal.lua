@@ -676,3 +676,9 @@ sluice_internal_async_test("fe3_stackless_rwlock_slice_test",
 -- released_mutex law; own-reacquire separation; notify/cancel/deadline).
 sluice_internal_async_test("fe3_stackless_condition_slice_test",
                            {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 cross-frontend mixing: representative Fiber+deferred waiter sets on
+-- ONE primitive resolved by ONE resolver (Event broadcast; RwLock reader
+-- batch) — each winner delivered exactly once through its own ResumeTarget.
+sluice_internal_async_test("fe3_cross_frontend_mixing_test",
+                           {includedirs = {"include", "tests", "src/async"}})
