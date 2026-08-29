@@ -35,12 +35,12 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_event.cpp` | 407 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
 | `src/async/scheduler_mutex.cpp` | 343 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 692 | rwlock waits, ActorId writer ownership |
+| `src/async/scheduler_rwlock.cpp` | 699 | rwlock waits, ActorId writer ownership |
 | `src/async/scheduler_condition.cpp` | 281 | condition waits, shared admit ladder |
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
-| `src/async/scheduler_fe2_test_seam.cpp` | 395 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
-| `src/async/scheduler.cpp` | 2206 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler_fe2_test_seam.cpp` | 431 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler.cpp` | 2231 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -309,6 +309,28 @@ winner-kind tail instead of `node.fiber()` + the direct fiber route
 DIV-18); the deferred queue cores' `active_port_calls_` interval close
 becomes exception-safe against the MAY-THROW timed ladder with
 drift-coupling notes).
+`scheduler.cpp` 2206 → 2231, `scheduler_rwlock.cpp` 692 → 699,
+`scheduler_fe2_test_seam.cpp` 395 → 431, `scheduler.hpp` +
+`scheduler_test_access.hpp` + `wait_node.hpp` (declarations only), and
+the new test target `fe2_publication_atomicity_death_test`
+(2026-08-29, FE-CORRECTIVE-1 review round — three P1 correctives:
+(1) `defer_publication_locked` becomes `noexcept` with a named
+fail-fast around the MAY-THROW insertion, so a stranded
+delivery-obligation insertion failure is a process-terminal boundary
+instead of an unrecorded escape past the terminal winner; the
+one-shot `deferred_publication_alloc_should_fail` controller flag
+mirrors the R2 injection pattern. (2) the deferred Queue ordinary
+cores transfer their `active_port_calls_` pin to the awaiting frame
+(released by the frontend in `await_resume` via
+`queue_release_deferred_pin_for_test`), so the port stays pinned
+through resume-side result consumption and an abandoned frame is
+mechanically visible at `begin_teardown`. (3) the recursive-writer
+`writer_owner == actor` check moves inside the shared
+`rwlock_write_admit_locked` ladder UNDER `global_mtx_`, closing the
+pre-G read race for both frontends; `WaitResume::fiber(nullptr)`
+normalizes to `Kind::none`. The header diffs are
+`noexcept` + one ternary — ZERO layout delta; the WaitNode/AsyncRwLock
+widening (+8/+8 vs pre-FE base) is registered as DIV-19.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

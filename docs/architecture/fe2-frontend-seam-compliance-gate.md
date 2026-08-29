@@ -267,18 +267,29 @@ here (the parent sections above remain authoritative).
   held together.
 - Deferred-kind grant publication: `defer_publication_locked` WITHOUT the
   `granted_not_resumed_` increment. Rationale: that counter pairs the grant
-  increment with the FIBER winner's post-resume decrement under G; a
-  deferred winner's discharge path never touches the port again (the
-  coroutine frame carries `QueueWaitCtx` + lease/out), so there is no
-  pairing decrement and no FIFO-empty teardown window change:
-  `begin_teardown` may proceed once both role FIFOs drain; the in-flight
-  deferred obligation is owned by the Scheduler-level
-  `deferred_publications_` teardown gate (stranded fail-fast, FE-2).
+  increment with the FIBER winner's post-resume decrement under G; the
+  deferred kind has no such pairing decrement. FE-CORRECTIVE-1 P1-2
+  corrected the LIFETIME authority here: a deferred winner's resume-side
+  result conversion (`release_popped` / `release_failed`) DOES require a
+  live QueuePort (the identity check validates `owner_port_` against it),
+  so the deferred entry TRANSFERS the ordinary-call pin
+  (`active_port_calls_`) to the frontend frame at admission and the
+  awaiter releases it in `await_resume` after that conversion — mirroring
+  the fiber frontend's CallGuard alive on the suspended fiber stack.
+  `begin_teardown` therefore cannot pass until the deferred result has
+  been consumed; the Scheduler-level `deferred_publications_` teardown
+  gate (stranded fail-fast, FE-2) is a SECOND, Scheduler-scoped check, not
+  the QueuePort lifetime authority. The pre-corrective claim that the
+  deferred discharge "never touches the port again" was false.
 
 ### Gate 2 — Resource model delta
 
 No new resource. `active_port_calls_` bracket reproduced for the deferred
-entry (single-exit decrement); ring/lease custody unchanged; the transit
+entry, with the FE-CORRECTIVE-1 P1-2 interval: the pin is INCREMENTED at
+the F.4 entry, released by the seam's catch on a ladder throw, and
+TRANSFERRED to the frontend frame on every non-throw return (released in
+`await_resume` after result conversion — the fiber CallGuard's exact
+interval). Ring/lease custody unchanged; the transit
 list stays bounded by CONCURRENT suspended deferred waiters (FE-2 Gate 2).
 
 ### Gate 3 — Wake model delta

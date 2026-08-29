@@ -349,6 +349,22 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 
 ---
 
+## DIV-19: FE-3 AsyncRwLock Writer-Owner ActorId Widening (+8 bytes)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-19 |
+| Status | Accepted |
+| Introduced by | FE campaign (FE-3 RwLock slice; recorded by FE-CORRECTIVE-1 P2 ABI hygiene — the layout delta predates the corrective and was previously unrecorded) |
+| Governing ADR | FE-1b A1 (ActorIdentity != ResumeTarget); FE-3 equivalence audit |
+| Reason | Writer ownership semantics must compare the holding ACTOR's identity, not the ResumeTarget delivery token (FE-1b A1): `writer_owner_` re-typed `Fiber*` -> `ActorId` so the fiber and stackless frontends share ONE ownership rule (`rwlock_write_admit_locked` recursive check, `rwlock_try_write_admission_locked`, `rwlock_unlock_write_core_locked`, grant-time commit). |
+| Benefit | Ownership semantics are frontend-neutral; with FE-CORRECTIVE-1 P1-3 every `writer_owner` read/write — including the recursive-owner decision — is serialized under `global_mtx_` (the pre-corrective fiber entries read it before G: a data race). |
+| Cost | `sizeof(AsyncRwLock)` 120 -> 128 bytes, alignment unchanged (8): the owner field widens `Fiber*` (8B) -> `ActorId` (16B: pointer + kind), absorbed with existing padding. Valid-call stackful semantics are preserved; invalid-call behavior changed EARLIER in the FE campaign (recursive blocking write: debug assert -> named fail-fast active in Debug AND Release) — that change is not attributable to the representation. FE-CORRECTIVE-1 itself adds ZERO layout delta (header diffs are a `noexcept` qualifier and a factory-body ternary only). |
+| Current evidence | Mechanically measured: BASE `origin/master` 4bee61f probe `sizeof(AsyncRwLock)=120 alignof=8`; FE branch + corrective `sizeof(AsyncRwLock)=128 alignof=8` (same probe, same compiler); `include/sluice/async/async_rwlock.hpp` (`ActorId writer_owner_`), `src/async/scheduler_rwlock.cpp`. |
+| Revisit trigger | The Mutex owner-identity slice (the same widening for `AsyncMutex::owner_`); any third frontend that needs a distinct actor representation. |
+
+---
+
 ## Summary
 
 | ID | Status | Area |
@@ -371,3 +387,4 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | DIV-16 | Accepted | FE-2 test-only stackless frontend |
 | DIV-17 | Accepted | FE deferred-discharge eligibility rule (resume-before-suspend window) |
 | DIV-18 | Partially resolved | FE Mutex/Semaphore cancel tails migrated; handoff owner-commit staged |
+| DIV-19 | Accepted | FE-3 AsyncRwLock writer-owner ActorId widening (+8 bytes) |
