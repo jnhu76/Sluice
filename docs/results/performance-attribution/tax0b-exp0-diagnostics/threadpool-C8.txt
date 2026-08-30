@@ -1,0 +1,5 @@
+[sudo] password for jnhu: 352.46,msec,task-clock,352457291,100.00,,
+6719,,context-switches,352457291,100.00,,
+0,,cpu-migrations,352457291,100.00,,
+1008658520,,cycles,352457291,100.00,,
+535571834,,instructions,352457291,100.00,,

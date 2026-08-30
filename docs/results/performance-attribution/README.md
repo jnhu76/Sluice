@@ -46,3 +46,22 @@ minimal thread pool vs L2 Sluice `ThreadPoolBackend` over one
 deterministic op stream with fail-closed same-work accounting. Tax
 definitions, environment discipline, and claim boundary:
 [`docs/verification/explicit-io-abstraction-tax.md`](../../verification/explicit-io-abstraction-tax.md).
+
+## TAX-0B EXP-0 — capacity invariance (#250 TAX-0 ladder, 2026-08-31)
+
+| Artifact | What it is |
+|----------|------------|
+| `tax0b-exp0-threadpool-tmpfs.json` | PRIMARY ThreadPool arm: fixed D=8/W=1 workload, sweep unused request capacity C∈{8,32,128,512}, 11 randomized rounds, per-rep process under user-mode perf stat |
+| `tax0b-exp0-uring-tmpfs.json` | PRIMARY real-liburing arm: same geometry, Q=8 |
+| `tax0b-exp0-threadpool-btrfs.json` | CONTROL: ThreadPool matrix on /home btrfs (page-cache warm) |
+| `tax0b-exp0-uring-btrfs.json` | CONTROL: uring matrix on /home btrfs |
+| `tax0b-exp0-threadpool-tmpfs-w4-replication.json` | SECONDARY W=4 replication (task-authorized, not mixed into the primary result) |
+| `tax0b-exp0-diagnostics/` | Non-canonical: kernel-inclusive perf stat cells (sudo), flame/bpftrace availability notes |
+
+Kind `tax0capacity` (validated by the same gate): one experimental
+variable (unused request capacity) at fixed workload, fail-closed
+same-work proof, predeclared blocked-randomized execution order
+(seed `0x54415830`), median/MAD + absolute-and-percent deltas +
+descriptive OLS capacity slope. Verdict and claim boundary:
+[`research/tax0/TAX0-B-EXP0-CAPACITY-INVARIANCE.md`](../../../research/tax0/TAX0-B-EXP0-CAPACITY-INVARIANCE.md).
+Measurement-only PR: no production code changed, no optimization.
