@@ -18,11 +18,20 @@ docs/results/safety/se1-hazard-corpus.json:
   - the legacy multi-meaning `aliases` field is forbidden
   - provenance shape: sources are structured {url, role, authority} records;
     roles/authorities are closed sets; role<->authority consistency
+  - origin<->quality closed relation: conventional-real->{C0,C2},
+    conventional-documentation->{C1}, conventional-minimal->{C3},
+    sluice-induced->{S0}
   - provenance-quality role contract:
-      C0 needs >=1 bug_record AND >=1 upstream_fix source
+      C0 needs >=1 PRIMARY-AUTHORITY incident record (bug_record or
+        official_bug_corpus carrying upstream-primary/official-primary
+        authority) AND >=1 upstream_fix source; a supporting-authority
+        bug_record annotates but never establishes C0
       C1 needs >=1 official_contract source
       C2 needs >=1 official_bug_corpus source
-      S0 needs >=1 repo_evidence source
+      S0 needs >=1 repo_evidence source; an IN-SE1 population case requires
+        >=1 repo-primary source; repo evidence that is exclusively
+        repo-untracked (E4: recorded only in untracked human artifacts)
+        makes the entry an UNCONFIRMED CANDIDATE which must be OUT-OF-SE1
       C3 must not claim bug_record/upstream_fix roles
       supporting sources never satisfy the above
   - Sluice-induced population cases: root_cause_key + root_cause_class
@@ -87,7 +96,13 @@ SOURCE_ROLES = {
     "repo_evidence",
     "supporting",
 }
-SOURCE_AUTHORITIES = {"upstream-primary", "official-primary", "repo-primary", "supporting"}
+SOURCE_AUTHORITIES = {
+    "upstream-primary",
+    "official-primary",
+    "repo-primary",
+    "repo-untracked",
+    "supporting",
+}
 
 # role -> authority values this role may carry (closed consistency contract)
 ROLE_AUTHORITY = {
@@ -95,11 +110,26 @@ ROLE_AUTHORITY = {
     "upstream_fix": {"upstream-primary"},
     "official_contract": {"upstream-primary", "official-primary"},
     "official_bug_corpus": {"upstream-primary", "official-primary"},
-    "repo_evidence": {"repo-primary"},
+    "repo_evidence": {"repo-primary", "repo-untracked"},
     "supporting": SOURCE_AUTHORITIES,
 }
 # roles that must not appear on C3 (conventional-minimal, no incident claim)
 INCIDENT_ROLES = {"bug_record", "upstream_fix"}
+# C0 PRIMARY-INCIDENT contract (#245 review 5060124249 FIX 1): the incident
+# record itself must be primary-authority; a supporting-authority bug_record
+# does not establish a primary incident. upstream_fix is pinned to
+# upstream-primary by ROLE_AUTHORITY, so role presence suffices on the fix side.
+PRIMARY_INCIDENT_ROLES = {"bug_record", "official_bug_corpus"}
+PRIMARY_AUTHORITIES = {"upstream-primary", "official-primary"}
+
+# closed origin<->quality relation: an origin may only claim the quality
+# classes its evidence kind can establish (enforced per entry below)
+ORIGIN_QUALITY = {
+    "conventional-real": {"C0", "C2"},
+    "conventional-documentation": {"C1"},
+    "conventional-minimal": {"C3"},
+    "sluice-induced": {"S0"},
+}
 
 # Claims that must never appear anywhere in the corpus artifact.
 FORBIDDEN_CLAIMS = [
@@ -299,15 +329,37 @@ def main() -> None:
                 fail(f"{eid}: {quality} provenance lacks an http(s) source url")
         if quality == "C3" and roles_here & INCIDENT_ROLES:
             fail(f"{eid}: C3 (conventional-minimal) must not claim incident roles {sorted(roles_here & INCIDENT_ROLES)}")
+        # origin<->quality closed relation
+        if quality not in ORIGIN_QUALITY[origin]:
+            fail(f"{eid}: origin {origin!r} cannot carry provenance_quality {quality!r} (allowed {sorted(ORIGIN_QUALITY[origin])})")
         # quality role contract
-        if quality == "C0" and not ({"bug_record"} <= roles_here and {"upstream_fix"} <= roles_here):
-            fail(f"{eid}: C0 requires >=1 bug_record AND >=1 upstream_fix source (found {sorted(roles_here)})")
+        if quality == "C0":
+            has_primary_incident = any(
+                src.get("role") in PRIMARY_INCIDENT_ROLES and src.get("authority") in PRIMARY_AUTHORITIES
+                for src in sources
+            )
+            if not (has_primary_incident and "upstream_fix" in roles_here):
+                fail(
+                    f"{eid}: C0 requires >=1 primary-authority incident record "
+                    f"(bug_record/official_bug_corpus with upstream-primary/official-primary authority) "
+                    f"AND >=1 upstream_fix source (found {sorted((s.get('role'), s.get('authority')) for s in sources)})"
+                )
         if quality == "C1" and "official_contract" not in roles_here:
             fail(f"{eid}: C1 requires >=1 official_contract source")
         if quality == "C2" and "official_bug_corpus" not in roles_here:
             fail(f"{eid}: C2 requires >=1 official_bug_corpus source")
-        if quality == "S0" and "repo_evidence" not in roles_here:
-            fail(f"{eid}: S0 requires >=1 repo_evidence source")
+        if quality == "S0":
+            repo_srcs = [s for s in sources if s.get("role") == "repo_evidence"]
+            if not repo_srcs:
+                fail(f"{eid}: S0 requires >=1 repo_evidence source")
+            if all(s.get("authority") == "repo-untracked" for s in repo_srcs):
+                # E4-only evidence is an unconfirmed candidate, never a
+                # population case (#245 review 5060124249 FIX 3)
+                if elig != "OUT-OF-SE1":
+                    fail(f"{eid}: S0 evidence is repo-untracked (E4) only; entry must be OUT-OF-SE1 (unconfirmed candidate)")
+            elif elig == "IN-SE1" and role == "population-case":
+                if not any(s.get("authority") == "repo-primary" for s in repo_srcs):
+                    fail(f"{eid}: IN-SE1 population S0 entry requires >=1 repo-primary repo_evidence source")
 
         for field in REQUIRED_TEXT_FIELDS:
             v = e.get(field)

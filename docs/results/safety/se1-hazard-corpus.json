@@ -27,11 +27,11 @@
     "PAIR-X": "COMPARABILITY_BLOCKED"
   },
   "provenance_quality_legend": {
-    "C0": "primary upstream real bug + fix (>=1 bug_record AND >=1 upstream_fix source)",
+    "C0": "primary upstream real bug + fix: >=1 primary-authority incident record (bug_record or official_bug_corpus with upstream-primary/official-primary authority) AND >=1 upstream_fix source",
     "C1": "primary API documentation explicitly warning about the hazard (>=1 official_contract source)",
     "C2": "published paper artifact / official bug corpus (>=1 official_bug_corpus source)",
     "C3": "carefully constructed minimal conventional reproducer (labeled CONVENTIONAL-MINIMAL); no incident provenance",
-    "S0": "repository-established Sluice evidence (>=1 repo_evidence source); where noted, records in untracked human review artifacts are flagged as E4"
+    "S0": "repository-established Sluice evidence (>=1 repo_evidence source); repo-primary = tracked, established; repo-untracked = recorded only in untracked human artifacts (E4) — E4-only entries are unconfirmed candidates and are never population cases"
   },
   "entries": [
     {
@@ -243,9 +243,9 @@
           },
           {
             "url": "https://starlabs.sg/advisories/23/23-1872/",
-            "role": "bug_record",
+            "role": "supporting",
             "authority": "supporting",
-            "note": "discoverer advisory: io_file_get_fixed missing ctx->uring_lock; async IORING_OP_SPLICE races fixed-file close/unregister -> UAF. The advisory's labeled 'primary fix' da24142b1ef9 was re-verified 2026-08-30 and is a different stable-only commit ('io_uring: ensure that io_init_req() passes in the right issue_flags'); not used as the fix record."
+            "note": "discoverer advisory: io_file_get_fixed missing ctx->uring_lock; async IORING_OP_SPLICE races fixed-file close/unregister -> UAF. The advisory's labeled 'primary fix' da24142b1ef9 was re-verified 2026-08-30 and is a different stable-only commit ('io_uring: ensure that io_init_req() passes in the right issue_flags'); not used as the fix record. Role corrected bug_record -> supporting in SE-1-CORRECTIVE-1 round 2 (review 5060124249 FIX 1): C0 must rest on a primary-authority incident record, which here is the NVD official_bug_corpus entry plus the verified upstream fix; the discoverer advisory annotates but does not establish the incident record."
           },
           {
             "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?id=08681391b84da27133deefaaddefd0acfa90c2be",
@@ -294,7 +294,7 @@
         "death test: destroy backend/context with accepted request → named fail-fast",
         "real-backend close-while-in-flight probe (D2/D4 class)"
       ],
-      "notes": "Provenance corrected in SE-1-CORRECTIVE-1: bug record = NVD (official corpus) + STAR Labs discoverer advisory; upstream fix = stable commit 08681391 'io_uring: add missing lock in io_get_file_fixed', verified against the cited UAF (locks the fixed-file lookup raced by unregister). The advisory's labeled 'primary fix' da24142b1ef9 is a different commit and was not adopted; see the source notes.",
+      "notes": "Provenance corrected in SE-1-CORRECTIVE-1: bug record = NVD (official corpus) + STAR Labs discoverer advisory; upstream fix = stable commit 08681391 'io_uring: add missing lock in io_get_file_fixed', verified against the cited UAF (locks the fixed-file lookup raced by unregister). The advisory's labeled 'primary fix' da24142b1ef9 is a different commit and was not adopted; see the source notes. SE-1-CORRECTIVE-1 round 2: the advisory was demoted to a supporting source so that C0 rests only on primary-authority provenance (NVD official_bug_corpus/official-primary + stable fix 08681391/upstream-primary), as now enforced mechanically.",
       "related_entries": [],
       "entry_role": "population-case"
     },
@@ -1448,7 +1448,7 @@
       "family": "H09",
       "title": "Nullable resume-target token: WaitResume could encode fiber(nullptr) with a valid kind (invalid representation, resume-to-nobody)",
       "origin": "sluice-induced",
-      "primary_bucket": "production-runtime",
+      "primary_bucket": "internal/seam",
       "corpus_eligibility": "IN-SE1",
       "provenance_quality": "S0",
       "provenance": {
@@ -1496,7 +1496,7 @@
       "se2_probe_candidates": [
         "M4 compile-rejection as existing witness; negative-compile extension for other identity tokens"
       ],
-      "notes": "Bucket production-runtime (token type lives in production scheduler surface) though discovered via the internal-testing frontend.",
+      "notes": "Bucket internal/seam per the #227 Sluice-induced hazard-bucket taxonomy (issue comment, buckets locked 2026-08-30): \"internal/seam representation hazard: nullable Fiber-kind token\", listed orthogonally from the production-runtime hazards — \"Do not mix these counts in SE-1/SE-2 net-safety statistics.\" SE-1-CORRECTIVE-1 round 2 bucket correction only (review 5060124249 FIX 2); induced population total unchanged.",
       "related_entries": [],
       "entry_role": "population-case",
       "root_cause_key": "wait-resume-valid-kind-null-target",
@@ -1565,7 +1565,8 @@
       "title": "select_event_registry_test one-time TSan hang (suspected no-progress termination vs plain-wait residency class) — UNCONFIRMED",
       "origin": "sluice-induced",
       "primary_bucket": "test-only",
-      "corpus_eligibility": "IN-SE1",
+      "corpus_eligibility": "OUT-OF-SE1",
+      "exclusion_reason": "UNCONFIRMED CANDIDATE (SE-1-CORRECTIVE-1 round 2, review 5060124249 FIX 3): the only evidence is an untracked E4 human artifact — one unreproduced TSan observation, 20/20 clean reruns, status UNKNOWN. E4-only evidence must not claim repo-primary/S0 establishment, so this entry is NOT an established induced population case. Retained as an SE-2 priority probe: a future reproduction graduates it into the corpus population with root-cause classification; otherwise it is explicitly dismissed.",
       "provenance_quality": "S0",
       "provenance": {
         "publication": "Sluice repository: recorded in untracked human review artifacts (THESIS-LEDGER-1 row 10; R2 closeout record). NOT currently documented in tracked docs — flagged as E4-only evidence.",
@@ -1573,8 +1574,8 @@
           {
             "url": "docs/history/reviews/THESIS-LEDGER-1-CURRENT-EVIDENCE-AUDIT.md",
             "role": "repo_evidence",
-            "authority": "repo-primary",
-            "note": "UNTRACKED human artifact (E4) — one-time TSan hang observation; 20/20 clean reruns; '记录于 gate 文档，待修' characterization. Tracked corroboration: none found in docs/verification/*.md at base SHA (checked 2026-08-30)."
+            "authority": "repo-untracked",
+            "note": "UNTRACKED human artifact (E4) — one-time TSan hang observation; 20/20 clean reruns; '记录于 gate 文档，待修' characterization. Tracked corroboration: none found in docs/verification/*.md at base SHA (checked 2026-08-30). Authority corrected repo-primary -> repo-untracked in round 2: an untracked human artifact records the observation but does not establish it as tracked repository evidence."
           }
         ],
         "date": "2026-08"
@@ -1608,11 +1609,11 @@
       "induced_by_sluice": "n-a",
       "pairing": "PAIR-F",
       "comparison_validity": "PARTIAL",
-      "comparison_notes": "Priority SE-2 probe. Also a documentation gap: an E4-only hazard record should be promoted to tracked evidence or explicitly dismissed.",
+      "comparison_notes": "Priority SE-2 probe. Also a documentation gap: an E4-only hazard record should be promoted to tracked evidence or explicitly dismissed. OUT-OF-SE1 unconfirmed candidate since round 2: pairing/validity are recorded descriptively and never enter population denominators.",
       "se2_probe_candidates": [
         "stress + TSan targeted rerun with residency instrumentation; #239-matrix scheduler-choice exploration of the termination path"
       ],
-      "notes": "If human review confirms a real defect, it graduates to its own production/test entry with root-cause classification; until then it stays UNKNOWN.",
+      "notes": "If human review confirms a real defect, it graduates to its own production/test entry with root-cause classification; until then it stays UNKNOWN. Population law since round 2: unconfirmed candidates are OUT-OF-SE1; graduation requires SE-2 reproduction into a formal entry (then with its own root-cause classification), otherwise explicit dismissal.",
       "related_entries": [],
       "entry_role": "population-case",
       "root_cause_key": "select-event-registry-termination-vs-plain-wait-residency-unconfirmed",
@@ -1639,8 +1640,8 @@
           {
             "url": "docs/history/reviews/THESIS-LEDGER-1-CURRENT-EVIDENCE-AUDIT.md",
             "role": "repo_evidence",
-            "authority": "repo-primary",
-            "note": "row 11 (E4, cross-checked against PR #238)"
+            "authority": "repo-untracked",
+            "note": "row 11 (E4, cross-checked against PR #238). Authority corrected repo-primary -> repo-untracked in SE-1-CORRECTIVE-1 round 2 (review 5060124249): untracked human artifacts record observations but do not constitute tracked repository evidence; this entry's S0 rests on its tracked PR sources."
           }
         ],
         "date": "2026-08-27"
@@ -1865,8 +1866,8 @@
     }
   ],
   "new_findings_policy": "No new production bug was discovered during corpus construction. The one known OPEN production-side defect (group.hpp reserve idiom, SE1-SB-04) predates SE-1 and is already registered; per task §23 it is NOT repaired here.",
-  "schema_note": "Schema v1 corrected in place while PR #245 was Draft (SE-1-CORRECTIVE-1, 2026-08-30): provenance.sources became structured {url, role, authority} records; entry_role / same_case_as / related_entries / root_cause_key were introduced; H08 was re-anchored to a verified upstream bug+fix. No schema v2 was created for a draft-only correction.",
-  "population_law": "POPULATION = corpus_eligibility == 'IN-SE1' AND entry_role == 'population-case'. Probe companions are artifacts, not denominator cases; OUT-OF-SE1 entries remain visible but are not denominator cases. This law drives the validator counts, the interpretation tables, and any future SE-2 matrix row population; SE-2 probes attached to companions attribute their result to the parent population case.",
+  "schema_note": "Schema v1 corrected in place while PR #245 was Draft (SE-1-CORRECTIVE-1, 2026-08-30): provenance.sources became structured {url, role, authority} records; entry_role / same_case_as / related_entries / root_cause_key were introduced; H08 was re-anchored to a verified upstream bug+fix. No schema v2 was created for a draft-only correction. Round 2 (same corrective authorization; PR #245 review 5060124249, 2026-08-30): C0 mechanically requires a primary-authority incident record; origin<->quality is a closed relation; authority repo-untracked (E4) introduced; SB-08 bucket corrected production-runtime -> internal/seam per the #227 hazard-bucket taxonomy; SB-10 reclassified OUT-OF-SE1 unconfirmed candidate. Still schema v1, still Draft-only.",
+  "population_law": "POPULATION = corpus_eligibility == 'IN-SE1' AND entry_role == 'population-case'. Probe companions are artifacts, not denominator cases; OUT-OF-SE1 entries remain visible but are not denominator cases. This law drives the validator counts, the interpretation tables, and any future SE-2 matrix row population; SE-2 probes attached to companions attribute their result to the parent population case. Unconfirmed candidates — S0 entries whose repo evidence is exclusively repo-untracked (E4) — are OUT-OF-SE1 by law; they enter the population only when a later phase reproduces them into a formal entry, or they are explicitly dismissed.",
   "source_role_vocabulary": {
     "entry_role": [
       "population-case",
@@ -1884,17 +1885,19 @@
       "upstream-primary",
       "official-primary",
       "repo-primary",
+      "repo-untracked",
       "supporting"
     ]
   },
   "source_role_contract": {
-    "C0": ">= 1 source with role bug_record AND >= 1 source with role upstream_fix. The same artifact may carry both roles ONLY when it genuinely contains both the bug diagnosis and the accepted fix (encoded mechanically as the same URL listed under both roles; the dual-role claim itself is human-verified).",
+    "C0": ">= 1 PRIMARY-AUTHORITY incident record (role bug_record or official_bug_corpus carrying authority upstream-primary or official-primary) AND >= 1 source with role upstream_fix. A supporting-authority bug_record annotates an entry but never establishes C0. The same artifact may carry both roles ONLY when it genuinely contains both the bug diagnosis and the accepted fix (encoded mechanically as the same URL listed under both roles; the dual-role claim itself is human-verified).",
     "C1": ">= 1 source with role official_contract.",
     "C2": ">= 1 source with role official_bug_corpus.",
     "C3": "conventional-minimal by construction; no incident provenance required; sources must not claim bug_record/upstream_fix roles (no historical incident claim).",
-    "S0": ">= 1 source with role repo_evidence (authority repo-primary): Sluice repository-established evidence.",
+    "S0": ">= 1 source with role repo_evidence. An IN-SE1 population case requires >= 1 repo-primary (tracked, repository-established) source. Entries whose repo evidence is EXCLUSIVELY repo-untracked are UNCONFIRMED CANDIDATES and must be OUT-OF-SE1; they enter the population only when a later phase reproduces them into a formal entry.",
     "supporting": "supporting sources may annotate any entry but never satisfy the C0/C1/C2/S0 role requirements.",
-    "enforcement_boundary": "scripts/verify-se1-hazard-corpus.py enforces MECHANICAL PROVENANCE SHAPE only. Whether a URL's content truthfully matches its claimed role, and whether the semantic mapping is valid, remain HUMAN SEMANTIC PROVENANCE REVIEW."
+    "enforcement_boundary": "scripts/verify-se1-hazard-corpus.py enforces MECHANICAL PROVENANCE SHAPE only. Whether a URL's content truthfully matches its claimed role, and whether the semantic mapping is valid, remain HUMAN SEMANTIC PROVENANCE REVIEW.",
+    "repo-untracked": "authority repo-untracked marks repository-side evidence that exists only in untracked human working-tree artifacts (E4 class). It records an observation without claiming tracked-repository establishment, and can never by itself establish population membership."
   },
   "status_semantics": "sluice_current_status is the PRIMARY DESCRIPTIVE OUTCOME FOR CORPUS NORMALIZATION ONLY. It is NOT the full detection profile: real detection layers overlap (an outcome recorded FAIL_FAST, DETERMINISTICALLY_REPRODUCIBLE, or TSan-detectable can co-occur for the same hazard). SE-2 owns the full hazard x detection-layer matrix; nothing in this corpus may be read as per-layer detection coverage."
 }
