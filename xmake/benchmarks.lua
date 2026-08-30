@@ -95,6 +95,18 @@ sluice_one_file_target("binary", "bench", "overload_backpressure_bench", "bench"
 sluice_one_file_target("binary", "bench", "e1_abstraction_tax_bench", "bench",
                       {"sluice_core", "sluice_async"})
 
+-- tax0_capacity_bench (#250 TAX-0B/EXP-0 — capacity invariance): the
+-- production-path capacity experiment. Independently configures
+-- request_capacity C vs active depth D on the REAL ThreadPoolBackend or
+-- UringAsyncBackend (request_capacity == queue_depth stays independent),
+-- because e1_abstraction_tax_bench intentionally couples capacity == depth
+-- for its ladder semantics and stays unchanged. Links the PRODUCTION
+-- sluice_async only (no internal-testing seams); the uring arm requires a
+-- --with-liburing build and fails closed without a real ring. Driven by
+-- scripts/bench/perf-attribution.py `tax0` (schema 2, kind "tax0capacity").
+sluice_one_file_target("binary", "bench", "tax0_capacity_bench", "bench",
+                      {"sluice_core", "sluice_async"})
+
 -- rx1_workload_bench (#234 RX-1 — controlled attribution falsification gate):
 -- single-shape ApplicationRuntime + ThreadPoolBackend pipeline driver with
 -- would_block-aware submission (intervention I2), an AC-1a pull-based
