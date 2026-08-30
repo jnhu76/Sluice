@@ -1160,7 +1160,7 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
         // q.mtx() (consistent with global_mtx_->inbox_mtx in route_runnable).
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
-        if (!q.register_wait_locked(node, me)) {
+        if (!q.register_wait_locked(node, WaitResume::fiber(me))) {
             // Node was already registered or terminal: a contract violation.
             // Do not suspend; return to the caller with the node untouched.
             return;
@@ -1207,14 +1207,12 @@ WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
     WaitNode* won = q.wake_one_locked();
     if (won == nullptr) return nullptr;  // empty, or head lost to a cancel
     retire_timer_for_node_locked(*won);
-    Fiber* f = won->fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // Exactly-once: publish a runnable ticket ONLY if waiting->runnable
-    // succeeded. The node is terminal; make_runnable is the publication guard.
+    // succeeded. The node is terminal; the publication edge switches on the
+    // winner's ResumeTarget kind (fiber route / deferred obligation / none).
     // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        publish_waiting_fiber_runnable_locked(f);
-    }
+    publish_wait_winner_locked(*won);
     return won;
 }
 
@@ -1261,13 +1259,24 @@ bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
     LockGuard qlk(q.mtx());
     if (!q.cancel_locked(node)) return false;  // already terminal (loser)
     retire_timer_for_node_locked(node);
-    Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        if (publish_waiting_fiber_runnable_locked(f)) {
-            return true;
+    // Route to the Fiber's recorded owner (NOT g_worker). The publication
+    // edge switches on the ResumeTarget kind: a fiber returns the
+    // exactly-once publication result; a deferred winner's delivery
+    // obligation is committed (published) — the epoch is delivered.
+    const WaitResume& r = node.resume();
+    if (r.kind() == WaitResume::Kind::fiber) {
+        Fiber* f = r.as_fiber();
+        if (f != nullptr) {
+            if (publish_waiting_fiber_runnable_locked(f)) {
+                return true;
+            }
         }
+        return false;
+    }
+    if (r.kind() == WaitResume::Kind::deferred) {
+        defer_publication_locked(r.as_deferred());
+        return true;
     }
     return false;
 }

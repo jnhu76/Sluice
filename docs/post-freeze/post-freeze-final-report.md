@@ -30,16 +30,17 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1309 | park/wake, R1-R4 protocol, interrupt bridge |
-| `src/async/scheduler_timer.cpp` | 609 | deadline heap, clock, test-clock |
-| `src/async/scheduler_event.cpp` | 395 | SchedulerEvent wake targets |
-| `src/async/scheduler_semaphore.cpp` | 314 | semaphore waits |
-| `src/async/scheduler_mutex.cpp` | 342 | AsyncMutex waits |
-| `src/async/scheduler_rwlock.cpp` | 685 | rwlock waits, ForgedRwWaitCtx |
-| `src/async/scheduler_condition.cpp` | 267 | condition waits |
-| `src/async/scheduler_queue.cpp` | 591 | runnable queue, fiber routing |
-| `src/async/scheduler_internal.hpp` | 71 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control` |
-| `src/async/scheduler.cpp` | 2146 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler_park_wake.cpp` | 1318 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_timer.cpp` | 631 | deadline heap, clock, test-clock |
+| `src/async/scheduler_event.cpp` | 407 | SchedulerEvent wake targets |
+| `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
+| `src/async/scheduler_mutex.cpp` | 343 | AsyncMutex waits |
+| `src/async/scheduler_rwlock.cpp` | 699 | rwlock waits, ActorId writer ownership |
+| `src/async/scheduler_condition.cpp` | 281 | condition waits, shared admit ladder |
+| `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
+| `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
+| `src/async/scheduler_fe2_test_seam.cpp` | 431 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
+| `src/async/scheduler.cpp` | 2231 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -192,6 +193,144 @@ deadlines). The R2-ALLOC contract is unchanged — every allocation still
 precedes `register_wait_locked`, the publish tail stays noexcept, and
 `reserve()` keeps the strong guarantee on throw. Growth curve
 regression-pinned by `od_alloc_a3_heap_growth_stays_geometric`.)
+`scheduler_park_wake.cpp` 1309 → 1318, `scheduler_timer.cpp` 609 → 631,
+`scheduler_event.cpp` 395 → 407, `scheduler.cpp` 2146 → 2206, and the new
+internal-testing-only `scheduler_fe2_test_seam.cpp` (69 lines; empty TU
+under the production `sluice_async` target) (2026-08-29, FE-2 — the
+frontend-neutral ResumeTarget seam: `WaitNode::fiber_` widens to the
+`WaitResume {void*, Kind}` token (DIV-15, +8 bytes per live node), all
+winner publication tails route through the ONE
+`publish_wait_winner_locked` kind switch (fiber branch bit-identical;
+`none` preserves the old null-token semantics), the Event untimed/timed
+admission closures are extracted into the ONE shared
+`Scheduler::event_wait_admit_locked` ladder consumed by both frontends
+(no duplicated admission law), and the deferred-publication transit list
+(`defer_publication_locked` / `take_deferred_publications`, teardown-gated)
+implements the FE-1b L9 commit/discharge delivery split. The stackless
+frontend itself (tiny coroutine task + awaiter + FeDeferredRecord) is
+test-only (DIV-16) via `AsyncTestAccess` seams; no public API change beyond
+the additive `WaitResume`/`resume()` widening documented in
+`docs/reference/api.md`.)
+`scheduler_queue.cpp` 591 → 628, `scheduler_fe2_test_seam.cpp` 69 → 210,
+`scheduler.hpp` (declarations only), and the new test target
+`fe3_stackless_queue_slice_test` (2026-08-28, FE-3 Queue vertical slice —
+the push/pop admission closures are extracted into the ONE shared
+`queue_push_admit_locked` / `queue_pop_admit_locked` ladders (one textual
+admission law per direction, blocking+timed, parameterized by the
+frontend's `WaitResume` token; `QueueAdmitDisposition` returns
+rejected / resolved_inline / resolved_inline_grant / authorized — the
+entry commits its own PublicationEligibility in the same CS on
+`authorized` and runs the Q-LIV-1 opposite-role grant on the `_grant`
+disposition after its role mutex release). The four fiber admit entries
+become thin frontend entries; their sequences are byte-equivalent
+motions. The two grant seams and `queue_cancel` route publication through
+the winner-kind tails (`queue_publish_winner_locked` /
+`publish_wait_winner_locked`): the fiber branch is bit-identical
+(including the `granted_not_resumed_` pairing), a deferred winner commits
+the delivery obligation WITHOUT the `granted_not_resumed_` increment
+(no post-resume port access exists to pair with; the Scheduler-level
+deferred transit teardown gate owns the in-flight window, and the
+winner's post-resume body reads coroutine-frame memory only). Test-only
+deferred Queue admission entries (lifecycle gate + `active_port_calls_`
+interval + control transition reproduced) and the 12-case slice test
+live in the internal-testing seam TU / test target; no public API
+change.)
+`scheduler_rwlock.cpp` 685 → 692, `scheduler_internal.hpp` 71 → 89,
+`scheduler_fe2_test_seam.cpp` 210 → 333, `scheduler.hpp` +
+`wait_node.hpp` (declarations only), and the new test target
+`fe3_stackless_rwlock_slice_test` (2026-08-28, FE-3 RwLock vertical
+slice — the read/write admission closures are extracted into the ONE
+shared `rwlock_read_admit_locked` / `rwlock_write_admit_locked` ladders
+and the try-write/unlock-write ownership laws into the shared
+`rwlock_try_write_admission_locked` / `rwlock_unlock_write_core_locked`
+cores, consumed by BOTH the fiber entries and the stackless deferred
+seam entries. Writer ownership identity moves from `Fiber*` to the new
+`ActorId` token (FE-1b corrective A1 — ActorIdentity is deliberately
+distinct from the `WaitResume` delivery token; "same actor + different
+resume target" still owns/releases): the inline claim and the
+grant-from-head commit `writer_owner = winner's ActorId`; the
+recursive-write / unlock-not-owner checks become named Release-active
+fail-fasts (`async_rwlock_recursive_write_fail_fast`,
+`async_rwlock_unlock_write_inactive_fail_fast`,
+`async_rwlock_unlock_write_not_owner_fail_fast`) replacing the
+grandfathered debug asserts at reachable caller-contract sites.
+`RwWaitCtx` moves to the non-installed `scheduler_internal.hpp` and
+gains the `actor` field (no `WaitNode` layout change). Test-only
+deferred rwlock admission entries reproduce the fiber CS shapes over
+the shared ladders; the 7-case slice test covers deferred
+own/release, actor-vs-resume-target independence, fiber-unlock grant,
+writer fairness, reader batch, cancel, and deadline expiry. The
+additive public `ActorId` name is documented in
+`docs/reference/api.md`.)
+`scheduler_condition.cpp` 267 → 281, `scheduler_fe2_test_seam.cpp`
+333 → 380, `scheduler.hpp` + `scheduler_test_access.hpp` (declarations
+only), and the new test target `fe3_stackless_condition_slice_test`
+(2026-08-28, FE-3 Condition vertical slice — the CONDITION-WAIT-PREPARE
+combined step is extracted into the ONE shared
+`condition_wait_admit_locked` ladder (register-before-handoff single
+`global_mtx_` CS: [timed: R2-ALLOC prepare → register → LOCAL timer
+publish] → already-due inline Expired → register-before-handoff phase
+seam → the ONE `mutex_handoff_one_locked` handoff → terminal recheck →
+authorized). `ConditionAdmitDisposition` encodes the released_mutex law
+so the fiber entries and the deferred seam derive their reacquire
+obligation from ONE source; both fiber entries become thin frontend
+entries whose guard scope still ends BEFORE the physical context switch.
+`condition_cancel_wait` publishes through the winner-kind tail
+(`publish_wait_winner_locked`) instead of reading `cond_node.fiber()`
+directly — behavior-equal for the fiber branch, and a deferred cancelled
+waiter is no longer stranded. Test-only deferred condition entries
+(notify_one/notify_all/cancel one-liners + the wait entries over the
+shared ladder) and the 5-case slice test cover deferred
+notify/notify_all (own-reacquire separation witnessed by the presented
+owner staying released), cancel loser-exactly-once, terminal re-wait
+rejection, due-inline retention, and pump expiry. The presented state is
+BARE WaitQueues (Mutex ownership re-typing is its own later slice per
+FE-1b A1 §12; the full AsyncCondition choreography composition stays
+covered by the unchanged fiber tests over the SAME ladder). No public
+API change beyond the additive internal disposition enum.)
+`tests/fe3_cross_frontend_mixing_test.cpp` (new test target
+`fe3_cross_frontend_mixing_test`, 2026-08-28, FE-3 cross-frontend
+mixing — representative Fiber+deferred waiter sets on ONE primitive
+resolved by ONE resolver, closing the FE-3 stage: Event — one set()
+broadcast resolves a parked FIBER waiter and a parked deferred waiter
+(each delivered exactly once through its OWN ResumeTarget kind: worker
+route vs transit obligation); AsyncRwLock — one unlock_write
+head-reconcile batch-grants a parked FIBER reader and a parked deferred
+reader as ONE reader prefix. No production or seam changes; the Queue
+direction pairs already live in the Queue slice
+(`fe3_q_cross_fiber_waiter_coroutine_resolver` /
+`fe3_q_cross_coroutine_waiter_fiber_resolver`).)
+`scheduler_mutex.cpp` 342 → 343, `scheduler_semaphore.cpp` 314 → 315,
+`scheduler_fe2_test_seam.cpp` 380 → 395 (2026-08-28, FE-4 adversarial
+review round — `mutex_cancel` / `sem_cancel` publish through the
+winner-kind tail instead of `node.fiber()` + the direct fiber route
+(behavior-equal for the fiber branch; the staged
+`mutex_handoff_one_locked` owner-commit hazard is registered as
+DIV-18); the deferred queue cores' `active_port_calls_` interval close
+becomes exception-safe against the MAY-THROW timed ladder with
+drift-coupling notes).
+`scheduler.cpp` 2206 → 2231, `scheduler_rwlock.cpp` 692 → 699,
+`scheduler_fe2_test_seam.cpp` 395 → 431, `scheduler.hpp` +
+`scheduler_test_access.hpp` + `wait_node.hpp` (declarations only), and
+the new test target `fe2_publication_atomicity_death_test`
+(2026-08-29, FE-CORRECTIVE-1 review round — three P1 correctives:
+(1) `defer_publication_locked` becomes `noexcept` with a named
+fail-fast around the MAY-THROW insertion, so a stranded
+delivery-obligation insertion failure is a process-terminal boundary
+instead of an unrecorded escape past the terminal winner; the
+one-shot `deferred_publication_alloc_should_fail` controller flag
+mirrors the R2 injection pattern. (2) the deferred Queue ordinary
+cores transfer their `active_port_calls_` pin to the awaiting frame
+(released by the frontend in `await_resume` via
+`queue_release_deferred_pin_for_test`), so the port stays pinned
+through resume-side result consumption and an abandoned frame is
+mechanically visible at `begin_teardown`. (3) the recursive-writer
+`writer_owner == actor` check moves inside the shared
+`rwlock_write_admit_locked` ladder UNDER `global_mtx_`, closing the
+pre-G read race for both frontends; `WaitResume::fiber(nullptr)`
+normalizes to `Kind::none`. The header diffs are
+`noexcept` + one ternary — ZERO layout delta; the WaitNode/AsyncRwLock
+widening (+8/+8 vs pre-FE base) is registered as DIV-19.)
 
 **Proof boundary (review-corrected wording):** this is a behavior-preserving
 structural split, NOT pure code motion. Two proofs cover two different

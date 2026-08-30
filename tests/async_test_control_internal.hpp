@@ -410,6 +410,16 @@ struct SchedulerController {
     std::mutex ordinary_deadline_alloc_fail_mtx;
     bool ordinary_deadline_alloc_fail_armed{false};
 
+    // ---- FE-CORRECTIVE-1 P1-1: deferred-publication storage-failure ----
+    // injection. One-shot arm: the NEXT defer_publication_locked call on
+    // this Scheduler throws std::bad_alloc at the transit-insertion edge
+    // (after the terminal winner is committed), then the flag auto-clears.
+    // The witness proves the named process-terminal fail-fast fires so the
+    // delivery obligation can never be silently lost. Same leaf-mutex
+    // discipline as the R2 flag (the guarded hook runs under global_mtx_).
+    std::mutex deferred_publication_alloc_fail_mtx;
+    bool deferred_publication_alloc_fail_armed{false};
+
     // ---- #196 E9 trace-conformance recorder ----
     // Fixed-size ring (no allocation on the record path). Guarded by
     // trace_mtx (the controller's own leaf mutex — never taken by, and never
@@ -695,6 +705,17 @@ void disarm_ordinary_deadline_alloc_failure(
 // Guarded production hook (called at prepare entry, under global_mtx_):
 // returns true iff the one-shot flag was armed; consuming it clears the flag.
 bool ordinary_deadline_alloc_should_fail(
+    sluice::async::Scheduler& s) noexcept;
+
+// ---- FE-CORRECTIVE-1 P1-1: deferred-publication storage-failure injection --
+// Arm/disarm the one-shot failure (test side); the guarded production hook is
+// consumed at the defer_publication_locked insertion edge (under global_mtx_,
+// after the terminal winner). Same contract as the R2 pair above.
+void arm_deferred_publication_alloc_failure(
+    sluice::async::Scheduler& s) noexcept;
+void disarm_deferred_publication_alloc_failure(
+    sluice::async::Scheduler& s) noexcept;
+bool deferred_publication_alloc_should_fail(
     sluice::async::Scheduler& s) noexcept;
 
 // ---- #196 E9 trace-conformance recorder (controller-owned; see the

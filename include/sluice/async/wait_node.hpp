@@ -72,6 +72,103 @@ namespace sluice::async {
 class Fiber;      // forward (the scheduler-facing handle)
 class WaitQueue;  // forward (friend: link fields + register/detach)
 
+// The frontend-neutral ResumeTarget token (FE-1b frozen contract, role
+// "ResumeTarget"): the opaque datum bound to a wait epoch at admission, which
+// the winner's publication tail consults to select the delivery mechanism.
+// Plain data: no behavior, no ownership, no allocation, no virtual dispatch.
+//
+// Kind is the delivery discriminator (FE-1c §13/§14):
+//   none     - no continuation bound (pure-protocol/test epochs). The
+//              publication tail publishes nothing, exactly like the null
+//              Fiber* it replaces.
+//   fiber    - the stackful frontend: `ptr` is a Fiber*; publication goes
+//              through the canonical make_runnable + worker route seam.
+//   deferred - a frontend whose continuation record is discharged outside
+//              authoritative locks (experimental stackless frontend; the
+//              record is frame-embedded and subject to the SAME
+//              address-stability rule as the WaitNode itself).
+//
+// NOT an ActorIdentity (FE-1b L11): ownership semantics (Mutex/RwLock owner
+// comparisons) must never compare this value. The Core never dereferences
+// `ptr` for a semantic decision; only the publication tail switches on kind.
+class WaitResume {
+public:
+    enum class Kind : std::uint8_t { none = 0, fiber = 1, deferred = 2 };
+
+    constexpr WaitResume() noexcept = default;
+
+    static constexpr WaitResume none() noexcept { return WaitResume{}; }
+    // kind==fiber implies a valid non-null Fiber*: a null token normalizes
+    // to `none` at this single construction point (one coherent rule — the
+    // publication tails switch on kind and never see a null fiber-kind; the
+    // null-skip guards in the legacy expire/cancel tails are exactly the
+    // incoherence this removes).
+    static constexpr WaitResume fiber(Fiber* f) noexcept {
+        return f != nullptr ? WaitResume{f, Kind::fiber} : WaitResume{};
+    }
+    static constexpr WaitResume deferred(void* delivery_record) noexcept {
+        return WaitResume{delivery_record, Kind::deferred};
+    }
+
+    constexpr Kind kind() const noexcept { return kind_; }
+    // Precondition: kind() == Kind::fiber (the publication tail switches on
+    // kind BEFORE calling; no runtime check — the payload is opaque data).
+    constexpr Fiber* as_fiber() const noexcept {
+        return static_cast<Fiber*>(ptr_);
+    }
+    // Precondition: kind() == Kind::deferred.
+    constexpr void* as_deferred() const noexcept { return ptr_; }
+
+private:
+    constexpr WaitResume(void* p, Kind k) noexcept : ptr_(p), kind_(k) {}
+    void* ptr_ = nullptr;
+    Kind kind_ = Kind::none;
+};
+
+// ActorIdentity (FE-1b A1): the stable logical identity of an execution
+// ACTOR for ownership / recursive-detection comparisons (e.g. the RwLock
+// writer-owner model). Deliberately DISTINCT from WaitResume (the
+// ResumeTarget delivery token above): a Fiber frontend's actor and resume
+// token coincide (the same Fiber*), while a stackless frontend's actor is
+// its own stable token and its resume target is the delivery record —
+// ownership semantics must not depend on WHERE control resumes (FE-3 slice
+// contract: "same ActorIdentity + different ResumeTarget" and "ownership
+// semantics do not depend on ResumeTarget identity"). Never a
+// coroutine_handle: identity is an opaque stable token, not a resumable
+// capability. The Core compares ActorIds; it never dereferences the token.
+class ActorId {
+public:
+    enum class Kind : std::uint8_t { none = 0, fiber = 1, frontend = 2 };
+
+    constexpr ActorId() noexcept = default;
+
+    static constexpr ActorId none() noexcept { return ActorId{}; }
+    static constexpr ActorId fiber(Fiber* f) noexcept {
+        return ActorId{f, Kind::fiber};
+    }
+    // A frontend-owned stable token (e.g. a frame-embedded actor record).
+    static constexpr ActorId frontend(void* token) noexcept {
+        return ActorId{token, Kind::frontend};
+    }
+
+    constexpr Kind kind() const noexcept { return kind_; }
+    constexpr void* token() const noexcept { return ptr_; }
+
+    friend constexpr bool operator==(const ActorId& a,
+                                     const ActorId& b) noexcept {
+        return a.ptr_ == b.ptr_ && a.kind_ == b.kind_;
+    }
+    friend constexpr bool operator!=(const ActorId& a,
+                                     const ActorId& b) noexcept {
+        return !(a == b);
+    }
+
+private:
+    constexpr ActorId(void* p, Kind k) noexcept : ptr_(p), kind_(k) {}
+    void* ptr_ = nullptr;
+    Kind kind_ = Kind::none;
+};
+
 // The terminal outcome of a wait resolution (§2/§6). Repository-native names
 // for the allowed terminal outcomes: woken/cancelled, plus `expired` (a
 // monotonic deadline elapsed) as a THIRD terminal outcome that is
@@ -118,15 +215,20 @@ enum class WaitOutcome : std::uint8_t {
 // Who mutates what (§3 ownership):
 //   - state_ : register_()/resolve_() via atomic CAS.
 //   - link fields (next_/prev_/home_) : the owning WaitQueue, under its mtx_.
-//   - fiber_ : immutable after construction.
+//   - resume_ : immutable after registration (bound by register_).
 class WaitNode {
 public:
     WaitNode() noexcept = default;
 
-    // Construct with the scheduler-facing fiber handle. `fiber` is opaque to
-    // WaitNode (it never dereferences it); the scheduler wake seam uses it to
-    // route the resumed fiber. May be null for pure-protocol tests.
-    explicit WaitNode(Fiber* fiber) noexcept : fiber_(fiber) {}
+    // Construct with a ResumeTarget token bound at registration (FE-1b L2).
+    // The token is opaque to WaitNode (never dereferenced); the winner
+    // publication tail switches on its kind to select delivery. `none` (the
+    // default) is the pure-protocol form and publishes nothing.
+    explicit WaitNode(WaitResume resume) noexcept : resume_(resume) {}
+    // Stackful convenience form (unchanged public surface): binds a Fiber*
+    // ResumeTarget, exactly WaitResume::fiber(fiber).
+    explicit WaitNode(Fiber* fiber) noexcept
+        : resume_(WaitResume::fiber(fiber)) {}
 
     // A Registered node may not be destroyed (§10): it is still linked in a
     // queue and destroying it would leave a dangling queue pointer (§3).
@@ -188,8 +290,16 @@ public:
         return state_.load(std::memory_order::acquire) == State::expired;
     }
 
-    // The opaque scheduler-facing fiber handle (immutable).
-    Fiber* fiber() const noexcept { return fiber_; }
+    // The frontend-neutral ResumeTarget bound at registration (immutable
+    // after register_ succeeds). FE-1b L2: fully bound before the epoch is
+    // resolver-observable — the binding happens under the authoritative
+    // admission critical section, so the semantic rule is satisfied by the
+    // CS, not by the textual order relative to the state CAS.
+    const WaitResume& resume() const noexcept { return resume_; }
+    // Stackful view of the token (existing consumer convenience). For a
+    // non-fiber token this is the raw payload reinterpreted — callers must
+    // switch on resume().kind() first. Publication tails do.
+    Fiber* fiber() const noexcept { return resume_.as_fiber(); }
 
     // Intrusive link pointers (managed by WaitQueue under its mtx_). Public so
     // WaitQueue can touch them without friending; documented as NOT for users.
@@ -210,19 +320,19 @@ private:
         expired = 4,     // terminal: resolved by deadline expiry (absorbing)
     };
 
-    // Register this node into `q` (Detached -> Registered) and record the
-    // scheduler-facing `fiber` handle. Called by WaitQueue under its mtx_
-    // during enqueue. Returns false (no transition) if the node is already
-    // registered or terminal (including expired) — register is single-shot
-    // per wait, which is the reuse-rejection contract.
-    bool register_(WaitQueue* q, Fiber* fiber) noexcept {
+    // Register this node into `q` (Detached -> Registered) and bind the
+    // ResumeTarget token. Called by WaitQueue under its mtx_ during enqueue.
+    // Returns false (no transition) if the node is already registered or
+    // terminal (including expired) — register is single-shot per wait, which
+    // is the reuse-rejection contract.
+    bool register_(WaitQueue* q, const WaitResume& resume) noexcept {
         State expected = State::detached;
         if (!state_.compare_exchange_strong(expected, State::registered,
                                             std::memory_order::acq_rel,
                                             std::memory_order::acquire)) {
             return false;  // already registered or terminal
         }
-        fiber_ = fiber;
+        resume_ = resume;
         home_ = q;
         return true;
     }
@@ -249,7 +359,7 @@ private:
                                               std::memory_order::acquire);
     }
 
-    Fiber* fiber_{nullptr};
+    WaitResume resume_{};  // ResumeTarget token (FE-1b L2/L11); bound at register
     std::atomic<State> state_{State::detached};
     void* user_{nullptr};  // AsyncQueue / AsyncRwLock per-op context; else null
 };

@@ -30,6 +30,7 @@
 #if defined(__unix__) || defined(__APPLE__)
 
 #include "async_test_control.hpp"  // R2-ALLOC injection controller
+#include "queue_detail.hpp"  // QueueWaitCtx (FE-CORRECTIVE-1 QD1; non-installed src/ header)
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/detail/queue_port.hpp>
@@ -434,6 +435,70 @@ SLUICE_TEST_CASE(queue_lifecycle_death_push_until_alloc_fail_fast) {
         "lease destruction contract");
 }
 
+// FE-CORRECTIVE-1 P1-2: begin_teardown must fail-fast while a DEFERRED Queue
+// operation holds its transferred lifetime pin (committed winner,
+// publication pending, result not yet consumed). Mutation M2 — restoring the
+// pre-corrective release at await_suspend — makes begin_teardown succeed and
+// the child exit kUnexpectedReturnExit, failing this case.
+SLUICE_TEST_CASE(queue_lifecycle_death_teardown_before_deferred_consumption) {
+    auto r = sluice_death_test::run_death_case(
+        "teardown-before-deferred-result-consumption");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "begin_teardown must fail-fast before a deferred Queue result has "
+        "been consumed (active_port_calls_ lifetime pin)");
+}
+
+// FE-CORRECTIVE-1 P1-2 (QD1) — begin_teardown MUST fail-fast while a DEFERRED
+// Queue ordinary operation sits between its committed winner and resume-side
+// result consumption. The pre-corrective deferred entry released
+// active_port_calls_ at await_suspend; in that window every OTHER teardown
+// precondition was already zero (role FIFOs drained by the winner,
+// wait associations retired, no timer, granted_not_resumed_ untouched by the
+// deferred kind), so begin_teardown could pass and the port could die before
+// the suspended continuation's release_popped/release_failed consumed the
+// result against a LIVE port. The corrective transfers the pin to the
+// frontend frame; this child deliberately WITHHOLDS the discharge (it plays
+// the suspended-but-published frontend), so the pin must be the obligation
+// that blocks teardown.
+void child_teardown_before_deferred_result_consumption() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+
+    // The deferred waiter's frame-embedded state (address-stable locals).
+    WaitNode node;
+    QueueWaitCtx qwctx;
+    Scheduler::AsyncTestAccess::FeDeferredRecord rec;
+    auto out = Scheduler::AsyncTestAccess::queue_make_empty_lease_for_test();
+
+    // Deferred pop parks on the empty open ring: entry acceptance increments
+    // active_port_calls_ and — on the authorized disposition — TRANSFERS the
+    // pin to this caller (the frontend frame). No Fiber, no worker: the seam
+    // is the same one the coroutine awaiter calls from await_suspend.
+    if (!Scheduler::AsyncTestAccess::queue_pop_deferred_for_test(
+            sched, port, out, node, qwctx, rec)) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+
+    // The producer commits an item: the parked consumer's terminal winner
+    // commits (resolve + unlink + lease moved into the frame's out), and the
+    // delivery obligation lands on the Scheduler transit list — UNDISCHARGED.
+    // This is the in-window state: every other teardown precondition is 0.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 42);
+        (void)port.try_push(std::move(lease));
+    }
+
+    // begin_teardown MUST observe active_port_calls_ == 1 (the deferred op's
+    // lifetime pin) and fail-fast. If it returned, the pre-corrective
+    // window is reachable again and the port could be destroyed out from
+    // under the suspended continuation.
+    port.begin_teardown();
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
     if (!child_case.empty()) {
@@ -453,6 +518,8 @@ int main(int argc, char** argv) {
             child_snapshot_then_teardown();
         } else if (child_case == "push-until-alloc-fail-fast") {
             child_push_until_alloc_fail_fast();
+        } else if (child_case == "teardown-before-deferred-result-consumption") {
+            child_teardown_before_deferred_result_consumption();
         } else {
             std::cerr << "[death] unknown child case: " << child_case << "\n";
             std::_Exit(sluice_death_test::kChildTestFailExit);

@@ -30,6 +30,7 @@
 #include <utility>
 #include <cstdio>   // Phase G park-window forensics dump (internal testing)
 #include <cstdlib>  // std::abort (E12-F Category B fail-fast)
+#include <new>      // std::bad_alloc (deferred-publication failure boundary)
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
 // the non-installed test-control header so the phase call sites below resolve to
@@ -221,6 +222,16 @@ Scheduler::~Scheduler() {
         if (wait_record_live_count_ != 0) {
             detail::scheduler_wait_registry_nonempty_fail_fast();
         }
+    }
+    // FE deferred-publication teardown gate (fe2-frontend-seam compliance
+    // gate, Gate 1): a non-empty transit list is a published-but-unconsumed
+    // winner — a suspended deferred continuation's delivery obligation was
+    // abandoned. Named fail-fast active in BOTH Debug and Release (AGENTS.md
+    // §9.2: ownership/lifetime invariants are never assert-only). Read
+    // without global_mtx_ (single-threaded post-run-join, like the
+    // neighboring teardown checks).
+    if (!deferred_publications_.empty()) {
+        detail::scheduler_deferred_publication_stranded_fail_fast();
     }
     if (any_active_select || active_deadline_count_ != 0 ||
         waiting_select_count_ != 0) {
@@ -1651,6 +1662,80 @@ bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
     return true;
 }
 
+void Scheduler::publish_wait_winner_locked(WaitNode& won) {
+    // FE frontend-neutral publication edge (FE-1b L8/L9). The terminal winner
+    // was already decided by the node's resolve_ CAS; this seam ONLY delivers
+    // it. The fiber branch is the unchanged stackful path (owner lookup +
+    // exactly-once FiberState guard + worker routing). The deferred branch
+    // commits the delivery obligation under G and returns — NO user
+    // continuation executes under authoritative locks (L9); the frontend
+    // discharges it via take_deferred_publications with no lock held. The
+    // none branch publishes nothing, exactly like the null Fiber* each tail
+    // previously guarded.
+    const WaitResume& r = won.resume();
+    switch (r.kind()) {
+    case WaitResume::Kind::fiber:
+        (void)publish_waiting_fiber_runnable_locked(r.as_fiber());
+        break;
+    case WaitResume::Kind::deferred:
+        defer_publication_locked(r.as_deferred());
+        break;
+    case WaitResume::Kind::none:
+        break;
+    }
+}
+
+void Scheduler::defer_publication_locked(void* delivery_record) noexcept {
+    // Producer half of the FE delivery split: persistent state written under
+    // G before the producer releases it, so the next take (any thread) sees
+    // the obligation — no lost publication. Transient transit list (Gate 2):
+    // bounded by CONCURRENT suspended deferred-kind waiters, drained per
+    // discharge; growth tracks outstanding, never historical submissions.
+    //
+    // FAILURE POSTURE (FE-CORRECTIVE-1 P1-1): this insertion runs AFTER the
+    // terminal winner is irreversible (resolve_ CAS, unlink, resource
+    // commit, timer retirement, accounting). The vector growth MAY
+    // allocate; a bad_alloc escaping here would strand the delivery
+    // obligation — the suspended continuation is never resumed, and
+    // ~Scheduler's empty-list teardown gate cannot even see the loss. The
+    // obligation is therefore NOT recoverable: a storage failure enters the
+    // named process-terminal fail-fast, the SAME boundary ~Scheduler uses
+    // for a stranded entry. This is a process-terminal failure boundary,
+    // NOT an allocation-free publication tail (the R2 prepare/publish
+    // pattern); the FE compliance evidence documents that posture.
+    try {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Test-only synthetic allocation failure (one-shot) at EXACTLY this
+        // insertion edge — the narrowest local seam; no generic allocator
+        // fault-injection machinery. Absent in production builds.
+        if (sluice_async_test::deferred_publication_alloc_should_fail(*this)) {
+            throw std::bad_alloc();
+        }
+#endif
+        deferred_publications_.push_back(delivery_record);
+    } catch (...) {
+        detail::scheduler_deferred_publication_stranded_fail_fast();
+    }
+}
+
+std::size_t Scheduler::take_deferred_publications(void** out, std::size_t cap) {
+    // Consumer half of the FE delivery split: move out up to `cap` records
+    // (FIFO) under G. The caller discharges each record with NO lock held
+    // (FE-1b L9: user continuation execution only outside authoritative
+    // locks) and may call again until this returns 0.
+    if (cap == 0) return 0;
+    LockGuard lk(global_mtx_);
+    const std::size_t n = std::min(cap, deferred_publications_.size());
+    if (n == 0) return 0;
+    std::move(deferred_publications_.begin(),
+              deferred_publications_.begin() + static_cast<std::ptrdiff_t>(n),
+              out);
+    deferred_publications_.erase(
+        deferred_publications_.begin(),
+        deferred_publications_.begin() + static_cast<std::ptrdiff_t>(n));
+    return n;
+}
+
 Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers,
                                               WorkerState* classify_ws) const {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1838,7 +1923,7 @@ void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_head_mode(
     {
         LockGuard lk(s.global_mtx_);
         LockGuard qlk(rw.waiters_.mtx());
-        (void)rw.waiters_.register_wait_locked(forged_head, nullptr);
+        (void)rw.waiters_.register_wait_locked(forged_head, WaitResume::none());
         ++s.waiting_waitq_count_;
         // user_ remains pointing at `bad` (register_wait_locked does not
         // touch user_). The grant's switch on mode MUST hit the default and
@@ -1859,7 +1944,7 @@ void Scheduler::AsyncTestAccess::rwlock_death_forge_null_head_user(
     {
         LockGuard lk(s.global_mtx_);
         LockGuard qlk(rw.waiters_.mtx());
-        (void)rw.waiters_.register_wait_locked(forged_head, nullptr);
+        (void)rw.waiters_.register_wait_locked(forged_head, WaitResume::none());
         ++s.waiting_waitq_count_;
     }
     LockGuard lk(s.global_mtx_);
@@ -1882,8 +1967,8 @@ void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_batch_member(
     {
         LockGuard lk(s.global_mtx_);
         LockGuard qlk(rw.waiters_.mtx());
-        (void)rw.waiters_.register_wait_locked(forged_head, nullptr);
-        (void)rw.waiters_.register_wait_locked(forged_second, nullptr);
+        (void)rw.waiters_.register_wait_locked(forged_head, WaitResume::none());
+        (void)rw.waiters_.register_wait_locked(forged_second, WaitResume::none());
         s.waiting_waitq_count_ += 2;
     }
     LockGuard lk(s.global_mtx_);

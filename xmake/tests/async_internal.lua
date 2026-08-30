@@ -643,3 +643,42 @@ do
         add_files(validity, impl)
         add_tests("capacity_validity_test")
 end
+
+-- FE-2 minimal stackless frontend proof-of-value (FE campaign;
+-- docs/architecture/fe2-frontend-seam-compliance-gate.md). The tiny
+-- coroutine task/awaiter/record are test-only; everything semantically
+-- load-bearing (shared Event admission ladder, WaitResume token, defer/take
+-- delivery split, winner-tail kind switch) is production code. Needs the
+-- non-installed scheduler_test_access.hpp seam header (src/async).
+sluice_internal_async_test("fe2_stackless_event_pov_test",
+                           {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 Queue vertical slice (FE campaign): a second stackless coroutine
+-- frontend drives the Queue through the SAME shared push/pop admission
+-- ladders, reconciler grants, close/cancel/timer dispositions, and the
+-- winner-kind publication tail. Test-only coroutine/awaiter/record
+-- vocabulary; everything semantically load-bearing is production code.
+-- Needs the non-installed scheduler_test_access.hpp + queue_detail.hpp
+-- seam headers (src/async).
+sluice_internal_async_test("fe3_stackless_queue_slice_test",
+                           {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 RwLock vertical slice (FE campaign): the stackless frontend drives
+-- the shared read/write admission ladders, the head reconcile (writer
+-- fairness / reader batching), cancel/expiry reconcile, and the
+-- ActorIdentity writer-ownership seam (FE-1b A1). Test-only coroutine/
+-- awaiter/record/actor-token vocabulary.
+sluice_internal_async_test("fe3_stackless_rwlock_slice_test",
+                           {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 Condition vertical slice: the stackless frontend over the ONE shared
+-- condition_wait_admit_locked ladder (register-before-handoff single CS;
+-- released_mutex law; own-reacquire separation; notify/cancel/deadline).
+sluice_internal_async_test("fe3_stackless_condition_slice_test",
+                           {includedirs = {"include", "tests", "src/async"}})
+
+-- FE-3 cross-frontend mixing: representative Fiber+deferred waiter sets on
+-- ONE primitive resolved by ONE resolver (Event broadcast; RwLock reader
+-- batch) — each winner delivered exactly once through its own ResumeTarget.
+sluice_internal_async_test("fe3_cross_frontend_mixing_test",
+                           {includedirs = {"include", "tests", "src/async"}})

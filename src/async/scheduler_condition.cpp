@@ -27,23 +27,105 @@
 #endif
 
 namespace sluice::async {
+
+Scheduler::ConditionAdmitDisposition Scheduler::condition_wait_admit_locked(
+    WaitQueue& cond_waiters, WaitNode& cond_node, const WaitResume& resume,
+    WaitQueue& mutex_waiters, Fiber*& owner, bool timed, deadline_t deadline)
+    SLUICE_REQUIRES(global_mtx_) {
+    // FE-3 shared CONDITION-WAIT-PREPARE admission ladder: the ONE textual
+    // admission law for the Condition epoch, consumed by BOTH the fiber
+    // entries (condition_wait_prepare / condition_wait_prepare_until — their
+    // pre-extraction sequences are preserved verbatim; the body below is the
+    // moved code) and the stackless deferred seam entry. Caller holds
+    // global_mtx_; the entry commits its own PublicationEligibility in the
+    // SAME CS on `authorized` and physically suspends outside the lock.
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard qlk(cond_waiters.mtx());
+        if (timed) {
+            // R2-ALLOC: allocations before any admission state mutation (a
+            // bad_alloc here leaves the Condition node Detached, the Mutex
+            // unreleased, and every counter intact).
+            reg = prepare_ordinary_deadline_locked(&cond_node, &cond_waiters,
+                                                   deadline);
+        }
+        // Step 1: register the Condition node into the Condition queue. This is
+        // a DIFFERENT queue from the Mutex queue (InvNoDualQueueMembership).
+        if (!cond_waiters.register_wait_locked(cond_node, resume)) {
+            if (timed) erase_popped_registration_locked(reg);  // never published
+            // Registration contract violation (node already
+            // registered/terminal). Do NOT release the Mutex; the caller
+            // retains ownership. The node's (terminal) outcome is latched.
+            return ConditionAdmitDisposition::rejected_retain;
+        }
+        ++waiting_waitq_count_;
+        if (timed) {
+            // Publish the timer for the Condition epoch ONLY (C-H4). The
+            // registration binds {cond_node, cond_waiters} so a later expiry
+            // resolves the Condition node Expired through pump_deadlines_locked.
+            // Publication = pool publication + ACTIVE count + heap push +
+            // park-cache refresh via the ordinary deadline authority.
+            publish_ordinary_deadline_locked(reg);
+        }
+    }
+    // Admission precedence: already-due admission closure (timed only) — if
+    // the deadline is ALREADY due, the Condition node resolves Expired INLINE.
+    // The Mutex is NOT released (the caller retains ownership), the Fiber does
+    // NOT suspend, and no reacquire epoch is created (WaitDueInline /
+    // InvDueInlineRetainsOwnership).
+    if (timed && clock_now_unlocked() >= deadline) {
+        LockGuard qlk(cond_waiters.mtx());
+        if (cond_waiters.expire_locked(cond_node)) {
+            // ACTIVE->CONSUMED via the ordinary deadline authority; the
+            // already-due inline path keeps its immediate cache recompute.
+            (void)consume_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+            // Fiber is RUNNING and continues inline; no publication.
+            return ConditionAdmitDisposition::resolved_inline_retain;
+        }
+        // If expire_locked lost, a concurrent resolver won; fall through to
+        // the terminal-recheck guard (the node is no longer Registered).
+    }
+    // Deterministic phase seam (test variant only): the Condition node
+    // is now Registered AND linked in the Condition queue, while the bound
+    // Mutex is STILL owned by the waiter. A test observing this phase can
+    // prove the register-before-release ordering (InvNoLostNotifyWindow /
+    // NEG-C8) and that a concurrent notify sees the registered node.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::condition_register_before_handoff);
+#endif
+    // Step 2: release the bound Mutex via the ONE accepted handoff —
+    // INTERNALLY (under global_mtx_); the Condition queue mtx was already
+    // released above, so the two queue mtxes are NEVER held simultaneously
+    // (docs §6.3 — sequential lock topology, no self-deadlock). A nullptr
+    // return means the Mutex queue is empty -> owner = nullptr.
+    if (mutex_handoff_one_locked(mutex_waiters, owner) == nullptr) {
+        owner = nullptr;  // UnlockNoWaiter: no Mutex waiter to hand off to
+    }
+    // Defense-in-depth: if the Condition node was resolved concurrently
+    // (notify/cancel/expire all need global_mtx_, so this cannot happen
+    // while this CS holds it, but guard anyway), do NOT suspend. The Mutex
+    // has already been released/handed off; the caller MUST run the reacquire
+    // epoch regardless.
+    if (cond_node.is_terminal()) {
+        return ConditionAdmitDisposition::resolved_inline_released;
+    }
+    return ConditionAdmitDisposition::authorized;
+}
+
 WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
                                               WaitNode& cond_node,
                                               WaitQueue& mutex_waiters,
                                               Fiber*& owner,
                                               bool& released_mutex) {
-    // CONDITION-WAIT-PREPARE (docs §7). One global_mtx_ critical section makes
+    // CONDITION-WAIT-PREPARE (docs §7) — stackful (Fiber) frontend entry over
+    // the SHARED ladder. One global_mtx_ critical section makes
     // register-Condition-node + release-Mutex + make_waiting ATOMIC w.r.t. every
     // Condition notify/cancel/expire path (which also need global_mtx_). This is
     // the lost-notify closure (docs §6): a notify CANNOT interleave between
     // Condition registration and Mutex release.
-    //
-    // `released_mutex` mirrors condition_wait_prepare_until: false on the
-    // registration-failure path (the Mutex is NOT released — the caller retains
-    // ownership and runs NO reacquire epoch), true after the Mutex has been
-    // released/handed off (the caller MUST run the reacquire epoch). The untimed
-    // path has no inline-Expired-at-admission branch, so every other path
-    // releases the Mutex.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncCondition::wait requires a running Fiber");
     Fiber* me = ws->current;
@@ -51,44 +133,16 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
                           "caller precondition violation");
     {
         LockGuard lk(global_mtx_);
-        // Step 1: register the Condition node into the Condition queue. This is
-        // a DIFFERENT queue from the Mutex queue (InvNoDualQueueMembership).
-        {
-            LockGuard qlk(cond_waiters.mtx());
-            if (!cond_waiters.register_wait_locked(cond_node, me)) {
-                // Registration contract violation (node already
-                // registered/terminal). Do NOT release the Mutex; the caller
-                // retains ownership. Return the node's (terminal) outcome.
-                released_mutex = false;
-                return cond_node.outcome();
-            }
-            ++waiting_waitq_count_;
+        const ConditionAdmitDisposition disp = condition_wait_admit_locked(
+            cond_waiters, cond_node, WaitResume::fiber(me), mutex_waiters,
+            owner, /*timed=*/false, deadline_t{});
+        if (disp != ConditionAdmitDisposition::authorized &&
+            disp != ConditionAdmitDisposition::resolved_inline_released) {
+            released_mutex = false;  // rejected / inline-retained: NO reacquire
+            return cond_node.outcome();
         }
-        // Deterministic phase seam (test variant only): the Condition node
-        // is now Registered AND linked in the Condition queue, while the bound
-        // Mutex is STILL owned by `me`. A test observing this phase can prove
-        // the register-before-release ordering (InvNoLostNotifyWindow / NEG-C8)
-        // and that a concurrent notify sees the registered node.
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::condition_register_before_handoff);
-#endif
-        // INTERNALLY (under global_mtx_); the Condition queue mtx was already
-        // released above, so the two queue mtxes are NEVER held simultaneously
-        // (docs §6.3 — sequential lock topology, no self-deadlock). A nullptr
-        // return means the Mutex queue is empty -> owner = nullptr.
-        if (mutex_handoff_one_locked(mutex_waiters, owner) == nullptr) {
-            owner = nullptr;  // UnlockNoWaiter: no Mutex waiter to hand off to
-        }
-        // The Mutex has been released/handed off; the caller MUST run the
-        // reacquire epoch regardless of the outcome below.
-        released_mutex = true;
-        // Defense-in-depth: if the Condition node was resolved concurrently
-        // (notify/cancel/expire all need global_mtx_, so this cannot happen
-        // while this CS holds it, but guard anyway), undo the registration and
-        // do NOT suspend. The Mutex has already been released/handed off; the
-        // caller will run the reacquire epoch regardless.
-        if (cond_node.is_terminal()) {
+        released_mutex = true;  // the Mutex has been released/handed off
+        if (disp == ConditionAdmitDisposition::resolved_inline_released) {
             return cond_node.outcome();
         }
         // Step 3: commit the calling Fiber to Waiting (inside global_mtx_, so a
@@ -119,79 +173,37 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
                                                     Fiber*& owner,
                                                     deadline_t deadline,
                                                     bool& released_mutex) {
-    // Deadline-aware CONDITION-WAIT-PREPARE (docs §10). The deadline governs
-    // ONLY the Condition epoch (C-H4). Admission precedence (under global_mtx_):
-    //   1. deadline ALREADY due -> resolve Expired INLINE (WaitDueInline): do
-    //      NOT release the Mutex, do NOT suspend, do NOT create a reacquire
-    //      epoch. The caller RETAINS ownership (InvDueInlineRetainsOwnership).
-    //      released_mutex = false.
-    //   2. else -> register node + timer, release/handoff Mutex, make_waiting,
-    //      context_switch; return the latched outcome. released_mutex = true
-    //      (the caller MUST run the reacquire epoch).
+    // Deadline-aware CONDITION-WAIT-PREPARE (docs §10) — stackful (Fiber)
+    // frontend entry over the SHARED ladder. The deadline governs ONLY the
+    // Condition epoch (C-H4). Admission precedence (under global_mtx_):
+    //   1. deadline ALREADY due at admission -> resolved_inline_retain (do NOT
+    //      release the Mutex, do NOT suspend, do NOT create a reacquire epoch;
+    //      the caller RETAINS ownership — InvDueInlineRetainsOwnership,
+    //      released_mutex = false);
+    //   2. else -> register node + timer, release/handoff the Mutex,
+    //      make_waiting, context_switch; return the latched outcome with
+    //      released_mutex = true (the caller MUST run the reacquire epoch).
+    // `released_mutex` distinguishes the inline-Expired path (no reacquire)
+    // from a suspended resolution (Woken/Cancelled/suspended-Expired, all
+    // reacquire), since both an inline-Expired and a suspended-Expired return
+    // the SAME outcome (Expired) but have opposite reacquire obligations.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncCondition::wait_until requires a running Fiber");
     Fiber* me = ws->current;
     assert(owner == me && "AsyncCondition::wait_until by a non-owner Fiber is a "
                           "caller precondition violation");
-    TimerRegistration* reg = nullptr;
     {
         LockGuard lk(global_mtx_);
-        {
-            LockGuard qlk(cond_waiters.mtx());
-            // R2-ALLOC: allocations before any admission state mutation (a
-            // bad_alloc here leaves the Condition node Detached, the Mutex
-            // unreleased, and every counter intact).
-            reg = prepare_ordinary_deadline_locked(&cond_node, &cond_waiters,
-                                                   deadline);
-            if (!cond_waiters.register_wait_locked(cond_node, me)) {
-                erase_popped_registration_locked(reg);  // never published
-                // Registration contract violation: do NOT release the Mutex.
-                released_mutex = false;
-                return cond_node.outcome();
-            }
-            ++waiting_waitq_count_;
-            // Publish the timer for the Condition epoch ONLY (C-H4). The
-            // registration binds {cond_node, cond_waiters} so a later expiry
-            // resolves the Condition node Expired through pump_deadlines_locked.
-            // Publication = pool publication + ACTIVE count + heap push +
-            // park-cache refresh via the ordinary deadline authority.
-            publish_ordinary_deadline_locked(reg);
+        const ConditionAdmitDisposition disp = condition_wait_admit_locked(
+            cond_waiters, cond_node, WaitResume::fiber(me), mutex_waiters,
+            owner, /*timed=*/true, deadline);
+        if (disp != ConditionAdmitDisposition::authorized &&
+            disp != ConditionAdmitDisposition::resolved_inline_released) {
+            released_mutex = false;  // rejected / due-inline Expired: NO reacquire
+            return cond_node.outcome();
         }
-        // Admission precedence 1: already-due admission closure — if the
-        // deadline is ALREADY due, the
-        // Condition node resolves Expired INLINE. The Mutex is NOT released
-        // (the caller retains ownership), the Fiber does NOT suspend, and no
-        // reacquire epoch is created. This is WaitDueInline /
-        // InvDueInlineRetainsOwnership.
-        if (clock_now_unlocked() >= deadline) {
-            LockGuard qlk(cond_waiters.mtx());
-            if (cond_waiters.expire_locked(cond_node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority; the
-                // already-due inline path keeps its immediate cache recompute.
-                (void)consume_ordinary_deadline_locked(*reg);
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Fiber is RUNNING and continues inline; no publication.
-                released_mutex = false;  // Mutex NOT released; no reacquire
-                return WaitOutcome::expired;  // resolved at admission; do NOT
-                                             // release Mutex or suspend
-            }
-            // If expire_locked lost, a concurrent resolver won; fall through to
-            // the terminal-recheck guard (the node is no longer Registered).
-        }
-        // Step 2: register-before-handoff phase seam (same as the untimed seam).
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::condition_register_before_handoff);
-#endif
-        // Step 3: release the bound Mutex via the ONE accepted handoff.
-        if (mutex_handoff_one_locked(mutex_waiters, owner) == nullptr) {
-            owner = nullptr;
-        }
-        // Defense-in-depth: concurrent resolution guard. The Mutex has been
-        // released; the caller MUST run the reacquire epoch regardless.
         released_mutex = true;
-        if (cond_node.is_terminal()) {
+        if (disp == ConditionAdmitDisposition::resolved_inline_released) {
             return cond_node.outcome();
         }
         commit_suspend_locked(ws, me);
@@ -255,12 +267,14 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     LockGuard lk(global_mtx_);
     LockGuard qlk(cond_waiters.mtx());
     if (!cancel_primitive_wait_locked(cond_waiters, cond_node)) return false;
-    Fiber* f = cond_node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // Route to the Fiber's recorded owner (NOT g_worker).
-    if (f != nullptr) {
-        publish_waiting_fiber_runnable_locked(f);
-    }
+    // Publish through the ONE winner-kind tail (FE-1b L8): the fiber branch is
+    // the unchanged stackful route (owner lookup + exactly-once guard), the
+    // deferred branch commits the delivery obligation under G, and a none
+    // token publishes nothing. Directly reading cond_node.fiber() here would
+    // strand a deferred (stackless) waiter: its cancelled terminal would
+    // never be delivered.
+    publish_wait_winner_locked(cond_node);
     return true;
 }
 

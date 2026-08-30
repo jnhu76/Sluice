@@ -284,6 +284,87 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 
 ---
 
+## DIV-15: FE-2 WaitNode Resume-Target Token Widening (+8 bytes)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-15 |
+| Status | Accepted |
+| Introduced by | FE campaign (FE-2; compliance gate `docs/architecture/fe2-frontend-seam-compliance-gate.md`) |
+| Governing ADR | FE-1b frozen contract (`docs/history/reviews/FE-1B-FRONTEND-NEUTRAL-CONTRACT-FREEZE.md`, design authority) |
+| Reason | The stackless second frontend cannot pass a continuation through the SAME registration/winner/publication authorities while the epoch token is typed `Fiber*` (FE-1a F1). `WaitResume {void*, Kind}` is the minimal earned representation (FE-1c strategy A). |
+| Benefit | One semantic Core serves both frontends; no duplicated admission/terminal/deadline/cancel authority. |
+| Cost | +8 bytes per live WaitNode (token field widened from bare `Fiber*` to pointer + kind tag); one kind compare at winner publication tails. Stackful behavior is bit-identical (fiber branch unchanged; `none` preserves the old null-token semantics). |
+| Current evidence | `include/sluice/async/wait_node.hpp` (WaitResume), `src/async/scheduler.cpp` (`publish_wait_winner_locked` / defer / take), tests/fe2_stackless_event_pov_test.cpp (Clang Debug 194/194). |
+| Revisit trigger | If ActorIdentity separation (FE-3 Mutex/RwLock) lands, re-audit whether the token should carry both roles; if a third frontend emerges, re-rank the type strategy. |
+
+---
+
+## DIV-16: Test-Only Stackless Frontend (No Public Coroutine API)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-16 |
+| Status | Accepted |
+| Introduced by | FE campaign (FE-2) |
+| Governing ADR | FE-1b frozen contract; campaign §44 (public API decision deferred) |
+| Reason | The second frontend exists as proof-of-value: tiny test-local coroutine task + awaiter + `FeDeferredRecord`, reached only through `Scheduler::AsyncTestAccess` seams compiled into `sluice_async_internal_testing` (AGENTS.md §15 C4 mechanism). |
+| Benefit | Proves cross-frontend semantic reuse without spending public-API stability or ABI surface. |
+| Cost | The deferred delivery branch (`publish_wait_winner_locked` deferred kind + transit list) is exercised only by internal-testing builds until a production consumer exists; drain-point placement at public resolver seams is deliberately NOT production-wired yet (FE-3+ scope). |
+| Current evidence | `src/async/scheduler_fe2_test_seam.cpp` (empty TU in production builds), `src/async/scheduler_test_access.hpp`, xmake/tests/async_internal.lua. |
+| Revisit trigger | FE-3 representative slices or any public coroutine-API ADR. |
+
+---
+
+## DIV-17: Deferred-Discharge Eligibility Rule (Resume-Before-Suspend Window)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-17 |
+| Status | Accepted (contract rule for the staged frontend; v1 discipline stated) |
+| Introduced by | FE-4 adversarial review A (finding 2) |
+| Governing ADR | FE-1b frozen contract (L2/L7/L9); FE-1c seam design |
+| Reason | A deferred delivery obligation becomes visible to any thread the moment the admission CS releases G. A drain driver on another thread could take the record and call `handle.resume()` while the admitting thread is still inside its `bool await_suspend` tail (the coroutine has not finished suspending) — the P2426/Gamarjoba concurrent-resume hazard. |
+| Rule (v1) | Discharge is only lawful from the thread that armed the record, AFTER its `await_suspend` tail completed (the test drain helpers discharge on the admitting thread, after `start()`/`join()`). `FeTask` uses `final_suspend{suspend_always}`, so an early resume cannot destroy the frame — the current shape is safe under the stated discipline, not under an arbitrary concurrent drainer. |
+| Benefit | Names the hazard now, so the production-frontend slice cannot inherit it silently. |
+| Cost | The v1 PoV cannot discharge from a foreign thread; a production frontend must adopt symmetric transfer or a suspend-completed acknowledgment gate before draining concurrently. |
+| Current evidence | Adversarial review A (this branch); single-threaded discharge in every FE-2/FE-3 test. |
+| Revisit trigger | The production stackless-frontend slice (first concurrent drain driver), or any public coroutine-API ADR. |
+
+---
+
+## DIV-18: Mutex/Semaphore Cancel Tails Migrated; Handoff Owner-Commit Staged
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-18 |
+| Status | Partially resolved (cancel tails migrated to the winner-kind tail; `mutex_handoff_one_locked` owner-commit staged) |
+| Introduced by | FE-4 adversarial reviews A+B (converging finding: fiber-only publication tails) |
+| Governing ADR | FE-1b frozen contract L8; FE-3 equivalence audit |
+| Reason | `mutex_cancel` and `sem_cancel` published via `node.fiber()` + the direct fiber route — for a deferred token that reinterprets the delivery record as a `Fiber*` and strands the continuation. Both are migrated onto `publish_wait_winner_locked` (behavior-equal for the fiber branch). `mutex_handoff_one_locked` still commits `owner = won->fiber()` BEFORE publication: that owner commit is inherently Fiber-typed until the Mutex owner field is re-typed to `ActorId` (the declared Mutex-identity slice), so migrating its publication call alone would NOT close the hazard. |
+| Benefit | Cancel/expire delivery of a deferred waiter can no longer corrupt memory on the Mutex/Semaphore paths; the remaining staged hazard is registered instead of latent. |
+| Cost | Until the Mutex slice, a deferred epoch MUST NOT reach a Mutex/Semaphore queue (the deferred Condition PoV presents bare queues with an empty bound mutex — enforced by test construction, documented in the seam header). |
+| Current evidence | `scheduler_mutex.cpp` / `scheduler_semaphore.cpp` cancel tails (this branch); `mutex_handoff_one_locked` owner commit; audit row #7 (F1-open). |
+| Revisit trigger | The Mutex owner-identity slice (re-types `owner`, migrates the handoff commit + publication, and admits deferred Mutex waiters). |
+
+---
+
+## DIV-19: FE-3 AsyncRwLock Writer-Owner ActorId Widening (+8 bytes)
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-19 |
+| Status | Accepted |
+| Introduced by | FE campaign (FE-3 RwLock slice; recorded by FE-CORRECTIVE-1 P2 ABI hygiene — the layout delta predates the corrective and was previously unrecorded) |
+| Governing ADR | FE-1b A1 (ActorIdentity != ResumeTarget); FE-3 equivalence audit |
+| Reason | Writer ownership semantics must compare the holding ACTOR's identity, not the ResumeTarget delivery token (FE-1b A1): `writer_owner_` re-typed `Fiber*` -> `ActorId` so the fiber and stackless frontends share ONE ownership rule (`rwlock_write_admit_locked` recursive check, `rwlock_try_write_admission_locked`, `rwlock_unlock_write_core_locked`, grant-time commit). |
+| Benefit | Ownership semantics are frontend-neutral; with FE-CORRECTIVE-1 P1-3 every `writer_owner` read/write — including the recursive-owner decision — is serialized under `global_mtx_` (the pre-corrective fiber entries read it before G: a data race). |
+| Cost | `sizeof(AsyncRwLock)` 120 -> 128 bytes, alignment unchanged (8): the owner field widens `Fiber*` (8B) -> `ActorId` (16B: pointer + kind), absorbed with existing padding. Valid-call stackful semantics are preserved; invalid-call behavior changed EARLIER in the FE campaign (recursive blocking write: debug assert -> named fail-fast active in Debug AND Release) — that change is not attributable to the representation. FE-CORRECTIVE-1 itself adds ZERO layout delta (header diffs are a `noexcept` qualifier and a factory-body ternary only). |
+| Current evidence | Mechanically measured: BASE `origin/master` 4bee61f probe `sizeof(AsyncRwLock)=120 alignof=8`; FE branch + corrective `sizeof(AsyncRwLock)=128 alignof=8` (same probe, same compiler); `include/sluice/async/async_rwlock.hpp` (`ActorId writer_owner_`), `src/async/scheduler_rwlock.cpp`. |
+| Revisit trigger | The Mutex owner-identity slice (the same widening for `AsyncMutex::owner_`); any third frontend that needs a distinct actor representation. |
+
+---
+
 ## Summary
 
 | ID | Status | Area |
@@ -302,3 +383,8 @@ Phase B activates the transitional backend-owned `RequestSlot` arena for the ref
 | DIV-12 | Resolved (Phase E) | Resource bounds |
 | DIV-13 | Accepted | Backend extension point |
 | DIV-14 | Resolved for real syscall backends (ThreadPool + Uring); reference-only exemption remains | prepare() descriptor validation deferred for reference backends |
+| DIV-15 | Accepted | FE-2 WaitNode token widening |
+| DIV-16 | Accepted | FE-2 test-only stackless frontend |
+| DIV-17 | Accepted | FE deferred-discharge eligibility rule (resume-before-suspend window) |
+| DIV-18 | Partially resolved | FE Mutex/Semaphore cancel tails migrated; handoff owner-commit staged |
+| DIV-19 | Accepted | FE-3 AsyncRwLock writer-owner ActorId widening (+8 bytes) |

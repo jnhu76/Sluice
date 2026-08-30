@@ -24,6 +24,18 @@
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
+#include "queue_detail.hpp"  // QueueWaitCtx (FE-3 queue deferred seams; non-installed)
+
+namespace sluice::async {
+// Defined in async_rwlock.hpp / the non-installed scheduler_internal.hpp;
+// the rwlock deferred-seam signatures only need the names (all bodies are
+// out-of-line in scheduler_fe2_test_seam.cpp — a complete-type include here
+// would be circular: async_rwlock.hpp includes scheduler.hpp, whose guarded
+// bottom include pulls this header).
+class AsyncRwLock;
+struct RwWaitCtx;
+}
+
 namespace sluice::async {
 
 // Internal-testing access surface. Reached only via the non-installed
@@ -648,6 +660,358 @@ struct Scheduler::AsyncTestAccess {
     // Global (not per-Scheduler) because it gates construction.
     static void set_evented_admission_override(bool supported) noexcept;
     static bool evented_admission_override() noexcept;
+
+    // ---- FE-2 minimal stackless frontend seams (fe2-frontend-seam
+    // compliance gate; non-installed control plane per AGENTS.md §15) ----
+    //
+    // FeDeferredRecord is the experimental stackless frontend's continuation
+    // record: frame-embedded (same address-stability rule as the WaitNode
+    // itself, FE-1b L2), holding the exactly-once PUBLICATION guard that is
+    // SUBORDINATE to the WaitNode terminal winner (the resolve_ CAS decides;
+    // this record only dedups delivery of an already-decided terminal).
+    //
+    //   unarmed --arm(admission CS, under G, L7)--> armed
+    //   armed   --try_consume(drain, no lock)-----> consumed   [exactly once]
+    //
+    // A try_consume on an unarmed record returns false and the drain loop
+    // treats it as a loud contract violation (resume-before-armed = L8
+    // broken); the PoV test asserts it is unreachable.
+    struct FeDeferredRecord {
+        enum class State : std::uint8_t { unarmed = 0, armed = 1, consumed = 2 };
+        std::atomic<State> state{State::unarmed};
+        void* handle_address = nullptr;  // bound BEFORE registration (L2)
+        // PublicationEligibilityCommit (FE-1b L7). Called ONLY by
+        // event_wait_deferred_*_for_test inside the resolver-excluded
+        // admission critical section, after the ladder authorizes. Plain
+        // release store: the single armer is the admission CS; G orders it
+        // against every resolver.
+        void arm(std::memory_order order = std::memory_order_release) noexcept {
+            state.store(State::armed, order);
+        }
+        // Exactly-once delivery guard (FE-1b L8). acq_rel: the winner pairs
+        // with arming; a losing discharger observes `consumed` and does
+        // nothing. Returns false for unarmed (contract violation observed by
+        // the caller) and for consumed (loser law).
+        bool try_consume() noexcept {
+            State expected = State::armed;
+            return state.compare_exchange_strong(expected, State::consumed,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire);
+        }
+    };
+
+    // Deferred-kind Event wait admission over the SHARED ladder (the ONE
+    // textual admission sequence — no duplicated admission law). Runs the
+    // ladder for a WaitResume::deferred token; on `authorized` commits the
+    // PublicationEligibility (record.arm) INSIDE the same resolver-excluded
+    // critical section (FE-1b L7) and returns true (the caller suspends /
+    // await_suspend returns true). `rejected` / inline `resolved_inline`
+    // return false with the outcome on the node — the caller must NOT
+    // suspend (FE-1b L6: inline resolution publishes nothing).
+    //
+    // Out-of-line (defined in scheduler_fe2_test_seam.cpp): these methods
+    // touch Event's private state (via Scheduler friendship) and therefore
+    // need the complete Event type, which the installed header's include
+    // footprint must NOT gain (the seam header is included by every
+    // internal-testing TU at the bottom of scheduler.hpp).
+    static bool event_wait_deferred_for_test(Scheduler& s, Event& event,
+                                             WaitNode& node,
+                                             FeDeferredRecord& record);
+    // Deadline-aware variant: same shared ladder with the ordinary deadline
+    // authority (timed=true) — the SAME prepare/publish/already-due/retire
+    // lifecycle the fiber entry uses. No second timer authority.
+    static bool event_wait_deferred_deadline_for_test(Scheduler& s,
+                                                      Event& event,
+                                                      WaitNode& node,
+                                                      FeDeferredRecord& record,
+                                                      deadline_t deadline);
+    // Event cancel through the SAME production seam the fiber frontend uses
+    // (event_cancel_wait). The winner tail switches on the deferred kind and
+    // commits the delivery obligation; the record must be armed (it is —
+    // resolvers run only after the admission CS that armed it released).
+    static bool event_cancel_deferred_for_test(Scheduler& s, Event& event,
+                                               WaitNode& node);
+    // Drain chunk: move out pending deferred delivery records under G. The
+    // caller discharges each with NO lock held (FE-1b L9).
+    static std::size_t take_deferred_for_test(Scheduler& s, void** out,
+                                              std::size_t cap) {
+        return s.take_deferred_publications(out, cap);
+    }
+    // Transit-list depth probe (teardown precondition observations).
+    static std::size_t deferred_depth_for_test(Scheduler& s) {
+        LockGuard lk(s.global_mtx_);
+        return s.deferred_publications_.size();
+    }
+    // FE-2 §22 no-user-code-under-lock witness probe: non-blocking G
+    // acquisition. A resumed continuation calls this from its body; true
+    // proves G was FREE at that instant (the discharge path holds no
+    // authoritative lock). If a mutated drain resumed under G, try_lock
+    // would deterministically return false (and never deadlock — unlike a
+    // blocking probe). TSA suppressed: the paired try_lock/unlock cannot be
+    // expressed with annotated RAII guards (same shape as
+    // worker_park_domain_try above).
+    static bool try_lock_global_for_test(Scheduler& s) noexcept
+        SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+        return s.global_mtx_.try_lock();
+    }
+    static void unlock_global_for_test(Scheduler& s) noexcept
+        SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+        s.global_mtx_.unlock();
+    }
+
+    // ---- FE-3 Queue deferred-frontend seams (FE campaign slice; same
+    // test-only scope as the Event seams above) ----
+    //
+    // The deferred QUEUE admission entries run the SHARED production push/pop
+    // ladders (queue_push_admit_locked / queue_pop_admit_locked) for a
+    // WaitResume::deferred token, reproduce the QueuePort ordinary-entry
+    // protocol (lifecycle gate + active_port_calls_ interval + the
+    // detached->producer_operation control transition + QueueWaitCtx stashing)
+    // that QueuePort::push/pop perform for the fiber frontend, commit the
+    // PublicationEligibility (record.arm) INSIDE the resolver-excluded
+    // admission CS on `authorized`, and run the Q-LIV-1 opposite-role grant
+    // under G + S after the role mutex is released. All semantic authority is
+    // production code; this TU adds none.
+    //
+    // `ctx` is the COROUTINE-FRAME-EMBEDDED wait context (FE-1a lifetime rule:
+    // the grant winner writes through ctx->prod_lease / ctx->cons_out AFTER
+    // suspension, so it must be address-stable — never a C++ stack frame that
+    // dies at await_suspend). Defined out-of-line in
+    // scheduler_fe2_test_seam.cpp (needs the complete QueuePort + queue_detail
+    // internals).
+    static bool queue_push_deferred_for_test(Scheduler& s,
+                                             detail::QueuePort& port,
+                                             detail::QueueItemLease& lease,
+                                             WaitNode& node, QueueWaitCtx& ctx,
+                                             FeDeferredRecord& record);
+    static bool queue_push_deferred_until_for_test(
+        Scheduler& s, detail::QueuePort& port, detail::QueueItemLease& lease,
+        WaitNode& node, QueueWaitCtx& ctx, FeDeferredRecord& record,
+        deadline_t deadline);
+    static bool queue_pop_deferred_for_test(Scheduler& s,
+                                            detail::QueuePort& port,
+                                            detail::QueueItemLease& out,
+                                            WaitNode& node, QueueWaitCtx& ctx,
+                                            FeDeferredRecord& record);
+    static bool queue_pop_deferred_until_for_test(
+        Scheduler& s, detail::QueuePort& port, detail::QueueItemLease& out,
+        WaitNode& node, QueueWaitCtx& ctx, FeDeferredRecord& record,
+        deadline_t deadline);
+    // Queue cancel through the SAME production seam the fiber frontend uses
+    // (queue_cancel). The winner tail switches on the deferred kind and
+    // commits the delivery obligation.
+    static bool queue_cancel_deferred_for_test(Scheduler& s,
+                                               detail::QueuePort& port,
+                                               detail::QueueRole role,
+                                               WaitNode& node) {
+        return s.queue_cancel(port, role, node);
+    }
+    // Lease-emptiness observation for the post-resume status mapping
+    // (QueueItemLease::control_ is authority-private; the test coroutines map
+    // outcome + emptiness to push/pop statuses exactly as QueuePort does).
+    static bool queue_lease_empty_for_test(const detail::QueueItemLease& l) {
+        return l.control_ == nullptr;
+    }
+    // An EMPTY lease for coroutine-frame pop out-parameters. QueueItemLease's
+    // default ctor is authority-private; the fiber frontend gets its empty
+    // out-lease inside QueuePort::pop (friend). The deferred frontend's frame
+    // needs the same object without minting a control: returns an empty lease
+    // by value (the public move ctor performs the transfer).
+    static detail::QueueItemLease queue_make_empty_lease_for_test() {
+        return detail::QueueItemLease{};
+    }
+    // CS cores shared by the blocking/timed entries above (defined in
+    // scheduler_fe2_test_seam.cpp). Assume the entry protocol (validation +
+    // control transition + ctx stash) already ran.
+    //
+    // PIN CONTRACT (FE-CORRECTIVE-1 P1-2): every NON-throw return transfers
+    // one QueuePort ordinary-call pin (active_port_calls_) to the CALLER —
+    // the fiber frontend's CallGuard stays on the suspended fiber stack
+    // through resume-side conversion; the deferred frontend's awaiter holds
+    // the obligation instead and MUST release it in await_resume, AFTER the
+    // port-dependent result conversion (release_popped/release_failed
+    // validate owner_port_ against a live port), via
+    // queue_release_deferred_pin_for_test — exactly once per non-throw
+    // call. A throw releases inside the core (await_resume never runs).
+    // An abandoned suspended frame leaves the pin held: begin_teardown
+    // fail-fasts on it (mechanically visible abandonment).
+    static bool queue_push_core_(Scheduler& s, detail::QueuePort& port,
+                                 detail::QueueItemLease& lease, WaitNode& node,
+                                 FeDeferredRecord& record, bool timed,
+                                 deadline_t deadline);
+    static bool queue_pop_core_(Scheduler& s, detail::QueuePort& port,
+                                detail::QueueItemLease& out, WaitNode& node,
+                                FeDeferredRecord& record, bool timed,
+                                deadline_t deadline);
+    // Release one transferred ordinary-call pin under G + S (the production
+    // CallGuard dtor's exact domain/shape). Call with NO lock held.
+    // Over-release (counter already zero) fail-fasts.
+    static void queue_release_deferred_pin_for_test(detail::QueuePort& port);
+    // Ordinary-call pin observation (QPIN phase witnesses): the deferred-op
+    // lifetime obligation is 1 from entry acceptance until resume-side
+    // result consumption completes.
+    static std::size_t queue_active_port_calls_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.active_port_calls_;
+    }
+    // Remaining QueuePort teardown counters (QPIN accounting-table
+    // witnesses; all G+S-synchronized fields).
+    static std::size_t queue_active_wait_associations_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.active_wait_associations_;
+    }
+    static std::size_t queue_active_queue_timers_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.active_queue_timers_;
+    }
+    static std::size_t queue_granted_not_resumed_for_test(
+        const detail::QueuePort& port) {
+        LockGuard glk(port.scheduler_.global_mtx_);
+        LockGuard slk(port.state_mtx_);
+        return port.granted_not_resumed_;
+    }
+
+    // ---- FE-3 RwLock deferred-frontend seams (FE campaign slice; same
+    // test-only scope as the Event/Queue seams above) ----
+    //
+    // The deferred RWLOCK admission entries run the SHARED production
+    // read/write ladders (rwlock_read_admit_locked / rwlock_write_admit_locked)
+    // for a WaitResume::deferred token and commit the PublicationEligibility
+    // (record.arm) INSIDE the resolver-excluded admission CS on `authorized`.
+    // `actor_token` is the caller's stable ACTOR identity (ActorId::frontend;
+    // FE-1b A1 — never the resume target, never a coroutine_handle): the
+    // writer-grant commits it into writer_owner, and the checked release core
+    // compares it. `ctx` is the COROUTINE-FRAME-EMBEDDED RwWaitCtx (the grant
+    // reads ctx->actor after suspension). Defined out-of-line in
+    // scheduler_fe2_test_seam.cpp (needs the complete AsyncRwLock + the shared
+    // RwWaitCtx internal).
+    static bool rwlock_read_deferred_for_test(Scheduler& s, AsyncRwLock& lock,
+                                              WaitNode& node, void* actor_token,
+                                              RwWaitCtx& ctx,
+                                              FeDeferredRecord& record);
+    static bool rwlock_read_deferred_until_for_test(
+        Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+        RwWaitCtx& ctx, FeDeferredRecord& record, deadline_t deadline);
+    static bool rwlock_write_deferred_for_test(Scheduler& s, AsyncRwLock& lock,
+                                               WaitNode& node,
+                                               void* actor_token,
+                                               RwWaitCtx& ctx,
+                                               FeDeferredRecord& record);
+    static bool rwlock_write_deferred_until_for_test(
+        Scheduler& s, AsyncRwLock& lock, WaitNode& node, void* actor_token,
+        RwWaitCtx& ctx, FeDeferredRecord& record, deadline_t deadline);
+    // Inline try-write through the SHARED admission core (the ONE textual
+    // ownership decision) with a frontend actor: recursive detection by the
+    // same actor returns false; a DIFFERENT actor is refused while
+    // writer_active — both independently of any ResumeTarget.
+    static bool rwlock_try_write_deferred_for_test(Scheduler& s,
+                                                   AsyncRwLock& lock,
+                                                   void* actor_token);
+    // Release through the SHARED checked core with a frontend actor: a
+    // non-owner (or inactive) release fail-fasts on the ACTOR comparison.
+    static void rwlock_unlock_write_deferred_for_test(Scheduler& s,
+                                                      AsyncRwLock& lock,
+                                                      void* actor_token);
+    // CS cores shared by the blocking/timed rwlock entries above (defined in
+    // scheduler_fe2_test_seam.cpp).
+    static bool rwlock_read_core_(Scheduler& s, AsyncRwLock& lock,
+                                  WaitNode& node, void* actor_token,
+                                  RwWaitCtx& ctx, FeDeferredRecord& record,
+                                  bool timed, deadline_t deadline);
+    static bool rwlock_write_core_(Scheduler& s, AsyncRwLock& lock,
+                                   WaitNode& node, void* actor_token,
+                                   RwWaitCtx& ctx, FeDeferredRecord& record,
+                                   bool timed, deadline_t deadline);
+    // Read-share release through the production seam (no actor: v1 reader
+    // ownership is a count). Head reconcile included.
+    static void rwlock_unlock_read_for_test(Scheduler& s, AsyncRwLock& lock);
+    // Try-read through the production seam (no barging observation; a true
+    // result commits one read share).
+    static bool rwlock_try_read_for_test(Scheduler& s, AsyncRwLock& lock);
+    // RwLock cancel through the SAME production seam the fiber frontend uses
+    // (rwlock_cancel; head reconcile included).
+    static bool rwlock_cancel_deferred_for_test(Scheduler& s,
+                                                AsyncRwLock& lock,
+                                                WaitNode& node);
+    // Writer-state observations for the ownership tests (authority-private
+    // fields; the Fiber-free frontend has no other way to observe them).
+    // Both read G-serialized ownership state under global_mtx_ — the same
+    // authority the resolvers use (FE-CORRECTIVE-1 P1-3).
+    static bool rwlock_writer_active_for_test(AsyncRwLock& lock);
+    static bool rwlock_owned_by_for_test(AsyncRwLock& lock,
+                                         const void* actor_token);
+
+    // ---- FE-3 Condition slice: deferred CONDITION-WAIT-PREPARE entries -----
+    //
+    // The Condition epoch over the ONE shared admission ladder
+    // (condition_wait_admit_locked): register -> [timed: R2-ALLOC prepare +
+    // LOCAL publish] -> already-due inline Expired -> register-before-handoff
+    // phase seam -> Mutex handoff -> terminal recheck -> authorized, all under
+    // ONE global_mtx_ CS. On `authorized` the seam commits the deferred
+    // PublicationEligibility (record.arm) in the SAME CS and returns true
+    // (the caller suspends). On any other disposition it returns false (the
+    // caller continues inline) and latches `released` from the disposition —
+    // the released_mutex law (false = the presented Mutex state was NOT
+    // released: no reacquire epoch; true = released/handed off: the resumed
+    // body runs its OWN reacquire epoch; the notify/cancel/expire resolver
+    // NEVER runs it for the winner).
+    //
+    // `cond_waiters` / `mutex_waiters` / `owner` are the presented Condition +
+    // bound-Mutex state (the same by-reference shape the fiber seam takes).
+    // The v1 PoV presents BARE WaitQueues: Mutex ownership identity re-typing
+    // (FE-1b A1 §12: "Mutex/RwLock owner fields are re-typed") is its own
+    // later slice — RwLock is done; until then a stackless coroutine cannot
+    // lawfully OWN an AsyncMutex, so the full AsyncCondition choreography
+    // composition stays covered by the unchanged fiber tests running over the
+    // SAME ladder. With an empty presented mutex queue the handoff is the
+    // documented UnlockNoWaiter no-op (`owner = nullptr`); the deferred entry
+    // never dereferences `owner`.
+    //
+    // Returns true when the caller must suspend (record armed); false when the
+    // ladder resolved inline (`node.outcome()` is terminal, `released` latched).
+    static bool condition_wait_deferred_for_test(Scheduler& s,
+                                                 WaitQueue& cond_waiters,
+                                                 WaitNode& cond_node,
+                                                 WaitQueue& mutex_waiters,
+                                                 Fiber*& owner,
+                                                 FeDeferredRecord& record,
+                                                 bool& released);
+    static bool condition_wait_deferred_until_for_test(
+        Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+        WaitQueue& mutex_waiters, Fiber*& owner, deadline_t deadline,
+        FeDeferredRecord& record, bool& released);
+
+    // One-liner resolvers over the presented BARE Condition queue (the public
+    // AsyncCondition::notify_* / cancel cannot be used: the PoV presents bare
+    // WaitQueues, not a bound AsyncCondition). All three already route
+    // publication through the ONE winner-kind tail.
+    static void condition_notify_one_for_test(Scheduler& s,
+                                              WaitQueue& cond_waiters) {
+        s.condition_notify_one(cond_waiters);
+    }
+    static std::size_t condition_notify_all_for_test(Scheduler& s,
+                                                     WaitQueue& cond_waiters) {
+        return s.condition_notify_all(cond_waiters);
+    }
+    static bool condition_cancel_for_test(Scheduler& s,
+                                          WaitQueue& cond_waiters,
+                                          WaitNode& cond_node) {
+        return s.condition_cancel_wait(cond_waiters, cond_node);
+    }
+
+    // Shared body of the two deferred condition entries (out-of-line; holds
+    // G for the ladder + the arm commit, derives `released` from the
+    // disposition).
+    static bool condition_wait_deferred_core_(
+        Scheduler& s, WaitQueue& cond_waiters, WaitNode& cond_node,
+        WaitQueue& mutex_waiters, Fiber*& owner, FeDeferredRecord& record,
+        bool timed, deadline_t deadline, bool& released);
 };  // struct Scheduler::AsyncTestAccess
 
 }  // namespace sluice::async

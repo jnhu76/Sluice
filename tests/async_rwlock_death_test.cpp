@@ -291,6 +291,35 @@ void child_a6_destroy_with_queued_waiter() {
 // the assert is diagnostic only and may be compiled out under NDEBUG.
 // ===========================================================================
 
+// RW — recursive BLOCKING write by the owner (named fail-fast, Debug AND
+// Release). FE-CORRECTIVE-1 P1-3: the recursive-owner decision now runs at
+// the top of the SHARED write admission ladder under global_mtx_ (+ W), so
+// this death child proves the check fires from INSIDE the authoritative
+// critical section — for both the fiber and the deferred frontend — with the
+// same named entry the pre-G site used (async_rwlock_recursive_write_fail_fast).
+void child_rw_recursive_blocking_write() {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncRwLock rw(sched);
+    Fiber f;
+    f.set_entry([&](Fiber&) {
+        WaitNode wn1;
+        rw.write_lock(wn1);  // admitted inline: this fiber owns the write
+        WaitNode wn2;
+        rw.write_lock(wn2);  // recursive: MUST terminate; never returns.
+        std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+    });
+    FiberStack s;
+    if (!sched.init_fiber(f, s.base(), s.size())) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    sched.spawn(f);
+    sched.run(1);
+    // run(1) returning means the fiber completed: the recursive fail-fast
+    // did NOT fire.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 // B1 — grant_from_head on linked head with INVALID mode (neither read nor write).
 void child_b1_grant_invalid_head_mode() {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -373,6 +402,9 @@ void dispatch_child(const std::string& name) {
     if      (name == "B1") child_b1_grant_invalid_head_mode();
     else if (name == "B2") child_b2_grant_null_head_user();
     else if (name == "B3") child_b3_reader_batch_invalid_mode();
+    // FE-CORRECTIVE-1 P1-3: recursive blocking write is a named
+    // Debug+Release fail-fast inside the shared write ladder (under G).
+    else if (name == "RW") child_rw_recursive_blocking_write();
     else if (name == "CTL") child_ctl_valid_usage();
     std::cerr << "[death] unknown child case: " << name << "\n";
     std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -406,6 +438,9 @@ int run_parent() {
     must_term("B1");  // invalid head mode
     must_term("B2");  // null head user_
     must_term("B3");  // invalid batch member mode
+    // FE-CORRECTIVE-1 P1-3: recursive blocking write fail-fasts under G in
+    // BOTH Debug and Release (named boundary, not an assert).
+    must_term("RW");
     must_zero("CTL");  // control: valid usage exits 0
 
     if (failures == 0) {

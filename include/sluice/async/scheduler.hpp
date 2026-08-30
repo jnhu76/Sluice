@@ -565,6 +565,31 @@ public:
     // cancel_wait is unchanged (Event-specific membership gate only).
     bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
+    // ---- FE shared wait admission ladder disposition (FE-1c; ONE textual
+    // ladder per primitive direction) ----
+    // The register → SET-precedence → already-due → terminal-recheck ladder
+    // shared by EVERY Event wait frontend. Caller holds G + q.mtx(). Binds the
+    // frontend's ResumeTarget token, evaluates Event precedence exactly once,
+    // and returns the disposition; the ENTRY (fiber wrapper / deferred
+    // awaiter) commits its own PublicationEligibility in the SAME critical
+    // section when `authorized` (fiber: commit_suspend_locked; deferred:
+    // frontend record arm) and then performs its physical suspension outside
+    // the lock. No duplicated admission law exists: this is the only textual
+    // ladder (FE-1c verdict).
+    enum class WaitAdmitDisposition : std::uint8_t {
+        rejected,         // registration contract violation; epoch untouched
+        resolved_inline,  // epoch terminal at admission (woken/expired);
+                          // consume the outcome inline — publish nothing (L6)
+        authorized,       // suspension authorized; commit eligibility in THIS CS
+    };
+    WaitAdmitDisposition event_wait_admit_locked(WaitQueue& q,
+                                                 const std::atomic<bool>& set_flag,
+                                                 WaitNode& node,
+                                                 const WaitResume& resume,
+                                                 bool timed,
+                                                 deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_, q.mtx());
+
 
     // ---- Semaphore admission / release ----
     // The Semaphore counting-permit substrate. A Semaphore owns an
@@ -802,6 +827,52 @@ public:
                                        WaitQueue& mutex_waiters, Fiber*& owner,
                                        bool& released_mutex);
 
+    // FE-3 shared CONDITION-WAIT-PREPARE admission ladder: the ONE textual
+    // admission law for the Condition epoch (blocking+timed), parameterized by
+    // the frontend's WaitResume token. Caller MUST hold global_mtx_; the
+    // Condition queue mtx is taken and released INSIDE (sequential topology —
+    // the Condition queue mtx and the Mutex queue mtx are NEVER held
+    // simultaneously), and the Mutex handoff acquires the Mutex queue mtx
+    // internally, exactly as the fiber entries did before the extraction.
+    //
+    // Ladder: [timed: R2-ALLOC prepare -> register -> LOCAL timer publish]
+    // -> [untimed: register] -> already-due inline Expired (Mutex RETAINED)
+    // -> register-before-handoff phase seam -> Mutex handoff (the ONE accepted
+    // mutex_handoff_one_locked; owner committed BEFORE publication) ->
+    // terminal recheck -> authorized. The entry commits its own
+    // PublicationEligibility in the SAME global_mtx_ CS on `authorized`
+    // (fiber: commit_suspend_locked; deferred: record.arm()) and physically
+    // suspends outside the lock.
+    //
+    // The disposition encodes the caller's REACQUIRE obligation (the
+    // released_mutex law), so the fiber entries and the deferred seam derive
+    // it from one source:
+    //   rejected_retain           registration failed; Mutex retained; no
+    //                             suspend; the node's outcome is latched.
+    //   resolved_inline_retain    already-due deadline resolved Expired
+    //                             inline; Mutex retained; no suspend; no
+    //                             reacquire epoch (InvDueInlineRetains
+    //                             Ownership).
+    //   resolved_inline_released  the node was resolved concurrently before
+    //                             suspension (post-handoff recheck); Mutex
+    //                             RELEASED; no suspend; the caller MUST run
+    //                             the reacquire epoch.
+    //   authorized                registered (+ timer published when timed)
+    //                             and the Mutex released/handed off; the
+    //                             caller suspends and MUST run the reacquire
+    //                             epoch after resume.
+    enum class ConditionAdmitDisposition : std::uint8_t {
+        rejected_retain = 0,
+        resolved_inline_retain = 1,
+        resolved_inline_released = 2,
+        authorized = 3,
+    };
+    ConditionAdmitDisposition condition_wait_admit_locked(
+        WaitQueue& cond_waiters, WaitNode& cond_node, const WaitResume& resume,
+        WaitQueue& mutex_waiters, Fiber*& owner, bool timed,
+        deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_);
+
     // Deadline-aware CONDITION-WAIT-PREPARE. Composes condition_wait_prepare
     // with a deadline TimerRegistration on `cond_node`
     // (deadline governs ONLY the Condition epoch). Admission precedence (under
@@ -904,6 +975,70 @@ public:
     [[nodiscard]] bool queue_cancel(detail::QueuePort& port, detail::QueueRole role,
                                     WaitNode& node);
 
+    // ---- FE shared Queue admission ladders (FE-3; ONE textual ladder per
+    // direction) ----
+    // The prepare(timed) -> register -> counters -> LOCAL timer publish ->
+    // resource-precedence -> closed -> already-due admission sequence shared by
+    // EVERY push (resp. pop) frontend. Caller holds G + S + the direction's
+    // role mtx(). Binds the frontend's ResumeTarget token, evaluates Queue
+    // admission precedence exactly once, and returns the disposition; the
+    // ENTRY (fiber admit / deferred awaiter) commits its own
+    // PublicationEligibility in the SAME critical section when `authorized`
+    // (fiber: commit_suspend_locked; deferred: frontend record arm) and then
+    // performs its physical suspension outside the lock. No duplicated
+    // admission law exists per direction.
+    //
+    // The LOCAL timer publish below the ladder is the AC-2b review-corrective
+    // Queue interleave (active_queue_timers_ bumped BEFORE the ACTIVE count /
+    // heap / cache publication; earliest_active_deadline_ is read lock-free by
+    // parked workers) and is preserved verbatim inside the ladder.
+    enum class QueueAdmitDisposition : std::uint8_t {
+        rejected,  // registration contract violation; epoch untouched
+        resolved_inline,  // epoch terminal at admission (committed / closed /
+                          // expired) with NO ring-occupancy change; consume
+                          // the outcome inline — publish nothing (L6)
+        resolved_inline_grant,  // ring-occupancy-changing inline success; the
+                                // ENTRY must run the Q-LIV-1 opposite-role
+                                // grant under G + S AFTER releasing the role
+                                // mutex, then consume the outcome inline (L6)
+        authorized,  // suspension authorized; commit eligibility in THIS CS
+    };
+    QueueAdmitDisposition queue_push_admit_locked(detail::QueuePort& port,
+                                                  detail::QueueItemLease& lease,
+                                                  WaitNode& node,
+                                                  const WaitResume& resume,
+                                                  bool timed,
+                                                  deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_, port.state_mtx_, port.waiters_[0].mtx());
+    QueueAdmitDisposition queue_pop_admit_locked(detail::QueuePort& port,
+                                                 detail::QueueItemLease& out,
+                                                 WaitNode& node,
+                                                 const WaitResume& resume,
+                                                 bool timed,
+                                                 deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_, port.state_mtx_, port.waiters_[1].mtx());
+
+    // FE winner publication for the Queue grant seams: the ONE textual
+    // publication tail parameterized by the winner's ResumeTarget kind. Fiber
+    // kind keeps the stackful route verbatim (exactly-once make_runnable
+    // guard -> the port's granted_not_resumed_ pair -> owner routing).
+    // Deferred kind commits the delivery obligation and deliberately does NOT
+    // touch granted_not_resumed_: that counter pairs the grant-side increment
+    // with the fiber winner's post-resume decrement under G. A deferred
+    // winner's QueuePort LIFETIME obligation is instead the ordinary-call pin
+    // (active_port_calls_) TRANSFERRED at admission from the seam entry to
+    // the frontend frame (FE-CORRECTIVE-1 P1-2): the fiber frontend spans the
+    // same interval with its CallGuard alive on the suspended fiber stack,
+    // while the deferred frontend's awaiter holds the pin through the
+    // transit-list discharge and releases it in await_resume AFTER the
+    // port-dependent result conversion (release_popped / release_failed
+    // validate owner_port_ against a live port). begin_teardown therefore
+    // cannot pass until the deferred result has been consumed — the
+    // Scheduler-level transit list is NOT a QueuePort lifetime authority.
+    // None kind publishes nothing (the old null-Fiber skip).
+    void queue_publish_winner_locked(detail::QueuePort& port, WaitNode& won)
+        SLUICE_REQUIRES(global_mtx_);
+
     // ---- Queue reconciler grant seams (winner-before-publication) ----
     // Called by QueuePort fast paths (try_push / try_pop / close) AND by the
     // blocking/timed admit inline-success paths (scheduler_queue.cpp, Q-LIV-1)
@@ -981,38 +1116,49 @@ public:
                                 bool& writer_active, WaitNode& node,
                                 deadline_t deadline, void* expire_ctx);
 
+    // Writer ownership identity (FE-3): `writer_owner` carries the holder's
+    // ActorId (FE-1b A1) — NOT the ResumeTarget delivery token. The Fiber
+    // frontend binds ActorId::fiber(current Fiber) (coincident with the
+    // historical Fiber* identity); a stackless frontend binds its own stable
+    // actor token. Recursive detection, non-owner unlock, and the grant-time
+    // ownership commit all compare/commit ACTOR identity, so ownership
+    // semantics do not depend on where control resumes.
+
     // Attempt inline write acquisition. Under G + W: if active_readers == 0
     // AND writer_active == false AND waiters empty AND current Fiber exists
-    // AND current Fiber != writer_owner: commit ownership; return true.
-    // Recursive call by current owner returns false. External thread: forbidden.
+    // AND writer_owner != ActorId::fiber(me): commit ownership; return true.
+    // Recursive call by the current owner actor returns false. External
+    // thread: forbidden.
     [[nodiscard]] bool rwlock_try_write_lock(WaitQueue& waiters,
                                              std::size_t& active_readers,
                                              bool& writer_active,
-                                             Fiber*& writer_owner);
+                                             ActorId& writer_owner);
 
     // Blocking write admission. Register node at FIFO tail, recheck via
     // grant_from_head_locked. If granted inline: return (node Woken). Otherwise
-    // suspend. Internally manages RwWaitCtx{mode=write} on node.user().
+    // suspend. Internally manages RwWaitCtx{mode=write, actor} on node.user().
     void rwlock_write_lock(WaitQueue& waiters, std::size_t& active_readers,
-                           bool& writer_active, Fiber*& writer_owner,
+                           bool& writer_active, ActorId& writer_owner,
                            WaitNode& node);
 
     // Deadline-aware write admission (resource-first precedence).
     // `expire_ctx` is stored on the TimerRegistration for pump routing.
     void rwlock_write_lock_until(WaitQueue& waiters, std::size_t& active_readers,
-                                 bool& writer_active, Fiber*& writer_owner,
+                                 bool& writer_active, ActorId& writer_owner,
                                  WaitNode& node, deadline_t deadline,
                                  void* expire_ctx);
 
     // Release one read share. Under G + W: active_readers--; if reaches 0,
     // reconcile queue head via grant_from_head_locked. Allows external thread.
     void rwlock_unlock_read(WaitQueue& waiters, std::size_t& active_readers,
-                            bool& writer_active, Fiber*& writer_owner);
+                            bool& writer_active, ActorId& writer_owner);
 
-    // Release exclusive write ownership. Under G + W: clear writer state,
-    // reconcile queue head. Non-owner unlock is a debug assert.
+    // Release exclusive write ownership. Under G + W: verify writer_active
+    // AND writer_owner == ActorId::fiber(current Fiber) (named fail-fast in
+    // Debug AND Release on violation — the historical debug-only asserts),
+    // clear writer state, reconcile queue head.
     void rwlock_unlock_write(WaitQueue& waiters, std::size_t& active_readers,
-                             bool& writer_active, Fiber*& writer_owner);
+                             bool& writer_active, ActorId& writer_owner);
 
     // Queue-identity-safe RwLock cancellation with head reconcile. Returns true
     // ONLY if node is Registered AND linked in `waiters` AND CANCEL wins. After
@@ -1020,7 +1166,7 @@ public:
     // OS thread.
     [[nodiscard]] bool rwlock_cancel(WaitQueue& waiters,
                                      std::size_t& active_readers,
-                                     bool& writer_active, Fiber*& writer_owner,
+                                     bool& writer_active, ActorId& writer_owner,
                                      WaitNode& node);
 
     // RwLock-specific deadline expiry with head reconcile. Called ONLY by
@@ -1030,8 +1176,62 @@ public:
     // A losing race (concurrent resolver won) returns false; the caller must
     // NOT increment its won counter in that case.
     bool rwlock_expire_wait(WaitQueue& waiters, std::size_t& active_readers,
-                            bool& writer_active, Fiber*& writer_owner,
+                            bool& writer_active, ActorId& writer_owner,
                             WaitNode& node)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // ---- FE shared RwLock admission ladders (FE-3; ONE textual ladder per
+    // mode) ----
+    // The prepare(timed) -> register -> counters -> ordinary-deadline publish
+    // -> head-prefix claim -> already-due -> terminal-recheck sequence shared
+    // by EVERY RwLock read (resp. write) frontend. Caller holds G + W. The
+    // ENTRY commits its own PublicationEligibility in the SAME critical
+    // section when `authorized` and performs physical suspension outside the
+    // lock. `actor` is the caller's ActorIdentity (stashed by the entry into
+    // its frame RwWaitCtx for the grant-time ownership commit; read mode
+    // ignores it — v1 has no per-reader identity).
+    WaitAdmitDisposition rwlock_read_admit_locked(WaitQueue& waiters,
+                                                  std::size_t& active_readers,
+                                                  bool& writer_active,
+                                                  WaitNode& node,
+                                                  const WaitResume& resume,
+                                                  bool timed,
+                                                  deadline_t deadline,
+                                                  void* expire_ctx)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx());
+    WaitAdmitDisposition rwlock_write_admit_locked(WaitQueue& waiters,
+                                                   std::size_t& active_readers,
+                                                   bool& writer_active,
+                                                   ActorId& writer_owner,
+                                                   WaitNode& node,
+                                                   const WaitResume& resume,
+                                                   const ActorId& actor,
+                                                   bool timed,
+                                                   deadline_t deadline,
+                                                   void* expire_ctx)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx());
+
+    // Shared inline try-write admission core (ONE textual decision: recursive
+    // owner-actor detection + free-resource commit). Caller holds G + W.
+    // Both the Fiber entry (actor = current Fiber) and the test-only deferred
+    // seam (actor = frontend token) consume it — no duplicated ownership law.
+    bool rwlock_try_write_admission_locked(WaitQueue& waiters,
+                                           std::size_t& active_readers,
+                                           bool& writer_active,
+                                           ActorId& writer_owner,
+                                           const ActorId& caller)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx());
+
+    // Shared checked write-release core (ONE textual ownership check +
+    // release + head reconcile). Caller holds G. The ownership checks are
+    // named fail-fasts (Debug AND Release): not write-active, or caller
+    // actor != writer_owner. Used by the Fiber entry and the test-only
+    // deferred seam.
+    void rwlock_unlock_write_core_locked(WaitQueue& waiters,
+                                         std::size_t& active_readers,
+                                         bool& writer_active,
+                                         ActorId& writer_owner,
+                                         const ActorId& caller)
         SLUICE_REQUIRES(global_mtx_);
 
 
@@ -1308,6 +1508,56 @@ private:
     // responsibility).
     bool publish_waiting_fiber_runnable_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
 
+    // ---- FE frontend-neutral publication edge (FE-1b contract L8/L9) ----
+    // Canonical winner publication: switches on the winning node's ResumeTarget
+    // kind. `fiber` -> publish_waiting_fiber_runnable_locked (unchanged stackful
+    // path); `deferred` -> defer_publication_locked (commit the delivery
+    // obligation under G; the frontend discharges it outside authoritative
+    // locks); `none` -> publish nothing (pure-protocol epochs, exactly like the
+    // null Fiber* previously guarded at each tail). The terminal winner remains
+    // the node's resolve_ CAS; this seam only delivers an already-decided
+    // terminal. Caller MUST hold global_mtx_.
+    void publish_wait_winner_locked(WaitNode& won) SLUICE_REQUIRES(global_mtx_);
+
+    // Commit a deferred delivery obligation: move the frontend record address
+    // onto the transient transit list under G. NO user continuation executes
+    // here (FE-1b L9); discharge happens in take_deferred_publications chunks
+    // with no lock held. Allocation: possible vector growth bounded by
+    // CONCURRENT suspended deferred-kind waiters (transient, drained per
+    // discharge — the same resource class as worker inboxes; grows with
+    // outstanding, never with historical submissions).
+    //
+    // FAILURE POSTURE (FE-CORRECTIVE-1 P1-1): the insertion runs after the
+    // terminal winner is irreversible; an allocation failure here is NOT
+    // recoverable (the suspended continuation's delivery obligation would be
+    // lost with no residue the teardown gate can observe). A storage failure
+    // therefore enters the NAMED process-terminal fail-fast
+    // (scheduler_deferred_publication_stranded_fail_fast — the same boundary
+    // ~Scheduler uses for a stranded entry). This is a process-terminal
+    // failure boundary, deliberately NOT the R2-style allocation-free
+    // publication tail: the stackless frontend is experimental/test-gated
+    // and its evidence documents this posture. noexcept: no exception
+    // escapes (the only throwing op is contained by the boundary).
+    void defer_publication_locked(void* delivery_record) noexcept
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Drain chunk: move out up to `cap` pending delivery records (FIFO) under
+    // G. The caller discharges each record (frontend resume) with NO
+    // Scheduler/primitive lock held, then may call again; an empty take means
+    // the TRANSIT LIST is drained (records already taken but not yet
+    // discharged are the discharging caller's obligation — take ownership;
+    // only the ~Scheduler-empty precondition covers the never-taken
+    // remainder). ~Scheduler requires this list EMPTY (a stranded
+    // entry is a published-but-unconsumed winner: fail-fast teardown
+    // precondition, mirrors the QueuePort granted_not_resumed_ gate).
+    std::size_t take_deferred_publications(void** out, std::size_t cap);
+
+    // Transient deferred-publication transit (FE-2; compliance gate
+    // docs/architecture/fe2-frontend-seam-compliance-gate.md Gate 1/2).
+    // Entries are raw frontend delivery records (experimental stackless
+    // frontend). Producer: winner tails under G. Consumer: frontend drain.
+    std::vector<void*> deferred_publications_ SLUICE_GUARDED_BY(global_mtx_){};
+
     // Frontend-neutral primitive cancellation terminal closure. The caller
     // MUST hold global_mtx_ + this exact WaitQueue's mtx(). Membership is
     // checked before mutation; a winner resolves Cancelled and unlinks through
@@ -1341,7 +1591,7 @@ private:
     void rwlock_grant_from_head_locked(WaitQueue& waiters,
                                        std::size_t& active_readers,
                                        bool& writer_active,
-                                       Fiber*& writer_owner)
+                                       ActorId& writer_owner)
         SLUICE_REQUIRES(global_mtx_);
 
     // No-publication head-claim primitive. Caller MUST hold G + W. Resolves the node Woken (the

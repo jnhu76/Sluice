@@ -3,6 +3,14 @@
 //
 // The class declaration, lock domains, atomic orderings, and wake contracts
 // remain in include/sluice/async/scheduler.hpp.
+//
+// FE-3 RwLock vertical slice: the admission closures are extracted into the
+// ONE shared rwlock_read_admit_locked / rwlock_write_admit_locked ladders
+// (one textual admission law per mode, blocking+timed, parameterized by the
+// frontend's WaitResume token), and every winner publication edge routes
+// through publish_wait_winner_locked (winner-kind switch). Writer ownership
+// identity is ActorId (FE-1b A1): ownership semantics do not depend on the
+// ResumeTarget delivery token.
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -12,7 +20,7 @@
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/select_port.hpp>
 
-#include "scheduler_internal.hpp"
+#include "scheduler_internal.hpp"  // g_worker + RwWaitCtx (shared, non-installed)
 
 #include <utility>
 #include <cstdio>
@@ -27,14 +35,6 @@
 #endif
 
 namespace sluice::async {
-namespace {
-// Per-operation context stored on WaitNode::user_ for RwLock waiters.
-// Stack-local in the lock function; alive for the entire suspension epoch.
-struct RwWaitCtx {
-    enum class Mode : std::uint8_t { read, write };
-    Mode mode;
-};
-}  // anonymous namespace
 
 // No-publication head-claim primitive. Caller MUST hold G + W. Resolves the
 // node Woken (winner CAS), unlinks, retires timer, decrements
@@ -44,8 +44,8 @@ struct RwWaitCtx {
 // writer_active_) BEFORE publishing, and for calling route_runnable_locked.
 //
 // AUTHORITY: shared by rwlock_grant_from_head_locked AND the inline admission
-// recheck in the lock_* registration paths, so there is ONE resolve/unlink/
-// retire/accounting sequence — not two potentially-drifted copies.
+// recheck in the ladders, so there is ONE resolve/unlink/retire/accounting
+// sequence — not two potentially-drifted copies.
 bool Scheduler::rwlock_claim_node_woken_locked(WaitQueue& waiters,
                                                WaitNode& node) {
     // Caller already holds G + W (verified by SLUICE_REQUIRES at the declaration
@@ -73,25 +73,30 @@ bool Scheduler::rwlock_claim_node_woken_locked(WaitQueue& waiters,
 void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
                                              std::size_t& active_readers,
                                              bool& writer_active,
-                                             Fiber*& writer_owner) {
+                                             ActorId& writer_owner) {
     // Unified head-driven grant reconcile. Caller MUST hold G; this function
     // acquires W internally (like mutex_handoff_one_locked). Dispatches based
     // on queue head mode. Publication is under G after W release.
     //
-    // Publication data is collected into a local intrusive list (readers) or a
-    // single Fiber* (writer) while W is held, then published after W release.
+    // Publication data is collected into a local intrusive list (readers) or
+    // a single node pointer (writer) while W is held, then published after W
+    // release through the ONE winner-kind tail (fiber stackful route /
+    // deferred delivery obligation / none).
     //
     // AUTHORITY: this is the ONLY head-driven grant path. The unlock_read,
     // unlock_write, cancel, and expiry reconcile flows all call this helper.
-    // The inline admission recheck in the registration paths ALSO calls this
-    // helper (see registration_admission_drift note in each lock_* function):
-    // there is no second grant logic with potentially-drifted mode handling,
-    // timer retirement, or accounting.
-    Fiber* single_writer_fiber = nullptr;
+    // The inline admission recheck in the ladders ALSO shares the claim
+    // primitive (see the REGISTRATION-ADMISSION-DRIFT note at the read
+    // ladder): there is no second grant logic with potentially-drifted mode
+    // handling, timer retirement, or accounting.
+    //
+    // FE-3 ownership commit: the writer grant commits the WINNER's
+    // ActorIdentity (RwWaitCtx::actor — bound by the admitting frontend),
+    // never the ResumeTarget delivery token.
+    WaitNode* writer_node = nullptr;
     WaitNode* pub_head = nullptr;
     WaitNode* pub_tail = nullptr;
     std::size_t granted_readers = 0;
-    bool granted_writer = false;
 
     {
         LockGuard qlk(waiters.mtx());
@@ -117,15 +122,13 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
             // --- Writer grant: grant exactly ONE writer ---
             if (active_readers > 0 || writer_active) return;  // not admissible
 
-            Fiber* f = head->fiber();
             // Shared claim primitive: resolve + unlink + retire + accounting.
             // (Same primitive the inline admission recheck uses — no drift.)
             rwlock_claim_node_woken_locked(waiters, *head);
-            // Commit ownership BEFORE publication.
+            // Commit ownership BEFORE publication: the winner's ACTOR identity.
             writer_active = true;
-            writer_owner = f;
-            single_writer_fiber = f;
-            granted_writer = true;
+            writer_owner = ctx->actor;
+            writer_node = head;
             break;
         }
         case RwWaitCtx::Mode::read: {
@@ -181,27 +184,20 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
         }
     }  // W released here
 
-    // Publication under G (W already released). Owner lookup is the
-    // authoritative owner_for_fiber_locked (the former
-    // fiber_owner_.find + g_worker fallback duplicated the lookup discipline
-    // every other primitive fail-fasts through; fiber_owner_ is never erased,
-    // so a missing entry is a Scheduler invariant violation, not a state to
-    // route around).
-    if (granted_writer) {
-        if (single_writer_fiber != nullptr && single_writer_fiber->make_runnable()) {
-            route_runnable_locked(single_writer_fiber,
-                                  owner_for_fiber_locked(single_writer_fiber));
-        }
+    // Publication under G (W already released) through the ONE winner-kind
+    // tail. The fiber branch is the unchanged stackful route (authoritative
+    // owner_for_fiber_locked + exactly-once make_runnable guard + worker
+    // routing); the deferred branch commits the delivery obligation; none
+    // publishes nothing (the historical null-Fiber skip).
+    if (writer_node != nullptr) {
+        publish_wait_winner_locked(*writer_node);
     }
     WaitNode* w = pub_head;
     while (w != nullptr) {
         WaitNode* pub_next = w->next_;
-        Fiber* fib = w->fiber();
         w->next_ = nullptr;
         w->prev_ = nullptr;
-        if (fib != nullptr && fib->make_runnable()) {
-            route_runnable_locked(fib, owner_for_fiber_locked(fib));
-        }
+        publish_wait_winner_locked(*w);
         w = pub_next;
     }
 }
@@ -218,70 +214,202 @@ bool Scheduler::rwlock_try_read_lock(WaitQueue& waiters,
     return false;
 }
 
+// ---- FE shared RwLock admission ladders (FE-3) -----------------------------
+//
+// ONE textual admission sequence per mode, shared by EVERY frontend (stackful
+// Fiber entries / deferred awaiters). Pure admission law: no g_worker access,
+// no coroutine knowledge — only the ResumeTarget token (+ the write mode's
+// actor for the ownership commit). The ENTRY commits its frontend-specific
+// PublicationEligibility in the SAME critical section when `authorized`
+// (fiber: commit_suspend_locked; deferred: frontend record arm) and suspends
+// physically outside the lock (FE-1b L7/L10). Inline dispositions publish
+// nothing — the caller never suspended (L6).
+
+// REGISTRATION-ADMISSION-DRIFT NOTE (lives here ONCE now, for both modes).
+//
+// The design's authoritative admission recheck is
+// rwlock_grant_from_head_locked. The READ ladder cannot call it directly
+// because this path does not own a writer_owner slot (a read admission MUST
+// NOT mutate writer ownership). If the queue head were an admissible writer,
+// the helper would have to commit writer_active + writer_owner — a write-side
+// authority the read path has no right to perform. Equivalent authority is
+// preserved by the following invariant: when a reader registers and becomes
+// the queue head, an earlier-registered writer head CANNOT be admissible.
+// Either (a) the writer was already admissible and was granted by its own
+// registration admission recheck (writer-grant path), so it is no longer
+// head; or (b) it was not admissible (active_readers_ > 0), and remains so
+// because a read registration does not change active_readers_. Therefore, if
+// this node is the head AND no writer is active, the head IS this reader and
+// granting it is the same head-prefix claim the unified helper would make.
+// Both ladders share the claim mechanics via rwlock_claim_node_woken_locked
+// (the no-publication primitive that unlock/cancel/expiry use internally
+// through grant_from_head).
+Scheduler::WaitAdmitDisposition Scheduler::rwlock_read_admit_locked(
+    WaitQueue& waiters, std::size_t& active_readers, bool& writer_active,
+    WaitNode& node, const WaitResume& resume, bool timed, deadline_t deadline,
+    void* expire_ctx)
+    SLUICE_REQUIRES(global_mtx_, waiters.mtx()) {
+    TimerRegistration* reg = nullptr;
+    if (timed) {
+        // R2-ALLOC: allocations before any admission state mutation (a
+        // bad_alloc here leaves the node Detached and all counters intact).
+        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
+    }
+    if (!waiters.register_wait_locked(node, resume)) {
+        if (timed) erase_popped_registration_locked(reg);  // never published
+        return WaitAdmitDisposition::rejected;
+    }
+    ++waiting_waitq_count_;
+    if (timed) {
+        // Publish via the ordinary deadline authority, attaching the
+        // RwLock-only expire/reconcile binding INSIDE the same G critical
+        // section.
+        publish_ordinary_deadline_locked(reg, &rwlock_timer_expire_reconcile,
+                                         expire_ctx);
+    }
+    // Admission precedence 1: resource admission wins over a due deadline.
+    if (node.prev_ == nullptr && !writer_active) {
+        // This node is the FIFO head and no writer active: claim it.
+        if (rwlock_claim_node_woken_locked(waiters, node)) {
+            ++active_readers;
+            node.set_user(nullptr);
+            // The caller is Running (executing this code, or about to observe
+            // the inline outcome on its own thread): no publication is needed
+            // — the caller continues without suspending (L6).
+            return WaitAdmitDisposition::resolved_inline;
+        }
+    }
+    if (timed) {
+        // Admission precedence 2: already-due deadline. Gate the
+        // timer-accounting cleanup on a successful consume (expire_locked won
+        // the resolve CAS, but the bound timer is still ACTIVE until claimed;
+        // a failed claim is the same Category B unreachable state as before —
+        // under continuous G+W the node is terminal and the timer unclaimed).
+        if (clock_now_unlocked() >= deadline) {
+            if (waiters.expire_locked(node)) {
+                if (!consume_ordinary_deadline_locked(*reg))
+                    assert(false && "E12-F read_lock_until: try_claim_expiry "
+                                    "failed after expire_locked win (Category B)");
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                node.set_user(nullptr);
+                return WaitAdmitDisposition::resolved_inline;
+            }
+        }
+    }
+    // Defense-in-depth.
+    if (node.is_terminal()) {
+        waiters.unlink_locked(node);
+        --waiting_waitq_count_;
+        if (timed) {
+            // ACTIVE->RETIRED via the ordinary deadline authority.
+            (void)retire_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+        }
+        node.set_user(nullptr);
+        return WaitAdmitDisposition::resolved_inline;
+    }
+    // Suspension authorized. The epoch is Registered, un-resolved, and every
+    // resolver is excluded until THIS critical section releases; the entry
+    // commits its PublicationEligibility now (contract L7) and suspends
+    // physically afterwards (L10).
+    return WaitAdmitDisposition::authorized;
+}
+
+Scheduler::WaitAdmitDisposition Scheduler::rwlock_write_admit_locked(
+    WaitQueue& waiters, std::size_t& active_readers, bool& writer_active,
+    ActorId& writer_owner, WaitNode& node, const WaitResume& resume,
+    const ActorId& actor, bool timed, deadline_t deadline, void* expire_ctx)
+    SLUICE_REQUIRES(global_mtx_, waiters.mtx()) {
+    // Recursive-owner decision UNDER G, BEFORE registration and any resource
+    // or timer mutation. writer_owner is G-serialized state: every write and
+    // the try-write/unlock comparisons run under global_mtx_ (+ W). A
+    // recursive check outside this authority is a data race against
+    // concurrent ownership transitions (FE-CORRECTIVE-1 P1-3); both the
+    // stackful and the deferred frontend consume this ONE rule through the
+    // shared ladder. Named fail-fast active in Debug AND Release (the
+    // historical debug-only assert, re-based onto ActorId; the try form
+    // returns false instead — see rwlock_try_write_admission_locked).
+    if (writer_owner == actor) {
+        detail::async_rwlock_recursive_write_fail_fast();
+    }
+    TimerRegistration* reg = nullptr;
+    if (timed) {
+        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
+    }
+    if (!waiters.register_wait_locked(node, resume)) {
+        if (timed) erase_popped_registration_locked(reg);  // never published
+        return WaitAdmitDisposition::rejected;
+    }
+    ++waiting_waitq_count_;
+    if (timed) {
+        publish_ordinary_deadline_locked(reg, &rwlock_timer_expire_reconcile,
+                                         expire_ctx);
+    }
+    // Admission precedence 1: resource admission. This node is the FIFO head
+    // and the resource is free, so a head-prefix claim of exactly this node is
+    // the same grant the unified helper would make (see the read ladder's
+    // REGISTRATION-ADMISSION-DRIFT note). claim_node retires the bound
+    // TimerRegistration internally, so only the ownership commit remains.
+    if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
+        if (rwlock_claim_node_woken_locked(waiters, node)) {
+            writer_active = true;
+            writer_owner = actor;  // the caller's ACTOR identity (FE-1b A1)
+            node.set_user(nullptr);
+            return WaitAdmitDisposition::resolved_inline;
+        }
+    }
+    if (timed) {
+        if (clock_now_unlocked() >= deadline) {
+            if (waiters.expire_locked(node)) {
+                if (!consume_ordinary_deadline_locked(*reg))
+                    assert(false && "E12-F write_lock_until: try_claim_expiry "
+                                    "failed after expire_locked win (Category B)");
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                node.set_user(nullptr);
+                return WaitAdmitDisposition::resolved_inline;
+            }
+        }
+    }
+    if (node.is_terminal()) {
+        waiters.unlink_locked(node);
+        --waiting_waitq_count_;
+        if (timed) {
+            (void)retire_ordinary_deadline_locked(*reg);
+            recompute_earliest_deadline_locked();
+        }
+        node.set_user(nullptr);
+        return WaitAdmitDisposition::resolved_inline;
+    }
+    return WaitAdmitDisposition::authorized;
+}
+
 void Scheduler::rwlock_read_lock(WaitQueue& waiters,
                                  std::size_t& active_readers,
                                  bool& writer_active,
                                  WaitNode& node) {
+    // Blocking read — stackful (Fiber) frontend entry over the SHARED read
+    // ladder. The RwWaitCtx is stack-local; on a Fiber the stack persists
+    // across the context switch.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::read_lock requires a running Fiber");
     Fiber* me = ws->current;
     assert(node.user() == nullptr && "AsyncRwLock::read_lock: node.user() must "
                                      "be nullptr on entry (caller contract)");
-    // Stack-local context for this wait epoch.
-    RwWaitCtx ctx{RwWaitCtx::Mode::read};
+    RwWaitCtx ctx{RwWaitCtx::Mode::read, ActorId::none()};
     node.set_user(&ctx);
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
-        if (!waiters.register_wait_locked(node, me)) {
-            node.set_user(nullptr);
-            return;  // registration contract violation
+        if (rwlock_read_admit_locked(waiters, active_readers, writer_active,
+                                     node, WaitResume::fiber(me),
+                                     /*timed=*/false, deadline_t{},
+                                     /*expire_ctx=*/nullptr) !=
+            WaitAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspends
         }
-        ++waiting_waitq_count_;
-
-        // REGISTRATION-ADMISSION-DRIFT NOTE.
-        //
-        // The design's authoritative admission recheck is
-        // rwlock_grant_from_head_locked. We CANNOT call it directly from the
-        // read registration path because this seam does not own a
-        // `writer_owner&` slot (a read admission MUST NOT mutate writer
-        // ownership). If the queue head were a writer admissible at this
-        // instant, the helper would have to commit writer_active +
-        // writer_owner — a write-side authority this path has no right to
-        // perform. (Grant is exclusively head-driven and writer ownership
-        // is committed only by the writer-grant authority.)
-        //
-        // Equivalent authority is preserved by the following invariant: when a
-        // reader registers and becomes the queue head, an earlier-registered
-        // writer head CANNOT be admissible. Either (a) the writer was already
-        // admissible and was granted by its own registration admission
-        // recheck (writer-grant path), so it is no longer head; or (b) it was
-        // not admissible (active_readers_ > 0), and remains so because this
-        // read registration does not change active_readers_. Therefore, if
-        // this node is the head AND no writer is active, the head IS this
-        // reader and granting it is the same head-prefix claim the unified
-        // helper would make. We share the claim mechanics via
-        // rwlock_claim_node_woken_locked (the no-publication primitive that
-        // unlock/cancel/expiry use internally through grant_from_head).
-        if (node.prev_ == nullptr && !writer_active) {
-            // This node is the FIFO head and no writer active: claim it.
-            if (rwlock_claim_node_woken_locked(waiters, node)) {
-                ++active_readers;
-                node.set_user(nullptr);
-                // The current Fiber is Running (it is executing this code on
-                // a worker); make_runnable returns false and no publication
-                // is needed — the caller continues without suspending.
-                return;  // node.outcome() == woken; do NOT suspend
-            }
-        }
-
-        // Defense-in-depth.
-        if (node.is_terminal()) {
-            waiters.unlink_locked(node);
-            --waiting_waitq_count_;
-            node.set_user(nullptr);
-            return;
-        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -299,17 +427,30 @@ void Scheduler::rwlock_read_lock(WaitQueue& waiters,
 bool Scheduler::rwlock_try_write_lock(WaitQueue& waiters,
                                       std::size_t& active_readers,
                                       bool& writer_active,
-                                      Fiber*& writer_owner) {
+                                      ActorId& writer_owner) {
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::try_write_lock requires a running Fiber");
     Fiber* me = ws->current;
     LockGuard lk(global_mtx_);
     LockGuard qlk(waiters.mtx());
-    // Recursive call by current owner: return false, no mutation.
-    if (writer_owner == me) return false;
+    return rwlock_try_write_admission_locked(waiters, active_readers,
+                                             writer_active, writer_owner,
+                                             ActorId::fiber(me));
+}
+
+// Shared inline try-write admission core (the ONE textual ownership
+// decision; see scheduler.hpp). `caller` is the calling ACTOR's identity.
+bool Scheduler::rwlock_try_write_admission_locked(WaitQueue& waiters,
+                                                  std::size_t& active_readers,
+                                                  bool& writer_active,
+                                                  ActorId& writer_owner,
+                                                  const ActorId& caller)
+    SLUICE_REQUIRES(global_mtx_, waiters.mtx()) {
+    // Recursive call by the current owner ACTOR: return false, no mutation.
+    if (writer_owner == caller) return false;
     if (active_readers == 0 && !writer_active && waiters.empty_locked()) {
         writer_active = true;
-        writer_owner = me;
+        writer_owner = caller;
         return true;
     }
     return false;
@@ -318,49 +459,31 @@ bool Scheduler::rwlock_try_write_lock(WaitQueue& waiters,
 void Scheduler::rwlock_write_lock(WaitQueue& waiters,
                                   std::size_t& active_readers,
                                   bool& writer_active,
-                                  Fiber*& writer_owner,
+                                  ActorId& writer_owner,
                                   WaitNode& node) {
+    // Blocking write — stackful frontend entry over the SHARED write ladder.
+    // The recursive-owner check lives INSIDE the ladder under G (see
+    // rwlock_write_admit_locked): reading writer_owner here, before
+    // global_mtx_, would race every G-protected ownership transition.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::write_lock requires a running Fiber");
     Fiber* me = ws->current;
-    assert(writer_owner != me && "AsyncRwLock::write_lock recursive acquisition "
-                                 "is a caller precondition violation");
     assert(node.user() == nullptr && "AsyncRwLock::write_lock: node.user() must "
                                      "be nullptr on entry (caller contract)");
-    RwWaitCtx ctx{RwWaitCtx::Mode::write};
+    RwWaitCtx ctx{RwWaitCtx::Mode::write, ActorId::fiber(me)};
     node.set_user(&ctx);
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
-        if (!waiters.register_wait_locked(node, me)) {
-            node.set_user(nullptr);
-            return;
+        if (rwlock_write_admit_locked(waiters, active_readers, writer_active,
+                                      writer_owner, node, WaitResume::fiber(me),
+                                      ActorId::fiber(me), /*timed=*/false,
+                                      deadline_t{},
+                                      /*expire_ctx=*/nullptr) !=
+            WaitAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspends
         }
-        ++waiting_waitq_count_;
-
-        // Admission recheck (REGISTRATION-ADMISSION-DRIFT NOTE — see
-        // rwlock_read_lock): use the shared no-publication claim primitive so
-        // resolve/unlink/retire/accounting match the unlock/cancel/expiry
-        // authority exactly. This node is the FIFO head and the resource is
-        // free, so a head-prefix claim of exactly this node is the same grant
-        // the unified helper would make.
-        if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
-            if (rwlock_claim_node_woken_locked(waiters, node)) {
-                writer_active = true;
-                writer_owner = me;
-                node.set_user(nullptr);
-                // Current Fiber is Running; make_runnable returns false, no
-                // publication needed — the caller continues without suspending.
-                return;
-            }
-        }
-
-        if (node.is_terminal()) {
-            waiters.unlink_locked(node);
-            --waiting_waitq_count_;
-            node.set_user(nullptr);
-            return;
-        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -377,7 +500,7 @@ void Scheduler::rwlock_write_lock(WaitQueue& waiters,
 void Scheduler::rwlock_unlock_read(WaitQueue& waiters,
                                    std::size_t& active_readers,
                                    bool& writer_active,
-                                   Fiber*& writer_owner) {
+                                   ActorId& writer_owner) {
     LockGuard lk(global_mtx_);
     assert(active_readers > 0 && "AsyncRwLock::unlock_read without held share "
                                  "(caller contract violation)");
@@ -391,18 +514,37 @@ void Scheduler::rwlock_unlock_read(WaitQueue& waiters,
 void Scheduler::rwlock_unlock_write(WaitQueue& waiters,
                                     std::size_t& active_readers,
                                     bool& writer_active,
-                                    Fiber*& writer_owner) {
+                                    ActorId& writer_owner) {
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::unlock_write requires a running Fiber");
     Fiber* me = ws->current;
     LockGuard lk(global_mtx_);
-    assert(writer_active && "AsyncRwLock::unlock_write while not write-locked "
-                            "(caller contract violation)");
-    assert(writer_owner == me && "AsyncRwLock::unlock_write by non-owner "
-                                 "(caller contract violation)");
-    (void)me;
+    rwlock_unlock_write_core_locked(waiters, active_readers, writer_active,
+                                    writer_owner, ActorId::fiber(me));
+}
+
+// Shared checked write-release core (the ONE textual ownership check +
+// release + head reconcile; see scheduler.hpp). `caller` is the calling
+// ACTOR's identity.
+void Scheduler::rwlock_unlock_write_core_locked(WaitQueue& waiters,
+                                                std::size_t& active_readers,
+                                                bool& writer_active,
+                                                ActorId& writer_owner,
+                                                const ActorId& caller)
+    SLUICE_REQUIRES(global_mtx_) {
+    if (!writer_active) {
+        // Not write-locked: caller contract violation. Named fail-fast in
+        // Debug AND Release (the historical debug-only assert).
+        detail::async_rwlock_unlock_write_inactive_fail_fast();
+    }
+    if (writer_owner != caller) {
+        // Non-owner release: caller contract violation. The ownership check
+        // compares ACTOR identity — a frontend actor releases with its own
+        // token, never with a ResumeTarget (FE-1b A1).
+        detail::async_rwlock_unlock_write_not_owner_fail_fast();
+    }
     writer_active = false;
-    writer_owner = nullptr;
+    writer_owner = ActorId::none();
     // Reconcile queue head (grant acquires W internally).
     rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
                                   writer_owner);
@@ -411,22 +553,14 @@ void Scheduler::rwlock_unlock_write(WaitQueue& waiters,
 bool Scheduler::rwlock_cancel(WaitQueue& waiters,
                               std::size_t& active_readers,
                               bool& writer_active,
-                              Fiber*& writer_owner,
+                              ActorId& writer_owner,
                               WaitNode& node) {
     LockGuard lk(global_mtx_);
-    Fiber* cancel_fiber = nullptr;
-    WorkerState* cancel_owner = nullptr;
     {
         LockGuard qlk(waiters.mtx());
         // Membership gate.
         if (!cancel_primitive_wait_locked(waiters, node)) return false;
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-        // Capture publication data for the cancel winner (authoritative
-        // owner lookup; see the grant-path note).
-        cancel_fiber = node.fiber();
-        if (cancel_fiber != nullptr) {
-            cancel_owner = owner_for_fiber_locked(cancel_fiber);
-        }
     }  // W released
 
     // Head reconcile: the newly exposed head may be admissible.
@@ -434,46 +568,33 @@ bool Scheduler::rwlock_cancel(WaitQueue& waiters,
     rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
                                   writer_owner);
 
-    // Publish cancel winner (after grant publications).
-    if (cancel_fiber != nullptr && cancel_fiber->make_runnable()) {
-        route_runnable_locked(cancel_fiber, cancel_owner);
-    }
+    // Publish cancel winner (after grant publications) through the ONE
+    // winner-kind tail; its result does NOT undo the cancel.
+    publish_wait_winner_locked(node);
     return true;
 }
 
 bool Scheduler::rwlock_expire_wait(WaitQueue& waiters,
                                    std::size_t& active_readers,
                                    bool& writer_active,
-                                   Fiber*& writer_owner,
+                                   ActorId& writer_owner,
                                    WaitNode& node) {
     // Called under G (from pump_deadlines_locked). Acquire W for expire, then
     // release; grant acquires W internally. Returns true iff expire_locked won.
-    Fiber* exp_fiber = nullptr;
-    WorkerState* exp_owner = nullptr;
-    bool won = false;
     {
         LockGuard qlk(waiters.mtx());
         if (!waiters.expire_locked(node)) return false;  // lost to grant/cancel
         // Timer already CONSUMED by pump. Update accounting.
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-        // Capture publication data (authoritative owner lookup; see
-        // the grant-path note).
-        exp_fiber = node.fiber();
-        if (exp_fiber != nullptr) {
-            exp_owner = owner_for_fiber_locked(exp_fiber);
-        }
-        won = true;
     }  // W released
 
     // Head reconcile (grant acquires W internally).
     rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
                                   writer_owner);
 
-    // Publish expired waiter.
-    if (exp_fiber != nullptr && exp_fiber->make_runnable()) {
-        route_runnable_locked(exp_fiber, exp_owner);
-    }
-    return won;
+    // Publish expired waiter through the ONE winner-kind tail.
+    publish_wait_winner_locked(node);
+    return true;
 }
 
 void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
@@ -482,84 +603,26 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
                                        WaitNode& node,
                                        deadline_t deadline,
                                        void* expire_ctx) {
+    // Timed read — stackful frontend entry over the SHARED read ladder with
+    // the ordinary deadline authority (timed=true).
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::read_lock_until requires a running Fiber");
     Fiber* me = ws->current;
     assert(node.user() == nullptr && "AsyncRwLock::read_lock_until: node.user() "
                                      "must be nullptr on entry");
-    RwWaitCtx ctx{RwWaitCtx::Mode::read};
+    RwWaitCtx ctx{RwWaitCtx::Mode::read, ActorId::none()};
     node.set_user(&ctx);
-    TimerRegistration* reg = nullptr;
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
-        // R2-ALLOC: allocations before any admission state mutation (a
-        // bad_alloc here leaves the node Detached and all counters intact).
-        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
-        if (!waiters.register_wait_locked(node, me)) {
-            erase_popped_registration_locked(reg);  // never published
-            node.set_user(nullptr);
-            return;
+        if (rwlock_read_admit_locked(waiters, active_readers, writer_active,
+                                     node, WaitResume::fiber(me),
+                                     /*timed=*/true, deadline,
+                                     expire_ctx) !=
+            WaitAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspends
         }
-        ++waiting_waitq_count_;
-        // Publish via the ordinary deadline authority, attaching the
-        // RwLock-only expire/reconcile binding INSIDE the same G critical
-        // section.
-        publish_ordinary_deadline_locked(reg,
-                                         &rwlock_timer_expire_reconcile,
-                                         expire_ctx);
-
-        // Admission precedence 1: resource admission wins over due deadline.
-        // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
-        // shared no-publication claim primitive. claim_node retires the bound
-        // TimerRegistration internally (via retire_timer_for_node_locked) and
-        // recomputes the earliest deadline, so we only need to commit the
-        // reader-side resource state afterward.
-        if (node.prev_ == nullptr && !writer_active) {
-            if (rwlock_claim_node_woken_locked(waiters, node)) {
-                ++active_readers;
-                node.set_user(nullptr);
-                // Current Fiber is Running; make_runnable returns false. The
-                // caller continues without suspending.
-                return;
-            }
-        }
-
-        // Admission precedence 2: already-due deadline.
-        // Gate the timer-accounting cleanup on a successful try_claim_expiry():
-        // expire_locked won the resolve CAS, but the bound timer is still
-        // ACTIVE until claimed. If the claim somehow fails (should be
-        // unreachable under continuous G+W — the node is terminal and the
-        // timer is unclaimed), we must NOT decrement active_deadline_count_
-        // for a timer we did not consume.
-        if (clock_now_unlocked() >= deadline) {
-            if (waiters.expire_locked(node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority. A false
-                // return (timer already terminal after a resolve-CAS win) is
-                // the same Category B unreachable state as before; under
-                // continuous G+W the node is terminal and the timer unclaimed.
-                if (!consume_ordinary_deadline_locked(*reg))
-                    assert(false && "E12-F read_lock_until: try_claim_expiry "
-                                     "failed after expire_locked win (Category B)");
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                node.set_user(nullptr);
-                // The current Fiber is RUNNING (never called make_waiting());
-                // it continues inline. No runnable publication is needed and
-                // make_runnable would be a no-op from running.
-                return;
-            }
-        }
-
-        if (node.is_terminal()) {
-            waiters.unlink_locked(node);
-            --waiting_waitq_count_;
-            // ACTIVE->RETIRED via the ordinary deadline authority.
-            (void)retire_ordinary_deadline_locked(*reg);
-            recompute_earliest_deadline_locked();
-            node.set_user(nullptr);
-            return;
-        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -576,81 +639,32 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
 void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
                                         std::size_t& active_readers,
                                         bool& writer_active,
-                                        Fiber*& writer_owner,
+                                        ActorId& writer_owner,
                                         WaitNode& node,
                                         deadline_t deadline,
                                         void* expire_ctx) {
+    // Timed write — stackful frontend entry over the SHARED write ladder.
+    // The recursive-owner check lives INSIDE the ladder under G (see
+    // rwlock_write_admit_locked): reading writer_owner here, before
+    // global_mtx_, would race every G-protected ownership transition.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncRwLock::write_lock_until requires a running Fiber");
     Fiber* me = ws->current;
-    assert(writer_owner != me && "AsyncRwLock::write_lock_until recursive "
-                                 "acquisition is a caller precondition violation");
     assert(node.user() == nullptr && "AsyncRwLock::write_lock_until: node.user() "
                                      "must be nullptr on entry");
-    RwWaitCtx ctx{RwWaitCtx::Mode::write};
+    RwWaitCtx ctx{RwWaitCtx::Mode::write, ActorId::fiber(me)};
     node.set_user(&ctx);
-    TimerRegistration* reg = nullptr;
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(waiters.mtx());
-        // R2-ALLOC: allocations before any admission state mutation (a
-        // bad_alloc here leaves the node Detached and all counters intact).
-        reg = prepare_ordinary_deadline_locked(&node, &waiters, deadline);
-        if (!waiters.register_wait_locked(node, me)) {
-            erase_popped_registration_locked(reg);  // never published
-            node.set_user(nullptr);
-            return;
+        if (rwlock_write_admit_locked(waiters, active_readers, writer_active,
+                                      writer_owner, node, WaitResume::fiber(me),
+                                      ActorId::fiber(me), /*timed=*/true,
+                                      deadline, expire_ctx) !=
+            WaitAdmitDisposition::authorized) {
+            return;  // rejected or resolved inline: this fiber never suspends
         }
-        ++waiting_waitq_count_;
-        // Publish via the ordinary deadline authority, attaching the
-        // RwLock-only expire/reconcile binding INSIDE the same G critical
-        // section.
-        publish_ordinary_deadline_locked(reg,
-                                         &rwlock_timer_expire_reconcile,
-                                         expire_ctx);
-
-        // Admission precedence 1: resource admission.
-        // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
-        // shared no-publication claim primitive. claim_node retires the bound
-        // TimerRegistration internally and recomputes the earliest deadline.
-        if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
-            if (rwlock_claim_node_woken_locked(waiters, node)) {
-                writer_active = true;
-                writer_owner = me;
-                node.set_user(nullptr);
-                // Current Fiber is Running; no publication needed.
-                return;
-            }
-        }
-
-        // Admission precedence 2: already-due deadline.
-        // Gate the timer-accounting cleanup on a successful try_claim_expiry()
-        // (same reasoning as rwlock_read_lock_until).
-        if (clock_now_unlocked() >= deadline) {
-            if (waiters.expire_locked(node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority. Same
-                // Category B reasoning as rwlock_read_lock_until above.
-                if (!consume_ordinary_deadline_locked(*reg))
-                    assert(false && "E12-F write_lock_until: try_claim_expiry "
-                                     "failed after expire_locked win (Category B)");
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                node.set_user(nullptr);
-                // Same as read_lock_until: the Fiber is RUNNING and continues
-                // inline; no publication.
-                return;
-            }
-        }
-
-        if (node.is_terminal()) {
-            waiters.unlink_locked(node);
-            --waiting_waitq_count_;
-            // ACTIVE->RETIRED via the ordinary deadline authority.
-            (void)retire_ordinary_deadline_locked(*reg);
-            recompute_earliest_deadline_locked();
-            node.set_user(nullptr);
-            return;
-        }
+        // Fiber-kind PublicationEligibility commit (FE-1b L7).
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
