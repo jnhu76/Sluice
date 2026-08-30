@@ -804,6 +804,12 @@ def _tax0_samples_from_rows(rows: list, capacities: list, key: str) -> dict:
     return out
 
 
+# derived per-op metric name -> raw row counter it must be recomputed from
+_TAX0_ROW_KEY = {"instructions_per_op": "instructions_user",
+                 "cycles_per_op": "cycles_user",
+                 "wall_ns_per_op": "wall_ns"}
+
+
 def check_tax0capacity(art: dict) -> list[str]:
     """Kind `tax0capacity` (#250 TAX-0B/EXP-0): one experimental variable
     (request capacity C) at a fixed workload. Fail-closed on: same-work
@@ -1013,7 +1019,19 @@ def check_tax0capacity(art: dict) -> list[str]:
                 errs.append(f"derived.per_op_metrics[{c}].{name}.samples: "
                             f"non-positive/non-numeric sample")
                 continue
-            srt = sorted(samples)
+            # FC-EXP0-8 seal: the stored samples are not an independent
+            # authority — they must be exactly the per-op series
+            # recomputed from the raw rows (execution order preserved),
+            # so tampering samples+median together while leaving the rows
+            # and the OLS/delta blocks untouched still fails here.
+            raw = _tax0_samples_from_rows(rows, [c], _TAX0_ROW_KEY[name])[c]
+            if len(raw) != reps or len(raw) != len(samples) or \
+                    any(not _tax0_close(s, w) for s, w in zip(samples, raw)):
+                errs.append(f"derived.per_op_metrics[{c}].{name}.samples: "
+                            f"stored list is not the per-op series "
+                            f"recomputed from the raw rows")
+                raw = samples  # still median-check whatever is stored
+            srt = sorted(raw)
             n = len(srt)
             want = srt[n // 2] if n % 2 == 1 else \
                 (srt[n // 2 - 1] + srt[n // 2]) / 2
@@ -1716,6 +1734,14 @@ class ValidatorSelfTest(unittest.TestCase):
         art["derived"]["per_op_metrics"]["32"] \
             ["instructions_per_op"]["median"] += 1.0
         self.assert_invalid(art, "!= recomputed")
+        # FC-EXP0-8: samples AND median tampered together, consistently —
+        # raw rows and the OLS/delta blocks untouched; only the raw-row
+        # binding catches it
+        art = _valid_tax0capacity()
+        cell = art["derived"]["per_op_metrics"]["32"]["instructions_per_op"]
+        cell["samples"] = [s + 1.0 for s in cell["samples"]]
+        cell["median"] = _median_of(cell["samples"])
+        self.assert_invalid(art, "recomputed from the raw rows")
 
 
 def main() -> int:
