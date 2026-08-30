@@ -19,7 +19,8 @@ hypotheses here were registered BEFORE any causal experiment.
   the `find_live_router_cookie_` scan direction removes ~100% of the
   measured capacity slope; canonical evidence in
   `docs/results/performance-attribution/tax0u0-*.json`, kinds
-  `tax0u0router`/`tax0u0witness`; no production optimization implemented)
+  `tax0u0router`/`tax0u0witness`; no production optimization implemented,
+  no production fix selected — design selection deferred to #255)
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 

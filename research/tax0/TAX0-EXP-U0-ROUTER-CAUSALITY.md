@@ -28,6 +28,7 @@ SUPPORTED are met (§15). No material residual capacity slope remains
 T0-U-CAPACITY: MEASURED MATERIAL (EXP-0).
 T0-U-ROUTER: CAUSALLY ATTRIBUTED (this experiment).
 OPTIMIZATION: EARNED, BUT NOT IMPLEMENTED (§19).
+FIX SELECTED: NO — production design selection is deferred to #255 (§19).
 
 ## 2 EXP-0 authority
 
@@ -160,8 +161,11 @@ liburing; in the default gate — Debug run 202/202 PASS):
   across arms (507.5 at C=512) — the same entries are matched, only the
   scan work differs.
 
-Claim scope: mechanical exhaustive testing over reachable states of this
-backend family plus the uniqueness theorem above — NOT a formal proof.
+Claim scope: a bounded mechanical equivalence gate over the exercised
+reachable states of this backend family plus the uniqueness theorem above
+— NOT a formal proof over all interleavings or unexercised states. The
+bounded gates, combined with the unique no-wrap cookie identity, strongly
+support semantic equivalence for the exercised backend states.
 
 ## 8 U0-A scan witness
 
@@ -174,11 +178,16 @@ witness per row. Medians (D=8, Q=8, READ, both arms):
 | production_forward iterations/op | 4.50 | 28.50 | 124.50 | 508.50 |
 | reverse_ablation iterations/op | 4.50 | 4.50 | 4.50 | 4.50 |
 
-- Forward iterations/op = `C − D/2` exactly (b_iter = +1.0000 instr-slope
-  analogue: one extra examined entry per unit of configured capacity),
-  while active depth stays 8 throughout. Δ iterations/op / ΔC ≈ O(1) as
-  predicted.
-- Reverse collapses to `D/2` at every C (slope 0.0000).
+- Forward iterations/op = `C − (D − 1)/2` (equivalently `C − D/2 + 0.5`)
+  exactly: the D live entries sit at the high indices C−D … C−1, one
+  forward lookup per position yields arithmetic mean `C − (D − 1)/2`
+  (b_iter = +1.0000 instr-slope analogue: one extra examined entry per
+  unit of configured capacity), while active depth stays 8 throughout. Δ
+  iterations/op / ΔC ≈ O(1) as predicted. For D=8: `C − 3.5` — matching
+  the measured witness (C=8 → 4.5, C=32 → 28.5, C=128 → 124.5, C=512 →
+  508.5).
+- Reverse is flat at `(D + 1)/2` (equivalently `D/2 + 0.5`; for D=8:
+  4.5) for every C (slope 0.0000).
 - Lookup accounting per row: `operation_cookie_lookup_calls == ops`
   exactly (enforced fail-closed), hits == ops, misses = 0,
   `control_cookie_lookup_calls = 0`, `transport_cookie_lookup_calls = 0`
@@ -357,38 +366,54 @@ by U0 — those are scope boundaries, not residuals (§17).
   mechanical equivalence gates + the same-work proof + the uniqueness
   theorem.
 
-## 19 Optimization authorization recommendation
+## 19 Optimization authorization
 
-Recommend (subject to human adversarial review of #250): move
-`T0-U-ROUTER` HYPOTHESIS → **CAUSALLY ATTRIBUTED** and record
-**OPTIMIZATION EARNED = YES**. Candidate production designs, ranked by the
-"smallest physical change that removes the measured tax without weakening
-identity semantics" rule (proposed only — NOT implemented):
+**OPTIMIZATION EARNED = YES** — EXP-U0 established WHAT causes the tax:
+the per-CQE forward router scan walking ~C dead entries to reach the D
+live entries parked at high indices.
 
-| rank | design | semantic risk | complexity | memory | capacity behavior | stale-cookie correctness | high-occupancy behavior | expected gain |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A | reverse the production scan direction (`for i = size; i-- > 0;`) | minimal — same predicate, same uniqueness theorem, mechanically re-provable by the U0 equivalence gates | ~1 line | none | removes the D≪C scan cost (proven by U0) | unchanged (cookie-keyed, not slot-keyed) | scan cost grows with (C − live) — at high occupancy reverse ≈ forward; tax returns only when the live set fills the LOW indices (the free-list makes that unreachable in steady LIFO use, but not under adversarial orderings) | ~100% of the measured tax in the tested geometry |
-| B | low-index-first router-slot allocation (seed descending / pop front) | low — changes WHICH slots are live, not lookup semantics; placement re-provable via the seam witness | small, localized to construction + retire push | none | same effect as A but makes the FORWARD scan cheap; steady LIFO keeps the live set at LOW indices | unchanged | high occupancy converges forward/reverse; cost ≈ O(live) either way | ≈ A |
-| C | O(1) cookie→router representation (direct table keyed by cookie) | highest — new identity-adjacent structure: bounded memory vs unbounded cookie space forces hashing/indirection, new stale-key discipline, new teardown/shutdown ownership questions; touches ADR-explicit-io-request-contract territory (§4.2/§10 identity authorities) | large | per-capacity table ≥ router itself | ideal O(1) at any occupancy | must re-prove the ABA/stale drop property | best | ≈ A in the tested geometry; strictly better only at high occupancy or C ≫ 512 |
+Production design selection is deferred to issue #255 (benchmark-driven
+fix selection), which decides HOW the tax should be fixed. #254 selects
+NO production candidate; it closes only the causal-attribution question.
+The reverse-scan ablation is a causally validated candidate, not yet the
+selected production design.
 
-Recommendation: **A** (or its placement dual **B**) — the smallest physical
-change, fully covered by the existing equivalence gates, zero new
-identity authority. **C** is not justified by the measured data (the tax
-is already ~0 under A/B in this geometry) and carries the largest
-semantic risk. Any chosen design needs its own correctness gates + a
-before/after remeasure on the EXP-0 matrix before the #250 ledger closes
-the entry.
+Admitted candidate families (evidence status as of this freeze; listed,
+not ranked as a selection — none wins in #254):
 
-## 20 Next campaign candidate
+| id | design family | evidence status |
+| --- | --- | --- |
+| R0 | current forward-scan baseline | production baseline, measured (EXP-0 / U0 forward arm) |
+| R1 | reverse scan (`for i = size; i-- > 0;`) | **DIRECTLY MEASURED BY EXP-U0** — capacity slope collapses 99.9–100% in the frozen geometry |
+| R2 | low-index-first router-slot placement | **PLAUSIBLE PLACEMENT-DUAL / NOT YET BENCHMARKED** — predicted to remove the same high-index traversal mechanism, but performance is NOT YET MEASURED |
+| R3 | bounded cookie→router index (O(1) lookup/table) | **DESIGN CANDIDATE / NOT BENCHMARKED** — not ranked out solely from complexity or Big-O intuition |
+| R4 | direct/index+generation variants | admissible only if the explicit-request identity contract (§10, ADR-explicit-io-request-contract) permits |
 
-After the earned fix lands and the EXP-0 matrix is remeasured (expected:
-Uring becomes capacity-invariant like ThreadPool in this geometry), the
-next residual-tax candidates from the TAX-0A census, in order:
+R2 must not be stated as "expected gain ≈ R1" as a measured fact; R3 must
+not be excluded by complexity intuition alone. Any chosen design needs
+its own correctness gates plus a before/after remeasure on the EXP-0
+matrix before the #250 ledger closes the entry.
 
-1. `T0-U-QDEPTH` / EXP-U1: queue-depth Q and dispatch-backlog interaction
-   with capacity (the deferred U0 axes: Q ≠ D, backlog, WRITE).
-2. `find_live_router_index_` (cancel-side SlotHandle scan) under
-   cancel-heavy workloads — same data-structure family, unmeasured.
-3. Whatever the post-fix remeasure leaves material on the board.
+## 20 Next step — #255 router candidate shootout
 
-STOP — no production optimization was implemented by EXP-U0.
+#254 closes the causal-attribution question only. Fix selection is owned
+by #255:
+
+    prior art
+        ↓
+    semantic admission
+        ↓
+    multi-geometry matched benchmark
+        ↓
+    robust winner selection
+        ↓
+    separate production PR
+        ↓
+    canonical EXP-0 before/after
+        ↓
+    recovered/residual tax ledger
+
+EXP-U1 (Q ≠ D, backlog, WRITE, multi-worker axes) remains AFTER router
+fix selection + production remeasurement, not before.
+
+STOP — no production optimization was implemented or selected by EXP-U0.
