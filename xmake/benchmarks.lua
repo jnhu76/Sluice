@@ -107,6 +107,16 @@ sluice_one_file_target("binary", "bench", "e1_abstraction_tax_bench", "bench",
 sluice_one_file_target("binary", "bench", "tax0_capacity_bench", "bench",
                       {"sluice_core", "sluice_async"})
 
+-- tax0u0_router_bench (#250 TAX-0 EXP-U0 — router-scan causal ablation):
+-- RESEARCH instrument, deliberately different wiring: it links
+-- sluice_async_internal_testing (never the production sluice_async) so the
+-- guarded EXP-U0 scan seam (scan-direction ablation + exact iteration
+-- witness) is visible; without liburing it compiles to a fail-closed stub
+-- main. The production build's find_live_router_cookie_ stays untouched.
+-- Driven by scripts/bench/perf-attribution.py `tax0u0`.
+sluice_one_file_target("binary", "bench", "tax0u0_router_bench", "bench",
+                      {"sluice_core", "sluice_async_internal_testing"})
+
 -- rx1_workload_bench (#234 RX-1 — controlled attribution falsification gate):
 -- single-shape ApplicationRuntime + ThreadPoolBackend pipeline driver with
 -- would_block-aware submission (intervention I2), an AC-1a pull-based
