@@ -113,9 +113,10 @@ def check_common(art: dict) -> list[str]:
         return ["artifact is not a JSON object"]
     kind = art.get("kind")
     if kind not in ("ladder", "cli", "perf", "overload", "e1tax",
-                    "tax0capacity"):
+                    "tax0capacity", "tax0u0router", "tax0u0witness"):
         errs.append(f"kind: expected ladder|cli|perf|overload|e1tax|"
-                    f"tax0capacity, got {kind!r}")
+                    f"tax0capacity|tax0u0router|tax0u0witness, got "
+                    f"{kind!r}")
     if art.get("schema") != REQUIRED_SCHEMA:
         errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
                     f"{art.get('schema')!r} (re-measure with the current "
@@ -1122,9 +1123,391 @@ def check_tax0capacity(art: dict) -> list[str]:
                                     f"recomputed {want_pct!r}")
     return errs
 
+# TAX-0 EXP-U0 preregistered constants (must mirror the runner's frozen
+# values; the validator fails an artifact whose envelope/thresholds were
+# edited after the fact).
+TAX0U0_MODES = ("production_forward", "reverse_ablation")
+TAX0U0_BASELINE_ENVELOPE = {"b_min": 5.0, "b_max": 7.0, "r2_min": 0.98}
+TAX0U0_DECISION = {"strong_reduction": 0.80, "partial_reduction": 0.50,
+                   "not_supported_reduction": 0.20,
+                   "reverse_abs_b_max": 1.5}
+
+
+def check_tax0u0(art: dict) -> list[str]:
+    """Kinds `tax0u0router` / `tax0u0witness` (#250 TAX-0 EXP-U0): the
+    Uring router-scan causal-ablation experiment. Fail-closed on: same-work
+    drift across rows OR across scan-mode arms, missing user-mode counters
+    (official kind only), unpinned placement (official only), execution
+    order that does not match the predeclared seed-derived (scan_mode, C)
+    sequence, scan-witness inconsistencies (lookup calls != ops, misses or
+    control/transport lookups in the no-cancel workload, forward iteration
+    counts not growing with C), and derived statistics (medians, per-mode
+    OLS slopes, slope reductions, baseline gate) that are not recomputable
+    from the raw rows."""
+    errs: list[str] = []
+    kind = art.get("kind")
+    witness_only = kind == "tax0u0witness"
+    params = art.get("params")
+    if not isinstance(params, dict):
+        return ["params: missing (experiment/modes/capacities/depth/"
+                "reps/seed/...)"]
+    if params.get("experiment") != "TAX-0-EXP-U0":
+        errs.append(f"params.experiment: expected 'TAX-0-EXP-U0', got "
+                    f"{params.get('experiment')!r}")
+    if params.get("witness_only") is not witness_only:
+        errs.append(f"params.witness_only {params.get('witness_only')!r} "
+                    f"does not match kind {kind!r}")
+    modes = params.get("router_scan_modes")
+    if modes != list(TAX0U0_MODES):
+        errs.append(f"params.router_scan_modes: expected {list(TAX0U0_MODES)}"
+                    f", got {modes!r}")
+    caps = params.get("capacities")
+    if not isinstance(caps, list) or not caps or len(set(caps)) != len(caps) \
+            or any(not isinstance(c, int) or c < 1 for c in caps):
+        return errs + [f"params.capacities: expected a non-empty unique "
+                       f"int list, got {caps!r}"]
+    depth = params.get("depth")
+    if not isinstance(depth, int) or depth < 1:
+        return errs + ["params.depth: expected int >= 1"]
+    for c in caps:
+        if c < depth:
+            errs.append(f"params.capacities: {c} < depth {depth}")
+    reps = params.get("reps")
+    if not isinstance(reps, int) or reps < 1:
+        errs.append(f"params.reps: expected int >= 1, got {reps!r}")
+    rs = params.get("request_size")
+    tb = params.get("total_bytes")
+    if not isinstance(rs, int) or rs < 4096 or rs % 4096 != 0:
+        errs.append("params.request_size: must be a multiple of 4096")
+    if not isinstance(tb, int) or tb < rs or (rs and tb % rs != 0):
+        errs.append("params.total_bytes: must be a positive multiple of "
+                    "request_size")
+    if params.get("op") is not None and params.get("op") != "read":
+        errs.append("params.op: EXP-U0 is a READ experiment")
+    if not isinstance(params.get("seed"), int):
+        errs.append("params.seed: missing (predeclared order seed)")
+    if witness_only:
+        if params.get("perf_events") is not None:
+            errs.append("params.perf_events: witness artifacts carry no "
+                        "perf counters")
+    else:
+        if not isinstance(params.get("perf_events"), list) or \
+                not params.get("perf_events"):
+            errs.append("params.perf_events: missing — official EXP-U0 "
+                        "artifacts must carry instructions:u/cycles:u")
+        env_extra = art.get("environment_extra")
+        if not isinstance(env_extra, dict):
+            errs.append("environment_extra: missing (governor/SMT/lscpu/"
+                        "taskset provenance)")
+        elif not isinstance(env_extra.get("taskset_cpus"), str) or \
+                not env_extra.get("taskset_cpus").strip():
+            errs.append("environment_extra.taskset_cpus: missing — "
+                        "official EXP-U0 evidence must be pinned")
+    if not isinstance(art.get("environment_id"), str) or \
+            not art.get("environment_id"):
+        errs.append("environment_id: missing")
+
+    # Execution order: the stored rounds must BE the deterministic output
+    # of the predeclared seed under the runner's generator contract over
+    # the (scan_mode, capacity) cells.
+    order = art.get("execution_order")
+    if not isinstance(order, dict):
+        return errs + ["execution_order: missing"]
+    cells = sorted([(m, c) for m in TAX0U0_MODES for c in caps])
+    cell_labels = [f"{m}|C={c}" for m, c in cells]
+    if order.get("cells") != cell_labels:
+        errs.append("execution_order.cells: not the sorted (mode, C) "
+                    "product of params")
+    rounds = order.get("rounds")
+    if not isinstance(rounds, list) or len(rounds) != reps:
+        errs.append(f"execution_order.rounds: expected {reps} rounds")
+        rounds = []
+    if isinstance(params.get("seed"), int) and isinstance(reps, int):
+        rng = random.Random(params["seed"])
+        seed_rounds = [[f"{m}|C={c}" for m, c in
+                        rng.sample(cells, k=len(cells))]
+                       for _ in range(reps)]
+        if rounds != seed_rounds:
+            errs.append("execution_order.rounds: not the deterministic "
+                        "output of the predeclared seed (generator "
+                        "contract: random.Random(seed).sample(sorted "
+                        "(mode x capacity cells)) per round)")
+
+    rows = art.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return errs + ["rows: empty"]
+    expected_ops = tb // rs if isinstance(tb, int) and isinstance(rs, int) \
+        and rs else None
+    if len(rows) != reps * len(cells):
+        errs.append(f"rows: {len(rows)} rows != reps {reps} x cells "
+                    f"{len(cells)}")
+    want_flat = [lab for rnd in rounds for lab in (rnd or [])]
+    per_cell: dict = {lab: 0 for lab in cell_labels}
+    fwd_iters_by_cap: dict = {c: [] for c in caps}
+    rev_iters_by_cap: dict = {c: [] for c in caps}
+    for i, r in enumerate(rows):
+        mode = r.get("router_scan_mode")
+        cap = r.get("request_capacity")
+        lab = f"{mode}|C={cap}"
+        where = f"rows[{i}] ({lab})"
+        if i < len(want_flat) and lab != want_flat[i]:
+            errs.append(f"{where}: does not match the predeclared "
+                        f"execution order position ({want_flat[i]})")
+        if lab in per_cell:
+            per_cell[lab] += 1
+        if r.get("experiment") != "TAX-0-EXP-U0":
+            errs.append(f"{where}: experiment is {r.get('experiment')!r}")
+        if r.get("execution_order_index") != i:
+            errs.append(f"{where}: execution_order_index "
+                        f"{r.get('execution_order_index')!r} != {i}")
+        if r.get("backend") != "uring" or r.get("op") != "read":
+            errs.append(f"{where}: EXP-U0 rows are uring reads")
+        if r.get("real_uring") is not True:
+            errs.append(f"{where}: real_uring must be true (stub evidence "
+                        f"is not EXP-U0 evidence)")
+        if r.get("active_depth") != depth or \
+                r.get("request_size") != rs or r.get("total_bytes") != tb:
+            errs.append(f"{where}: workload geometry drift vs params "
+                        f"(same-work violation)")
+        if r.get("uring_queue_depth") != params.get("uring_queue_depth"):
+            errs.append(f"{where}: uring_queue_depth drift vs params")
+        if expected_ops is not None and r.get("ops") != expected_ops:
+            errs.append(f"{where}: ops {r.get('ops')!r} != {expected_ops} "
+                        f"(same-work guarantee)")
+        if r.get("semantic_validation") is not True:
+            errs.append(f"{where}: semantic_validation not true")
+        if r.get("child_exit_code") not in (0, None):
+            errs.append(f"{where}: child_exit_code "
+                        f"{r.get('child_exit_code')}")
+        for k in ("wall_ns", "user_ns", "sys_ns"):
+            v = r.get(k)
+            if not isinstance(v, (int, float)) or v <= 0:
+                errs.append(f"{where}: {k} missing/non-positive")
+        # Scan-witness shape (no-cancel READ workload): exactly one
+        # operation-CQE lookup per op, all hits, zero misses, zero control
+        # and zero transport lookups.
+        if r.get("op_cookie_lookup_calls") != r.get("ops"):
+            errs.append(f"{where}: op_cookie_lookup_calls "
+                        f"{r.get('op_cookie_lookup_calls')!r} != ops "
+                        f"{r.get('ops')!r} — witness inconsistency")
+        if r.get("lookup_hits") != r.get("ops") or \
+                r.get("lookup_misses") != 0:
+            errs.append(f"{where}: lookup hits/misses inconsistent with a "
+                        f"no-cancel all-hit workload")
+        if r.get("control_cookie_lookup_calls") != 0:
+            errs.append(f"{where}: control-CQE contamination "
+                        f"({r.get('control_cookie_lookup_calls')})")
+        if r.get("transport_cookie_lookup_calls") != 0:
+            errs.append(f"{where}: transport lookup calls != 0")
+        it = r.get("op_lookup_iterations_total")
+        if not isinstance(it, (int, float)) or it <= 0:
+            errs.append(f"{where}: op_lookup_iterations_total missing")
+        elif cap in fwd_iters_by_cap and mode == "production_forward":
+            fwd_iters_by_cap[cap].append(it)
+        elif cap in rev_iters_by_cap and mode == "reverse_ablation":
+            rev_iters_by_cap[cap].append(it)
+        if not witness_only:
+            for k in ("instructions_user", "cycles_user"):
+                v = r.get(k)
+                if not isinstance(v, (int, float)) or v <= 0:
+                    errs.append(f"{where}: {k} missing/non-positive — "
+                                f"primary metric absent, not zero")
+    for lab, n in per_cell.items():
+        if n != reps:
+            errs.append(f"rows: cell {lab} has {n} rows != reps {reps}")
+
+    # Witness direction fingerprint: forward per-op iterations must grow
+    # with C (strictly, on medians); reverse must stay ~flat (slope small).
+    ops0 = expected_ops or (rows[0].get("ops") or 0)
+    if ops0:
+        fwd_meds = {}
+        rev_meds = {}
+        for c in caps:
+            if fwd_iters_by_cap[c]:
+                fwd_meds[c] = _median_of([v / ops0 for v in
+                                          fwd_iters_by_cap[c]])
+            if rev_iters_by_cap[c]:
+                rev_meds[c] = _median_of([v / ops0 for v in
+                                          rev_iters_by_cap[c]])
+        srt = sorted(fwd_meds)
+        for a, b in zip(srt, srt[1:]):
+            if not fwd_meds[b] > fwd_meds[a]:
+                errs.append(f"scan witness: forward iterations/op not "
+                            f"strictly increasing with C "
+                            f"({a}->{b}: {fwd_meds[a]}->{fwd_meds[b]})")
+        if len(rev_meds) >= 2:
+            rev_line = _tax0_ols([float(c) for c in sorted(rev_meds)],
+                                 [rev_meds[c] for c in sorted(rev_meds)])
+            if rev_line and abs(rev_line["b"]) > 0.1:
+                errs.append(f"scan witness: reverse iterations/op slope "
+                            f"{rev_line['b']:.4f} not ~flat (|b| > 0.1)")
+
+    # Same-work mechanical proof across ALL rows AND BOTH arms.
+    sw = art.get("same_work")
+    if not isinstance(sw, dict):
+        errs.append("same_work: missing mechanical same-work proof block")
+    else:
+        if sw.get("valid") is not True:
+            errs.append("same_work.valid is not true — EXP-U0 invalid, "
+                        "numbers must not be interpreted")
+        ws = sorted({r.get("word_sum") for r in rows})
+        if len(ws) != 1 or rows and ws[0] != rows[0].get("expected_word_sum"):
+            errs.append("same_work: word_sum drift across rows/arms")
+
+    # derived: every stored statistic recomputable from the raw rows.
+    derived = art.get("derived")
+    if not isinstance(derived, dict):
+        return errs + ["derived: missing per-cell statistics"]
+    metrics = derived.get("per_op_metrics")
+    if not isinstance(metrics, dict):
+        return errs + ["derived.per_op_metrics: missing"]
+    row_keys = {"instructions_per_op": "instructions_user",
+                "cycles_per_op": "cycles_user",
+                "wall_ns_per_op": "wall_ns",
+                "user_ns_per_op": "user_ns",
+                "sys_ns_per_op": "sys_ns",
+                "scan_iterations_per_op": "op_lookup_iterations_total"}
+    for cell_label in cell_labels:
+        cell = metrics.get(cell_label)
+        if not isinstance(cell, dict):
+            errs.append(f"derived.per_op_metrics[{cell_label}]: missing")
+            continue
+        mode, cap_s = cell_label.split("|C=")
+        cap = int(cap_s)
+        for name, key in row_keys.items():
+            m = cell.get(name)
+            if not isinstance(m, dict):
+                if name in ("instructions_per_op", "cycles_per_op") and \
+                        witness_only:
+                    continue  # no perf counters in witness artifacts
+                errs.append(f"derived.per_op_metrics[{cell_label}]."
+                            f"{name}: missing")
+                continue
+            samples = m.get("samples")
+            raw = [r[key] / (expected_ops or r["ops"]) for r in rows
+                   if r.get("router_scan_mode") == mode
+                   and r.get("request_capacity") == cap
+                   and isinstance(r.get(key), (int, float))]
+            if not isinstance(samples, list) or len(samples) != len(raw):
+                errs.append(f"derived.per_op_metrics[{cell_label}].{name}"
+                            f".samples: expected {len(raw)} raw samples")
+                continue
+            if any(not _tax0_close(s, w) for s, w in zip(samples, raw)):
+                errs.append(f"derived.per_op_metrics[{cell_label}].{name}"
+                            f".samples: not the per-op series recomputed "
+                            f"from the raw rows")
+            want = _median_of(raw)
+            got = m.get("median")
+            if not _tax0_close(got, want):
+                errs.append(f"derived.per_op_metrics[{cell_label}].{name}"
+                            f".median {got!r} != recomputed {want!r}")
+
+    # Per-mode capacity slopes recomputed from raw-row medians.
+    slopes = derived.get("capacity_slopes_ols")
+    if not isinstance(slopes, dict):
+        errs.append("derived.capacity_slopes_ols: missing")
+    else:
+        for mode in TAX0U0_MODES:
+            for name, key in (("instructions_per_op", "instructions_user"),
+                              ("scan_iterations_per_op",
+                               "op_lookup_iterations_total")):
+                xs, ys, usable = [], [], True
+                for c in caps:
+                    vals = [r[key] / (expected_ops or r["ops"]) for r in
+                            rows if r.get("router_scan_mode") == mode
+                            and r.get("request_capacity") == c
+                            and isinstance(r.get(key), (int, float))]
+                    if len(vals) != reps:
+                        usable = False
+                    if vals:
+                        xs.append(float(c))
+                        ys.append(_median_of(vals))
+                got = slopes.get(f"{name}|{mode}")
+                if not usable:
+                    continue
+                if name == "instructions_per_op" and witness_only:
+                    if got is not None:
+                        errs.append(f"derived.capacity_slopes_ols."
+                                    f"{name}|{mode}: present in a witness "
+                                    f"artifact without perf counters")
+                    continue
+                want = _tax0_ols(xs, ys) if len(xs) >= 2 else None
+                if want is None:
+                    if got is not None:
+                        errs.append(f"derived.capacity_slopes_ols.{name}|"
+                                    f"{mode}: present but not recomputable")
+                    continue
+                if not isinstance(got, dict):
+                    errs.append(f"derived.capacity_slopes_ols.{name}|"
+                                f"{mode}: missing")
+                    continue
+                for k in ("a", "b"):
+                    if not _tax0_close(got.get(k), want[k]):
+                        errs.append(f"derived.capacity_slopes_ols.{name}|"
+                                    f"{mode}.{k}: stored {got.get(k)!r} != "
+                                    f"recomputed {want[k]!r}")
+                if isinstance(want["r2"], (int, float)):
+                    if not _tax0_close(got.get("r2"), want["r2"]):
+                        errs.append(f"derived.capacity_slopes_ols.{name}|"
+                                    f"{mode}.r2: stored {got.get('r2')!r} "
+                                    f"!= recomputed {want['r2']!r}")
+
+        # Slope reductions recomputable from the stored/recomputed slopes.
+        red = derived.get("slope_reductions")
+        if isinstance(red, dict):
+            for rel, slope_name in (("instruction_slope",
+                                     "instructions_per_op"),
+                                    ("iteration_slope",
+                                     "scan_iterations_per_op")):
+                stored = red.get(rel)
+                if not isinstance(stored, dict):
+                    if not witness_only or slope_name != \
+                            "instructions_per_op":
+                        errs.append(f"derived.slope_reductions.{rel}: "
+                                    f"missing")
+                    continue
+                f_line = slopes.get(f"{slope_name}|production_forward")
+                r_line = slopes.get(f"{slope_name}|reverse_ablation")
+                if isinstance(f_line, dict) and isinstance(r_line, dict) \
+                        and r_line.get("b") not in (None, 0) and \
+                        f_line.get("b"):
+                    want_red = 1.0 - abs(r_line["b"] / f_line["b"])
+                    if not _tax0_close(stored.get("reduction"), want_red):
+                        errs.append(f"derived.slope_reductions.{rel}."
+                                    f"reduction: stored "
+                                    f"{stored.get('reduction')!r} != "
+                                    f"recomputed {want_red!r}")
+
+    # Baseline reproduction gate: envelope must be the preregistered
+    # constants and the pass flag recomputable from the forward slope.
+    base = derived.get("baseline_reproduction")
+    if not isinstance(base, dict):
+        if not witness_only:
+            errs.append("derived.baseline_reproduction: missing")
+    else:
+        if base.get("envelope") != TAX0U0_BASELINE_ENVELOPE:
+            errs.append("derived.baseline_reproduction.envelope: not the "
+                        "preregistered constants (post-hoc widening is "
+                        "forbidden)")
+        f_line = (slopes or {}).get(
+            "instructions_per_op|production_forward")
+        if isinstance(f_line, dict) and f_line.get("b") is not None:
+            want_pass = (
+                TAX0U0_BASELINE_ENVELOPE["b_min"] <= f_line["b"]
+                <= TAX0U0_BASELINE_ENVELOPE["b_max"]
+                and isinstance(f_line.get("r2"), (int, float))
+                and f_line["r2"] >= TAX0U0_BASELINE_ENVELOPE["r2_min"])
+            if base.get("pass") is not want_pass:
+                errs.append(f"derived.baseline_reproduction.pass: stored "
+                            f"{base.get('pass')!r} != recomputed "
+                            f"{want_pass!r}")
+    return errs
+
+
 CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf,
           "overload": check_overload, "e1tax": check_e1tax,
-          "tax0capacity": check_tax0capacity}
+          "tax0capacity": check_tax0capacity,
+          "tax0u0router": check_tax0u0, "tax0u0witness": check_tax0u0}
 
 
 def validate_artifact(art: dict) -> list[str]:
@@ -1333,6 +1716,110 @@ def _valid_tax0capacity() -> dict:
                       "baseline_capacity": min(caps),
                       "delta_vs_baseline": deltas,
                       "capacity_slope_ols": slopes}
+    return art
+
+
+def _valid_tax0u0(witness_only: bool = False) -> dict:
+    """A minimal structurally-valid EXP-U0 artifact: 2 modes x 2 capacities
+    x 3 reps, synthetic but internally consistent (rows, seed-derived
+    order, recomputable medians/slopes/reductions, preregistered
+    envelope). Mirrors the runner's emission contract."""
+    caps = [8, 128]
+    reps = 3
+    seed = 0x55304C55
+    depth, q, rs_ = 8, 8, 4096
+    ops = (1 << 20) // rs_
+    tb = ops * rs_
+    art = _valid_ladder()
+    cells = sorted([(m, c) for m in TAX0U0_MODES for c in caps])
+    rng = random.Random(seed)
+    rounds = [rng.sample(cells, k=len(cells)) for _ in range(reps)]
+    rows = []
+    base_instr = {"production_forward": {8: 1000.0 * ops, 128: 1480.0 * ops},
+                  "reverse_ablation": {8: 1000.0 * ops, 128: 1010.0 * ops}}
+    base_cyc = {"production_forward": {8: 3000.0 * ops, 128: 3260.0 * ops},
+                "reverse_ablation": {8: 3000.0 * ops, 128: 3040.0 * ops}}
+    fwd_iters = {8: 4.5, 128: 124.5}     # ~C - D/2
+    rev_iters = {8: 4.5, 128: 4.6}       # ~D/2, flat
+    for i, (m, c) in enumerate([x for rnd in rounds for x in rnd]):
+        jitter = 1.0 + 0.001 * (i % 3)
+        row = {
+            "experiment": "TAX-0-EXP-U0",
+            "git_sha": "0" * 40,
+            "router_scan_mode": m,
+            "backend": "uring", "real_uring": True,
+            "filesystem": "tmpfs", "op": "read",
+            "request_size": rs_, "active_depth": depth,
+            "request_capacity": c, "uring_queue_depth": q,
+            "total_bytes": tb, "ops": ops,
+            "rep": sum(1 for r in rows
+                       if r["router_scan_mode"] == m
+                       and r["request_capacity"] == c),
+            "execution_order_index": i,
+            "wall_ns": int(2_000_000_000 * jitter),
+            "user_ns": int(1_000_000_000 * jitter),
+            "sys_ns": int(500_000_000 * jitter),
+            "op_cookie_lookup_calls": ops,
+            "op_lookup_iterations_total": int(
+                (fwd_iters if m == "production_forward" else rev_iters)[c]
+                * ops * jitter),
+            "op_lookup_iterations_max": c,
+            "control_cookie_lookup_calls": 0,
+            "transport_cookie_lookup_calls": 0,
+            "lookup_hits": ops, "lookup_misses": 0,
+            "matched_router_index_sum": int(ops * (c - 4.5)),
+            "matched_router_index_max": c - 1,
+            "semantic_validation": True,
+            "word_sum": 12345678901234567890,
+            "expected_word_sum": 12345678901234567890,
+            "child_exit_code": 0,
+            "environment_id": "abcd0123abcd0123",
+        }
+        if not witness_only:
+            row["instructions_user"] = int(base_instr[m][c] * jitter)
+            row["cycles_user"] = int(base_cyc[m][c] * jitter)
+            row["perf_raw"] = "synthetic"
+        rows.append(row)
+    art["kind"] = "tax0u0witness" if witness_only else "tax0u0router"
+    art["binary"] = {"path": "tax0u0_router_bench",
+                     "sha256": "f" * 64, "size": 12345,
+                     "mtime": 1756600000.0}
+    art["params"] = {"experiment": "TAX-0-EXP-U0",
+                      "question": "...", "hypothesis": "...",
+                      "router_scan_modes": list(TAX0U0_MODES),
+                      "capacities": caps, "depth": depth,
+                      "uring_queue_depth": q, "request_size": rs_,
+                      "total_bytes": tb, "reps": reps,
+                      "warmup_rounds": 0 if witness_only else 2,
+                      "seed": seed, "fs_label": "tmpfs",
+                      "taskset": "0,2", "witness_only": witness_only,
+                      "perf_events": None if witness_only
+                      else ["instructions:u", "cycles:u"]}
+    art["execution_order"] = {
+               "generator": "...", "seed": seed, "reps": reps,
+               "cells": [f"{m}|C={c}" for m, c in cells],
+               "rounds": [[f"{m}|C={c}" for m, c in rnd]
+                          for rnd in rounds]}
+    art["environment_extra"] = {"taskset_cpus": "0,2"}
+    art["environment_id"] = "abcd0123abcd0123"
+    art["rows"] = rows
+    art["same_work"] = {"ops_expected": ops,
+                         "ops_observed": [ops],
+                         "bytes_expected": tb, "bytes_observed": [tb],
+                         "depth": depth, "request_size": rs_,
+                         "word_sum_expected": 12345678901234567890,
+                         "word_sum_observed": [12345678901234567890],
+                         "validation_all_true": True,
+                         "valid": True}
+    # Reuse the runner's derived computation by importing the pure helpers
+    # from the runner module (same repo, no side effects).
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "perf_attribution", REPO / "scripts" / "bench" /
+        "perf-attribution.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    art["derived"] = mod.tax0u0_derived(rows, caps)
     return art
 
 
@@ -1687,6 +2174,68 @@ class ValidatorSelfTest(unittest.TestCase):
         art = _valid_e1tax()
         art["params"]["ladders"] = ["L0_raw", "L3_uring"]
         self.assert_invalid(art, "params.ladders")
+
+    def test_valid_tax0u0_passes(self):
+        self.assertEqual(validate_artifact(_valid_tax0u0(False)), [])
+        self.assertEqual(validate_artifact(_valid_tax0u0(True)), [])
+
+    def test_tax0u0_detectors_fire(self):
+        # scan-mode tampering: relabel a row's mode -> cell/order mismatch.
+        art = _valid_tax0u0(False)
+        art["rows"][0]["router_scan_mode"] = (
+            "production_forward"
+            if art["rows"][0]["router_scan_mode"] == "reverse_ablation"
+            else "reverse_ablation")
+        self.assert_invalid(art, "does not match the predeclared "
+                              "execution order")
+
+        # seed/order tampering: rotate one stored round.
+        art = _valid_tax0u0(False)
+        eo = art["execution_order"]
+        eo["rounds"][0] = eo["rounds"][0][1:] + eo["rounds"][0][:1]
+        self.assert_invalid(art, "not the deterministic output of the "
+                              "predeclared seed")
+
+        # scan-iteration tampering: raw row counter no longer matches the
+        # stored derived samples.
+        art = _valid_tax0u0(False)
+        fwd = next(r for r in art["rows"]
+                   if r["router_scan_mode"] == "production_forward")
+        fwd["op_lookup_iterations_total"] = int(
+            fwd["op_lookup_iterations_total"] * 0.5)
+        self.assert_invalid(art, "not the per-op series recomputed from "
+                              "the raw rows")
+
+        # slope tampering: stored OLS b drifts from the recomputation.
+        art = _valid_tax0u0(False)
+        art["derived"]["capacity_slopes_ols"][
+            "instructions_per_op|production_forward"]["b"] = 0.123
+        self.assert_invalid(
+            art, "capacity_slopes_ols.instructions_per_op|"
+                 "production_forward.b")
+
+        # same-work tampering: one row moves a different byte payload.
+        art = _valid_tax0u0(False)
+        art["rows"][1]["word_sum"] = 1
+        self.assert_invalid(art, "word_sum drift")
+
+        # witness inconsistency: lookup calls drift from ops.
+        art = _valid_tax0u0(False)
+        art["rows"][2]["op_cookie_lookup_calls"] += 1
+        self.assert_invalid(art, "op_cookie_lookup_calls")
+
+        # envelope tampering: post-hoc widening of the preregistered gate.
+        art = _valid_tax0u0(False)
+        art["derived"]["baseline_reproduction"]["envelope"] = {
+            "b_min": 0.0, "b_max": 100.0, "r2_min": 0.0}
+        self.assert_invalid(art, "not the preregistered constants")
+
+        # witness artifact smuggling perf-less performance evidence.
+        art = _valid_tax0u0(True)
+        art["kind"] = "tax0u0router"
+        art["params"]["witness_only"] = False
+        art["params"]["perf_events"] = ["instructions:u"]
+        self.assert_invalid(art, "instructions_user missing/non-positive")
 
     def test_valid_tax0capacity_passes(self):
         self.assertEqual(validate_artifact(_valid_tax0capacity()), [])

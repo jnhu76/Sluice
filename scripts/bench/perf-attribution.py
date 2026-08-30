@@ -32,6 +32,12 @@ Commands:
             randomized execution order from a predeclared seed, one bench
             process per measured repetition under user-mode perf stat,
             fail-closed same-work proof (research/tax0/).
+  tax0u0    #250 TAX-0 EXP-U0 Uring router-scan causal ablation: the EXP-0
+            geometry with ONE changed variable — router scan direction
+            (production forward vs research reverse). Two arms x capacity
+            list, blocked randomized (mode, C) order, per-row exact
+            scan-iteration witness, preregistered baseline envelope and
+            causal decision thresholds (research/tax0/).
   flame     Diagnostic CPU flame graph for one command: `perf record -g`
             -> `perf script` -> folded stacks -> self-contained SVG (no
             external FlameGraph checkout needed).
@@ -1535,6 +1541,436 @@ def cmd_tax0(args) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# tax0u0: #250 TAX-0 EXP-U0 — Uring router-scan causal ablation. Two arms
+# (production_forward vs reverse_ablation scan direction) x the EXP-0
+# capacity list, process-per-repetition under user-mode perf stat, blocked
+# randomized (scan_mode, C) order from a predeclared seed. The bench
+# binary (tax0u0_router_bench) links the internal-testing variant and
+# carries the exact scan-iteration witness in every row. Preregistered
+# decision rule: the baseline envelope and the causal thresholds below
+# were fixed in code BEFORE any official run (research/tax0/ report).
+# ---------------------------------------------------------------------------
+
+TAX0U0_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "tax0u0_router_bench"
+TAX0U0_DEFAULT_SEED = 0x55304C55
+# Artifact mode labels (stable identifiers; the CLI keeps forward|reverse).
+TAX0U0_MODES = ["production_forward", "reverse_ablation"]
+TAX0U0_CLI_MODE = {"production_forward": "forward", "reverse_ablation": "reverse"}
+# Preregistered baseline-reproduction envelope for the primary tmpfs
+# forward arm (fixed BEFORE measurement; never widened after observing).
+TAX0U0_BASELINE_ENVELOPE = {"b_min": 5.0, "b_max": 7.0, "r2_min": 0.98}
+# Preregistered causal-decision thresholds (EXP-U0 task §19).
+TAX0U0_DECISION = {
+    "strong_reduction": 0.80,   # >= 80% slope reduction
+    "partial_reduction": 0.50,  # >= 50% = materially reduced
+    "not_supported_reduction": 0.20,  # < 20% change = NOT supported
+    "reverse_abs_b_max": 1.5,   # |b_instr_reverse| <= 1.5 instr/op/C
+}
+
+
+def tax0u0_cells(modes: list[str], capacities: list[int]) -> list[tuple]:
+    cells = [(m, c) for m in modes for c in capacities]
+    # Deterministic enumeration order (the seed shuffles it anyway).
+    return sorted(cells)
+
+
+def tax0u0_execution_order(cells: list[tuple], reps: int, seed: int) -> list:
+    """Blocked randomized order over (scan_mode, capacity) cells: `reps`
+    rounds, each a fresh permutation. Pure function of (cells, reps,
+    seed), generated before any measurement."""
+    rng = random.Random(seed)
+    return [rng.sample(cells, k=len(cells)) for _ in range(reps)]
+
+
+def _tax0u0_bench_argv(args, mode: str, capacity: int) -> list[str]:
+    argv = [str(TAX0U0_BIN), "--router-scan-mode", TAX0U0_CLI_MODE[mode],
+            "--request-size", str(args.request_size),
+            "--total-bytes", str(args.total_bytes),
+            "--depth", str(args.depth),
+            "--request-capacity", str(capacity),
+            "--uring-queue-depth", str(args.uring_queue_depth),
+            "--reps", "1", "--warmup", "0",
+            "--file", args.file]
+    return argv
+
+
+def _tax0u0_run(args, mode: str, capacity: int, use_perf: bool,
+                label: str) -> dict:
+    perf = shutil.which("perf")
+    if use_perf and perf is None:
+        sys.exit("perf not found in PATH (required for official EXP-U0 "
+                 "rows; witness-only runs never use perf)")
+    argv: list[str] = []
+    if args.taskset:
+        argv += ["taskset", "-c", args.taskset]
+    if use_perf:
+        argv += [perf, "stat", "-x,", "-e", ",".join(TAX0_PERF_EVENTS),
+                 "--"]
+    argv += _tax0u0_bench_argv(args, mode, capacity)
+    env = dict(os.environ, LC_ALL="C")
+    out = subprocess.run(argv, capture_output=True, text=True, env=env)
+    if out.returncode != 0:
+        sys.exit(f"tax0u0 {label}: bench exited {out.returncode} "
+                 f"(mode={mode} C={capacity}); stderr tail: "
+                 f"{out.stderr.strip()[-2000:]}")
+    try:
+        bench = json.loads(out.stdout)
+    except json.JSONDecodeError as e:
+        sys.exit(f"tax0u0 {label}: bench stdout is not JSON "
+                 f"(mode={mode} C={capacity}): {e}")
+    if not bench.get("all_reps_ok"):
+        sys.exit(f"tax0u0 {label}: bench reported all_reps_ok=false "
+                 f"(mode={mode} C={capacity})")
+    counters = parse_perf_stat(out.stderr) if use_perf else {}
+    if use_perf:
+        for req in ("instructions", "cycles"):
+            if not counters.get(req):
+                sys.exit(f"tax0u0 {label}: perf stat returned no {req} "
+                         f"counter (mode={mode} C={capacity}); perf stderr "
+                         f"tail: {out.stderr.strip()[-2000:]}")
+    return {"bench": bench, "counters": counters,
+            "child_exit_code": out.returncode,
+            "perf_raw": out.stderr.strip() if use_perf else None}
+
+
+def tax0u0_derived(rows: list[dict], capacities: list[int]) -> dict:
+    """Per-(mode, capacity) medians/MADs, per-mode capacity slopes
+    (instructions/op AND scan iterations/op), the preregistered baseline
+    reproduction gate, the slope reductions, and the preregistered causal
+    classification inputs. Pure recomputation from raw rows."""
+    modes = sorted({r["router_scan_mode"] for r in rows})
+    ops = rows[0]["ops"]
+    # Witness-only rows carry no perf counters (None values): skip
+    # non-numeric metrics instead of crashing (their derived entries are
+    # simply omitted).
+    def _numeric(key: str) -> bool:
+        return all(isinstance(r.get(key), (int, float))
+                   and r.get(key) is not None for r in rows)
+    metrics = [(n, k) for n, k in
+               (("instructions_per_op", "instructions_user"),
+                ("cycles_per_op", "cycles_user"),
+                ("wall_ns_per_op", "wall_ns"),
+                ("user_ns_per_op", "user_ns"),
+                ("sys_ns_per_op", "sys_ns"),
+                ("scan_iterations_per_op", "op_lookup_iterations_total"))
+               if _numeric(k)]
+    cells: dict[str, dict] = {}
+    med_of: dict[str, dict[tuple, float]] = {}
+    for name, key in metrics:
+        med_of[name] = {}
+        for mode in modes:
+            for cap in capacities:
+                samples = [r[key] / ops for r in rows
+                           if r["router_scan_mode"] == mode
+                           and r["request_capacity"] == cap]
+                cells.setdefault(f"{mode}|C={cap}", {})[name] = {
+                    "n": len(samples),
+                    "median": median(samples),
+                    "mad": _mad(samples),
+                    "samples": samples,
+                }
+                med_of[name][(mode, cap)] = median(samples)
+
+    slopes: dict[str, dict] = {}
+    for name, _ in metrics:
+        for mode in modes:
+            line = _ols_line([float(c) for c in capacities],
+                             [med_of[name][(mode, c)] for c in capacities])
+            if line is not None:
+                slopes[f"{name}|{mode}"] = line
+
+    b_instr = {m: (slopes.get(f"instructions_per_op|{m}") or {}).get("b")
+               for m in modes}
+    b_iter = {m: (slopes.get(f"scan_iterations_per_op|{m}") or {}).get("b")
+              for m in modes}
+
+    fwd = "production_forward" if "production_forward" in modes else modes[0]
+    rev = "reverse_ablation" if "reverse_ablation" in modes else None
+
+    reductions = {}
+    if rev is not None and b_instr[fwd] and b_instr[rev] is not None:
+        reductions["instruction_slope"] = {
+            "b_forward": b_instr[fwd],
+            "b_reverse": b_instr[rev],
+            "reduction": 1.0 - abs(b_instr[rev] / b_instr[fwd]),
+        }
+    if rev is not None and b_iter[fwd] and b_iter[rev] is not None:
+        reductions["iteration_slope"] = {
+            "b_forward": b_iter[fwd],
+            "b_reverse": b_iter[rev],
+            "reduction": 1.0 - abs(b_iter[rev] / b_iter[fwd]),
+        }
+
+    # C=8 -> C=128 cycles delta per mode (material user impact).
+    cycle_delta = {}
+    for mode in modes:
+        lo, hi = min(capacities), 128
+        if hi in capacities and "cycles_per_op" in med_of:
+            lo_v = med_of["cycles_per_op"].get((mode, lo))
+            hi_v = med_of["cycles_per_op"].get((mode, hi))
+            if lo_v:
+                cycle_delta[mode] = {
+                    "c_lo": lo, "c_hi": hi,
+                    "percent": 100.0 * (hi_v - lo_v) / lo_v,
+                }
+
+    # Preregistered baseline reproduction gate (primary forward arm).
+    fwd_line = slopes.get(f"instructions_per_op|{fwd}") or {}
+    baseline = {
+        "envelope": TAX0U0_BASELINE_ENVELOPE,
+        "b_forward": fwd_line.get("b"),
+        "r2_forward": fwd_line.get("r2"),
+        "pass": (fwd_line.get("b") is not None
+                 and TAX0U0_BASELINE_ENVELOPE["b_min"] <= fwd_line["b"]
+                 <= TAX0U0_BASELINE_ENVELOPE["b_max"]
+                 and fwd_line.get("r2") is not None
+                 and fwd_line["r2"] >= TAX0U0_BASELINE_ENVELOPE["r2_min"]),
+    }
+
+    # Preregistered causal classification (§19). Computed mechanically;
+    # the verdict itself is adjudicated in the report, not here.
+    adjudication = {"thresholds": TAX0U0_DECISION}
+    if rev is not None and reductions.get("instruction_slope") and \
+            reductions.get("iteration_slope"):
+        r_instr = reductions["instruction_slope"]["reduction"]
+        r_iter = reductions["iteration_slope"]["reduction"]
+        rev_b = abs(b_instr[rev])
+        iter_collapses = r_iter >= TAX0U0_DECISION["strong_reduction"]
+        if not baseline["pass"]:
+            cls = "INCONCLUSIVE (baseline reproduction failed)"
+        elif not iter_collapses:
+            cls = "INCONCLUSIVE (ablation did not change scan iterations)"
+        elif r_instr >= TAX0U0_DECISION["strong_reduction"] and \
+                rev_b <= TAX0U0_DECISION["reverse_abs_b_max"]:
+            cls = "ROUTER CAUSALITY STRONGLY SUPPORTED"
+        elif r_instr >= TAX0U0_DECISION["partial_reduction"]:
+            cls = "ROUTER CAUSALITY SUPPORTED - PARTIAL RESIDUAL"
+        elif r_instr < TAX0U0_DECISION["not_supported_reduction"]:
+            cls = "ROUTER CAUSALITY NOT SUPPORTED"
+        else:
+            cls = "INTERMEDIATE (between NOT SUPPORTED and PARTIAL; " \
+                  "adjudicate in review)"
+        adjudication.update({
+            "iteration_slope_reduction": r_iter,
+            "instruction_slope_reduction": r_instr,
+            "abs_b_instr_reverse": rev_b,
+            "classification": cls,
+        })
+
+    return {"per_op_metrics": cells,
+            "capacity_slopes_ols": slopes,
+            "cycle_delta_c8_to_c128": cycle_delta,
+            "baseline_reproduction": baseline,
+            "slope_reductions": reductions,
+            "causal_adjudication": adjudication}
+
+
+def cmd_tax0u0(args) -> dict:
+    witness_only = bool(getattr(args, "witness_only", False))
+    if not TAX0U0_BIN.exists():
+        sys.exit(f"missing {TAX0U0_BIN} (xmake f -m release "
+                 f"--toolchain=clang --with-liburing=true; xmake build "
+                 f"tax0u0_router_bench)")
+    capacities = [int(v) for v in args.capacities.split(",") if v.strip()]
+    if not capacities or len(set(capacities)) != len(capacities):
+        sys.exit("--capacities must be a non-empty comma list without dups")
+    for cap in capacities:
+        if cap < args.depth:
+            sys.exit(f"capacity {cap} < depth {args.depth}: the pipeline "
+                     f"would exceed the arena (would_block); refuse")
+    if not witness_only and args.no_perf:
+        sys.exit("--no-perf is witness-only; official EXP-U0 rows require "
+                 "perf (instructions:u is the primary metric)")
+    if not args.file:
+        sys.exit("--file is required (deterministic workload path)")
+
+    modes = list(TAX0U0_MODES)
+    cells = tax0u0_cells(modes, capacities)
+    rounds = tax0u0_execution_order(cells, args.reps, args.seed)
+    flat = [c for rnd in rounds for c in rnd]
+
+    env_fp = env_fingerprint(input_path=args.file)
+    env_id_src = {k: v for k, v in env_fp.items() if k != "time"}
+    environment_id = hashlib.sha256(
+        json.dumps(env_id_src, sort_keys=True).encode()).hexdigest()[:16]
+    env_extra = _tax0_environment_extra(args.taskset, args.file)
+
+    expected_ops = args.total_bytes // args.request_size
+
+    # Warmup rounds (unmeasured, no perf) for every cell.
+    if not witness_only:
+        for w in range(args.warmup_rounds):
+            for mode, cap in sorted(cells):
+                _tax0u0_run(args, mode, cap, use_perf=False,
+                            label=f"warmup r{w + 1}/{args.warmup_rounds}")
+            print(f"[tax0u0 warmup round {w + 1}/{args.warmup_rounds}] done",
+                  file=sys.stderr)
+
+    rows = []
+    rep_counters = {(m, c): 0 for m in modes for c in capacities}
+    for ridx, rnd in enumerate(rounds):
+        for mode, cap in rnd:
+            idx = len(rows)
+            got = _tax0u0_run(args, mode, cap, use_perf=not witness_only,
+                              label=f"round {ridx + 1}/{args.reps}")
+            bench = got["bench"]
+            rep = bench["reps_out"][0]
+            counters = got["counters"]
+            row = {
+                "experiment": "TAX-0-EXP-U0",
+                "git_sha": env_fp["git"]["sha"],
+                "router_scan_mode": mode,
+                "backend": "uring",
+                "real_uring": bool(bench.get("real_uring")),
+                "filesystem": args.fs_label or None,
+                "op": "read",
+                "request_size": args.request_size,
+                "active_depth": args.depth,
+                "request_capacity": cap,
+                "uring_queue_depth": args.uring_queue_depth,
+                "total_bytes": args.total_bytes,
+                "ops": bench["ops"],
+                "rep": rep_counters[(mode, cap)],
+                "execution_order_index": idx,
+                "wall_ns": rep["wall_ns"],
+                "user_ns": rep["user_ns"],
+                "sys_ns": rep["sys_ns"],
+                "instructions_user": counters.get("instructions"),
+                "cycles_user": counters.get("cycles"),
+                "branches_user": counters.get("branches"),
+                "branch_misses_user": counters.get("branch-misses"),
+                "cache_misses_user": counters.get("cache-misses"),
+                # Exact scan witness (U0-A) for this rep.
+                "op_cookie_lookup_calls": rep["op_lookup_calls"],
+                "op_lookup_iterations_total": rep["op_lookup_iterations_total"],
+                "op_lookup_iterations_max": rep["op_lookup_iterations_max"],
+                "control_cookie_lookup_calls": rep["control_lookup_calls"],
+                "transport_cookie_lookup_calls": rep["transport_lookup_calls"],
+                "lookup_hits": rep["lookup_hits"],
+                "lookup_misses": rep["lookup_misses"],
+                "matched_router_index_sum": rep["matched_router_index_sum"],
+                "matched_router_index_max": rep["matched_router_index_max"],
+                "semantic_validation": True,
+                "word_sum": rep.get("word_sum"),
+                "expected_word_sum": bench.get("expected_word_sum"),
+                "child_exit_code": got["child_exit_code"],
+                "perf_raw": got["perf_raw"],
+                "environment_id": environment_id,
+            }
+            # Fail-closed per-row checks: same-work AND scan-witness shape
+            # (exactly one operation lookup per op, all hits, no control /
+            # transport lookups in this no-cancel READ workload).
+            if row["ops"] != expected_ops:
+                sys.exit(f"tax0u0 row {idx}: ops {row['ops']} != expected "
+                         f"{expected_ops} (mode={mode} C={cap})")
+            if bench["total_bytes"] != args.total_bytes:
+                sys.exit(f"tax0u0 row {idx}: total_bytes mismatch "
+                         f"(mode={mode} C={cap})")
+            if row["word_sum"] != row["expected_word_sum"]:
+                sys.exit(f"tax0u0 row {idx}: word_sum mismatch "
+                         f"(mode={mode} C={cap})")
+            if not row["real_uring"]:
+                sys.exit(f"tax0u0 row {idx}: uring row without a real ring")
+            if row["op_cookie_lookup_calls"] != row["ops"]:
+                sys.exit(f"tax0u0 row {idx}: op lookup calls "
+                         f"{row['op_cookie_lookup_calls']} != ops "
+                         f"{row['ops']} — STOP and explain (do not divide "
+                         f"blindly)")
+            if row["lookup_misses"] != 0 or row["lookup_hits"] != row["ops"]:
+                sys.exit(f"tax0u0 row {idx}: unexpected lookup misses "
+                         f"(mode={mode} C={cap})")
+            if row["control_cookie_lookup_calls"] != 0:
+                sys.exit(f"tax0u0 row {idx}: control-CQE contamination "
+                         f"({row['control_cookie_lookup_calls']} calls) — "
+                         f"record and explain before interpretation")
+            if row["transport_cookie_lookup_calls"] != 0:
+                sys.exit(f"tax0u0 row {idx}: transport lookup calls != 0 — "
+                         f"record and explain before interpretation")
+            if not witness_only and not row["instructions_user"]:
+                sys.exit(f"tax0u0 row {idx}: missing instructions counter")
+            rows.append(row)
+            rep_counters[(mode, cap)] += 1
+            if not witness_only:
+                print(f"[tax0u0 round {ridx + 1}/{args.reps}] "
+                      f"{idx + 1}/{len(flat)}: {mode} C={cap} "
+                      f"instr/op={row['instructions_user'] / row['ops']:.1f} "
+                      f"it/op={row['op_lookup_iterations_total'] / row['ops']:.1f}",
+                      file=sys.stderr)
+
+    # Mechanical same-work proof across ALL rows AND BOTH modes.
+    same_work = {
+        "ops_expected": expected_ops,
+        "ops_observed": sorted({r["ops"] for r in rows}),
+        "bytes_expected": args.total_bytes,
+        "bytes_observed": sorted({r["total_bytes"] for r in rows}),
+        "depth": args.depth,
+        "request_size": args.request_size,
+        "word_sum_expected": rows[0]["expected_word_sum"] if rows else None,
+        "word_sum_observed": sorted({r["word_sum"] for r in rows}),
+        "matched_router_index_sum_by_cell": {
+            f"{r['router_scan_mode']}|C={r['request_capacity']}":
+                r["matched_router_index_sum"]
+            for r in rows[:len(cells)]
+        },
+        "validation_all_true": all(r["semantic_validation"] for r in rows),
+    }
+    same_work["valid"] = (
+        same_work["ops_observed"] == [expected_ops]
+        and same_work["bytes_observed"] == [args.total_bytes]
+        and same_work["word_sum_observed"] ==
+        [same_work["word_sum_expected"]]
+        and same_work["validation_all_true"])
+
+    return {
+        "schema": SCHEMA,
+        "kind": "tax0u0witness" if witness_only else "tax0u0router",
+        "binary": binary_provenance(TAX0U0_BIN),
+        "params": {
+            "experiment": "TAX-0-EXP-U0",
+            "question": ("does the per-operation CQE lookup through "
+                         "find_live_router_cookie_ cause the material "
+                         "C-dependent Uring instruction tax measured by "
+                         "EXP-0?"),
+            "hypothesis": ("H-U0-ROUTER: the EXP-0 capacity slope is "
+                           "primarily the forward linear router scan over "
+                           "high-index live entries; reversing only the "
+                           "scan direction collapses the slope"),
+            "router_scan_modes": modes,
+            "capacities": capacities,
+            "depth": args.depth,
+            "uring_queue_depth": args.uring_queue_depth,
+            "request_size": args.request_size,
+            "total_bytes": args.total_bytes,
+            "reps": args.reps,
+            "warmup_rounds": 0 if witness_only else args.warmup_rounds,
+            "seed": args.seed,
+            "fs_label": args.fs_label or None,
+            "taskset": args.taskset or None,
+            "witness_only": witness_only,
+            "perf_events": None if witness_only else TAX0_PERF_EVENTS,
+            "counter_scope": ("process-aggregate user-mode counters over a "
+                              "1-rep process (startup+build+teardown "
+                              "included, identical across cells, amortized "
+                              "per op; never subtracted)"),
+        },
+        "execution_order": {
+            "generator": ("random.Random(seed).sample(cells) per round "
+                          "over (scan_mode, capacity) — generated before "
+                          "measurement"),
+            "seed": args.seed,
+            "reps": args.reps,
+            "cells": [f"{m}|C={c}" for m, c in cells],
+            "rounds": [[f"{m}|C={c}" for m, c in rnd] for rnd in rounds],
+        },
+        "environment_extra": env_extra,
+        "environment_id": environment_id,
+        "rows": rows,
+        "same_work": same_work,
+        "derived": tax0u0_derived(rows, capacities),
+    }
+
+
 def _bpftrace_tool_block() -> dict:
     bpf = shutil.which("bpftrace")
     if bpf is None:
@@ -2085,6 +2521,50 @@ def main() -> int:
     p.add_argument("--note", default="",
                    help="provenance note embedded in the artifact")
 
+    p = sub.add_parser("tax0u0",
+                       help="#250 TAX-0 EXP-U0 Uring router-scan causal "
+                            "ablation (forward vs reverse scan, EXP-0 "
+                            "geometry, per-row scan-iteration witness)")
+    p.add_argument("--capacities", default="8,32,128,512",
+                   help="comma list of request capacities C (EXP-0 list)")
+    p.add_argument("--depth", type=_positive_int, default=8,
+                   help="fixed active depth D (default 8)")
+    p.add_argument("--uring-queue-depth", type=_positive_int, default=8,
+                   dest="uring_queue_depth",
+                   help="io_uring SQ/CQ depth Q (keep Q == D)")
+    p.add_argument("--request-size", type=int, default=4096,
+                   dest="request_size")
+    p.add_argument("--total-bytes", type=int, default=256 << 20,
+                   dest="total_bytes")
+    p.add_argument("--reps", type=_positive_int, default=11,
+                   help="measured rounds; each round runs every "
+                        "(scan_mode, capacity) cell once in randomized "
+                        "order")
+    p.add_argument("--warmup-rounds", type=_nonneg_int, default=2,
+                   dest="warmup_rounds",
+                   help="unmeasured full rounds before measurement")
+    p.add_argument("--seed", type=lambda s: int(s, 0),
+                   default=TAX0U0_DEFAULT_SEED,
+                   help="predeclared order-randomization seed (hex ok)")
+    p.add_argument("--file", required=True,
+                   help="deterministic workload file path (created by the "
+                        "bench when absent; same file for every cell)")
+    p.add_argument("--fs-label", default="tmpfs", dest="fs_label",
+                   help="filesystem label recorded per row (tmpfs|btrfs...)")
+    p.add_argument("--taskset", default="",
+                   help="CPU list for `taskset -c` pinning (physical "
+                        "cores, avoid SMT siblings)")
+    p.add_argument("--witness-only", action="store_true",
+                   dest="witness_only",
+                   help="U0-A diagnostic witness run: no perf, no "
+                        "warmup, small workload acceptable; produces kind "
+                        "tax0u0witness (NOT performance evidence)")
+    p.add_argument("--no-perf", action="store_true", dest="no_perf",
+                   help=argparse.SUPPRESS)
+    p.add_argument("--output", default="")
+    p.add_argument("--note", default="",
+                   help="provenance note embedded in the artifact")
+
     p = sub.add_parser("flame",
                        help="diagnostic CPU flame graph for one command "
                             "(perf record -g -> folded -> SVG)")
@@ -2138,6 +2618,9 @@ def main() -> int:
     elif args.command == "tax0":
         out_fs = None
         tmpdir = args.file
+    elif args.command == "tax0u0":
+        out_fs = None
+        tmpdir = args.file
     else:
         out_fs = None
     result = {"env": env_fingerprint(input_path=tmpdir, output_path=out_fs)}
@@ -2151,6 +2634,8 @@ def main() -> int:
         result.update(cmd_e1(args))
     elif args.command == "tax0":
         result.update(cmd_tax0(args))
+    elif args.command == "tax0u0":
+        result.update(cmd_tax0u0(args))
     elif args.command == "perf":
         if args.cmd and args.cmd[0] == "--":
             args.cmd = args.cmd[1:]

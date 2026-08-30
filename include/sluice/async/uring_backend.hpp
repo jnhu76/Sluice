@@ -311,6 +311,58 @@ class UringAsyncBackend : public AsyncBackend {
     // stay in the class: the guarded test members below use it.
     using BeforeQueueExitFn = void (*)(void*);
     void set_before_queue_exit_hook_for_test(BeforeQueueExitFn fn, void* ctx) noexcept;
+
+    // ---- TAX-0 EXP-U0 router-scan research seam (#250 campaign) ----------
+    // Research-only causal-ablation control + exact scan-iteration witness
+    // for find_live_router_cookie_ (the per-CQE cookie->router lookup).
+    // NOTHING here is compiled into production targets. The default mode is
+    // forward_production, so an internal-testing build that never touches
+    // the seam executes the production forward scan (plus the diagnostic
+    // counter folding; plain non-atomic members — see the private section).
+    enum class RouterScanModeForTest : std::uint8_t {
+        forward_production, // the production scan (and the seam default)
+        reverse_ablation,   // EXP-U0 research ablation: scan high -> low
+    };
+    // Which find_live_router_cookie_ callsite family a lookup belonged to
+    // (operation CQE / tagged-control CQE / transport accounting — the
+    // consumed-cancel-control SQE and Class-A recovery sites). The U0
+    // no-cancel READ workload expects control == 0 and transport == 0.
+    enum class RouterLookupKindForTest : std::uint8_t {
+        operation_cqe,
+        control_cqe,
+        transport,
+    };
+    struct RouterScanDiagnosticsForTest {
+        // Kind-specific accounting (folded at the callsites).
+        std::uint64_t operation_cookie_lookup_calls = 0;
+        std::uint64_t control_cookie_lookup_calls = 0;
+        std::uint64_t transport_cookie_lookup_calls = 0;
+        std::uint64_t operation_lookup_iterations_total = 0;
+        std::uint64_t operation_lookup_iterations_max = 0;
+        std::uint64_t control_lookup_iterations_total = 0;
+        std::uint64_t control_lookup_iterations_max = 0;
+        std::uint64_t transport_lookup_iterations_total = 0;
+        std::uint64_t transport_lookup_iterations_max = 0;
+        // Kind-agnostic accounting (folded inside the scan itself).
+        std::uint64_t lookup_calls = 0;
+        std::uint64_t lookup_hits = 0;
+        std::uint64_t lookup_misses = 0;
+        std::uint64_t matched_router_index_sum = 0;
+        std::uint64_t matched_router_index_max = 0;
+        std::uint64_t reverse_mode_calls = 0;
+        std::uint64_t last_call_iterations = 0;
+    };
+    void set_router_scan_mode_for_test(RouterScanModeForTest mode) noexcept;
+    RouterScanModeForTest router_scan_mode_for_test() const noexcept;
+    // Read-only cookie -> router-index resolution through the EXACT
+    // production find_live_router_cookie_ under the current scan mode
+    // (diagnostics folded). Returns router capacity on a miss, exactly
+    // like the production lookup.
+    std::size_t find_live_router_cookie_for_test(std::uint64_t cookie)
+        const noexcept;
+    const RouterScanDiagnosticsForTest& router_scan_diagnostics_for_test()
+        const noexcept;
+    void reset_router_scan_diagnostics_for_test() noexcept;
 #endif
 
   private:
@@ -708,6 +760,21 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<BeforeAdmissionLockPauseGate*> before_admission_lock_gate_{nullptr};
     std::atomic<BeforeQueueExitFn> before_queue_exit_fn_{nullptr};
     std::atomic<void*> before_queue_exit_ctx_{nullptr};
+
+    // TAX-0 EXP-U0 research seam state: scan-mode selector + diagnostic
+    // counters. PLAIN (non-atomic) members are sound: every
+    // find_live_router_cookie_ callsite runs on the documented single-driver
+    // call domain (poll/wait_one/submit/cancel serialization — the same
+    // domain that already serializes CQE reap without dispatch_mtx_).
+    // mutable: the lookup itself is const. Layout cost exists only in
+    // internal-testing builds (AGENTS.md §15); production objects keep the
+    // pre-seam layout.
+    mutable RouterScanModeForTest router_scan_mode_for_test_ =
+        RouterScanModeForTest::forward_production;
+    mutable RouterScanDiagnosticsForTest router_diag_for_test_{};
+    // Fold one completed lookup's iterations into its callsite family.
+    void fold_router_lookup_diag_for_test(RouterLookupKindForTest kind)
+        const noexcept;
 #endif
 #endif // SLUICE_HAS_LIBURING
 

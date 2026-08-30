@@ -343,6 +343,18 @@ sluice_internal_async_test("phase_g_closeout_test")
 -- evidence-mode classification (required_modes=("real",)).
 sluice_internal_async_test("phase_g_closeout_uring_test")
 
+-- uring_router_scan_equivalence_test — TAX-0 EXP-U0 semantic-equivalence
+-- gates for the research-only reverse-scan ablation. On the REAL io_uring
+-- path it mechanically proves forward_lookup(R,k) == reverse_lookup(R,k)
+-- (same found/not-found AND matched index) over a C x K matrix of reachable
+-- router states, plus stale/unknown/control-tagged miss equivalence,
+-- retirement equivalence after drain, the free-list high-index placement
+-- fact with EXACT per-direction iteration counts, and per-family lookup
+-- accounting (operation/control/transport) on the real CQE and cancel paths
+-- in BOTH scan modes. Research evidence only — not a backend conformance
+-- manifest row.
+sluice_internal_async_test("uring_router_scan_equivalence_test")
+
 -- select_registration_rollback_test — E13 P7 registration-failure rollback
 -- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
 -- real running Fiber; the controller-only synthetic registration-failure seam

@@ -370,6 +370,37 @@ inline void UringAsyncBackend::set_before_queue_exit_hook_for_test(
     before_queue_exit_ctx_.store(ctx, std::memory_order_release);
 }
 
+// ---- TAX-0 EXP-U0 router-scan research seam (#250 campaign) --------------
+// Research-only scan-direction ablation + exact scan-iteration witness.
+// set_router_scan_mode_for_test selects forward_production (the production
+// scan — also the default for every internal-testing construction) or
+// reverse_ablation (the EXP-U0 causal ablation: same matching predicate,
+// high->low traversal). Call from a quiescent point on the single-driver
+// domain (e.g. before the runtime starts driving the backend). The setter
+// is deliberately NOT synchronized: the mode is read on the driver domain
+// only.
+inline void UringAsyncBackend::set_router_scan_mode_for_test(
+    RouterScanModeForTest mode) noexcept {
+    router_scan_mode_for_test_ = mode;
+}
+inline UringAsyncBackend::RouterScanModeForTest
+UringAsyncBackend::router_scan_mode_for_test() const noexcept {
+    return router_scan_mode_for_test_;
+}
+// Read-only resolution through the EXACT production lookup under the
+// current mode; diagnostics fold exactly as a real call would.
+inline std::size_t UringAsyncBackend::find_live_router_cookie_for_test(
+    std::uint64_t cookie) const noexcept {
+    return find_live_router_cookie_(cookie);
+}
+inline const UringAsyncBackend::RouterScanDiagnosticsForTest&
+UringAsyncBackend::router_scan_diagnostics_for_test() const noexcept {
+    return router_diag_for_test_;
+}
+inline void UringAsyncBackend::reset_router_scan_diagnostics_for_test() noexcept {
+    router_diag_for_test_ = RouterScanDiagnosticsForTest{};
+}
+
 }  // namespace sluice::async
 
 #endif  // defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
