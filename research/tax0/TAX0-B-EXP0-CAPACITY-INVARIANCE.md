@@ -144,7 +144,7 @@ vs C=8(绝对 / 百分比;永不只报百分比):
 | 512 | +3,020.8 (+67.1%) | +1,126.6 (+29.3%) | +406.1 (+11.0%) |
 
 斜率:instr b=+5.994(R²=**1.0000**)· cycles b=+2.162(R²=0.9957)· wall b=+0.685(R²=0.8843)。
-解读:强单调、近完美线性;instr MAD ≈ 5(近乎确定论)使趋势远超离散度(cycles C=128 delta ≈ 6×MAD)。
+解读:强单调、近完美线性;instr MAD ≈ 5(近乎确定论);cycles C=8→128 的绝对 delta 327.6 超过两端点格内离散度(端点相对比 ≈3.5× C=8 MAD / ≈6.1× C=128 MAD;MAD 比较为描述性离散度对照,不是假设检验统计量,§17)。
 
 # 10 btrfs control(对照,SATA SSD,页缓存温热)
 
@@ -160,7 +160,7 @@ vs C=8(绝对 / 百分比;永不只报百分比):
 | 512 | 7,098.3 | 0.0 | 3,417.0 | 10.7 | 2,097.7 | 9.2 |
 
 vs C=8:C=128 instr +720.1(+17.7%)/ cycles +11.8% / wall +5.8%;C=512 instr +74.2% / cycles +41.0% / wall +19.5%。斜率 instr b=+6.001(R²=**1.0000**)。
-解读:**容量依赖的用户态指令趋势在另一存储形态完整幸存**,且量值与 tmpfs 几乎相同(b 6.001 vs 5.994)——与"税在用户态代码、不在存储层"一致。btrfs 臂整体更快(更热的页缓存路径),但不改变斜率。instr MAD=0.0:固定容量下每 op 指令数逐 rep 完全一致(确定论执行),趋势非噪声。
+解读:**容量依赖的用户态指令趋势在另一存储形态完整幸存**,且量值与 tmpfs 几乎相同(b 6.001 vs 5.994)——容量斜率不随存储形态改变。btrfs 臂在本 session 观测上整体更快;EXP-0 不对跨文件系统的绝对性能差异做归因("页缓存温热"只是负载状态声明,不是速度解释)。instr MAD=0.0:固定容量下每 op 指令数逐 rep 完全一致(确定论执行),趋势非噪声。
 
 **W=4 二级复现**(TP tmpfs,独立 artifact):instr/op med 4,451.5 / 4,447.4 / 4,450.1 / 4,448.3,斜率 b=−0.003;C=128 cycles +2.5%(噪声内)。TP 平坦不是 W=1 特例。
 
@@ -168,13 +168,13 @@ vs C=8:C=128 instr +720.1(+17.7%)/ cycles +11.8% / wall +5.8%;C=512 instr +74.2%
 
 - **TP 臂**:四个格在两个文件系统上全部落在 ±0.7% 内,斜率符号翻转(tmpfs −0.019 / btrfs −0.071 / W=4 −0.003)→ 无可复现容量趋势。
 - **Uring 臂**:分段增量对 C 几乎严格成比例(tmpfs:+142/+581/+2,298 对 ΔC=24/96/384,即 5.93/6.05/5.98 instr·op⁻¹·C⁻¹),R²=1.0000。b≈6.0 与"每 CQE(或每 op)一次 O(C) 扫描、每槽 ~6 条指令(load+compare+loop 开销)"的量级一致——**这是事后解释,不是因果证明**(§18)。
-- 诊断层佐证:kernel-inclusive(含 :k)instr 斜率 = (860,789,735−662,094,373)/65,536/(512−8) ≈ **6.02** instr/op/C,与 user-mode 官方斜率 5.99 一致 → 容量税**全部位于用户态指令**,内核侧指令数对 C 平坦。
+- 诊断层佐证(单次运行、方向性、二级证据,非官方复制矩阵):kernel-inclusive(含 :k)instr 斜率 = (860,789,735−662,094,373)/65,536/(512−8) ≈ **6.02** instr/op/C,与 user-mode 官方斜率 5.99 密切吻合,该诊断中未观察到额外的 C 依赖内核侧指令增量——诊断证据与"测得的增量容量税位于用户态"一致;这不构成"内核贡献为零"或"已证明完全位于用户态"的结论。
 - 可选事件(branches/branch-misses/cache-misses)随 artifact 存档;C=512 无超线性拐点(router 数组 ~512×32B=16KiB,L1/L2 内),线性即全部行为。
 
 # 12 Cycles/wall analysis
 
 - **TP**:cycles 增量 ±5% 内且跨 fs 无一致方向;wall 同。无 material 趋势。
-- **Uring tmpfs**:cycles C=128 +8.5%(delta 327.6 ≈ 6×MAD 53.8)——达到并超过预注册 material 阈值;wall C=128 +3.4%(阈值下),C=512 +11.0%。btrfs 对照 cycles +11.8% / wall +5.8%。**判定规则 C 的第 1 条(cycles ≥5% 且 delta ≫ 离散度)在两个文件系统上同时满足**;第 2 条(wall)在 tmpfs 未达 5%,不构成必要条件。
+- **Uring tmpfs**:cycles C=128 +8.5%(绝对 delta 327.6 超过两端点格内离散度:≈3.5× C=8 MAD、≈6.1× C=128 MAD)——达到并超过预注册 material 阈值;wall C=128 +3.4%(阈值下),C=512 +11.0%。btrfs 对照 cycles +11.8% / wall +5.8%。**判定规则 C 的第 1 条(cycles ≥5% 且 delta 明显大于离散度)在两个文件系统上同时满足**;第 2 条(wall)在 tmpfs 未达 5%,不构成必要条件。MAD 比较为描述性,不是假设检验统计量。
 - 每周期指令效率:C=512 处 instr +67% 但 cycles 只 +29% → 扫描是高 IPC 的紧凑循环,部分被超标量吸收——记录为事实,不做进一步推断。
 
 # 13 Capacity slope
@@ -198,7 +198,7 @@ delta_b(btrfs) = 6.001 − (−0.071) = +6.072 instr/op per unit C
 
 # 14 Cross-backend comparison
 
-任务 §22 四种情形中命中:**TP flat + Uring slope → promote router-specific causal experiment**。补充结构信息:TP 与 URING 共享同一 await/`resolve_completion` 路径;TP 臂平坦 ⇒ 共享路径在本几何下对容量不敏感(要么该扫描未在每 op 热路径上执行,要么其常数小到不可测——区分这两种机制解释同样属于因果实验);因此 delta_b 的**候选**集中于 uring 特有的每 CQE 机制(`find_live_router_cookie_`)。此为假设排序,不是归属结论。
+任务 §22 四种情形中命中:**TP flat + Uring slope → promote router-specific causal experiment(EXP-U0,§19)**。补充结构信息:TP 与 URING 共享同一 await/`resolve_completion` 路径;TP 臂平坦 ⇒ 共享路径在本几何下对容量不敏感(要么该扫描未在每 op 热路径上执行,要么其常数小到不可测——区分这两种机制解释同样属于因果实验);因此 delta_b 的**候选**集中于 uring 特有的每 CQE 机制(`find_live_router_cookie_`)。此为假设排序,不是归属结论。
 
 # 15 Noise and limitations
 
@@ -206,7 +206,7 @@ delta_b(btrfs) = 6.001 − (−0.071) = +6.072 instr/op per unit C
 - **进程级计数**:instr/cycles 为进程聚合(含启动/Runtime 构建/teardown 固定成本)。固定成本跨格相同,摊销于 65,536 op;C 相关的一次性构造成本(如 512 个 slot 初始化)量级 ~50K 指令 ≈ 0.8 instr/op,远小于观测斜率。
 - **governor schedutil + 温热页缓存**:wall/cycles 受频率与缓存状态影响;这正是以 instructions/op 为主指标的原因(instr 对频率不敏感,趋势在两个 fs 上一致)。
 - **btrfs 对照为页缓存温热**,非冷设备 I/O;不声称任何 NVMe/冷存储结论。
-- **诊断层为单次运行**(sudo perf stat ×4):只作方向性佐证(税在用户态、ctx-switch/迁移与 C 无关:TP 6.7-7.9K、uring 15.6-16.1K,迁移 ≤2),不入统计。
+- **诊断层为单次运行**(sudo perf stat ×4):只作方向性佐证(增量斜率与用户态一致、ctx-switch/迁移与 C 无关:TP 6.7-7.9K、uring 15.6-16.1K,迁移 ≤2),不入统计。
 - **火焰图未采集**:Release 二进制无帧指针且已 strip(`readelf` 无 .symtab);TAX-0A §17 预注册把火焰图归 EXP-2 的一次性诊断构建("diagnostic builds 不入证据库")。bpftrace 本机未安装(perf 计数器已覆盖其目标问题)。
 - **几何边界**:D=8、4 KiB read、W=1(主)、Q=8、单 fiber 流水线。workers 轴、write、更大 D/Q、backlog(EXP-U1 目标)均未测。
 
@@ -214,7 +214,9 @@ delta_b(btrfs) = 6.001 − (−0.071) = +6.072 instr/op per unit C
 
 - **H0(容量不变)**:TP 臂**未被拒绝**(三重确认:两 fs + W=4);uring 臂**被拒绝**(R²=1.0000 的单调上升,delta ≫ MAD)。
 - **H1-TP(resolve_completion O(C) 使 TP 成本随 C 上升)**:**NOT SUPPORTED at this geometry**——TP 斜率为噪声级(≤0.07 instr/op/C 绝对量 ≤0.7%)。按预注册规则 A(对 TP 臂):不得据此优化 `resolve_completion`。
-- **H1-URING(uring 上升更陡,双 O(C) 机制)**:**SUPPORTED**——b≈+6.0/C,R²=1.0000,双 fs;诊断层显示增量全在用户态。注意:该假设只预测"更陡",不指定两机制各自的贡献占比;"哪条扫描产生 delta_b"未证明。
+- **H1-URING(原冻结假设同时包含可观测预测与机制解释两个子句,§2)**:以下按**实验后裁定拆分**(post-experiment adjudication decomposition)分别裁定——这是对裁定粒度的修正,不是对预注册历史的改写:
+  - **H1-URING-PREDICTION(Uring 成本随容量 C 上升得更强)**:**SUPPORTED**——b≈+6.0/C,R²=1.0000,tmpfs 与 btrfs 双文件系统可复现。
+  - **H1-URING-MECHANISM(`resolve_completion` O(C) + `find_live_router_cookie_` O(C) 构成原因解释)**:**NOT YET CAUSALLY ADJUDICATED**——EXP-0 未确立 delta_b 中有多大比例由 `find_live_router_cookie_`、`resolve_completion`、其他 uring 特有的 C 依赖路径或其组合产生(§18)。
 - 任务 §3 假设书写纪律复核:测量前没有任何一条被描述为 bottleneck;本报告的机制语言均标明"事后解释/候选"。
 
 # 17 Materiality adjudication
@@ -223,11 +225,11 @@ delta_b(btrfs) = 6.001 − (−0.071) = +6.072 instr/op per unit C
 
 | 检验 | tmpfs 主 | btrfs 对照 | 判定 |
 |---|---|---|---|
-| cycles C=128 | **+8.5%**(≈6×MAD) | **+11.8%**(≈70×MAD) | **满足** |
+| cycles C=128 | **+8.5%**(delta 327.6;≈3.5× C=8 MAD / ≈6.1× C=128 MAD) | **+11.8%**(delta 285.8;≈84× C=8 MAD / ≈70× C=128 MAD) | **满足** |
 | wall C=128 | +3.4% | +5.8% | tmpfs 未达 5%(非必要条件) |
 | instr C=128 | +16.1% | +17.7% | 满足(第 3 条) |
 
-**判定:CAPACITY-DEPENDENT TAX MATERIAL(限 uring 后端、本几何)**。C=512 的 +67-74% instr / +29-41% cycles 进一步确认这不是只有极端容量才出现的形态。TP 臂按规则 A 登记:税不存在(在其上),优化优先级降级。
+**判定:CAPACITY-DEPENDENT TAX MATERIAL(限 uring 后端、本几何)**。C=512 的 +67-74% instr / +29-41% cycles 进一步确认这不是只有极端容量才出现的形态。TP 臂按规则 A 登记:税不存在(在其上),优化优先级降级。MAD 比较是描述性离散度对照,不是假设检验统计量;material 判定依据是预注册的百分比阈值加"delta 明显大于观测离散度"的定性规则。
 
 # 18 What is NOT proven
 
@@ -241,9 +243,10 @@ delta_b(btrfs) = 6.001 − (−0.071) = +6.072 instr/op per unit C
 
 按任务 §22 与 TAX-0A §17 梯子:
 
-1. **EXP-U1(uring dispatch/backlog 剖面)升级为与因果隔离合并设计**:在固定 C、变 backlog 的同时,对 router 扫描做只读遥测(每 CQE 扫描迭代计数,test seam 只读)以直接检验"每 CQE O(C) 扫描 = delta_b"假设——需要单独授权与设计冻结。
-2. TP 臂:`resolve_completion`/arena 查找的容量优化候选**降级**(规则 A);若未来 TP 高容量形态出现趋势,再以同 harness 复测。
-3. 本 harness(`tax0` runner 子命令 + `tax0capacity` validator kind)可直接复用于上述复测。
+1. **NEXT — EXP-U0(uring router/容量因果归属)**:保持 D=8、Q=8、C 轴与 workload 形态不变,隔离候选机制(例如对 router 扫描做只读遥测——每 CQE 扫描迭代计数,test seam 只读),直接裁定哪条 O(C) 路径产生测得斜率。事后机制线索(标注:post-hoc,非因果裁定):`router_.size() == request_capacity`;operation CQE 逐个调用 `find_live_router_cookie_`,该查找线性扫描 router_;观测斜率 ≈ +6 instr/op/C 与"全容量线性扫描 × 每槽 ~6 指令"的量级一致——这是驱动 EXP-U0 的强机制指纹,**不构成 `find_live_router_cookie_` 是原因的证明**。需要单独授权与设计冻结。
+2. **QUEUED AFTER — EXP-U1(dispatch backlog / `remove_exact(front)` 剖面)**:独立问题;在 EXP-U0 解释干净的 C 依赖斜率之前,不把 Q/backlog 作为第二变量引入。
+3. TP 臂:`resolve_completion`/arena 查找的容量优化候选**降级**(规则 A);若未来 TP 高容量形态出现趋势,再以同 harness 复测。
+4. 本 harness(`tax0` runner 子命令 + `tax0capacity` validator kind)可直接复用于上述复测。
 
 ---
 
