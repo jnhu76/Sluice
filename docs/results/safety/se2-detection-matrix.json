@@ -67,6 +67,7 @@
       "conventional_probe": {
         "probe_id": "P-C01",
         "source": "tests/research/se2/conventional/conv_h01_aio_buffer_lifetime.c",
+        "executed": true,
         "baseline_form": "POSIX AIO (glibc), raw",
         "result": "plain: completion reports 13 bytes delivered into freed buffer; instrumented deref reads garbage — silent; ASan: heap-use-after-free (exit 1)",
         "fairness_notes": "Normal aio_read usage except the ONE hazard (free before completion). The kernel's write into freed pages is outside ASan sight; the post-completion deref (the normalized final trace step) is the observable access."
@@ -206,6 +207,7 @@
       "conventional_probe": {
         "probe_id": "P-C02",
         "source": "tests/research/se2/conventional/conv_h02_uring_user_data_reuse.c",
+        "executed": true,
         "baseline_form": "raw liburing 2.14",
         "result": "2 CQEs under one reused user_data; caller 1:1 bookkeeping records 2 terminals for 1 logical request; plain exit 0; ASan clean",
         "fairness_notes": "Normal liburing usage except the ONE hazard (in-flight identity reuse). Probe-internal write bug found by ASan during bring-up was fixed before evidence was recorded."
@@ -344,6 +346,7 @@
       "conventional_probe": {
         "probe_id": "P-C03",
         "source": "tests/research/se2/conventional/conv_h03_uring_fd_reuse.c",
+        "executed": true,
         "baseline_form": "raw liburing 2.14",
         "result": "read SQE prepared on pipe fd, fd closed and number recycled by a victim file before submit; read consumes the FILE's bytes (VICTIM-DATA) — silent wrong-target I/O; plain exit 0; ASan clean",
         "fairness_notes": "Normal liburing usage except the ONE hazard (fd closed in the prepared window). Kernel-side fixed-file UAF half (CVE-class, fixed upstream) is NOT user-space reproducible: recorded BLOCKED at L9."
@@ -494,6 +497,7 @@
       "conventional_probe": {
         "probe_id": null,
         "source": null,
+        "executed": false,
         "baseline_form": "raw io_uring cancel-CQE / request-CQE reconciliation",
         "result": "NOT_EXECUTED — caller-reconciliation analog rejected during design as either non-deterministic or a manufactured-incompetence baseline (task §14); kernel-side pre-fix double-terminal is not re-executable",
         "fairness_notes": "Conventional half rests on the documented obligation (cancel is an attempt; caller reconciles). Honest gap: no executed conventional probe for this family."
@@ -627,6 +631,7 @@
       "conventional_probe": {
         "probe_id": null,
         "source": null,
+        "executed": false,
         "baseline_form": "kernel duplicate-CQE history (fixed by routing fix)",
         "result": "NOT_EXECUTED — the defect lived in kernel routing and is fixed upstream; re-execution would require a vulnerable kernel (BLOCKED); today's kernel PREVENTS by mechanism",
         "fairness_notes": "Recorded honestly: current conventional kernel PREVENTS this hazard by mechanism; the historical defect is the SE-1 evidence."
@@ -762,6 +767,7 @@
       "conventional_probe": {
         "probe_id": "P-C06",
         "source": "tests/research/se2/conventional/conv_h06_lio_listio_partial.c",
+        "executed": true,
         "baseline_form": "POSIX lio_listio (glibc), LIO_WAIT, one invalid entry",
         "result": "measured: listio rc=-1 errno=EIO with NOTHING executed (file empty; valid entries' aio_return unset) — glibc initiation is ATOMIC for the invalid-entry shape; batch-level rejection with no residue",
         "fairness_notes": "CONVENTIONAL STRONGER IN THIS DIMENSION (§37 recorded): for the invalid-entry shape, glibc's listio initiation is atomic and matches Sluice's transactional submission. POSIX itself permits subset initiation and valid entries can still fail at completion (ENOSPC class) — that per-entry reconciliation obligation remains documented-only and was not deterministically triggerable on this host."
@@ -912,6 +918,7 @@
       "conventional_probe": {
         "probe_id": "P-C07",
         "source": "tests/research/se2/conventional/conv_h07_partial_write_retry.c",
+        "executed": true,
         "baseline_form": "raw POSIX pipe, F_SETPIPE_SZ=4096, nonblocking",
         "result": "partial write 4096/8192; wrong-offset retry delivers block-1 twice, block-2 never — silent stream corruption; plain exit 0; ASan clean",
         "fairness_notes": "Normal POSIX usage except the ONE hazard (retry from wrong offset). Deterministic via pinned pipe capacity."
@@ -1061,6 +1068,7 @@
       "conventional_probe": {
         "probe_id": null,
         "source": null,
+        "executed": false,
         "baseline_form": "io_uring linked timeout (kernel 5.13 fix 447c19f class)",
         "result": "NOT_EXECUTED — the defect was kernel-internal and is fixed upstream; user-space re-execution impossible (BLOCKED); today's kernel PREVENTS by mechanism",
         "fairness_notes": "Per the corrected SE-1 H08 shape, the conventional probe target is linked-timeout semantics inside the kernel — not reachable from user space."
@@ -1195,6 +1203,7 @@
       "conventional_probe": {
         "probe_id": "P-C09",
         "source": "tests/research/se2/conventional/conv_h09_lost_wake.c",
+        "executed": true,
         "baseline_form": "POSIX condition variable, mutex-protected predicate, missing recheck protocol",
         "result": "plain: LOST WAKE REPRODUCED deterministically (waiter stranded; alarm fired, exit 42); TSan x3: ZERO race reports (all accesses mutex-held), same exit 42",
         "fairness_notes": "Normal pthreads usage except the ONE hazard (single predicate check before unconditional sleep — the missing recheck protocol). LAYER FINGERPRINT: TSan is blind to logic-level lost wakes."
@@ -1331,6 +1340,7 @@
       "conventional_probe": {
         "probe_id": null,
         "source": null,
+        "executed": false,
         "baseline_form": "libuv EBUSY refusal / asio documented handler abandonment",
         "result": "NOT_EXECUTED — host has libuv runtime .so but NO headers and no asio; a raw-pthread loop would be a manufactured baseline (task §14)",
         "fairness_notes": "Conventional half rests on the SE-1 documented-obligation source. Honest NOT_TESTED."
@@ -1464,6 +1474,7 @@
       "conventional_probe": {
         "probe_id": null,
         "source": null,
+        "executed": false,
         "baseline_form": "io_uring provided-buffer / request-refcount completion paths (kernel fixes)",
         "result": "NOT_EXECUTED — kernel-internal path-coverage defects, fixed upstream; not re-executable (BLOCKED)",
         "fairness_notes": "Kernel-half history; user-space analog would be manufactured."
@@ -1597,6 +1608,7 @@
       "conventional_probe": {
         "probe_id": null,
         "source": null,
+        "executed": false,
         "baseline_form": "filesystem/durability model (PostgreSQL fsyncgate class)",
         "result": "KERNEL HALF BLOCKED: kernel page-error clearing cannot be probed without storage-fault injection below the boundary. POLICY HALF: conventional retry-after-fsync-failure is exactly what the documented guidance suggested — the failure is policy-level and conventional layers provide no detection.",
         "fairness_notes": "Per task §20: policy cells testable; kernel mechanism recorded BLOCKED/NOT_APPLICABLE. No fake evidence."
@@ -1728,6 +1740,7 @@
       "conventional_probe": {
         "probe_id": "P-C13",
         "source": "tests/research/se2/conventional/conv_h13_sb_litmus.c",
+        "executed": true,
         "baseline_form": "store-buffering litmus, plain (non-atomic) int publications, 200000 iterations, persistent threads + barrier",
         "result": "plain: 4888/200000 iterations observed publication-without-visibility (both read 0) — silent; ASan clean; TSan: data race DETECTED (exit 66, SUMMARY at conv_h13_sb_litmus.c:37)",
         "fairness_notes": "Normal single-thread-style code except the ONE hazard (publication without barriers). x86-TSO host makes the SB outcome observable."

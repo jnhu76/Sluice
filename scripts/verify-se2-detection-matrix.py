@@ -18,6 +18,12 @@ Narrow validator for docs/results/safety/se2-detection-matrix.json:
         current-executed AND an executed conventional probe source
       * current-documented / historical-fixed / blocked rows can never be
         direct support (a historical broken kernel is not a baseline)
+    plus final-hardening rules (P3-1/P3-2):
+      * direct_ts1b_support == true can never rest on migration_class
+        M0 (parity) or MX (comparison blocked)
+      * comparison_basis == current-executed requires a declared
+        conventional_probe.executed == true; a recorded source path alone
+        is not execution
     with per-subshape consistency when subshapes are present
   - ts1b_adjudication partitions all 13 conventional rows exactly, and its
     support_rows equal the set of rows with direct_ts1b_support == true
@@ -51,9 +57,12 @@ CLAIM_RE = re.compile(r"sluice is safer|safer than|net [-+]?\d|wins \d+ hazards"
 COMPARISON_BASES = {"current-executed", "current-documented", "historical-fixed", "blocked"}
 MIGRATION_CLASSES = {"M0", "M1", "M2", "M3", "M4", "M5", "MX"}
 DIRECT_REQUIRES = "current-executed"
+# P3-1: M0 (no demonstrated comparative migration / parity) and MX
+# (comparison blocked) cannot be direct positive support for T-S1b.
+DIRECT_FORBIDDEN_CLASSES = {"M0", "MX"}
 
 
-def check_comparison(rid: str, where: str, c: dict, has_executed_conv_probe: bool, problems: list[str]) -> None:
+def check_comparison(rid: str, where: str, c: dict, conv_probe: dict, problems: list[str]) -> None:
     basis = c.get("comparison_basis")
     if basis not in COMPARISON_BASES:
         problems.append(f"{rid}/{where}: illegal comparison_basis {basis!r}")
@@ -64,20 +73,35 @@ def check_comparison(rid: str, where: str, c: dict, has_executed_conv_probe: boo
     if not isinstance(direct, bool):
         problems.append(f"{rid}/{where}: direct_ts1b_support must be a boolean")
         return
+    # P3-2: a current-executed basis must rest on a probe that actually ran.
+    # A recorded source path alone is not execution; the structured
+    # `executed` flag is the authority (NOT_EXECUTED/BLOCKED result strings
+    # are never re-parsed here).
+    if basis == "current-executed":
+        if not (conv_probe.get("source") or "").strip():
+            problems.append(
+                f"{rid}/{where}: comparison_basis=current-executed requires "
+                "conventional_probe.source to be set"
+            )
+        if conv_probe.get("executed") is not True:
+            problems.append(
+                f"{rid}/{where}: comparison_basis=current-executed requires "
+                "conventional_probe.executed=true"
+            )
     if direct:
         if basis != DIRECT_REQUIRES:
             problems.append(
                 f"{rid}/{where}: direct_ts1b_support=true requires "
                 f"comparison_basis={DIRECT_REQUIRES} (got {basis!r})"
             )
-        if not has_executed_conv_probe:
+        if cls in DIRECT_FORBIDDEN_CLASSES:
             problems.append(
-                f"{rid}/{where}: direct_ts1b_support=true requires an executed "
-                f"conventional probe (conventional_probe.source must be set)"
+                f"{rid}/{where}: direct_ts1b_support=true cannot rest on "
+                f"migration_class={cls} (parity/blocked is not comparative support)"
             )
     for s in c.get("subshapes", []) or []:
         check_comparison(rid, f"{where}.subshape[{s.get('name', '?')!r}]", s,
-                         has_executed_conv_probe, problems)
+                         conv_probe, problems)
     if direct and c.get("subshapes"):
         if not any(s.get("direct_ts1b_support") for s in c["subshapes"]):
             problems.append(f"{rid}/{where}: row direct=true needs a direct subshape")
@@ -174,14 +198,19 @@ def main() -> int:
             problems.append(f"{rid}: conventional-origin row missing conventional_probe section")
         if not is_conventional_row and r.get("conventional_probe") is not None:
             problems.append(f"{rid}: induced row must not carry a conventional_probe")
-        # comparison block (review 5060477073 Blockers 1+3)
+        # comparison block (review 5060477073 Blockers 1+3; P3-1/P3-2 hardening)
         if is_conventional_row:
             comp = r.get("comparison")
             if not isinstance(comp, dict):
                 problems.append(f"{rid}: missing comparison block")
             else:
-                executed = bool((r.get("conventional_probe") or {}).get("source"))
-                check_comparison(rid, "comparison", comp, executed, problems)
+                probe = r.get("conventional_probe") or {}
+                if not isinstance(probe.get("executed"), bool):
+                    problems.append(
+                        f"{rid}: conventional_probe.executed must be declared "
+                        "as a boolean (true = probe actually ran)"
+                    )
+                check_comparison(rid, "comparison", comp, probe, problems)
 
     # SB-10 must not be a denominator row
     if "SE1-SB-10" in row_ids:
@@ -295,7 +324,7 @@ def main() -> int:
     if isinstance(adj, dict):
         print(f"  T-S1b status:         {adj.get('status')}")
         print(f"  direct support rows:  {sorted(direct_ids)}")
-    print("  comparison blocks:    13 conventional rows, basis/class/direct consistent")
+    print("  comparison blocks:    13 conventional rows, basis/class/direct/executed consistent")
     print("  markdown derivation:  counts, direct list, pair-table classes match JSON")
     print("  score-like fields:    none")
     print("  forbidden claims:     none")

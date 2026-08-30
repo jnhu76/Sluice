@@ -87,7 +87,11 @@ Measured against the CURRENT conventional baseline (review 5060477073).
 `comparison_basis` per row lives in the JSON: `current-executed` (probe ran),
 `current-documented` (docs/SE-1 sources only), `historical-fixed` (current
 conventional implementation prevents by mechanism), `blocked`. Only
-`current-executed` rows can be direct T-S1b support.
+`current-executed` rows can be direct T-S1b support. The validator enforces
+this mechanically: `current-executed` requires a set `conventional_probe.source`
+AND `conventional_probe.executed: true` (a recorded source path alone is not
+execution), and direct T-S1b support can never rest on `M0` (parity) or `MX`
+(blocked).
 
 - M0 (no current-baseline migration): H01, H03, H05, H06, H07, H08, H11 —
   parity-in-miss (H01, H03 executed shape, H07 raw-surface shape), current
