@@ -252,6 +252,21 @@ run_gate "failure-envelope matrix" "${FAIL_ENV_REPRO}" \
     python3 scripts/gates/failure-envelope.py
 
 # ---------------------------------------------------------------------------
+# Gate 5e: SE-1 hazard corpus evidence integrity (#227 Lane A / SE-1-CORRECTIVE-1).
+#
+# docs/results/safety/se1-hazard-corpus.json is the frozen SE-1 data authority.
+# The validator is FILE-SCOPED (no diff dependence), like Gate 5d: any drift —
+# a C0 entry losing its bug_record/upstream_fix source roles, duplicate induced
+# root_cause_keys, a probe companion mutating into a population case, a family
+# losing its population-case anchor without an explicit NO VALID ENTRY YET
+# declaration, a legacy `aliases` field, or a score-like field — fails the gate
+# even if the corpus was not touched in the pushed range. The validator enforces
+# MECHANICAL PROVENANCE SHAPE only; semantic provenance review remains human.
+SE1_CORPUS_REPRO="python3 scripts/verify-se1-hazard-corpus.py"
+run_gate "SE-1 hazard corpus integrity" "${SE1_CORPUS_REPRO}" \
+    python3 scripts/verify-se1-hazard-corpus.py
+
+# ---------------------------------------------------------------------------
 # Gate 6: whitespace / conflict-marker damage + assert-hygiene changed-lines
 # scan across the selected revision range(s).
 #
