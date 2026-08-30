@@ -1,0 +1,1249 @@
+{
+  "schema": "sluice-tax0a-hotpath-topology/1.1",
+  "description": "TAX-0A static physical-topology census + native measurement-readiness audit. Every factual entry carries status FACT with file:line evidence bound to the baseline SHA; every unproven causal claim carries status HYPOTHESIS. No entry asserts a bottleneck: no current causal experiment has been run (that is TAX-0B/C/D). Schema 1.1 = freeze corrections FC-1..FC-7 (2026-08-30, human adversarial review of issue #251) applied BEFORE any TAX-0B experiment; see the freeze block.",
+  "baseline": {
+    "status": "FACT",
+    "branch": "master",
+    "head": "5537187c3df4db51fac51cb8b75dc2e04e9cae34",
+    "origin_master": "5537187c3df4db51fac51cb8b75dc2e04e9cae34",
+    "head_equals_origin": true,
+    "tracked_worktree_clean": true,
+    "untracked_audit_artifacts": [
+      "research/tax0/README.md",
+      "research/tax0/TAX0-A-HOTPATH-TOPOLOGY-AUDIT.md",
+      "research/tax0/tax0a-hotpath-topology.json"
+    ],
+    "date": "2026-08-30",
+    "note": "All file:line references bound to this SHA. Worktree snapshot at audit time: tracked tree clean, the three audit artifacts untracked; the freeze commit (this file) is what tracks them."
+  },
+  "freeze": {
+    "status": "ACCEPTED / FROZEN",
+    "date": "2026-08-30",
+    "baseline": "5537187c3df4db51fac51cb8b75dc2e04e9cae34",
+    "production_changes": "NONE",
+    "scientific_changes": "NONE (no TAX-0B/C experiment run; these artifacts are pre-experiment preregistration)",
+    "review_provenance": "human adversarial review of issue #251 (2026-08-30); corrections applied BEFORE any TAX-0B experiment",
+    "corrections": [
+      {
+        "id": "FC-1",
+        "area": "evidence vocabulary",
+        "change": "structures S1-S9: measured_hotness=CURRENT split into path_frequency (code-path classification) + measured_hotness=NONE — no current performance measurement exists"
+      },
+      {
+        "id": "FC-2",
+        "area": "baseline provenance",
+        "change": "worktree_clean split into tracked_worktree_clean=true + untracked_audit_artifacts (the three research/tax0 files)"
+      },
+      {
+        "id": "FC-3",
+        "area": "hypothesis wording",
+        "change": "H-W3 'pure overhead' replaced with 'no additional scheduler-worker sleeper expected in this workload shape; performance contribution unmeasured'"
+      },
+      {
+        "id": "FC-4",
+        "area": "unknown preservation",
+        "change": "io_worker fallback stays UNKNOWN ('no code-level fallback path found'); report wording aligned — kernel io-wq behavior is a separate, untested question"
+      },
+      {
+        "id": "FC-5",
+        "area": "experiment ordering",
+        "change": "ladder re-registered as EXP-0 (capacity invariance, new) -> EXP-1 (cliff replication, + CPU-placement prereg) -> EXP-U1 (uring dispatch/backlog, new) -> EXP-2 (attribution) -> EXP-3 (raw-liburing matched ceiling); targets the two clean O(capacity) paths (resolve_completion per-await scan, find_live_router_cookie_ per-CQE scan)"
+      },
+      {
+        "id": "FC-6",
+        "area": "measurement controls",
+        "change": "EXP-1 CPU-placement preregistration added: lscpu topology capture, affinity/SMT policy, governor, migration observation"
+      },
+      {
+        "id": "FC-7",
+        "area": "perf capability",
+        "change": "PERF split into AUTOMATED_UNPRIVILEGED=LIMITED vs HOST_WITH_SUDO=potentially available (agent lacks passwordless sudo; host does not lack the capability)"
+      }
+    ]
+  },
+  "environment": {
+    "os": "Fedora Linux 44 (KDE Plasma Desktop Edition), PREEMPT_DYNAMIC kernel 7.1.9-200.fc44.x86_64",
+    "cpu": {
+      "model": "Intel Xeon E5-2666 v3 @ 2.90GHz",
+      "sockets": 1,
+      "cores_per_socket": 10,
+      "threads_per_core": 2,
+      "logical_cpus": 20,
+      "smt_active": 1,
+      "l1d": "32 KiB/core (10 instances)",
+      "l2": "256 KiB/core (2.5 MiB total, 10 instances)",
+      "l3": "25 MiB shared, 1 instance",
+      "numa_nodes": 1,
+      "numa_node0_cpus": "0-19",
+      "governor": "schedutil (intel_cpufreq driver; idle sample 1.2 GHz)"
+    },
+    "compilers": {
+      "clang": "22.1.8 (Fedora 22.1.8-4.fc44)",
+      "gcc": "16.2.1"
+    },
+    "liburing": {
+      "system_rpm": "liburing-2.13-2.fc44 / liburing-devel-2.13-2.fc44 (pkg-config 2.13)",
+      "repo_build_pin": "xmake add_requires liburing 2.14 via xrepo (xmake/experimental.lua:43)",
+      "kernel_symbols": "io_uring symbols present in /proc/kallsyms (addresses zeroed for unprivileged reader)"
+    },
+    "storage": {
+      "status": "FACT",
+      "repo_fs": "/home on /dev/sda3, btrfs (compress=zstd:1, ssd, discard=async)",
+      "repo_device": "SATA SSD KINGSTON GS-480 447.1G, ROTA=0 (non-rotational)",
+      "nvme_present_but_unusable": "nvme0n1 GVL-512 476.9G exists but is NTFS (Windows dual-boot); no Linux filesystem on it",
+      "perf_storage_status": "OTHER_BLOCK_DEVICE",
+      "tmp": "tmpfs /tmp (separate from repo)"
+    },
+    "perf": {
+      "version": "perf 7.1.9-200.fc44.x86_64",
+      "perf_event_paranoid": 2,
+      "kptr_restrict": 0,
+      "passwordless_sudo": false,
+      "user_mode_counters": "READY (cycles:u, instructions:u verified working)",
+      "kernel_counters_context_switches": "BLOCKED unprivileged (context-switches:u reads 0; kernel-side events need paranoid<=1)",
+      "perf_c2c_perf_sched": "BLOCKED unprivileged (require root or paranoid lowering)",
+      "compensation_available": "/proc/<pid>/task/*/status voluntary/involuntary_ctxt_switches + schedstat (the RX-1 method, research/rx1/RX1_METHOD.md sec3)",
+      "host_with_sudo_note": "perf_event_paranoid=2 / kptr_restrict=0 / no passwordless sudo are agent-session facts, not missing host capabilities; with interactive sudo, perf sched / perf c2c are potentially available and must be recorded as a separate provenance tier"
+    }
+  },
+  "paths": [
+    {
+      "id": "3A-threadpool-async",
+      "status": "FACT",
+      "summary": "ApplicationRuntime Evented task -> Fiber -> submit transaction -> BoundedDispatchQueue -> persistent blocking worker -> pread/pwrite -> arena terminal -> reap -> Scheduler wake -> Fiber resume",
+      "steps": [
+        {
+          "symbol": "RuntimeTaskContext::await_completion",
+          "file_line": "src/async/application_runtime.cpp:79",
+          "thread": "scheduler worker (Fiber)",
+          "notes": "Evented mode: task body runs on a Scheduler Fiber; Threaded mode uses std::thread + ThreadedWaitPolicy instead (include/sluice/async/group.hpp:49-52)"
+        },
+        {
+          "symbol": "AsyncIoContext::submit_read/write (access_mtx_)",
+          "file_line": "src/async/async_io_context.cpp:161-183",
+          "lock": "access_mtx_",
+          "notes": "ALL backend calls serialized by access_mtx_ at context layer"
+        },
+        {
+          "symbol": "ThreadPoolBackend::submit_size",
+          "file_line": "src/async/threadpool_backend.cpp:251-287",
+          "lock": "admission_mtx_ (line 274)",
+          "notes": "admission transaction serializes Stage 1-3 ladder"
+        },
+        {
+          "symbol": "detail::submit_transaction",
+          "file_line": "include/sluice/async/detail/submit_transaction.hpp:95-205",
+          "notes": "reserve -> validate -> prepare -> write_scratch -> install_publication_binding -> begin_binding CAS -> commit -> install/commit_binding release-store; 4 arena-leaf acquisitions under admission_mtx_; allocation-free"
+        },
+        {
+          "symbol": "RequestArena::reserve/prepare/install_publication_binding/commit",
+          "file_line": "include/sluice/async/detail/request_arena.hpp:242,292,315,366",
+          "lock": "arena mutex_ x4",
+          "container": "slots_ vector (fixed), free_slots_ vector LIFO (pop_back line 252)",
+          "atomic": "submit_seq_++ under lock (line 379); Completion begin/commit CAS + release-store (include/sluice/async/completion.hpp:295-340)"
+        },
+        {
+          "symbol": "ThreadPoolBackend::enqueue_after_commit",
+          "file_line": "src/async/threadpool_backend.cpp:316-396",
+          "lock": "work_mtx_ (line 330) -> arena_.enqueue (line 331)",
+          "wake": "work_cv_.notify_one() per submit (line 389)",
+          "container": "dispatch_ BoundedDispatchQueue fixed array, capacity==request_capacity, O(1) push/pop (lines 59-76)"
+        },
+        {
+          "symbol": "ThreadPoolBackend::worker_loop",
+          "file_line": "src/async/threadpool_backend.cpp:426-519",
+          "thread": "per persistent blocking worker",
+          "lock": "work_mtx_ park on work_cv_ (line 437-438); pop_front (469); arena_.mark_running under work_mtx_ (479); ++active_workers_ (482); work_mtx_ release BEFORE syscall; work_mtx_ again for --active_workers_ (495-496)"
+        },
+        {
+          "symbol": "run_syscall (pread/pwrite/fdatasync/fsync, EINTR retry)",
+          "file_line": "src/async/threadpool_backend.cpp:521-552",
+          "thread": "blocking worker",
+          "atomic": "syscall_count_.fetch_add relaxed (493)"
+        },
+        {
+          "symbol": "arena_.record_terminal",
+          "file_line": "include/sluice/async/detail/request_arena.hpp:598-619",
+          "thread": "blocking worker",
+          "lock": "arena mutex_ alone; push_ready_locked_ intrusive ready-ring (1099)",
+          "wake": "signal_ready_progress -> ReadyWaitSource::signal_progress: mtx_ + ++ready_epoch_ + notify_ALL (threadpool_backend.cpp:507, ready_wait_source.hpp:165-171)"
+        },
+        {
+          "symbol": "Scheduler::drain_routed_completion_waits_locked",
+          "file_line": "src/async/scheduler.cpp:1405-1489",
+          "thread": "scheduler worker under global_mtx_",
+          "lock": "global_mtx_ -> access_mtx_ (ctx_.poll) -> arena mutex_ per reaped slot",
+          "notes": "arena_.reap pops ready-ring one slot per lock acquisition; publish thunk = Completion-ready release-store INSIDE leaf domain (request_arena.hpp:555); sink.on_ready outside lock -> wait_registry_mtx_ marks delivered (scheduler.cpp:1498-1550)"
+        },
+        {
+          "symbol": "Scheduler::route_runnable_locked",
+          "file_line": "src/async/scheduler.cpp:1570-1640",
+          "thread": "scheduler worker under global_mtx_",
+          "atomic": "global_terminate_.store(false) 1583; idle_workers_.exchange(0)+conditional dance_epoch_.fetch_add 1598-1604",
+          "container": "fiber_owner_ unordered_map find (1646) per publication; target->local_runnable deque push_back under inbox_mtx (1624-1625)",
+          "wake": "signal_wake_locked: wake_mtx_ + ++wake_epoch_ + wake_cv_.notify_ALL (scheduler_park_wake.cpp:135-170) + backend bridge gate 167"
+        },
+        {
+          "symbol": "worker_loop pop + run_next_on",
+          "file_line": "src/async/scheduler.cpp:546-551,1337",
+          "thread": "owning scheduler worker",
+          "lock": "inbox_mtx pop_front; idle_workers_.exchange(0) unlocked erase 606-612",
+          "atomic": "running_fiber_count_.fetch_add",
+          "notes": "fiber_ctx::context_switch back into Fiber; fiber reads frozen outcome; Completion::reset -> arena_.release_completed_binding (arena lock, generation++ request_arena.hpp:792,1167)"
+        }
+      ],
+      "per_op_lock_acquisitions": {
+        "status": "FACT",
+        "arena_leaf": "8-9 (reserve,prepare,install_binding,commit under admission_mtx_; enqueue under work_mtx_; mark_running under work_mtx_; record_terminal; reap; release)",
+        "admission_mtx_": 1,
+        "work_mtx_": "3 (submitter push, worker pop, worker active--)",
+        "ready_domain_mtx_": "2 (worker signal + waiter snapshot)",
+        "access_mtx_": "2-3 (submit, poll, register_waiter)",
+        "global_mtx_": ">=2 (drain+route per completion wave; classify per idle iteration)",
+        "wait_registry_mtx_": 2,
+        "inbox_mtx": 1,
+        "wake_mtx_": 1,
+        "notes": "Counts for the E1-L2 shape (1 fiber, depth-D pipeline); does not include park/wake futex traffic"
+      }
+    },
+    {
+      "id": "3B-uring-async",
+      "status": "FACT",
+      "summary": "Single-driver model: submit + dispatch + SQE fill under ONE dispatch_mtx_; SQE flush batches via io_uring_submit on poll/wait; CQE batch reaped by driver thread; kernel park via io_uring_submit_and_wait(1)",
+      "steps": [
+        {
+          "symbol": "UringAsyncBackend::submit_size",
+          "file_line": "src/async/uring_backend.cpp:624-666",
+          "lock": "dispatch_mtx_ (line 643) for the whole submit_transaction (arena x4 under it)",
+          "notes": "admission+dispatch share one lock; AsyncIoContext::access_mtx_ serializes all driver calls above this"
+        },
+        {
+          "symbol": "UringAsyncBackend::enqueue_after_commit",
+          "file_line": "src/async/uring_backend.cpp:712-780",
+          "lock": "dispatch_mtx_; arena_.enqueue (721); dispatch_->push_back (723); DRAIN LOOP dispatch_one_locked(front) until NULL SQE (733-752)"
+        },
+        {
+          "symbol": "UringAsyncBackend::dispatch_one_locked",
+          "file_line": "src/async/uring_backend.cpp:796-903",
+          "container": "cookie_free_list_ vector LIFO (812-813); router_ fixed vector (864-869); transport_ledger_ fixed ring append (873)",
+          "atomic": "live_cookies_.fetch_add relaxed (869)",
+          "notes": "io_uring_get_sqe one at a time (819); on NULL: submit_transport_locked flush + single retry; prep_read/write/fsync (846-858); sqe_set_data64(op_cookie) (863); arena_.mark_running under dispatch_mtx_ (881); dispatch_->remove_exact(front) = O(queue-size) with shift (891, 253-269)"
+        },
+        {
+          "symbol": "UringAsyncBackend::submit_transport_locked (io_uring_submit)",
+          "file_line": "src/async/uring_backend.cpp:910-927",
+          "notes": "TRANSPORT ONLY, never mutates RequestState; flushes ALL staged SQEs at once (batch-capable); called from poll()/wait_one() dispatch phase (1313,1349) and on SQ-pressure retry; NOT called per dispatch_one_locked",
+          "complexity_flag": "SQE fill is per-op under dispatch_mtx_ but kernel submission is batched at the next poll/wait_one"
+        },
+        {
+          "symbol": "UringAsyncBackend::reap_cqes (io_uring_peek_batch_cqe, BATCH=32)",
+          "file_line": "src/async/uring_backend.cpp:1233-1266",
+          "thread": "the single driver thread (whichever called poll/wait_one)",
+          "notes": "per CQE: cqe_get_data64 + cqe_seen + handle_one_cqe"
+        },
+        {
+          "symbol": "handle_one_cqe -> find_live_router_cookie_ -> finalize_operation_terminal_",
+          "file_line": "src/async/uring_backend.cpp:1161-1231,1095-1101,1128-1159",
+          "complexity_flag": "find_live_router_cookie_ is a LINEAR O(request_capacity) scan PER CQE (normal completion path)",
+          "lock": "arena_.record_terminal per CQE (arena leaf)"
+        },
+        {
+          "symbol": "UringAsyncBackend::wait_one",
+          "file_line": "src/async/uring_backend.cpp:1330-1420",
+          "thread": "driver",
+          "lock": "dispatch_mtx_ held across io_uring_submit_and_wait(1) kernel park (1382-1389)",
+          "wake": "kernel CQE arrival; UringWaitSource control eventfd + poll(2) for cross-thread interrupt (include/sluice/async/detail/uring_wait_source.hpp:1-95)"
+        },
+        {
+          "symbol": "cancel control SQE (IORING_OP_ASYNC_CANCEL)",
+          "file_line": "src/async/uring_backend.cpp:1572-1666",
+          "notes": "running-cancel records intent then appends tagged control SQE; control CQE informational only; terminal decided by original op CQE"
+        }
+      ],
+      "io_worker_fallback": "UNKNOWN: no code-level io_worker fallback path found in uring_backend.cpp; SQ-full backpressure is handled by leaving entries on the dispatch ring (dispatch_one_locked returns false) and retrying at next poll/wait_one",
+      "who_resumes_fiber": "FACT: the same thread that reaps CQEs (the single driver = the Scheduler worker that called poll/wait_one) also runs arena_.reap -> sink -> route -> and, if it owns the fiber, context_switches back in. No other thread touches Completion-ready publication."
+    },
+    {
+      "id": "3C-scheduler-runnable",
+      "status": "FACT",
+      "structures": [
+        {
+          "symbol": "WorkerState::local_runnable",
+          "file_line": "include/sluice/async/scheduler.hpp:167",
+          "container": "std::deque<Fiber*>",
+          "bounded": false,
+          "growth": "deque chunk allocation on push_back growth",
+          "owner": "worker thread",
+          "guard": "per-worker inbox_mtx (scheduler.hpp:178)",
+          "producers": "spawn/spawn_on (scheduler.cpp:278-279,333-334), route_runnable_locked cross-worker publication (1623-1626), try_steal transfer (2092-2093), retire-rescue",
+          "consumers": "owner worker_loop pop_front (546-551); thieves (steal)",
+          "topology": "OWNER+THIEF; cross-worker: yes"
+        },
+        {
+          "symbol": "Scheduler::fiber_owner_",
+          "file_line": "include/sluice/async/scheduler.hpp:1810",
+          "container": "std::unordered_map<Fiber*, WorkerState*>",
+          "bounded": false,
+          "growth": "rehash on growth; one node alloc per fiber",
+          "guard": "global_mtx_",
+          "access": "find on EVERY fiber publication (owner_for_fiber_locked scheduler.cpp:1646); writes on spawn/steal/re-route",
+          "topology": "shared by ALL workers under G"
+        },
+        {
+          "symbol": "Scheduler::pending_spawn_",
+          "file_line": "include/sluice/async/scheduler.hpp:1814",
+          "container": "std::deque<Fiber*>",
+          "bounded": false,
+          "guard": "global_mtx_",
+          "topology": "global FIFO, pre-run assignment"
+        },
+        {
+          "symbol": "Scheduler::try_steal",
+          "file_line": "src/async/scheduler.cpp:2036-2103",
+          "lock": "global_mtx_ held, then victim inbox_mtx",
+          "complexity_flag": "victim round-robin; LINEAR scan of victim deque + fiber_owner_ find per candidate; erase from deque middle = O(n) shift; steal does NOT signal the wake domain (thief is awake by definition)"
+        },
+        {
+          "symbol": "Scheduler::classify_locked_impl",
+          "file_line": "src/async/scheduler.cpp:1760-1795",
+          "lock": "global_mtx_ -> per-worker inbox_mtx (O(W) acquisitions per classify) -> access_mtx_ (ctx_.outstanding -> arena lock)",
+          "notes": "runs at least once per worker_loop idle iteration and in MW-S2 admission re-checks"
+        },
+        {
+          "symbol": "park_on_wake_source",
+          "file_line": "src/async/scheduler_park_wake.cpp:178+",
+          "lock": "global_mtx_ (arm-then-recheck) -> nested wake_mtx_ baseline; cv wait with BOTH released",
+          "predicate": "wake_epoch != observed OR terminate; deadline-driven timeout (no periodic wake without active deadline); 2ms bounded observation only for non-split-wait mixed-wake parks"
+        },
+        {
+          "symbol": "idle dance",
+          "file_line": "src/async/scheduler.cpp:1079-1148",
+          "atomic": "idle_workers_.fetch_add(1)/exchange(0) acq_rel; dance_epoch_.fetch_add(1) at 3 unlocked erase sites (610,668,1602); per-worker idle_dance_contributed_/dance_epoch_at_contribution_",
+          "notes": "last-idle threshold convergence against live_loop_workers_"
+        },
+        {
+          "symbol": "MW-S2 single participant",
+          "file_line": "src/async/scheduler.cpp:681-1020",
+          "notes": "two-phase admission (candidate/committed), lowest-id alive election; committed participant parks in ctx_.wait_one (Backend domain) for split-wait backends (ThreadPool ReadyWaitSource / Uring kernel wait); backend_wait_active_ gate + signal_wake_locked bridge interrupts it"
+        }
+      ]
+    },
+    {
+      "id": "3D-wait-timer-sync",
+      "status": "FACT",
+      "source": "subagent census verified against headers; key facts:",
+      "structures": [
+        {
+          "symbol": "WaitQueue (per primitive)",
+          "file_line": "include/sluice/async/wait_queue.hpp:337-338",
+          "container": "intrusive doubly-linked FIFO of caller-owned WaitNodes; NO container storage; zero allocation steady-state",
+          "lock": "per-primitive Mutex (std::mutex wrapper); order G -> primitive mtx",
+          "atomic": "WaitNode::state_ CAS acq_rel (wait_node.hpp:328-360)"
+        },
+        {
+          "symbol": "Scheduler timer subsystem",
+          "file_line": "include/sluice/async/scheduler.hpp:2075-2098, src/async/scheduler_timer.cpp",
+          "container": "deadline_heap_ std::vector binary min-heap + timer_pool_/select_timer_pool_ std::list (pointer-stable)",
+          "allocation": "ONE heap list-node allocation per timed-wait registration (prepare_ordinary_deadline_locked scheduler_timer.cpp:396)",
+          "complexity_flag": "insert O(log n); recompute_earliest_deadline_locked O(pool1+pool2) LINEAR scan after EVERY heap/pool mutation (scheduler_timer.cpp:510-536); retire_timer_for_node_locked O(pool) address scan on every non-timer wake of a timed wait (438-473); pump per due timer O(log n) + O(pool) erase; no timer wheel"
+        },
+        {
+          "symbol": "wait_records_ registry",
+          "file_line": "include/sluice/async/scheduler.hpp:1761-1775",
+          "container": "preallocated unique_ptr pool (wait_capacity, default 256) + intrusive free list; NEVER grows",
+          "lock": "wait_registry_mtx_ leaf; inbound edges {G, access_mtx_} -> registry"
+        },
+        {
+          "symbol": "legacy fallback maps",
+          "file_line": "include/sluice/async/scheduler.hpp:1737-1739",
+          "container": "unordered_map keyed Completion*/atomic<bool>*; NON-arena backends only; O(n) ready() rescan in drain (scheduler.cpp:1456-1487)"
+        },
+        {
+          "symbol": "AsyncQueue QueuePort",
+          "file_line": "include/sluice/async/detail/queue_port.hpp:405-447",
+          "container": "fixed new[] ring (bounded capacity) + 2 role WaitQueues; per-item Node<T> heap alloc on push (queue_port.hpp:219-232)",
+          "lock": "G -> state_mtx_ -> exactly one role mtx"
+        },
+        {
+          "symbol": "Select",
+          "file_line": "src/async/select.cpp:856-865",
+          "container": "caller-frame fixed arrays (<=8 arms); intrusive SelectPort lists; deferred_publications_ vector transit (FE only)"
+        }
+      ]
+    }
+  ],
+  "structures": [
+    {
+      "id": "S1",
+      "symbol": "RequestArena::slots_ + free_slots_",
+      "file_line": "include/sluice/async/detail/request_arena.hpp:1187-1188",
+      "container": "std::vector<RequestSlot> fixed + std::vector<uint32_t> LIFO free-list",
+      "allocator": "default; construction-time only",
+      "steady_state_allocation": "none",
+      "growth": "none (capacity fixed)",
+      "node_based": false,
+      "owner": "arena (backend)",
+      "writers": "driver/submitter, workers, reaper under one mutex",
+      "readers": "same under lock",
+      "producer_topology": "MPMC (all lifecycle transitions)",
+      "cross_thread": true,
+      "lock": "single mutable std::mutex mutex_ (1189)",
+      "bounded": "yes (request_capacity)",
+      "commutativity": "PARTIAL (independent slots' transitions commute semantically; all serialized by one mutex)",
+      "physical_conflict_candidate": "YES",
+      "path_frequency": "PER_OP (every submit/reap/terminal/release transitions a slot; E1-L2 shape)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)",
+      "semantic_guarantee": "single arbitration domain for identity/generation/terminal/reap (ADR decisions 2,4,9,12,13,14)"
+    },
+    {
+      "id": "S2",
+      "symbol": "arena ready-ring (ready_head_/tail/count + slot ready_next_)",
+      "file_line": "include/sluice/async/detail/request_arena.hpp:1206-1208,1099-1150",
+      "container": "intrusive singly-linked FIFO threaded through slots",
+      "steady_state_allocation": "none",
+      "bounded": "yes (== capacity)",
+      "commutativity": "PARTIAL (push/pop of different entries commute; order preservation is semantic)",
+      "physical_conflict_candidate": "UNKNOWN (same mutex as S1)",
+      "path_frequency": "PER_COMPLETION (one ready-ring push per terminal, one pop per reap)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)",
+      "semantic_guarantee": "reap order = terminal-winner order (Decision 9)"
+    },
+    {
+      "id": "S3",
+      "symbol": "ThreadPoolBackend::dispatch_ (BoundedDispatchQueue)",
+      "file_line": "src/async/threadpool_backend.cpp:59-100",
+      "container": "fixed SlotHandle array ring",
+      "steady_state_allocation": "none",
+      "bounded": "yes (request_capacity)",
+      "owner": "work_mtx_ domain",
+      "producer_topology": "MPSC (driver submits) / consumers = W workers",
+      "commutativity": "PARTIAL (push vs pop of different entries commute; shared head/size metadata)",
+      "physical_conflict_candidate": "YES (work_mtx_ shared by driver + W workers)",
+      "path_frequency": "PER_OP (one push per submit; one pop per worker dequeue)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)",
+      "notes": "remove_exact O(size)-with-shift used ONLY on cancel path for ThreadPool (worker pops via O(1) pop_front)"
+    },
+    {
+      "id": "S4",
+      "symbol": "UringAsyncBackend::dispatch_ + router_ + cookie_free_list_ + transport_ledger_",
+      "file_line": "src/async/uring_backend.cpp:205-276,288-383,504-516",
+      "container": "fixed vector rings/arrays (all construction-time)",
+      "steady_state_allocation": "none",
+      "bounded": "yes",
+      "commutativity": "N/A single-driver serialized",
+      "physical_conflict_candidate": "NO (single driver; contention only via access_mtx_ serialization itself)",
+      "path_frequency": "PER_OP + PER_CQE (per dispatch drain pass; per-CQE router scan on uring path)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)",
+      "complexity_flags": [
+        "remove_exact(front) O(queue-size) shift per dispatch => drain of N = O(N^2) SlotHandle copies (891)",
+        "find_live_router_cookie_ O(request_capacity) per CQE (1095)"
+      ]
+    },
+    {
+      "id": "S5",
+      "symbol": "WorkerState::local_runnable",
+      "file_line": "include/sluice/async/scheduler.hpp:167",
+      "container": "std::deque<Fiber*>",
+      "steady_state_allocation": "deque chunk growth possible on push_back",
+      "bounded": "no",
+      "owner": "worker",
+      "writers": "owner + cross-worker routers + thieves (under inbox_mtx)",
+      "producer_topology": "OWNER+THIEF",
+      "commutativity": "COMMUTES across DIFFERENT workers' queues; does NOT commute on the SAME queue (FIFO order is semantic)",
+      "physical_conflict_candidate": "UNKNOWN per-queue; cross-queue routing shares G + fiber_owner_ + wake domain (see L2/L6)",
+      "path_frequency": "PER_FIBER_ROUTE (push per routed/spawned fiber; steal scans victim queue)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)"
+    },
+    {
+      "id": "S6",
+      "symbol": "Scheduler::fiber_owner_",
+      "file_line": "include/sluice/async/scheduler.hpp:1810",
+      "container": "std::unordered_map<Fiber*, WorkerState*>",
+      "allocation": "node per fiber + rehash growth",
+      "bounded": "no (grows with total spawned fibers, never shrinks)",
+      "lock": "global_mtx_",
+      "commutativity": "COMMUTES for unrelated fibers (find is read-only)",
+      "physical_conflict_candidate": "YES (shared node-based table under G, touched by every publication/steal)",
+      "path_frequency": "PER_OP (find per publication/steal under G)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)"
+    },
+    {
+      "id": "S7",
+      "symbol": "Scheduler wait_records_ pool",
+      "file_line": "include/sluice/async/scheduler.hpp:1765-1770",
+      "container": "preallocated unique_ptr vector + intrusive free/delivered lists",
+      "steady_state_allocation": "none",
+      "bounded": "yes (wait_capacity)",
+      "physical_conflict_candidate": "UNKNOWN (leaf registry lock; on_ready per reaped op + drain per wave)",
+      "path_frequency": "PER_COMPLETION (one acquire+retire per await_completion)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)"
+    },
+    {
+      "id": "S8",
+      "symbol": "timer_pool_/deadline_heap_",
+      "file_line": "include/sluice/async/scheduler.hpp:2075-2098",
+      "container": "std::list + std::vector heap",
+      "allocation": "one list node per timed wait",
+      "bounded": "no (lazy reclamation at deadline)",
+      "physical_conflict_candidate": "YES under G (recompute O(pool) per mutation)",
+      "path_frequency": "NONE in E1-L2 shape (no timers); TIMED_WAIT_ONLY for timed-wait workloads",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)"
+    },
+    {
+      "id": "S9",
+      "symbol": "AsyncIoContext backend call serialization",
+      "file_line": "src/async/async_io_context.cpp:115-383",
+      "container": "n/a (mutex domain)",
+      "physical_conflict_candidate": "YES (access_mtx_ serializes submit+poll+wait phases of ALL participants)",
+      "path_frequency": "PER_OP (access_mtx_ serializes submit/poll/wait phases of all participants)",
+      "measured_hotness": "NONE (no current performance measurement exists; frequency is a code-path classification only)"
+    }
+  ],
+  "locks": [
+    {
+      "symbol": "RequestArena::mutex_",
+      "file_line": "include/sluice/async/detail/request_arena.hpp:1189",
+      "purpose": "leaf slot-lifecycle arbitration: identity/generation/state/terminal/reap/counters/ready-ring",
+      "protected_state": "slots_, free_slots_, counters, ready-ring, admission_closed_",
+      "writers": "submitter (x4-5/op), each blocking worker (mark_running, record_terminal), reaper (per slot), Completion::reset (release)",
+      "frequency_candidate": "8-9 acquisitions per op",
+      "cross_thread": "yes (driver + W workers)",
+      "lock_nesting": "under admission_mtx_/dispatch_mtx_ (submit) and work_mtx_ (TP enqueue/mark); standalone for record_terminal/reap/release",
+      "semantically_commute_under_it": "PARTIAL: disjoint-slot transitions commute",
+      "logical_vs_physical": "LOGICAL: one arbitration authority required per slot; PHYSICAL: one mutex for ALL capacity slots — physical centralization exceeds per-slot semantic requirement (sharding-compatible semantics, unproven benefit)",
+      "status": "FACT"
+    },
+    {
+      "symbol": "ThreadPoolBackend::admission_mtx_",
+      "file_line": "include/sluice/async/threadpool_backend.hpp:575",
+      "purpose": "admission transaction (submit Stage 1-3 + close serialization)",
+      "writers": "submitters",
+      "frequency_candidate": "1/op",
+      "cross_thread": "yes (multi-fiber submitters; E1 shape: 1)",
+      "semantically_commute_under_it": "NO for admission-vs-close; PARTIAL for two admits (ordering of accepts is not semantically fixed)",
+      "logical_vs_physical": "LOGICAL: accept LP must serialize vs close; PHYSICAL: whole ladder under one mutex (required by current LP design)",
+      "status": "FACT"
+    },
+    {
+      "symbol": "ThreadPoolBackend::work_mtx_ + work_cv_",
+      "file_line": "include/sluice/async/threadpool_backend.hpp:578-579",
+      "purpose": "dispatch ring + active_workers_ + stopping_; worker park domain",
+      "writers": "submitter (push), W workers (pop, active--, park)",
+      "frequency_candidate": "~3/op + park/wake cycle",
+      "cross_thread": "yes (driver + W workers)",
+      "semantically_commute_under_it": "PARTIAL (push vs pop different entries)",
+      "logical_vs_physical": "LOGICAL: dequeue+mark_running single transfer window (ADR 10.4); PHYSICAL: one mutex for whole ring",
+      "status": "FACT"
+    },
+    {
+      "symbol": "ReadyWaitSource::mtx_ + ready_cv_",
+      "file_line": "include/sluice/async/detail/ready_wait_source.hpp:220-223",
+      "purpose": "ready/control epoch domain; MW-S2 participant park",
+      "writers": "every record_terminal (signal_progress), cancel wins, close_admission (interrupt_all)",
+      "frequency_candidate": "notify_ALL per terminal; snapshot+park per wait_one cycle",
+      "cross_thread": "yes (W workers -> parked reaper)",
+      "semantically_commute_under_it": "COMMUTES (epoch increments are commutative monoid)",
+      "logical_vs_physical": "LOGICAL: progress must be observable; PHYSICAL: per-op epoch++ + notify_all is one physicalization; batch-capable aggregation unproven",
+      "status": "FACT"
+    },
+    {
+      "symbol": "AsyncIoContext::access_mtx_",
+      "file_line": "include/sluice/async/async_io_context.hpp:614",
+      "purpose": "serializes ALL backend calls (submit/poll/wait phases/register_waiter/outstanding)",
+      "frequency_candidate": "2-3/op",
+      "cross_thread": "yes (all participants)",
+      "logical_vs_physical": "LOGICAL: single-driver backend contract (esp. Uring); PHYSICAL: global serialization point for ThreadPool too",
+      "status": "FACT"
+    },
+    {
+      "symbol": "Scheduler::global_mtx_",
+      "file_line": "include/sluice/async/scheduler.hpp:1728",
+      "purpose": "wait admission/resolution/routing/classify/spawn/steal/idle-dance/timer pump",
+      "writers": "every worker + every suspending fiber + resolvers",
+      "frequency_candidate": ">=2 per completion wave + per classify iteration",
+      "cross_thread": "yes (all scheduler workers)",
+      "semantically_commute_under_it": "PARTIAL (unrelated wait resolutions commute; routing order to distinct workers commutes)",
+      "logical_vs_physical": "LOGICAL: unified MW classification + owner record + wake epoch authority; PHYSICAL: one mutex for the entire scheduler — the largest centralization candidate; semantics of most pairs do not require it",
+      "status": "FACT"
+    },
+    {
+      "symbol": "Scheduler wake domain (wake_mtx_ + wake_cv_ + wake_epoch_)",
+      "file_line": "include/sluice/async/scheduler.hpp:1945-1947, src/async/scheduler_park_wake.cpp:135-170",
+      "purpose": "parked-worker notification; epoch closes commit-to-sleep window",
+      "frequency_candidate": "notify_ALL per runnable publication",
+      "cross_thread": "yes",
+      "semantically_commute_under_it": "COMMUTES (epoch monoid)",
+      "logical_vs_physical": "LOGICAL: lost-wake-free wake; PHYSICAL: per-publication notify_all on one cv",
+      "status": "FACT"
+    },
+    {
+      "symbol": "WorkerState::inbox_mtx (xW)",
+      "file_line": "include/sluice/async/scheduler.hpp:178",
+      "purpose": "local_runnable publication authority per worker",
+      "frequency_candidate": "1 push + 1 pop per fiber activation (+ classify emptiness checks O(W)/iteration)",
+      "cross_thread": "routers vs owner",
+      "status": "FACT"
+    },
+    {
+      "symbol": "UringAsyncBackend::dispatch_mtx_",
+      "file_line": "include/sluice/async/uring_backend.hpp:694",
+      "purpose": "admission + dispatch + transport + cancel arbitration + router/ledger",
+      "frequency_candidate": "2-3/op (all single-driver in practice)",
+      "logical_vs_physical": "LOGICAL: enqueue/cancel arbitration + SQE no-fail region; PHYSICAL: held across kernel io_uring_submit_and_wait park in wait_one",
+      "status": "FACT"
+    },
+    {
+      "symbol": "Scheduler::wait_registry_mtx_",
+      "file_line": "include/sluice/async/scheduler.hpp:1761",
+      "purpose": "leaf: WaitRecord pool/delivered list",
+      "frequency_candidate": "2/op (on_ready + drain retire)",
+      "status": "FACT"
+    }
+  ],
+  "atomics": [
+    {
+      "symbol": "Completion state machine",
+      "file_line": "include/sluice/async/completion.hpp:249-425",
+      "ops": "CAS idle->binding, CAS ->outstanding, release-store ready (414), reset CAS",
+      "purpose": "accept LP + exactly-once publication",
+      "classification": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "symbol": "Fiber::state_ (make_runnable/make_waiting)",
+      "file_line": "src/async/fiber.cpp:6-42",
+      "ops": "CAS acq_rel x3",
+      "purpose": "exactly-once runnable publication",
+      "classification": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "symbol": "Scheduler::idle_workers_ / dance_epoch_",
+      "file_line": "include/sluice/async/scheduler.hpp:1828-1830, src/async/scheduler.cpp:606-612,664-670,1598-1604,1079-1148",
+      "ops": "fetch_add(1)/exchange(0) acq_rel + conditional fetch_add",
+      "purpose": "last-idle termination convergence (TLA+-proven protocol, issue #161)",
+      "classification": "FUNDAMENTAL-SEMANTIC (liveness proof depends on the exact protocol); frequency = per activation + per idle iteration"
+    },
+    {
+      "symbol": "Scheduler::global_terminate_ / active_worker_count_ / running_fiber_count_ / backend_wait_active_ / earliest_active_deadline_",
+      "file_line": "include/sluice/async/scheduler.hpp:1826-1830,1893,1962,2127",
+      "ops": "load/store acquire/release + fetch_add/sub",
+      "purpose": "MW classification inputs + bridge gate + park bound",
+      "classification": "IMPLEMENTATION-DEPENDENT storage; semantic inputs required"
+    },
+    {
+      "symbol": "WorkerState::suspend_switch_pending",
+      "file_line": "include/sluice/async/scheduler.hpp:196",
+      "ops": "store release / load acquire",
+      "purpose": "steal-vs-suspend-switch race closure",
+      "classification": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "symbol": "TP syscall_count_ / Uring live_cookies_ / live_control_sqes_ / submit_flushes_",
+      "file_line": "src/async/threadpool_backend.cpp:493; src/async/uring_backend.cpp:869,914,958",
+      "ops": "fetch_add/sub relaxed",
+      "purpose": "stats/telemetry",
+      "classification": "POSSIBLY-AMORTIZABLE (relaxed, shared line across workers)"
+    },
+    {
+      "symbol": "Event::set_ / Semaphore::available_ / WaitNode::state_ / TimerRegistration::state_",
+      "file_line": "per 3D census",
+      "ops": "exchange/CAS release/acquire",
+      "classification": "FUNDAMENTAL-SEMANTIC per-primitive resolution"
+    }
+  ],
+  "wake_edges": [
+    {
+      "id": "W1",
+      "edge": "submitter -> work_cv_.notify_one -> one TP worker",
+      "file_line": "src/async/threadpool_backend.cpp:389",
+      "per_op_or_batch": "per submit",
+      "sleepers": "idle TP workers parked in worker_loop (threadpool_backend.cpp:438)",
+      "status": "FACT",
+      "hypothesis": null
+    },
+    {
+      "id": "W2",
+      "edge": "TP worker record_terminal -> ReadyWaitSource::signal_progress -> ready_cv_.notify_ALL -> parked wait_one participant(s)",
+      "file_line": "src/async/threadpool_backend.cpp:507; include/sluice/async/detail/ready_wait_source.hpp:165-171",
+      "per_op_or_batch": "per terminal (per op)",
+      "sleepers": "MW-S2 committed participant + any concurrent wait_one parkers",
+      "status": "FACT",
+      "hypothesis": {
+        "id": "H-W2",
+        "claim": "At W=4 concurrent terminals trigger concurrent notify_all + epoch increments on one mtx_/cv word from 4 cores; at W=1 terminals are serialized so the reaper amortizes multiple ready ops per wake. Per-op (non-batched) reaper wake cadence may be a component of the historical w4-only cliff.",
+        "status": "HYPOTHESIS",
+        "falsifier": "TAX-0B: count reaper wake_one cycles + ready-epoch advances per op at w1 vs w4 (internal telemetry or perf user-mode flame + /proc ctx counters)"
+      }
+    },
+    {
+      "id": "W3",
+      "edge": "route_runnable_locked -> signal_wake_locked -> wake_cv_.notify_ALL",
+      "file_line": "src/async/scheduler.cpp:1639; src/async/scheduler_park_wake.cpp:135-170",
+      "per_op_or_batch": "per routed fiber",
+      "sleepers": "workers parked on the Scheduler wake domain",
+      "status": "FACT",
+      "hypothesis": {
+        "id": "H-W3",
+        "claim": "In the E1-L2 shape (scheduler workers=1) no additional scheduler-worker sleeper is expected on wake_cv_ for this workload shape; the performance contribution of per-route notify_all + wake_mtx_ acquisition is unmeasured.",
+        "status": "HYPOTHESIS",
+        "falsifier": "perf user-mode sampling of signal_wake_locked share at cliff cell vs d1 cell"
+      }
+    },
+    {
+      "id": "W4",
+      "edge": "signal_wake_locked bridge: backend_wait_active_ gate -> ctx_.interrupt_backend_waiters -> backend control epoch (+eventfd for Uring / ready_cv_ interrupt for TP)",
+      "file_line": "src/async/scheduler_park_wake.cpp:167-169; src/async/async_io_context.cpp:384+",
+      "per_op_or_batch": "per Scheduler wake publication while a backend participant is parked",
+      "status": "FACT"
+    },
+    {
+      "id": "W5",
+      "edge": "Uring: kernel CQE -> io_uring_submit_and_wait/enter return -> driver reaps -> same W2'/W3 tail (signal_ready_progress + route)",
+      "file_line": "src/async/uring_backend.cpp:1375,1324-1327",
+      "per_op_or_batch": "batch-capable at kernel wait (min_complete=1) but reap publishes per-slot",
+      "status": "FACT"
+    },
+    {
+      "id": "W6",
+      "edge": "external SchedulerWakeHandle::notify -> Control::mtx lease -> notify_external_wake -> signal_wake_locked",
+      "file_line": "src/async/scheduler_internal.hpp:50-85",
+      "status": "FACT",
+      "notes": "mutex-serialized callback lease, not refcount"
+    },
+    {
+      "id": "W7",
+      "edge": "idle-dance not-last signal_wake_locked",
+      "file_line": "src/async/scheduler.cpp:1126,1095",
+      "per_op_or_batch": "per idle transition during termination convergence",
+      "status": "FACT"
+    }
+  ],
+  "commutativity_candidates": [
+    {
+      "id": "C1",
+      "pair": "Worker0 record_terminal(A) vs Worker1 record_terminal(B) (disjoint slots)",
+      "semantic": "COMMUTES (exactly-one terminals, disjoint identities)",
+      "shared_physical": [
+        "RequestArena::mutex_ (request_arena.hpp:1189)"
+      ],
+      "why_independent": "different slots, different ready-ring entries, no shared result",
+      "falsifier": "TAX-0C ablation (arena sharding) or perf c2c on arena cacheline at w4 cliff cell",
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE (HYPOTHESIS that it matters)"
+    },
+    {
+      "id": "C2",
+      "pair": "Worker0 mark_running(A) vs Worker1 mark_running(B)",
+      "semantic": "COMMUTES",
+      "shared_physical": [
+        "arena mutex_",
+        "work_mtx_ (pop side)"
+      ],
+      "falsifier": "same as C1 + work-domain counters",
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE"
+    },
+    {
+      "id": "C3",
+      "pair": "driver submit reserve/commit(A) vs worker record_terminal(B)",
+      "semantic": "COMMUTES (different slots; capacity accounting is a commutative counter)",
+      "shared_physical": [
+        "arena mutex_"
+      ],
+      "notes": "admission_mtx_ vs work_mtx_ nesting both terminate on arena leaf",
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE"
+    },
+    {
+      "id": "C4",
+      "pair": "two Completion resets / slot releases (disjoint)",
+      "semantic": "COMMUTES",
+      "shared_physical": [
+        "arena mutex_ (free_slots_ push_back, generation++, counters)"
+      ],
+      "notes": "in E1 shape both run on the driver fiber — same thread, no cross-core; multi-fiber workloads would be cross-core",
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE (cross-core only with >1 scheduler workers)"
+    },
+    {
+      "id": "C5",
+      "pair": "route fiber F1->W0 vs route fiber F2->W1",
+      "semantic": "COMMUTES",
+      "shared_physical": [
+        "global_mtx_ (whole route)",
+        "fiber_owner_ table",
+        "wake_mtx_ + wake_cv_ (notify_all + epoch)",
+        "global_terminate_ store",
+        "idle_workers_ exchange"
+      ],
+      "falsifier": "sched-workers>1 E1 variant + perf; or G-held-time instrumentation",
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE"
+    },
+    {
+      "id": "C6",
+      "pair": "two ReadyRoutingSink::on_ready deliveries (one reap)",
+      "semantic": "COMMUTES",
+      "shared_physical": [
+        "wait_registry_mtx_ + delivered-list head (scheduler.cpp:1541-1543)"
+      ],
+      "notes": "same driver thread in practice",
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE (weak)"
+    },
+    {
+      "id": "C7",
+      "pair": "driver push to dispatch ring vs worker pop from it (different entries, ring non-empty)",
+      "semantic": "PARTIAL (commutes while both sides have work; pop on empty must observe push)",
+      "shared_physical": [
+        "work_mtx_ + ring head/tail/size"
+      ],
+      "notes": "producer-consumer metadata genuinely shared; queue semantics require some shared authority",
+      "status": "PARTIAL — not a pure conflict candidate"
+    },
+    {
+      "id": "C8",
+      "pair": "two independent timer registrations",
+      "semantic": "COMMUTES",
+      "shared_physical": [
+        "global_mtx_",
+        "timer_pool_ list",
+        "deadline_heap_",
+        "earliest recompute O(pool)"
+      ],
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE (timed-wait workloads; not E1 shape)"
+    },
+    {
+      "id": "C9",
+      "pair": "steal(F from victim) vs owner pop(F') from same victim",
+      "semantic": "DOES NOT COMMUTE for same ticket (identity); commutes for different tickets",
+      "shared_physical": [
+        "global_mtx_",
+        "victim inbox_mtx"
+      ],
+      "status": "FACT: serialization is semantically required for same-ticket; different-ticket case shares the same locks"
+    },
+    {
+      "id": "C10",
+      "pair": "Uring dispatch(SQE A) vs reap CQE(B) (same driver)",
+      "semantic": "COMMUTES logically",
+      "shared_physical": [
+        "access_mtx_ + dispatch_mtx_ serialize them by design (single-driver contract)"
+      ],
+      "status": "FACT: single-driver model intentionally serializes; not a conflict candidate under current architecture"
+    },
+    {
+      "id": "C11",
+      "pair": "Event::set / mutex unlock / semaphore release resolving waiters on DIFFERENT primitives",
+      "semantic": "COMMUTES",
+      "shared_physical": [
+        "global_mtx_ + wake domain tail (every resolution routes + signals)"
+      ],
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE (sync-primitive-heavy workloads)"
+    },
+    {
+      "id": "C12",
+      "pair": "classify on W0 vs classify on W1 (idle iterations)",
+      "semantic": "COMMUTES (read-only classification)",
+      "shared_physical": [
+        "global_mtx_ + all inbox_mtx reads + access_mtx_/arena via outstanding()"
+      ],
+      "status": "COMMUTATIVITY-CONFLICT-CANDIDATE (multi-scheduler-worker only)"
+    }
+  ],
+  "static_complexity_flags": [
+    {
+      "op": "Uring BoundedDispatchQueue::remove_exact on front during dispatch drain",
+      "file_line": "src/async/uring_backend.cpp:253-269,891",
+      "complexity": "O(queue_size) with per-element shift; drain of N entries O(N^2) SlotHandle copies",
+      "invoked": "EVERY uring dispatch (normal path)",
+      "capacity_bound": "request_capacity",
+      "hotness": "CURRENT on uring path; magnitude UNKNOWN (16-byte handles)",
+      "candidate_measurement": "TAX-0B uring ladder: capacity 32 vs 256 at fixed depth"
+    },
+    {
+      "op": "Uring find_live_router_cookie_ per CQE",
+      "file_line": "src/async/uring_backend.cpp:1095-1101",
+      "complexity": "O(request_capacity) linear scan",
+      "invoked": "every non-control CQE + ledger-consumed control entries",
+      "hotness": "CURRENT; magnitude UNKNOWN",
+      "candidate_measurement": "same uring ladder capacity sweep"
+    },
+    {
+      "op": "RequestArena::resolve_completion (Completion*-keyed register_waiter/cancel bridge)",
+      "file_line": "include/sluice/async/detail/request_arena.hpp:947-958",
+      "complexity": "O(request_capacity) scan under arena lock",
+      "invoked": "EVERY await_completion registration (register_waiter) + every public cancel",
+      "hotness": "CURRENT in E1-L2 shape (capacity == D == 32)",
+      "candidate_measurement": "E1 depth sweep at fixed bytes; arena-internal telemetry"
+    },
+    {
+      "op": "RequestArena::oldest_enqueued_of",
+      "file_line": "include/sluice/async/detail/request_arena.hpp:925-939",
+      "complexity": "O(capacity)",
+      "invoked": "FakeAsyncBackend completion model ONLY",
+      "hotness": "NONE on TP/Uring production path"
+    },
+    {
+      "op": "recompute_earliest_deadline_locked",
+      "file_line": "src/async/scheduler_timer.cpp:510-536",
+      "complexity": "O(pool1+pool2) per heap/pool mutation",
+      "invoked": "every timed-wait publish/retire/consume/pump",
+      "hotness": "NONE in E1 shape; CURRENT for timed workloads"
+    },
+    {
+      "op": "retire_timer_for_node_locked",
+      "file_line": "src/async/scheduler_timer.cpp:438-473",
+      "complexity": "O(pool) address scan per non-timer wake of a timed-registered node",
+      "invoked": "every wake_wait_one/mutex handoff/rwlock claim/queue grant when the waiter had a timer",
+      "hotness": "timed workloads only"
+    },
+    {
+      "op": "Scheduler classify_locked_impl",
+      "file_line": "src/async/scheduler.cpp:1760-1772",
+      "complexity": "O(W) inbox locks + access_mtx_/arena lock via outstanding()",
+      "invoked": "per idle worker-loop iteration + MW-S2 re-checks",
+      "hotness": "CURRENT (W=1 in E1 shape: cheap; scales with scheduler workers)"
+    },
+    {
+      "op": "try_steal victim scan",
+      "file_line": "src/async/scheduler.cpp:2070-2087",
+      "complexity": "O(W-1) victims x O(queue) scan + map find per candidate + O(n) deque erase shift",
+      "invoked": "whenever a worker finds its queue empty (before parking)",
+      "hotness": "CURRENT with scheduler workers>1; NONE at W=1"
+    },
+    {
+      "op": "arena lock count per op",
+      "file_line": "submit_transaction.hpp:95-205 + arena call sites",
+      "complexity": "8-9 mutex acquisitions per op lifetime",
+      "invoked": "always",
+      "hotness": "CURRENT",
+      "candidate_measurement": "lock-held-time/futex contention counters at w1 vs w4"
+    }
+  ],
+  "historical_cliff_candidates": [
+    {
+      "historical_fact": "4 KiB depth 32 workers 4 WRITE: L2-L1 = +1725.9 ms (+266%) per 1 GiB; READ d32 w4: +15%; d64 w4: write +600%, read +41%; SAME cells at workers 1: cliff ABSENT (write d64 w1 +7.5%)",
+      "source": "docs/results/performance-attribution/e1-round1-*-representative.json, e1-round1-*-smoke.json; docs/verification/explicit-io-abstraction-tax.md:245-249",
+      "status": "FACT (historical, WSL2/tmpfs, commit 9404df8)"
+    },
+    {
+      "historical_fact": "~4.1 thread switches per op in BOTH L1 and L2 at 4KiB d1 w4 READ (bpftrace); L2 adds ~+0.4% switches; sched_migrate similar",
+      "source": "docs/results/performance-attribution/e1-diagnostics/README.md",
+      "status": "FACT (historical; measured at NON-cliff cell d1; cliff-cell switch counts UNKNOWN)"
+    },
+    {
+      "historical_fact": "L1 pool itself slower at w4 than w1 on 4 KiB d8 (read 609ms vs 1846ms L1-L0) — naive-pool contention shape on that host",
+      "source": "e1-round1-*-smoke.json derived rows; #221 construction comment",
+      "status": "FACT (historical)"
+    },
+    {
+      "mapping": {
+        "candidate": "arena single-mutex serialization across 5 threads (C1/C2/C3)",
+        "class": "REQUEST-CORE/LOCK-ATOMIC",
+        "consistency": "explains w4-only (cross-core mutex transfer) and depth coupling (capacity==D fills arena); does NOT explain write>>read asymmetry at d32",
+        "verdict": "HYPOTHESIS"
+      }
+    },
+    {
+      "mapping": {
+        "candidate": "per-terminal ready_cv_ notify_all + per-op reaper wake cadence (H-W2)",
+        "class": "WAKE/TOPOLOGY",
+        "consistency": "explains w4-only (concurrent terminals from 4 cores vs serialized at w1); write asymmetry UNKNOWN",
+        "verdict": "HYPOTHESIS"
+      }
+    },
+    {
+      "mapping": {
+        "candidate": "work_cv_ notify_one per submit + work_mtx_ contention between driver push and W worker pops",
+        "class": "BACKEND/SUBMIT",
+        "consistency": "w4-only; but L1 shares a single mutex + cv per job — the DELTA between L2 and L1 here is the extra work_mtx_ acquisitions + arena nesting, not the pattern itself",
+        "verdict": "HYPOTHESIS (weaker)"
+      }
+    },
+    {
+      "mapping": {
+        "candidate": "await_completion registration path (G + registry + access_mtx_ + O(capacity) resolve scan + fiber suspend/resume switches)",
+        "class": "REQUEST-CORE/SCHEDULER",
+        "consistency": "explains the FLAT L2-L1 baseline tax (~1.3-2.0 us/op at d1) but is w-independent — cannot alone explain the w4 cliff",
+        "verdict": "HYPOTHESIS (flat component only)"
+      }
+    },
+    {
+      "mapping": {
+        "candidate": "worker migration / scheduler topology of TP threads",
+        "class": "UNKNOWN",
+        "consistency": "historical sched_migrate_task counts similar between L1/L2 at d1; cliff-cell migration UNKNOWN",
+        "verdict": "UNKNOWN"
+      }
+    },
+    {
+      "mapping": {
+        "candidate": "allocator/cache-line effects",
+        "class": "ALLOCATOR/LIFETIME",
+        "consistency": "no per-op heap allocation exists on the L2 path (fixed arrays) except deque/map growth; capacity-bound structures are pre-allocated — allocator is an unlikely primary but cacheline sharing on mutexes/epochs unmeasured",
+        "verdict": "UNKNOWN"
+      }
+    },
+    {
+      "mapping": {
+        "candidate": "tmpfs write-path interaction (write>>read at d32)",
+        "class": "UNKNOWN",
+        "consistency": "no topology fact found that distinguishes write from read on the control plane (identical code path); storage-layer timing interaction unmodeled",
+        "verdict": "UNKNOWN — explicitly retained"
+      }
+    }
+  ],
+  "request_core_cost_map": [
+    {
+      "action": "generation++ on slot release",
+      "file_line": "request_arena.hpp:1160-1183",
+      "physical_cost": "one store under arena lock",
+      "semantic_guarantee": "prevents stale-key/ABA reuse (64-bit no-wrap fail-fast)",
+      "class": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "action": "terminal-winner arbitration (record_terminal first-wins)",
+      "file_line": "request_arena.hpp:598-619",
+      "physical_cost": "lock + state check + store + ring push",
+      "semantic_guarantee": "exactly-one terminal; losers never overwrite (ADR D12)",
+      "class": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "action": "reap-only Completion-ready publication (release-store in leaf domain)",
+      "file_line": "request_arena.hpp:500-565",
+      "physical_cost": "publish thunk under lock; sink outside",
+      "semantic_guarantee": "single publication authority + acquire-observer ordering (borrow end visible)",
+      "class": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "action": "enqueue-in-flight pin",
+      "file_line": "request_slot.hpp:139-145, request_arena.hpp:407-428,521",
+      "physical_cost": "flag set/clear in same domain",
+      "semantic_guarantee": "Scheme-B submit/cancel race closure (no publication before submit ack)",
+      "class": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "action": "bounded capacity + would_block admission",
+      "file_line": "request_arena.hpp:242-251",
+      "physical_cost": "free-list check under lock",
+      "semantic_guarantee": "backpressure without unbounded growth (D13/D14)",
+      "class": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "action": "ready-ring terminal-winner ordering",
+      "file_line": "request_arena.hpp:1099-1150",
+      "physical_cost": "intrusive link writes (no allocation)",
+      "semantic_guarantee": "reap order = backend-known order (D9); intrusive threading itself is implementation",
+      "class": "ORDER=FUNDAMENTAL; MECHANISM=IMPLEMENTATION-DEPENDENT"
+    },
+    {
+      "action": "ONE mutex for the entire arena",
+      "file_line": "request_arena.hpp:1189",
+      "physical_cost": "8-9 acquisitions/op, global serialization point",
+      "semantic_guarantee": "arbitration-domain correctness; per-slot sharding preserves semantics but is UNPROVEN beneficial",
+      "class": "IMPLEMENTATION-DEPENDENT"
+    },
+    {
+      "action": "5-stage submit ladder (separate arena acquisition per stage)",
+      "file_line": "submit_transaction.hpp:95-205",
+      "physical_cost": "4 arena lock/unlock per submit",
+      "semantic_guarantee": "stage-wise rollback/residue-freedom (ADR D5); coalescing stages under one acquisition could preserve semantics — UNPROVEN",
+      "class": "POSSIBLY-AMORTIZABLE"
+    },
+    {
+      "action": "submit_seq_ monotonic counter",
+      "file_line": "request_slot.hpp:165-172",
+      "physical_cost": "u64 increment under lock",
+      "semantic_guarantee": "FakeAsyncBackend oldest-op identification only",
+      "class": "IMPLEMENTATION-DEPENDENT (production backends do not consume it)"
+    },
+    {
+      "action": "Uring no-reuse cookie counter",
+      "file_line": "uring_backend.cpp:1065-1079",
+      "physical_cost": "u64 increment under dispatch_mtx_",
+      "semantic_guarantee": "stale-CQE ABA closure",
+      "class": "FUNDAMENTAL-SEMANTIC"
+    },
+    {
+      "action": "Uring transport ledger append/pop",
+      "file_line": "uring_backend.cpp:288-383",
+      "physical_cost": "fixed-ring record per SQE + prefix pop per submit",
+      "semantic_guarantee": "partial-submit/Class-A proof boundary",
+      "class": "FUNDAMENTAL-SEMANTIC (proof); per-entry bookkeeping shape = POSSIBLY-AMORTIZABLE"
+    },
+    {
+      "action": "resolve_completion O(capacity) scan",
+      "file_line": "request_arena.hpp:947-958",
+      "physical_cost": "linear scan under lock per register_waiter/cancel",
+      "semantic_guarantee": "pointer-keyed public cancel API (ADR D7); index/lookup structure could preserve semantics",
+      "class": "POSSIBLY-AMORTIZABLE"
+    }
+  ],
+  "measurement_readiness": {
+    "status": "FACT",
+    "release_build": "PASS — xmake f -m release --toolchain=clang; e1_abstraction_tax_bench built clean",
+    "e1_smoke_native": "PASS — L0/L1/L2 write 4KiB d1 w1 64MiB x1rep all_reps_ok=true each (readiness check only, NOT a benchmark result; first read attempt failed only because the input file lacked the bench's splitmix64 pattern — workload-prep error, not a code defect)",
+    "real_liburing_build": "PASS — sluice_async + uring tests compiled against xrepo liburing 2.14 (repo pin; system rpm is 2.13)",
+    "real_liburing_smoke": "PASS — uring_backend_test: ALL TESTS PASSED, evidence mode=real on kernel 7.1.9 (no segv on native; historical WSL2 4-test segv does NOT reproduce here)",
+    "stale_bench_target": "FACT: bench/uring_write_bench fails to compile (references removed experimental::UringIoContext) — pre-existing on master, unrelated to this audit; do not use it for uring evidence",
+    "REAL_URING": "READY",
+    "PERF": {
+      "AUTOMATED_UNPRIVILEGED": "LIMITED — user-mode counters READY (cycles:u/instructions:u verified); context-switch/cpu-migration kernel counters, perf sched, perf c2c BLOCKED unprivileged (perf_event_paranoid=2, no passwordless sudo); RX-1 /proc compensation available",
+      "HOST_WITH_SUDO": "perf sched / perf c2c / kernel-side counters POTENTIALLY AVAILABLE — the host capability is not missing; only the automated agent lacks passwordless sudo. Escalation path: run manually under sudo, record as a separate evidence-provenance tier from automated runs"
+    },
+    "NVME": "NON_NVME for repo + /tmp default (SATA SSD btrfs + tmpfs respectively; NVMe device present but NTFS-only). For device-level claims a Linux-usable NVMe path would be needed — currently absent",
+    "governor_note": "schedutil + shared L3 + SMT on; 10 physical cores support w1/w4/w8 sweeps"
+  },
+  "ranked_hypotheses": [
+    {
+      "rank": 1,
+      "candidate": "Arena leaf-mutex serialization across driver + W workers (C1/C2/C3)",
+      "class": "REQUEST-CORE/LOCK-ATOMIC",
+      "current_fact": "ONE std::mutex guards every slot transition; 8-9 acquisitions/op; TP submit/mark/reap/release all nest into it from 1+W threads",
+      "hypothesis": "At w4 the L2-L1 increment is dominated by cross-core arena-mutex transfers (futex traffic) that collapse at w1 (2 threads)",
+      "why_plausible": "explains workers-axis cliff + depth coupling (capacity==D); flat at d1 matches mutex cost being amortized differently",
+      "falsifying_experiment": "TAX-0B: e1 cliff-cell replication on native + perf stat :u + /proc ctx counters at w1 vs w4; then capacity/lock-held-time ablation",
+      "semantic_risk": "LOW for measurement; any sharding experiment later must preserve admission-transaction + terminal-winner + reap-order semantics"
+    },
+    {
+      "rank": 2,
+      "candidate": "Per-terminal ready-domain notify_all + per-op reaper wake cadence (H-W2)",
+      "class": "WAKE/TOPOLOGY",
+      "current_fact": "signal_ready_progress = mtx + epoch++ + notify_ALL per record_terminal from each worker; reaper parks per wait_one",
+      "hypothesis": "w4 produces concurrent epoch bumps + wakes from 4 cores on one cv/mtx; w1 serializes terminals so one wake reaps a batch (aggregation exists at w1, absent at w4)",
+      "why_plausible": "wakes are batch-capable at the protocol level but per-op in the code; reaper wake/park cycle per op amplifies context switches",
+      "falsifying_experiment": "instrument ready-epoch advances + wait_one return sizes per op at w1 vs w4 (existing AsyncStats + internal-testing counters, read-only); /proc ctxt counters",
+      "semantic_risk": "measurement-only: none; future aggregation must keep split-phase predicate protocol (AC-6)"
+    },
+    {
+      "rank": 3,
+      "candidate": "work_cv_ notify-per-submit + work_mtx_ driver/worker contention",
+      "class": "BACKEND/SUBMIT",
+      "current_fact": "notify_one per submit; driver takes work_mtx_ per submit; workers take it per pop + per active--",
+      "hypothesis": "admission bursts of D=32 submits collide with W pops on work_mtx_",
+      "why_plausible": "w4-only shape; but L1 has an analogous single mutex, so the DELTA must come from L2's extra acquisitions, weakening this as the primary",
+      "falsifying_experiment": "w sweep {1,2,4} at fixed d32 + work-domain occupancy telemetry (dispatch_occupancy/high_water exist as AC-1a signals)",
+      "semantic_risk": "none for measurement"
+    },
+    {
+      "rank": 4,
+      "candidate": "Flat per-op control-plane tax (registration path: G + registry + access_mtx_ + O(capacity) resolve_completion scan + 2 fiber context switches per await)",
+      "class": "REQUEST-CORE/SCHEDULER",
+      "current_fact": "await_completion does G lock + registry acquire + access_mtx_ + arena O(capacity) resolve scan + arena register + fiber suspend/resume",
+      "hypothesis": "this is the w-independent FLAT component of L2-L1 (~1.3-2.0 us/op historical); it cannot explain the w4 cliff but sets the floor",
+      "why_plausible": "matches d1 flat tax; resolve scan scales with capacity==D",
+      "falsifying_experiment": "EXP-0 capacity sweep at fixed D (vary C) + resolve_completion iteration-count telemetry; depth sweep at fixed total bytes",
+      "semantic_risk": "none for measurement"
+    },
+    {
+      "rank": 5,
+      "candidate": "UNKNOWN remainder incl. write-vs-read asymmetry + storage-layer interaction",
+      "class": "UNKNOWN",
+      "current_fact": "no topology fact distinguishes the control plane of read vs write (identical code path); cliff was 17x larger for write at d32",
+      "hypothesis": "UNKNOWN — retained explicitly; tmpfs/btrfs write completion timing interacting with wake cadence is unmodeled",
+      "falsifying_experiment": "cliff-cell read/write pair on native btrfs AND tmpfs control; raw-liburing ladder comparison (L3-equivalent)",
+      "semantic_risk": "none"
+    }
+  ],
+  "do_not_optimize_yet": [
+    "the single arena mutex (semantically load-bearing arbitration domain; sharding unproven)",
+    "global_mtx_ unification (MW classification + owner record + wake epoch authority; TLA+-verified protocols depend on it)",
+    "std::deque local_runnable (STL type alone is not a finding; no bouncing evidence)",
+    "notify_all choices (split-phase concurrent-observer justification documented in ready_wait_source.hpp:29-33)",
+    "idle-dance atomics (contribution-identity law is model-proven liveness, issue #161)",
+    "per-stage arena locking in submit_transaction (residue-free rollback ladder; coalescing unproven)"
+  ],
+  "planned_experiments_design_only": [
+    {
+      "id": "EXP-0",
+      "ladder_position": 1,
+      "name": "Capacity invariance",
+      "question": "With active depth D held fixed, does unused request capacity C itself cost per-op time (UnusedCapacity -> Tax)?",
+      "mechanism_fact_bases": [
+        "RequestArena::resolve_completion() performs an O(request_capacity) scan on every waiter registration (include/sluice/async/detail/request_arena.hpp:947-958)",
+        "UringAsyncBackend::find_live_router_cookie_() performs an O(request_capacity) scan per CQE (src/async/uring_backend.cpp:1095)"
+      ],
+      "hypothesis": "per-op cost rises monotonically with C at fixed D via the two O(C) scans + slot-array cache footprint",
+      "baseline": "C==D cell of the same ladder, same session",
+      "variable": "request_capacity C in {8, 32, 128, 512} at fixed D=8",
+      "arms": "ThreadPool L2 rung (hits resolve_completion) AND Uring rung (hits find_live_router_cookie_); both real-liburing READY",
+      "control": "C==D; d1 low-capacity cell; L1 rung every session",
+      "metrics": "wall/op median + raw samples; AsyncStats; resolve/router scan iteration counters if exposed read-only",
+      "expected_result_if_hypothesis_true": "monotonic per-op increase with C at fixed D on at least one arm",
+      "falsifier": "flat cost vs C on BOTH arms -> both O(C) paths demoted for this geometry; hypothesis-4 flat-tax component re-attributed",
+      "does_not_prove": "no wall-clock share attribution (that is EXP-2); no workers-axis claim",
+      "bench_side_change_required": "e1 bench currently constructs ThreadPoolBackend(request_capacity == depth) (bench/e1_abstraction_tax_bench.cpp:619-624); decoupling C from D is a bench-side parameter change, not production code",
+      "environment_requirements": "Release build; same CPU-placement preregistration as EXP-1",
+      "semantic_safety": "bench-parameter sweep only; zero production changes"
+    },
+    {
+      "id": "EXP-1",
+      "ladder_position": 2,
+      "name": "Native historical cliff replication",
+      "question": "Does the historical 4K high-depth w4 cliff reproduce on native Fedora/btrfs, and is workers=1 vs 4 still the decisive axis?",
+      "hypothesis": "H1/H2 (arena mutex contention + wake cadence) reproduce as w4-only L2-L1 inflation at d32/d64 4KiB",
+      "baseline": "e1 ladder L0/L1/L2 on native, commit 5537187, Release clang, 1 GiB/cell, >=7 reps, file on btrfs /home + tmpfs /tmp control arm",
+      "variable": "workers {1,4} x depth {8,32,64} at 4 KiB (write AND read)",
+      "control": "d1 cells; L1 rung in every session (same-session A/B per docs/verification/performance-engineering.md)",
+      "cpu_placement_preregistration": {
+        "topology_capture": "lscpu -e=CPU,CORE,SOCKET,NODE snapshot archived with the run",
+        "affinity_policy": "process CPU set (taskset) declared explicitly per cell: w1 = single core; w4 = either 4 distinct physical cores or explicit SMT-sibling policy — one choice, recorded",
+        "smt_policy": "SMT sibling overlap between bench thread and workers recorded, not left to chance",
+        "governor": "recorded (schedutil observed at audit time)",
+        "migration_observation": "/proc/<pid>/task/*/status Cpus_allowed + schedstat per thread (perf kernel counters unavailable unprivileged)",
+        "rationale": "without this the measured axis is worker-count + placement + SMT + migration mixed together"
+      },
+      "metrics": "wall median + raw samples; AsyncStats; /proc ctxt switches + schedstat per thread",
+      "expected_result_if_hypothesis_true": "L2-L1 at d32 w4 >> d32 w1 and >> d1 w4",
+      "falsifier": "cliff absent on native OR present equally at w1 => H1/H2 rejected for this environment",
+      "environment_requirements": "Release build (done); idle machine; perf_event_paranoid=2 acknowledged",
+      "semantic_safety": "read-only workload; no production changes"
+    },
+    {
+      "id": "EXP-U1",
+      "ladder_position": 3,
+      "name": "Uring dispatch/backlog profile",
+      "question": "Do the single-driver serialization (dispatch_mtx_ across the kernel submit_and_wait park), the per-dispatch remove_exact O(queue) shift (drain of N = O(N^2) handle moves), and the per-CQE router scan dominate uring per-op cost at high backlog?",
+      "hypothesis": "per-op cost is non-flat in backlog because dispatch batch boundaries and the O(N^2) drain shape the driver loop",
+      "baseline": "d1 low-backlog cell; ThreadPool rung at same geometry",
+      "variable": "depth/backlog {8, 32, 64} at scheduler workers=1, single Fiber; request_capacity fixed",
+      "control": "TP same-geometry rung; d1 cell",
+      "metrics": "wall/op; submit_flushes_ / live_cookies_ telemetry; dispatch-queue high-water via uring test seams (read-only); user-mode perf on the driver thread",
+      "expected_result_if_hypothesis_true": "non-flat cost vs backlog correlated with flush count / queue high-water",
+      "falsifier": "flat vs backlog with constant flush counts -> dispatch/backlog hypothesis demoted; focus shifts to capacity mechanism (EXP-0)",
+      "environment_requirements": "real-liburing (READY); same CPU-placement preregistration as EXP-1",
+      "semantic_safety": "zero production changes; test seams read-only"
+    },
+    {
+      "id": "EXP-2",
+      "ladder_position": 4,
+      "name": "Attribution profile",
+      "question": "Does the cliff correlate with context-switch/migration inflation, and where does user-mode time concentrate?",
+      "hypothesis": "cliff cells show higher voluntary ctxt switches per op (reaper wake/park churn) and user-mode time in arena/reap/route frames",
+      "baseline": "d1 w4 non-cliff cell",
+      "variable": "cliff cell as identified by EXP-1 (cell may be re-chosen from EXP-1 outcome before this runs)",
+      "control": "d32 w1",
+      "metrics": "perf record --user-mode (frame-pointer-less Release needs dwarf or a diagnostic frame-pointer build — decide before run); perf stat :u; /proc counters",
+      "expected_result": "switches/op higher at cliff; user frames concentrated in mutex/epoch functions if H1/H2",
+      "falsifier": "no switch inflation + flat user profile => wake/mutex hypotheses weakened; investigate syscall/device layer",
+      "environment_requirements": "perf user-mode only (verified); possibly a one-off frame-pointer diagnostic build of the SAME commit (documented as diagnostic-only)",
+      "semantic_safety": "no production change; diagnostic build artifact must not be committed as evidence without labeling"
+    },
+    {
+      "id": "EXP-3",
+      "ladder_position": 5,
+      "name": "Raw-liburing matched ceiling",
+      "question": "Does a raw liburing ladder at IDENTICAL geometry show no cliff where Sluice uring does — i.e. what is the matched ceiling, and which layer accounts for the difference (router O(capacity) scan / remove_exact O(n^2) drain / arena serialization)?",
+      "position_note": "Runs LAST, after EXP-0/1/U1, at geometries already proven sensitive; the former capacity-sweep dimension of this experiment moved to EXP-0",
+      "hypothesis": "Sluice uring adds per-CQE O(capacity) router scan + per-dispatch remove_exact shift + arena serialization; raw liburing ladder will not cliff",
+      "baseline": "new minimal raw-liburing ladder arm (L3-equivalent; historically deferred — needs authoring, NOT production code)",
+      "variable": "matched geometry chosen from EXP-0/EXP-1/EXP-U1 outcomes",
+      "control": "ThreadPool rung same geometry",
+      "metrics": "wall/op; submit_flushes_/live_cookies_ telemetry; SQ/CQ fill from uring_test seams (read-only)",
+      "expected_result": "if router scan or remove_exact matter, the matched-geometry comparison localizes the difference",
+      "falsifier": "raw == sluice at matched geometry => S4 complexity flags demoted; difference attributed elsewhere",
+      "environment_requirements": "real-liburing build (verified READY)",
+      "semantic_safety": "bench-side code only"
+    }
+  ],
+  "explicit_non_claims": [
+    "No bottleneck is asserted anywhere in this census (no causal experiment has run).",
+    "STL container types are recorded as FACTS, not findings.",
+    "The E1 smoke numbers are readiness checks, not benchmark results.",
+    "Historical cliff numbers are historical (WSL2/tmpfs, commit 9404df8) and are used only as replication targets per #250."
+  ]
+}
