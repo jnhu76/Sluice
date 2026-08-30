@@ -943,6 +943,9 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
             const TransportLedger::Entry entry = transport_ledger_->pop_front();
             if (entry.kind == TransportLedger::Kind::cancel_control) {
                 const std::size_t router_index = find_live_router_cookie_(entry.cookie);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                fold_router_lookup_diag_for_test(RouterLookupKindForTest::transport);
+#endif
                 if (router_index == router_.size() ||
                     router_[router_index].handle.slot.value != entry.handle.slot.value ||
                     router_[router_index].handle.generation.value !=
@@ -991,6 +994,9 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
 
         if (physical.kind == TransportLedger::Kind::operation) {
             const std::size_t router_index = find_live_router_cookie_(physical.cookie);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            fold_router_lookup_diag_for_test(RouterLookupKindForTest::transport);
+#endif
             if (router_index == router_.size() ||
                 router_[router_index].handle.slot.value != physical.handle.slot.value ||
                 router_[router_index].handle.generation.value != physical.handle.generation.value) {
@@ -1012,6 +1018,9 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
             }
         } else {
             const std::size_t router_index = find_live_router_cookie_(physical.cookie);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            fold_router_lookup_diag_for_test(RouterLookupKindForTest::transport);
+#endif
             if (router_index == router_.size() ||
                 router_[router_index].handle.slot.value != physical.handle.slot.value ||
                 router_[router_index].handle.generation.value != physical.handle.generation.value ||
@@ -1093,12 +1102,89 @@ std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) con
 }
 
 std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // TAX-0 EXP-U0 research instrumentation: the IDENTICAL matching
+    // predicate (in_use && cookie equality) with a selectable scan
+    // direction and exact per-call iteration accounting. Live cookies are
+    // unique within backend lifetime (no-wrap allocate_cookie_), so the
+    // scan direction can never change the semantic answer — at most one
+    // index matches. The default mode is forward_production; the production
+    // build below the #else is untouched and byte-equivalent.
+    std::size_t examined = 0;
+    std::size_t found = router_.size();
+    const bool reverse =
+        router_scan_mode_for_test_ == RouterScanModeForTest::reverse_ablation;
+    if (reverse) {
+        for (std::size_t i = router_.size(); i-- > 0;) {
+            ++examined;
+            if (router_[i].in_use && router_[i].cookie == cookie) {
+                found = i;
+                break;
+            }
+        }
+    } else {
+        for (std::size_t i = 0; i < router_.size(); ++i) {
+            ++examined;
+            if (router_[i].in_use && router_[i].cookie == cookie) {
+                found = i;
+                break;
+            }
+        }
+    }
+    RouterScanDiagnosticsForTest& diag = router_diag_for_test_;
+    diag.last_call_iterations = examined;
+    diag.lookup_calls += 1;
+    if (reverse)
+        diag.reverse_mode_calls += 1;
+    if (found != router_.size()) {
+        diag.lookup_hits += 1;
+        diag.matched_router_index_sum += found;
+        if (found > diag.matched_router_index_max)
+            diag.matched_router_index_max = found;
+    } else {
+        diag.lookup_misses += 1;
+    }
+    return found;
+#else
     for (std::size_t i = 0; i < router_.size(); ++i) {
         if (router_[i].in_use && router_[i].cookie == cookie)
             return i;
     }
     return router_.size();
+#endif
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// Attribute the just-completed find_live_router_cookie_ call (its
+// last_call_iterations) to one callsite family. Called ONLY from
+// single-driver contexts, immediately after the lookup, before any other
+// lookup can run.
+void UringAsyncBackend::fold_router_lookup_diag_for_test(
+    RouterLookupKindForTest kind) const noexcept {
+    RouterScanDiagnosticsForTest& diag = router_diag_for_test_;
+    const std::uint64_t it = diag.last_call_iterations;
+    switch (kind) {
+    case RouterLookupKindForTest::operation_cqe:
+        diag.operation_cookie_lookup_calls += 1;
+        diag.operation_lookup_iterations_total += it;
+        if (it > diag.operation_lookup_iterations_max)
+            diag.operation_lookup_iterations_max = it;
+        break;
+    case RouterLookupKindForTest::control_cqe:
+        diag.control_cookie_lookup_calls += 1;
+        diag.control_lookup_iterations_total += it;
+        if (it > diag.control_lookup_iterations_max)
+            diag.control_lookup_iterations_max = it;
+        break;
+    case RouterLookupKindForTest::transport:
+        diag.transport_cookie_lookup_calls += 1;
+        diag.transport_lookup_iterations_total += it;
+        if (it > diag.transport_lookup_iterations_max)
+            diag.transport_lookup_iterations_max = it;
+        break;
+    }
+}
+#endif
 
 void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept {
     if (router_index >= router_.size() || !router_[router_index].in_use) {
@@ -1166,6 +1252,9 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         if (target_cookie == 0)
             return; // never emitted; harmless unknown tagged control value
         const std::size_t router_index = find_live_router_cookie_(target_cookie);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        fold_router_lookup_diag_for_test(RouterLookupKindForTest::control_cqe);
+#endif
         if (router_index == router_.size())
             return; // stale duplicate control CQE; its exact router is already retired
 
@@ -1193,6 +1282,9 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     // the central ABA fix: the old router_slot+1 encoding resolved a stale CQE
     // to whatever NEW SlotHandle now occupied the recycled array slot.
     const std::size_t router_index = find_live_router_cookie_(user_data);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    fold_router_lookup_diag_for_test(RouterLookupKindForTest::operation_cqe);
+#endif
     if (router_index == router_.size())
         return; // stale/unknown cookie; no live execution reference matched
     RouterEntry& entry = router_[router_index];
