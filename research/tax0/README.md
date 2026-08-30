@@ -14,6 +14,12 @@ hypotheses here were registered BEFORE any causal experiment.
   ThreadPool capacity-invariant; canonical evidence in
   `docs/results/performance-attribution/tax0b-exp0-*.json`, kind
   `tax0capacity`)
+- `TAX0-EXP-U0-ROUTER-CAUSALITY.md` — EXP-U0 causal-attribution report
+  (PR #254; verdict: ROUTER CAUSALITY STRONGLY SUPPORTED — reversing only
+  the `find_live_router_cookie_` scan direction removes ~100% of the
+  measured capacity slope; canonical evidence in
+  `docs/results/performance-attribution/tax0u0-*.json`, kinds
+  `tax0u0router`/`tax0u0witness`; no production optimization implemented)
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 
