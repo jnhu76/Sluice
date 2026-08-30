@@ -1,0 +1,2482 @@
+{
+  "schema": "se2-detection-matrix-schema",
+  "schema_version": 1,
+  "campaign": "SE-2 — Hazard Detection / Prevention / Replay Matrix",
+  "authority": {
+    "roadmap_issue": 227,
+    "se1_corpus": "docs/results/safety/se1-hazard-corpus.json (frozen; verified by scripts/verify-se1-hazard-corpus.py == PASS)",
+    "se1_frozen_head": "06137793d40a140ed6dd418ce2845c7113eb2201",
+    "authorization": "SE-2 campaign brief (hazard detection/prevention/replay matrix over the frozen SE-1 population); human adversarial review precedes any claim promotion"
+  },
+  "base_sha": "1fd8a2fdf87eb52f35efd4a5c8ae76293b8dcfbd",
+  "branch": "research/se2-hazard-detection-matrix",
+  "created": "2026-08-30",
+  "execution_date": "2026-08-30",
+  "execution_note": "All fresh executions ran on the working tree at base_sha plus the committed-in-this-PR probe files (production sources untouched). Counts in this matrix are DESCRIPTIVE ONLY; no safety score is computed or implied. CORRECTIVE-1: probes were executed on b453d85 (= 1fd8a2f + docs-only commit 0afd9e5, which human review 5060477073 ordered removed from the branch); the code-relevant tree is identical, so no probe was re-run.",
+  "population_law": "POPULATION = SE-1 corpus_eligibility == 'IN-SE1' AND entry_role == 'population-case'. No rows added, removed, or replaced inside SE-2.",
+  "claim_discipline_in": {
+    "T-S1a": "PROVEN — PER-HAZARD SCOPE (SE-1); unchanged by SE-2",
+    "T-S1b": "NOT YET TESTED entering SE-2",
+    "T-S2": "NOT YET TESTED entering SE-2; SE-2 must NOT auto-promote"
+  },
+  "environment": {
+    "os": "WSL2 Ubuntu; kernel 6.18.33.2-microsoft-standard-WSL2; x86_64 (TSO-only host)",
+    "compilers": "Ubuntu clang 21.1.8 (Sluice targets and probes); gcc (glibc AIO diagnostic bring-up only)",
+    "build_modes": "xmake debug / asanubsan / tsan; toolchain clang",
+    "backends": "FakeAsyncBackend (deterministic), ThreadPoolBackend (real threads), UringAsyncBackend real liburing 2.14 (--with-liburing=true)",
+    "formal": "tla2tools v1.7.4 (locked; scripts/formal/tla2tools.lock.json) via python3 scripts/formal/verify.py; GenMC v0.17.0 (commit 29b03a6) via scripts/weakmem/verify-completion-weak-memory.sh --self-test",
+    "dst": "tests/dst_pv1_schedule_driver_test.cpp deterministic schedule driver (PR #241)"
+  },
+  "layer_vocabulary": {
+    "L0": "REPRESENTABILITY — is the invalid semantic state constructible at all through the relevant boundary",
+    "L1": "TYPE / STATIC API — compiler, type system, access control, negative compile, structural authority gate",
+    "L2": "CONTRACT / FAIL-FAST — explicit runtime validation, death test, invariant assertion, named process-terminal fail-fast",
+    "L3": "ORDINARY REGRESSION — unit / integration / regression tests, deterministic unit scenario",
+    "L4": "ASAN / UBSAN — memory / UB detection",
+    "L5": "TSAN — data-race detection",
+    "L6": "TLA+ — semantic-state model witness",
+    "L7": "GENMC / WEAK-MEMORY MODEL — bounded weak-memory execution witness",
+    "L8": "DETERMINISTIC SCHEDULING / DST — controlled scheduling/replay witness",
+    "L9": "REAL BACKEND — ThreadPool / real io_uring / OS execution where applicable",
+    "L10": "EXTERNAL OBSERVABILITY — what the user actually sees if all mechanism layers miss"
+  },
+  "status_vocabulary": {
+    "PREVENTS": "Layer makes the invalid state impossible.",
+    "REJECTS": "Invalid attempt reaches the layer but is mechanically rejected.",
+    "DETECTS": "Defect executes/reaches state and layer catches it.",
+    "REPRODUCES": "Layer does not prevent/detect by itself but makes the failure deterministically reproducible.",
+    "MISSES": "Hazard can occur and this layer does not catch it.",
+    "NOT_APPLICABLE": "Layer is semantically irrelevant to this hazard.",
+    "NOT_MODELED": "Layer could matter, but no corresponding model exists (or the model is only ADJACENT to the hazard law).",
+    "NOT_TESTED": "Experiment not executed (reason required).",
+    "BLOCKED": "Fair test cannot currently be constructed (reason required).",
+    "UNKNOWN": "Test result is ambiguous or flaky (reason required).",
+    "_l10_convention": "L10 records the residual user-visible outcome when all mechanism layers miss: MISSES with the failure form in notes, or NOT_APPLICABLE when no residual silent path remains on the Sluice side."
+  },
+  "mutation_policy": "BIND-ONLY: all nine required mutation classes (M1 exactly-one terminal/winner; M2 generation/stale identity; M3 deadline-vs-completion arbitration; M4 teardown/quiescence; M5 queue reconciliation/lost wake; M6 failure atomicity/register-before-prepare; M7 RwLock owner synchronization; M8 ResumeTarget invalid representation; M9 completion publication ordering) have existing narrowly-scoped, reverted, recorded mutation witnesses. No new production mutation was executed inside SE-2.",
+  "rows": [
+    {
+      "corpus_id": "SE1-CA-H01-1",
+      "family": "H01",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-E",
+      "normalized_hazard_ref": "SE1-CA-H01-1 (async borrow lifetime: memory must stay valid until completion)",
+      "probe_companion_ref": "SE1-CA-H01-2 (asio stack-buffer shape; implemented as P-C01 in POSIX AIO spelling)",
+      "conventional_probe": {
+        "probe_id": "P-C01",
+        "source": "tests/research/se2/conventional/conv_h01_aio_buffer_lifetime.c",
+        "executed": true,
+        "baseline_form": "POSIX AIO (glibc), raw",
+        "result": "plain: completion reports 13 bytes delivered into freed buffer; instrumented deref reads garbage — silent; ASan: heap-use-after-free (exit 1)",
+        "fairness_notes": "Normal aio_read usage except the ONE hazard (free before completion). The kernel's write into freed pages is outside ASan sight; the post-completion deref (the normalized final trace step) is the observable access."
+      },
+      "sluice_probe": {
+        "probe_id": "P-S01",
+        "source": "tests/research/se2/se2_h01_borrow_destroy_probe.cpp",
+        "baseline_form": "Sluice AsyncBackend submit_read with heap borrow destroyed while outstanding; --mode=fake isolates the Sluice layer (no UB executed); --mode=threadpool executes the real read into freed memory",
+        "result": "fake (plain+ASan): submit accepted, no fail-fast, success 64 published (exit 0, ASan clean); threadpool plain x20: success published every run (silent UAF); threadpool ASan: heap-use-after-free, WRITE of size 64 on worker thread (exit 1 with ASAN_OPTIONS=symbolize=0:halt_on_error=1)",
+        "fairness_notes": "Required §18 silent case experimentally preserved: Sluice itself MISSES; detection is external (ASan). No production lifetime machinery exists or was added."
+      },
+      "mutation_used": false,
+      "mutation_id": null,
+      "real_backend_required": true,
+      "fairness_notes": "SE-1 PARTIAL carries: asio-spelled companion vs POSIX AIO spelling is a provenance difference, not a semantic one.",
+      "worst_user_visible_outcome": "use-after-free / corrupted delivered data, silent",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-S01 fake: the borrow-destroy violation is accepted by the public API without objection",
+            "probe_id": "P-S01"
+          },
+          "L1": {
+            "status": "MISSES",
+            "evidence": "ReadOp carries a raw std::byte* borrow; no lifetime type-state; no negative-compile gate exists for borrow lifetime"
+          },
+          "L2": {
+            "status": "MISSES",
+            "evidence": "P-S01 fake: submit succeeds, reap publishes success; no runtime validation, no named fail-fast",
+            "probe_id": "P-S01"
+          },
+          "L3": {
+            "status": "MISSES",
+            "evidence": "no repository test asserts borrow liveness across a request lifecycle"
+          },
+          "L4": {
+            "status": "DETECTS",
+            "evidence": "P-S01 threadpool under ASan+UBSan: heap-use-after-free, WRITE of size 64 into freed borrow on worker thread, exit 1",
+            "probe_id": "P-S01",
+            "env": "xmake asanubsan, clang 21.1.8, ASAN_OPTIONS=symbolize=0:halt_on_error=1; symbolizer subprocess hangs under WSL2 (recorded)"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "single-thread caller-discipline defect; no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "request-arena/e10 TLA models cover slot lifecycle and winner law, not caller-side borrow lifetime"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "GenMC kernels model publication ordering, not borrow lifetime"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "DST driver controls scheduling, not caller-object lifetime"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-S01 threadpool: deterministic real execution (temp-file read, 20/20 plain runs publish success into freed borrow)",
+            "probe_id": "P-S01",
+            "env": "ThreadPoolBackend, debug, 20 healthy repeats"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent UAF in production; Sluice reports success. KEPT as required counterevidence (task §18); no production lifetime machinery added"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-C01: early free expressible; aio_read accepts without objection",
+            "probe_id": "P-C01"
+          },
+          "L1": {
+            "status": "MISSES",
+            "evidence": "raw pointer/aiocb; no type-system protection; obligation is documentation only"
+          },
+          "L2": {
+            "status": "MISSES",
+            "evidence": "no runtime validation in POSIX AIO"
+          },
+          "L3": {
+            "status": "MISSES",
+            "evidence": "no conventional test harness asserts aio buffer liveness"
+          },
+          "L4": {
+            "status": "DETECTS",
+            "evidence": "P-C01 under ASan: heap-use-after-free at the post-completion deref, exit 1",
+            "probe_id": "P-C01",
+            "env": "clang asanubsan"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model of the conventional stack"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "MISSES",
+            "evidence": "P-C01 executed on the real OS AIO path; real execution manifests the corruption silently",
+            "probe_id": "P-C01"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent UAF/corruption; ASan only if the program happens to run under it"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Executed parity-in-miss (P-C01 vs P-S01): both sides silent at the API layer, ASan-only detection on both. REQUIRED §18 counterevidence row; no migration claim exists or is manufactured."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H02-1",
+      "family": "H02",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-B",
+      "normalized_hazard_ref": "SE1-CA-H02-1 (identity reuse without generation; ABA on request identity)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": "P-C02",
+        "source": "tests/research/se2/conventional/conv_h02_uring_user_data_reuse.c",
+        "executed": true,
+        "baseline_form": "raw liburing 2.14",
+        "result": "2 CQEs under one reused user_data; caller 1:1 bookkeeping records 2 terminals for 1 logical request; plain exit 0; ASan clean",
+        "fairness_notes": "Normal liburing usage except the ONE hazard (in-flight identity reuse). Probe-internal write bug found by ASan during bring-up was fixed before evidence was recorded."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "scripts/verify-async-identity-negative-compile.sh; scripts/verify-request-arena-negative-compile.sh; scripts/verify-request-handle-authority-negative-compile.sh; tests/request_lifecycle_scheme_b_test.cpp; tests/request_arena_death_test.cpp; tests/uring_backend_c2b_identity_test.cpp; spec/tla/request_arena",
+        "baseline_form": "RequestKey = {ContextIdentity, SlotIndex, Generation}; stale construction not expressible; generation bumped before new occupant visible",
+        "result": "all cited gates/tests re-executed 2026-08-30: 3 negative-compile gates PASS; request_lifecycle_scheme_b_test PASS; request_arena_death_test PASS; uring_backend_c2b_identity_test PASS (real liburing mode)",
+        "fairness_notes": "P0 evidence reuse per task §10; no new probe written."
+      },
+      "mutation_used": true,
+      "mutation_id": "M2 (phase-c2b identity mutation evidence + phase-d3 uring identity/waiter mutations; bound, not re-executed)",
+      "real_backend_required": true,
+      "fairness_notes": "FAIR: both sides attempt the same normalized violation (reuse an in-flight identity).",
+      "worst_user_visible_outcome": "results delivered to wrong request; canceled work reported done",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "RequestKey is not caller-constructible; a stale identity cannot be encoded through the public API (protocol unrepresentability)"
+          },
+          "L1": {
+            "status": "REJECTS",
+            "evidence": "negative-compile gates re-executed PASS: verify-async-identity, verify-request-arena, verify-request-handle-authority (forge/reuse attempts rejected at compile)",
+            "env": "clang 21.1.8, 2026-08-30"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "generation bump + stale-generation validation make stale dispatch unwritable; request_arena_death_test PASS (re-executed)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "request_lifecycle_scheme_b_test (generation-reuse class) PASS re-executed; request_arena_test PASS",
+            "env": "debug, 2026-08-30"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "request-arena TLA+ suite re-executed PASS (5 gate lines); generation discipline modeled EXACT",
+            "formal_label": "EXACT",
+            "env": "tla2tools 1.7.4, 23.4s"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no GenMC kernel for identity/generation"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case for stale identity"
+          },
+          "L9": {
+            "status": "DETECTS",
+            "evidence": "uring_backend_c2b_identity_test PASS in real liburing mode (re-executed 2026-08-30, [evidence-meta] mode=real)",
+            "env": "liburing 2.14, kernel 6.18 WSL2"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no residual silent path: stale dispatch cannot bind results to the wrong occupant"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-C02: in-flight user_data reuse expressible",
+            "probe_id": "P-C02"
+          },
+          "L1": {
+            "status": "MISSES",
+            "evidence": "user_data is an opaque integer; compiler silent"
+          },
+          "L2": {
+            "status": "MISSES",
+            "evidence": "kernel/liburing do not validate uniqueness; documented caller obligation only"
+          },
+          "L3": {
+            "status": "MISSES",
+            "evidence": "no conventional regression asserts identity uniqueness"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "evidence": "P-C02 ASan clean (no memory error)",
+            "probe_id": "P-C02"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no race; deterministic 2-CQE choreography"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model of the conventional stack"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-C02 executed on real io_uring (liburing 2.14); deterministic misattribution",
+            "probe_id": "P-C02",
+            "env": "kernel 6.18 WSL2"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent wrong-result attribution / double consume"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M4",
+        "direct_ts1b_support": true,
+        "adjudication_notes": "P-C02 executed: plain documented usage (raw int user_data, in-flight reuse) silently misattributes terminals. Sluice makes a stale identity unencodable (RequestKey generation protocol + negative-compile, all re-executed). Conventional parity would require hand-built, unverifiable generation bookkeeping with no structural tie to the request; Sluice closes the class structurally."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H03-1",
+      "family": "H03",
+      "origin": "conventional-real",
+      "bucket": "external/conventional",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-C",
+      "normalized_hazard_ref": "SE1-CA-H03-1 (completion races resource close; kernel fixed-file UAF half + user-space wrong-target half)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": "P-C03",
+        "source": "tests/research/se2/conventional/conv_h03_uring_fd_reuse.c",
+        "executed": true,
+        "baseline_form": "raw liburing 2.14",
+        "result": "read SQE prepared on pipe fd, fd closed and number recycled by a victim file before submit; read consumes the FILE's bytes (VICTIM-DATA) — silent wrong-target I/O; plain exit 0; ASan clean",
+        "fairness_notes": "Normal liburing usage except the ONE hazard (fd closed in the prepared window). Kernel-side fixed-file UAF half (CVE-class, fixed upstream) is NOT user-space reproducible: recorded BLOCKED at L9."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "tests/threadpool_backend_phase_e_test.cpp (closed-fd -> accepted -> typed EBADF terminal); threadpool_backend_death_test; uring_backend_death_test (real liburing); docs/verification/phase-d4-uring-wait-close-drain-mutation-evidence.md",
+        "baseline_form": "quiescent-destruction contract + descriptor-validation rule (nonnegative-but-closed fd accepted; resolved by real syscall)",
+        "result": "threadpool_backend_death_test PASS; uring_backend_death_test PASS in real liburing mode (2026-08-30); phase_e closed-fd EBADF terminal PASS",
+        "fairness_notes": "The honest split: Sluice fail-fast covers BACKEND-STATE lifetime with in-flight work; the fd-identity reuse window between accept and syscall execution is BELOW the Sluice boundary (§9.1) and remains — same exposure as raw io_uring."
+      },
+      "mutation_used": true,
+      "mutation_id": "M4 (phase-c2e close-drain-destruction + phase-d4 uring wait/close/drain mutations; bound)",
+      "real_backend_required": true,
+      "fairness_notes": "PARTIAL: kernel-UAF half blocked; user-space wrong-target half executed both sides.",
+      "worst_user_visible_outcome": "silent wrong-target I/O (user-space half); kernel UAF/LPE (historical kernel half)",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "close-while-accepted is expressible by design (fd is an int by public contract); the violation state is constructible"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type-level fd-lifetime protection (intentional: descriptor-validation rule forbids preflight)"
+          },
+          "L2": {
+            "status": "DETECTS",
+            "evidence": "backend-state half: destruction with accepted/bound requests = named fail-fast Debug+Release (threadpool_backend_death_test, uring_backend_death_test real mode, both PASS re-executed). fd half: closed fd -> accepted -> typed EBADF terminal (phase_e PASS). fd-NUMBER-REUSE window: MISSES — recorded explicitly in fairness_notes",
+            "env": "debug + real liburing, 2026-08-30"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "threadpool_backend_phase_e_test closed-fd slice PASS (no-reuse half); the reuse window has no regression witness",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no user-space memory error in the wrong-target half"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no TLA model of fd lifecycle / close windows"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case for close windows"
+          },
+          "L9": {
+            "status": "MISSES",
+            "notes": "real io_uring path resolves fd at kernel execution; the accept->execution reuse window exists identically below the Sluice boundary. Backend-state half is DETECTED (uring_backend_death_test real mode PASS). Kernel-UAF half BLOCKED (fixed upstream; not re-executable)"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent wrong-target I/O remains possible in the fd-reuse window; Sluice does not migrate this half — preserved as an honest finding"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-C03: prepared-window close expressible",
+            "probe_id": "P-C03"
+          },
+          "L1": {
+            "status": "MISSES",
+            "evidence": "no type protection"
+          },
+          "L2": {
+            "status": "MISSES",
+            "evidence": "kernel does not validate caller intent; post-fix kernel prevents only the internal UAF, not caller-level wrong-target I/O"
+          },
+          "L3": {
+            "status": "MISSES",
+            "evidence": "no conventional regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "evidence": "P-C03 ASan clean",
+            "probe_id": "P-C03"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-C03 real io_uring deterministic wrong-target I/O; kernel-UAF half BLOCKED (fixed upstream, not re-executable)",
+            "probe_id": "P-C03"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent wrong-target I/O; historical kernel half: UAF/LPE"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "The executed comparative shape is the fd-number-reuse window, where Sluice is identical to raw io_uring (parity-in-miss, below the §9.1 boundary). The backend-state half is a class claim on a documented conventional posture only.",
+        "subshapes": [
+          {
+            "name": "fd-number-reuse window (accept→syscall)",
+            "comparison_basis": "current-executed",
+            "migration_class": "M0",
+            "direct_ts1b_support": false,
+            "notes": "P-C03 executed both sides: identical silent wrong-target I/O in the reuse window; Sluice does not migrate this half."
+          },
+          {
+            "name": "backend-state lifetime at teardown",
+            "comparison_basis": "current-documented",
+            "migration_class": "M3",
+            "direct_ts1b_support": false,
+            "notes": "Sluice named fail-fast executed (threadpool/uring death tests, real liburing); conventional side is documentation only (no executed probe) — class claim, excluded from direct T-S1b support."
+          }
+        ]
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H04-1",
+      "family": "H04",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-A",
+      "normalized_hazard_ref": "SE1-CA-H04-1 (cancel vs complete: two candidate terminals; loser must not overwrite/duplicate)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": null,
+        "source": null,
+        "executed": false,
+        "baseline_form": "raw io_uring cancel-CQE / request-CQE reconciliation",
+        "result": "NOT_EXECUTED — caller-reconciliation analog rejected during design as either non-deterministic or a manufactured-incompetence baseline (task §14); kernel-side pre-fix double-terminal is not re-executable",
+        "fairness_notes": "Conventional half rests on the documented obligation (cancel is an attempt; caller reconciles). Honest gap: no executed conventional probe for this family."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "tests/request_lifecycle_scheme_b_test.cpp; tests/request_arena_cancel_intent_test.cpp; spec/tla/e10_waitnode; dst_pv1 T4 (cancel-vs-expiry precedence transposition)",
+        "baseline_form": "resolve_ CAS single-winner; running cancel records intent only; cancel never publishes Completion-ready",
+        "result": "request_lifecycle_scheme_b_test PASS; dst_pv1_schedule_driver_test PASS (T4 flips cancel-vs-expiry precedence deterministically, both directions); e10-waitnode TLA suite PASS",
+        "fairness_notes": "P0 evidence reuse; all cited witnesses re-executed 2026-08-30."
+      },
+      "mutation_used": true,
+      "mutation_id": "M1/M2 (FE M1-M5 winner-law mutations all RED; c2b generation mutations; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "FAIR per SE-1: normalized trace is cancel-vs-complete winner arbitration.",
+      "worst_user_visible_outcome": "caller sees success AND cancellation for one op; accounting drift",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "second terminal unwritable after resolve_ CAS commit (SE-1 UNREPRESENTABLE; protocol law)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protection is protocol-level, not compile-time"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "single-winner CAS + running-cancel-intent-only law (ADR Decision 11); loser never overwrites or double-publishes"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "request_lifecycle_scheme_b_test PASS re-executed (exactly-one terminal, cancel-intent, verbatim real result)",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension (winner is CAS-arbitrated)"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e10-waitnode TLA suite re-executed PASS (winner exclusivity modeled EXACT)",
+            "formal_label": "EXACT",
+            "env": "tla2tools 1.7.4, 6.7s"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no GenMC kernel for cancel arbitration (publication kernels cover a different law)"
+          },
+          "L8": {
+            "status": "REPRODUCES",
+            "evidence": "dst_pv1 T4: cancel-vs-expiry precedence deterministically transposable both ways; PASS re-executed",
+            "env": "debug"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "real-liburing cancel-vs-complete probe not executed this campaign; standing D2/D4 real-liburing mutation evidence is adjacent (failure/rollback class, not cancel-winner class)"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protocol prevents double terminal; no residual silent path"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "double-terminal caller bug constructible; documented-only obligation"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "MISSES",
+            "notes": "cancel CQE is evidence-of-attempt; caller reconciliation undocumented in mechanism, documented in text"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "no conventional regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension in the normalized trace"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "cancel-vs-complete race not executed on real io_uring this campaign (fair probe could not be constructed without manufactured incompetence); pre-fix kernel double-terminal not re-executable"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "caller observes success + canceled; accounting drift"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-documented",
+        "migration_class": "M5",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current conventional has NO prevention mechanism (cancel-CQE is attempt evidence; caller reconciliation is documentation), so this is not historical-fixed — but no executed conventional probe exists either (fair probe rejected as non-deterministic or manufactured incompetence, §14). Class claim on a documented basis; excluded from direct T-S1b support."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H05-1",
+      "family": "H05",
+      "origin": "conventional-real",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-A",
+      "normalized_hazard_ref": "SE1-CA-H05-1 (double terminal / double publication for one request)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": null,
+        "source": null,
+        "executed": false,
+        "baseline_form": "kernel duplicate-CQE history (fixed by routing fix)",
+        "result": "NOT_EXECUTED — the defect lived in kernel routing and is fixed upstream; re-execution would require a vulnerable kernel (BLOCKED); today's kernel PREVENTS by mechanism",
+        "fairness_notes": "Recorded honestly: current conventional kernel PREVENTS this hazard by mechanism; the historical defect is the SE-1 evidence."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "tests/completion_authority_death_test.cpp; tests/completion_binding_test.cpp; scripts/verify-completion-authority-negative-compile.sh; spec/tla/e10_waitnode; spec/weakmem/completion-publication (K1/K2 + controls)",
+        "baseline_form": "reap-only publication; single winner CAS",
+        "result": "completion_authority_death_test PASS; completion_binding_test PASS; negative-compile gate PASS; e10-waitnode PASS; GenMC self-test PASS (kernels pass, broken-order controls fail as required)",
+        "fairness_notes": "P0/P1 evidence reuse, all re-executed 2026-08-30."
+      },
+      "mutation_used": true,
+      "mutation_id": "M1/M9 (FE M1 publication-tail mutation RED; GenMC N1/N1b/N3 broken-order controls FAIL by design; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "FAIR.",
+      "worst_user_visible_outcome": "phantom completion event; refcount underflow; UAF on request object",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "single publication authority: only reap publishes Completion-ready (completion.hpp publish_from_reap; backend reap-is-sole-publisher)"
+          },
+          "L1": {
+            "status": "REJECTS",
+            "evidence": "verify-completion-authority-negative-compile.sh PASS re-executed (publication-bypass attempts rejected)",
+            "env": "clang 21.1.8, 2026-08-30"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "reap-only publication + CAS winner; completion_authority_death_test PASS re-executed"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "completion_binding_test two-stage claim/publish lifecycle PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension in the protocol shape"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension (publication order is protocol-arbitrated)"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e10-waitnode TLA suite PASS re-executed; winner exclusivity EXACT",
+            "formal_label": "EXACT"
+          },
+          "L7": {
+            "status": "DETECTS",
+            "evidence": "GenMC completion-publication kernels K1/K2 PASS; broken-order controls N1/N1b/N3 FAIL as required (sensitivity proven); self-test 4 legs PASS (fail-closed runner)",
+            "formal_label": "EXACT",
+            "env": "GenMC v0.17.0, rc11/ra gated; 2026-08-30"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "DST driver exists; no dedicated double-terminal replay case"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "real-backend double-publication fault probe not executed this campaign; uring real-mode contract test PASS is adjacent coverage only"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protocol prevents; no residual silent path"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "pre-fix representable at kernel routing level; today PREVENTED by kernel mechanism (L2)"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "current upstream kernel routing fix restores exactly-once — by kernel mechanism, not user-enforceable; recorded per §37 fairness",
+            "evidence": "current upstream kernel routing fix restores exactly-once completion (SE-1 source: kernel fix commit class); mechanism-owned, not user-enforceable"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "defect was found by syzbot-class fuzzing, not ordinary regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "kernel-internal"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "kernel-internal"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "BLOCKED",
+            "notes": "cannot re-execute a fixed kernel routing race on current host/kernel"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "historically MISSES (phantom completion, refcount underflow); today prevented by kernel"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "historical-fixed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current upstream kernel PREVENTS the historical routing defect by mechanism (recorded conventional L2). Sluice also prevents — user-visible failure-mode PARITY at the boundary. The SE-1 kernel bug proves the class existed, not a current-baseline migration. Sluice witnesses (negative-compile, death tests, GenMC) stand as T-S1a machinery evidence only."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H06-1",
+      "family": "H06",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-C",
+      "normalized_hazard_ref": "SE1-CA-H06-1 (submit-failure rollback: partial submission leaves per-entry outcomes on a separate channel)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": "P-C06",
+        "source": "tests/research/se2/conventional/conv_h06_lio_listio_partial.c",
+        "executed": true,
+        "baseline_form": "POSIX lio_listio (glibc), LIO_WAIT, one invalid entry",
+        "result": "measured: listio rc=-1 errno=EIO with NOTHING executed (file empty; valid entries' aio_return unset) — glibc initiation is ATOMIC for the invalid-entry shape; batch-level rejection with no residue",
+        "fairness_notes": "CONVENTIONAL STRONGER IN THIS DIMENSION (§37 recorded): for the invalid-entry shape, glibc's listio initiation is atomic and matches Sluice's transactional submission. POSIX itself permits subset initiation and valid entries can still fail at completion (ENOSPC class) — that per-entry reconciliation obligation remains documented-only and was not deterministically triggerable on this host."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "detail::submit_transaction ladder (include/sluice/async/detail/submit_transaction.hpp); R2-ALLOC regression witnesses (PR #242); tests/fe2_publication_atomicity_death_test.cpp (PUB1/PUBCTL); tests/request_lifecycle_scheme_b_test.cpp fault matrix; docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md (real liburing, historical)",
+        "baseline_form": "transactional submission: all fallible preparation precedes registration; failed submit leaves no request/borrow/queue-work/accounting residue; post-terminal allocation failure = named fail-fast (exit 86 class)",
+        "result": "request_lifecycle_scheme_b_test PASS (fault-injection matrix); fe2_publication_atomicity_death_test PASS; uring real-mode contract test PASS (2026-08-30)",
+        "fairness_notes": "P0/P1 evidence reuse; all re-executed except the historical D2 real-liburing mutation record (cited, not re-run)."
+      },
+      "mutation_used": true,
+      "mutation_id": "M6 (R2-ALLOC prepare-before-register fault-injection witnesses PR #242; phase-c2d failure-injection mutations; D2 uring noalloc; bound)",
+      "real_backend_required": true,
+      "fairness_notes": "FAIR: both sides attempt the same normalized shape (batch submission with a failing entry).",
+      "worst_user_visible_outcome": "hangs (work lost), duplicate I/O, accounting mismatch",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "accepted-but-unknown-work state unrepresentable: submit success commits all bounded resources; failed submit returns typed error with zero residue"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protocol-level, not compile-time"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "submit_transaction ladder + post-terminal allocation failure = named fail-fast (PUBCTL death test PASS re-executed)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "request_lifecycle_scheme_b_test allocation-fault matrix PASS; fe2_publication_atomicity_death_test PASS (re-executed 2026-08-30)",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "request-arena TLA models slot admission EXACT (suite PASS re-executed) but the full submit-ladder fault shape is beyond current model scope (ADJACENT); recorded as coverage note"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case for submission faults"
+          },
+          "L9": {
+            "status": "DETECTS",
+            "evidence": "phase-d2-uring-failure-noalloc-mutation-evidence.md (real-liburing local execution, HISTORICAL record cited per §10; not re-run this campaign); fresh uring_backend_test real-mode PASS exercises real submit paths",
+            "env": "historical + fresh real liburing 2.14"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "transactional submission prevents residue"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "partial-initiation shapes expressible per POSIX (subset initiation allowed)"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "P-C06 measured: glibc LIO_WAIT invalid-entry initiation is atomic (rc=-1/EIO, zero execution, zero residue)",
+            "probe_id": "P-C06"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "no conventional regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "evidence": "P-C06 ASan clean",
+            "probe_id": "P-C06"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-C06 executed on real OS AIO path; deterministic",
+            "probe_id": "P-C06"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "per-entry COMPLETION failures (ENOSPC class) remain a documented-only reconciliation obligation: lost work / double retry possible"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "At the executed shape glibc initiation is ATOMIC (P-C06: batch -1/EIO, zero execution, zero residue) — conventional PREVENTS and is mechanism-equivalent to Sluice's transactional submission (§37 conventional-stronger). The post-terminal shape has no matched conventional probe, so no comparative claim is made there.",
+        "subshapes": [
+          {
+            "name": "invalid-entry initiation (glibc, LIO_WAIT)",
+            "comparison_basis": "current-executed",
+            "migration_class": "M0",
+            "direct_ts1b_support": false,
+            "notes": "Measured glibc atomic initiation; mechanism-equivalent to Sluice's submit ladder at this shape."
+          },
+          {
+            "name": "post-terminal publication-allocation",
+            "comparison_basis": "blocked",
+            "migration_class": "MX",
+            "direct_ts1b_support": false,
+            "notes": "No matched conventional probe constructed; Sluice-side PUBCTL fail-fast witnesses stand as T-S1a machinery evidence only — no comparative claim."
+          }
+        ]
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H07-1",
+      "family": "H07",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-A",
+      "normalized_hazard_ref": "SE1-CA-H07-1 (partial/zero-progress I/O; wrong-argument retry corrupts the stream)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": "P-C07",
+        "source": "tests/research/se2/conventional/conv_h07_partial_write_retry.c",
+        "executed": true,
+        "baseline_form": "raw POSIX pipe, F_SETPIPE_SZ=4096, nonblocking",
+        "result": "partial write 4096/8192; wrong-offset retry delivers block-1 twice, block-2 never — silent stream corruption; plain exit 0; ASan clean",
+        "fairness_notes": "Normal POSIX usage except the ONE hazard (retry from wrong offset). Deterministic via pinned pipe capacity."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "tests/async_op_helpers_test.cpp (short-retry O5; zero-progress invalid_state Slice 6); docs/reference/api.md read_some/write_some typed semantics",
+        "baseline_form": "read_some/write_some expose short I/O as typed Results; exact/all helpers loop; zero-progress non-empty write = backend failure (invalid_state), never retried forever",
+        "result": "async_op_helpers_test PASS re-executed 2026-08-30 (includes zero-progress -> invalid_state)",
+        "fairness_notes": "Residual honesty: a caller who ignores the typed short count can still mis-retry — the helpers close the loop, the raw *_some surface documents the obligation. Recorded at L10."
+      },
+      "mutation_used": false,
+      "mutation_id": null,
+      "real_backend_required": false,
+      "fairness_notes": "PARTIAL: silent partial-SUCCESS variant unrepresentable in Sluice; caller-side misuse of raw *_some counts remains possible (documented).",
+      "worst_user_visible_outcome": "protocol corruption; duplicated bytes; hangs (livelock on zero-progress)",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "silent partial-success unrepresentable: short I/O surfaces only as explicit typed Result counts; zero progress cannot be a success"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "runtime typed semantics, not compile-time rejection"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "zero-progress non-empty write classified backend failure (invalid_state); no retry-forever path"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "async_op_helpers_test PASS re-executed: short-completion retry + zero-progress invalid_state slices",
+            "env": "debug, 2026-08-30"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no TLA model of short-I/O loops"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "zero-progress on a real backend not separately probed this campaign; threadpool_backend_phase_e real-path PASS is adjacent"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "residual: a caller bypassing exact/all helpers and ignoring typed counts can still mis-retry — below the helper protection, documented"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-C07: wrong-retry expressible",
+            "probe_id": "P-C07"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "byte counts are plain ssize_t; no enforcement"
+          },
+          "L2": {
+            "status": "MISSES",
+            "notes": "POSIX does not classify zero-progress; retry discipline is documented"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "no conventional regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "evidence": "P-C07 ASan clean (no memory error)",
+            "probe_id": "P-C07"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-C07 real pipe semantics, deterministic",
+            "probe_id": "P-C07"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent stream corruption / livelock"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Subshapes split per review 5060477073; the executed comparative shape (raw-surface partial-retry misuse) is parity, and the zero-progress claim has no executed conventional probe.",
+        "subshapes": [
+          {
+            "name": "partial-write retry (raw surface)",
+            "comparison_basis": "current-executed",
+            "migration_class": "M0",
+            "direct_ts1b_support": false,
+            "notes": "P-C07 executed: raw write + ignored short count corrupts the stream. Sluice raw write_some retains identical misuse (L10 MISSES); conventional documented retry practice (write_all folklore) achieves parity — helper convenience, not a failure-mode migration."
+          },
+          {
+            "name": "zero-progress classification",
+            "comparison_basis": "current-documented",
+            "migration_class": "M3",
+            "direct_ts1b_support": false,
+            "notes": "Sluice types zero progress on non-empty write as backend failure (invalid_state; executed witnesses). POSIX does not classify zero progress; no executed conventional probe — class claim, excluded from direct T-S1b support."
+          }
+        ]
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H08-1",
+      "family": "H08",
+      "origin": "conventional-real",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-A",
+      "normalized_hazard_ref": "SE1-CA-H08-1 (same-object timeout vs completion arbitration; corrected semantic shape: linked deadline racing request completion)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": null,
+        "source": null,
+        "executed": false,
+        "baseline_form": "io_uring linked timeout (kernel 5.13 fix 447c19f class)",
+        "result": "NOT_EXECUTED — the defect was kernel-internal and is fixed upstream; user-space re-execution impossible (BLOCKED); today's kernel PREVENTS by mechanism",
+        "fairness_notes": "Per the corrected SE-1 H08 shape, the conventional probe target is linked-timeout semantics inside the kernel — not reachable from user space."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "AC-2b centralized deadline authority (arm/consume/retire_ordinary_deadline_locked, scheduler.hpp); dst_pv1 T4; spec/tla/e11_timer_wait; PR #238 mutation census (192 gates)",
+        "baseline_form": "deadline expiry is one participant in the WaitNode resolve_ single-winner CAS; grant and expiry cannot both win",
+        "result": "e11-timer-wait TLA suite PASS (25.4s); dst_pv1_schedule_driver_test PASS (T4 deadline/timeout transposition); AC-2b census standing",
+        "fairness_notes": "P0/P2 evidence reuse; e11 + DST re-executed 2026-08-30."
+      },
+      "mutation_used": true,
+      "mutation_id": "M3 (AC-2b deadline mutation census PR #238; rwlock deadline-precedence negative models; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "FAIR per corrected SE-1 shape (same-object deadline-vs-completion).",
+      "worst_user_visible_outcome": "double retire / dual publication (historical kernel: double free -> UAF)",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "grant and expiry cannot both win on the same wait: deadline is a resolve_ single-winner participant (SE-1 UNREPRESENTABLE)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protocol-level"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "centralized AC-2b deadline authority: arm/consume/retire under one text; single-winner law"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "dst_pv1 T4 PASS (transposing one step flips cancel-vs-expiry precedence deterministically — the precedence law is pinned); deadline choreography in Condition/Select suites (standing)",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e11-timer-wait TLA suite PASS re-executed (timer/deadline wait law EXACT for grant-vs-expiry)",
+            "formal_label": "EXACT",
+            "env": "tla2tools 1.7.4, 25.4s"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "REPRODUCES",
+            "evidence": "dst_pv1 T4: deterministic replay of deadline/cancel/completion precedence in both orders; PASS re-executed",
+            "env": "debug"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "real-backend deadline-vs-completion probe not executed (ThreadPool has no kernel deadline; uring linked-timeout path not exercised this campaign)"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protocol prevents dual publication"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "pre-fix representable at kernel level"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "current upstream kernel restores single-winner arbitration for linked timeouts — kernel mechanism, not user-enforceable",
+            "evidence": "current upstream kernel linked-timeout fix 447c19f restores single-winner arbitration (SE-1 source); mechanism-owned, not user-enforceable"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "found by syzbot-class fuzzing"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "kernel-internal"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "kernel-internal"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "BLOCKED",
+            "notes": "fixed kernel race not re-executable on current host"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "historically MISSES (double free/UAF); today prevented by kernel"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "historical-fixed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current upstream kernel linked-timeout fix (447c19f class) restores single-winner arbitration by mechanism; conventional PREVENTS today. Sluice also prevents — parity at the boundary; SE-1 defect is historical evidence only. Sluice witnesses (AC-2b authority, e11 EXACT, DST T4) stand as T-S1a machinery evidence."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H09-1",
+      "family": "H09",
+      "origin": "conventional-real",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-D",
+      "normalized_hazard_ref": "SE1-CA-H09-1 (lost wake: wake consumed by nobody; waiter stranded with predicate satisfied)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": "P-C09",
+        "source": "tests/research/se2/conventional/conv_h09_lost_wake.c",
+        "executed": true,
+        "baseline_form": "POSIX condition variable, mutex-protected predicate, missing recheck protocol",
+        "result": "plain: LOST WAKE REPRODUCED deterministically (waiter stranded; alarm fired, exit 42); TSan x3: ZERO race reports (all accesses mutex-held), same exit 42",
+        "fairness_notes": "Normal pthreads usage except the ONE hazard (single predicate check before unconditional sleep — the missing recheck protocol). LAYER FINGERPRINT: TSan is blind to logic-level lost wakes."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "spec/tla/e9_park_wake (incl. negative models); dst_pv1 T5 (Q-LIV-1 replay V1/V1-S/V1-T/V1-TS); tests/async_queue_lifecycle_death_test.cpp; PR #190/#194 model-vs-C++ epilogue repairs; PR #242 four Q-LIV-1 regression witnesses",
+        "baseline_form": "wake epoch / persistent predicate protocol with terminal recheck; opposite-role queue reconciler; stranded-transit fail-fast",
+        "result": "e9-park-wake TLA suite PASS (90.3s); e12-queue PASS (59.2s); dst_pv1 PASS; async_queue_lifecycle_death_test PASS — all re-executed 2026-08-30",
+        "fairness_notes": "The induced sibling (SB-01) is the same family and keeps the honest DETERMINISTICALLY_REPRODUCIBLE posture."
+      },
+      "mutation_used": true,
+      "mutation_id": "M5 (FE M5 queue reconcile mutation RED; DST V1 witness originated as the as-built defect proof; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "FAIR.",
+      "worst_user_visible_outcome": "permanent stall (hang); requires shutdown/restart",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "wake-protocol violations were constructible — SE1-SB-01 (Q-LIV-1) is the realized counterexample; the protocol laws reduce but do not make the whole class unrepresentable"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "DETECTS",
+            "evidence": "stranded-transit named fail-fast at teardown (async_queue_lifecycle_death_test PASS re-executed) + predicate/terminal-recheck protocol prevents the modeled law"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "Q-LIV-1 four regression witnesses (PR #242) standing; dst_pv1 PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "liveness class, not memory"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "logic lost wake has no data race (see P-C09 fingerprint)"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e9-park-wake TLA suite PASS re-executed; park/wake epilogue gaps were genuinely found by this layer historically (PRs #190/#194) — sensitive, not vacuous",
+            "formal_label": "EXACT"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no GenMC wake-liveness kernel (weakmem covers publication ordering only)"
+          },
+          "L8": {
+            "status": "REPRODUCES",
+            "evidence": "dst_t5 Q-LIV-1 replay class (V1 flipped post-fix regression; V1-S/V1-T/V1-TS symmetric pins); PASS re-executed",
+            "env": "debug"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "real-backend lost-wake probe not executed; threadpool_backend_phase_e no-lost-wake slice PASS is adjacent fresh coverage"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "for the pinned shapes: regression + DST + teardown fail-fast close the silent path; the class is not exhaustively preventable (guarded, not eliminated)"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-C09: missing-recheck constructible",
+            "probe_id": "P-C09"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "pthread API cannot enforce the recheck protocol"
+          },
+          "L2": {
+            "status": "MISSES",
+            "notes": "no runtime validation"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "no conventional harness; hang needs specific interleaving (our probe choreographed it — the conventional stack provides no such driver)"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory error"
+          },
+          "L5": {
+            "status": "MISSES",
+            "evidence": "P-C09 TSan x3: zero race reports, hang still reproduced (exit 42) — TSan blind to logic lost wake",
+            "probe_id": "P-C09",
+            "env": "xmake tsan"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-C09 real pthreads/OS, deterministic choreography, hang reproduced",
+            "probe_id": "P-C09"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "hang; requires restart"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M2",
+        "direct_ts1b_support": true,
+        "adjudication_notes": "P-C09 executed: the current conventional baseline (POSIX threads) still MISSES logic lost wakes — deterministic permanent stall, TSan blind. Present-tense conventional failure, not historical. Sluice does NOT prevent the class (L0 MISSES; SB-01 realized) but changes the failure mode on the pinned shapes: deterministic DST replay, teardown stranded-transit fail-fast, and a formal layer that historically found real defects (e9 → PRs #190/#194), plus regression witnesses (PR #242). Guard-not-eliminate is recorded at L10."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H10-1",
+      "family": "H10",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-C",
+      "normalized_hazard_ref": "SE1-CA-H10-1 (shutdown with in-flight work: close-refusal vs documented abandonment)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": null,
+        "source": null,
+        "executed": false,
+        "baseline_form": "libuv EBUSY refusal / asio documented handler abandonment",
+        "result": "NOT_EXECUTED — host has libuv runtime .so but NO headers and no asio; a raw-pthread loop would be a manufactured baseline (task §14)",
+        "fairness_notes": "Conventional half rests on the SE-1 documented-obligation source. Honest NOT_TESTED."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "threadpool_backend_death_test; uring_backend_death_test (real liburing); tests/async_io_context_death_test.cpp (teardown gates); spec/tla/e16_application_runtime; FE QD1 (async_queue_lifecycle_death_test)",
+        "baseline_form": "quiescent destruction: destructor never implicitly closes/cancels/drains/publishes; destruction with accepted/bound requests = named fail-fast Debug+Release",
+        "result": "threadpool_backend_death_test PASS; uring_backend_death_test PASS (real liburing); async_queue_lifecycle_death_test PASS (QD1); e16-application-runtime TLA suite PASS — re-executed 2026-08-30",
+        "fairness_notes": "P0 evidence reuse, re-executed."
+      },
+      "mutation_used": true,
+      "mutation_id": "M4 (phase-c2e close/drain/destruction mutations; bound)",
+      "real_backend_required": true,
+      "fairness_notes": "FAIR.",
+      "worst_user_visible_outcome": "abandoned I/O; skipped durability/cleanup; silent data loss; (less defensive designs) UAF",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "the abandon-while-live semantic is not representable as a default: destruction with accepted requests is a contract violation by ADR"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "runtime contract"
+          },
+          "L2": {
+            "status": "DETECTS",
+            "evidence": "destruction-with-live-work named fail-fast Debug+Release: threadpool_backend_death_test PASS, uring_backend_death_test PASS real liburing, QD1 PASS — all re-executed",
+            "env": "debug + real liburing"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "teardown death-test group + FE QD1 standing; re-executed subset PASS",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "lifecycle class"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e16-application-runtime TLA suite PASS re-executed (runtime shutdown/drain laws modeled EXACT for the modeled lifecycle)",
+            "formal_label": "EXACT"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no dedicated DST teardown-window case (T5 covers close-before/after-admit admission shapes — adjacent)"
+          },
+          "L9": {
+            "status": "DETECTS",
+            "evidence": "uring_backend_death_test non-quiescent destroy fail-fast in REAL liburing mode PASS (2026-08-30)",
+            "env": "liburing 2.14"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "fail-fast prevents silent abandonment"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "abandon-mode expressible (documented in asio; refusal documented in libuv)"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "MISSES",
+            "notes": "the obligation is documentation: either EBUSY refusal or explicit abandonment semantics — no mechanical enforcement"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "no conventional regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "lifecycle class"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "no conventional loop library headers on host; raw-pthread loop would violate the competent-baseline rule (§14)"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "abandoned I/O / skipped durability steps; silent data loss"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-documented",
+        "migration_class": "M3",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Conventional postures (libuv EBUSY refusal / asio documented abandonment) are documentation on this host (no headers; a raw-pthread loop would be a manufactured baseline, §14) and no conventional probe was executed. Sluice named fail-fast is executed. Class claim on a documented basis; excluded from direct T-S1b support."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H11-1",
+      "family": "H11",
+      "origin": "conventional-real",
+      "bucket": "external/conventional",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-C",
+      "normalized_hazard_ref": "SE1-CA-H11-1 (terminal-path resource/accounting leak: less-common completion path omits the release)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": null,
+        "source": null,
+        "executed": false,
+        "baseline_form": "io_uring provided-buffer / request-refcount completion paths (kernel fixes)",
+        "result": "NOT_EXECUTED — kernel-internal path-coverage defects, fixed upstream; not re-executable (BLOCKED)",
+        "fairness_notes": "Kernel-half history; user-space analog would be manufactured."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "request_arena_test (slot accounting); AC-1a observability accessors (docs/verification/guarantee-cost.md); R2-ALLOC regressions (PR #242); AC-2c 13-path wait-accounting census",
+        "baseline_form": "accounting retirement attached to terminal resolution: reap closes registration, ends borrow, updates accounting, releases slot exactly-once",
+        "result": "request_arena_test PASS re-executed 2026-08-30; AC-1a accessors standing (overload artifact: sustained RSS delta 0 kB in measured runs); request-arena TLA suite PASS",
+        "fairness_notes": "Residual recorded: the concrete wait-accounting counter remains deliberately per-frontend (SE1-SB-12-class structural residual, OUT-OF-SE1)."
+      },
+      "mutation_used": true,
+      "mutation_id": "M6 (R2-ALLOC registration-residue witnesses PR #242; bound)",
+      "real_backend_required": true,
+      "fairness_notes": "PARTIAL.",
+      "worst_user_visible_outcome": "gradual pool exhaustion; allocation failures under sustained load; memory leak",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "unretired-terminal state unrepresentable at reap: accounting retirement is a semantic obligation attached to terminal resolution"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "protocol-level"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "reap-only retirement (Stage 5) + AC-2c exactly-once wait-accounting across audited paths"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "request_arena_test slot accounting PASS re-executed; R2-ALLOC regression witnesses standing (PR #242); AC-1a counter assertions standing",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "accounting class (LSan would see true leaks; none present)"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "request-arena TLA suite PASS re-executed — slot release/generation EXACT for the modeled half",
+            "formal_label": "EXACT",
+            "env": "tla2tools 1.7.4"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST accounting case"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "fault-injected terminal census on real backend not re-run this campaign; historical D2 real-liburing noalloc record cited"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "residual structural duplication risk tracked OUT-OF-SE1 (SE1-SB-12)"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "path-coverage gaps were representable (kernel history)"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "current upstream kernel path-coverage fixes restore exactly-once retirement — kernel mechanism",
+            "evidence": "current upstream kernel path-coverage fixes restore exactly-once retirement (SE-1 source: provided-buffer/completion-path fixes); mechanism-owned"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "historically found by targeted kernel auditing/fuzzing, not ordinary regression"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "kernel-internal"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "kernel-internal"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "BLOCKED",
+            "notes": "fixed kernel paths not re-executable"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "historically: pool exhaustion under load; today prevented by kernel mechanism"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "historical-fixed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current upstream kernel path-coverage fixes restore exactly-once retirement by mechanism; conventional PREVENTS today. Parity at the boundary; the SE-1 kernel history is not a baseline. Sluice accounting witnesses (arena tests, AC-1a, AC-2c census) stand as T-S1a machinery evidence."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H12-1",
+      "family": "H12",
+      "origin": "conventional-real",
+      "bucket": "external/conventional",
+      "comparison_validity": "COMPARABILITY_BLOCKED",
+      "pairing": "PAIR-X",
+      "normalized_hazard_ref": "SE1-CA-H12-1 (fsync error-clearing: retry-after-fsync-failure silently loses reported-durable data). POLICY HALF testable; KERNEL MECHANISM HALF below the boundary (task §20)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": null,
+        "source": null,
+        "executed": false,
+        "baseline_form": "filesystem/durability model (PostgreSQL fsyncgate class)",
+        "result": "KERNEL HALF BLOCKED: kernel page-error clearing cannot be probed without storage-fault injection below the boundary. POLICY HALF: conventional retry-after-fsync-failure is exactly what the documented guidance suggested — the failure is policy-level and conventional layers provide no detection.",
+        "fairness_notes": "Per task §20: policy cells testable; kernel mechanism recorded BLOCKED/NOT_APPLICABLE. No fake evidence."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "tests/async_durability_test.cpp (sync error paths); tests/wal_writer_test.cpp (durable_lsn_ advances only on success); src/file.cpp do_sync (EINTR-only retry); src/wal.cpp",
+        "baseline_form": "sync_data() vs sync_all() distinct typed ops; sync errors surface as typed IoError with no retry loop; WAL durable marker strict-on-success",
+        "result": "async_durability_test PASS; wal_writer_test PASS — re-executed 2026-08-30",
+        "fairness_notes": "Policy half only. The kernel error-clearing mechanism operates below the Sluice boundary and is NOT claimed solved."
+      },
+      "mutation_used": true,
+      "mutation_id": "M6-adjacent (wal-copy-fuzz mutation evidence + copy_all_fault_fuzz; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "COMPARABILITY_BLOCKED per SE-1: kernel half has no fair user-space probe.",
+      "worst_user_visible_outcome": "silent loss of reported-durable data after crash; database corruption",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "notes": "POLICY HALF: no silent durability-retry machinery exists to get wrong; the reported-durable-but-unverified state is unrepresentable at the WAL boundary. KERNEL HALF: MISSES — recorded at L9/L10",
+            "evidence": "no silent durability-retry machinery exists: src/file.cpp do_sync retries EINTR only, src/wal.cpp advances durable_lsn_ strictly on success (wal_writer_test PASS re-executed)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "runtime semantics"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "EINTR-only retry; other errno -> typed failure; durable_lsn_ advances strictly on success (wal_writer_test PASS re-executed)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "async_durability_test sync-error slices PASS; wal_writer_test PASS (re-executed 2026-08-30)",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no durability model in the TLA inventory"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST durability case"
+          },
+          "L9": {
+            "status": "BLOCKED",
+            "notes": "KERNEL HALF: kernel error-clearing requires storage-fault injection below the Sluice boundary; not constructible on this host"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "KERNEL HALF preserved honestly: if the kernel clears the error state, a later successful fsync can still lose writes — below every user-space layer including Sluice; no fake evidence constructed (§20)"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "retry-after-failure is representable and was the documented recommendation"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "no type protection"
+          },
+          "L2": {
+            "status": "MISSES",
+            "notes": "no conventional runtime layer detects kernel error-clearing"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "PostgreSQL needed a design change (panic on fsync failure), not a regression fix"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data-race dimension"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "BLOCKED",
+            "notes": "storage-fault injection below boundary"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "silent data loss after crash; the canonical fsyncgate outcome"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "blocked",
+        "migration_class": "MX",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Kernel error-clearing half is below every user-space boundary on both sides (storage-fault injection not constructible); policy half tested on both sides. Comparison blocked, per §20 no fake evidence."
+      }
+    },
+    {
+      "corpus_id": "SE1-CA-H13-1",
+      "family": "H13",
+      "origin": "conventional-documentation",
+      "bucket": "external/conventional",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-D",
+      "normalized_hazard_ref": "SE1-CA-H13-1 (weak-memory publication: readiness observed without the payload it announces)",
+      "probe_companion_ref": null,
+      "conventional_probe": {
+        "probe_id": "P-C13",
+        "source": "tests/research/se2/conventional/conv_h13_sb_litmus.c",
+        "executed": true,
+        "baseline_form": "store-buffering litmus, plain (non-atomic) int publications, 200000 iterations, persistent threads + barrier",
+        "result": "plain: 4888/200000 iterations observed publication-without-visibility (both read 0) — silent; ASan clean; TSan: data race DETECTED (exit 66, SUMMARY at conv_h13_sb_litmus.c:37)",
+        "fairness_notes": "Normal single-thread-style code except the ONE hazard (publication without barriers). x86-TSO host makes the SB outcome observable."
+      },
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "record.arm() acq_rel publication protocol (completion.hpp); spec/weakmem/completion-publication K1/K2 + controls N1-N4; docs/verification/weak-memory/completion-publication-kernel.md; #197 campaign (PR #203) genuine TSO discovery record",
+        "baseline_form": "Completion readiness published via acq_rel arm; GenMC-checked under RC11/SC/TSO/RA+RLX with broken-order negative controls",
+        "result": "GenMC self-test PASS 2026-08-30 (kernels pass on all models; controls fail as required; runner fail-closed verified); async_completion_test PASS",
+        "fairness_notes": "#197's genuine TSO-ordering discovery (repaired in PR #203) is the standing proof this layer is sensitive, not vacuous."
+      },
+      "mutation_used": true,
+      "mutation_id": "M9 (GenMC generated broken-order mutants MUST FAIL — controls N1/N1b/N3/N2/N4; bound; generator _gen_mutants.py runtime-only)",
+      "real_backend_required": false,
+      "fairness_notes": "PARTIAL: x86-only host limits real-backend weak-ordering claims (recorded).",
+      "worst_user_visible_outcome": "intermittent wrong data; missed wakeups; typically invisible on x86-only testing of simple cases",
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "PREVENTS",
+            "evidence": "relaxed publication unrepresentable at the Completion boundary: arm() is acq_rel by protocol"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "memory_order is compile-time spelled but mis-ordering compiles — protection is protocol + model, not the type system"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "evidence": "acq_rel arm publication law"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "async_completion_test publication semantics PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory-error dimension"
+          },
+          "L5": {
+            "status": "NOT_TESTED",
+            "notes": "no fresh TSan run over arm/publish sites this campaign; TSan gate covers the class on touched code (standing); fresh DST/rwlock TSan greens are adjacent"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "TLA models abstract memory; weak memory is out of TLA scope by design"
+          },
+          "L7": {
+            "status": "DETECTS",
+            "evidence": "GenMC K1/K2 PASS; relaxed-publication controls N1/N1b/N3/N2/N4 FAIL as required under rc11+ra (and TSO) — the model catches exactly the normalized violation class; EXACT for the publication law",
+            "formal_label": "EXACT",
+            "env": "GenMC v0.17.0, 2026-08-30"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST weak-memory case"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "x86-TSO-only host: ARM-class weak ordering unprovable here; honest limit recorded"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "for modeled publication edges; residual: new publication edges must extend the kernels (standing obligation)"
+          }
+        },
+        "conventional": {
+          "L0": {
+            "status": "MISSES",
+            "evidence": "P-C13: barrier-free publication expressible",
+            "probe_id": "P-C13"
+          },
+          "L1": {
+            "status": "MISSES",
+            "notes": "plain ints accepted by the compiler"
+          },
+          "L2": {
+            "status": "MISSES",
+            "notes": "no runtime validation"
+          },
+          "L3": {
+            "status": "MISSES",
+            "notes": "no conventional regression; failure is intermittent"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "evidence": "P-C13 ASan clean (no memory error)",
+            "probe_id": "P-C13"
+          },
+          "L5": {
+            "status": "DETECTS",
+            "evidence": "P-C13 TSan: data race reported (exit 66)",
+            "probe_id": "P-C13",
+            "env": "xmake tsan"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "no formal model"
+          },
+          "L7": {
+            "status": "NOT_TESTED",
+            "notes": "the litmus was not itself run under GenMC; Sluice-side kernels cover the protocol half — recorded honestly"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no conventional DST"
+          },
+          "L9": {
+            "status": "REPRODUCES",
+            "evidence": "P-C13 real x86-TSO execution: 4888/200000 silent publication failures observed",
+            "probe_id": "P-C13"
+          },
+          "L10": {
+            "status": "MISSES",
+            "notes": "intermittent wrong data; missed wakeups"
+          }
+        }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M5",
+        "direct_ts1b_support": true,
+        "adjudication_notes": "P-C13 executed: current conventional runtime (plain ints) silently publishes without visibility (4888/200000); TSan detects the race class at tool cost but the baseline's own runtime stays silent. Sluice makes relaxed publication unrepresentable at the Completion boundary (acq_rel arm protocol) with GenMC sensitivity controls (re-executed). Counterevidence preserved: TSan gives comparable DETECTION for the conventional class (§37); x86-TSO-only host limits real-backend weak-ordering claims."
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-01",
+      "family": "H09",
+      "origin": "sluice-induced",
+      "bucket": "production-runtime",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-01 (Q-LIV-1: blocking inline success skips opposite-role FIFO reconcile, stranding waiters)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "dst_pv1 T5 (dst_t5_v1 + V1-S/V1-T/V1-TS); PR #242 regression witnesses; tests/async_queue_lifecycle_death_test.cpp; spec/tla/e12_queue",
+        "baseline_form": "opposite-role reconcile law at all four admit inline-commit sites (grant_from_head_locked)",
+        "result": "dst_pv1_schedule_driver_test PASS; async_queue_lifecycle_death_test PASS; e12-queue TLA suite PASS — re-executed 2026-08-30",
+        "fairness_notes": "All 7 induced cases evaluated per task §16 questions (see row fields)."
+      },
+      "mutation_used": true,
+      "mutation_id": "M5 (FE M5 downgrade of resolved_inline_grant -> RED after coverage repair; DST V1 = original as-built defect witness; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "Induced production-runtime hazard; bucket discipline kept (§17).",
+      "worst_user_visible_outcome": "fiber stranded on a Queue that should progress; workload hang",
+      "induced_interpretation": {
+        "introduced_by": "explicit queue admission/lifecycle protocol (inline-commit path missing the reconcile obligation)",
+        "originally_found_by": "human adversarial review (AC-2d) + DST-PV-1 characterization witness — NOT by sanitizer, model, or ordinary tests",
+        "layers_that_would_miss": "L4 ASan, L5 TSan (liveness, no race), L7 GenMC, ordinary stress — all blind; only adversarial review then DST made it visible",
+        "repaired_posture": "repaired (PR #242) at all four sites; regression-pinned; DST-replayable; teardown fail-fast retained as backstop",
+        "did_explicitness_help": "YES for localization/replay: the bounded reconcile obligation + deterministic DST replay made the repair verifiable; the protocol complexity (four inline-commit sites) was ALSO the defect surface — both recorded (§38: not forced into a favorable story)"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was constructible — realized (this is the definition of an induced realized hazard)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "DETECTS",
+            "notes": "post-repair: reconcile is a production law; stranded transit at teardown = named fail-fast (async_queue_lifecycle_death_test PASS re-executed)",
+            "evidence": "stranded-transit named fail-fast at teardown: async_queue_lifecycle_death_test PASS re-executed 2026-08-30"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "four regression witnesses (PR #242) standing; dst_pv1 T5 PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "liveness class"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "COVERAGE GAP recorded per §17: e12-queue models the queue lifecycle EXACT for modeled laws but the blocking-inline reconcile transition was NOT in the modeled surface pre-repair (found by human review + DST); suite PASS post-repair (59.2s)"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "REPRODUCES",
+            "evidence": "dst_t5_v1: deterministic replay of the original defect; V1 flipped to post-fix regression with V1-S/V1-T/V1-TS symmetric pins; PASS re-executed",
+            "env": "debug"
+          },
+          "L9": {
+            "status": "NOT_APPLICABLE",
+            "notes": "scheduler/queue level; no backend mechanism involved"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "post-repair, for the pinned shapes: hang path is regression-pinned and DST-replayable; silent stranding closed"
+          }
+        }
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-02",
+      "family": "H06",
+      "origin": "sluice-induced",
+      "bucket": "production-runtime",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-02 (R2-ALLOC: timed admission registered waiter + accounting before timer-arming allocations; bad_alloc left live residue)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "prepare-before-register repair + four regression witnesses (PR #242); tests/request_lifecycle_scheme_b_test.cpp fault matrix; od_alloc_a3 capacity witness",
+        "baseline_form": "all fallible preparation precedes registration; post-commit tail noexcept; failures leave lifecycle domain unchanged",
+        "result": "request_lifecycle_scheme_b_test fault matrix PASS re-executed 2026-08-30",
+        "fairness_notes": "Process honesty preserved: round-1 closeout had wrongly recorded it as out-of-scope while claiming KNOWN R2 BUGS: NONE — caught by human review round 2."
+      },
+      "mutation_used": true,
+      "mutation_id": "M6 (R2-ALLOC fault-injection witnesses PR #242; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "Induced production-runtime hazard.",
+      "worst_user_visible_outcome": "permanent wait-accounting inflation; admission-policy corruption under OOM; hidden stuck state",
+      "induced_interpretation": {
+        "introduced_by": "multi-step admission ladder ordered register-before-prepare (an explicitness-induced obligation sequence)",
+        "originally_found_by": "human adversarial review round 2 — NOT runtime tooling",
+        "layers_that_would_miss": "L4/L5 (no memory error/race), ordinary tests (fault injection at exactly the right ladder stage was not present pre-repair)",
+        "repaired_posture": "prepare-before-register + strong guarantee; regression-pinned",
+        "did_explicitness_help": "MIXED (§38 B/C): the bug was ordinary implementation error in the new protocol's ladder, but the explicit accounting/state model is what made the residue describable and the repair verifiable"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was constructible (OOM at the arming stage)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "prepare-before-register: failures now leave the lifecycle domain unchanged (strong guarantee)",
+            "evidence": "prepare-before-register repair (PR #242) + request_lifecycle_scheme_b_test fault matrix PASS re-executed 2026-08-30"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "allocation-failure injection at every arming stage (PR #242 witnesses); request_lifecycle_scheme_b fault matrix PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory error"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "allocation-failure dimension beyond current model scope (ADJACENT via arena admission)"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "real-backend OOM injection not executed this campaign"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "post-repair: residue state unrepresentable"
+          }
+        }
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-05",
+      "family": "H06",
+      "origin": "sluice-induced",
+      "bucket": "production-runtime",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-05 (FE P1-1: deferred publication insertion could throw after the terminal winner committed)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "tests/fe2_publication_atomicity_death_test.cpp (PUB1/PUBCTL, Debug+Release); corrective mutations C1-C4 (docs/verification/fe3-multi-frontend-mutation-evidence.md); PR #243 deferred-publication terminal-safety",
+        "baseline_form": "noexcept publication tail; allocation banned from terminal-critical path; stranded transit = named fail-fast (exit 86 class)",
+        "result": "fe2_publication_atomicity_death_test PASS re-executed 2026-08-30",
+        "fairness_notes": "Induced production-runtime hazard."
+      },
+      "mutation_used": true,
+      "mutation_id": "M6/M9 (corrective mutations C1-C4 RED->GREEN records; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "Induced production-runtime hazard.",
+      "worst_user_visible_outcome": "resolved-but-undelivered result; risk of double publication on retry; fail-fast at teardown",
+      "induced_interpretation": {
+        "introduced_by": "deferred-publication transit (an explicitness mechanism) allocating on the post-terminal path",
+        "originally_found_by": "FE adversarial review (human) + death-test/mutation campaign",
+        "layers_that_would_miss": "L4/L5 blind (allocation failure is not memory error/race); ordinary tests without fault injection blind",
+        "repaired_posture": "noexcept tail + PUBCTL fail-fast; C1-C4 mutation-pinned",
+        "did_explicitness_help": "YES for detection design: the transit/stranded-transit vocabulary made the failure mode nameable and testable"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was constructible pre-repair (throwing insertion after commit)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "noexcept publication tail; post-terminal allocation banned; stranded transit fail-fast",
+            "evidence": "noexcept publication tail + PUBCTL fail-fast: fe2_publication_atomicity_death_test PASS re-executed 2026-08-30 (PR #243)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "PUB1/PUBCTL death tests PASS re-executed (Debug+Release)",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "allocation-failure class"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "deferred transit beyond model scope"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "publication-ORDERING kernels adjacent to the ordering law only; the allocation-failure path is not a weak-memory shape"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "real-backend OOM at publication sites not injected this campaign"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "post-repair: winner/stranded ambiguity closed; fail-fast named"
+          }
+        }
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-06",
+      "family": "H10",
+      "origin": "sluice-induced",
+      "bucket": "production-runtime",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-06 (FE P1-2: QueuePort lifetime hole — teardown could pass through the in-flight deferred-operation window; no pin held)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "QPIN-1/QPIN-2 + QD1 death test (PR #243 evidence); tests/async_queue_lifecycle_death_test.cpp",
+        "baseline_form": "teardown gate observes pins; pin transfer to awaiting frame closes the in-flight window",
+        "result": "async_queue_lifecycle_death_test PASS re-executed 2026-08-30",
+        "fairness_notes": "Induced production-runtime hazard."
+      },
+      "mutation_used": false,
+      "mutation_id": null,
+      "real_backend_required": false,
+      "fairness_notes": "Induced production-runtime hazard.",
+      "worst_user_visible_outcome": "use-after-teardown / silent result loss during shutdown",
+      "induced_interpretation": {
+        "introduced_by": "deferred Queue operations with logical port references lacking lifetime pins (explicit teardown protocol interaction)",
+        "originally_found_by": "FE-CORRECTIVE-1 adversarial review (human)",
+        "layers_that_would_miss": "L4/L5 partially blind (window-dependent), ordinary tests without teardown-during-in-flight choreography",
+        "repaired_posture": "pin transfer closes the window; QD1 fail-fast pinned",
+        "did_explicitness_help": "YES for repair verifiability: pin/window vocabulary made the fix precise; the pin obligation is also new protocol surface (both recorded)"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was constructible pre-repair (teardown through the window)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "teardown gate observes pins; destruction-with-live-work fail-fast retained",
+            "evidence": "teardown pin gate + QD1 fail-fast: async_queue_lifecycle_death_test PASS re-executed 2026-08-30 (PR #243)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "QPIN-1/QPIN-2 + QD1 death test PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "window class"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "not a data race"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "teardown-window not modeled"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "DST T5 close-before/after-admit shapes are adjacent (admission), not the teardown-pin window"
+          },
+          "L9": {
+            "status": "NOT_TESTED",
+            "notes": "not exercised on real backend this campaign"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "post-repair: window closed by pin transfer"
+          }
+        }
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-07",
+      "family": "H13",
+      "origin": "sluice-induced",
+      "bucket": "production-runtime",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-07 (FE P1-3: RwLock recursive-owner check executed outside the global critical section)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "TSan witness + M3 mutation + RW death child + turnover stress (PR #243 evidence); tests/async_rwlock_death_test.cpp; tests/async_rwlock_test.cpp",
+        "baseline_form": "ActorId ownership law evaluated inside the serialized admission ladder (single admission text)",
+        "result": "async_rwlock_death_test PASS; async_rwlock_test under TSan PASS clean (2026-08-30); e12-rwlock + e12-rwlock-scheduler-liveness TLA suites PASS",
+        "fairness_notes": "Induced production-runtime hazard."
+      },
+      "mutation_used": true,
+      "mutation_id": "M7 (FE M3 rwlock ownership-commit mutation RED; PR #243 evidence; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "Induced production-runtime hazard.",
+      "worst_user_visible_outcome": "wrong admission decision; torn owner state; possible double ownership",
+      "induced_interpretation": {
+        "introduced_by": "recursive-owner identity check (explicit owner semantics) placed outside the serializing section",
+        "originally_found_by": "TSan (runtime tooling) — the detection layer that DID catch an induced production bug",
+        "layers_that_would_miss": "L4 blind; L6 models abstracted the check placement (the C++ bug was a placement error against the modeled law); stress-only testing would flake",
+        "repaired_posture": "check moved inside the ladder's serialized section; TSan-clean; death-child + turnover stress pinned",
+        "did_explicitness_help": "YES: the owner-identity law (kind-tagged ActorId) made the correct placement a checkable rule; the explicit recursive-owner feature was itself the risk surface"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was constructible (unsynchronized read placement)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "owner checks now inside the single serialized admission text",
+            "evidence": "owner check inside serialized admission ladder (PR #243 repair); async_rwlock tests PASS re-executed 2026-08-30"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "evidence": "RW death child + turnover stress (PR #243); async_rwlock_death_test PASS re-executed",
+            "env": "debug"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no memory error in the normalized shape"
+          },
+          "L5": {
+            "status": "DETECTS",
+            "evidence": "TSan caught the ORIGINAL defect (historical witness, PR #243); fresh async_rwlock_test under TSan PASS clean (2026-08-30) — repaired posture is TSan-green",
+            "env": "xmake tsan"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e12-rwlock + e12-rwlock-scheduler-liveness suites PASS re-executed (owner/admission laws EXACT for the modeled surface)",
+            "formal_label": "EXACT",
+            "env": "tla2tools 1.7.4"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case"
+          },
+          "L9": {
+            "status": "NOT_APPLICABLE",
+            "notes": "scheduler-level"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "post-repair: check placement enforced by single admission text"
+          }
+        }
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-08",
+      "family": "H09",
+      "origin": "sluice-induced",
+      "bucket": "internal/seam",
+      "comparison_validity": "PARTIAL",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-08 (nullable resume-target token: WaitResume could encode fiber(nullptr) with a valid kind)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "static_assert + normalization at 0cc738b; M4 compile-rejection record (fe3 evidence); spec/tla/e9_wake_handle_lifetime",
+        "baseline_form": "kind-tagged resume identity; invalid (kind, target) combinations normalized to Kind::none and compile-rejected",
+        "result": "e9-wake-handle-lifetime TLA suite PASS (2026-08-30); M4 compile-rejection record standing",
+        "fairness_notes": "INTERNAL/SEAM bucket: must not be counted as user-visible production hazard (§17)."
+      },
+      "mutation_used": true,
+      "mutation_id": "M8 (M4 mutation compile-rejected — the mutation record IS the layer-sensitivity witness; bound)",
+      "real_backend_required": false,
+      "fairness_notes": "Internal/seam bucket.",
+      "worst_user_visible_outcome": "lost wake in representation form or crash on resume path (pre-repair, seam-internal)",
+      "induced_interpretation": {
+        "introduced_by": "kind-tagged resume token representation (explicit identity encoding)",
+        "originally_found_by": "adversarial representation audit (human)",
+        "layers_that_would_miss": "L4/L5 blind (representation issue); runtime tests blind while the encoding is never exercised",
+        "repaired_posture": "static_assert + normalization: invalid combination now compile-rejected",
+        "did_explicitness_help": "YES: the explicit kind/target encoding made the invalid combination statable AND statable-at-compile-time — the fix is a compile-time law, the strongest posture in the matrix"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was encodable pre-repair (the defect)"
+          },
+          "L1": {
+            "status": "REJECTS",
+            "evidence": "static_assert + normalization: invalid (kind,target) combination is a compile error; M4 mutation compile-rejected (fe3 evidence record)",
+            "env": "compile-time"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "normalization to Kind::none makes the invalid runtime state unwritable",
+            "evidence": "normalization to Kind::none at 0cc738b; M4 mutation compile-rejected record (fe3 evidence)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "notes": "fe3 slice suite covers the normalized identity; the primary witness is compile-time (L1)",
+            "evidence": "fe3 slice suite covers the normalized resume identity (fe3 evidence record)"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "representation class"
+          },
+          "L5": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no data race"
+          },
+          "L6": {
+            "status": "DETECTS",
+            "evidence": "e9-wake-handle-lifetime suite PASS re-executed (wake-handle identity law)",
+            "formal_label": "EXACT"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "no DST case"
+          },
+          "L9": {
+            "status": "NOT_APPLICABLE",
+            "notes": "seam-internal representation"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "compile-time rejection closes the path entirely"
+          }
+        }
+      }
+    },
+    {
+      "corpus_id": "SE1-SB-09",
+      "family": "H13",
+      "origin": "sluice-induced",
+      "bucket": "test-only",
+      "comparison_validity": "FAIR",
+      "pairing": "PAIR-F",
+      "normalized_hazard_ref": "SE1-SB-09 (test-seam race #229: internal-testing seam's own coordination state raced under TSan)",
+      "probe_companion_ref": null,
+      "conventional_probe": null,
+      "sluice_probe": {
+        "probe_id": "P0 (existing witnesses)",
+        "source": "issue #229 TSan detection + repair; THESIS-LEDGER-1 row 9; TSan gate covering seam code; fresh dst_pv1_schedule_driver_test under TSan PASS (2026-08-30)",
+        "baseline_form": "test seams compiled-out of production (SLUICE_ASYNC_INTERNAL_TESTING) and held to the same synchronization discipline",
+        "result": "dst_pv1 under TSan PASS clean (2026-08-30); historical #229 TSan detection record standing",
+        "fairness_notes": "TEST-ONLY bucket: never user-visible production runtime hazard (§17)."
+      },
+      "mutation_used": false,
+      "mutation_id": null,
+      "real_backend_required": false,
+      "fairness_notes": "Test-only bucket.",
+      "worst_user_visible_outcome": "flaky verification; potential harness-level memory error (test process only)",
+      "induced_interpretation": {
+        "introduced_by": "deterministic test seam's own coordination state (the verification apparatus explicit protocols created)",
+        "originally_found_by": "TSan (the meta-obligation layer worked)",
+        "layers_that_would_miss": "L4 blind; ordinary tests would flake without attribution",
+        "repaired_posture": "seam synchronization repaired; TSan gate covers seam code; production exclusion mechanically verified",
+        "did_explicitness_help": "QUALIFIED: the seam is protocol complexity created FOR verification; TSan-on-tests (a conventional tool) was the effective layer — no Sluice-specific mechanism detected it"
+      },
+      "layers": {
+        "sluice": {
+          "L0": {
+            "status": "MISSES",
+            "notes": "was constructible (the defect)"
+          },
+          "L1": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no compile-time dimension"
+          },
+          "L2": {
+            "status": "PREVENTS",
+            "notes": "post-repair seam discipline + production exclusion (mechanically gated)",
+            "evidence": "issue #229 seam synchronization repair + production exclusion (scripts/gates/mechanical-facts.py mechanical verification)"
+          },
+          "L3": {
+            "status": "DETECTS",
+            "notes": "TSan gate runs seam-instrumented targets in CI-class verification",
+            "evidence": "TSan gate runs seam-instrumented targets (standing gate wiring); fresh dst_pv1 TSan PASS 2026-08-30"
+          },
+          "L4": {
+            "status": "NOT_APPLICABLE",
+            "notes": "no ASan dimension recorded"
+          },
+          "L5": {
+            "status": "DETECTS",
+            "evidence": "TSan detected the ORIGINAL seam race (#229, historical); fresh dst_pv1 TSan PASS clean (2026-08-30)",
+            "env": "xmake tsan"
+          },
+          "L6": {
+            "status": "NOT_MODELED",
+            "notes": "seam coordination not modeled"
+          },
+          "L7": {
+            "status": "NOT_MODELED",
+            "notes": "no weak-memory dimension"
+          },
+          "L8": {
+            "status": "NOT_MODELED",
+            "notes": "the seam IS the DST substrate — meta-obligation, not a DST target"
+          },
+          "L9": {
+            "status": "NOT_APPLICABLE",
+            "notes": "test-only"
+          },
+          "L10": {
+            "status": "NOT_APPLICABLE",
+            "notes": "test-only bucket; no user-visible path by construction"
+          }
+        }
+      }
+    }
+  ],
+  "sb10_exploratory": {
+    "corpus_id": "SE1-SB-10",
+    "status_in_corpus": "OUT-OF-SE1, UNKNOWN, E4-only, unconfirmed candidate",
+    "campaign": {
+      "target": "select_event_registry_test",
+      "protocol": "TSan binary x10 runs + plain binary x100 runs; per-run timeout 60s; no DST expansion; no seam modification (pre-registered in the audit artifact)",
+      "result": "TSan 10/10 clean (0 hang, 0 race report); plain 100/100 clean (0 hang, 0 fail)",
+      "outcome": "B — STILL UNCONFIRMED"
+    },
+    "denominator_impact": "NONE: remains OUT-OF-SE1; not promoted, not added to the SE-1 denominator",
+    "promotion_recommended": false
+  },
+  "out_of_se1_note": "SE1-SB-03/04 (performance-shape growth), SE1-SB-11/12 (structural-authority), SE1-SB-13 (experiment-process) remain OUT-OF-SE1 with no SE-2 rows, per the frozen population law and §6 exception rules.",
+  "comparison_basis_vocabulary": {
+    "current-executed": "a conventional probe was freshly executed on this host against the CURRENT conventional implementation",
+    "current-documented": "the current conventional posture is known only from documentation/SE-1 sources; no executed conventional probe",
+    "historical-fixed": "the historical defect is fixed in the current conventional implementation, which now PREVENTS by mechanism; the broken state is not a baseline",
+    "blocked": "no fair comparison constructible on this host (reason required in notes)"
+  },
+  "migration_class_note": "Migration classes are measured against the CURRENT conventional baseline (human review 5060477073 Blocker 1). M0 covers parity, conventional-already-prevents, and historical-only postures; a class other than M0/MX whose comparison_basis is not current-executed is a CLAIM, excluded from direct T-S1b support. Classes are qualitative labels only; no score, rate, or arithmetic exists or is implied.",
+  "ts1b_adjudication": {
+    "status": "NOT PROVEN — NARROW DIRECT SUPPORT",
+    "scope": "frozen 20-row SE-1 population; layers executed on this host 2026-08-30; per-hazard scope only",
+    "method": "Human review 5060477073 Blocker 1: T-S1b compares Sluice to the CURRENT competent conventional baseline. historical-fixed and current-documented rows can never be direct support; direct support requires comparison_basis == current-executed AND a Sluice-side failure-mode change on the demonstrated shape.",
+    "support_rows": [
+      "SE1-CA-H02-1",
+      "SE1-CA-H09-1",
+      "SE1-CA-H13-1"
+    ],
+    "claimed_not_direct_rows": [
+      "SE1-CA-H04-1",
+      "SE1-CA-H10-1"
+    ],
+    "counterevidence_rows": [
+      "SE1-CA-H01-1",
+      "SE1-CA-H03-1",
+      "SE1-CA-H05-1",
+      "SE1-CA-H06-1",
+      "SE1-CA-H07-1",
+      "SE1-CA-H08-1",
+      "SE1-CA-H11-1",
+      "SE1-CA-H12-1"
+    ],
+    "adjudication_note": "Direct current-executed comparative support exists for exactly 3 of 13 conventional families (identity H02, lost wake H09, weak-memory publication H13). 7 of 13 are M0 against the current baseline: current kernels prevent H05/H08/H11 by mechanism, glibc listio initiation is atomic at the executed H06 shape, H07 partial-retry is parity at the raw surface, and H01/H03 are executed parity-in-miss. The GENERAL comparative-migration claim is therefore NOT established at population level; the earlier '10 classes with direct re-executed evidence' statement was over-counted because it used the historical broken kernel as a comparator. T-S1a (per-hazard, SE-1) is unchanged. G1-Safety is NOT adjudicable from this evidence alone."
+  }
+}

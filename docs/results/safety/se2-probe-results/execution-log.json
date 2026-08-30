@@ -1,0 +1,305 @@
+{
+  "schema": "se2-probe-execution-log",
+  "version": 1,
+  "campaign": "SE-2",
+  "date": "2026-08-30",
+  "base_sha": "1fd8a2fdf87eb52f35efd4a5c8ae76293b8dcfbd",
+  "host": {
+    "os": "WSL2 Ubuntu, kernel 6.18.33.2-microsoft-standard-WSL2, x86_64 (TSO-only)",
+    "toolchain": "Ubuntu clang 21.1.8 via xmake 3.0.9; modes debug / asanubsan / tsan",
+    "liburing": "2.14 real (--with-liburing=true)",
+    "formal": "tla2tools v1.7.4; GenMC v0.17.0 (29b03a6)"
+  },
+  "conventions": {
+    "timeout_seconds": 30,
+    "plain_repeats": "1 (+20 where noted)",
+    "preregistration": "docs/history/reviews/SE-2-HAZARD-DETECTION-MATRIX-AUDIT.md # EXECUTION PLAN FREEZE (written before execution)"
+  },
+  "runs": [
+    {
+      "probe": "se2_h01_borrow_destroy_probe --mode=fake",
+      "build": "debug",
+      "exit": 0,
+      "expected": "submit accepted; no fail-fast; success 64 published",
+      "actual": "as expected",
+      "repeats": 1
+    },
+    {
+      "probe": "se2_h01_borrow_destroy_probe --mode=fake",
+      "build": "asanubsan",
+      "asan_options": "symbolize=0:halt_on_error=1",
+      "exit": 0,
+      "expected": "clean (fake never touches borrow)",
+      "actual": "clean, success published"
+    },
+    {
+      "probe": "se2_h01_borrow_destroy_probe --mode=threadpool",
+      "build": "debug",
+      "exit": 0,
+      "expected": "success published (silent UAF)",
+      "actual": "as expected",
+      "repeats": 20
+    },
+    {
+      "probe": "se2_h01_borrow_destroy_probe --mode=threadpool",
+      "build": "asanubsan",
+      "asan_options": "symbolize=0:halt_on_error=1",
+      "exit": 1,
+      "expected": "heap-use-after-free abort",
+      "actual": "ERROR: AddressSanitizer: heap-use-after-free; WRITE of size 64, worker thread"
+    },
+    {
+      "probe": "se2_h01_borrow_destroy_probe --mode=threadpool",
+      "build": "asanubsan (default options)",
+      "exit": "timeout(30s)",
+      "note": "ASan report emitted, process hung in symbolizer under WSL2; recorded, not used as a layer outcome"
+    },
+    {
+      "probe": "conv_h01_aio_buffer_lifetime",
+      "build": "debug",
+      "exit": 0,
+      "expected": "silent garbage (MISSES)",
+      "actual": "13 bytes delivered; first freed-borrow byte 0x48"
+    },
+    {
+      "probe": "conv_h01_aio_buffer_lifetime",
+      "build": "asanubsan",
+      "exit": 1,
+      "expected": "heap-use-after-free at deref",
+      "actual": "as expected"
+    },
+    {
+      "probe": "conv_h02_uring_user_data_reuse",
+      "build": "debug",
+      "exit": 0,
+      "expected": "2 terminals recorded for 1 logical request",
+      "actual": "as expected"
+    },
+    {
+      "probe": "conv_h02_uring_user_data_reuse",
+      "build": "asanubsan",
+      "exit": 0,
+      "expected": "clean",
+      "actual": "clean",
+      "note": "bring-up found a probe-internal write overflow (26 bytes read from a 13-byte array); fixed inside the probe before evidence was recorded"
+    },
+    {
+      "probe": "conv_h03_uring_fd_reuse",
+      "build": "debug",
+      "exit": 0,
+      "expected": "read consumes VICTIM-DATA from recycled fd",
+      "actual": "as expected"
+    },
+    {
+      "probe": "conv_h03_uring_fd_reuse",
+      "build": "asanubsan",
+      "exit": 0,
+      "expected": "clean",
+      "actual": "clean"
+    },
+    {
+      "probe": "conv_h06_lio_listio_partial",
+      "build": "debug",
+      "exit": 0,
+      "expected": "measured glibc atomic initiation (bring-up discovery amended the plan)",
+      "actual": "rc=-1/EIO, zero execution, valid entries never ran"
+    },
+    {
+      "probe": "conv_h06_lio_listio_partial",
+      "build": "asanubsan",
+      "exit": 0,
+      "expected": "clean",
+      "actual": "clean"
+    },
+    {
+      "probe": "conv_h07_partial_write_retry",
+      "build": "debug",
+      "exit": 0,
+      "expected": "block-1 duplicated, block-2 never",
+      "actual": "as expected"
+    },
+    {
+      "probe": "conv_h07_partial_write_retry",
+      "build": "asanubsan",
+      "exit": 0,
+      "expected": "clean",
+      "actual": "clean"
+    },
+    {
+      "probe": "conv_h09_lost_wake",
+      "build": "debug",
+      "exit": 42,
+      "expected": "lost wake reproduced via alarm(5)",
+      "actual": "waiter stranded; alarm fired",
+      "repeats": 1
+    },
+    {
+      "probe": "conv_h09_lost_wake",
+      "build": "tsan",
+      "exit": 42,
+      "expected": "same hang; ZERO TSan reports",
+      "actual": "0 ThreadSanitizer warnings",
+      "repeats": 3
+    },
+    {
+      "probe": "conv_h13_sb_litmus",
+      "build": "debug",
+      "exit": 0,
+      "expected": "both-zero count > 0 in 200000 iterations",
+      "actual": "4888/200000"
+    },
+    {
+      "probe": "conv_h13_sb_litmus",
+      "build": "asanubsan",
+      "exit": 0,
+      "expected": "clean (no memory error), count > 0",
+      "actual": "5196/200000, clean"
+    },
+    {
+      "probe": "conv_h13_sb_litmus",
+      "build": "tsan",
+      "exit": 66,
+      "expected": "data race reported",
+      "actual": "WARNING: ThreadSanitizer: data race; SUMMARY at conv_h13_sb_litmus.c:37 worker0"
+    }
+  ],
+  "fresh_gate_executions": [
+    {
+      "gate": "scripts/verify-async-identity-negative-compile.sh",
+      "result": "PASS"
+    },
+    {
+      "gate": "scripts/verify-request-arena-negative-compile.sh",
+      "result": "PASS"
+    },
+    {
+      "gate": "scripts/verify-request-handle-authority-negative-compile.sh",
+      "result": "PASS"
+    },
+    {
+      "gate": "scripts/verify-completion-authority-negative-compile.sh",
+      "result": "PASS"
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite request-arena",
+      "result": "PASS",
+      "duration_s": 23.4
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e10-waitnode",
+      "result": "PASS",
+      "duration_s": 6.7
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e9-park-wake",
+      "result": "PASS",
+      "duration_s": 90.3
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e11-timer-wait",
+      "result": "PASS",
+      "duration_s": 25.4
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e12-queue",
+      "result": "PASS",
+      "duration_s": 59.2
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e12-rwlock",
+      "result": "PASS"
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e16-application-runtime",
+      "result": "PASS"
+    },
+    {
+      "gate": "python3 scripts/formal/verify.py suite e9-wake-handle-lifetime",
+      "result": "PASS"
+    },
+    {
+      "gate": "bash scripts/weakmem/verify-completion-weak-memory.sh --self-test",
+      "result": "PASS (4 fail-closed legs)"
+    },
+    {
+      "test": "completion_binding_test / request_lifecycle_scheme_b_test / threadpool_backend_phase_e_test / async_op_helpers_test / async_durability_test / wal_writer_test / async_completion_test / request_arena_test",
+      "build": "debug",
+      "result": "PASS"
+    },
+    {
+      "test": "async_queue_lifecycle_death_test / fe2_publication_atomicity_death_test / dst_pv1_schedule_driver_test / async_mutex_death_test / async_rwlock_death_test / completion_authority_death_test / request_arena_death_test / threadpool_backend_death_test",
+      "build": "debug",
+      "result": "PASS"
+    },
+    {
+      "test": "uring_backend_test / uring_backend_death_test / uring_backend_c2b_identity_test",
+      "build": "debug --with-liburing=true",
+      "result": "PASS",
+      "evidence_meta": "[evidence-meta] evidence=uring_backend_contract mode=real"
+    },
+    {
+      "test": "async_rwlock_test + dst_pv1_schedule_driver_test",
+      "build": "tsan",
+      "result": "PASS clean"
+    },
+    {
+      "campaign": "SB-10: select_event_registry_test TSan x10 + plain x100, timeout 60s",
+      "result": "0 hang / 0 race / 0 fail — STILL UNCONFIRMED"
+    }
+  ],
+  "skipped_or_blocked": [
+    {
+      "item": "real-backend fault-injection probes (H04/H05/H08/H09/SB-02/SB-05 L9 cells)",
+      "reason": "not executed this campaign; standing D2/D4 real-liburing records cited as historical"
+    },
+    {
+      "item": "conventional loop-library probe (H10 conventional L9)",
+      "reason": "no libuv headers / no asio on host; raw-pthread loop would violate competent-baseline rule"
+    },
+    {
+      "item": "kernel halves (H03 UAF, H05 duplicate CQE, H08 linked-timeout, H11 leak paths, H12 error-clearing)",
+      "reason": "fixed upstream kernel defects not re-executable; H12 below every user-space boundary"
+    },
+    {
+      "item": "conventional litmus under GenMC (H13 conv L7)",
+      "reason": "not run; Sluice-side kernels cover the protocol half"
+    },
+    {
+      "item": "ARM-class weak-ordering (H13 L9)",
+      "reason": "x86-TSO-only host"
+    }
+  ],
+  "corrective_1": {
+    "trigger": "human adversarial review 5060477073 (CHANGES REQUIRED BEFORE SE-2 FREEZE / T-S1b PROMOTION)",
+    "branch_cleanup": "branch rebased onto origin/master 1fd8a2f; docs-only commit 0afd9e5 (4 archived human review reports, previously kept untracked) removed from the PR; reports restored locally as untracked, sha256-verified byte-identical",
+    "readjudication": "migration classes re-measured against the CURRENT competent conventional baseline (historical broken kernel is not a baseline): M0=7 (H01,H03,H05,H06,H07,H08,H11), M2=1 (H09), M3=1 (H10, claim), M4=1 (H02), M5=2 (H04 claim, H13), MX=1 (H12); direct current-executed T-S1b support = H02, H09, H13 only",
+    "authority_move": "comparison_basis/migration_class/direct_ts1b_support per row + ts1b_adjudication added to se2-detection-matrix.json; markdown counts now exported from JSON and machine-checked",
+    "gates_rerun": [
+      {
+        "gate": "python3 scripts/verify-se2-detection-matrix.py",
+        "result": "PASS (extended: comparison blocks, ts1b partition, markdown derivation)"
+      },
+      {
+        "gate": "python3 scripts/verify-se1-hazard-corpus.py",
+        "result": "PASS (denominator untouched)"
+      },
+      {
+        "gate": "python3 scripts/check-doc-links.py",
+        "result": "PASS"
+      },
+      {
+        "gate": "python3 scripts/verify-architecture-docs.py",
+        "result": "PASS"
+      },
+      {
+        "gate": "git diff --check",
+        "result": "clean"
+      },
+      {
+        "gate": "bash scripts/gates/pre-push.sh --range 1fd8a2f..HEAD",
+        "result": "see corrective run below"
+      }
+    ],
+    "no_probe_rerun_reason": "the rebase changed only docs-only commits (0afd9e5 touched 4 review .md files, no code); the code-relevant tree at execution time is identical to the rebased tree, so all probe/execution records above remain valid as recorded"
+  }
+}
