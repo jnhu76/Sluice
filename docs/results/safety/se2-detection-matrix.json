@@ -8,11 +8,11 @@
     "se1_frozen_head": "06137793d40a140ed6dd418ce2845c7113eb2201",
     "authorization": "SE-2 campaign brief (hazard detection/prevention/replay matrix over the frozen SE-1 population); human adversarial review precedes any claim promotion"
   },
-  "base_sha": "b453d85cd865b9429e48116f1ad463a5d3ecad6a",
+  "base_sha": "1fd8a2fdf87eb52f35efd4a5c8ae76293b8dcfbd",
   "branch": "research/se2-hazard-detection-matrix",
   "created": "2026-08-30",
   "execution_date": "2026-08-30",
-  "execution_note": "All fresh executions ran on the working tree at base_sha plus the committed-in-this-PR probe files (production sources untouched). Counts in this matrix are DESCRIPTIVE ONLY; no safety score is computed or implied.",
+  "execution_note": "All fresh executions ran on the working tree at base_sha plus the committed-in-this-PR probe files (production sources untouched). Counts in this matrix are DESCRIPTIVE ONLY; no safety score is computed or implied. CORRECTIVE-1: probes were executed on b453d85 (= 1fd8a2f + docs-only commit 0afd9e5, which human review 5060477073 ordered removed from the branch); the code-relevant tree is identical, so no probe was re-run.",
   "population_law": "POPULATION = SE-1 corpus_eligibility == 'IN-SE1' AND entry_role == 'population-case'. No rows added, removed, or replaced inside SE-2.",
   "claim_discipline_in": {
     "T-S1a": "PROVEN — PER-HAZARD SCOPE (SE-1); unchanged by SE-2",
@@ -186,6 +186,12 @@
             "notes": "silent UAF/corruption; ASan only if the program happens to run under it"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Executed parity-in-miss (P-C01 vs P-S01): both sides silent at the API layer, ASan-only detection on both. REQUIRED §18 counterevidence row; no migration claim exists or is manufactured."
       }
     },
     {
@@ -318,6 +324,12 @@
             "notes": "silent wrong-result attribution / double consume"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M4",
+        "direct_ts1b_support": true,
+        "adjudication_notes": "P-C02 executed: plain documented usage (raw int user_data, in-flight reuse) silently misattributes terminals. Sluice makes a stale identity unencodable (RequestKey generation protocol + negative-compile, all re-executed). Conventional parity would require hand-built, unverifiable generation bookkeeping with no structural tie to the request; Sluice closes the class structurally."
       }
     },
     {
@@ -446,6 +458,28 @@
             "notes": "silent wrong-target I/O; historical kernel half: UAF/LPE"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "The executed comparative shape is the fd-number-reuse window, where Sluice is identical to raw io_uring (parity-in-miss, below the §9.1 boundary). The backend-state half is a class claim on a documented conventional posture only.",
+        "subshapes": [
+          {
+            "name": "fd-number-reuse window (accept→syscall)",
+            "comparison_basis": "current-executed",
+            "migration_class": "M0",
+            "direct_ts1b_support": false,
+            "notes": "P-C03 executed both sides: identical silent wrong-target I/O in the reuse window; Sluice does not migrate this half."
+          },
+          {
+            "name": "backend-state lifetime at teardown",
+            "comparison_basis": "current-documented",
+            "migration_class": "M3",
+            "direct_ts1b_support": false,
+            "notes": "Sluice named fail-fast executed (threadpool/uring death tests, real liburing); conventional side is documentation only (no executed probe) — class claim, excluded from direct T-S1b support."
+          }
+        ]
       }
     },
     {
@@ -573,6 +607,12 @@
             "notes": "caller observes success + canceled; accounting drift"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-documented",
+        "migration_class": "M5",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current conventional has NO prevention mechanism (cancel-CQE is attempt evidence; caller reconciliation is documentation), so this is not historical-fixed — but no executed conventional probe exists either (fair probe rejected as non-deterministic or manufactured incompetence, §14). Class claim on a documented basis; excluded from direct T-S1b support."
       }
     },
     {
@@ -702,6 +742,12 @@
             "notes": "historically MISSES (phantom completion, refcount underflow); today prevented by kernel"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "historical-fixed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current upstream kernel PREVENTS the historical routing defect by mechanism (recorded conventional L2). Sluice also prevents — user-visible failure-mode PARITY at the boundary. The SE-1 kernel bug proves the class existed, not a current-baseline migration. Sluice witnesses (negative-compile, death tests, GenMC) stand as T-S1a machinery evidence only."
       }
     },
     {
@@ -830,6 +876,28 @@
             "notes": "per-entry COMPLETION failures (ENOSPC class) remain a documented-only reconciliation obligation: lost work / double retry possible"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "At the executed shape glibc initiation is ATOMIC (P-C06: batch -1/EIO, zero execution, zero residue) — conventional PREVENTS and is mechanism-equivalent to Sluice's transactional submission (§37 conventional-stronger). The post-terminal shape has no matched conventional probe, so no comparative claim is made there.",
+        "subshapes": [
+          {
+            "name": "invalid-entry initiation (glibc, LIO_WAIT)",
+            "comparison_basis": "current-executed",
+            "migration_class": "M0",
+            "direct_ts1b_support": false,
+            "notes": "Measured glibc atomic initiation; mechanism-equivalent to Sluice's submit ladder at this shape."
+          },
+          {
+            "name": "post-terminal publication-allocation",
+            "comparison_basis": "blocked",
+            "migration_class": "MX",
+            "direct_ts1b_support": false,
+            "notes": "No matched conventional probe constructed; Sluice-side PUBCTL fail-fast witnesses stand as T-S1a machinery evidence only — no comparative claim."
+          }
+        ]
       }
     },
     {
@@ -957,6 +1025,28 @@
             "notes": "silent stream corruption / livelock"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Subshapes split per review 5060477073; the executed comparative shape (raw-surface partial-retry misuse) is parity, and the zero-progress claim has no executed conventional probe.",
+        "subshapes": [
+          {
+            "name": "partial-write retry (raw surface)",
+            "comparison_basis": "current-executed",
+            "migration_class": "M0",
+            "direct_ts1b_support": false,
+            "notes": "P-C07 executed: raw write + ignored short count corrupts the stream. Sluice raw write_some retains identical misuse (L10 MISSES); conventional documented retry practice (write_all folklore) achieves parity — helper convenience, not a failure-mode migration."
+          },
+          {
+            "name": "zero-progress classification",
+            "comparison_basis": "current-documented",
+            "migration_class": "M3",
+            "direct_ts1b_support": false,
+            "notes": "Sluice types zero progress on non-empty write as backend failure (invalid_state; executed witnesses). POSIX does not classify zero progress; no executed conventional probe — class claim, excluded from direct T-S1b support."
+          }
+        ]
       }
     },
     {
@@ -1085,6 +1175,12 @@
             "notes": "historically MISSES (double free/UAF); today prevented by kernel"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "historical-fixed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current upstream kernel linked-timeout fix (447c19f class) restores single-winner arbitration by mechanism; conventional PREVENTS today. Sluice also prevents — parity at the boundary; SE-1 defect is historical evidence only. Sluice witnesses (AC-2b authority, e11 EXACT, DST T4) stand as T-S1a machinery evidence."
       }
     },
     {
@@ -1215,6 +1311,12 @@
             "notes": "hang; requires restart"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M2",
+        "direct_ts1b_support": true,
+        "adjudication_notes": "P-C09 executed: the current conventional baseline (POSIX threads) still MISSES logic lost wakes — deterministic permanent stall, TSan blind. Present-tense conventional failure, not historical. Sluice does NOT prevent the class (L0 MISSES; SB-01 realized) but changes the failure mode on the pinned shapes: deterministic DST replay, teardown stranded-transit fail-fast, and a formal layer that historically found real defects (e9 → PRs #190/#194), plus regression witnesses (PR #242). Guard-not-eliminate is recorded at L10."
       }
     },
     {
@@ -1342,6 +1444,12 @@
             "notes": "abandoned I/O / skipped durability steps; silent data loss"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-documented",
+        "migration_class": "M3",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Conventional postures (libuv EBUSY refusal / asio documented abandonment) are documentation on this host (no headers; a raw-pthread loop would be a manufactured baseline, §14) and no conventional probe was executed. Sluice named fail-fast is executed. Class claim on a documented basis; excluded from direct T-S1b support."
       }
     },
     {
@@ -1469,6 +1577,12 @@
             "notes": "historically: pool exhaustion under load; today prevented by kernel mechanism"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "historical-fixed",
+        "migration_class": "M0",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Current upstream kernel path-coverage fixes restore exactly-once retirement by mechanism; conventional PREVENTS today. Parity at the boundary; the SE-1 kernel history is not a baseline. Sluice accounting witnesses (arena tests, AC-1a, AC-2c census) stand as T-S1a machinery evidence."
       }
     },
     {
@@ -1594,6 +1708,12 @@
             "notes": "silent data loss after crash; the canonical fsyncgate outcome"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "blocked",
+        "migration_class": "MX",
+        "direct_ts1b_support": false,
+        "adjudication_notes": "Kernel error-clearing half is below every user-space boundary on both sides (storage-fault injection not constructible); policy half tested on both sides. Comparison blocked, per §20 no fake evidence."
       }
     },
     {
@@ -1725,6 +1845,12 @@
             "notes": "intermittent wrong data; missed wakeups"
           }
         }
+      },
+      "comparison": {
+        "comparison_basis": "current-executed",
+        "migration_class": "M5",
+        "direct_ts1b_support": true,
+        "adjudication_notes": "P-C13 executed: current conventional runtime (plain ints) silently publishes without visibility (4888/200000); TSan detects the race class at tool cost but the baseline's own runtime stays silent. Sluice makes relaxed publication unrepresentable at the Completion boundary (acq_rel arm protocol) with GenMC sensitivity controls (re-executed). Counterevidence preserved: TSan gives comparable DETECTION for the conventional class (§37); x86-TSO-only host limits real-backend weak-ordering claims."
       }
     },
     {
@@ -2307,5 +2433,37 @@
     "denominator_impact": "NONE: remains OUT-OF-SE1; not promoted, not added to the SE-1 denominator",
     "promotion_recommended": false
   },
-  "out_of_se1_note": "SE1-SB-03/04 (performance-shape growth), SE1-SB-11/12 (structural-authority), SE1-SB-13 (experiment-process) remain OUT-OF-SE1 with no SE-2 rows, per the frozen population law and §6 exception rules."
+  "out_of_se1_note": "SE1-SB-03/04 (performance-shape growth), SE1-SB-11/12 (structural-authority), SE1-SB-13 (experiment-process) remain OUT-OF-SE1 with no SE-2 rows, per the frozen population law and §6 exception rules.",
+  "comparison_basis_vocabulary": {
+    "current-executed": "a conventional probe was freshly executed on this host against the CURRENT conventional implementation",
+    "current-documented": "the current conventional posture is known only from documentation/SE-1 sources; no executed conventional probe",
+    "historical-fixed": "the historical defect is fixed in the current conventional implementation, which now PREVENTS by mechanism; the broken state is not a baseline",
+    "blocked": "no fair comparison constructible on this host (reason required in notes)"
+  },
+  "migration_class_note": "Migration classes are measured against the CURRENT conventional baseline (human review 5060477073 Blocker 1). M0 covers parity, conventional-already-prevents, and historical-only postures; a class other than M0/MX whose comparison_basis is not current-executed is a CLAIM, excluded from direct T-S1b support. Classes are qualitative labels only; no score, rate, or arithmetic exists or is implied.",
+  "ts1b_adjudication": {
+    "status": "NOT PROVEN — NARROW DIRECT SUPPORT",
+    "scope": "frozen 20-row SE-1 population; layers executed on this host 2026-08-30; per-hazard scope only",
+    "method": "Human review 5060477073 Blocker 1: T-S1b compares Sluice to the CURRENT competent conventional baseline. historical-fixed and current-documented rows can never be direct support; direct support requires comparison_basis == current-executed AND a Sluice-side failure-mode change on the demonstrated shape.",
+    "support_rows": [
+      "SE1-CA-H02-1",
+      "SE1-CA-H09-1",
+      "SE1-CA-H13-1"
+    ],
+    "claimed_not_direct_rows": [
+      "SE1-CA-H04-1",
+      "SE1-CA-H10-1"
+    ],
+    "counterevidence_rows": [
+      "SE1-CA-H01-1",
+      "SE1-CA-H03-1",
+      "SE1-CA-H05-1",
+      "SE1-CA-H06-1",
+      "SE1-CA-H07-1",
+      "SE1-CA-H08-1",
+      "SE1-CA-H11-1",
+      "SE1-CA-H12-1"
+    ],
+    "adjudication_note": "Direct current-executed comparative support exists for exactly 3 of 13 conventional families (identity H02, lost wake H09, weak-memory publication H13). 7 of 13 are M0 against the current baseline: current kernels prevent H05/H08/H11 by mechanism, glibc listio initiation is atomic at the executed H06 shape, H07 partial-retry is parity at the raw surface, and H01/H03 are executed parity-in-miss. The GENERAL comparative-migration claim is therefore NOT established at population level; the earlier '10 classes with direct re-executed evidence' statement was over-counted because it used the historical broken kernel as a comparator. T-S1a (per-hazard, SE-1) is unchanged. G1-Safety is NOT adjudicable from this evidence alone."
+  }
 }
