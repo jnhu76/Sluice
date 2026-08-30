@@ -59,6 +59,8 @@ end
 --   tests/async.lua    — async tests linking production sluice_async
 --   tests/async_internal.lua — tests linking sluice_async_internal_testing
 --   tests/death.lua    — POSIX death tests (fork/exec + fail-fast)
+--   research.lua       — SE-2 research probes (deliberate hazard injection;
+--                        NEVER add_tests-registered; run explicitly)
 --   examples.lua       — buildable examples
 --   benchmarks.lua     — microbench targets
 -- ---------------------------------------------------------------------------
@@ -70,6 +72,7 @@ includes("xmake/tests/core.lua")
 includes("xmake/tests/async.lua")
 includes("xmake/tests/async_internal.lua")
 includes("xmake/tests/death.lua")
+includes("xmake/research.lua")
 includes("xmake/examples.lua")
 includes("xmake/benchmarks.lua")
 includes("xmake/fuzz.lua")
