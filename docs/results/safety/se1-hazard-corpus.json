@@ -27,11 +27,11 @@
     "PAIR-X": "COMPARABILITY_BLOCKED"
   },
   "provenance_quality_legend": {
-    "C0": "primary upstream real bug + fix",
-    "C1": "primary API documentation explicitly warning about the hazard",
-    "C2": "published paper artifact / official bug corpus",
-    "C3": "carefully constructed minimal conventional reproducer (labeled CONVENTIONAL-MINIMAL)",
-    "S0": "repository-established Sluice evidence (tracked code/tests/docs/merged PRs); where noted, records in untracked human review artifacts are flagged as E4"
+    "C0": "primary upstream real bug + fix (>=1 bug_record AND >=1 upstream_fix source)",
+    "C1": "primary API documentation explicitly warning about the hazard (>=1 official_contract source)",
+    "C2": "published paper artifact / official bug corpus (>=1 official_bug_corpus source)",
+    "C3": "carefully constructed minimal conventional reproducer (labeled CONVENTIONAL-MINIMAL); no incident provenance",
+    "S0": "repository-established Sluice evidence (>=1 repo_evidence source); where noted, records in untracked human review artifacts are flagged as E4"
   },
   "entries": [
     {
@@ -45,9 +45,24 @@
       "provenance": {
         "publication": "Boost.Asio official docs (buffer debugging overview); POSIX aio_read(3) man page; io_uring_enter(2) man page",
         "sources": [
-          "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/overview/core/buffers.html — 'you need to ensure that the buffers for the operation are valid until the completion handler is called'",
-          "https://man7.org/linux/man-pages/man3/aio_read.3.html — NOTES: 'The buffer area being read into must not be accessed during the operation or undefined results may occur.' / 'The memory areas involved must remain valid.'",
-          "https://man7.org/linux/man-pages/man2/io_uring_enter.2.html — IORING_OP_SEND_ZC: 'The user must not modify the data buffer until the notification is posted.'"
+          {
+            "url": "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/overview/core/buffers.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "'you need to ensure that the buffers for the operation are valid until the completion handler is called'"
+          },
+          {
+            "url": "https://man7.org/linux/man-pages/man3/aio_read.3.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "NOTES: 'The buffer area being read into must not be accessed during the operation or undefined results may occur.' / 'The memory areas involved must remain valid.'"
+          },
+          {
+            "url": "https://man7.org/linux/man-pages/man2/io_uring_enter.2.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "IORING_OP_SEND_ZC: 'The user must not modify the data buffer until the notification is posted.'"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -59,9 +74,19 @@
         "completion/backend later accesses R",
         "invalid memory access or stale/corrupted data"
       ],
-      "actors": ["owner thread", "backend/completion context"],
-      "relevant_state": ["buffer allocation lifetime", "operation in-flight set", "completion pending flag"],
-      "preconditions": ["operation outstanding past owner scope exit", "no runtime check ties buffer lifetime to operation lifetime"],
+      "actors": [
+        "owner thread",
+        "backend/completion context"
+      ],
+      "relevant_state": [
+        "buffer allocation lifetime",
+        "operation in-flight set",
+        "completion pending flag"
+      ],
+      "preconditions": [
+        "operation outstanding past owner scope exit",
+        "no runtime check ties buffer lifetime to operation lifetime"
+      ],
       "race_or_failure_window": "from operation submission until its completion handler/terminal",
       "bad_outcome": "use-after-free / use-after-move of the borrowed buffer",
       "externally_observable_effect": "memory corruption, wrong data delivered, ASan-reported UAF, potential exploitation",
@@ -74,9 +99,13 @@
       "pairing": "PAIR-E",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Obligation representation is fair (both document the lifetime duty); detection is not: Sluice adds no runtime/compile-time check for borrow lifetime, so the hazard's bad_outcome is equivalent risk under Sluice. Recorded as a priority §16 silent case.",
-      "se2_probe_candidates": ["ASan on a deliberate borrower-destroys-buffer probe under ThreadPool/Uring backends", "negative-compile feasibility for borrowed-buffer lifetime annotations"],
-      "aliases": [],
-      "notes": "Documented contract hazard, not a single historical incident; per task §13 a generic UAF would be insufficient — the three sources above all tie lifetime causally to in-flight async operation."
+      "se2_probe_candidates": [
+        "ASan on a deliberate borrower-destroys-buffer probe under ThreadPool/Uring backends",
+        "negative-compile feasibility for borrowed-buffer lifetime annotations"
+      ],
+      "notes": "Documented contract hazard, not a single historical incident; per task §13 a generic UAF would be insufficient — the three sources above all tie lifetime causally to in-flight async operation.",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H01-2",
@@ -89,7 +118,12 @@
       "provenance": {
         "publication": "Modeled on the Boost.Asio buffer-debugging documentation example (stack std::string going out of scope before completion); labeled CONVENTIONAL-MINIMAL per task §8. No historical incident is claimed.",
         "sources": [
-          "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/overview/core/buffers.html — doc example: 'This variable is on the stack, and so it goes out of scope before the asynchronous operation completes.'"
+          {
+            "url": "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/overview/core/buffers.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "'you need to ensure that the buffers for the operation are valid until the completion handler is called'"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -100,9 +134,17 @@
         "operation completes into freed stack memory",
         "handler reads bytes_transferred into dead object"
       ],
-      "actors": ["calling thread", "reactor/proactor thread"],
-      "relevant_state": ["stack frame lifetime", "pending async read"],
-      "preconditions": ["initiating scope exits before completion"],
+      "actors": [
+        "calling thread",
+        "reactor/proactor thread"
+      ],
+      "relevant_state": [
+        "stack frame lifetime",
+        "pending async read"
+      ],
+      "preconditions": [
+        "initiating scope exits before completion"
+      ],
       "race_or_failure_window": "submission → completion",
       "bad_outcome": "stack use-after-return / corruption",
       "externally_observable_effect": "garbage data, ASan stack-use-after-return, crash",
@@ -115,9 +157,13 @@
       "pairing": "PAIR-E",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Synthetic by construction and visibly labeled; serves as the deterministic SE-2 probe skeleton for H01.",
-      "se2_probe_candidates": ["deterministic minimal repro under FakeAsyncBackend with fault-injected completion ordering"],
-      "aliases": ["SE1-CA-H01-1"],
-      "notes": "Alias of SE1-CA-H01-1 at the semantic level but a distinct corpus unit (minimal executable-shaped case)."
+      "se2_probe_candidates": [
+        "deterministic minimal repro under FakeAsyncBackend with fault-injected completion ordering"
+      ],
+      "notes": "Probe companion of SE1-CA-H01-1 (same_case_as): NOT a distinct population case under the population law. Serves as the deterministic SE-2 probe skeleton; remains available to SE-2, which must attribute its result to the parent population case.",
+      "related_entries": [],
+      "entry_role": "probe-companion",
+      "same_case_as": "SE1-CA-H01-1"
     },
     {
       "id": "SE1-CA-H02-1",
@@ -130,7 +176,12 @@
       "provenance": {
         "publication": "POSIX aio_read(3) man page (as implemented by glibc/Linux man-pages)",
         "sources": [
-          "https://man7.org/linux/man-pages/man3/aio_read.3.html — NOTES: 'The control block must not be changed while the read operation is in progress.' / 'Simultaneous I/O operations specifying the same aiocb structure produce undefined results.'"
+          {
+            "url": "https://man7.org/linux/man-pages/man3/aio_read.3.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "NOTES: 'The control block must not be changed while the read operation is in progress.' / 'Simultaneous I/O operations specifying the same aiocb structure produce undefined results.'"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -142,9 +193,17 @@
         "completion or cancellation intended for O1 is applied to O2 (or UB)",
         "wrong result, lost cancellation, or undefined behavior"
       ],
-      "actors": ["caller thread(s)", "async backend"],
-      "relevant_state": ["identity slot occupancy", "in-flight set keyed by identity"],
-      "preconditions": ["identity is caller-visible and reusable without a generation/stamp"],
+      "actors": [
+        "caller thread(s)",
+        "async backend"
+      ],
+      "relevant_state": [
+        "identity slot occupancy",
+        "in-flight set keyed by identity"
+      ],
+      "preconditions": [
+        "identity is caller-visible and reusable without a generation/stamp"
+      ],
       "race_or_failure_window": "between O1 still being referenced and S being reused",
       "bad_outcome": "ABA: stale completion/cancel binds to the wrong occupant; undefined behavior per POSIX docs",
       "externally_observable_effect": "results delivered to wrong request; canceled work reported done; memory corruption",
@@ -157,9 +216,13 @@
       "pairing": "PAIR-B",
       "comparison_validity": "FAIR",
       "comparison_notes": "Same semantic slot-reuse hazard; conventional answer is documentation, Sluice answer is unforgeable identity + generation. T-S1a fact only; no migration claim.",
-      "se2_probe_candidates": ["death test for stale-generation dispatch under slot reuse", "GenMC/TLA+ bounded reuse model already exists (request-arena suite)"],
-      "aliases": [],
-      "notes": "Rejected candidate recorded: generic epoll user_data reuse anecdotes lacked causal in-flight identity binding; the aio control-block contract states the hazard precisely."
+      "se2_probe_candidates": [
+        "death test for stale-generation dispatch under slot reuse",
+        "GenMC/TLA+ bounded reuse model already exists (request-arena suite)"
+      ],
+      "notes": "Rejected candidate recorded: generic epoll user_data reuse anecdotes lacked causal in-flight identity binding; the aio control-block contract states the hazard precisely.",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H03-1",
@@ -172,8 +235,24 @@
       "provenance": {
         "publication": "Linux kernel io_uring CVE-2023-1872 (use-after-free, local privilege escalation)",
         "sources": [
-          "https://nvd.nist.gov/vuln/detail/CVE-2023-1872 — NVD entry: UAF in io_uring via io_file_get_fixed",
-          "https://starlabs.sg/advisories/23/23-1872/ — STAR Labs advisory: io_file_get_fixed missing ctx->uring_lock; async IORING_OP_SPLICE races fixed-file close/unregister → UAF"
+          {
+            "url": "https://nvd.nist.gov/vuln/detail/CVE-2023-1872",
+            "role": "official_bug_corpus",
+            "authority": "official-primary",
+            "note": "NVD entry: UAF in io_uring via io_file_get_fixed (CWE-416)"
+          },
+          {
+            "url": "https://starlabs.sg/advisories/23/23-1872/",
+            "role": "bug_record",
+            "authority": "supporting",
+            "note": "discoverer advisory: io_file_get_fixed missing ctx->uring_lock; async IORING_OP_SPLICE races fixed-file close/unregister -> UAF. The advisory's labeled 'primary fix' da24142b1ef9 was re-verified 2026-08-30 and is a different stable-only commit ('io_uring: ensure that io_init_req() passes in the right issue_flags'); not used as the fix record."
+          },
+          {
+            "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?id=08681391b84da27133deefaaddefd0acfa90c2be",
+            "role": "upstream_fix",
+            "authority": "upstream-primary",
+            "note": "verified 2026-08-30: 'io_uring: add missing lock in io_get_file_fixed' (Billy Jheng / STAR Labs; stable, committed 2023-03-03 by Greg K-H): locks the fixed-file lookup when invoked unlocked (io-wq) to avoid the race with fixed-file unregistration — exactly the CVE root cause. Commit message records the mainline fix was absorbed into the 5.18 file-assignment rework ('No single upstream patch exists for this issue')."
+          }
         ],
         "date": "2023-04"
       },
@@ -185,9 +264,20 @@
         "O (or its completion) dereferences freed entry",
         "use-after-free; exploitable for privilege escalation in kernel context"
       ],
-      "actors": ["submitter thread", "closer thread", "kernel async worker"],
-      "relevant_state": ["fixed-file table refcounts", "uring_lock hold state", "in-flight request set"],
-      "preconditions": ["lock-free lookup of a closeable resource", "close allowed while operations in flight"],
+      "actors": [
+        "submitter thread",
+        "closer thread",
+        "kernel async worker"
+      ],
+      "relevant_state": [
+        "fixed-file table refcounts",
+        "uring_lock hold state",
+        "in-flight request set"
+      ],
+      "preconditions": [
+        "lock-free lookup of a closeable resource",
+        "close allowed while operations in flight"
+      ],
       "race_or_failure_window": "between resource lookup and terminal CQE",
       "bad_outcome": "use-after-free of the resource entry; completion touching dead state",
       "externally_observable_effect": "kernel UAF / LPE (CVE scored); in user-space analogs, crash or data corruption",
@@ -198,11 +288,15 @@
       "evidence_for_status": "Scheduler teardown gates (begin_teardown) plus stranded-transit fail-fast exercised by scheduler teardown death tests (Debug+Release); uring close/drain mutation evidence docs/verification/phase-d4-uring-wait-close-drain-mutation-evidence.md (real-liburing mode, local execution).",
       "induced_by_sluice": "no",
       "pairing": "PAIR-C",
-      "comparison_validity": "FAIR",
-      "comparison_notes": "Same close-vs-in-flight semantics; kernel fixed it with locking, Sluice makes live-destruction a named fail-fast contract. Kernel case is privilege-escalation severity; severity parity is not claimed.",
-      "se2_probe_candidates": ["death test: destroy backend/context with accepted request → named fail-fast", "real-backend close-while-in-flight probe (D2/D4 class)"],
-      "aliases": [],
-      "notes": "Provenance is advisory + NVD (both primary-source classes for a kernel CVE); the fix commit is uring-lock acquisition in io_file_get_fixed per advisory."
+      "comparison_validity": "PARTIAL",
+      "comparison_notes": "Shares in-flight-operation-vs-resource-lifetime semantics (fixed-file entry freed under a live lookup/operation). Not mechanically demonstrated: a Sluice-side registered-resource slot lifecycle equivalent to the kernel fixed-file table (per-resource registry with refcounted lookup raced by close/unregister). Sluice's fail-fast covers live destruction of backend/context with accepted requests — an adjacent but not identical resource authority. Family mapping kept; comparability downgraded FAIR -> PARTIAL in SE-1-CORRECTIVE-1 (N1).",
+      "se2_probe_candidates": [
+        "death test: destroy backend/context with accepted request → named fail-fast",
+        "real-backend close-while-in-flight probe (D2/D4 class)"
+      ],
+      "notes": "Provenance corrected in SE-1-CORRECTIVE-1: bug record = NVD (official corpus) + STAR Labs discoverer advisory; upstream fix = stable commit 08681391 'io_uring: add missing lock in io_get_file_fixed', verified against the cited UAF (locks the fixed-file lookup raced by unregister). The advisory's labeled 'primary fix' da24142b1ef9 is a different commit and was not adopted; see the source notes.",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H04-1",
@@ -215,7 +309,12 @@
       "provenance": {
         "publication": "io_uring_enter(2) man page, IORING_OP_ASYNC_CANCEL semantics",
         "sources": [
-          "https://man7.org/linux/man-pages/man2/io_uring_enter.2.html — cancel may return -EALREADY and 'the request may or may not terminate'; interruptible requests tend to cancel, already-started disk I/O generally cannot"
+          {
+            "url": "https://man7.org/linux/man-pages/man2/io_uring_enter.2.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "IORING_OP_ASYNC_CANCEL may return -EALREADY and 'the request may or may not terminate'; interruptible requests tend to cancel, already-started disk I/O generally cannot"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -227,9 +326,19 @@
         "if both publish, or C wins wrongly, the real result is lost or duplicated",
         "caller observes contradiction (success + canceled, or double terminal)"
       ],
-      "actors": ["canceller thread", "completion/reap path", "backend worker"],
-      "relevant_state": ["request terminal state", "cancel intent flag", "CQE queue"],
-      "preconditions": ["cancel issued while O is enqueued or running"],
+      "actors": [
+        "canceller thread",
+        "completion/reap path",
+        "backend worker"
+      ],
+      "relevant_state": [
+        "request terminal state",
+        "cancel intent flag",
+        "CQE queue"
+      ],
+      "preconditions": [
+        "cancel issued while O is enqueued or running"
+      ],
       "race_or_failure_window": "cancel issuance → O's terminal",
       "bad_outcome": "lost real result, double terminal, or cancel acting on the wrong (reused) request",
       "externally_observable_effect": "caller sees success and cancellation for the same op; accounting drift",
@@ -242,9 +351,13 @@
       "pairing": "PAIR-A",
       "comparison_validity": "FAIR",
       "comparison_notes": "The conventional contract states the race exists and is tolerated; the Sluice protocol makes the invalid outcome (two terminals) unrepresentable. Detection-layer effectiveness is SE-2 work.",
-      "se2_probe_candidates": ["deterministic cancel-vs-complete race test (existing causal seam class)", "e10-waitnode model as bounded witness"],
-      "aliases": [],
-      "notes": ""
+      "se2_probe_candidates": [
+        "deterministic cancel-vs-complete race test (existing causal seam class)",
+        "e10-waitnode model as bounded witness"
+      ],
+      "notes": "",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H05-1",
@@ -257,7 +370,18 @@
       "provenance": {
         "publication": "io-uring mailing list patch by Jens Axboe, '[PATCH] io_uring: fix sporadic double CQE entry for close' (2020-02-01); included in io_uring-5.6 pull",
         "sources": [
-          "https://lore.gnuweeb.org/io-uring/c1b8f3c9-af7c-7327-cd15-5bc92ffc8e6b@gmail.com/T/ — root cause: punting close async assigned ->files, making io_close_finish() re-close and 'log a new CQE event for this request. This causes duplicate CQEs.'; fix: queue async work manually instead of returning -EAGAIN"
+          {
+            "url": "https://lore.gnuweeb.org/io-uring/c1b8f3c9-af7c-7327-cd15-5bc92ffc8e6b@gmail.com/T/",
+            "role": "bug_record",
+            "authority": "upstream-primary",
+            "note": "Axboe diagnosis inside the patch record: punting close async assigned ->files, making io_close_finish() re-close and 'log a new CQE event for this request. This causes duplicate CQEs.'"
+          },
+          {
+            "url": "https://lore.gnuweeb.org/io-uring/c1b8f3c9-af7c-7327-cd15-5bc92ffc8e6b@gmail.com/T/",
+            "role": "upstream_fix",
+            "authority": "upstream-primary",
+            "note": "same artifact contains the accepted fix (queue async work manually instead of returning -EAGAIN); dual-role same-artifact case, human-verified; applied in the io_uring-5.6 pull"
+          }
         ],
         "date": "2020-02-01"
       },
@@ -268,9 +392,19 @@
         "one logical request produces two CQEs",
         "caller consumes a phantom completion; req refcount drops twice"
       ],
-      "actors": ["submit path", "async worker", "completion path"],
-      "relevant_state": ["request completion flag", "async routing decision", "req refcount"],
-      "preconditions": ["two code paths can both reach the publication statement"],
+      "actors": [
+        "submit path",
+        "async worker",
+        "completion path"
+      ],
+      "relevant_state": [
+        "request completion flag",
+        "async routing decision",
+        "req refcount"
+      ],
+      "preconditions": [
+        "two code paths can both reach the publication statement"
+      ],
       "race_or_failure_window": "routing decision → publication",
       "bad_outcome": "duplicate CQE / double put of the request",
       "externally_observable_effect": "extra completion event, refcount underflow, UAF on the request object",
@@ -283,9 +417,13 @@
       "pairing": "PAIR-A",
       "comparison_validity": "FAIR",
       "comparison_notes": "Both are exactly-once publication obligations at the same abstraction level (runtime internal routing bug vs protocol law).",
-      "se2_probe_candidates": ["mutation: weaken resolve_ CAS → expect RED suite (already recorded as FE M-mutations)", "GenMC publication kernel re-run"],
-      "aliases": [],
-      "notes": ""
+      "se2_probe_candidates": [
+        "mutation: weaken resolve_ CAS → expect RED suite (already recorded as FE M-mutations)",
+        "GenMC publication kernel re-run"
+      ],
+      "notes": "",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H06-1",
@@ -298,7 +436,12 @@
       "provenance": {
         "publication": "io_uring_enter(2) man page, RETURN VALUE section",
         "sources": [
-          "https://man7.org/linux/man-pages/man2/io_uring_enter.2.html — returns 'the number of I/Os successfully consumed'; 'The errors related to a submission queue entry will be returned through a completion queue entry'; only non-SQE errors surface as the syscall return"
+          {
+            "url": "https://man7.org/linux/man-pages/man2/io_uring_enter.2.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "returns 'the number of I/Os successfully consumed'; 'The errors related to a submission queue entry will be returned through a completion queue entry'; only non-SQE errors surface as the syscall return"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -310,9 +453,19 @@
         "caller must reconcile return value + CQE stream to know what was accepted",
         "incorrect reconciliation → leaked accounting, double retry, or lost work"
       ],
-      "actors": ["submitter", "kernel submission path", "CQ reaper"],
-      "relevant_state": ["SQ tail", "submitted count", "per-SQE error CQEs"],
-      "preconditions": ["batch submission with per-entry failure possibility"],
+      "actors": [
+        "submitter",
+        "kernel submission path",
+        "CQ reaper"
+      ],
+      "relevant_state": [
+        "SQ tail",
+        "submitted count",
+        "per-SQE error CQEs"
+      ],
+      "preconditions": [
+        "batch submission with per-entry failure possibility"
+      ],
       "race_or_failure_window": "syscall execution window (plus CQE arrival latency)",
       "bad_outcome": "residue: accepted-but-unknown work, double-submitted ops, or lost requests",
       "externally_observable_effect": "hangs (work lost), duplicate I/O, accounting mismatch",
@@ -325,9 +478,13 @@
       "pairing": "PAIR-C",
       "comparison_validity": "FAIR",
       "comparison_notes": "Conventional model exposes the reconciliation burden; Sluice moves the failure boundary before accept and fail-fasts the only residual window. Fairness caveat: Sluice has not been compared operation-by-operation against io_uring batch submission in a live experiment (that is SE-2/RE-1U territory).",
-      "se2_probe_candidates": ["fault-injected allocation failure at each ladder stage (existing R2 witness class)", "uring partial-submission probe in real mode"],
-      "aliases": [],
-      "notes": ""
+      "se2_probe_candidates": [
+        "fault-injected allocation failure at each ladder stage (existing R2 witness class)",
+        "uring partial-submission probe in real mode"
+      ],
+      "notes": "",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H07-1",
@@ -340,8 +497,18 @@
       "provenance": {
         "publication": "OpenSSL SSL_write(3) man page (partial write + moving buffer modes); Boost.Asio read_some/write_some short-I/O model",
         "sources": [
-          "https://docs.openssl.org/1.1.1/man3/SSL_write/ — after partial write 'it must be repeated with the same arguments' and 'The data that was passed might have been partially processed'; with SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER 'the pointer can be different, but the data and length should still be the same'",
-          "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/overview/core/buffers.html and read/write stream docs — read_some/write_some may transfer fewer bytes; composed operations loop"
+          {
+            "url": "https://docs.openssl.org/1.1.1/man3/SSL_write/",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "after partial write 'it must be repeated with the same arguments' and 'The data that was passed might have been partially processed'; with SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER 'the pointer can be different, but the data and length should still be the same'"
+          },
+          {
+            "url": "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/overview/core/buffers.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "read_some/write_some may transfer fewer bytes; composed operations loop"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -352,9 +519,18 @@
         "stream/logic-level corruption",
         "or: zero-progress write is treated as retryable forever → livelock"
       ],
-      "actors": ["caller", "I/O backend"],
-      "relevant_state": ["bytes transferred counter", "retry buffer identity"],
-      "preconditions": ["short-I/O semantics of the transport", "caller-side retry logic"],
+      "actors": [
+        "caller",
+        "I/O backend"
+      ],
+      "relevant_state": [
+        "bytes transferred counter",
+        "retry buffer identity"
+      ],
+      "preconditions": [
+        "short-I/O semantics of the transport",
+        "caller-side retry logic"
+      ],
       "race_or_failure_window": "not a race — a semantic mismatch across the partial boundary",
       "bad_outcome": "data corruption, duplicated bytes, or infinite retry livelock on zero progress",
       "externally_observable_effect": "protocol corruption; hangs",
@@ -367,50 +543,86 @@
       "pairing": "PAIR-A",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Sluice cannot stop a caller from ignoring a typed partial result; explicitness converts the silent hazard into a visible obligation, which is obligation-representation, not prevention. Zero-progress-as-backend-failure is a protocol rule; its dedicated death/segment tests are thinner than for other families — honest evidence gap noted for SE-2.",
-      "se2_probe_candidates": ["short-read/short-write loop helper tests (existing exact/all helper tests)", "zero-progress write backend-failure probe"],
-      "aliases": [],
-      "notes": "Supporting real-world adaptation: libcurl sets SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER because its retry path can pass different buffer addresses (project source-level evidence; not claimed as C0)."
+      "se2_probe_candidates": [
+        "short-read/short-write loop helper tests (existing exact/all helper tests)",
+        "zero-progress write backend-failure probe"
+      ],
+      "notes": "Supporting real-world adaptation: libcurl sets SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER because its retry path can pass different buffer addresses (project source-level evidence; not claimed as C0).",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H08-1",
       "family": "H08",
-      "title": "Timeout vs resource grant: nonblocking connect completion protocol (writability ≠ success)",
-      "origin": "conventional-documentation",
+      "title": "Timeout vs completion arbitration: linked timeout racing request completion (double free, io_uring 5.13 fix)",
+      "origin": "conventional-real",
       "primary_bucket": "external/conventional",
       "corpus_eligibility": "IN-SE1",
-      "provenance_quality": "C1",
+      "entry_role": "population-case",
+      "provenance_quality": "C0",
       "provenance": {
-        "publication": "connect(2) man page, EINPROGRESS section",
+        "publication": "Linux kernel io_uring linked-timeout completion race (syzbot-reported; Begunkov fix, mainline 447c19f, 5.13 merge window) + liburing linked-timeout contract",
         "sources": [
-          "https://man7.org/linux/man-pages/man2/connect.2.html — 'It is possible to select(2) or poll(2) for completion by selecting the socket for writing.' and 'use getsockopt(2) to read the SO_ERROR option at level SOL_SOCKET to determine whether connect() completed successfully'"
+          {
+            "url": "https://lore.kernel.org/io-uring/69c46bf6ce37fec4fdcd98f0882e18eb07ce693a.1620990121.git.asml.silence@gmail.com/",
+            "role": "bug_record",
+            "authority": "upstream-primary",
+            "note": "'[PATCH] io_uring: fix ltout double free on completion race' (Begunkov, 2021-05-14): 'Always remove linked timeout on io_link_timeout_fn() from the master request link list, otherwise we may get use-after-free when first io_link_timeout_fn() puts linked timeout in the fail path, and then will be found and put on master's free.' Reported-and-tested-by syzbot; Fixes: 90cd7e424969d ('io_uring: track link timeout's master explicitly')."
+          },
+          {
+            "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=447c19f3b5074409c794b350b10306e1da1ef4ba",
+            "role": "upstream_fix",
+            "authority": "upstream-primary",
+            "note": "verified 2026-08-30 on the torvalds tree: mainline 447c19f3b5074409c794b350b10306e1da1ef4ba, fs/io_uring.c, merged via the io_uring-5.13 pull. Diff unlinks the timeout from the master's link list before the refcount grab, so the loser of the race is retired exactly once."
+          },
+          {
+            "url": "https://github.com/axboe/liburing/blob/master/_autodocs/sqe-operations.md",
+            "role": "official_contract",
+            "authority": "upstream-primary",
+            "note": "liburing io_uring_prep_link_timeout contract: the linked timeout constrains the linked request; 'if the linked request does not complete before the timeout, it is cancelled with -ETIME' — i.e. the contract itself defines the arbitration between timeout expiry and request completion."
+          }
         ],
-        "date": "accessed 2026-08-30"
+        "date": "2021-05 (fix); accessed 2026-08-30"
       },
       "normalized_semantic_trace": [
-        "nonblocking connect returns EINPROGRESS; the attempt continues asynchronously",
-        "caller waits with timeout; writability or timeout fires",
-        "writability alone does not prove success; the attempt may have failed (or a timeout raced a just-established connection)",
-        "caller must query SO_ERROR to learn the actual terminal",
-        "if the caller treats timeout as terminal while the grant (connection) also arrived, the socket leaks or the result is misreported"
+        "request R is submitted with a linked timeout T armed against it; the contract defines the intended arbitration: if R does not complete before T expires, R is canceled with -ETIME (liburing link-timeout contract)",
+        "R and T race: io_link_timeout_fn() fires while R is completing ('we race with the completion of the linked work' — fix commit)",
+        "exactly one final interpretation must win: R's real result, or R canceled -ETIME by T; the loser must be unlinked from R and retired exactly once",
+        "real bug: when the race hit the fail path, T was put by io_link_timeout_fn() AND later found still on R's link list and put again at R's free — double free/use-after-free (syzbot-reported; commit message)",
+        "fix: unlink T from R's link list before attempting the refcount grab, restoring single-winner arbitration (mainline 447c19f)"
       ],
-      "actors": ["caller wait loop", "kernel connect completion"],
-      "relevant_state": ["EINPROGRESS attempt", "timer deadline", "SO_ERROR"],
-      "preconditions": ["timeout and completion are two different authorities racing"],
-      "race_or_failure_window": "deadline expiry ↔ attempt completion",
-      "bad_outcome": "misreported failure on success, leaked connected socket, or double handling",
-      "externally_observable_effect": "connection leaks; phantom failures under load",
-      "silent_or_distributed_character": "silent; classic two-authority race documented as a mandatory protocol",
-      "conventional_obligation": "documented protocol: after writability/timeout, the actual outcome must be fetched via SO_ERROR — winner authority lives in the socket error state",
+      "actors": [
+        "linked-timeout hrtimer context",
+        "request completion/free path"
+      ],
+      "relevant_state": [
+        "master request link list membership",
+        "linked-timeout request refcount",
+        "timeout-fired flag"
+      ],
+      "preconditions": [
+        "linked timeout armed against an in-flight request",
+        "timeout expiry races request completion of the same linked pair"
+      ],
+      "race_or_failure_window": "timeout expiry <-> request completion of the same linked pair",
+      "bad_outcome": "linked-timeout request freed twice (double put) -> use-after-free; two terminals claimed for one pair",
+      "externally_observable_effect": "syzbot-reported use-after-free/crash; memory corruption",
+      "silent_or_distributed_character": "distributed race window; intermittent (syzbot-class)",
+      "conventional_obligation": "exactly one final interpretation per timeout/request pair: the winner delivers its terminal (real result, or the loser canceled with -ETIME per the linked-timeout contract); the loser is unlinked and retired exactly once — the kernel needed a fix to restore this",
       "sluice_protocol_obligation": "ordinary deadline authority centralized (AC-2b: arm/consume/retire_ordinary_deadline_locked, scheduler.hpp:2294/2305/2314); deadline expiry is one participant in the WaitNode resolve_ single-winner CAS, so grant and expiry cannot both win on the same wait; admission ladders are the single text of each primitive's admission",
       "sluice_current_status": "UNREPRESENTABLE",
-      "evidence_for_status": "Single-winner law for wait+deadline (e10/e9 model class; AC-2b mutation census 192 gates recorded in PR #238 evidence); same-object double grant/expiry is unwritable. Cross-object composition (timer + separate connection object) remains caller-side — see comparison_notes.",
+      "evidence_for_status": "Single-winner law for wait+deadline (e10/e9 model class; AC-2b mutation census 192 gates recorded in PR #238 evidence); same-object double grant/expiry is unwritable in the protocol.",
       "induced_by_sluice": "no",
       "pairing": "PAIR-A",
-      "comparison_validity": "PARTIAL",
-      "comparison_notes": "Fair for the same-object winner race (deadline vs grant on one wait). The conventional connect case is cross-object (kernel attempt + caller timer): Sluice has no socket-connect operation in the audited public surface, so the cross-object form maps only structurally, not operationally.",
-      "se2_probe_candidates": ["deadline-vs-grant deterministic race tests (existing deadline choreography class in Condition/Select tests)", "AC-2b mutation gates as sensitivity evidence"],
-      "aliases": [],
-      "notes": "Rejected candidate: Go Dialer timeout semantics did not document a persistent post-timeout grant hazard precisely enough for provenance this round."
+      "comparison_validity": "FAIR",
+      "comparison_notes": "Same-object winner race on both sides: the io_uring linked timeout is bound to the same request whose completion it constrains, and the fixed bug is exactly a double claim of the loser. Sluice's deadline participates in the same wait's single-winner CAS, so the equivalent invalid state (deadline and result both winning one wait) is unwritable. Evidence class is protocol/model/mutation census, not measured superiority.",
+      "se2_probe_candidates": [
+        "deadline-vs-grant deterministic race tests (existing deadline choreography class in Condition/Select tests)",
+        "AC-2b mutation gates as sensitivity evidence",
+        "mutation: let the timeout path retire an already-resolved wait -> expect RED suite"
+      ],
+      "related_entries": [],
+      "notes": "SE-1-CORRECTIVE-1 B1: re-anchored from source. The original draft anchor (connect(2) EINPROGRESS writability/SO_ERROR protocol) documents completion checking but not the timeout-vs-grant arbitration; its 'timeout raced a just-established connection' step was unsupported inference and is demoted to rejected_candidates. New anchor verified 2026-08-30: lore bug record (incl. syzbot tag) + mainline fix 447c19f3b5074409c794b350b10306e1da1ef4ba (subject/diff verified on git.kernel.org) + liburing contract."
     },
     {
       "id": "SE1-CA-H09-1",
@@ -423,9 +635,24 @@
       "provenance": {
         "publication": "glibc Bugzilla #25847 with patch series (Malte Skarupke), discovered via 'Finding a bug in glibc's condition variable' analysis",
         "sources": [
-          "https://www.sourceware.org/bugzilla/show_bug.cgi?id=25847 — 'pthread_cond_signal failed to wake up pthread_cond_wait' (signal stealing via g_signals[] state)",
-          "https://patchwork.ozlabs.org/project/glibc/cover/20230513040224.8057-1-malteskarupke@fastmail.fm/ — patch series 'lost wakeup fix'",
-          "https://probablydance.com/2022/09/17/finding-the-second-bug-in-glibcs-condition-variable/ — discovery analysis (supporting)"
+          {
+            "url": "https://www.sourceware.org/bugzilla/show_bug.cgi?id=25847",
+            "role": "bug_record",
+            "authority": "upstream-primary",
+            "note": "glibc Bugzilla: 'pthread_cond_signal failed to wake up pthread_cond_wait' (signal stealing via g_signals[] state)"
+          },
+          {
+            "url": "https://patchwork.ozlabs.org/project/glibc/cover/20230513040224.8057-1-malteskarupke@fastmail.fm/",
+            "role": "upstream_fix",
+            "authority": "upstream-primary",
+            "note": "patch series 'lost wakeup fix' (Malte Skarupke)"
+          },
+          {
+            "url": "https://probablydance.com/2022/09/17/finding-the-second-bug-in-glibcs-condition-variable/",
+            "role": "supporting",
+            "authority": "supporting",
+            "note": "discovery analysis"
+          }
         ],
         "date": "2022–2023"
       },
@@ -436,9 +663,18 @@
         "W remains asleep with predicate satisfied",
         "waiter is stranded indefinitely (liveness failure, not data corruption)"
       ],
-      "actors": ["waiter thread", "signaler thread"],
-      "relevant_state": ["waiter registration", "wake counter/state", "predicate"],
-      "preconditions": ["wake state can desynchronize from live waiter set"],
+      "actors": [
+        "waiter thread",
+        "signaler thread"
+      ],
+      "relevant_state": [
+        "waiter registration",
+        "wake counter/state",
+        "predicate"
+      ],
+      "preconditions": [
+        "wake state can desynchronize from live waiter set"
+      ],
       "race_or_failure_window": "registration ↔ wake emission ↔ sleep commit",
       "bad_outcome": "lost wakeup; permanent or long-lived stall",
       "externally_observable_effect": "hang; requires shutdown/restart",
@@ -451,9 +687,15 @@
       "pairing": "PAIR-D",
       "comparison_validity": "FAIR",
       "comparison_notes": "Both are liveness-class lost-wake in a wait primitive. Sluice does not claim the class is impossible in implementation — its protocol + deterministic replay converts the historical silent bug into a reproducible, fixed one. That is a PAIR-D fact, not a superiority claim.",
-      "se2_probe_candidates": ["DST replay of queued wait/notify interleavings (existing dst_t5 class)", "e9 model re-run on wake-path changes"],
-      "aliases": ["SE1-SB-01"],
-      "notes": "Rejected candidate: musl condvar rewrite could not be pinned to a primary commit in this session; glibc BZ 25847 has a precise primary record."
+      "se2_probe_candidates": [
+        "DST replay of queued wait/notify interleavings (existing dst_t5 class)",
+        "e9 model re-run on wake-path changes"
+      ],
+      "notes": "Rejected candidate: musl condvar rewrite could not be pinned to a primary commit in this session; glibc BZ 25847 has a precise primary record.",
+      "related_entries": [
+        "SE1-SB-01"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H10-1",
@@ -466,8 +708,18 @@
       "provenance": {
         "publication": "libuv loop API docs; Boost.Asio io_context destructor reference",
         "sources": [
-          "https://docs.libuv.org/en/v1.x/loop.html — uv_loop_close: 'Releases all internal loop resources.' returns UV_EBUSY unless 'all open handles and requests have been closed'",
-          "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/reference/io_context/_io_context.html — destructor: 'The io_context destructor defined above destroys all handlers'; 'Uninvoked handler objects that were scheduled for deferred invocation ... are destroyed'"
+          {
+            "url": "https://docs.libuv.org/en/v1.x/loop.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "uv_loop_close: 'Releases all internal loop resources.' returns UV_EBUSY unless 'all open handles and requests have been closed'"
+          },
+          {
+            "url": "https://www.boost.org/doc/libs/latest/doc/html/boost_asio/reference/io_context/_io_context.html",
+            "role": "official_contract",
+            "authority": "official-primary",
+            "note": "destructor: 'The io_context destructor defined above destroys all handlers'; 'Uninvoked handler objects that were scheduled for deferred invocation ... are destroyed'"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -478,9 +730,19 @@
         "in the abandon model, operations already handed to the OS complete into nothing; in-flight state is dropped",
         "resource cleanup, durability, and accounting obligations attached to those operations may never run"
       ],
-      "actors": ["teardown owner", "in-flight operations", "queued handlers"],
-      "relevant_state": ["loop/context live state", "handle/request active counts", "queued handler set"],
-      "preconditions": ["teardown attempted while work is accepted/in flight"],
+      "actors": [
+        "teardown owner",
+        "in-flight operations",
+        "queued handlers"
+      ],
+      "relevant_state": [
+        "loop/context live state",
+        "handle/request active counts",
+        "queued handler set"
+      ],
+      "preconditions": [
+        "teardown attempted while work is accepted/in flight"
+      ],
       "race_or_failure_window": "teardown ↔ operation terminal",
       "bad_outcome": "abandoned I/O, skipped cleanup/durability steps, or (in less defensive designs) UAF on destroyed objects",
       "externally_observable_effect": "silent data loss (writes abandoned), leaks, or crashes",
@@ -493,9 +755,13 @@
       "pairing": "PAIR-C",
       "comparison_validity": "FAIR",
       "comparison_notes": "Three documented designs of the same shutdown boundary (refuse / abandon / fail-fast-quiescent) at comparable abstraction level; Sluice's mechanical enforcement is an architecture fact, not a measured safety difference.",
-      "se2_probe_candidates": ["existing teardown death tests as sensitivity witnesses", "probe: destruction attempt with accepted request on each backend"],
-      "aliases": [],
-      "notes": ""
+      "se2_probe_candidates": [
+        "existing teardown death tests as sensitivity witnesses",
+        "probe: destruction attempt with accepted request on each backend"
+      ],
+      "notes": "",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H11-1",
@@ -506,9 +772,20 @@
       "corpus_eligibility": "IN-SE1",
       "provenance_quality": "C0",
       "provenance": {
-        "publication": "io-uring mailing list patch by Pavel Begunkov, '[PATCH] io_uring: fix leaks on IOPOLL and CQE_SKIP' (v1 2022-04-12, v2 2022-04-17, applied; merged in 5.18-rc cycle)",
+        "publication": "io-uring mailing list patch by Pavel Begunkov, '[PATCH v2] io_uring: fix leaks on IOPOLL and CQE_SKIP' (2022-04-17, applied; pulled in the 5.18-rc cycle); message-id permalink added in SE-1-CORRECTIVE-1",
         "sources": [
-          "https://lore.kernel.org/io-uring/?q=%22fix+leaks+on+IOPOLL+and+CQE_SKIP%22 — thread with v1/v2 and applied notifications; missing io_put_kbuf()/release on specific completion paths leaks provided buffers/requests"
+          {
+            "url": "https://lore.kernel.org/io-uring/5072fc8693fbfd595f89e5d4305bfcfd5d2f0a64.1650186611.git.asml.silence@gmail.com/",
+            "role": "bug_record",
+            "authority": "upstream-primary",
+            "note": "[PATCH v2] 'io_uring: fix leaks on IOPOLL and CQE_SKIP' (Begunkov, 2022-04-17): missing io_put_kbuf()/release on specific completion paths leaks provided buffers/requests"
+          },
+          {
+            "url": "https://lore.kernel.org/io-uring/5072fc8693fbfd595f89e5d4305bfcfd5d2f0a64.1650186611.git.asml.silence@gmail.com/",
+            "role": "upstream_fix",
+            "authority": "upstream-primary",
+            "note": "same artifact carries the accepted patch; dual-role same-artifact case, human-verified; applied by Axboe 2022-04-17 and pulled upstream in the io_uring 5.18-rc fix pulls"
+          }
         ],
         "date": "2022-04"
       },
@@ -519,9 +796,19 @@
         "resource is stranded though the request is terminal",
         "accounting says free, pool says consumed; cumulative exhaustion under load"
       ],
-      "actors": ["completion paths", "buffer pool", "request refcounts"],
-      "relevant_state": ["resource acquired flag", "terminal path taken", "pool/refcount accounting"],
-      "preconditions": ["multiple terminal paths with per-path release duties"],
+      "actors": [
+        "completion paths",
+        "buffer pool",
+        "request refcounts"
+      ],
+      "relevant_state": [
+        "resource acquired flag",
+        "terminal path taken",
+        "pool/refcount accounting"
+      ],
+      "preconditions": [
+        "multiple terminal paths with per-path release duties"
+      ],
       "race_or_failure_window": "terminal-path selection (deterministic once path chosen, but latent across paths)",
       "bad_outcome": "permanent resource/accounting leak per affected completion",
       "externally_observable_effect": "gradual pool exhaustion; allocation failures under sustained load; memory leak",
@@ -534,9 +821,15 @@
       "pairing": "PAIR-C",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Sluice has the same exactly-once-retirement obligation surface; its witnesses cover the audited paths, not all conceivable terminal paths. No generic runtime leak detector exists in Sluice — honest limitation mirrored in the conventional case (kernel needed a path-coverage audit).",
-      "se2_probe_candidates": ["terminal-path coverage audit (AC-2c-style census re-run) as a probe", "AC-1a counter delta assertions across fault-injected terminals"],
-      "aliases": ["SE1-SB-02"],
-      "notes": "Message-id-level permalink for the Begunkov patch can be added at human review; subject/author/date/merge-cycle verified via lore thread listing."
+      "se2_probe_candidates": [
+        "terminal-path coverage audit (AC-2c-style census re-run) as a probe",
+        "AC-1a counter delta assertions across fault-injected terminals"
+      ],
+      "notes": "Message-id-level permalink for the v2 patch now recorded directly in sources (SE-1-CORRECTIVE-1); subject/author/date/merge-cycle verified via the lore thread.",
+      "related_entries": [
+        "SE1-SB-02"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H12-1",
@@ -549,10 +842,30 @@
       "provenance": {
         "publication": "pgsql-hackers thread (Craig Ringer, April 2018) and PostgreSQL fsync fixes (data_sync_retry; Feb 2019 minor releases backpatched to 9.4–11)",
         "sources": [
-          "https://wiki.postgresql.org/wiki/Fsync_Errors — canonical project history page for the issue and fixes",
-          "https://www.postgresql.org/docs/10/release-10-7.html — release notes: new server parameter data_sync_retry controlling panic-on-fsync-failure",
-          "https://lwn.net/Articles/752093/ — coverage of the thread: on Linux, after fsync() reports EIO the page error state is cleared, so a later retry can return success though data was never written",
-          "https://danluu.com/fsyncgate/ — analysis (supporting)"
+          {
+            "url": "https://wiki.postgresql.org/wiki/Fsync_Errors",
+            "role": "bug_record",
+            "authority": "official-primary",
+            "note": "canonical project history page for the fsyncgate incident and fixes"
+          },
+          {
+            "url": "https://www.postgresql.org/docs/10/release-10-7.html",
+            "role": "upstream_fix",
+            "authority": "upstream-primary",
+            "note": "release notes: new server parameter data_sync_retry controlling panic-on-fsync-failure (fix response)"
+          },
+          {
+            "url": "https://lwn.net/Articles/752093/",
+            "role": "supporting",
+            "authority": "supporting",
+            "note": "on Linux, after fsync() reports EIO the page error state is cleared, so a later retry can return success though data was never written"
+          },
+          {
+            "url": "https://danluu.com/fsyncgate/",
+            "role": "supporting",
+            "authority": "supporting",
+            "note": "analysis"
+          }
         ],
         "date": "2018–2019"
       },
@@ -563,9 +876,20 @@
         "durability layer reports the data durable",
         "crash loses data that was reported durable — silent durability violation"
       ],
-      "actors": ["durability layer", "kernel page/writeback state", "storage"],
-      "relevant_state": ["page error state", "fsync return codes", "durable LSN/marker"],
-      "preconditions": ["retry-after-fsync-failure policy", "kernel error-clearing semantics"],
+      "actors": [
+        "durability layer",
+        "kernel page/writeback state",
+        "storage"
+      ],
+      "relevant_state": [
+        "page error state",
+        "fsync return codes",
+        "durable LSN/marker"
+      ],
+      "preconditions": [
+        "retry-after-fsync-failure policy",
+        "kernel error-clearing semantics"
+      ],
       "race_or_failure_window": "F1 failure → retry policy → F2",
       "bad_outcome": "silent loss of reported-durable data; database corruption on crash",
       "externally_observable_effect": "silent data loss after power/storage failure; for PostgreSQL, PANIC-on-fsync became the mandated response",
@@ -577,10 +901,14 @@
       "induced_by_sluice": "no",
       "pairing": "PAIR-X",
       "comparison_validity": "COMPARABILITY_BLOCKED",
-      "comparison_notes": "The load-bearing half of fsyncgate (second fsync returns success after error-state clearing) is a kernel semantics that no user-space library obligation can represent: Sluice would also see a success return. What Sluice does change — explicit sync intent, no retry-on-error, success-gated durability markers — is real but addresses a different half of the hazard. Comparison blocked at the kernel-mechanism level; partial at the policy level.",
-      "se2_probe_candidates": ["fault-injected sync failure probes asserting typed-error propagation and durable_lsn_ immutability (existing WAL test class)", "documented boundary note: kernel cleared-error semantics are out of scope for any Sluice-layer probe"],
-      "aliases": [],
-      "notes": "C2-class supporting artifact exists (OSDI'16 'All File Systems Are Not Created Equal' crash-consistency study) but was not required given the C0 primary record."
+      "comparison_notes": "Overall pairing remains PAIR-X / COMPARABILITY_BLOCKED. Policy half = PARTIALLY COMPARABLE: fsync error -> should the application blindly retry, should the durability marker advance; Sluice has relevant behavior (non-EINTR sync errors propagate as typed IoError with no retry loop; durable_lsn advances only on success). Kernel-mechanism half = COMPARABILITY_BLOCKED: the kernel clears dirty/error state so a later fsync can succeed despite the lost write — that mechanism operates below the Sluice boundary and no user-space library obligation can represent it. Sluice does not solve fsyncgate; the policy half is represented, the kernel mechanism half is not (SE-1-CORRECTIVE-1 N2).",
+      "se2_probe_candidates": [
+        "fault-injected sync failure probes asserting typed-error propagation and durable_lsn_ immutability (existing WAL test class)",
+        "documented boundary note: kernel cleared-error semantics are out of scope for any Sluice-layer probe"
+      ],
+      "notes": "C2-class supporting artifact exists (OSDI'16 'All File Systems Are Not Created Equal' crash-consistency study) but was not required given the C0 primary record.",
+      "related_entries": [],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-CA-H13-1",
@@ -593,7 +921,12 @@
       "provenance": {
         "publication": "Linux kernel Documentation/memory-barriers.txt, SLEEP AND WAKE-UP FUNCTIONS section",
         "sources": [
-          "https://www.kernel.org/doc/Documentation/memory-barriers.txt — example with X,Y initially zero: 'CPU 1: X = 1; <smp_mb> LOAD Y' vs 'CPU 2: Y = 1; wake_up(); LOAD X' with the guarantee 'If a wakeup does occur, one (at least) of the two loads must see 1' — and the requirement that sleep/wake functions imply full memory barriers to uphold it"
+          {
+            "url": "https://www.kernel.org/doc/Documentation/memory-barriers.txt",
+            "role": "official_contract",
+            "authority": "upstream-primary",
+            "note": "SLEEP AND WAKE-UP FUNCTIONS section: CPU 1 'X = 1; <smp_mb> LOAD Y' vs CPU 2 'Y = 1; wake_up(); LOAD X' with the guarantee 'If a wakeup does occur, one (at least) of the two loads must see 1' — sleep/wake functions must imply full memory barriers to uphold it"
+          }
         ],
         "date": "accessed 2026-08-30"
       },
@@ -604,9 +937,18 @@
         "published state is read before the data it announces is visible",
         "consumer acts on unpublished or partially published state"
       ],
-      "actors": ["publisher CPU", "observer CPU"],
-      "relevant_state": ["payload writes", "readiness flag", "acquire/release ordering"],
-      "preconditions": ["multi-core visibility without release/acquire (or stronger) ordering on the publication edge"],
+      "actors": [
+        "publisher CPU",
+        "observer CPU"
+      ],
+      "relevant_state": [
+        "payload writes",
+        "readiness flag",
+        "acquire/release ordering"
+      ],
+      "preconditions": [
+        "multi-core visibility without release/acquire (or stronger) ordering on the publication edge"
+      ],
       "race_or_failure_window": "publication store → remote observation",
       "bad_outcome": "stale/missing data observed after 'successful' publication; lost wake as a special case",
       "externally_observable_effect": "intermittent wrong data, missed wakeups; typically invisible on x86-only testing of simple cases, visible on weakly-ordered cores",
@@ -619,9 +961,15 @@
       "pairing": "PAIR-D",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Bounded kernels are bounded: GenMC coverage is per-protocol, not whole-program (AGENTS §17); the conventional hazard class is only converted where a kernel models the edge. The Sluice-induced analog SE1-SB-07 shows implementation-level ordering gaps still had to be caught by TSan+review.",
-      "se2_probe_candidates": ["extend bounded kernels to any new publication edge (existing GenMC workflow)", "TSan/litmus probe for new arm/publish sites"],
-      "aliases": ["SE1-SB-07"],
-      "notes": "Rejected candidate: memory-barriers.txt contains no verbatim two-store/two-load 'SB' litmus; the SLEEP AND WAKE-UP section is the documented instance and is quoted with its exact framing (wakeup-conditioned)."
+      "se2_probe_candidates": [
+        "extend bounded kernels to any new publication edge (existing GenMC workflow)",
+        "TSan/litmus probe for new arm/publish sites"
+      ],
+      "notes": "Rejected candidate: memory-barriers.txt contains no verbatim two-store/two-load 'SB' litmus; the SLEEP AND WAKE-UP section is the documented instance and is quoted with its exact framing (wakeup-conditioned).",
+      "related_entries": [
+        "SE1-SB-07"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-SB-01",
@@ -634,9 +982,24 @@
       "provenance": {
         "publication": "Sluice repository: discovered by DST deterministic replay (PR #241 witness dst_t5_v1); fixed and pinned in PR #242 (merge 5706a6d)",
         "sources": [
-          "PR #241 (DST-PV-1) — deterministic replay of the stranded-waiter execution",
-          "PR #242 — repair (opposite-role reconciler, grant_from_head_locked) + 4 regression witnesses",
-          "src/async scheduler queue reconciler region (include/sluice/async/scheduler.hpp:934-1152)"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/241",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "DST-PV-1: deterministic replay of the stranded-waiter execution (witness dst_t5_v1)"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/242",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "repair (opposite-role reconciler, grant_from_head_locked) + 4 regression witnesses (merge 5706a6d)"
+          },
+          {
+            "url": "include/sluice/async/scheduler.hpp:934-1152",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "scheduler queue reconciler region"
+          }
         ],
         "date": "2026-08-28"
       },
@@ -648,9 +1011,19 @@
         "no future event is guaranteed to revisit it",
         "waiter stranded: deterministic hang under a specific interleaving"
       ],
-      "actors": ["Queue producer/consumer fibers", "Scheduler"],
-      "relevant_state": ["opposite-role FIFO heads", "waiter state Registered", "inline-success path"],
-      "preconditions": ["mixed-role queue contention", "inline (non-suspended) success path taken"],
+      "actors": [
+        "Queue producer/consumer fibers",
+        "Scheduler"
+      ],
+      "relevant_state": [
+        "opposite-role FIFO heads",
+        "waiter state Registered",
+        "inline-success path"
+      ],
+      "preconditions": [
+        "mixed-role queue contention",
+        "inline (non-suspended) success path taken"
+      ],
       "race_or_failure_window": "deterministic interleaving (not a data race; G+S fully serialized)",
       "bad_outcome": "permanent waiter stranding (liveness)",
       "externally_observable_effect": "hang of a fiber waiting on a Queue that 'should' make progress; test/workload stall",
@@ -663,9 +1036,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "FAIR",
       "comparison_notes": "This is the corpus's flagship PAIR-F instance: Sluice's own queue semantic machinery created a lost-wake/liveness class bug (caught by Sluice's own DST layer — both halves of that sentence are kept).",
-      "se2_probe_candidates": ["DST replay already exists (dst_t5_v1); SE-2 can measure which other layers kill the same mutant"],
-      "aliases": [],
-      "notes": "Also demonstrates DST value in one bug-discovery case (T-D1), consistent with #227 wording."
+      "se2_probe_candidates": [
+        "DST replay already exists (dst_t5_v1); SE-2 can measure which other layers kill the same mutant"
+      ],
+      "notes": "Also demonstrates DST value in one bug-discovery case (T-D1), consistent with #227 wording.",
+      "related_entries": [],
+      "entry_role": "population-case",
+      "root_cause_key": "scheduler-queue-inline-success-skips-opposite-role-reconcile",
+      "root_cause_class": "liveness-reconciliation"
     },
     {
       "id": "SE1-SB-02",
@@ -678,8 +1056,18 @@
       "provenance": {
         "publication": "Sluice repository: R2 wait-lifecycle closeout adversarial review round 2 (PR #242 body, P1 corrective)",
         "sources": [
-          "PR #242 — 'every ordinary timed admission registered its WaitNode and bumped wait accounting BEFORE the timer-arming allocations... a bad_alloc escaping the arming therefore left a Registered+linked node with live accounting behind an unwinding caller'",
-          "repair: prepare-before-register (select.cpp step-(5) reserve pattern); 4 regression witnesses"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/242",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "adversarial review round 2 (P1 corrective): 'every ordinary timed admission registered its WaitNode and bumped wait accounting BEFORE the timer-arming allocations... a bad_alloc escaping the arming therefore left a Registered+linked node with live accounting behind an unwinding caller'"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/242",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "repair: prepare-before-register (select.cpp step-(5) reserve pattern); 4 regression witnesses"
+          }
         ],
         "date": "2026-08-28"
       },
@@ -691,9 +1079,18 @@
         "Registered node stays linked with live accounting and no armed deadline",
         "resource/accounting residue: wait accounting permanently inflated; waiter state inconsistent"
       ],
-      "actors": ["admitting thread", "allocator"],
-      "relevant_state": ["WaitNode state", "waiting_waitq_count_ accounting", "timer_pool_/deadline_heap_ allocations"],
-      "preconditions": ["allocation failure between register and arm"],
+      "actors": [
+        "admitting thread",
+        "allocator"
+      ],
+      "relevant_state": [
+        "WaitNode state",
+        "waiting_waitq_count_ accounting",
+        "timer_pool_/deadline_heap_ allocations"
+      ],
+      "preconditions": [
+        "allocation failure between register and arm"
+      ],
       "race_or_failure_window": "not a race — failure-atomicity window (register→arm→retire sequence)",
       "bad_outcome": "live accounting + linked node with no terminal path for the deadline dimension",
       "externally_observable_effect": "accounting drift; potential admission-policy corruption under OOM; hidden stuck state",
@@ -706,9 +1103,17 @@
       "pairing": "PAIR-F",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Conventional analog (OOM during admission) is under-represented in conventional corpora; comparison anchored to the H06 family rather than a specific conventional incident.",
-      "se2_probe_candidates": ["allocation-failure injection at every arming stage (existing witness class)", "extend injection to all admission ladders as SE-2 probe"],
-      "aliases": ["SE1-CA-H11-1"],
-      "notes": "Root cause classified as temporal ordering (register before arm) manifesting as failure-atomicity gap."
+      "se2_probe_candidates": [
+        "allocation-failure injection at every arming stage (existing witness class)",
+        "extend injection to all admission ladders as SE-2 probe"
+      ],
+      "notes": "Root cause classified as temporal ordering (register before arm) manifesting as failure-atomicity gap.",
+      "related_entries": [
+        "SE1-CA-H11-1"
+      ],
+      "entry_role": "population-case",
+      "root_cause_key": "timed-admission-register-before-timer-arming-alloc",
+      "root_cause_class": "failure-atomicity"
     },
     {
       "id": "SE1-SB-03",
@@ -723,7 +1128,12 @@
       "provenance": {
         "publication": "Sluice repository: PR #242 adversarial review round 3 (capacity witness RED on round-2 code)",
         "sources": [
-          "PR #242 — round-2 fix introduced reserve(size + 1); round-3 capacity witness caught O(N²) growth; repair: growth-correct reserve + witness od_alloc_a3"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/242",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "round-2 fix introduced reserve(size + 1); round-3 capacity witness caught O(N^2) growth; repair: growth-correct reserve + witness od_alloc_a3"
+          }
         ],
         "date": "2026-08-28"
       },
@@ -734,9 +1144,17 @@
         "every admission reallocates and copies the whole heap",
         "cumulative O(N²) copying; allocator churn under deadline-heavy load"
       ],
-      "actors": ["admission path", "allocator"],
-      "relevant_state": ["deadline_heap_ capacity", "admission count"],
-      "preconditions": ["deadline-heavy workload"],
+      "actors": [
+        "admission path",
+        "allocator"
+      ],
+      "relevant_state": [
+        "deadline_heap_ capacity",
+        "admission count"
+      ],
+      "preconditions": [
+        "deadline-heavy workload"
+      ],
       "race_or_failure_window": "none (deterministic performance defect)",
       "bad_outcome": "quadratic reallocation cost",
       "externally_observable_effect": "latency degradation; allocator pressure",
@@ -749,9 +1167,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "COMPARABILITY_BLOCKED",
       "comparison_notes": "No lifecycle-safety comparison is meaningful; preserved as rejected-seed evidence (also an instance of 'repair introduces next hazard' — kept because it is thesis-relevant context, not corpus-counted).",
-      "se2_probe_candidates": ["capacity/allocation-count witness (already exists: od_alloc_a3)"],
-      "aliases": ["SE1-SB-04"],
-      "notes": "Same root-cause class as SE1-SB-04; one class, two sites, both listed for visibility, counted once in root-cause map."
+      "se2_probe_candidates": [
+        "capacity/allocation-count witness (already exists: od_alloc_a3)"
+      ],
+      "notes": "Same root-cause class as SE1-SB-04; one class, two sites, both listed for visibility, counted once in root-cause map.",
+      "related_entries": [
+        "SE1-SB-04"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-SB-04",
@@ -765,8 +1188,18 @@
       "provenance": {
         "publication": "Sluice repository: include/sluice/async/group.hpp:202-203 (verified at base SHA); discovered during PR #242 round 3",
         "sources": [
-          "include/sluice/async/group.hpp:202-203 — tasks_.reserve(tasks_.size() + 1); futures_.reserve(futures_.size() + 1);",
-          "PR #242 review round 3 — flagged as sibling of the deadline-heap defect"
+          {
+            "url": "include/sluice/async/group.hpp:202-203",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "tasks_.reserve(tasks_.size() + 1); futures_.reserve(futures_.size() + 1); (verified at base SHA)"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/242",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "review round 3: flagged as sibling of the deadline-heap defect"
+          }
         ],
         "date": "2026-08-30 (site re-verified at base)"
       },
@@ -777,9 +1210,16 @@
         "cumulative O(N²) copying for long-lived groups",
         "bounded-memory property degrades with task count, not configuration"
       ],
-      "actors": ["group admission path", "allocator"],
-      "relevant_state": ["tasks_/futures_ capacity"],
-      "preconditions": ["long-lived group with many admissions"],
+      "actors": [
+        "group admission path",
+        "allocator"
+      ],
+      "relevant_state": [
+        "tasks_/futures_ capacity"
+      ],
+      "preconditions": [
+        "long-lived group with many admissions"
+      ],
       "race_or_failure_window": "none",
       "bad_outcome": "quadratic reallocation; transient 2× memory during growth",
       "externally_observable_effect": "latency/memory degradation at scale",
@@ -792,9 +1232,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "COMPARABILITY_BLOCKED",
       "comparison_notes": "Retained as the corpus's one known OPEN production-side defect outside SE-1 scope; feeding it into the safety corpus would inflate counts (task §17 prohibition).",
-      "se2_probe_candidates": ["none for SE-2 safety probes; repair belongs to a future resource-boundedness slice (E3-adjacent)"],
-      "aliases": ["SE1-SB-03"],
-      "notes": "Do not count toward net-safety corpus size merely because it is a bug (task §17)."
+      "se2_probe_candidates": [
+        "none for SE-2 safety probes; repair belongs to a future resource-boundedness slice (E3-adjacent)"
+      ],
+      "notes": "Do not count toward net-safety corpus size merely because it is a bug (task §17).",
+      "related_entries": [
+        "SE1-SB-03"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-SB-05",
@@ -807,8 +1252,18 @@
       "provenance": {
         "publication": "Sluice repository: FE campaign corrective round (PR #243, fix commit e57c16e 'fix(async): make deferred publication failure terminal-safe')",
         "sources": [
-          "PR #243 — defer_publication_locked was MAY-THROW: the deferred_publications_ transit insert allocated after the terminal winner was resolved",
-          "repair: noexcept publication tail + named fail-fast exit 86 on stranded transit (Debug+Release); PUB1/PUBCTL death tests"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "fix commit e57c16e 'fix(async): make deferred publication failure terminal-safe': defer_publication_locked was MAY-THROW — the deferred_publications_ transit insert allocated after the terminal winner was resolved"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "repair: noexcept publication tail + named fail-fast exit 86 on stranded transit (Debug+Release); PUB1/PUBCTL death tests"
+          }
         ],
         "date": "2026-08-29"
       },
@@ -819,9 +1274,18 @@
         "winner exists but delivery is stranded (or retry could double-publish)",
         "result lost until teardown notices stranded transit"
       ],
-      "actors": ["publication path", "allocator", "teardown"],
-      "relevant_state": ["resolve_ outcome", "deferred_publications_ transit"],
-      "preconditions": ["allocation failure in the post-terminal publication step"],
+      "actors": [
+        "publication path",
+        "allocator",
+        "teardown"
+      ],
+      "relevant_state": [
+        "resolve_ outcome",
+        "deferred_publications_ transit"
+      ],
+      "preconditions": [
+        "allocation failure in the post-terminal publication step"
+      ],
       "race_or_failure_window": "terminal commit → publication (failure-atomicity window, not a data race)",
       "bad_outcome": "resolved-but-undelivered result; risk of second publication on retry",
       "externally_observable_effect": "lost wake/delivery under OOM; fail-fast at teardown if stranded",
@@ -834,9 +1298,16 @@
       "pairing": "PAIR-F",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "The deferred-publication transit itself is a Sluice-specific mechanism (no exact conventional twin); family-anchored comparison only.",
-      "se2_probe_candidates": ["PUB1/PUBCTL death tests as existing witnesses; allocation-failure matrix across publication sites for SE-2"],
-      "aliases": ["SE1-SB-02"],
-      "notes": "Same failure-atomicity root-cause class as SE1-SB-02; distinct site and mechanism, counted separately in buckets, unified in root-cause map."
+      "se2_probe_candidates": [
+        "PUB1/PUBCTL death tests as existing witnesses; allocation-failure matrix across publication sites for SE-2"
+      ],
+      "notes": "Same failure-atomicity root-cause class as SE1-SB-02; distinct site and mechanism, counted separately in buckets, unified in root-cause map.",
+      "related_entries": [
+        "SE1-SB-02"
+      ],
+      "entry_role": "population-case",
+      "root_cause_key": "deferred-publication-transit-insert-may-throw-after-terminal-commit",
+      "root_cause_class": "failure-atomicity"
     },
     {
       "id": "SE1-SB-06",
@@ -849,8 +1320,18 @@
       "provenance": {
         "publication": "Sluice repository: FE campaign corrective round (PR #243, fix commit f53d7ac 'fix(async): pin deferred queue operations through result consumption')",
         "sources": [
-          "PR #243 — deferred Queue ops did not hold a pin; begin_teardown could pass through the in-flight window before result consumption",
-          "repair: pin transfer to the awaiting frame; QPIN-1/QPIN-2 witnesses + QD1 death test"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "fix commit f53d7ac 'fix(async): pin deferred queue operations through result consumption': deferred Queue ops did not hold a pin; begin_teardown could pass through the in-flight window before result consumption"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "repair: pin transfer to the awaiting frame; QPIN-1/QPIN-2 witnesses + QD1 death test"
+          }
         ],
         "date": "2026-08-29"
       },
@@ -861,9 +1342,18 @@
         "port/queue state is torn down while the operation still needs it",
         "operation resumes into destroyed state or silently loses its result"
       ],
-      "actors": ["deferred operation frame", "teardown path"],
-      "relevant_state": ["QueuePort pin", "begin_teardown gate", "in-flight deferred op"],
-      "preconditions": ["teardown initiated while a deferred queue op is unresolved"],
+      "actors": [
+        "deferred operation frame",
+        "teardown path"
+      ],
+      "relevant_state": [
+        "QueuePort pin",
+        "begin_teardown gate",
+        "in-flight deferred op"
+      ],
+      "preconditions": [
+        "teardown initiated while a deferred queue op is unresolved"
+      ],
       "race_or_failure_window": "operation resolution ↔ teardown progression (deterministic window)",
       "bad_outcome": "use-after-teardown / lost result",
       "externally_observable_effect": "crash or silent result loss during shutdown",
@@ -876,9 +1366,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "FAIR",
       "comparison_notes": "Direct Sluice-native instance of the H10 shutdown/in-flight family (teardown through an in-flight window introduced by Sluice's own deferred mechanism).",
-      "se2_probe_candidates": ["QPIN/QD1 death tests; teardown-during-in-flight matrix across primitives for SE-2"],
-      "aliases": [],
-      "notes": ""
+      "se2_probe_candidates": [
+        "QPIN/QD1 death tests; teardown-during-in-flight matrix across primitives for SE-2"
+      ],
+      "notes": "",
+      "related_entries": [],
+      "entry_role": "population-case",
+      "root_cause_key": "deferred-queue-op-teardown-window-unpinned",
+      "root_cause_class": "lifetime"
     },
     {
       "id": "SE1-SB-07",
@@ -891,8 +1386,18 @@
       "provenance": {
         "publication": "Sluice repository: FE campaign corrective round (PR #243, fixes c5cb90d 'serialize rwlock actor ownership checks' + 77bd66b awaiter symmetry test)",
         "sources": [
-          "PR #243 — the recursive-owner check read actor ownership state outside the admission ladder's critical section (G), creating a data race window",
-          "witnesses: TSan race witness + M3 mutation + RW death child + turnover stress"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "fixes c5cb90d 'serialize rwlock actor ownership checks' + 77bd66b awaiter symmetry test: the recursive-owner check read actor ownership state outside the admission ladder's critical section (G)"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "witnesses: TSan race witness + M3 mutation + RW death child + turnover stress"
+          }
         ],
         "date": "2026-08-29"
       },
@@ -903,9 +1408,18 @@
         "check observes a torn/stale owner identity",
         "wrong admission decision: recursive reentry granted/denied incorrectly, or state corrupted"
       ],
-      "actors": ["locking thread", "unlocking thread", "owner-state transitions"],
-      "relevant_state": ["ActorId owner field", "admission ladder critical section"],
-      "preconditions": ["owner check hoisted out of the serializing section"],
+      "actors": [
+        "locking thread",
+        "unlocking thread",
+        "owner-state transitions"
+      ],
+      "relevant_state": [
+        "ActorId owner field",
+        "admission ladder critical section"
+      ],
+      "preconditions": [
+        "owner check hoisted out of the serializing section"
+      ],
       "race_or_failure_window": "owner read ↔ concurrent owner write (classic data race window)",
       "bad_outcome": "wrong admission decision; torn owner state; possible double ownership",
       "externally_observable_effect": "TSan report; corrupt lock semantics under turnover",
@@ -918,9 +1432,16 @@
       "pairing": "PAIR-F",
       "comparison_validity": "FAIR",
       "comparison_notes": "An implementation-level synchronization gap of exactly the class the H13 family covers; introduced by the FE refactor itself and caught by Sluice's own TSan gate.",
-      "se2_probe_candidates": ["M3 mutation + turnover stress as existing witnesses; TSan gate covers the class on touched code"],
-      "aliases": ["SE1-CA-H13-1"],
-      "notes": ""
+      "se2_probe_candidates": [
+        "M3 mutation + turnover stress as existing witnesses; TSan gate covers the class on touched code"
+      ],
+      "notes": "",
+      "related_entries": [
+        "SE1-CA-H13-1"
+      ],
+      "entry_role": "population-case",
+      "root_cause_key": "rwlock-owner-check-outside-serialized-ladder-section",
+      "root_cause_class": "synchronization"
     },
     {
       "id": "SE1-SB-08",
@@ -933,8 +1454,12 @@
       "provenance": {
         "publication": "Sluice repository: FE campaign corrective round (PR #243, fix commit 0cc738b 'fix(async): normalize null resume targets')",
         "sources": [
-          "PR #243 — FE-2 resume-target token widening (DIV-15) made WaitResume::fiber(nullptr) representable with a valid Fiber kind",
-          "repair: Kind::none normalization + static_assert; M4 mutation compile-rejected"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/243",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "fix commit 0cc738b 'fix(async): normalize null resume targets': FE-2 resume-target token widening (DIV-15) made WaitResume::fiber(nullptr) representable with a valid Fiber kind; repair: Kind::none normalization + static_assert; M4 mutation compile-rejected"
+          }
         ],
         "date": "2026-08-29"
       },
@@ -945,9 +1470,17 @@
         "wake obligation consumed but no fiber resumes",
         "lost wake in representation form (or crash on dereference)"
       ],
-      "actors": ["resolver", "resume dispatch"],
-      "relevant_state": ["WaitResume kind tag", "target pointer"],
-      "preconditions": ["token type admits null target with valid kind"],
+      "actors": [
+        "resolver",
+        "resume dispatch"
+      ],
+      "relevant_state": [
+        "WaitResume kind tag",
+        "target pointer"
+      ],
+      "preconditions": [
+        "token type admits null target with valid kind"
+      ],
       "race_or_failure_window": "none — invalid state reachable without concurrency",
       "bad_outcome": "lost wake (resume consumed for nobody) or crash",
       "externally_observable_effect": "hang or crash on resume path",
@@ -960,9 +1493,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Representation-invalid-state flavor of the H09 family; no conventional incident twin claimed.",
-      "se2_probe_candidates": ["M4 compile-rejection as existing witness; negative-compile extension for other identity tokens"],
-      "aliases": [],
-      "notes": "Bucket production-runtime (token type lives in production scheduler surface) though discovered via the internal-testing frontend."
+      "se2_probe_candidates": [
+        "M4 compile-rejection as existing witness; negative-compile extension for other identity tokens"
+      ],
+      "notes": "Bucket production-runtime (token type lives in production scheduler surface) though discovered via the internal-testing frontend.",
+      "related_entries": [],
+      "entry_role": "population-case",
+      "root_cause_key": "wait-resume-valid-kind-null-target",
+      "root_cause_class": "identity-representation"
     },
     {
       "id": "SE1-SB-09",
@@ -975,7 +1513,12 @@
       "provenance": {
         "publication": "Sluice repository: issue #229 (TSan-detected race in test seam), fixed during the #227 phase-1 campaign",
         "sources": [
-          "issue #229 — seam race found by TSan; repaired; recorded in THESIS-LEDGER-1 row 9 as test-only induced hazard"
+          {
+            "url": "https://github.com/jnhu76/Sluice/issues/229",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "TSan-detected race in test seam; repaired; recorded in THESIS-LEDGER-1 row 9 as test-only induced hazard"
+          }
         ],
         "date": "2026-08"
       },
@@ -985,9 +1528,16 @@
         "test harness itself races while trying to make production races deterministic",
         "flaky/false test outcomes; harness UAF potential"
       ],
-      "actors": ["test threads", "seam control object"],
-      "relevant_state": ["seam coordination state"],
-      "preconditions": ["multi-threaded causal test using the seam"],
+      "actors": [
+        "test threads",
+        "seam control object"
+      ],
+      "relevant_state": [
+        "seam coordination state"
+      ],
+      "preconditions": [
+        "multi-threaded causal test using the seam"
+      ],
       "race_or_failure_window": "seam install/use window",
       "bad_outcome": "flaky verification; potential harness-level memory error",
       "externally_observable_effect": "TSan report; test flake",
@@ -1000,9 +1550,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "FAIR",
       "comparison_notes": "Sluice-induced test-layer hazard kept in corpus per bucket taxonomy (test-only bucket exists precisely so this is not conflated with production-runtime hazards).",
-      "se2_probe_candidates": ["TSan gate as the detection layer for this bucket"],
-      "aliases": [],
-      "notes": "Counted in test-only bucket; excluded from any production-runtime hazard counts."
+      "se2_probe_candidates": [
+        "TSan gate as the detection layer for this bucket"
+      ],
+      "notes": "Counted in test-only bucket; excluded from any production-runtime hazard counts.",
+      "related_entries": [],
+      "entry_role": "population-case",
+      "root_cause_key": "internal-test-seam-coordination-unsynchronized",
+      "root_cause_class": "test-seam-synchronization"
     },
     {
       "id": "SE1-SB-10",
@@ -1015,8 +1570,12 @@
       "provenance": {
         "publication": "Sluice repository: recorded in untracked human review artifacts (THESIS-LEDGER-1 row 10; R2 closeout record). NOT currently documented in tracked docs — flagged as E4-only evidence.",
         "sources": [
-          "docs/history/reviews/THESIS-LEDGER-1-CURRENT-EVIDENCE-AUDIT.md (untracked, E4) — one-time TSan hang observation; 20/20 clean reruns; '记录于 gate 文档，待修' characterization",
-          "tracked corroboration: none found in docs/verification/*.md at base SHA (checked 2026-08-30)"
+          {
+            "url": "docs/history/reviews/THESIS-LEDGER-1-CURRENT-EVIDENCE-AUDIT.md",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "UNTRACKED human artifact (E4) — one-time TSan hang observation; 20/20 clean reruns; '记录于 gate 文档，待修' characterization. Tracked corroboration: none found in docs/verification/*.md at base SHA (checked 2026-08-30)."
+          }
         ],
         "date": "2026-08"
       },
@@ -1027,9 +1586,17 @@
         "hypothesis never reproduced (20/20 clean reruns)",
         "existence and mechanism of a real defect remain UNKNOWN"
       ],
-      "actors": ["test worker threads", "termination logic"],
-      "relevant_state": ["no-progress predicate", "plain-wait residency"],
-      "preconditions": ["specific interleaving observed once under TSan"],
+      "actors": [
+        "test worker threads",
+        "termination logic"
+      ],
+      "relevant_state": [
+        "no-progress predicate",
+        "plain-wait residency"
+      ],
+      "preconditions": [
+        "specific interleaving observed once under TSan"
+      ],
       "race_or_failure_window": "termination check ↔ plain-wait residency",
       "bad_outcome": "hypothesized hang (unconfirmed)",
       "externally_observable_effect": "one observed hang; none reproducible",
@@ -1042,9 +1609,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "PARTIAL",
       "comparison_notes": "Priority SE-2 probe. Also a documentation gap: an E4-only hazard record should be promoted to tracked evidence or explicitly dismissed.",
-      "se2_probe_candidates": ["stress + TSan targeted rerun with residency instrumentation; #239-matrix scheduler-choice exploration of the termination path"],
-      "aliases": [],
-      "notes": "If human review confirms a real defect, it graduates to its own production/test entry with root-cause classification; until then it stays UNKNOWN."
+      "se2_probe_candidates": [
+        "stress + TSan targeted rerun with residency instrumentation; #239-matrix scheduler-choice exploration of the termination path"
+      ],
+      "notes": "If human review confirms a real defect, it graduates to its own production/test entry with root-cause classification; until then it stays UNKNOWN.",
+      "related_entries": [],
+      "entry_role": "population-case",
+      "root_cause_key": "select-event-registry-termination-vs-plain-wait-residency-unconfirmed",
+      "root_cause_class": "liveness-reconciliation"
     },
     {
       "id": "SE1-SB-11",
@@ -1058,8 +1630,18 @@
       "provenance": {
         "publication": "Sluice repository: AC-2b (PR #238, merged) centralizing ordinary deadline registration lifecycle",
         "sources": [
-          "PR #238 — ~30 inline sites → arm/consume/retire_ordinary_deadline_locked (scheduler.hpp:2294/2305/2314); 8/10 arming census; 192 mutation gates",
-          "THESIS-LEDGER-1 row 11 (E4, cross-checked against PR #238)"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/238",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "~30 inline sites -> arm/consume/retire_ordinary_deadline_locked (scheduler.hpp:2294/2305/2314); 8/10 arming census; 192 mutation gates"
+          },
+          {
+            "url": "docs/history/reviews/THESIS-LEDGER-1-CURRENT-EVIDENCE-AUDIT.md",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "row 11 (E4, cross-checked against PR #238)"
+          }
         ],
         "date": "2026-08-27"
       },
@@ -1069,9 +1651,16 @@
         "no single authority defines the correct lifecycle",
         "over time, edits at one site silently diverge from the others"
       ],
-      "actors": ["all admission/retire paths"],
-      "relevant_state": ["active_deadline_count_", "arming/retirement sites"],
-      "preconditions": ["authority duplication"],
+      "actors": [
+        "all admission/retire paths"
+      ],
+      "relevant_state": [
+        "active_deadline_count_",
+        "arming/retirement sites"
+      ],
+      "preconditions": [
+        "authority duplication"
+      ],
       "race_or_failure_window": "none per se — maintenance-time hazard",
       "bad_outcome": "deadline accounting/lifecycle drift (potential future runtime bugs)",
       "externally_observable_effect": "none until drift produces a concrete bug",
@@ -1084,9 +1673,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "COMPARABILITY_BLOCKED",
       "comparison_notes": "Not an executable hazard; no probe can 'kill' it directly — SE-2 consumption is audit-level only.",
-      "se2_probe_candidates": ["none executable; AC-2b mutation census is the standing sensitivity witness"],
-      "aliases": ["SE1-SB-12"],
-      "notes": "Root cause: authority duplication (shared with SE1-SB-12)."
+      "se2_probe_candidates": [
+        "none executable; AC-2b mutation census is the standing sensitivity witness"
+      ],
+      "notes": "Root cause: authority duplication (shared with SE1-SB-12).",
+      "related_entries": [
+        "SE1-SB-12"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-SB-12",
@@ -1100,8 +1694,18 @@
       "provenance": {
         "publication": "Sluice repository: #234 six-domain audit → AC-2 family (PRs #238/#240/#242)",
         "sources": [
-          "PR #240 Stage-A evidence — 13 cancellation paths inventoried; 6 primitive paths shared one S3 semantic closure; cancel_primitive_wait_locked centralization",
-          "PR #242 — R2 COMPLETE verdict; AsyncQueue drift resolved via Q-LIV-1 reconcile"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/240",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "Stage-A evidence: 13 cancellation paths inventoried; 6 primitive paths shared one S3 semantic closure; cancel_primitive_wait_locked centralization"
+          },
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/242",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "R2 COMPLETE verdict; AsyncQueue drift resolved via Q-LIV-1 reconcile"
+          }
         ],
         "date": "2026-08-27/28"
       },
@@ -1111,9 +1715,15 @@
         "AsyncQueue in fact drifted (Q-LIV-1)",
         "concrete drift bug counted separately; structure itself is maintenance-time risk"
       ],
-      "actors": ["Scheduler primitive cancel/wait paths"],
-      "relevant_state": ["duplicated closures across 6+ paths"],
-      "preconditions": ["authority duplication"],
+      "actors": [
+        "Scheduler primitive cancel/wait paths"
+      ],
+      "relevant_state": [
+        "duplicated closures across 6+ paths"
+      ],
+      "preconditions": [
+        "authority duplication"
+      ],
       "race_or_failure_window": "maintenance-time",
       "bad_outcome": "semantic drift (realized once: SE1-SB-01)",
       "externally_observable_effect": "none directly",
@@ -1126,9 +1736,14 @@
       "pairing": "PAIR-F",
       "comparison_validity": "COMPARABILITY_BLOCKED",
       "comparison_notes": "Audit-level only for SE-2.",
-      "se2_probe_candidates": ["none executable; AC-2c six-path census is the standing witness"],
-      "aliases": ["SE1-SB-11"],
-      "notes": "One root-cause class with SE1-SB-11 (authority duplication)."
+      "se2_probe_candidates": [
+        "none executable; AC-2c six-path census is the standing witness"
+      ],
+      "notes": "One root-cause class with SE1-SB-11 (authority duplication).",
+      "related_entries": [
+        "SE1-SB-11"
+      ],
+      "entry_role": "population-case"
     },
     {
       "id": "SE1-SB-13",
@@ -1142,7 +1757,12 @@
       "provenance": {
         "publication": "Sluice repository: RX-1 falsification campaign (PR #236, merged e10e181)",
         "sources": [
-          "PR #236 — 18 CONTROL runs failed the pre-registered physical-validity gate (workers saturated); honestly excluded; H_RX1 verdict NOT SUPPORTED independent of these runs"
+          {
+            "url": "https://github.com/jnhu76/Sluice/pull/236",
+            "role": "repo_evidence",
+            "authority": "repo-primary",
+            "note": "RX-1: 18 CONTROL runs failed the pre-registered physical-validity gate (workers saturated); honestly excluded; H_RX1 verdict NOT SUPPORTED independent of these runs"
+          }
         ],
         "date": "2026-08-27"
       },
@@ -1152,9 +1772,17 @@
         "pre-registered validity gate detected the invalidity",
         "runs excluded before analysis; no contaminated sample entered the verdict"
       ],
-      "actors": ["experiment harness", "validity gate"],
-      "relevant_state": ["worker saturation", "preregistered validity criteria"],
-      "preconditions": ["load-dependent measurement validity"],
+      "actors": [
+        "experiment harness",
+        "validity gate"
+      ],
+      "relevant_state": [
+        "worker saturation",
+        "preregistered validity criteria"
+      ],
+      "preconditions": [
+        "load-dependent measurement validity"
+      ],
       "race_or_failure_window": "measurement window",
       "bad_outcome": "would-be false evidence (prevented)",
       "externally_observable_effect": "none (never published as evidence)",
@@ -1167,20 +1795,23 @@
       "pairing": "PAIR-F",
       "comparison_validity": "COMPARABILITY_BLOCKED",
       "comparison_notes": "Included in the JSON for inventory completeness and dedup honesty; excluded from the hazard population.",
-      "se2_probe_candidates": ["none"],
-      "aliases": [],
-      "notes": "Family 'none' is legal only for bucket experiment-process (validator-enforced)."
+      "se2_probe_candidates": [
+        "none"
+      ],
+      "notes": "Family 'none' is legal only for bucket experiment-process (validator-enforced).",
+      "related_entries": [],
+      "entry_role": "population-case"
     }
   ],
   "coverage_gate": {
-    "H01": "DOCUMENTED CONTRACT HAZARD FOUND (+ CONVENTIONAL-MINIMAL companion SE1-CA-H01-2)",
+    "H01": "DOCUMENTED CONTRACT HAZARD FOUND (+ probe companion SE1-CA-H01-2)",
     "H02": "DOCUMENTED CONTRACT HAZARD FOUND",
     "H03": "REAL SOURCE FOUND",
     "H04": "DOCUMENTED CONTRACT HAZARD FOUND",
     "H05": "REAL SOURCE FOUND",
     "H06": "DOCUMENTED CONTRACT HAZARD FOUND",
     "H07": "DOCUMENTED CONTRACT HAZARD FOUND",
-    "H08": "DOCUMENTED CONTRACT HAZARD FOUND",
+    "H08": "REAL SOURCE FOUND",
     "H09": "REAL SOURCE FOUND",
     "H10": "DOCUMENTED CONTRACT HAZARD FOUND",
     "H11": "REAL SOURCE FOUND",
@@ -1191,28 +1822,79 @@
     {
       "candidate": "musl libc condition-variable rewrite as H09 conventional case",
       "reason": "Could not pin a single primary commit/thread this session; glibc BZ 25847 has a precise primary record (bugzilla + patch series).",
-      "sources_checked": ["git.musl-libc.org log/src/thread", "musl release notes"]
+      "sources_checked": [
+        "git.musl-libc.org log/src/thread",
+        "musl release notes"
+      ]
     },
     {
       "candidate": "memory-barriers.txt verbatim store-buffering (SB) litmus as H13 anchor",
       "reason": "The document contains no verbatim two-store/two-load SB litmus; the SLEEP AND WAKE-UP FUNCTIONS section is the documented instance and is used with its exact wakeup-conditioned framing instead. Honesty over convenience.",
-      "sources_checked": ["https://www.kernel.org/doc/Documentation/memory-barriers.txt"]
+      "sources_checked": [
+        "https://www.kernel.org/doc/Documentation/memory-barriers.txt"
+      ]
     },
     {
       "candidate": "Generic use-after-free bug reports for H01",
       "reason": "Task §13: a generic UAF is insufficient unless async/in-flight lifetime is causal; only documentation sources stating the in-flight lifetime duty were accepted.",
-      "sources_checked": ["web search results (generic UAF reports)"]
+      "sources_checked": [
+        "web search results (generic UAF reports)"
+      ]
     },
     {
       "candidate": "Go net.Dialer timeout semantics for H08",
       "reason": "Documentation does not state a persistent post-timeout grant hazard precisely enough; connect(2) EINPROGRESS protocol used instead.",
-      "sources_checked": ["search results"]
+      "sources_checked": [
+        "search results"
+      ]
     },
     {
       "candidate": "Star Labs io_put_kbuf exploit chain as H11 primary",
       "reason": "Exploit-focused secondary write-up; the named kernel leak-fix patch (Begunkov, lore, applied 5.18-rc) is the primary record.",
-      "sources_checked": ["https://starlabs.sg/blog/2022/06-io_uring-new-code-new-bugs-and-a-new-exploit-technique/", "https://chomp.ie/Blog+Posts/Put+an+io_uring+on+it+-+Exploiting+the+Linux+Kernel"]
+      "sources_checked": [
+        "https://starlabs.sg/blog/2022/06-io_uring-new-code-new-bugs-and-a-new-exploit-technique/",
+        "https://chomp.ie/Blog+Posts/Put+an+io_uring+on+it+-+Exploiting+the+Linux+Kernel"
+      ]
+    },
+    {
+      "candidate": "connect(2) EINPROGRESS writability/SO_ERROR protocol as H08 anchor (original SE-1 draft)",
+      "reason": "Documents the completion-check protocol (writability != success; SO_ERROR terminal interpretation) but NOT the timeout-vs-grant arbitration; the old trace's 'timeout raced a just-established connection' step was unsupported inference (SE-1-CORRECTIVE-1 B1). H08 re-anchored to the io_uring linked-timeout completion race (real bug + fix, mainline 447c19f).",
+      "sources_checked": [
+        "https://man7.org/linux/man-pages/man2/connect.2.html"
+      ]
     }
   ],
-  "new_findings_policy": "No new production bug was discovered during corpus construction. The one known OPEN production-side defect (group.hpp reserve idiom, SE1-SB-04) predates SE-1 and is already registered; per task §23 it is NOT repaired here."
+  "new_findings_policy": "No new production bug was discovered during corpus construction. The one known OPEN production-side defect (group.hpp reserve idiom, SE1-SB-04) predates SE-1 and is already registered; per task §23 it is NOT repaired here.",
+  "schema_note": "Schema v1 corrected in place while PR #245 was Draft (SE-1-CORRECTIVE-1, 2026-08-30): provenance.sources became structured {url, role, authority} records; entry_role / same_case_as / related_entries / root_cause_key were introduced; H08 was re-anchored to a verified upstream bug+fix. No schema v2 was created for a draft-only correction.",
+  "population_law": "POPULATION = corpus_eligibility == 'IN-SE1' AND entry_role == 'population-case'. Probe companions are artifacts, not denominator cases; OUT-OF-SE1 entries remain visible but are not denominator cases. This law drives the validator counts, the interpretation tables, and any future SE-2 matrix row population; SE-2 probes attached to companions attribute their result to the parent population case.",
+  "source_role_vocabulary": {
+    "entry_role": [
+      "population-case",
+      "probe-companion"
+    ],
+    "source_roles": [
+      "bug_record",
+      "upstream_fix",
+      "official_contract",
+      "official_bug_corpus",
+      "repo_evidence",
+      "supporting"
+    ],
+    "source_authorities": [
+      "upstream-primary",
+      "official-primary",
+      "repo-primary",
+      "supporting"
+    ]
+  },
+  "source_role_contract": {
+    "C0": ">= 1 source with role bug_record AND >= 1 source with role upstream_fix. The same artifact may carry both roles ONLY when it genuinely contains both the bug diagnosis and the accepted fix (encoded mechanically as the same URL listed under both roles; the dual-role claim itself is human-verified).",
+    "C1": ">= 1 source with role official_contract.",
+    "C2": ">= 1 source with role official_bug_corpus.",
+    "C3": "conventional-minimal by construction; no incident provenance required; sources must not claim bug_record/upstream_fix roles (no historical incident claim).",
+    "S0": ">= 1 source with role repo_evidence (authority repo-primary): Sluice repository-established evidence.",
+    "supporting": "supporting sources may annotate any entry but never satisfy the C0/C1/C2/S0 role requirements.",
+    "enforcement_boundary": "scripts/verify-se1-hazard-corpus.py enforces MECHANICAL PROVENANCE SHAPE only. Whether a URL's content truthfully matches its claimed role, and whether the semantic mapping is valid, remain HUMAN SEMANTIC PROVENANCE REVIEW."
+  },
+  "status_semantics": "sluice_current_status is the PRIMARY DESCRIPTIVE OUTCOME FOR CORPUS NORMALIZATION ONLY. It is NOT the full detection profile: real detection layers overlap (an outcome recorded FAIL_FAST, DETERMINISTICALLY_REPRODUCIBLE, or TSan-detectable can co-occur for the same hazard). SE-2 owns the full hazard x detection-layer matrix; nothing in this corpus may be read as per-layer detection coverage."
 }
