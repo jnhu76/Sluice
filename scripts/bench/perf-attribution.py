@@ -27,6 +27,11 @@ Commands:
             the request-size x depth x workers sweep, per-cell process
             isolation, repetitions, provenance, and derived tax metrics
             (docs/verification/explicit-io-abstraction-tax.md).
+  tax0      #250 TAX-0B/EXP-0 capacity-invariance matrix: fixed useful
+            workload, one variable — unused request capacity C. Blocked
+            randomized execution order from a predeclared seed, one bench
+            process per measured repetition under user-mode perf stat,
+            fail-closed same-work proof (research/tax0/).
   flame     Diagnostic CPU flame graph for one command: `perf record -g`
             -> `perf script` -> folded stacks -> self-contained SVG (no
             external FlameGraph checkout needed).
@@ -72,6 +77,7 @@ import io
 import json
 import os
 import platform
+import random
 import shutil
 import statistics
 import subprocess
@@ -85,6 +91,7 @@ REPO = Path(__file__).resolve().parents[2]
 BENCH_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "grep_attribution_bench"
 OVERLOAD_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "overload_backpressure_bench"
 E1_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "e1_abstraction_tax_bench"
+TAX0_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "tax0_capacity_bench"
 GEN_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "grep_workload_gen"
 GREP_APPS = {
     "sluice-grep": REPO / "build" / "linux" / "x86_64" / "release" / "sluice-grep",
@@ -1140,6 +1147,394 @@ def _perf_paranoid_or_none():
         return None
 
 
+# ---------------------------------------------------------------------------
+# tax0: #250 TAX-0B/EXP-0 capacity-invariance matrix (preregistered design
+# in research/tax0/TAX0-A-HOTPATH-TOPOLOGY-AUDIT.md §17). Fixed useful
+# workload (depth/op/bytes/workers/queue-depth), one variable: unused
+# request capacity C. Process-per-repetition: each measured row is one
+# fresh bench process under `perf stat` (user-mode events), so
+# instructions:u/cycles:u are whole-process aggregates that include
+# process startup + runtime build/teardown — identical fixed costs across
+# C cells (amortized over ops; recorded honestly, never subtracted).
+# Blocked randomized execution order is generated BEFORE measurement from
+# a predeclared seed; the runner never reorders on timing.
+# ---------------------------------------------------------------------------
+
+# Primary + secondary user-mode events. instructions/cycles are REQUIRED
+# (fail-closed); branches/branch-misses/cache-misses are optional
+# (experiment validity does not depend on them).
+TAX0_PERF_EVENTS = ["instructions:u", "cycles:u", "branches:u",
+                    "branch-misses:u", "cache-misses:u"]
+
+TAX0_DEFAULT_SEED = 0x54415830
+
+
+def tax0_execution_order(capacities: list[int], reps: int, seed: int) -> list:
+    """Blocked randomized order: `reps` rounds, each a fresh permutation.
+
+    Pure function of (capacities, reps, seed) — generated before any
+    measurement and stored verbatim in the artifact so the executed order
+    is auditable against the predeclared seed.
+    """
+    rng = random.Random(seed)
+    return [rng.sample(capacities, k=len(capacities)) for _ in range(reps)]
+
+
+def _mad(samples: list[float]) -> float | None:
+    """Median absolute deviation from the median."""
+    if not samples:
+        return None
+    m = median(samples)
+    return median([abs(x - m) for x in samples])
+
+
+def _ols_line(xs: list[float], ys: list[float]) -> dict | None:
+    """Least-squares fit y = a + b*x with R² (descriptive only — never an
+    asymptotic-complexity claim)."""
+    n = len(xs)
+    if n < 2:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    if sxx == 0:
+        return None
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    b = sxy / sxx
+    a = my - b * mx
+    ss_tot = sum((y - my) ** 2 for y in ys)
+    ss_res = sum((y - (a + b * x)) ** 2 for x, y in zip(xs, ys))
+    r2 = (1.0 - ss_res / ss_tot) if ss_tot > 0 else None
+    return {"a": a, "b": b, "r2": r2}
+
+
+def _tax0_environment_extra(taskset: str, data_file: str) -> dict:
+    """EXP-0 placement/provenance extras recorded next to the env
+    fingerprint: governor, SMT state, the exact taskset CPU set, the
+    lscpu extended topology snapshot, liburing provenance, and the data
+    file's real mount (findmnt). All probes are best-effort reads; a probe
+    that fails records None rather than aborting the session."""
+    def _read(p: str) -> str | None:
+        try:
+            return Path(p).read_text().strip() or None
+        except OSError:
+            return None
+
+    def _cap(cmd: list[str]) -> str | None:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=30)
+            return out.stdout.strip() if out.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+
+    block = {
+        "governor_cpu0": _read(
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"),
+        "smt_active": _read("/sys/devices/system/cpu/smt/active"),
+        "taskset_cpus": taskset or None,
+        "lscpu_extended": _cap(["lscpu", "-e=CPU,CORE,SOCKET,NODE"]),
+        "perf_event_paranoid": _perf_paranoid_or_none(),
+        "data_file_mount": _cap(["findmnt", "-n", "-T", data_file,
+                                 "-o", "FSTYPE,SOURCE,TARGET"]),
+    }
+    # liburing: the repo build pins xrepo liburing 2.14 (xmake/
+    # experimental.lua); record the system package as the coexistence
+    # witness, clearly labeled — the binary binds via binary_provenance.
+    block["liburing_repo_pin"] = "xrepo liburing 2.14 (xmake/experimental.lua)"
+    block["liburing_system_rpm"] = _cap(["rpm", "-q", "--qf",
+                                         "%{NAME}-%{VERSION}-%{RELEASE}",
+                                         "liburing"])
+    return block
+
+
+def _tax0_bench_argv(args, capacity: int) -> list[str]:
+    argv = [str(TAX0_BIN), "--backend", args.backend, "--op", args.op,
+            "--request-size", str(args.request_size),
+            "--total-bytes", str(args.total_bytes),
+            "--depth", str(args.depth),
+            "--request-capacity", str(capacity),
+            "--reps", "1", "--warmup", "0",
+            "--file", args.file]
+    if args.backend == "threadpool":
+        argv += ["--workers", str(args.workers)]
+    else:
+        argv += ["--uring-queue-depth", str(args.uring_queue_depth)]
+    return argv
+
+
+def _tax0_run(args, capacity: int, use_perf: bool, label: str) -> dict:
+    """One bench process (optionally under perf stat). Returns the parsed
+    bench JSON + counters. Fail-closed: any child failure, non-JSON
+    stdout, or accounting mismatch aborts the session — never a sentinel
+    row."""
+    perf = shutil.which("perf")
+    if use_perf and perf is None:
+        sys.exit("perf not found in PATH (required for official EXP-0 "
+                 "rows; use --no-perf only for non-evidence smoke)")
+    argv: list[str] = []
+    if args.taskset:
+        argv += ["taskset", "-c", args.taskset]
+    if use_perf:
+        argv += [perf, "stat", "-x,", "-e", ",".join(TAX0_PERF_EVENTS),
+                 "--"]
+    argv += _tax0_bench_argv(args, capacity)
+    env = dict(os.environ, LC_ALL="C")
+    out = subprocess.run(argv, capture_output=True, text=True, env=env)
+    if out.returncode != 0:
+        sys.exit(f"tax0 {label}: bench exited {out.returncode} "
+                 f"(C={capacity}); stderr tail: "
+                 f"{out.stderr.strip()[-2000:]}")
+    try:
+        bench = json.loads(out.stdout)
+    except json.JSONDecodeError as e:
+        sys.exit(f"tax0 {label}: bench stdout is not JSON (C={capacity}): {e}")
+    if not bench.get("all_reps_ok"):
+        sys.exit(f"tax0 {label}: bench reported all_reps_ok=false (C={capacity})")
+    counters = parse_perf_stat(out.stderr) if use_perf else {}
+    if use_perf:
+        for req in ("instructions", "cycles"):
+            if not counters.get(req):
+                sys.exit(f"tax0 {label}: perf stat returned no {req} "
+                         f"counter (C={capacity}); perf stderr tail: "
+                         f"{out.stderr.strip()[-2000:]}")
+    return {"bench": bench, "counters": counters,
+            "child_exit_code": out.returncode,
+            "perf_raw": out.stderr.strip() if use_perf else None}
+
+
+def tax0_derived(rows: list[dict], capacities: list[int],
+                 baseline_capacity: int) -> dict:
+    """Per-cell medians/MADs (raw samples preserved), deltas vs the
+    baseline capacity (absolute AND percentage — never percentage alone),
+    and the descriptive capacity slope (least squares over the tested C
+    points; NOT an asymptotic-complexity claim)."""
+    metrics = [("instructions_per_op", "instructions_user"),
+               ("cycles_per_op", "cycles_user"),
+               ("wall_ns_per_op", "wall_ns"),
+               ("user_ns_per_op", "user_ns"),
+               ("sys_ns_per_op", "sys_ns")]
+    ops = rows[0]["ops"]
+    cells: dict[str, dict] = {}
+    med_of: dict[str, dict[int, float]] = {}
+    for name, key in metrics:
+        med_of[name] = {}
+        for cap in capacities:
+            samples = [r[key] / ops for r in rows
+                       if r["request_capacity"] == cap]
+            cells.setdefault(str(cap), {})[name] = {
+                "n": len(samples),
+                "median": median(samples),
+                "mad": _mad(samples),
+                "samples": samples,
+            }
+            med_of[name][cap] = median(samples)
+    deltas: dict[str, dict] = {}
+    base_cap = baseline_capacity
+    for name, _ in metrics:
+        b = med_of[name][base_cap]
+        deltas[name] = {}
+        for cap in capacities:
+            m = med_of[name][cap]
+            deltas[name][str(cap)] = {
+                "absolute": m - b,
+                "percent": (100.0 * (m - b) / b) if b else None,
+            }
+    slopes = {}
+    for name, _ in metrics:
+        line = _ols_line([float(c) for c in capacities],
+                         [med_of[name][c] for c in capacities])
+        if line is not None:
+            slopes[name] = line
+    return {"per_op_metrics": cells,
+            "baseline_capacity": base_cap,
+            "delta_vs_baseline": deltas,
+            "capacity_slope_ols": slopes}
+
+
+def cmd_tax0(args) -> dict:
+    if not TAX0_BIN.exists():
+        sys.exit(f"missing {TAX0_BIN} (xmake f -m release --toolchain=clang "
+                 f"--with-liburing=true; xmake build tax0_capacity_bench)")
+    capacities = [int(v) for v in args.capacities.split(",") if v.strip()]
+    if not capacities or len(set(capacities)) != len(capacities):
+        sys.exit("--capacities must be a non-empty comma list without dups")
+    for cap in capacities:
+        if cap < args.depth:
+            sys.exit(f"capacity {cap} < depth {args.depth}: the pipeline "
+                     f"would exceed the arena (would_block); refuse")
+    if args.backend == "uring" and args.no_perf:
+        sys.exit("--no-perf rows are smoke-only and cannot carry official "
+                 "uring evidence (instructions:u is the primary metric)")
+    if not args.file:
+        sys.exit("--file is required (deterministic workload path)")
+
+    # Execution order: generated from the predeclared seed BEFORE any
+    # measurement and stored verbatim.
+    rounds = tax0_execution_order(capacities, args.reps, args.seed)
+    flat = [cap for rnd in rounds for cap in rnd]
+
+    env_fp = env_fingerprint(input_path=args.file)
+    env_id_src = {k: v for k, v in env_fp.items() if k != "time"}
+    environment_id = hashlib.sha256(
+        json.dumps(env_id_src, sort_keys=True).encode()).hexdigest()[:16]
+    # Placement/provenance extras are probed BEFORE any official run (the
+    # task template requires environment provenance recorded before
+    # official execution, not reconstructed afterwards).
+    env_extra = _tax0_environment_extra(args.taskset, args.file)
+
+    expected_ops = args.total_bytes // args.request_size
+
+    # Warmup rounds (unmeasured, no perf): stabilize page cache / CPU
+    # frequency for EVERY cell before the first measured row.
+    for w in range(args.warmup_rounds):
+        for cap in sorted(capacities):
+            _tax0_run(args, cap, use_perf=False,
+                      label=f"warmup r{w + 1}/{args.warmup_rounds}")
+        print(f"[tax0 warmup round {w + 1}/{args.warmup_rounds}] done",
+              file=sys.stderr)
+
+    rows = []
+    rep_counters = {cap: 0 for cap in capacities}
+    for ridx, rnd in enumerate(rounds):
+        for cap in rnd:
+            idx = len(rows)
+            got = _tax0_run(args, cap, use_perf=not args.no_perf,
+                            label=f"round {ridx + 1}/{args.reps}")
+            bench = got["bench"]
+            rep = bench["reps_out"][0]
+            counters = got["counters"]
+            row = {
+                "experiment": "TAX-0B-EXP0",
+                "git_sha": env_fp["git"]["sha"],
+                "backend": args.backend,
+                "real_uring": bool(bench.get("real_uring")),
+                "filesystem": args.fs_label or None,
+                "op": args.op,
+                "request_size": args.request_size,
+                "active_depth": args.depth,
+                "request_capacity": cap,
+                "uring_queue_depth": (args.uring_queue_depth
+                                      if args.backend == "uring" else None),
+                "worker_count": (args.workers
+                                 if args.backend == "threadpool" else None),
+                "total_bytes": args.total_bytes,
+                "ops": bench["ops"],
+                "rep": rep_counters[cap],
+                "execution_order_index": idx,
+                "wall_ns": rep["wall_ns"],
+                "user_ns": rep["user_ns"],
+                "sys_ns": rep["sys_ns"],
+                "instructions_user": counters.get("instructions"),
+                "cycles_user": counters.get("cycles"),
+                "branches_user": counters.get("branches"),
+                "branch_misses_user": counters.get("branch-misses"),
+                "cache_misses_user": counters.get("cache-misses"),
+                "semantic_validation": True,
+                "word_sum": rep.get("word_sum"),
+                "expected_word_sum": bench.get("expected_word_sum"),
+                "lifecycle_setup_ns": bench.get("lifecycle_setup_ns"),
+                "lifecycle_teardown_ns": bench.get("lifecycle_teardown_ns"),
+                "child_exit_code": got["child_exit_code"],
+                "perf_raw": got["perf_raw"],
+                "environment_id": environment_id,
+            }
+            # Same-work invariants, enforced row-by-row (fail-closed).
+            if row["ops"] != expected_ops:
+                sys.exit(f"tax0 row {idx}: ops {row['ops']} != expected "
+                         f"{expected_ops} (C={cap})")
+            if bench["total_bytes"] != args.total_bytes:
+                sys.exit(f"tax0 row {idx}: total_bytes mismatch (C={cap})")
+            if args.op == "read" and \
+                    row["word_sum"] != row["expected_word_sum"]:
+                sys.exit(f"tax0 row {idx}: word_sum mismatch (C={cap})")
+            if args.backend == "uring" and not row["real_uring"]:
+                sys.exit(f"tax0 row {idx}: uring row without a real ring")
+            rows.append(row)
+            rep_counters[cap] += 1
+            print(f"[tax0 round {ridx + 1}/{args.reps}] "
+                  f"{idx + 1}/{len(flat)}: C={cap} "
+                  f"instr/op={row['instructions_user'] / row['ops']:.1f}"
+                  if row["instructions_user"] else
+                  f"[tax0 round {ridx + 1}/{args.reps}] "
+                  f"{idx + 1}/{len(flat)}: C={cap} (no perf)",
+                  file=sys.stderr)
+
+    # Mechanical same-work proof across ALL rows (ops/bytes/depth/size/
+    # offsets-generator/validation): any difference invalidates EXP-0.
+    same_work = {
+        "ops_expected": expected_ops,
+        "ops_observed": sorted({r["ops"] for r in rows}),
+        "bytes_expected": args.total_bytes,
+        "bytes_observed": sorted({r["total_bytes"] for r in rows}),
+        "depth": args.depth,
+        "request_size": args.request_size,
+        "word_sum_expected": rows[0]["expected_word_sum"] if rows else None,
+        "word_sum_observed": sorted({r["word_sum"] for r in rows}),
+        "validation_all_true": all(r["semantic_validation"] for r in rows),
+    }
+    same_work["valid"] = (
+        same_work["ops_observed"] == [expected_ops]
+        and same_work["bytes_observed"] == [args.total_bytes]
+        and (args.op != "read"
+             or same_work["word_sum_observed"] ==
+             [same_work["word_sum_expected"]])
+        and same_work["validation_all_true"])
+    if not same_work["valid"]:
+        sys.exit("tax0: same-work proof FAILED — EXP-0 invalid, "
+                 "performance numbers must not be interpreted")
+
+    return {
+        "schema": SCHEMA,
+        "kind": "tax0capacity",
+        "binary": binary_provenance(TAX0_BIN),
+        "params": {
+            "experiment": "TAX-0B-EXP0",
+            "question": ("at fixed useful workload, does increasing UNUSED "
+                         "request capacity increase user-space cost?"),
+            "hypotheses": {
+                "H0": "cost is capacity-invariant within noise",
+                "H1-TP": ("ThreadPool cost rises with C via "
+                          "resolve_completion O(request_capacity) per "
+                          "await"),
+                "H1-URING": ("Uring cost rises more strongly via BOTH "
+                             "resolve_completion O(C) and "
+                             "find_live_router_cookie_ O(C) per CQE"),
+            },
+            "backend": args.backend,
+            "op": args.op,
+            "capacities": capacities,
+            "depth": args.depth,
+            "workers": args.workers,
+            "uring_queue_depth": args.uring_queue_depth,
+            "request_size": args.request_size,
+            "total_bytes": args.total_bytes,
+            "reps": args.reps,
+            "warmup_rounds": args.warmup_rounds,
+            "seed": args.seed,
+            "fs_label": args.fs_label or None,
+            "taskset": args.taskset or None,
+            "perf_events": None if args.no_perf else TAX0_PERF_EVENTS,
+            "counter_scope": ("process-aggregate user-mode counters over a "
+                              "1-rep process (startup+build+teardown "
+                              "included, identical across cells, amortized "
+                              "per op; never subtracted)"),
+        },
+        "execution_order": {
+            "generator": ("random.Random(seed).sample(capacities) per "
+                          "round — generated before measurement"),
+            "seed": args.seed,
+            "reps": args.reps,
+            "rounds": rounds,
+            "flat": flat,
+        },
+        "environment_extra": env_extra,
+        "environment_id": environment_id,
+        "rows": rows,
+        "same_work": same_work,
+        "derived": tax0_derived(rows, capacities, min(capacities)),
+    }
+
+
 def _bpftrace_tool_block() -> dict:
     bpf = shutil.which("bpftrace")
     if bpf is None:
@@ -1645,6 +2040,51 @@ def main() -> int:
     p.add_argument("--note", default="",
                    help="provenance note embedded in the artifact")
 
+    p = sub.add_parser("tax0",
+                       help="#250 TAX-0B/EXP-0 capacity-invariance matrix "
+                            "(fixed workload, sweep unused request capacity)")
+    p.add_argument("--backend", choices=["threadpool", "uring"],
+                   required=True)
+    p.add_argument("--op", default="read", choices=["read", "write"])
+    p.add_argument("--capacities", default="8,32,128,512",
+                   help="comma list of request capacities C (the ONLY "
+                        "experimental variable)")
+    p.add_argument("--depth", type=_positive_int, default=8,
+                   help="fixed active depth D (default 8)")
+    p.add_argument("--workers", type=_positive_int, default=1,
+                   help="ThreadPoolBackend worker count W (primary W=1)")
+    p.add_argument("--uring-queue-depth", type=_positive_int, default=8,
+                   dest="uring_queue_depth",
+                   help="io_uring SQ/CQ depth Q (keep Q == D for EXP-0)")
+    p.add_argument("--request-size", type=int, default=4096,
+                   dest="request_size")
+    p.add_argument("--total-bytes", type=int, default=256 << 20,
+                   dest="total_bytes")
+    p.add_argument("--reps", type=_positive_int, default=11,
+                   help="measured rounds; each round runs every capacity "
+                        "once in randomized order")
+    p.add_argument("--warmup-rounds", type=_nonneg_int, default=2,
+                   dest="warmup_rounds",
+                   help="unmeasured full rounds before measurement")
+    p.add_argument("--seed", type=lambda s: int(s, 0),
+                   default=TAX0_DEFAULT_SEED,
+                   help="predeclared order-randomization seed (hex ok)")
+    p.add_argument("--file", required=True,
+                   help="deterministic workload file path (created by the "
+                        "bench when absent; same file for every cell)")
+    p.add_argument("--fs-label", default="tmpfs", dest="fs_label",
+                   help="filesystem label recorded per row (tmpfs|btrfs...)")
+    p.add_argument("--taskset", default="",
+                   help="CPU list for `taskset -c` pinning the whole "
+                        "benchmark process tree (physical cores, avoid "
+                        "SMT siblings)")
+    p.add_argument("--no-perf", action="store_true", dest="no_perf",
+                   help="skip perf counters (SMOKE ONLY — not valid for "
+                        "official EXP-0 evidence)")
+    p.add_argument("--output", default="")
+    p.add_argument("--note", default="",
+                   help="provenance note embedded in the artifact")
+
     p = sub.add_parser("flame",
                        help="diagnostic CPU flame graph for one command "
                             "(perf record -g -> folded -> SVG)")
@@ -1695,6 +2135,9 @@ def main() -> int:
     elif args.command == "e1":
         out_fs = None
         tmpdir = args.data_dir or tmpdir
+    elif args.command == "tax0":
+        out_fs = None
+        tmpdir = args.file
     else:
         out_fs = None
     result = {"env": env_fingerprint(input_path=tmpdir, output_path=out_fs)}
@@ -1706,6 +2149,8 @@ def main() -> int:
         result.update(cmd_overload(args))
     elif args.command == "e1":
         result.update(cmd_e1(args))
+    elif args.command == "tax0":
+        result.update(cmd_tax0(args))
     elif args.command == "perf":
         if args.cmd and args.cmd[0] == "--":
             args.cmd = args.cmd[1:]

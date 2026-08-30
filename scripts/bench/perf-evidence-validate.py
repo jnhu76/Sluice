@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import re
 import sys
 import tempfile
@@ -111,9 +112,10 @@ def check_common(art: dict) -> list[str]:
     if not isinstance(art, dict):
         return ["artifact is not a JSON object"]
     kind = art.get("kind")
-    if kind not in ("ladder", "cli", "perf", "overload", "e1tax"):
-        errs.append(f"kind: expected ladder|cli|perf|overload|e1tax, "
-                    f"got {kind!r}")
+    if kind not in ("ladder", "cli", "perf", "overload", "e1tax",
+                    "tax0capacity"):
+        errs.append(f"kind: expected ladder|cli|perf|overload|e1tax|"
+                    f"tax0capacity, got {kind!r}")
     if art.get("schema") != REQUIRED_SCHEMA:
         errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
                     f"{art.get('schema')!r} (re-measure with the current "
@@ -752,8 +754,377 @@ def check_e1tax(art: dict) -> list[str]:
     return errs
 
 
+def _median_of(samples: list) -> float | None:
+    srt = sorted(samples)
+    n = len(srt)
+    if not n:
+        return None
+    return srt[n // 2] if n % 2 == 1 else (srt[n // 2 - 1] + srt[n // 2]) / 2
+
+
+def _tax0_ols(xs: list, ys: list) -> dict | None:
+    """Least-squares y = a + b*x with R², mirroring the runner's descriptive
+    slope fit exactly (same summation semantics) so the validator can check
+    the stored slope bit-for-bit within double rounding."""
+    n = len(xs)
+    if n < 2:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    if sxx == 0:
+        return None
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    b = sxy / sxx
+    a = my - b * mx
+    ss_tot = sum((y - my) ** 2 for y in ys)
+    ss_res = sum((y - (a + b * x)) ** 2 for x, y in zip(xs, ys))
+    r2 = (1.0 - ss_res / ss_tot) if ss_tot > 0 else None
+    return {"a": a, "b": b, "r2": r2}
+
+
+def _tax0_close(got, want: float) -> bool:
+    """Deterministic-double recomputation tolerance (not exact string
+    equality: JSON round-trips the full repr, so 1e-9 relative only absorbs
+    summation-order noise)."""
+    return isinstance(got, (int, float)) and not isinstance(got, bool) and \
+        abs(got - want) <= 1e-9 * max(1.0, abs(want))
+
+
+def _tax0_samples_from_rows(rows: list, capacities: list, key: str) -> dict:
+    """Per-capacity per-op samples recomputed from the preserved raw rows
+    (row counter / ops) — independent of the derived block, so a tampered
+    derived.samples list fails even when internally self-consistent."""
+    out: dict = {}
+    for c in capacities:
+        out[c] = [r[key] / r["ops"] for r in rows
+                  if r.get("request_capacity") == c
+                  and isinstance(r.get(key), (int, float))
+                  and isinstance(r.get("ops"), (int, float))
+                  and r.get("ops")]
+    return out
+
+
+# derived per-op metric name -> raw row counter it must be recomputed from
+_TAX0_ROW_KEY = {"instructions_per_op": "instructions_user",
+                 "cycles_per_op": "cycles_user",
+                 "wall_ns_per_op": "wall_ns"}
+
+
+def check_tax0capacity(art: dict) -> list[str]:
+    """Kind `tax0capacity` (#250 TAX-0B/EXP-0): one experimental variable
+    (request capacity C) at a fixed workload. Fail-closed on: same-work
+    drift across rows, missing user-mode instruction/cycle counters,
+    unpinned placement, hand-typed derived statistics, and execution order
+    that does not match the predeclared randomized sequence — where "match"
+    means the exact deterministic output of the predeclared seed under the
+    runner's generator contract, and "hand-typed" covers the headline OLS
+    slope (a/b/R²) and baseline deltas, which are recomputed from the raw
+    row counters, not trusted from the derived block."""
+    errs: list[str] = []
+    params = art.get("params")
+    if not isinstance(params, dict):
+        return ["params: missing (experiment/backend/capacities/depth/"
+                "reps/seed/...)"]
+    if params.get("experiment") != "TAX-0B-EXP0":
+        errs.append(f"params.experiment: expected 'TAX-0B-EXP0', got "
+                    f"{params.get('experiment')!r}")
+    backend = params.get("backend")
+    if backend not in ("threadpool", "uring"):
+        errs.append(f"params.backend: expected threadpool|uring, got "
+                    f"{backend!r}")
+    caps = params.get("capacities")
+    if not isinstance(caps, list) or not caps or len(set(caps)) != len(caps) \
+            or any(not isinstance(c, int) or c < 1 for c in caps):
+        return errs + [f"params.capacities: expected a non-empty unique "
+                       f"int list, got {caps!r}"]
+    depth = params.get("depth")
+    if not isinstance(depth, int) or depth < 1:
+        return errs + ["params.depth: expected int >= 1"]
+    for c in caps:
+        if c < depth:
+            errs.append(f"params.capacities: {c} < depth {depth} (the "
+                        f"pipeline would exceed the arena)")
+    reps = params.get("reps")
+    if not isinstance(reps, int) or reps < 1:
+        errs.append(f"params.reps: expected int >= 1, got {reps!r}")
+    rs = params.get("request_size")
+    tb = params.get("total_bytes")
+    if not isinstance(rs, int) or rs < 4096 or rs % 4096 != 0:
+        errs.append(f"params.request_size: must be a multiple of 4096")
+    if not isinstance(tb, int) or tb < rs or (rs and tb % rs != 0):
+        errs.append(f"params.total_bytes: must be a positive multiple of "
+                    f"request_size")
+    if not isinstance(params.get("seed"), int):
+        errs.append("params.seed: missing (predeclared order seed)")
+    # Official capacity evidence is defined by the user-mode counters; a
+    # --no-perf smoke artifact must never be committed as evidence.
+    if not isinstance(params.get("perf_events"), list) or \
+            not params.get("perf_events"):
+        errs.append("params.perf_events: missing — committed artifacts "
+                    "must carry instructions:u/cycles:u (smoke-only "
+                    "--no-perf runs are not evidence)")
+
+    # Placement discipline: official rows must record the taskset CPU set.
+    env_extra = art.get("environment_extra")
+    if not isinstance(env_extra, dict):
+        errs.append("environment_extra: missing (governor/SMT/lscpu/"
+                    "taskset provenance)")
+    elif not isinstance(env_extra.get("taskset_cpus"), str) or \
+            not env_extra.get("taskset_cpus").strip():
+        errs.append("environment_extra.taskset_cpus: missing — official "
+                    "EXP-0 evidence must be pinned via taskset")
+    if not isinstance(art.get("environment_id"), str) or \
+            not art.get("environment_id"):
+        errs.append("environment_id: missing")
+
+    # Execution order: predeclared seed -> rounds -> flat sequence; the
+    # rows must appear in exactly that order.
+    order = art.get("execution_order")
+    if not isinstance(order, dict):
+        return errs + ["execution_order: missing (randomized blocked "
+                       "order is part of the frozen design)"]
+    if order.get("seed") != params.get("seed"):
+        errs.append("execution_order.seed != params.seed")
+    rounds = order.get("rounds")
+    if not isinstance(rounds, list) or len(rounds) != reps:
+        errs.append(f"execution_order.rounds: expected {reps} rounds")
+        rounds = []
+    for i, rnd in enumerate(rounds):
+        if sorted(rnd if isinstance(rnd, list) else []) != sorted(caps):
+            errs.append(f"execution_order.rounds[{i}]: not a permutation "
+                        f"of capacities")
+    flat = order.get("flat")
+    want_flat = [c for rnd in rounds for c in (rnd or [])]
+    if flat != want_flat:
+        errs.append("execution_order.flat does not match rounds")
+    # Structural self-consistency is not enough: the stored order must BE
+    # the deterministic output of the predeclared seed under the runner's
+    # generator contract. A hand-shuffled but internally consistent order
+    # (rounds a permutation, flat == rounds, rows matching flat) still
+    # fails here.
+    if isinstance(params.get("seed"), int) and isinstance(reps, int):
+        rng = random.Random(params["seed"])
+        seed_rounds = [rng.sample(caps, k=len(caps)) for _ in range(reps)]
+        if order.get("rounds") != seed_rounds:
+            errs.append("execution_order.rounds: not the deterministic "
+                        "output of the predeclared seed (generator "
+                        "contract: random.Random(seed).sample(capacities, "
+                        "k=len(capacities)) per round)")
+        seed_flat = [c for rnd in seed_rounds for c in rnd]
+        if order.get("flat") != seed_flat:
+            errs.append("execution_order.flat: not the predeclared "
+                        "seed-derived sequence")
+
+    rows = art.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return errs + ["rows: empty"]
+    expected_ops = tb // rs if isinstance(tb, int) and isinstance(rs, int) \
+        and rs else None
+    if len(rows) != reps * len(caps):
+        errs.append(f"rows: {len(rows)} rows != reps {reps} x capacities "
+                    f"{len(caps)}")
+    per_cap: dict = {c: 0 for c in caps}
+    for i, r in enumerate(rows):
+        where = f"rows[{i}] (C={r.get('request_capacity')})"
+        if r.get("experiment") != "TAX-0B-EXP0":
+            errs.append(f"{where}: experiment is {r.get('experiment')!r}")
+        if r.get("execution_order_index") != i:
+            errs.append(f"{where}: execution_order_index "
+                        f"{r.get('execution_order_index')!r} != {i}")
+        if i < len(want_flat) and r.get("request_capacity") != want_flat[i]:
+            errs.append(f"{where}: capacity does not match the predeclared "
+                        f"execution order position")
+        cap = r.get("request_capacity")
+        if cap in per_cap:
+            per_cap[cap] += 1
+        if r.get("backend") != backend or r.get("op") != params.get("op"):
+            errs.append(f"{where}: backend/op drift vs params")
+        if r.get("active_depth") != depth or \
+                r.get("request_size") != rs or r.get("total_bytes") != tb:
+            errs.append(f"{where}: workload geometry drift vs params "
+                        f"(same-work violation)")
+        if expected_ops is not None and r.get("ops") != expected_ops:
+            errs.append(f"{where}: ops {r.get('ops')!r} != {expected_ops} "
+                        f"(same-work guarantee)")
+        if r.get("semantic_validation") is not True:
+            errs.append(f"{where}: semantic_validation not true")
+        if r.get("child_exit_code") not in (0, None):
+            errs.append(f"{where}: child_exit_code "
+                        f"{r.get('child_exit_code')} (invalid evidence)")
+        for k in ("wall_ns", "user_ns", "sys_ns"):
+            v = r.get(k)
+            if not isinstance(v, (int, float)) or v <= 0:
+                errs.append(f"{where}: {k} missing/non-positive")
+        for k in ("instructions_user", "cycles_user"):
+            v = r.get(k)
+            if not isinstance(v, (int, float)) or v <= 0:
+                errs.append(f"{where}: {k} missing/non-positive — primary "
+                            f"metric absent, not zero")
+        if backend == "uring":
+            if r.get("real_uring") is not True:
+                errs.append(f"{where}: uring row without real_uring=true "
+                            f"(stub evidence is not capacity evidence)")
+            if r.get("uring_queue_depth") != params.get("uring_queue_depth"):
+                errs.append(f"{where}: uring_queue_depth drift vs params")
+            if r.get("worker_count") is not None:
+                errs.append(f"{where}: worker_count set on an uring row")
+        else:
+            if not isinstance(r.get("worker_count"), int) or \
+                    r.get("worker_count", 0) < 1:
+                errs.append(f"{where}: worker_count missing on a "
+                            f"threadpool row")
+            if r.get("real_uring") is not False:
+                errs.append(f"{where}: real_uring must be false on a "
+                            f"threadpool row")
+    for c, n in per_cap.items():
+        if n != reps:
+            errs.append(f"rows: capacity {c} has {n} rows != reps {reps}")
+
+    # Same-work mechanical proof must be present and valid.
+    sw = art.get("same_work")
+    if not isinstance(sw, dict):
+        errs.append("same_work: missing mechanical same-work proof block")
+    elif sw.get("valid") is not True:
+        errs.append("same_work.valid is not true — EXP-0 invalid, numbers "
+                    "must not be interpreted")
+
+    # derived: medians recomputable from preserved raw samples
+    # (anti-hand-typing), baseline = min capacity, deltas carry BOTH
+    # absolute and percentage, slope present for the primary metric.
+    derived = art.get("derived")
+    if not isinstance(derived, dict):
+        return errs + ["derived: missing per-cell statistics"]
+    if derived.get("baseline_capacity") != min(caps):
+        errs.append("derived.baseline_capacity != min(capacities)")
+    metrics = derived.get("per_op_metrics")
+    if not isinstance(metrics, dict):
+        return errs + ["derived.per_op_metrics: missing"]
+    for c in caps:
+        cell = metrics.get(str(c))
+        if not isinstance(cell, dict):
+            errs.append(f"derived.per_op_metrics[{c}]: missing")
+            continue
+        for name in ("instructions_per_op", "cycles_per_op", "wall_ns_per_op"):
+            m = cell.get(name)
+            if not isinstance(m, dict):
+                errs.append(f"derived.per_op_metrics[{c}].{name}: missing")
+                continue
+            samples = m.get("samples")
+            if not isinstance(samples, list) or len(samples) != reps:
+                errs.append(f"derived.per_op_metrics[{c}].{name}.samples: "
+                            f"expected {reps} raw samples")
+                continue
+            if any(not isinstance(s, (int, float)) or s <= 0
+                   for s in samples):
+                errs.append(f"derived.per_op_metrics[{c}].{name}.samples: "
+                            f"non-positive/non-numeric sample")
+                continue
+            # FC-EXP0-8 seal: the stored samples are not an independent
+            # authority — they must be exactly the per-op series
+            # recomputed from the raw rows (execution order preserved),
+            # so tampering samples+median together while leaving the rows
+            # and the OLS/delta blocks untouched still fails here.
+            raw = _tax0_samples_from_rows(rows, [c], _TAX0_ROW_KEY[name])[c]
+            if len(raw) != reps or len(raw) != len(samples) or \
+                    any(not _tax0_close(s, w) for s, w in zip(samples, raw)):
+                errs.append(f"derived.per_op_metrics[{c}].{name}.samples: "
+                            f"stored list is not the per-op series "
+                            f"recomputed from the raw rows")
+                raw = samples  # still median-check whatever is stored
+            srt = sorted(raw)
+            n = len(srt)
+            want = srt[n // 2] if n % 2 == 1 else \
+                (srt[n // 2 - 1] + srt[n // 2]) / 2
+            got = m.get("median")
+            if not isinstance(got, (int, float)) or \
+                    abs(got - want) > 1e-9 * max(1.0, abs(want)):
+                errs.append(f"derived.per_op_metrics[{c}].{name}.median "
+                            f"{got!r} != recomputed {want}")
+    slopes = derived.get("capacity_slope_ols")
+    if not isinstance(slopes, dict) or \
+            "instructions_per_op" not in slopes:
+        errs.append("derived.capacity_slope_ols: missing the primary "
+                    "instructions-per-op slope")
+    dvb = derived.get("delta_vs_baseline")
+    if not isinstance(dvb, dict) or "instructions_per_op" not in dvb:
+        errs.append("derived.delta_vs_baseline: missing the primary "
+                    "instructions-per-op deltas")
+    else:
+        for c in caps:
+            d = dvb.get("instructions_per_op", {}).get(str(c))
+            if not isinstance(d, dict) or "absolute" not in d or \
+                    "percent" not in d:
+                errs.append(f"derived.delta_vs_baseline."
+                            f"instructions_per_op[{c}]: needs BOTH "
+                            f"absolute and percent")
+
+    # Independent recomputation from the preserved raw rows: per-op medians
+    # -> OLS a/b/R² -> baseline deltas must all match the stored derived
+    # block (anti-tampering: the headline slope and deltas are validated
+    # against the raw counters, not against derived.samples). The primary
+    # metric instructions_per_op is required; cycles_per_op is enforced
+    # alongside it because its counters are required on every row above.
+    if isinstance(reps, int) and isinstance(slopes, dict) \
+            and isinstance(dvb, dict):
+        base = min(caps)
+        med_rows: dict = {}
+        recompute_ok = True
+        for name, key in (("instructions_per_op", "instructions_user"),
+                          ("cycles_per_op", "cycles_user")):
+            per_cap = _tax0_samples_from_rows(rows, caps, key)
+            med_rows[name] = {}
+            for c in caps:
+                if len(per_cap[c]) != reps:
+                    errs.append(f"derived.{name}: capacity {c} has "
+                                f"{len(per_cap[c])} usable rows != reps "
+                                f"{reps} — headline stats not recomputable")
+                    recompute_ok = False
+                else:
+                    med_rows[name][c] = _median_of(per_cap[c])
+        if recompute_ok:
+            for name in ("instructions_per_op", "cycles_per_op"):
+                want = _tax0_ols([float(c) for c in caps],
+                                 [med_rows[name][c] for c in caps])
+                got = slopes.get(name)
+                if not isinstance(got, dict) or want is None:
+                    errs.append(f"derived.capacity_slope_ols.{name}: "
+                                f"missing/not recomputable from raw rows")
+                    continue
+                for k in ("a", "b"):
+                    if not _tax0_close(got.get(k), want[k]):
+                        errs.append(f"derived.capacity_slope_ols.{name}."
+                                    f"{k}: stored {got.get(k)!r} != "
+                                    f"recomputed from raw rows {want[k]!r}")
+                if isinstance(want["r2"], (int, float)):
+                    if not _tax0_close(got.get("r2"), want["r2"]):
+                        errs.append(f"derived.capacity_slope_ols.{name}."
+                                    f"r2: stored {got.get('r2')!r} != "
+                                    f"recomputed {want['r2']!r}")
+                elif got.get("r2") is not None:
+                    errs.append(f"derived.capacity_slope_ols.{name}.r2: "
+                                f"stored {got.get('r2')!r} != recomputed "
+                                f"None")
+                base_med = med_rows[name][base]
+                for c in caps:
+                    d = dvb.get(name, {}).get(str(c))
+                    want_abs = med_rows[name][c] - base_med
+                    want_pct = 100.0 * want_abs / base_med if base_med \
+                        else None
+                    if not _tax0_close((d or {}).get("absolute"), want_abs):
+                        errs.append(f"derived.delta_vs_baseline.{name}"
+                                    f"[{c}].absolute: stored "
+                                    f"{(d or {}).get('absolute')!r} != "
+                                    f"recomputed {want_abs!r}")
+                    if not _tax0_close((d or {}).get("percent"), want_pct):
+                        errs.append(f"derived.delta_vs_baseline.{name}"
+                                    f"[{c}].percent: stored "
+                                    f"{(d or {}).get('percent')!r} != "
+                                    f"recomputed {want_pct!r}")
+    return errs
+
 CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf,
-          "overload": check_overload, "e1tax": check_e1tax}
+          "overload": check_overload, "e1tax": check_e1tax,
+          "tax0capacity": check_tax0capacity}
 
 
 def validate_artifact(art: dict) -> list[str]:
@@ -891,6 +1262,77 @@ def _valid_e1tax() -> dict:
                  "mode": None, "perf_event_paranoid": 2},
         "bpftrace": {"available": False, "reason": "not requested"},
     }
+    return art
+
+
+def _valid_tax0capacity() -> dict:
+    """A minimal structurally-valid tax0capacity artifact (2 capacities ×
+    3 reps, threadpool arm). The derived block is built with the same
+    recomputation helpers the validator enforces, so any tampering the
+    tests plant is a real divergence, not a factory inconsistency."""
+    caps, reps, seed = [8, 32], 3, 0x54415830
+    ops = 4
+    art = _valid_ladder()
+    art["kind"] = "tax0capacity"
+    art["params"] = {"experiment": "TAX-0B-EXP0", "backend": "threadpool",
+                     "op": "read", "capacities": caps, "depth": 8,
+                     "request_size": 4096, "total_bytes": ops * 4096,
+                     "reps": reps, "seed": seed, "worker_count": 1,
+                     "perf_events": ["instructions:u", "cycles:u"]}
+    rng = random.Random(seed)
+    rounds = [rng.sample(caps, k=len(caps)) for _ in range(reps)]
+    art["execution_order"] = {"seed": seed, "rounds": rounds,
+                              "flat": [c for r in rounds for c in r]}
+    art["environment_extra"] = {"taskset_cpus": "0,2,4,6"}
+    art["environment_id"] = "envfingerprint0"
+    art["same_work"] = {"valid": True}
+    # deterministic per-op counters with an exact capacity slope (instr +6,
+    # cycles +2) and a per-rep ±1 wiggle inside each cell
+    med = {c: {"instructions_user": (4000 + 6 * c + 1) * ops,
+               "cycles_user": (3000 + 2 * c + 1) * ops} for c in caps}
+    seen: dict = {c: 0 for c in caps}
+    rows = []
+    for i, cap in enumerate(art["execution_order"]["flat"]):
+        wiggle = seen[cap] - 1
+        seen[cap] += 1
+        rows.append({"experiment": "TAX-0B-EXP0",
+                     "execution_order_index": i, "request_capacity": cap,
+                     "backend": "threadpool", "op": "read",
+                     "active_depth": 8, "request_size": 4096,
+                     "total_bytes": ops * 4096, "ops": ops,
+                     "semantic_validation": True, "child_exit_code": 0,
+                     "wall_ns": 5000 + i, "user_ns": 2500, "sys_ns": 2500,
+                     "instructions_user": med[cap]["instructions_user"] +
+                     wiggle * ops,
+                     "cycles_user": med[cap]["cycles_user"] + wiggle * ops,
+                     "worker_count": 1, "real_uring": False})
+    art["rows"] = rows
+    per_op: dict = {str(c): {} for c in caps}
+    med_of: dict = {}
+    for name, key in (("instructions_per_op", "instructions_user"),
+                      ("cycles_per_op", "cycles_user"),
+                      ("wall_ns_per_op", "wall_ns")):
+        med_of[name] = {}
+        by_cap = _tax0_samples_from_rows(rows, caps, key)
+        for c in caps:
+            samples = by_cap[c]
+            per_op[str(c)][name] = {"n": len(samples),
+                                    "median": _median_of(samples),
+                                    "samples": samples}
+            med_of[name][c] = _median_of(samples)
+    deltas = {}
+    for name in ("instructions_per_op", "cycles_per_op"):
+        b = med_of[name][min(caps)]
+        deltas[name] = {str(c): {"absolute": med_of[name][c] - b,
+                                 "percent": 100.0 * (med_of[name][c] - b) / b}
+                        for c in caps}
+    slopes = {name: _tax0_ols([float(c) for c in caps],
+                              [med_of[name][c] for c in caps])
+              for name in ("instructions_per_op", "cycles_per_op")}
+    art["derived"] = {"per_op_metrics": per_op,
+                      "baseline_capacity": min(caps),
+                      "delta_vs_baseline": deltas,
+                      "capacity_slope_ols": slopes}
     return art
 
 
@@ -1245,6 +1687,61 @@ class ValidatorSelfTest(unittest.TestCase):
         art = _valid_e1tax()
         art["params"]["ladders"] = ["L0_raw", "L3_uring"]
         self.assert_invalid(art, "params.ladders")
+
+    def test_valid_tax0capacity_passes(self):
+        self.assertEqual(validate_artifact(_valid_tax0capacity()), [])
+
+    def test_tax0capacity_detectors_fire(self):
+        # A. self-consistent but NOT seed-derived order: reverse every
+        # round, then rebuild flat AND rows to match — permutations check,
+        # flat check, and row-order check all pass; only the seed-contract
+        # recomputation can catch it
+        art = _valid_tax0capacity()
+        order = art["execution_order"]
+        order["rounds"] = [list(reversed(r)) for r in order["rounds"]]
+        order["flat"] = [c for r in order["rounds"] for c in r]
+        by_cap: dict = {}
+        for r in art["rows"]:
+            by_cap.setdefault(r["request_capacity"], []).append(r)
+        art["rows"] = []
+        for i, c in enumerate(order["flat"]):
+            r = dict(by_cap[c].pop(0))
+            r["execution_order_index"] = i
+            art["rows"].append(r)
+        self.assert_invalid(art, "predeclared seed")
+        # B. headline OLS slope corrupted: b nudged off the raw-row
+        # recomputation
+        art = _valid_tax0capacity()
+        art["derived"]["capacity_slope_ols"]["instructions_per_op"]["b"] \
+            += 0.125
+        self.assert_invalid(art, "recomputed from raw rows")
+        # intercept zeroed out
+        art = _valid_tax0capacity()
+        art["derived"]["capacity_slope_ols"]["instructions_per_op"]["a"] = 0.0
+        self.assert_invalid(art, "capacity_slope_ols")
+        # C. baseline delta corrupted (absolute, primary metric)
+        art = _valid_tax0capacity()
+        art["derived"]["delta_vs_baseline"]["instructions_per_op"]["32"] \
+            ["absolute"] += 1.5
+        self.assert_invalid(art, "delta_vs_baseline")
+        # C'. delta percent corrupted on the secondary metric
+        art = _valid_tax0capacity()
+        art["derived"]["delta_vs_baseline"]["cycles_per_op"]["32"] \
+            ["percent"] = 0.0
+        self.assert_invalid(art, "delta_vs_baseline")
+        # stored median tampered while samples are kept (hand-typed table)
+        art = _valid_tax0capacity()
+        art["derived"]["per_op_metrics"]["32"] \
+            ["instructions_per_op"]["median"] += 1.0
+        self.assert_invalid(art, "!= recomputed")
+        # FC-EXP0-8: samples AND median tampered together, consistently —
+        # raw rows and the OLS/delta blocks untouched; only the raw-row
+        # binding catches it
+        art = _valid_tax0capacity()
+        cell = art["derived"]["per_op_metrics"]["32"]["instructions_per_op"]
+        cell["samples"] = [s + 1.0 for s in cell["samples"]]
+        cell["median"] = _median_of(cell["samples"])
+        self.assert_invalid(art, "recomputed from the raw rows")
 
 
 def main() -> int:

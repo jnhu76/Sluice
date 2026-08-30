@@ -9,6 +9,11 @@ this freeze commit is the preregistration baseline for TAX-0B/C — the
 hypotheses here were registered BEFORE any causal experiment.
 
 - `TAX0-A-HOTPATH-TOPOLOGY-AUDIT.md` — human report
+- `TAX0-B-EXP0-CAPACITY-INVARIANCE.md` — EXP-0 measurement report (PR
+  #253; verdict: capacity-dependent tax MATERIAL on the uring arm,
+  ThreadPool capacity-invariant; canonical evidence in
+  `docs/results/performance-attribution/tax0b-exp0-*.json`, kind
+  `tax0capacity`)
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 
