@@ -265,83 +265,114 @@ All artifacts runner-produced, one file each, under
 `docs/results/performance-attribution/`:
 
 - `tax0router-fix-micro.json` — Layer A official (kind
-  `tax0routermicro`, 756 rows). SUPERSEDES an earlier same-day run of
-  identical frozen parameters whose `execution_order.cells` summary
-  mislabeled the candidate field (runner unpack bug — capacity written
-  into the candidate slot; `rounds`, `rows`, and all measurements were
-  correct). Rather than hand-editing a runner-produced artifact, the
-  tooling was fixed and the campaign re-run with unchanged parameters;
-  the superseding artifact is the official one.
+  `tax0routermicro`, 756 rows, git sha = RE-FREEZE A2 `adef692`).
+  Supersede chain, both re-runs with unchanged frozen parameters:
+  (1) SUPERSEDES an earlier same-day run whose `execution_order.cells`
+  summary mislabeled the candidate field (runner unpack bug — capacity
+  written into the candidate slot; `rounds`, `rows`, and all
+  measurements were correct). (2) SUPERSEDES the `aa8dff4` artifact
+  under SHOOTOUT RE-FREEZE A2 (corrective review 5063072823,
+  `TAX0-ROUTER-REFREEZE-A2.md`): per-window allocation removed and the
+  steady-allocation claim now MEASURED + enforced (`bench_version` 2),
+  and the bench `--seed` parser fixed (prior runs traced with effective
+  permutation seed 0 — identical across all candidates, so fairness and
+  comparability were intact; the intended seed 0x52545253 is now
+  actually consumed). Rather than hand-editing runner-produced
+  artifacts, the tooling was fixed and Layer A re-run; the superseding
+  artifact is the official one.
 - `tax0router-fix-shootout-read-tmpfs.json` / `-write-tmpfs.json` /
   `-read-btrfs.json` / `-write-btrfs.json` — Layer B official (kind
   `tax0routershootout`, 252 rows each = 4 candidates × 7 cells × 9
   reps).
 
-Post-freeze tooling fixes (both validator-facing, none touching
-measurement parameters or winner rules; scope documented here):
-(a) the micro `execution_order.cells` unpack bug above; (b)
+Post-freeze tooling fixes (none touching measurement parameters,
+winner rules, or the candidate/backend implementations; scope
+documented here and in `TAX0-ROUTER-REFREEZE-A2.md`): (a) the micro
+`execution_order.cells` unpack bug above; (b)
 `tax0router-validate.py` micro parser could not parse ANY 3-field cell
 string and its self-test never exercised `validate_micro` (now covered:
-4 micro mutations + multi-session aggregate + duplicate-session
+micro mutations + multi-session aggregate + duplicate-session
 fail-closed); (c) `campaign_aggregate` flagged the by-design shared
 (cand, D, C) grid across the four fs×op sessions as duplicate cells —
 rewritten to key by (cand, D, C, fs, op); (d) `perf-evidence-validate.py`
 kind allowlist learned the two new kinds (structural checks only;
-semantic authority stays in `tax0router-validate.py`).
+semantic authority stays in `tax0router-validate.py`); (e) RE-FREEZE A2
+batch: Layer A per-window allocation removed (measured + enforced),
+`--seed` 0x-prefix parser, validator sealed to the frozen matrix
+(cell/candidate/session deletion fails closed), micro cycles derived
+cross-checked, §25 selector direction corrected (see §19).
 
 ## 12. Validator result
 
 `scripts/bench/tax0router-validate.py --micro <Layer A> --shootout
-<all four Layer B artifacts>`: **VALIDATION PASSED**. It recomputes the
-seed-derived execution order (exact match required vs recorded rounds
-and row sequence), per-cell medians, normalization vs same-session r0,
-GMs, envelopes, guardrail/tie classification, and the §25 selection —
-recorded `derived` blocks must match the recomputation. Per-row
-semantic witnesses are enforced (misses == 0, control/transport == 0,
-R3 table accounting, non-R3 zero table traffic, zero steady-state
-allocation, real_uring + Q == D). Self-test: 7 shootout + 4 micro
-mutations all rejected, multi-session aggregate sanity, duplicate-session
-fail-closed. Additionally `perf-evidence-validate.py`: 22/22 artifacts
-pass (structural), self-test OK.
+<all four Layer B artifacts>`: **VALIDATION PASSED** (final run on the
+A2-superseding Layer A artifact + the unchanged Layer B artifacts).
+Since RE-FREEZE A2 the validator embeds the externally frozen matrix
+(candidates, patterns, geometries, windows, request size, total bytes,
+reps, warmup, seed, and the exact four fs×op sessions) and requires each
+artifact's declared cell set to EQUAL it — deleting a cell, a candidate,
+or a whole session fails closed even with rows and derived resynced
+(self-tested). It recomputes the seed-derived execution order (exact
+match required vs recorded rounds and row sequence), per-cell medians
+and normalization vs same-session r0 on BOTH axes (instructions and
+cycles), GMs, envelopes, guardrail/tie classification, and the §25
+selection — recorded `derived` blocks must match the recomputation.
+Per-row semantic witnesses are enforced (misses == 0, control/
+transport == 0, R3 table accounting, non-R3 zero table traffic, zero
+steady-state allocation — measured per row, real_uring + Q == D).
+Self-test: 7 shootout + 9 micro mutations all rejected (incl.
+drop-cell/drop-candidate with derived resync, cycles-GM tamper,
+allocation tamper), plus multi-session aggregate, duplicate-session,
+drop-session, and unknown-session fail-closed checks. Additionally
+`perf-evidence-validate.py`: 22/22 artifacts pass (structural),
+self-test OK.
 
 ## 13. Layer A results — per-cell normalized instructions vs R0
 
-Micro (router lifecycle isolated). Full per-cell table (instruction
-ratios; cycles in parentheses r1/r2/r3):
+Micro (router lifecycle isolated). Numbers below are the A2
+re-measurement (instrument corrected: no per-window allocation, seed
+parser fixed — see §11 and `TAX0-ROUTER-REFREEZE-A2.md`; the corrected
+instrument shifts ratios slightly FURTHER from 1.0 because the removed
+allocation overhead had diluted every candidate's ratios toward 1.0).
+Full per-cell table (instruction ratios; cycles in parentheses
+r1/r2/r3):
 
 | cell | r1 | r2 | r3 |
 | --- | --- | --- | --- |
-| P0 D=8,C=8 | 0.993 (1.031) | 0.993 (1.002) | 1.208 (1.130) |
-| P0 D=8,C=32 | 0.676 (0.836) | 0.676 (0.829) | 0.823 (0.923) |
-| P0 D=8,C=128 | 0.297 (0.357) | 0.297 (0.354) | 0.361 (0.396) |
-| P0 D=8,C=512 | 0.092 (0.155) | 0.092 (0.152) | 0.111 (0.170) |
-| P0 D=32,C=32 | 0.994 (1.015) | 0.994 (1.003) | 0.918 (0.951) |
-| P0 D=32,C=128 | 0.361 (0.281) | 0.361 (0.276) | 0.328 (0.257) |
-| P0 D=32,C=512 | 0.102 (0.134) | 0.102 (0.132) | 0.092 (0.123) |
-| P0 D=128,C=128 | 0.997 (1.002) | 0.997 (1.002) | 0.400 (0.522) |
-| P0 D=128,C=512 | 0.231 (0.225) | 0.231 (0.224) | 0.093 (0.118) |
-| P1 (same 9 cells) | ≈P0 | ≈P0 | ≈P0 |
-| P2 D=8,C=8 | 0.993 (1.015) | 0.993 (0.996) | 1.208 (1.117) |
-| P2 D=32,C=32 | 0.994 (1.021) | 0.994 (1.004) | 0.918 (0.956) |
-| P2 D=128,C=128 | 0.997 (1.002) | 0.997 (1.003) | 0.400 (0.520) |
+| P0 D=8,C=8 | 0.993 (1.021) | 0.993 (1.002) | 1.218 (1.139) |
+| P0 D=8,C=32 | 0.666 (0.794) | 0.666 (0.777) | 0.817 (0.873) |
+| P0 D=8,C=128 | 0.287 (0.353) | 0.287 (0.346) | 0.352 (0.389) |
+| P0 D=8,C=512 | 0.088 (0.149) | 0.088 (0.145) | 0.108 (0.164) |
+| P0 D=32,C=32 | 0.994 (1.100) | 0.994 (1.002) | 0.917 (0.960) |
+| P0 D=32,C=128 | 0.359 (0.340) | 0.359 (0.310) | 0.325 (0.291) |
+| P0 D=32,C=512 | 0.101 (0.148) | 0.101 (0.134) | 0.092 (0.125) |
+| P0 D=128,C=128 | 0.997 (1.021) | 0.997 (1.010) | 0.400 (0.528) |
+| P0 D=128,C=512 | 0.231 (0.242) | 0.231 (0.238) | 0.093 (0.125) |
+| P1 (same 9 cells) | ≈P0 (max |Δ| 0.012) | ≈P0 | ≈P0 |
+| P2 D=8,C=8 | 0.993 (1.016) | 0.993 (0.999) | 1.218 (1.127) |
+| P2 D=32,C=32 | 0.994 (1.097) | 0.994 (1.004) | 0.917 (0.955) |
+| P2 D=128,C=128 | 0.997 (1.023) | 0.997 (1.004) | 0.400 (0.523) |
 
 Reading: r1 ≡ r2 to three decimals everywhere (they are placement
 duals — identical scan lengths by construction). Ratios scale with the
 live-set fraction D/C: no gain at D == C (full array is live; any scan
-is equally long), ~10× at C/D = 64. r3 is flat O(1) — fastest at large
+is equally long), ~11× at C/D = 64. r3 is flat O(1) — fastest at large
 C, but at small capacity its table maintenance (insert+erase probes)
-EXCEEDS the scan it replaces (1.21× at C=8): on the isolated slice, R3
+EXCEEDS the scan it replaces (1.22× at C=8): on the isolated slice, R3
 only wins once C is large enough for the scan to dominate maintenance.
+Per-window steady-state allocation: measured 0 on every row
+(enforced by the bench gate).
 
 ## 14. Layer A aggregate — geometric means
 
-Normalized GM vs same-session R0 over all 21 (cell, pattern) points:
+Normalized GM vs same-session R0 over all 21 (cell, pattern) points
+(A2 re-measurement):
 
 | candidate | gm_instr | gm_cycles |
 | --- | --- | --- |
-| r1 | 0.4371 | 0.5050 |
-| r2 | 0.4371 | 0.4963 |
-| r3 | 0.3723 | 0.4203 |
+| r1 | 0.4329 | 0.5184 |
+| r2 | 0.4329 | 0.5013 |
+| r3 | 0.3699 | 0.4242 |
 
 On the isolated slice R3 looks best — but the slice is exactly where
 the scan dominates; §15–§16 show this does NOT transfer end-to-end.
@@ -384,8 +415,9 @@ over 9 blocked-randomized reps; four sessions):
 
 The end-to-end slope mirrors EXP-U0's causal claim: gain grows with
 capacity at fixed depth (≈0% at D==C, ~35–40% of TOTAL instructions at
-C=512), is op-independent (read ≈ write), and filesystem-independent
-(tmpfs ≈ btrfs).
+C=512), and the same direction reproduces across the tested READ/WRITE
+and tmpfs/btrfs sessions (read ≈ write, tmpfs ≈ btrfs within the
+observed spread).
 
 ## 16. Layer B aggregate — envelope, split GMs, median/best/worst
 
@@ -418,12 +450,14 @@ PASS.
 
 ## 18. Practical-tie analysis (§24)
 
-Rule: candidates whose GMs are both within 2% of the GM leader AND with
-no >2pp worst-regression disadvantage form a practical tie, resolved by
-the simplicity order R1 < R2 < R3. GM leader on instructions is r2
-(0.8387): r1 trails by 0.10pp, r3 by 0.56pp — both inside the 2% band;
-cycles spread 0.9023–0.9093 (0.77pp) — inside the band; worst-cell
-instruction spread 1.0046–1.0163 (1.2pp) — inside 2pp. PRACTICAL TIE:
+Rule (as corrected by RE-FREEZE A2 — worst-cell tails checked on BOTH
+axes): candidates whose GMs are both within 2% of the GM leader AND
+with no >2pp worst-cell disadvantage on either axis form a practical
+tie, resolved by the simplicity order R1 < R2 < R3. GM leader on
+instructions is r2 (0.8387): r1 trails by 0.10pp, r3 by 0.56pp — both
+inside the 2% band; cycles spread 0.9023–0.9093 (0.77pp) — inside the
+band; worst-cell instructions 1.0046–1.0163 (1.2pp) and worst-cell
+cycles 1.0325–1.0454 (1.3pp) — both inside 2pp. PRACTICAL TIE:
 {r1, r2, r3} → simplest candidate r1.
 
 Interpretation (not part of the mechanical rule): end-to-end, the
@@ -436,12 +470,18 @@ exactly the cells where Layer A showed R3 winning in isolation.
 
 ## 19. Winner selection under §25 mechanical rules
 
-Applied by the frozen validator to the official artifacts:
-eligible = {r1, r2, r3} (guardrail). No candidate leads another by ≥2%
-on instruction GM ⇒ no outright selection; practical-tie set = {r1,
-r2, r3}; simplicity minimum ⇒ **R1 SELECTED**. No opaque composite
-score used: instructions GM + guardrail + tie band + simplicity order
-only, with cycles GM recorded alongside.
+Applied by the RE-FREEZE-A2 validator (selector direction corrected:
+the instruction winner's cycles GM may exceed the cycles winner's by at
+most the tie band — the pre-A2 form `>= min − TIE` was satisfied by
+almost anything; worst-cell tails now checked on both axes) to the
+official artifacts: eligible = {r1, r2, r3} (guardrail). No candidate
+leads another by ≥2% on instruction GM ⇒ no outright selection;
+practical-tie set = {r1, r2, r3}; simplicity minimum ⇒ **R1 SELECTED**.
+The pre-A2 run reached the same verdict through the practical-tie
+branch, so the correction did not change the outcome — it closed a
+latent wrong-selection path. No opaque composite score used:
+instructions GM + guardrail + tie band + simplicity order only, with
+cycles GM recorded alongside.
 
 ## 20. Verdict
 
@@ -452,20 +492,39 @@ R1 (reverse scan of the existing `router_` array — the traversal
 one-line dual of the production predicate, first evidenced by EXP-U0)
 is the selected fix candidate: it delivers the entire measurable
 end-to-end benefit (GM instructions 0.8397, GM cycles 0.9093 vs
-same-session R0; +35–40% instruction reduction at C=512 cells; zero
-regression beyond noise at D==C), with no new state, no new capacity
-consumer, and no structural change. R2 delivers the same numbers with
-a placement change (reseeded free list); R3 adds bounded structural
-state for an end-to-end gain indistinguishable from the tie band.
+same-session R0; +35–40% instruction reduction at C=512 cells; all
+observed D==C regressions remain within the preregistered +5%
+guardrail — worst +1.58% instructions / +4.17% cycles — no noise
+adjudication was performed, so no stronger claim is made), with no new
+state, no new capacity consumer, and no structural change. R2 delivers
+the same numbers with a placement change (reseeded free list); R3 adds
+bounded structural state for an end-to-end gain indistinguishable from
+the tie band.
 
 ## 21. Handoff and proposed ledger transition
 
 - Base master: `9bbe3a243cc3c87f1f1ce2450a43fc3b5c5eedfa`
 - SHOOTOUT-FREEZE: `d45f620` (admission, candidates, gates, harnesses,
   runner, validator — frozen before any official measurement)
+- SHOOTOUT RE-FREEZE A2: `adef692` (corrective review 5063072823:
+  Layer A instrument correction + validator sealing + §25 selector
+  fix — `TAX0-ROUTER-REFREEZE-A2.md`; Layer A re-measured under it,
+  Layer B NOT re-measured)
 - Post-freeze tooling fixes: recorded in §11, committed on this branch
   (validator/runner only; measurement parameters and winner rules
   untouched)
+- Provenance statement (corrective-review requirement): the candidate
+  and backend implementations are UNCHANGED from the original freeze
+  `d45f620` — every post-freeze commit touches only evidence tooling,
+  reports, and the Layer A bench/validator; all measurement parameters
+  are unchanged; the first runner correction only fixed
+  evidence-order serialization (rows/measurements were already
+  correct); the Layer B raw artifacts are unchanged through all
+  tooling corrections; the Layer A artifact was re-measured twice under
+  the documented supersede chain (§11). The A2 Layer A artifact
+  records git sha `adef692` (clean tree) because it was produced after
+  the re-freeze commit — the ORIGINAL freeze SHA governing the
+  candidate semantics remains `d45f620`.
 - Final head: see the branch tip of `research/tax0-router-fix-shootout`
   (also recorded in the closing commit of PR #256)
 - Draft PR: https://github.com/jnhu76/Sluice/pull/256
@@ -473,10 +532,12 @@ state for an end-to-end gain indistinguishable from the tie band.
 - RAW EVIDENCE PATHS (§11): `docs/results/performance-attribution/`
   `tax0router-fix-micro.json`,
   `tax0router-fix-shootout-{read,write}-{tmpfs,btrfs}.json`
-- VALIDATOR RESULT (§12): VALIDATION PASSED (tax0router-validate.py on
-  all five artifacts; perf-evidence-validate.py 22/22 structural)
+- VALIDATOR RESULT (§12): VALIDATION PASSED (tax0router-validate.py,
+  RE-FREEZE-A2 sealed validator, on all five artifacts;
+  perf-evidence-validate.py 22/22 structural)
 - VERDICT: ROUTER SHOOTOUT PASS — PRACTICAL TIE, SIMPLEST CANDIDATE
-  SELECTED (R1)
+  SELECTED (R1) — recomputed by the sealed validator after the
+  corrective-review fixes; unchanged from the pre-A2 verdict
 
 **PRODUCTION BEHAVIOR CHANGED: NO.** All candidate modes live behind
 `SLUICE_ASYNC_INTERNAL_TESTING`; the production default path is
