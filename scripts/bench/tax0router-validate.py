@@ -89,8 +89,7 @@ def validate_micro(art: dict, errs: list[str]) -> dict:
     # Recompute the seed-derived order.
     cells = []
     for s in cells_spec:
-        cand, rest = s.split("|")
-        pat, dc = rest.split("|")
+        cand, pat, dc = s.split("|")
         d, c = dc[2:].split(",C=")
         cells.append((cand, pat, int(d), int(c)))
     want = _rng_order(cells, reps, seed)
@@ -305,16 +304,19 @@ def campaign_aggregate(micro_v: dict, shootouts: list[dict],
     selection authority) + the frozen §25 mechanical winner."""
     all_med_i: dict[tuple, float] = {}
     all_med_c: dict[tuple, float] = {}
-    fs_op_of_cell: dict[tuple, str] = {}
+    # Sessions share the SAME (cand, D, C) grid by design — the fs/op
+    # dimension is what distinguishes them — so the global cell key is
+    # (cand, D, C, fs, op). A repeated 5-tuple means the same session
+    # was passed twice (fail closed).
     for sv in shootouts:
-        for cell, v in sv["med_instr"].items():
-            key = cell
+        fs, op = sv["fs"], sv["op"]
+        for (cd, d, c), v in sv["med_instr"].items():
+            key = (cd, d, c, fs, op)
             if key in all_med_i:
-                errs.append(f"campaign: duplicate session cell {cell}")
+                errs.append(f"campaign: duplicate session cell {key}")
             all_med_i[key] = v
-            all_med_c[key] = sv["med_cycles"][cell]
-            fs_op_of_cell[key] = f"{sv['fs']}|{sv['op']}"
-    candidates = sorted({c for (c, _, _) in all_med_i})
+            all_med_c[key] = sv["med_cycles"][(cd, d, c)]
+    candidates = sorted({k[0] for k in all_med_i})
     if "r0" not in candidates:
         errs.append("campaign: no r0 baseline rows")
 
@@ -325,22 +327,20 @@ def campaign_aggregate(micro_v: dict, shootouts: list[dict],
         if cand == "r0":
             continue
         ni, nc = [], []
-        for (cd, d, c), mi in all_med_i.items():
+        for (cd, d, c, fs, op), mi in all_med_i.items():
             if cd != cand:
                 continue
-            base_i = all_med_i.get(("r0", d, c))
-            base_c = all_med_c.get(("r0", d, c))
+            base_i = all_med_i.get(("r0", d, c, fs, op))
+            base_c = all_med_c.get(("r0", d, c, fs, op))
             if not base_i or not base_c:
-                errs.append(f"campaign: missing r0 baseline for D={d} C={c}")
+                errs.append(f"campaign: missing r0 baseline for "
+                            f"D={d} C={c} {fs}|{op}")
                 continue
-            ri, rc = mi / base_i, all_med_c[(cd, d, c)] / base_c
+            ri, rc = mi / base_i, all_med_c[(cd, d, c, fs, op)] / base_c
             ni.append(ri)
             nc.append(rc)
-            grp = fs_op_of_cell[(cd, d, c)]
-            per_fs.setdefault(grp.split("|")[0],
-                              {}).setdefault(cand, []).append(ri)
-            per_op.setdefault(grp.split("|")[1],
-                              {}).setdefault(cand, []).append(ri)
+            per_fs.setdefault(fs, {}).setdefault(cand, []).append(ri)
+            per_op.setdefault(op, {}).setdefault(cand, []).append(ri)
         env[cand] = {
             "n_cells": len(ni),
             "gm_instr": _gm(ni) if ni else None,
@@ -490,6 +490,83 @@ def _mutate(base: dict, which: str) -> dict:
     return art
 
 
+def _micro_fixture() -> dict:
+    """Minimal valid tax0routermicro artifact exercising the micro
+    validator: seed-order recompute, per-cell rep counts, semantic /
+    same-work / steady-alloc / table accounting, and the recorded-derived
+    cross-check. Multipliers make r1/r3 faster than r0 deterministically."""
+    seed, reps = 0x52545253, 2
+    cands = ["r0", "r1", "r3"]
+    geo = [(8, 8), (8, 32)]
+    cells = [(cd, p, d, cc)
+             for cd in cands for p in ("P0", "P1") for (d, cc) in geo]
+    rounds = _rng_order(cells, reps, seed)
+    speed = {"r0": 1.0, "r1": 0.5, "r3": 0.4}
+    rows = []
+    seen: dict[tuple, int] = {}
+    for rnd in rounds:
+        for (cand, pat, d, c) in rnd:
+            rep = seen.get((cand, pat, d, c), 0)
+            seen[(cand, pat, d, c)] = rep + 1
+            base = 1000.0 + 40 * c + (0 if pat == "P0" else 100)
+            instr = base * speed[cand] * 100
+            rows.append({
+                "candidate": cand, "pattern": pat, "depth": d,
+                "request_capacity": c, "ops": 100, "lifecycle_ops": 100,
+                "instructions_user": instr, "cycles_user": instr * 0.9,
+                "semantic_validation": True, "same_work": True,
+                "steady_allocations_per_op": 0,
+                "table_insert_probes_total": 100 if cand == "r3" else 0,
+                "table_erase_probes_total": 100 if cand == "r3" else 0,
+            })
+    art = {
+        "kind": MICRO_KIND,
+        "params": {"seed": seed, "reps": reps},
+        "execution_order": {
+            "cells": [f"{c}|{p}|D={d},C={cc}" for c, p, d, cc in cells],
+            "rounds": [[f"{c}|{p}|D={d},C={cc}"
+                        for c, p, d, cc in rnd] for rnd in rounds],
+        },
+        "rows": rows,
+        "derived": {},
+    }
+    # Embed the CORRECT derived values (validate_micro appends mismatch
+    # errors but still recomputes; the throwaway list is discarded).
+    v = validate_micro(art, [])
+    art["derived"] = {
+        "gm_per_candidate": {c: {"gm_instr": g}
+                             for c, g in v["gm"].items()},
+        "normalized_vs_r0": {k: {"instr": n}
+                             for k, n in v["normalized"].items()},
+    }
+    return art
+
+
+MICRO_MUTATIONS = [
+    "micro-tamper-order", "micro-tamper-gm", "micro-tamper-semantic",
+    "micro-nonr3-table",
+]
+
+
+def _mutate_micro(art: dict, which: str) -> dict:
+    art = json.loads(json.dumps(art))
+    if which == "micro-tamper-order":
+        art["execution_order"]["rounds"][0][0], \
+            art["execution_order"]["rounds"][0][1] = \
+            art["execution_order"]["rounds"][0][1], \
+            art["execution_order"]["rounds"][0][0]
+    elif which == "micro-tamper-gm":
+        art["derived"]["gm_per_candidate"]["r1"]["gm_instr"] = 0.7
+    elif which == "micro-tamper-semantic":
+        art["rows"][1]["semantic_validation"] = False
+    elif which == "micro-nonr3-table":
+        for r in art["rows"]:
+            if r["candidate"] == "r3":
+                r["table_insert_probes_total"] = 0
+                break
+    return art
+
+
 def self_test() -> int:
     base = _fixture()
     errs: list[str] = []
@@ -507,6 +584,23 @@ def self_test() -> int:
         else:
             print(f"mutation {which}: NOT DETECTED (validator bug)")
             failures += 1
+    # Micro validator must be exercised too (the official campaign runs
+    # it on real artifacts; a parser that accepts nothing must die here).
+    mbase = _micro_fixture()
+    errs = []
+    validate_micro(mbase, errs)
+    if errs:
+        print(f"SELF-TEST MICRO FIXTURE INVALID: {errs}")
+        return 1
+    for which in MICRO_MUTATIONS:
+        errs = []
+        validate_micro(_mutate_micro(mbase, which), errs)
+        if errs:
+            print(f"mutation {which}: rejected as expected "
+                  f"({errs[0]})")
+        else:
+            print(f"mutation {which}: NOT DETECTED (validator bug)")
+            failures += 1
     # Campaign aggregate sanity on the clean fixture.
     sv = validate_shootout(base, [])
     agg = campaign_aggregate({}, [sv], [])
@@ -517,6 +611,35 @@ def self_test() -> int:
     else:
         print(f"aggregate: {agg['verdict']} (gm_instr "
               f"{agg['envelope']['r1']['gm_instr']:.4f})")
+    # Multi-session aggregate: a second session with a different fs|op
+    # shares the SAME (cand, D, C) grid by design; r2 is faster there,
+    # so the campaign envelope must pool 2x cells, not flag duplicates.
+    other = json.loads(json.dumps(base))
+    other["params"]["fs_label"] = "btrfs"
+    other["params"]["op"] = "write"
+    for r in other["rows"]:
+        if r["candidate"] == "r2":
+            r["instructions_user"] *= 0.2
+            r["cycles_user"] *= 0.2
+    sv2 = validate_shootout(other, [])
+    agg2 = campaign_aggregate({}, [sv, sv2], [])
+    if agg2["envelope"]["r1"]["n_cells"] != \
+            2 * agg["envelope"]["r1"]["n_cells"] or not agg2["verdict"]:
+        print(f"SELF-TEST multi-session aggregate wrong: "
+              f"n_cells={agg2['envelope']['r1']['n_cells']} "
+              f"{agg2['verdict']}")
+        failures += 1
+    else:
+        print(f"multi-session aggregate: {agg2['verdict']} "
+              f"(n_cells {agg2['envelope']['r1']['n_cells']})")
+    # Passing the SAME session twice must fail closed (duplicate cells).
+    errs = []
+    campaign_aggregate({}, [sv, sv], errs)
+    if any("duplicate session cell" in e for e in errs):
+        print("duplicate-session: rejected as expected")
+    else:
+        print("duplicate-session: NOT DETECTED (validator bug)")
+        failures += 1
     print("SELF-TEST " + ("OK" if failures == 0 else f"FAILED ({failures})"))
     return 1 if failures else 0
 

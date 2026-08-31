@@ -28,9 +28,10 @@ hypotheses here were registered BEFORE any causal experiment.
   not as recommendations
 - `TAX0-ROUTER-FIX-SELECTION.md` — T0-U-ROUTER (#255) fix-selection
   report: candidate admission (R0–R4, R4 shapes rejected pre-benchmark
-  for stale-CQE/ABA contract weakening), shootout methodology, §25
-  mechanical winner selection, and the §31 verdict; measurement
-  sections stay PENDING until the frozen campaign runs
+  for stale-CQE/ABA contract weakening), frozen shootout methodology,
+  official campaign results, §25 mechanical winner selection, and the
+  §31 verdict (ROUTER SHOOTOUT PASS — PRACTICAL TIE, SIMPLEST
+  CANDIDATE SELECTED (R1)); no production fix implemented
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 

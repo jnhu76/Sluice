@@ -2270,7 +2270,8 @@ def cmd_tax0routermicro(args) -> dict:
                           "before measurement"),
             "seed": args.seed,
             "reps": args.reps,
-            "cells": [f"{c}|{p}|D={d},C={c}" for c, p, d, c in cells],
+            "cells": [f"{cand}|{p}|D={d},C={c}"
+                      for cand, p, d, c in cells],
             "rounds": [[f"{c}|{p}|D={d},C={cc}" for c, p, d, cc in rnd]
                        for rnd in rounds],
         },
