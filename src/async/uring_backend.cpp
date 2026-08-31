@@ -513,6 +513,14 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
         cookie_free_list_[i] = detail::SlotIndex{i};
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // TAX-0 router-fix shootout (#255): the R3 candidate's fixed cookie
+    // table is sized and allocated ONCE here (construction-time bounded
+    // memory; zero steady-state allocation). Internal-testing builds only;
+    // production objects keep the pre-seam layout.
+    cookie_table_for_test_ =
+        std::make_unique<RouterCookieTableForTest>(config.request_capacity);
+#endif
     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, /*flags=*/0) == 0) {
         // The physical ledger is sized from the ACTUAL SQ capacity returned by
@@ -867,6 +875,12 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     route.handle = h;
     route.in_use = true;
     live_cookies_.fetch_add(1, std::memory_order_relaxed);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // TAX-0 router-fix shootout (#255): R3 candidate maintains its derived
+    // cookie table exactly on the production install path. No-op for every
+    // other mode; compiled out of production builds.
+    router_table_insert_(op_cookie, router_slot.value);
+#endif
     const auto& sq = ring_state_->ring.sq;
     const std::uint32_t physical_position =
         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
@@ -1103,18 +1117,43 @@ std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) con
 
 std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // TAX-0 EXP-U0 research instrumentation: the IDENTICAL matching
-    // predicate (in_use && cookie equality) with a selectable scan
-    // direction and exact per-call iteration accounting. Live cookies are
-    // unique within backend lifetime (no-wrap allocate_cookie_), so the
-    // scan direction can never change the semantic answer — at most one
-    // index matches. The default mode is forward_production; the production
-    // build below the #else is untouched and byte-equivalent.
+    // TAX-0 research instrumentation (#250 U0 witness + #255 router-fix
+    // shootout): the IDENTICAL matching predicate (in_use && cookie
+    // equality) with a selectable fix candidate and exact per-call
+    // accounting. Live cookies are unique within backend lifetime (no-wrap
+    // allocate_cookie_), so NO candidate can change the semantic answer —
+    // at most one index matches, or the cookie is stale/unknown and every
+    // candidate reports the same not-found. The default mode is
+    // production_baseline; the production build below the #else is
+    // untouched and byte-equivalent.
     std::size_t examined = 0;
     std::size_t found = router_.size();
     const bool reverse =
-        router_scan_mode_for_test_ == RouterScanModeForTest::reverse_ablation;
-    if (reverse) {
+        router_fix_mode_for_test_ == RouterFixModeForTest::reverse_scan ||
+        (router_fix_mode_for_test_ ==
+             RouterFixModeForTest::production_baseline &&
+         router_scan_mode_for_test_ == RouterScanModeForTest::reverse_ablation);
+    if (router_fix_mode_for_test_ ==
+            RouterFixModeForTest::bounded_cookie_table &&
+        cookie_table_for_test_ != nullptr) {
+        // R3: fixed-table resolution. Same miss contract (router_.size()).
+        // A hit MUST name the live entry carrying exactly this cookie — a
+        // table/router desync is an invariant violation, never a fallback.
+        const std::size_t idx = cookie_table_for_test_->lookup(cookie);
+        examined = static_cast<std::size_t>(cookie_table_for_test_->last_probes);
+        if (idx != RouterCookieTableForTest::kMiss) {
+            if (idx >= router_.size() || !router_[idx].in_use ||
+                router_[idx].cookie != cookie) {
+                std::fprintf(stderr,
+                             "sluice::async::UringAsyncBackend: router cookie "
+                             "table resolved a stale/non-matching router entry "
+                             "(invariant violation)\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
+            found = idx;
+        }
+    } else if (reverse) {
         for (std::size_t i = router_.size(); i-- > 0;) {
             ++examined;
             if (router_[i].in_use && router_[i].cookie == cookie) {
@@ -1144,6 +1183,12 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     } else {
         diag.lookup_misses += 1;
     }
+    if (router_fix_mode_for_test_ ==
+        RouterFixModeForTest::bounded_cookie_table) {
+        diag.table_lookup_probes_total += examined;
+        if (examined > diag.table_lookup_probes_max)
+            diag.table_lookup_probes_max = examined;
+    }
     return found;
 #else
     for (std::size_t i = 0; i < router_.size(); ++i) {
@@ -1153,6 +1198,52 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     return router_.size();
 #endif
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// TAX-0 router-fix shootout (#255): R3 table maintenance on the PRODUCTION
+// install/retire paths (guarded; no-ops for every other mode so the same
+// production functions serve all candidates). The table is derived
+// transport metadata: insert exactly on router install, erase exactly on
+// router retirement; any impossible state (duplicate insert, missing erase,
+// probe overrun) fail-fasts inside the table.
+void UringAsyncBackend::router_table_insert_(std::uint64_t cookie,
+                                             std::size_t router_index) noexcept {
+    if (router_fix_mode_for_test_ != RouterFixModeForTest::bounded_cookie_table ||
+        cookie_table_for_test_ == nullptr)
+        return;
+    cookie_table_for_test_->insert(cookie, router_index);
+    fold_router_table_probes_for_test_('i', cookie_table_for_test_->last_probes);
+}
+
+void UringAsyncBackend::router_table_erase_(std::uint64_t cookie) noexcept {
+    if (router_fix_mode_for_test_ != RouterFixModeForTest::bounded_cookie_table ||
+        cookie_table_for_test_ == nullptr)
+        return;
+    cookie_table_for_test_->erase(cookie);
+    fold_router_table_probes_for_test_('e', cookie_table_for_test_->last_probes);
+}
+
+void UringAsyncBackend::fold_router_table_probes_for_test_(
+    char which, std::uint64_t probes) const noexcept {
+    RouterScanDiagnosticsForTest& diag = router_diag_for_test_;
+    switch (which) {
+    case 'i':
+        diag.table_insert_calls += 1;
+        diag.table_insert_probes_total += probes;
+        if (probes > diag.table_insert_probes_max)
+            diag.table_insert_probes_max = probes;
+        break;
+    case 'e':
+        diag.table_erase_calls += 1;
+        diag.table_erase_probes_total += probes;
+        if (probes > diag.table_erase_probes_max)
+            diag.table_erase_probes_max = probes;
+        break;
+    default:
+        break;
+    }
+}
+#endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 // Attribute the just-completed find_live_router_cookie_ call (its
@@ -1200,6 +1291,12 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept 
         std::fflush(stderr);
         std::terminate();
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // TAX-0 router-fix shootout (#255): R3 erases exactly on retirement,
+    // before the entry (and its cookie) is cleared. No-op for other modes;
+    // an absent-cookie erase is an impossible state and fail-fasts.
+    router_table_erase_(entry.cookie);
+#endif
     entry = RouterEntry{};
     cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
     live_cookies_.fetch_sub(1, std::memory_order_relaxed);

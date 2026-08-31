@@ -21,6 +21,16 @@ hypotheses here were registered BEFORE any causal experiment.
   `docs/results/performance-attribution/tax0u0-*.json`, kinds
   `tax0u0router`/`tax0u0witness`; no production optimization implemented,
   no production fix selected — design selection deferred to #255)
+- `TAX0-ROUTER-PRIOR-ART.md` — T0-U-ROUTER (#255) prior-art survey:
+  user_data→completion resolution contracts across liburing, fio, Tokio,
+  tokio-uring, Monoio, Glommio, Seastar, Boost.Asio; three families
+  (raw pointer / recycled index / no-wrap key) compared as contracts,
+  not as recommendations
+- `TAX0-ROUTER-FIX-SELECTION.md` — T0-U-ROUTER (#255) fix-selection
+  report: candidate admission (R0–R4, R4 shapes rejected pre-benchmark
+  for stale-CQE/ABA contract weakening), shootout methodology, §25
+  mechanical winner selection, and the §31 verdict; measurement
+  sections stay PENDING until the frozen campaign runs
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 

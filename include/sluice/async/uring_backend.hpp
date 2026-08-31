@@ -76,6 +76,16 @@ namespace sluice::async {
 // .cpp so this header never needs <liburing.h> (the experimental gate defines
 // SLUICE_HAS_LIBURING without requiring liburing headers in includers).
 struct UringRingState;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// TAX-0 router-fix shootout (#255 campaign): the R3 candidate's fixed
+// cookie->router-index table. Non-installed research type; the complete
+// definition lives in src/async/uring_test_seams.hpp (included at the
+// bottom of this header under the internal-testing guard). Production
+// builds never name it; internal-testing object layout carries one extra
+// unique_ptr.
+struct RouterCookieTableForTest;
+#endif
 #endif
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -351,6 +361,16 @@ class UringAsyncBackend : public AsyncBackend {
         std::uint64_t matched_router_index_max = 0;
         std::uint64_t reverse_mode_calls = 0;
         std::uint64_t last_call_iterations = 0;
+        // TAX-0 router-fix shootout (#255): R3 bounded-table structural
+        // probes. Zero unless the bounded_cookie_table mode is active.
+        std::uint64_t table_insert_calls = 0;
+        std::uint64_t table_insert_probes_total = 0;
+        std::uint64_t table_insert_probes_max = 0;
+        std::uint64_t table_lookup_probes_total = 0;
+        std::uint64_t table_lookup_probes_max = 0;
+        std::uint64_t table_erase_calls = 0;
+        std::uint64_t table_erase_probes_total = 0;
+        std::uint64_t table_erase_probes_max = 0;
     };
     void set_router_scan_mode_for_test(RouterScanModeForTest mode) noexcept;
     RouterScanModeForTest router_scan_mode_for_test() const noexcept;
@@ -363,6 +383,52 @@ class UringAsyncBackend : public AsyncBackend {
     const RouterScanDiagnosticsForTest& router_scan_diagnostics_for_test()
         const noexcept;
     void reset_router_scan_diagnostics_for_test() noexcept;
+
+    // ---- TAX-0 router-fix candidate shootout seam (#255 campaign) --------
+    // Research-only FIX-CANDIDATE selector for the per-CQE cookie->router
+    // resolution. NOTHING here is compiled into production targets; the
+    // default mode is production_baseline, under which the backend executes
+    // EXACTLY the production behavior (including any U0 scan-mode ablation).
+    // Candidates:
+    //   production_baseline   R0 — forward scan + high-index LIFO placement
+    //                         (the shipped representation; the comparator)
+    //   reverse_scan          R1 — identical predicate traversed high -> low
+    //                         (placement unchanged; the EXP-U0 ablation as
+    //                         a candidate)
+    //   low_placement_forward R2 — free-list seeded descending so the live
+    //                         set occupies LOW indices; forward scan kept
+    //                         (the placement dual of R1)
+    //   bounded_cookie_table  R3 — fixed open-addressed cookie->router-index
+    //                         table (construction-time bounded, no
+    //                         steady-state allocation); placement unchanged
+    //                         (R0 placement) so the table's own cost is
+    //                         isolated
+    enum class RouterFixModeForTest : std::uint8_t {
+        production_baseline,
+        reverse_scan,
+        low_placement_forward,
+        bounded_cookie_table,
+    };
+    // Mode switch is a fresh-backend operation: the router must be fully
+    // retired AND the backend quiescent (outstanding() == 0), otherwise this
+    // fail-fasts. Switching reseeds the router free-list in the mode's
+    // physical order (R2 descending, others ascending); cookie values are
+    // NEVER reseeded. Defined in the non-installed seam header.
+    void set_router_fix_mode_for_test(RouterFixModeForTest mode) noexcept;
+    RouterFixModeForTest router_fix_mode_for_test() const noexcept;
+    // Layer-A microbench micro-ops (research instrument only; NOT a
+    // production surface). install mirrors ONLY the router-install slice of
+    // dispatch_one_locked — free-list pop (mode-ordered), no-wrap cookie
+    // allocation, RouterEntry install, R3 table insert — with no SQE, ring,
+    // arena, dispatch, or ledger interaction. retire delegates to the EXACT
+    // production retire_router_entry_ path (including the R3 table erase).
+    std::size_t router_install_cookie_for_test() noexcept;
+    void router_retire_cookie_for_test(std::size_t router_index) noexcept;
+    // Structural memory facts for the Layer-A evidence (research only):
+    // the fixed per-capacity metadata cost of the router representation
+    // (router array entry bytes; R3 table bytes when the table exists).
+    static std::size_t router_entry_bytes_for_test() noexcept;
+    std::size_t router_table_bytes_for_test() const noexcept;
 #endif
 
   private:
@@ -772,6 +838,25 @@ class UringAsyncBackend : public AsyncBackend {
     mutable RouterScanModeForTest router_scan_mode_for_test_ =
         RouterScanModeForTest::forward_production;
     mutable RouterScanDiagnosticsForTest router_diag_for_test_{};
+    // TAX-0 router-fix shootout state (#255): candidate selector + the R3
+    // fixed cookie table. Same single-driver call domain as the U0 seam
+    // state above (plain members are sound; mutable: lookups are const).
+    // Layout cost exists only in internal-testing builds (AGENTS.md §15).
+    mutable RouterFixModeForTest router_fix_mode_for_test_ =
+        RouterFixModeForTest::production_baseline;
+    std::unique_ptr<RouterCookieTableForTest> cookie_table_for_test_;
+    // R3 table maintenance. No-ops unless bounded_cookie_table is active;
+    // called from the production dispatch/retire paths under this guard so
+    // the table can never desync from the router it mirrors. Terminate on
+    // any impossible state (duplicate insert / missing erase / probe
+    // overrun) — deterministic fail-fast, never silent repair.
+    void router_table_insert_(std::uint64_t cookie,
+                              std::size_t router_index) noexcept;
+    void router_table_erase_(std::uint64_t cookie) noexcept;
+    // Fold one completed R3 table operation's probe count (micro-op and
+    // production-path folding share this; single-driver domain).
+    void fold_router_table_probes_for_test_(char which,
+                                            std::uint64_t probes) const noexcept;
     // Fold one completed lookup's iterations into its callsite family.
     void fold_router_lookup_diag_for_test(RouterLookupKindForTest kind)
         const noexcept;

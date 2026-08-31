@@ -117,6 +117,28 @@ sluice_one_file_target("binary", "bench", "tax0_capacity_bench", "bench",
 sluice_one_file_target("binary", "bench", "tax0u0_router_bench", "bench",
                       {"sluice_core", "sluice_async_internal_testing"})
 
+-- tax0router_micro_bench (#255 TAX-0 router-fix candidate shootout — Layer
+-- A): deterministic synthetic router-lifecycle microbench (install/lookup/
+-- retire over the internal-testing micro-op seams + the EXACT production
+-- find_live_router_cookie_ under each candidate). Every candidate consumes
+-- the identical logical trace; no kernel I/O, no per-op allocation. Also
+-- links sluice_async_internal_testing (research instrument only). Driven
+-- by scripts/bench/perf-attribution.py `tax0routermicro`.
+sluice_one_file_target("binary", "bench", "tax0router_micro_bench", "bench",
+                      {"sluice_core", "sluice_async_internal_testing"})
+
+-- tax0router_shootout_bench (#255 TAX-0 router-fix candidate shootout —
+-- Layer B): REAL io_uring end-to-end matrix over the EXP-0/U0 geometry
+-- (depth-D submit/await pipeline, ApplicationRuntime, fail-closed same-work
+-- accounting, per-rep structural witness) with the router fix candidate as
+-- the single selectable variable; READ and WRITE arms (write arm verifies
+-- the full file word-sum after the last rep). Links
+-- sluice_async_internal_testing — candidates are research modes; the
+-- production sluice_async keeps R0 behavior. Driven by scripts/bench/
+-- perf-attribution.py `tax0routershootout`.
+sluice_one_file_target("binary", "bench", "tax0router_shootout_bench", "bench",
+                      {"sluice_core", "sluice_async_internal_testing"})
+
 -- rx1_workload_bench (#234 RX-1 — controlled attribution falsification gate):
 -- single-shape ApplicationRuntime + ThreadPoolBackend pipeline driver with
 -- would_block-aware submission (intervention I2), an AC-1a pull-based
