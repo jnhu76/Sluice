@@ -227,9 +227,10 @@ parameter at all.
 - The near-capacity marginal regression (~2%) is small enough that its
   practical significance is untested against differently shaped workloads.
 - Formal/whole-program claims: none (benchmarks are not proofs).
-- The out-of-envelope Phase-3 drain defect (design doc §7.1) was recorded,
-  not fixed; it does not touch the frozen envelope (C ≥ P+1 never rejects)
-  but it is real and needs its own authorized fix task.
+- The out-of-envelope Phase-3 drain defect (design doc §7.1) was recorded
+  as issue #258, not fixed; it does not touch the frozen envelope
+  (C ≥ P+1 never rejects) but it is real and needs its own authorized fix
+  task.
 
 # 20 Production-landing implications
 

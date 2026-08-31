@@ -217,8 +217,9 @@ clean would_block return is also reachable). Backend-agnostic (the same
 skip would occur with any bounded backend; the uring backend's fail-fast
 is the correct report of the app's contract violation). NOT in the
 experiment envelope: every frozen cell uses C ≥ P+1 where no submit is
-rejected. Left for a separate authorized fix task; not worked around in
-the research bench (which never enters the failing configuration).
+rejected. Registered as issue #258 for a separate authorized fix task; not
+worked around in the research bench (which never enters the failing
+configuration).
 
 ## 8. Analysis plan (frozen)
 
