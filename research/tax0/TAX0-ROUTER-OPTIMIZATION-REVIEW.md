@@ -17,7 +17,7 @@ report）、`TAX0-EXP-U0-ROUTER-CAUSALITY.md`（归因实验）、
 | --- | --- |
 | 归因结论（EXP-U0） | 容量斜率 +5.99 instr/op/C，翻转扫描方向消除 ~100% ⇒ 归因 `find_live_router_cookie_`；给出的是**容量税部分的可回收上界**，不是整体优化上限（§5.1） |
 | 候选集 | R0 基线 / R1 反向扫描 / R2 低位放置 / R3 有界表；R4 三形状跑分前拒绝 |
-| Layer A 实测量 | 756 次 perf-stat（4 候选 × 9 格 × P0/P1/P2 × 9 reps，20 000 windows/次）；**RE-FREEZE A2 重测**（仪器修正后，见 §6.1） |
+| Layer A 实测量 | 756 次 perf-stat（4 候选 ×（P0 9 格 + P1 9 格 + P2 3 方形格）× 9 reps，20 000 windows/次）；**RE-FREEZE A2 重测**（仪器修正后，见 §6.1） |
 | Layer B 实测量 | 4 session × 252 rows = 1008 measured（+224 warmup），真实 io_uring，128 MiB/进程/格；**A2 未重测**（选型权威层，原始工件原样通过封印 validator） |
 | 随机化 | blocked randomized rounds，seed `0x52545253`，验证器从种子重算 |
 | 验证 | 封印 validator（冻结矩阵外部封印 + 双轴重算）PASS；18/18 变异拒收 + 4 类会话封印检查；perf-evidence 22/22 |

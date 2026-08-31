@@ -114,10 +114,11 @@ lines, binary bytes), cache state (page-cache hot in-process).
   overhead ratio / share in `derived`.
 
 Environment recorded with every result (fingerprint): git SHA + dirty
-flag (+ provenance note when dirty), build mode (performance data is
-**Release only**), compiler, kernel, platform, CPU, logical CPUs, glibc,
-python, WSL classification, workload input/output filesystem mounts
-(via `/proc/self/mountinfo`), GNU grep / ripgrep versions.
+flag and the exact `dirty_paths` (+ provenance note when dirty), build
+mode (performance data is **Release only**), compiler, kernel, platform,
+CPU, logical CPUs, glibc, python, WSL classification, workload
+input/output filesystem mounts (via `/proc/self/mountinfo`), GNU grep /
+ripgrep versions.
 
 ## Benchmark hygiene
 

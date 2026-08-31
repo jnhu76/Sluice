@@ -521,10 +521,21 @@ the tie band.
   evidence-order serialization (rows/measurements were already
   correct); the Layer B raw artifacts are unchanged through all
   tooling corrections; the Layer A artifact was re-measured twice under
-  the documented supersede chain (§11). The A2 Layer A artifact
-  records git sha `adef692` (clean tree) because it was produced after
-  the re-freeze commit — the ORIGINAL freeze SHA governing the
-  candidate semantics remains `d45f620`.
+  the documented supersede chain (§11). The A2 Layer A artifact records
+  git sha `adef6926dfcae64da017b7378184414aa19bfd12` with
+  `"dirty": true` in its canonical JSON (`tax0router-fix-micro.json`
+  `env.git`), and the binary that ran is bound by
+  `env.binary.sha256 = ff067989074deaacc692734fddad079891e22e0dd09db98586745129a6ac8b83`
+  in the same record. The dirty flag is evidence-output regeneration,
+  not measurement-source drift: the runner records provenance at
+  measurement start and then rewrites its tracked output artifact in
+  place, so the modified-but-uncommitted path at capture time was the
+  artifact file itself — the bench, runner, and validator committed at
+  `adef692` were untouched until after this measurement (every commit
+  after `adef692` changes only artifacts and reports). All four Layer B
+  artifacts carry the same `"dirty": true` provenance for the same
+  reason (recorded sha `bb0d487`, content unchanged). The ORIGINAL
+  freeze SHA governing the candidate semantics remains `d45f620`.
 - Final head: see the branch tip of `research/tax0-router-fix-shootout`
   (also recorded in the closing commit of PR #256)
 - Draft PR: https://github.com/jnhu76/Sluice/pull/256

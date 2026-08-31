@@ -238,15 +238,23 @@ def git_sha() -> dict:
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO,
                              capture_output=True, text=True, check=True).stdout.strip()
-        dirty = bool(subprocess.run(["git", "status", "--short"], cwd=REPO,
-                                    capture_output=True, text=True,
-                                    check=True).stdout.strip())
+        # Capture the exact dirty paths, not just a bool: a dirty tree is
+        # routinely the artifact file itself being rewritten in place (the
+        # runner records provenance BEFORE writing its output), so
+        # `dirty_paths` lets a reader tell "evidence output regenerated"
+        # apart from "measurement source drifted".
+        status = subprocess.run(["git", "status", "--short"], cwd=REPO,
+                                capture_output=True, text=True,
+                                check=True).stdout.splitlines()
+        dirty_paths = [ln.strip() for ln in status if ln.strip()]
         branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
                                 cwd=REPO, capture_output=True, text=True,
                                 check=True).stdout.strip()
-        return {"sha": sha, "dirty": dirty, "branch": branch}
+        return {"sha": sha, "dirty": bool(dirty_paths), "branch": branch,
+                "dirty_paths": dirty_paths}
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return {"sha": "unknown", "dirty": None, "branch": "unknown"}
+        return {"sha": "unknown", "dirty": None, "branch": "unknown",
+                "dirty_paths": []}
 
 
 def _first_line(cmd: list[str]) -> str | None:
@@ -2154,6 +2162,18 @@ def tax0routermicro_derived(rows: list[dict]) -> dict:
             "gm_per_candidate": gm}
 
 
+def _tax0router_micro_argv(bin_path: Path, cand: str, pat: str, d: int,
+                           c: int, windows: int, seed: int) -> list[str]:
+    """Bench argv for one Layer A micro row. The `--seed` here is the one
+    the bench actually consumes for its permutation trace, so it MUST be
+    the campaign seed derived from args (corrective review: this used to
+    hard-code the frozen constant, which would drift from the recorded
+    seed on any non-default `--seed` run)."""
+    return [str(bin_path), "--candidate", cand, "--pattern", pat,
+            "--depth", str(d), "--capacity", str(c),
+            "--windows", str(windows), "--seed", hex(seed)]
+
+
 def cmd_tax0routermicro(args) -> dict:
     if not TAX0ROUTER_MICRO_BIN.exists():
         sys.exit(f"missing {TAX0ROUTER_MICRO_BIN} (xmake f -m release "
@@ -2189,11 +2209,9 @@ def cmd_tax0routermicro(args) -> dict:
     for ridx, rnd in enumerate(rounds):
         for (cand, pat, d, c) in rnd:
             idx = len(rows)
-            bench_argv = [str(TAX0ROUTER_MICRO_BIN), "--candidate", cand,
-                          "--pattern", pat, "--depth", str(d),
-                          "--capacity", str(c),
-                          "--windows", str(args.windows),
-                          "--seed", hex(TAX0ROUTER_SEED)]
+            bench_argv = _tax0router_micro_argv(TAX0ROUTER_MICRO_BIN, cand,
+                                                pat, d, c, args.windows,
+                                                args.seed)
             prefix = ["taskset", "-c", args.taskset] if args.taskset else []
             got = _tax0router_perf_run(prefix, bench_argv,
                                        use_perf=not args.no_perf,
@@ -2870,6 +2888,31 @@ class RunnerSelfTest(unittest.TestCase):
             self.assertEqual(prov["size"], len(b"measured-bytes"))
             self.assertEqual(prov["path"], str(p))
             self.assertIsInstance(prov["mtime"], float)
+
+    def test_tax0router_micro_seed_follows_args(self):
+        # Corrective review: the Layer A bench argv hard-coded the frozen
+        # constant even for non-default `--seed` runs, so the recorded
+        # seed (args.seed, also used for the execution order) and the seed
+        # the bench actually consumed would drift apart on any non-default
+        # run. The bench argv must carry the args-derived seed.
+        argv = _tax0router_micro_argv(Path("/bin/true"), "r1", "P1", 8, 32,
+                                      20000, 0x1234)
+        self.assertEqual(argv[argv.index("--seed") + 1], hex(0x1234))
+        # Default campaign seed still round-trips identically.
+        argv = _tax0router_micro_argv(Path("/bin/true"), "r1", "P1", 8, 32,
+                                      20000, TAX0ROUTER_SEED)
+        self.assertEqual(argv[argv.index("--seed") + 1], hex(TAX0ROUTER_SEED))
+
+    def test_git_sha_records_dirty_paths(self):
+        # A dirty tree is routinely just the artifact file being rewritten
+        # in place; provenance must record WHICH paths are dirty so
+        # "evidence output regenerated" is distinguishable from
+        # "measurement source drifted". Shape check only (we are inside a
+        # git repo, so the fields are always present).
+        g = git_sha()
+        self.assertEqual(set(g), {"sha", "dirty", "branch", "dirty_paths"})
+        self.assertEqual(bool(g["dirty_paths"]), bool(g["dirty"]))
+        self.assertIsInstance(g["dirty_paths"], list)
 
     MOUNTINFO = (
         "36 35 0:53 / /tmp rw - tmpfs tmpfs rw\n"

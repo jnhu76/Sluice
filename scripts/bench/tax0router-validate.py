@@ -917,6 +917,24 @@ def _mutate_micro(art: dict, which: str) -> dict:
     return art
 
 
+def _selector_sv(med: dict, fs: str = "tmpfs", op: str = "read") -> dict:
+    """Minimal synthetic shootout-validation envelope for the §25 selector
+    truth table. `campaign_aggregate` only consumes `med_instr`/
+    `med_cycles` (keyed by (cand, D, C)) plus fs/op, so the frozen winner
+    rules can be exercised directly without the full artifact pipeline.
+    `med` maps (cand, D, C) -> (median instr/op, median cycles/op);
+    r0 supplies the normalization baseline."""
+    return {"med_instr": {k: v[0] for k, v in med.items()},
+            "med_cycles": {k: v[1] for k, v in med.items()},
+            "fs": fs, "op": op}
+
+
+def _selector_run(med: dict) -> dict:
+    """Run the frozen §25 mechanical selection over one synthetic session."""
+    return campaign_aggregate({}, [_selector_sv(med)], [],
+                              sessions=[("read", "tmpfs")])
+
+
 def self_test() -> int:
     failures = 0
 
@@ -1014,6 +1032,75 @@ def self_test() -> int:
     else:
         print("unknown-session: NOT DETECTED (validator bug)")
         failures += 1
+
+    # Selector truth table (corrective review 5063317280): each branch of
+    # the frozen §25 winner rules must be pinned by its own tiny synthetic
+    # envelope. The 18/18 artifact mutations only prove tampering is
+    # caught; they cannot see whether the WINNER RULES themselves regress
+    # (e.g. the "instr winner with a >2% cycles gap" branch that was wrong
+    # before RE-FREEZE A2).
+    def check_selector(label: str, med: dict, want: dict) -> None:
+        nonlocal failures
+        agg = _selector_run(med)
+        for key, cond in want.items():
+            if not cond(agg):
+                print(f"selector {label}: {key} violated (selected="
+                      f"{agg['selected']!r}, verdict={agg['verdict']!r}, "
+                      f"tie_set={agg['tie_set']!r})")
+                failures += 1
+
+    A = (8, 8)                 # one cell: GM == worst == cell value
+    C1, C2 = (8, 8), (8, 32)   # two cells: GM can diverge from worst tail
+    # 1. instr clearly wins + cycles within band -> OUTRIGHT winner.
+    check_selector("row1-outright", {
+        ("r0", *A): (100.0, 100.0),
+        ("r1", *A): (85.0, 95.0),
+        ("r2", *A): (92.0, 94.0),
+    }, {
+        "outright": lambda a: "R1 SELECTED" in a["verdict"]
+                              and "PRACTICAL TIE" not in a["verdict"],
+    })
+    # 2. instr clearly wins + cycles over the band -> must NOT outright win.
+    check_selector("row2-cycles-over-band", {
+        ("r0", *A): (100.0, 100.0),
+        ("r1", *A): (85.0, 100.0),
+        ("r2", *A): (92.0, 93.0),
+    }, {
+        "not-outright": lambda a: "R1 SELECTED" not in a["verdict"]
+                                  and "PRACTICAL TIE" in a["verdict"],
+    })
+    # 3. worst-cycles tail >2pp worse than the leader -> excluded from tie
+    #    (r2's GM is inside the band on both axes; only its 1.02 tail on
+    #    C=32 excludes it, so this branch is the sole reason it loses).
+    check_selector("row3-worst-tail", {
+        ("r0", *C1): (100.0, 100.0), ("r0", *C2): (100.0, 100.0),
+        ("r1", *C1): (85.0, 90.0), ("r1", *C2): (85.0, 90.0),
+        ("r2", *C1): (86.0, 80.0), ("r2", *C2): (86.0, 102.0),
+    }, {
+        "r2-excluded": lambda a: "r2" not in a["tie_set"]
+                                 and a["selected"] == "r1",
+    })
+    # 4. practical tie (both within band, tails OK) -> SIMPLICITY winner
+    #    (r2 has the better instr GM but the simplest valid candidate wins).
+    check_selector("row4-tie-simplicity", {
+        ("r0", *A): (100.0, 100.0),
+        ("r1", *A): (90.0, 90.0),
+        ("r2", *A): (89.0, 91.0),
+    }, {
+        "simplicity": lambda a: set(a["tie_set"]) == {"r1", "r2"}
+                                and a["selected"] == "r1",
+    })
+    # 5. nobody beats baseline -> NO-FIX verdict, no selection.
+    check_selector("row5-no-fix", {
+        ("r0", *A): (100.0, 100.0),
+        ("r1", *A): (99.0, 100.0),
+        ("r2", *A): (100.0, 99.0),
+    }, {
+        "no-fix": lambda a: a["selected"] is None
+                            and "NO CANDIDATE ROBUSTLY BEATS BASELINE"
+                            in a["verdict"],
+    })
+    print("selector truth table: 5/5 rows checked")
 
     print("SELF-TEST " + ("OK" if failures == 0 else f"FAILED ({failures})"))
     return 1 if failures else 0
