@@ -68,32 +68,41 @@ practical tie，因此按预注册的 simplicity order 选择 **R1**。
 
 ### 0.5 Copy 是否已经变快
 
-**COPY-AB-1（application-level copy A/B）已于 2026-08-31 完成测量。**
+**COPY-AB-1（application-level copy A/B）已于 2026-08-31 完成测量；
+同日完成 evidence corrective（判定统计按冻结规则重算，raw 数据未重跑）。**
 
 同一 copy engine（`run_pipelined_copy_with_backend`，真实 `sluice-copy`
 bounded pipeline）、同一 256 MiB 确定性源、唯一变量为 R0/R1 router mode
 （#256 seam 注入真实 `UringAsyncBackend`）；tmpfs + warm btrfs、
 {4K,64K,1M} × {P=1,8,32} × {C=P+1,128,512}、Q=64、9 个 blocked-randomized
 rounds、seed `0x434F5059`；A/A 校准 + 外部冻结 materiality rule（2×A/A 噪声
-与 2% 取大）；全部 artifact 通过外置 manifest validator。
+与 2% 取大，作用于 per-cell paired median）；全部六 artifact 通过外置
+manifest validator 的 campaign seal（跨工件一致性 + paired 重算）。
 
-结果（GM R1/R0）：
+结果——先给决策统计（authoritative：per-cell paired-median 分类），
+再给描述统计（descriptive：GM ratio-of-arm-medians，不参与分类）：
 
-- instructions/byte：**0.898 (tmpfs) / 0.889 (btrfs) — material**；
-  18/27 cells material，且恰好是全部 18 个 capacity-skewed cells
-  （C=128/512）；C=P+1 的 9 个 cells 全部 ≈ 1.00（无收益，1 个 ~2% 边际回退）。
-- cycles/byte：0.922 / 0.920 — 方向一致，但整体未过冻结门槛
-  （≤0.816）；仅在 C=512 × 小 buffer 的最 skewed cells material。
-- wall：0.977 / 0.993 — **NOT MATERIAL**（btrfs 上无变化）。
+- instructions/byte：**18/27 cells material（每个 fs），且恰好是全部
+  18 个 capacity-skewed cells（C=128: 9/9，C=512: 9/9）**；C=P+1 的
+  9 个 cells 0/9 material（btrfs 上两个深 pipeline 近容量 cell 为
+  +2.4–2.5% 的 material regression，tmpfs 同几何 +1.8% 在带内）。
+  描述 GM **0.898 (tmpfs) / 0.889 (btrfs)**。
+- cycles/byte：决策门槛 ratio ≤ 0.8177（纠正后包络），仅
+  C=512 × {4K,64K} 的 6/27 cells material（paired-median ratio
+  0.760–0.815）；描述 GM 0.922 / 0.920。
+- wall：**0/27 cells material（两个 fs）**；描述 GM 0.977 / 0.993。
 - ThreadPool 对照组（production backend，无 router/无 C 参数）：
-  instr/byte rel. sd ≤0.3%，无任何 capacity-dependent 效应。
+  harness-stability control（无 C 维度可操纵）；instr/byte rel. sd
+  ≤0.3%，harness 稳定。
 
-判定：**COPY-AB-1 PASS — BENEFIT ONLY IN CAPACITY-SKEWED REGIMES**——
-R1 的应用级收益真实存在，但严格由 `C >> active depth` 驱动；near-capacity
-sizing 下 R1 ≈ R0。这与 EXP-U0 的因果模型定量吻合。
+判定：**COPY-AB-1 PASS — BENEFIT ONLY IN CAPACITY-SKEWED REGIMES**
+（corrective 后 SURVIVED）——R1 的应用级收益真实存在，但严格由
+`C >> active depth` 驱动；near-capacity sizing 下 R1 ≈ R0。这与 EXP-U0
+的因果模型定量吻合。router 因果继承自 EXP-U0/#254 与 #256 shootout；
+COPY-AB-1 是应用效果验证，不独立记录 router 迭代 witness。
 
 > Copy application CPU cost: SUPPORTED — SCOPE-BOUNDED（instruction 维度
-> material，范围 = capacity-skewed cells）。
+> material，范围 = capacity-skewed cells，paired-median 决策）。
 > Copy wall throughput: NOT MATERIAL / NOT YET SHOWN（测试矩阵内）。
 
 ---
@@ -718,16 +727,17 @@ External directions：
 - R1 因最小实现/语义表面积胜出；
 - 受测矩阵中 R1 平均约减少 **16% instructions/op**、**9% userspace cycles/op**；
 - 高 capacity / 低 active-depth cell 总指令可减少约 **35–40%**；
-- COPY-AB-1（真实 sluice-copy pipeline，唯一变量 R0/R1）：instr/byte GM
-  **0.898 (tmpfs) / 0.889 (btrfs) — material**，收益严格集中于
-  capacity-skewed cells（18/18），C=P+1 时 ≈ 1.00；cycles 方向一致但整体
-  未过冻结门槛；wall NOT MATERIAL —— 判定
-  **PASS — BENEFIT ONLY IN CAPACITY-SKEWED REGIMES**（PR #257）。
+- COPY-AB-1（真实 sluice-copy pipeline，唯一变量 R0/R1）：instr/byte
+  决策统计（per-cell paired median）**18/18 capacity-skewed cells
+  material**，C=P+1 时 0/9；描述 GM **0.898 (tmpfs) / 0.889 (btrfs)**；
+  cycles 仅 C=512 × {4K,64K} 的 6/27 cells 过门槛（≤0.8177）；wall
+  0/27 NOT MATERIAL —— 判定 **PASS — BENEFIT ONLY IN CAPACITY-SKEWED
+  REGIMES**（PR #257，evidence corrective 后 SURVIVED）。
 
 ### 尚未证明
 
 - production Sluice 已经获得上述收益；
-- copy wall throughput 已提升（COPY-AB-1 明确 NOT MATERIAL）；
+- copy wall throughput 已提升（COPY-AB-1 明确 NOT MATERIAL，0/27）；
 - 结论跨 CPU/kernel/compiler/机器保持相同比例；
 - tie 2pp 与 guardrail 5pp 已由 noise floor / power analysis 校准；
 - optimized Sluice 已接近 competent raw io_uring ceiling。

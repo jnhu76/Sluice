@@ -99,7 +99,8 @@ deps `{sluice_core, sluice_async_internal_testing}` plus the app's
   `set_router_fix_mode_for_test()` is applied BEFORE the runtime drives the
   backend (quiescent, single-threaded moment after construction).
 - threadpool mode: `ThreadPoolBackend()` default construction (the exact
-  production backend object); router witness recorded as not-applicable.
+  production backend object); no router dimension exists on that backend,
+  so no router witness applies.
 - The measured copy = the whole `run_pipelined_copy_with_backend()` call
   (build/start/submit/wait/drain/join — the necessary Runtime/backend
   execution). Source generation, destination verification, JSON emission,
@@ -108,9 +109,11 @@ deps `{sluice_core, sluice_async_internal_testing}` plus the app's
   `read_ops ∈ [ceil(N/B), ceil(N/B) + P]` (beyond-EOF zero reads are legal
   copy-algorithm work in the EOF window, bounded by P slots);
   `write_ops == ceil(N/B)` and `short_writes == 0` expected on
-  tmpfs/warm-btrfs (recorded; validator fail-closes on violations);
-  router witness: exactly `read_ops + write_ops` operation-cookie lookups,
-  all hits, zero control/transport lookups (no-cancel copy).
+  tmpfs/warm-btrfs (recorded; validator fail-closes on violations).
+  Router causality is INHERITED from EXP-U0/#254 and the #256 router
+  shootout; COPY-AB-1 is an APPLICATION-EFFECT validation and does NOT
+  independently record structural router-iteration witnesses (lookup
+  counts / iterations are not fields of the official COPY-AB-1 artifacts).
 - One process per measured candidate run; `--reps 1` per process.
 
 ## 5. Matrix (frozen BEFORE official runs)
@@ -167,7 +170,9 @@ positional bias):
   (1 MiB, P8, C512), 11 paired repetitions each (66 measured rows per
   session). Artifacts: `tax0-copy-ab1-aa-tmpfs.json`,
   `tax0-copy-ab1-aa-btrfs.json`.
-- Noise envelope (log2 paired-ratio |d| p90, max over cells):
+- Noise envelope (log2 paired-ratio |d| p90, max over cells; the values
+  below are the freeze-era RECORDED pooled statistics — superseded by the
+  corrected max-per-cell nearest-rank recomputation in §13):
 
   | metric  | tmpfs p90 | btrfs p90 | FROZEN envelope (max) |
   |---------|-----------|-----------|-----------------------|
@@ -247,19 +252,34 @@ git SHA, binary sha256, dirty paths, environment fingerprint + environment_id,
 candidate, filesystem label, B/P/C/Q, file size, source sha256, bytes copied,
 read/write ops, short writes, round, execution order index, instructions,
 cycles, wall/user/sys ns, same-work witness, content verification method +
-result, real_uring, router witness (lookups/iterations).
+result, real_uring. (Router-iteration witnesses are NOT recorded — see §4;
+router causality is inherited from EXP-U0/#254 and #256.)
 
 ## 10. Validator
 
 `scripts/bench/tax0-copy-ab1-validate.py` with an EXTERNAL frozen manifest
 (the frozen matrix + thresholds live in the validator/manifest, not in the
-artifact). Recomputes medians, normalized ratios, GMs, paired effects, and the
-materiality classification from raw rows; validates candidate/fs/B/P/C/Q/file
-size/reps/seed/source identity/same-work/content verification/real-uring.
-Mutation tests (drop row, drop cell+resync, drop candidate, relabel candidate,
-change file size/source hash/bytes, false verification, real_uring=false,
-tamper instructions/normalized ratio/GM/order/A-A threshold) must all fail
-closed.
+artifact). Recomputes per-cell medians, normalized ratios, GMs, the PAIRED
+per-round effects, and the A/A noise envelope from raw rows; classifies
+materiality from the recomputed per-cell PAIRED MEDIAN against the frozen
+thresholds (ratio-of-arm-medians is descriptive only); pins the recorded
+freeze-era paired fields for tamper evidence; validates candidate/fs/
+B/P/C/Q/file size/reps/seed/source identity/same-work/content verification/
+real-uring, and that each declared `fs_label` matches the filesystem type
+actually recorded for the input/output paths. The top-level invocation is a
+SIX-ARTIFACT CAMPAIGN SEAL: exactly one tmpfs + one btrfs for A/A, campaign
+and control, plus cross-artifact consistency (source bytes, benchmark
+binary, seed, matrix constants across the two filesystem sessions).
+Mutation tests (per-artifact: drop row, drop cell+resync, drop candidate,
+relabel candidate, change file size/source hash/bytes, false verification,
+real_uring=false, tamper instructions, tamper one round's R1 with only the
+descriptive section re-embedded, tamper normalized ratio/GM/order/A-A
+threshold; campaign-seal: drop/duplicate each of the six artifacts,
+unknown filesystem, wrong kind, wrong experiment, cross-filesystem source
+or binary mismatch, paired-row swap, A/A envelope tamper) must all fail
+closed, plus a fixture proving the validator classifies with the PAIRED
+median where ratio-of-medians would disagree. (As-frozen rule; implemented
+as written by the §13 evidence corrective.)
 
 ## 11. Freeze discipline
 
@@ -272,5 +292,93 @@ invalidates affected evidence; refreeze and rerun.
 
 No production R1; no CLI default change; no copy algorithm change; no
 production router path change; no EXP-U1; #250/#255 stay governed elsewhere.
-The ThreadPool control exists to prove the harness cannot fake a
-capacity-dependent router effect, not to crown a backend winner.
+The ThreadPool control exists to show the copy harness is stable under a
+backend with no Uring router/request_capacity dimension; it is a
+harness-stability control, NOT an experimental manipulation of C.
+
+## 13. Evidence corrective (2026-08-31, post-evidence review)
+
+A corrective review of the EVIDENCE ADJUDICATION (not of the measurements)
+found that the freeze-era implementation did not compute this design's
+as-frozen statistics correctly. The historical sequence is preserved here;
+nothing above is rewritten except pointers to this section.
+
+What the original prose CORRECTLY preregistered (unchanged):
+
+- the decision statistic is the PAIRED per-round log-ratio median per cell
+  (§8: "report paired median effect");
+- the A/A envelope is the max per-cell p90 of |log2 paired ratio|
+  (§7: "max over cells");
+- the materiality rule `median_log2 <= -max(2 × NOISE[m], log2(1/0.98))`.
+
+What the implementation got wrong (8 findings, fixed in the corrective):
+
+1. Cell materiality was classified from the RATIO-OF-ARM-MEDIANS
+   (`log2(median(R1)/median(R0))` — a descriptive statistic) instead of
+   the paired median. Root cause: the validator reused the descriptive
+   ratio section as the classification input. Fix: the validator
+   recomputes per-cell paired effects from raw rows and classifies with
+   the paired median; a dedicated fixture proves the two rules can
+   disagree and that the paired rule wins.
+2. The A/A envelope POOLED all 33 pairs per session before taking p90
+   instead of taking max over the three per-cell p90 values. Fix:
+   `corrected_envelope()` recomputes per-cell nearest-rank p90 and takes
+   the max over cells, then over both official sessions; the frozen
+   manifest constants must regenerate from the official A/A raw rows at
+   every validation.
+3. The p90 order statistic used `int(0.9*n)-1` (biased low) instead of
+   the nearest-rank `ceil(0.9*n)-1`. Fix: nearest-rank everywhere the
+   envelope or per-cell p90 is computed.
+4. The runner's per-cell `paired_effects` aggregate keyed its accumulator
+   by (round, cell) but emitted under a round-less cell name, so each
+   round overwrote the previous one (recorded A/A per_cell entries all
+   carry n_pairs=1). Fix: the helper now collects ALL paired rounds per
+   cell. Tooling-only: the corrupt recorded `per_cell` fields are ignored
+   (never authoritative) and the raw artifacts stay byte-identical.
+5. Validation accepted each artifact independently; the six-artifact
+   campaign was not sealed top-level. Fix: the validator requires exactly
+   one tmpfs + one btrfs for A/A, campaign and control (exact kind and
+   experiment id, no duplicate paths/filesystems), plus cross-artifact
+   consistency (source sha256, benchmark binary sha256, seed, file_bytes,
+   workers, queue_depth, candidate labels across the two filesystem
+   sessions) and fs_label-vs-recorded-filesystem-type checks.
+6. The design claimed structural router witnesses (lookup counts, all
+   hits, zero control/transport lookups) that the official artifacts do
+   NOT record. Fix: docs now state COPY-AB-1 inherits router causality
+   from EXP-U0/#254 and the #256 shootout; its role is application-effect
+   validation, not a second causal-attribution experiment. No measurement
+   was rerun to add fields.
+7. The ThreadPool control conclusion ("no capacity-dependent effect
+   observed") overstated a session with no C manipulation. Corrected
+   wording: the control shows the same copy harness is stable under a
+   backend with no Uring router/request_capacity dimension; it is a
+   harness-stability control, not an experimental manipulation of C.
+8. A/A provenance is a pre-freeze DIRTY research tree (git sha c4f0b4a,
+   dirty=true; dirty paths were the research bench/runner/validator and
+   artifact output; the benchmark binary sha256 is recorded in the
+   artifacts; the production libraries were unchanged). This is a
+   provenance LIMITATION and must not be described as a clean-tree
+   freeze. Process lesson for future experiments:
+   TOOL-FREEZE → A/A CALIBRATION → THRESHOLD-FREEZE → OFFICIAL CAMPAIGN.
+
+Corrective recomputation (from the UNCHANGED raw rows):
+
+- Corrected A/A envelope (max per-cell p90, nearest-rank):
+  instr 0.002030 (tmpfs cell 4 KiB/P8/C32; btrfs max 0.0000116),
+  cycles 0.145216 (btrfs cell 1 MiB/P8/C512; tmpfs max 0.115284),
+  wall 0.398224 (tmpfs cell 4 KiB/P8/C32; btrfs max 0.367874).
+  Corrected thresholds (log2): instr 0.029146 (ratio ≤ 0.9800; 2% floor
+  dominates), cycles 0.290432 (ratio ≤ 0.8177), wall 0.796448
+  (ratio ≤ 0.5758).
+- Corrected per-cell classification: instructions 18/27 material
+  improvements per filesystem — exactly the 18 capacity-skewed cells
+  (C=128: 9/9, C=512: 9/9, C=P+1: 0/9), cycles 6/27 (the
+  {4 KiB, 64 KiB} × C=512 cells), wall 0/27, on BOTH filesystems.
+  btrfs additionally classifies two near-capacity cells as MATERIAL
+  REGRESSIONS under the paired rule (4 KiB/P32/C33 ratio 1.0250,
+  64 KiB/P32/C33 ratio 1.0238 vs the 0.9800 bar); on tmpfs the same
+  geometry is +1.8%, inside the band.
+- RAW DATA RERUN: NO. OFFICIAL ARTIFACTS CHANGED: NO (sha256 verified
+  byte-identical before and after the corrective; see the report's
+  Evidence Corrective section for the hash record). The headline verdict
+  SURVIVES the corrected rule.

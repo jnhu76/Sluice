@@ -277,46 +277,63 @@ def gm(values: list[float]) -> float:
     return prod ** (1.0 / len(values))
 
 
+def _effects(ds: list[float]) -> dict | None:
+    if not ds:
+        return None
+    ordered = sorted(abs(v) for v in ds)
+    p90 = ordered[math.ceil(0.9 * len(ds)) - 1]  # nearest-rank
+    return {
+        "n_pairs": len(ds),
+        "paired_median_log2": statistics.median(ds),
+        "paired_mean_log2": sum(ds) / len(ds),
+        "paired_gm_ratio": 2 ** (sum(ds) / len(ds)),
+        "mad_log2": pa._mad(ds),
+        "p90_abs_log2": p90,
+    }
+
+
 def paired_effects(rows: list[dict], labels: list[str],
                    per_cell: bool = False) -> dict:
     """Blocked paired design: per (round, cell) log2 ratio of the candidate
-    pair. Round/cell clustering is preserved (one pair per round per cell);
-    rows are NEVER treated as IID."""
+    pair, normalized per copied byte. Round/cell clustering is preserved
+    (one pair per round per cell); rows are NEVER treated as IID.
+
+    EVIDENCE-CORRECTIVE (post-freeze review, raw rows unchanged): the
+    per-cell aggregate previously keyed its accumulator by (round, cell)
+    but EMITTED it under a round-less cell name, so each round silently
+    overwrote the previous one (every recorded per_cell entry carried
+    n_pairs=1). A per-cell aggregate now collects ALL paired rounds of the
+    cell: by_cell[cell][metric] = [d_round0, d_round1, ...]. The p90 order
+    statistic is nearest-rank ceil(0.90*n)-1; the freeze-era implementation
+    used int(0.9*n)-1, which is biased low. Field names follow the
+    corrective spec (`paired_gm_ratio`); the OFFICIAL freeze-era artifacts
+    recorded the pooled section under the old `gm_ratio` name and the
+    validator pins that recorded shape verbatim — a new measurement freeze
+    re-pins the validator to the corrected names.
+    """
     by_rc: dict[tuple, dict] = {}
     for r in rows:
         key = (r["round"], r["buffer_size"], r["pipeline_depth"],
                r["request_capacity"], r["file_bytes"])
         by_rc.setdefault(key, {})[r["candidate"]] = r
 
-    def _effects(ds: list[float]) -> dict | None:
-        if not ds:
-            return None
-        p90 = sorted(abs(v) for v in ds)[max(0, int(0.9 * len(ds)) - 1)]
-        return {
-            "n_pairs": len(ds),
-            "paired_median_log2": statistics.median(ds),
-            "paired_mean_log2": sum(ds) / len(ds),
-            "gm_ratio": 2 ** (sum(ds) / len(ds)),
-            "mad_log2": pa._mad(ds),
-            "p90_abs_log2": p90,
-        }
-
     pooled = {m: [] for m in METRICS}
-    per_cell_out: dict[str, dict] = {}
+    by_cell_acc: dict[tuple, dict] = {}
     for key, slot in sorted(by_rc.items()):
         if len(slot) != len(labels):
             continue
-        cell_ds = {m: [math.log2(slot[labels[1]][m] / slot[labels[0]][m])]
-                   for m in METRICS}
+        a, b = slot[labels[0]], slot[labels[1]]
         for m in METRICS:
-            pooled[m].extend(cell_ds[m])
-        if per_cell:
-            name = f"B={key[1]},P={key[2]},C={key[3]}"
-            per_cell_out[name] = {
-                m: _effects(cell_ds[m]) for m in METRICS}
+            d = math.log2((b[m] / b["file_bytes"]) / (a[m] / a["file_bytes"]))
+            pooled[m].append(d)
+            if per_cell:
+                by_cell_acc.setdefault(key[1:], {}).setdefault(m, []).append(d)
     out = {m: _effects(pooled[m]) for m in METRICS}
     if per_cell:
-        out["per_cell"] = per_cell_out
+        out["per_cell"] = {
+            "B={},P={},C={}".format(*cell):
+                {m: _effects(ds[m]) for m in METRICS}
+            for cell, ds in sorted(by_cell_acc.items())}
     return out
 
 
