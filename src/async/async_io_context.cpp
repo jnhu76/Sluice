@@ -115,28 +115,39 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_read(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    // TAX-0D F01 (#250): skip the outstanding() evaluation (virtual call +
+    // arena leaf lock round-trip) when stats cannot observe it; the argument
+    // was previously evaluated unconditionally even with stats_ == nullptr.
+    if (stats_) {
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     return r;
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_write(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_data(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_all(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     return r;
 }
 
@@ -152,7 +163,9 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_read(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
@@ -163,7 +176,9 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_write(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
@@ -174,7 +189,9 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_data(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
@@ -185,7 +202,9 @@ Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_all(op, c);
     tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {  // F01 (#250): never evaluate outstanding() when unobserved
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
