@@ -1,0 +1,580 @@
+{
+ "schema": 2,
+ "kind": "tax0copyab-control",
+ "binary": {
+  "path": "/home/jnhu/Source/Sluice/build/linux/x86_64/release/tax0_copy_ab_bench",
+  "sha256": "404048939f7c335f7e99919beb8d8dd4405be2bf179f176308f1c57173016783",
+  "size": 286744,
+  "mtime": 1788170266.2131352
+ },
+ "env": {
+  "time": "2026-08-31T19:06:54+0800",
+  "git": {
+   "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+   "dirty": true,
+   "branch": "research/tax0-copy-ab1",
+   "dirty_paths": [
+    "M scripts/bench/tax0-copy-ab1-run.py",
+    "M scripts/bench/tax0-copy-ab1-validate.py",
+    "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+    "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+    "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+    "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+    "?? research/tax0/TAX0-COPY-AB1.md"
+   ]
+  },
+  "build": {
+   "mode": "release",
+   "compiler": "clang++",
+   "compiler_version": "clang version 22.1.8 (Fedora 22.1.8-4.fc44)",
+   "plat": "linux",
+   "arch": "x86_64",
+   "toolchain": "clang"
+  },
+  "system": {
+   "kernel": "7.1.9-200.fc44.x86_64",
+   "platform": "x86_64",
+   "cpu": "Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz",
+   "logical_cpus": 20,
+   "glibc": "glibc 2.43",
+   "python": "3.14.7"
+  },
+  "environment": {
+   "wsl": "native"
+  },
+  "filesystem": {
+   "input": {
+    "path": "/home/jnhu/tax0-copy-ab1-scratch/src.bin",
+    "mount_point": "/home",
+    "type": "btrfs"
+   },
+   "output": {
+    "path": "/home/jnhu/tax0-copy-ab1-scratch/dst.bin",
+    "mount_point": "/home",
+    "type": "btrfs"
+   }
+  },
+  "tools": {
+   "gnu_grep": "grep (GNU grep) 3.12",
+   "ripgrep": "ripgrep 15.2.0"
+  }
+ },
+ "note": "Production ThreadPoolBackend default construction; no router, no request_capacity parameter. | Measured on branch research/tax0-copy-ab1 @ d428cefcbd12 with uncommitted research-only files (bench/runner/validator/artifact output); the measured binaries are the Release+liburing build of tax0_copy_ab_bench and the unmodified production libraries at that tree (binary sha256 in `binary`).",
+ "params": {
+  "experiment": "TAX-0-COPY-AB-1-CONTROL",
+  "labels": [
+   "threadpool"
+  ],
+  "cells": [
+   "B=4096,P=8,backend=threadpool"
+  ],
+  "file_bytes": 268435456,
+  "reps": 9,
+  "seed": 1129271385,
+  "fs_label": "btrfs",
+  "taskset": "0,2,4,6",
+  "workers": 1,
+  "note": "Production ThreadPoolBackend default construction; no router, no request_capacity parameter."
+ },
+ "execution_order": {
+  "generator": "single cell, blocked by round (same key format as the campaign: label|B=,P=,C=)",
+  "seed": 1129271385,
+  "reps": 9,
+  "cells": [
+   "threadpool|B=4096,P=8,C=0"
+  ],
+  "rounds": [
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ],
+   [
+    "threadpool|B=4096,P=8,C=0"
+   ]
+  ]
+ },
+ "environment_extra": {
+  "governor_cpu0": "schedutil",
+  "smt_active": "1",
+  "taskset_cpus": "0,2,4,6",
+  "lscpu_extended": "CPU CORE SOCKET NODE\n  0    0      0    0\n  1    1      0    0\n  2    2      0    0\n  3    3      0    0\n  4    4      0    0\n  5    5      0    0\n  6    6      0    0\n  7    7      0    0\n  8    8      0    0\n  9    9      0    0\n 10    0      0    0\n 11    1      0    0\n 12    2      0    0\n 13    3      0    0\n 14    4      0    0\n 15    5      0    0\n 16    6      0    0\n 17    7      0    0\n 18    8      0    0\n 19    9      0    0",
+  "perf_event_paranoid": 2,
+  "data_file_mount": "btrfs /dev/sda3[/home] /home",
+  "liburing_repo_pin": "xrepo liburing 2.14 (xmake/experimental.lua)",
+  "liburing_system_rpm": "liburing-2.13-2.fc44"
+ },
+ "environment_id": "5c2cbc2ec6ef5443",
+ "rows": [
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 0,
+   "execution_order_index": 0,
+   "copy_wall_ns": 1225214556,
+   "user_ns": 671461000,
+   "sys_ns": 1552778000,
+   "instructions_user": 833241632.0,
+   "cycles_user": 1064862763.0,
+   "branches_user": 210308764.0,
+   "branch_misses_user": 2316600.0,
+   "cache_misses_user": 8922.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 1,
+   "execution_order_index": 1,
+   "copy_wall_ns": 1286203498,
+   "user_ns": 672206000,
+   "sys_ns": 1665103000,
+   "instructions_user": 831473513.0,
+   "cycles_user": 966916769.0,
+   "branches_user": 209881476.0,
+   "branch_misses_user": 2303605.0,
+   "cache_misses_user": 9339.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 2,
+   "execution_order_index": 2,
+   "copy_wall_ns": 1270488925,
+   "user_ns": 671161000,
+   "sys_ns": 1686079000,
+   "instructions_user": 831704047.0,
+   "cycles_user": 975358815.0,
+   "branches_user": 209932425.0,
+   "branch_misses_user": 2321037.0,
+   "cache_misses_user": 9635.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 3,
+   "execution_order_index": 3,
+   "copy_wall_ns": 1344219523,
+   "user_ns": 738173000,
+   "sys_ns": 1678309000,
+   "instructions_user": 831168989.0,
+   "cycles_user": 1010923984.0,
+   "branches_user": 209788700.0,
+   "branch_misses_user": 2319108.0,
+   "cache_misses_user": 10055.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 4,
+   "execution_order_index": 4,
+   "copy_wall_ns": 1341966176,
+   "user_ns": 664148000,
+   "sys_ns": 1810301000,
+   "instructions_user": 832759679.0,
+   "cycles_user": 1009427941.0,
+   "branches_user": 210231219.0,
+   "branch_misses_user": 2367270.0,
+   "cache_misses_user": 8765.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 5,
+   "execution_order_index": 5,
+   "copy_wall_ns": 1474507479,
+   "user_ns": 781490000,
+   "sys_ns": 1886900000,
+   "instructions_user": 832707541.0,
+   "cycles_user": 1111600101.0,
+   "branches_user": 210209589.0,
+   "branch_misses_user": 2332197.0,
+   "cache_misses_user": 10010.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 6,
+   "execution_order_index": 6,
+   "copy_wall_ns": 1306243617,
+   "user_ns": 726235000,
+   "sys_ns": 1694214000,
+   "instructions_user": 825597360.0,
+   "cycles_user": 987843388.0,
+   "branches_user": 208270925.0,
+   "branch_misses_user": 2307440.0,
+   "cache_misses_user": 10054.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 7,
+   "execution_order_index": 7,
+   "copy_wall_ns": 1405994102,
+   "user_ns": 687441000,
+   "sys_ns": 1792051000,
+   "instructions_user": 827276532.0,
+   "cycles_user": 984268533.0,
+   "branches_user": 208723007.0,
+   "branch_misses_user": 2337597.0,
+   "cache_misses_user": 10641.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  },
+  {
+   "experiment": "TAX-0-COPY-AB-1",
+   "git_sha": {
+    "sha": "d428cefcbd12b9d1fd75e1aece63884ff9556347",
+    "dirty": true,
+    "branch": "research/tax0-copy-ab1",
+    "dirty_paths": [
+     "M scripts/bench/tax0-copy-ab1-run.py",
+     "M scripts/bench/tax0-copy-ab1-validate.py",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-btrfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-control-tmpfs.json",
+     "?? docs/results/performance-attribution/tax0-copy-ab1-tmpfs.json",
+     "?? research/tax0/TAX0-COPY-AB1.md"
+    ]
+   },
+   "candidate": "threadpool",
+   "backend": "threadpool",
+   "real_uring": false,
+   "filesystem": "btrfs",
+   "buffer_size": 4096,
+   "pipeline_depth": 8,
+   "request_capacity": 0,
+   "queue_depth": 64,
+   "workers": 1,
+   "file_bytes": 268435456,
+   "source_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+   "bytes_copied": 268435456,
+   "read_ops": 65544,
+   "write_ops": 65536,
+   "short_writes": 0,
+   "chunks": 65536,
+   "round": 8,
+   "execution_order_index": 8,
+   "copy_wall_ns": 1435264529,
+   "user_ns": 742954000,
+   "sys_ns": 1874070000,
+   "instructions_user": 830552283.0,
+   "cycles_user": 967785465.0,
+   "branches_user": 209614517.0,
+   "branch_misses_user": 2342859.0,
+   "cache_misses_user": 9661.0,
+   "same_work": true,
+   "content_verification": "cmp full byte comparison",
+   "content_verified": true,
+   "environment_id": "5c2cbc2ec6ef5443"
+  }
+ ],
+ "same_work": {
+  "bytes_expected": 268435456,
+  "bytes_observed": [
+   268435456
+  ],
+  "content_verification": "cmp full byte comparison (unmeasured)",
+  "all_verified": true,
+  "real_uring_all": true
+ },
+ "derived": {
+  "cells": {
+   "threadpool|4096|8|0|268435456": {
+    "candidate": "threadpool",
+    "buffer_size": 4096,
+    "pipeline_depth": 8,
+    "request_capacity": 0,
+    "file_bytes": 268435456,
+    "reps": 9,
+    "median_instr": 831473513.0,
+    "median_cycles": 987843388.0,
+    "median_wall_ns": 1341966176,
+    "instr_per_byte": 3.097480211406946,
+    "cycles_per_byte": 3.6800033897161484,
+    "wall_ns_per_byte": 4.9992135763168335
+   }
+  },
+  "ratios": {}
+ }
+}

@@ -139,6 +139,33 @@ sluice_one_file_target("binary", "bench", "tax0router_micro_bench", "bench",
 sluice_one_file_target("binary", "bench", "tax0router_shootout_bench", "bench",
                       {"sluice_core", "sluice_async_internal_testing"})
 
+-- tax0_copy_ab_bench (TAX-0 COPY-AB-1 — application-level copy A/B):
+-- drives the REAL sluice-copy engine (apps/sluice-copy/copy_task.cpp,
+-- run_pipelined_copy_with_backend — the SAME copy task the CLI uses) with
+-- the backend as the single selectable variable: REAL UringAsyncBackend
+-- under the #256 router-fix research seam (r0 production_baseline vs r1
+-- reverse_scan) or the production ThreadPoolBackend default. Links
+-- sluice_async_internal_testing (research instrument only — the router
+-- seam exists nowhere else) plus the app's copy_task.cpp; it is NOT part
+-- of the installed/public sluice-copy surface. uring modes fail closed
+-- without a real ring. Driven by scripts/bench/tax0-copy-ab1-run.py;
+-- validated by scripts/bench/tax0-copy-ab1-validate.py.
+do
+    local R = SLUICE_ROOT
+    local path = R .. "bench/tax0_copy_ab_bench.cpp"
+    local copy_task = R .. "apps/sluice-copy/copy_task.cpp"
+    if os.isfile(path) and os.isfile(copy_task) then
+        target("tax0_copy_ab_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs(R .. "include", R .. "bench",
+                            R .. "apps/sluice-copy")
+            add_files(path, copy_task)
+    end
+end
+
 -- rx1_workload_bench (#234 RX-1 — controlled attribution falsification gate):
 -- single-shape ApplicationRuntime + ThreadPoolBackend pipeline driver with
 -- would_block-aware submission (intervention I2), an AC-1a pull-based

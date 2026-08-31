@@ -114,10 +114,12 @@ def check_common(art: dict) -> list[str]:
     kind = art.get("kind")
     if kind not in ("ladder", "cli", "perf", "overload", "e1tax",
                     "tax0capacity", "tax0u0router", "tax0u0witness",
-                    "tax0routermicro", "tax0routershootout"):
+                    "tax0routermicro", "tax0routershootout",
+                    "tax0copyab", "tax0copyab-aa", "tax0copyab-control"):
         errs.append(f"kind: expected ladder|cli|perf|overload|e1tax|"
                     f"tax0capacity|tax0u0router|tax0u0witness|"
-                    f"tax0routermicro|tax0routershootout, got "
+                    f"tax0routermicro|tax0routershootout|"
+                    f"tax0copyab|tax0copyab-aa|tax0copyab-control, got "
                     f"{kind!r}")
     if art.get("schema") != REQUIRED_SCHEMA:
         errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
