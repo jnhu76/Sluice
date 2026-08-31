@@ -31,7 +31,19 @@ top-level validation.
 The top-level invocation is a SIX-ARTIFACT CAMPAIGN SEAL: exactly one
 tmpfs + one btrfs artifact for each of A/A, campaign and control, with
 cross-artifact consistency checks (source bytes, benchmark binary, seed,
-matrix constants, filesystem labels vs recorded filesystem types).
+matrix constants, filesystem labels vs recorded filesystem types). Rows
+carry an identity binding of their own — the exact campaign experiment
+id, the frozen candidate->backend map, the session fs_label and the
+frozen file size — and the seal requires ONE benchmark binary sha256
+across all three classes: an A/A envelope is a noise threshold only for
+the binary that produced the campaign.
+
+REVIEW-CORRECTIVE (second post-freeze review; raw artifacts
+byte-identical): the earlier row check accepted any of the three
+experiment ids on every row and never bound row backend, filesystem or
+file_bytes, and the seal compared binary hashes only WITHIN a class. The
+pins above close those tails. The official artifacts already satisfy
+every new pin; no measurement was rerun.
 
 Usage:
   tax0-copy-ab1-validate.py --aa AA_TMPFS.json AA_BTRFS.json \
@@ -106,6 +118,18 @@ KIND_OF = {"aa": ("tax0copyab-aa", "TAX-0-COPY-AB-1-AA"),
            "campaign": ("tax0copyab", "TAX-0-COPY-AB-1"),
            "control": ("tax0copyab-control", "TAX-0-COPY-AB-1-CONTROL")}
 
+# Row identity binding (REVIEW-CORRECTIVE): the runner stamps EVERY row
+# (A/A and control included) with the campaign experiment id — category
+# identity lives in params.experiment, sealed per category in
+# _load_sealed — and each candidate label is pinned to exactly one
+# backend. A row can no longer be re-homed into a foreign experiment, a
+# candidate cannot silently change backend, and row filesystem/file_bytes
+# must match the frozen session parameters.
+ROW_EXPERIMENT = KIND_OF["campaign"][1]
+CANDIDATE_BACKEND = {"r0": "uring-r0", "r1": "uring-r1",
+                     "r0a": "uring-r0", "r0b": "uring-r0",
+                     "threadpool": "threadpool"}
+
 
 class Invalid(Exception):
     pass
@@ -154,10 +178,19 @@ def _check(cond, msg, errs) -> None:
 
 def _check_row_common(art: dict, i: int, row: dict, errs: list[str],
                       expect_uring: bool) -> None:
-    _check(row.get("experiment") in
-           ("TAX-0-COPY-AB-1", "TAX-0-COPY-AB-1-AA",
-            "TAX-0-COPY-AB-1-CONTROL"),
-           f"row {i}: wrong experiment", errs)
+    _check(row.get("experiment") == ROW_EXPERIMENT,
+           f"row {i}: experiment {row.get('experiment')!r} != "
+           f"{ROW_EXPERIMENT!r}", errs)
+    backend = CANDIDATE_BACKEND.get(row.get("candidate"))
+    _check(backend is not None and row.get("backend") == backend,
+           f"row {i}: backend {row.get('backend')!r} violates the frozen "
+           f"candidate->backend binding "
+           f"{row.get('candidate')!r}->{backend!r}", errs)
+    _check(row.get("file_bytes") == FILE_BYTES,
+           f"row {i}: file_bytes != frozen file size", errs)
+    _check(row.get("filesystem") == (art.get("params") or {}).get("fs_label"),
+           f"row {i}: filesystem {row.get('filesystem')!r} != session "
+           f"fs_label", errs)
     sha = (row.get("git_sha") or {}).get("sha") if \
         isinstance(row.get("git_sha"), dict) else row.get("git_sha")
     _check(isinstance(sha, str) and len(sha) == 40,
@@ -679,6 +712,15 @@ def validate_all(aa_paths: list, campaign_paths: list, control_paths: list,
     _cross_class("aa", aa_arts, errs)
     _cross_class("campaign", campaign_arts, errs)
     _cross_class("control", control_arts, errs)
+    # Cross-CLASS binary seal: the recomputed A/A envelope is a noise
+    # threshold ONLY for the benchmark binary that produced the campaign
+    # (and control) rows. One binary sha256 across all six artifacts.
+    bins = {(a.get("binary") or {}).get("sha256")
+            for a in aa_arts + campaign_arts + control_arts}
+    _check(len(bins) == 1,
+           f"seal: benchmark binary sha256 differs across the A/A, "
+           f"campaign and control classes ({sorted(repr(b) for b in bins)}) "
+           f"— the A/A envelope does not bound a different binary", errs)
 
     # The frozen envelope is only valid if the OFFICIAL A/A raw rows
     # regenerate it under the frozen rule.
@@ -937,6 +979,23 @@ def _mutate_campaign(base: dict, which: str) -> dict:
             row["execution_order_index"] = i
     elif which == "tamper_q":
         art["rows"][4]["queue_depth"] = 32
+    elif which == "swap_backend":
+        # An r1 row carrying r0's backend: the candidate/backend binding
+        # is broken while membership, order and every statistic stay
+        # intact.
+        for r in art["rows"]:
+            if r["candidate"] == "r1":
+                r["backend"] = "uring-r0"
+                break
+    elif which == "rehome_row_experiment":
+        # This PASSED under the old three-id row whitelist; rows must
+        # carry exactly the campaign experiment id.
+        art["rows"][8]["experiment"] = "TAX-0-COPY-AB-1-CONTROL"
+    elif which == "tamper_row_file_bytes":
+        # Paired normalization divides by row file_bytes.
+        art["rows"][10]["file_bytes"] = FILE_BYTES // 2
+    elif which == "tamper_row_filesystem":
+        art["rows"][12]["filesystem"] = "ext4"
     else:
         raise SystemExit(f"unknown mutation {which}")
     return art
@@ -974,6 +1033,14 @@ def _mutate_aa(base: dict, which: str) -> dict:
         art["rows"][1], art["rows"][2] = art["rows"][2], art["rows"][1]
         for i, row in enumerate(art["rows"]):
             row["execution_order_index"] = i
+    elif which == "swap_backend":
+        # r0b carrying r1's backend: both A/A arms are r0-backend runs by
+        # frozen design; a backend swap fakes candidate identity, and the
+        # rows must fail even though every statistic still reproduces.
+        for r in art["rows"]:
+            if r["candidate"] == "r0b":
+                r["backend"] = "uring-r1"
+                break
     else:
         raise SystemExit(f"unknown aa mutation {which}")
     return art
@@ -1046,7 +1113,9 @@ def self_test() -> int:
             "change_bytes", "false_verification", "real_uring_false",
             "tamper_instructions", "tamper_r1_descriptive_only",
             "tamper_normalized_ratio", "tamper_gm",
-            "tamper_order", "tamper_q"]
+            "tamper_order", "tamper_q",
+            "swap_backend", "rehome_row_experiment",
+            "tamper_row_file_bytes", "tamper_row_filesystem"]
     for m in muts:
         art = _mutate_campaign(base, m)
         expect_reject(m, validate_campaign, art)
@@ -1111,7 +1180,7 @@ def self_test() -> int:
     for m in ["drop_row", "relabel_candidate", "change_source_hash",
               "change_bytes", "false_verification", "real_uring_false",
               "tamper_instructions", "tamper_noise_threshold",
-              "tamper_order"]:
+              "tamper_order", "swap_backend"]:
         art = _mutate_aa(base_aa, m)
         expect_reject(m, validate_aa, art)
 
@@ -1170,6 +1239,11 @@ def self_test() -> int:
         r["source_sha256"] = "e" * 64
     a = sealed("mismatched_binary_sha")
     a["campaign"][1]["binary"]["sha256"] = "c" * 64
+    a = sealed("mismatched_binary_sha_aa_vs_campaign")
+    # BOTH A/A sessions re-stamped consistently: the within-class binary
+    # checks still pass, only the cross-class seal can catch this.
+    a["aa"][0]["binary"]["sha256"] = "c" * 64
+    a["aa"][1]["binary"]["sha256"] = "c" * 64
     a = sealed("paired_row_swap_breaks_round_pair")
     a["campaign"][1]["rows"][5]["candidate"] = "r1" if \
         a["campaign"][1]["rows"][5]["candidate"] == "r0" else "r0"

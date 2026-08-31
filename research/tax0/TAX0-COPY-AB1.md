@@ -149,8 +149,9 @@ fail-closes on all of these), and after EVERY measured process an unmeasured
 occurred in any session. uring rows additionally prove `real_uring == true`
 (`SLUICE_HAS_LIBURING` compiled + `available()` verified before handover;
 stub results are structurally impossible). VALIDATOR (corrected,
-six-artifact campaign seal incl. cross-artifact consistency): PASS on all
-six official artifacts; self-test: 40 planted mutations plus a
+six-artifact campaign seal incl. cross-artifact consistency, row identity
+binding and a single binary sha256 across all three classes): PASS on all
+six official artifacts; self-test: 47 planted mutations plus a
 descriptive-vs-paired disagreement fixture all fail closed; the frozen A/A
 envelope regenerates from the official A/A raw rows.
 
@@ -217,9 +218,10 @@ DESCRIPTIVE instr GM: 4 KiB **0.8752 / 0.8713**, 64 KiB **0.8939 /
 0.8758**, 1 MiB **0.9262 / 0.9195** (tmpfs/btrfs). DECISION instr
 material cells per B stratum: 6/9 / 6/9 / 6/9 — every stratum improves in
 its C=128/C=512 cells. The router tax is per-I/O-op, so its per-byte
-weight shrinks as B grows (1 MiB cells clear the bar only at C=512 with a
-smaller margin: ratios 0.83–0.84) — exactly the pre-registered
-prediction, confirmed as a trend.
+weight shrinks as B grows: the 1 MiB cells clear the bar with a visibly
+smaller margin at C=128 (paired ratios ≈0.95–0.97) and a much larger one
+at C=512 (≈0.80–0.84) — exactly the pre-registered prediction, confirmed
+as a trend.
 
 # 14 pipeline-depth effect
 
@@ -303,10 +305,12 @@ router/capacity dimension: B=4 KiB P=8, 9 rounds per fs, instr/byte median
   This upgrades the #256 conclusion from "microbenchmark-level win" to
   "application-level win, scope-bounded".
 - A landing decision should therefore pair the router change with capacity
-  SIZING guidance: with C near the real active depth, R1 ≈ R0 (no harm);
-  with overprovisioned C, R1 recovers most of the tax. The measured cost
-  is the small near-capacity corner at deep pipelines (+1.8% to +2.5% on
-  2 of 18 near-capacity cells, both on btrfs).
+  SIZING guidance: with overprovisioned C, R1 recovers most of the tax;
+  with C near the real active depth the effect is close to neutral in
+  most tested cells (tmpfs's worst near-capacity cell, +1.8%, stays
+  inside the band), but near-capacity is NOT a no-harm guarantee — the
+  matrix contains two formal material regression cells (btrfs 4 KiB/
+  P32/C33 +2.5%, 64 KiB/P32/C33 +2.4%).
 - Copy wall throughput is NOT a landing argument on this evidence.
 - Post-landing verification must reuse this A/B harness (it is validated,
   mutation-tested, and reproducible from the frozen seed).
@@ -317,6 +321,12 @@ A corrective review of the evidence ADJUDICATION (not of the measurements)
 found the freeze-era implementation deviated from the as-frozen analysis
 plan. The physical campaign was NOT rerun; every decision statistic was
 RECOMPUTED from the existing raw rows.
+
+A SECOND review round (post-adjudication PR review, 2026-08-31) sealed
+two remaining validator tails (findings #9, #10) and corrected two
+documentation contradictions (§13 "only at C=512", §20 "no harm"). The
+raw artifacts are untouched — the sha256 block below re-verified
+identical after the round; no measurement was rerun.
 
 Raw evidence freeze (sha256, verified identical before and after the
 corrective — OFFICIAL_ARTIFACTS_BYTE_IDENTICAL: YES):
@@ -336,10 +346,12 @@ e7d44e40ac3dc33092026150058444e756a77f854d11d73f49e009c2d9400fd8  tax0-copy-ab1-
 | 2 | A/A envelope pooled all pairs instead of max per-cell p90 | Freeze-time envelope derived from pooled p90, contradicting §7's "max over cells" | `corrected_envelope()` recomputes per-cell nearest-rank p90; frozen constants must regenerate from official A/A raw rows at every validation | NO | Small: corrected envelope 0.002030/0.145216/0.398224; thresholds move to 0.9800/0.8177/0.5758 |
 | 3 | p90 order statistic biased low (`int(0.9·n)−1`) | Off-by-one index choice in the helper | Nearest-rank `ceil(0.9·n)−1` everywhere the envelope/p90 is computed | NO | None beyond #2 (floor dominates instr) |
 | 4 | Runner per-cell aggregate overwrote rounds (recorded A/A per_cell all n_pairs=1) | Accumulator keyed by (round, cell) but emitted under a round-less cell name | Helper collects ALL paired rounds per cell; corrupt recorded per_cell fields ignored (never authoritative) | NO | None: per_cell was never decision input |
-| 5 | Six-artifact campaign was not top-level sealed | Validator accepted artifacts independently | Seal: exactly one tmpfs + one btrfs per category, exact kind/experiment, no duplicate paths/fs; cross-artifact source/binary/seed/matrix/fs-label checks; 14 seal mutations fail closed | NO | None: all six official artifacts pass the seal |
+| 5 | Six-artifact campaign was not top-level sealed | Validator accepted artifacts independently | Seal: exactly one tmpfs + one btrfs per category, exact kind/experiment, no duplicate paths/fs; cross-artifact source/binary/seed/matrix/fs-label checks; 18 seal mutations fail closed | NO | None: all six official artifacts pass the seal |
 | 6 | Design claimed router witnesses not present in artifacts | Prose carried §4 intent ("witness") beyond what rows record | Docs state router causality is INHERITED from EXP-U0/#254 and #256; COPY-AB-1 is application-effect validation | NO | None: no unavailable evidence now claimed |
 | 7 | ThreadPool control wording overstated ("no capacity-dependent effect observed") | Session has no C manipulation; wording implied one | Reworded: harness-stability control under a backend with no router/request_capacity dimension | NO | None |
 | 8 | A/A provenance is a pre-freeze dirty research tree | A/A measured before the freeze commit | Provenance kept visible (§5): git sha c4f0b4a, dirty=true, dirty paths = research bench/runner/validator/artifact output, binary sha recorded, production libraries unchanged; NOT a clean-tree freeze; process lesson: TOOL-FREEZE → A/A CALIBRATION → THRESHOLD-FREEZE → OFFICIAL CAMPAIGN | NO | None: envelope regenerates from recorded rows |
+| 9 | Row-level identity unsealed: a row's `experiment` accepted any of the three campaign ids; row `backend`/`filesystem`/`file_bytes` never bound | `_check_row_common` checked membership, not binding — an artifact could re-home a row into a foreign experiment or quietly reassign a candidate's backend while every statistic still reproduced | Rows pinned to the exact campaign experiment id (the runner stamps it on EVERY row; category identity stays in `params.experiment`, sealed per category), the frozen candidate→backend map, the session `fs_label` and the frozen file size; 5 new row-identity mutations fail closed | NO | None: all six official artifacts satisfy every pin |
+| 10 | Benchmark binary sha256 compared only WITHIN a class — nothing bound the A/A binary to the campaign binary its envelope thresholds | `_cross_class` sealed tmpfs↔btrfs per category only | Cross-class seal: ONE binary sha256 across A/A + campaign + control (the six official artifacts share `40404893…16783`); an A/A re-stamp mutation that passes every within-class check fails closed | NO | None: the six artifacts already share one binary |
 
 Corrected decision result (authoritative; per-cell paired median):
 
