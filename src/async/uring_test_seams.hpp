@@ -23,6 +23,8 @@
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 #include <cassert>
+#include <cstdio>
+#include <exception>
 
 namespace sluice::async {
 
@@ -399,6 +401,231 @@ UringAsyncBackend::router_scan_diagnostics_for_test() const noexcept {
 }
 inline void UringAsyncBackend::reset_router_scan_diagnostics_for_test() noexcept {
     router_diag_for_test_ = RouterScanDiagnosticsForTest{};
+}
+
+// ---- TAX-0 router-fix candidate shootout seam (#255 campaign) ------------
+
+// Deterministic research fail-fast for impossible table states. Same
+// discipline as the production invariant violations (typed message +
+// terminate); unreachable for any caller that honors the insert-on-install /
+// erase-on-retire pairing.
+[[noreturn]] inline void router_table_fatal_(const char* what) {
+    std::fprintf(stderr,
+                 "sluice::async::RouterCookieTableForTest: %s "
+                 "(impossible internal state - invariant violation)\n",
+                 what);
+    std::fflush(stderr);
+    std::terminate();
+}
+
+// R3 candidate: fixed-capacity open-addressed cookie -> router-index table
+// (linear probing, backward-shift deletion - NO tombstones). Bounded at
+// construction: capacity = next power of two >= 2 * request_capacity
+// (>= 16), so the load factor stays <= 50% at the legal maximum of C live
+// cookies and an empty slot always terminates every probe. Identity
+// contract preserved by construction: the kernel-visible user_data stays
+// the no-wrap never-reused operation cookie; this table is pure derived
+// transport metadata (insert exactly on router install, erase exactly on
+// router retirement), so a stale cookie's probe walks to an empty slot and
+// misses - the same semantic answer the production linear scan produces.
+// Zero steady-state allocation; teardown is one delete. Research-only
+// (#255); production builds never compile this type.
+struct RouterCookieTableForTest {
+    struct Slot {
+        std::uint64_t cookie = 0; // 0 = empty (operation cookies are >= 1)
+        std::uint32_t router_index = 0;
+        std::uint32_t pad = 0;
+    };
+
+    static constexpr std::size_t kMiss = static_cast<std::size_t>(-1);
+
+    std::uint32_t log2_size = 0;
+    std::size_t size = 0;      // == 1 << log2_size
+    std::size_t mask = 0;      // size - 1
+    std::vector<Slot> slots;   // fixed at construction; never resized
+    // Probe count of the most recent operation (single-driver domain - the
+    // same domain that owns the backend diagnostics).
+    mutable std::uint64_t last_probes = 0;
+
+    explicit RouterCookieTableForTest(std::size_t request_capacity) {
+        std::size_t want = request_capacity * 2;
+        if (want < 16)
+            want = 16;
+        while ((std::size_t{1} << log2_size) < want)
+            ++log2_size;
+        size = std::size_t{1} << log2_size;
+        mask = size - 1;
+        slots.assign(size, Slot{});
+    }
+
+    static std::size_t hash(std::uint64_t cookie, std::uint32_t log2) noexcept {
+        // Multiply-shift (Fibonacci) hashing: spreads the sequential
+        // operation-cookie domain across the table without stored state.
+        return static_cast<std::size_t>(
+            (cookie * std::uint64_t{0x9E3779B97F4A7C15ull}) >> (64 - log2));
+    }
+
+    void insert(std::uint64_t cookie, std::size_t router_index) noexcept {
+        // 0 is the empty-slot sentinel AND outside the operation-cookie
+        // domain [1, 2^63-1] (allocate_cookie_ starts at 1, never returns
+        // 0); a 0 insert is an impossible state, not a silent drop.
+        if (cookie == 0)
+            router_table_fatal_("insert of cookie 0 (outside key domain)");
+        std::uint64_t probes = 0;
+        std::size_t i = hash(cookie, log2_size);
+        for (;;) {
+            Slot& s = slots[i];
+            if (s.cookie == 0) {
+                s.cookie = cookie;
+                s.router_index = static_cast<std::uint32_t>(router_index);
+                last_probes = probes + 1;
+                return;
+            }
+            if (s.cookie == cookie)
+                router_table_fatal_("duplicate insert");
+            ++probes;
+            if (probes > size)
+                router_table_fatal_("insert probe overrun (table full)");
+            i = (i + 1) & mask;
+        }
+    }
+
+    // kMiss on miss (stale/unknown cookie - the expected stale-CQE answer,
+    // identical to the linear scan's not-found). Cookie 0 is outside the
+    // operation-cookie domain: it misses by domain (the production linear
+    // scan agrees - no live entry ever carries cookie 0).
+    std::size_t lookup(std::uint64_t cookie) const noexcept {
+        if (cookie == 0) {
+            last_probes = 1;
+            return kMiss;
+        }
+        std::uint64_t probes = 0;
+        std::size_t i = hash(cookie, log2_size);
+        for (;;) {
+            const Slot& s = slots[i];
+            if (s.cookie == cookie) {
+                last_probes = probes + 1;
+                return s.router_index;
+            }
+            if (s.cookie == 0) {
+                last_probes = probes + 1;
+                return kMiss;
+            }
+            ++probes;
+            if (probes > size)
+                router_table_fatal_("lookup probe overrun (no empty slot)");
+            i = (i + 1) & mask;
+        }
+    }
+
+    void erase(std::uint64_t cookie) noexcept {
+        if (cookie == 0)
+            router_table_fatal_("erase of cookie 0 (outside key domain)");
+        std::uint64_t probes = 0;
+        std::size_t i = hash(cookie, log2_size);
+        for (;;) {
+            if (slots[i].cookie == cookie)
+                break;
+            if (slots[i].cookie == 0)
+                router_table_fatal_("erase of absent cookie");
+            ++probes;
+            if (probes > size)
+                router_table_fatal_("erase probe overrun (no empty slot)");
+            i = (i + 1) & mask;
+        }
+        const std::uint64_t erase_probes = probes + 1;
+        // Backward-shift deletion: every cluster entry after the hole whose
+        // probe path crosses the hole moves into it; the first entry whose
+        // home lies strictly beyond the hole stops the shift. Keeps the
+        // table tombstone-free so lookups always terminate at an empty slot.
+        std::size_t hole = i;
+        std::size_t j = (i + 1) & mask;
+        while (slots[j].cookie != 0) {
+            const std::size_t home = hash(slots[j].cookie, log2_size);
+            const std::size_t d_hole = (hole + size - home) & mask;
+            const std::size_t d_j = (j + size - home) & mask;
+            if (d_hole <= d_j) {
+                slots[hole] = slots[j];
+                hole = j;
+            }
+            j = (j + 1) & mask;
+        }
+        slots[hole] = Slot{};
+        last_probes = erase_probes;
+    }
+
+    std::size_t fixed_bytes() const noexcept { return size * sizeof(Slot); }
+};
+
+inline void UringAsyncBackend::set_router_fix_mode_for_test(
+    RouterFixModeForTest mode) noexcept {
+    // Fresh-backend operation: the whole backend must be quiescent and the
+    // router fully retired before the physical placement may change.
+    if (outstanding() != 0 || live_cookies_.load(std::memory_order_relaxed) != 0 ||
+        cookie_free_list_.size() != router_.size()) {
+        std::fprintf(stderr,
+                     "sluice::async::UringAsyncBackend: router-fix mode "
+                     "switch on a non-quiescent backend (invariant "
+                     "violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    router_fix_mode_for_test_ = mode;
+    // Reseed the free list in the mode's physical order. Cookie values are
+    // NEVER reseeded (next_cookie_ is untouched - no identity reset).
+    cookie_free_list_.assign(router_.size(), detail::SlotIndex{0});
+    if (mode == RouterFixModeForTest::low_placement_forward) {
+        // Descending seed: back() == index 0 first, so the live set parks
+        // at LOW indices under the unchanged back()-pop/back()-push LIFO.
+        for (std::size_t i = 0; i < router_.size(); ++i)
+            cookie_free_list_[i] =
+                detail::SlotIndex{static_cast<std::uint32_t>(router_.size() - 1 - i)};
+    } else {
+        // Ascending seed: the production placement (back() == highest).
+        for (std::size_t i = 0; i < router_.size(); ++i)
+            cookie_free_list_[i] = detail::SlotIndex{static_cast<std::uint32_t>(i)};
+    }
+}
+inline UringAsyncBackend::RouterFixModeForTest
+UringAsyncBackend::router_fix_mode_for_test() const noexcept {
+    return router_fix_mode_for_test_;
+}
+// Layer-A microbench micro-ops. install mirrors ONLY the router-install
+// slice of dispatch_one_locked (free-list pop, no-wrap cookie allocation,
+// RouterEntry install, R3 table insert); it never touches the SQE ring,
+// arena, dispatch queue, or transport ledger.
+inline std::size_t UringAsyncBackend::router_install_cookie_for_test() noexcept {
+    if (cookie_free_list_.empty()) {
+        std::fprintf(stderr,
+                     "sluice::async::UringAsyncBackend: router exhaustion "
+                     "(invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    detail::SlotIndex router_slot = cookie_free_list_.back();
+    cookie_free_list_.pop_back();
+    const std::uint64_t op_cookie = allocate_cookie_(); // no-wrap; fail-fast
+    RouterEntry& route = router_[router_slot.value];
+    route = RouterEntry{};
+    route.cookie = op_cookie;
+    route.in_use = true;
+    live_cookies_.fetch_add(1, std::memory_order_relaxed);
+    router_table_insert_(op_cookie, router_slot.value);
+    return router_slot.value;
+}
+inline void UringAsyncBackend::router_retire_cookie_for_test(
+    std::size_t router_index) noexcept {
+    // The EXACT production retirement path (invariant checks + R3 table
+    // erase + free-list push + live-cookie accounting).
+    retire_router_entry_(router_index);
+}
+// Structural memory facts for the Layer-A evidence.
+inline std::size_t UringAsyncBackend::router_entry_bytes_for_test() noexcept {
+    return sizeof(RouterEntry);
+}
+inline std::size_t UringAsyncBackend::router_table_bytes_for_test()
+    const noexcept {
+    return cookie_table_for_test_ ? cookie_table_for_test_->fixed_bytes() : 0;
 }
 
 }  // namespace sluice::async

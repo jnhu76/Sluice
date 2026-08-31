@@ -21,6 +21,27 @@ hypotheses here were registered BEFORE any causal experiment.
   `docs/results/performance-attribution/tax0u0-*.json`, kinds
   `tax0u0router`/`tax0u0witness`; no production optimization implemented,
   no production fix selected — design selection deferred to #255)
+- `TAX0-ROUTER-PRIOR-ART.md` — T0-U-ROUTER (#255) prior-art survey:
+  user_data→completion resolution contracts across liburing, fio, Tokio,
+  tokio-uring, Monoio, Glommio, Seastar, Boost.Asio; three families
+  (raw pointer / recycled index / no-wrap key) compared as contracts,
+  not as recommendations
+- `TAX0-ROUTER-FIX-SELECTION.md` — T0-U-ROUTER (#255) fix-selection
+  report: candidate admission (R0–R4, R4 shapes rejected pre-benchmark
+  for stale-CQE/ABA contract weakening), frozen shootout methodology,
+  official campaign results, §25 mechanical winner selection, and the
+  §31 verdict (ROUTER SHOOTOUT PASS — PRACTICAL TIE, SIMPLEST
+  CANDIDATE SELECTED (R1)); no production fix implemented
+- `TAX0-ROUTER-REFREEZE-A2.md` — corrective-review re-freeze (PR #256
+  review 5063072823): Layer A instrument correction only (per-window
+  allocation removed + measured allocation gate, `--seed` 0x-prefix
+  parser), validator sealing to the frozen matrix (cell/candidate/
+  session deletion fails closed), micro cycles cross-check, §25 selector
+  direction fix; Layer B not re-measured
+- `TAX0-ROUTER-OPTIMIZATION-REVIEW.md` — T0-U-ROUTER 优化复盘：流程、
+  方案确定与双层 bench 设计、统计/归一化方法及其如何反哺代码决策、
+  当前生产状态（未变更）、优化上限与 AI 驱动优化路线、流程疏漏与
+  改进清单
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 

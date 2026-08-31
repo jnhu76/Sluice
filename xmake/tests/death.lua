@@ -267,6 +267,39 @@ if os.isfile(p) and is_plat("linux", "macosx") then
 end
 end
 
+-- uring_router_fix_death_test — TAX-0 router-fix candidate shootout (#255)
+-- R3 bounded-cookie-table / mode-seam fail-fast death gates. Compiles the
+-- authoritative production uring_backend.cpp under SLUICE_ASYNC_INTERNAL_
+-- TESTING (the R3 table + mode seam are guarded research instrumentation)
+-- and proves via fork/exec children that the impossible internal states —
+-- duplicate insert, erase of an absent cookie, insert/erase of cookie 0
+-- (outside the operation-cookie domain), and a router-fix mode switch on a
+-- non-quiescent backend — terminate (exit 86) in Debug AND Release rather
+-- than silently repairing or resolving a stale entry. Research evidence
+-- only. POSIX-only; real-liburing builds only (the mode-seam case needs a
+-- live ring; the stub registers build/API honesty).
+do
+local p = R .. "tests/uring_router_fix_death_test.cpp"
+if os.isfile(p) and is_plat("linux", "macosx") then
+    target("uring_router_fix_death_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core")
+        add_includedirs(R .. "include", R .. "tests")
+        add_files(p, R .. "src/async/fail_fast.cpp")
+        if has_config("with-liburing") then
+            add_files(R .. "src/async/uring_backend.cpp")
+            -- C4 (issue #135): the installed async headers include the
+            -- non-installed internal-testing seam headers from src/async.
+            add_includedirs(R .. "src/async")
+            add_defines("SLUICE_HAS_LIBURING", "SLUICE_ASYNC_INTERNAL_TESTING")
+            add_packages("liburing")
+        end
+        add_tests("uring_router_fix_death_test")
+end
+end
+
 -- failure_model_high_risk_death_test — PR-D (#135 Case B) death-test
 -- obligations for the ScriptedAsyncBackend fail-closed guards (T3 null
 -- shared state at construction; T6 non-quiescent destruction with accepted

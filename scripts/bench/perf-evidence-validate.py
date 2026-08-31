@@ -113,9 +113,11 @@ def check_common(art: dict) -> list[str]:
         return ["artifact is not a JSON object"]
     kind = art.get("kind")
     if kind not in ("ladder", "cli", "perf", "overload", "e1tax",
-                    "tax0capacity", "tax0u0router", "tax0u0witness"):
+                    "tax0capacity", "tax0u0router", "tax0u0witness",
+                    "tax0routermicro", "tax0routershootout"):
         errs.append(f"kind: expected ladder|cli|perf|overload|e1tax|"
-                    f"tax0capacity|tax0u0router|tax0u0witness, got "
+                    f"tax0capacity|tax0u0router|tax0u0witness|"
+                    f"tax0routermicro|tax0routershootout, got "
                     f"{kind!r}")
     if art.get("schema") != REQUIRED_SCHEMA:
         errs.append(f"schema: expected {REQUIRED_SCHEMA}, got "
@@ -1504,10 +1506,132 @@ def check_tax0u0(art: dict) -> list[str]:
     return errs
 
 
+def _valid_cpu_set(s) -> bool:
+    """True if `s` parses as a `taskset -c` CPU list: comma-separated
+    non-negative integers or `a-b` ranges with a <= b."""
+    if not isinstance(s, str) or not s.strip():
+        return False
+    for tok in s.split(","):
+        tok = tok.strip()
+        if not tok:
+            return False
+        if "-" in tok:
+            a, _, b = tok.partition("-")
+            if not a.isdigit() or not b.isdigit() or int(a) > int(b):
+                return False
+        elif not tok.isdigit():
+            return False
+    return True
+
+
+def check_tax0router(art: dict) -> list[str]:
+    """Kinds `tax0routermicro` / `tax0routershootout` (#250 TAX-0
+    T0-U-ROUTER fix-candidate shootout, #255 gate): structural checks
+    only — kind-specific params sanity, pinned official counters, row
+    field presence, and a derived block with the expected shape. The
+    SEMANTIC authority for these kinds (seed-order recompute, medians,
+    normalization, guardrail/tie/selection recomputation, mutation
+    self-test) is `scripts/bench/tax0router-validate.py`, which must be
+    run on the official artifacts and recorded in the selection report;
+    this gate deliberately does not duplicate it."""
+    errs: list[str] = []
+    kind = art.get("kind")
+    micro = kind == "tax0routermicro"
+    params = art.get("params")
+    if not isinstance(params, dict):
+        return ["params: missing"]
+    want_exp = ("TAX-0-ROUTER-SHOOTOUT-A" if micro
+                else "TAX-0-ROUTER-SHOOTOUT-B")
+    if params.get("experiment") != want_exp:
+        errs.append(f"params.experiment: expected {want_exp!r}, got "
+                    f"{params.get('experiment')!r}")
+    if params.get("candidates") != ["r0", "r1", "r2", "r3"]:
+        errs.append("params.candidates: expected [r0, r1, r2, r3]")
+    if not isinstance(params.get("seed"), int):
+        errs.append("params.seed: missing (predeclared order seed)")
+    reps = params.get("reps")
+    if not isinstance(reps, int) or reps < 1:
+        errs.append(f"params.reps: expected int >= 1, got {reps!r}")
+    if not _valid_cpu_set(params.get("taskset")):
+        errs.append("params.taskset: missing or not a valid CPU set "
+                    "(official runs must pin CPUs, e.g. '0,2,4,6')")
+    pe = params.get("perf_events")
+    if not isinstance(pe, list) or not pe:
+        errs.append("params.perf_events: missing — official shootout "
+                    "artifacts must carry instructions:u/cycles:u")
+    elif not {"instructions:u", "cycles:u"} <= set(pe):
+        errs.append("params.perf_events: must include both "
+                    "instructions:u and cycles:u")
+    if micro:
+        if not isinstance(params.get("windows"), int) or \
+                params.get("windows", 0) < 1:
+            errs.append("params.windows: expected int >= 1")
+        if params.get("patterns") != ["P0", "P1", "P2"]:
+            errs.append("params.patterns: expected [P0, P1, P2]")
+    else:
+        if params.get("op") not in ("read", "write"):
+            errs.append(f"params.op: expected read|write, got "
+                        f"{params.get('op')!r}")
+        if params.get("fs_label") not in ("tmpfs", "btrfs"):
+            errs.append("params.fs_label: expected tmpfs|btrfs")
+        rs, tb = params.get("request_size"), params.get("total_bytes")
+        if not isinstance(rs, int) or rs < 4096 or rs % 4096 != 0:
+            errs.append("params.request_size: must be a multiple of 4096")
+        if not isinstance(tb, int) or tb < rs or (rs and tb % rs != 0):
+            errs.append("params.total_bytes: must be a positive multiple "
+                        "of request_size")
+        if not isinstance(params.get("warmup_rounds"), int) or \
+                params.get("warmup_rounds", -1) < 0:
+            errs.append("params.warmup_rounds: expected int >= 0")
+    rows = art.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return errs + ["rows: empty"]
+    need = {"candidate", "instructions_user", "cycles_user", "ops",
+            "semantic_validation", "same_work", "real_uring",
+            "uring_queue_depth", "request_capacity"}
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict) or not need <= set(r):
+            errs.append(f"row {i}: missing required fields")
+            break
+        if r.get("candidate") not in ("r0", "r1", "r2", "r3"):
+            errs.append(f"row {i}: bad candidate {r.get('candidate')!r}")
+            break
+    if micro:
+        # bench_version >= 2 records the OBSERVED steady-state allocation
+        # count alongside the per-op figure.
+        for i, r in enumerate(rows):
+            if not isinstance(r, dict) or \
+                    "steady_allocations_during_trace" not in r:
+                errs.append(f"row {i}: missing "
+                            f"steady_allocations_during_trace")
+                break
+    derived = art.get("derived")
+    if not isinstance(derived, dict) or not derived:
+        errs.append("derived: missing (must embed recomputed statistics)")
+    elif micro:
+        for k in ("gm_per_candidate", "normalized_vs_r0", "cells"):
+            if k not in derived:
+                errs.append(f"derived.{k}: missing")
+    else:
+        env = derived.get("envelope_vs_r0")
+        if not isinstance(env, dict):
+            errs.append("derived.envelope_vs_r0: missing")
+        else:
+            for cand, e in env.items():
+                for k in ("gm_instr", "gm_cycles", "worst_cell_instr",
+                          "worst_cell_cycles", "guardrail_pass"):
+                    if k not in e:
+                        errs.append(f"derived.envelope_vs_r0.{cand}.{k}: "
+                                    f"missing")
+    return errs
+
+
 CHECKS = {"ladder": check_ladder, "cli": check_cli, "perf": check_perf,
           "overload": check_overload, "e1tax": check_e1tax,
           "tax0capacity": check_tax0capacity,
-          "tax0u0router": check_tax0u0, "tax0u0witness": check_tax0u0}
+          "tax0u0router": check_tax0u0, "tax0u0witness": check_tax0u0,
+          "tax0routermicro": check_tax0router,
+          "tax0routershootout": check_tax0router}
 
 
 def validate_artifact(art: dict) -> list[str]:

@@ -238,15 +238,23 @@ def git_sha() -> dict:
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO,
                              capture_output=True, text=True, check=True).stdout.strip()
-        dirty = bool(subprocess.run(["git", "status", "--short"], cwd=REPO,
-                                    capture_output=True, text=True,
-                                    check=True).stdout.strip())
+        # Capture the exact dirty paths, not just a bool: a dirty tree is
+        # routinely the artifact file itself being rewritten in place (the
+        # runner records provenance BEFORE writing its output), so
+        # `dirty_paths` lets a reader tell "evidence output regenerated"
+        # apart from "measurement source drifted".
+        status = subprocess.run(["git", "status", "--short"], cwd=REPO,
+                                capture_output=True, text=True,
+                                check=True).stdout.splitlines()
+        dirty_paths = [ln.strip() for ln in status if ln.strip()]
         branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
                                 cwd=REPO, capture_output=True, text=True,
                                 check=True).stdout.strip()
-        return {"sha": sha, "dirty": dirty, "branch": branch}
+        return {"sha": sha, "dirty": bool(dirty_paths), "branch": branch,
+                "dirty_paths": dirty_paths}
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return {"sha": "unknown", "dirty": None, "branch": "unknown"}
+        return {"sha": "unknown", "dirty": None, "branch": "unknown",
+                "dirty_paths": []}
 
 
 def _first_line(cmd: list[str]) -> str | None:
@@ -1971,6 +1979,656 @@ def cmd_tax0u0(args) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# tax0routermicro / tax0routershootout: #255 TAX-0 router-fix candidate
+# shootout. Layer A (synthetic router-lifecycle microbench: install+lookup+
+# retire on the internal-testing micro-op seams; every candidate consumes
+# the identical deterministic trace) and Layer B (REAL io_uring end-to-end
+# EXP-0/U0 geometry, READ+WRITE arms, Q==D, per-row structural witness).
+# Candidates are research modes (r0 production baseline / r1 reverse scan /
+# r2 low placement + forward / r3 bounded cookie table); the production
+# sluice_async keeps R0 through this whole campaign. Frozen BEFORE any
+# official run (#255): seed 0x52545253 ("RTRS"), winner guardrail +5%,
+# practical-tie band 2%, tie-break order (semantic surface, complexity,
+# fixed memory) => r1 < r2 < r3. End-to-end has production-selection
+# authority; Layer A is diagnostic only.
+# ---------------------------------------------------------------------------
+
+TAX0ROUTER_MICRO_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "tax0router_micro_bench"
+TAX0ROUTER_SHOOTOUT_BIN = REPO / "build" / "linux" / "x86_64" / "release" / "tax0router_shootout_bench"
+TAX0ROUTER_SEED = 0x52545253  # "RTRS"
+TAX0ROUTER_CANDIDATES = ["r0", "r1", "r2", "r3"]
+TAX0ROUTER_GUARDRAIL = 0.05   # per-cell +5% instr OR cycles => disqualified
+TAX0ROUTER_TIE = 0.02         # practical-tie band (GM and worst-advantage)
+# Tie-break preference (frozen; simplest semantically valid first).
+TAX0ROUTER_SIMPLICITY = {"r1": 0, "r2": 1, "r3": 2}
+
+
+def tax0router_execution_order(cells: list[tuple], reps: int, seed: int) -> list:
+    """Blocked randomized order over arbitrary hashable cell tuples:
+    `reps` rounds, each a fresh permutation. Pure function of (cells,
+    reps, seed), generated before any measurement; the validator
+    recomputes it exactly."""
+    rng = random.Random(seed)
+    norm = sorted(cells)
+    return [rng.sample(norm, k=len(norm)) for _ in range(reps)]
+
+
+def _tax0router_parse_pairs(spec: str, what: str) -> list[tuple[int, int]]:
+    pairs = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            sys.exit(f"--{what}: each cell must be D:C (got {part!r})")
+        d_s, c_s = part.split(":", 1)
+        try:
+            d, c = int(d_s), int(c_s)
+        except ValueError:
+            sys.exit(f"--{what}: invalid cell {part!r}")
+        if d <= 0 or c < d:
+            sys.exit(f"--{what}: cell {part!r} violates 1 <= D <= C")
+        pairs.append((d, c))
+    if not pairs or len(set(pairs)) != len(pairs):
+        sys.exit(f"--{what}: must be a non-empty comma list without dups")
+    return pairs
+
+
+def _tax0router_perf_run(argv_prefix: list[str], bench_argv: list[str],
+                         use_perf: bool, label: str) -> dict:
+    perf = shutil.which("perf")
+    if use_perf and perf is None:
+        sys.exit(f"{label}: perf not found in PATH (required for official "
+                 f"rows; smoke runs use --no-perf)")
+    argv: list[str] = list(argv_prefix)
+    if use_perf:
+        argv += [perf, "stat", "-x,", "-e", ",".join(TAX0_PERF_EVENTS), "--"]
+    argv += bench_argv
+    env = dict(os.environ, LC_ALL="C")
+    out = subprocess.run(argv, capture_output=True, text=True, env=env)
+    if out.returncode != 0:
+        sys.exit(f"{label}: bench exited {out.returncode}; stderr tail: "
+                 f"{out.stderr.strip()[-2000:]}")
+    try:
+        bench = json.loads(out.stdout)
+    except json.JSONDecodeError as e:
+        sys.exit(f"{label}: bench stdout is not JSON: {e}")
+    if not bench.get("accounting_ok", bench.get("all_reps_ok")):
+        sys.exit(f"{label}: bench reported accounting failure")
+    counters = parse_perf_stat(out.stderr) if use_perf else {}
+    if use_perf:
+        for req in ("instructions", "cycles"):
+            if not counters.get(req):
+                sys.exit(f"{label}: perf stat returned no {req} counter; "
+                         f"perf stderr tail: {out.stderr.strip()[-2000:]}")
+    return {"bench": bench, "counters": counters,
+            "child_exit_code": out.returncode,
+            "perf_raw": out.stderr.strip() if use_perf else None}
+
+
+def _gm(values: list[float]) -> float:
+    if not values:
+        return float("nan")
+    prod = 1.0
+    for v in values:
+        prod *= v
+    return prod ** (1.0 / len(values))
+
+
+# ---- Layer A: router lifecycle microbench ----------------------------------
+
+def tax0routermicro_cells(candidates: list[str], patterns: list[str],
+                          geometries: list[tuple[int, int]]) -> list[tuple]:
+    cells = []
+    for pat in patterns:
+        for (d, c) in geometries:
+            if pat == "P2" and d != c:
+                continue  # P2 is the full-occupancy pattern: D == C only
+            for cand in candidates:
+                cells.append((cand, pat, d, c))
+    return sorted(cells)
+
+
+def tax0routermicro_derived(rows: list[dict]) -> dict:
+    """Per-cell medians/MADs, per-candidate normalized-vs-r0 ratios and
+    geometric means. Pure recomputation from raw rows. Per-op divisors use
+    each row's OWN lifecycle_ops (windows * depth — varies by cell); a
+    shared rows[0] divisor would mis-scale every other depth."""
+    by_cell: dict[tuple, list[dict]] = {}
+    for r in rows:
+        by_cell.setdefault((r["candidate"], r["pattern"], r["depth"],
+                            r["request_capacity"]), []).append(r)
+
+    def _cell_per_op_med(cell_rows: list[dict], key: str) -> float | None:
+        vals = [r[key] / r["lifecycle_ops"] for r in cell_rows
+                if isinstance(r.get(key), (int, float))
+                and r.get("lifecycle_ops")]
+        return median(vals) if vals else None
+
+    cells: dict[str, dict] = {}
+    med_instr: dict[tuple, float | None] = {}
+    med_cycles: dict[tuple, float | None] = {}
+    for cell, cell_rows in sorted(by_cell.items()):
+        instr = _cell_per_op_med(cell_rows, "instructions_user")
+        cycles = _cell_per_op_med(cell_rows, "cycles_user")
+        med_instr[cell] = instr
+        med_cycles[cell] = cycles
+        cand, pat, d, c = cell
+        r0 = cell_rows[0]
+        cells[f"{cand}|{pat}|D={d},C={c}"] = {
+            "n": len(cell_rows),
+            "instr_per_op": med_instr[cell],
+            "cycles_per_op": med_cycles[cell],
+            "mad_instr": _mad([r["instructions_user"] / r["lifecycle_ops"]
+                               for r in cell_rows
+                               if isinstance(r.get("instructions_user"),
+                                             (int, float))
+                               and r.get("lifecycle_ops")]),
+            "lookup_probes_per_op": (
+                _cell_per_op_med(cell_rows, "lookup_iterations_total") or 0),
+            "matched_router_index_max": r0["matched_router_index_max"],
+            "fixed_router_bytes": r0["router_bytes"],
+            "fixed_candidate_bytes": r0["candidate_table_bytes"],
+            # Observed, not assumed: the bench counts every replaceable
+            # global allocation across the trace and fails the run on a
+            # nonzero count; this propagates the measured value.
+            "steady_allocations_per_op":
+                max(r["steady_allocations_per_op"]
+                    for r in cell_rows),
+        }
+
+    # Normalize every non-r0 candidate against same-cell r0.
+    normalized: dict[str, dict] = {}
+    for cell in sorted(by_cell):
+        cand, pat, d, c = cell
+        if cand == "r0" or med_instr[cell] is None:
+            continue
+        base_i = med_instr.get((("r0",) + cell[1:]))
+        base_c = med_cycles.get((("r0",) + cell[1:]))
+        entry: dict = {}
+        if base_i:
+            entry["instr"] = med_instr[cell] / base_i
+        if base_c:
+            entry["cycles"] = med_cycles[cell] / base_c
+        normalized[f"{cand}|{pat}|D={d},C={c}"] = entry
+
+    gm: dict[str, dict] = {}
+    for cand in sorted({r["candidate"] for r in rows}):
+        ratios_i = [normalized[k]["instr"] for k in normalized
+                    if k.startswith(cand + "|") and normalized[k].get("instr")]
+        ratios_c = [normalized[k]["cycles"] for k in normalized
+                    if k.startswith(cand + "|") and normalized[k].get("cycles")]
+        gm[cand] = {"gm_instr": _gm(ratios_i) if ratios_i else None,
+                    "gm_cycles": _gm(ratios_c) if ratios_c else None,
+                    "n_cells": len(ratios_i)}
+    return {"cells": cells, "normalized_vs_r0": normalized,
+            "gm_per_candidate": gm}
+
+
+def _tax0router_micro_argv(bin_path: Path, cand: str, pat: str, d: int,
+                           c: int, windows: int, seed: int) -> list[str]:
+    """Bench argv for one Layer A micro row. The `--seed` here is the one
+    the bench actually consumes for its permutation trace, so it MUST be
+    the campaign seed derived from args (corrective review: this used to
+    hard-code the frozen constant, which would drift from the recorded
+    seed on any non-default `--seed` run)."""
+    return [str(bin_path), "--candidate", cand, "--pattern", pat,
+            "--depth", str(d), "--capacity", str(c),
+            "--windows", str(windows), "--seed", hex(seed)]
+
+
+def cmd_tax0routermicro(args) -> dict:
+    if not TAX0ROUTER_MICRO_BIN.exists():
+        sys.exit(f"missing {TAX0ROUTER_MICRO_BIN} (xmake f -m release "
+                 f"--toolchain=clang --with-liburing=true; xmake build "
+                 f"tax0router_micro_bench)")
+    candidates = [c.strip() for c in args.candidates.split(",") if c.strip()]
+    if not candidates or len(set(candidates)) != len(candidates):
+        sys.exit("--candidates must be a non-empty comma list without dups")
+    for cand in candidates:
+        if cand not in TAX0ROUTER_CANDIDATES:
+            sys.exit(f"--candidates: unknown candidate {cand} "
+                     f"(allowed {TAX0ROUTER_CANDIDATES})")
+    if "r0" not in candidates:
+        sys.exit("--candidates must include r0 (the normalization baseline)")
+    patterns = [p.strip().upper() for p in args.patterns.split(",") if p.strip()]
+    for pat in patterns:
+        if pat not in ("P0", "P1", "P2"):
+            sys.exit("--patterns must list P0|P1|P2")
+    geometries = _tax0router_parse_pairs(args.geometries, "geometries")
+
+    cells = tax0routermicro_cells(candidates, patterns, geometries)
+    if not cells:
+        sys.exit("tax0routermicro matrix expanded to zero cells "
+                 "(check pattern/geometry combination)")
+    rounds = tax0router_execution_order(cells, args.reps, args.seed)
+    flat = [c for rnd in rounds for c in rnd]
+
+    env_fp = env_fingerprint()
+    env_id_src = {k: v for k, v in env_fp.items() if k != "time"}
+    environment_id = hashlib.sha256(
+        json.dumps(env_id_src, sort_keys=True).encode()).hexdigest()[:16]
+    perf_events = None if args.no_perf else TAX0_PERF_EVENTS
+
+    rows = []
+    rep_counters: dict[tuple, int] = {c: 0 for c in cells}
+    for ridx, rnd in enumerate(rounds):
+        for (cand, pat, d, c) in rnd:
+            idx = len(rows)
+            bench_argv = _tax0router_micro_argv(TAX0ROUTER_MICRO_BIN, cand,
+                                                pat, d, c, args.windows,
+                                                args.seed)
+            prefix = ["taskset", "-c", args.taskset] if args.taskset else []
+            got = _tax0router_perf_run(prefix, bench_argv,
+                                       use_perf=not args.no_perf,
+                                       label=f"micro r{ridx + 1} {cand} "
+                                             f"{pat} D={d} C={c}")
+            bench = got["bench"]
+            counters = got["counters"]
+            row = {
+                "experiment": "TAX-0-ROUTER-SHOOTOUT-A",
+                "git_sha": env_fp["git"]["sha"],
+                "candidate": cand,
+                "backend": "router-micro",
+                "real_uring": True,
+                "filesystem": None,
+                "op": f"lifecycle:{pat}",
+                "pattern": pat,
+                "depth": d,
+                "request_capacity": c,
+                "uring_queue_depth": None,
+                "bytes": 0,
+                "lifecycle_ops": bench["lifecycle_ops"],
+                "ops": bench["lifecycle_ops"],
+                "rep": rep_counters[(cand, pat, d, c)],
+                "execution_order_index": idx,
+                "wall_ns": bench["wall_ns_total"],
+                "instructions_user": counters.get("instructions"),
+                "cycles_user": counters.get("cycles"),
+                "lookup_iterations_total": bench["lookup_iterations_total"],
+                "table_insert_probes_total": bench["table_insert_probes_total"],
+                "table_erase_probes_total": bench["table_erase_probes_total"],
+                "matched_router_index_max": bench["matched_router_index_max"],
+                "router_bytes": bench["router_bytes"],
+                "candidate_table_bytes": bench["candidate_table_bytes"],
+                "steady_allocations_during_trace":
+                    bench["steady_allocations_during_trace"],
+                "steady_allocations_per_op": bench["steady_allocations_per_op"],
+                "same_work": True,
+                "semantic_validation": True,
+                "child_exit_code": got["child_exit_code"],
+                "perf_raw": got["perf_raw"],
+                "environment_id": environment_id,
+            }
+            if row["lifecycle_ops"] != args.windows * d:
+                sys.exit(f"micro row {idx}: lifecycle ops mismatch")
+            if row["steady_allocations_during_trace"] != 0 or \
+                    row["steady_allocations_per_op"] != 0:
+                sys.exit(f"micro row {idx}: steady-state allocation observed "
+                         f"({row['steady_allocations_during_trace']})")
+            if cand == "r3" and (row["table_insert_probes_total"] == 0 or
+                                 row["table_erase_probes_total"] == 0):
+                sys.exit(f"micro row {idx}: r3 without table accounting")
+            if cand != "r3" and (row["table_insert_probes_total"] != 0 or
+                                 row["table_erase_probes_total"] != 0):
+                sys.exit(f"micro row {idx}: non-r3 touched the table")
+            if not args.no_perf and not row["instructions_user"]:
+                sys.exit(f"micro row {idx}: missing instructions counter")
+            rows.append(row)
+            rep_counters[(cand, pat, d, c)] += 1
+            if not args.no_perf:
+                print(f"[tax0routermicro round {ridx + 1}/{args.reps}] "
+                      f"{idx + 1}/{len(flat)}: {cand} {pat} D={d} C={c} "
+                      f"instr/op="
+                      f"{row['instructions_user'] / row['ops']:.1f}",
+                      file=sys.stderr)
+
+    return {
+        "schema": SCHEMA,
+        "kind": "tax0routermicro",
+        "binary": binary_provenance(TAX0ROUTER_MICRO_BIN),
+        "params": {
+            "experiment": "TAX-0-ROUTER-SHOOTOUT-A",
+            "candidates": candidates,
+            "patterns": patterns,
+            "geometries": [f"D={d},C={c}" for d, c in geometries],
+            "windows": args.windows,
+            "reps": args.reps,
+            "seed": args.seed,
+            "taskset": args.taskset or None,
+            "perf_events": perf_events,
+            "note": args.note or None,
+        },
+        "execution_order": {
+            "generator": ("random.Random(seed).sample(sorted(cells)) per "
+                          "round over (candidate, pattern, D, C) — generated "
+                          "before measurement"),
+            "seed": args.seed,
+            "reps": args.reps,
+            "cells": [f"{cand}|{p}|D={d},C={c}"
+                      for cand, p, d, c in cells],
+            "rounds": [[f"{c}|{p}|D={d},C={cc}" for c, p, d, cc in rnd]
+                       for rnd in rounds],
+        },
+        "environment_id": environment_id,
+        "rows": rows,
+        "same_work": {
+            "lifecycle_ops_by_geometry": {
+                f"D={d},C={c}": args.windows * d for d, c in geometries},
+            "same_work_all": True,
+            "note": ("every candidate consumed the identical logical trace "
+                     "(cookie sequence, depth, capacity, completion order, "
+                     "insert/lookup/erase counts); asserted by the bench"),
+        },
+        "derived": tax0routermicro_derived(rows),
+    }
+
+
+# ---- Layer B: REAL io_uring end-to-end shootout -----------------------------
+
+def tax0routershootout_cells(candidates: list[str],
+                             geometries: list[tuple[int, int]]) -> list[tuple]:
+    return sorted((cand, d, c) for cand in candidates for (d, c) in geometries)
+
+
+def cmd_tax0routershootout(args) -> dict:
+    if not TAX0ROUTER_SHOOTOUT_BIN.exists():
+        sys.exit(f"missing {TAX0ROUTER_SHOOTOUT_BIN} (xmake f -m release "
+                 f"--toolchain=clang --with-liburing=true; xmake build "
+                 f"tax0router_shootout_bench)")
+    candidates = [c.strip() for c in args.candidates.split(",") if c.strip()]
+    if not candidates or len(set(candidates)) != len(candidates):
+        sys.exit("--candidates must be a non-empty comma list without dups")
+    for cand in candidates:
+        if cand not in TAX0ROUTER_CANDIDATES:
+            sys.exit(f"--candidates: unknown candidate {cand}")
+    if "r0" not in candidates:
+        sys.exit("--candidates must include r0 (the same-session baseline)")
+    if args.op not in ("read", "write"):
+        sys.exit("--op must be read|write (one op group per session)")
+    geometries = _tax0router_parse_pairs(args.geometries, "geometries")
+
+    cells = tax0routershootout_cells(candidates, geometries)
+    rounds = tax0router_execution_order(cells, args.reps, args.seed)
+    flat = [c for rnd in rounds for c in rnd]
+
+    env_fp = env_fingerprint(input_path=args.file)
+    env_id_src = {k: v for k, v in env_fp.items() if k != "time"}
+    environment_id = hashlib.sha256(
+        json.dumps(env_id_src, sort_keys=True).encode()).hexdigest()[:16]
+    env_extra = _tax0_environment_extra(args.taskset, args.file)
+    expected_ops = args.total_bytes // args.request_size
+
+    # Unmeasured warmup rounds (no perf) for every cell.
+    if not args.no_perf:
+        for w in range(args.warmup_rounds):
+            for (cand, d, c) in sorted(cells):
+                bench_argv = [str(TAX0ROUTER_SHOOTOUT_BIN),
+                              "--router-fix-mode", cand, "--op", args.op,
+                              "--request-size", str(args.request_size),
+                              "--total-bytes", str(args.total_bytes),
+                              "--depth", str(d),
+                              "--request-capacity", str(c),
+                              "--uring-queue-depth", str(d),  # Q == D (frozen)
+                              "--reps", "1", "--warmup", "0",
+                              "--file", args.file]
+                prefix = ["taskset", "-c", args.taskset] if args.taskset else []
+                _tax0router_perf_run(prefix, bench_argv, use_perf=False,
+                                     label=f"warmup r{w + 1}/"
+                                           f"{args.warmup_rounds}")
+            print(f"[tax0routershootout warmup round {w + 1}/"
+                  f"{args.warmup_rounds}] done", file=sys.stderr)
+
+    rows = []
+    rep_counters: dict[tuple, int] = {c: 0 for c in cells}
+    for ridx, rnd in enumerate(rounds):
+        for (cand, d, c) in rnd:
+            idx = len(rows)
+            bench_argv = [str(TAX0ROUTER_SHOOTOUT_BIN),
+                          "--router-fix-mode", cand, "--op", args.op,
+                          "--request-size", str(args.request_size),
+                          "--total-bytes", str(args.total_bytes),
+                          "--depth", str(d),
+                          "--request-capacity", str(c),
+                          "--uring-queue-depth", str(d),  # Q == D (frozen)
+                          "--reps", "1", "--warmup", "0",
+                          "--file", args.file]
+            prefix = ["taskset", "-c", args.taskset] if args.taskset else []
+            got = _tax0router_perf_run(prefix, bench_argv,
+                                       use_perf=not args.no_perf,
+                                       label=f"round {ridx + 1}/{args.reps}")
+            bench = got["bench"]
+            rep = bench["reps_out"][0]
+            counters = got["counters"]
+            row = {
+                "experiment": "TAX-0-ROUTER-SHOOTOUT-B",
+                "git_sha": env_fp["git"]["sha"],
+                "candidate": cand,
+                "backend": "uring",
+                "real_uring": bool(bench.get("real_uring")),
+                "filesystem": args.fs_label or None,
+                "op": args.op,
+                "request_size": args.request_size,
+                "active_depth": d,
+                "request_capacity": c,
+                "uring_queue_depth": d,  # Q == D (frozen primary matrix)
+                "total_bytes": args.total_bytes,
+                "bytes": args.total_bytes,
+                "ops": bench["ops"],
+                "rep": rep_counters[(cand, d, c)],
+                "execution_order_index": idx,
+                "wall_ns": rep["wall_ns"],
+                "user_ns": rep["user_ns"],
+                "sys_ns": rep["sys_ns"],
+                "instructions_user": counters.get("instructions"),
+                "cycles_user": counters.get("cycles"),
+                "branches_user": counters.get("branches"),
+                "branch_misses_user": counters.get("branch-misses"),
+                "cache_misses_user": counters.get("cache-misses"),
+                "op_cookie_lookup_calls": rep["op_lookup_calls"],
+                "op_lookup_iterations_total": rep["op_lookup_iterations_total"],
+                "op_lookup_iterations_max": rep["op_lookup_iterations_max"],
+                "control_cookie_lookup_calls": rep["control_lookup_calls"],
+                "transport_cookie_lookup_calls": rep["transport_lookup_calls"],
+                "lookup_hits": rep["lookup_hits"],
+                "lookup_misses": rep["lookup_misses"],
+                "matched_router_index_max": rep["matched_router_index_max"],
+                "table_insert_calls": rep["table_insert_calls"],
+                "table_erase_calls": rep["table_erase_calls"],
+                "table_insert_probes_total": rep["table_insert_probes_total"],
+                "table_lookup_probes_total": rep["table_lookup_probes_total"],
+                "table_erase_probes_total": rep["table_erase_probes_total"],
+                "same_work": True,
+                "semantic_validation": True,
+                "word_sum": rep.get("word_sum") if args.op == "read" else None,
+                "expected_word_sum": (bench.get("expected_word_sum")
+                                      if args.op == "read" else None),
+                "child_exit_code": got["child_exit_code"],
+                "perf_raw": got["perf_raw"],
+                "environment_id": environment_id,
+            }
+            # Fail-closed per-row checks.
+            if row["ops"] != expected_ops:
+                sys.exit(f"shootout row {idx}: ops {row['ops']} != expected "
+                         f"{expected_ops} ({cand} D={d} C={c})")
+            if not row["real_uring"]:
+                sys.exit(f"shootout row {idx}: uring row without a real ring")
+            if row["op_cookie_lookup_calls"] != row["ops"]:
+                sys.exit(f"shootout row {idx}: op lookup calls != ops "
+                         f"— STOP and explain")
+            if row["lookup_hits"] != row["ops"] or row["lookup_misses"] != 0:
+                sys.exit(f"shootout row {idx}: unexpected lookup misses")
+            if row["control_cookie_lookup_calls"] != 0 or \
+                    row["transport_cookie_lookup_calls"] != 0:
+                sys.exit(f"shootout row {idx}: control/transport lookup "
+                         f"contamination — record and explain")
+            if args.op == "read" and row["word_sum"] != row["expected_word_sum"]:
+                sys.exit(f"shootout row {idx}: word_sum mismatch")
+            if cand == "r3" and (row["table_insert_calls"] != row["ops"] or
+                                 row["table_erase_calls"] != row["ops"]):
+                sys.exit(f"shootout row {idx}: r3 table accounting mismatch")
+            if cand != "r3" and (row["table_insert_calls"] != 0 or
+                                 row["table_erase_calls"] != 0):
+                sys.exit(f"shootout row {idx}: non-r3 touched the table")
+            if row["matched_router_index_max"] >= c:
+                sys.exit(f"shootout row {idx}: matched index out of range")
+            if not args.no_perf and not row["instructions_user"]:
+                sys.exit(f"shootout row {idx}: missing instructions counter")
+            rows.append(row)
+            rep_counters[(cand, d, c)] += 1
+            if not args.no_perf:
+                print(f"[tax0routershootout round {ridx + 1}/{args.reps}] "
+                      f"{idx + 1}/{len(flat)}: {cand} D={d} C={c} "
+                      f"instr/op="
+                      f"{row['instructions_user'] / row['ops']:.1f} "
+                      f"it/op="
+                      f"{row['op_lookup_iterations_total'] / row['ops']:.1f}",
+                      file=sys.stderr)
+
+    return {
+        "schema": SCHEMA,
+        "kind": "tax0routershootout",
+        "binary": binary_provenance(TAX0ROUTER_SHOOTOUT_BIN),
+        "params": {
+            "experiment": "TAX-0-ROUTER-SHOOTOUT-B",
+            "candidates": candidates,
+            "op": args.op,
+            "geometries": [f"D={d},C={c}" for d, c in geometries],
+            "request_size": args.request_size,
+            "total_bytes": args.total_bytes,
+            "reps": args.reps,
+            "warmup_rounds": 0 if args.no_perf else args.warmup_rounds,
+            "seed": args.seed,
+            "fs_label": args.fs_label or None,
+            "taskset": args.taskset or None,
+            "perf_events": None if args.no_perf else TAX0_PERF_EVENTS,
+            "note": args.note or None,
+        },
+        "execution_order": {
+            "generator": ("random.Random(seed).sample(sorted(cells)) per "
+                          "round over (candidate, D, C) — generated before "
+                          "measurement"),
+            "seed": args.seed,
+            "reps": args.reps,
+            "cells": [f"{c}|D={d},C={cc}" for c, d, cc in cells],
+            "rounds": [[f"{c}|D={d},C={cc}" for c, d, cc in rnd]
+                       for rnd in rounds],
+        },
+        "environment_extra": env_extra,
+        "environment_id": environment_id,
+        "rows": rows,
+        "same_work": {
+            "ops_expected": expected_ops,
+            "ops_observed": sorted({r["ops"] for r in rows}),
+            "bytes_expected": args.total_bytes,
+            "bytes_observed": sorted({r["total_bytes"] for r in rows}),
+            "word_sum_expected": rows[0]["expected_word_sum"] if rows else None,
+            "word_sum_observed": sorted({r["word_sum"] for r in rows
+                                         if r["word_sum"] is not None}),
+            "validation_all_true": all(r["semantic_validation"] for r in rows),
+        },
+        "derived": tax0routershootout_derived(rows),
+    }
+
+
+def tax0routershootout_derived(rows: list[dict]) -> dict:
+    """Per-(candidate, cell) medians/MADs, per-candidate normalized-vs-r0
+    envelope + geometric mean + worst regression + guardrail eligibility
+    (frozen +5%), and the pairwise practical-tie relation (frozen 2%). Pure
+    recomputation from raw rows; per-artifact (one fs x one op session).
+    The campaign aggregate across sessions is recomputed by the validator
+    from the raw rows of all shootout artifacts."""
+    ops = rows[0]["ops"]
+    by_cell: dict[tuple, list[dict]] = {}
+    for r in rows:
+        by_cell.setdefault((r["candidate"], r["active_depth"],
+                            r["request_capacity"]), []).append(r)
+
+    def _med(cell_rows: list[dict], key: str) -> float | None:
+        vals = [r[key] for r in cell_rows if isinstance(r.get(key),
+                                                        (int, float))]
+        return median(vals) if vals else None
+
+    cells: dict[str, dict] = {}
+    med_instr: dict[tuple, float | None] = {}
+    med_cycles: dict[tuple, float | None] = {}
+    for cell, cell_rows in sorted(by_cell.items()):
+        cand, d, c = cell
+        instr, cycles = _med(cell_rows, "instructions_user"), \
+            _med(cell_rows, "cycles_user")
+        med_instr[cell] = instr / ops if instr else None
+        med_cycles[cell] = cycles / ops if cycles else None
+        cells[f"{cand}|D={d},C={c}"] = {
+            "n": len(cell_rows),
+            "instr_per_op": med_instr[cell],
+            "cycles_per_op": med_cycles[cell],
+            "mad_instr": _mad([r["instructions_user"] / ops
+                               for r in cell_rows
+                               if isinstance(r.get("instructions_user"),
+                                             (int, float))]),
+            "iterations_per_op":
+                (_med(cell_rows, "op_lookup_iterations_total") or 0) / ops,
+            "wall_ns_per_op": _med(cell_rows, "wall_ns"),
+        }
+
+    candidates = sorted({r["candidate"] for r in rows})
+    envelope: dict[str, dict] = {}
+    for cand in candidates:
+        if cand == "r0":
+            continue
+        norm_i: list[float] = []
+        norm_c: list[float] = []
+        for (cd, d, c) in sorted(by_cell):
+            if cd != cand:
+                continue
+            base_i = med_instr.get(("r0", d, c))
+            base_c = med_cycles.get(("r0", d, c))
+            if base_i and med_instr[(cd, d, c)]:
+                norm_i.append(med_instr[(cd, d, c)] / base_i)
+            if base_c and med_cycles[(cd, d, c)]:
+                norm_c.append(med_cycles[(cd, d, c)] / base_c)
+        envelope[cand] = {
+            "cells": len(norm_i),
+            "gm_instr": _gm(norm_i) if norm_i else None,
+            "gm_cycles": _gm(norm_c) if norm_c else None,
+            "worst_cell_instr": max(norm_i) if norm_i else None,
+            "worst_cell_cycles": max(norm_c) if norm_c else None,
+            "guardrail_pass": (bool(norm_i) and bool(norm_c)
+                               and max(norm_i) <= 1 + TAX0ROUTER_GUARDRAIL
+                               and max(norm_c) <= 1 + TAX0ROUTER_GUARDRAIL),
+            "guardrail": {"max_instr_ratio": 1 + TAX0ROUTER_GUARDRAIL,
+                          "max_cycles_ratio": 1 + TAX0ROUTER_GUARDRAIL},
+        }
+
+    # Pairwise practical tie (frozen §24): GM_instr and GM_cycles both
+    # within 2%, and no >2 percentage-point worst-regression advantage.
+    tie: dict[str, bool] = {}
+    tie_set = list(candidates)
+    for a in candidates:
+        for b in candidates:
+            if a >= b or a == "r0" or b == "r0":
+                continue
+            ea, eb = envelope.get(a, {}), envelope.get(b, {})
+            gi = ea.get("gm_instr") and eb.get("gm_instr")
+            gc = ea.get("gm_cycles") and eb.get("gm_cycles")
+            wa = ea.get("worst_cell_instr") or 0.0
+            wb = eb.get("worst_cell_instr") or 0.0
+            tied = bool(gi and gc and
+                        abs(ea["gm_instr"] - eb["gm_instr"]) < TAX0ROUTER_TIE
+                        and abs(ea["gm_cycles"] - eb["gm_cycles"]) <
+                        TAX0ROUTER_TIE
+                        and abs(wa - wb) <= TAX0ROUTER_TIE)
+            tie[f"{a}|{b}"] = tied
+
+    return {"cells": cells, "envelope_vs_r0": envelope,
+            "practical_tie": tie,
+            "tie_set": tie_set,
+            "rules": {"guardrail": TAX0ROUTER_GUARDRAIL,
+                      "tie": TAX0ROUTER_TIE,
+                      "simplicity_order": TAX0ROUTER_SIMPLICITY}}
+
+
 def _bpftrace_tool_block() -> dict:
     bpf = shutil.which("bpftrace")
     if bpf is None:
@@ -2237,6 +2895,31 @@ class RunnerSelfTest(unittest.TestCase):
             self.assertEqual(prov["size"], len(b"measured-bytes"))
             self.assertEqual(prov["path"], str(p))
             self.assertIsInstance(prov["mtime"], float)
+
+    def test_tax0router_micro_seed_follows_args(self):
+        # Corrective review: the Layer A bench argv hard-coded the frozen
+        # constant even for non-default `--seed` runs, so the recorded
+        # seed (args.seed, also used for the execution order) and the seed
+        # the bench actually consumed would drift apart on any non-default
+        # run. The bench argv must carry the args-derived seed.
+        argv = _tax0router_micro_argv(Path("/bin/true"), "r1", "P1", 8, 32,
+                                      20000, 0x1234)
+        self.assertEqual(argv[argv.index("--seed") + 1], hex(0x1234))
+        # Default campaign seed still round-trips identically.
+        argv = _tax0router_micro_argv(Path("/bin/true"), "r1", "P1", 8, 32,
+                                      20000, TAX0ROUTER_SEED)
+        self.assertEqual(argv[argv.index("--seed") + 1], hex(TAX0ROUTER_SEED))
+
+    def test_git_sha_records_dirty_paths(self):
+        # A dirty tree is routinely just the artifact file being rewritten
+        # in place; provenance must record WHICH paths are dirty so
+        # "evidence output regenerated" is distinguishable from
+        # "measurement source drifted". Shape check only (we are inside a
+        # git repo, so the fields are always present).
+        g = git_sha()
+        self.assertEqual(set(g), {"sha", "dirty", "branch", "dirty_paths"})
+        self.assertEqual(bool(g["dirty_paths"]), bool(g["dirty"]))
+        self.assertIsInstance(g["dirty_paths"], list)
 
     MOUNTINFO = (
         "36 35 0:53 / /tmp rw - tmpfs tmpfs rw\n"
@@ -2565,6 +3248,74 @@ def main() -> int:
     p.add_argument("--note", default="",
                    help="provenance note embedded in the artifact")
 
+    p = sub.add_parser("tax0routermicro",
+                       help="#255 TAX-0 router-fix shootout Layer A: "
+                            "deterministic router-lifecycle microbench "
+                            "(install+lookup+retire, identical trace per "
+                            "candidate, no kernel I/O)")
+    p.add_argument("--candidates", default="r0,r1,r2,r3",
+                   help="comma list (must include r0)")
+    p.add_argument("--patterns", default="P0,P1,P2",
+                   help="workload patterns (P2 requires D == C cells)")
+    p.add_argument("--geometries",
+                   default="8:8,8:32,8:128,8:512,32:32,32:128,32:512,"
+                           "128:128,128:512",
+                   help="comma list of D:C cells")
+    p.add_argument("--windows", type=_positive_int, default=20000,
+                   help="windows per run (one window = D installs + D "
+                        "lookups + D retires)")
+    p.add_argument("--reps", type=_positive_int, default=5,
+                   help="measured process repetitions per cell")
+    p.add_argument("--seed", type=lambda s: int(s, 0),
+                   default=TAX0ROUTER_SEED,
+                   help="predeclared order-randomization seed (hex ok)")
+    p.add_argument("--taskset", default="",
+                   help="CPU list for `taskset -c` pinning")
+    p.add_argument("--no-perf", action="store_true", dest="no_perf",
+                   help="witness-only smoke (NOT valid official evidence)")
+    p.add_argument("--output", default="")
+    p.add_argument("--note", default="",
+                   help="provenance note embedded in the artifact")
+
+    p = sub.add_parser("tax0routershootout",
+                       help="#255 TAX-0 router-fix shootout Layer B: REAL "
+                            "io_uring end-to-end matrix, EXP-0/U0 geometry, "
+                            "Q == D, READ/WRITE arms, one op per session")
+    p.add_argument("--candidates", default="r0,r1,r2,r3",
+                   help="comma list (must include r0)")
+    p.add_argument("--op", choices=["read", "write"], default="read",
+                   help="one op group per session (fs/op groups are "
+                        "separate sessions; candidates stay interleaved)")
+    p.add_argument("--geometries",
+                   default="8:8,8:32,8:128,8:512,32:32,32:128,32:512",
+                   help="comma list of D:C cells (Q == D is enforced)")
+    p.add_argument("--request-size", type=int, default=4096,
+                   dest="request_size")
+    p.add_argument("--total-bytes", type=int, default=128 << 20,
+                   dest="total_bytes",
+                   help="frozen official workload (128 MiB per process/cell)")
+    p.add_argument("--reps", type=_positive_int, default=9,
+                   help="official repetitions per cell")
+    p.add_argument("--warmup-rounds", type=_nonneg_int, default=2,
+                   dest="warmup_rounds",
+                   help="unmeasured full rounds before measurement")
+    p.add_argument("--seed", type=lambda s: int(s, 0),
+                   default=TAX0ROUTER_SEED,
+                   help="predeclared order-randomization seed (hex ok)")
+    p.add_argument("--file", required=True,
+                   help="deterministic workload file path (created by the "
+                        "bench when absent; same file for every cell)")
+    p.add_argument("--fs-label", default="tmpfs", dest="fs_label",
+                   help="filesystem label recorded per row (tmpfs|btrfs...)")
+    p.add_argument("--taskset", default="",
+                   help="CPU list for `taskset -c` pinning (physical "
+                        "cores, avoid SMT siblings)")
+    p.add_argument("--no-perf", action="store_true", dest="no_perf",
+                   help="smoke only (NOT valid official evidence)")
+    p.add_argument("--output", default="")
+    p.add_argument("--note", default="",
+                   help="provenance note embedded in the artifact")
+
     p = sub.add_parser("flame",
                        help="diagnostic CPU flame graph for one command "
                             "(perf record -g -> folded -> SVG)")
@@ -2621,6 +3372,9 @@ def main() -> int:
     elif args.command == "tax0u0":
         out_fs = None
         tmpdir = args.file
+    elif args.command == "tax0routershootout":
+        out_fs = None
+        tmpdir = args.file
     else:
         out_fs = None
     result = {"env": env_fingerprint(input_path=tmpdir, output_path=out_fs)}
@@ -2636,6 +3390,10 @@ def main() -> int:
         result.update(cmd_tax0(args))
     elif args.command == "tax0u0":
         result.update(cmd_tax0u0(args))
+    elif args.command == "tax0routermicro":
+        result.update(cmd_tax0routermicro(args))
+    elif args.command == "tax0routershootout":
+        result.update(cmd_tax0routershootout(args))
     elif args.command == "perf":
         if args.cmd and args.cmd[0] == "--":
             args.cmd = args.cmd[1:]

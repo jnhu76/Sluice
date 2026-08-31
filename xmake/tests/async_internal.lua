@@ -355,6 +355,20 @@ sluice_internal_async_test("phase_g_closeout_uring_test")
 -- manifest row.
 sluice_internal_async_test("uring_router_scan_equivalence_test")
 
+-- uring_router_fix_equivalence_test — TAX-0 router-fix candidate shootout
+-- (#255) semantic-equivalence gates. For every admitted candidate (R0
+-- production baseline / R1 reverse scan / R2 low placement + forward scan /
+-- R3 bounded cookie table) it proves on the REAL io_uring path: live-cookie
+-- hit equivalence over a C x K x reuse matrix, stale/unknown/control-tagged
+-- miss equivalence, retirement + router-reuse generation safety (a retired
+-- cookie never resolves to a reused slot), cancel/control path equivalence
+-- with per-family accounting, full-occupancy behavior, the per-candidate
+-- placement/structure witness (R0/R1/R3 high-index, R2 low-index steady
+-- state, R3 bounded probes), and R3 bare-table unit gates (collision
+-- cluster, backward-shift deletion, tombstone-freedom, capacity bound).
+-- Research evidence only — not a backend conformance manifest row.
+sluice_internal_async_test("uring_router_fix_equivalence_test")
+
 -- select_registration_rollback_test — E13 P7 registration-failure rollback
 -- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
 -- real running Fiber; the controller-only synthetic registration-failure seam
