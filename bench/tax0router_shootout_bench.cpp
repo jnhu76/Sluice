@@ -655,47 +655,50 @@ int main(int argc, char** argv) {
     out += "  \"reps_out\": [\n";
     for (std::size_t i = 0; i < results.size(); ++i) {
         const RepResult& r = results[i];
-        char buf[768];
-        std::snprintf(buf, sizeof(buf),
-                      "    {\"wall_ns\": %llu, \"user_ns\": %llu, "
-                      "\"sys_ns\": %llu, \"maxrss_kb\": %llu, \"ops\": %llu, "
-                      "\"bytes\": %llu, \"word_sum\": %llu, \"errors\": %llu, "
-                      "\"op_lookup_calls\": %llu, "
-                      "\"op_lookup_iterations_total\": %llu, "
-                      "\"op_lookup_iterations_max\": %llu, "
-                      "\"control_lookup_calls\": %llu, "
-                      "\"transport_lookup_calls\": %llu, "
-                      "\"lookup_hits\": %llu, \"lookup_misses\": %llu, "
-                      "\"matched_router_index_sum\": %llu, "
-                      "\"matched_router_index_max\": %llu, "
-                      "\"table_insert_calls\": %llu, "
-                      "\"table_erase_calls\": %llu, "
-                      "\"table_insert_probes_total\": %llu, "
-                      "\"table_lookup_probes_total\": %llu, "
-                      "\"table_erase_probes_total\": %llu}%s\n",
-                      (unsigned long long)r.wall_ns,
-                      (unsigned long long)r.user_ns,
-                      (unsigned long long)r.sys_ns,
-                      (unsigned long long)r.maxrss_kb,
-                      (unsigned long long)r.ops,
-                      (unsigned long long)r.bytes,
-                      (unsigned long long)r.word_sum,
-                      (unsigned long long)r.errors,
-                      (unsigned long long)r.op_lookup_calls,
-                      (unsigned long long)r.lookup_iterations_total,
-                      (unsigned long long)r.lookup_iterations_max,
-                      (unsigned long long)r.control_lookup_calls,
-                      (unsigned long long)r.transport_lookup_calls,
-                      (unsigned long long)r.lookup_hits,
-                      (unsigned long long)r.lookup_misses,
-                      (unsigned long long)r.matched_router_index_sum,
-                      (unsigned long long)r.matched_router_index_max,
-                      (unsigned long long)r.table_insert_calls,
-                      (unsigned long long)r.table_erase_calls,
-                      (unsigned long long)r.table_insert_probes_total,
-                      (unsigned long long)r.table_lookup_probes_total,
-                      (unsigned long long)r.table_erase_probes_total,
-                      (i + 1 < results.size()) ? "," : "");
+        char buf[1024];
+        const int n = std::snprintf(buf, sizeof(buf),
+                                    "    {\"wall_ns\": %llu, \"user_ns\": %llu, "
+                                    "\"sys_ns\": %llu, \"maxrss_kb\": %llu, \"ops\": %llu, "
+                                    "\"bytes\": %llu, \"word_sum\": %llu, \"errors\": %llu, "
+                                    "\"op_lookup_calls\": %llu, "
+                                    "\"op_lookup_iterations_total\": %llu, "
+                                    "\"op_lookup_iterations_max\": %llu, "
+                                    "\"control_lookup_calls\": %llu, "
+                                    "\"transport_lookup_calls\": %llu, "
+                                    "\"lookup_hits\": %llu, \"lookup_misses\": %llu, "
+                                    "\"matched_router_index_sum\": %llu, "
+                                    "\"matched_router_index_max\": %llu, "
+                                    "\"table_insert_calls\": %llu, "
+                                    "\"table_erase_calls\": %llu, "
+                                    "\"table_insert_probes_total\": %llu, "
+                                    "\"table_lookup_probes_total\": %llu, "
+                                    "\"table_erase_probes_total\": %llu}%s\n",
+                                    (unsigned long long)r.wall_ns,
+                                    (unsigned long long)r.user_ns,
+                                    (unsigned long long)r.sys_ns,
+                                    (unsigned long long)r.maxrss_kb,
+                                    (unsigned long long)r.ops,
+                                    (unsigned long long)r.bytes,
+                                    (unsigned long long)r.word_sum,
+                                    (unsigned long long)r.errors,
+                                    (unsigned long long)r.op_lookup_calls,
+                                    (unsigned long long)r.lookup_iterations_total,
+                                    (unsigned long long)r.lookup_iterations_max,
+                                    (unsigned long long)r.control_lookup_calls,
+                                    (unsigned long long)r.transport_lookup_calls,
+                                    (unsigned long long)r.lookup_hits,
+                                    (unsigned long long)r.lookup_misses,
+                                    (unsigned long long)r.matched_router_index_sum,
+                                    (unsigned long long)r.matched_router_index_max,
+                                    (unsigned long long)r.table_insert_calls,
+                                    (unsigned long long)r.table_erase_calls,
+                                    (unsigned long long)r.table_insert_probes_total,
+                                    (unsigned long long)r.table_lookup_probes_total,
+                                    (unsigned long long)r.table_erase_probes_total,
+                                    (i + 1 < results.size()) ? "," : "");
+        if (n < 0 || n >= static_cast<int>(sizeof(buf))) {
+            bench_semantic("repetition JSON line truncated (buffer too small)");
+        }
         out += buf;
     }
     out += "  ],\n";

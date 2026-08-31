@@ -1506,6 +1506,24 @@ def check_tax0u0(art: dict) -> list[str]:
     return errs
 
 
+def _valid_cpu_set(s) -> bool:
+    """True if `s` parses as a `taskset -c` CPU list: comma-separated
+    non-negative integers or `a-b` ranges with a <= b."""
+    if not isinstance(s, str) or not s.strip():
+        return False
+    for tok in s.split(","):
+        tok = tok.strip()
+        if not tok:
+            return False
+        if "-" in tok:
+            a, _, b = tok.partition("-")
+            if not a.isdigit() or not b.isdigit() or int(a) > int(b):
+                return False
+        elif not tok.isdigit():
+            return False
+    return True
+
+
 def check_tax0router(art: dict) -> list[str]:
     """Kinds `tax0routermicro` / `tax0routershootout` (#250 TAX-0
     T0-U-ROUTER fix-candidate shootout, #255 gate): structural checks
@@ -1534,12 +1552,16 @@ def check_tax0router(art: dict) -> list[str]:
     reps = params.get("reps")
     if not isinstance(reps, int) or reps < 1:
         errs.append(f"params.reps: expected int >= 1, got {reps!r}")
-    if not params.get("taskset"):
-        errs.append("params.taskset: missing (official runs must pin CPUs)")
-    if not isinstance(params.get("perf_events"), list) or \
-            not params.get("perf_events"):
+    if not _valid_cpu_set(params.get("taskset")):
+        errs.append("params.taskset: missing or not a valid CPU set "
+                    "(official runs must pin CPUs, e.g. '0,2,4,6')")
+    pe = params.get("perf_events")
+    if not isinstance(pe, list) or not pe:
         errs.append("params.perf_events: missing — official shootout "
                     "artifacts must carry instructions:u/cycles:u")
+    elif not {"instructions:u", "cycles:u"} <= set(pe):
+        errs.append("params.perf_events: must include both "
+                    "instructions:u and cycles:u")
     if micro:
         if not isinstance(params.get("windows"), int) or \
                 params.get("windows", 0) < 1:

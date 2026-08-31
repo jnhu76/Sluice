@@ -586,9 +586,10 @@ def campaign_aggregate(micro_v: dict, shootouts: list[dict],
             selected, verdict = best, f"ROUTER SHOOTOUT PASS - " \
                                       f"{best.upper()} SELECTED"
         else:
-            # Practical-tie set: within the 2% band of the GM leader on
-            # both axes and no >2pp worst-regression disadvantage on
-            # either axis.
+            # Genuine practical-tie set: within the 2% band of the GM
+            # leader on both axes and no >2pp worst-regression
+            # disadvantage on either axis. A SINGLETON is not a tie — it
+            # is just the leader, so it is never minted artificially.
             tie_set = [c for c in eligible
                        if abs(env[c]["gm_instr"] -
                               env[best]["gm_instr"]) < TIE
@@ -598,11 +599,26 @@ def campaign_aggregate(micro_v: dict, shootouts: list[dict],
                        env[best]["worst_cell_instr"] + TIE
                        and env[c]["worst_cell_cycles"] <=
                        env[best]["worst_cell_cycles"] + TIE]
-            if len(tie_set) <= 1:
-                tie_set = [best]
-            selected = min(tie_set, key=lambda c: SIMPLICITY.get(c, 99))
-            verdict = ("ROUTER SHOOTOUT PASS - PRACTICAL TIE, SIMPLEST "
-                       f"CANDIDATE SELECTED ({selected})")
+            if len(tie_set) >= 2:
+                selected = min(tie_set, key=lambda c: SIMPLICITY.get(c, 99))
+                verdict = ("ROUTER SHOOTOUT PASS - PRACTICAL TIE, SIMPLEST "
+                           f"CANDIDATE SELECTED ({selected})")
+            elif not leads:
+                # Never led by >=2% and no genuine tie: the §25 written
+                # rule falls through to the GM leader, but that is NOT a
+                # practical tie, so the verdict must not call it one.
+                selected = best
+                verdict = ("ROUTER SHOOTOUT PASS - "
+                           f"{best.upper()} SELECTED (NO PRACTICAL TIE)")
+            else:
+                # Led by >=2% on instructions but vetoed by the
+                # cycles/worst-tail guard: without a genuine second
+                # candidate in the band the vetoed leader must NOT be
+                # selected under a fabricated "practical tie".
+                selected = None
+                verdict = ("ROUTER SHOOTOUT PASS - NO SELECTION "
+                           "(LEADER VETOED ON CYCLES/WORST-TAIL, "
+                           "NO PRACTICAL TIE)")
     return {"envelope": env, "gm_by_fs": gm_fs, "gm_by_op": gm_op,
             "eligible": eligible, "tie_set": tie_set,
             "selected": selected, "verdict": verdict,
@@ -1060,25 +1076,32 @@ def self_test() -> int:
         "outright": lambda a: "R1 SELECTED" in a["verdict"]
                               and "PRACTICAL TIE" not in a["verdict"],
     })
-    # 2. instr clearly wins + cycles over the band -> must NOT outright win.
+    # 2. instr clearly wins + cycles over the band -> leader vetoed; with
+    #    no genuine second candidate in the tie band there is NO SELECTION
+    #    (pre-fix the vetoed leader was re-selected via a fabricated
+    #    singleton "practical tie").
     check_selector("row2-cycles-over-band", {
         ("r0", *A): (100.0, 100.0),
         ("r1", *A): (85.0, 100.0),
         ("r2", *A): (92.0, 93.0),
     }, {
-        "not-outright": lambda a: "R1 SELECTED" not in a["verdict"]
-                                  and "PRACTICAL TIE" in a["verdict"],
+        "no-selection": lambda a: a["selected"] is None
+                                  and "NO SELECTION" in a["verdict"],
     })
     # 3. worst-cycles tail >2pp worse than the leader -> excluded from tie
     #    (r2's GM is inside the band on both axes; only its 1.02 tail on
     #    C=32 excludes it, so this branch is the sole reason it loses).
+    #    The leader never led by >=2% and is alone in the band: selected
+    #    per the §25 fall-through, but NOT labeled a practical tie.
     check_selector("row3-worst-tail", {
         ("r0", *C1): (100.0, 100.0), ("r0", *C2): (100.0, 100.0),
         ("r1", *C1): (85.0, 90.0), ("r1", *C2): (85.0, 90.0),
         ("r2", *C1): (86.0, 80.0), ("r2", *C2): (86.0, 102.0),
     }, {
         "r2-excluded": lambda a: "r2" not in a["tie_set"]
-                                 and a["selected"] == "r1",
+                                 and a["selected"] == "r1"
+                                 and "PRACTICAL TIE, SIMPLEST"
+                                 not in a["verdict"],
     })
     # 4. practical tie (both within band, tails OK) -> SIMPLICITY winner
     #    (r2 has the better instr GM but the simplest valid candidate wins).
@@ -1100,7 +1123,20 @@ def self_test() -> int:
                             and "NO CANDIDATE ROBUSTLY BEATS BASELINE"
                             in a["verdict"],
     })
-    print("selector truth table: 5/5 rows checked")
+    # 6. worst-cycle-tail veto: leader led by >=2% on instr, its cycles GM
+    #    is inside the band, but its worst-cell cycles tail (1.04) exceeds
+    #    r2 (0.99) by >2pp while staying inside the +5% guardrail; r2 sits
+    #    outside the instr band so there is no genuine tie and the vetoed
+    #    leader must NOT be selected.
+    check_selector("row6-worst-tail-veto", {
+        ("r0", *C1): (100.0, 100.0), ("r0", *C2): (100.0, 100.0),
+        ("r1", *C1): (85.0, 90.0), ("r1", *C2): (85.0, 104.0),
+        ("r2", *C1): (96.0, 99.0), ("r2", *C2): (96.0, 99.0),
+    }, {
+        "no-selection": lambda a: a["selected"] is None
+                                  and "NO SELECTION" in a["verdict"],
+    })
+    print("selector truth table: 6/6 rows checked")
 
     print("SELF-TEST " + ("OK" if failures == 0 else f"FAILED ({failures})"))
     return 1 if failures else 0
@@ -1128,7 +1164,9 @@ def main() -> int:
     shoot_vs = []
     for path in args.shootout:
         art = json.loads(Path(path).read_text())
-        shoot_vs.append(validate_shootout(art, errs))
+        v = validate_shootout(art, errs)
+        if v:
+            shoot_vs.append(v)
     agg = campaign_aggregate(micro_v, shoot_vs, errs)
     if errs:
         print("VALIDATION FAILED (fail closed):")

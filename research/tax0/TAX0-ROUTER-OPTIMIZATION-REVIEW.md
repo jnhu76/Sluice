@@ -216,19 +216,26 @@ flowchart TD
     B{"存在 GM instr<br/>≤ 0.98 的候选?"}
     NB["NO CANDIDATE ROBUSTLY BEATS BASELINE"]
     L{"GM instr 最低者领先<br/>其余全部 ≥ 2%?"}
+    V{"cycles / worst-tail<br/>双轴均 ≤ 带 + 2%?"}
     WIN["选中 GM instr 最低者"]
-    T{"构成 practical tie:<br/>与最低者差 &lt; 2% (两轴 GM)<br/>且 worst-cell 劣势 &lt; 2pp (两轴)?"}
+    T{"构成 genuine practical tie:<br/>≥ 2 候选在 2% 带内 (两轴 GM)<br/>且 worst-cell 劣势 ≤ 2pp (两轴)?"}
     TIE["tie 集合 = 满足带内者"]
     SIM["按简单度序取最简单<br/>本次: R1 &lt; R2 &lt; R3"]
+    N{"leader 是否已被<br/>cycles/worst veto?"}
+    NS["NO SELECTION<br/>(被 veto 且无 genuine tie)"]
     S --> G
     G -- "是" --> OUT
     G -- "否" --> B
     B -- "否" --> NB
     B -- "是" --> L
-    L -- "是" --> WIN
+    L -- "是" --> V
+    V -- "是" --> WIN
     L -- "否" --> T
+    V -- "否" --> T
     T -- "是" --> TIE --> SIM
-    T -- "否" --> WIN
+    T -- "否" --> N
+    N -- "否" --> WIN
+    N -- "是" --> NS
 ```
 
 每条规则都可独立审计，禁止 opaque composite score（不可解释的综合
@@ -243,6 +250,17 @@ flowchart TD
 > 影响：无人领先 ≥2%，走的是 tie 分支；修正后由封印 validator 重算
 > 官方工件，verdict 不变。教训见 §6.2 #19——**选型器代码与书面规则
 > 之间需要 truth-table/property 测试**。
+
+> **Post-A2 修正（corrective review 5064169305）**：A2 把被 veto 的
+> leader 送进 tie 判定，但原代码在 `len(tie_set) <= 1` 时人为构造
+> `tie_set = [best]`，把刚被 cycles/worst 否掉的 leader 以
+> "PRACTICAL TIE" 名义重新选中（只改了 verdict 名字）。修正：singleton
+> 不是 practical tie，不再人为构造；被 veto 的 leader 若无 ≥2 个
+> genuine tie 候选 → **NO SELECTION**（`selected = None`）；只有从未
+> 领先 ≥2% 的 leader 在无 tie 时才按书面规则落到 WIN（verdict 明说
+> NO PRACTICAL TIE）。官方工件不受影响：{r1,r2,r3} 是 genuine tie，
+> 仍走 TIE → SIM → R1。truth-table 扩到 6 行（row2 断言 selected is
+> None，row6 worst-tail veto 同型）。
 
 ## 3. 结果如何统计与归一化；如何用 bench 结果指导代码优化
 

@@ -2092,37 +2092,41 @@ def tax0routermicro_cells(candidates: list[str], patterns: list[str],
 
 def tax0routermicro_derived(rows: list[dict]) -> dict:
     """Per-cell medians/MADs, per-candidate normalized-vs-r0 ratios and
-    geometric means. Pure recomputation from raw rows."""
-    ops = rows[0]["lifecycle_ops"]
+    geometric means. Pure recomputation from raw rows. Per-op divisors use
+    each row's OWN lifecycle_ops (windows * depth — varies by cell); a
+    shared rows[0] divisor would mis-scale every other depth."""
     by_cell: dict[tuple, list[dict]] = {}
     for r in rows:
         by_cell.setdefault((r["candidate"], r["pattern"], r["depth"],
                             r["request_capacity"]), []).append(r)
 
-    def _cell_med(cell_rows: list[dict], key: str) -> float | None:
-        vals = [r[key] for r in cell_rows
-                if isinstance(r.get(key), (int, float))]
+    def _cell_per_op_med(cell_rows: list[dict], key: str) -> float | None:
+        vals = [r[key] / r["lifecycle_ops"] for r in cell_rows
+                if isinstance(r.get(key), (int, float))
+                and r.get("lifecycle_ops")]
         return median(vals) if vals else None
 
     cells: dict[str, dict] = {}
     med_instr: dict[tuple, float | None] = {}
     med_cycles: dict[tuple, float | None] = {}
     for cell, cell_rows in sorted(by_cell.items()):
-        instr = _cell_med(cell_rows, "instructions_user")
-        cycles = _cell_med(cell_rows, "cycles_user")
-        med_instr[cell] = instr / ops if instr else None
-        med_cycles[cell] = cycles / ops if cycles else None
+        instr = _cell_per_op_med(cell_rows, "instructions_user")
+        cycles = _cell_per_op_med(cell_rows, "cycles_user")
+        med_instr[cell] = instr
+        med_cycles[cell] = cycles
         cand, pat, d, c = cell
         r0 = cell_rows[0]
         cells[f"{cand}|{pat}|D={d},C={c}"] = {
             "n": len(cell_rows),
             "instr_per_op": med_instr[cell],
             "cycles_per_op": med_cycles[cell],
-            "mad_instr": _mad([r["instructions_user"] / ops for r in cell_rows
+            "mad_instr": _mad([r["instructions_user"] / r["lifecycle_ops"]
+                               for r in cell_rows
                                if isinstance(r.get("instructions_user"),
-                                             (int, float))]),
+                                             (int, float))
+                               and r.get("lifecycle_ops")]),
             "lookup_probes_per_op": (
-                _cell_med(cell_rows, "lookup_iterations_total") or 0) / ops,
+                _cell_per_op_med(cell_rows, "lookup_iterations_total") or 0),
             "matched_router_index_max": r0["matched_router_index_max"],
             "fixed_router_bytes": r0["router_bytes"],
             "fixed_candidate_bytes": r0["candidate_table_bytes"],
@@ -2195,6 +2199,9 @@ def cmd_tax0routermicro(args) -> dict:
     geometries = _tax0router_parse_pairs(args.geometries, "geometries")
 
     cells = tax0routermicro_cells(candidates, patterns, geometries)
+    if not cells:
+        sys.exit("tax0routermicro matrix expanded to zero cells "
+                 "(check pattern/geometry combination)")
     rounds = tax0router_execution_order(cells, args.reps, args.seed)
     flat = [c for rnd in rounds for c in rnd]
 
@@ -3363,6 +3370,9 @@ def main() -> int:
         out_fs = None
         tmpdir = args.file
     elif args.command == "tax0u0":
+        out_fs = None
+        tmpdir = args.file
+    elif args.command == "tax0routershootout":
         out_fs = None
         tmpdir = args.file
     else:

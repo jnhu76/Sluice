@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -335,7 +336,9 @@ SLUICE_TEST_CASE(uring_router_fix_placement_and_structure_witness) {
             for (std::size_t k = 0; k < 8; ++k)
                 SLUICE_CHECK(backend
                                  .submit_write(WriteOp{file.fd(), buf.data() + k * 4096,
-                                                       4096, round * 8 * 4096},
+                                                       4096,
+                                                       round * 8 * 4096 +
+                                                           k * 4096},
                                                comp[k])
                                  .has_value());
             SLUICE_CHECK(drain(backend));
@@ -445,6 +448,19 @@ SLUICE_TEST_CASE(uring_router_fix_table_unit_gates) {
         }
     }
     SLUICE_CHECK(c3 != 0);
+    // A fourth in-cluster cookie sharing the same home that is NEVER
+    // inserted — an absent neighbor inside the cluster must miss (the old
+    // hard-coded probe hashed to a different empty home, so it never
+    // exercised the cluster).
+    std::uint64_t d4 = 0;
+    for (std::uint64_t cand = c3 + 1; cand < 300000; ++cand) {
+        if (RouterCookieTableForTest::hash(cand, table.log2_size) ==
+            RouterCookieTableForTest::hash(a, table.log2_size)) {
+            d4 = cand;
+            break;
+        }
+    }
+    SLUICE_CHECK(d4 != 0);
 
     table.insert(a, 7);
     table.insert(b, 8);
@@ -453,7 +469,7 @@ SLUICE_TEST_CASE(uring_router_fix_table_unit_gates) {
     SLUICE_CHECK(table.lookup(b) == 8);
     SLUICE_CHECK(table.lookup(c3) == 9);
     // Unknown neighbor misses even inside a collision cluster.
-    SLUICE_CHECK(table.lookup(999424) == RouterCookieTableForTest::kMiss);
+    SLUICE_CHECK(table.lookup(d4) == RouterCookieTableForTest::kMiss);
     // Erase the middle of the chain; the far entries must remain reachable
     // (backward shift) and the erased cookie must miss (stale).
     table.erase(b);

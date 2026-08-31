@@ -16,10 +16,13 @@ approved production PR.
 - **SHOOTOUT-FREEZE SHA:** `d45f620` (candidate implementations, admission
   table, prior-art survey, correctness gates, both bench layers, runner,
   and validator frozen BEFORE any official measurement)
-- **Final head SHA:** `PENDING (filled after official campaign)`
-- **Canonical raw evidence:** `PENDING (paths filled after official campaign)`
-- **Validator result:** `PENDING`
-- **VERDICT:** `PENDING (exactly one allowed §31 form)`
+- **Final head SHA:** `566b8b7` (campaign-sealing head; post-freeze
+  tooling fixes recorded in §11)
+- **Canonical raw evidence:** the five artifacts listed in §11 under
+  `docs/results/performance-attribution/`
+- **Validator result:** `VALIDATION PASSED` (§12)
+- **VERDICT:** `ROUTER SHOOTOUT PASS — PRACTICAL TIE, SIMPLEST CANDIDATE
+  SELECTED (R1)` (§20)
 
 **PRODUCTION BEHAVIOR CHANGED: NO** (to be re-affirmed with evidence at
 handoff). **PRODUCTION FIX IMPLEMENTED: NO.**
@@ -300,7 +303,12 @@ semantic authority stays in `tax0router-validate.py`); (e) RE-FREEZE A2
 batch: Layer A per-window allocation removed (measured + enforced),
 `--seed` 0x-prefix parser, validator sealed to the frozen matrix
 (cell/candidate/session deletion fails closed), micro cycles derived
-cross-checked, §25 selector direction corrected (see §19).
+cross-checked, §25 selector direction corrected (see §19); (f)
+post-A2 corrective review 5064169305: a leader vetoed by the
+cycles/worst-tail guard with no genuine tie (tie set < 2) is no longer
+re-selected via a fabricated singleton "practical tie" — verdict
+becomes NO SELECTION (see §19); the official path {r1,r2,r3} is a
+genuine tie, so the outcome is unchanged.
 
 ## 12. Validator result
 
@@ -320,7 +328,7 @@ selection — recorded `derived` blocks must match the recomputation.
 Per-row semantic witnesses are enforced (misses == 0, control/
 transport == 0, R3 table accounting, non-R3 zero table traffic, zero
 steady-state allocation — measured per row, real_uring + Q == D).
-Self-test: 7 shootout + 9 micro mutations all rejected (incl.
+Self-test: 9 shootout + 9 micro mutations all rejected (incl.
 drop-cell/drop-candidate with derived resync, cycles-GM tamper,
 allocation tamper), plus multi-session aggregate, duplicate-session,
 drop-session, and unknown-session fail-closed checks. Additionally
@@ -348,7 +356,7 @@ r1/r2/r3):
 | P0 D=32,C=512 | 0.101 (0.148) | 0.101 (0.134) | 0.092 (0.125) |
 | P0 D=128,C=128 | 0.997 (1.021) | 0.997 (1.010) | 0.400 (0.528) |
 | P0 D=128,C=512 | 0.231 (0.242) | 0.231 (0.238) | 0.093 (0.125) |
-| P1 (same 9 cells) | ≈P0 (max |Δ| 0.012) | ≈P0 | ≈P0 |
+| P1 (same 9 cells) | ≈P0 (max \|Δ\| 0.012) | ≈P0 | ≈P0 |
 | P2 D=8,C=8 | 0.993 (1.016) | 0.993 (0.999) | 1.218 (1.127) |
 | P2 D=32,C=32 | 0.994 (1.097) | 0.994 (1.004) | 0.917 (0.955) |
 | P2 D=128,C=128 | 0.997 (1.023) | 0.997 (1.004) | 0.400 (0.523) |
@@ -482,6 +490,13 @@ branch, so the correction did not change the outcome — it closed a
 latent wrong-selection path. No opaque composite score used:
 instructions GM + guardrail + tie band + simplicity order only, with
 cycles GM recorded alongside.
+
+Post-A2 corrective review 5064169305: a leader vetoed by the
+cycles/worst-tail guard with no genuine tie (tie set < 2 candidates) is
+now **NO SELECTION** — the old singleton fallback could re-select the
+vetoed leader under a fabricated "PRACTICAL TIE" label. The official
+path here is unaffected: {r1, r2, r3} is a genuine tie (see the
+decision tree in `TAX0-ROUTER-OPTIMIZATION-REVIEW.md` §2.4).
 
 ## 20. Verdict
 
