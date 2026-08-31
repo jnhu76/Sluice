@@ -68,23 +68,33 @@ practical tie，因此按预注册的 simplicity order 选择 **R1**。
 
 ### 0.5 Copy 是否已经变快
 
-**目前没有直接证据。Copy pipeline 尚未做 production before/after A/B。**
+**COPY-AB-1（application-level copy A/B）已于 2026-08-31 完成测量。**
 
-方向上值得期待：本次收益在受测 READ 与 WRITE session 中都复现，而 copy 通常同时
-包含 read 与 write；如果 copy 使用相同 Uring backend，并且 `C >> D`，router tax
-确实会出现在两条 I/O leg 上。但最终 wall throughput 是否提高、提高多少，取决于：
+同一 copy engine（`run_pipelined_copy_with_backend`，真实 `sluice-copy`
+bounded pipeline）、同一 256 MiB 确定性源、唯一变量为 R0/R1 router mode
+（#256 seam 注入真实 `UringAsyncBackend`）；tmpfs + warm btrfs、
+{4K,64K,1M} × {P=1,8,32} × {C=P+1,128,512}、Q=64、9 个 blocked-randomized
+rounds、seed `0x434F5059`；A/A 校准 + 外部冻结 materiality rule（2×A/A 噪声
+与 2% 取大）；全部 artifact 通过外置 manifest validator。
 
-- copy 的 block size；
-- active depth / request capacity；
-- 是否 CPU-bound 还是 device/kernel-bound；
-- read/write pipeline 是否有额外 buffering、copy、wake、scheduler 成本；
-- storage latency 是否把这部分 CPU 节省完全淹没。
+结果（GM R1/R0）：
 
-因此正确状态是：
+- instructions/byte：**0.898 (tmpfs) / 0.889 (btrfs) — material**；
+  18/27 cells material，且恰好是全部 18 个 capacity-skewed cells
+  （C=128/512）；C=P+1 的 9 个 cells 全部 ≈ 1.00（无收益，1 个 ~2% 边际回退）。
+- cycles/byte：0.922 / 0.920 — 方向一致，但整体未过冻结门槛
+  （≤0.816）；仅在 C=512 × 小 buffer 的最 skewed cells material。
+- wall：0.977 / 0.993 — **NOT MATERIAL**（btrfs 上无变化）。
+- ThreadPool 对照组（production backend，无 router/无 C 参数）：
+  instr/byte rel. sd ≤0.3%，无任何 capacity-dependent 效应。
 
-> **Copy improvement: plausible, but NOT YET MEASURED.**
+判定：**COPY-AB-1 PASS — BENEFIT ONLY IN CAPACITY-SKEWED REGIMES**——
+R1 的应用级收益真实存在，但严格由 `C >> active depth` 驱动；near-capacity
+sizing 下 R1 ≈ R0。这与 EXP-U0 的因果模型定量吻合。
 
-§7 给出 production landing 后应执行的 copy A/B。
+> Copy application CPU cost: SUPPORTED — SCOPE-BOUNDED（instruction 维度
+> material，范围 = capacity-skewed cells）。
+> Copy wall throughput: NOT MATERIAL / NOT YET SHOWN（测试矩阵内）。
 
 ---
 
@@ -673,9 +683,16 @@ Internal evidence：
 - `research/tax0/TAX0-ROUTER-PRIOR-ART.md`
 - `research/tax0/TAX0-ROUTER-FIX-SELECTION.md`
 - `research/tax0/TAX0-ROUTER-REFREEZE-A2.md`
+- `research/tax0/TAX0-COPY-AB1-DESIGN.md`
+- `research/tax0/TAX0-COPY-AB1.md`
 - `docs/results/performance-attribution/tax0router-fix-micro.json`
 - `docs/results/performance-attribution/tax0router-fix-shootout-{read,write}-{tmpfs,btrfs}.json`
+- `docs/results/performance-attribution/tax0-copy-ab1-aa-{tmpfs,btrfs}.json`
+- `docs/results/performance-attribution/tax0-copy-ab1-{tmpfs,btrfs}.json`
+- `docs/results/performance-attribution/tax0-copy-ab1-control-{tmpfs,btrfs}.json`
 - `scripts/bench/tax0router-validate.py`
+- `scripts/bench/tax0-copy-ab1-run.py`
+- `scripts/bench/tax0-copy-ab1-validate.py`
 - `scripts/bench/perf-evidence-validate.py`
 
 External directions：
@@ -700,12 +717,17 @@ External directions：
 - 真实 io_uring shootout 中三者 practical tie；
 - R1 因最小实现/语义表面积胜出；
 - 受测矩阵中 R1 平均约减少 **16% instructions/op**、**9% userspace cycles/op**；
-- 高 capacity / 低 active-depth cell 总指令可减少约 **35–40%**。
+- 高 capacity / 低 active-depth cell 总指令可减少约 **35–40%**；
+- COPY-AB-1（真实 sluice-copy pipeline，唯一变量 R0/R1）：instr/byte GM
+  **0.898 (tmpfs) / 0.889 (btrfs) — material**，收益严格集中于
+  capacity-skewed cells（18/18），C=P+1 时 ≈ 1.00；cycles 方向一致但整体
+  未过冻结门槛；wall NOT MATERIAL —— 判定
+  **PASS — BENEFIT ONLY IN CAPACITY-SKEWED REGIMES**（PR #257）。
 
 ### 尚未证明
 
 - production Sluice 已经获得上述收益；
-- copy throughput 已提升；
+- copy wall throughput 已提升（COPY-AB-1 明确 NOT MATERIAL）；
 - 结论跨 CPU/kernel/compiler/机器保持相同比例；
 - tie 2pp 与 guardrail 5pp 已由 noise floor / power analysis 校准；
 - optimized Sluice 已接近 competent raw io_uring ceiling。

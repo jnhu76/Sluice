@@ -255,8 +255,8 @@ def derived_per_cell(rows: list[dict], labels: list[str]) -> dict:
     for k, v in cells.items():
         by_geom.setdefault(tuple(k.split("|")[1:]), {})[v["candidate"]] = v
     for geom, cand in sorted(by_geom.items()):
-        if len(cand) != len(labels):
-            continue
+        if len(labels) < 2 or len(cand) != len(labels):
+            continue  # single-label sessions (threadpool control) have no pair
         a, b = cand[labels[0]], cand[labels[1]]
         ratios["|".join(geom)] = {
             "buffer_size": a["buffer_size"],
@@ -483,9 +483,14 @@ def cmd_control(args) -> None:
         "note": "Production ThreadPoolBackend default construction; no "
                 "router, no request_capacity parameter.",
     }, {
-        "generator": "single cell, blocked by round",
-        "seed": SEED, "reps": args.reps, "cells": ["threadpool"],
-        "rounds": [["threadpool"] for _ in range(args.reps)],
+        "generator": "single cell, blocked by round (same key format as "
+                     "the campaign: label|B=,P=,C=)",
+        "seed": SEED, "reps": args.reps,
+        "cells": [f"{CONTROL_LABEL}|B={CONTROL_CELL[0]},"
+                  f"P={CONTROL_CELL[1]},C={CONTROL_CELL[2]}"],
+        "rounds": [[f"{CONTROL_LABEL}|B={CONTROL_CELL[0]},"
+                    f"P={CONTROL_CELL[1]},C={CONTROL_CELL[2]}"]
+                   for _ in range(args.reps)],
     }, rows, derived)
     Path(args.out).write_text(json.dumps(art, indent=1))
     log(f"wrote {args.out} ({len(rows)} rows)")

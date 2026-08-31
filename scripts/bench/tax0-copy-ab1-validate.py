@@ -104,7 +104,10 @@ def _check_row_common(art: dict, i: int, row: dict, errs: list[str],
            ("TAX-0-COPY-AB-1", "TAX-0-COPY-AB-1-AA",
             "TAX-0-COPY-AB-1-CONTROL"),
            f"row {i}: wrong experiment", errs)
-    _check(len(row.get("git_sha", "")) == 40, f"row {i}: git_sha", errs)
+    sha = (row.get("git_sha") or {}).get("sha") if \
+        isinstance(row.get("git_sha"), dict) else row.get("git_sha")
+    _check(isinstance(sha, str) and len(sha) == 40,
+           f"row {i}: git_sha", errs)
     _check(row.get("bytes_copied") == FILE_BYTES,
            f"row {i}: bytes_copied != file size", errs)
     _check(row.get("same_work") is True, f"row {i}: same_work", errs)
@@ -197,8 +200,9 @@ def _check_same_source(art: dict, errs) -> None:
     hashes = {r.get("source_sha256") for r in art.get("rows", [])}
     _check(len(hashes) == 1 and None not in hashes,
            "source identity: rows bind different/missing source hashes", errs)
-    _check(len({r.get("git_sha") for r in art["rows"]}) == 1,
-           "git_sha differs across rows", errs)
+    shas = {r["git_sha"].get("sha") if isinstance(r.get("git_sha"), dict)
+            else r.get("git_sha") for r in art["rows"]}
+    _check(len(shas) == 1, "git_sha differs across rows", errs)
 
 
 def _recompute(art: dict) -> dict:
