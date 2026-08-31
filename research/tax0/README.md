@@ -44,6 +44,17 @@ hypotheses here were registered BEFORE any causal experiment.
   改进清单
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
+- `TAX0-A2-CONTROL-PLANE-SEMANTIC-FLOOR.md` — round-2 control-plane audit
+  under #259 (Zero-Cost Control Plane framing): Path A (standalone uring)
+  and Path B (runtime continuation) re-recovered per-arrow at the new
+  baseline, F01–F05 suspected seams registered (code facts FACT, costs
+  HYPOTHESIS, no measurement), and the Z0–Z4 semantic-floor ladder with
+  the Z1b Minimal-Semantic-Equivalent-Uring checklist preregistered; no
+  production change, no measurement, no optimization recommendation
+- `tax0a2-control-plane-topology.json` — schema-2.0 machine census
+  superseding the frozen v1.1 file (which remains valid history for
+  baseline `5537187`); production drift between the two baselines is
+  uring research-seam files only
 
 Output placement note: the task template suggested
 `docs/results/performance-attribution/`, but that directory's own README

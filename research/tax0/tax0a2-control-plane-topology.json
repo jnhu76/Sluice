@@ -1,0 +1,436 @@
+{
+  "schema": "sluice-tax0a2-control-plane-topology/2.0",
+  "description": "TAX-0A round 2 (#259 CONTROL PLANE framing): real submit->resume physical topology re-recovered from current master code, plus F01-F05 suspected-seam registration and the Z0-Z4 semantic-floor ladder preregistration. Static audit ONLY: every code fact carries status FACT with file:line evidence bound to the baseline SHA; every cost claim carries status HYPOTHESIS with measured=null. No entry asserts a bottleneck; no causal experiment has been run in this round. Supersedes tax0a-hotpath-topology.json (schema 1.1, frozen @ 5537187) which remains valid history for its own baseline.",
+  "round": {
+    "issue": 250,
+    "roadmap_issue": 259,
+    "phase": "TAX-0A (control-plane round, re-baselined)",
+    "mission": "Quantify how much of Sluice's per-op cost is necessary capability cost (semantic floor - bare floor) vs accidental abstraction tax (Sluice - semantic floor). Sluice-minus-raw-liburing is NOT a valid tax measure: raw liburing provides none of the lifecycle / stale-CQE / exactly-once-publication / waiter / continuation semantics.",
+    "scope_exclusions": [
+      "BufferPool", "BufferLease", "registered/fixed buffers", "std::vector<std::byte> replacement",
+      "zero-copy", "splice", "copy_file_range", "O_DIRECT", "NUMA buffer policy",
+      "WAL redesign", "new public API", "network I/O", "io_uring opcode expansion",
+      "generic allocator", "generic lock-free queue", "scheduler semantic redesign", "coroutine rewrite"
+    ]
+  },
+  "baseline": {
+    "status": "FACT",
+    "branch": "master",
+    "head": "967022473d3a8882693cf019ccd11462fa2efda1",
+    "origin_master": "967022473d3a8882693cf019ccd11462fa2efda1",
+    "head_equals_origin": true,
+    "tracked_worktree_clean": true,
+    "date": "2026-08-31",
+    "note": "All file:line references bound to this SHA. Untracked at audit time: only this census + the A2 report (added by the A2 commit)."
+  },
+  "provenance": {
+    "supersedes": "tax0a-hotpath-topology.json (schema 1.1, frozen @ 5537187c3df4db51fac51cb8b75dc2e04e9cae34, ACCEPTED/FROZEN after human adversarial review FC-1..FC-7)",
+    "supersede_rule": "The v1.1 census is a frozen preregistration artifact and is NOT rewritten; this file re-binds the topology to the new baseline and adds the round-2 framing. v1.1 remains the historical preregistration for EXP-0/EXP-U0/ROUTER/COPY-AB-1.",
+    "production_drift_5537187_to_9670224": {
+      "changed_production_files": [
+        "include/sluice/async/uring_backend.hpp (+152: TAX-0 router research seams, SLUICE_ASYNC_INTERNAL_TESTING-guarded declarations; production layout carries one extra unique_ptr only in internal-testing builds per header note)",
+        "src/async/uring_backend.cpp (+189: router scan diagnostics folding + R3 bounded-table seam, all test-guarded; production behavior unchanged, default mode forward_production)",
+        "src/async/uring_test_seams.hpp (+258: research seam definitions)"
+      ],
+      "unchanged_hot_path_files": [
+        "src/async/async_io_context.cpp", "include/sluice/async/async_io_context.hpp",
+        "include/sluice/async/completion.hpp", "include/sluice/async/detail/request_arena.hpp",
+        "include/sluice/async/detail/submit_transaction.hpp", "include/sluice/async/detail/request_slot.hpp",
+        "src/async/threadpool_backend.cpp", "src/async/scheduler.cpp", "src/async/scheduler_park_wake.cpp",
+        "src/async/application_runtime.cpp"
+      ],
+      "binding_verification": "All hot-path files except the three uring research-seam files are byte-identical to the v1.1 baseline (git diff --stat 5537187..HEAD); their v1.1 bindings were re-spot-checked at HEAD and remain valid. uring_backend.cpp entries re-bound to HEAD line numbers by full re-read."
+    }
+  },
+  "cost_model": {
+    "bare_io_floor": "Z0: raw pread/pwrite (and Z1: raw liburing minimal submit/reap) — no lifecycle safety, no stale-completion protection, no exactly-once publication, no waiter, no continuation.",
+    "semantic_floor": "Z1b: minimal semantic-equivalent liburing harness providing EXACTLY the safety/lifecycle semantics the compared workload requires (bounded in-flight, stable request identity, generation/stale-completion protection, exactly-once terminal publication, safe caller buffer lifetime, one continuation, cooperative wait/resume, no per-op heap allocation if Sluice also avoids it). Removing safety semantics to make the floor look cheap is FORBIDDEN.",
+    "capability_cost": "semantic_floor - bare_floor. Necessary by definition; not a tax.",
+    "abstraction_tax": "Sluice - semantic_floor. The ONLY quantity this round is authorized to optimize.",
+    "forbidden_measure": "Sluice - raw_liburing(Z1) mislabeled as abstraction overhead: conflates capability cost with implementation cost.",
+    "attribution_vocabulary": ["MEASURED", "INFERRED_BY_AB", "STRUCTURAL_ONLY", "UNKNOWN"],
+    "measurement_status": "NONE — no TAX-0B/C/D measurement exists in this round; all cost entries are HYPOTHESIS with measured=null (preregistered ablations below)."
+  },
+  "path_A_standalone_async_io": {
+    "backend": "UringAsyncBackend (SLUICE_HAS_LIBURING real path)",
+    "threading_model": "SINGLE-DRIVER: all userspace stages run on the calling thread; AsyncIoContext::access_mtx_ serializes every context call (async_io_context.cpp:1-6, 115). No worker threads, no scheduler.",
+    "stages": [
+      {
+        "id": "A1",
+        "stage": "submit: caller -> context",
+        "binding": "src/async/async_io_context.cpp:114-120 (submit_read; :121-127 write; :128-141 sync)",
+        "thread": "caller (driver) thread",
+        "authority_domain": "AsyncIoContext access_mtx_ (serialized backend access, ADR 9.2.5)",
+        "mechanisms": [
+          "LOCK std::mutex access_mtx_ (:115)",
+          "VIRTUAL dispatch backend_->submit_read (:116; AsyncBackend::outstanding/submit are pure virtual, async_io_context.hpp:248)",
+          "stats branch tally_submit (:117 -> :91-108; early return when stats_==nullptr — cheap)",
+          "F01 SEAM: update_max_outstanding(stats_, backend_->outstanding()) (:118) — argument evaluation calls backend_->outstanding() UNCONDITIONALLY even when stats_==nullptr"
+        ]
+      },
+      {
+        "id": "A2",
+        "stage": "submit: admission transaction (arena ladder)",
+        "binding": "src/async/uring_backend.cpp:632-674 (submit_size; dispatch_mtx_ :651) + include/sluice/async/detail/submit_transaction.hpp:95-205",
+        "thread": "driver thread (under access_mtx_ + dispatch_mtx_)",
+        "authority_domain": "dispatch_mtx_ (backend admission+dispatch+transport+cancel) wrapping the RequestArena leaf mutex_",
+        "mechanisms": [
+          "LOCK dispatch_mtx_ (:651)",
+          "stage0 policy precheck: ring/poison/admission (submit_transaction.hpp:106-108)",
+          "LOCK arena leaf #1 reserve (request_arena.hpp:242-272): free-list LIFO pop :252-253, high_water_mark_ update :270, admission_closed_/would_block gates :244-251",
+          "LOCK arena leaf #2 prepare (:292-304): borrow metadata, active=false :301",
+          "policy.write_scratch: prepared_ops_[i] fixed array (no allocation)",
+          "LOCK arena leaf #3 install_publication_binding (:315-341): thunk + completion ptr + requested_bytes",
+          "ATOMIC RMW CAS acq_rel: Completion begin_binding idle->binding (completion.hpp:321-327) — elects ONE submitter",
+          "LOCK arena leaf #4 commit (request_arena.hpp:366-382): prepared->pending :373, enqueue_in_flight_pin_=true :374, borrow_.active=true :375, submit_seq_=next_submit_seq_++ :379, ++accepted_outstanding_ :380",
+          "ATOMIC RMW CAS acq_rel: commit_binding binding->outstanding RELEASE-STORE (completion.hpp:328-346) — THE ACCEPT LINEARIZATION POINT; after it no failure representation exists (submit_transaction.hpp:20-25, 198-204)"
+        ]
+      },
+      {
+        "id": "A3",
+        "stage": "enqueue + dispatch (SQE staging)",
+        "binding": "src/async/uring_backend.cpp:720-788 (enqueue_after_commit) + :804-917 (dispatch_one_locked)",
+        "thread": "driver thread",
+        "authority_domain": "dispatch_mtx_ (second acquisition; enqueue+dispatch ONE critical section, frozen design 4.2)",
+        "mechanisms": [
+          "LOCK dispatch_mtx_ 2nd acquisition (:724)",
+          "LOCK arena leaf #5 enqueue (request_arena.hpp:407-428): pending->enqueued, pin cleared :416; Scheme-B terminal_noop :419-425",
+          "QUEUE push: dispatch_->push_back (:731) — BoundedDispatchQueue fixed ring, capacity==request_capacity, never allocates (:205-207)",
+          "drain loop (:741-760) -> dispatch_one_locked (:804):",
+          "  router slot reserve from cookie_free_list_ LIFO (:814-821); exhaustion = invariant terminate",
+          "  io_uring_get_sqe (:827) — userspace ring op, no syscall; NULL -> submit_transport_locked flush + retry once (:829-841)",
+          "  NO-FAIL REGION after get_sqe (sqe_tail advanced; abandoning the SQE would execute it with stale identity) (:844-849)",
+          "  allocate_cookie_ (:850 -> :1088-1102): plain next_cookie_++ under dispatch_mtx_ (NOT atomic); no-wrap fail-fast at CONTROL_TAG",
+          "  io_uring_prep_read/write/fsync (:852-867)",
+          "  io_uring_sqe_set_data64 (:871) — kernel-visible identity = never-reused cookie (ABA closure, :121-129)",
+          "  router_[i] install (:872-876); ATOMIC RMW relaxed live_cookies_.fetch_add (:877)",
+          "  transport_ledger_->append (:887) — fixed ledger, capacity == kernel sq.ring_entries",
+          "  LOCK arena leaf #6 mark_running (:895 -> request_arena.hpp:452-466): enqueued->running ownership transfer; false = invariant terminate under dispatch_mtx_ discipline",
+          "  QUEUE remove_exact (:905): O(queue) head removal — drain N = O(N^2) handle moves (complexity flag, not a verdict)"
+        ],
+        "note": "NO io_uring_submit here: the SQE is staged (liburing sqe_tail advanced); kernel flush is deferred to the next poll/wait_one (batched)."
+      },
+      {
+        "id": "A4",
+        "stage": "transport flush (syscall)",
+        "binding": "src/async/uring_backend.cpp:924-941 (submit_transport_locked)",
+        "thread": "driver thread",
+        "authority_domain": "dispatch_mtx_ held by caller (poll :1502 / wait_one :1538 / SQ-pressure :829)",
+        "mechanisms": [
+          "SYSCALL io_uring_submit (:937) = one io_uring_enter flushing ALL staged SQEs (batched kernel submit; liburing submission-api contract)",
+          "ATOMIC RMW relaxed submit_flushes_.fetch_add (:928)",
+          "ledger prefix consumption account_transport_result_locked (:943); permanent negative -> poison_and_recover_locked Class-A (:994)"
+        ]
+      },
+      {
+        "id": "A5",
+        "stage": "reap + terminal + publication",
+        "binding": "src/async/uring_backend.cpp:1474-1517 (poll) / :1519-1609 (wait_one); reap_cqes :1422-1455; handle_one_cqe :1344-1420; finalize_operation_terminal_ :1311-1342; arena reap request_arena.hpp:500-565",
+        "thread": "driver thread (whoever called poll/wait_one, under access_mtx_ at context layer)",
+        "authority_domain": "dispatch_mtx_ (drain+flush) released BEFORE reap; arena leaf mutex_ for terminal+publication; Completion state_ CAS = publication authority",
+        "mechanisms": [
+          "LOCK dispatch_mtx_ (:1481 / :1530): re-drain + submit_transport_locked",
+          "reap_cqes (:1422): io_uring_peek_batch_cqe BATCH=32 (:1433; peek does not advance CQ head — per-CQE io_uring_cqe_seen :1443 advances)",
+          "per CQE: io_uring_cqe_get_data64 (:1441) — integer user_data API end-to-end (:1436-1440)",
+          "find_live_router_cookie_ (:1381 op / :1351 control -> :1118+): bounded O(request_capacity) linear scan of the fixed router under NO uring lock (single-driver contract; D1 comment :150-156)",
+          "LOCK arena leaf #7 record_terminal (:1322 -> request_arena.hpp:598-620): exactly-once terminal-winner (:605 early false), state validation :606-611, backend_ready + ++backend_ready_count_ :615-616, ready-ring push :617 (intrusive FIFO, terminal-winner order)",
+          "LOCK arena leaf #8 reap — ONE acquisition PER SLOT in loop (request_arena.hpp:500-565): enqueue-pin check :521, binding validation :525, registration close + waiter delivery exactly-once :533-540, borrow end :542, completion_ready + accounting :546-548",
+          "PUBLICATION inside leaf (:555) -> Completion::publish_from_reap (completion.hpp:404-415): CAS acq_rel outstanding->publishing :406-411, storage set :412, F02 SEAM reap_seq_ = next_reap_seq() :413 (process-global static atomic, seq_cst ++), release-store ready :414 — the completion-ready linearization point",
+          "sink.on_ready OUTSIDE the leaf lock (:561; ADR sink-never-under-mutex)",
+          "wait_one kernel park when nothing ready: io_uring_submit_and_wait(ring,1) (:1564) UNDER dispatch_mtx_ (:1571) — submit+block single enter (liburing contract), EINTR-retried (:1575); drained boundary requires accepted_outstanding()==0 (:1547-1550)"
+        ]
+      },
+      {
+        "id": "A6",
+        "stage": "consume + reset (slot release)",
+        "binding": "include/sluice/async/completion.hpp:217-223 (result) / :234-274 (reset); request_arena.hpp:792+ (release_completed_binding) / :1160-1183 (free_slot_locked_)",
+        "thread": "driver thread",
+        "authority_domain": "Completion state_ CAS; arena leaf mutex_ for release",
+        "mechanisms": [
+          "ATOMIC LOAD acquire: result() ready check (:218)",
+          "ATOMIC RMW CAS acq_rel: reset ready->resetting (completion.hpp:249-254)",
+          "LOCK arena leaf #9 release_completed_binding (request_arena.hpp:792 -> free_slot_locked_ :1160-1183): generation_++ BEFORE free-list visibility :1164-1167 (ABA guard, UINT64_MAX fail-fast), free_slots_ LIFO push :1182",
+          "storage clear + reap_seq_=0 (:269-270); release-store idle (:273) — reset cleanup completes before next claim can observe idle"
+        ]
+      }
+    ],
+    "stage_thread_authority_answer": {
+      "submit": "driver thread; access_mtx_ -> dispatch_mtx_ -> arena leaf x4; accept LP = Completion binding->outstanding release-store",
+      "dispatch": "driver thread under dispatch_mtx_ (SQE staging + optional in-dispatch flush); ring ownership transfer = mark_running + remove_exact under the same critical section",
+      "execute": "KERNEL (asynchronous); userspace never blocks on execution in Path A",
+      "complete": "kernel produces CQE; consumed by driver thread in reap_cqes",
+      "reap": "driver thread (poll/wait_one caller); reap is the SOLE publication authority; per-slot arena leaf lock; publish = release-store ready inside leaf; sink called outside leaf",
+      "wake": "none in standalone Path A — the driver parks in the kernel (io_uring_submit_and_wait) or returns from poll; no userspace wake edge exists",
+      "resume": "same driver thread; completion observed by caller poll/wait_one return + Completion::ready()"
+    }
+  },
+  "path_B_runtime_continuation": {
+    "canonical_shape": "ApplicationRuntime: 1 Fiber per task, depth-D pipeline, scheduler workers=W, ThreadPoolBackend workers=W_tp (E1-L2 shape). Uring+runtime delta noted per stage (MW-S2 parks the participant inside ctx_.wait_one -> kernel).",
+    "stages": [
+      {
+        "id": "B1",
+        "stage": "task submit",
+        "binding": "src/async/application_runtime.cpp:37-48 (RuntimeTaskContext::submit_*) -> async_io_context.cpp:114-141 -> src/async/threadpool_backend.cpp:300-395",
+        "thread": "task fiber (running on a scheduler worker thread)",
+        "authority_domain": "access_mtx_ -> admission_mtx_ + work_mtx_ (TP) -> arena leaf",
+        "mechanisms": [
+          "RuntimeTaskContext is pure delegation (:37-48)",
+          "TP admission transaction: admission_mtx_ + submit_transaction (4 arena leaf locks; identical ladder to A2)",
+          "LOCK work_mtx_: arena_.enqueue (:331) + dispatch_.push_back (:368, frozen census binding)",
+          "WAKE work_cv_.notify_one PER SUBMIT (:389) — unicast",
+          "uring delta: dispatch_mtx_ x2 (submit ladder + enqueue/dispatch), SQE staged, flush deferred; no work_cv_"
+        ]
+      },
+      {
+        "id": "B2",
+        "stage": "backend execute",
+        "binding": "src/async/threadpool_backend.cpp:423-507 (worker loop)",
+        "thread": "TP worker thread (W_tp threads) — CROSS-THREAD HANDOFF vs B1",
+        "authority_domain": "work_mtx_/work_cv_ (dequeue+mark_running ONE transfer window, ADR 10.4); arena leaf for mark_running/record_terminal",
+        "mechanisms": [
+          "WAKE-PARK work_cv_.wait predicate stopping_||!dispatch_.empty() (:438)",
+          "LOCK work_mtx_: pop_front (:469-473) + LOCK arena leaf #6 mark_running (:479)",
+          "SYSCALL pread/pwrite with ALL locks released (:495 region) — blocking offload",
+          "LOCK arena leaf #7 record_terminal (:504) — arena leaf taken ALONE (no work_mtx_; comment :502) + ready-ring push (request_arena.hpp:617)",
+          "WAKE signal_ready_progress (:507 -> :599-607): ready mutex + ready_epoch_++ + notify_all BROADCAST (split-wait allows concurrent parkers; ready_wait_source.hpp:29-33)",
+          "uring+runtime delta: no TP worker; kernel executes; driver/participant reaps in poll/wait_one; the BackendWaitSource park is the KERNEL wait (submit_and_wait), bridged to scheduler wakes via signal_wake_locked -> interrupt_backend_waiters (async_io_context.cpp:384-403)"
+        ]
+      },
+      {
+        "id": "B3",
+        "stage": "await: waiter registration + suspend",
+        "binding": "src/async/application_runtime.cpp:79-95 (RuntimeTaskContext::await_completion) -> src/async/scheduler_park_wake.cpp:838-925 (await_completion_size)",
+        "thread": "task fiber (current scheduler worker)",
+        "authority_domain": "Scheduler global_mtx_ (G) wrapping wait-registry leaf + arena leaf (via access_mtx_)",
+        "mechanisms": [
+          "assert non-idle (application_runtime.cpp:80-82)",
+          "LOCK G (:857)",
+          "LOCK registry leaf acquire_wait_record_locked (:859 -> :770-809): preallocated WaitRecord pool (wait_capacity=256 default, scheduler.hpp:301), reuse bumps generation BEFORE visibility (:796), lease serial :808; exhaustion = synchronous no_space, NO allocation recovery (:798-801)",
+          "WaiterToken{scheduler_identity, slot, generation} + RoutingLease::pinning (:864-867)",
+          "ctx_.register_waiter (:869) -> access_mtx_ (async_io_context.cpp:473-481) -> backend register_waiter (uring_backend.cpp:1721-1730 / threadpool_backend.cpp:803+) -> arena_.resolve_completion O(request_capacity) SCAN under leaf lock (request_arena.hpp:947-958) + arena_.register_waiter SECOND leaf lock (:645) — two leaf acquisitions per await",
+          "inline-ready fast path: registration lost because reap already won -> return WITHOUT suspending (:892-896)",
+          "commit_suspend_locked (:902 -> scheduler.cpp:1371+): raise suspend_switch_pending BEFORE make_waiting under G (suspend-before-switch race closure)",
+          "release G; fiber_ctx::context_switch (:913-916) — PHYSICAL SUSPEND (stack switch to scheduler ctx)"
+        ]
+      },
+      {
+        "id": "B4",
+        "stage": "reap -> routing",
+        "binding": "request_arena.hpp:500-565 (reap) -> src/async/scheduler.cpp:1498-1550 (ReadyRoutingSink::on_ready) -> drain under G -> route_runnable_locked :1570-1640",
+        "thread": "whoever runs the reap pass (driver/participant under access_mtx_); routing under G",
+        "authority_domain": "arena leaf (publication) -> wait-registry leaf (delivery) -> G (routing) + target inbox_mtx",
+        "mechanisms": [
+          "reap publishes Completion-ready inside leaf and extracts waiter delivery exactly-once (:533-540)",
+          "sink.on_ready OUTSIDE leaf (:561) -> LOCK registry leaf (:1511): token identity/generation/state validation (:1515-1540; stale dropped), mark delivered + push delivered list (:1541-1543)",
+          "drain under G: fiber make_runnable exactly-once -> route_runnable_locked (:1570):",
+          "  ATOMIC store release global_terminate_=false (:1583)",
+          "  ATOMIC RMW acq_rel idle_workers_.exchange(0) + CONDITIONAL dance_epoch_.fetch_add (:1598-1604; TLA+ contribution-identity law, issue #161)",
+          "  admission candidate demotion (:1611-1614)",
+          "  MAP FIND fiber_owner_ (unordered_map, G-protected) (:1616-1622)",
+          "  LOCK target inbox_mtx + local_runnable.push_back (:1623-1626; std::deque)",
+          "  WAKE signal_wake_locked (:1639): wake_mtx_ + epoch + notify_all BROADCAST + backend-wait interrupt bridge (scheduler_park_wake.cpp signal path)",
+          "retire_wait_record_locked (scheduler_park_wake.cpp:812-828, registry leaf) consumes the delivered record on the drain pass"
+        ]
+      },
+      {
+        "id": "B5",
+        "stage": "wake -> resume -> consume",
+        "binding": "src/async/scheduler_park_wake.cpp:178+ (park_on_wake_source) + await_completion_size :916-924; completion.hpp:217-274",
+        "thread": "TARGET scheduler worker (may differ from the suspending worker — fiber migration via owner routing)",
+        "authority_domain": "wake domain (wake_mtx_+epoch predicate) -> worker loop -> fiber ctx; then Completion caller lifecycle + arena leaf",
+        "mechanisms": [
+          "worker parked with arm-then-recheck under G + nested wake_mtx_; predicate = wake epoch / terminate / earliest deadline (no periodic poll)",
+          "worker pops local_runnable -> context_switch INTO fiber",
+          "await returns at :916; frozen completion_wait_outcome read :922 (not racy c.ready() — cancel-vs-complete race closure)",
+          "task: c.result() (acquire load + copy) -> c.reset() (CAS ready->resetting :249; LOCK arena leaf #9 release_completed_binding -> generation++ :1167; release-store idle :273)"
+        ]
+      }
+    ],
+    "stage_thread_authority_answer": {
+      "submit": "task fiber; G not involved; access -> admission/work -> arena leaf x4; accept LP = binding->outstanding release-store",
+      "dispatch": "TP worker thread (cross-thread handoff via work_cv_); dequeue+mark_running is ONE work_mtx_ window (ADR 10.4). Uring: driver under dispatch_mtx_",
+      "execute": "TP worker (blocking syscall, no locks held) or KERNEL (uring)",
+      "complete": "record_terminal exactly-once under arena leaf (worker thread, TP); ready-ring push orders reap delivery in terminal-winner order",
+      "reap": "driver/participant under access_mtx_; per-slot arena leaf lock; publish release-store inside leaf; sink outside leaf",
+      "wake": "ready_cv_ notify_all per terminal (TP); wake_cv_ notify_all per route (scheduler); Uring participant park = kernel wait bridged by interrupt_backend_waiters",
+      "resume": "scheduler worker (possibly different from suspender — fiber migration); context_switch back; frozen outcome read; reset releases slot with generation++"
+    }
+  },
+  "seams": [
+    {
+      "id": "F01",
+      "name": "disabled stats still paying outstanding()",
+      "semantic_role": "observability (optional AsyncStats)",
+      "code_fact": {
+        "status": "FACT",
+        "chain": [
+          "src/async/async_io_context.cpp:118 (also :125/:132/:139/:155/:166/:177/:188): update_max_outstanding(stats_, backend_->outstanding()) — C++ argument evaluation calls backend_->outstanding() BEFORE the null-check inside update_max_outstanding (:109-111) runs",
+          "src/async/uring_backend.cpp:1885-1887: UringAsyncBackend::outstanding() -> arena_.accepted_outstanding()",
+          "src/async/threadpool_backend.cpp:887-889: same for ThreadPoolBackend",
+          "include/sluice/async/detail/request_arena.hpp:201-204: accepted_outstanding() takes std::lock_guard on the ARENA LEAF mutex_"
+        ],
+        "conclusion": "With stats_==nullptr (stats disabled), EVERY submit still pays: 1 virtual call + 1 arena leaf mutex acquire/release, on top of the 4-6 leaf acquisitions the submit ladder itself performs. tally_submit (:91-108) is already null-safe-cheap. wait_one's outstanding() at :323 is NOT part of this finding (semantically required empty-wait boundary); destructor/move-assignment checks (:35/:64) are lifecycle, not hot path."
+      },
+      "candidate_ablation": {
+        "R0": "current: unconditional update_max_outstanding(stats_, backend_->outstanding())",
+        "R1": "if (stats_) { update_max_outstanding(stats_, backend_->outstanding()); } — semantics IDENTICAL when stats enabled; stats-disabled is a normal production configuration (plain AsyncStats* = nullptr constructor path)",
+        "measure": "instructions/op, cycles/op, wall/op; lock activity if observable; negative result recorded if gain unstable"
+      },
+      "measured": null,
+      "status": "HYPOTHESIS (cost unmeasured; code fact FACT)"
+    },
+    {
+      "id": "F02",
+      "name": "unused Batch reap-order atomic on every completion",
+      "semantic_role": "Batch::next() reap-ordering capability (ADR 6 O2)",
+      "code_fact": {
+        "status": "FACT",
+        "chain": [
+          "include/sluice/async/completion.hpp:109-112: detail::next_reap_seq() = function-local static std::atomic<uint64_t> counter{0}; return ++counter — a PROCESS-GLOBAL RMW; operator++ default is seq_cst, while the adjacent comment (:106-108) states 'Relaxed ordering is sufficient' (comment/code ordering divergence recorded, not silently fixed)",
+          "completion.hpp:413 (T) and :625 (void): publish_from_reap stamps reap_seq_ UNCONDITIONALLY on EVERY successful terminal publication — independent of whether any Batch exists",
+          "consumers: ONLY Batch::next() (src/async/batch.cpp:141 reads reap_seq(); batch.hpp:130/152-155 docs). Ordinary callers ignore the field (completion.hpp:79-82)",
+          "reset zeroes reap_seq_ (completion.hpp:270/:552)"
+        ],
+        "conclusion": "Every non-Batch completion currently pays a process-global seq_cst atomic RMW for a capability only Batch consumes; the counter is a single shared cacheline across ALL contexts and backends in the process."
+      },
+      "candidate_ablation": {
+        "R0": "current: unconditional next_reap_seq() stamp at publication",
+        "R1": "normal Completion publication does not generate a reap sequence; Batch keeps EXACT semantics — if this cannot be done without semantic change, a research-only seam first (e.g. lazily stamp on Batch registration path); must preserve: Batch::next() reap-order guarantee, monotonicity within a Batch, zero-seq = never-reaped invariant",
+        "measure": "instructions/op, cycles/op, atomic contention evidence; single-thread + multi-thread; depth 1/8/32/64; focus small-I/O high-completion-rate multi-worker regimes"
+      },
+      "measured": null,
+      "status": "HYPOTHESIS (cost unmeasured; code fact FACT)"
+    },
+    {
+      "id": "F03",
+      "name": "RequestArena repeated synchronization boundaries",
+      "semantic_role": "leaf slot-lifecycle authority (AGENTS.md 4.1)",
+      "code_fact": {
+        "status": "FACT",
+        "summary": "One successful op crosses the arena leaf mutex_ N times: submit ladder 4 (reserve/prepare/install_binding/commit, submit_transaction.hpp) + enqueue 1 + mark_running 1 + record_terminal 1 + reap per-slot 1 + release_completed_binding 1 = 9 (Path B TP, including reset-time release); 8 before release in Path A. All on ONE physical mutex (request_arena.hpp:1189).",
+        "transitions": [
+          {"transition": "reserve", "binding": "request_arena.hpp:242-272", "invariant": "capacity arbitration + admission gate + high-water", "linearization_point": "free-list pop (would_block boundary)", "can_commute_disjoint_slots": false, "physical_conflict": "YES — shared counter slot_in_use_/free list on one lock"},
+          {"transition": "prepare", "binding": "request_arena.hpp:292-304", "invariant": "borrow metadata write (inactive)", "linearization_point": "none (internal to transaction)", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock"},
+          {"transition": "install_publication_binding", "binding": "request_arena.hpp:315-341", "invariant": "exactly-one binding per slot generation", "linearization_point": "none until commit", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock"},
+          {"transition": "commit", "binding": "request_arena.hpp:366-382", "invariant": "accepted accounting (accepted_outstanding_, submit_seq_)", "linearization_point": "slot half of accept LP (full LP = Completion release-store)", "can_commute_disjoint_slots": false, "physical_conflict": "YES — shared counters"},
+          {"transition": "enqueue", "binding": "request_arena.hpp:407-428", "invariant": "enqueued visibility + pin acknowledgment; Scheme-B terminal_noop arbitration", "linearization_point": "state flip pending->enqueued", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock"},
+          {"transition": "mark_running", "binding": "request_arena.hpp:452-466", "invariant": "dispatch ownership transfer (ADR 10.4); false reserved for cancel-won race", "linearization_point": "enqueued->running", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock (+work_mtx_/dispatch_mtx_ context)"},
+          {"transition": "record_terminal", "binding": "request_arena.hpp:598-620", "invariant": "terminal-winner exactly-once; ready-ring terminal-winner order", "linearization_point": "terminal_.stored + ring push :605/:617", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock"},
+          {"transition": "reap (per slot)", "binding": "request_arena.hpp:500-565", "invariant": "registration close, borrow end, accounting, publication authority (sole)", "linearization_point": "Completion-ready release-store INSIDE leaf :555; sink outside :561", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock; delivery order is semantic (ready-ring)"},
+          {"transition": "release_completed_binding", "binding": "request_arena.hpp:792+/:1160-1183", "invariant": "generation++ BEFORE free-list visibility (ABA guard)", "linearization_point": "generation bump :1167", "can_commute_disjoint_slots": true, "physical_conflict": "YES — same physical lock"}
+        ]
+      },
+      "interpretation_guard": "The question is NOT 'how many mutexes' but: (1) what invariant each acquisition protects; (2) which transitions need independent linearization points (reserve, commit, record_terminal, reap-publish, release DO; prepare/install_binding/enqueue-mark-running transitions are orderable); (3) which are historical splitting vs semantic (single centralized submit_transaction ladder is a deliberate ADR structure — acceptance LP ordering, rollback ladder); (4) disjoint-slot transitions semantically commute yet physically serialize on ONE lock; (5) Scalable Commutativity Rule applies in principle — but weakening semantic authority is forbidden and per-slot sharding touches admission transaction + Scheme-B + reap ordering (new-ADR territory).",
+      "candidate_ablation": "TAX-0D: profile first (lock hold times, futex traffic on the cliff cells); only if measured hot: commutativity-preserving ablation designs submitted as a separate gate; single-lock->sharded rewrite is NOT pre-authorized",
+      "measured": null,
+      "status": "HYPOTHESIS (structural facts FACT; cost/commutativity benefit unmeasured)"
+    },
+    {
+      "id": "F04",
+      "name": "AsyncIoContext vs backend serialization layering",
+      "semantic_role": "three distinct authority domains stack on one request",
+      "code_fact": {
+        "status": "FACT",
+        "layers": [
+          "access_mtx_ (AsyncIoContext): serializes ALL context calls — submit/poll/wait_one/cancel/register_waiter/outstanding (async_io_context.cpp:115/:200/:321/:458/:476/:509). Semantic role: ADR 9.2.5 serialized backend access domain; also the AsyncStats non-atomic accounting domain (:220-227)",
+          "dispatch_mtx_ (UringAsyncBackend): admission+dispatch+transport+cancel ONE lock (uring_backend.cpp:651/:724/:1481/:1530/:1571); wait_one parks IN-KERNEL while HOLDING it (:1564/:1571 — deliberate single-driver design; control wakes bypass via BackendWaitSource bridge)",
+          "RequestArena mutex_: leaf slot-lifecycle domain (see F03)",
+          "TP shape: admission_mtx_ (ladder) + work_mtx_ (dequeue/transfer) instead of dispatch_mtx_"
+        ],
+        "single_driver_answer": "In single-issuer/single-worker/manual-poll topologies all locks are UNCONTENDED (same thread re-acquires); the per-op cost is then ~N uncontended lock round-trips, not contention. In multi-worker runtime topologies access_mtx_ + arena leaf become true cross-thread serialization points.",
+        "classification": "REQUIRED-SEMANTIC-SERIALIZATION (each layer guards a different authority: caller serialization/accounting vs backend admission/dispatch arbitration vs slot lifecycle). Whether the PHYSICAL stacking is redundant in single-driver regimes is a measurement question."
+      },
+      "candidate_ablation": "TAX-0C profile: uncontended lock round-trip cost per op by layer (regime: w1 vs w4); NO merge-lock or remove-lock preauthorized",
+      "measured": null,
+      "status": "UNKNOWN (classification structural; cost regime-dependent, unmeasured)"
+    },
+    {
+      "id": "F05",
+      "name": "Scheduler/waiter/Fiber continuation floor",
+      "semantic_role": "the continuation capability set that separates Sluice from a poll loop",
+      "code_fact": {
+        "status": "FACT",
+        "chain": "completion -> await_completion (application_runtime.cpp:79-95) -> WaitRecord acquire under G (scheduler_park_wake.cpp:859/:770-809) -> arena register_waiter via resolve_completion O(capacity) + register (947/:645) -> commit_suspend_locked (scheduler.cpp:1371+) -> context_switch (park_wake :913-916) -> reap sink.on_ready (scheduler.cpp:1498-1550) -> drain + route_runnable_locked (:1570-1640) -> signal_wake_locked -> worker wake (park_on_wake_source, park_wake :178+) -> fiber resume (:916-924) -> result/reset -> release_completed_binding",
+        "capability_purchase": {
+          "WaitRecord pool + reuse generation (scheduler_park_wake.cpp:796)": "exactly-one waiter identity + stale-token protection; bounded 256 default, no allocation on wait path",
+          "RoutingLease + token identity validation (scheduler.cpp:1515-1533)": "exactly-once delivery ack + cross-scheduler/stale drop",
+          "commit_suspend_locked suspend_switch_pending (scheduler.cpp:1371+)": "suspend-before-physical-switch race closure",
+          "route_runnable_locked + idle-dance + global_terminate_ clear (scheduler.cpp:1583-1604)": "lost-wake liveness — TLA+-verified protocol (#161/#189/#194)",
+          "fiber_owner_ authoritative map (:1642-1651)": "owner-authentic routing; fiber migration across workers",
+          "frozen completion_wait_outcome (park_wake :917-924)": "cancel-vs-complete race decided once, read after resume",
+          "MW-S2 split wait + arm_backend_wait_commit (async_io_context.cpp:437-455)": "commit-to-park window closure; one-shot control interrupt",
+          "signal_wake_locked backend bridge": "cross-domain wake into kernel-parked participants"
+        }
+      },
+      "comparison_guard": "This chain MUST NOT be compared against 'while(!done) io_uring_peek_cqe(...)' and called overhead: the poll loop provides none of the purchased semantics (no lost-wake safety, no stale protection, no cancel safety, no cross-worker wake).",
+      "z1b_design": {
+        "name": "Minimal Semantic-Equivalent Uring harness (Z1b)",
+        "required_semantics": [
+          "bounded in-flight (fixed capacity)",
+          "stable request identity (never-reused cookie or generation-tagged slot)",
+          "generation/stale-completion protection (stale CQE dropped, never misdelivered)",
+          "exactly-once terminal publication (single-winner per request)",
+          "safe caller buffer lifetime (borrowed buffer held until that request's terminal)",
+          "one continuation per request (cooperative wait/resume — e.g. one-shot wait on the request's own completion flag/epoch)",
+          "no per-op heap allocation (matching Sluice's hot-path property)"
+        ],
+        "forbidden": "secretly deleting safety semantics to manufacture a cheaper 'floor'",
+        "purpose": "semantic_floor for the Z2/Z3 comparison: Sluice - Z1b = the only admissible abstraction-tax measure; Z1b - Z1 = capability cost"
+      },
+      "measured": null,
+      "status": "HYPOTHESIS (floor not yet built; purchase map is structural FACT)"
+    }
+  ],
+  "z_ladder_preregistration": {
+    "ladder": {
+      "Z0": "raw pread/pwrite — bare I/O floor",
+      "Z1": "raw liburing minimal submission/reap (io_uring_prep_read + io_uring_submit + io_uring_peek_cqe family; NO lifecycle semantics)",
+      "Z1b": "minimal semantic-equivalent liburing (F05.z1b_design) — SEMANTIC FLOOR",
+      "Z2": "AsyncIoContext + UringAsyncBackend, manual poll/reap, NO Scheduler",
+      "Z3": "ApplicationRuntime + RuntimeTaskContext::await_completion",
+      "Z4": "representative Sluice application path (composition amplification check only)"
+    },
+    "priority": ["Z1", "Z1b", "Z2", "Z3"],
+    "definitions": "capability_cost = Z1b - Z1; abstraction_tax = Z2 (or Z3) - Z1b; Z2 - Z1 is NOT a valid tax measure",
+    "same_work_freeze": [
+      "same fd", "same offset sequence", "same bytes", "same op count", "same queue depth",
+      "same in-flight depth", "same buffer reuse policy", "same file size", "same cache state",
+      "same filesystem", "same durability policy", "same completion count", "same error/cancel policy"
+    ],
+    "non_comparable_rule": "a layer that cannot provide the same semantics is marked NOT-SEMANTICALLY-COMPARABLE; no ratio is computed",
+    "matrix_minimum": "4KiB d{1,8,32,64}; 64KiB d{1,8,32}; 1MiB d{1,8,32}; read+write; workers {1,4} for worker-sensitive layers; historical 4K high-depth w4 cliff cell (4KiB d>=32 w4) is a mandatory re-judgment cell; #221 WSL2/tmpfs numbers are replication targets only",
+    "verdict_vocabulary": ["REPRODUCED-CURRENT-NATIVE", "NOT-REPRODUCED", "ENVIRONMENT-SPECIFIC", "TRANSFORMED", "BLOCKED"],
+    "environment_note": "v1.1 census §3 recorded native Fedora 44 readiness (real liburing 2.14, perf user-mode LIMITED/HOST_WITH_SUDO). Measurement sessions run in a different environment MUST re-establish: kernel, liburing, CPU topology/affinity/governor, filesystem, and tag ENVIRONMENT-LIMITED when on WSL2/VM/tmpfs/CI; pilot numbers are never universal conclusions.",
+    "lifecycle_separation_rule": "construction/startup, registration/setup, first-touch/page-fault, warm steady-state, shutdown/drain are SEPARATE line items; runtime startup/thread/ring creation/allocation must not be amortized into per-I/O tax, and per-op bookkeeping must not be hidden outside setup",
+    "tax_stack_target": "per representative cell: total cycles/op decomposed into kernel/device; io_uring submit/reap; required lifecycle/identity; cancellation capability; publication; waiter registration; routing; scheduler wake; fiber resume; accidental residual — each labeled MEASURED | INFERRED_BY_AB | STRUCTURAL_ONLY | UNKNOWN; structural counts are never presented as performance attribution"
+  },
+  "first_optimization_gate": {
+    "rule": "after TAX-0A2/B/C/D, rank candidates by measured cost magnitude, causal confidence, semantic risk, implementation size, cross-workload breadth, expected gain, possible regression; EXACTLY ONE production optimization authorized per round; simplicity (F01/F02 being easy) is not a selection criterion; #255 fix-selection gate applies when 2+ semantically valid fixes exist",
+    "candidate_pool": ["F01 disabled instrumentation", "F02 unused Batch capability", "F03 arena transition structure", "F04 serialization topology", "F05 continuation/runtime topology", "newly discovered candidates"],
+    "production_change_rules": "one mechanism / one causal hypothesis / one semantic invariant / one before-after experiment; forbidden: drive-by cleanup, mass renames, arena/scheduler rewrites, lock-free rewrites, allocator frameworks, buffer changes, public API redesign, memory_order weakening",
+    "current_recommendation": "NONE — no measurement exists; ranking before TAX-0B/C/D evidence would be a story, not a verdict"
+  },
+  "do_not_optimize_yet": [
+    "arena single lock (semantic arbitration domain; sharding touches admission transaction + Scheme-B + reap order; new-ADR territory)",
+    "global_mtx_ unified domain (MW classification + owner records + wake epoch + idle-dance, TLA+-verified)",
+    "notify_all choices (concurrent-parker justification documented, ready_wait_source.hpp:29-33)",
+    "idle-dance atomic protocol (#161 model-proven liveness)",
+    "submit ladder staged locking (segmented rollback semantics; merging unproven)",
+    "std::deque local_runnable (STL type is not a finding absent bounce evidence)",
+    "timer pool O(pool) recompute/scan (absent from E1-shape hot path)",
+    "F02 seq_cst-vs-relaxed comment/code divergence (recorded; fixing ordering WITHOUT measurement would itself be an unmeasured change)"
+  ],
+  "historical_context": {
+    "prior_round_results_on_master": [
+      "EXP-0 (PR #253): capacity-dependent tax MATERIAL on uring arm, ThreadPool capacity-invariant",
+      "EXP-U0 (PR #254): router-causality strongly supported — reversing find_live_router_cookie_ scan direction removes ~100% of measured capacity slope",
+      "T0-U-ROUTER shootout (PR #256): practical tie, simplest candidate (R1 reverse scan) selected by #255 gate; NOT yet shipped to production",
+      "COPY-AB-1 (PR #257): benefit only in capacity-skewed regimes (verdict PASS with boundary)"
+    ],
+    "relation_to_this_round": "These are data/reference results feeding the same campaign; the Z-ladder semantic-floor comparison is new and does not re-litigate them."
+  },
+  "measurement_readiness": {
+    "benchmarks_required": "Z0-Z3 arms are bench-side code only (non-production); Z1b harness is new research bench code with a frozen semantic checklist (F05.z1b_design) — building it does not authorize any production change",
+    "gates": "all perf evidence through scripts/bench/perf-attribution.py runner + perf-evidence-validate.py; canonical artifacts in docs/results/performance-attribution/ only"
+  }
+}
