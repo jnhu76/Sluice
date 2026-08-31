@@ -8,22 +8,31 @@ relies on:
 
   - seed-derived execution order (must equal the recorded rounds AND the
     actual row sequence, cell-by-cell);
-  - candidate set + matrix completeness (every frozen cell present, no
-    extras, exact rep counts);
+  - SEALED matrix completeness: the validator embeds the externally
+    frozen campaign matrix (candidates, patterns, geometries, windows,
+    request size, total bytes, reps, warmup, seed, exact session set) and
+    requires each artifact's declared cell set to EQUAL it — deleting a
+    cell, a candidate, a geometry, or a whole session fails closed even
+    when rows and derived values are tampered consistently;
   - same-work (ops/bytes/word-sums identical across candidates within each
     session);
   - semantic_validation flags (fail-closed: any False fails the campaign);
-  - per-cell medians and normalized-vs-r0 ratios;
+  - per-cell medians and normalized-vs-r0 ratios for BOTH axes
+    (instructions AND cycles), each recomputed and cross-checked against
+    the recorded derived values;
   - campaign-aggregate geometric means (overall + per fs + per op),
     worst regressions, +5% guardrail eligibility;
-  - the pairwise practical-tie relation (2% band);
-  - the frozen §25 winner selection (mechanical; the human report may only
-    quote it, not re-derive it differently).
+  - the pairwise practical-tie relation (2% band, both GM axes and both
+    worst-cell tails);
+  - the frozen §25 winner selection (mechanical; the human report may
+    only quote it, not re-derive it differently).
 
 Mutation testing: `--self-test` applies each documented tamper (candidate
 label tampering, row removal, order tampering, normalized-metric tampering,
-GM tampering, worst-regression tampering, semantic-validity tampering) to a
-synthetic fixture and asserts the validator FAILS on every one. The
+GM tampering — instructions AND cycles, worst-regression tampering,
+semantic-validity tampering, whole-cell deletion with consistent derived
+resync, whole-candidate deletion, whole-session deletion, unknown session)
+to synthetic fixtures and asserts the validator FAILS on every one. The
 validator never repairs; it only accepts or exits non-zero.
 
 Usage:
@@ -45,6 +54,39 @@ SIMPLICITY = {"r1": 0, "r2": 1, "r3": 2}
 CANDIDATES = ["r0", "r1", "r2", "r3"]
 MICRO_KIND = "tax0routermicro"
 SHOOTOUT_KIND = "tax0routershootout"
+
+# Externally frozen campaign matrix (SHOOTOUT-FREEZE d45f620; recorded
+# verbatim in the official artifacts' params). The validator holds these
+# as INDEPENDENT facts and forces every artifact to match — an artifact
+# cannot redefine its own matrix.
+FROZEN_MICRO = {
+    "experiment": "TAX-0-ROUTER-SHOOTOUT-A",
+    "candidates": ["r0", "r1", "r2", "r3"],
+    "patterns": ["P0", "P1", "P2"],
+    "geometries": ["D=8,C=8", "D=8,C=32", "D=8,C=128", "D=8,C=512",
+                   "D=32,C=32", "D=32,C=128", "D=32,C=512",
+                   "D=128,C=128", "D=128,C=512"],
+    "windows": 20000,
+    "reps": 9,
+    "seed": 0x52545253,  # == 1381257811 ("RTRS")
+}
+FROZEN_SHOOTOUT = {
+    "experiment": "TAX-0-ROUTER-SHOOTOUT-B",
+    "candidates": ["r0", "r1", "r2", "r3"],
+    "geometries": ["D=8,C=8", "D=8,C=32", "D=8,C=128", "D=8,C=512",
+                   "D=32,C=32", "D=32,C=128", "D=32,C=512"],
+    "request_size": 4096,
+    "total_bytes": 134217728,  # 128 MiB per process/cell
+    "reps": 9,
+    "warmup_rounds": 2,
+    "seed": 0x52545253,
+}
+# The campaign is exactly these four fs x op sessions — no more, no fewer.
+FROZEN_SESSIONS = [("read", "tmpfs"), ("write", "tmpfs"),
+                   ("read", "btrfs"), ("write", "btrfs")]
+# Domain-level frozen facts independent of any spec override.
+ALLOWED_OPS = ("read", "write")
+ALLOWED_FS = ("tmpfs", "btrfs")
 
 
 class Invalid(Exception):
@@ -74,7 +116,65 @@ def _check_tracked(cond: bool, msg: str, errs: list[str]) -> None:
         errs.append(msg)
 
 
-def validate_micro(art: dict, errs: list[str]) -> dict:
+def _parse_cell(s: str) -> tuple:
+    cand, rest = s.split("|")
+    d, c = rest[2:].split(",C=")
+    return (cand, int(d), int(c))
+
+
+def _expected_micro_cells(spec: dict) -> list[tuple]:
+    """Mirror of the runner's tax0routermicro_cells over the frozen spec."""
+    cells = []
+    for pat in spec["patterns"]:
+        for g in spec["geometries"]:
+            _, d, c = _parse_cell(f"x|{g}")
+            if pat == "P2" and d != c:
+                continue  # P2 is the full-occupancy pattern: D == C only
+            for cand in spec["candidates"]:
+                cells.append((cand, pat, d, c))
+    return sorted(cells)
+
+
+def _check_micro_params(art: dict, spec: dict, errs: list[str]) -> None:
+    p = art.get("params") or {}
+    for key, want in (("experiment", spec["experiment"]),
+                      ("candidates", spec["candidates"]),
+                      ("patterns", spec["patterns"]),
+                      ("geometries", spec["geometries"]),
+                      ("windows", spec["windows"]),
+                      ("reps", spec["reps"]),
+                      ("seed", spec["seed"])):
+        got = p.get(key)
+        if got != want:
+            errs.append(f"micro params.{key}: sealed matrix violation "
+                        f"(frozen {want!r}, artifact {got!r})")
+
+
+def _check_shootout_params(art: dict, spec: dict, errs: list[str]) -> None:
+    p = art.get("params") or {}
+    for key, want in (("experiment", spec["experiment"]),
+                      ("candidates", spec["candidates"]),
+                      ("geometries", spec["geometries"]),
+                      ("request_size", spec["request_size"]),
+                      ("total_bytes", spec["total_bytes"]),
+                      ("reps", spec["reps"]),
+                      ("warmup_rounds", spec["warmup_rounds"]),
+                      ("seed", spec["seed"])):
+        got = p.get(key)
+        if got != want:
+            errs.append(f"shootout params.{key}: sealed matrix violation "
+                        f"(frozen {want!r}, artifact {got!r})")
+    if p.get("op") not in ALLOWED_OPS:
+        errs.append(f"shootout params.op: {p.get('op')!r} not in "
+                    f"{ALLOWED_OPS}")
+    if p.get("fs_label") not in ALLOWED_FS:
+        errs.append(f"shootout params.fs_label: {p.get('fs_label')!r} "
+                    f"not in {ALLOWED_FS}")
+
+
+def validate_micro(art: dict, errs: list[str],
+                   spec: dict | None = None) -> dict:
+    spec = spec or FROZEN_MICRO
     if art.get("kind") != MICRO_KIND:
         errs.append(f"micro artifact kind is {art.get('kind')!r}")
         return {}
@@ -85,13 +185,33 @@ def validate_micro(art: dict, errs: list[str]) -> dict:
         return {}
     seed = params.get("seed")
     reps = params.get("reps")
+    if "execution_order" not in art or "cells" not in art["execution_order"]:
+        errs.append("micro: missing execution_order.cells")
+        return {}
+    _check_micro_params(art, spec, errs)
+    # SEALED matrix: the declared cell set must EQUAL the frozen set —
+    # missing AND extra cells both fail.
     cells_spec = art["execution_order"]["cells"]
-    # Recompute the seed-derived order.
-    cells = []
+    declared: list[tuple] = []
     for s in cells_spec:
-        cand, pat, dc = s.split("|")
-        d, c = dc[2:].split(",C=")
-        cells.append((cand, pat, int(d), int(c)))
+        try:
+            cand, pat, dc = s.split("|")
+            d, c = dc[2:].split(",C=")
+            declared.append((cand, pat, int(d), int(c)))
+        except (ValueError, IndexError):
+            errs.append(f"micro: unparsable cell {s!r}")
+            return {}
+    expected = _expected_micro_cells(spec)
+    missing = sorted(set(expected) - set(declared))
+    extra = sorted(set(declared) - set(expected))
+    for cell in missing:
+        errs.append(f"micro: SEALED matrix cell absent: {cell}")
+    for cell in extra:
+        errs.append(f"micro: SEALED matrix extra cell: {cell}")
+    if missing or extra:
+        return {}
+    # Recompute the seed-derived order over the (now sealed) cell set.
+    cells = declared
     want = _rng_order(cells, reps, seed)
     got = art["execution_order"]["rounds"]
     if [[f"{a}|{b}|D={d},C={c}" for a, b, d, c in r] for r in want] != got:
@@ -102,10 +222,14 @@ def validate_micro(art: dict, errs: list[str]) -> dict:
     flat = [c for rnd in got for c in rnd]
     if seq != flat:
         errs.append("micro: row sequence != recorded execution order")
-    # Matrix completeness: rep count per cell.
+    # Rep count per cell (the sealed set already guarantees the cell list;
+    # this pins the rep count on the row side).
     counts: dict[str, int] = {}
     for s in seq:
         counts[s] = counts.get(s, 0) + 1
+    if len(counts) != len(cells):
+        errs.append(f"micro: row-side cell count {len(counts)} != sealed "
+                    f"{len(cells)}")
     for s, n in counts.items():
         if n != reps:
             errs.append(f"micro: cell {s} has {n} reps (want {reps})")
@@ -115,6 +239,9 @@ def validate_micro(art: dict, errs: list[str]) -> dict:
                        f"micro row {i}: semantic_validation not True", errs)
         _check_tracked(r.get("same_work") is True,
                        f"micro row {i}: same_work not True", errs)
+        _check_tracked(r.get("steady_allocations_during_trace") == 0,
+                       f"micro row {i}: steady-state allocation observed "
+                       f"during trace", errs)
         _check_tracked(r.get("steady_allocations_per_op") == 0,
                        f"micro row {i}: steady allocations != 0", errs)
         _check_tracked(r.get("ops") == r.get("lifecycle_ops"),
@@ -135,49 +262,75 @@ def validate_micro(art: dict, errs: list[str]) -> dict:
     for key, v in ops_by_cell.items():
         if len(v) != 1:
             errs.append(f"micro: same-work violation at {key}: ops {v}")
-    # Recompute medians + normalized + GM.
+    # Recompute medians + normalized + GM for BOTH axes.
     by_cell: dict[tuple, list[dict]] = {}
     for r in rows:
         by_cell.setdefault((r["candidate"], r["pattern"], r["depth"],
                             r["request_capacity"]), []).append(r)
     med_instr: dict[tuple, float] = {}
+    med_cycles: dict[tuple, float] = {}
     for cell, rs in by_cell.items():
-        vals = [r["instructions_user"] / r["ops"] for r in rs
-                if r.get("instructions_user")]
-        if len(vals) != len(rs):
-            errs.append(f"micro: cell {cell} rows missing instructions")
-        elif vals:
-            med_instr[cell] = _med(vals)
-    normalized: dict[str, float] = {}
+        vals_i = [r["instructions_user"] / r["ops"] for r in rs
+                  if r.get("instructions_user")]
+        vals_c = [r["cycles_user"] / r["ops"] for r in rs
+                  if r.get("cycles_user")]
+        if len(vals_i) != len(rs) or len(vals_c) != len(rs):
+            errs.append(f"micro: cell {cell} rows missing counters")
+        else:
+            med_instr[cell] = _med(vals_i)
+            med_cycles[cell] = _med(vals_c)
+    normalized: dict[str, dict[str, float]] = {}
     for cell, v in med_instr.items():
         cand, pat, d, c = cell
-        base = med_instr.get(("r0", pat, d, c))
-        if cand != "r0" and base:
-            normalized[f"{cand}|{pat}|D={d},C={c}"] = v / base
-    gm: dict[str, float] = {}
+        base_i = med_instr.get(("r0", pat, d, c))
+        base_c = med_cycles.get(("r0", pat, d, c))
+        if cand != "r0" and base_i:
+            entry: dict = {"instr": v / base_i}
+            if base_c:
+                entry["cycles"] = med_cycles[cell] / base_c
+            normalized[f"{cand}|{pat}|D={d},C={c}"] = entry
+    gm: dict[str, dict[str, float]] = {}
     for cand in sorted({r["candidate"] for r in rows}):
-        ratios = [v for k, v in normalized.items()
-                  if k.startswith(cand + "|")]
-        if ratios:
-            gm[cand] = _gm(ratios)
-    # Recorded derived must match the recomputation.
+        ri = [v["instr"] for k, v in normalized.items()
+              if k.startswith(cand + "|")]
+        rc = [v["cycles"] for k, v in normalized.items()
+              if k.startswith(cand + "|") and "cycles" in v]
+        if ri:
+            gm[cand] = {"gm_instr": _gm(ri), "n_cells": len(ri)}
+            if rc:
+                gm[cand]["gm_cycles"] = _gm(rc)
+    # Recorded derived must match the recomputation (both axes).
     rec_gm = (art.get("derived") or {}).get("gm_per_candidate") or {}
-    for cand, v in gm.items():
+    for cand, d in gm.items():
         rec = (rec_gm.get(cand) or {}).get("gm_instr")
+        v = d["gm_instr"]
         if rec is None or abs(rec - v) > 1e-9:
             errs.append(f"micro: recorded GM_instr {cand} tampered "
                         f"(recorded {rec}, recomputed {v})")
+        if "gm_cycles" in d:
+            rec_c = (rec_gm.get(cand) or {}).get("gm_cycles")
+            if rec_c is None or abs(rec_c - d["gm_cycles"]) > 1e-9:
+                errs.append(f"micro: recorded GM_cycles {cand} tampered "
+                            f"(recorded {rec_c}, recomputed "
+                            f"{d['gm_cycles']})")
     rec_norm = (art.get("derived") or {}).get("normalized_vs_r0") or {}
     for k, v in normalized.items():
         rec = (rec_norm.get(k) or {}).get("instr")
-        if rec is None or abs(rec - v) > 1e-9:
+        if rec is None or abs(rec - v["instr"]) > 1e-9:
             errs.append(f"micro: recorded normalized {k} tampered "
-                        f"(recorded {rec}, recomputed {v})")
-    return {"med_instr": med_instr, "normalized": normalized, "gm": gm,
-            "cells": by_cell}
+                        f"(recorded {rec}, recomputed {v['instr']})")
+        if "cycles" in v:
+            rec_c = (rec_norm.get(k) or {}).get("cycles")
+            if rec_c is None or abs(rec_c - v["cycles"]) > 1e-9:
+                errs.append(f"micro: recorded normalized cycles {k} tampered "
+                            f"(recorded {rec_c}, recomputed {v['cycles']})")
+    return {"med_instr": med_instr, "med_cycles": med_cycles,
+            "normalized": normalized, "gm": gm, "cells": by_cell}
 
 
-def validate_shootout(art: dict, errs: list[str]) -> dict:
+def validate_shootout(art: dict, errs: list[str],
+                      spec: dict | None = None) -> dict:
+    spec = spec or FROZEN_SHOOTOUT
     if art.get("kind") != SHOOTOUT_KIND:
         errs.append(f"shootout artifact kind is {art.get('kind')!r}")
         return {}
@@ -187,12 +340,36 @@ def validate_shootout(art: dict, errs: list[str]) -> dict:
         errs.append("shootout artifact has no rows")
         return {}
     seed, reps = params.get("seed"), params.get("reps")
+    if "execution_order" not in art or "cells" not in art["execution_order"]:
+        errs.append("shootout: missing execution_order.cells")
+        return {}
+    _check_shootout_params(art, spec, errs)
+    # SEALED matrix: declared cell set must EQUAL the frozen set.
     cells_spec = art["execution_order"]["cells"]
-    cells = []
+    declared: list[tuple] = []
     for s in cells_spec:
-        cand, dc = s.split("|")
-        d, c = dc[2:].split(",C=")
-        cells.append((cand, int(d), int(c)))
+        try:
+            cand, dc = s.split("|")
+            d, c = dc[2:].split(",C=")
+            declared.append((cand, int(d), int(c)))
+        except (ValueError, IndexError):
+            errs.append(f"shootout: unparsable cell {s!r}")
+            return {}
+    expected: list[tuple] = []
+    for g in spec["geometries"]:
+        _, d, c = _parse_cell(f"x|{g}")
+        for cand in spec["candidates"]:
+            expected.append((cand, d, c))
+    expected.sort()
+    missing = sorted(set(expected) - set(declared))
+    extra = sorted(set(declared) - set(expected))
+    for cell in missing:
+        errs.append(f"shootout: SEALED matrix cell absent: {cell}")
+    for cell in extra:
+        errs.append(f"shootout: SEALED matrix extra cell: {cell}")
+    if missing or extra:
+        return {}
+    cells = declared
     want = _rng_order(cells, reps, seed)
     got = art["execution_order"]["rounds"]
     if [[f"{a}|D={d},C={c}" for a, d, c in r] for r in want] != got:
@@ -206,6 +383,9 @@ def validate_shootout(art: dict, errs: list[str]) -> dict:
     counts: dict[str, int] = {}
     for s in seq:
         counts[s] = counts.get(s, 0) + 1
+    if len(counts) != len(cells):
+        errs.append(f"shootout: row-side cell count {len(counts)} != sealed "
+                    f"{len(cells)}")
     for s, n in counts.items():
         if n != reps:
             errs.append(f"shootout: cell {s} has {n} reps (want {reps})")
@@ -299,9 +479,24 @@ def validate_shootout(art: dict, errs: list[str]) -> dict:
 
 
 def campaign_aggregate(micro_v: dict, shootouts: list[dict],
-                       errs: list[str]) -> dict:
+                       errs: list[str],
+                       sessions: list[tuple] | None = None) -> dict:
     """Campaign-level envelope across ALL shootout sessions (production
-    selection authority) + the frozen §25 mechanical winner."""
+    selection authority) + the frozen §25 mechanical winner.
+
+    The session SET itself is sealed: it must equal the frozen four
+    (fs x op) sessions exactly — a dropped session, a duplicated session,
+    or an unknown session fails closed."""
+    frozen = sessions if sessions is not None else FROZEN_SESSIONS
+    got_sessions = sorted((sv["op"], sv["fs"]) for sv in shootouts
+                          if sv.get("op") and sv.get("fs"))
+    for s in sorted(frozen):
+        if s not in got_sessions:
+            errs.append(f"campaign: SEALED session absent: {s[0]}/{s[1]}")
+    for s in got_sessions:
+        if s not in sorted(frozen):
+            errs.append(f"campaign: unknown session (not in frozen set): "
+                        f"{s[0]}/{s[1]}")
     all_med_i: dict[tuple, float] = {}
     all_med_c: dict[tuple, float] = {}
     # Sessions share the SAME (cand, D, C) grid by design — the fs/op
@@ -372,24 +567,37 @@ def campaign_aggregate(micro_v: dict, shootouts: list[dict],
         best_cycles = min(eligible, key=lambda c: env[c]["gm_cycles"])
         leads = all(env[best]["gm_instr"] <=
                     env[o]["gm_instr"] - TIE for o in others if o in SIMPLICITY)
-        cycles_ok = env[best]["gm_cycles"] >= \
-            env[best_cycles]["gm_cycles"] - TIE
-        worst_ok = all(env[best]["worst_cell_instr"] <=
-                       env[o]["worst_cell_instr"] + TIE
-                       for o in others if o in SIMPLICITY)
+        # Direction fixed per corrective review 5063072823: "worse" is a
+        # LARGER ratio, so the instruction winner must be no more than the
+        # tie band above the cycles winner (the old `>= min - TIE` form was
+        # satisfied by almost anything).
+        cycles_ok = env[best]["gm_cycles"] <= \
+            env[best_cycles]["gm_cycles"] + TIE
+        # Tail symmetry: the instruction winner must not carry a worst-cell
+        # regression worse than any other candidate by more than the tie
+        # band — on EITHER axis (instructions AND cycles).
+        worst_ok = all(
+            env[best]["worst_cell_instr"] <=
+            env[o]["worst_cell_instr"] + TIE
+            and env[best]["worst_cell_cycles"] <=
+            env[o]["worst_cell_cycles"] + TIE
+            for o in others if o in SIMPLICITY)
         if leads and cycles_ok and worst_ok:
             selected, verdict = best, f"ROUTER SHOOTOUT PASS - " \
                                       f"{best.upper()} SELECTED"
         else:
             # Practical-tie set: within the 2% band of the GM leader on
-            # both axes and no >2pp worst-regression disadvantage.
+            # both axes and no >2pp worst-regression disadvantage on
+            # either axis.
             tie_set = [c for c in eligible
                        if abs(env[c]["gm_instr"] -
                               env[best]["gm_instr"]) < TIE
                        and abs(env[c]["gm_cycles"] -
                                env[best]["gm_cycles"]) < TIE
                        and env[c]["worst_cell_instr"] <=
-                       env[best]["worst_cell_instr"] + TIE]
+                       env[best]["worst_cell_instr"] + TIE
+                       and env[c]["worst_cell_cycles"] <=
+                       env[best]["worst_cell_cycles"] + TIE]
             if len(tie_set) <= 1:
                 tie_set = [best]
             selected = min(tie_set, key=lambda c: SIMPLICITY.get(c, 99))
@@ -406,12 +614,38 @@ def campaign_aggregate(micro_v: dict, shootouts: list[dict],
 # Mutation self-test (every documented tamper must FAIL validation).
 # ---------------------------------------------------------------------------
 
+# Tiny specs for the self-test fixtures: the validators take the sealed
+# spec as a parameter (the official CLI passes nothing and gets the frozen
+# campaign matrix), so the self-test proves the sealing MECHANISM against
+# fixtures that deliberately deviate from the frozen campaign sizes.
+SELF_MICRO_SPEC = {
+    "experiment": "TAX-0-ROUTER-SHOOTOUT-A",
+    "candidates": ["r0", "r1", "r3"],
+    "patterns": ["P0", "P1"],
+    "geometries": ["D=8,C=8", "D=8,C=32"],
+    "windows": 20000,
+    "reps": 2,
+    "seed": 0x52545253,
+}
+SELF_SHOOT_SPEC = {
+    "experiment": "TAX-0-ROUTER-SHOOTOUT-B",
+    "candidates": ["r0", "r1"],
+    "geometries": ["D=8,C=8", "D=8,C=32"],
+    "request_size": 4096,
+    "total_bytes": 134217728,
+    "reps": 2,
+    "warmup_rounds": 2,
+    "seed": 0x52545253,
+}
+SELF_SESSIONS = [("read", "tmpfs"), ("write", "btrfs")]
+
+
 def _fixture() -> dict:
     """Tiny but structurally valid shootout artifact (synthetic numbers)."""
-    cands = ["r0", "r1"]
+    cands = list(SELF_SHOOT_SPEC["candidates"])
     geo = [(8, 8), (8, 32)]
-    reps = 2
-    seed = 0x52545253
+    reps = SELF_SHOOT_SPEC["reps"]
+    seed = SELF_SHOOT_SPEC["seed"]
     cells = sorted((c, d, cc) for c in cands for d, cc in geo)
     rounds = _rng_order(cells, reps, seed)
     rows = []
@@ -430,13 +664,18 @@ def _fixture() -> dict:
                 "op_cookie_lookup_calls": 100, "lookup_hits": 100,
                 "lookup_misses": 0, "control_cookie_lookup_calls": 0,
                 "transport_cookie_lookup_calls": 0,
-                "table_insert_calls": 0 if cand != "r3" else 100,
-                "table_erase_calls": 0, "word_sum": 42,
+                "table_insert_calls": 0, "table_erase_calls": 0,
+                "word_sum": 42,
             })
     art = {
         "kind": SHOOTOUT_KIND,
-        "params": {"seed": seed, "reps": reps, "fs_label": "tmpfs",
-                   "op": "read", "candidates": cands},
+        "params": {"experiment": SELF_SHOOT_SPEC["experiment"],
+                   "seed": seed, "reps": reps, "fs_label": "tmpfs",
+                   "op": "read", "candidates": cands,
+                   "geometries": list(SELF_SHOOT_SPEC["geometries"]),
+                   "request_size": SELF_SHOOT_SPEC["request_size"],
+                   "total_bytes": SELF_SHOOT_SPEC["total_bytes"],
+                   "warmup_rounds": SELF_SHOOT_SPEC["warmup_rounds"]},
         "execution_order": {
             "cells": [f"{c}|D={d},C={cc}" for c, d, cc in cells],
             "rounds": [[f"{c}|D={d},C={cc}" for c, d, cc in rnd]
@@ -445,28 +684,65 @@ def _fixture() -> dict:
         "rows": rows,
         "derived": {},
     }
-    # Embed the CORRECT derived envelope (real artifacts always carry it;
-    # the mutations then tamper it, and absence itself is invalid).
-    v = validate_shootout(art, [])
-    env: dict[str, dict] = {}
-    for cand in cands:
-        if cand == "r0":
-            continue
-        ni = [v["med_instr"][(cand, d, cc)] /
-              v["med_instr"][("r0", d, cc)] for d, cc in geo]
-        nc = [v["med_cycles"][(cand, d, cc)] /
-              v["med_cycles"][("r0", d, cc)] for d, cc in geo]
-        env[cand] = {"gm_instr": _gm(ni), "gm_cycles": _gm(nc),
-                     "worst_cell_instr": max(ni),
-                     "worst_cell_cycles": max(nc)}
-    art["derived"] = {"envelope_vs_r0": env}
+    _embed_shootout_envelope(art)
     return art
+
+
+def _embed_shootout_envelope(art: dict) -> None:
+    """Recompute and embed the CORRECT derived envelope from the artifact's
+    rows (standalone math, independent of the sealed validator — the
+    drop-cell mutations produce artifacts the validator refuses before the
+    derived stage). Real artifacts always carry this block; the mutations
+    then tamper it, and absence itself is invalid."""
+    by_cell: dict[tuple, list[dict]] = {}
+    for r in art["rows"]:
+        by_cell.setdefault((r["candidate"], r["active_depth"],
+                            r["request_capacity"]), []).append(r)
+    med_i = {k: _med([r["instructions_user"] / r["ops"] for r in rs])
+             for k, rs in by_cell.items()}
+    med_c = {k: _med([r["cycles_user"] / r["ops"] for r in rs])
+             for k, rs in by_cell.items()}
+    ratios: dict[str, tuple[list, list]] = {}
+    for (cd, d, c) in by_cell:
+        if cd == "r0":
+            continue
+        ni = med_i[(cd, d, c)] / med_i[("r0", d, c)]
+        nc = med_c[(cd, d, c)] / med_c[("r0", d, c)]
+        ni_l, nc_l = ratios.setdefault(cd, ([], []))
+        ni_l.append(ni)
+        nc_l.append(nc)
+    env = {cd: {"gm_instr": _gm(v[0]), "gm_cycles": _gm(v[1]),
+                "worst_cell_instr": max(v[0]),
+                "worst_cell_cycles": max(v[1])}
+           for cd, v in ratios.items()}
+    art["derived"] = {"envelope_vs_r0": env}
 
 
 MUTATIONS = [
     "relabel-candidate", "drop-row", "tamper-order", "tamper-semantic",
     "tamper-gm", "tamper-normalized", "tamper-worst-regression",
+    "drop-cell-synced", "drop-candidate-synced",
 ]
+
+
+def _drop_shootout_cell(base: dict, cand: str, d: int, c: int) -> dict:
+    """Delete one whole cell AND resync rounds/rows/derived — the tamper a
+    derived-consistency check alone cannot catch; only the sealed matrix
+    can."""
+    art = copy.deepcopy(base)
+    cell = f"{cand}|D={d},C={c}"
+    art["execution_order"]["cells"] = [s for s in
+                                       art["execution_order"]["cells"]
+                                       if s != cell]
+    art["execution_order"]["rounds"] = [[s for s in rnd if s != cell]
+                                        for rnd in
+                                        art["execution_order"]["rounds"]]
+    art["rows"] = [r for r in art["rows"]
+                   if not (r["candidate"] == cand
+                           and r["active_depth"] == d
+                           and r["request_capacity"] == c)]
+    _embed_shootout_envelope(art)
+    return art
 
 
 def _mutate(base: dict, which: str) -> dict:
@@ -487,19 +763,27 @@ def _mutate(base: dict, which: str) -> dict:
     elif which == "tamper-worst-regression":
         art["derived"] = {"envelope_vs_r0": {
             "r1": {"worst_cell_instr": 0.7}}}
+    elif which == "drop-cell-synced":
+        art = _drop_shootout_cell(base, "r1", 8, 32)
+    elif which == "drop-candidate-synced":
+        for d, c in [(8, 8), (8, 32)]:
+            art = _drop_shootout_cell(art, "r1", d, c)
     return art
 
 
 def _micro_fixture() -> dict:
     """Minimal valid tax0routermicro artifact exercising the micro
-    validator: seed-order recompute, per-cell rep counts, semantic /
-    same-work / steady-alloc / table accounting, and the recorded-derived
-    cross-check. Multipliers make r1/r3 faster than r0 deterministically."""
-    seed, reps = 0x52545253, 2
-    cands = ["r0", "r1", "r3"]
+    validator: sealed-param/cell checks, seed-order recompute, per-cell
+    rep counts, semantic / same-work / steady-alloc / table accounting,
+    and the recorded-derived cross-check on BOTH axes (instructions and
+    cycles). Multipliers make r1/r3 faster than r0 deterministically."""
+    seed = SELF_MICRO_SPEC["seed"]
+    reps = SELF_MICRO_SPEC["reps"]
+    cands = list(SELF_MICRO_SPEC["candidates"])
     geo = [(8, 8), (8, 32)]
     cells = [(cd, p, d, cc)
-             for cd in cands for p in ("P0", "P1") for (d, cc) in geo]
+             for cd in cands for p in SELF_MICRO_SPEC["patterns"]
+             for (d, cc) in geo]
     rounds = _rng_order(cells, reps, seed)
     speed = {"r0": 1.0, "r1": 0.5, "r3": 0.4}
     rows = []
@@ -515,13 +799,18 @@ def _micro_fixture() -> dict:
                 "request_capacity": c, "ops": 100, "lifecycle_ops": 100,
                 "instructions_user": instr, "cycles_user": instr * 0.9,
                 "semantic_validation": True, "same_work": True,
+                "steady_allocations_during_trace": 0,
                 "steady_allocations_per_op": 0,
                 "table_insert_probes_total": 100 if cand == "r3" else 0,
                 "table_erase_probes_total": 100 if cand == "r3" else 0,
             })
     art = {
         "kind": MICRO_KIND,
-        "params": {"seed": seed, "reps": reps},
+        "params": {"experiment": SELF_MICRO_SPEC["experiment"],
+                   "seed": seed, "reps": reps, "candidates": cands,
+                   "patterns": list(SELF_MICRO_SPEC["patterns"]),
+                   "geometries": list(SELF_MICRO_SPEC["geometries"]),
+                   "windows": SELF_MICRO_SPEC["windows"]},
         "execution_order": {
             "cells": [f"{c}|{p}|D={d},C={cc}" for c, p, d, cc in cells],
             "rounds": [[f"{c}|{p}|D={d},C={cc}"
@@ -530,21 +819,67 @@ def _micro_fixture() -> dict:
         "rows": rows,
         "derived": {},
     }
-    # Embed the CORRECT derived values (validate_micro appends mismatch
-    # errors but still recomputes; the throwaway list is discarded).
-    v = validate_micro(art, [])
-    art["derived"] = {
-        "gm_per_candidate": {c: {"gm_instr": g}
-                             for c, g in v["gm"].items()},
-        "normalized_vs_r0": {k: {"instr": n}
-                             for k, n in v["normalized"].items()},
-    }
+    _embed_micro_derived(art)
+    return art
+
+
+def _embed_micro_derived(art: dict) -> None:
+    """Recompute and embed the correct micro derived block (both axes),
+    standalone from the rows (see _embed_shootout_envelope)."""
+    by_cell: dict[tuple, list[dict]] = {}
+    for r in art["rows"]:
+        by_cell.setdefault((r["candidate"], r["pattern"], r["depth"],
+                            r["request_capacity"]), []).append(r)
+    med_i = {k: _med([r["instructions_user"] / r["ops"] for r in rs])
+             for k, rs in by_cell.items()}
+    med_c = {k: _med([r["cycles_user"] / r["ops"] for r in rs])
+             for k, rs in by_cell.items()}
+    normalized: dict[str, dict[str, float]] = {}
+    for (cd, p, d, c) in sorted(by_cell):
+        if cd == "r0":
+            continue
+        normalized[f"{cd}|{p}|D={d},C={c}"] = {
+            "instr": med_i[(cd, p, d, c)] / med_i[("r0", p, d, c)],
+            "cycles": med_c[(cd, p, d, c)] / med_c[("r0", p, d, c)],
+        }
+    gm: dict[str, dict[str, float]] = {}
+    for cd in sorted({k[0] for k in by_cell}):
+        ri = [v["instr"] for k, v in normalized.items()
+              if k.startswith(cd + "|")]
+        rc = [normalized[k]["cycles"] for k in normalized
+              if k.startswith(cd + "|")]
+        if ri:
+            gm[cd] = {"gm_instr": _gm(ri), "n_cells": len(ri)}
+            if rc:
+                gm[cd]["gm_cycles"] = _gm(rc)
+    art["derived"] = {"gm_per_candidate": gm,
+                      "normalized_vs_r0": normalized}
+
+
+def _drop_micro_cell(base: dict, cand: str, pat: str, d: int,
+                     c: int) -> dict:
+    """Delete one whole micro cell AND resync rounds/rows/derived."""
+    art = json.loads(json.dumps(base))
+    cell = f"{cand}|{pat}|D={d},C={c}"
+    art["execution_order"]["cells"] = [s for s in
+                                       art["execution_order"]["cells"]
+                                       if s != cell]
+    art["execution_order"]["rounds"] = [[s for s in rnd if s != cell]
+                                        for rnd in
+                                        art["execution_order"]["rounds"]]
+    art["rows"] = [r for r in art["rows"]
+                   if not (r["candidate"] == cand and r["pattern"] == pat
+                           and r["depth"] == d
+                           and r["request_capacity"] == c)]
+    _embed_micro_derived(art)
     return art
 
 
 MICRO_MUTATIONS = [
-    "micro-tamper-order", "micro-tamper-gm", "micro-tamper-semantic",
-    "micro-nonr3-table",
+    "micro-tamper-order", "micro-tamper-gm", "micro-tamper-gm-cycles",
+    "micro-tamper-normalized-cycles", "micro-tamper-semantic",
+    "micro-nonr3-table", "micro-tamper-alloc",
+    "micro-drop-cell-synced", "micro-drop-candidate-synced",
 ]
 
 
@@ -557,6 +892,12 @@ def _mutate_micro(art: dict, which: str) -> dict:
             art["execution_order"]["rounds"][0][0]
     elif which == "micro-tamper-gm":
         art["derived"]["gm_per_candidate"]["r1"]["gm_instr"] = 0.7
+    elif which == "micro-tamper-gm-cycles":
+        art["derived"]["gm_per_candidate"]["r1"]["gm_cycles"] = 0.7
+    elif which == "micro-tamper-normalized-cycles":
+        k = next(k for k in art["derived"]["normalized_vs_r0"]
+                 if k.startswith("r1|"))
+        art["derived"]["normalized_vs_r0"][k]["cycles"] = 0.7
     elif which == "micro-tamper-semantic":
         art["rows"][1]["semantic_validation"] = False
     elif which == "micro-nonr3-table":
@@ -564,46 +905,53 @@ def _mutate_micro(art: dict, which: str) -> dict:
             if r["candidate"] == "r3":
                 r["table_insert_probes_total"] = 0
                 break
+    elif which == "micro-tamper-alloc":
+        art["rows"][0]["steady_allocations_per_op"] = 0.5
+        art["rows"][0]["steady_allocations_during_trace"] = 50
+    elif which == "micro-drop-cell-synced":
+        art = _drop_micro_cell(art, "r1", "P0", 8, 32)
+    elif which == "micro-drop-candidate-synced":
+        for pat in list(SELF_MICRO_SPEC["patterns"]):
+            for d, c in [(8, 8), (8, 32)]:
+                art = _drop_micro_cell(art, "r1", pat, d, c)
     return art
 
 
 def self_test() -> int:
-    base = _fixture()
-    errs: list[str] = []
-    validate_shootout(base, errs)
-    if errs:
-        print(f"SELF-TEST FIXTURE INVALID: {errs}")
-        return 1
     failures = 0
-    for which in MUTATIONS:
-        errs = []
-        validate_shootout(_mutate(base, which), errs)
+
+    def run_muts(label: str, base: dict, muts: list[str],
+                 mutate_fn, validate_fn, spec) -> None:
+        nonlocal failures
+        errs: list[str] = []
+        validate_fn(base, errs, spec=spec)
         if errs:
-            print(f"mutation {which}: rejected as expected "
-                  f"({errs[0]})")
-        else:
-            print(f"mutation {which}: NOT DETECTED (validator bug)")
+            print(f"SELF-TEST {label} FIXTURE INVALID: {errs}")
             failures += 1
-    # Micro validator must be exercised too (the official campaign runs
-    # it on real artifacts; a parser that accepts nothing must die here).
+            return
+        for which in muts:
+            errs = []
+            validate_fn(mutate_fn(base, which), errs, spec=spec)
+            if errs:
+                print(f"mutation {which}: rejected as expected "
+                      f"({errs[0]})")
+            else:
+                print(f"mutation {which}: NOT DETECTED (validator bug)")
+                failures += 1
+
+    # Shootout: clean fixture + every mutation must fail.
+    base = _fixture()
+    run_muts("SHOOTOUT", base, MUTATIONS, _mutate, validate_shootout,
+             SELF_SHOOT_SPEC)
+
+    # Micro: clean fixture + every mutation must fail.
     mbase = _micro_fixture()
-    errs = []
-    validate_micro(mbase, errs)
-    if errs:
-        print(f"SELF-TEST MICRO FIXTURE INVALID: {errs}")
-        return 1
-    for which in MICRO_MUTATIONS:
-        errs = []
-        validate_micro(_mutate_micro(mbase, which), errs)
-        if errs:
-            print(f"mutation {which}: rejected as expected "
-                  f"({errs[0]})")
-        else:
-            print(f"mutation {which}: NOT DETECTED (validator bug)")
-            failures += 1
-    # Campaign aggregate sanity on the clean fixture.
-    sv = validate_shootout(base, [])
-    agg = campaign_aggregate({}, [sv], [])
+    run_muts("MICRO", mbase, MICRO_MUTATIONS, _mutate_micro, validate_micro,
+             SELF_MICRO_SPEC)
+
+    # Campaign aggregate sanity on the clean fixture (tiny session set).
+    sv = validate_shootout(base, [], spec=SELF_SHOOT_SPEC)
+    agg = campaign_aggregate({}, [sv], [], sessions=[("read", "tmpfs")])
     if agg["selected"] != "r1" or not agg["verdict"]:
         print(f"SELF-TEST aggregate unexpected: {agg['verdict']} "
               f"{agg['selected']}")
@@ -611,18 +959,20 @@ def self_test() -> int:
     else:
         print(f"aggregate: {agg['verdict']} (gm_instr "
               f"{agg['envelope']['r1']['gm_instr']:.4f})")
+
     # Multi-session aggregate: a second session with a different fs|op
-    # shares the SAME (cand, D, C) grid by design; r2 is faster there,
-    # so the campaign envelope must pool 2x cells, not flag duplicates.
+    # shares the SAME (cand, D, C) grid by design; r1 is faster there, so
+    # the campaign envelope must pool 2x cells, not flag duplicates.
     other = json.loads(json.dumps(base))
     other["params"]["fs_label"] = "btrfs"
     other["params"]["op"] = "write"
     for r in other["rows"]:
-        if r["candidate"] == "r2":
+        if r["candidate"] == "r1":
             r["instructions_user"] *= 0.2
             r["cycles_user"] *= 0.2
-    sv2 = validate_shootout(other, [])
-    agg2 = campaign_aggregate({}, [sv, sv2], [])
+    _embed_shootout_envelope(other)
+    sv2 = validate_shootout(other, [], spec=SELF_SHOOT_SPEC)
+    agg2 = campaign_aggregate({}, [sv, sv2], [], sessions=SELF_SESSIONS)
     if agg2["envelope"]["r1"]["n_cells"] != \
             2 * agg["envelope"]["r1"]["n_cells"] or not agg2["verdict"]:
         print(f"SELF-TEST multi-session aggregate wrong: "
@@ -632,14 +982,39 @@ def self_test() -> int:
     else:
         print(f"multi-session aggregate: {agg2['verdict']} "
               f"(n_cells {agg2['envelope']['r1']['n_cells']})")
+
     # Passing the SAME session twice must fail closed (duplicate cells).
     errs = []
-    campaign_aggregate({}, [sv, sv], errs)
+    campaign_aggregate({}, [sv, sv], errs, sessions=[("read", "tmpfs")])
     if any("duplicate session cell" in e for e in errs):
         print("duplicate-session: rejected as expected")
     else:
         print("duplicate-session: NOT DETECTED (validator bug)")
         failures += 1
+
+    # Sealed session set: dropping one of the frozen sessions must fail.
+    errs = []
+    campaign_aggregate({}, [sv, sv2], errs)  # frozen set wants 4 sessions
+    if any("SEALED session absent" in e for e in errs):
+        print("drop-session: rejected as expected")
+    else:
+        print("drop-session: NOT DETECTED (validator bug)")
+        failures += 1
+
+    # Unknown session (not in the frozen set) must fail.
+    zfs = json.loads(json.dumps(base))
+    zfs["params"]["fs_label"] = "zfs"
+    _embed_shootout_envelope(zfs)
+    errs = []
+    campaign_aggregate({}, [validate_shootout(zfs, [], spec=SELF_SHOOT_SPEC)],
+                       errs)
+    if any("unknown session" in e for e in errs) or \
+            any("fs_label" in e for e in errs):
+        print("unknown-session: rejected as expected")
+    else:
+        print("unknown-session: NOT DETECTED (validator bug)")
+        failures += 1
+
     print("SELF-TEST " + ("OK" if failures == 0 else f"FAILED ({failures})"))
     return 1 if failures else 0
 

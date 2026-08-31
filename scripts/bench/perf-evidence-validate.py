@@ -1574,6 +1574,15 @@ def check_tax0router(art: dict) -> list[str]:
         if r.get("candidate") not in ("r0", "r1", "r2", "r3"):
             errs.append(f"row {i}: bad candidate {r.get('candidate')!r}")
             break
+    if micro:
+        # bench_version >= 2 records the OBSERVED steady-state allocation
+        # count alongside the per-op figure.
+        for i, r in enumerate(rows):
+            if not isinstance(r, dict) or \
+                    "steady_allocations_during_trace" not in r:
+                errs.append(f"row {i}: missing "
+                            f"steady_allocations_during_trace")
+                break
     derived = art.get("derived")
     if not isinstance(derived, dict) or not derived:
         errs.append("derived: missing (must embed recomputed statistics)")

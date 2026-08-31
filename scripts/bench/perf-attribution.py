@@ -2118,7 +2118,12 @@ def tax0routermicro_derived(rows: list[dict]) -> dict:
             "matched_router_index_max": r0["matched_router_index_max"],
             "fixed_router_bytes": r0["router_bytes"],
             "fixed_candidate_bytes": r0["candidate_table_bytes"],
-            "steady_allocations_per_op": 0,
+            # Observed, not assumed: the bench counts every replaceable
+            # global allocation across the trace and fails the run on a
+            # nonzero count; this propagates the measured value.
+            "steady_allocations_per_op":
+                max(r["steady_allocations_per_op"]
+                    for r in cell_rows),
         }
 
     # Normalize every non-r0 candidate against same-cell r0.
@@ -2222,6 +2227,8 @@ def cmd_tax0routermicro(args) -> dict:
                 "matched_router_index_max": bench["matched_router_index_max"],
                 "router_bytes": bench["router_bytes"],
                 "candidate_table_bytes": bench["candidate_table_bytes"],
+                "steady_allocations_during_trace":
+                    bench["steady_allocations_during_trace"],
                 "steady_allocations_per_op": bench["steady_allocations_per_op"],
                 "same_work": True,
                 "semantic_validation": True,
@@ -2231,6 +2238,10 @@ def cmd_tax0routermicro(args) -> dict:
             }
             if row["lifecycle_ops"] != args.windows * d:
                 sys.exit(f"micro row {idx}: lifecycle ops mismatch")
+            if row["steady_allocations_during_trace"] != 0 or \
+                    row["steady_allocations_per_op"] != 0:
+                sys.exit(f"micro row {idx}: steady-state allocation observed "
+                         f"({row['steady_allocations_during_trace']})")
             if cand == "r3" and (row["table_insert_probes_total"] == 0 or
                                  row["table_erase_probes_total"] == 0):
                 sys.exit(f"micro row {idx}: r3 without table accounting")

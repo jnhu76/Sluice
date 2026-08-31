@@ -1,9 +1,13 @@
 // TAX-0 router-fix candidate shootout (#255) — Layer A: router LIFECYCLE
-// microbench. Synthetic, deterministic, no kernel/device I/O, no per-op
-// allocation: every candidate consumes the EXACT same logical trace
+// microbench. Synthetic, deterministic, no kernel/device I/O. Every
+// candidate consumes the EXACT same logical trace
 // (cookie sequence, active depth D, capacity C, completion order, insert /
 // lookup / erase counts) generated purely from (pattern, D, C, cycles) —
-// never from candidate behavior.
+// never from candidate behavior. The trace allocates nothing: the
+// completion-order buffer is hoisted out of the window loop and every
+// replaceable global allocation function is counted, so the artifact's
+// steady-allocation field is an OBSERVED measurement backed by a
+// fail-closed gate (nonzero => run fails), not a hardcoded constant.
 //
 // Measured path: the REAL router lifecycle surface of the internal-testing
 // build —
@@ -34,12 +38,14 @@
 #include <sluice/async/uring_backend.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 #include <numeric>
 #include <string>
 #include <string_view>
@@ -67,13 +73,110 @@ std::uint64_t splitmix64(std::uint64_t x) {
     return x ^ (x >> 31);
 }
 
+// Measured-allocation witness. The trace's "no steady-state allocation"
+// claim is enforced, not asserted: every replaceable global allocation
+// function counts, the trace loop runs between two counter observations,
+// and the artifact records the OBSERVED count (accounting fails the run
+// if it is nonzero). Confined to this bench executable; placement forms
+// are not replaceable and allocate nothing.
+std::atomic<std::uint64_t> g_allocations{0};
+
+void* alloc_counted(std::size_t n, std::size_t alignment) {
+    g_allocations.fetch_add(1, std::memory_order_relaxed);
+    if (alignment <= __STDCPP_DEFAULT_NEW_ALIGNMENT__) {
+        if (void* p = std::malloc(n))
+            return p;
+    } else {
+        n = (n + alignment - 1) / alignment * alignment;
+        if (void* p = std::aligned_alloc(alignment, n))
+            return p;
+    }
+    throw std::bad_alloc{};
+}
+
+} // namespace
+
+// no inline, required by [replacement.functions]/3
+void* operator new(std::size_t n) {
+    return alloc_counted(n, 1);
+}
+void* operator new[](std::size_t n) {
+    return alloc_counted(n, 1);
+}
+void* operator new(std::size_t n, std::align_val_t a) {
+    return alloc_counted(n, static_cast<std::size_t>(a));
+}
+void* operator new[](std::size_t n, std::align_val_t a) {
+    return alloc_counted(n, static_cast<std::size_t>(a));
+}
+void* operator new(std::size_t n, const std::nothrow_t&) noexcept {
+    g_allocations.fetch_add(1, std::memory_order_relaxed);
+    return std::malloc(n);
+}
+void* operator new[](std::size_t n, const std::nothrow_t&) noexcept {
+    g_allocations.fetch_add(1, std::memory_order_relaxed);
+    return std::malloc(n);
+}
+void* operator new(std::size_t n, std::align_val_t a,
+                   const std::nothrow_t&) noexcept {
+    g_allocations.fetch_add(1, std::memory_order_relaxed);
+    return std::aligned_alloc(
+        static_cast<std::size_t>(a),
+        (n + static_cast<std::size_t>(a) - 1) /
+            static_cast<std::size_t>(a) * static_cast<std::size_t>(a));
+}
+void* operator new[](std::size_t n, std::align_val_t a,
+                     const std::nothrow_t&) noexcept {
+    return ::operator new(n, a, std::nothrow);
+}
+void operator delete(void* p) noexcept {
+    std::free(p);
+}
+void operator delete[](void* p) noexcept {
+    std::free(p);
+}
+void operator delete(void* p, std::size_t) noexcept {
+    std::free(p);
+}
+void operator delete[](void* p, std::size_t) noexcept {
+    std::free(p);
+}
+void operator delete(void* p, std::align_val_t) noexcept {
+    std::free(p);
+}
+void operator delete[](void* p, std::align_val_t) noexcept {
+    std::free(p);
+}
+void operator delete(void* p, std::size_t, std::align_val_t) noexcept {
+    std::free(p);
+}
+void operator delete[](void* p, std::size_t, std::align_val_t) noexcept {
+    std::free(p);
+}
+void operator delete(void* p, const std::nothrow_t&) noexcept {
+    std::free(p);
+}
+void operator delete[](void* p, const std::nothrow_t&) noexcept {
+    std::free(p);
+}
+void operator delete(void* p, std::align_val_t, const std::nothrow_t&) noexcept {
+    std::free(p);
+}
+void operator delete[](void* p, std::align_val_t,
+                       const std::nothrow_t&) noexcept {
+    std::free(p);
+}
+
+namespace {
+
 // Deterministic in-place Fisher-Yates from a seeded splitmix64 stream:
 // the completion permutation is a PURE function of (seed, window index, D)
-// — identical for every candidate.
-std::vector<std::uint32_t> window_permutation(std::uint64_t seed,
-                                              std::uint64_t window,
-                                              std::uint32_t d) {
-    std::vector<std::uint32_t> order(d);
+// — identical for every candidate. Fills the caller-owned buffer; the
+// measured trace performs no allocation (enforced by the counting
+// allocator above).
+void window_permutation(std::uint64_t seed, std::uint64_t window,
+                        std::uint32_t d,
+                        std::vector<std::uint32_t>& order) {
     for (std::uint32_t i = 0; i < d; ++i)
         order[i] = i;
     std::uint64_t state = splitmix64(seed ^ (window * 0x9E3779B97F4A7C15ull));
@@ -82,7 +185,6 @@ std::vector<std::uint32_t> window_permutation(std::uint64_t seed,
         const std::uint32_t j = static_cast<std::uint32_t>(state % i);
         std::swap(order[i - 1], order[j]);
     }
-    return order;
 }
 
 enum class Pattern { P0_lifo, P1_permutation, P2_full };
@@ -176,9 +278,23 @@ int main(int argc, char** argv) {
         } else if (a == "--seed") {
             std::uint64_t v = 0;
             const char* s = next("--seed");
-            for (const char* p = s; (*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f'); ++p)
-                v = v * 16 + static_cast<std::uint64_t>(
-                                 (*p <= '9') ? (*p - '0') : (*p - 'a' + 10));
+            // Accept an optional 0x prefix: the runner passes hex(s);
+            // a parser that stopped at 'x' would silently trace with
+            // seed 0 instead of the frozen campaign seed.
+            if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+                s += 2;
+            if (*s == '\0')
+                bench_fatal("--seed: invalid hex");
+            for (const char* p = s;; ++p) {
+                if (*p >= '0' && *p <= '9')
+                    v = v * 16 + static_cast<std::uint64_t>(*p - '0');
+                else if (*p >= 'a' && *p <= 'f')
+                    v = v * 16 + static_cast<std::uint64_t>(*p - 'a' + 10);
+                else if (*p == '\0')
+                    break;
+                else
+                    bench_fatal("--seed: invalid hex");
+            }
             cfg.seed = v;
         } else {
             bench_fatal("unknown argument");
@@ -209,9 +325,12 @@ int main(int argc, char** argv) {
     backend.set_router_fix_mode_for_test(mode_of(cfg.candidate));
 
     // Live-window bookkeeping (bench-side trace state; NOT the measured
-    // path): cookie values and router indices of the live window.
+    // path): cookie values and router indices of the live window. The
+    // completion-order buffer is allocated ONCE here — the measured trace
+    // performs no allocation (counted and enforced below).
     std::vector<std::uint64_t> live_cookie(D);
     std::vector<std::size_t> live_index(D);
+    std::vector<std::uint32_t> order(D);
     std::size_t live_count = 0;
     std::uint64_t next_cookie_value = 1; // no-wrap counter mirror (assert-only)
 
@@ -223,6 +342,7 @@ int main(int argc, char** argv) {
     std::uint64_t lookup_iterations = 0;
 
     backend.reset_router_scan_diagnostics_for_test();
+    const std::uint64_t alloc0 = g_allocations.load(std::memory_order_relaxed);
     const std::uint64_t t_all0 = now_ns();
 
     for (std::uint64_t w = 0; w < cfg.windows; ++w) {
@@ -230,14 +350,14 @@ int main(int argc, char** argv) {
         // seed, window, D) — identical across candidates. The order is
         // computed over WINDOW POSITIONS before any candidate runs (it is
         // the same array for every candidate by construction).
-        std::vector<std::uint32_t> order;
         if (cfg.pattern == Pattern::P1_permutation)
-            order = window_permutation(cfg.seed, w, static_cast<std::uint32_t>(D));
-        else
-            order.resize(D), std::iota(order.begin(), order.end(), 0u);
-        // P0/P2: LIFO — reverse install order.
-        if (cfg.pattern != Pattern::P1_permutation)
+            window_permutation(cfg.seed, w, static_cast<std::uint32_t>(D),
+                               order);
+        else {
+            std::iota(order.begin(), order.end(), 0u);
+            // P0/P2: LIFO — reverse install order.
             std::reverse(order.begin(), order.end());
+        }
 
         // Phase A: install up to depth D (steady state: the window starts
         // empty because the previous window retired everything).
@@ -284,10 +404,14 @@ int main(int argc, char** argv) {
         retire_ns += t5 - t4;
     }
     const std::uint64_t t_all1 = now_ns();
+    const std::uint64_t trace_allocations =
+        g_allocations.load(std::memory_order_relaxed) - alloc0;
 
     // Fail-closed accounting gates.
     if (inserts != lookups || lookups != erases)
         bench_fatal("insert/lookup/erase count mismatch");
+    if (trace_allocations != 0)
+        bench_fatal("steady-state allocation inside the measured trace");
     if (backend.live_cookies_for_test() != 0 || backend.outstanding() != 0)
         bench_fatal("router not quiescent after the trace");
     const auto& diag = backend.router_scan_diagnostics_for_test();
@@ -325,7 +449,7 @@ int main(int argc, char** argv) {
     std::string out;
     out += "{\n";
     out += "  \"bench\": \"tax0router_micro_bench\",\n";
-    out += "  \"bench_version\": 1,\n";
+    out += "  \"bench_version\": 2,\n";
     out += "  \"experiment\": \"TAX-0-ROUTER-SHOOTOUT-A\",\n";
     out += std::string("  \"candidate\": \"") + cand + "\",\n";
     out += std::string("  \"pattern\": \"") + pat + "\",\n";
@@ -356,7 +480,11 @@ int main(int argc, char** argv) {
     out += "  \"router_bytes\": " + std::to_string(router_bytes) + ",\n";
     out += "  \"candidate_table_bytes\": " + std::to_string(table_bytes) + ",\n";
     out += "  \"freelist_bytes\": " + std::to_string(freelist_bytes) + ",\n";
-    out += "  \"steady_allocations_per_op\": 0,\n";
+    out += "  \"steady_allocations_during_trace\": " +
+           std::to_string(trace_allocations) + ",\n";
+    out += "  \"steady_allocations_per_op\": " +
+           std::to_string(static_cast<double>(trace_allocations) /
+                          static_cast<double>(inserts)) + ",\n";
     out += "  \"accounting_ok\": true\n";
     out += "}\n";
     std::fputs(out.c_str(), stdout);

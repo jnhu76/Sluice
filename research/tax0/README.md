@@ -32,6 +32,16 @@ hypotheses here were registered BEFORE any causal experiment.
   official campaign results, §25 mechanical winner selection, and the
   §31 verdict (ROUTER SHOOTOUT PASS — PRACTICAL TIE, SIMPLEST
   CANDIDATE SELECTED (R1)); no production fix implemented
+- `TAX0-ROUTER-REFREEZE-A2.md` — corrective-review re-freeze (PR #256
+  review 5063072823): Layer A instrument correction only (per-window
+  allocation removed + measured allocation gate, `--seed` 0x-prefix
+  parser), validator sealing to the frozen matrix (cell/candidate/
+  session deletion fails closed), micro cycles cross-check, §25 selector
+  direction fix; Layer B not re-measured
+- `TAX0-ROUTER-OPTIMIZATION-REVIEW.md` — T0-U-ROUTER 优化复盘：流程、
+  方案确定与双层 bench 设计、统计/归一化方法及其如何反哺代码决策、
+  当前生产状态（未变更）、优化上限与 AI 驱动优化路线、流程疏漏与
+  改进清单
 - `tax0a-hotpath-topology.json` — machine-readable census (every entry
   carries `"status": "FACT"` or `"status": "HYPOTHESIS"`)
 
