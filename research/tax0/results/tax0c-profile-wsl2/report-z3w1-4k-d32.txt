@@ -1,0 +1,43 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 589
+#
+# Samples: 91K of event 'cpu/cycles/Pu'
+# Event count (approx.): 16860779699
+#
+# Overhead  Command          Shared Object            Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+# ........  ...............  .......................  .................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    24.20%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] std::_Function_handler<void (sluice::async::RuntimeTaskContext&), main::$_0::operator()((anonymous namespace)::RepResult&) const::{lambda(sluice::async::RuntimeTaskContext&)#1}>::_M_invoke(std::_Any_data const&, sluice::async::RuntimeTaskContext&)
+    13.03%  tax0_z_ladder_b  libc.so.6                [.] pthread_mutex_lock@@GLIBC_2.2.5
+    11.38%  tax0_z_ladder_b  libc.so.6                [.] pthread_mutex_unlock@@GLIBC_2.2.5
+     6.72%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::register_waiter(sluice::async::Completion<unsigned long>&, sluice::async::detail::WaiterToken, sluice::async::detail::RoutingLease)
+     6.14%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::Result<sluice::async::detail::SlotHandle> sluice::async::detail::submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > >(sluice::async::detail::RequestArena&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::completion_type&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::op_type const&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >&)
+     3.07%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::SlotHandle)
+     2.94%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+     2.68%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::enqueue_after_commit(sluice::async::detail::SlotHandle)
+     2.13%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::finalize_operation_terminal_(unsigned long, sluice::async::detail::TerminalResult const&)
+     2.07%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
+     1.99%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::reap(sluice::async::detail::SynchronousReadySink&)
+     1.89%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::SlotHandle)
+     1.81%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::record_terminal(sluice::async::detail::SlotHandle, sluice::async::detail::TerminalResult)
+     1.67%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::Scheduler::await_completion_size(sluice::async::Completion<unsigned long>&)
+     1.31%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::free_slot_locked_(sluice::async::detail::RequestSlot*, unsigned int)
+     1.27%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::Scheduler::retire_wait_record_locked(unsigned int)
+     1.15%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::reserve()
+     1.07%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::AsyncIoContext::register_waiter(sluice::async::Completion<unsigned long>&, sluice::async::detail::WaiterToken, sluice::async::detail::RoutingLease)
+     0.83%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::publish_size_ready(void*, sluice::async::detail::TerminalResult const&)
+     0.73%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::release_completed_binding(sluice::async::detail::SlotHandle)
+     0.73%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)
+     0.64%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] pthread_mutex_unlock@plt
+     0.60%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::enqueue(sluice::async::detail::SlotHandle)
+     0.55%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::mark_running(sluice::async::detail::SlotHandle)
+     0.50%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
+     0.41%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::outstanding() const
+     0.40%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::poll()
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

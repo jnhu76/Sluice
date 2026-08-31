@@ -1,0 +1,97 @@
+{
+ "bench": "tax0_z_ladder",
+ "arm": "z3",
+ "op": "write",
+ "request_size": 4096,
+ "total_bytes": 67108864,
+ "depth": 64,
+ "workers": 4,
+ "request_capacity": 64,
+ "queue_depth": 64,
+ "ops": 16384,
+ "warmup_reps": 0,
+ "measured_reps": 7,
+ "setup_ns": 258117,
+ "teardown_ns": 503503,
+ "write_final_verified": false,
+ "warmup": [],
+ "reps": [
+  {
+   "wall_ns": 58015731,
+   "user_ns": 18415000,
+   "sys_ns": 141564000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  },
+  {
+   "wall_ns": 56343303,
+   "user_ns": 15584000,
+   "sys_ns": 143473000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  },
+  {
+   "wall_ns": 56948346,
+   "user_ns": 13496000,
+   "sys_ns": 148279000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  },
+  {
+   "wall_ns": 38554360,
+   "user_ns": 12881000,
+   "sys_ns": 63731000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  },
+  {
+   "wall_ns": 58027574,
+   "user_ns": 8724000,
+   "sys_ns": 155317000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  },
+  {
+   "wall_ns": 56817831,
+   "user_ns": 19408000,
+   "sys_ns": 142150000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  },
+  {
+   "wall_ns": 62223045,
+   "user_ns": 29962000,
+   "sys_ns": 143283000,
+   "ops": 16384,
+   "bytes": 67108864,
+   "word_sum": 0,
+   "errors": 0,
+   "stale_dropped": 0,
+   "outstanding_max": 0
+  }
+ ]
+}

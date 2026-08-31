@@ -1,0 +1,34 @@
+[
+ {
+  "arm": "z2",
+  "cell": "4K d32",
+  "reps": 800,
+  "notes": "L1 abstraction-tax decomposition target",
+  "size_mb": 1403.6,
+  "raw_binary": "DELETED after report extraction (repo bloat rule)"
+ },
+ {
+  "arm": "z3w1",
+  "cell": "4K d32",
+  "reps": 800,
+  "notes": "continuation-layer delta",
+  "size_mb": 1524.4,
+  "raw_binary": "DELETED after report extraction (repo bloat rule)"
+ },
+ {
+  "arm": "z1b",
+  "cell": "4K d32",
+  "reps": 800,
+  "notes": "semantic-floor contrast",
+  "size_mb": 1176.2,
+  "raw_binary": "DELETED after report extraction (repo bloat rule)"
+ },
+ {
+  "arm": "z2",
+  "cell": "1M d8",
+  "reps": 120,
+  "notes": "large-request regime",
+  "size_mb": 206.7,
+  "raw_binary": "DELETED after report extraction (repo bloat rule)"
+ }
+]

@@ -1,0 +1,124 @@
+{
+  "schema": "2.1",
+  "description": "TAX-0B/C/D measurement companion to the frozen TAX-0A2 preregistration census (tax0a2-control-plane-topology.json). Additive: this file registers measured results and hypothesis_status outcomes; it does not modify the preregistration. All numbers are ENVIRONMENT-LIMITED (WSL2, virtualized PMU, virtual ext4) — control-plane user-instruction attribution pilot, never native throughput conclusions.",
+  "round": "TAX-0B/C/D/E under #250, #259, PR #260",
+  "baseline": {
+    "branch": "research/tax0-a2-control-plane",
+    "head": "867ac94e20dfb83c1fcc0a587851f8e1d5d225c7",
+    "note": "production files byte-identical to master 9670224 except SLUICE_ASYNC_INTERNAL_TESTING-guarded research seams (F01/F02 A/B); the canonical ladder session ran a production-linked binary"
+  },
+  "environment": {
+    "classification": "QUALIFIED_BUT_VIRTUALIZED",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "cpu": "AMD Ryzen 7 5800H, 8 logical CPUs, no cpufreq governor exposed",
+    "filesystem": "ext4 on WSL2 virtual block device",
+    "liburing": "2.14",
+    "perf": "7.0.12, hardware counters verified real (calibrated loop)",
+    "compiler": "clang (xmake release), stripped canonical binary + debug-symbol twin (+0.3% codegen-equivalence check)"
+  },
+  "protocol": {
+    "primary_metrics": ["instructions:u per op", "cycles:u per op"],
+    "normalization": "double-difference (total(R14)-total(R7))/7/ops removes setup/teardown exactly; write verification runner-side; read word_sum inline uniform",
+    "same_work": "frozen 13-item census list, fail-closed enforced per rep; cross-arm word_sum equality checked",
+    "sessions": {
+      "ladder_canonical": "research/tax0/results/tax0b-zladder-wsl2-formal4",
+      "profile": "research/tax0/results/tax0c-profile-wsl2",
+      "ablations": "research/tax0/results/tax0d-ablation-wsl2-1"
+    }
+  },
+  "z_ladder_results": {
+    "units": "user instructions per operation (median-of-reps via double difference)",
+    "read": {
+      "4K_d1":  { "z1": 1154, "z1b": 1201, "z1bw": 1968, "z2": 3827, "z3w1": 5796, "z3w4": 6647 },
+      "4K_d32": { "z1": 1043, "z1b": 1080, "z1bw": 1290, "z2": 3112, "z3w1": 3899, "z3w4": 3924 },
+      "4K_d64": { "z1": 1043, "z1b": 1080, "z1bw": 1290, "z2": 3212, "z3w1": 4105, "z3w4": 4138 },
+      "64K_d8": { "z1": 14499, "z1b": 14537, "z1bw": 14783, "z2": 16552, "z3w1": 17380, "z3w4": 17498 },
+      "1M_d8":  { "z1": 229553, "z1b": 229590, "z1bw": 230155, "z2": 231605, "z3w1": 232468, "z3w4": 233416 }
+    },
+    "capability_cost_z1b_minus_z1": { "4K_d1": 47, "4K_d32": 37, "4K_d64": 37, "64K_d8": 38, "1M_d8": 37 },
+    "l1_abstraction_tax_z2_minus_z1b": { "4K_d1": 2626, "4K_d32": 2032, "4K_d64": 2132, "64K_d8": 2015, "1M_d8": 2015 },
+    "runtime_continuation_z3w1_minus_z2": { "4K_d1": 1969, "4K_d32": 787, "4K_d64": 893, "64K_d8": 828, "1M_d8": 863 },
+    "handwritten_continuation_z1bw_minus_z1b": { "4K_d1": 767, "4K_d32": 210, "4K_d64": 210, "64K_d8": 246, "1M_d8": 565 },
+    "structural_finding": "Z2-Z1b is a FIXED ~2015 instr/op independent of request size (control-plane per-op work), while Z1b-Z1 is ~+37/op; both vanish into the data plane's relative noise at 64K/1M",
+    "wall_note": "wall/op at 4K is kernel-medium-dominated on this host (z2 wall can be LOWER than z1/z1b at depth>=8); instructions/op is the campaign's primary metric and the only basis for control-plane claims"
+  },
+  "historical_cliff_rejudgment": {
+    "cell": "4K depth>=32 workers=4 (Z3 arm, uring path)",
+    "verdict": "NOT_REPRODUCED",
+    "evidence": "z3w4 vs z3w1 at 4K d32: +0.6% instructions (3924 vs 3899), +40% wall; at 4K d64: +0.8% / +54% — smooth in depth, no threshold discontinuity",
+    "scope_caveat": "historical #221 evidence was ThreadPool-backend on WSL2/tmpfs; this re-judgment covers the uring Z-ladder path in the current environment only"
+  },
+  "seam_outcomes": [
+    {
+      "id": "F01",
+      "mechanism": "stats disabled still evaluates backend_->outstanding() (arena leaf lock) per submit",
+      "ablation": "R1 gates the evaluation on stats presence; identical semantics (stats-enabled path unchanged)",
+      "measured": {
+        "instructions_per_op_delta": "-74..-77 across 7 cells x {z2, z3w1}, both ops",
+        "relative": "~2.3-2.5% of z2 per-op cost at 4K",
+        "wall": "neutral within noise",
+        "variance_reference": "production binary session-to-session dispersion 3112/3112/3121 at read 4K d32 z2"
+      },
+      "hypothesis_status": "PROVEN_TAX",
+      "scope": "stats-disabled configurations only; magnitude per submit on every backend"
+    },
+    {
+      "id": "F02",
+      "mechanism": "ordinary (non-Batch) completion pays process-global reap-seq seq_cst RMW",
+      "ablation": "F02-A: R1 skips ordinary stamps (Batch preserved in production builds; research seam build is not Batch-safe by design). F02-B (seq_cst vs relaxed) NOT RUN per its preregistered gate",
+      "measured": {
+        "instructions_per_op_delta": "-4..-2 (read), straddles zero on write (+23 at 4K d32 z2)"
+      },
+      "hypothesis_status": "NEGLIGIBLE",
+      "scope": "single-driver and single-task regimes measured; contended multi-worker reap UNKNOWN (z3w4 unstable under profiling in this environment)"
+    },
+    {
+      "id": "F03",
+      "mechanism": "RequestArena synchronization structure (~9 leaf lock transitions/op)",
+      "measured": {
+        "profile_samples": "pthread_mutex_lock+unlock ~11.7% of z2 userspace samples at 4K d32 (access+dispatch+arena aggregated); arena functions individually 0.7-8.3%",
+        "wall_note": "sample share over-weights stalled locks vs instruction share; the causal epoch-merging ablation was NOT performed (structural change, ADR territory per preregistration)"
+      },
+      "hypothesis_status": "STRUCTURAL_ONLY",
+      "scope": "preregistered order-preserving ablation remains open; sharding explicitly out of scope"
+    },
+    {
+      "id": "F04",
+      "mechanism": "ctx/backend serialization layering across regimes",
+      "measured": {
+        "worker_topology": "z3w4 vs z3w1: +0.6..0.8% instructions, +40..54% wall at 4K d32/d64 (read); no cliff",
+        "single_driver": "z2 fully serialized in one thread by design; no cross-thread contention observable in instructions"
+      },
+      "hypothesis_status": "REGIME_SPECIFIC",
+      "scope": "multi-worker write cells unmeasured (z3w4 write instability, see observations)"
+    },
+    {
+      "id": "F05",
+      "mechanism": "scheduler/waiter/fiber continuation floor",
+      "measured": {
+        "z3_continuation_premium": "+787..+863 instr/op at d32-d64; +1969 at d1",
+        "handwritten_floor_z1bw": "+210 instr/op at d32 amortized; +767 at d1 (cross-thread futex wake dominates wall at shallow depth: 46us/op on this host)",
+        "reading": "a hand-written same-semantic continuation (park/wake/lost-wake-safe one-shot wait, exactly-once terminal, stale protection) demonstrably costs a fraction of the Z3 premium at amortized depth; the Z3-specific remainder (+577 at d32) is waiter-registration/routing/scheduler machinery — candidate accidental cost, decomposed only STRUCTURAL_ONLY (no per-component ablation)"
+      },
+      "hypothesis_status": "REGIME_SPECIFIC",
+      "comparison_guard": "z1bw is NOT a poll loop: it purchases the frozen checklist semantics for the compared cell (no cancel, one consumer). Z3 additionally carries capabilities the compared cells do not exercise (cancel race closure, cross-worker wake, TLA+-verified routing); those stay REQUIRED-if-USED, UNMEASURED here"
+    }
+  ],
+  "observations": [
+    {
+      "id": "OBS-1",
+      "severity": "potential production defect (NOT a tax finding)",
+      "summary": "Intermittent spurious 'canceled' terminal (IoError code 1) with os_errno=125 (EAGAIN) surfacing through Completion::result() on the ApplicationRuntime WRITE path (workers=4, depth>=32, no cancel ever requested), plus a separate intermittent 'terminate called without an active exception' teardown abort under perf-stat wrapping. Standalone probes pass (11/12, 5/5); in-session combos failed all bounded retries (formal2 4/4, formal3 3/4). z3w1 and all read cells unaffected. NOT root-caused in this campaign; measured cells degraded to no-perf wrapper (wall/user/sys + same-work only). Follow-up recommended in #250."
+    },
+    {
+      "id": "OBS-2",
+      "summary": "write>>read wall asymmetry at shallow depth reproduced (4K d1 write 39-70us/op vs read 1.6us/op; vanishes at depth>=8) — carries the v1.1 UNKNOWN forward as ENVIRONMENT-SPECIFIC-until-native"
+    }
+  ],
+  "first_optimization_gate": {
+    "ranking_basis": "measured magnitude x causal confidence x semantic risk x size x breadth",
+    "ranking": ["F01 (PROVEN, -75 instr/op, trivial, zero-risk)", "F05 remainder (largest but multi-mechanism, structural decomposition missing)", "F03 (profile-hot, causal ablation = ADR-scale structural change)", "F02 (NEGLIGIBLE)"],
+    "authorized": "F01 — one production optimization: gate update_max_outstanding's outstanding() evaluation on stats presence",
+    "rejected_for_now": "F02-B (memory-order) per preregistered gate; F03/F05 structural changes (out of one-mechanism scope)"
+  }
+}

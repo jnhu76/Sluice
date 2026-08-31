@@ -1,0 +1,136 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 1528
+#
+# Samples: 71K of event 'cpu/cycles/Pu'
+# Event count (approx.): 4440639754
+#
+# Overhead  Command          Shared Object            Symbol                                                            
+# ........  ...............  .......................  ..................................................................
+#
+    85.93%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] main::$_0::operator()((anonymous namespace)::RepResult&) const
+            |          
+            |--73.02%--(anonymous namespace)::word_sum(std::byte const*, unsigned long) (inlined)
+            |          (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+            |          main::$_0::operator()((anonymous namespace)::RepResult&) const
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main_impl (inlined)
+            |          _start
+            |          
+            |--9.83%--(anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+            |          main::$_0::operator()((anonymous namespace)::RepResult&) const
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main_impl (inlined)
+            |          _start
+            |          
+            |--1.28%--io_uring_initialize_sqe (inlined)
+            |          _io_uring_get_sqe (inlined)
+            |          io_uring_get_sqe (inlined)
+            |          (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+            |          main::$_0::operator()((anonymous namespace)::RepResult&) const
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main_impl (inlined)
+            |          _start
+            |          
+             --0.70%--std::vector<(anonymous namespace)::Z1bSlot, std::allocator<(anonymous namespace)::Z1bSlot> >::operator[](unsigned long) (inlined)
+                       (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+                       main::$_0::operator()((anonymous namespace)::RepResult&) const
+                       main
+                       __libc_start_call_main
+                       __libc_start_main_impl (inlined)
+                       _start
+
+     1.02%  tax0_z_ladder_b  [unknown]                [k] 0xffffffff86000084
+            |
+            ---0xffffffff86000084
+               |          
+                --1.02%--io_uring_submit_and_wait
+                          |          
+                           --1.01%--(anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+                                     main::$_0::operator()((anonymous namespace)::RepResult&) const
+                                     main
+                                     __libc_start_call_main
+                                     __libc_start_main_impl (inlined)
+                                     _start
+
+     0.69%  tax0_z_ladder_b  [unknown]                [k] 0xffffffff86208354
+            |
+            ---0xffffffff86208354
+               0xffffffff8600012f
+               |          
+                --0.68%--io_uring_submit_and_wait
+                          (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+                          main::$_0::operator()((anonymous namespace)::RepResult&) const
+                          main
+                          __libc_start_call_main
+                          __libc_start_main_impl (inlined)
+                          _start
+
+     0.59%  tax0_z_ladder_b  [unknown]                [k] 0xffffffff86ab2b44
+            |
+            ---0xffffffff86ab2b44
+               0xffffffff86aa9d4e
+               0xffffffff86aaa716
+               0xffffffff8620a261
+               0xffffffff873956e3
+               0xffffffff8600012f
+               io_uring_submit_and_wait
+               (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+               main::$_0::operator()((anonymous namespace)::RepResult&) const
+               main
+               __libc_start_call_main
+               __libc_start_main_impl (inlined)
+               _start
+
+     0.49%  tax0_z_ladder_b  [unknown]                [k] 0xffffffff86104104
+            |
+            ---0xffffffff86104104
+               |          
+                --0.41%--io_uring_submit_and_wait
+                          (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+                          main::$_0::operator()((anonymous namespace)::RepResult&) const
+                          main
+                          __libc_start_call_main
+                          __libc_start_main_impl (inlined)
+                          _start
+
+     0.44%  tax0_z_ladder_b  [unknown]                [k] 0xffffffff8642da19
+            |
+            ---0xffffffff8642da19
+               0xffffffff8642eb2d
+               0xffffffff863aa6bf
+               0xffffffff87395882
+               0xffffffff8600012f
+               io_uring_submit_and_wait
+               (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+               main::$_0::operator()((anonymous namespace)::RepResult&) const
+               main
+               __libc_start_call_main
+               __libc_start_main_impl (inlined)
+               _start
+
+     0.41%  tax0_z_ladder_b  [unknown]                [k] 0xffffffff86aa9253
+            |
+            ---0xffffffff86aa9253
+               0xffffffff86aa9d4e
+               0xffffffff86aaa716
+               0xffffffff8620a261
+               0xffffffff873956e3
+               0xffffffff8600012f
+               io_uring_submit_and_wait
+               (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&) (inlined)
+               main::$_0::operator()((anonymous namespace)::RepResult&) const
+               main
+               __libc_start_call_main
+               __libc_start_main_impl (inlined)
+               _start
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
