@@ -1,6 +1,6 @@
 {
   "schema": "2.1",
-  "description": "TAX-0B/C/D measurement companion to the frozen TAX-0A2 preregistration census (tax0a2-control-plane-topology.json). Additive: this file registers measured results and hypothesis_status outcomes; it does not modify the preregistration. All numbers are ENVIRONMENT-LIMITED (WSL2, virtualized PMU, virtual ext4) — control-plane user-instruction attribution pilot, never native throughput conclusions.",
+  "description": "TAX-0B/C/D measurement companion to the frozen TAX-0A2 preregistration census (tax0a2-control-plane-topology.json). Additive: this file registers measured results and hypothesis_status outcomes; it does not modify the preregistration. All numbers are ENVIRONMENT-LIMITED (WSL2, virtualized PMU, virtual ext4) \u2014 control-plane user-instruction attribution pilot, never native throughput conclusions.",
   "round": "TAX-0B/C/D/E under #250, #259, PR #260",
   "baseline": {
     "branch": "research/tax0-a2-control-plane",
@@ -17,7 +17,10 @@
     "compiler": "clang (xmake release), stripped canonical binary + debug-symbol twin (+0.3% codegen-equivalence check)"
   },
   "protocol": {
-    "primary_metrics": ["instructions:u per op", "cycles:u per op"],
+    "primary_metrics": [
+      "instructions:u per op",
+      "cycles:u per op"
+    ],
     "normalization": "double-difference (total(R14)-total(R7))/7/ops removes setup/teardown exactly; write verification runner-side; read word_sum inline uniform",
     "same_work": "frozen 13-item census list, fail-closed enforced per rep; cross-arm word_sum equality checked",
     "sessions": {
@@ -29,23 +32,82 @@
   "z_ladder_results": {
     "units": "user instructions per operation (median-of-reps via double difference)",
     "read": {
-      "4K_d1":  { "z1": 1154, "z1b": 1201, "z1bw": 1968, "z2": 3827, "z3w1": 5796, "z3w4": 6647 },
-      "4K_d32": { "z1": 1043, "z1b": 1080, "z1bw": 1290, "z2": 3112, "z3w1": 3899, "z3w4": 3924 },
-      "4K_d64": { "z1": 1043, "z1b": 1080, "z1bw": 1290, "z2": 3212, "z3w1": 4105, "z3w4": 4138 },
-      "64K_d8": { "z1": 14499, "z1b": 14537, "z1bw": 14783, "z2": 16552, "z3w1": 17380, "z3w4": 17498 },
-      "1M_d8":  { "z1": 229553, "z1b": 229590, "z1bw": 230155, "z2": 231605, "z3w1": 232468, "z3w4": 233416 }
+      "4K_d1": {
+        "z1": 1154,
+        "z1b": 1201,
+        "z1bw": 1968,
+        "z2": 3827,
+        "z3w1": 5796,
+        "z3w4": 6647
+      },
+      "4K_d32": {
+        "z1": 1043,
+        "z1b": 1080,
+        "z1bw": 1290,
+        "z2": 3112,
+        "z3w1": 3899,
+        "z3w4": 3924
+      },
+      "4K_d64": {
+        "z1": 1043,
+        "z1b": 1080,
+        "z1bw": 1290,
+        "z2": 3212,
+        "z3w1": 4105,
+        "z3w4": 4138
+      },
+      "64K_d8": {
+        "z1": 14499,
+        "z1b": 14537,
+        "z1bw": 14783,
+        "z2": 16552,
+        "z3w1": 17380,
+        "z3w4": 17498
+      },
+      "1M_d8": {
+        "z1": 229553,
+        "z1b": 229590,
+        "z1bw": 230155,
+        "z2": 231605,
+        "z3w1": 232468,
+        "z3w4": 233416
+      }
     },
-    "capability_cost_z1b_minus_z1": { "4K_d1": 47, "4K_d32": 37, "4K_d64": 37, "64K_d8": 38, "1M_d8": 37 },
-    "l1_abstraction_tax_z2_minus_z1b": { "4K_d1": 2626, "4K_d32": 2032, "4K_d64": 2132, "64K_d8": 2015, "1M_d8": 2015 },
-    "runtime_continuation_z3w1_minus_z2": { "4K_d1": 1969, "4K_d32": 787, "4K_d64": 893, "64K_d8": 828, "1M_d8": 863 },
-    "handwritten_continuation_z1bw_minus_z1b": { "4K_d1": 767, "4K_d32": 210, "4K_d64": 210, "64K_d8": 246, "1M_d8": 565 },
+    "capability_cost_z1b_minus_z1": {
+      "4K_d1": 47,
+      "4K_d32": 37,
+      "4K_d64": 37,
+      "64K_d8": 38,
+      "1M_d8": 37
+    },
+    "l1_abstraction_tax_z2_minus_z1b": {
+      "4K_d1": 2626,
+      "4K_d32": 2032,
+      "4K_d64": 2132,
+      "64K_d8": 2015,
+      "1M_d8": 2015
+    },
+    "runtime_continuation_z3w1_minus_z2": {
+      "4K_d1": 1969,
+      "4K_d32": 787,
+      "4K_d64": 893,
+      "64K_d8": 828,
+      "1M_d8": 863
+    },
+    "handwritten_continuation_z1bw_minus_z1b": {
+      "4K_d1": 767,
+      "4K_d32": 210,
+      "4K_d64": 210,
+      "64K_d8": 246,
+      "1M_d8": 565
+    },
     "structural_finding": "Z2-Z1b is a FIXED ~2015 instr/op independent of request size (control-plane per-op work), while Z1b-Z1 is ~+37/op; both vanish into the data plane's relative noise at 64K/1M",
     "wall_note": "wall/op at 4K is kernel-medium-dominated on this host (z2 wall can be LOWER than z1/z1b at depth>=8); instructions/op is the campaign's primary metric and the only basis for control-plane claims"
   },
   "historical_cliff_rejudgment": {
     "cell": "4K depth>=32 workers=4 (Z3 arm, uring path)",
     "verdict": "NOT_REPRODUCED",
-    "evidence": "z3w4 vs z3w1 at 4K d32: +0.6% instructions (3924 vs 3899), +40% wall; at 4K d64: +0.8% / +54% — smooth in depth, no threshold discontinuity",
+    "evidence": "z3w4 vs z3w1 at 4K d32: +0.6% instructions (3924 vs 3899), +40% wall; at 4K d64: +0.8% / +54% \u2014 smooth in depth, no threshold discontinuity",
     "scope_caveat": "historical #221 evidence was ThreadPool-backend on WSL2/tmpfs; this re-judgment covers the uring Z-ladder path in the current environment only"
   },
   "seam_outcomes": [
@@ -98,7 +160,7 @@
       "measured": {
         "z3_continuation_premium": "+787..+863 instr/op at d32-d64; +1969 at d1",
         "handwritten_floor_z1bw": "+210 instr/op at d32 amortized; +767 at d1 (cross-thread futex wake dominates wall at shallow depth: 46us/op on this host)",
-        "reading": "a hand-written same-semantic continuation (park/wake/lost-wake-safe one-shot wait, exactly-once terminal, stale protection) demonstrably costs a fraction of the Z3 premium at amortized depth; the Z3-specific remainder (+577 at d32) is waiter-registration/routing/scheduler machinery — candidate accidental cost, decomposed only STRUCTURAL_ONLY (no per-component ablation)"
+        "reading": "a hand-written same-semantic continuation (park/wake/lost-wake-safe one-shot wait, exactly-once terminal, stale protection) demonstrably costs a fraction of the Z3 premium at amortized depth; the Z3-specific remainder (+577 at d32) is waiter-registration/routing/scheduler machinery \u2014 candidate accidental cost, decomposed only STRUCTURAL_ONLY (no per-component ablation)"
       },
       "hypothesis_status": "REGIME_SPECIFIC",
       "comparison_guard": "z1bw is NOT a poll loop: it purchases the frozen checklist semantics for the compared cell (no cancel, one consumer). Z3 additionally carries capabilities the compared cells do not exercise (cancel race closure, cross-worker wake, TLA+-verified routing); those stay REQUIRED-if-USED, UNMEASURED here"
@@ -108,17 +170,22 @@
     {
       "id": "OBS-1",
       "severity": "potential production defect (NOT a tax finding)",
-      "summary": "Intermittent spurious 'canceled' terminal (IoError code 1) with os_errno=125 (EAGAIN) surfacing through Completion::result() on the ApplicationRuntime WRITE path (workers=4, depth>=32, no cancel ever requested), plus a separate intermittent 'terminate called without an active exception' teardown abort under perf-stat wrapping. Standalone probes pass (11/12, 5/5); in-session combos failed all bounded retries (formal2 4/4, formal3 3/4). z3w1 and all read cells unaffected. NOT root-caused in this campaign; measured cells degraded to no-perf wrapper (wall/user/sys + same-work only). Follow-up recommended in #250."
+      "summary": "Intermittent spurious 'canceled' terminal (IoError code 1) with os_errno=125 (EAGAIN) surfacing through Completion::result() on the ApplicationRuntime WRITE path (workers=4, depth>=32, no cancel ever requested), plus a separate intermittent 'terminate called without an active exception' teardown abort under perf-stat wrapping. Standalone probes pass (11/12, 5/5); in-session combos failed all bounded retries (formal2 4/4, formal3 3/4). z3w1 and all read cells unaffected. NOT root-caused in this campaign; measured cells degraded to no-perf wrapper (wall/user/sys + same-work only). Follow-up recommended in #250. MASTER-SIDE ANCHOR (added post-campaign during production-PR gating): the repository's own uring_router_scan_equivalence_test fails intermittently (~2/4 full-suite runs) on CLEAN master 9670224 on this host with the identical 'terminate called without an active exception' abort 0.007s into the test (only the first [run] line printed); standalone runs pass 11/11. The F01 production PR (#261) therefore carries a pre-existing-flake A/B record (master 2/4 vs branch 2/4 in suite, 11/11 vs 10/10 standalone), and OBS-1's abort symptom and this test failure are plausibly the same underlying defect."
     },
     {
       "id": "OBS-2",
-      "summary": "write>>read wall asymmetry at shallow depth reproduced (4K d1 write 39-70us/op vs read 1.6us/op; vanishes at depth>=8) — carries the v1.1 UNKNOWN forward as ENVIRONMENT-SPECIFIC-until-native"
+      "summary": "write>>read wall asymmetry at shallow depth reproduced (4K d1 write 39-70us/op vs read 1.6us/op; vanishes at depth>=8) \u2014 carries the v1.1 UNKNOWN forward as ENVIRONMENT-SPECIFIC-until-native"
     }
   ],
   "first_optimization_gate": {
     "ranking_basis": "measured magnitude x causal confidence x semantic risk x size x breadth",
-    "ranking": ["F01 (PROVEN, -75 instr/op, trivial, zero-risk)", "F05 remainder (largest but multi-mechanism, structural decomposition missing)", "F03 (profile-hot, causal ablation = ADR-scale structural change)", "F02 (NEGLIGIBLE)"],
-    "authorized": "F01 — one production optimization: gate update_max_outstanding's outstanding() evaluation on stats presence",
+    "ranking": [
+      "F01 (PROVEN, -75 instr/op, trivial, zero-risk)",
+      "F05 remainder (largest but multi-mechanism, structural decomposition missing)",
+      "F03 (profile-hot, causal ablation = ADR-scale structural change)",
+      "F02 (NEGLIGIBLE)"
+    ],
+    "authorized": "F01 \u2014 one production optimization: gate update_max_outstanding's outstanding() evaluation on stats presence",
     "rejected_for_now": "F02-B (memory-order) per preregistered gate; F03/F05 structural changes (out of one-mechanism scope)"
   }
 }

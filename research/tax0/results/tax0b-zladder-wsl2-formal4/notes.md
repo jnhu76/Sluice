@@ -79,6 +79,11 @@ constant; L1 abstraction tax Z2−Z1b ≈ +2015/op constant across 4K/64K/1M
    instability (candidates: spurious cancel-disposition publication or
    EAGAIN mapped to `canceled` in the uring backend; runtime worker
    teardown race) — follow-up in #250, not root-caused in this campaign.
+   MASTER-SIDE ANCHOR (added during production-PR gating): the repository's
+   own uring_router_scan_equivalence_test aborts intermittently with the
+   identical "terminate called without an active exception" on CLEAN master
+   9670224 under full-suite load (~2/4 runs, 0.007s into the test, standalone
+   passes 11/11) — plausibly the same underlying defect as this OBS-1 abort.
 3. Write≫read asymmetry at shallow depth REPRODUCED on this host
    (4K d1 write wall 39–70µs vs read 1.6µs; asymmetry vanishes at d≥8).
    Carries the v1.1 census UNKNOWN forward as
