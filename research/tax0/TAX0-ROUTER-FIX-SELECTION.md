@@ -12,7 +12,10 @@ approved production PR.
 - **Base master:** `9bbe3a243cc3c87f1f1ce2450a43fc3b5c5eedfa`
 - **Branch:** `research/tax0-router-fix-shootout`
 - **Draft PR:** `research(perf): benchmark Uring router-resolution fix candidates`
-- **SHOOTOUT-FREEZE SHA:** `PENDING (filled at §18 freeze)`
+  — https://github.com/jnhu76/Sluice/pull/256
+- **SHOOTOUT-FREEZE SHA:** `d45f620` (candidate implementations, admission
+  table, prior-art survey, correctness gates, both bench layers, runner,
+  and validator frozen BEFORE any official measurement)
 - **Final head SHA:** `PENDING (filled after official campaign)`
 - **Canonical raw evidence:** `PENDING (paths filled after official campaign)`
 - **Validator result:** `PENDING`
