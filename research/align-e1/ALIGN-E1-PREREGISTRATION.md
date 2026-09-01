@@ -9,6 +9,26 @@ rewritten). The scientific question, matrices, modules, workload, metrics,
 same-work contract, materiality rule, sweet-spot definitions, regime-map
 rule, and production stop gates are frozen below.
 
+> **AMENDMENT 1 (2026-09-01, appended BEFORE the sweep; after
+> `aligne1-validate-native-1`, which ran the original 512 MiB and caught a
+> harness bug — the driver's perf invocation dropped the `-e` event list,
+> so every validation run recorded zero perf counters and failed the
+> perf-availability gate. The failed session is retained as immutable
+> evidence; the harness fix is recorded in the same commit as this
+> amendment).**
+>
+> Total data per run is reduced from 512 MiB to **128 MiB**
+> (134 217 728 B) — UNIFORMLY for every cell and every module. Reason: at
+> 512 MiB the 4K/6K/8K d1..d8 `engine` cells take ~14–15 s per run (the
+> production ThreadPoolBackend at workers=1 has a per-op fixed cost of
+> ~50–110 µs at 4K–16K chunks; the production CLI default workers=1 is
+> confirmed in `apps/sluice-copy/cli_parse.hpp`), which makes the 840-run
+> sweep a ~4+ hour campaign on this host. **Everything else is unchanged**:
+> the same-bytes-across-compared-arms-in-one-cell contract, the 4K..64K +
+> 1 MiB chunk matrix, depth {1,2,4,8}, the three modules, all metrics,
+> same-work gates, materiality/regime/verdict rules, R=7 seeded rounds.
+> All references to 536 870 912 B below are amended to 134 217 728 B.
+
 ## 1. Question
 
 Does ALIGN-E0's native Linux READ per-op alignment micro-cost (the +16

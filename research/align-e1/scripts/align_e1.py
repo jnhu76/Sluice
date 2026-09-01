@@ -44,7 +44,7 @@ DATA_DIR = REPO / "build/aligne1-data"
 BENCH = REPO / "build/linux/x86_64/release/align_e1_bench"
 RESULTS = REPO / "research/align-e1/results"
 
-FILE_BYTES = 536_870_912  # 512 MiB
+FILE_BYTES = 134_217_728  # 128 MiB (AMENDMENT 1, 2026-09-01 — see prereg)
 CHUNKS = [4096, 6144, 8192, 12288, 16384, 24576, 32768, 49152, 65536, 1048576]
 PRIMARY_CHUNKS = CHUNKS[:-1]  # 4K..64K (1 MiB is the historical reference)
 DEPTHS = [1, 2, 4, 8]
@@ -154,11 +154,6 @@ def new_session(session_id: str, purpose: str, manifest: dict) -> Path:
     return sd
 
 
-def perf_cmd() -> list[str]:
-    return ["perf", "stat", "-x,", "-e", "instructions:u,cycles:u,task-clock",
-            "-o", "/dev/null"]
-
-
 def parse_perf_stat(text: str) -> dict:
     out = {}
     for line in text.splitlines():
@@ -199,11 +194,11 @@ def bench_run(session_dir: Path, gates: Gates, manifest: dict, run_id: str,
               module: str, chunk: int, depth: int) -> dict:
     """One measured run under perf; fail-closed in the driver."""
     raw_dir = session_dir / "raw"
-    cmd = perf_cmd()[0:3] + ["-o", "/dev/null"] + \
-        ["--", str(BENCH), "--run", "--module", module, "--chunk",
-         str(chunk), "--depth", str(depth), "--src",
-         str(DATA_DIR / "src.bin"), "--dst", str(DATA_DIR / "dst.bin"),
-         "--label", run_id]
+    cmd = ["perf", "stat", "-x,", "-e", "instructions:u,cycles:u,task-clock",
+           "-o", "/dev/null", "--", str(BENCH), "--run", "--module", module,
+           "--chunk", str(chunk), "--depth", str(depth), "--src",
+           str(DATA_DIR / "src.bin"), "--dst", str(DATA_DIR / "dst.bin"),
+           "--label", run_id]
     t0 = time.monotonic()
     p = subprocess.run(cmd, capture_output=True, text=True)
     tout = p.stdout.strip()
