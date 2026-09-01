@@ -6,11 +6,11 @@
 # Samples: 84K of event 'cpu/cycles/Pu'
 # Event count (approx.): 12399848884
 #
-# Overhead  Command          Shared Object            Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+# Overhead  Command          Shared Object            Symbol
 # ........  ...............  .......................  .................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 #
     35.11%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] main::$_0::operator()((anonymous namespace)::RepResult&) const
-            |          
+            |
             |--27.75%--(anonymous namespace)::word_sum(std::byte const*, unsigned long) (inlined)
             |          (anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&) (inlined)
             |          main::$_0::operator()((anonymous namespace)::RepResult&) const
@@ -18,14 +18,14 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
             |--4.68%--(anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&) (inlined)
             |          main::$_0::operator()((anonymous namespace)::RepResult&) const
             |          main
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
              --0.64%--bool std::__atomic_impl::__compare_exchange<false, sluice::async::Completion<unsigned long>::State>(sluice::async::Completion<unsigned long>::State&, std::remove_volatile<sluice::async::Completion<unsigned long>::State>::type&, std::remove_volatile<sluice::async::Completion<unsigned long>::State>::type&, bool, std::memory_order, std::memory_order) (inlined)
                        std::atomic<sluice::async::Completion<unsigned long>::State>::compare_exchange_strong(sluice::async::Completion<unsigned long>::State&, sluice::async::Completion<unsigned long>::State, std::memory_order, std::memory_order) (inlined)
                        sluice::async::Completion<unsigned long>::reset() (inlined)
@@ -37,7 +37,7 @@
                        _start
 
      8.26%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::Result<sluice::async::detail::SlotHandle> sluice::async::detail::submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > >(sluice::async::detail::RequestArena&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::completion_type&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::op_type const&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >&)
-            |          
+            |
             |--2.81%--submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > > (inlined)
             |          submit_size<sluice::async::ReadOp> (inlined)
             |          submit_read (inlined)
@@ -48,9 +48,9 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
             |--1.09%--validate_ (inlined)
-            |          |          
+            |          |
             |           --0.57%--commit (inlined)
             |                     submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > > (inlined)
             |                     submit_size<sluice::async::ReadOp> (inlined)
@@ -62,10 +62,10 @@
             |                     __libc_start_call_main
             |                     __libc_start_main_impl (inlined)
             |                     _start
-            |          
+            |
             |--0.97%--__compare_exchange<false, sluice::async::Completion<unsigned long>::State> (inlined)
             |          compare_exchange_strong (inlined)
-            |          |          
+            |          |
             |           --0.59%--begin_binding_for_backend (inlined)
             |                     begin_binding<unsigned long> (inlined)
             |                     begin_binding (inlined)
@@ -79,7 +79,7 @@
             |                     __libc_start_call_main
             |                     __libc_start_main_impl (inlined)
             |                     _start
-            |          
+            |
              --0.69%--write_scratch (inlined)
                        submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > > (inlined)
                        submit_size<sluice::async::ReadOp> (inlined)
@@ -93,18 +93,18 @@
                        _start
 
      6.87%  tax0_z_ladder_b  libc.so.6                [.] pthread_mutex_lock@@GLIBC_2.2.5
-            |          
+            |
             |--5.19%--___pthread_mutex_lock (inlined)
-            |          |          
+            |          |
             |          |--3.67%--__gthread_mutex_lock (inlined)
             |          |          lock (inlined)
-            |          |          |          
+            |          |          |
             |          |           --3.37%--lock_guard (inlined)
-            |          |          
+            |          |
             |           --1.17%--__gthread_mutex_lock(pthread_mutex_t*) (inlined)
             |                     std::mutex::lock() (inlined)
             |                     std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
-            |                     |          
+            |                     |
             |                      --0.93%--sluice::async::detail::RequestArena::release_completed_binding(sluice::async::detail::SlotHandle)
             |                                sluice::async::Completion<unsigned long>::reset() (inlined)
             |                                (anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&) (inlined)
@@ -113,43 +113,43 @@
             |                                __libc_start_call_main
             |                                __libc_start_main_impl (inlined)
             |                                _start
-            |          
+            |
              --1.68%--lll_mutex_lock_optimized (inlined)
                        ___pthread_mutex_lock (inlined)
-                       |          
+                       |
                         --1.20%--__gthread_mutex_lock (inlined)
                                   lock (inlined)
-                                  |          
+                                  |
                                    --1.09%--lock_guard (inlined)
 
      4.79%  tax0_z_ladder_b  libc.so.6                [.] pthread_mutex_unlock@@GLIBC_2.2.5
-            |          
+            |
             |--2.16%--__pthread_mutex_unlock_usercnt (inlined)
             |          ___pthread_mutex_unlock (inlined)
-            |          |          
+            |          |
             |           --1.64%--__gthread_mutex_unlock (inlined)
             |                     unlock (inlined)
-            |                     |          
+            |                     |
             |                      --1.62%--~lock_guard (inlined)
-            |          
+            |
             |--1.53%--___pthread_mutex_unlock (inlined)
-            |          |          
+            |          |
             |           --1.14%--__gthread_mutex_unlock (inlined)
             |                     unlock (inlined)
-            |                     |          
+            |                     |
             |                      --1.05%--~lock_guard (inlined)
-            |          
+            |
              --1.10%--lll_mutex_unlock_optimized (inlined)
                        __pthread_mutex_unlock_usercnt (inlined)
                        ___pthread_mutex_unlock (inlined)
-                       |          
+                       |
                         --1.04%--__gthread_mutex_unlock (inlined)
                                   unlock (inlined)
-                                  |          
+                                  |
                                    --0.95%--~lock_guard (inlined)
 
      4.50%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
-            |          
+            |
             |--2.85%--find_live_router_cookie_ (inlined)
             |          handle_one_cqe (inlined)
             |          reap_cqes (inlined)
@@ -162,7 +162,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
              --1.59%--handle_one_cqe (inlined)
                        reap_cqes (inlined)
                        poll (inlined)
@@ -176,7 +176,7 @@
                        _start
 
      4.28%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::SlotHandle)
-            |          
+            |
             |--1.65%--remove_exact (inlined)
             |          dispatch_one_locked (inlined)
             |          enqueue_after_commit (inlined)
@@ -189,7 +189,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
             |--1.35%--dispatch_one_locked (inlined)
             |          enqueue_after_commit (inlined)
             |          submit_size<sluice::async::ReadOp> (inlined)
@@ -201,7 +201,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
              --0.61%--_M_ptr (inlined)
                        get (inlined)
                        operator-> (inlined)
@@ -218,7 +218,7 @@
                        _start
 
      3.60%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::enqueue_after_commit(sluice::async::detail::SlotHandle)
-            |          
+            |
             |--1.94%--push_back (inlined)
             |          enqueue_after_commit (inlined)
             |          submit_size<sluice::async::ReadOp> (inlined)
@@ -230,7 +230,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
             |--0.70%--enqueue_after_commit (inlined)
             |          submit_size<sluice::async::ReadOp> (inlined)
             |          submit_read (inlined)
@@ -241,7 +241,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
              --0.57%--front (inlined)
                        enqueue_after_commit (inlined)
                        submit_size<sluice::async::ReadOp> (inlined)
@@ -255,7 +255,7 @@
                        _start
 
      3.28%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::finalize_operation_terminal_(unsigned long, sluice::async::detail::TerminalResult const&)
-            |          
+            |
              --3.13%--finalize_operation_terminal_ (inlined)
                        handle_one_cqe (inlined)
                        reap_cqes (inlined)
@@ -270,7 +270,7 @@
                        _start
 
      2.59%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::reap(sluice::async::detail::SynchronousReadySink&)
-            |          
+            |
             |--1.28%--ReadyEvent (inlined)
             |          reap (inlined)
             |          poll (inlined)
@@ -282,7 +282,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
              --0.60%--reap (inlined)
                        poll (inlined)
                        sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
@@ -295,7 +295,7 @@
                        _start
 
      2.44%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::SlotHandle)
-            |          
+            |
              --2.37%--append (inlined)
                        dispatch_one_locked (inlined)
                        enqueue_after_commit (inlined)
@@ -310,7 +310,7 @@
                        _start
 
      2.01%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::record_terminal(sluice::async::detail::SlotHandle, sluice::async::detail::TerminalResult)
-            |          
+            |
             |--1.20%--push_ready_locked_ (inlined)
             |          record_terminal (inlined)
             |          finalize_operation_terminal_ (inlined)
@@ -325,7 +325,7 @@
             |          __libc_start_call_main
             |          __libc_start_main_impl (inlined)
             |          _start
-            |          
+            |
              --0.51%--record_terminal (inlined)
                        finalize_operation_terminal_ (inlined)
                        handle_one_cqe (inlined)
@@ -341,7 +341,7 @@
                        _start
 
      1.57%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::free_slot_locked_(sluice::async::detail::RequestSlot*, unsigned int)
-            |          
+            |
              --1.13%--sluice::async::detail::RequestArena::free_slot_locked_(sluice::async::detail::RequestSlot*, unsigned int)
                        sluice::async::detail::RequestArena::release_completed_binding(sluice::async::detail::SlotHandle)
                        sluice::async::Completion<unsigned long>::reset() (inlined)
@@ -353,7 +353,7 @@
                        _start
 
      1.56%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::reserve()
-            |          
+            |
              --1.13%--reserve (inlined)
                        submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > > (inlined)
                        submit_size<sluice::async::ReadOp> (inlined)
@@ -367,7 +367,7 @@
                        _start
 
      1.35%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::publish_size_ready(void*, sluice::async::detail::TerminalResult const&)
-            |          
+            |
              --0.57%--operator++ (inlined)
                        next_reap_seq (inlined)
                        publish_from_reap (inlined)
@@ -385,7 +385,7 @@
                        _start
 
      1.35%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
-            |          
+            |
              --1.01%--submit_read (inlined)
                        sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
                        (anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&) (inlined)
@@ -396,7 +396,7 @@
                        _start
 
      1.09%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
-            |          
+            |
              --0.78%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
                        (anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&) (inlined)
                        main::$_0::operator()((anonymous namespace)::RepResult&) const
@@ -406,7 +406,7 @@
                        _start
 
      1.06%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)
-            |          
+            |
              --0.81%--retire_router_entry_ (inlined)
                        handle_one_cqe (inlined)
                        reap_cqes (inlined)
@@ -424,7 +424,7 @@
      0.86%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::release_completed_binding(sluice::async::detail::SlotHandle)
      0.73%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::detail::RequestArena::mark_running(sluice::async::detail::SlotHandle)
      0.64%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] sluice::async::UringAsyncBackend::outstanding() const
-            |          
+            |
              --0.52%--outstanding (inlined)
                        sluice::async::(anonymous namespace)::tax0_f01_update_max_outstanding(sluice::AsyncStats*, sluice::async::AsyncBackend&) (inlined)
                        sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp, sluice::async::Completion<unsigned long>&)
