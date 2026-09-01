@@ -31,7 +31,7 @@ single research campaign, not a generic framework.
 - Chunks: 4K, 6K, 8K, 12K, 16K, 24K, 32K, 48K, 64K (+ 1 MiB historical
   reference, excluded from materiality/regime analysis).
 - Depths: 1, 2, 4, 8 (pipeline depth, workers = 1).
-- Modules: `engine` (production `run_pipelined_copy_with_backend`), 
+- Modules: `engine` (production `run_pipelined_copy_with_backend`),
   `replica-natural` (same algorithm, malloc geometry), `replica-aligned`
   (same algorithm, 64 B exposed alignment).
 - Workload: 512 MiB READ + WRITE file copy, deterministic pseudo-random

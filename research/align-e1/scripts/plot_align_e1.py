@@ -147,6 +147,14 @@ def plot_alignment_ratio(idx, depth: int, out: Path, session: str):
     plt.close(fig)
 
 
+def clean_svg(path: Path) -> None:
+    """Strip trailing whitespace per line (matplotlib SVG path dumps it;
+    `git diff --check` requires clean lines)."""
+    text = path.read_text()
+    fixed = "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+    path.write_text(fixed)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("session", nargs="?", default="aligne1-sweep-native-1")
@@ -159,6 +167,8 @@ def main() -> None:
         plot_throughput(idx, d, out, args.session)
         plot_instr_per_byte(idx, d, out, args.session)
         plot_alignment_ratio(idx, d, out, args.session)
+    for p in out.glob("*.svg"):
+        clean_svg(p)
     print(f"plots written to {out}")
 
 
