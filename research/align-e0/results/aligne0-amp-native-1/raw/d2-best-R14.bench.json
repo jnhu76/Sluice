@@ -1,0 +1,181 @@
+{
+ "bench": "align_e0_amp_bench",
+ "arm": "aligned",
+ "alignment": 64,
+ "buffer_size": 1048576,
+ "depth": 2,
+ "workers": 1,
+ "reps": 14,
+ "file_bytes": 536870912,
+ "chunks": 512,
+ "ops_for_diff": 14,
+ "construct_ns": {
+  "median": 35403,
+  "n": 14
+ },
+ "engine_ns": {
+  "median": 638370944,
+  "n": 14
+ },
+ "total_ns": {
+  "median": 638397420,
+  "n": 14
+ },
+ "reps_detail": [
+  {
+   "rep": 0,
+   "construct_ns": 23465,
+   "engine_ns": 635282825,
+   "total_ns": 635306290,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 1,
+   "construct_ns": 35759,
+   "engine_ns": 670720947,
+   "total_ns": 670756706,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 2,
+   "construct_ns": 26801,
+   "engine_ns": 668487383,
+   "total_ns": 668514184,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 3,
+   "construct_ns": 28259,
+   "engine_ns": 667445852,
+   "total_ns": 667474111,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 4,
+   "construct_ns": 28822,
+   "engine_ns": 632925364,
+   "total_ns": 632954186,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 5,
+   "construct_ns": 39644,
+   "engine_ns": 631451910,
+   "total_ns": 631491554,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 6,
+   "construct_ns": 35403,
+   "engine_ns": 628499216,
+   "total_ns": 628534619,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 7,
+   "construct_ns": 35232,
+   "engine_ns": 635102458,
+   "total_ns": 635137690,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 8,
+   "construct_ns": 36036,
+   "engine_ns": 635681726,
+   "total_ns": 635717762,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 9,
+   "construct_ns": 36911,
+   "engine_ns": 672136854,
+   "total_ns": 672173765,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 10,
+   "construct_ns": 36675,
+   "engine_ns": 671959022,
+   "total_ns": 671995697,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 11,
+   "construct_ns": 39452,
+   "engine_ns": 672010140,
+   "total_ns": 672049592,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 12,
+   "construct_ns": 27258,
+   "engine_ns": 635514452,
+   "total_ns": 635541710,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 13,
+   "construct_ns": 26476,
+   "engine_ns": 638370944,
+   "total_ns": 638397420,
+   "bytes_copied": 536870912,
+   "read_ops": 514,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  }
+ ],
+ "all_reps_ok": true
+}

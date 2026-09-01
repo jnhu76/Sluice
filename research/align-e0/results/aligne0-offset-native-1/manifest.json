@@ -1,0 +1,31 @@
+{
+ "purpose": "PAGE-OFFSET-E0 diagnostic (gated)",
+ "preregistration": "research/align-e0/ALIGN-E0-PREREGISTRATION.md",
+ "matrix": {
+  "mode": "offset",
+  "offsets": [
+   0,
+   16,
+   32,
+   64,
+   128,
+   256,
+   512,
+   1024,
+   2048
+  ],
+  "dirs": [
+   "read",
+   "write"
+  ],
+  "sizes": [
+   4096,
+   65536,
+   1048576
+  ],
+  "rep_pair": [
+   7,
+   14
+  ]
+ }
+}

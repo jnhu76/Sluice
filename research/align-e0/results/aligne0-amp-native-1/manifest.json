@@ -1,0 +1,26 @@
+{
+ "purpose": "amplifier",
+ "preregistration": "research/align-e0/ALIGN-E0-PREREGISTRATION.md",
+ "best_align": 64,
+ "matrix": {
+  "buffer_size": 1048576,
+  "depths": [
+   1,
+   2,
+   4,
+   8,
+   16
+  ],
+  "arms": [
+   "engine",
+   "natural",
+   "best",
+   "4096"
+  ],
+  "file_bytes": 536870912,
+  "rep_pair": [
+   7,
+   14
+  ]
+ }
+}

@@ -20,7 +20,7 @@ how much alignment?
 for which operation size?
 at which queue depth?
 for READ or WRITE?
-on native Linux does it reproduce?
+on native Linux does it reproduce?   <- answered: MIXED, see below
 ```
 
 Governing rule: OBSERVED EFFECT → ALIGNMENT THRESHOLD →
@@ -33,41 +33,64 @@ prohibited.
 
 | Artifact | Purpose |
 | --- | --- |
-| `ALIGN-E0-PREREGISTRATION.md` | Frozen experiment design (arms, matrices, same-work, metrics, gate; AMENDMENTs append-only) |
-| `ALIGN-E0-REPORT.md` | Final report + verdict + evidence taxonomy |
+| `ALIGN-E0-PREREGISTRATION.md` | Frozen experiment design (arms, matrices, same-work, metrics, gate; AMENDMENTs append-only — none required) |
+| `ALIGN-E0-REPORT.md` | Final report + verdict + evidence taxonomy (WSL2 + native) |
 | `bench/` | Bench sources (`align_e0_bench` microbench, `align_e0_amp_bench` amplifier; wired in `xmake/benchmarks.lua`) |
 | `scripts/aligne0.py` | Session driver (validate/run/amp/report) |
-| `results/<session-id>/` | Immutable measurement sessions |
+| `results/<session-id>/` | Immutable measurement sessions (6 WSL2 + 5 native) |
 
-## Baseline (start of Phase 3)
+## Baselines
 
-| Field | Value |
-| --- | --- |
-| BASE SHA | `312ede532f66236b8e1723368d3d4ab6bbb7476f` (master after #264) |
-| Branch | `research/align-e0` |
-| git status at start | clean |
-| Host | WSL2 (`Hu`, kernel `6.18.33.2-microsoft-standard-WSL2`) — VIRTUALIZED, not native Linux |
-| CPU | AMD Ryzen 7 5800H (8 logical CPUs, SMT) |
-| Page size | 4096 |
-| Filesystem | ext4 on WSL2 virtual block device (`/dev/sdd`) |
-| Compiler | clang 21.1.8 / g++ 15.2.0 |
-| libc | glibc 2.43 |
-| Build | xmake release, Linux x86_64 |
+| Field | WSL2 campaign | Native campaign (Phase-3 evidence) |
+| --- | --- | --- |
+| BASE SHA | `312ede532f66236b8e1723368d3d4ab6bbb7476f` (master after #264) | same |
+| Branch | `research/align-e0` | `research/align-e0` @ 7d7046fc |
+| Host | WSL2 (`Hu`, kernel `6.18.33.2-microsoft-standard-WSL2`) — VIRTUALIZED | bare metal (NOT WSL/container): Fedora 44, kernel `7.1.9-200.fc44.x86_64` |
+| CPU | AMD Ryzen 7 5800H (8 logical CPUs, SMT) | Intel Xeon E5-2666 v3 @ 2.90 GHz (10C/20T, SMT, turbo 3.5 GHz) |
+| Page size | 4096 | 4096 |
+| Filesystem | ext4 on WSL2 virtual block device | btrfs (compress=zstd:1) on SATA SSD (warm page-cache timed path) |
+| Compiler | clang / g++ | clang 22.1.8 Release (warnings-as-errors PASS) |
+| libc | glibc 2.43 | glibc 2.43 |
+| Build | xmake release, Linux x86_64 | xmake release (clang), Linux x86_64 |
 
 Per-session `environment.json` captures the exact state (HEAD/branch/dirty,
-binary sha256, kernel, tools) for every immutable session.
+binary sha256, kernel, tools) for every immutable session; `notes.md` adds
+the environment detail (mount options, device, SMT, governor, PMU
+observations).
 
-## Environment classification
+## Verdict (Phase 3 FINAL — ENVIRONMENT-BLOCKED superseded)
 
-WSL2 = `QUALIFIED_BUT_VIRTUALIZED`, `ENVIRONMENT-LIMITED`: same-host causal
-comparison and harness validation only. **Native Linux (real kernel,
-non-WSL, x86-64, warm page cache) is the mandatory primary environment for
-any final Phase-3 verdict.** No native host is reachable from this workspace;
-therefore the Phase-3 verdict is `ENVIRONMENT-BLOCKED` with
-`PRODUCTION ALIGNMENT CHANGE AUTHORIZED: NO` until a native Linux run of the
-frozen matrix exists. The harness is native-ready (plain pread/pwrite, no
-WSL-specific behavior) and the frozen matrix is exactly what a native session
-should run.
+```
+MIXED — NEED TARGETED FOLLOW-UP
+PRODUCTION ALIGNMENT CHANGE AUTHORIZED: NO
+```
+
+The native Linux replication of the frozen harness completed (5 immutable
+native sessions, 0 gate errors). Findings:
+
+- **READ +16 per-op anomaly REPRODUCED in kind, not in magnitude**: on
+  native the +16 exposed pointer (16-aligned, page offset 16) is the only
+  slow point (offset sweep: offsets 0/32/64/…/2048 fast), but the penalty
+  is 1.14x–1.42x at 4K–64K (peak 8K) vs WSL2's 2.2x–6.7x; at 1M the sync
+  windows are noise, and threaded per-op shows +5–9%. Same signature,
+  ~1/4–1/10 the magnitude, different size profile.
+- **WRITE: null on both hosts** — no consistent material alignment effect
+  (ladder, offset sweep, threaded all flat).
+- **Application amplifier: NOT reproduced.** Native d1 natural/best =
+  1.03x (within MAD), null at every depth; WSL2's d1 1.41x is a
+  WSL2-environment effect candidate, not a native property. Per
+  preregistration §9 the amplifier is the application-level boundary — no
+  application-level alignment benefit is established on native.
+- instructions/op arm-invariant on both hosts (2382 @4K native / 2400
+  @4K WSL2; 485 102 / 484 607 @1M) — wall effects are NOT
+  instruction-count deltas. `cycles:u` unreliable on both hosts (WSL2:
+  virtualized counter; native: frequency scaling between process runs).
+- Minimum tested effective alignment on native: 32 B separation / 64 B
+  ladder arm (4096 NOT necessary) — but with no application-level payoff
+  and a sub-1.5x microbench effect, no production change is authorized.
+
+WSL2-qualified references (not the verdict): the full WSL2 tables live in
+`ALIGN-E0-REPORT.md` Part A; the side-by-side table is Part C.
 
 ## Scope guards
 
@@ -77,39 +100,3 @@ should run.
   zero-copy / SIMD / custom memcpy / NUMA / huge pages / scheduler change.
 - One Draft research PR; DO NOT MERGE; stop for adversarial review after the
   verdict. Even a YES verdict puts no production code on this PR.
-
-## Verdict so far (WSL2 qualified evidence only, see ALIGN-E0-REPORT.md)
-
-Phase-3 verdict: **ENVIRONMENT-BLOCKED** — native Linux (the mandatory
-environment gate) is not reachable from this workspace; `PRODUCTION
-ALIGNMENT CHANGE AUTHORIZED: NO`. The harness is native-ready and the frozen
-matrix is exactly what a native session must run.
-
-WSL2-qualified findings (QUALIFIED_BUT_VIRTUALIZED, not the Phase-3 verdict):
-
-- READ alignment effect located and causally isolated: only the **+16**
-  exposed pointer (`base + 16`, page offset 16) was slow in the
-  preregistered offset sweep (2.2x–6.7x across the size × depth matrix);
-  offsets 0, 32, 64, …, 2048 were all fast (minflt=0). **32 B is the
-  minimum tested alignment that captures the benefit** — 4096 is NOT
-  necessary (64 B already captures the full benefit in the ladder). The
-  observed split is consistent with a 32-byte-alignment explanation, but
-  the exact threshold and residue-class rule are UNRESOLVED (16-mod-32
-  offsets other than +16, e.g. +48/+80/+112, were not tested).
-  instructions/op shows no material arm separation — the wall effect is
-  NOT explained by an instruction-count delta.
-- WRITE: **no consistent material alignment effect established** at any
-  size × depth × worker count. Some isolated cells are large (1.9–2.2x)
-  but noisy and lacking neighboring-cell / regime consistency; effect == 0
-  is not claimed.
-- The per-op READ cost does NOT disappear with depth or overlap (threaded
-  diagnostic: true per-op latency a0 4x–6.5x slower at every worker
-  count). MECHANISM DISAPPEARS: NO. At the application level, BUF-E0's
-  d1-material/d8-null is consistent with application-level masking /
-  overlap (SUPPORTED INTERPRETATION — amplifier shows the benefit at d1,
-  natural/best = 1.41x, and no material separation at d2+); the exact
-  application bottleneck is UNRESOLVED (writeback / page-cache ceiling /
-  control-plane factors are hypotheses, not proven root cause).
-- Exact kernel/uaccess mechanism: UNRESOLVED. Native replication is
-  required to determine whether the +16 signature is a real Linux property
-  or a WSL2 virtualization artifact.

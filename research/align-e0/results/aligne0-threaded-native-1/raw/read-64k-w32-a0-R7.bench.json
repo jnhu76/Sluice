@@ -1,0 +1,115 @@
+{
+ "bench": "align_e0_bench",
+ "label": "read-64k-w32-a0-R7",
+ "dir": "read",
+ "mode": "threaded",
+ "arm": "a0",
+ "offset": 0,
+ "alignment": 16,
+ "page_offset": 16,
+ "size": 65536,
+ "depth": 1,
+ "workers": 32,
+ "reps": 7,
+ "pages_per_buffer": 16,
+ "page_size": 4096,
+ "kc": 16,
+ "window_bytes": 33554432,
+ "prefault_ns": 1063738,
+ "prefault_minflt": 512,
+ "file": "/home/jnhu/Source/Sluice/build/aligne0-data/src.bin",
+ "same_work": {
+  "ops": 3584,
+  "bytes": 234881024,
+  "strong_checks": 64,
+  "ops_for_diff": 3584,
+  "ok": true
+ },
+ "io_ns": {
+  "median": 356574,
+  "mad": 9041,
+  "min": 315503,
+  "max": 560841,
+  "n": 7
+ },
+ "minflt_io": {
+  "median": 0,
+  "mad": 0,
+  "min": 0,
+  "max": 0,
+  "n": 7
+ },
+ "thread_op_ns": {
+  "median": 15439,
+  "mad": 916,
+  "min": 10531,
+  "max": 91545,
+  "n": 3584
+ },
+ "reps_detail": [
+  {
+   "rep": 0,
+   "io_ns": 560841,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  },
+  {
+   "rep": 1,
+   "io_ns": 365615,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  },
+  {
+   "rep": 2,
+   "io_ns": 315503,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  },
+  {
+   "rep": 3,
+   "io_ns": 359820,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  },
+  {
+   "rep": 4,
+   "io_ns": 353287,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  },
+  {
+   "rep": 5,
+   "io_ns": 356574,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  },
+  {
+   "rep": 6,
+   "io_ns": 319499,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 512,
+   "bytes": 33554432,
+   "ok": true
+  }
+ ],
+ "all_reps_ok": true
+}

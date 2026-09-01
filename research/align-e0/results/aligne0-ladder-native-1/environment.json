@@ -1,0 +1,58 @@
+{
+ "timestamp_utc": "2026-09-01T08:34:59.266219+00:00",
+ "git": {
+  "head": "7d7046fc1c9cfb4a974179baeb1031bf9f03998f",
+  "branch": "research/align-e0",
+  "dirty": true
+ },
+ "system": {
+  "kernel": "7.1.9-200.fc44.x86_64",
+  "wsl": false,
+  "logical_cpus": 20,
+  "cpu_model": "Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz",
+  "mem_total_kb": 65676556,
+  "page_size": 4096,
+  "perf_event_paranoid": "2"
+ },
+ "filesystem": {
+  "data_src": "/home/jnhu/Source/Sluice/build/aligne0-data/src.bin",
+  "data_dst": "/home/jnhu/Source/Sluice/build/aligne0-data/dst.bin",
+  "amp_src": "/home/jnhu/Source/Sluice/build/aligne0-data/amp-src.bin",
+  "amp_dst": "/home/jnhu/Source/Sluice/build/aligne0-data/amp-dst.bin",
+  "data_fs": "native",
+  "data_bytes": 268435456,
+  "amp_bytes": 536870912,
+  "cache_regime": "warm (untimed warm sweep before formal reps)"
+ },
+ "virtualization": {
+  "wsl2": false,
+  "classification": "QUALIFIED_BUT_VIRTUALIZED",
+  "claim_limit": "ENVIRONMENT-LIMITED: same-host causal comparison and harness validation only; no native Linux verdict; final Phase-3 verdict requires native"
+ },
+ "tools": {
+  "perf": "perf version 7.1.9-200.fc44.x86_64",
+  "python": "3.14.7"
+ },
+ "build": {
+  "mode": "release",
+  "bench_binary": "/home/jnhu/Source/Sluice/build/linux/x86_64/release/align_e0_bench",
+  "bench_binary_sha256": "e324226673d9f46aae2200dc85b1058e1882efddb58cc6b555d78194c754a122",
+  "amp_binary": "/home/jnhu/Source/Sluice/build/linux/x86_64/release/align_e0_amp_bench",
+  "amp_binary_sha256": "ca78a37fd1aa0b1db299efa3b7488ce704ed4291c863aa423640de3692782e67"
+ },
+ "protocol": {
+  "perf_events": [
+   "instructions:u",
+   "cycles:u"
+  ],
+  "rep_pair": [
+   7,
+   14
+  ],
+  "normalization": "double-difference (total(R14)-total(R7))/7/ops_per_rep",
+  "cycles_note": "cycles:u UNRELIABLE on WSL2 (virtualized non-monotonic counter, BUF-E0 finding); quantitative pair = instructions:u + wall"
+ },
+ "purpose": "ALIGN-E0 ladder matrix",
+ "data_src_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+ "data_dst_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64"
+}
