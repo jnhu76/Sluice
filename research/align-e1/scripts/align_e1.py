@@ -11,9 +11,17 @@ Subcommands:
   validate <session-id>   validation session: 3 modules x {4K,64K,1M} x {d1,d4}
                           x 2 reps + the cycles:u stability probe (prereg §6).
   sweep <session-id>      full frozen sweep (prereg §4/§5): 7 rounds x 120 cells.
+  causal <session-id>     E1-C1 strict causal-isolation control (AMENDMENT 2):
+                          causal-phase16 vs causal-aligned64 — SAME
+                          posix_memalign(4096, chunk+64) backing in both arms,
+                          ONLY the exposed pointer phase differs (+16 vs 0);
+                          9 chunks x {d1,d2} x 2 arms x 7 seeded interleaved
+                          rounds; driver address gate FAIL CLOSED per run.
   summarize <session-id>  runs.jsonl -> summary.csv/json + analysis.json
                           (sweet spots, materiality, regime, fidelity, verdict
                           per prereg §8-12).
+  summarize-causal <s>    E1-C1 analysis: frozen prereg §8 materiality rule,
+                          case A/B/C verdict (AMENDMENT 2 §9).
 
 Immutable session layout (B16.5):
   results/<session-id>/{environment.json, manifest.json, gates.json, notes.md,
@@ -54,6 +62,16 @@ PREREG_SEED = 0xE1E1E1E121212121
 MATERIAL_RATIO = 1.05
 MATERIAL_MAD_SCALE = 1.5
 P95_FRACTION = 0.95
+
+# E1-C1 strict causal-isolation control (AMENDMENT 2): SAME posix_memalign
+# backing in both arms, ONLY the exposed pointer phase differs. d1/d2 are
+# the depths where the original sweep's natural geometry actually sat in
+# the 16-mod-32 candidate state; 4K–64K is the ALIGN-E0 micro-cost
+# candidate regime. 1 MiB is a known application null — excluded.
+CAUSAL_CHUNKS = PRIMARY_CHUNKS
+CAUSAL_DEPTHS = [1, 2]
+CAUSAL_ARMS = ["causal-phase16", "causal-aligned64"]
+CAUSAL_ROUNDS = 7
 
 
 def sha256_file(path: Path) -> str:
@@ -135,7 +153,9 @@ def mad(vals, med):
     return median([abs(v - med) for v in vals])
 
 
-def new_session(session_id: str, purpose: str, manifest: dict) -> Path:
+def new_session(session_id: str, purpose: str, manifest: dict,
+                prereg_ref: str = "research/align-e1/"
+                "ALIGN-E1-PREREGISTRATION.md (FROZEN)") -> Path:
     sd = RESULTS / session_id
     raw = sd / "raw"
     raw.mkdir(parents=True, exist_ok=False)
@@ -144,8 +164,7 @@ def new_session(session_id: str, purpose: str, manifest: dict) -> Path:
         if (DATA_DIR / "src.bin").is_file() else "?"
     (sd / "environment.json").write_text(json.dumps(env, indent=1) + "\n")
     manifest["purpose"] = purpose
-    manifest["preregistration"] = \
-        "research/align-e1/ALIGN-E1-PREREGISTRATION.md (FROZEN)"
+    manifest["preregistration"] = prereg_ref
     manifest["data_dir"] = str(DATA_DIR)
     (sd / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
     (sd / "gates.json").write_text("{\n}\n")
@@ -205,8 +224,12 @@ class Gates:
 
 
 def bench_run(session_dir: Path, gates: Gates, manifest: dict, run_id: str,
-              module: str, chunk: int, depth: int) -> dict:
-    """One measured run under perf; fail-closed in the driver."""
+              module: str, chunk: int, depth: int,
+              extra_gate=None) -> dict:
+    """One measured run under perf; fail-closed in the driver.
+
+    extra_gate (optional): rec -> gate_fail string | None, evaluated after
+    the standard gates and before the run is marked ok."""
     raw_dir = session_dir / "raw"
     cmd = ["perf", "stat", "-x,", "-e", "instructions:u,cycles:u,task-clock",
            "--", str(BENCH), "--run", "--module", module,
@@ -253,6 +276,12 @@ def bench_run(session_dir: Path, gates: Gates, manifest: dict, run_id: str,
         rec["gate_fail"] = "dst_hash_mismatch"
         gates.record(rec)
         return rec
+    if extra_gate is not None:
+        fail = extra_gate(rec)
+        if fail:
+            rec["gate_fail"] = fail
+            gates.record(rec)
+            return rec
     rec["ok"] = True
     gates.record(rec)
     # Append-only raw evidence (values preserved; run identity kept).
@@ -356,6 +385,180 @@ def cmd_sweep(session_id: str) -> None:
     print(f"sweep: {total} runs, {len(gates.errors)} gate errors")
     if len(gates.errors) > 0:
         sys.exit("sweep FAILED (gate errors present)")
+
+
+def causal_address_gate(rec: dict):
+    """Driver-side E1-C1 address gate (AMENDMENT 2, FAIL CLOSED): backing
+    page-aligned in both arms; exposed page_offset == 16 (phase16) / 0
+    (aligned64); exposed mod64 tracks the phase."""
+    bench = rec.get("bench") or {}
+    base = bench.get("slots_base_mod4096") or []
+    exp = bench.get("slots_exposed_mod4096") or []
+    res = bench.get("slots_residual_mod64") or []
+    if not base or not exp or not res:
+        return "causal_address_metadata_missing"
+    if any(b != 0 for b in base):
+        return "causal_base_not_page_aligned"
+    want = 16 if rec["module"] == "causal-phase16" else 0
+    if any(e != want for e in exp):
+        return "causal_exposed_page_offset_mismatch"
+    if any(r != want for r in res):
+        return "causal_exposed_mod64_mismatch"
+    return None
+
+
+def cmd_causal(session_id: str) -> None:
+    manifest = {
+        "base": "master (post-#266)", "kind": "causal-control",
+        "amendment": "AMENDMENT 2 — E1-C1 STRICT CAUSAL-ISOLATION CONTROL",
+        "allocation": "posix_memalign(4096, chunk + 64) in BOTH arms; same "
+                      "primitive, size, backing alignment, ownership and "
+                      "page-set policy; the ONLY variable is the exposed "
+                      "pointer address phase (phase16: base+16; aligned64: "
+                      "base)",
+        "address_gates": {
+            "both_arms": "base page_offset == 0 (page-aligned backing)",
+            "causal-phase16": "exposed page_offset == 16 (mod64 == 16)",
+            "causal-aligned64": "exposed page_offset == 0 (mod64 == 0)",
+            "on_violation": "FAIL CLOSED",
+        },
+        "materiality_rule": "FROZEN prereg §8, unchanged: "
+                            "median(W_phase16)/median(W_aligned64) >= 1.05 "
+                            "AND 1.5*MAD robust separation on both sides",
+        "rounds": CAUSAL_ROUNDS, "chunks": CAUSAL_CHUNKS,
+        "depths": CAUSAL_DEPTHS, "arms": CAUSAL_ARMS,
+        "file_bytes": FILE_BYTES,
+        "data_src_sha256": sha256_file(DATA_DIR / "src.bin"),
+    }
+    sd = new_session(
+        session_id, "E1-C1 strict causal-isolation control: same "
+        "allocation/backing/work in both arms, only the exposed pointer "
+        "address phase differs", manifest,
+        prereg_ref="research/align-e1/ALIGN-E1-PREREGISTRATION.md (FROZEN) "
+                   "+ AMENDMENT 2 (E1-C1 strict causal-isolation control)")
+    gates = Gates(sd)
+    cells = [(arm, c, d) for c in CAUSAL_CHUNKS for d in CAUSAL_DEPTHS
+             for arm in CAUSAL_ARMS]
+    total = 0
+    for rnd in range(1, CAUSAL_ROUNDS + 1):
+        order = cells[:]
+        rng = random.Random(PREREG_SEED + rnd)
+        rng.shuffle(order)
+        for i, (module, chunk, depth) in enumerate(order):
+            run_id = f"c{rnd}-{i:04d}"
+            bench_run(sd, gates, manifest, run_id, module, chunk, depth,
+                      extra_gate=causal_address_gate)
+        total += len(order)
+        print(f"causal round {rnd}/{CAUSAL_ROUNDS} done "
+              f"({len(gates.errors)} gate errors so far)", flush=True)
+    gates.persist(manifest | {"runs_total": total}, runs_total=total)
+    (sd / "notes.md").write_text(
+        f"# {session_id} — notes\n\nE1-C1 strict causal control "
+        f"(AMENDMENT 2): 9 chunks x 2 depths x 2 arms x {CAUSAL_ROUNDS} "
+        f"rounds = {total} runs; both arms posix_memalign(4096, chunk+64); "
+        "only exposed pointer phase differs (+16 vs 0); driver address "
+        "gate FAIL CLOSED on every run.\n")
+    print(f"causal: {total} runs, {len(gates.errors)} gate errors")
+    if len(gates.errors) > 0:
+        sys.exit("causal control FAILED (gate errors present)")
+
+
+def summarize_causal(session_id: str) -> dict:
+    """Frozen-rule analysis for an E1-C1 session (AMENDMENT 2 §9-§10).
+
+    Case A: all 18 cells null -> MICROBENCH-ONLY final verdict.
+    Case B: >=2 neighboring chunks (either depth) or one chunk at both
+            depths -> MIXED — CAUSAL CONTROL FOUND APPLICATION MATERIALITY.
+    Case C: isolated single material cell -> no production authorization.
+    """
+    sd = RESULTS / session_id
+    runs = load_runs(session_id)
+    gates = json.loads((sd / "gates.json").read_text())
+    stats = cells_stats(runs)
+    rows = []
+    for (module, chunk, depth), s in sorted(stats.items()):
+        rows.append({
+            "module": module, "chunk": chunk,
+            "chunk_kib": round(chunk / 1024, 1), "depth": depth, **s})
+    write_summary(sd, rows)
+
+    mat: dict = {str(c): {} for c in CAUSAL_CHUNKS}
+    for c in CAUSAL_CHUNKS:
+        for d in CAUSAL_DEPTHS:
+            n = stats.get(("causal-phase16", c, d))
+            a = stats.get(("causal-aligned64", c, d))
+            is_mat = bool(n and a and
+                          material(stats, "causal-phase16",
+                                   "causal-aligned64", c, d))
+            mat[str(c)][str(d)] = {
+                "material": is_mat,
+                "ratio": round(n["total_ns_median"] / a["total_ns_median"], 4)
+                if n and a and a["total_ns_median"] else None,
+                "median_phase16_ns": n["total_ns_median"] if n else None,
+                "mad_phase16_ns": n["total_ns_mad"] if n else None,
+                "median_aligned64_ns": a["total_ns_median"] if a else None,
+                "mad_aligned64_ns": a["total_ns_mad"] if a else None,
+            }
+
+    neighbor_pair = any(
+        mat[str(c1)][str(d)]["material"] and mat[str(c2)][str(d)]["material"]
+        for d in CAUSAL_DEPTHS
+        for c1, c2 in zip(CAUSAL_CHUNKS, CAUSAL_CHUNKS[1:]))
+    both_depths = any(
+        all(mat[str(c)][str(d)]["material"] for d in CAUSAL_DEPTHS)
+        for c in CAUSAL_CHUNKS)
+    n_material = sum(1 for c in CAUSAL_CHUNKS for d in CAUSAL_DEPTHS
+                     if mat[str(c)][str(d)]["material"])
+
+    if n_material == 0:
+        case = "A"
+        verdict = ("STRICT CAUSAL CONTROL: PASS — APPLICATION MATERIALITY "
+                   "NOT ESTABLISHED IN ANY TESTED 4K–64K CELL")
+        final = "MICROBENCH-ONLY — NOT APPLICATION MATERIAL"
+    elif neighbor_pair or both_depths:
+        case = "B"
+        verdict = "MIXED — CAUSAL CONTROL FOUND APPLICATION MATERIALITY"
+        final = verdict
+    else:
+        case = "C"
+        verdict = "ISOLATED MATERIAL CELL — NO STABLE REGIME"
+        final = ("MICROBENCH-ONLY — NOT APPLICATION MATERIAL "
+                 "(single isolated material cell; no stable regime; no "
+                 "production authorization)")
+
+    return {
+        "session": session_id,
+        "kind": "causal-control",
+        "amendment": "AMENDMENT 2 — E1-C1 STRICT CAUSAL-ISOLATION CONTROL",
+        "rounds": CAUSAL_ROUNDS,
+        "runs": len(runs),
+        "gate_errors": gates.get("gate_errors", -1),
+        "materiality_rule": ("FROZEN prereg §8 (ratio >= 1.05 AND 1.5*MAD "
+                             "robust separation both sides), unchanged"),
+        "materiality": mat,
+        "material_cells": n_material,
+        "verdict_rule": {
+            "case": case,
+            "neighbor_pair_material": neighbor_pair,
+            "same_chunk_both_depths_material": both_depths,
+            "verdict": verdict,
+        },
+        "final_verdict": final,
+    }
+
+
+def cmd_summarize_causal(session_id: str) -> None:
+    analysis = summarize_causal(session_id)
+    sd = RESULTS / session_id
+    (sd / "analysis.json").write_text(json.dumps(analysis, indent=1) + "\n")
+    print(json.dumps({
+        "runs": analysis["runs"],
+        "gate_errors": analysis["gate_errors"],
+        "case": analysis["verdict_rule"]["case"],
+        "verdict": analysis["verdict_rule"]["verdict"],
+        "material_cells": analysis["material_cells"],
+        "final_verdict": analysis["final_verdict"],
+    }, indent=1))
 
 
 def load_runs(session_id: str) -> list[dict]:
@@ -642,9 +845,11 @@ def main() -> None:
         cmd_status()
     elif cmd == "generate" and len(sys.argv) == 3:
         cmd_generate(sys.argv[2])
-    elif cmd in ("validate", "sweep", "summarize") and len(sys.argv) == 3:
+    elif cmd in ("validate", "sweep", "summarize", "causal",
+                 "summarize-causal") and len(sys.argv) == 3:
         {"validate": cmd_validate, "sweep": cmd_sweep,
-         "summarize": cmd_summarize}[cmd](sys.argv[2])
+         "summarize": cmd_summarize, "causal": cmd_causal,
+         "summarize-causal": cmd_summarize_causal}[cmd](sys.argv[2])
     else:
         usage()
 

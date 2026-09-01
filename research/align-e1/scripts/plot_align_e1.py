@@ -9,6 +9,11 @@ emits, per depth {1,2,4,8} (prereg B10):
                                      (baseline 1.0; 1.05 materiality line;
                                      MATERIAL cells marked)
 
+With --causal (E1-C1 strict causal control session, AMENDMENT 2), emits ONLY:
+  plots/causal-ratio-d<N>.svg        causal-phase16 wall / causal-aligned64
+                                     wall per depth {1,2} (baseline 1.0;
+                                     1.05 materiality line)
+
 SVG only (generated artifacts rule). Requires matplotlib.
 """
 
@@ -38,6 +43,8 @@ MODULE_COLORS = {"engine": "#1f77b4", "replica-natural": "#ff7f0e",
 CHUNK_LABELS = {4096: "4K", 6144: "6K", 8192: "8K", 12288: "12K",
                 16384: "16K", 24576: "24K", 32768: "32K", 49152: "48K",
                 65536: "64K", 1048576: "1M"}
+CAUSAL_CHUNKS = [c for c in CHUNK_LABELS if c != 1048576]
+CAUSAL_DEPTHS = [1, 2]
 MATERIAL_RATIO = 1.05
 
 
@@ -69,11 +76,12 @@ def yerr_mibps(r: dict) -> tuple[list[float], list[float]]:
     return [max(cur - lo, 0.0)], [max(hi - cur, 0.0)]
 
 
-def style_axis(ax):
+def style_axis(ax, chunks=None):
+    shown = list(chunks) if chunks else CHUNK_LABELS
     ax.set_xlabel("chunk size (KiB, log2)")
     ax.grid(True, which="both", ls=":", alpha=0.4)
-    ax.set_xticks([xpos(c) for c in CHUNK_LABELS])
-    ax.set_xticklabels([CHUNK_LABELS[c] for c in CHUNK_LABELS], rotation=45)
+    ax.set_xticks([xpos(c) for c in shown])
+    ax.set_xticklabels([CHUNK_LABELS[c] for c in shown], rotation=45)
 
 
 def plot_throughput(idx, depth: int, out: Path, session: str):
@@ -147,6 +155,34 @@ def plot_alignment_ratio(idx, depth: int, out: Path, session: str):
     plt.close(fig)
 
 
+def plot_causal_ratio(idx, depth: int, out: Path, session: str):
+    """E1-C1 (AMENDMENT 2): phase16 wall / aligned64 wall, both arms on the
+    SAME posix_memalign backing — the ratio isolates exposed pointer phase."""
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    xs, ys = [], []
+    for c in CAUSAL_CHUNKS:
+        p = idx.get(("causal-phase16", c, depth))
+        a = idx.get(("causal-aligned64", c, depth))
+        if not p or not a or not float(a["total_ns_median"]):
+            continue
+        xs.append(xpos(c))
+        ys.append(float(p["total_ns_median"]) /
+                  float(a["total_ns_median"]))
+    ax.axhline(1.0, color="black", lw=1, label="1.0 (no separation)")
+    ax.axhline(MATERIAL_RATIO, color="red", ls="--", lw=0.9,
+               label=f"{MATERIAL_RATIO:.2f} (materiality line)")
+    ax.plot(xs, ys, marker="o", ls="-", lw=1.2, ms=5,
+            color=MODULE_COLORS["replica-natural"],
+            label="phase16 wall / aligned64 wall")
+    style_axis(ax, CAUSAL_CHUNKS)
+    ax.set_ylabel("median wall ratio (phase16 / aligned64)")
+    ax.set_title(f"ALIGN-E1 E1-C1 causal control, depth {depth} — {session}")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out / f"causal-ratio-d{depth}.svg")
+    plt.close(fig)
+
+
 def clean_svg(path: Path) -> None:
     """Strip trailing whitespace per line (matplotlib SVG path dumps it;
     `git diff --check` requires clean lines)."""
@@ -158,15 +194,22 @@ def clean_svg(path: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("session", nargs="?", default="aligne1-sweep-native-1")
+    ap.add_argument("--causal", action="store_true",
+                    help="E1-C1 causal control session: emit ONLY the "
+                         "causal-ratio-d{1,2} plots")
     args = ap.parse_args()
     rows = load_rows(args.session)
     idx = row_index(rows)
     out = PLOTS
     out.mkdir(parents=True, exist_ok=True)
-    for d in DEPTHS:
-        plot_throughput(idx, d, out, args.session)
-        plot_instr_per_byte(idx, d, out, args.session)
-        plot_alignment_ratio(idx, d, out, args.session)
+    if args.causal:
+        for d in CAUSAL_DEPTHS:
+            plot_causal_ratio(idx, d, out, args.session)
+    else:
+        for d in DEPTHS:
+            plot_throughput(idx, d, out, args.session)
+            plot_instr_per_byte(idx, d, out, args.session)
+            plot_alignment_ratio(idx, d, out, args.session)
     for p in out.glob("*.svg"):
         clean_svg(p)
     print(f"plots written to {out}")

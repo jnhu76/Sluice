@@ -20,6 +20,23 @@
 //                            tested-effective alignment: 32 B minimum
 //                            tested separation, 64 B amplifier best arm)
 //                            inside a page-aligned over-allocated block.
+//   --module causal-phase16  E1-C1 strict causal control (AMENDMENT 2):
+//                            page-aligned posix_memalign backing — the
+//                            SAME primitive, size and ownership as
+//                            causal-aligned64 — exposed pointer = base+16
+//                            (page offset 16, mod64 16; ALIGN-E0's
+//                            actually tested +16 point).
+//   --module causal-aligned64 same page-aligned backing, exposed = base
+//                            (page offset 0, mod64 0).
+//
+// The two causal arms change ONLY the exposed pointer address phase:
+// allocation primitive, allocation size (cap + 64), backing alignment,
+// ownership, page-set policy, bytes, op counts, chunk, depth and worker
+// topology are identical by construction. The bench fails closed (exit 3)
+// if the backing is not page-aligned or the exposed phase deviates from
+// the arm's contract. Per-run slot addresses are recorded as
+// slots_base_mod4096 / slots_exposed_mod4096 / slots_residual_mod64
+// (exposed mod 64).
 //
 // Only the exposed buffer geometry differs between modules. Same bytes,
 // same op count, same depth (pre-submitted read window), same worker
@@ -80,8 +97,12 @@ using CopyStats = sluice_copy::CopyStats;
 }
 
 constexpr std::size_t kBlock = 4096;
+constexpr std::size_t kPage = 4096;
 constexpr std::uint64_t kSeed = 0xE1E1E1E121212121ull;
 constexpr std::size_t kAlignedExposure = 64;  // tested-effective geometry
+// E1-C1 (AMENDMENT 2): the exposed-pointer phase offset of the causal
+// phase16 arm — ALIGN-E0's actually tested +16 point.
+constexpr std::size_t kCausalPhaseOffset = 16;
 
 std::uint64_t splitmix64(std::uint64_t x) {
     x += 0x9E3779B97F4A7C15ull;
@@ -97,16 +118,24 @@ std::uint64_t now_ns() {
             .count());
 }
 
-enum class Module { engine, natural, aligned };
+enum class Module { engine, natural, aligned, causal_phase16, causal_aligned64 };
 
 const char* module_name(Module m) {
     switch (m) {
     case Module::engine: return "engine";
     case Module::natural: return "replica-natural";
     case Module::aligned: return "replica-aligned";
+    case Module::causal_phase16: return "causal-phase16";
+    case Module::causal_aligned64: return "causal-aligned64";
     }
     return "?";
 }
+
+// Slot backing/exposure geometry. natural = production-like malloc;
+// aligned64 = ALIGN-E1's aligned treatment; the two causal geometries
+// (AMENDMENT 2) share ONE posix_memalign backing and differ only in the
+// exposed pointer offset.
+enum class SlotGeometry { natural, aligned64, causal_phase16, causal_aligned64 };
 
 std::uintptr_t round_up(std::uintptr_t v, std::uintptr_t alignment) {
     return (v + alignment - 1) & ~(alignment - 1);
@@ -130,8 +159,11 @@ enum class SlotState : std::uint8_t {
 
 struct ReplicaSlot {
     // natural:    plain malloc(cap) — production-like allocator geometry.
-    // aligned:    ONE page-aligned over-allocated owned block per slot,
+    // aligned64:  ONE page-aligned over-allocated owned block per slot,
     //             exposed pointer = round_up(base, kAlignedExposure).
+    // causal-*:   the SAME page-aligned posix_memalign(cap + 64) backing
+    //             for both arms; exposed = base + kCausalPhaseOffset
+    //             (phase16) or base (aligned64). AMENDMENT 2.
     void* base_ptr = nullptr;
     std::size_t alloc_cap = 0;
     bool over_allocated = false;
@@ -144,24 +176,31 @@ struct ReplicaSlot {
     bool eof = false;
     SlotState state = SlotState::idle;
 
-    explicit ReplicaSlot(std::size_t cap, bool aligned_geometry) {
-        if (aligned_geometry) {
-            alloc_cap = cap + kAlignedExposure;
-            if (::posix_memalign(&base_ptr, 4096, alloc_cap) != 0)
-                throw std::bad_alloc();
-            const std::uintptr_t raw =
-                reinterpret_cast<std::uintptr_t>(base_ptr);
-            storage = reinterpret_cast<std::byte*>(round_up(raw, kAlignedExposure));
-            if (reinterpret_cast<std::uintptr_t>(storage) + cap >
-                raw + alloc_cap)
-                e1_semantic("exposed buffer exceeds owned block");
-            over_allocated = true;
-        } else {
+    explicit ReplicaSlot(std::size_t cap, SlotGeometry geometry) {
+        if (geometry == SlotGeometry::natural) {
             base_ptr = std::malloc(cap);
             if (base_ptr == nullptr) throw std::bad_alloc();
             storage = reinterpret_cast<std::byte*>(base_ptr);
             alloc_cap = cap;
+            return;
         }
+        // aligned64 / causal arms: one shared allocation recipe.
+        alloc_cap = cap + kAlignedExposure;
+        if (::posix_memalign(&base_ptr, kPage, alloc_cap) != 0)
+            throw std::bad_alloc();
+        const std::uintptr_t raw =
+            reinterpret_cast<std::uintptr_t>(base_ptr);
+        // aligned64 and causal_aligned64 both expose the base itself
+        // (a page-aligned address is already 64-aligned); only phase16
+        // shifts the exposed pointer.
+        const std::uintptr_t exposed =
+            (geometry == SlotGeometry::causal_phase16)
+                ? raw + kCausalPhaseOffset
+                : round_up(raw, kAlignedExposure);
+        storage = reinterpret_cast<std::byte*>(exposed);
+        if (exposed + cap > raw + alloc_cap)
+            e1_semantic("exposed buffer exceeds owned block");
+        over_allocated = true;
     }
 
     ~ReplicaSlot() {
@@ -179,7 +218,7 @@ struct ReplicaCopyTask {
     std::size_t buffer_size;
     std::size_t pipeline_depth;
     sluice_copy::SyncPolicy sync;
-    bool aligned_geometry;  // the ONLY delta vs the production task
+    SlotGeometry geometry;  // slot backing/exposure (built before the task)
     std::vector<std::unique_ptr<ReplicaSlot>> slots;
     Completion<void> sync_c;
 
@@ -462,6 +501,8 @@ Config parse_args(int argc, char** argv) {
             if (p == "engine") c.module = Module::engine;
             else if (p == "replica-natural") c.module = Module::natural;
             else if (p == "replica-aligned") c.module = Module::aligned;
+            else if (p == "causal-phase16") c.module = Module::causal_phase16;
+            else if (p == "causal-aligned64") c.module = Module::causal_aligned64;
             else e1_semantic("bad --module");
         } else if (a == "--chunk") {
             c.chunk = std::strtoull(next("--chunk").c_str(), nullptr, 10);
@@ -530,6 +571,8 @@ int run_one(const Config& cfg) {
     std::uint64_t construct_ns = 0;
     std::uint64_t engine_ns = 0;
     CopyStats st{};
+    std::vector<std::uint64_t> base_mods;
+    std::vector<std::uint64_t> exposed_mods;
     std::vector<std::uint64_t> residuals;
 
     if (cfg.module == Module::engine) {
@@ -544,14 +587,17 @@ int run_one(const Config& cfg) {
     } else {
         // Slot construction BEFORE the Runtime — the production order
         // (copy_task.cpp builds all slots before run_task_to_result).
-        const bool aligned_geometry = (cfg.module == Module::aligned);
+        const SlotGeometry geometry =
+            (cfg.module == Module::natural)          ? SlotGeometry::natural
+            : (cfg.module == Module::aligned)        ? SlotGeometry::aligned64
+            : (cfg.module == Module::causal_phase16) ? SlotGeometry::causal_phase16
+                                                     : SlotGeometry::causal_aligned64;
         std::uint64_t t0 = now_ns();
         std::vector<std::unique_ptr<ReplicaSlot>> slots;
         try {
             slots.reserve(cfg.depth);
             for (std::size_t i = 0; i < cfg.depth; ++i) {
-                auto s = std::make_unique<ReplicaSlot>(cfg.chunk,
-                                                       aligned_geometry);
+                auto s = std::make_unique<ReplicaSlot>(cfg.chunk, geometry);
                 s->chunk_offset =
                     static_cast<std::uint64_t>(i) * cfg.chunk;
                 slots.push_back(std::move(s));
@@ -560,13 +606,37 @@ int run_one(const Config& cfg) {
             e1_semantic("slot construction bad_alloc");
         }
         construct_ns = now_ns() - t0;
-        for (const auto& s : slots)
-            residuals.push_back(
-                reinterpret_cast<std::uintptr_t>(s->storage) % 64);
+        // Bench-side causal address gate (AMENDMENT 2, fail-closed): the
+        // backing must be page-aligned and the exposed phase must equal
+        // the arm's contract (+16 / 0).
+        if (cfg.module == Module::causal_phase16 ||
+            cfg.module == Module::causal_aligned64) {
+            const std::uint64_t want =
+                (cfg.module == Module::causal_phase16) ? kCausalPhaseOffset : 0;
+            for (const auto& s : slots) {
+                const std::uintptr_t base =
+                    reinterpret_cast<std::uintptr_t>(s->base_ptr);
+                const std::uintptr_t exposed =
+                    reinterpret_cast<std::uintptr_t>(s->storage);
+                if (base % kPage != 0)
+                    e1_semantic("causal backing not page-aligned");
+                if (exposed % kPage != want)
+                    e1_semantic("causal exposed phase mismatch");
+            }
+        }
+        for (const auto& s : slots) {
+            const std::uintptr_t base =
+                reinterpret_cast<std::uintptr_t>(s->base_ptr);
+            const std::uintptr_t exposed =
+                reinterpret_cast<std::uintptr_t>(s->storage);
+            base_mods.push_back(base % kPage);
+            exposed_mods.push_back(exposed % kPage);
+            residuals.push_back(exposed % 64);
+        }
 
         ReplicaCopyTask task{src_fd,        dst_fd, cfg.chunk,
                              cfg.depth,     sluice_copy::SyncPolicy::none,
-                             aligned_geometry, std::move(slots), {}};
+                             geometry, std::move(slots), {}};
         std::uint64_t t1 = now_ns();
         auto res = sluice::async::run_task_to_result<sluice_copy::CopyStats>(
             /*workers=*/1,
@@ -626,6 +696,16 @@ int run_one(const Config& cfg) {
     for (std::size_t i = 0; i < residuals.size(); ++i) {
         std::printf("%s%llu", i ? "," : "",
                     (unsigned long long)residuals[i]);
+    }
+    std::printf("],\"slots_base_mod4096\":[");
+    for (std::size_t i = 0; i < base_mods.size(); ++i) {
+        std::printf("%s%llu", i ? "," : "",
+                    (unsigned long long)base_mods[i]);
+    }
+    std::printf("],\"slots_exposed_mod4096\":[");
+    for (std::size_t i = 0; i < exposed_mods.size(); ++i) {
+        std::printf("%s%llu", i ? "," : "",
+                    (unsigned long long)exposed_mods[i]);
     }
     std::printf("],\"utime_us\":%llu,\"stime_us\":%llu,\"ok\":true}\n",
                 (unsigned long long)utime_us,

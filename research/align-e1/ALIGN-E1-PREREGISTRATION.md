@@ -257,3 +257,100 @@ unified `bench/` location (`bench/align_e1_bench.cpp`) wired in
 (`add_deps(sluice_core, sluice_async)`, `apps/sluice-copy` include path).
 No duplicated util trees; no per-chunk/per-depth/per-module directory
 trees; dimensions live in CSV/JSON columns.
+
+---
+
+## AMENDMENT 2 — E1-C1 STRICT CAUSAL-ISOLATION CONTROL (2026-09-01,
+## appended BEFORE the causal-control measurement)
+
+Reason: adversarial review found that the original replica-natural and
+replica-aligned treatments changed both exposed address geometry AND
+allocation/backing policy (`malloc(cap)` vs `posix_memalign(4096,
+cap+64)`), so the null application result is strongly suggestive but not
+a strict single-variable causal A/B for alignment/address phase. This
+amendment adds the minimal strict causal control; it changes nothing
+above it and does not rewrite any frozen session.
+
+### A2.1 Treatment design
+
+Two arms, identical in every respect except ONE variable — the exposed
+pointer address phase:
+
+```
+allocation (BOTH arms):  posix_memalign(4096, chunk + 64)
+                         (same primitive, same size, same backing
+                         alignment, same ownership, same page-set policy)
+arm C0 causal-phase16:   base page-aligned; exposed = base + 16
+                         => exposed page_offset 16, exposed mod 64 = 16
+arm C1 causal-aligned64: base page-aligned; exposed = base
+                         => exposed page_offset 0, exposed mod 64 = 0
+```
+
+This reproduces ALIGN-E0's actually tested +16-vs-aligned exposed point
+directly; it does NOT rely on the "16 mod 32 class" inference. Per run
+the bench records per-slot `base mod 4096`, `exposed mod 4096`, `exposed
+mod 64`. Driver gates (FAIL CLOSED): phase16 arm `exposed page_offset ==
+16`, aligned64 arm `exposed page_offset == 0`, both arms `base page
+offset == 0`.
+
+### A2.2 Matrix, workload, ordering
+
+- Chunks: 4K, 6K, 8K, 12K, 16K, 24K, 32K, 48K, 64K (NO 1 MiB, NO d4/d8,
+  NO engine, NO additional arms — this is a causal control, not a new
+  sweep). d1/d2 are the depths where the original sweep's natural
+  geometry actually sat in the 16-mod-32 candidate state; 4K–64K is the
+  ALIGN-E0 micro-cost candidate regime; 1 MiB is a known application
+  null.
+- Depths: 1, 2. Arms: 2. R = 7 rounds. Total = 9 × 2 × 2 × 7 = 252 runs.
+- Workload: identical to the frozen sweep (§3 as amended): 128 MiB
+  READ + WRITE copy, workers = 1, same source file, same destination
+  semantics, same depth semantics, same hash validation, same-work
+  gates FAIL CLOSED (bench exit / perf exit / dst sha256 == src sha256
+  / op gates / short writes == 0).
+- Ordering: the frozen seeded interleaved machinery (§5) — fresh seeded
+  Fisher–Yates permutation per round, seed `0xE1E1E1E121212121 + round`.
+
+### A2.3 Materiality and verdict rules
+
+- The materiality rule is FROZEN and UNCHANGED (§8):
+  `MATERIAL(c,d) <=> median(W_phase16)/median(W_aligned64) >= 1.05 AND
+  median(W_aligned64) + 1.5*MAD(W_aligned64) < median(W_phase16) −
+  1.5*MAD(W_phase16)`. No post-hoc threshold adjustment is permitted.
+- Case A — all 18 cells null (9 chunks × 2 depths): STRICT CAUSAL
+  CONTROL: PASS; APPLICATION MATERIALITY NOT ESTABLISHED IN ANY TESTED
+  4K–64K CELL; FINAL ALIGN-E1 VERDICT: MICROBENCH-ONLY — NOT
+  APPLICATION MATERIAL. Authorized closing statement: "Under a
+  same-allocation, same-backing, same-work causal A/B, changing only
+  the exposed destination pointer from exact page-offset +16 to
+  page/cache-line-aligned did not produce a material application-copy
+  benefit anywhere in the tested 4K–64K × depth {1,2} regime."
+- Case B — a stable material pattern (≥2 neighboring chunks at one
+  depth, or one chunk material at both depths) passes the frozen rule:
+  MIXED — CAUSAL CONTROL FOUND APPLICATION MATERIALITY; STOP. No
+  productionization.
+- Case C — a single isolated material cell with no neighbor/depth
+  consistency: ISOLATED MATERIAL CELL — NO STABLE REGIME; no production
+  authorization; any targeted follow-up requires separate adversarial
+  review. The matrix is NOT enlarged.
+- Production ceilings unchanged for ALL cases (§12): production
+  alignment knob NO, runtime adaptation NO, registered buffer NO, SIMD
+  NO.
+
+### A2.4 Evidence, structure, session
+
+- Evidence taxonomy stays strict: DIRECTLY MEASURED (252 runs, wall
+  medians/MAD, address metadata, same-work gates, hash equality,
+  materiality result); CAUSALLY ISOLATED (only E1-C1 may state
+  "allocation/backing identical; only exposed pointer phase differs");
+  INFERRED (micro-cost masked/amortized by larger application-path
+  cost); UNRESOLVED (exact kernel/uaccess/cache-line mechanism — #267).
+- The original `aligne1-sweep-native-1` session stays immutable and is
+  reported alongside as the broad application sweep; E1-C1 is the
+  strict causal confirmation INSIDE the same campaign directory
+  (`research/align-e1/`): session `aligne1-causal-native-1` with the
+  compact evidence layout (environment/manifest/gates/notes/summary/
+  analysis + raw/runs.jsonl + raw/perf.csv; no per-run files) and at
+  most two derived plots (`causal-ratio-d1.svg`, `causal-ratio-d2.svg`).
+- Terminology carried into all current documents: the sweep data
+  pattern is a deterministic repeated pseudo-random 4 KiB pattern (one
+  master block repeated), not an "incompressible" stream.
