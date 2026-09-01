@@ -553,7 +553,7 @@ def new_session(session_id: str, purpose: str, manifest: dict):
 def cmd_validate(args):
     session_dir = new_session(
         args.session,
-        "HARNESS VALIDATION (WSL2 development-only subset): all 8 arms x "
+        "HARNESS VALIDATION (frozen development subset): all 8 arms x "
         "dirs {read,write} x sizes {4K,1M} x depths {1,8} — proves the "
         "harness end-to-end (same-work gates, JSON, R-pairs, perf wiring).",
         {"purpose": "validate", "preregistration":
