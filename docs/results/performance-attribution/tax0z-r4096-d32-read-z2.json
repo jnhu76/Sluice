@@ -1,0 +1,113 @@
+{
+  "env": {
+    "time": "2026-09-01T01:38:04+0800",
+    "git": {
+      "sha": "867ac94e20dfb83c1fcc0a587851f8e1d5d225c7",
+      "dirty": true,
+      "branch": "research/tax0-a2-control-plane",
+      "dirty_paths": [
+        "M include/sluice/async/completion.hpp",
+        "M src/async/async_io_context.cpp",
+        "M xmake/benchmarks.lua",
+        "M xmake/libraries.lua",
+        "?? docs/results/performance-attribution/tax0z-r4096-d1-read-z1b.json",
+        "?? docs/results/performance-attribution/tax0z-r4096-d1-read-z2.json",
+        "?? docs/results/performance-attribution/tax0z-r4096-d1-read-z3w1.json",
+        "?? docs/results/performance-attribution/tax0z-r4096-d32-read-z1b.json",
+        "?? research/tax0/bench/",
+        "?? research/tax0/results/",
+        "?? research/tax0/scripts/",
+        "?? src/async/tax0_ablation_seams.hpp",
+        "?? tests/tax0_ablation_seams.cpp"
+      ]
+    },
+    "build": {
+      "mode": "release",
+      "compiler": "clang++",
+      "compiler_version": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+      "plat": "linux",
+      "arch": "x86_64",
+      "toolchain": "clang"
+    },
+    "system": {
+      "kernel": "6.18.33.2-microsoft-standard-WSL2",
+      "platform": "x86_64",
+      "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+      "logical_cpus": 8,
+      "glibc": "glibc 2.43",
+      "python": "3.14.4"
+    },
+    "environment": {
+      "wsl": "WSL2"
+    },
+    "filesystem": {
+      "input": {
+        "path": "/tmp",
+        "mount_point": "/tmp",
+        "type": "tmpfs"
+      },
+      "output": null
+    },
+    "tools": {
+      "gnu_grep": "grep (GNU grep) 3.12",
+      "ripgrep": "ripgrep 15.1.0"
+    }
+  },
+  "schema": 2,
+  "kind": "perf",
+  "binary": {
+    "path": "/home/hoo/Projects/Sluice/build/linux/x86_64/release/tax0_z_ladder_bench",
+    "sha256": "4da1fc12d9983f7812fa3acfb6574a1761f457a7d21cf390eee9d1fbbf068619",
+    "size": 203752,
+    "mtime": 1788196194.4940925
+  },
+  "cmd": [
+    "/home/hoo/Projects/Sluice/build/linux/x86_64/release/tax0_z_ladder_bench",
+    "--arm",
+    "z2",
+    "--op",
+    "read",
+    "--file",
+    "/home/hoo/Projects/Sluice/build/tax0z-data/data-4096.bin",
+    "--request-size",
+    "4096",
+    "--total-bytes",
+    "67108864",
+    "--depth",
+    "32",
+    "--reps",
+    "14",
+    "--warmup",
+    "0",
+    "--runner-verify"
+  ],
+  "child_exit_code": 0,
+  "exit_semantics": "strict-zero",
+  "counters": {
+    "task-clock": 273.33,
+    "cycles": 212097079.0,
+    "instructions": 715783838.0,
+    "branches": 140484732.0,
+    "branch-misses": 387521.0,
+    "cache-misses": 1473494.0,
+    "context-switches": 0.0,
+    "cpu-migrations": 0.0,
+    "page-faults": 177.0
+  },
+  "raw": "273.33,msec,task-clock:u,273333076,100.00,,\n212097079,,cycles:u,273333076,100.00,,\n715783838,,instructions:u,273333076,100.00,,\n140484732,,branches:u,273333076,100.00,,\n387521,,branch-misses:u,273333076,100.00,,\n1473494,,cache-misses:u,273333076,100.00,,\n0,,context-switches:u,273333076,100.00,,\n0,,cpu-migrations:u,273333076,100.00,,\n177,,page-faults:u,273333076,100.00,,",
+  "params": {
+    "requests": 229376
+  },
+  "derived": {
+    "task-clock_per_request": 0.0011916242327008927,
+    "cycles_per_request": 924.6698826381138,
+    "instructions_per_request": 3120.5698852539062,
+    "branches_per_request": 612.464826311384,
+    "branch-misses_per_request": 1.6894574846540178,
+    "cache-misses_per_request": 6.423924037388393,
+    "context-switches_per_request": 0.0,
+    "cpu-migrations_per_request": 0.0,
+    "page-faults_per_request": 0.0007716587611607143
+  },
+  "note": "TAX-0B Z-ladder canonical artifact (formal-session protocol, whole-process counters; per-op ladder numbers live in research/tax0/results/)"
+}

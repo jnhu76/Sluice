@@ -1,0 +1,6 @@
+terminate called without an active exception
+/home/hoo/Projects/Sluice/build/linux/x86_64/release/tax0_z_ladder_bench: Aborted
+84557864,,instructions:u,296488191,100.00,,
+71462044,,cycles:u,296488191,100.00,,
+350024,,branch-misses:u,296488191,100.00,,
+2546775,,cache-misses:u,296488191,100.00,,
