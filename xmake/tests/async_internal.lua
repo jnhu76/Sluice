@@ -708,3 +708,11 @@ sluice_internal_async_test("fe3_stackless_condition_slice_test",
 -- batch) — each winner delivered exactly once through its own ResumeTarget.
 sluice_internal_async_test("fe3_cross_frontend_mixing_test",
                            {includedirs = {"include", "tests", "src/async"}})
+
+-- TAX-0D F01 ablation seam regression (#260 seam + #261 production gate):
+-- pins that the internal-testing build keeps BOTH F01 arms reproducible —
+-- R0 unconditional outstanding() evaluation (pre-#261 baseline) and R1
+-- stats-gated evaluation (production behavior since #261). The seam header
+-- resolves via the public src/async include path of
+-- sluice_async_internal_testing.
+sluice_internal_async_test("tax0_ablation_seam_test")
