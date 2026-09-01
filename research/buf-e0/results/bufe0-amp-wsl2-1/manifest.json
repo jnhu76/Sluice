@@ -1,0 +1,28 @@
+{
+ "purpose": "BUF-E0 application amplifier: engine-b0 (production) vs replica-b0/b1/b3 (storage variants); 512 MiB copy, full engine call measured, workers=1, sync=none",
+ "matrix": {
+  "arms": [
+   "engine-b0",
+   "replica-b0",
+   "replica-b1",
+   "replica-b3"
+  ],
+  "cells": [
+   [
+    1048576,
+    1
+   ],
+   [
+    1048576,
+    8
+   ]
+  ],
+  "file_bytes": 536870912,
+  "workers": 1,
+  "sync": "none",
+  "rep_pair": [
+   7,
+   14
+  ]
+ }
+}

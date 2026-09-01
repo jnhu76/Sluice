@@ -15,11 +15,20 @@ Phase 1 (CONTROL-PLANE TRUTH, #250) is CLOSED and frozen — not reopened.
 | --- | --- |
 | `BUF-E0-BUFFER-LIFECYCLE.md` | Static lifecycle census (CODE FACT only) |
 | `buf_e0_census.json` | Machine-readable census |
-| `BUF-E0-PREREGISTRATION.md` | Frozen experiment design (frozen before first formal measurement) |
+| `BUF-E0-PREREGISTRATION.md` | Frozen experiment design (+ AMENDMENT 1) |
 | `BUF-E0-REPORT.md` | Final report + verdict + Phase-3 gate |
-| `bench/` | Research-only bench sources (also wired in `xmake/benchmarks.lua`) |
-| `scripts/` | Session drivers (perf-stat wrapper, aggregation, same-work gates) |
+| `bench/` | (bench sources live in `bench/` at repo root, wired in `xmake/benchmarks.lua`) |
+| `scripts/bufe0.py` | Session driver (run/align/amp/arena/report) |
 | `results/<session-id>/` | Immutable measurement sessions |
+
+## Verdict (see BUF-E0-REPORT.md)
+
+STEADY-STATE STORAGE EFFECT MEASURED — page alignment of the I/O buffer
+(mechanism attributed via b1a; 1.8x end-to-end at production-default
+depth). BUF-F01 eager-init = cost shift, not material (amplifier
+null). BUF-F02 per-slot ownership = not proven. PHASE 3 AUTHORIZED: YES
+— narrowly, as a minimal alignment experiment within current per-slot
+ownership, NOT a buffer-pool framework.
 
 ## Artifacts by milestone (issue #263)
 

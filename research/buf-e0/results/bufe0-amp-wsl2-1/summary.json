@@ -1,0 +1,93 @@
+{
+ "rows": [
+  {
+   "arm": "engine-b0",
+   "size": 1048576,
+   "depth": 1,
+   "construct_ns": 0.0,
+   "engine_ns": 486439614.5,
+   "total_ns": 486439614.5,
+   "dst_verified": true,
+   "instructions_per_copy": 7802500.857142857,
+   "cycles_per_copy": 32411198.42857143
+  },
+  {
+   "arm": "engine-b0",
+   "size": 1048576,
+   "depth": 8,
+   "construct_ns": 0.0,
+   "engine_ns": 234790840.5,
+   "total_ns": 234790840.5,
+   "dst_verified": true,
+   "instructions_per_copy": 8152966.571428572,
+   "cycles_per_copy": 27001021.14285714
+  },
+  {
+   "arm": "replica-b0",
+   "size": 1048576,
+   "depth": 1,
+   "construct_ns": 109603.5,
+   "engine_ns": 466883895.5,
+   "total_ns": 466980493.5,
+   "dst_verified": true,
+   "instructions_per_copy": 7798168.285714285,
+   "cycles_per_copy": 35443966.28571428
+  },
+  {
+   "arm": "replica-b0",
+   "size": 1048576,
+   "depth": 8,
+   "construct_ns": 4272484.0,
+   "engine_ns": 222606841.5,
+   "total_ns": 226940088.0,
+   "dst_verified": true,
+   "instructions_per_copy": 8112138.0,
+   "cycles_per_copy": 18415913.85714286
+  },
+  {
+   "arm": "replica-b1",
+   "size": 1048576,
+   "depth": 1,
+   "construct_ns": 3301.5,
+   "engine_ns": 471983667.0,
+   "total_ns": 471986707.5,
+   "dst_verified": true,
+   "instructions_per_copy": 7736436.857142857,
+   "cycles_per_copy": 31999653.714285713
+  },
+  {
+   "arm": "replica-b1",
+   "size": 1048576,
+   "depth": 8,
+   "construct_ns": 54156.0,
+   "engine_ns": 257281763.5,
+   "total_ns": 257324201.0,
+   "dst_verified": true,
+   "instructions_per_copy": 7480671.857142857,
+   "cycles_per_copy": 22121406.285714287
+  },
+  {
+   "arm": "replica-b3",
+   "size": 1048576,
+   "depth": 1,
+   "construct_ns": 27453.0,
+   "engine_ns": 260330835.0,
+   "total_ns": 260357942.0,
+   "dst_verified": true,
+   "instructions_per_copy": 7741012.857142857,
+   "cycles_per_copy": 24358907.0
+  },
+  {
+   "arm": "replica-b3",
+   "size": 1048576,
+   "depth": 8,
+   "construct_ns": 62275.5,
+   "engine_ns": 231402822.0,
+   "total_ns": 231463765.5,
+   "dst_verified": true,
+   "instructions_per_copy": 7520576.0,
+   "cycles_per_copy": 26743880.285714287
+  }
+ ],
+ "skipped": []
+}

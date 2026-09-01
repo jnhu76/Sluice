@@ -1,0 +1,9 @@
+phase,arm,size,slots,regime,ops_per_rep,kc,window_bytes,alloc_ns_median,alloc_ns_mad,alloc_ns_per_buffer,io_ns_median,io_ns_mad,io_ns_per_first_read,io_ns_per_op,total_to_first_io_ns_median,total_to_first_io_ns_mad,total_to_first_io_ns_per_buffer,touch_ns_median,touch_ns_mad,touch_ns_per_page,destroy_ns_median,minflt_alloc_median,minflt_io_median,minflt_touch_median,minflt_total_median,construct_ns,construct_minflt,prefault_ns,prefault_minflt,instructions_per_unit,cycles_per_unit
+A,b0,4096,8,arena,8,,,476.0,25.0,59.5,,,,,,,,,,,160.0,0.0,,,,,,,,3831.160714285714,573.75
+A,b0,65536,8,arena,8,,,6082.0,60.5,760.25,,,,,,,,,,,165.5,0.0,,,,,,,,7181.0,7367.642857142857
+A,b1,4096,8,arena,8,,,180.5,10.5,22.5625,,,,,,,,,,,180.0,0.0,,,,,,,,3467.5,1077.0
+A,b1,65536,8,arena,8,,,11728.0,180.5,1466.0,,,,,,,,,,,4950.0,6.0,,,,,,,,3612.1071428571427,-2751.6071428571427
+A,b2,4096,8,arena,8,,,12835.0,45.0,1604.375,,,,,,,,,,,26952.0,0.0,,,,,,,,1090.982142857143,3429.160714285714
+A,b2,65536,8,arena,8,,,13721.5,616.0,1715.1875,,,,,,,,,,,25725.0,0.0,,,,,,,,1089.017857142857,-5581.125
+A,b3,4096,8,arena,8,,,310.0,19.0,38.75,,,,,,,,,,,160.5,0.0,,,,,,,,3842.339285714286,3881.625
+A,b3,65536,8,arena,8,,,17995.0,290.0,2249.375,,,,,,,,,,,7029.0,7.0,,,,,,,,3927.8571428571427,5208.571428571428

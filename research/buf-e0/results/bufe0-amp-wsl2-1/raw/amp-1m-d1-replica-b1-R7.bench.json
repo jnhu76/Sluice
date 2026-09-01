@@ -1,0 +1,103 @@
+{
+ "bench": "buf_e0_amp_bench",
+ "arm": "replica-b1",
+ "buffer_size": 1048576,
+ "depth": 1,
+ "workers": 1,
+ "reps": 7,
+ "file_bytes": 536870912,
+ "chunks": 512,
+ "ops_for_diff": 7,
+ "construct_ns": {
+  "median": 3707,
+  "n": 7
+ },
+ "engine_ns": {
+  "median": 415490278,
+  "n": 7
+ },
+ "total_ns": {
+  "median": 415492993,
+  "n": 7
+ },
+ "reps_detail": [
+  {
+   "rep": 0,
+   "construct_ns": 25389,
+   "engine_ns": 438329222,
+   "total_ns": 438354611,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 1,
+   "construct_ns": 24417,
+   "engine_ns": 372480994,
+   "total_ns": 372505411,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 2,
+   "construct_ns": 2715,
+   "engine_ns": 415490278,
+   "total_ns": 415492993,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 3,
+   "construct_ns": 2726,
+   "engine_ns": 483211918,
+   "total_ns": 483214644,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 4,
+   "construct_ns": 3457,
+   "engine_ns": 451528590,
+   "total_ns": 451532047,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 5,
+   "construct_ns": 4148,
+   "engine_ns": 410045040,
+   "total_ns": 410049188,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  },
+  {
+   "rep": 6,
+   "construct_ns": 3707,
+   "engine_ns": 391989824,
+   "total_ns": 391993531,
+   "bytes_copied": 536870912,
+   "read_ops": 513,
+   "write_ops": 512,
+   "short_writes": 0,
+   "ok": true
+  }
+ ],
+ "all_reps_ok": true
+}
