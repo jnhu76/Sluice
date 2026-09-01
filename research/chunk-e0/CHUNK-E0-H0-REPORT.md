@@ -73,10 +73,11 @@ POST-HOC ROBUSTNESS DIAGNOSTIC    adversarial checks added after the
                                   campaign (sustained-to-boundary
                                   flatness); they inform interpretation
                                   and NEVER rewrite the frozen verdict
-KNEE                              statistical slope-change descriptor of
-                                  the frozen two-segment fit — not the
-                                  plateau entry, not the 95% point, not
-                                  an engineering recommendation
+KNEE                              deterministic piecewise-linear knee
+                                  descriptor of the frozen two-segment
+                                  SSE fit — not the plateau entry, not
+                                  the 95% point, not an engineering
+                                  recommendation
 ENGINEERING CANDIDATE             an explicitly-labeled operating point
                                   derived from frozen metrics for
                                   discussion; NOT an optimum and NOT a
@@ -271,13 +272,14 @@ much stronger a claim would be unjustified.
 
 The corrected knee fit changes the surface description: the H0 throughput
 curve is NOT best described as a smooth monotone rise — every depth has a
-statistically supported slope change (KNEE, 36.9–71.6% SSE reduction vs a
-single line). The shape is: steep rise through the sub-1M region, marked
+slope change under the frozen deterministic two-segment SSE rule (KNEE,
+36.9–71.6% SSE reduction vs a single line). The shape is: steep rise through the sub-1M region, marked
 slope change (d1/d2/d4: 384K–1.5M; d8: already 128K), then a flattened
 tail that at d2 is still capable of a material +4.86% step into 4 MiB.
 Depth shifts the curve up from d1 to d2 (~+28% at 4 MiB), then backs off
 slightly: d2 > d4 > d8 at the large-chunk end, with d4's best point
-(2 MiB, 845.1) statistically at d2's 2 MiB level (857.7 ± MAD ~1%). The
+(2 MiB, 845.1) within the run-to-run MAD band of d2's 2 MiB level
+(857.7 ± MAD ~1%). The
 historical anchor region ≤64K is a distinct CPU-overhead-dominated regime
 (see CPU COST) and is 1.3–5× slower than the plateau region at every
 depth.
