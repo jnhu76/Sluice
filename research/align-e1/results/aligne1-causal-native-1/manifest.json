@@ -1,0 +1,39 @@
+{
+ "base": "master (post-#266)",
+ "kind": "causal-control",
+ "amendment": "AMENDMENT 2 \u2014 E1-C1 STRICT CAUSAL-ISOLATION CONTROL",
+ "allocation": "posix_memalign(4096, chunk + 64) in BOTH arms; same primitive, size, backing alignment, ownership and page-set policy; the ONLY variable is the exposed pointer address phase (phase16: base+16; aligned64: base)",
+ "address_gates": {
+  "both_arms": "base page_offset == 0 (page-aligned backing)",
+  "causal-phase16": "exposed page_offset == 16 (mod64 == 16)",
+  "causal-aligned64": "exposed page_offset == 0 (mod64 == 0)",
+  "on_violation": "FAIL CLOSED"
+ },
+ "materiality_rule": "FROZEN prereg \u00a78, unchanged: median(W_phase16)/median(W_aligned64) >= 1.05 AND 1.5*MAD robust separation on both sides",
+ "rounds": 7,
+ "chunks": [
+  4096,
+  6144,
+  8192,
+  12288,
+  16384,
+  24576,
+  32768,
+  49152,
+  65536
+ ],
+ "depths": [
+  1,
+  2
+ ],
+ "arms": [
+  "causal-phase16",
+  "causal-aligned64"
+ ],
+ "file_bytes": 134217728,
+ "data_src_sha256": "1263e63e1ded998db34e25e92ed6d936a48c3fc84cf05e6eab32ed817cebf82e",
+ "purpose": "E1-C1 strict causal-isolation control: same allocation/backing/work in both arms, only the exposed pointer address phase differs",
+ "preregistration": "research/align-e1/ALIGN-E1-PREREGISTRATION.md (FROZEN) + AMENDMENT 2 (E1-C1 strict causal-isolation control)",
+ "data_dir": "/home/jnhu/Source/Sluice/build/aligne1-data",
+ "runs_total": 252
+}

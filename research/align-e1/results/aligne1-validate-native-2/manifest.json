@@ -1,0 +1,9 @@
+{
+ "base": "master (post-#266)",
+ "kind": "validate",
+ "data_src_sha256": "1263e63e1ded998db34e25e92ed6d936a48c3fc84cf05e6eab32ed817cebf82e",
+ "purpose": "harness validation (frozen subset)",
+ "preregistration": "research/align-e1/ALIGN-E1-PREREGISTRATION.md (FROZEN)",
+ "data_dir": "/home/jnhu/Source/Sluice/build/aligne1-data",
+ "runs_total": 48
+}

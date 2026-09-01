@@ -1,0 +1,38 @@
+{
+ "uname": "Linux E5 7.1.9-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Aug 19 17:41:40 UTC 2026 x86_64 GNU/Linux",
+ "kernel": "7.1.9-200.fc44.x86_64",
+ "distribution": "NAME=\"Fedora Linux\"\nVERSION=\"44 (KDE Plasma Desktop Edition)\"\nRELEASE_TYPE=stable\nID=fedora\nVERSION_ID=44\nVERSION_CODENAME=\"\"\nPRETTY_NAME=\"Fedora Linux 44 (KDE Plasma Desktop Edition)\"\nANSI_COLOR=\"0;38;2;60;110;180\"\nLOGO=fedora-logo-icon\nCPE_NAME=\"cpe:/o:fedoraproject:fedora:44\"\nDEFAULT_HOSTNAME=\"fedora\"\nHOME_URL=\"https://fedoraproject.org/\"\nDOCUMENTATION_URL=\"https://docs.fedoraproject.org/en-US/fedora/f44/\"\nSUPPORT_URL=\"https://ask.fedoraproject.org/\"\nBUG_REPORT_URL=\"https://bugzilla.redhat.com/\"\nREDHAT_BUGZILLA_PRODUCT=\"Fedora\"\nREDHAT_BUGZILLA_PRODUCT_VERSION=44\nREDHAT_SUPPORT_PRODUCT=\"Fedora\"\nREDHAT_SUPPORT_PRODUCT_VERSION=44\nSUPPORT_END=2027-05-19\nVARIANT=\"KDE Plasma Desktop Edition\"\nVARIANT_ID=kde",
+ "cpu_model": [
+  "Model name:                              Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz"
+ ],
+ "cpu_flags": [
+  "Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm cpuid_fault epb pti intel_ppin ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts vnmi md_clear flush_l1d"
+ ],
+ "cpu_threads": [
+  "CPU(s):                                  20",
+  "Thread(s) per core:                      2",
+  "CPU(s) scaling MHz:                      43%"
+ ],
+ "meminfo": {
+  "MemTotal": "65676556 kB",
+  "MemAvailable": "61813128 kB"
+ },
+ "page_size": "4096",
+ "cache_line": "64",
+ "smbios": "",
+ "filesystem": "btrfs rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home",
+ "glibc": "ldd (GNU libc) 2.43",
+ "clang": "clang version 22.1.8 (Fedora 22.1.8-4.fc44)",
+ "xmake": "\u001b[0m\u001b[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua\u001b[0m\u001b[0m",
+ "perf": "perf version 7.1.9-200.fc44.x86_64",
+ "perf_paranoid": "2",
+ "git": {
+  "head": "b22dcc4ced11a65057bc9684eaee633f59041474",
+  "branch": "research/align-e1",
+  "dirty": false
+ },
+ "bench_binary_sha256": "c78342a508b7cd5e99b145e3e47da1551564f7085a87e5943ea6decfb7120638",
+ "bench_binary_size": 171800,
+ "vm": true,
+ "data_src_sha256": "5324ebf6e96c8b74bd2e2d996f69860cd57f0eaa19c7207b9574f05ee8dc5e25"
+}

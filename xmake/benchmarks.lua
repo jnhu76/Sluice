@@ -312,3 +312,27 @@ do
         target_end()
     end
 end
+
+-- align_e1_bench (#268 ALIGN-E1 — small/medium-chunk application
+-- materiality, prereg research/align-e1/ALIGN-E1-PREREGISTRATION.md): the
+-- realistic 4K-64K READ+WRITE copy sweep with buffer geometry as the ONLY
+-- variable — the REAL production engine (apps/sluice-copy/copy_task.cpp,
+-- run_pipelined_copy_with_backend) vs a verbatim research replica with
+-- natural (plain malloc) or tested-effective aligned (64 B exposed)
+-- slot geometry. Same-work fail-closed per run; driver hashes src/dst
+-- post-exit. Research instrument only — production code untouched.
+do
+    local R = SLUICE_ROOT
+    local e1 = R .. "bench/align_e1_bench.cpp"
+    local copy_task = R .. "apps/sluice-copy/copy_task.cpp"
+    if os.isfile(e1) and os.isfile(copy_task) then
+        target("align_e1_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "apps/sluice-copy")
+            add_files(e1, copy_task)
+        target_end()
+    end
+end
