@@ -14,10 +14,14 @@ control — appended BEFORE the causal-control run). This report covers:
 
 ```
 VERDICT:        MICROBENCH-ONLY — NOT APPLICATION MATERIAL.
-                The strict same-allocation causal A/B (PART C) found NO
-                material application effect of the exposed pointer phase
-                in any tested 4K–64K cell at depth {1,2}; the broad
-                sweep (PART A) is consistent with that null.
+                The strict causal-control A/B (PART C) — same
+                allocation primitive, same allocation size, same
+                backing-alignment policy, same ownership/lifetime
+                policy, same algorithm, same workload — found NO
+                material application effect of the exposed-pointer
+                phase treatment in any tested 4K–64K cell at depth
+                {1,2}; the broad sweep (PART A) is consistent with
+                that null.
 
 BASE:           7092554fed9dd4f269e7b265f9317ae1e15c5c33 (master after
                 the ALIGN-E0 evidence merge PR #266)
@@ -263,8 +267,10 @@ host, and no production-quantitative claim is drawn from this sweep.
    `posix_memalign(4096, cap+64)`). The sweep's null result is therefore
    strongly suggestive but not a strict single-variable causal A/B for
    alignment/address phase. Remediation: AMENDMENT 2 (E1-C1, PART C) —
-   both arms on the SAME `posix_memalign(4096, chunk+64)` backing, only
-   the exposed pointer phase (+16 vs 0) differing, gate-verified per run.
+   both arms on the same `posix_memalign(4096, chunk+64)` allocation
+   primitive, allocation size and backing-alignment policy, only the
+   exposed-pointer phase treatment (+16 vs 0) differing, gate-verified
+   per run.
 2. **Residue-class over-claim.** Draft wording had said the natural
    module was "provably in the ALIGN-E0 +16 slow residue class". What
    ALIGN-E0 proved is only that the specifically tested +16
@@ -303,8 +309,9 @@ exposed pointer address phase:
 
 ```
 allocation (BOTH arms):  posix_memalign(4096, chunk + 64)
-                         same primitive / size / backing alignment /
-                         ownership / page-set policy
+                         same allocation primitive / same allocation
+                         size / same backing-alignment policy / same
+                         ownership/lifetime policy
 arm C0 causal-phase16:   base page-aligned; exposed = base + 16
                          -> page_offset 16, mod64 16 (ALIGN-E0's
                          actually tested +16 point)
@@ -387,10 +394,11 @@ APPLICATION MATERIALITY: NOT ESTABLISHED IN ANY TESTED 4K–64K CELL
   wall; per-slot address metadata (base/exposed mod 4096, exposed mod
   64) in every causal run; instructions/byte per cell; the materiality
   results.
-- **CAUSALLY ISOLATED** (E1-C1 only): allocation primitive, allocation
-  size, backing alignment, ownership, page-set policy, algorithm,
-  bytes, op counts, chunk, depth and worker topology identical between
-  arms; ONLY the exposed pointer address phase differs (+16 vs 0),
+- **CAUSALLY ISOLATED** (E1-C1 only): same allocation primitive, same
+  allocation size, same backing-alignment policy, same
+  ownership/lifetime policy, same algorithm, same workload (bytes, op
+  counts, chunk, depth and worker topology identical between arms);
+  ONLY the exposed-pointer phase treatment differs (+16 vs 0),
   gate-enforced per run. Under that isolation, no material application
   effect was found.
 - **INFERRED**: the ALIGN-E0 sub-µs READ micro-cost is
@@ -423,10 +431,12 @@ APPLICATION MATERIALITY: NOT ESTABLISHED IN ANY TESTED 4K–64K CELL
 
 Authorized closing statement (AMENDMENT 2 §A2.3, Case A):
 
-> Under a same-allocation, same-backing, same-work causal A/B, changing
-> only the exposed destination pointer from exact page-offset +16 to
-> page/cache-line-aligned did not produce a material application-copy
-> benefit anywhere in the tested 4K–64K × depth {1,2} regime.
+> Under an A/B with identical allocation primitive, allocation size,
+> backing-alignment policy, ownership, algorithm and workload, changing
+> the exposed destination pointer from exact page-offset +16 to
+> page/cache-line-aligned did not establish a material
+> application-copy benefit anywhere in the tested 4K–64K × depth
+> {1,2} regime.
 
 ### FINAL ALIGN-E1 VERDICT
 

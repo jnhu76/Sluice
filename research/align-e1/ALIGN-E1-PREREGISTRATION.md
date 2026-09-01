@@ -278,8 +278,9 @@ pointer address phase:
 
 ```
 allocation (BOTH arms):  posix_memalign(4096, chunk + 64)
-                         (same primitive, same size, same backing
-                         alignment, same ownership, same page-set policy)
+                         (same allocation primitive, same allocation
+                         size, same backing-alignment policy, same
+                         ownership/lifetime policy)
 arm C0 causal-phase16:   base page-aligned; exposed = base + 16
                          => exposed page_offset 16, exposed mod 64 = 16
 arm C1 causal-aligned64: base page-aligned; exposed = base
@@ -319,11 +320,13 @@ offset == 0`.
 - Case A — all 18 cells null (9 chunks × 2 depths): STRICT CAUSAL
   CONTROL: PASS; APPLICATION MATERIALITY NOT ESTABLISHED IN ANY TESTED
   4K–64K CELL; FINAL ALIGN-E1 VERDICT: MICROBENCH-ONLY — NOT
-  APPLICATION MATERIAL. Authorized closing statement: "Under a
-  same-allocation, same-backing, same-work causal A/B, changing only
+  APPLICATION MATERIAL. Authorized closing statement: "Under an A/B
+  with identical allocation primitive, allocation size,
+  backing-alignment policy, ownership, algorithm and workload, changing
   the exposed destination pointer from exact page-offset +16 to
-  page/cache-line-aligned did not produce a material application-copy
-  benefit anywhere in the tested 4K–64K × depth {1,2} regime."
+  page/cache-line-aligned did not establish a material
+  application-copy benefit anywhere in the tested 4K–64K × depth
+  {1,2} regime."
 - Case B — a stable material pattern (≥2 neighboring chunks at one
   depth, or one chunk material at both depths) passes the frozen rule:
   MIXED — CAUSAL CONTROL FOUND APPLICATION MATERIALITY; STOP. No

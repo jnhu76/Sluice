@@ -35,8 +35,10 @@ chunk × depth) — a single research campaign, not a generic framework.
 - Modules: `engine` (production `run_pipelined_copy_with_backend`),
   `replica-natural` (same algorithm, malloc geometry), `replica-aligned`
   (same algorithm, 64 B exposed alignment). E1-C1 adds `causal-phase16`
-  and `causal-aligned64` — SAME `posix_memalign(4096, chunk+64)` backing
-  in both arms, ONLY the exposed pointer phase differing (+16 vs 0).
+  and `causal-aligned64` — same `posix_memalign(4096, chunk+64)`
+  allocation primitive, allocation size and backing-alignment policy in
+  both arms, ONLY the exposed-pointer phase treatment differing
+  (+16 vs 0).
 - Workload: 128 MiB READ + WRITE file copy (AMENDMENT 1), deterministic
   repeated pseudo-random 4 KiB pattern, per-run dst hash == src hash
   (fail-closed), R = 7 seeded interleaved rounds, median + MAD per cell.
@@ -47,10 +49,11 @@ chunk × depth) — a single research campaign, not a generic framework.
 VERDICT:        MICROBENCH-ONLY — NOT APPLICATION MATERIAL
 
 E1-C1 STRICT CAUSAL CONTROL (AMENDMENT 2):
-  PASS — with allocation primitive, size, backing alignment, ownership,
-  page-set policy, algorithm, bytes, op counts, chunk, depth and worker
-  topology identical, changing ONLY the exposed destination pointer from
-  exact page-offset +16 to page/cache-line-aligned produced NO material
+  PASS — with the same allocation primitive, allocation size,
+  backing-alignment policy, ownership/lifetime policy, algorithm,
+  workload (bytes, op counts, chunk, depth, worker topology) in both
+  arms, changing ONLY the exposed-pointer phase treatment from exact
+  page-offset +16 to page/cache-line-aligned produced NO material
   application-copy benefit in ANY tested 4K–64K cell at depth {1,2}
   (252 runs, 0 gate errors, frozen prereg §8 materiality rule:
   0 / 18 cells material).
