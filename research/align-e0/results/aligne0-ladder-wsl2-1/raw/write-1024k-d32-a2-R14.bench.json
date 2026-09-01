@@ -1,0 +1,171 @@
+{
+ "bench": "align_e0_bench",
+ "label": "write-1024k-d32-a2-R14",
+ "dir": "write",
+ "mode": "sync",
+ "arm": "a2",
+ "offset": 0,
+ "alignment": 128,
+ "page_offset": 0,
+ "size": 1048576,
+ "depth": 1,
+ "workers": 1,
+ "reps": 14,
+ "pages_per_buffer": 256,
+ "page_size": 4096,
+ "kc": 16,
+ "window_bytes": 16777216,
+ "prefault_ns": 4316596,
+ "prefault_minflt": 256,
+ "file": "/home/hoo/Projects/Sluice/build/aligne0-data/src.bin",
+ "same_work": {
+  "ops": 224,
+  "bytes": 234881024,
+  "strong_checks": 3,
+  "ops_for_diff": 224,
+  "ok": true
+ },
+ "io_ns": {
+  "median": 1830571,
+  "mad": 280767,
+  "min": 1408438,
+  "max": 6791009,
+  "n": 14
+ },
+ "minflt_io": {
+  "median": 0,
+  "mad": 0,
+  "min": 0,
+  "max": 0,
+  "n": 14
+ },
+ "reps_detail": [
+  {
+   "rep": 0,
+   "io_ns": 1830571,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 1,
+   "io_ns": 1549052,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 2,
+   "io_ns": 2045932,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 3,
+   "io_ns": 1408438,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 4,
+   "io_ns": 1654498,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 5,
+   "io_ns": 1549804,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 6,
+   "io_ns": 1732430,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 7,
+   "io_ns": 6200478,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 8,
+   "io_ns": 2107171,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 9,
+   "io_ns": 1650910,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 10,
+   "io_ns": 2999933,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 11,
+   "io_ns": 6791009,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 12,
+   "io_ns": 1907061,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  },
+  {
+   "rep": 13,
+   "io_ns": 1485789,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 16,
+   "bytes": 16777216,
+   "ok": true
+  }
+ ],
+ "all_reps_ok": true
+}

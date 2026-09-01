@@ -1,0 +1,40 @@
+{
+ "purpose": "frozen ALIGN-E0 alignment ladder",
+ "preregistration": "research/align-e0/ALIGN-E0-PREREGISTRATION.md",
+ "matrix": {
+  "mode": "sync",
+  "arms": [
+   "a0",
+   "a1",
+   "a2",
+   "a3",
+   "a4",
+   "a5",
+   "a6",
+   "a7"
+  ],
+  "dirs": [
+   "read",
+   "write"
+  ],
+  "sizes": [
+   4096,
+   8192,
+   16384,
+   65536,
+   1048576
+  ],
+  "depths": [
+   1,
+   2,
+   4,
+   8,
+   16,
+   32
+  ],
+  "rep_pair": [
+   7,
+   14
+  ]
+ }
+}

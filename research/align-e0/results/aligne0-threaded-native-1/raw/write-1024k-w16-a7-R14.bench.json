@@ -1,0 +1,178 @@
+{
+ "bench": "align_e0_bench",
+ "label": "write-1024k-w16-a7-R14",
+ "dir": "write",
+ "mode": "threaded",
+ "arm": "a7",
+ "offset": 0,
+ "alignment": 4096,
+ "page_offset": 0,
+ "size": 1048576,
+ "depth": 1,
+ "workers": 16,
+ "reps": 14,
+ "pages_per_buffer": 256,
+ "page_size": 4096,
+ "kc": 16,
+ "window_bytes": 268435456,
+ "prefault_ns": 8121654,
+ "prefault_minflt": 4096,
+ "file": "/home/jnhu/Source/Sluice/build/aligne0-data/src.bin",
+ "same_work": {
+  "ops": 3584,
+  "bytes": 3758096384,
+  "strong_checks": 48,
+  "ops_for_diff": 3584,
+  "ok": true
+ },
+ "io_ns": {
+  "median": 140064888,
+  "mad": 1999636,
+  "min": 137350041,
+  "max": 146504298,
+  "n": 14
+ },
+ "minflt_io": {
+  "median": 0,
+  "mad": 0,
+  "min": 0,
+  "max": 0,
+  "n": 14
+ },
+ "thread_op_ns": {
+  "median": 8979569,
+  "mad": 85152,
+  "min": 354504,
+  "max": 20322430,
+  "n": 3584
+ },
+ "reps_detail": [
+  {
+   "rep": 0,
+   "io_ns": 137350041,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 1,
+   "io_ns": 146504298,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 2,
+   "io_ns": 137830535,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 3,
+   "io_ns": 140064888,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 4,
+   "io_ns": 137517845,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 5,
+   "io_ns": 140755551,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 6,
+   "io_ns": 142064524,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 7,
+   "io_ns": 138271179,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 8,
+   "io_ns": 141106233,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 9,
+   "io_ns": 141183297,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 10,
+   "io_ns": 138321075,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 11,
+   "io_ns": 138067245,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 12,
+   "io_ns": 137481419,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  },
+  {
+   "rep": 13,
+   "io_ns": 142498208,
+   "minflt_io": 0,
+   "majflt": 0,
+   "ops": 256,
+   "bytes": 268435456,
+   "ok": true
+  }
+ ],
+ "all_reps_ok": true
+}
