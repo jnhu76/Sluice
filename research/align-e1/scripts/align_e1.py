@@ -155,14 +155,28 @@ def new_session(session_id: str, purpose: str, manifest: dict) -> Path:
 
 
 def parse_perf_stat(text: str) -> dict:
+    """Parse `perf stat -x,` output. Layout is version-dependent:
+    `<value>,<unit>,<event>,...` — the event name marks the column; the
+    counter value is the closest numeric field before it (unit may be
+    empty)."""
     out = {}
     for line in text.splitlines():
-        parts = line.split(",")
-        if len(parts) >= 2 and parts[0].endswith((":u", "task-clock")):
-            try:
-                out[parts[0]] = float(parts[1])
-            except ValueError:
-                out[parts[0]] = None
+        parts = [p.strip() for p in line.split(",")]
+        for i, p in enumerate(parts):
+            if p.endswith((":u", "task-clock")):
+                for j in range(i - 1, -1, -1):
+                    if not parts[j] or parts[j] in ("msec", "sec"):
+                        continue
+                    try:
+                        out[p] = float(parts[j])
+                    except ValueError:
+                        out[p] = None
+                    break
+                else:
+                    out[p] = None
+                break
+    if "task-clock:u" in out:
+        out["task-clock"] = out.pop("task-clock:u")
     return out
 
 
@@ -195,8 +209,9 @@ def bench_run(session_dir: Path, gates: Gates, manifest: dict, run_id: str,
     """One measured run under perf; fail-closed in the driver."""
     raw_dir = session_dir / "raw"
     cmd = ["perf", "stat", "-x,", "-e", "instructions:u,cycles:u,task-clock",
-           "-o", "/dev/null", "--", str(BENCH), "--run", "--module", module,
-           "--chunk", str(chunk), "--depth", str(depth), "--src",
+           "--", str(BENCH), "--run", "--module", module,
+           "--chunk", str(chunk), "--depth", str(depth),
+           "--file-bytes", str(FILE_BYTES), "--src",
            str(DATA_DIR / "src.bin"), "--dst", str(DATA_DIR / "dst.bin"),
            "--label", run_id]
     t0 = time.monotonic()
@@ -282,32 +297,38 @@ def cmd_validate(session_id: str) -> None:
              for m in MODULES
              for _ in range(2)]
     run_matrix(sd, gates, manifest, cells, "val")
-    # cycles:u stability probe (prereg §6): 3 consecutive identical runs.
-    probe = []
+    # cycles:u stability probe (prereg §6): 3 consecutive identical runs;
+    # cycles is upgraded only if the consecutive-run per-op DOUBLE-
+    # DIFFERENCE is non-negative at both {4K,64K} x d1 for both replica
+    # modules. Any negative difference -> DEMOTED.
+    probe = {}
     for c in (4096, 65536):
         for m in ("replica-natural", "replica-aligned"):
+            vals = []
             for i in range(3):
                 rec = bench_run(sd, gates, manifest,
                                 f"probe-{c}-{m}-{i}", m, c, 1)
                 cyc = rec.get("perf", {}).get("cycles:u")
                 bench = rec.get("bench") or {}
                 ops = bench.get("read_ops", 0) + bench.get("write_ops", 0)
-                probe.append({"cell": f"{m}/{c}/d1", "rep": i,
-                              "cycles_per_op": (cyc / ops) if cyc and ops
-                              else None})
+                vals.append((cyc / ops) if cyc and ops else None)
+            diffs = [vals[i + 1] - vals[i] for i in range(2)
+                     if vals[i] is not None and vals[i + 1] is not None]
+            probe[f"{m}/{c}/d1"] = {"per_op": vals, "diffs": diffs}
     gates.persist(manifest | {"runs_total": len(cells) + 12},
                   runs_total=len(cells) + 12)
     (sd / "notes.md").write_text(
         f"# {session_id} — notes\n\nvalidation subset: 3 modules x "
         f"{{4K,64K,1M}} x {{d1,d4}} x 2 reps = {len(cells)} runs + 12-run\n"
         "cycles stability probe.\n")
-    cycles_negative = any(
-        p["cycles_per_op"] is not None and p["cycles_per_op"] < 0
-        for p in probe)
+    cycles_negative = any(d < 0 for cell in probe.values()
+                          for d in cell["diffs"])
     print(f"validate: {len(cells) + 12} runs, "
           f"{len(gates.errors)} gate errors")
-    probe_label = ("NEGATIVE VALUES -> DEMOTED" if cycles_negative
-                   else "no negative values -> upgrade candidate")
+    probe_label = ("cycles:u DEMOTED (negative consecutive double-difference)"
+                   if cycles_negative else
+                   "cycles:u no negative double-difference -> upgrade candidate")
+    (sd / "cycles_probe.json").write_text(json.dumps(probe, indent=1) + "\n")
     print(f"cycles probe: {probe_label}")
     if len(gates.errors) > 0:
         sys.exit("validation FAILED (gate errors present)")
