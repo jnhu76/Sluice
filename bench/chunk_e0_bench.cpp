@@ -32,6 +32,7 @@
 
 #include <sluice/async/threadpool_backend.hpp>
 
+#include <algorithm>  // std::min; not transitively provided by all stdlibs
 #include <chrono>
 #include <cstddef>
 #include <cstdint>

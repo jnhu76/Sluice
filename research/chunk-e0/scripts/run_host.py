@@ -31,7 +31,11 @@ CLI:
   --campaign <H1|H2|H0>     campaign label (does not change the frozen
                             matrix)
   --profile <full|verify|smoke>
-  --preflight-only          fail-fast checks only; no measurement
+  --preflight-only          fail-fast checks only; no measurement; ends
+                            with an explicit FORMAL_ELIGIBLE: YES/NO
+                            summary (with REASONS when NO) so a host that
+                            cannot host a formal campaign is identified
+                            before machine time is spent
   --resume <session>        continue an interrupted full session (identity
                             checked; RESUME REFUSED on mismatch)
   --print-install-command   print suggested package-install commands only
@@ -631,10 +635,13 @@ def preflight(tools: dict, matrix: dict, build: dict,
     # gates record instructions:u per run. smoke/verify proceed with a
     # warning (runs will fail closed as gate errors, honestly recorded);
     # perf unavailability degrades classification, it never crashes the
-    # benchmark itself.
+    # benchmark itself. full additionally demands instructions:u RELIABLE —
+    # a BLOCKED counter would fail every run closed only AFTER the machine
+    # time was burned.
     perf_required = profile == "full"
-    checks["perf_usable"] = (tools["perf"]["found"] and perf_events_ok) \
-        if perf_required else perf_events_ok
+    checks["perf_usable"] = (tools["perf"]["found"] and
+                             tools["perf_events"]["instructions:u"] ==
+                             "RELIABLE") if perf_required else perf_events_ok
     ok = all(v is True for k, v in checks.items() if k !=
              "bench_binary_sha256" and (k != "perf_usable" or perf_required))
     disk = disk_budget()
@@ -652,6 +659,53 @@ def preflight(tools: dict, matrix: dict, build: dict,
                              "note": "rough estimate only; never a "
                                      "scientific conclusion"},
     }
+
+
+def formal_eligibility(tools: dict, matrix: dict, build: dict) -> dict:
+    """FORMAL_ELIGIBLE verdict (--preflight-only): being able to run a wall
+    benchmark is NOT formal-campaign eligibility. The frozen full profile
+    additionally needs RELIABLE instructions:u, a compiler, xmake, an
+    aligned matrix, a successful build and disk budget. Reasons are
+    reported BEFORE any machine time is spent; the runner never installs
+    packages or changes system state to become eligible."""
+    reasons = []
+    if not tools["perf"]["found"]:
+        reasons.append("perf unavailable")
+    else:
+        ev = tools["perf_events"]["instructions:u"]
+        if ev == "UNAVAILABLE":
+            reasons.append("instructions:u unavailable")
+        elif ev == "BLOCKED":
+            reasons.append("instructions:u blocked "
+                           "(perf_event_paranoid/permissions)")
+        elif ev != "RELIABLE":
+            reasons.append(f"instructions:u not reliable ({ev})")
+    if not (tools["clang"]["found"] or tools["gcc"]["found"]):
+        reasons.append("required compiler unavailable")
+    if not tools["xmake"]["found"]:
+        reasons.append("xmake unavailable")
+    if not matrix["aligned"]:
+        reasons.append("campaign matrix misaligned vs frozen constants: "
+                       f"{matrix['mismatches']}")
+    if not build.get("ok"):
+        reasons.append(f"bench build failed at {build.get('stage')}")
+    disk = disk_budget()
+    if not disk["sufficient"]:
+        reasons.append("disk budget insufficient "
+                       f"(free={disk['free_bytes']}, need="
+                       f"{disk['required_with_safety_bytes']})")
+    return {"formal_eligible": not reasons, "reasons": reasons}
+
+
+def print_formal_eligible(eligibility: dict) -> None:
+    if eligibility["formal_eligible"]:
+        print("FORMAL_ELIGIBLE: YES")
+        return
+    print("FORMAL_ELIGIBLE: NO")
+    print()
+    print("REASONS:")
+    for r in eligibility["reasons"]:
+        print(f"- {r}")
 
 
 # --------------------------------------------------------------------------
@@ -1169,6 +1223,8 @@ def main(argv=None) -> int:
     # ---- phase 3: preflight ----
     pf = preflight(tools, matrix, build, profile=args.profile)
     if not pf["pass"]:
+        if args.preflight_only:
+            print_formal_eligible(formal_eligibility(tools, matrix, build))
         log("PREFLIGHT FAIL — " + json.dumps(pf["checks"]))
         return 1
     log("PREFLIGHT PASS")
@@ -1178,6 +1234,7 @@ def main(argv=None) -> int:
         f"disk required ~{pf['disk']['required_with_safety_bytes'] / (1 << 30):.2f} GiB; "
         f"free {pf['disk']['free_bytes'] / (1 << 30):.2f} GiB")
     if args.preflight_only:
+        print_formal_eligible(formal_eligibility(tools, matrix, build))
         log("preflight-only: stopping before measurement")
         return 0
 

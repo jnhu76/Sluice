@@ -11,7 +11,7 @@ READ + WRITE copy engine over chunk_size × pipeline depth.
 | `CHUNK-E0-H0-PREREGISTRATION.md` | Frozen experiment design (scope/hard exclusions, host, workload 1 GiB, chunk grid 16K..4M, depth {1,2,4,8}, metrics, same-work fail-closed, R=7 seeded interleaved, sweet-spot definitions, Pareto rule, stop/extension rule, verdict rules, production stop gates). Additive AMENDMENTs only. |
 | `CHUNK-E0-H0-REPORT.md` | Final H0 report (host-local verdict, per-depth sweet-spot tables, Pareto, resource tradeoff, CPU cost, final status). |
 | `bench/chunk_e0_bench.cpp` | Engine-only sweep bench (production `run_pipelined_copy_with_backend`, workers=1; wired in `xmake/benchmarks.lua` as `chunk_e0_bench`, `-g bench`). |
-| `scripts/chunk_e0.py` | Session driver (generate / validate / sweep / summarize). |
+| `scripts/chunk_e0.py` | Session driver (generate / validate / sweep / summarize / knee-diagnostics). |
 | `scripts/plot_chunk_e0.py` | Plot generator (SVG, derived artifacts; per-depth throughput + instructions-per-byte + throughput-vs-in-flight/Pareto). |
 | `results/<session-id>/` | Immutable measurement sessions (environment.json, manifest.json, gates.json, notes.md, summary.csv/json, analysis.json, raw/runs.jsonl + perf.csv). |
 | `results/host-<host-id>/<session-id>/` | Imported remote-host sessions (placed by `scripts/import_host.py`; see below). |
@@ -40,6 +40,10 @@ dependencies and marks every non-`full` profile as NOT FORMAL EVIDENCE.
 ```sh
 # on the rented host: clone the repo, then
 ./research/chunk-e0/run-host.sh --preflight-only          # gate check, no measurement
+#   ends with FORMAL_ELIGIBLE: YES — or NO plus REASONS (e.g. instructions:u
+#   blocked). Being able to run a wall benchmark is NOT formal eligibility;
+#   check the verdict BEFORE spending machine time. The runner never
+#   installs packages or changes system state.
 ./research/chunk-e0/run-host.sh --profile full            # the one command (formal)
 #   variants: --profile verify | smoke ; --resume <session-id> after an interrupt
 
@@ -55,8 +59,19 @@ makes no cross-host causality judgments and never touches the preregistration.
 
 ## Verdict (see CHUNK-E0-H0-REPORT.md)
 
-`HOST-LOCAL SWEET REGION LOCATED` — plateau entry at depth 2 (1.5 MiB),
-depth 4 (1.5 MiB) and depth 8 (768 KiB); depth 1 does not plateau inside
-16K..4M; KNEE NOT LOCATED at any depth. Depth 8 is entirely off the
-Pareto frontier. This campaign establishes the Host-0 surface only; it
-makes no cross-host or production-default claim.
+FROZEN-RULE VERDICT: `HOST-LOCAL SWEET REGION LOCATED` — plateau entry at
+depth 2 (1.5 MiB), depth 4 (1.5 MiB) and depth 8 (768 KiB); depth 1 does
+not plateau inside 16K..4M. This campaign establishes the Host-0 surface
+only; it makes no cross-host or production-default claim, and GLOBAL
+OPTIMUM is NOT PROVEN (the peak sits at the sampled 4 MiB boundary).
+
+Post-hoc robustness diagnostic (remediation; does not change the frozen
+verdict): only depth 4's plateau is SUSTAINED to the tested boundary —
+depth 2 and depth 8 plateau entries are LOCAL-FLATNESS CANDIDATES
+(material rises reappear before 4 MiB). KNEE (frozen two-segment rule,
+corrected fit): located at every depth — d1 384 KiB, d2 1.5 MiB,
+d4 1.5 MiB, d8 128 KiB; a slope-change descriptor, distinct from plateau
+entry. Engineering candidates (not an optimum): ABSOLUTE TESTED PEAK
+4 MiB × d2 (885.9 MiB/s, 8 MiB in-flight); NEAR-PEAK LOW-RESOURCE
+2 MiB × d2 (857.7 MiB/s = 96.8% of peak, 4 MiB in-flight, ≈ −28% RSS).
+Depth 8 is entirely off the Pareto frontier.

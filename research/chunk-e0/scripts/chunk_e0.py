@@ -17,7 +17,12 @@ Subcommands:
   summarize <session-id>  runs.jsonl -> summary.csv/json + analysis.json
                           (tested-range peak, 95% point, plateau entry,
                           knee, Pareto frontier, verdict per prereg
-                          §10-12).
+                          §10-12; plus the POST-HOC sustained-to-boundary
+                          flatness robustness diagnostic, which does not
+                          feed the frozen verdict).
+  knee-diagnostics        synthetic analysis-unit diagnostics for
+                          two_segment_knee (single line / injected
+                          two-segment / flat); not a measurement.
 
 Immutable session layout (prereg §14):
   results/<session-id>/{environment.json, manifest.json, gates.json,
@@ -474,6 +479,24 @@ def cells_stats(runs: list[dict], file_bytes: int = FILE_BYTES) -> dict:
     return stats
 
 
+def _least_squares_sse(xs: list[float], ys: list[float]) -> float:
+    """SSE of the ordinary least-squares line y = a + b*x over (xs, ys).
+    mean(x) and mean(y) are SEPARATE statistics; conflating them puts the
+    intercept at the wrong place and biases every segment fit (the H0
+    remediation bug)."""
+    n = len(xs)
+    if n < 2:
+        return 0.0  # any line through one point fits it exactly
+    xm = sum(xs) / n
+    ym = sum(ys) / n
+    sxx = sum((x - xm) ** 2 for x in xs)
+    sxy = sum((x - xm) * (y - ym) for x, y in zip(xs, ys))
+    slope = sxy / sxx if sxx else 0
+    intercept = ym - slope * xm
+    return sum((y - (intercept + slope * x)) ** 2
+               for x, y in zip(xs, ys))
+
+
 def two_segment_knee(xs: list[float], ys: list[float]):
     """Deterministic two-segment LS fit on (x=log2 chunk, y=MiB/s median).
     Breakpoint = interior point with >=2 points per side minimizing SSE.
@@ -481,32 +504,11 @@ def two_segment_knee(xs: list[float], ys: list[float]):
     n = len(xs)
     if n < 5:
         return None, 0.0
-    xm = sum(xs) / n
-    ym = sum(ys) / n
-    sxx = sum((x - xm) ** 2 for x in xs)
-    sxy = sum((x - xm) * (y - ym) for x, y in zip(xs, ys))
-    b1 = sxy / sxx if sxx else 0
-    a1 = ym - b1 * xm
-    sse_single = sum((y - (a1 + b1 * x)) ** 2 for x, y in zip(xs, ys))
+    sse_single = _least_squares_sse(xs, ys)
     best = None
     for k in range(2, n - 2):
-        xl, yl = xs[:k], ys[:k]
-        xr, yr = xs[k:], ys[k:]
-        sse = 0.0
-        for x, y in zip(xl, yl):
-            m = sum(yl) / len(yl)
-            a = sum((x - m) * (y - m) for x, y in zip(xl, yl))
-            b = sum((x - m) ** 2 for x in xl)
-            slope = a / b if b else 0
-            inter = m - slope * m
-            sse += (y - (inter + slope * x)) ** 2
-        for x, y in zip(xr, yr):
-            m = sum(yr) / len(yr)
-            a = sum((x - m) * (y - m) for x, y in zip(xr, yr))
-            b = sum((x - m) ** 2 for x in xr)
-            slope = a / b if b else 0
-            inter = m - slope * m
-            sse += (y - (inter + slope * x)) ** 2
+        sse = _least_squares_sse(xs[:k], ys[:k]) + \
+            _least_squares_sse(xs[k:], ys[k:])
         if best is None or sse < best[1]:
             best = (k, sse)
     if best is None:
@@ -514,6 +516,103 @@ def two_segment_knee(xs: list[float], ys: list[float]):
     k, sse = best
     reduction = (sse_single - sse) / sse_single if sse_single else 0
     return k, reduction
+
+
+def knee_synthetic_diagnostics() -> list[dict]:
+    """Analysis-unit diagnostics for two_segment_knee (deterministic
+    synthetic curves; NOT scientific measurement of any host):
+    A. perfect single line            -> KNEE NOT LOCATED
+    B. obvious injected two-segment   -> knee near the known breakpoint
+    C. flat (constant) curve          -> no forced knee
+
+    Numerical note: on exactly-linear curves SSE_single degenerates to
+    float epsilon and the RELATIVE reduction is only meaningful when the
+    single-line residual is well above machine precision (true for every
+    real H0 curve: MiB/s-scale residuals, reductions 0.37-0.72). The flat
+    case is exact in float (residuals are exactly 0), so it is the
+    well-conditioned no-knee construction; a near-flat NOISY curve cannot
+    be asserted under a relative rule at n=15 (expected reduction from 2
+    extra fit dof alone is ~2/15)."""
+    xs = [math.log2(float(c)) for c in CHUNKS]
+    diags = []
+
+    ys = [120.0 + 8.0 * x for x in xs]
+    k, r = two_segment_knee(xs, ys)
+    diags.append({
+        "name": "synthetic_single_line",
+        "expect": "KNEE NOT LOCATED (reduction < 10%)",
+        "breakpoint_index": k, "sse_reduction": round(r, 6),
+        "pass": k is None or r < KNEE_SSE_REDUCTION,
+    })
+
+    bp = xs.index(math.log2(1048576.0))  # injected breakpoint at 1 MiB
+    ys = [200.0 + 90.0 * x if x < xs[bp]
+          else 200.0 + 90.0 * xs[bp] + 3.0 * (x - xs[bp]) for x in xs]
+    k, r = two_segment_knee(xs, ys)
+    diags.append({
+        "name": "synthetic_two_segment",
+        "expect": f"KNEE near injected breakpoint index {bp} (1 MiB), "
+                  f"reduction >= 10%",
+        "breakpoint_index": k, "sse_reduction": round(r, 6),
+        "pass": k is not None and abs(k - bp) <= 1 and
+        r >= KNEE_SSE_REDUCTION,
+    })
+
+    ys = [500.0] * len(xs)
+    k, r = two_segment_knee(xs, ys)
+    diags.append({
+        "name": "synthetic_flat",
+        "expect": "KNEE NOT LOCATED (no forced knee)",
+        "breakpoint_index": k, "sse_reduction": round(r, 6),
+        "pass": k is None or r < KNEE_SSE_REDUCTION,
+    })
+    return diags
+
+
+def cmd_knee_diagnostics() -> None:
+    diags = knee_synthetic_diagnostics()
+    for d in diags:
+        print(f"{d['name']}: {'PASS' if d['pass'] else 'FAIL'} "
+              f"(breakpoint_index={d['breakpoint_index']}, "
+              f"sse_reduction={d['sse_reduction']})")
+    if not all(d["pass"] for d in diags):
+        sys.exit("knee synthetic diagnostics FAILED")
+    print("knee synthetic diagnostics: 3/3 PASS "
+          "(analysis-unit only, not scientific measurement)")
+
+
+def sustained_to_boundary(chunks_sorted: list[int], mibps: dict[int, float],
+                          plateau_entry: int | None,
+                          flat_gain: float = FLAT_GAIN) -> dict:
+    """POST-HOC adversarial diagnostic (H0 remediation; NOT part of the
+    frozen verdict and NOT a preregistration rewrite): starting at the
+    frozen plateau-entry candidate and up to the sampled upper boundary,
+    no further >= flat_gain material throughput rise may occur. A frozen
+    plateau that is followed by a material rise is a LOCAL-FLATNESS
+    CANDIDATE, never 'plateau from here on'."""
+    if plateau_entry is None or plateau_entry not in chunks_sorted:
+        return {
+            "frozen_plateau_chunk": plateau_entry,
+            "upper_boundary_chunk": chunks_sorted[-1] if chunks_sorted
+            else None,
+            "material_rises_after_entry": [],
+            "sustained_to_boundary": None,
+            "label": "N/A (frozen plateau not located)",
+        }
+    i0 = chunks_sorted.index(plateau_entry)
+    rises = [{"from": a, "to": b, "gain": round(mibps[b] / mibps[a] - 1.0, 4)}
+             for a, b in zip(chunks_sorted[i0:], chunks_sorted[i0 + 1:])
+             if mibps[b] / mibps[a] - 1.0 >= flat_gain]
+    sustained = not rises
+    return {
+        "frozen_plateau_chunk": plateau_entry,
+        "upper_boundary_chunk": chunks_sorted[-1],
+        "material_rises_after_entry": rises,
+        "sustained_to_boundary": sustained,
+        "label": ("SUSTAINED PLATEAU TO THE TESTED BOUNDARY" if sustained
+                  else "LOCAL-FLATNESS CANDIDATE, NOT A SUSTAINED PLATEAU "
+                       "TO THE TESTED BOUNDARY"),
+    }
 
 
 def plateau_entry(chunks: list[int], mibps: dict[int, float],
@@ -581,6 +680,10 @@ def analyze(session_id: str, file_bytes: int = FILE_BYTES) -> dict:
                            else ("NO KNEE (flat)"
                                  if knee_i is not None and reduction >= 0
                                  else "NO KNEE (fit not improved)")),
+            # POST-HOC ROBUSTNESS DIAGNOSTIC — does not feed the frozen
+            # verdict below (prereg §12 priority order is untouched).
+            "sustained_flatness": sustained_to_boundary(chunks_sorted, cp,
+                                                        entry),
         }
 
     sweet_spots = {str(d): sweet(d) for d in DEPTHS}
@@ -728,6 +831,8 @@ def main() -> None:
     cmd = sys.argv[1]
     if cmd == "status":
         cmd_status()
+    elif cmd == "knee-diagnostics" and len(sys.argv) == 2:
+        cmd_knee_diagnostics()
     elif cmd == "generate" and len(sys.argv) == 3:
         cmd_generate(sys.argv[2])
     elif cmd in ("validate", "summarize") and len(sys.argv) == 3:

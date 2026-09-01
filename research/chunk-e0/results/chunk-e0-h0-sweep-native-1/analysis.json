@@ -52,8 +52,15 @@
     "min_flat_pairs": 2
    },
    "knee_chunk": 393216,
-   "knee_sse_reduction": -20.069,
-   "knee_label": "NO KNEE (fit not improved)"
+   "knee_sse_reduction": 0.6741,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": null,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [],
+    "sustained_to_boundary": null,
+    "label": "N/A (frozen plateau not located)"
+   }
   },
   "2": {
    "tested_range_peak_chunk": 4194304,
@@ -98,9 +105,22 @@
     "flat_gain": 0.03,
     "min_flat_pairs": 2
    },
-   "knee_chunk": 524288,
-   "knee_sse_reduction": -13.483,
-   "knee_label": "NO KNEE (fit not improved)"
+   "knee_chunk": 1572864,
+   "knee_sse_reduction": 0.3689,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": 1572864,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [
+     {
+      "from": 3145728,
+      "to": 4194304,
+      "gain": 0.0486
+     }
+    ],
+    "sustained_to_boundary": false,
+    "label": "LOCAL-FLATNESS CANDIDATE, NOT A SUSTAINED PLATEAU TO THE TESTED BOUNDARY"
+   }
   },
   "4": {
    "tested_range_peak_chunk": 2097152,
@@ -145,9 +165,16 @@
     "flat_gain": 0.03,
     "min_flat_pairs": 2
    },
-   "knee_chunk": 524288,
-   "knee_sse_reduction": -8.3085,
-   "knee_label": "NO KNEE (fit not improved)"
+   "knee_chunk": 1572864,
+   "knee_sse_reduction": 0.5291,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": 1572864,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [],
+    "sustained_to_boundary": true,
+    "label": "SUSTAINED PLATEAU TO THE TESTED BOUNDARY"
+   }
   },
   "8": {
    "tested_range_peak_chunk": 4194304,
@@ -192,9 +219,27 @@
     "flat_gain": 0.03,
     "min_flat_pairs": 2
    },
-   "knee_chunk": 393216,
-   "knee_sse_reduction": -5.9187,
-   "knee_label": "NO KNEE (fit not improved)"
+   "knee_chunk": 131072,
+   "knee_sse_reduction": 0.7162,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": 786432,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [
+     {
+      "from": 1572864,
+      "to": 2097152,
+      "gain": 0.0558
+     },
+     {
+      "from": 2097152,
+      "to": 3145728,
+      "gain": 0.0363
+     }
+    ],
+    "sustained_to_boundary": false,
+    "label": "LOCAL-FLATNESS CANDIDATE, NOT A SUSTAINED PLATEAU TO THE TESTED BOUNDARY"
+   }
   }
  },
  "pareto": {
