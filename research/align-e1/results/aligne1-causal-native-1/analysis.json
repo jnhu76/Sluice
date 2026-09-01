@@ -1,0 +1,181 @@
+{
+ "session": "aligne1-causal-native-1",
+ "kind": "causal-control",
+ "amendment": "AMENDMENT 2 \u2014 E1-C1 STRICT CAUSAL-ISOLATION CONTROL",
+ "rounds": 7,
+ "runs": 252,
+ "gate_errors": 0,
+ "materiality_rule": "FROZEN prereg \u00a78 (ratio >= 1.05 AND 1.5*MAD robust separation both sides), unchanged",
+ "materiality": {
+  "4096": {
+   "1": {
+    "material": false,
+    "ratio": 0.9961,
+    "median_phase16_ns": 2359070020,
+    "mad_phase16_ns": 107769322,
+    "median_aligned64_ns": 2368382181,
+    "mad_aligned64_ns": 186822576
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.1243,
+    "median_phase16_ns": 822316586,
+    "mad_phase16_ns": 47594082,
+    "median_aligned64_ns": 731414993,
+    "mad_aligned64_ns": 54314766
+   }
+  },
+  "6144": {
+   "1": {
+    "material": false,
+    "ratio": 0.9832,
+    "median_phase16_ns": 1799912158,
+    "mad_phase16_ns": 177895403,
+    "median_aligned64_ns": 1830737139,
+    "mad_aligned64_ns": 28377734
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.0322,
+    "median_phase16_ns": 849111543,
+    "mad_phase16_ns": 191676458,
+    "median_aligned64_ns": 822599532,
+    "mad_aligned64_ns": 38275921
+   }
+  },
+  "8192": {
+   "1": {
+    "material": false,
+    "ratio": 1.0025,
+    "median_phase16_ns": 1262432416,
+    "mad_phase16_ns": 48659303,
+    "median_aligned64_ns": 1259336789,
+    "mad_aligned64_ns": 37248641
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.1872,
+    "median_phase16_ns": 509839061,
+    "mad_phase16_ns": 21239322,
+    "median_aligned64_ns": 429453105,
+    "mad_aligned64_ns": 52583278
+   }
+  },
+  "12288": {
+   "1": {
+    "material": false,
+    "ratio": 1.0662,
+    "median_phase16_ns": 922343673,
+    "mad_phase16_ns": 71350162,
+    "median_aligned64_ns": 865084450,
+    "mad_aligned64_ns": 99887374
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.1115,
+    "median_phase16_ns": 379066102,
+    "mad_phase16_ns": 44434069,
+    "median_aligned64_ns": 341041700,
+    "mad_aligned64_ns": 20298599
+   }
+  },
+  "16384": {
+   "1": {
+    "material": false,
+    "ratio": 0.9667,
+    "median_phase16_ns": 714323176,
+    "mad_phase16_ns": 21081525,
+    "median_aligned64_ns": 738937858,
+    "mad_aligned64_ns": 42694764
+   },
+   "2": {
+    "material": false,
+    "ratio": 0.8174,
+    "median_phase16_ns": 301276589,
+    "mad_phase16_ns": 32732253,
+    "median_aligned64_ns": 368560834,
+    "mad_aligned64_ns": 16744691
+   }
+  },
+  "24576": {
+   "1": {
+    "material": false,
+    "ratio": 1.0136,
+    "median_phase16_ns": 584265902,
+    "mad_phase16_ns": 36782855,
+    "median_aligned64_ns": 576412834,
+    "mad_aligned64_ns": 56737578
+   },
+   "2": {
+    "material": false,
+    "ratio": 0.9124,
+    "median_phase16_ns": 275528116,
+    "mad_phase16_ns": 19540670,
+    "median_aligned64_ns": 301967199,
+    "mad_aligned64_ns": 19948524
+   }
+  },
+  "32768": {
+   "1": {
+    "material": false,
+    "ratio": 1.0708,
+    "median_phase16_ns": 603216161,
+    "mad_phase16_ns": 108676073,
+    "median_aligned64_ns": 563326318,
+    "mad_aligned64_ns": 88725549
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.0303,
+    "median_phase16_ns": 257659385,
+    "mad_phase16_ns": 8299357,
+    "median_aligned64_ns": 250077352,
+    "mad_aligned64_ns": 12564501
+   }
+  },
+  "49152": {
+   "1": {
+    "material": false,
+    "ratio": 0.948,
+    "median_phase16_ns": 542036320,
+    "mad_phase16_ns": 59421630,
+    "median_aligned64_ns": 571754294,
+    "mad_aligned64_ns": 34136145
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.0388,
+    "median_phase16_ns": 232786894,
+    "mad_phase16_ns": 10277231,
+    "median_aligned64_ns": 224098384,
+    "mad_aligned64_ns": 3605332
+   }
+  },
+  "65536": {
+   "1": {
+    "material": false,
+    "ratio": 1.0081,
+    "median_phase16_ns": 491705236,
+    "mad_phase16_ns": 18320591,
+    "median_aligned64_ns": 487745531,
+    "mad_aligned64_ns": 16205338
+   },
+   "2": {
+    "material": false,
+    "ratio": 1.0205,
+    "median_phase16_ns": 207595462,
+    "mad_phase16_ns": 11034847,
+    "median_aligned64_ns": 203422066,
+    "mad_aligned64_ns": 13320310
+   }
+  }
+ },
+ "material_cells": 0,
+ "verdict_rule": {
+  "case": "A",
+  "neighbor_pair_material": false,
+  "same_chunk_both_depths_material": false,
+  "verdict": "STRICT CAUSAL CONTROL: PASS \u2014 APPLICATION MATERIALITY NOT ESTABLISHED IN ANY TESTED 4K\u201364K CELL"
+ },
+ "final_verdict": "MICROBENCH-ONLY \u2014 NOT APPLICATION MATERIAL"
+}
