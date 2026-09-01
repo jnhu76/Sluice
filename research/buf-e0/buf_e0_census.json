@@ -1,0 +1,178 @@
+{
+  "campaign": "BUF-E0",
+  "issue": 263,
+  "roadmap": 259,
+  "phase1_frozen_issue": 250,
+  "base": {
+    "branch": "research/buf-e0-buffer-truth",
+    "forked_from_master": "2a8dd7995a606882f1bd42ca264aebc80ce1726b"
+  },
+  "subject": {
+    "production_site": "apps/sluice-copy/copy_task.cpp",
+    "type": "PipelineSlot (struct)",
+    "storage": "std::vector<std::byte> buffer; explicit PipelineSlot(std::size_t cap) : buffer(cap) {}",
+    "construction": "value-initialization: one heap allocation of cap bytes followed by eager zero-initialization of all cap bytes (touches every page)",
+    "site_kind": "per-slot owned I/O staging buffer (read fills, write drains)"
+  },
+  "lifecycle_steps": [
+    {
+      "step": "application setup",
+      "code": "apps/sluice-copy/main.cpp + cli_parse.cpp; caller opens src/dst fds",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": false,
+      "repeated": false,
+      "notes": "no buffer involvement"
+    },
+    {
+      "step": "argument validation",
+      "code": "run_pipelined_copy_with_backend pre-checks: buffer_size/pipeline_depth/workers nonzero; kMaxBufferSize=64MiB; kMaxPipelineDepth=64; kMaxPipelineBytes=512MiB; product overflow; rejects invalid_state BEFORE any allocation",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": false,
+      "repeated": false,
+      "notes": "capacity is caller-owned and validated up front"
+    },
+    {
+      "step": "slot creation (setup-only)",
+      "code": "copy_task.cpp:446-456 slots.reserve(pipeline_depth); for each: make_unique<PipelineSlot>(buffer_size)",
+      "allocation": true,
+      "initialization": true,
+      "page_touching": true,
+      "io_overwrite": false,
+      "repeated": false,
+      "notes": "ONE vector allocation + eager zero-init per slot, ONCE per copy operation, BEFORE the Runtime is built/started; bad_alloc translated to IoError::no_space; slots.reserve(depth) is the only growth (pointer vector)"
+    },
+    {
+      "step": "runtime starts",
+      "code": "run_task_to_result<CopyStats> builds/starts ApplicationRuntime + caller backend (CLI: ThreadPoolBackend)",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": false,
+      "repeated": false,
+      "notes": "no buffer involvement; backend workers_ reserve is setup-only"
+    },
+    {
+      "step": "first I/O",
+      "code": "Phase 1 submit window: up to pipeline_depth submit_read at chunk_offset = i*buffer_size; ThreadPoolBackend pread into buffer.data()+filled",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": true,
+      "repeated": "once per slot lifetime",
+      "notes": "kernel overwrites [0,N) for full chunks; pages already resident from eager init; EOF tail chunk overwrites only [0,filled) — bytes [filled,N) keep zero-init but are never read by the write side"
+    },
+    {
+      "step": "reuse loop (steady state)",
+      "code": "after await_slot_write: ws->chunk_offset += buffer_size*pipeline_depth; filled=0; written=0; state=idle; submit_slot_read reuses SAME buffer",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": true,
+      "repeated": true,
+      "notes": "no realloc, no re-init, no memset; buffer address stable for whole operation (L7); reuse count per slot = number of chunk cycles ~= ceil(file_bytes/(buffer_size*pipeline_depth))"
+    },
+    {
+      "step": "drain + sync",
+      "code": "Phase 3 drain (error path) / Phase 4 sync_data/sync_all (clean path)",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": false,
+      "repeated": false,
+      "notes": "no buffer involvement"
+    },
+    {
+      "step": "destroy",
+      "code": "slots vector destructs (task object end) -> each vector frees its block; one free per slot per copy operation",
+      "allocation": false,
+      "initialization": false,
+      "page_touching": false,
+      "io_overwrite": false,
+      "repeated": false,
+      "notes": "one-time teardown after Runtime joined"
+    }
+  ],
+  "census_questions": {
+    "q1_vector_allocation_per_op_or_setup_only": {
+      "answer": "setup-only",
+      "status": "CODE FACT",
+      "evidence": "copy_task.cpp:446-456 constructs all slots once before run_task_to_result; no allocation in the Phase 1/2 loops"
+    },
+    "q2_slot_reuse_count": {
+      "answer": "unbounded within one copy operation: each slot is reused for chunk cycle after chunk cycle until EOF; reuse count per slot ~= ceil(file_bytes/(buffer_size*pipeline_depth)) (e.g. 1 GiB file, 1 MiB x depth 8 -> 128 reuses per slot)",
+      "status": "CODE FACT",
+      "evidence": "copy_task.cpp:314-341 recycle path"
+    },
+    "q3_buffer_fully_overwritten_by_read": {
+      "answer": "yes for full chunks (pread fills [0,buffer_size), overwriting every zero-initialized byte); EOF tail chunk overwrites only [0,filled)",
+      "status": "CODE FACT",
+      "evidence": "submit_slot_read reads [chunk_offset+filled, +buffer_size-filled) into buffer.data()+filled; await_read_fill retries short reads to full-or-EOF"
+    },
+    "q4_short_read_partial_valid_length": {
+      "answer": "yes: filled tracks valid bytes; short reads retry within slot; EOF tail is a partial valid length; write side only drains [0,filled)",
+      "status": "CODE FACT",
+      "evidence": "SlotState::read_done / await_slot_read"
+    },
+    "q5_slot_count_determined_by": {
+      "answer": "pipeline_depth caller parameter (CLI default 1 = Version A sequential; caps kMaxPipelineDepth=64, kMaxPipelineBytes=512MiB total)",
+      "status": "CODE FACT",
+      "evidence": "copy_task.hpp limits block; main.cpp --pipeline-depth"
+    },
+    "q6_capacity_equals_active_inflight_depth": {
+      "answer": "yes: in steady state all pipeline_depth slots have reads outstanding (read overlap); writes are single-outstanding by design; buffer capacity == logical in-flight read depth",
+      "status": "CODE FACT",
+      "evidence": "copy_task.cpp Phase 1 pre-submit window + Phase 2 round-robin"
+    },
+    "q7_resize_or_growth": {
+      "answer": "none: per-slot buffer size fixed at construction; the slots pointer-vector is reserve(depth)+push_back (no reallocation); no resize/reserve on buffers",
+      "status": "CODE FACT",
+      "evidence": "PipelineSlot ctor; slots.reserve before loop"
+    },
+    "q8_production_steady_state_heap_allocation": {
+      "answer": "no per-op heap allocation in the copy steady state: buffers pre-built, Completions address-stable; ThreadPoolBackend uses fixed persistent workers with bounded dispatch storage (setup-time reserve only)",
+      "status": "CODE FACT (task side) + CODE FACT (backend construction side); steady-state dynamic-allocation absence is CODE FACT by inspection, not yet by measurement",
+      "evidence": "copy_task.cpp steady-state loops; src/async/threadpool_backend.cpp workers_.reserve at construction; bounded dispatch ring per ADR threadpool contract"
+    }
+  },
+  "adjacent_sites_out_of_scope": [
+    {
+      "site": "src/wal.cpp read_record / encode paths",
+      "kind": "per-record owned RESULT vector (record-sized return value), not per-slot I/O staging",
+      "why_out": "different lifecycle role (owned result, not reusable I/O staging); same eager-init mechanism family but not the Phase 2 subject"
+    },
+    {
+      "site": "examples/mvp_copy_pipeline.cpp",
+      "kind": "educational example with fixed 1 KiB buffers",
+      "why_out": "not production"
+    },
+    {
+      "site": "bench/* (tax0_capacity_bench, copy benches, ...)",
+      "kind": "research instruments with their own buffers",
+      "why_out": "measurement instruments, not production lifecycle"
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "BUF-F01",
+      "statement": "std::vector<std::byte>(N) eager zero-initialization creates a measurable lifecycle cost (construction-time init + page touching) that is NOT merely shifted to first touch / first I/O",
+      "status": "COST UNMEASURED (construction-time zero-init is CODE FACT; total-cost question open)"
+    },
+    {
+      "id": "BUF-F02",
+      "statement": "per-slot ownership / storage policy (vs pooled or alternative representation) causes a measurable capacity/lifecycle/steady-state penalty",
+      "status": "COST UNMEASURED (setup-only allocation + reuse-amortized structure is CODE FACT; penalty question open)"
+    }
+  ],
+  "measurement_environment_prior": {
+    "wsl2": true,
+    "classification": "QUALIFIED_BUT_VIRTUALIZED",
+    "page_size": 4096,
+    "logical_cpus": 8,
+    "mem_total_kb": 16377464,
+    "note": "absolute numbers ENVIRONMENT-LIMITED; valid for same-host causal comparison"
+  }
+}
