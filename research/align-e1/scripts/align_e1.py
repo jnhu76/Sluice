@@ -392,7 +392,8 @@ def cells_stats(runs: list[dict]) -> dict:
             "total_ns_mad": mad(tot, med_t),
             "engine_ns_median": median(eng),
             "construct_ns_median": median(con),
-            "mibps_median": (FILE_BYTES / med_t * 1e9) if med_t else 0,
+            "mibps_median": (FILE_BYTES / med_t * 1e9 / (1 << 20))
+            if med_t else 0,
             "wall_per_chunk_ns_median": med_t / chunks if chunks else 0,
             "instructions_median": med_i,
             "instructions_per_byte": med_i / FILE_BYTES if med_i else 0,
@@ -485,7 +486,9 @@ def analyze(session_id: str) -> dict:
             "knee_chunk": chunks_sorted[knee_i] if knee_i is not None else None,
             "knee_sse_reduction": round(reduction, 4),
             "knee_label": ("KNEE" if knee_i is not None and reduction >= 0.10
-                           else "NO KNEE (flat)"),
+                           else ("NO KNEE (flat)"
+                                 if knee_i is not None and reduction >= 0
+                                 else "NO KNEE (fit not improved)")),
         }
 
     sweet_spots = {m: {d: sweet(m, d) for d in DEPTHS} for m in MODULES}

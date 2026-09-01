@@ -1,0 +1,422 @@
+{
+ "sessions": [
+  "aligne1-sweep-native-1"
+ ],
+ "rounds": 7,
+ "gates": {
+  "gate_errors": 0
+ },
+ "sweet_spots": {
+  "engine": {
+   "1": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 624.5052076952586,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 593.2799473104957,
+    "knee_chunk": 49152,
+    "knee_sse_reduction": -13.1441,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "2": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 873.2069769182881,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 829.5466280723737,
+    "knee_chunk": 24576,
+    "knee_sse_reduction": -8.8885,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "4": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 856.8622978573977,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 814.0191829645278,
+    "knee_chunk": 16384,
+    "knee_sse_reduction": -5.2977,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "8": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 831.1629806449934,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 789.6048316127436,
+    "knee_chunk": 16384,
+    "knee_sse_reduction": -1.9901,
+    "knee_label": "NO KNEE (fit not improved)"
+   }
+  },
+  "replica-natural": {
+   "1": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 652.8704797186193,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 620.2269557326883,
+    "knee_chunk": 49152,
+    "knee_sse_reduction": -10.5169,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "2": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 888.9015557360581,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 844.4564779492551,
+    "knee_chunk": 24576,
+    "knee_sse_reduction": -7.045,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "4": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 908.8981103702953,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 863.4532048517805,
+    "knee_chunk": 16384,
+    "knee_sse_reduction": -4.6441,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "8": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 896.3310258038016,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 851.5144745136115,
+    "knee_chunk": 32768,
+    "knee_sse_reduction": -11.6402,
+    "knee_label": "NO KNEE (fit not improved)"
+   }
+  },
+  "replica-aligned": {
+   "1": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 647.1718484048079,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 614.8132559845675,
+    "knee_chunk": 49152,
+    "knee_sse_reduction": -21.7088,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "2": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 887.7174286124518,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 843.3315571818292,
+    "knee_chunk": 24576,
+    "knee_sse_reduction": -7.9701,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "4": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 908.6255869561572,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 863.1943076083493,
+    "knee_chunk": 32768,
+    "knee_sse_reduction": -3.6258,
+    "knee_label": "NO KNEE (fit not improved)"
+   },
+   "8": {
+    "peak_chunk": 1048576,
+    "peak_mibps": 867.8913544853555,
+    "p95_chunk": 1048576,
+    "p95_threshold_mibps": 824.4967867610876,
+    "knee_chunk": 24576,
+    "knee_sse_reduction": -3.3928,
+    "knee_label": "NO KNEE (fit not improved)"
+   }
+  }
+ },
+ "materiality": {
+  "4096": {
+   "depths": [],
+   "m": 0
+  },
+  "6144": {
+   "depths": [],
+   "m": 0
+  },
+  "8192": {
+   "depths": [],
+   "m": 0
+  },
+  "12288": {
+   "depths": [],
+   "m": 0
+  },
+  "16384": {
+   "depths": [],
+   "m": 0
+  },
+  "24576": {
+   "depths": [],
+   "m": 0
+  },
+  "32768": {
+   "depths": [],
+   "m": 0
+  },
+  "49152": {
+   "depths": [],
+   "m": 0
+  },
+  "65536": {
+   "depths": [],
+   "m": 0
+  },
+  "1048576": {
+   "depths": [],
+   "m": 0
+  }
+ },
+ "stable_material_regime": [],
+ "alignment_materiality_crossover": {
+  "chunk": 4096,
+  "q": "materiality disappears from 4096 onward"
+ },
+ "engine_fidelity": {
+  "cells": 40,
+  "held": 7,
+  "fraction": 0.175,
+  "conclusion": false,
+  "detail": [
+   [
+    4096,
+    1,
+    0.9827,
+    true
+   ],
+   [
+    4096,
+    2,
+    1.14,
+    false
+   ],
+   [
+    4096,
+    4,
+    0.8457,
+    false
+   ],
+   [
+    4096,
+    8,
+    1.0231,
+    false
+   ],
+   [
+    6144,
+    1,
+    1.0853,
+    false
+   ],
+   [
+    6144,
+    2,
+    0.9202,
+    false
+   ],
+   [
+    6144,
+    4,
+    1.0451,
+    false
+   ],
+   [
+    6144,
+    8,
+    0.9149,
+    false
+   ],
+   [
+    8192,
+    1,
+    0.9886,
+    true
+   ],
+   [
+    8192,
+    2,
+    0.9072,
+    false
+   ],
+   [
+    8192,
+    4,
+    0.9204,
+    false
+   ],
+   [
+    8192,
+    8,
+    1.0601,
+    false
+   ],
+   [
+    12288,
+    1,
+    1.0228,
+    false
+   ],
+   [
+    12288,
+    2,
+    0.801,
+    false
+   ],
+   [
+    12288,
+    4,
+    1.1605,
+    false
+   ],
+   [
+    12288,
+    8,
+    0.9834,
+    true
+   ],
+   [
+    16384,
+    1,
+    0.9542,
+    false
+   ],
+   [
+    16384,
+    2,
+    1.0129,
+    true
+   ],
+   [
+    16384,
+    4,
+    1.0959,
+    false
+   ],
+   [
+    16384,
+    8,
+    0.9108,
+    false
+   ],
+   [
+    24576,
+    1,
+    1.1662,
+    false
+   ],
+   [
+    24576,
+    2,
+    1.0599,
+    false
+   ],
+   [
+    24576,
+    4,
+    1.0653,
+    false
+   ],
+   [
+    24576,
+    8,
+    0.8754,
+    false
+   ],
+   [
+    32768,
+    1,
+    1.128,
+    false
+   ],
+   [
+    32768,
+    2,
+    1.0305,
+    false
+   ],
+   [
+    32768,
+    4,
+    0.9977,
+    true
+   ],
+   [
+    32768,
+    8,
+    0.877,
+    false
+   ],
+   [
+    49152,
+    1,
+    0.9405,
+    false
+   ],
+   [
+    49152,
+    2,
+    0.9693,
+    false
+   ],
+   [
+    49152,
+    4,
+    1.0691,
+    false
+   ],
+   [
+    49152,
+    8,
+    0.8873,
+    false
+   ],
+   [
+    65536,
+    1,
+    0.9627,
+    false
+   ],
+   [
+    65536,
+    2,
+    1.0633,
+    false
+   ],
+   [
+    65536,
+    4,
+    1.1084,
+    false
+   ],
+   [
+    65536,
+    8,
+    1.0116,
+    true
+   ],
+   [
+    1048576,
+    1,
+    1.0454,
+    false
+   ],
+   [
+    1048576,
+    2,
+    1.018,
+    true
+   ],
+   [
+    1048576,
+    4,
+    1.0607,
+    false
+   ],
+   [
+    1048576,
+    8,
+    1.0784,
+    false
+   ]
+  ]
+ },
+ "verdict": "MICROBENCH-ONLY \u2014 NOT APPLICATION MATERIAL",
+ "gate_errors": 0
+}

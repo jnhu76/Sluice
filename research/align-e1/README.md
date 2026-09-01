@@ -38,12 +38,22 @@ single research campaign, not a generic framework.
   src, per-run dst hash == src hash (fail-closed), R = 7 seeded
   interleaved rounds, median + MAD per cell.
 
-## Verdict (pending measurement — to be filled by the report)
+## Verdict (measurement complete — see ALIGN-E1-REPORT.md)
 
 ```
-VERDICT:        (pending)
+VERDICT:        MICROBENCH-ONLY — NOT APPLICATION MATERIAL
+                (ALIGN-E0's native READ per-op alignment micro-cost does
+                NOT surface as a material effect in the 4K–64K READ+WRITE
+                application copy; M(c)=0 at every chunk × depth, incl.
+                the direct +16-residue-class test at d1/d2)
 PRODUCTION ALIGNMENT KNOB AUTHORIZED: NO
 RUNTIME ADAPTATION AUTHORIZED: NO
 REGISTERED BUFFER: NO
 SIMD: NO
 ```
+
+Evidence: `aligne1-sweep-native-1` — 840 runs, 0 gate errors, dst hash
+== src hash every run (fail-closed). Production stop gates (prereg §14):
+no alignment knob, no aligned storage abstraction, no production-oriented
+kernel archaeology on this thread; #267 may continue as independent
+methodology research.
