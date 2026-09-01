@@ -15,9 +15,10 @@ ENVIRONMENT: WSL2 (kernel 6.18.33.2-microsoft-standard-WSL2, AMD Ryzen 7
          native-NVMe/NUMA/TLB claims.
 
 BASE: 2a8dd7995a606882f1bd42ca264aebc80ce1726b (origin/master)
-HEAD: (final commit of this branch; sessions recorded clean-tree states)
+HEAD: final commit of research/buf-e0-buffer-truth (sessions recorded
+      clean-tree states in their environment.json)
 BRANCH: research/buf-e0-buffer-truth
-DRAFT PR: (opened after this report; DO NOT MERGE)
+DRAFT PR: #264 (DO NOT MERGE — awaiting adversarial review)
 EXECUTION ISSUE: #263 (milestones BUF-E0A/E0B/E0C/VERDICT posted there)
 
 PRODUCTION CODE CHANGED: NO
