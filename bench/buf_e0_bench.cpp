@@ -765,6 +765,12 @@ int run_phase(const Config& cfg, int fd, const std::byte* master,
 
         // Phases A / B / D: fresh construction per rep (pinned fresh-page
         // regime by default), phase-specific measured region, teardown.
+        // Re-exhaust the arena top before every rep: glibc arena dynamics
+        // (fastbin/tcache cycling of the many sub-threshold object headers)
+        // can silently sbrk-refill the top between reps at higher slot
+        // counts; the eaters are held, untouched (no faults), and outside
+        // every timed span. The per-rep regime gate verifies the result.
+        if (cfg.regime == Regime::pinned) exhaust_arena_top();
         RUsage ra = rusage_now();
         std::int64_t rss_before = resident_kb_now();
         std::uint64_t t0 = now_ns();
