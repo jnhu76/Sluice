@@ -336,3 +336,26 @@ do
         target_end()
     end
 end
+
+-- chunk_e0_bench (#270 CHUNK-E0 Phase H0 — chunk-size x depth sweet-spot map,
+-- prereg research/chunk-e0/CHUNK-E0-H0-PREREGISTRATION.md): the production
+-- buffered READ+WRITE copy engine ONLY (apps/sluice-copy/copy_task.cpp,
+-- run_pipelined_copy_with_backend, ThreadPoolBackend, workers=1) swept over
+-- 16K..4M chunk sizes x depth {1,2,4,8} on the Host-0 bare-metal machine.
+-- Same-work fail-closed per run; driver hashes src/dst post-exit and wraps
+-- runs under perf stat. Research instrument only — production code untouched.
+do
+    local R = SLUICE_ROOT
+    local e0 = R .. "bench/chunk_e0_bench.cpp"
+    local copy_task = R .. "apps/sluice-copy/copy_task.cpp"
+    if os.isfile(e0) and os.isfile(copy_task) then
+        target("chunk_e0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "apps/sluice-copy")
+            add_files(e0, copy_task)
+        target_end()
+    end
+end

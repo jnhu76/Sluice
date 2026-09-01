@@ -1,0 +1,42 @@
+CHUNK-E0 host environment — validate-native
+schema: chunk-e0-runner-1.0
+captured_at_utc: 20260901-151826
+campaign: H0
+
+GIT
+  commit: a2f7c4c904994137d50c571a1d36197866359f39
+  branch: research/chunk-e0-h0
+  dirty: True
+
+OS
+  uname: Linux E5 7.1.9-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Aug 19 17:41:40 UTC 2026 x86_64
+  distro: fedora 44
+  kernel: 7.1.9-200.fc44.x86_64
+
+CPU
+  vendor: intel
+  model: Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+  microarchitecture: x86-64 AVX2+ERMS (Haswell-class or newer)
+  smt: Thread(s) per core:                      2
+  cache line: 64 B
+
+MEMORY
+  mem_total: 65676556 kB
+  page size: 4096 B
+
+FREQUENCY
+  governor: schedutil
+  intel no_turbo: 0
+  arm cpufreq boost: UNAVAILABLE
+
+FILESYSTEM / STORAGE
+  findmnt: btrfs rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home /dev/sda3[/home]
+  storage class: NVMe
+
+VIRTUALIZATION
+  systemd-detect-virt: none
+  container: no
+  dmi: JUXIESHI
+
+NOTE: HOST-LOCAL RESULT ONLY. This runner performs no cross-host
+causality attribution.

@@ -1,0 +1,10 @@
+{
+ "base": "master (post-#269)",
+ "kind": "validate",
+ "data_src_sha256": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53",
+ "file_bytes": 1073741824,
+ "purpose": "harness validation (frozen subset)",
+ "preregistration": "research/chunk-e0/CHUNK-E0-H0-PREREGISTRATION.md (FROZEN)",
+ "data_dir": "/home/jnhu/Source/Sluice/build/chunk-e0-data",
+ "runs_total": 14
+}

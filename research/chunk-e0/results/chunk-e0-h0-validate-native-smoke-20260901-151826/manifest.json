@@ -1,0 +1,25 @@
+{
+ "base": "master (post-#269)",
+ "kind": "smoke",
+ "campaign": "H0",
+ "host_id": "validate-native",
+ "profile": "smoke",
+ "runner_schema": "chunk-e0-runner-1.0",
+ "data_src_sha256": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53",
+ "file_bytes": 1073741824,
+ "build": {
+  "binary_path": "/home/jnhu/Source/Sluice/build/linux/x86_64/release/chunk_e0_bench",
+  "binary_sha256": "75f1db930e2dbc6101291db102b7e6eadeb954f21e9bd2d0651e9f4acf4ffcae",
+  "binary_size": 163560,
+  "compiler": "clang",
+  "compiler_version": "clang version 22.1.8 (Fedora 22.1.8-4.fc44)",
+  "variant": "preferred(clang)",
+  "xmake_version": "\u001b[0m\u001b[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua\u001b[0m\u001b[0m",
+  "config": "release"
+ },
+ "preregistration": "research/chunk-e0/CHUNK-E0-H0-PREREGISTRATION.md (FROZEN)",
+ "note": "PROFILE=SMOKE. NOT FORMAL EVIDENCE.",
+ "purpose": "smoke correctness check",
+ "data_dir": "/home/jnhu/Source/Sluice/build/chunk-e0-host/validate-native/data",
+ "runs_total": 2
+}

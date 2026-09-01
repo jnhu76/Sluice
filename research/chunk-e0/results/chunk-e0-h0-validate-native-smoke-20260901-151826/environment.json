@@ -1,0 +1,69 @@
+{
+ "schema": "chunk-e0-runner-1.0",
+ "captured_at_utc": "20260901-151826",
+ "campaign": "H0",
+ "host_id": "validate-native",
+ "identity": {
+  "hostname": "E5",
+  "machine": "x86_64"
+ },
+ "git": {
+  "commit": "a2f7c4c904994137d50c571a1d36197866359f39",
+  "branch": "research/chunk-e0-h0",
+  "dirty": true
+ },
+ "os": {
+  "uname": "Linux E5 7.1.9-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Aug 19 17:41:40 UTC 2026 x86_64",
+  "os_release": "NAME=\"Fedora Linux\"\nVERSION=\"44 (KDE Plasma Desktop Edition)\"\nRELEASE_TYPE=stable\nID=fedora\nVERSION_ID=44\nVERSION_CODENAME=\"\"\nPRETTY_NAME=\"Fedora Linux 44 (KDE Plasma Desktop Edition)\"\nANSI_COLOR=\"0;38;2;60;110;180\"\nLOGO=fedora-logo-icon\nCPE_NAME=\"cpe:/o:fedoraproject:fedora:44\"\nDEFAULT_HOSTNAME=\"fedora\"\nHOME_URL=\"https://fedoraproject.org/\"\nDOCUMENTATION_URL=\"https://docs.fedoraproject.org/en-US/fedora/f44/\"\nSUPPORT_URL=\"https://ask.fedoraproject.org/\"\nBUG_REPORT_URL=\"https://bugzilla.redhat.com/\"\nREDHAT_BUGZILLA_PRODUCT=\"Fedora\"\nREDHAT_BUGZILLA_PRODUCT_VERSION=44\nREDHAT_SUPPORT_PRODUCT=\"Fedora\"\nREDHAT_SUPPORT_PRODUCT_VERSION=44\nSUPPORT_END=2027-05-19\nVARIANT=\"KDE Plasma Desktop Edition\"\nVARIANT_ID=kde",
+  "distro_id": "fedora",
+  "distro_version": "44",
+  "kernel": "7.1.9-200.fc44.x86_64",
+  "libc_version": "Linux version 7.1.9-200.fc44.x86_64 (mockbuild@54bf0dc571144a4a947ef04d06983795) (gcc (GCC) 16.1.1 20260515 (Red Hat 16.1.1-2), GNU ld version 2.46.1-1.fc44) #1 SMP PREEMPT_DYNAMIC Wed Aug 19 17:41:40 UTC 2026"
+ },
+ "cpu": {
+  "vendor": "intel",
+  "model": "Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz",
+  "model_line": "Model name:                              Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz",
+  "microarchitecture": {
+   "label": "x86-64 AVX2+ERMS (Haswell-class or newer)",
+   "method": "BEST_EFFORT (cpu flags)",
+   "flags_evidence": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c "
+  },
+  "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  20\nOn-line CPU(s) list:                     0-19\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz\nCPU family:                              6\nModel:                                   63\nThread(s) per core:                      2\nCore(s) per socket:                      10\nSocket(s):                               1\nStepping:                                2\nCPU(s) scaling MHz:                      47%\nCPU max MHz:                             3500.0000\nCPU min MHz:                             1200.0000\nBogoMIPS:                                5787.24\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm cpuid_fault epb pti intel_ppin ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts vnmi md_clear flush_l1d\nVirtualization:                          VT-x\nL1d cache:                               320 KiB (10 instances)\nL1i cache:                               320 KiB (10 instances)\nL2 cache:                                2.5 MiB (10 instances)\nL3 cache:                                25 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-19\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             KVM: Mitigation: Split huge pages\nVulnerability L1tf:                      Mitigation; PTE Inversion; VMX conditional cache flushes, SMT vulnerable\nVulnerability Mds:                       Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Meltdown:                  Mitigation; PTI\nVulnerability Mmio stale data:           Mitigation; Clear CPU buffers; SMT vulnerable\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP conditional; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace",
+  "smt": "Thread(s) per core:                      2",
+  "cores_per_socket": "Core(s) per socket:                      10",
+  "sockets": "Socket(s):                               1",
+  "numa_nodes": "NUMA node(s):                            1",
+  "cache_hierarchy": [
+   "NAME ONE-SIZE ALL-SIZE WAYS TYPE        LEVEL  SETS PHY-LINE COHERENCY-SIZE",
+   "L1d       32K     320K    8 Data            1    64        1             64",
+   "L1i       32K     320K    8 Instruction     1    64        1             64",
+   "L2       256K     2.5M    8 Unified         2   512        1             64",
+   "L3        25M      25M   20 Unified         3 20480        1             64"
+  ],
+  "cache_line_bytes": "64"
+ },
+ "memory": {
+  "mem_total": "65676556 kB",
+  "page_size": "4096"
+ },
+ "frequency": {
+  "governor": "schedutil",
+  "intel_pstate_no_turbo": "0",
+  "arm_cpufreq_boost": "UNAVAILABLE",
+  "scaling_driver": "intel_cpufreq"
+ },
+ "filesystem_storage": {
+  "work_dir": "/home/jnhu/Source/Sluice/build/chunk-e0-host",
+  "findmnt": "btrfs rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home /dev/sda3[/home]",
+  "lsblk": "NAME    MODEL                ROTA   SIZE TRAN\nsda     GS-480                  0 447.1G sata\nsdb     ST4000HKVS002-3FC104    1   3.6T sata\nzram0                           0     8G \nnvme0n1 GVL-512                 0 476.9G nvme",
+  "storage_class": "NVMe"
+ },
+ "virtualization": {
+  "systemd_detect_virt": "none",
+  "container": "no",
+  "dmi_product": "JUXIESHI"
+ },
+ "perf_event_paranoid": "2",
+ "data_src_sha256": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53"
+}

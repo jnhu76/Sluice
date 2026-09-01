@@ -1,0 +1,507 @@
+{
+ "sessions": [
+  "chunk-e0-h0-sweep-native-1"
+ ],
+ "rounds": 7,
+ "file_bytes": 1073741824,
+ "gates": {
+  "gate_errors": 0
+ },
+ "sweet_spots": {
+  "1": {
+   "tested_range_peak_chunk": 4194304,
+   "tested_range_peak_mibps": 689.4600298720811,
+   "peak_at_4m_boundary": true,
+   "p95_point_chunk": 3145728,
+   "p95_threshold_mibps": 654.987028378477,
+   "plateau_entry_chunk": null,
+   "pair_gains": {
+    "16384": 0.2286,
+    "32768": 0.2566,
+    "65536": 0.1827,
+    "98304": 0.0369,
+    "131072": 0.1555,
+    "196608": 0.0993,
+    "262144": 0.1489,
+    "393216": 0.0834,
+    "524288": 0.0732,
+    "786432": 0.0604,
+    "1048576": 0.0911,
+    "1572864": 0.0404,
+    "2097152": 0.0433,
+    "3145728": 0.0205
+   },
+   "pair_flat": {
+    "16384": false,
+    "32768": false,
+    "65536": false,
+    "98304": false,
+    "131072": false,
+    "196608": false,
+    "262144": false,
+    "393216": false,
+    "524288": false,
+    "786432": false,
+    "1048576": false,
+    "1572864": false,
+    "2097152": false,
+    "3145728": true
+   },
+   "plateau_rule": {
+    "flat_gain": 0.03,
+    "min_flat_pairs": 2
+   },
+   "knee_chunk": 393216,
+   "knee_sse_reduction": 0.6741,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": null,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [],
+    "sustained_to_boundary": null,
+    "label": "N/A (frozen plateau not located)"
+   }
+  },
+  "2": {
+   "tested_range_peak_chunk": 4194304,
+   "tested_range_peak_mibps": 885.9058930200462,
+   "peak_at_4m_boundary": true,
+   "p95_point_chunk": 2097152,
+   "p95_threshold_mibps": 841.6105983690438,
+   "plateau_entry_chunk": 1572864,
+   "pair_gains": {
+    "16384": 0.193,
+    "32768": 0.3277,
+    "65536": -0.0384,
+    "98304": 0.0352,
+    "131072": 0.1434,
+    "196608": 0.0259,
+    "262144": 0.0352,
+    "393216": 0.1077,
+    "524288": 0.0514,
+    "786432": 0.0505,
+    "1048576": 0.1016,
+    "1572864": 0.0295,
+    "2097152": -0.015,
+    "3145728": 0.0486
+   },
+   "pair_flat": {
+    "16384": false,
+    "32768": false,
+    "65536": true,
+    "98304": false,
+    "131072": false,
+    "196608": true,
+    "262144": false,
+    "393216": false,
+    "524288": false,
+    "786432": false,
+    "1048576": false,
+    "1572864": true,
+    "2097152": true,
+    "3145728": false
+   },
+   "plateau_rule": {
+    "flat_gain": 0.03,
+    "min_flat_pairs": 2
+   },
+   "knee_chunk": 1572864,
+   "knee_sse_reduction": 0.3689,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": 1572864,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [
+     {
+      "from": 3145728,
+      "to": 4194304,
+      "gain": 0.0486
+     }
+    ],
+    "sustained_to_boundary": false,
+    "label": "LOCAL-FLATNESS CANDIDATE, NOT A SUSTAINED PLATEAU TO THE TESTED BOUNDARY"
+   }
+  },
+  "4": {
+   "tested_range_peak_chunk": 2097152,
+   "tested_range_peak_mibps": 845.1113792382853,
+   "peak_at_4m_boundary": false,
+   "p95_point_chunk": 1572864,
+   "p95_threshold_mibps": 802.855810276371,
+   "plateau_entry_chunk": 1572864,
+   "pair_gains": {
+    "16384": 0.4351,
+    "32768": 0.2888,
+    "65536": -0.0332,
+    "98304": 0.0695,
+    "131072": 0.0656,
+    "196608": 0.078,
+    "262144": 0.0318,
+    "393216": 0.0531,
+    "524288": 0.1193,
+    "786432": 0.0479,
+    "1048576": 0.0604,
+    "1572864": 0.0217,
+    "2097152": -0.0124,
+    "3145728": -0.0032
+   },
+   "pair_flat": {
+    "16384": false,
+    "32768": false,
+    "65536": true,
+    "98304": false,
+    "131072": false,
+    "196608": false,
+    "262144": false,
+    "393216": false,
+    "524288": false,
+    "786432": false,
+    "1048576": false,
+    "1572864": true,
+    "2097152": true,
+    "3145728": true
+   },
+   "plateau_rule": {
+    "flat_gain": 0.03,
+    "min_flat_pairs": 2
+   },
+   "knee_chunk": 1572864,
+   "knee_sse_reduction": 0.5291,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": 1572864,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [],
+    "sustained_to_boundary": true,
+    "label": "SUSTAINED PLATEAU TO THE TESTED BOUNDARY"
+   }
+  },
+  "8": {
+   "tested_range_peak_chunk": 4194304,
+   "tested_range_peak_mibps": 814.8861478874067,
+   "peak_at_4m_boundary": true,
+   "p95_point_chunk": 2097152,
+   "p95_threshold_mibps": 774.1418404930363,
+   "plateau_entry_chunk": 786432,
+   "pair_gains": {
+    "16384": 0.4408,
+    "32768": 0.3071,
+    "65536": 0.0865,
+    "98304": -0.0696,
+    "131072": 0.0845,
+    "196608": 0.0273,
+    "262144": 0.0769,
+    "393216": 0.0599,
+    "524288": 0.1,
+    "786432": 0.0124,
+    "1048576": -0.01,
+    "1572864": 0.0558,
+    "2097152": 0.0363,
+    "3145728": 0.0024
+   },
+   "pair_flat": {
+    "16384": false,
+    "32768": false,
+    "65536": false,
+    "98304": true,
+    "131072": false,
+    "196608": true,
+    "262144": false,
+    "393216": false,
+    "524288": false,
+    "786432": true,
+    "1048576": true,
+    "1572864": false,
+    "2097152": false,
+    "3145728": true
+   },
+   "plateau_rule": {
+    "flat_gain": 0.03,
+    "min_flat_pairs": 2
+   },
+   "knee_chunk": 131072,
+   "knee_sse_reduction": 0.7162,
+   "knee_label": "KNEE",
+   "sustained_flatness": {
+    "frozen_plateau_chunk": 786432,
+    "upper_boundary_chunk": 4194304,
+    "material_rises_after_entry": [
+     {
+      "from": 1572864,
+      "to": 2097152,
+      "gain": 0.0558
+     },
+     {
+      "from": 2097152,
+      "to": 3145728,
+      "gain": 0.0363
+     }
+    ],
+    "sustained_to_boundary": false,
+    "label": "LOCAL-FLATNESS CANDIDATE, NOT A SUSTAINED PLATEAU TO THE TESTED BOUNDARY"
+   }
+  }
+ },
+ "pareto": {
+  "rule": "non-dominated over (throughput max, instructions/byte min, in_flight_bytes min)",
+  "frontier": [
+   {
+    "chunk": 4194304,
+    "chunk_kib": 4096.0,
+    "depth": 2,
+    "in_flight_bytes": 8388608,
+    "mibps_median": 885.91,
+    "instructions_per_byte": 0.0066
+   },
+   {
+    "chunk": 2097152,
+    "chunk_kib": 2048.0,
+    "depth": 2,
+    "in_flight_bytes": 4194304,
+    "mibps_median": 857.66,
+    "instructions_per_byte": 0.0098
+   },
+   {
+    "chunk": 3145728,
+    "chunk_kib": 3072.0,
+    "depth": 2,
+    "in_flight_bytes": 6291456,
+    "mibps_median": 844.81,
+    "instructions_per_byte": 0.0074
+   },
+   {
+    "chunk": 1572864,
+    "chunk_kib": 1536.0,
+    "depth": 2,
+    "in_flight_bytes": 3145728,
+    "mibps_median": 833.07,
+    "instructions_per_byte": 0.0122
+   },
+   {
+    "chunk": 1048576,
+    "chunk_kib": 1024.0,
+    "depth": 2,
+    "in_flight_bytes": 2097152,
+    "mibps_median": 756.27,
+    "instructions_per_byte": 0.0169
+   },
+   {
+    "chunk": 786432,
+    "chunk_kib": 768.0,
+    "depth": 2,
+    "in_flight_bytes": 1572864,
+    "mibps_median": 719.93,
+    "instructions_per_byte": 0.0217
+   },
+   {
+    "chunk": 4194304,
+    "chunk_kib": 4096.0,
+    "depth": 1,
+    "in_flight_bytes": 4194304,
+    "mibps_median": 689.46,
+    "instructions_per_byte": 0.0065
+   },
+   {
+    "chunk": 524288,
+    "chunk_kib": 512.0,
+    "depth": 2,
+    "in_flight_bytes": 1048576,
+    "mibps_median": 684.77,
+    "instructions_per_byte": 0.0312
+   },
+   {
+    "chunk": 3145728,
+    "chunk_kib": 3072.0,
+    "depth": 1,
+    "in_flight_bytes": 3145728,
+    "mibps_median": 675.61,
+    "instructions_per_byte": 0.0076
+   },
+   {
+    "chunk": 2097152,
+    "chunk_kib": 2048.0,
+    "depth": 1,
+    "in_flight_bytes": 2097152,
+    "mibps_median": 647.6,
+    "instructions_per_byte": 0.01
+   },
+   {
+    "chunk": 1572864,
+    "chunk_kib": 1536.0,
+    "depth": 1,
+    "in_flight_bytes": 1572864,
+    "mibps_median": 622.45,
+    "instructions_per_byte": 0.0125
+   },
+   {
+    "chunk": 393216,
+    "chunk_kib": 384.0,
+    "depth": 2,
+    "in_flight_bytes": 786432,
+    "mibps_median": 618.18,
+    "instructions_per_byte": 0.0407
+   },
+   {
+    "chunk": 262144,
+    "chunk_kib": 256.0,
+    "depth": 2,
+    "in_flight_bytes": 524288,
+    "mibps_median": 597.15,
+    "instructions_per_byte": 0.0598
+   },
+   {
+    "chunk": 196608,
+    "chunk_kib": 192.0,
+    "depth": 2,
+    "in_flight_bytes": 393216,
+    "mibps_median": 582.06,
+    "instructions_per_byte": 0.0788
+   },
+   {
+    "chunk": 1048576,
+    "chunk_kib": 1024.0,
+    "depth": 1,
+    "in_flight_bytes": 1048576,
+    "mibps_median": 570.47,
+    "instructions_per_byte": 0.0174
+   },
+   {
+    "chunk": 786432,
+    "chunk_kib": 768.0,
+    "depth": 1,
+    "in_flight_bytes": 786432,
+    "mibps_median": 537.97,
+    "instructions_per_byte": 0.0224
+   },
+   {
+    "chunk": 65536,
+    "chunk_kib": 64.0,
+    "depth": 4,
+    "in_flight_bytes": 262144,
+    "mibps_median": 515.28,
+    "instructions_per_byte": 0.2321
+   },
+   {
+    "chunk": 65536,
+    "chunk_kib": 64.0,
+    "depth": 2,
+    "in_flight_bytes": 131072,
+    "mibps_median": 511.39,
+    "instructions_per_byte": 0.2311
+   },
+   {
+    "chunk": 131072,
+    "chunk_kib": 128.0,
+    "depth": 2,
+    "in_flight_bytes": 262144,
+    "mibps_median": 509.08,
+    "instructions_per_byte": 0.1169
+   },
+   {
+    "chunk": 524288,
+    "chunk_kib": 512.0,
+    "depth": 1,
+    "in_flight_bytes": 524288,
+    "mibps_median": 501.27,
+    "instructions_per_byte": 0.0322
+   },
+   {
+    "chunk": 98304,
+    "chunk_kib": 96.0,
+    "depth": 2,
+    "in_flight_bytes": 196608,
+    "mibps_median": 491.76,
+    "instructions_per_byte": 0.155
+   },
+   {
+    "chunk": 393216,
+    "chunk_kib": 384.0,
+    "depth": 1,
+    "in_flight_bytes": 393216,
+    "mibps_median": 462.69,
+    "instructions_per_byte": 0.0421
+   },
+   {
+    "chunk": 262144,
+    "chunk_kib": 256.0,
+    "depth": 1,
+    "in_flight_bytes": 262144,
+    "mibps_median": 402.74,
+    "instructions_per_byte": 0.0618
+   },
+   {
+    "chunk": 32768,
+    "chunk_kib": 32.0,
+    "depth": 2,
+    "in_flight_bytes": 65536,
+    "mibps_median": 385.18,
+    "instructions_per_byte": 0.4595
+   },
+   {
+    "chunk": 196608,
+    "chunk_kib": 192.0,
+    "depth": 1,
+    "in_flight_bytes": 196608,
+    "mibps_median": 366.35,
+    "instructions_per_byte": 0.0816
+   },
+   {
+    "chunk": 16384,
+    "chunk_kib": 16.0,
+    "depth": 2,
+    "in_flight_bytes": 32768,
+    "mibps_median": 322.85,
+    "instructions_per_byte": 0.9148
+   },
+   {
+    "chunk": 131072,
+    "chunk_kib": 128.0,
+    "depth": 1,
+    "in_flight_bytes": 131072,
+    "mibps_median": 317.06,
+    "instructions_per_byte": 0.121
+   },
+   {
+    "chunk": 98304,
+    "chunk_kib": 96.0,
+    "depth": 1,
+    "in_flight_bytes": 98304,
+    "mibps_median": 305.78,
+    "instructions_per_byte": 0.1605
+   },
+   {
+    "chunk": 65536,
+    "chunk_kib": 64.0,
+    "depth": 1,
+    "in_flight_bytes": 65536,
+    "mibps_median": 258.55,
+    "instructions_per_byte": 0.2394
+   },
+   {
+    "chunk": 32768,
+    "chunk_kib": 32.0,
+    "depth": 1,
+    "in_flight_bytes": 32768,
+    "mibps_median": 205.76,
+    "instructions_per_byte": 0.4762
+   },
+   {
+    "chunk": 16384,
+    "chunk_kib": 16.0,
+    "depth": 1,
+    "in_flight_bytes": 16384,
+    "mibps_median": 167.47,
+    "instructions_per_byte": 0.9497
+   }
+  ],
+  "frontier_size": 31
+ },
+ "last_pair_gain_3m_to_4m": {
+  "1": 0.02049868963105217,
+  "2": 0.04864989672188713,
+  "4": -0.003194556604861787,
+  "8": 0.0023758228462089637
+ },
+ "verdict": "HOST-LOCAL SWEET REGION LOCATED (plateau entry at {'2': 1572864, '4': 1572864, '8': 786432})",
+ "gate_errors": 0
+}
