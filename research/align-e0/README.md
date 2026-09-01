@@ -87,20 +87,29 @@ matrix is exactly what a native session must run.
 
 WSL2-qualified findings (QUALIFIED_BUT_VIRTUALIZED, not the Phase-3 verdict):
 
-- READ alignment effect located and causally isolated: only the
-  **16-aligned-but-not-32-aligned** exposed pointer (`base + 16`, page
-  offset 16) is slow (2.2x–6.7x across the size × depth matrix);
-  **32-byte alignment at any page offset is already fast** — the READ
-  threshold is in (16, 32] bytes, and 4096 is NOT necessary (64 B captures
-  the full benefit). instructions/op identical across arms (copy-path
-  latency, not instruction count).
-- WRITE: **no material alignment effect** at any size × depth × worker
-  count.
+- READ alignment effect located and causally isolated: only the **+16**
+  exposed pointer (`base + 16`, page offset 16) was slow in the
+  preregistered offset sweep (2.2x–6.7x across the size × depth matrix);
+  offsets 0, 32, 64, …, 2048 were all fast (minflt=0). **32 B is the
+  minimum tested alignment that captures the benefit** — 4096 is NOT
+  necessary (64 B already captures the full benefit in the ladder). The
+  observed split is consistent with a 32-byte-alignment explanation, but
+  the exact threshold and residue-class rule are UNRESOLVED (16-mod-32
+  offsets other than +16, e.g. +48/+80/+112, were not tested).
+  instructions/op shows no material arm separation — the wall effect is
+  NOT explained by an instruction-count delta.
+- WRITE: **no consistent material alignment effect established** at any
+  size × depth × worker count. Some isolated cells are large (1.9–2.2x)
+  but noisy and lacking neighboring-cell / regime consistency; effect == 0
+  is not claimed.
 - The per-op READ cost does NOT disappear with depth or overlap (threaded
   diagnostic: true per-op latency a0 4x–6.5x slower at every worker
-  count). The BUF-E0 d1-material/d8-null is an application-pipeline
-  overlap/ceiling phenomenon: the amplifier shows the benefit at d1
-  (natural/best = 1.41x) and null at d2+.
+  count). MECHANISM DISAPPEARS: NO. At the application level, BUF-E0's
+  d1-material/d8-null is consistent with application-level masking /
+  overlap (SUPPORTED INTERPRETATION — amplifier shows the benefit at d1,
+  natural/best = 1.41x, and no material separation at d2+); the exact
+  application bottleneck is UNRESOLVED (writeback / page-cache ceiling /
+  control-plane factors are hypotheses, not proven root cause).
 - Exact kernel/uaccess mechanism: UNRESOLVED. Native replication is
   required to determine whether the +16 signature is a real Linux property
   or a WSL2 virtualization artifact.

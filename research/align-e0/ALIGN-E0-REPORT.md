@@ -7,10 +7,13 @@ completed; BUF-E0 evidence #264 merged at 312ede5). Preregistration:
 ```
 VERDICT:        ENVIRONMENT-BLOCKED (final Phase-3 verdict pending native
                 Linux replication). WSL2-qualified READ effect located:
-                threshold <= 32 B, single slow point at +16.
+                only +16 slow in the preregistered offset sweep; minimum
+                tested effective alignment 32 B.
 CONFIDENCE:     HIGH on the WSL2-qualified measurements (fail-closed
-                same-work, 0 gate errors, 1360+ runs); LOW-to-NONE on any
-                production interpretation (native replication missing).
+                same-work, 0 gate errors across 5 valid sessions / 1316
+                runs; 1 retained invalid session rejected by the gate);
+                LOW-to-NONE on any production interpretation (native
+                replication missing).
 ENVIRONMENT:    WSL2 (QUALIFIED_BUT_VIRTUALIZED, ENVIRONMENT-LIMITED).
                 Native Linux x86-64 not reachable from this workspace.
 
@@ -26,8 +29,9 @@ NO
 
 ---
 
-## Sessions (all immutable, all same-work gates GREEN except the
-failed-attempt threaded-1 which is retained as evidence)
+## Sessions (6 immutable session records: 5 valid sessions with 0 gate
+errors; 1 intentionally retained invalid session that the fail-closed
+same-work gate correctly rejected)
 
 | Session | Runs | Content |
 | --- | --- | --- |
@@ -64,13 +68,21 @@ a6    round_up(base,2048) 2048         0         1030 ns      2.04x       2399
 a7    round_up(base,4096) 4096         0          963 ns      2.18x       2399
 ```
 
-- **minimum tested effective alignment (ladder): 64 B (A1)** — a1..a7 are
-  statistically equivalent; a0 is the only slow arm (2.2x–6.7x across the
-  size × depth matrix).
+- **DIRECTLY OBSERVED**: in the preregistered offset sweep, +16 (16-byte
+  aligned, page offset 16) was the only slow exposed pointer (2.2x–6.7x
+  across the size × depth matrix); all offsets 0, 32, 64, …, 2048 were
+  fast at every size (minflt=0). a0 is the only slow ladder arm; a1..a7
+  are statistically equivalent.
+- **MINIMUM TESTED EFFECTIVE ALIGNMENT**: 32 B in the tested WSL2
+  configurations — every tested alignment ≥ 32 B captures the benefit.
+- **SUPPORTED HYPOTHESIS**: the observed WSL2 split is consistent with a
+  32-byte-alignment explanation (32-aligned fast, 16-mod-32 slow as
+  tested at +16); the residue-class rule is NOT proven.
 - **4096 necessary: NO (on WSL2 READ)** — 64 B already captures the full
-  benefit; the offset diagnostic (below) refines the threshold to ≤ 32 B.
-- Instructions/op is identical across arms (2399–2400) — the wall gap is
-  copy-path latency/stalls, not instruction count.
+  benefit; 32 B is the smallest tested alignment that does so.
+- instructions/op shows no material arm separation (2399–2400) — the
+  wall-time effect is NOT explained by an instruction-count delta; the
+  exact latency/kernel/uaccess mechanism is UNRESOLVED.
 
 ## READ (WSL2-qualified size × depth map)
 
@@ -103,11 +115,15 @@ a0-vs-best ratio by size × depth (sync microbench):
   1M       1.15   1.91   1.21   1.15   1.38   2.02
 ```
 
-**WRITE: NO MATERIAL ALIGNMENT EFFECT** on WSL2. Ratios hover ~1.0–1.4x
-within dispersion (write 1M cells are extremely noisy — MADs up to ~100–200 µs
-on ~50 µs medians; WSL2 virtualized writeback). The few 1.9–2.2x cells are
-not consistent and are within the noise. WRITE gets its own independent
-verdict: **NO EFFECT (QUALIFIED_BUT_VIRTUALIZED)**.
+**WRITE: NO CONSISTENT MATERIAL ALIGNMENT EFFECT ESTABLISHED** in the
+WSL2-qualified measurements. Ratios hover ~1.0–1.4x within dispersion
+(write 1M cells are extremely noisy — MADs up to ~100–200 µs on ~50 µs
+medians; WSL2 virtualized writeback is a candidate explanation, not a
+proven root cause). Some isolated cells reach 1.9–2.2x, but they are noisy
+and lack neighboring-cell / regime consistency. No alignment effect == 0
+claim is made; equally, no material effect has been established. WRITE gets
+its own independent verdict: **NO CONSISTENT MATERIAL ALIGNMENT EFFECT
+ESTABLISHED (QUALIFIED_BUT_VIRTUALIZED)**.
 
 ## PAGE-RELATIVE OFFSET
 
@@ -125,21 +141,28 @@ offset   0     16     32     64    128    256    512   1024   2048
 fast, at every size. `minflt_io = 0` for every cell (no page-fault
 artifact).
 
-- The slow configuration is **address ≡ 16 (mod 32)**: 16-byte aligned but
-  NOT 32-byte aligned, page offset 16. **32-byte alignment at any page
-  offset is already fast** — so the READ threshold is in (16, 32] bytes,
-  and it is an ADDRESS-ALIGNMENT (mod-32 divisibility) property, not a
-  page-relative-phase property (all non-zero page offsets up to 2048 are
-  fast when 32-aligned).
-- Finer discrimination untested (24, 48, 80, 112… — the 16-mod-64 classes);
-  the exact boundary in (16, 32] is UNRESOLVED.
-- WRITE: flat across all offsets.
+- **DIRECTLY OBSERVED**: +16 was the only slow offset in the preregistered
+  offset sweep; offsets 0, 32, 64, …, 2048 were all fast at every size.
+- **SUPPORTED HYPOTHESIS**: the observed WSL2 split is consistent with a
+  32-byte-alignment explanation — 16-aligned-but-not-32-aligned (+16) is
+  slow and every tested alignment ≥ 32 B is fast at any page offset (all
+  non-zero page offsets up to 2048 are fast when 32-aligned), which also
+  argues against a page-relative-phase property. The residue-class rule
+  (all of 16 mod 32) is NOT proven — only +16 was tested.
+- **MINIMUM TESTED EFFECTIVE ALIGNMENT**: 32 B in the tested WSL2
+  configurations.
+- **UNRESOLVED**: the exact threshold and residue-class rule; other
+  16-mod-32 offsets such as +48/+80/+112 were not tested, nor the finer
+  16-mod-64 classes (24/48/80/112…).
+- WRITE: flat across all offsets (within the dispersion noted above).
 
 ## D1 → D8 CROSSOVER (WSL2-qualified)
 
-- **instructions behavior**: instructions/op identical across arms and
-  ~flat across depths (2400 @ 4K; 484 607 @ 1M) — the cost is not an
-  instruction-count delta, and it does not disappear with depth.
+- **instructions behavior**: instructions/op shows no material arm
+  separation and is ~flat across depths (2400 @ 4K; 484 607 @ 1M) — the
+  wall-time effect is NOT explained by an instruction-count delta, and it
+  does not disappear with depth. The exact latency/kernel/uaccess
+  mechanism is UNRESOLVED.
 - **wall behavior (sync microbench)**: per-op benefit persists at ALL
   depths — the mechanism does not disappear at the syscall level.
 - **wall behavior (threaded diagnostic, real overlap)**: true per-op
@@ -154,19 +177,26 @@ artifact).
 verdict:
 
 ```
-MECHANISM DISAPPEARS:   NO  — the per-op uaccess cost persists at every
-                        depth and under real concurrency (threaded
-                        diagnostic, instructions/op).
-COST OVERLAPPED:        YES at the APPLICATION level (d8 copy pipeline is
-                        dominated by writeback/page-cache ceiling and
-                        control-plane factors, so the READ copy tax is no
-                        longer throughput-limiting); NO at the pure-I/O
-                        level (threaded harness shows the tax remains
-                        throughput-visible even overlapped).
+MECHANISM DISAPPEARS:   NO — supported by pure-I/O and threaded
+                        measurements (per-op READ cost persists at every
+                        depth; true per-op latency a0 4x–6.5x slower at
+                        every worker count).
+APPLICATION-LEVEL MASKING / OVERLAP:
+                        SUPPORTED INTERPRETATION — the amplifier shows the
+                        benefit at d1 (natural/best = 1.41x) and no
+                        material separation at d2+, while the pure-I/O
+                        measurements show the tax persists; consistent
+                        with the READ copy tax ceasing to be the
+                        throughput-limiter at application depth.
+EXACT APPLICATION BOTTLENECK:
+                        UNRESOLVED — writeback, page-cache ceiling and
+                        control-plane factors are candidate explanations
+                        (hypotheses), not proven root cause.
 ```
 
-This adjudicates the BUF-E0 d1-material/d8-null observation: it is a
-pipeline/overlap phenomenon, not a vanishing uaccess cost.
+This adjudicates the BUF-E0 d1-material/d8-null observation: it is
+consistent with a pipeline/overlap interpretation, not a vanishing uaccess
+cost.
 
 ## APPLICATION AMPLIFIER (WSL2-qualified, 512 MiB copy, 1 MiB chunks,
 ThreadPoolBackend workers=1)
@@ -200,27 +230,33 @@ depth   engine    natural   best(64)   4096
 - **CAUSALLY ISOLATED**: exposed pointer alignment/offset is the ONLY
   variable (same over-allocated backing, same page set, same bytes, same
   prefault, minflt=0) — the +16 wall effect on WSL2 is causally the
-  exposed address phase (mod-32 alignment), not allocator, mapping,
-  faults, or content.
+  exposed address phase (offset/alignment), not allocator, mapping,
+  faults, or content; which offset/residue classes are slow is the
+  UNRESOLVED part above.
 - **PROFILE/SOURCE SUPPORT**: none. PMU unreliable on WSL2; kernel
   uaccess source attribution not performed (native step).
-- **INFERRED**: d1/d8 application null attributed to overlap/ceiling
-  (supported by threaded + instructions evidence, but the exact pipeline
-  bottleneck is not profiled).
+- **INFERRED**: d1/d8 application null interpreted as application-level
+  masking/overlap (SUPPORTED INTERPRETATION backed by threaded +
+  instructions evidence); the exact application bottleneck is UNRESOLVED —
+  writeback / page-cache ceiling / control-plane factors are candidate
+  hypotheses, not established root cause.
 - **UNRESOLVED**: exact kernel/uaccess branch for the +16 penalty; whether
   +16 reproduces on NATIVE Linux (it may be a WSL2 virtualization
-  artifact); finer threshold in (16, 32]; the 16-mod-64 offset classes;
-  WRITE 1M dispersion mechanism.
+  artifact); the exact threshold and residue-class rule (16-mod-32 offsets
+  other than +16, e.g. +48/+80/+112, and the 16-mod-64 offset classes were
+  not tested); WRITE 1M dispersion mechanism.
 
 ## PHASE 3 VERDICT
 
 ```
 ALIGNMENT EFFECT:
-  WSL2-qualified READ effect located and causally isolated: the slow
-  configuration is 16-aligned-but-not-32-aligned (+16), 2.2x-6.7x slower;
-  32-byte alignment already captures the benefit at any page offset; WRITE
-  shows no effect. FINAL PHASE-3 VERDICT: ENVIRONMENT-BLOCKED — native
-  Linux replication is mandatory before any interpretation beyond WSL2 and
+  WSL2-qualified READ effect located and causally isolated: +16 was the
+  only slow offset in the preregistered offset sweep (2.2x-6.7x slower);
+  32 B is the minimum tested alignment that captures the benefit at any
+  page offset, and the observed split is consistent with (but does not
+  prove) a 32-byte-alignment rule; WRITE shows no consistent material
+  effect. FINAL PHASE-3 VERDICT: ENVIRONMENT-BLOCKED — native Linux
+  replication is mandatory before any interpretation beyond WSL2 and
   before any production decision.
 
 PRODUCTION ALIGNMENT CHANGE AUTHORIZED:
@@ -249,8 +285,10 @@ REGISTERED BUFFER AUTHORIZED:
   consistent pattern, not on tight CIs.
 - The +16 signature may be a WSL2-specific artifact; native replication is
   required to know whether it is a real Linux kernel/uaccess property.
-- Finer threshold (16, 32] and 16-mod-64 classes (24/48/80/112) untested;
-  only the preregistered offset set was run.
+- The exact threshold and residue-class rule are UNRESOLVED: 16-mod-32
+  offsets other than +16 (e.g. +48/+80/+112) and the 16-mod-64 classes
+  (24/48/80/112) were not tested; only the preregistered offset set was
+  run.
 - Offset diagnostic at d1 only; workers=1 primary (secondary topology
   diagnostic only a0/a7 at 64K/1M).
 - No kernel source inspection or perf attribution performed (PMU
