@@ -73,6 +73,16 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     return *this;
 }
 
+// TAX-0D F01 seam consult — the definition lives in the non-installed
+// src/async/tax0_ablation_seams.hpp (C++17 inline, vague linkage), compiled
+// only in the sluice_async_internal_testing target; production TUs never
+// link it and this declaration is dead code there (the only call site is
+// inside the SLUICE_ASYNC_INTERNAL_TESTING helper below).
+namespace detail {
+bool tax0_f01_gate_outstanding_eval() noexcept;
+}
+using detail::tax0_f01_gate_outstanding_eval;
+
 namespace {
 // Tally one submit_* result into AsyncStats. This is the SINGLE counting
 // authority for the reject-path counters on the L8 reject path:
@@ -109,45 +119,57 @@ void tally_submit(AsyncStats* s, const Result<void>& r) {
 void update_max_outstanding(AsyncStats* s, std::size_t cur) {
     if (s && cur > s->max_outstanding) s->max_outstanding = cur;
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// TAX-0D F01 research ablation (#250/PR #260): R0 (flag unset) evaluates
+// backend_->outstanding() (one virtual call + arena leaf lock round-trip
+// per submit) unconditionally — the pre-#261 production behavior the TAX-0D
+// A/B measurement used as its baseline. R1 (flag set) gates that evaluation
+// on stats presence and is identical to production since #261; both arms
+// stay reproducible here. Never compiled outside the
+// sluice_async_internal_testing target.
+void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
+    if (tax0_f01_gate_outstanding_eval() && s == nullptr) return;
+    update_max_outstanding(s, b.outstanding());
+}
+#else
+// Production path (#261): evaluate outstanding() only when stats can
+// observe it. With stats disabled the previous unconditional argument
+// evaluation (virtual call + arena leaf lock round-trip per submit) was
+// pure overhead; with stats enabled the accounting is unchanged.
+void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
+    if (s == nullptr) return;
+    update_max_outstanding(s, b.outstanding());
+}
+#endif
 }  // namespace
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_read(op, c);
     tally_submit(stats_, r);
-    // Skip the outstanding() evaluation (a virtual call + arena leaf lock
-    // round-trip) when stats cannot observe it; the argument was previously
-    // evaluated unconditionally even with stats_ == nullptr.
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     return r;
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_write(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_data(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_all(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     return r;
 }
 
@@ -163,9 +185,7 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_read(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
@@ -176,9 +196,7 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_write(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
@@ -189,9 +207,7 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_data(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }
@@ -202,9 +218,7 @@ Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op,
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_all(op, c);
     tally_submit(stats_, r);
-    if (stats_) {
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
+    tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
 }

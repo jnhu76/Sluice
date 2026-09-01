@@ -186,3 +186,41 @@ do
         target_end()
     end
 end
+
+-- tax0_z_ladder_bench (#250 TAX-0B — preregistered semantic-floor ladder):
+-- Z1 raw liburing bare floor / Z1b minimal semantic-equivalent uring (the
+-- frozen F05 checklist as explicit userspace machinery) / Z1bw Z1b + one
+-- lost-wake-safe continuation consumer / Z2 AsyncIoContext manual driver
+-- (no Scheduler) / Z3 ApplicationRuntime await_completion. Z2/Z3 link the
+-- PRODUCTION sluice_async only (no internal-testing seams). The raw arms
+-- include <liburing.h> directly (package/include propagate from the
+-- sluice_async dep under --with-liburing); without liburing the target
+-- compiles to a fail-closed stub. Lives under research/ (experiment
+-- harness, rx1 precedent). Driven by research/tax0/scripts/tax0z.py.
+do
+    local R = SLUICE_ROOT
+    if os.isfile(R .. "research/tax0/bench/tax0_z_ladder_bench.cpp") then
+        target("tax0_z_ladder_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include")
+            add_files(R .. "research/tax0/bench/tax0_z_ladder_bench.cpp")
+        target_end()
+        -- tax0_ablation_bench: the SAME harness linked against
+        -- sluice_async_internal_testing (never production sluice_async) so
+        -- the TAX-0D F01/F02 R0/R1 ablation modes are installable via CLI.
+        -- Research instrument only. F01 R0 reproduces the pre-#261
+        -- unconditional-evaluation baseline (production is stats-gated
+        -- since #261); F02 R0 remains production behavior.
+        target("tax0_ablation_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs(R .. "include")
+            add_files(R .. "research/tax0/bench/tax0_z_ladder_bench.cpp")
+        target_end()
+    end
+end

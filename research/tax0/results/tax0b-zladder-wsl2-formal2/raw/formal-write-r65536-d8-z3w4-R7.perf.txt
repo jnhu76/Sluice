@@ -1,0 +1,6 @@
+tax0_z_ladder_bench: task failed: z3: terminal I/O error (code 1, os 125)
+tax0_z_ladder_bench: semantic failure: measured rep failed same-work accounting
+107571607,,instructions:u,324853711,100.00,,
+110281651,,cycles:u,324853711,100.00,,
+332881,,branch-misses:u,324853711,100.00,,
+5858989,,cache-misses:u,324853711,100.00,,

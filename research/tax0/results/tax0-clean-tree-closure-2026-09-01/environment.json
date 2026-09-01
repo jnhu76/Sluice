@@ -1,0 +1,48 @@
+{
+  "timestamp_utc": "2026-08-31T18:32:23.346224+00:00",
+  "git": {
+    "head": "7cc294a7132ef429e242f86954307f53da249292",
+    "branch": "research/tax0-a2-control-plane",
+    "dirty": false
+  },
+  "system": {
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "wsl": true,
+    "logical_cpus": 8,
+    "cpu_model": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "affinity_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "governor": null,
+    "mem_total_kb": 16377464,
+    "perf_event_paranoid": "2"
+  },
+  "filesystem": {
+    "data_dir": "/home/hoo/Projects/Sluice/build/tax0z-data",
+    "data_dir_fs": "ext4",
+    "notes": "WSL2 ext4 on virtual block device (no raw NVMe semantics)"
+  },
+  "virtualization": {
+    "wsl2": true,
+    "classification": "QUALIFIED_BUT_VIRTUALIZED",
+    "claim_limit": "ENVIRONMENT-LIMITED: control-plane user-instruction attribution pilot only; no native NVMe/throughput conclusions (census z_ladder_preregistration.environment_note)"
+  },
+  "tools": {
+    "perf": "perf version 7.0.12",
+    "python": "3.14.4"
+  },
+  "liburing": "2.14",
+  "build": {
+    "mode": "release",
+    "bench_binary": "/home/hoo/Projects/Sluice/build/linux/x86_64/release/tax0_z_ladder_bench",
+    "bench_binary_sha256": "f854642e894df2c85efc26f228c343eea7f6453436227f467ab48c4104a352ba",
+    "compiler": "Ubuntu clang version 21.1.8 (6ubuntu1)"
+  }
+}

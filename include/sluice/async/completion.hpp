@@ -87,6 +87,13 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// C4 pattern: the non-installed TAX-0D ablation seam declarations live in
+// src/async and resolve only on the internal-testing include path. Production
+// TUs compile none of this (guard above) and keep byte-identical behavior.
+#include "tax0_ablation_seams.hpp"
+#endif
+
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -410,6 +417,11 @@ private:
             detail::completion_authority_fail_fast();
         }
         storage_.set(std::move(res));
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // TAX-0D F02 R1 (research-only, seam build not Batch-safe with the
+        // flag set): skip the ordinary reap-seq stamp. Default R0.
+        if (!detail::tax0_f02_skip_reap_seq())
+#endif
         reap_seq_ = detail::next_reap_seq();
         state_.store(State::ready, std::memory_order::release);
     }
@@ -622,6 +634,11 @@ private:
         }
         if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
         else { has_error_ = false; }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // TAX-0D F02 R1 (research-only, seam build not Batch-safe with the
+        // flag set): skip the ordinary reap-seq stamp. Default R0.
+        if (!detail::tax0_f02_skip_reap_seq())
+#endif
         reap_seq_ = detail::next_reap_seq();
         state_.store(State::ready, std::memory_order::release);
     }

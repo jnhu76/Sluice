@@ -1,0 +1,26 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 12K of event 'cpu/cycles/Pu'
+# Event count (approx.): 5183646118
+#
+# Overhead  Command          Shared Object            Symbol
+# ........  ...............  .......................  .................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    97.90%  tax0_z_ladder_b  tax0_z_ladder_bench_sym  [.] main::$_0::operator()((anonymous namespace)::RepResult&) const
+            |
+             --97.67%--(anonymous namespace)::word_sum(std::byte const*, unsigned long) (inlined)
+                       (anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&) (inlined)
+                       main::$_0::operator()((anonymous namespace)::RepResult&) const
+                       main
+                       __libc_start_call_main
+                       __libc_start_main_impl (inlined)
+                       _start
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
