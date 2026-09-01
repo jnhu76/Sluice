@@ -1,0 +1,56 @@
+{
+ "timestamp_utc": "2026-09-01T04:57:55.383941+00:00",
+ "git": {
+  "head": "db072c93455c7eb780454da61d8c492f977519f1",
+  "branch": "research/buf-e0-buffer-truth",
+  "dirty": false
+ },
+ "system": {
+  "kernel": "6.18.33.2-microsoft-standard-WSL2",
+  "wsl": true,
+  "logical_cpus": 8,
+  "cpu_model": "AMD Ryzen 7 5800H with Radeon Graphics",
+  "mem_total_kb": 16377464,
+  "page_size": 4096,
+  "thp_enabled": "always [madvise] never",
+  "perf_event_paranoid": "2"
+ },
+ "filesystem": {
+  "data_dir": "/home/hoo/Projects/Sluice/build/bufe0-data",
+  "data_dir_fs": "ext4 (WSL2 virtual block device)",
+  "data_bytes": 268435456,
+  "cache_regime": "warm (untimed warm sweep before formal reps)"
+ },
+ "virtualization": {
+  "wsl2": true,
+  "classification": "QUALIFIED_BUT_VIRTUALIZED",
+  "claim_limit": "ENVIRONMENT-LIMITED: allocation/initialization/fault-shifting attribution and same-host causal comparison only; no native NVMe/NUMA/TLB claims"
+ },
+ "tools": {
+  "perf": "perf version 7.0.12",
+  "python": "3.14.4"
+ },
+ "build": {
+  "mode": "release",
+  "bench_binary": "/home/hoo/Projects/Sluice/build/linux/x86_64/release/buf_e0_bench",
+  "bench_binary_sha256": "6a54fb690306fb252915c7c68a484378ee2f793ab2b7c0fdab1e99cd4ee279dc",
+  "amp_binary": "/home/hoo/Projects/Sluice/build/linux/x86_64/release/buf_e0_amp_bench",
+  "amp_binary_sha256": "8f4802143317abcf133e3c4f934e136c4a547f289b2c0cbe2093821ef44c61f3"
+ },
+ "protocol": {
+  "perf_events": [
+   "instructions:u",
+   "cycles:u"
+  ],
+  "rep_pair": [
+   7,
+   14
+  ],
+  "normalization": "double-difference (total(R14)-total(R7))/7/ops_per_rep",
+  "fault_source": "in-process getrusage ru_minflt (per region)",
+  "run_order": "cells in matrix order; phases A,B,D,C; arms b0,b1,b2,b3; R7 then R14 per pair",
+  "memory_budget_per_cell": 536870912
+ },
+ "data_file_sha256": "5324ebf6e96c8b74bd2e2d996f69860cd57f0eaa19c7207b9574f05ee8dc5e25",
+ "purpose": "BUF-E0 application amplifier: engine-b0 (production) vs replica-b0/b1/b3 (storage variants); 512 MiB copy, full engine call measured, workers=1, sync=none"
+}

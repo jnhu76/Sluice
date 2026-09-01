@@ -1,0 +1,84 @@
+{
+ "purpose": "BUF-E0 microbench formal session (#263 Phase 2)",
+ "preregistration": "research/buf-e0/BUF-E0-PREREGISTRATION.md",
+ "matrix": {
+  "phases": [
+   "A",
+   "B",
+   "D",
+   "C"
+  ],
+  "arms": [
+   "b0",
+   "b1",
+   "b2",
+   "b3"
+  ],
+  "sizes": [
+   4096,
+   65536,
+   1048576
+  ],
+  "slots": [
+   1,
+   8,
+   32,
+   128
+  ],
+  "rep_pair": [
+   7,
+   14
+  ],
+  "kc_formula": "clamp(256MiB/(slots*size), 1, 16) (phase C)"
+ },
+ "cells": [
+  [
+   4096,
+   1
+  ],
+  [
+   4096,
+   8
+  ],
+  [
+   4096,
+   32
+  ],
+  [
+   4096,
+   128
+  ],
+  [
+   65536,
+   1
+  ],
+  [
+   65536,
+   8
+  ],
+  [
+   65536,
+   32
+  ],
+  [
+   65536,
+   128
+  ],
+  [
+   1048576,
+   1
+  ],
+  [
+   1048576,
+   8
+  ],
+  [
+   1048576,
+   32
+  ],
+  [
+   1048576,
+   128
+  ]
+ ]
+}

@@ -224,3 +224,46 @@ do
         target_end()
     end
 end
+
+-- buf_e0_bench (#263 Phase 2 BUF-E0 — buffer allocation / initialization /
+-- first-touch truth): storage-representation arms B0 vector<byte> / B1
+-- uninitialized owned / B2 anonymous mmap / B3 page-aligned over lifecycle
+-- phases A (alloc->ready), B (alloc->first useful I/O), C (prefaulted
+-- steady-state reuse) + D (memory-only first-touch diagnostic). Self-
+-- contained (plain pread; the buffer lifecycle is the object, no backend).
+-- Driven by research/buf-e0/scripts/bufe0.py; preregistration
+-- research/buf-e0/BUF-E0-PREREGISTRATION.md. Research instrument only.
+do
+    local R = SLUICE_ROOT
+    if os.isfile(R .. "bench/buf_e0_bench.cpp") then
+        target("buf_e0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_files(R .. "bench/buf_e0_bench.cpp")
+        target_end()
+    end
+end
+
+-- buf_e0_amp_bench (#263 BUF-E0 application amplifier, prereg §8): the
+-- realistic PipelineSlot lifecycle end-to-end with slot storage as the only
+-- variable — the REAL production engine (apps/sluice-copy/copy_task.cpp,
+-- run_pipelined_copy_with_backend) vs a verbatim research replica of the
+-- same copy task with selectable slot storage (vector / uninitialized /
+-- page-aligned). Same-work fail-closed per rep; runner hashes src/dst
+-- post-exit. Research instrument only — production code untouched.
+do
+    local R = SLUICE_ROOT
+    local amp = R .. "bench/buf_e0_amp_bench.cpp"
+    local copy_task = R .. "apps/sluice-copy/copy_task.cpp"
+    if os.isfile(amp) and os.isfile(copy_task) then
+        target("buf_e0_amp_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "apps/sluice-copy")
+            add_files(amp, copy_task)
+        target_end()
+    end
+end

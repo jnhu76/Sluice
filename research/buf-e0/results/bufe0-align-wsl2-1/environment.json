@@ -1,0 +1,54 @@
+{
+ "timestamp_utc": "2026-09-01T04:51:54.121381+00:00",
+ "git": {
+  "head": "39b7ca4d197327a303c98b2ce8dde1c300b32052",
+  "branch": "research/buf-e0-buffer-truth",
+  "dirty": true
+ },
+ "system": {
+  "kernel": "6.18.33.2-microsoft-standard-WSL2",
+  "wsl": true,
+  "logical_cpus": 8,
+  "cpu_model": "AMD Ryzen 7 5800H with Radeon Graphics",
+  "mem_total_kb": 16377464,
+  "page_size": 4096,
+  "thp_enabled": "always [madvise] never",
+  "perf_event_paranoid": "2"
+ },
+ "filesystem": {
+  "data_dir": "/home/hoo/Projects/Sluice/build/bufe0-data",
+  "data_dir_fs": "ext4 (WSL2 virtual block device)",
+  "data_bytes": 268435456,
+  "cache_regime": "warm (untimed warm sweep before formal reps)"
+ },
+ "virtualization": {
+  "wsl2": true,
+  "classification": "QUALIFIED_BUT_VIRTUALIZED",
+  "claim_limit": "ENVIRONMENT-LIMITED: allocation/initialization/fault-shifting attribution and same-host causal comparison only; no native NVMe/NUMA/TLB claims"
+ },
+ "tools": {
+  "perf": "perf version 7.0.12",
+  "python": "3.14.4"
+ },
+ "build": {
+  "mode": "release",
+  "bench_binary": "/home/hoo/Projects/Sluice/build/linux/x86_64/release/buf_e0_bench",
+  "bench_binary_sha256": "6a54fb690306fb252915c7c68a484378ee2f793ab2b7c0fdab1e99cd4ee279dc"
+ },
+ "protocol": {
+  "perf_events": [
+   "instructions:u",
+   "cycles:u"
+  ],
+  "rep_pair": [
+   7,
+   14
+  ],
+  "normalization": "double-difference (total(R14)-total(R7))/7/ops_per_rep",
+  "fault_source": "in-process getrusage ru_minflt (per region)",
+  "run_order": "cells in matrix order; phases A,B,D,C; arms b0,b1,b2,b3; R7 then R14 per pair",
+  "memory_budget_per_cell": 536870912
+ },
+ "data_file_sha256": "a25a1518a93c8db33f03e2eea5c4dfaaff31440bc42993c302f6cd51c13e5a64",
+ "purpose": "AMENDMENT 1 alignment diagnostic: b1a (B1 mechanism + page-aligned pointer) vs b1/b2/b3, phases B/C"
+}

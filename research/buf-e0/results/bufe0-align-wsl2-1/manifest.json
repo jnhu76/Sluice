@@ -1,0 +1,31 @@
+{
+ "purpose": "AMENDMENT 1 alignment diagnostic: b1a (B1 mechanism + page-aligned pointer) vs b1/b2/b3, phases B/C",
+ "amendment": "BUF-E0-PREREGISTRATION.md AMENDMENT 1",
+ "matrix": {
+  "phases": [
+   "B",
+   "C"
+  ],
+  "arms": [
+   "b1",
+   "b1a",
+   "b2",
+   "b3"
+  ],
+  "sizes": [
+   4096,
+   65536,
+   1048576
+  ],
+  "slots": [
+   1,
+   8,
+   32,
+   128
+  ],
+  "rep_pair": [
+   7,
+   14
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "purpose": "arena-regime secondary probe: default glibc allocator, phase A, {4K,64K} x slots 8 (prereg \u00a75; not primary)",
+ "matrix": {
+  "phases": [
+   "A"
+  ],
+  "arms": [
+   "b0",
+   "b1",
+   "b2",
+   "b3"
+  ],
+  "sizes": [
+   4096,
+   65536
+  ],
+  "slots": [
+   8
+  ]
+ }
+}
