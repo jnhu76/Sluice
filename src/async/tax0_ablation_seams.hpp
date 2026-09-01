@@ -4,11 +4,13 @@
 // Registers the R1 research variants of the two suspected seams frozen in
 // research/tax0/TAX0-A2-CONTROL-PLANE-SEMANTIC-FLOOR.md:
 //
-//   F01  AsyncIoContext::submit_* evaluates backend_->outstanding() (arena
+//   F01  AsyncIoContext::submit_* evaluated backend_->outstanding() (arena
 //        leaf lock) unconditionally even when stats are disabled. R1 gates
 //        that evaluation on stats presence (identical semantics either way:
 //        stats enabled -> identical accounting; stats disabled -> nothing
-//        observable changes).
+//        observable changes). R1 became the PRODUCTION behavior in #261;
+//        this seam keeps the R0 (unconditional) arm reproducible for the
+//        TAX-0D A/B measurement.
 //   F02  Completion::publish_from_reap() stamps the process-global reap
 //        sequence (seq_cst RMW) on EVERY publication although only
 //        Batch::next() consumes it. R1 skips the stamp for ordinary
@@ -18,9 +20,11 @@
 //        candidate as-is.
 //
 // The production targets never define SLUICE_ASYNC_INTERNAL_TESTING and
-// compile none of this. Default mode in every build is R0 (production
-// behavior); the ablation bench installs R1 through tax0_ablation_modes()
-// before driving I/O.
+// compile none of this. Default mode in every build is R0; the ablation
+// bench installs R1 through tax0_ablation_modes() before driving I/O.
+// For F01, production has been R1-shaped since #261 (stats-gated
+// evaluation), so this seam's R0 arm exists to reproduce the pre-#261
+// baseline; for F02, R0 remains the production behavior.
 //
 // Definitions are C++17 inline (vague linkage): every internal-testing TU
 // that compiles the guarded production sources sees the one shared storage

@@ -73,8 +73,11 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     return *this;
 }
 
-// TAX-0D F01 seam consult — external linkage, defined only in the
-// sluice_async_internal_testing target (tests/tax0_ablation_seams.cpp).
+// TAX-0D F01 seam consult — the definition lives in the non-installed
+// src/async/tax0_ablation_seams.hpp (C++17 inline, vague linkage), compiled
+// only in the sluice_async_internal_testing target; production TUs never
+// link it and this declaration is dead code there (the only call site is
+// inside the SLUICE_ASYNC_INTERNAL_TESTING helper below).
 namespace detail {
 bool tax0_f01_gate_outstanding_eval() noexcept;
 }
@@ -118,19 +121,24 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-// TAX-0D F01 research ablation (#250/PR #260): R1 evaluates the
-// backend_->outstanding() argument (one virtual call + arena leaf lock
-// round-trip per submit) only when stats can observe it. Production
-// behavior (R0, default) stays unconditional. Never compiled outside the
+// TAX-0D F01 research ablation (#250/PR #260): R0 (flag unset) evaluates
+// backend_->outstanding() (one virtual call + arena leaf lock round-trip
+// per submit) unconditionally — the pre-#261 production behavior the TAX-0D
+// A/B measurement used as its baseline. R1 (flag set) gates that evaluation
+// on stats presence and is identical to production since #261; both arms
+// stay reproducible here. Never compiled outside the
 // sluice_async_internal_testing target.
 void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
     if (tax0_f01_gate_outstanding_eval() && s == nullptr) return;
     update_max_outstanding(s, b.outstanding());
 }
 #else
-// Production path: the identical unconditional evaluation the submit_*
-// methods always performed; the helper only names the shared tail.
+// Production path (#261): evaluate outstanding() only when stats can
+// observe it. With stats disabled the previous unconditional argument
+// evaluation (virtual call + arena leaf lock round-trip per submit) was
+// pure overhead; with stats enabled the accounting is unchanged.
 void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
+    if (s == nullptr) return;
     update_max_outstanding(s, b.outstanding());
 }
 #endif

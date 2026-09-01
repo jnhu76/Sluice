@@ -24,6 +24,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/error.hpp>
+#include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -190,6 +191,71 @@ SLUICE_TEST_CASE(async_io_context_chained_moves_preserve_authority) {
     SLUICE_CHECK(c.result().value() == 8);
     SLUICE_CHECK(c_ctx.outstanding() == 0);
     c.reset();  // slot release handshake (ADR Decision 15)
+}
+
+// ---- F01: disabled-stats submit paths must not evaluate outstanding() ------
+
+// #261 regression (TAX-0D F01): the submit hot path's max-outstanding
+// sampling previously evaluated backend_->outstanding() (virtual call + arena
+// leaf lock round-trip) unconditionally, even with stats disabled where the
+// value cannot be observed. With stats == nullptr the F01 accounting must
+// now cause ZERO outstanding() calls. The counting wrapper proves both the
+// skip (stats disabled) and that the instrument itself observes calls
+// (stats enabled -> exactly one evaluation per submit).
+namespace {
+class OutstandingCountingFake final : public FakeAsyncBackend {
+public:
+    std::size_t outstanding() const noexcept override {
+        ++outstanding_calls_;
+        return FakeAsyncBackend::outstanding();
+    }
+    std::size_t outstanding_calls() const noexcept { return outstanding_calls_; }
+
+private:
+    mutable std::size_t outstanding_calls_ = 0;
+};
+}  // namespace
+
+SLUICE_TEST_CASE(async_io_context_disabled_stats_skips_outstanding_eval) {
+    auto backend = std::make_unique<OutstandingCountingFake>();
+    OutstandingCountingFake* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend), nullptr);  // stats disabled
+
+    std::byte b[8]{};
+    Completion<std::size_t> c1, c2;
+    SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 8, 0}, c1).has_value());
+    SLUICE_CHECK(ctx.submit_write(WriteOp{0, b, 8, 0}, c2).has_value());
+    // Snapshot while the context is alive: the only outstanding() callers
+    // so far are the F01 accounting sites under test. (The destructor's L11
+    // outstanding() check is a lifecycle contract, not F01 accounting, and
+    // runs only after this assertion.)
+    SLUICE_CHECK(raw->outstanding_calls() == 0);
+
+    raw->complete_oldest_with_bytes(8);
+    raw->complete_oldest_with_bytes(8);
+    SLUICE_CHECK(ctx.poll() == 2);
+    c1.reset();
+    c2.reset();
+}
+
+SLUICE_TEST_CASE(async_io_context_enabled_stats_still_samples_outstanding) {
+    // Instrument self-check + stats-presence behavior: with stats attached,
+    // each submit still evaluates outstanding() exactly once, so the
+    // disabled-stats case above cannot false-pass through a blind counter.
+    auto backend = std::make_unique<OutstandingCountingFake>();
+    OutstandingCountingFake* raw = backend.get();
+    sluice::AsyncStats stats{};
+    AsyncIoContext ctx(std::move(backend), &stats);
+
+    std::byte b[8]{};
+    Completion<std::size_t> c;
+    SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 8, 0}, c).has_value());
+    SLUICE_CHECK(raw->outstanding_calls() == 1);
+    SLUICE_CHECK(stats.max_outstanding == 1);
+
+    raw->complete_oldest_with_bytes(8);
+    SLUICE_CHECK(ctx.poll() == 1);
+    c.reset();
 }
 
 SLUICE_MAIN()

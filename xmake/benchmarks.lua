@@ -210,8 +210,10 @@ do
         target_end()
         -- tax0_ablation_bench: the SAME harness linked against
         -- sluice_async_internal_testing (never production sluice_async) so
-        -- the TAX-0D F01/F02 R1 ablation modes are installable via CLI.
-        -- Research instrument only; R0 default keeps production behavior.
+        -- the TAX-0D F01/F02 R0/R1 ablation modes are installable via CLI.
+        -- Research instrument only. F01 R0 reproduces the pre-#261
+        -- unconditional-evaluation baseline (production is stats-gated
+        -- since #261); F02 R0 remains production behavior.
         target("tax0_ablation_bench")
             set_kind("binary")
             set_default(false)
