@@ -44,7 +44,7 @@ prohibited.
 | Field | WSL2 campaign | Native campaign (Phase-3 evidence) |
 | --- | --- | --- |
 | BASE SHA | `312ede532f66236b8e1723368d3d4ab6bbb7476f` (master after #264) | same |
-| Branch | `research/align-e0` | `research/align-e0` @ 7d7046fc |
+| Branch | `research/align-e0` | `research/align-e0` (native sessions @ 1936a466; merged as PR #266) |
 | Host | WSL2 (`Hu`, kernel `6.18.33.2-microsoft-standard-WSL2`) — VIRTUALIZED | bare metal (NOT WSL/container): Fedora 44, kernel `7.1.9-200.fc44.x86_64` |
 | CPU | AMD Ryzen 7 5800H (8 logical CPUs, SMT) | Intel Xeon E5-2666 v3 @ 2.90 GHz (10C/20T, SMT, turbo 3.5 GHz) |
 | Page size | 4096 | 4096 |
@@ -85,9 +85,13 @@ native sessions, 0 gate errors). Findings:
   @4K WSL2; 485 102 / 484 607 @1M) — wall effects are NOT
   instruction-count deltas. `cycles:u` unreliable on both hosts (WSL2:
   virtualized counter; native: frequency scaling between process runs).
-- Minimum tested effective alignment on native: 32 B separation / 64 B
-  ladder arm (4096 NOT necessary) — but with no application-level payoff
-  and a sub-1.5x microbench effect, no production change is authorized.
+- Minimum TESTED effective alignment on native: 32 B separation / 64 B
+  ladder arm (4096 NOT necessary). NOT PROVEN: the full address ≡ 16
+  (mod 32) residue class (only +16 was tested in the slow class). With
+  no application-level payoff and a sub-1.5x microbench effect, no
+  production change is authorized.
+- Residual scope is re-tracked: #267 (mechanism/environment), #268
+  (application materiality).
 
 WSL2-qualified references (not the verdict): the full WSL2 tables live in
 `ALIGN-E0-REPORT.md` Part A; the side-by-side table is Part C.
@@ -98,5 +102,6 @@ WSL2-qualified references (not the verdict): the full WSL2 tables live in
 - No BufferStorage / BufferPool / BufferLease / registered-fixed buffers /
   provided buffers / O_DIRECT / splice / copy_file_range / reflink /
   zero-copy / SIMD / custom memcpy / NUMA / huge pages / scheduler change.
-- One Draft research PR; DO NOT MERGE; stop for adversarial review after the
-  verdict. Even a YES verdict puts no production code on this PR.
+- One research PR (#266), merged as the Phase-3 evidence record; adversarial
+  review of the evidence follows. Even a YES verdict puts no production
+  code on this PR.

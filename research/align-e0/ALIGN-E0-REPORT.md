@@ -26,10 +26,13 @@ ENVIRONMENT:    NATIVE Linux x86-64 (bare metal): Fedora 44, kernel
                 clang 22.1.8 Release.
 
 BASE:           312ede532f66236b8e1723368d3d4ab6bbb7476f
-HEAD:           7d7046fc (8600583 + one metadata-only text fix)
+PR HEAD:        research/align-e0 merged as PR #266 (native campaign run
+                state: 1936a466; claim-hygiene/merge-closure text commits
+                added at close)
 BRANCH:         research/align-e0
 EXECUTION ISSUE:#265
-DRAFT PR:       research/align-e0 (Draft, DO NOT MERGE)
+PR:             #266 — merged as the immutable ALIGN-E0 Phase-3 evidence
+                record; no production code
 
 PRODUCTION CODE CHANGED:
 NO
@@ -122,9 +125,9 @@ effective alignment on WSL2; 4096 NOT necessary.**
   pure-I/O; MECHANISM DISAPPEARS: NO.
 - Amplifier: benefit survives at d1 (natural/best 1.41x), null at d2+
   (1.00–1.19x within dispersion) — SUPPORTED INTERPRETATION:
-  application-level masking/overlap; exact application bottleneck
-  UNRESOLVED (writeback / page-cache ceiling / control-plane =
-  hypotheses).
+  application-level masking/amortization (candidate interpretation;
+  exact application bottleneck UNRESOLVED — writeback / page-cache
+  ceiling / control-plane listed as hypotheses, not root cause).
 
 ### WRITE (WSL2-qualified)
 
@@ -348,9 +351,11 @@ VERDICT (primary term):
   native.
   The WSL2 +16 penalty is therefore NOT a pure virtualization artifact
   (a genuine, small per-op READ uaccess property candidate exists on
-  native), but the WSL2 MAGNITUDE, its size-profile, and its
-  application-level benefit are environment-specific and do not
-  transfer.
+  native): the signature REPRODUCES IN KIND, but the WSL2 MAGNITUDE, its
+  size-profile, and its application-level benefit are environment-
+  specific and do NOT transfer (magnitude and application significance:
+  NOT transferable; virtualization amplification: research hypothesis,
+  re-tracked in #267).
 
 PRODUCTION ALIGNMENT CHANGE AUTHORIZED:
   NO   (production gate: 1 native-reproduced — partially (per-op READ
@@ -370,13 +375,15 @@ SIMD / CUSTOM MEMCPY:
   NO
 ```
 
-Targeted follow-up candidates (not authorized work; for a later issue if
-the roadmap keeps the thread): (a) refine the native READ threshold 24/32/
-48 and the +48/+80 residue (requires a preregistered AMENDMENT — frozen
-matrix must change consciously); (b) an application amplifier with the
-4K–64K regime that shows the per-op tax (1 MiB-chunk copy absorbs it);
-(c) kernel uaccess source attribution (copy_user_enhanced_fast_string on
-Haswell-EP) if a causal mechanism claim is ever needed.
+Residual scope is re-tracked OUT of this PR (it does not gate the merge):
+- #267 — mechanism/environment: virtualization amplification,
+  address-phase/cache-line geometry, kernel uaccess attribution
+  (e.g. `copy_user_enhanced_fast_string` on Haswell-EP) if a causal
+  mechanism claim is ever needed.
+- #268 — application materiality: small/medium-chunk application
+  amplifier in the 4K–64K regime (ALIGN-E1).
+- Threshold refinement 24/32/48 and the +48/+80 residue class remain
+  untested (frozen matrix; would require a preregistered AMENDMENT).
 
 ## LIMITATIONS
 
@@ -402,9 +409,13 @@ Haswell-EP) if a causal mechanism claim is ever needed.
 ## FINAL STATUS
 
 ```
-Draft PR:     HUMAN REVIEW READY — Phase 3 scientifically closed
+PR #266:      MERGED as the immutable ALIGN-E0 Phase-3 evidence record.
               (ENVIRONMENT-BLOCKED superseded by a completed native
-              replication); verdict MIXED — NEED TARGETED FOLLOW-UP;
-              PRODUCTION ALIGNMENT CHANGE AUTHORIZED: NO
-MERGED:       NO
+              replication; verdict MIXED — NEED TARGETED FOLLOW-UP; no
+              production code in the PR; production alignment change
+              NOT authorized.)
+ISSUE #265:   CLOSED as completed once the evidence PR merged.
+RESIDUAL:     #267 (mechanism/environment) and #268 (application
+              materiality) — OPEN, independent of this evidence record.
+MERGED:       YES (PR #266)
 ```
