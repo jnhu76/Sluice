@@ -1,0 +1,30 @@
+{
+ "purpose": "SECONDARY TOPOLOGY DIAGNOSTIC (d1/d8 overlap adjudication)",
+ "preregistration": "research/align-e0/ALIGN-E0-PREREGISTRATION.md",
+ "matrix": {
+  "mode": "threaded",
+  "workers": [
+   2,
+   4,
+   8,
+   16,
+   32
+  ],
+  "arms": [
+   "a0",
+   "a7"
+  ],
+  "dirs": [
+   "read",
+   "write"
+  ],
+  "sizes": [
+   65536,
+   1048576
+  ],
+  "rep_pair": [
+   7,
+   14
+  ]
+ }
+}

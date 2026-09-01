@@ -267,3 +267,48 @@ do
         target_end()
     end
 end
+
+-- align_e0_bench (#265 Phase 3 ALIGN-E0 — I/O buffer alignment threshold ×
+-- size × depth × direction): one over-allocated owned block per process,
+-- exposed-pointer alignment arms A0..A7 + PAGE-OFFSET-E0 offset mode,
+-- READ/WRITE independent verdicts, sync depth + threaded secondary
+-- topology diagnostic. Self-contained (plain pread/pwrite; the buffer
+-- geometry is the object, no backend). Driven by
+-- research/align-e0/scripts/aligne0.py; preregistration
+-- research/align-e0/ALIGN-E0-PREREGISTRATION.md. Research instrument only.
+do
+    local R = SLUICE_ROOT
+    if os.isfile(R .. "research/align-e0/bench/align_e0_bench.cpp") then
+        target("align_e0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_files(R .. "research/align-e0/bench/align_e0_bench.cpp")
+            add_syslinks("pthread")
+        target_end()
+    end
+end
+
+-- align_e0_amp_bench (#265 ALIGN-E0 application amplifier, prereg §9): the
+-- realistic copy pipeline end-to-end with the exposed buffer alignment as
+-- the only variable — the REAL production engine (apps/sluice-copy/
+-- copy_task.cpp, run_pipelined_copy_with_backend) as fidelity reference vs
+-- a verbatim research replica of the same copy task with selectable exposed
+-- alignment (natural = base+16 / aligned = round_up(base, N)). Same-work
+-- fail-closed per rep; runner hashes src/dst post-exit. Research
+-- instrument only — production code untouched.
+do
+    local R = SLUICE_ROOT
+    local amp = R .. "research/align-e0/bench/align_e0_amp_bench.cpp"
+    local copy_task = R .. "apps/sluice-copy/copy_task.cpp"
+    if os.isfile(amp) and os.isfile(copy_task) then
+        target("align_e0_amp_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "apps/sluice-copy")
+            add_files(amp, copy_task)
+        target_end()
+    end
+end
