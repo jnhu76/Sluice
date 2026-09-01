@@ -501,10 +501,185 @@ def cmd_arena(args):
         sys.exit(3)
 
 
+def cmd_align(args):
+    """AMENDMENT 1 diagnostic session: arm b1a (B1 + page-aligned pointer)
+    vs b1/b2/b3, phases B and C, full matrix, identical protocol. Purpose:
+    mechanism attribution for the formal session's Outcome-D pattern
+    (page-aligned arms 2.5-5x faster in prefaulted steady state)."""
+    session_dir = RESULTS / args.session
+    if session_dir.exists():
+        print(f"session {session_dir} already exists (immutable)", file=sys.stderr)
+        sys.exit(2)
+    if not DATA_FILE.exists():
+        print("run the pinned session first (data file missing)", file=sys.stderr)
+        sys.exit(2)
+    env = environment_json()
+    env["data_file_sha256"] = sha256_file(DATA_FILE)
+    env["purpose"] = ("AMENDMENT 1 alignment diagnostic: b1a (B1 mechanism + "
+                      "page-aligned pointer) vs b1/b2/b3, phases B/C")
+    session_dir.mkdir(parents=True)
+    (session_dir / "environment.json").write_text(json.dumps(env, indent=1) + "\n")
+    (session_dir / "manifest.json").write_text(json.dumps({
+        "purpose": env["purpose"],
+        "amendment": "BUF-E0-PREREGISTRATION.md AMENDMENT 1",
+        "matrix": {"phases": ["B", "C"], "arms": ["b1", "b1a", "b2", "b3"],
+                   "sizes": SIZES, "slots": SLOTS, "rep_pair": [REP_LO, REP_HI]},
+    }, indent=1) + "\n")
+    records, skips = run_matrix(session_dir, ["B", "C"], ["b1", "b1a", "b2", "b3"],
+                                SIZES, SLOTS, "pinned")
+    errors = same_work_gate(records)
+    (session_dir / "gates.json").write_text(json.dumps(
+        {"same_work_errors": errors, "skipped": skips}, indent=1) + "\n")
+    rows = summarize(records)
+    write_summary(session_dir, rows, skips)
+    print(f"session {args.session}: {len(records)} runs, gate errors: "
+          f"{len(errors)}")
+    if errors:
+        for e in errors:
+            print("GATE:", e, file=sys.stderr)
+        sys.exit(3)
+
+
+AMP_BENCH = REPO / "build/linux/x86_64/release/buf_e0_amp_bench"
+AMP_SRC = DATA_DIR / "amp-src.bin"
+AMP_DST = DATA_DIR / "amp-dst.bin"
+AMP_BYTES = 512 * 1024 * 1024
+AMP_ARMS = ["engine-b0", "replica-b0", "replica-b1", "replica-b3"]
+AMP_CELLS = [(1 << 20, 1), (1 << 20, 8)]  # (buffer_size, depth)
+
+
+def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def cmd_amp(args):
+    """Amplifier session (prereg §8 + AMENDMENT 1): realistic PipelineSlot
+    lifecycle end-to-end — production engine vs storage-variant replicas.
+    R7/R14 perf pairs per arm x cell; post-exit src/dst hash verification
+    (runner-side, outside every measured window)."""
+    session_dir = RESULTS / args.session
+    if session_dir.exists():
+        print(f"session {session_dir} already exists (immutable)", file=sys.stderr)
+        sys.exit(2)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not AMP_SRC.exists() or AMP_SRC.stat().st_size != AMP_BYTES:
+        subprocess.run([str(AMP_BENCH), "--generate", "--src", str(AMP_SRC),
+                        "--file-bytes", str(AMP_BYTES)], check=True)
+    src_hash = file_sha256(AMP_SRC)
+
+    env = environment_json()
+    env["data_file_sha256"] = src_hash
+    env["purpose"] = ("BUF-E0 application amplifier: engine-b0 (production) "
+                      "vs replica-b0/b1/b3 (storage variants); 512 MiB copy, "
+                      "full engine call measured, workers=1, sync=none")
+    env["build"]["amp_binary"] = str(AMP_BENCH)
+    env["build"]["amp_binary_sha256"] = sha256_file(AMP_BENCH)
+    session_dir.mkdir(parents=True)
+    (session_dir / "environment.json").write_text(json.dumps(env, indent=1) + "\n")
+    (session_dir / "manifest.json").write_text(json.dumps({
+        "purpose": env["purpose"],
+        "matrix": {"arms": AMP_ARMS, "cells": AMP_CELLS,
+                   "file_bytes": AMP_BYTES, "workers": 1, "sync": "none",
+                   "rep_pair": [REP_LO, REP_HI]},
+    }, indent=1) + "\n")
+
+    raw_dir = session_dir / "raw"
+    raw_dir.mkdir()
+    records = []
+    for size, depth in AMP_CELLS:
+        for arm in AMP_ARMS:
+            for reps in (REP_LO, REP_HI):
+                cmd = [str(AMP_BENCH), "--arm", arm, "--src", str(AMP_SRC),
+                       "--dst", str(AMP_DST), "--buffer-size", str(size),
+                       "--depth", str(depth), "--workers", "1",
+                       "--reps", str(reps)]
+                full = ["perf", "stat", "-x,", "-e", ",".join(PERF_EVENTS),
+                        "--"] + cmd
+                proc = subprocess.run(full, capture_output=True, text=True,
+                                      env=dict(os.environ, LC_ALL="C"), cwd=REPO)
+                tag = f"amp-{size // 1048576}m-d{depth}-{arm}-R{reps}"
+                (raw_dir / f"{tag}.perf.txt").write_text(proc.stderr)
+                bench = None
+                if proc.stdout.strip():
+                    try:
+                        bench = json.loads(proc.stdout)
+                    except ValueError:
+                        bench = None
+                if bench is not None:
+                    (raw_dir / f"{tag}.bench.json").write_text(
+                        json.dumps(bench, indent=1) + "\n")
+                # Post-exit verification (runner-side): dst must equal src
+                dst_hash = file_sha256(AMP_DST)
+                verified = dst_hash == src_hash
+                records.append({
+                    "tag": tag, "arm": arm, "size": size, "depth": depth,
+                    "reps": reps, "cmd": cmd,
+                    "returncode": proc.returncode, "bench": bench,
+                    "dst_verified": verified,
+                    "perf_counters": parse_perf_stat(proc.stderr),
+                })
+                if proc.returncode != 0 or bench is None or not verified:
+                    print(f"FATAL: {tag} rc={proc.returncode} "
+                          f"verified={verified}", file=sys.stderr)
+                    sys.exit(3)
+
+    # aggregate: per arm x cell, wall medians from R14 reps + perf
+    # double-difference per rep (ops unit = one full copy)
+    rows = []
+    groups = {}
+    for r in records:
+        groups.setdefault((r["arm"], r["size"], r["depth"]), {})[r["reps"]] = r
+    for key in sorted(groups):
+        arm, size, depth = key
+        pair = groups[key]
+        lo, hi = pair[REP_LO], pair[REP_HI]
+        b = hi["bench"]
+
+        def med(field, b=b):
+            vals = [x[field] for x in b["reps_detail"]]
+            return median(vals)
+        row = {"arm": arm, "size": size, "depth": depth,
+               "construct_ns": med("construct_ns"),
+               "engine_ns": med("engine_ns"),
+               "total_ns": med("total_ns"),
+               "dst_verified": all(x["dst_verified"] for x in pair.values())}
+        for ev in ("instructions", "cycles"):
+            try:
+                row[f"{ev}_per_copy"] = (
+                    (hi["perf_counters"][ev] - lo["perf_counters"][ev])
+                    / (REP_HI - REP_LO))
+            except (KeyError, TypeError):
+                row[f"{ev}_per_copy"] = None
+        rows.append(row)
+    with open(session_dir / "summary.json", "w") as f:
+        json.dump({"rows": rows, "skipped": []}, f, indent=1)
+    cols = ["arm", "size", "depth", "construct_ns", "engine_ns", "total_ns",
+            "instructions_per_copy", "cycles_per_copy", "dst_verified"]
+    with open(session_dir / "summary.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+    (session_dir / "gates.json").write_text(json.dumps({
+        "same_work_errors": [],
+        "skipped": [],
+        "post_exit_hash_verification": "all runs dst_sha256 == src_sha256",
+    }, indent=1) + "\n")
+    print(f"session {args.session}: {len(records)} runs, all hash-verified")
+
+
 def cmd_report(args):
     session_dir = RESULTS / args.session
     summary = json.loads((session_dir / "summary.json").read_text())
     rows = summary["rows"]
+    arms_present = []
+    for r in rows:
+        if r["arm"] not in arms_present:
+            arms_present.append(r["arm"])
     print(f"== {args.session}: {len(rows)} rows, {len(summary['skipped'])} skipped")
     for phase in ("A", "B", "D", "C"):
         pr = [r for r in rows if r["phase"] == phase]
@@ -517,10 +692,10 @@ def cmd_report(args):
                 for slots in SLOTS:
                     cells = {r["arm"]: r for r in pr
                              if r["size"] == size and r["slots"] == slots}
-                    if len(cells) < 4:
+                    if len(cells) < len(arms_present):
                         continue
                     line = f"{size//1024:>7}k {slots:>5} |"
-                    for arm in ARMS:
+                    for arm in arms_present:
                         r = cells[arm]
                         line += (f" {arm}={r.get('alloc_ns_per_buffer', 0):>10.0f}"
                                  f"±{r.get('alloc_ns_mad', 0)/max(r['slots'],1):>7.0f}")
@@ -532,15 +707,15 @@ def cmd_report(args):
                 for slots in SLOTS:
                     cells = {r["arm"]: r for r in pr
                              if r["size"] == size and r["slots"] == slots}
-                    if len(cells) < 4:
+                    if len(cells) < len(arms_present):
                         continue
                     line = f"{size//1024:>7}k {slots:>5} |"
-                    for arm in ARMS:
+                    for arm in arms_present:
                         r = cells[arm]
                         line += (f" {arm}="
                                  f"{r.get('total_to_first_io_ns_per_buffer', 0):>10.0f}")
                     line += " |"
-                    for arm in ARMS:
+                    for arm in arms_present:
                         r = cells[arm]
                         line += f" {arm}={r.get('minflt_total_median', 0):>5.0f}"
                     print(line)
@@ -550,10 +725,10 @@ def cmd_report(args):
                 for slots in SLOTS:
                     cells = {r["arm"]: r for r in pr
                              if r["size"] == size and r["slots"] == slots}
-                    if len(cells) < 4:
+                    if len(cells) < len(arms_present):
                         continue
                     line = f"{size//1024:>7}k {slots:>5} |"
-                    for arm in ARMS:
+                    for arm in arms_present:
                         r = cells[arm]
                         line += (f" {arm}="
                                  f"{r.get('touch_ns_per_page', 0):>9.0f}")
@@ -564,11 +739,11 @@ def cmd_report(args):
                 for slots in SLOTS:
                     cells = {r["arm"]: r for r in pr
                              if r["size"] == size and r["slots"] == slots}
-                    if len(cells) < 4:
+                    if len(cells) < len(arms_present):
                         continue
                     line = (f"{size//1024:>7}k {slots:>5} "
-                            f"{cells['b0'].get('kc', 0):>3} |")
-                    for arm in ARMS:
+                            f"{cells[arms_present[0]].get('kc', 0):>3} |")
+                    for arm in arms_present:
                         r = cells[arm]
                         line += f" {arm}={r.get('io_ns_per_op', 0):>11.0f}"
                     print(line)
@@ -583,6 +758,12 @@ def main():
     p = sub.add_parser("arena")
     p.add_argument("--session", required=True)
     p.set_defaults(fn=cmd_arena)
+    p = sub.add_parser("align")
+    p.add_argument("--session", required=True)
+    p.set_defaults(fn=cmd_align)
+    p = sub.add_parser("amp")
+    p.add_argument("--session", required=True)
+    p.set_defaults(fn=cmd_amp)
     p = sub.add_parser("report")
     p.add_argument("--session", required=True)
     p.set_defaults(fn=cmd_report)

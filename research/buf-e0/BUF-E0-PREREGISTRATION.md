@@ -250,3 +250,50 @@ id. New session id convention: `bufe0-<phase|amp>-wsl2-<n>`.
 harness proves unable to express the production lifecycle, that is a reported
 BLOCKER, not a production change. Draft research PR only; DO NOT MERGE; stop
 for adversarial review after the verdict.
+
+---
+
+## AMENDMENT 1 — 2026-09-01, after formal session bufe0-micro-wsl2-1
+
+What changed:
+
+1. **Diagnostic arm b1a added** (B1 + page alignment: allocate
+   `make_unique_for_overwrite<std::byte[]>(N + 4096)`, expose the pointer
+   rounded up to 4096; N usable bytes; teardown frees the original
+   allocation). Measured in a separate follow-up session (phases B and C,
+   identical protocol/matrix/runner) as arm `b1a` alongside `b1/b2/b3`.
+
+2. **Amplifier alternative arm extended** per §8's own swap rule: Phase B
+   formal data showed arms materially better than B1 on
+   total-to-first-useful-I/O at 1 MiB (B2/B3 ~25-30% lower), so the
+   amplifier runs `replica-b3` (posix_memalign page-aligned storage, the
+   owned/glibc-family representation closest to production semantics)
+   alongside the originally pinned `replica-b1`. Both run in the same
+   amplifier session; the §8 pairing (B0 vs B1) remains present.
+
+3. **cycles:u demoted to UNRELIABLE on this host** (metric-availability
+   note, not a design change): 5/192 cells show negative R7/R14
+   double-differences (virtualized cycle counter non-monotonicity).
+   `instructions:u` (1/192 anomalous) and in-process wall spans remain the
+   quantitative pair. Recorded per the environment-availability rules.
+
+Why: Phase C of the formal session showed the Outcome-D pattern —
+B0/B1 (glibc chunk pointer at +16, not page-aligned) are 2.5-5x slower
+than B2/B3 (page-aligned) in prefaulted steady-state reads, consistently
+across sizes and slot counts. Prereg §Outcome-D requires proving the
+mechanism (alignment? allocator placement? TLB? cache? mapping?) before
+interpreting; b1a isolates page alignment with the allocation family held
+constant (B1's exact mechanism + pointer shift only).
+
+When discovered: after closing formal session bufe0-micro-wsl2-1 (all
+gates green), during first report generation.
+
+Whether data already existed: yes — the 4-arm formal session is complete
+and unchanged. b1a/b3-amplifier data did not exist when the pattern was
+found.
+
+Comparability: the original 4-arm cells are not re-measured or replaced;
+b1a is an added arm under the identical protocol (same runner, same
+R7/R14 normalization, same same-work gates, same data file), so cross-arm
+comparison b1 vs b1a is same-session-family and directly interpretable.
+The amplifier comparison happens wholly within its own session.

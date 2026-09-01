@@ -257,7 +257,7 @@ void maps_kind(const void* ptr, char* out, std::size_t out_n) {
 // bytes; teardown dispatch is by arm. (BUF-E0-PREREGISTRATION §1.)
 // ---------------------------------------------------------------------------
 
-enum class Arm { b0, b1, b2, b3 };
+enum class Arm { b0, b1, b2, b3, b1a };
 enum class Phase { A, B, C, D };
 enum class Regime { pinned, arena };
 
@@ -267,6 +267,7 @@ const char* arm_name(Arm a) {
     case Arm::b1: return "b1";
     case Arm::b2: return "b2";
     case Arm::b3: return "b3";
+    case Arm::b1a: return "b1a";
     }
     return "?";
 }
@@ -276,7 +277,7 @@ struct Buffer {
     std::size_t size = 0;
     // owning context, arm-specific
     std::vector<std::byte>* b0_vec = nullptr;              // b0
-    std::byte* b1_ptr = nullptr;                           // b1
+    std::byte* b1_ptr = nullptr;                           // b1 / b1a
     void* b2_map = nullptr;                                // b2
     void* b3_ptr = nullptr;                                // b3
 };
@@ -293,6 +294,17 @@ void buffer_construct(Arm arm, std::size_t n, Buffer& out) {
     case Arm::b1: {
         auto p = std::make_unique_for_overwrite<std::byte[]>(n);
         out.data = p.get();
+        out.b1_ptr = p.release();
+        break;
+    }
+    case Arm::b1a: {
+        // AMENDMENT 1 diagnostic: B1's exact mechanism + pointer rounded up
+        // to page alignment. N usable bytes start at the aligned pointer;
+        // the raw allocation (N + 4096) is what gets freed.
+        auto p = std::make_unique_for_overwrite<std::byte[]>(n + 4096);
+        std::uintptr_t raw = reinterpret_cast<std::uintptr_t>(p.get());
+        std::uintptr_t aligned = (raw + 4095) & ~std::uintptr_t{4095};
+        out.data = reinterpret_cast<std::byte*>(aligned);
         out.b1_ptr = p.release();
         break;
     }
@@ -322,6 +334,7 @@ void buffer_destroy(Arm arm, Buffer& b) {
         b.b0_vec = nullptr;
         break;
     case Arm::b1:
+    case Arm::b1a:  // b1a frees the RAW allocation, not the aligned view
         delete[] b.b1_ptr;
         b.b1_ptr = nullptr;
         break;
@@ -540,6 +553,7 @@ Config parse_args(int argc, char** argv) {
             else if (p == "b1") c.arm = Arm::b1;
             else if (p == "b2") c.arm = Arm::b2;
             else if (p == "b3") c.arm = Arm::b3;
+            else if (p == "b1a") c.arm = Arm::b1a;
             else { std::fprintf(stderr, "bad --arm\n"); std::exit(1); }
         } else if (a == "--regime") {
             std::string p = next("--regime");
