@@ -1,13 +1,22 @@
 # BUF-E0 final report — Phase 2 buffer truth (#263)
 
 ```text
-VERDICT: STEADY-STATE STORAGE EFFECT MEASURED (page alignment of the I/O
-         buffer; mechanism attributed) — with BUF-F01 eager-init resolved
-         as FIRST-TOUCH COST SHIFT / NOT MATERIAL and BUF-F02 NOT PROVEN
-CONFIDENCE: high for the alignment mechanism (three sessions, dedicated
-         b1a isolation arm, amplifier arithmetic cross-check); high for
-         F01 immateriality (fault conservation + amplifier + arena probe
-         double-bound); medium for absolute magnitudes (WSL2)
+VERDICT: STEADY-STATE ALIGNMENT EFFECT MEASURED — user-buffer address
+         alignment causally isolated; exact alignment threshold and
+         kernel micro-mechanism unresolved. With BUF-F01 eager-init
+         resolved as FIRST-TOUCH COST SHIFT / NOT MATERIAL and BUF-F02
+         NOT PROVEN.
+CONFIDENCE:
+  HIGH:   alignment is a causal performance variable in the tested
+          WSL2 regime (three sessions, dedicated b1a isolation arm);
+          BUF-F01 eager initialization is not material (fault
+          conservation + amplifier + arena probe double-bound).
+  MEDIUM: magnitudes and generalization beyond this host/regime
+          (all absolute numbers WSL2-bound).
+  UNRESOLVED: minimum effective alignment (only natural-unaligned vs
+          4096-byte alignment was compared); exact kernel/uaccess
+          micro-mechanism; standalone WRITE effect; why depth 8
+          eliminates the end-to-end benefit.
 ENVIRONMENT: WSL2 (kernel 6.18.33.2-microsoft-standard-WSL2, AMD Ryzen 7
          5800H, 8 CPUs, 16 GiB, ext4 on virtual block device, warm page
          cache) — QUALIFIED_BUT_VIRTUALIZED; all absolute numbers
@@ -18,8 +27,10 @@ BASE: 2a8dd7995a606882f1bd42ca264aebc80ce1726b (origin/master)
 HEAD: final commit of research/buf-e0-buffer-truth (sessions recorded
       clean-tree states in their environment.json)
 BRANCH: research/buf-e0-buffer-truth
-DRAFT PR: #264 (DO NOT MERGE — awaiting adversarial review)
-EXECUTION ISSUE: #263 (milestones BUF-E0A/E0B/E0C/VERDICT posted there)
+PR: #264 (adversarial claim-hygiene closure applied; see the EVIDENCE
+    TAXONOMY section for the claim boundaries)
+EXECUTION ISSUE: #263 (milestones BUF-E0A/E0B/E0C/VERDICT posted there;
+    a claim-boundary clarification is appended there)
 
 PRODUCTION CODE CHANGED: NO
 ```
@@ -86,8 +97,10 @@ PHASE B — allocation → first useful I/O (ns/buffer total; faults conserved)
 
 ```text
 4 KiB (all slot counts):  b0 6288-7359 ±130-371   b1 6518-7725 ±130-496
-                          → statistically indistinguishable at every
-                            slot count (medians inside each other's MAD)
+                          → no material separation at any slot count
+                            relative to observed run-to-run dispersion
+                            (medians inside each other's MAD; this is
+                            not a formal hypothesis test)
 64 KiB s8:                b0 48111±1770  b1 49514±4107  b2 28848±2422
                           b3 33100±3571 → b0 ≈ b1
 1 MiB s8:                 b0 865694±33085  b1 773273±11616  b2 555591±26290
@@ -122,18 +135,24 @@ PHASE C — prefaulted steady-state (ns/op, identical prefault protocol)
 material difference: YES — but NOT along the preregistered
 representation axis. b0 == b1 everywhere (ownership/initialization
 representation does not change steady state). The difference tracks
-buffer ALIGNMENT: b2/b3 are page-aligned; b0/b1 pointers sit at +16
-(glibc chunk offset).
+buffer ALIGNMENT: b2/b3 are 4096-byte aligned; b0/b1 pointers sit at
++16 (glibc chunk offset).
 
-MECHANISM (AMENDMENT 1, session bufe0-align-wsl2-1): arm b1a = b1's
-exact allocation mechanism with the pointer rounded up to page
-alignment. b1a recovers essentially the entire gap (64K s1:
-24198 → 4975 vs b2 4542; 1M s1: 437015 → 124752 vs b2 120551; 10 of 12
-cells full recovery). A page-aligned I/O buffer lets the kernel copy
-path work in full-page units; a +16 offset defeats it for every page of
-every op. This is a per-op steady-state cost — NOT cost shifting, NOT
-vector-vs-mmap, and achievable within owned-allocation semantics
-(posix_memalign / over-allocate+align).
+CAUSAL ISOLATION (AMENDMENT 1, session bufe0-align-wsl2-1): arm b1a =
+b1's exact allocation mechanism with the pointer rounded up to 4096-byte
+alignment. b1a recovers essentially the entire gap (64K s1: 24198 →
+4975 vs b2 4542; 1M s1: 437015 → 124752 vs b2 120551; 10 of 12 cells
+full recovery). This isolates user-buffer address alignment as the
+dominant causal variable at the userspace boundary, achievable within
+owned-allocation semantics (posix_memalign / over-allocate+align). It
+is a per-op steady-state cost — NOT cost shifting, NOT vector-vs-mmap.
+
+Mechanism boundary: the campaign compared a natural unaligned pointer
+against a 4096-byte-aligned pointer and measured a material change. It
+did NOT identify which kernel/uaccess copy-path branch causes the
+difference, and it did NOT sweep intermediate alignments — 4096-byte
+alignment was the tested effective alignment; the minimum effective
+alignment threshold remains unknown.
 
 ==================================================
 SCALING
@@ -164,19 +183,30 @@ depth 1 (production CLI default):
   engine-b0 (production):      486.4 ms/copy
   replica-b0 (vector):         467.0 ms/copy   (fidelity: engine≈replica)
   replica-b1 (uninitialized):  472.0 ms/copy   → NO benefit vs b0
-  replica-b3 (page-aligned):   260.4 ms/copy   → 1.8x faster
+  replica-b3 (4096-aligned):   260.4 ms/copy   → 1.8x faster
 
 depth 8:
   engine-b0: 234.8 ms   replica-b0: 226.9 ms   replica-b1: 257.3 ms
   replica-b3: 231.5 ms  → no material difference at d8 on this host
 
+direction boundary: the alignment effect is directly measured on the
+  READ path (standalone microbench) and survives this real READ+WRITE
+  copy amplifier at depth 1. WRITE was NOT independently benchmarked;
+  do not read an independent WRITE per-op magnitude out of the
+  aggregate amplifier result.
+
 verdict: the F01 (uninitialized construction) microbench saving does
 not survive the realistic lifecycle (construction is 0.02-1.9% of one
-copy and amortizes over census reuse). The alignment effect AMPLIFIES
-at the production default depth. Arithmetic cross-check: per-op
-alignment penalty × (512 reads + 512 writes) ≈ 207 ms ≈ observed
-replica-b0 − replica-b3 gap at d1 (207 ms). Per prereg §22 the
-amplifier governs.
+copy and amortizes over census reuse). The alignment effect is
+REGIME-SPECIFIC: material and amplified at the production default
+depth 1, absent at depth 8 (mechanism of the disappearance unresolved).
+Consistency cross-check (not an independent causal proof): applying the
+observed READ per-op alignment magnitude to the full copy operation
+count — per-op penalty × (512 reads + 512 writes) ≈ 207 ms — predicts
+an end-to-end delta close to the observed replica-b0 − replica-b3 d1
+gap (207 ms). Because WRITE was not independently benchmarked, this is
+supporting consistency evidence, not a mechanism confirmation. Per
+prereg §22 the amplifier governs.
 ```
 
 ==================================================
@@ -215,17 +245,22 @@ COST VERDICT: NOT PROVEN. Per-buffer lifecycle cost does not grow with
             capability question (Gate B), not performance evidence.
 ```
 
-NEW (within BUF-E0's storage-representation scope, mechanism-attributed):
+NEW (within BUF-E0's storage-representation scope; causally isolated):
 
 ```text
-BUFFER PAGE ALIGNMENT: production slot buffers are never page-aligned
-  (glibc chunk pointers at +16; arena-carved small buffers worse), and
-  the kernel copy path penalizes that on EVERY read-into and
-  write-from op: 2-4.7x per-op in the microbench, 1.8x end-to-end at
-  the production-default pipeline depth, recoverable by pointer
-  alignment alone (b1a) and by posix_memalign (b3) within per-slot
-  owned semantics. This is the ONE measured, material, non-shifted
-  storage cost BUF-E0 found.
+BUFFER ADDRESS ALIGNMENT: production slot buffers are never page-aligned
+  (glibc chunk pointers at +16; arena-carved small buffers worse).
+  Changing only the exposed pointer alignment — within the same
+  allocation family and ownership semantics — removes most of the
+  measured per-op steady-state gap (b1a). Direct evidence: READ
+  standalone, 2-4.7x per-op in the microbench; end-to-end 1.8x at the
+  production-default pipeline depth 1, with NO material effect at depth
+  8 on this host. Recoverable by pointer alignment alone (b1a) and by
+  posix_memalign (b3) within per-slot owned semantics. 4096-byte
+  alignment was the tested effective alignment; the minimum effective
+  threshold and the exact kernel/uaccess micro-mechanism are unresolved.
+  This is the ONE measured, material, non-shifted storage cost BUF-E0
+  found.
 ```
 
 ==================================================
@@ -250,30 +285,82 @@ NEGATIVE RESULTS
   mechanism unattributed, recorded as an open observation.
 
 ==================================================
+EVIDENCE TAXONOMY
+==================================================
+
+```text
+DIRECTLY MEASURED
+  - READ steady-state alignment effect (formal + align sessions,
+    2-4.7x per-op; per-cell data in summary.csv)
+  - d1 READ+WRITE end-to-end amplifier effect (1.8x, 512 MiB copies,
+    hash-verified)
+  - d8 null end-to-end result (no material effect at depth 8)
+  - eager-init cost/fault shift (fault totals conserved; Phase D
+    first-touch rates; arena probe bounds)
+
+CAUSALLY ISOLATED
+  - buffer address alignment as the dominant variable separating the
+    b0/b1 group from b2/b3, via B1 → B1a (same allocation family and
+    ownership semantics; only exposed pointer alignment changes; most
+    of the observed gap disappears)
+
+NOT DIRECTLY MEASURED
+  - standalone WRITE alignment effect (no standalone write matrix)
+  - minimum useful alignment threshold (only natural-unaligned vs
+    4096-byte was compared; no 64/128/256/512/1024/2048 sweep)
+  - exact kernel/uaccess implementation mechanism (which copy-path
+    branch causes the difference)
+
+INFERRED / CONSISTENCY CHECK (supporting, not independent proof)
+  - d1 per-op × op-count arithmetic (READ per-op magnitude applied to
+    512 reads + 512 writes ≈ 207 ms ≈ observed 207 ms d1 gap; WRITE
+    magnitude not independently established)
+```
+
+==================================================
 PHASE 3 GATE
 ==================================================
 
 ```text
-PHASE 3 AUTHORIZED: YES
+PHASE 3 AUTHORIZED: YES — as the ALIGN-E0 research experiment only.
+  Phase 3 is authorized as a research experiment, NOT as a production
+  alignment change. No production representation change follows from
+  Phase 2 evidence alone.
 
-WHY (the single measured reason): Gate A — the page-alignment
-steady-state copy cost is repeatable (three sessions), material (2-4.7x
-per-op; 1.8x end-to-end at the production-default depth 1), mechanism-
-attributed (b1a isolation; kernel full-page copy path), and NOT merely
+WHY (the single measured reason): Gate A — the alignment steady-state
+copy cost is repeatable (three sessions), material (2-4.7x per-op
+READ; 1.8x end-to-end at the production-default depth 1), causally
+isolated at the userspace boundary (b1a; the exact kernel/uaccess
+micro-mechanism is NOT established by this campaign), and NOT merely
 shifted (per-op steady-state cost, present in the current production
-representation on every read and write).
+representation on the measured READ path and the d1 READ+WRITE
+amplifier).
 
-If YES, exact scope implied by the evidence:
-  Phase 3 should be a MINIMAL ALIGNMENT experiment within the current
-  per-slot ownership model (e.g. posix_memalign / over-allocate+align
-  slot storage in a research variant of the copy app), NOT a
-  BufferStorage/BufferPool/BufferLease framework: BUF-F02 (ownership/
-  pooling) is NOT PROVEN, and B3 achieves the measured effect as an
-  ordinary owned allocation. A pool/lease redesign has no performance
-  justification from BUF-E0. (Gate B — alignment/registration lifetime
-  for future fixed-buffer experiments — may ALSO favor an explicit
-  storage boundary, but that is a capability argument to be made in
-  Phase 3, not evidence from this phase.)
+If YES, exact scope implied by the evidence — ALIGN-E0: measure the
+alignment threshold and regime crossover:
+
+  alignment:  natural / 64 B / 128 B / 256 B / 512 B / 1 KiB / 2 KiB /
+              4 KiB
+  × I/O size:  4 KiB / 64 KiB / 1 MiB
+  × depth:     1 / 2 / 4 / 8 / 16 / 32
+  × direction: READ and WRITE (standalone matrices for both)
+  × environment: native Linux MANDATORY before any production
+              authorization (WSL2 magnitudes are ENVIRONMENT-LIMITED)
+
+  Optional extension to separate cache-line alignment / generic address
+  alignment / page-boundary phase effects: a page-relative offset sweep
+  (page+0, +16, +32, +64, ...).
+
+  ALIGN-E0 stays within the current per-slot ownership model (research
+  variant of the copy app). It is explicitly NOT a
+  BufferStorage/BufferPool/BufferLease framework, NOT registered or
+  fixed buffers, and NOT a public buffer API redesign: BUF-F02
+  (ownership/pooling) is NOT PROVEN, and B3 achieves the measured
+  effect as an ordinary owned allocation. A pool/lease redesign has no
+  performance justification from BUF-E0. (Gate B — alignment/
+  registration lifetime for future fixed-buffer experiments — may ALSO
+  favor an explicit storage boundary, but that is a capability argument
+  to be made in Phase 3, not evidence from this phase.)
 
 Keep current std::vector<std::byte> representation until that
 experiment is reviewed: YES (Phase 2 changes nothing; production code
@@ -285,10 +372,16 @@ LIMITATIONS
 ==================================================
 
 - WSL2 virtualized environment; absolute magnitudes (fault cost ~1.5-2
-  µs/page, alignment multipliers) are host-bound. The alignment
-  mechanism (kernel full-page copy fast path) is expected to exist on
-  native Linux but its magnitude there is UNMEASURED — Phase 3 must
-  re-quantify on a native host before any production change.
+  µs/page, alignment multipliers) are host-bound. The alignment effect
+  is expected to be a real causal variable on native Linux, but both
+  its magnitude there and the responsible kernel/uaccess micro-
+  mechanism are UNMEASURED — Phase 3 (ALIGN-E0) must re-quantify on a
+  native host before any production change.
+- No alignment-threshold sweep: only natural-unaligned vs 4096-byte
+  alignment was compared. Nothing in this campaign establishes that
+  PAGE_SIZE alignment is necessary, optimal, or a threshold.
+- No standalone WRITE matrix: WRITE alignment magnitude is not
+  independently measured (see EVIDENCE TAXONOMY).
 - cycles:u unreliable (virtualized counter; AMENDMENT 1); instruction
   attribution inherits the 1/192 anomalous cell.
 - Warm page-cache regime throughout (a memory/lifecycle campaign, not a
@@ -309,6 +402,8 @@ FINAL STATUS
 ==================================================
 
 ```text
-Draft PR: HUMAN REVIEW READY
-MERGED: NO
+PR #264: adversarial claim-hygiene closure applied (this revision):
+  findings preserved, micro-mechanism/threshold/universality claims
+  downgraded to the evidence boundary (see EVIDENCE TAXONOMY).
+MERGED: see PR #264 state at merge time
 ```

@@ -23,12 +23,15 @@ Phase 1 (CONTROL-PLANE TRUTH, #250) is CLOSED and frozen — not reopened.
 
 ## Verdict (see BUF-E0-REPORT.md)
 
-STEADY-STATE STORAGE EFFECT MEASURED — page alignment of the I/O buffer
-(mechanism attributed via b1a; 1.8x end-to-end at production-default
-depth). BUF-F01 eager-init = cost shift, not material (amplifier
+STEADY-STATE ALIGNMENT EFFECT MEASURED — user-buffer address alignment
+causally isolated via the b1a arm (1.8x end-to-end at production-default
+depth 1; no material effect at depth 8). The exact alignment threshold,
+the standalone WRITE effect, and the exact kernel/uaccess micro-mechanism
+are unresolved. BUF-F01 eager-init = cost shift, not material (amplifier
 null). BUF-F02 per-slot ownership = not proven. PHASE 3 AUTHORIZED: YES
-— narrowly, as a minimal alignment experiment within current per-slot
-ownership, NOT a buffer-pool framework.
+— as ALIGN-E0 research only (alignment threshold × size × depth ×
+direction, native Linux replication required before any production
+change), NOT a buffer-pool framework and NOT a production change.
 
 ## Artifacts by milestone (issue #263)
 
