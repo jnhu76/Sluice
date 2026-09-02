@@ -73,7 +73,7 @@ matrix.
   unreliable, the campaign is INDETERMINATE for instruction claims (never
   silently demoted to wall-only); cycles may be DEMOTED by probe evidence.
 - Session layout per RE-1U / RE-1: `environment.json`, `manifest.json`
-  (every launch + rc + arm order), `raw/` verbatim, `summary.json/.csv`,
+  (every launch + rc + arm order), `runs.jsonl` (verbatim per-launch cmd/stdout/stderr), `summary.json/.csv`,
   `gates.json` (qual), `analysis.json` — O(10) files, no per-run dirs.
 
 ## P7. Metrics (frozen priority)

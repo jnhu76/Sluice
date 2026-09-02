@@ -62,6 +62,22 @@ CELL_L = {"request_size": 2 * 1024 * 1024, "depth": 2,
           "total_bytes": 1024 * 1024 * 1024}
 CELLS = {"S": CELL_S, "L": CELL_L}
 
+# RE-2 representative envelope (preregistration P11; frozen shape)
+CELLS_RE2 = {
+    "4Kd1": {"request_size": 4096, "depth": 1,
+             "total_bytes": 256 * 1024 * 1024},
+    "4Kd8": {"request_size": 4096, "depth": 8,
+             "total_bytes": 256 * 1024 * 1024},
+    "64Kd2": {"request_size": 65536, "depth": 2,
+              "total_bytes": 256 * 1024 * 1024},
+    "2Md1": {"request_size": 2 * 1024 * 1024, "depth": 1,
+             "total_bytes": 1024 * 1024 * 1024},
+    "2Md2": {"request_size": 2 * 1024 * 1024, "depth": 2,
+             "total_bytes": 1024 * 1024 * 1024},
+}
+RE2U_ARMS = ["z1b", "z2"]   # uring floor vs Sluice uring backend
+RE2P_ARMS = ["L1", "L2"]    # pool floor vs Sluice ThreadPool path
+
 RE1U_ARMS = ["z1", "z1b", "z1bw", "z2", "z3"]
 RE1_ARMS = ["L0", "L1", "L2"]
 OPS = ["read", "write"]
@@ -270,7 +286,7 @@ def _invalid_row(family, arm, cell_key, cell, op, fs, note):
     return {
         "family": family, "fs": fs, "op": op,
         "request_size": cell["request_size"], "depth": cell["depth"],
-        "workers": 1 if family == "re1u" else cell["depth"],
+        "workers": 1 if family.endswith("u") else cell["depth"],
         "arm": arm, "cell": cell_key, "ok": False, "ops": None,
         "total_bytes": cell["total_bytes"], "word_sum": None,
         "wall_ns_per_op_samples": [], "instr_u_per_op_estimates": None,
@@ -286,7 +302,7 @@ def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
     rs = cell["request_size"]
     data = data_root / f"data-{rs}.bin"
     base_tag = f"{family}-{fs}-{cell_key}-{op}-{arm}"
-    if family == "re1u":
+    if family.endswith("u"):
         cmd = lambda reps: z_cmd(arm, cell, op, data_root, reps)
     else:
         cmd = lambda reps: e1_cmd(arm, cell, op, data_root, reps)
@@ -331,14 +347,14 @@ def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
                     / (r_hi - r_lo) / bench["ops"])
 
     ops = bench["ops"]
-    reps = bench["reps"] if family == "re1u" else bench["reps_out"]
+    reps = bench["reps"] if family.endswith("u") else bench["reps_out"]
     row = {
         "family": family,
         "fs": fs,
         "op": op,
         "request_size": rs,
         "depth": cell["depth"],
-        "workers": 1 if family == "re1u" else cell["depth"],
+        "workers": 1 if family.endswith("u") else cell["depth"],
         "arm": arm,
         "cell": cell_key,
         "ok": True,
@@ -354,7 +370,7 @@ def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
         "error_note": "",
     }
     if op == "write":
-        if family == "re1u":
+        if family.endswith("u"):
             # one byte-exact verify per combo, after the last launch
             # (file left by the final P launch; TAX-0B precedent)
             row["write_verified"] = runner_verify_write(data,
@@ -483,11 +499,11 @@ def action_qual262(args):
 def _run_formal(args, prefix, family, arms, cells):
     s = _common_session_setup(args, prefix)
     env = json.loads((s.dir / "environment.json").read_text())
-    sha = (env["build"]["z_bench_sha256"] if family == "re1u"
+    sha = (env["build"]["z_bench_sha256"] if family.endswith("u")
            else env["build"]["e1_bench_sha256"])
     for root, fs in ((BTRFS_DATA, "btrfs"), (TMPFS_DATA, "tmpfs")):
         prepare_data_files(cells, root)
-        for cell_key in ("S", "L"):
+        for cell_key in cells:
             cell = cells[cell_key]
             for op in OPS:
                 order = shuffled_arms(arms, cell_key, op, fs)
@@ -514,6 +530,14 @@ def action_re1(args):
 
 def action_re1u(args):
     return _run_formal(args, "re-h0-re1u", "re1u", RE1U_ARMS, CELLS)
+
+
+def action_re2(args):
+    # two sub-ladders per cell: uring (z1b->z2) and pool (L1->L2)
+    rc = 0
+    rc |= _run_formal(args, "re-h0-re2u", "re2u", RE2U_ARMS, CELLS_RE2)
+    rc |= _run_formal(args, "re-h0-re2p", "re2p", RE2P_ARMS, CELLS_RE2)
+    return rc
 
 
 def action_analyze(args):
@@ -577,6 +601,42 @@ def action_analyze(args):
                         bad = True
                         print(f"[ANALYSIS-FAIL] {head}: {type(e).__name__}: "
                               f"{e}")
+        for cell_key, cell in CELLS_RE2.items():
+            for op in OPS:
+                for family, cand, base, sha in (
+                        ("re2u", "z2", "z1b", sha_z),
+                        ("re2p", "L2", "L1", sha_e1)):
+                    sel = [r for r in rows
+                           if r.get("family") == family
+                           and r.get("fs") == fs and r.get("op") == op
+                           and r.get("cell") == cell_key]
+                    if len(sel) < 2:
+                        continue
+                    head = (f"{family} {fs} {cell_key} {op} "
+                            f"r{cell['request_size']}d{cell['depth']}")
+                    try:
+                        v = an.pair_verdict(
+                            sel, fs, op, cell["request_size"], cell["depth"],
+                            cand, base,
+                            workers=None if family == "re2u" else cell[
+                                "depth"],
+                            expected_binary_sha256=sha)
+                        print(f"{head}: {cand}/{base}="
+                              f"{v['ratio']:.3f}({v['verdict']})")
+                        results["blocks"].append(
+                            {"block": {"family": family, "fs": fs,
+                                       "op": op, "cell": cell_key,
+                                       "request_size": cell["request_size"],
+                                       "depth": cell["depth"]},
+                             "pair": v})
+                    except (an.SessionInvalid, an.IndeterminateMetric) as e:
+                        results["errors"].append(
+                            {"family": family, "fs": fs, "op": op,
+                             "cell": cell_key, "error": str(e),
+                             "kind": type(e).__name__})
+                        bad = True
+                        print(f"[ANALYSIS-FAIL] {head}: {type(e).__name__}: "
+                              f"{e}")
     (sdir / "analysis.json").write_text(json.dumps(results, indent=1) + "\n")
     return 1 if bad else 0
 
@@ -584,7 +644,7 @@ def action_analyze(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("action", choices=["env", "qual262", "re1", "re1u",
-                                       "analyze"],
+                                       "re2", "analyze"],
                     default="re1u", nargs="?")
     ap.add_argument("--session", default=None)
     ap.add_argument("--n", type=int, default=20,
@@ -606,6 +666,8 @@ def main():
         return action_re1(args)
     if args.action == "re1u":
         return action_re1u(args)
+    if args.action == "re2":
+        return action_re2(args)
     if args.action == "analyze":
         return action_analyze(args)
     return 2

@@ -1,0 +1,385 @@
+{
+ "blocks": [
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.6097011933410388,
+    "delta_per_op": 756.6591644287109,
+    "base_median_wall_ns": 1241.0327758789062,
+    "cand_median_wall_ns": 1997.6919403076172,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.3371305867632792,
+    "delta_per_op": 3729.0130615234375,
+    "base_median_wall_ns": 11061.034530639648,
+    "cand_median_wall_ns": 14790.047592163086,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.3906086537020028,
+    "delta_per_op": 329.42431640625,
+    "base_median_wall_ns": 843.3615417480469,
+    "cand_median_wall_ns": 1172.7858581542969,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 0.9194096477612973,
+    "delta_per_op": -264.1636657714844,
+    "base_median_wall_ns": 3277.857192993164,
+    "cand_median_wall_ns": 3013.6935272216797,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.0868194181487467,
+    "delta_per_op": 743.1396484375,
+    "base_median_wall_ns": 8559.601806640625,
+    "cand_median_wall_ns": 9302.741455078125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.0220613192382018,
+    "delta_per_op": 620.52587890625,
+    "base_median_wall_ns": 28127.32421875,
+    "cand_median_wall_ns": 28747.85009765625,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.0035483897475759,
+    "delta_per_op": 1147.837890625,
+    "base_median_wall_ns": 323481.345703125,
+    "cand_median_wall_ns": 324629.18359375,
+    "verdict": "PARITY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 0.9155372445741425,
+    "delta_per_op": -139281.369140625,
+    "base_median_wall_ns": 1649027.05859375,
+    "cand_median_wall_ns": 1509745.689453125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 0.9948285158283379,
+    "delta_per_op": -1678.060546875,
+    "base_median_wall_ns": 324483.357421875,
+    "cand_median_wall_ns": 322805.296875,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.0078806681846475,
+    "delta_per_op": 6322.052734375,
+    "base_median_wall_ns": 802222.931640625,
+    "cand_median_wall_ns": 808544.984375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.2231515870600893,
+    "delta_per_op": 2343.6311798095703,
+    "base_median_wall_ns": 10502.417709350586,
+    "cand_median_wall_ns": 12846.048889160156,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.878005250574333,
+    "delta_per_op": 7205.870346069336,
+    "base_median_wall_ns": 8207.092544555664,
+    "cand_median_wall_ns": 15412.962890625,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.3784098128574809,
+    "delta_per_op": 620.3376007080078,
+    "base_median_wall_ns": 1639.3274688720703,
+    "cand_median_wall_ns": 2259.665069580078,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.3575044478583957,
+    "delta_per_op": 591.5423431396484,
+    "base_median_wall_ns": 1654.643310546875,
+    "cand_median_wall_ns": 2246.1856536865234,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.027015512775479,
+    "delta_per_op": 287.77197265625,
+    "base_median_wall_ns": 10652.10107421875,
+    "cand_median_wall_ns": 10939.873046875,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.0447169059812746,
+    "delta_per_op": 532.184326171875,
+    "base_median_wall_ns": 11901.1884765625,
+    "cand_median_wall_ns": 12433.372802734375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 0.9739782041577517,
+    "delta_per_op": -26035.0703125,
+    "base_median_wall_ns": 1000510.12890625,
+    "cand_median_wall_ns": 974475.05859375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.0067098586982148,
+    "delta_per_op": 8383.15234375,
+    "base_median_wall_ns": 1249378.373046875,
+    "cand_median_wall_ns": 1257761.525390625,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 1.071954103244368,
+    "delta_per_op": 24924.271484375,
+    "base_median_wall_ns": 346391.24609375,
+    "cand_median_wall_ns": 371315.517578125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2u",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "z2",
+    "base": "z1b",
+    "ratio": 0.9905036533678635,
+    "delta_per_op": -3107.1484375,
+    "base_median_wall_ns": 327194.083984375,
+    "cand_median_wall_ns": 324086.935546875,
+    "verdict": "GRAY"
+   }
+  }
+ ],
+ "errors": []
+}

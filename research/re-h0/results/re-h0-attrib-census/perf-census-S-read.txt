@@ -1,0 +1,45 @@
+== z1b rc=0 ==
+    24.06%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000005069
+    22.86%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000005073
+    15.96%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000005060
+     7.82%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000000506f
+     7.70%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000005065
+     4.05%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004c38
+     2.02%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004ee7
+     1.93%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004eb8
+     0.74%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004fb0
+     0.53%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004c4f
+     0.52%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004fa7
+     0.50%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004ba7
+     0.45%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004c45
+     0.41%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004bb6
+== z2 rc=0 ==
+     9.55%  tax0_z_ladder_b  libc.so.6             [.] pthread_mutex_lock@@GLIBC_2.2.5
+     8.42%  tax0_z_ladder_b  libc.so.6             [.] __GI___pthread_mutex_unlock_usercnt
+     8.10%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004ab9
+     7.61%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004ac3
+     5.98%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004ab0
+     3.00%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004abf
+     2.52%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004ab5
+     2.37%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000001b3e1
+     2.26%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000001617b
+     2.23%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000001b4b2
+     1.70%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000004b12
+     1.63%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000017759
+     1.53%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000184b1
+     1.07%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000001815d
+== z3 rc=0 ==
+    31.14%  tax0_z_ladder_b  libc.so.6             [.] __GI___pthread_mutex_unlock_usercnt
+    27.27%  tax0_z_ladder_b  libc.so.6             [.] pthread_mutex_lock@@GLIBC_2.2.5
+     6.91%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000065c3
+     6.68%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000065b9
+     5.94%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000065b0
+     1.57%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000065bf
+     1.42%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000184b1
+     1.29%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x00000000000065b5
+     1.28%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000001617b
+     1.25%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000017759
+     1.08%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000006617
+     1.02%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000006486
+     1.02%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x0000000000017371
+     0.86%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] 0x000000000001815d

@@ -1,0 +1,385 @@
+{
+ "blocks": [
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0149310832599423,
+    "delta_per_op": 282.27056884765625,
+    "base_median_wall_ns": 18904.8955078125,
+    "cand_median_wall_ns": 19187.166076660156,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.1090638931640993,
+    "delta_per_op": 2095.317367553711,
+    "base_median_wall_ns": 19211.833602905273,
+    "cand_median_wall_ns": 21307.150970458984,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.9444007428673307,
+    "delta_per_op": 1660.9113006591797,
+    "base_median_wall_ns": 1758.693344116211,
+    "cand_median_wall_ns": 3419.6046447753906,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0908956794006799,
+    "delta_per_op": 250.67919921875,
+    "base_median_wall_ns": 2757.8780517578125,
+    "cand_median_wall_ns": 3008.5572509765625,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0877024982644412,
+    "delta_per_op": 1049.793701171875,
+    "base_median_wall_ns": 11969.940673828125,
+    "cand_median_wall_ns": 13019.734375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 0.97818328208549,
+    "delta_per_op": -712.409423828125,
+    "base_median_wall_ns": 32654.28955078125,
+    "cand_median_wall_ns": 31941.880126953125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.739153596922919,
+    "delta_per_op": 660254.78515625,
+    "base_median_wall_ns": 379641.4453125,
+    "cand_median_wall_ns": 1039896.23046875,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.087203218373244,
+    "delta_per_op": 134925.140625,
+    "base_median_wall_ns": 1547249.552734375,
+    "cand_median_wall_ns": 1682174.693359375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "read",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.6085613219481614,
+    "delta_per_op": 318443.482421875,
+    "base_median_wall_ns": 197967.884765625,
+    "cand_median_wall_ns": 516411.3671875,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "btrfs",
+    "op": "write",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 0.9870433569787709,
+    "delta_per_op": -10644.017578125,
+    "base_median_wall_ns": 821510.4453125,
+    "cand_median_wall_ns": 810866.427734375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.2098446063446469,
+    "delta_per_op": 3230.1758728027344,
+    "base_median_wall_ns": 15393.180358886719,
+    "cand_median_wall_ns": 18623.356231689453,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "4Kd1",
+    "request_size": 4096,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0976601514917543,
+    "delta_per_op": 2024.3600616455078,
+    "base_median_wall_ns": 20728.618896484375,
+    "cand_median_wall_ns": 22752.978958129883,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.9504184794214916,
+    "delta_per_op": 1645.4989624023438,
+    "base_median_wall_ns": 1731.3415069580078,
+    "cand_median_wall_ns": 3376.8404693603516,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "4Kd8",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.55396635897703,
+    "delta_per_op": 1126.9535369873047,
+    "base_median_wall_ns": 2034.335693359375,
+    "cand_median_wall_ns": 3161.2892303466797,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.3180049435596852,
+    "delta_per_op": 13588.283447265625,
+    "base_median_wall_ns": 10309.736328125,
+    "cand_median_wall_ns": 23898.019775390625,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "64Kd2",
+    "request_size": 65536,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 0.8541659190595954,
+    "delta_per_op": -2961.6162109375,
+    "base_median_wall_ns": 20308.121337890625,
+    "cand_median_wall_ns": 17346.505126953125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.831135299279011,
+    "delta_per_op": 721538.3359375,
+    "base_median_wall_ns": 394038.7890625,
+    "cand_median_wall_ns": 1115577.125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "2Md1",
+    "request_size": 2097152,
+    "depth": 1
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0514372962510499,
+    "delta_per_op": 59081.453125,
+    "base_median_wall_ns": 1148611.171875,
+    "cand_median_wall_ns": 1207692.625,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "read",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.7792196684127273,
+    "delta_per_op": 382110.23046875,
+    "base_median_wall_ns": 214762.818359375,
+    "cand_median_wall_ns": 596873.048828125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "family": "re2p",
+    "fs": "tmpfs",
+    "op": "write",
+    "cell": "2Md2",
+    "request_size": 2097152,
+    "depth": 2
+   },
+   "pair": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 0.875908684767715,
+    "delta_per_op": -90521.375,
+    "base_median_wall_ns": 729473.89453125,
+    "cand_median_wall_ns": 638952.51953125,
+    "verdict": "GRAY"
+   }
+  }
+ ],
+ "errors": []
+}
