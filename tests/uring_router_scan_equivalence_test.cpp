@@ -30,13 +30,20 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/uring_backend.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <exception>
+#include <thread>
 #include <vector>
 
 #if defined(SLUICE_HAS_LIBURING)
 #include <unistd.h>
+#if defined(__unix__)
+#include "death_test_runner_posix.hpp"
+#endif
 #endif
 
 using namespace sluice::async;
@@ -340,6 +347,80 @@ SLUICE_TEST_CASE(uring_u0_cancel_control_path_equivalence) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// #262 S2 harness-robustness regression: a stalled CQE delivery must surface
+// as a NAMED drain failure, never as the silent teardown abort.
+//
+// Failure mode under investigation (#262 S2): when the kernel cannot deliver
+// a CQE within the bounded non-blocking spin window (slow or emulated storage
+// under load), the historical harness returned false from drain() and let the
+// case continue; the still-outstanding completions then destructed through
+// the SILENT completion-authority fail-fast — "terminate called without an
+// active exception", the misleading teardown abort reported on #262.
+//
+// The child below makes that state deterministic on any host: one accepted
+// read on an empty pipe with no writer can NEVER complete. It installs a
+// terminate handler that pins the silent-fail-fast exit code, runs the
+// harness drain, and reports:
+//   pre-escalation: drain returns false -> scope exit destroys the
+//                   outstanding completion -> SILENT fail-fast
+//                   (kExpectedTerminateExit, no diagnostic) — the RED state.
+//   post-escalation: drain never returns false; its watchdog names the stall
+//                   and exits kDrainStallLoudExit — the GREEN state.
+// ---------------------------------------------------------------------------
+constexpr int kDrainStallLoudExit = 89;
+
+int run_drain_stall_child() {
+    int pipe_fds[2] = {-1, -1};
+    if (::pipe(pipe_fds) != 0)
+        return sluice_death_test::kChildTestFailExit;
+    UringAsyncBackend backend{UringConfig{8, 8}};
+    if (!backend.available()) {
+        ::close(pipe_fds[0]);
+        ::close(pipe_fds[1]);
+        return sluice_death_test::kChildTestFailExit;
+    }
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    if (!backend.submit_read(ReadOp{pipe_fds[0], buf, 4, 0}, c).has_value()) {
+        ::close(pipe_fds[0]);
+        ::close(pipe_fds[1]);
+        return sluice_death_test::kChildTestFailExit;
+    }
+    (void)backend.poll(); // dispatch + submit; the kernel owns the blocked read
+    std::set_terminate(
+        [] { std::_Exit(sluice_death_test::kExpectedTerminateExit); });
+    const bool drained = drain(backend);
+    if (drained)
+        return sluice_death_test::kUnexpectedReturnExit; // impossible: no writer
+    // Scope exit below destroys the still-outstanding completion.
+    // PRE-ESCALATION this is the silent fail-fast (the pinned exit 86 fires
+    // before this return value can materialize). POST-ESCALATION this line is
+    // unreachable: drain's watchdog already named the stall and exited with
+    // kDrainStallLoudExit from inside drain().
+    ::close(pipe_fds[0]);
+    ::close(pipe_fds[1]);
+    return sluice_death_test::kChildTestFailExit;
+}
+
+SLUICE_TEST_CASE(uring_u0_drain_stall_is_loud_not_silent) {
+    bool timed_out = false;
+    const int status =
+        sluice_death_test::fork_exec_child("drain-stall-equivalence", timed_out);
+    SLUICE_CHECK_MSG(!timed_out,
+                     "drain-stall child exceeded the 60s parent watchdog");
+    SLUICE_CHECK(WIFEXITED(status));
+    const int code = WEXITSTATUS(status);
+    char msg[256];
+    std::snprintf(msg, sizeof(msg),
+                  "expected the loud drain-stall exit (%d), got %d (%d = the "
+                  "SILENT completion-authority fail-fast on outstanding-"
+                  "completion destruction: the pre-escalation harness gap)",
+                  kDrainStallLoudExit, code,
+                  sluice_death_test::kExpectedTerminateExit);
+    SLUICE_CHECK_MSG(code == kDrainStallLoudExit, msg);
+}
+
 #else
 
 // Stub builds: build/API honesty only (no ring -> no router to scan).
@@ -347,4 +428,22 @@ SLUICE_TEST_CASE(uring_u0_scan_equivalence_stub_build_compile) {}
 
 #endif
 
+#if defined(SLUICE_HAS_LIBURING) && defined(__unix__)
+// Self-exec child dispatch (death_test_runner_posix.hpp convention): the
+// forked child re-runs this binary with --death-child=<case> and executes
+// only the named child body.
+int main(int argc, char** argv) {
+    const std::size_t prefix_len =
+        std::strlen(sluice_death_test::kChildArgPrefix);
+    if (argc == 2 && std::strncmp(argv[1], sluice_death_test::kChildArgPrefix,
+                                  prefix_len) == 0) {
+        const char* which = argv[1] + prefix_len;
+        if (std::strcmp(which, "drain-stall-equivalence") == 0)
+            return run_drain_stall_child();
+        return sluice_death_test::kChildTestFailExit;
+    }
+    return ::sluice_test::run_all();
+}
+#else
 SLUICE_MAIN()
+#endif
