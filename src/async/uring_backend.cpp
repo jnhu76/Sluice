@@ -1197,9 +1197,11 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     // Shipped scan direction: REVERSE (T0-U-ROUTER / #255 — the R1 candidate
     // selected by the #256 shootout). Live cookies are unique within backend
     // lifetime (no-wrap allocate_cookie_ above), so at most one entry matches
-    // and the traversal order cannot change the semantic answer; high-index
-    // LIFO placement puts the live set at the top, so scanning high -> low
-    // makes the per-CQE cost O(live requests) instead of O(request capacity).
+    // and the traversal order cannot change the semantic answer. High-index
+    // LIFO placement concentrates the steady live set near the top in the
+    // measured fixed-depth regime, so reverse traversal removes the measured
+    // capacity-dependent lookup tax in that regime. Worst-case lookup remains
+    // O(request_capacity).
     for (std::size_t i = router_.size(); i-- > 0;) {
         if (router_[i].in_use && router_[i].cookie == cookie)
             return i;

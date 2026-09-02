@@ -63,12 +63,15 @@ behaves identically to the causally attributed ablation arm.
 - **Recovered tax**: essentially the whole measured T0-U-ROUTER capacity
   slope — +6.00 instr/op/C of the uring READ path, 99.99% (btrfs) / ≈100%
   (tmpfs) of the before slope.
-- **Residual tax**: the after slope is indistinguishable from zero at this
-  measurement resolution (|b| ≤ 0.007 instr/op/C; tmpfs r² collapses to 0.56,
-  i.e. no linear capacity trend). No material residual capacity-dependent
-  instruction cost remains on this path. The ThreadPoolBackend control
-  (no router) shows no capacity slope before or after, consistent with the
-  tax being uring-router-specific.
+- **Residual tax**: no material residual capacity slope was detected under
+  the canonical campaign (OLS point estimate |b| ≤ 0.007 instr/op/C; tmpfs
+  r² collapses to 0.56, i.e. no linear capacity trend). Residual slope is
+  negligible at the campaign's engineering resolution; no material residual
+  capacity-dependent instruction cost remains on this path. The evidence is
+  an OLS slope/R² characterization, not a confidence-interval or equivalence
+  test, so it does not support a "statistically zero" claim. The
+  ThreadPoolBackend control (no router) shows no capacity slope before or
+  after, consistent with the tax being uring-router-specific.
 
 ## Gates run for this measurement
 
