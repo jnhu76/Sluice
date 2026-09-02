@@ -38,6 +38,7 @@
 #include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
+#include <sluice/async/fake_backend.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -1022,6 +1023,82 @@ SLUICE_TEST_CASE(contract_submit_failure_drain) {
 }
 #else
 SLUICE_TEST_CASE(contract_submit_failure_drain_not_implemented) {
+    SLUICE_FAIL("Version B pipelined copy not implemented");
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// Contract 11b (#258): the Phase 3 error-cleanup drain must consume READY
+// completions too, not only outstanding ones.
+//
+// ARENA-BACKED deterministic reproduction of the historical sluice-copy
+// failure geometry (#258): request capacity C = P-1 < pipeline depth P. The
+// fake backend auto-completes every accepted read at the next poll, and the
+// arena refusal of the P-th read submit is contract-deterministic, so no
+// filesystem timing is involved:
+//
+//   Phase 1 submits P reads; reads 1..P-1 are accepted, the P-th submit hits
+//   the arena capacity and returns would_block -> fail() -> Phase 3. While
+//   the task drains, the runtime driver's poll auto-completes ALL accepted
+//   reads in one pass and publishes them: the first drain consumes its
+//   target, the rest are READY-unconsumed.
+//
+//   pre-fix: Phase 3 gates on outstanding() only, so the READY completions
+//            are skipped; the task returns the typed error and the bridge
+//            tears the context down while the task-local READY Completions
+//            still hold their arena slots — the arena's non-quiescent
+//            destruction fail-fast terminates the process (the historical
+//            exit-134 abort on a real io_uring backend).
+//   post-fix: Phase 3 drains outstanding OR ready completions (await_drain
+//            fast-paths a READY completion: consume + reset -> slot
+//            released); the typed would_block propagates and teardown is
+//            quiescent.
+//
+// The pre-fix failure mode is a process abort, which is the RED witness;
+// every interleaving leaves >= 1 READY-unconsumed completion, so the RED is
+// deterministic.
+// ---------------------------------------------------------------------------
+#if SLUICE_HAS_PIPELINED_COPY
+SLUICE_TEST_CASE(contract_error_cleanup_drains_ready_completions) {
+    constexpr std::size_t B = 16;
+    constexpr std::size_t Depth = 8;
+    TempFile src, dst;
+    seed_file(src.fd, B * 4);
+
+    std::optional<Result<CopyStats>> copy_result;
+    std::atomic<bool> copy_published{false};
+    std::thread copy_thread([&]() mutable {
+        // C = P-1: the P-th read submit is refused with would_block by the
+        // arena (contract-deterministic capacity refusal).
+        auto backend = std::make_unique<FakeAsyncBackend>(Depth - 1);
+        backend->auto_bytes(B);
+        auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, Depth,
+                                                 1, SyncPolicy::none,
+                                                 std::move(backend));
+        copy_result = std::move(r);
+        copy_published.store(true, std::memory_order_release);
+    });
+
+    // Bounded join (liveness safety only, not sequencing): pre-fix this
+    // thread dies inside the bridge's context teardown before publishing.
+    const auto deadline = std::chrono::steady_clock::now() + kWaitFor * 3;
+    while (!copy_published.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    if (copy_thread.joinable()) copy_thread.join();
+
+    SLUICE_CHECK(copy_published.load(std::memory_order_acquire));
+    SLUICE_CHECK(copy_result.has_value());
+    SLUICE_CHECK(!copy_result->has_value());
+    SLUICE_CHECK(copy_result->error().code == IoError::Code::would_block);
+    // Reaching these checks proves quiescent teardown: READY completions left
+    // unconsumed hold their arena slots through the bridge's context/backend
+    // destruction, and the non-quiescent destruction fail-fast aborts the
+    // process before any check can run (the pre-fix #258 behavior).
+}
+#else
+SLUICE_TEST_CASE(contract_error_cleanup_drains_ready_completions_not_implemented) {
     SLUICE_FAIL("Version B pipelined copy not implemented");
 }
 #endif

@@ -351,19 +351,25 @@ struct PipelinedCopyTask {
         }
 
         // ---- Phase 3: cleanup drain. ----
-        // On the error path, drain every still-outstanding read/write so the
+        // On the error path, drain every still-unconsumed read/write so the
         // Runtime can shut down (no outstanding Completion at context close).
         // First meaningful error wins; secondary/canceled results are consumed
-        // and discarded. Submit-failed ops (never entered the backend) are
-        // skipped: their Completion is idle, so await is skipped.
+        // and discarded. Two unconsumed shapes reach this point: ops still
+        // OUTSTANDING (await to terminal) and ops the driver already reaped
+        // and published while the task was failing — READY is an unconsumed
+        // lifecycle state too (#258): skipping it strands the arena slot in
+        // completion_ready and the context teardown fail-fasts. await_drain
+        // fast-paths a READY completion (consume + reset). Submit-failed ops
+        // (never entered the backend) are skipped: their Completion is idle,
+        // and awaiting an idle Completion is a caller contract violation.
         for (auto& s : slots) {
-            // Drain an outstanding read / write: await to terminal, consume
-            // and discard the secondary outcome, reset for reuse.
-            if (s->read_c.outstanding()) {
+            // Drain an outstanding / ready read or write: await to terminal,
+            // consume and discard the secondary outcome, reset for reuse.
+            if (s->read_c.outstanding() || s->read_c.ready()) {
                 auto dr = await_drain(ctx, s->read_c);
                 if (!dr.has_value()) return make_unexpected<CopyStats>(dr.error());
             }
-            if (s->write_c.outstanding()) {
+            if (s->write_c.outstanding() || s->write_c.ready()) {
                 auto dr = await_drain(ctx, s->write_c);
                 if (!dr.has_value()) return make_unexpected<CopyStats>(dr.error());
             }
