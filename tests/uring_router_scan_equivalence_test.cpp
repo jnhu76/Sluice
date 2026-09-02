@@ -31,6 +31,7 @@
 #include <sluice/async/uring_backend.hpp>
 
 #include <atomic>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -132,30 +133,41 @@ void check_state_equivalence(UringAsyncBackend& backend, std::size_t capacity,
     }
 }
 
-// Loud drain-stall exit: the escalated drain names the stall and exits with
-// this code instead of letting outstanding completions hit the silent
-// completion-authority fail-fast (the misleading #262 S2 teardown abort).
-constexpr int kDrainStallLoudExit = 89;
+// Loud-drain failure forms each get a DEDICATED exit code so the teardown
+// can never mask which failure fired. 86/87/88 are pinned by
+// death_test_runner_posix.hpp and 90 is its kQueueExitHookExit, hence 89/91.
+constexpr int kDrainStallLoudExit = 89;     // watchdog expired: CQE delivery stalled
+constexpr int kDrainWaitErrorLoudExit = 91; // wait_one reported an error while work remained
 
-// Drain every accepted request on the backend. First phase: bounded
-// non-blocking poll spin (fast path; on real storage every CQE lands within
-// microseconds). Returns true only when the arena is fully drained.
+// Drain every accepted request on the backend. Fast path: bounded
+// non-blocking poll spin (on real storage every CQE lands within
+// microseconds), then return normally ONLY when the arena is fully drained.
 //
 // ESCALATION (#262 S2): CQE delivery can stall far beyond any spin window on
 // slow or emulated storage under load. The pre-escalation harness returned
 // false here and let the case continue; the still-outstanding completions
 // then destructed through the SILENT completion-authority fail-fast — the
-// misleading "terminate called without an active exception" teardown abort.
-// The escalation blocks in wait_one (which sleeps in the kernel until a CQE
-// lands) under a diagnostic watchdog: a transient delivery delay now
-// RESOLVES instead of aborting, and a genuine stall is NAMED with the
-// outstanding count before terminating loudly.
-bool drain(UringAsyncBackend& backend, int rounds = 10000) {
+// "terminate called without an active exception" teardown abort reported on
+// #262. Once escalation begins this function NEVER returns to the caller
+// while accepted work remains outstanding; the only exits are:
+//   A. outstanding reaches 0     -> normal return
+//   B. wait_one reports an error -> NAMED diagnostic, _Exit(91)
+//   C. watchdog expires (~1s)    -> NAMED diagnostic, _Exit(89)
+// A transient delivery delay RESOLVES via (A); a genuine stall or wait
+// failure is NAMED with the evidence (kind, outstanding count, error
+// code/os_errno) before the process terminates loudly. The watchdog is the
+// ONLY liveness bound in escalation — the wait_one loop is otherwise
+// unbounded, so there is exactly one competing-timeout mechanism.
+//
+// LIFETIME: no failure path returns to ordinary test scope — every escalation
+// exit is _Exit from inside this function — so an outstanding Completion can
+// never be destroyed through the silent fail-fast again.
+void drain_or_fail_loudly(UringAsyncBackend& backend, int rounds = 10000) {
     while (backend.outstanding() > 0 && rounds-- > 0) {
         (void)backend.poll();
     }
     if (backend.outstanding() == 0)
-        return true;
+        return;
     const std::size_t stuck = backend.outstanding();
     std::atomic<bool> resolved{false};
     std::thread watchdog([&] {
@@ -165,7 +177,7 @@ bool drain(UringAsyncBackend& backend, int rounds = 10000) {
         }
         if (!resolved.load(std::memory_order_acquire)) {
             std::fprintf(stderr,
-                         "uring equivalence harness: drain stalled with %zu "
+                         "uring equivalence harness: drain STALLED with %zu "
                          "outstanding op(s); CQE delivery did not resume "
                          "(#262 S2 signature)\n",
                          stuck);
@@ -173,16 +185,23 @@ bool drain(UringAsyncBackend& backend, int rounds = 10000) {
             std::_Exit(kDrainStallLoudExit);
         }
     });
-    for (int blocking_rounds = 1000; blocking_rounds-- > 0;) {
-        if (backend.outstanding() == 0)
-            break;
-        auto wr = backend.wait_one();
-        if (!wr.has_value())
-            break;
+    while (backend.outstanding() > 0) {
+        const auto wr = backend.wait_one();
+        if (!wr.has_value()) {
+            const sluice::IoError err = wr.error();
+            std::fprintf(stderr,
+                         "uring equivalence harness: drain wait_one FAILED "
+                         "with %zu outstanding op(s); code=%.*s os_errno=%d "
+                         "(#262 S2 harness fail-closed reporting)\n",
+                         backend.outstanding(),
+                         static_cast<int>(sluice::to_string(err.code).size()),
+                         sluice::to_string(err.code).data(), err.os_errno);
+            std::fflush(stderr);
+            std::_Exit(kDrainWaitErrorLoudExit);
+        }
     }
     resolved.store(true, std::memory_order_release);
     watchdog.join();
-    return backend.outstanding() == 0;
 }
 
 } // namespace
@@ -237,7 +256,7 @@ SLUICE_TEST_CASE(uring_u0_scan_direction_equivalence_matrix) {
 
             // Consume the diagnostic probes, then check the real CQE path.
             backend.reset_router_scan_diagnostics_for_test();
-            SLUICE_CHECK(drain(backend));
+            drain_or_fail_loudly(backend);
             SLUICE_CHECK(backend.live_cookies_for_test() == 0);
 
             const auto& diag = backend.router_scan_diagnostics_for_test();
@@ -292,7 +311,7 @@ SLUICE_TEST_CASE(uring_u0_cqe_path_and_stale_drop_equivalence) {
         SLUICE_CHECK(
             backend.submit_write(WriteOp{file.fd(), buf, 8, 0}, c).has_value());
 
-        SLUICE_CHECK(drain(backend));
+        drain_or_fail_loudly(backend);
         SLUICE_CHECK(c.ready());
         const auto res = c.result();
         SLUICE_CHECK(res.has_value() && res.value() == 8);
@@ -433,17 +452,16 @@ int run_drain_stall_child() {
     (void)backend.poll(); // dispatch + submit; the kernel owns the blocked read
     std::set_terminate(
         [] { std::_Exit(sluice_death_test::kExpectedTerminateExit); });
-    const bool drained = drain(backend);
-    if (drained)
-        return sluice_death_test::kUnexpectedReturnExit; // impossible: no writer
-    // Scope exit below destroys the still-outstanding completion.
-    // PRE-ESCALATION this is the silent fail-fast (the pinned exit 86 fires
-    // before this return value can materialize). POST-ESCALATION this line is
-    // unreachable: drain's watchdog already named the stall and exited with
-    // kDrainStallLoudExit from inside drain().
+    // PRE-ESCALATION this child returned from drain with outstanding work and
+    // the scope exit below destroyed the completion through the SILENT
+    // fail-fast (pinned exit 86). POST-ESCALATION drain_or_fail_loudly never
+    // returns here at all: its watchdog names the stall and exits with
+    // kDrainStallLoudExit from inside the drain. The return below is the
+    // honest "contract broken" marker if that guarantee is ever violated.
+    drain_or_fail_loudly(backend);
     ::close(pipe_fds[0]);
     ::close(pipe_fds[1]);
-    return sluice_death_test::kChildTestFailExit;
+    return sluice_death_test::kUnexpectedReturnExit;
 }
 
 SLUICE_TEST_CASE(uring_u0_drain_stall_is_loud_not_silent) {
@@ -462,6 +480,81 @@ SLUICE_TEST_CASE(uring_u0_drain_stall_is_loud_not_silent) {
                   kDrainStallLoudExit, code,
                   sluice_death_test::kExpectedTerminateExit);
     SLUICE_CHECK_MSG(code == kDrainStallLoudExit, msg);
+}
+
+// ---------------------------------------------------------------------------
+// D1 (#262 corrective): a wait_one ERROR during escalation is also a named,
+// fail-closed exit — never a silent return into ordinary scope.
+//
+// The pre-corrective drain broke out of its blocking loop on a wait_one
+// error, marked the watchdog resolved, and returned false with work still
+// outstanding: the caller then continued/unwound and the outstanding
+// completion destructed through the SILENT completion-authority fail-fast —
+// the same harness hole as the stall case, on a different trigger.
+//
+// The child below makes that state deterministic with the EXISTING
+// transport seam (no new fault-injection framework): UringBackendSubmitTest
+// Hooks.submit_and_wait (internal-testing only) replaces the kernel wait and
+// returns -EIO on every call, which wait_one surfaces verbatim as an
+// unexpected IoError (backend_error, os_errno=EIO) while one blocked read
+// stays outstanding. Expected: the NAMED wait-error exit (91), with the
+// diagnostic carrying the failure kind, outstanding count, code and
+// os_errno — never exit 86 (silent fail-fast), never a normal return.
+// ---------------------------------------------------------------------------
+
+int fail_wait_deterministically(void*, ::io_uring*, unsigned) noexcept {
+    return -EIO;
+}
+
+int run_drain_wait_error_child() {
+    int pipe_fds[2] = {-1, -1};
+    if (::pipe(pipe_fds) != 0)
+        return sluice_death_test::kChildTestFailExit;
+    UringAsyncBackend backend{
+        UringConfig{8, 8},
+        UringBackendSubmitTestHooks{nullptr, nullptr, &fail_wait_deterministically}};
+    if (!backend.available()) {
+        ::close(pipe_fds[0]);
+        ::close(pipe_fds[1]);
+        return sluice_death_test::kChildTestFailExit;
+    }
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    if (!backend.submit_read(ReadOp{pipe_fds[0], buf, 4, 0}, c).has_value()) {
+        ::close(pipe_fds[0]);
+        ::close(pipe_fds[1]);
+        return sluice_death_test::kChildTestFailExit;
+    }
+    (void)backend.poll(); // dispatch + submit; the kernel owns the blocked read
+    std::set_terminate(
+        [] { std::_Exit(sluice_death_test::kExpectedTerminateExit); });
+    // The escalated drain hits the injected wait error on its first
+    // wait_one: it must name the failure and _Exit(91) from inside the
+    // drain. The return below is the honest "contract broken" marker if a
+    // normal (drained) return were ever possible with this backend.
+    drain_or_fail_loudly(backend);
+    ::close(pipe_fds[0]);
+    ::close(pipe_fds[1]);
+    return sluice_death_test::kUnexpectedReturnExit;
+}
+
+SLUICE_TEST_CASE(uring_u0_drain_wait_error_is_loud_not_silent) {
+    bool timed_out = false;
+    const int status = sluice_death_test::fork_exec_child(
+        "drain-wait-error-equivalence", timed_out);
+    SLUICE_CHECK_MSG(!timed_out,
+                     "drain-wait-error child exceeded the 60s parent watchdog");
+    SLUICE_CHECK(WIFEXITED(status));
+    const int code = WEXITSTATUS(status);
+    char msg[256];
+    std::snprintf(msg, sizeof(msg),
+                  "expected the named wait-error exit (%d), got %d (%d = the "
+                  "SILENT completion-authority fail-fast; 89 = the stall "
+                  "watchdog — the child must surface the wait_one ERROR form, "
+                  "not another failure form)",
+                  kDrainWaitErrorLoudExit, code,
+                  sluice_death_test::kExpectedTerminateExit);
+    SLUICE_CHECK_MSG(code == kDrainWaitErrorLoudExit, msg);
 }
 
 #else
@@ -483,6 +576,8 @@ int main(int argc, char** argv) {
         const char* which = argv[1] + prefix_len;
         if (std::strcmp(which, "drain-stall-equivalence") == 0)
             return run_drain_stall_child();
+        if (std::strcmp(which, "drain-wait-error-equivalence") == 0)
+            return run_drain_wait_error_child();
         return sluice_death_test::kChildTestFailExit;
     }
     return ::sluice_test::run_all();
