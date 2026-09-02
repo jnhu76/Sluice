@@ -374,13 +374,14 @@ inline void UringAsyncBackend::set_before_queue_exit_hook_for_test(
 
 // ---- TAX-0 EXP-U0 router-scan research seam (#250 campaign) --------------
 // Research-only scan-direction ablation + exact scan-iteration witness.
-// set_router_scan_mode_for_test selects forward_production (the production
-// scan — also the default for every internal-testing construction) or
-// reverse_ablation (the EXP-U0 causal ablation: same matching predicate,
-// high->low traversal). Call from a quiescent point on the single-driver
-// domain (e.g. before the runtime starts driving the backend). The setter
-// is deliberately NOT synchronized: the mode is read on the driver domain
-// only.
+// set_router_scan_mode_for_test selects reverse_production (the shipped
+// production scan since the R1 landing — also the default for every
+// internal-testing construction) or forward_ablation (the pre-fix forward
+// traversal, kept as the EXP-U0 causal-comparator direction: same matching
+// predicate, low->high traversal). Call from a quiescent point on the
+// single-driver domain (e.g. before the runtime starts driving the
+// backend). The setter is deliberately NOT synchronized: the mode is read
+// on the driver domain only.
 inline void UringAsyncBackend::set_router_scan_mode_for_test(
     RouterScanModeForTest mode) noexcept {
     router_scan_mode_for_test_ = mode;

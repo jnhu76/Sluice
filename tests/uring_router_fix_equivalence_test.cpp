@@ -301,13 +301,14 @@ SLUICE_TEST_CASE(uring_router_fix_placement_and_structure_witness) {
                 SLUICE_CHECK(idx == k);
                 SLUICE_CHECK(iters == k + 1);
             } else {
-                // R0/R1/R3 keep the production high-index placement.
+                // R1/R3 keep the production high-index placement.
                 SLUICE_CHECK(idx == capacity - 1 - k);
-                if (mode == UringAsyncBackend::RouterFixModeForTest::reverse_scan)
+                if (mode == UringAsyncBackend::RouterFixModeForTest::reverse_scan ||
+                    mode ==
+                        UringAsyncBackend::RouterFixModeForTest::production_baseline)
+                    // reverse_scan IS the shipped production direction since
+                    // the R1 landing; production_baseline tracks it.
                     SLUICE_CHECK(iters == k + 1);
-                else if (mode ==
-                         UringAsyncBackend::RouterFixModeForTest::production_baseline)
-                    SLUICE_CHECK(iters == capacity - k);
                 else // R3: bounded probe sequence, placement untouched.
                     SLUICE_CHECK(iters >= 1 && iters <= 8);
             }
