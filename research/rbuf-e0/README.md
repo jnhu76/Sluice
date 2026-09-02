@@ -20,12 +20,21 @@ capability (see `RBUF-E0-AUDIT.md`); this campaign must not add one.
 ## Layout
 
 ```text
-scripts/rbuf_e0.py      campaign driver (status/probe/generate/q0/steady/
-                        amort/summarize)
-scripts/plot_rbuf_e0.py derived SVG plots
-results/<session>/      immutable sessions (environment/manifest/gates/
-                        notes/raw/runs.jsonl/raw/perf.csv/summary/analysis)
-plots/                  derived SVGs (regenerable)
+scripts/rbuf_e0.py                 campaign driver (status/probe/generate/
+                                   q0/steady/amort/summarize)
+scripts/plot_rbuf_e0.py            derived SVG plots (regenerable)
+scripts/check_rbuf_e0_analysis.py  read-only hygiene guard: setup_plus_
+                                   teardown_fraction identity vs raw,
+                                   absolute lifecycle reporting, U1/U2
+                                   causal isolation, frozen verdict vocab
+scripts/check_rbuf_e0_probe_order.py
+                                   structural guard: the capability probe
+                                   stays strictly serial (read CQE before
+                                   write submission; no IOSQE_IO_LINK)
+results/<session>/                 immutable sessions (environment/
+                                   manifest/gates/notes/raw/runs.jsonl/
+                                   raw/perf.csv/summary/analysis)
+plots/                             derived SVGs (regenerable)
 ```
 
 The measurement instrument is `bench/rbuf_e0_bench.cpp` (research-only
@@ -53,3 +62,12 @@ python3 research/rbuf-e0/scripts/plot_rbuf_e0.py     <steady-session-id>
 All conclusions are HOST-LOCAL ONLY. #262 is not closed by this campaign;
 Q0 only records that the multi-worker cancel anomaly did not reproduce in
 this restricted single-worker regime.
+
+Post-measurement adversarial-review remediation (2026-09-02, after the
+frozen formal sessions): capability probe made strictly serial
+(read-completion-before-write-submission; probe-only — the formal --run
+path is untouched and formal raw evidence is hash-unchanged), the
+`setup_fraction` field renamed to `setup_plus_teardown_fraction` (formula
+unchanged), and amortization/memlock claim wording tightened to the
+evidence. See `RBUF-E0-REPORT.md` §POST-MEASUREMENT PROBE VALIDATION.
+Formal benchmark rerun: NO.

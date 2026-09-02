@@ -13,8 +13,11 @@ research/chunk-e0):
   plots/instructions-per-byte-u1-vs-u2.svg   U1 vs U2 instructions/byte
   plots/amortized-cost-vs-reuse-horizon.svg  U1 vs U2 amortized per-transfer
                                              end-to-end cost vs H (log-x)
-  plots/setup-fraction-vs-reuse-horizon.svg  U2 (setup+teardown)/end-to-end
-                                             fraction vs H
+  plots/setup-plus-teardown-fraction-vs-reuse-horizon.svg
+                                             U2 (setup_ns + teardown_ns) /
+                                             end-to-end span fraction vs H
+                                             (region dominated by filesystem/
+                                             close teardown, NOT registration)
 """
 
 from __future__ import annotations
@@ -175,11 +178,11 @@ def plot_amortized(analysis: dict) -> None:
 def plot_setup_fraction(analysis: dict) -> None:
     hz = [h for h in analysis["amortization"]["horizons"] if h.get("u2")]
     if not hz:
-        print("skip plots/setup-fraction-vs-reuse-horizon.svg "
+        print("skip plots/setup-plus-teardown-fraction-vs-reuse-horizon.svg "
               "(no U2 amortization data in this session)")
         return
     hs = [h["horizon_transfers"] for h in hz]
-    frac = [h["u2"]["setup_fraction"] for h in hz]
+    frac = [h["u2"]["setup_plus_teardown_fraction"] for h in hz]
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.plot(hs, frac, "s-", color=ARM_COLORS["U2"])
     for h, f in zip(hs, frac):
@@ -189,10 +192,11 @@ def plot_setup_fraction(analysis: dict) -> None:
     ax.set_xticks(hs)
     ax.set_xticklabels([str(h) for h in hs])
     ax.set_xlabel("reuse horizon H")
-    ax.set_ylabel("(register + unregister) / end-to-end")
-    ax.set_title("RBUF-E0 U2 registration lifecycle fraction of end-to-end "
-                 "cost vs reuse horizon (2M×d2)")
-    save(fig, "setup-fraction-vs-reuse-horizon.svg")
+    ax.set_ylabel("median(setup_ns + teardown_ns) / end-to-end span")
+    ax.set_title("RBUF-E0 U2 setup+teardown REGION fraction of the measured "
+                 "end-to-end span vs reuse horizon (2M×d2; region dominated "
+                 "by filesystem/close teardown, not registration)")
+    save(fig, "setup-plus-teardown-fraction-vs-reuse-horizon.svg")
 
 
 def main() -> None:

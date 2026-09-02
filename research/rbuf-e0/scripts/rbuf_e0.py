@@ -27,9 +27,9 @@ Subcommands:
                         lifecycle costs, amortization crossover; verdict
                         vocabulary per prereg)
 
-RLIMIT_MEMLOCK boundary: cells whose U2 registration would exceed the
-observed memlock limit are REGISTRATION-INFEASIBLE. The driver marks them
-infeasible in the manifest BEFORE measurement (from the probe's observed
+RLIMIT_MEMLOCK boundary: cells whose U2 registration would meet or exceed
+the observed memlock limit are REGISTRATION-INFEASIBLE. The driver marks
+them infeasible in the manifest BEFORE measurement (from the probe's observed
 limit) and records them in analysis.json — they are a reportable resource
 capability boundary, not gate errors and not anomalies. No ulimit/sysctl is
 ever adjusted (prereg rule).
@@ -355,9 +355,10 @@ def memlock_limit_bytes() -> int:
 
 
 def u2_feasible(chunk: int, depth: int, memlock: int) -> bool:
-    """REGISTRATION-INFEASIBLE iff the U2 registration for the cell exceeds
-    the OBSERVED memlock soft limit (probe-verified on Host-0: exactly-at or
-    above the limit fails with ENOMEM)."""
+    """REGISTRATION-INFEASIBLE iff the U2 registration for the cell meets or
+    exceeds the OBSERVED memlock soft limit (probe-verified on Host-0: an
+    exactly-at-limit 8 MiB registered-iovec request failed with ENOMEM; the
+    kernel's exact extra accounting was not observed)."""
     if memlock < 0:
         return True  # unknown limit -> attempt, fail-closed at runtime
     return chunk * depth < memlock
@@ -737,10 +738,15 @@ def cmd_summarize(session_id: str) -> None:
                 "amortized_per_transfer_ns_median": median(am),
                 "steady_per_transfer_ns_median":
                     median([median(r["bench"]["transfer_ns"]) for r in rs]),
-                "setup_fraction":
-                    round(median([r["bench"]["setup_ns"] +
-                                  r["bench"]["teardown_ns"] for r in rs]) /
-                          median(costs), 5) if median(costs) else 0,
+            # Fraction of the measured end-to-end span occupied by the
+            # setup+teardown REGION. On this host that region is dominated
+            # by the filesystem/dirty-page/close teardown stall, NOT by the
+            # registration lifecycle (reported as absolute register_ns /
+            # unregister_ns in `lifecycle`). The name states the formula.
+            "setup_plus_teardown_fraction":
+                round(median([r["bench"]["setup_ns"] +
+                              r["bench"]["teardown_ns"] for r in rs]) /
+                      median(costs), 5) if median(costs) else 0,
             }
             e2e[(arm, h)] = costs
         if ("U1", h) in e2e and ("U2", h) in e2e:

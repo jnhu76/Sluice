@@ -32,9 +32,12 @@
 // validation on every CQE, and no in-flight op left at transfer end.
 // Registration/unregistration failures exit 4 (capability/lifecycle class).
 //
-// `--probe` verifies host capability behaviorally (register + fixed
-// read/write round-trip on a small file) and prints a JSON capability line
-// (exit 0 when fully capable, exit 5 otherwise).
+// `--probe` verifies host capability behaviorally: a registered-buffer
+// round-trip on a small file in STRICT read-completion-before-write-
+// submission order (the read CQE is reaped and its content validated before
+// the write SQE is even prepared — no IOSQE_IO_LINK, ordering lives in the
+// submission structure so a foreign kernel cannot reorder it away). Prints a
+// JSON capability line (exit 0 when fully capable, exit 5 otherwise).
 //
 // The driver (research/rbuf-e0/scripts/rbuf_e0.py) wraps each run under
 // `perf stat -e instructions:u,cycles:u,task-clock`, hashes src/dst
@@ -440,6 +443,7 @@ int run_probe(const Config& cfg) {
     int init_errno = 0, reg_errno = 0, unreg_errno = 0;
     int read_res = 0, write_res = 0;
     bool read_ok = false, write_ok = false;
+    bool write_submitted_after_read_cqe = false;
     io_uring ring{};
     const int irc = ::io_uring_queue_init(8, &ring, 0);
     if (irc != 0) {
@@ -459,30 +463,40 @@ int run_probe(const Config& cfg) {
                 ::open(cfg.dst.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (rfd < 0) rbuf_fatal("open(probe read)", errno);
             if (wfd < 0) rbuf_fatal("open(probe write)", errno);
+            // PROTOCOL: read phase completes (CQE reaped, buffer content
+            // validated) before the write SQE is prepared, so probe
+            // results cannot depend on kernel-side op ordering.
             io_uring_sqe* sq = ::io_uring_get_sqe(&ring);
             ::io_uring_prep_read_fixed(sq, rfd, buf, kBlock, 0, 0);
             ::io_uring_sqe_set_data64(sq, 1);
+            if (::io_uring_submit(&ring) != 1)
+                rbuf_semantic("probe read submit");
+            {
+                io_uring_cqe* cqe = nullptr;
+                const int wrc = ::io_uring_wait_cqe(&ring, &cqe);
+                if (wrc < 0) rbuf_fatal("io_uring_wait_cqe(probe read)", -wrc);
+                if (cqe->user_data != 1)
+                    rbuf_semantic("probe: CQE before read completion");
+                read_res = cqe->res;
+                read_ok = read_res == static_cast<int>(kBlock) &&
+                          std::memcmp(buf, master.data(), kBlock) == 0;
+                ::io_uring_cqe_seen(&ring, cqe);
+            }
             io_uring_sqe* sw = ::io_uring_get_sqe(&ring);
             ::io_uring_prep_write_fixed(sw, wfd, buf, kBlock, 0, 0);
             ::io_uring_sqe_set_data64(sw, 2);
-            const int src_rc = ::io_uring_submit(&ring);
-            if (src_rc != 2) rbuf_semantic("probe submit");
-            int seen = 0;
-            while (seen < 2) {
+            write_submitted_after_read_cqe = true;
+            if (::io_uring_submit(&ring) != 1)
+                rbuf_semantic("probe write submit");
+            {
                 io_uring_cqe* cqe = nullptr;
-                const int wrc = ::io_uring_wait_cqe(&ring, &cqe);
-                if (wrc < 0) rbuf_fatal("io_uring_wait_cqe(probe)", -wrc);
-                if (cqe->user_data == 1) {
-                    read_res = cqe->res;
-                    read_ok = read_res == static_cast<int>(kBlock) &&
-                              std::memcmp(buf, master.data(), kBlock) == 0;
-                    ++seen;
-                } else if (cqe->user_data == 2) {
-                    write_res = cqe->res;
-                    ++seen;
-                } else {
-                    rbuf_semantic("probe: unknown CQE cookie");
-                }
+                const int wrc =
+                    ::io_uring_wait_cqe(&ring, &cqe);
+                if (wrc < 0)
+                    rbuf_fatal("io_uring_wait_cqe(probe write)", -wrc);
+                if (cqe->user_data != 2)
+                    rbuf_semantic("probe: CQE before write completion");
+                write_res = cqe->res;
                 ::io_uring_cqe_seen(&ring, cqe);
             }
             ::close(rfd);
@@ -506,16 +520,19 @@ int run_probe(const Config& cfg) {
     if (::getrlimit(RLIMIT_MEMLOCK, &rl) != 0)
         rbuf_fatal("getrlimit(RLIMIT_MEMLOCK)", errno);
     const bool ok = init_errno == 0 && reg_errno == 0 && unreg_errno == 0 &&
-                    read_ok && write_ok;
+                    read_ok && write_ok && write_submitted_after_read_cqe;
     std::printf(
         "{\"bench\":\"rbuf_e0_bench\",\"mode\":\"probe\","
         "\"uring_queue_init_errno\":%d,\"register_errno\":%d,"
         "\"unregister_errno\":%d,\"read_fixed_res\":%d,"
         "\"write_fixed_res\":%d,\"read_content_ok\":%s,"
-        "\"write_content_ok\":%s,\"memlock_cur_bytes\":%llu,"
+        "\"write_content_ok\":%s,"
+        "\"write_submitted_after_read_cqe\":%s,"
+        "\"memlock_cur_bytes\":%llu,"
         "\"memlock_max_bytes\":%llu,\"page_size\":%ld,\"capable\":%s}\n",
         init_errno, reg_errno, unreg_errno, read_res, write_res,
         read_ok ? "true" : "false", write_ok ? "true" : "false",
+        write_submitted_after_read_cqe ? "true" : "false",
         (unsigned long long)rl.rlim_cur, (unsigned long long)rl.rlim_max,
         ::sysconf(_SC_PAGESIZE), ok ? "true" : "false");
     return ok ? 0 : 5;

@@ -42,8 +42,10 @@ cell        U0       U1       U2       U1/U2   MAD-sep  MATERIAL
 1M   x d2   2073.0   2169.5   2108.2   0.9717  no       no
 2M   x d1    827.6    890.7    778.0   0.8735  no       no
 2M   x d2   2100.8   2056.6   2140.0   1.0405  no       no   (PRIMARY)
-2M   x d4   2134.4   2087.6   INFEASIBLE (registration > memlock)
-4M   x d2   2121.5   2101.6   INFEASIBLE (registration > memlock)
+2M   x d4   2134.4   2087.6   INFEASIBLE (8 MiB registered-iovec request
+                                          ENOMEM under observed 8 MiB
+                                          soft RLIMIT_MEMLOCK)
+4M   x d2   2121.5   2101.6   INFEASIBLE (same resource boundary)
 ```
 
 PRIMARY 2M x d2: U2 median is 4.05% faster, but the U1/U2 distributions
@@ -64,9 +66,13 @@ this session).
 Neighbor consistency: NOT satisfied (no neighbor is material).
 
 STEADY-STATE VERDICT: **REGISTERED BUFFER STEADY-STATE NOT MATERIAL**
-(frozen rule). Secondary observation: the sign of the (sub-material) effect
-flips across cells — registration is not a uniform win OR loss here; it is
-noise-adjacent everywhere on this host.
+(frozen rule). Scope: HOST-LOCAL, tested feasible regime, frozen rule.
+NOT MATERIAL is NOT "no effect exists": the supported statement is that
+**no robust material steady-state advantage for registered/fixed buffers
+was established in the tested feasible Host-0 regime.** Secondary
+observation: the sign of the (sub-material) effect flips across cells —
+registration is not a uniform win OR loss here; it is noise-adjacent
+everywhere on this host.
 
 ==================================================
 LIFECYCLE
@@ -82,13 +88,18 @@ resource accounting: RLIMIT_MEMLOCK soft = 8 MiB (OBSERVED);
   NOT OBSERVABLE (no invented quantities; INFERRED values are forbidden)
 ```
 
-Capability boundary (OBSERVED, errno recorded): registering exactly 8 MiB
-(`2M x d4`, `4M x d2`) fails with ENOMEM under the 8 MiB memlock soft
-limit. Those U2 cells are REGISTRATION-INFEASIBLE on Host-0 as-configured
-and were excluded BEFORE measurement per prereg §5. No ulimit/sysctl was
-adjusted. This boundary is itself a reportable resource cost of the
-registration capability: pinning grows with in-flight bytes and ends at the
-memlock wall.
+Capability boundary (OBSERVED, errno recorded): an 8 MiB
+registered-iovec request (`2M x d4`, `4M x d2`) was infeasible under the
+observed 8 MiB soft RLIMIT_MEMLOCK configuration and failed with ENOMEM.
+Those U2 cells are REGISTRATION-INFEASIBLE on Host-0 as-configured and were
+excluded BEFORE measurement per prereg §5. No ulimit/sysctl was adjusted.
+The kernel's exact accounting/pinning overhead beyond the requested iovec
+lengths was NOT observed, so this is recorded as a HOST-LOCAL RESOURCE
+CAPABILITY BOUNDARY (requested size vs observed soft limit) — not as a
+claim that "registration exceeds memlock", and not a protocol, Linux, or
+fixed-buffer limit. The request itself (8 MiB) equaled the soft limit; the
+failure shows exactly-at-limit registration does not succeed in this
+configuration. Pinning grows with in-flight bytes and ends at this wall.
 
 Session-level filesystem observation (OBSERVED, mechanism NOT attributed):
 in the amortization session, the bench's teardown region (close(dst) +
@@ -111,25 +122,43 @@ H     U1 e2e (s)   U2 e2e (s)   ratio   MAD-sep   material
 4     5.7363       6.0764       0.9440  no        no
 16    13.3698      10.8649      1.2305  no        no
 64    39.9559      47.2087      0.8464  no        no
-setup fraction (U2): 89.3% (H=1) -> 66.6% (H=4) -> 34.9% (H=16) ->
-7.9% (H=64) — but the numerator/denominator are dominated by the
-environmental teardown stall documented above, not by registration.
+setup+teardown fraction (U2, field setup_plus_teardown_fraction):
+89.3% (H=1) -> 66.6% (H=4) -> 34.9% (H=16) -> 7.9% (H=64)
 ```
 
-The end-to-end signal is swamped: the registration lifecycle (~1.15 ms total)
-is ~4 orders of magnitude below the inter-run filesystem noise (seconds),
-and the direction of the (noise-level) U1/U2 difference flips between
-horizons. Under the frozen rule no tested horizon is material.
+What the fraction measures (renamed during adversarial-review remediation;
+the formula is unchanged): `setup_plus_teardown_fraction` = median(setup_ns
++ teardown_ns) / median(end-to-end span). The ~89% at H=1 is the share of
+the measured end-to-end SPAN occupied by the setup+teardown REGION — it is
+NOT a registration cost. The dominant anomaly inside that region is the
+arm-independent filesystem/dirty-page/close teardown stall documented under
+LIFECYCLE (2.5-14.4 s depending on dirty page-cache debt left by
+predecessor runs). The registration lifecycle itself is ~1.086 ms register
++ ~65 us unregister (4 MiB / 2-iovec treatment) — about four orders of
+magnitude below the seconds-scale region noise. No statement in this report
+may be read as "registration occupies 89%", "registration dominates H1",
+or "registration setup is 89%".
 
 CROSSOVER: **AMORTIZATION CROSSOVER NOT LOCATED IN TESTED RANGE**
 
-Decomposition (context, same session, clean transfer spans only):
-registration setup+teardown (~1.15 ms) is ~0.25% of a SINGLE 0.46 s
-transfer. Therefore the amortization question collapses onto the
-steady-state question: any REAL steady-state benefit larger than ~0.25%
-would pay for registration within the first transfer (H=1). Since the
-frozen steady-state rule finds no material benefit, there is no benefit for
-any reuse horizon to amortize. The negative is a valid closure.
+Authorized claim (evidence-exact): the tested reuse horizons establish no
+robust end-to-end amortization crossover under the frozen materiality rule.
+The end-to-end amortization measurement is under-resolved for a ~1.15 ms
+registration lifecycle cost because seconds-scale filesystem/dirty-page
+teardown variation dominates the non-steady region — the noise-level U1/U2
+end-to-end difference flips direction between horizons (1.05, 0.94, 1.23,
+0.85) with no MAD separation at any horizon. Since RBUF-E0 also establishes
+no robust steady-state registration benefit under its frozen rule, this
+campaign provides NO EVIDENCE-BACKED amortization case for production
+promotion. That is "no evidence-backed benefit", NOT "true benefit is
+zero".
+
+Decomposition (context, same session, clean transfer spans only): the
+registration lifecycle (~1.15 ms) is ~0.25% of a SINGLE 0.46 s transfer.
+A robust steady-state benefit above that scale would amortize registration
+within the first transfer (H=1); the frozen steady-state rule establishes
+no such robust benefit, and the end-to-end measurement cannot resolve the
+millisecond-scale lifecycle against the seconds-scale teardown noise.
 
 ==================================================
 CPU
@@ -172,12 +201,73 @@ aligned-reuse storage policy itself is worth ~0-3% vs natural allocation
 in most cells — an allocation/reuse effect, explicitly NOT a registration
 claim.
 
+Remediation re-audit (adversarial review, post-measurement): mechanically
+re-verified from raw runs.jsonl by
+`scripts/check_rbuf_e0_analysis.py` — all 112 steady runs and all 56
+amortization runs gate-clean; in every U1-vs-U2 comparison group (4 steady
+cells + all 4 amortization horizons) both arms are identical on
+align_remainder (0), slot_stride (== chunk), ring_entries
+requested/actual, chunks_per_transfer, read/write/CQE counts and byte
+totals, and only U2 carries registered_buffers/registered_bytes (plus the
+fixed opcode selection). Isolation holds.
+
 Adversarial self-review (prereg-mandated): none of the ten review questions
 surfaced a confound (storage primitive/size/alignment/stride gated equal;
 allocation once per process in both arms; setup charged in lifecycle and
 amortization accounting; same useful bytes and hashes gated per run; same
 ring geometry recorded per run; zero gate errors so no selective run
 removal; zero canceled/teardown anomalies in all 218 runs).
+
+==================================================
+POST-MEASUREMENT PROBE VALIDATION (adversarial-review remediation)
+==================================================
+
+The capability probe in `bench/rbuf_e0_bench.cpp` originally submitted
+READ_FIXED and WRITE_FIXED together in one io_uring_submit, so probe
+results could depend on kernel-side op ordering (an ordering race for
+future foreign kernels / ARM hosts; NOT a formal-performance-evidence
+problem — the formal --run path never used the probe). Remediation: the
+probe is now strictly serial (submit READ_FIXED -> wait CQE -> validate
+length + buffer content -> submit WRITE_FIXED -> wait CQE -> validate ->
+pread destination -> validate content). No IOSQE_IO_LINK, no chaining.
+
+```text
+formal benchmark rerun:            NO (forbidden by remediation scope)
+formal raw evidence modified:      NO (hash audit below)
+formal --run C++ path changed:     NO (diff confined to run_probe() +
+                                    its header comment)
+re-run performed:                  capability probe ONLY
+probe session:                     results/rbuf-e0-probe-native-2 (new,
+                                   post-measurement validation artifact;
+                                   NOT part of any formal session)
+probe binary:                      rebuilt bench, sha256
+                                   9494dd48baaf3cf64feb1b035e71fa72e5cb
+                                   9b5c826548c0a019bd29989dfd49
+                                   (formal sessions recorded the frozen
+                                   7649fceb... binary in their immutable
+                                   environment.json — unchanged)
+probe result:                      uring_queue_init PASS, register_buffers
+                                   PASS, READ_FIXED PASS (res=4096),
+                                   read content PASS, WRITE_FIXED PASS
+                                   (res=4096), destination content PASS,
+                                   unregister_buffers PASS,
+                                   write_submitted_after_read_cqe=true,
+                                   capable=true, exit 0
+memlock re-observation:            soft = 8388608 (8 MiB), feasible/
+                                   infeasible U2 cells identical to the
+                                   original probe session
+regression guard:                  scripts/check_rbuf_e0_probe_order.py
+                                   (source-structural + executed-probe)
+                                   PASS
+```
+
+Immutable-evidence hash audit (pre- and post-regeneration, sha256 of
+raw/runs.jsonl, raw/perf.csv, manifest.json, gates.json for all three
+formal sessions): UNCHANGED — Q0 50 runs, steady 112 runs, amortization
+56 runs, 218 formal runs total, gate errors 0. Derived artifacts
+(analysis.json, summary.csv/json, plots) were regenerated from the
+untouched raw evidence only; the sole analysis change is the field rename
+`setup_fraction` -> `setup_plus_teardown_fraction` (values identical).
 
 ==================================================
 CLAIM BOUNDARY
@@ -208,15 +298,44 @@ per 4 MiB; memlock-bounded). An RBUF-P1 production design issue is NOT
 justified by this evidence. #262 remains open and unaffected.
 
 ==================================================
-FINAL
+FINAL — RBUF-E0 HOST-0 RESULT
 ==================================================
 
 ```text
-STEADY-STATE VERDICT:  REGISTERED BUFFER STEADY-STATE NOT MATERIAL
-AMORTIZATION VERDICT:  AMORTIZATION CROSSOVER NOT LOCATED IN TESTED RANGE
-                       (registration lifecycle ~1.15 ms per 4 MiB lifecycle
-                       is negligible against any single transfer; with no
-                       steady-state benefit there is nothing to amortize)
+Q0:                   QUALIFIED (50/50; does NOT close #262 — #262
+                      did not reproduce in this restricted
+                      single-worker direct-liburing regime; #262
+                      remains OPEN)
 
-NEXT: adversarial review
+STEADY STATE:         REGISTERED BUFFER STEADY-STATE NOT MATERIAL
+                      (frozen rule; NOT MATERIAL != NO EFFECT EXISTS)
+
+PRIMARY 2M x d2:      nominal +4.05% median U2 advantage, but fails
+                      the frozen 1.5x MAD separation; not material
+
+NEIGHBOR CONSISTENCY: NO
+
+LIFECYCLE:            ~1.086 ms registration / ~65 us unregistration
+                      for the 4 MiB / 2-iovec treatment
+
+RESOURCE:             8 MiB registration request infeasible under the
+                      observed 8 MiB soft RLIMIT_MEMLOCK configuration
+                      (ENOMEM); Host-0 configuration/capability
+                      boundary, NOT a protocol or Linux limit
+
+AMORTIZATION:         CROSSOVER NOT LOCATED IN TESTED RANGE
+MEASUREMENT QUALITY:  end-to-end amortization under-resolved for the
+                      ~1.15 ms registration lifecycle — seconds-scale
+                      filesystem/dirty-page teardown noise dominates
+                      the non-steady region
+
+PRODUCTION PROMOTION: NO (registered-buffer production integration:
+                      NO; public API: NO; runtime policy: NO; RBUF-P1:
+                      NOT JUSTIFIED)
+
+CLAIM:                HOST-LOCAL ONLY
 ```
+
+A negative result is a completed result: RBUF-E0 answered its frozen
+question for Host-0 and closes as a negative research campaign. #262,
+#270 and #259 remain OPEN and unaffected.

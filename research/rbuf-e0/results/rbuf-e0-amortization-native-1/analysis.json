@@ -80,14 +80,14 @@
      "end_to_end_ns_median": 4575443665,
      "amortized_per_transfer_ns_median": 4575443665.0,
      "steady_per_transfer_ns_median": 492894156,
-     "setup_fraction": 0.89528
+     "setup_plus_teardown_fraction": 0.89528
     },
     "u2": {
      "n": 7,
      "end_to_end_ns_median": 4361977055,
      "amortized_per_transfer_ns_median": 4361977055.0,
      "steady_per_transfer_ns_median": 465289837,
-     "setup_fraction": 0.89333
+     "setup_plus_teardown_fraction": 0.89333
     },
     "u1_vs_u2_end_to_end": {
      "u1_median_ns": 4575443665,
@@ -106,14 +106,14 @@
      "end_to_end_ns_median": 5736282924,
      "amortized_per_transfer_ns_median": 1434070731.0,
      "steady_per_transfer_ns_median": 487162774,
-     "setup_fraction": 0.64352
+     "setup_plus_teardown_fraction": 0.64352
     },
     "u2": {
      "n": 7,
      "end_to_end_ns_median": 6076446212,
      "amortized_per_transfer_ns_median": 1519111553.0,
      "steady_per_transfer_ns_median": 480184270,
-     "setup_fraction": 0.66599
+     "setup_plus_teardown_fraction": 0.66599
     },
     "u1_vs_u2_end_to_end": {
      "u1_median_ns": 5736282924,
@@ -132,14 +132,14 @@
      "end_to_end_ns_median": 13369752025,
      "amortized_per_transfer_ns_median": 835609501.5625,
      "steady_per_transfer_ns_median": 413162257,
-     "setup_fraction": 0.3113
+     "setup_plus_teardown_fraction": 0.3113
     },
     "u2": {
      "n": 7,
      "end_to_end_ns_median": 10864932312,
      "amortized_per_transfer_ns_median": 679058269.5,
      "steady_per_transfer_ns_median": 405366565,
-     "setup_fraction": 0.3485
+     "setup_plus_teardown_fraction": 0.3485
     },
     "u1_vs_u2_end_to_end": {
      "u1_median_ns": 13369752025,
@@ -158,14 +158,14 @@
      "end_to_end_ns_median": 39955855203,
      "amortized_per_transfer_ns_median": 624310237.546875,
      "steady_per_transfer_ns_median": 430846638,
-     "setup_fraction": 0.10017
+     "setup_plus_teardown_fraction": 0.10017
     },
     "u2": {
      "n": 7,
      "end_to_end_ns_median": 47208703671,
      "amortized_per_transfer_ns_median": 737635994.859375,
      "steady_per_transfer_ns_median": 419992073,
-     "setup_fraction": 0.07869
+     "setup_plus_teardown_fraction": 0.07869
     },
     "u1_vs_u2_end_to_end": {
      "u1_median_ns": 39955855203,
