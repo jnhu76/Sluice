@@ -430,7 +430,8 @@ def finish_session(s):
     if s.rows:
         fields = sorted({k for r in s.rows for k in r})
         with open(s.dir / "summary.csv", "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore",
+                           lineterminator="\n")
             w.writeheader()
             w.writerows(s.rows)
     print(f"session: {s.dir}")

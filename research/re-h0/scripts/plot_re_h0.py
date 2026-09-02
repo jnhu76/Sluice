@@ -22,6 +22,17 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+
+def savefig_clean(fig, path):
+    """matplotlib writes trailing spaces inside <path d="..."> lines; the
+    repo gate (git diff --check) rejects them. Strip per-line trailing ws
+    without touching rendering."""
+    fig.savefig(path)
+    p = pathlib.Path(path)
+    text = p.read_text()
+    p.write_text("".join(line.rstrip() + "\n" for line in
+                         text.splitlines()))
+
 REPO = pathlib.Path(__file__).resolve().parents[3]
 RESULTS = REPO / "research/re-h0/results"
 PLOTS = REPO / "research/re-h0/plots"
@@ -79,7 +90,7 @@ def z_ladder_plots(rows, outdir):
     ax.set_title("RE-1U Z-ladder: instructions per op (Host-0)")
     ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(outdir / "z-ladder-instructions-per-op.svg")
+    savefig_clean(fig, outdir / "z-ladder-instructions-per-op.svg")
     plt.close(fig)
 
     # throughput (median wall)
@@ -99,7 +110,7 @@ def z_ladder_plots(rows, outdir):
     ax.set_title("RE-1U Z-ladder: throughput (Host-0)")
     ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(outdir / "z-ladder-throughput.svg")
+    savefig_clean(fig, outdir / "z-ladder-throughput.svg")
     plt.close(fig)
 
 
@@ -133,7 +144,7 @@ def ratio_plot(analysis, outdir):
                  "(P=parity, M=material, G=gray)")
     ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(outdir / "z-ladder-cost-ratios.svg")
+    savefig_clean(fig, outdir / "z-ladder-cost-ratios.svg")
     plt.close(fig)
 
 
@@ -190,7 +201,7 @@ def re2_plots(rows, outdir):
         fig.suptitle("RE-2 envelope: Sluice vs its own floor "
                      "(btrfs primary)", fontsize=10)
         fig.tight_layout()
-        fig.savefig(outdir / fname)
+        savefig_clean(fig, outdir / fname)
         plt.close(fig)
 
 
@@ -222,7 +233,7 @@ def mechanism_plot(rows, outdir):
                  "NOT an abstraction-tax measure")
     ax.legend(fontsize=8)
     fig.tight_layout()
-    fig.savefig(outdir / "threadpool-vs-uring-regimes.svg")
+    savefig_clean(fig, outdir / "threadpool-vs-uring-regimes.svg")
     plt.close(fig)
 
 
