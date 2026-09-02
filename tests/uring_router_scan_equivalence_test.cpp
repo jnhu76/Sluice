@@ -132,12 +132,56 @@ void check_state_equivalence(UringAsyncBackend& backend, std::size_t capacity,
     }
 }
 
-// Drain every accepted request on the backend (bounded loop; poll drives
-// dispatch + reap). Returns false on a stall.
+// Loud drain-stall exit: the escalated drain names the stall and exits with
+// this code instead of letting outstanding completions hit the silent
+// completion-authority fail-fast (the misleading #262 S2 teardown abort).
+constexpr int kDrainStallLoudExit = 89;
+
+// Drain every accepted request on the backend. First phase: bounded
+// non-blocking poll spin (fast path; on real storage every CQE lands within
+// microseconds). Returns true only when the arena is fully drained.
+//
+// ESCALATION (#262 S2): CQE delivery can stall far beyond any spin window on
+// slow or emulated storage under load. The pre-escalation harness returned
+// false here and let the case continue; the still-outstanding completions
+// then destructed through the SILENT completion-authority fail-fast — the
+// misleading "terminate called without an active exception" teardown abort.
+// The escalation blocks in wait_one (which sleeps in the kernel until a CQE
+// lands) under a diagnostic watchdog: a transient delivery delay now
+// RESOLVES instead of aborting, and a genuine stall is NAMED with the
+// outstanding count before terminating loudly.
 bool drain(UringAsyncBackend& backend, int rounds = 10000) {
     while (backend.outstanding() > 0 && rounds-- > 0) {
         (void)backend.poll();
     }
+    if (backend.outstanding() == 0)
+        return true;
+    const std::size_t stuck = backend.outstanding();
+    std::atomic<bool> resolved{false};
+    std::thread watchdog([&] {
+        for (int i = 0; i < 100 && !resolved.load(std::memory_order_acquire);
+             ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (!resolved.load(std::memory_order_acquire)) {
+            std::fprintf(stderr,
+                         "uring equivalence harness: drain stalled with %zu "
+                         "outstanding op(s); CQE delivery did not resume "
+                         "(#262 S2 signature)\n",
+                         stuck);
+            std::fflush(stderr);
+            std::_Exit(kDrainStallLoudExit);
+        }
+    });
+    for (int blocking_rounds = 1000; blocking_rounds-- > 0;) {
+        if (backend.outstanding() == 0)
+            break;
+        auto wr = backend.wait_one();
+        if (!wr.has_value())
+            break;
+    }
+    resolved.store(true, std::memory_order_release);
+    watchdog.join();
     return backend.outstanding() == 0;
 }
 
@@ -366,9 +410,8 @@ SLUICE_TEST_CASE(uring_u0_cancel_control_path_equivalence) {
 //                   outstanding completion -> SILENT fail-fast
 //                   (kExpectedTerminateExit, no diagnostic) — the RED state.
 //   post-escalation: drain never returns false; its watchdog names the stall
-//                   and exits kDrainStallLoudExit — the GREEN state.
+//                   and exits with the loud drain-stall code — the GREEN state.
 // ---------------------------------------------------------------------------
-constexpr int kDrainStallLoudExit = 89;
 
 int run_drain_stall_child() {
     int pipe_fds[2] = {-1, -1};
