@@ -1119,20 +1119,23 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // TAX-0 research instrumentation (#250 U0 witness + #255 router-fix
     // shootout): the IDENTICAL matching predicate (in_use && cookie
-    // equality) with a selectable fix candidate and exact per-call
-    // accounting. Live cookies are unique within backend lifetime (no-wrap
-    // allocate_cookie_), so NO candidate can change the semantic answer —
-    // at most one index matches, or the cookie is stale/unknown and every
-    // candidate reports the same not-found. The default mode is
-    // production_baseline; the production build below the #else is
-    // untouched and byte-equivalent.
+    // equality) with a selectable scan direction / fix candidate and exact
+    // per-call accounting. Live cookies are unique within backend lifetime
+    // (no-wrap allocate_cookie_), so NO candidate can change the semantic
+    // answer — at most one index matches, or the cookie is stale/unknown
+    // and every candidate reports the same not-found. production_baseline
+    // tracks the SHIPPED production scan, which is REVERSE since the R1
+    // production landing (#255); forward_ablation is the pre-fix forward
+    // traversal, kept as the causal-comparator direction. The production
+    // build in the #else below carries the same reverse direction.
     std::size_t examined = 0;
     std::size_t found = router_.size();
     const bool reverse =
         router_fix_mode_for_test_ == RouterFixModeForTest::reverse_scan ||
         (router_fix_mode_for_test_ ==
              RouterFixModeForTest::production_baseline &&
-         router_scan_mode_for_test_ == RouterScanModeForTest::reverse_ablation);
+         router_scan_mode_for_test_ !=
+             RouterScanModeForTest::forward_ablation);
     if (router_fix_mode_for_test_ ==
             RouterFixModeForTest::bounded_cookie_table &&
         cookie_table_for_test_ != nullptr) {
@@ -1191,7 +1194,13 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     }
     return found;
 #else
-    for (std::size_t i = 0; i < router_.size(); ++i) {
+    // Shipped scan direction: REVERSE (T0-U-ROUTER / #255 — the R1 candidate
+    // selected by the #256 shootout). Live cookies are unique within backend
+    // lifetime (no-wrap allocate_cookie_ above), so at most one entry matches
+    // and the traversal order cannot change the semantic answer; high-index
+    // LIFO placement puts the live set at the top, so scanning high -> low
+    // makes the per-CQE cost O(live requests) instead of O(request capacity).
+    for (std::size_t i = router_.size(); i-- > 0;) {
         if (router_[i].in_use && router_[i].cookie == cookie)
             return i;
     }

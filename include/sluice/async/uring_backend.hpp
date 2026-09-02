@@ -325,13 +325,17 @@ class UringAsyncBackend : public AsyncBackend {
     // ---- TAX-0 EXP-U0 router-scan research seam (#250 campaign) ----------
     // Research-only causal-ablation control + exact scan-iteration witness
     // for find_live_router_cookie_ (the per-CQE cookie->router lookup).
-    // NOTHING here is compiled into production targets. The default mode is
-    // forward_production, so an internal-testing build that never touches
-    // the seam executes the production forward scan (plus the diagnostic
+    // NOTHING here is compiled into production targets. Since the R1
+    // production landing (#255), the shipped production scan is REVERSE, so
+    // the seam default (reverse_production) models production and
+    // forward_ablation is the pre-fix traversal kept as the causal
+    // comparator direction; an internal-testing build that never touches
+    // the seam executes the production reverse scan (plus the diagnostic
     // counter folding; plain non-atomic members — see the private section).
     enum class RouterScanModeForTest : std::uint8_t {
-        forward_production, // the production scan (and the seam default)
-        reverse_ablation,   // EXP-U0 research ablation: scan high -> low
+        reverse_production, // the shipped production scan (the seam default)
+        forward_ablation,   // pre-fix production traversal (EXP-U0
+                            // causal-comparator direction): scan low -> high
     };
     // Which find_live_router_cookie_ callsite family a lookup belonged to
     // (operation CQE / tagged-control CQE / transport accounting — the
@@ -388,13 +392,14 @@ class UringAsyncBackend : public AsyncBackend {
     // Research-only FIX-CANDIDATE selector for the per-CQE cookie->router
     // resolution. NOTHING here is compiled into production targets; the
     // default mode is production_baseline, under which the backend executes
-    // EXACTLY the production behavior (including any U0 scan-mode ablation).
-    // Candidates:
-    //   production_baseline   R0 — forward scan + high-index LIFO placement
-    //                         (the shipped representation; the comparator)
+    // EXACTLY the shipped production behavior — REVERSE scan since the R1
+    // landing (including any U0 scan-mode ablation). Candidates:
+    //   production_baseline   tracks the shipped production representation
+    //                         (currently R1 reverse scan + high-index LIFO
+    //                         placement; the comparator)
     //   reverse_scan          R1 — identical predicate traversed high -> low
-    //                         (placement unchanged; the EXP-U0 ablation as
-    //                         a candidate)
+    //                         (placement unchanged; the #256 shootout
+    //                         winner now shipped in production)
     //   low_placement_forward R2 — free-list seeded descending so the live
     //                         set occupies LOW indices; forward scan kept
     //                         (the placement dual of R1)
@@ -836,7 +841,7 @@ class UringAsyncBackend : public AsyncBackend {
     // internal-testing builds (AGENTS.md §15); production objects keep the
     // pre-seam layout.
     mutable RouterScanModeForTest router_scan_mode_for_test_ =
-        RouterScanModeForTest::forward_production;
+        RouterScanModeForTest::reverse_production;
     mutable RouterScanDiagnosticsForTest router_diag_for_test_{};
     // TAX-0 router-fix shootout state (#255): candidate selector + the R3
     // fixed cookie table. Same single-driver call domain as the U0 seam

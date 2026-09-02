@@ -7,8 +7,12 @@
 // pipeline over ApplicationRuntime + REAL UringAsyncBackend) under a
 // selectable, research-only router scan direction:
 //
-//   --router-scan-mode forward_production  (the production scan; baseline)
-//   --router-scan-mode reverse_ablation    (same predicate, high->low)
+//   --router-scan-mode reverse_production  (the shipped production scan —
+//                                         reverse since the R1 landing;
+//                                         baseline)
+//   --router-scan-mode forward_ablation    (same predicate, low->high — the
+//                                         pre-fix traversal, the EXP-U0
+//                                         causal-comparator direction)
 //
 // The scan mode is set through the SLUICE_ASYNC_INTERNAL_TESTING-only seam
 // (set_router_scan_mode_for_test) BEFORE the runtime starts driving the
@@ -25,7 +29,7 @@
 // This target deliberately links sluice_async_internal_testing (NOT the
 // production sluice_async): the whole binary IS the research instrument.
 // Production Release builds of sluice_async compile none of the seam and
-// keep the production forward scan byte-identical.
+// keep the production reverse scan (R1) byte-identical.
 //
 // Output: one JSON object on stdout (consumed by scripts/bench/
 // perf-attribution.py `tax0u0`). Exit 0 only when every counted
@@ -148,10 +152,10 @@ std::uint64_t word_sum(const std::byte* p, std::size_t len) {
 // Configuration + validation
 // ---------------------------------------------------------------------------
 
-enum class ScanMode { forward_production, reverse_ablation };
+enum class ScanMode { forward_ablation, reverse_production };
 
 struct Config {
-    ScanMode scan_mode = ScanMode::forward_production;
+    ScanMode scan_mode = ScanMode::reverse_production;
     std::size_t request_size = 4096;
     std::size_t total_bytes = 256u << 20;
     std::size_t depth = 8;
@@ -424,7 +428,7 @@ int usage_error(const char* argv0, const char* detail) {
         "          [--request-capacity N] [--uring-queue-depth N]\n"
         "          [--reps N] [--warmup N]\n"
         "note: EXP-U0 research bench. uring READ only; scan mode selects\n"
-        "      forward_production (baseline) or reverse_ablation. Requires\n"
+        "      reverse_production (baseline) or forward_ablation. Requires\n"
         "      a real-liburing build (xmake f --with-liburing=true).\n"
         "error: %s\n",
         argv0, detail);
@@ -454,8 +458,8 @@ int main(int argc, char** argv) {
         };
         if (a == "--router-scan-mode") {
             std::string s(next("--router-scan-mode"));
-            if (s == "forward") cfg.scan_mode = ScanMode::forward_production;
-            else if (s == "reverse") cfg.scan_mode = ScanMode::reverse_ablation;
+            if (s == "forward") cfg.scan_mode = ScanMode::forward_ablation;
+            else if (s == "reverse") cfg.scan_mode = ScanMode::reverse_production;
             else return usage_error(
                 argv[0], "--router-scan-mode must be forward|reverse");
         } else if (a == "--request-size") {
@@ -518,9 +522,9 @@ int main(int argc, char** argv) {
         // Install the research scan mode BEFORE the runtime starts driving
         // the backend (quiescent, single thread).
         ub->set_router_scan_mode_for_test(
-            cfg.scan_mode == ScanMode::reverse_ablation
-                ? UringAsyncBackend::RouterScanModeForTest::reverse_ablation
-                : UringAsyncBackend::RouterScanModeForTest::forward_production);
+            cfg.scan_mode == ScanMode::reverse_production
+                ? UringAsyncBackend::RouterScanModeForTest::reverse_production
+                : UringAsyncBackend::RouterScanModeForTest::forward_ablation);
         backend = ub.get();
         builder.backend(std::move(ub));
         auto built = builder.build();
@@ -569,7 +573,7 @@ int main(int argc, char** argv) {
     out += "  \"backend\": \"uring\",\n";
     out += "  \"real_uring\": true,\n";
     out += std::string("  \"router_scan_mode\": \"") +
-           (cfg.scan_mode == ScanMode::forward_production ? "forward"
+           (cfg.scan_mode == ScanMode::forward_ablation ? "forward"
                                                           : "reverse") +
            "\",\n";
     out += "  \"op\": \"read\",\n";

@@ -1,7 +1,8 @@
 // TAX-0 EXP-U0 — router scan-direction semantic-equivalence gates.
 //
 // PROVES mechanically, over REACHABLE router states on a REAL ring, the
-// invariant the EXP-U0 reverse-scan ablation depends on:
+// invariant the SHIPPED reverse scan (T0-U-ROUTER R1 production landing,
+// #255) depends on:
 //
 //     for every reachable router state R and every probed cookie k:
 //         forward_lookup(R, k) == reverse_lookup(R, k)
@@ -11,7 +12,9 @@
 // backend lifetime — allocate_cookie_ is no-wrap — so the matching
 // predicate `in_use && cookie == k` selects at most one entry regardless
 // of traversal order) is NOT trusted alone: every case checks the REAL
-// production find_live_router_cookie_ through the seam, in both modes.
+// production find_live_router_cookie_ through the seam, in both
+// directions (reverse_production — the shipped default — and
+// forward_ablation, the pre-fix traversal kept as causal comparator).
 //
 // Also binds the EXP-0 static placement fact empirically (free-list
 // back() allocation places the first D live entries at the HIGHEST
@@ -80,13 +83,13 @@ void check_state_equivalence(UringAsyncBackend& backend, std::size_t capacity,
         const std::uint64_t cookie = live[k];
 
         backend.set_router_scan_mode_for_test(
-            UringAsyncBackend::RouterScanModeForTest::forward_production);
+            UringAsyncBackend::RouterScanModeForTest::forward_ablation);
         const std::size_t fwd = backend.find_live_router_cookie_for_test(cookie);
         const std::uint64_t fwd_iters =
             backend.router_scan_diagnostics_for_test().last_call_iterations;
 
         backend.set_router_scan_mode_for_test(
-            UringAsyncBackend::RouterScanModeForTest::reverse_ablation);
+            UringAsyncBackend::RouterScanModeForTest::reverse_production);
         const std::size_t rev = backend.find_live_router_cookie_for_test(cookie);
         const std::uint64_t rev_iters =
             backend.router_scan_diagnostics_for_test().last_call_iterations;
@@ -112,10 +115,10 @@ void check_state_equivalence(UringAsyncBackend& backend, std::size_t capacity,
     };
     for (const std::uint64_t p : probes) {
         backend.set_router_scan_mode_for_test(
-            UringAsyncBackend::RouterScanModeForTest::forward_production);
+            UringAsyncBackend::RouterScanModeForTest::forward_ablation);
         const std::size_t fwd = backend.find_live_router_cookie_for_test(p);
         backend.set_router_scan_mode_for_test(
-            UringAsyncBackend::RouterScanModeForTest::reverse_ablation);
+            UringAsyncBackend::RouterScanModeForTest::reverse_production);
         const std::size_t rev = backend.find_live_router_cookie_for_test(p);
         SLUICE_CHECK(fwd == capacity);
         SLUICE_CHECK(rev == capacity);
@@ -149,9 +152,9 @@ SLUICE_TEST_CASE(uring_u0_scan_direction_equivalence_matrix) {
             UringAsyncBackend backend{UringConfig{capacity, 8}};
             if (!backend.available())
                 return;
-            // Seam default must be the production scan.
+            // Seam default must be the shipped production scan (reverse).
             SLUICE_CHECK(backend.router_scan_mode_for_test() ==
-                         UringAsyncBackend::RouterScanModeForTest::forward_production);
+                         UringAsyncBackend::RouterScanModeForTest::reverse_production);
             backend.reset_router_scan_diagnostics_for_test();
 
             TempFile file;
@@ -197,11 +200,11 @@ SLUICE_TEST_CASE(uring_u0_scan_direction_equivalence_matrix) {
             // in BOTH directions through the real lookup.
             for (const std::uint64_t cookie : live) {
                 backend.set_router_scan_mode_for_test(
-                    UringAsyncBackend::RouterScanModeForTest::forward_production);
+                    UringAsyncBackend::RouterScanModeForTest::forward_ablation);
                 SLUICE_CHECK(backend.find_live_router_cookie_for_test(cookie) ==
                              capacity);
                 backend.set_router_scan_mode_for_test(
-                    UringAsyncBackend::RouterScanModeForTest::reverse_ablation);
+                    UringAsyncBackend::RouterScanModeForTest::reverse_production);
                 SLUICE_CHECK(backend.find_live_router_cookie_for_test(cookie) ==
                              capacity);
             }
@@ -222,8 +225,8 @@ SLUICE_TEST_CASE(uring_u0_scan_direction_equivalence_matrix) {
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_u0_cqe_path_and_stale_drop_equivalence) {
     const std::size_t capacity = 32;
-    for (const auto mode : {UringAsyncBackend::RouterScanModeForTest::forward_production,
-                            UringAsyncBackend::RouterScanModeForTest::reverse_ablation}) {
+    for (const auto mode : {UringAsyncBackend::RouterScanModeForTest::forward_ablation,
+                            UringAsyncBackend::RouterScanModeForTest::reverse_production}) {
         UringAsyncBackend backend{UringConfig{capacity, 8}};
         if (!backend.available())
             return;
@@ -253,7 +256,7 @@ SLUICE_TEST_CASE(uring_u0_cqe_path_and_stale_drop_equivalence) {
         // Direction-specific exact iteration witness at C=32 (live entry at
         // index 31 before retirement).
         SLUICE_CHECK(diag.operation_lookup_iterations_max ==
-                     (mode == UringAsyncBackend::RouterScanModeForTest::forward_production
+                     (mode == UringAsyncBackend::RouterScanModeForTest::forward_ablation
                           ? 32
                           : 1));
 
@@ -280,8 +283,8 @@ SLUICE_TEST_CASE(uring_u0_cqe_path_and_stale_drop_equivalence) {
 // control side in both modes.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_u0_cancel_control_path_equivalence) {
-    for (const auto mode : {UringAsyncBackend::RouterScanModeForTest::forward_production,
-                            UringAsyncBackend::RouterScanModeForTest::reverse_ablation}) {
+    for (const auto mode : {UringAsyncBackend::RouterScanModeForTest::forward_ablation,
+                            UringAsyncBackend::RouterScanModeForTest::reverse_production}) {
         // A fresh pipe per mode: the scenario needs a kernel-BLOCKED read
         // (empty pipe) whose write end is closed later to deliver the
         // deterministic EOF original result.
