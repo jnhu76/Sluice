@@ -1,0 +1,37 @@
+{
+ "uname": "Linux E5 7.1.9-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Aug 19 17:41:40 UTC 2026 x86_64 GNU/Linux",
+ "kernel": "7.1.9-200.fc44.x86_64",
+ "distribution": "NAME=\"Fedora Linux\"\nVERSION=\"44 (KDE Plasma Desktop Edition)\"\nRELEASE_TYPE=stable\nID=fedora\nVERSION_ID=44\nVERSION_CODENAME=\"\"\nPRETTY_NAME=\"Fedora Linux 44 (KDE Plasma Desktop Edition)\"\nANSI_COLOR=\"0;38;2;60;110;180\"\nLOGO=fedora-logo-icon\nCPE_NAME=\"cpe:/o:fedoraproject:fedora:44\"\nDEFAULT_HOSTNAME=\"fedora\"\nHOME_URL=\"https://fedoraproject.org/\"\nDOCUMENTATION_URL=\"https://docs.fedoraproject.org/en-US/fedora/f44/\"\nSUPPORT_URL=\"https://ask.fedoraproject.org/\"\nBUG_REPORT_URL=\"https://bugzilla.redhat.com/\"\nREDHAT_BUGZILLA_PRODUCT=\"Fedora\"\nREDHAT_BUGZILLA_PRODUCT_VERSION=44\nREDHAT_SUPPORT_PRODUCT=\"Fedora\"\nREDHAT_SUPPORT_PRODUCT_VERSION=44\nSUPPORT_END=2027-05-19\nVARIANT=\"KDE Plasma Desktop Edition\"\nVARIANT_ID=kde",
+ "cpu_model": [
+  "Model name:                              Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz"
+ ],
+ "cpu_threads": [
+  "CPU(s):                                  20",
+  "Thread(s) per core:                      2",
+  "CPU(s) scaling MHz:                      50%"
+ ],
+ "meminfo": {
+  "MemTotal": "65676560 kB",
+  "MemAvailable": "61885624 kB"
+ },
+ "page_size": "4096",
+ "smbios": "",
+ "filesystem": "btrfs rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home",
+ "block_device": "/dev/sda3[/home]",
+ "governor": "schedutil",
+ "no_turbo": "0",
+ "glibc": "ldd (GNU libc) 2.43",
+ "clang": "clang version 22.1.8 (Fedora 22.1.8-4.fc44)",
+ "liburing_pkg": "2.13",
+ "perf": "perf version 7.1.9-200.fc44.x86_64",
+ "perf_paranoid": "2",
+ "virtualization": "?",
+ "git": {
+  "head": "67b208c7ba24a405606838b3047624d7beaed8cf",
+  "branch": "research/rbuf-e0",
+  "dirty": true
+ },
+ "bench_binary_sha256": "7649fcebede8ec382845b47e18ecf58973a25bbd3cab9b0e784cd0650105c09f",
+ "bench_binary_size": 48384,
+ "data_src_sha256": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53"
+}

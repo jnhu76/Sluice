@@ -1,0 +1,184 @@
+{
+ "sessions": [
+  "rbuf-e0-amortization-native-1"
+ ],
+ "file_bytes": 1073741824,
+ "gates": {
+  "gate_errors": 0
+ },
+ "rule": {
+  "material_ratio": 1.03,
+  "material_mad_k": 1.5
+ },
+ "primary_cell": [
+  2097152,
+  2
+ ],
+ "cells": [
+  {
+   "chunk": 524288,
+   "depth": 2,
+   "in_flight_mib": 1.0,
+   "u0": null,
+   "u1": null,
+   "u2": null
+  },
+  {
+   "chunk": 1048576,
+   "depth": 2,
+   "in_flight_mib": 2.0,
+   "u0": null,
+   "u1": null,
+   "u2": null
+  },
+  {
+   "chunk": 2097152,
+   "depth": 1,
+   "in_flight_mib": 2.0,
+   "u0": null,
+   "u1": null,
+   "u2": null
+  },
+  {
+   "chunk": 2097152,
+   "depth": 2,
+   "in_flight_mib": 4.0,
+   "u0": null,
+   "u1": null,
+   "u2": null
+  },
+  {
+   "chunk": 2097152,
+   "depth": 4,
+   "in_flight_mib": 8.0,
+   "u0": null,
+   "u1": null,
+   "u2": null
+  },
+  {
+   "chunk": 4194304,
+   "depth": 2,
+   "in_flight_mib": 8.0,
+   "u0": null,
+   "u1": null,
+   "u2": null
+  }
+ ],
+ "neighbor_consistency": {
+  "neighbors": [],
+  "consistent": false
+ },
+ "steady_state_verdict": "REGISTERED BUFFER MIXED / UNSTABLE (no U2 data)",
+ "lifecycle": {},
+ "u2_infeasible_cells": [],
+ "amortization": {
+  "horizons": [
+   {
+    "horizon_transfers": 1,
+    "u1": {
+     "n": 7,
+     "end_to_end_ns_median": 4575443665,
+     "amortized_per_transfer_ns_median": 4575443665.0,
+     "steady_per_transfer_ns_median": 492894156,
+     "setup_plus_teardown_fraction": 0.89528
+    },
+    "u2": {
+     "n": 7,
+     "end_to_end_ns_median": 4361977055,
+     "amortized_per_transfer_ns_median": 4361977055.0,
+     "steady_per_transfer_ns_median": 465289837,
+     "setup_plus_teardown_fraction": 0.89333
+    },
+    "u1_vs_u2_end_to_end": {
+     "u1_median_ns": 4575443665,
+     "u1_mad_ns": 1212178495,
+     "u2_median_ns": 4361977055,
+     "u2_mad_ns": 261420703,
+     "ratio_u1_over_u2": 1.0489,
+     "mad_separated": false,
+     "material": false
+    }
+   },
+   {
+    "horizon_transfers": 4,
+    "u1": {
+     "n": 7,
+     "end_to_end_ns_median": 5736282924,
+     "amortized_per_transfer_ns_median": 1434070731.0,
+     "steady_per_transfer_ns_median": 487162774,
+     "setup_plus_teardown_fraction": 0.64352
+    },
+    "u2": {
+     "n": 7,
+     "end_to_end_ns_median": 6076446212,
+     "amortized_per_transfer_ns_median": 1519111553.0,
+     "steady_per_transfer_ns_median": 480184270,
+     "setup_plus_teardown_fraction": 0.66599
+    },
+    "u1_vs_u2_end_to_end": {
+     "u1_median_ns": 5736282924,
+     "u1_mad_ns": 527905041,
+     "u2_median_ns": 6076446212,
+     "u2_mad_ns": 128565906,
+     "ratio_u1_over_u2": 0.944,
+     "mad_separated": false,
+     "material": false
+    }
+   },
+   {
+    "horizon_transfers": 16,
+    "u1": {
+     "n": 7,
+     "end_to_end_ns_median": 13369752025,
+     "amortized_per_transfer_ns_median": 835609501.5625,
+     "steady_per_transfer_ns_median": 413162257,
+     "setup_plus_teardown_fraction": 0.3113
+    },
+    "u2": {
+     "n": 7,
+     "end_to_end_ns_median": 10864932312,
+     "amortized_per_transfer_ns_median": 679058269.5,
+     "steady_per_transfer_ns_median": 405366565,
+     "setup_plus_teardown_fraction": 0.3485
+    },
+    "u1_vs_u2_end_to_end": {
+     "u1_median_ns": 13369752025,
+     "u1_mad_ns": 2267304150,
+     "u2_median_ns": 10864932312,
+     "u2_mad_ns": 335644651,
+     "ratio_u1_over_u2": 1.2305,
+     "mad_separated": false,
+     "material": false
+    }
+   },
+   {
+    "horizon_transfers": 64,
+    "u1": {
+     "n": 7,
+     "end_to_end_ns_median": 39955855203,
+     "amortized_per_transfer_ns_median": 624310237.546875,
+     "steady_per_transfer_ns_median": 430846638,
+     "setup_plus_teardown_fraction": 0.10017
+    },
+    "u2": {
+     "n": 7,
+     "end_to_end_ns_median": 47208703671,
+     "amortized_per_transfer_ns_median": 737635994.859375,
+     "steady_per_transfer_ns_median": 419992073,
+     "setup_plus_teardown_fraction": 0.07869
+    },
+    "u1_vs_u2_end_to_end": {
+     "u1_median_ns": 39955855203,
+     "u1_mad_ns": 8897746487,
+     "u2_median_ns": 47208703671,
+     "u2_mad_ns": 8717927813,
+     "ratio_u1_over_u2": 0.8464,
+     "mad_separated": false,
+     "material": false
+    }
+   }
+  ],
+  "crossover_horizon": null,
+  "verdict": "AMORTIZATION CROSSOVER NOT LOCATED IN TESTED RANGE"
+ }
+}

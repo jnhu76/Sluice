@@ -359,3 +359,25 @@ do
         target_end()
     end
 end
+
+-- rbuf_e0_bench (#272 RBUF-E0 — io_uring registered/fixed-buffer steady-state
+-- and amortization crossover): research-only DIRECT-liburing mechanism bench
+-- (U0 ordinary-natural / U1 aligned reusable ordinary / U2 SAME storage +
+-- io_uring_register_buffers + READ_FIXED/WRITE_FIXED). Single submission/
+-- completion thread, no production runtime involvement, production code
+-- untouched. Same-work fail-closed per run; driver hashes src/dst post-exit
+-- and wraps runs under perf stat. Built only under --with-liburing (default
+-- builds and CI stay liburing-free, matching every other research bench).
+if has_config("with-liburing") then
+    local R = SLUICE_ROOT
+    local rb = R .. "bench/rbuf_e0_bench.cpp"
+    if os.isfile(rb) then
+        target("rbuf_e0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_files(rb)
+            add_packages("liburing")
+        target_end()
+    end
+end

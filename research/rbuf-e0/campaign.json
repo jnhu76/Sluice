@@ -1,0 +1,30 @@
+{
+  "campaign": "RBUF-E0",
+  "issue": 272,
+  "preregistration": "research/rbuf-e0/RBUF-E0-PREREGISTRATION.md (FROZEN)",
+  "bench": "bench/rbuf_e0_bench.cpp",
+  "target": "rbuf_e0_bench",
+  "arms": {
+    "U0": "ordinary-natural per-slot heap vectors, ordinary READ/WRITE (context only)",
+    "U1": "causal ordinary control: posix_memalign(4096) block, chunk-strided slots, ordinary READ/WRITE, reused",
+    "U2": "U1 storage + io_uring_register_buffers + READ_FIXED/WRITE_FIXED (buf_index=slot), unregister once"
+  },
+  "file_bytes": 1073741824,
+  "fixture_sha256": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53",
+  "sync": "none",
+  "workers": 1,
+  "cells": [[524288, 2], [1048576, 2], [2097152, 1], [2097152, 2], [2097152, 4], [4194304, 2]],
+  "primary_cell": [2097152, 2],
+  "depth8_excluded": "off the Host-0 CHUNK-E0 H0 frozen Pareto frontier; not needed for registration causality",
+  "horizons": [1, 4, 16, 64],
+  "rounds": 7,
+  "seed": 16276538885333393697,
+  "materiality": {"ratio": 1.03, "mad_k": 1.5, "metric": "median wall (U1/U2), robust separation"},
+  "q0": {"runs": 50, "cell": [2097152, 2], "arm": "U1"},
+  "verdict_vocabulary": {
+    "steady": ["REGISTERED BUFFER STEADY-STATE MATERIAL", "REGISTERED BUFFER REGIME-SPECIFIC", "REGISTERED BUFFER STEADY-STATE NOT MATERIAL", "REGISTERED BUFFER MIXED / UNSTABLE", "URING QUALIFICATION FAILED — #262 BLOCKING"],
+    "amortization": ["AMORTIZATION CROSSOVER LOCATED @ H=<...>", "AMORTIZATION CROSSOVER NOT LOCATED IN TESTED RANGE", "REGISTRATION NEVER RECOVERS SETUP COST IN TESTED RANGE"]
+  },
+  "production": {"implementation": "NO", "public_api": "NO", "runtime_policy": "NO"},
+  "host_scope": "HOST-LOCAL ONLY"
+}

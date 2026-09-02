@@ -1,0 +1,50 @@
+[
+ {
+  "chunk": 524288,
+  "depth": 2,
+  "in_flight_mib": 1.0,
+  "u0": null,
+  "u1": null,
+  "u2": null
+ },
+ {
+  "chunk": 1048576,
+  "depth": 2,
+  "in_flight_mib": 2.0,
+  "u0": null,
+  "u1": null,
+  "u2": null
+ },
+ {
+  "chunk": 2097152,
+  "depth": 1,
+  "in_flight_mib": 2.0,
+  "u0": null,
+  "u1": null,
+  "u2": null
+ },
+ {
+  "chunk": 2097152,
+  "depth": 2,
+  "in_flight_mib": 4.0,
+  "u0": null,
+  "u1": null,
+  "u2": null
+ },
+ {
+  "chunk": 2097152,
+  "depth": 4,
+  "in_flight_mib": 8.0,
+  "u0": null,
+  "u1": null,
+  "u2": null
+ },
+ {
+  "chunk": 4194304,
+  "depth": 2,
+  "in_flight_mib": 8.0,
+  "u0": null,
+  "u1": null,
+  "u2": null
+ }
+]
