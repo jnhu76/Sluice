@@ -20,7 +20,7 @@
     "B2": "competent standalone copy_file_range loop",
     "B3": "research-only thin Sluice-shaped Copy boundary using copy_file_range"
   },
-  "freeze_commit": null,
+  "freeze_commit": "715c7711",
   "phases": {
     "audit": "done",
     "preregistration": "frozen-pending-commit",

@@ -360,6 +360,30 @@ do
     end
 end
 
+-- g1_control_copy_x0_bench (COPY-X0 — G1-Control Candidate 2, prereg
+-- research/g1-control-copy-x0/COPY-X0-PREREGISTRATION.md): research-only
+-- copy-boundary falsification bench. B0 raw pread/pwrite, B1 production
+-- sluice::copy_all over FileReader/FileWriter, B2 raw copy_file_range loop,
+-- B3 thin research-only Copy boundary (explicit mechanism + observable
+-- fallback record). Deterministic semantic fixtures S1-S8 + probe + selftest
+-- loop-rule checks; same-work fail-closed per run (checksums/size/mechanism
+-- witnesses in every row). Research instrument only — production code
+-- untouched; no liburing dependency (sluice_core sync surface only).
+do
+    local R = SLUICE_ROOT
+    local cx = R .. "bench/g1_control_copy_x0_bench.cpp"
+    if os.isfile(cx) then
+        target("g1_control_copy_x0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include")
+            add_files(cx)
+        target_end()
+    end
+end
+
 -- rbuf_e0_bench (#272 RBUF-E0 — io_uring registered/fixed-buffer steady-state
 -- and amortization crossover): research-only DIRECT-liburing mechanism bench
 -- (U0 ordinary-natural / U1 aligned reusable ordinary / U2 SAME storage +
