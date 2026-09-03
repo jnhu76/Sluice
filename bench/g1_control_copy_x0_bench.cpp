@@ -260,14 +260,15 @@ ArmResult run_b0(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
                  std::uint64_t n, std::size_t chunk, OpCounts& c) {
     std::uint64_t src_pos = src_off;
     std::uint64_t dst_pos = dst_off;
-    return buffered_loop(
+    OpCounts local; // returned ArmResult carries the counts; c stays in sync
+    ArmResult r = buffered_loop(
         [&](std::byte* buf, std::size_t want) -> ssize_t {
-            ssize_t r;
+            ssize_t rr;
             do {
-                r = ::pread(src_fd, buf, want, static_cast<off_t>(src_pos));
-            } while (r < 0 && errno == EINTR);
-            if (r > 0) src_pos += static_cast<std::uint64_t>(r);
-            return r < 0 ? -errno : r;
+                rr = ::pread(src_fd, buf, want, static_cast<off_t>(src_pos));
+            } while (rr < 0 && errno == EINTR);
+            if (rr > 0) src_pos += static_cast<std::uint64_t>(rr);
+            return rr < 0 ? -errno : rr;
         },
         [&](const std::byte* buf, std::size_t len) -> ssize_t {
             ssize_t w;
@@ -277,7 +278,10 @@ ArmResult run_b0(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
             if (w > 0) dst_pos += static_cast<std::uint64_t>(w);
             return w < 0 ? -errno : w;
         },
-        n, chunk, c);
+        n, chunk, local);
+    r.counts = local;
+    c = local;
+    return r;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,21 +295,25 @@ ArmResult run_b2(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
     std::uint64_t dst_pos = dst_off;
     std::uint64_t available =
         src_off < src_size ? src_size - src_off : 0; // bytes obtainable now
-    return cfr_loop(
+    OpCounts local; // returned ArmResult carries the counts; c stays in sync
+    ArmResult r = cfr_loop(
         [&](std::size_t want) -> ssize_t {
             loff_t in = static_cast<loff_t>(src_pos);
             loff_t out = static_cast<loff_t>(dst_pos);
-            ssize_t r;
+            ssize_t rr;
             do {
-                r = ::copy_file_range(src_fd, &in, dst_fd, &out, want, 0);
-            } while (r < 0 && errno == EINTR);
-            if (r > 0) {
+                rr = ::copy_file_range(src_fd, &in, dst_fd, &out, want, 0);
+            } while (rr < 0 && errno == EINTR);
+            if (rr > 0) {
                 src_pos = static_cast<std::uint64_t>(in);
                 dst_pos = static_cast<std::uint64_t>(out);
             }
-            return r < 0 ? -errno : r;
+            return rr < 0 ? -errno : rr;
         },
-        n, chunk, available, c);
+        n, chunk, available, local);
+    r.counts = local;
+    c = local;
+    return r;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,7 +388,12 @@ ArmResult run_b3(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
     dec.reason = "file_range_fallback_to_buffered";
     dec.fallback_occurred = true;
     dec.mechanism_executed = "buffered_read_write";
-    return run_b0(src_fd, src_off, dst_fd, dst_off, n, chunk, c);
+    OpCounts refused = c; // the failed file_range attempt(s), kept visible
+    ArmResult fb = run_b0(src_fd, src_off, dst_fd, dst_off, n, chunk, c);
+    fb.counts.xfer_calls += refused.xfer_calls;
+    fb.counts.partial_events += refused.partial_events;
+    c = fb.counts;
+    return fb;
 }
 
 // ---------------------------------------------------------------------------
