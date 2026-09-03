@@ -1,0 +1,11 @@
+{
+ "mode": "replacement-window",
+ "bench": "g1_control_c0_bench",
+ "boundary_a_update_errno": 0,
+ "boundary_a_res": 4096,
+ "boundary_a_marker": "B",
+ "boundary_a_verdict": "BOUNDARY-A WINDOW CONFIRMED (prepared-before-update SQE binds post-update)",
+ "boundary_d_res": 4096,
+ "boundary_d_marker": "A",
+ "boundary_d_verdict": "BOUNDARY-D RETENTION CONFIRMED (bound request kept old target)"
+}

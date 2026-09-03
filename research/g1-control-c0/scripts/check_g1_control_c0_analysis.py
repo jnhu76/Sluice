@@ -65,6 +65,9 @@ def main() -> None:
     gates = json.loads((sd / "gates.json").read_text())
     raw = sd / "raw" / "runs.jsonl"
     runs = [json.loads(l) for l in raw.read_text().splitlines() if l.strip()]
+    # Q0 qualification runs share the READ 4K d8 tmpfs F0 cell signature but
+    # are NOT part of the formal matrix (prereg §12); exclude them.
+    runs = [r for r in runs if not r["run_id"].startswith("q0-")]
 
     # 1. gate errors
     errs = gates.get("errors", [])
@@ -154,8 +157,11 @@ def main() -> None:
                         fails.append(
                             f"{cell}: stored direction {stored} != "
                             f"recomputed {direction}")
-                    if abs(summary["per_cell"][cell]["f0"]["ratio"] -
-                           ratio) > 1e-6 and size != 0:
+                    # summary stores round(ratio, 4); compare within half a
+                    # rounding quantum
+                    stored_ratio = summary["per_cell"][cell]["f0"]["ratio"]
+                    if stored_ratio is None or \
+                            abs(stored_ratio - ratio) > 5e-5:
                         fails.append(f"{cell}: ratio mismatch")
 
     # 7. verdict vocabulary

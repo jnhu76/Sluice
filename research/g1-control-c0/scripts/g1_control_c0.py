@@ -581,6 +581,12 @@ def cmd_summarize(session_id: str) -> None:
     if not runs:
         print(f"no runs in {session_id}", file=sys.stderr)
         sys.exit(1)
+    # Q0 qualification runs share the READ 4K d8 tmpfs F0 cell signature but
+    # are NOT part of the formal matrix (prereg §12); exclude them.
+    runs = [r for r in runs if not r["run_id"].startswith("q0-")]
+    if not runs:
+        print(f"no formal runs in {session_id}", file=sys.stderr)
+        sys.exit(1)
     manifest = json.loads((sd / "manifest.json").read_text())
     gates = json.loads((sd / "gates.json").read_text())
     cells = {}
