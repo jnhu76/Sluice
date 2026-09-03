@@ -496,3 +496,34 @@ kernel issue path (io_assign_file / io_file_get_fixed) is
 SOURCE-SUPPORTED, VERSION-BOUND — an inference from source, not an
 executed fact. Boundaries B/C remain NOT DETERMINISTICALLY OBSERVABLE
 from userspace.
+
+AMENDMENT-5 (2026-09-03, Corrective-2 — substrate execution corrective):
+the frozen §6 "tmpfs (primary, /tmp)" cells were NEVER executed on tmpfs.
+native-1 (environment.json) AND the Corrective-1 threaded session
+native-2 (manifest substrate_fstypes) both resolve BOTH filesystem labels
+to the SAME btrfs substrate (/home): the preregistered primary substrate
+produced no executed evidence, so a campaign verdict derived from
+btrfs-only execution could not lawfully close the tmpfs-primary
+campaign. Withdrawn from Amendment-3: the claim that "the substrate-share
+bias runs AGAINST F1 (harder materiality)" — the executed evidence cannot
+establish a bias direction (the identical substrate removed the intended
+cross-filesystem microscope AND turned cross-label agreement into
+same-substrate replication; the net effect on materiality is not
+observably one-directional). Corrective-2 adds a fail-closed substrate
+gate (a filesystem label is usable only when the filesystem it resolves
+to equals its canonical fstype; per-label root override) and executes the
+missing tmpfs half of the frozen matrix in session
+g1-control-c0-native-3-tmpfs-corrective (2 ops x 5 cells x 4 arms x 7 =
+280 formal runs + 30-run Q0, on real tmpfs; clean commit-pinned
+execution: tracked files identical to recorded HEAD at generate time).
+Disposition of the mislabeled rows: native-1 tmpfs-label rows (280 =
+140 single + 140 threaded) and native-2 tmpfs-label rows (140) are
+SUPERSEDED — WRONG SUBSTRATE; retained byte-identical, excluded from
+every derived number. The campaign composite becomes 3-session
+substrate-authoritative: btrfs F0/F1 <- native-1, btrfs F0-T/F1-T <-
+native-2, ALL tmpfs cells <- native-3 (560 valid frozen runs total).
+Frozen materiality rule, matrix shape, hypotheses, thresholds, and the
+§13 neighbor rule TEXT are unchanged; the Corrective-2 review also found
+the neighbor rule's TOOLING wiring dropped the 64 KiB / btrfs neighbors
+(rule text never changed) — disclosure and fix recorded in the report
+Corrective-2 record, not here.

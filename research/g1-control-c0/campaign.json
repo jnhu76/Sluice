@@ -42,11 +42,34 @@
     },
     "p1_3_validator": {
       "finding": "analysis validator checked campaign verdict vocabulary but did not independently re-derive the verdict from raw cells",
-      "disposition": "validator now re-derives READ/WRITE verdicts from raw and requires stored == derived; --self-test proves both mutation directions are rejected"
+      "disposition": "validator now re-derives READ/WRITE verdicts from raw and requires stored == derived; --self-test proves both mutation directions are rejected; NOTE (Corrective-2): its neighbor wiring still filtered directions to the tmpfs primary cells, fixed in Corrective-2"
     },
     "substrate_disclosure": {
       "finding": "native-1 environment.json resolves BOTH filesystem labels ('tmpfs', 'btrfs') to the SAME btrfs substrate — the §6 'tmpfs (primary, /tmp)' intent was not met; regime control did not vary the regime",
-      "disposition": "F0-vs-F1 causal comparison unaffected (identical substrate within every pair); regime language withdrawn; resolved substrate now recorded per session (manifest substrate_fstypes); corrective threaded cells executed on the SAME substrate for comparability"
+      "disposition": "F0-vs-F1 causal comparison unaffected (identical substrate within every pair); regime language withdrawn; resolved substrate now recorded per session (manifest substrate_fstypes); corrective threaded cells executed on the SAME substrate for comparability; Amendment-3 bias-direction claim later WITHDRAWN by Amendment-5"
+    }
+  },
+  "corrective_2": {
+    "date": "2026-09-03",
+    "p1_1_substrate_execution": {
+      "finding": "the frozen tmpfs (primary, /tmp) cells were NEVER executed on tmpfs: native-1 AND native-2 resolved BOTH filesystem labels to btrfs (/home); a frozen primary had no executed evidence",
+      "disposition": "native-1 tmpfs-label rows (280) and native-2 tmpfs-label rows (140) SUPERSEDED — WRONG SUBSTRATE (retained byte-identical); the missing tmpfs half of the frozen matrix executed in g1-control-c0-native-3-tmpfs-corrective (280 formal + 30 Q0 on real tmpfs, 0 gate errors) behind a fail-closed substrate gate (label must resolve to its canonical fstype; G1C0_FS_ROOT_<LABEL> per-label root)"
+    },
+    "p1_2_neighbor_wiring": {
+      "finding": "driver cell_directions() returned only the 4 KiB tmpfs primary cells, so the §13 64 KiB tmpfs and same-depth btrfs neighbors silently resolved to None; the independent validator reproduced the same wiring defect and its self-test bypassed the defective entry point with hand-built directions",
+      "disposition": "driver + validator run the FULL eligible direction set through neighbor_share()/derive_verdicts(); self-test drives the production chain from synthetic per-cell values with neighbor-specific mutants (64 KiB, btrfs, neighbor-supported regression, isolated control) proven to discriminate the old wiring; §13 rule TEXT unchanged; stored native-1/native-2 summaries re-derived — all verdicts unchanged"
+    },
+    "p2_clean_pin": {
+      "finding": "native-2 (Corrective-1 evidence) executed at pre-corrective HEAD 3d193599 with a dirty tracked worktree; driver bytes were not independently pinned",
+      "disposition": "sessions record dirty_tracked (tracked-files-only pin) + driver sha256; native-3 executed clean commit-pinned at 45f1ff70 (dirty_tracked=false); the composite fails closed if the tmpfs-corrective session is not clean-pinned"
+    },
+    "composite": {
+      "shape": "3-session substrate-authoritative: btrfs F0/F1 <- native-1, btrfs F0-T/F1-T <- native-2, all tmpfs cells <- native-3",
+      "valid_frozen_runs": 560,
+      "campaign_verdicts": {
+        "READ": "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED",
+        "WRITE": "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
+      }
     }
   },
   "production": {"implementation": "NO", "public_api": "NO", "c1": "NOT ENTERED"},
