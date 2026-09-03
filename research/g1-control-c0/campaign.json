@@ -1,0 +1,77 @@
+{
+  "campaign": "G1-CONTROL-C0",
+  "issue": 279,
+  "preregistration": "research/g1-control-c0/G1-CONTROL-C0-PREREGISTRATION.md (FROZEN)",
+  "audit": "research/g1-control-c0/G1-CONTROL-C0-AUDIT.md",
+  "bench": "bench/g1_control_c0_bench.cpp",
+  "target": "g1_control_c0_bench",
+  "arms": {
+    "F0": "ordinary fd, single-thread process shape, no registration",
+    "F1": "fixed file (IOSQE_FIXED_FILE, slot 0), L0 frozen binding (register once -> run -> unregister once)",
+    "F0-T": "ordinary fd under matched threaded-process condition (K=4 threads, file referenced from >1 thread)",
+    "F1-T": "fixed file under the SAME matched threaded-process condition"
+  },
+  "cells": {
+    "READ": [[4096, 1], [4096, 8], [4096, 32], [65536, 1], [2097152, 1]],
+    "WRITE": [[4096, 1], [4096, 8], [4096, 32], [65536, 1], [2097152, 1]]
+  },
+  "filesystems": ["tmpfs", "btrfs"],
+  "file_bytes": { "4096": 536870912, "65536": 1073741824, "2097152": 1073741824 },
+  "rounds": 7,
+  "seed": 16276538885333393697,
+  "threaded_workers": 4,
+  "q0": {"runs": 30, "cell": [4096, 8], "fs": "tmpfs", "op": "READ", "arm": "F0"},
+  "materiality": {"ratio": 1.03, "mad_k": 1.5, "metric": "median wall/op, robust separation"},
+  "primary_metric": "steady-state wall per op (includes kernel lookup; perf:u cannot see kernel cost at paranoid=2)",
+  "perf_events": ["instructions:u", "cycles:u", "task-clock:u"],
+  "verdict_vocabulary": {
+    "perf": ["FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED", "REGIME-LOCAL BENEFIT ESTABLISHED", "FIXED-FILE PERFORMANCE REGRESSION", "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED", "BLOCKED", "INVALID"],
+    "identity": ["ORDINARY-FD WRONG-TARGET REPRODUCED", "FIXED L0 BINDING PRESERVED TARGET", "FIXED L0 BINDING DID NOT PRESERVE TARGET", "BOUNDARY-A WINDOW CONFIRMED", "POST-COMPLETION UPDATE CONTROL", "BOUNDARY-D RETENTION CONFIRMED (WITHDRAWN by Corrective-1 — executed topology was non-overlap)", "BLOCKED", "INVALID"],
+    "minimality": ["L0 SUFFICIENT", "L1 REQUIRED", "L1 SUFFICIENT", "L2 GENERATION EARNED", "GENERATION NOT EARNED", "PER-REQUEST LIVE-USE EARNED", "PER-REQUEST LIVE-USE NOT EARNED", "UNRESOLVED"]
+  },
+  "corrective_1": {
+    "date": "2026-09-03",
+    "p1_1_threaded_condition": {
+      "finding": "native-1 threaded arms joined workers BEFORE the measured span (frozen prereg §5 violated: workers must park across the span)",
+      "disposition": "native-1 F0-T/F1-T SUPERSEDED; 280 affected runs re-executed in g1-control-c0-native-2-threaded-corrective with a deterministic park/release gate",
+      "single_thread_evidence": "UNAFFECTED"
+    },
+    "p1_2_boundary_d": {
+      "finding": "executed BOUNDARY-D topology updated the slot only AFTER the CQE reap — cannot witness in-flight retention",
+      "disposition": "executed retention claim WITHDRAWN; reclassified as POST-COMPLETION UPDATE CONTROL; retention remains SOURCE-SUPPORTED / VERSION-BOUND"
+    },
+    "p1_3_validator": {
+      "finding": "analysis validator checked campaign verdict vocabulary but did not independently re-derive the verdict from raw cells",
+      "disposition": "validator now re-derives READ/WRITE verdicts from raw and requires stored == derived; --self-test proves both mutation directions are rejected; NOTE (Corrective-2): its neighbor wiring still filtered directions to the tmpfs primary cells, fixed in Corrective-2"
+    },
+    "substrate_disclosure": {
+      "finding": "native-1 environment.json resolves BOTH filesystem labels ('tmpfs', 'btrfs') to the SAME btrfs substrate — the §6 'tmpfs (primary, /tmp)' intent was not met; regime control did not vary the regime",
+      "disposition": "F0-vs-F1 causal comparison unaffected (identical substrate within every pair); regime language withdrawn; resolved substrate now recorded per session (manifest substrate_fstypes); corrective threaded cells executed on the SAME substrate for comparability; Amendment-3 bias-direction claim later WITHDRAWN by Amendment-5"
+    }
+  },
+  "corrective_2": {
+    "date": "2026-09-03",
+    "p1_1_substrate_execution": {
+      "finding": "the frozen tmpfs (primary, /tmp) cells were NEVER executed on tmpfs: native-1 AND native-2 resolved BOTH filesystem labels to btrfs (/home); a frozen primary had no executed evidence",
+      "disposition": "native-1 tmpfs-label rows (280) and native-2 tmpfs-label rows (140) SUPERSEDED — WRONG SUBSTRATE (retained byte-identical); the missing tmpfs half of the frozen matrix executed in g1-control-c0-native-3-tmpfs-corrective (280 formal + 30 Q0 on real tmpfs, 0 gate errors) behind a fail-closed substrate gate (label must resolve to its canonical fstype; G1C0_FS_ROOT_<LABEL> per-label root)"
+    },
+    "p1_2_neighbor_wiring": {
+      "finding": "driver cell_directions() returned only the 4 KiB tmpfs primary cells, so the §13 64 KiB tmpfs and same-depth btrfs neighbors silently resolved to None; the independent validator reproduced the same wiring defect and its self-test bypassed the defective entry point with hand-built directions",
+      "disposition": "driver + validator run the FULL eligible direction set through neighbor_share()/derive_verdicts(); self-test drives the production chain from synthetic per-cell values with neighbor-specific mutants (64 KiB, btrfs, neighbor-supported regression, isolated control) proven to discriminate the old wiring; §13 rule TEXT unchanged; stored native-1/native-2 summaries re-derived — all verdicts unchanged"
+    },
+    "p2_clean_pin": {
+      "finding": "native-2 (Corrective-1 evidence) executed at pre-corrective HEAD 3d193599 with a dirty tracked worktree; driver bytes were not independently pinned",
+      "disposition": "sessions record dirty_tracked (tracked-files-only pin) + driver sha256; native-3 executed clean commit-pinned at 45f1ff70 (dirty_tracked=false); the composite fails closed if the tmpfs-corrective session is not clean-pinned"
+    },
+    "composite": {
+      "shape": "3-session substrate-authoritative: btrfs F0/F1 <- native-1, btrfs F0-T/F1-T <- native-2, all tmpfs cells <- native-3",
+      "valid_frozen_runs": 560,
+      "campaign_verdicts": {
+        "READ": "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED",
+        "WRITE": "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
+      }
+    }
+  },
+  "production": {"implementation": "NO", "public_api": "NO", "c1": "NOT ENTERED"},
+  "host_scope": "HOST-LOCAL ONLY"
+}

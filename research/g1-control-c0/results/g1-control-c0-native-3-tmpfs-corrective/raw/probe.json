@@ -1,0 +1,18 @@
+{
+ "bench": "g1_control_c0_bench",
+ "mode": "probe",
+ "uring_queue_init_errno": 0,
+ "register_errno": 0,
+ "unregister_errno": 0,
+ "read_fixed_res": 4096,
+ "write_fixed_res": 4096,
+ "read_content_ok": true,
+ "write_content_ok": true,
+ "write_submitted_after_read_cqe": true,
+ "features": 262143,
+ "rsrc_tags_feature": true,
+ "memlock_cur_bytes": 8388608,
+ "memlock_max_bytes": 8388608,
+ "page_size": 4096,
+ "capable": true
+}

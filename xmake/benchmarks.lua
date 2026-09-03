@@ -381,3 +381,28 @@ if has_config("with-liburing") then
         target_end()
     end
 end
+
+-- g1_control_c0_bench (#279 G1-CONTROL-C0 — fixed-file resource identity and
+-- specialization falsification): research-only DIRECT-liburing mechanism
+-- bench (F0 ordinary fd / F1 fixed file / F0-T+F1-T matched threaded-process
+-- condition) + FILE-ID-E0 deterministic identity witness + replacement-window
+-- probe. Single submission/completion thread in the measured path; the
+-- threaded arms spawn K=4 workers that each perform ONE ordinary I/O to
+-- establish the shared files_struct shape, then join. Production code
+-- untouched. Same-work fail-closed per run; driver hashes dst post-exit for
+-- WRITE runs. Built only under --with-liburing (default builds and CI stay
+-- liburing-free). Links pthread for the threaded arms.
+if has_config("with-liburing") then
+    local R = SLUICE_ROOT
+    local gc = R .. "bench/g1_control_c0_bench.cpp"
+    if os.isfile(gc) then
+        target("g1_control_c0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_files(gc)
+            add_packages("liburing")
+            add_syslinks("pthread")
+        target_end()
+    end
+end

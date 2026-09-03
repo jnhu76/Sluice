@@ -1,0 +1,6 @@
+{
+ "purpose": "generate",
+ "expected_dst_sha256_4096": "5324ebf6e96c8b74bd2e2d996f69860cd57f0eaa19c7207b9574f05ee8dc5e25",
+ "expected_dst_sha256_65536": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53",
+ "expected_dst_sha256_2097152": "8a3c4bf01ec3d32c0da34e9ed93a091bfaedfc48e39dad5bcd6c8b1bf548fd53"
+}

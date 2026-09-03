@@ -1,0 +1,16 @@
+{
+ "phase": "Q0",
+ "cell": {
+  "op": "READ",
+  "size": 4096,
+  "depth": 8,
+  "fs": "tmpfs",
+  "arm": "F0"
+ },
+ "runs_total": 30,
+ "runs_ok": 30,
+ "unexpected_canceled": 0,
+ "teardown_abort_or_gate_errors": 0,
+ "hash_failures": 0,
+ "verdict": "QUALIFIED (single-worker direct-liburing path; #262 NOT closed)"
+}

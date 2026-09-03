@@ -1,0 +1,20 @@
+{
+ "mode": "fileid",
+ "bench": "g1_control_c0_bench",
+ "a_marker_actual": "A",
+ "b_marker_actual": "B",
+ "ordinary_fd_N": 4,
+ "ordinary_read_res": 4096,
+ "ordinary_read_marker": "B",
+ "fixed_slot": 0,
+ "register_errno": 0,
+ "fixed_read_res": 4096,
+ "fixed_read_marker": "A",
+ "update_errno": 0,
+ "replaced_read_res": 4096,
+ "replaced_read_marker": "B",
+ "unregister_errno": 0,
+ "ordinary_verdict": "ORDINARY-FD WRONG-TARGET REPRODUCED",
+ "fixed_verdict": "FIXED L0 BINDING PRESERVED TARGET",
+ "replacement_verdict": "REPLACEMENT HONORED GOING FORWARD"
+}
