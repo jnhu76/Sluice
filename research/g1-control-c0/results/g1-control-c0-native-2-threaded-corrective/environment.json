@@ -1,0 +1,51 @@
+{
+ "uname": "Linux E5 7.1.9-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Aug 19 17:41:40 UTC 2026 x86_64 GNU/Linux",
+ "kernel": "7.1.9-200.fc44.x86_64",
+ "distribution": "NAME=\"Fedora Linux\"\nVERSION=\"44 (KDE Plasma Desktop Edition)\"\nRELEASE_TYPE=stable\nID=fedora\nVERSION_ID=44\nVERSION_CODENAME=\"\"\nPRETTY_NAME=\"Fedora Linux 44 (KDE Plasma Desktop Edition)\"\nANSI_COLOR=\"0;38;2;60;110;180\"\nLOGO=fedora-logo-icon\nCPE_NAME=\"cpe:/o:fedoraproject:fedora:44\"\nDEFAULT_HOSTNAME=\"fedora\"\nHOME_URL=\"https://fedoraproject.org/\"\nDOCUMENTATION_URL=\"https://docs.fedoraproject.org/en-US/fedora/f44/\"\nSUPPORT_URL=\"https://ask.fedoraproject.org/\"\nBUG_REPORT_URL=\"https://bugzilla.redhat.com/\"\nREDHAT_BUGZILLA_PRODUCT=\"Fedora\"\nREDHAT_BUGZILLA_PRODUCT_VERSION=44\nREDHAT_SUPPORT_PRODUCT=\"Fedora\"\nREDHAT_SUPPORT_PRODUCT_VERSION=44\nSUPPORT_END=2027-05-19\nVARIANT=\"KDE Plasma Desktop Edition\"\nVARIANT_ID=kde",
+ "cpu_model": [
+  "Model name:                              Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz"
+ ],
+ "cpu_topology": [
+  "CPU(s):                                  20",
+  "Thread(s) per core:                      2",
+  "Core(s) per socket:                      10",
+  "Socket(s):                               1",
+  "CPU(s) scaling MHz:                      46%",
+  "NUMA node(s):                            1",
+  "NUMA node0 CPU(s):                       0-19"
+ ],
+ "meminfo": {
+  "MemTotal": "65676548 kB",
+  "MemAvailable": "60246748 kB"
+ },
+ "page_size": "4096",
+ "filesystems": {
+  "tmpfs": {
+   "type": "btrfs",
+   "opts": "rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home",
+   "source": "/dev/sda3[/home]"
+  },
+  "btrfs": {
+   "type": "btrfs",
+   "opts": "rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home",
+   "source": "/dev/sda3[/home]"
+  }
+ },
+ "governor": "schedutil",
+ "no_turbo": "0",
+ "glibc": "ldd (GNU libc) 2.43",
+ "clang": "clang version 22.1.8 (Fedora 22.1.8-4.fc44)",
+ "liburing_pkg": "2.13",
+ "perf": "perf version 7.1.9-200.fc44.x86_64",
+ "perf_paranoid": "2",
+ "io_uring_disabled": "0",
+ "virtualization": "?",
+ "git": {
+  "head": "3d193599c2b58cba62acc960fa9310b9c906659f",
+  "branch": "research/g1-control-c0-fixed-file",
+  "prereg_sha": "1a67b3174d1046d579a2f00171b64de2aaef79d7",
+  "dirty": true
+ },
+ "bench_binary_sha256": "6e75182ee925734c9c295502511cd304fc50e0e8dea98fa377e271e680ad06e3",
+ "bench_binary_size": 60736
+}
