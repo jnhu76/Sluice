@@ -1,0 +1,34 @@
+{
+  "campaign": "G1-CONTROL-C0",
+  "issue": 279,
+  "preregistration": "research/g1-control-c0/G1-CONTROL-C0-PREREGISTRATION.md (FROZEN)",
+  "audit": "research/g1-control-c0/G1-CONTROL-C0-AUDIT.md",
+  "bench": "bench/g1_control_c0_bench.cpp",
+  "target": "g1_control_c0_bench",
+  "arms": {
+    "F0": "ordinary fd, single-thread process shape, no registration",
+    "F1": "fixed file (IOSQE_FIXED_FILE, slot 0), L0 frozen binding (register once -> run -> unregister once)",
+    "F0-T": "ordinary fd under matched threaded-process condition (K=4 threads, file referenced from >1 thread)",
+    "F1-T": "fixed file under the SAME matched threaded-process condition"
+  },
+  "cells": {
+    "READ": [[4096, 1], [4096, 8], [4096, 32], [65536, 1], [2097152, 1]],
+    "WRITE": [[4096, 1], [4096, 8], [4096, 32], [65536, 1], [2097152, 1]]
+  },
+  "filesystems": ["tmpfs", "btrfs"],
+  "file_bytes": { "4096": 536870912, "65536": 1073741824, "2097152": 1073741824 },
+  "rounds": 7,
+  "seed": 16276538885333393697,
+  "threaded_workers": 4,
+  "q0": {"runs": 30, "cell": [4096, 8], "fs": "tmpfs", "op": "READ", "arm": "F0"},
+  "materiality": {"ratio": 1.03, "mad_k": 1.5, "metric": "median wall/op, robust separation"},
+  "primary_metric": "steady-state wall per op (includes kernel lookup; perf:u cannot see kernel cost at paranoid=2)",
+  "perf_events": ["instructions:u", "cycles:u", "task-clock:u"],
+  "verdict_vocabulary": {
+    "perf": ["FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED", "REGIME-LOCAL BENEFIT ESTABLISHED", "FIXED-FILE PERFORMANCE REGRESSION", "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED", "BLOCKED", "INVALID"],
+    "identity": ["ORDINARY-FD WRONG-TARGET REPRODUCED", "FIXED L0 BINDING PRESERVED TARGET", "FIXED L0 BINDING DID NOT PRESERVE TARGET", "BOUNDARY-A WINDOW CONFIRMED", "BOUNDARY-D RETENTION CONFIRMED", "BLOCKED", "INVALID"],
+    "minimality": ["L0 SUFFICIENT", "L1 REQUIRED", "L1 SUFFICIENT", "L2 GENERATION EARNED", "GENERATION NOT EARNED", "PER-REQUEST LIVE-USE EARNED", "PER-REQUEST LIVE-USE NOT EARNED", "UNRESOLVED"]
+  },
+  "production": {"implementation": "NO", "public_api": "NO", "c1": "NOT ENTERED"},
+  "host_scope": "HOST-LOCAL ONLY"
+}

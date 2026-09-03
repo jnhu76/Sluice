@@ -1,0 +1,22 @@
+# Linux kernel v7.1.9 io_uring source snapshot — evidence provenance
+#
+# The AUDIT (G1-CONTROL-C0-AUDIT.md) cites these files by function and
+# line. They are NOT committed into this repository (GPL kernel sources,
+# fetchable at the pinned URLs). This manifest pins the fetch provenance
+# and content hashes so the audit evidence is reproducible.
+#
+# Source: Bootlin Elixir Cross Referencer, tag v7.1.9
+#   URL pattern: https://elixir.bootlin.com/linux/v7.1.9/source/io_uring/<f>?raw=true
+# Host kernel: 7.1.9-200.fc44.x86_64 (uname -r), Fedora 44
+# Local UAPI cross-check: /usr/include/linux/io_uring.h (host)
+# Local liburing cross-check: xrepo liburing 2.14 headers +
+#   https://raw.githubusercontent.com/axboe/liburing/liburing-2.14/src/include/liburing.h
+# Fetched: 2026-09-03
+294efa72495932c3df1523294705c5865c33dc30a35e8fa9bdf0ab19e56662ba  fs_file.c
+bc62302e76f37e1e94ec98b28f5d36069de868a365e77aae80fa41c290d89fc9  io_uring.c
+2556c75b7e31168518a47e0d3880b13473f263098f6091e4a8c11a7520557cc9  opdef.c
+b772e48f1240faada2e82e2c210b69e3e05f5dc82b71a9aefdf0af8cfd902a9d  rsrc.c
+929eadf29e32e35109a2374cf5b9021890cb8bb7ff8b0d828d2bb92db38f2b1f  rw.c
+2d1b87c43d93e2e7a120fdf814c00006317542b5a60ba546f686a055fda3b17f  io_uring_types_extra.h
+31e3b1a4502d023af2be65b7ffc5fddf2fab0c9d59555e7ecb5b3628585022cf  io_uring_types.h
+6e1f27204aec2c8facdfbb2b358130e38a1350588c3a9e83cd7994dbdc6e1a41  rsrc.h
