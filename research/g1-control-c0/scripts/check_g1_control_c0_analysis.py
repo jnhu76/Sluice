@@ -14,27 +14,51 @@ would have passed. It now derives the READ/WRITE verdicts from the raw
 cells and requires stored == derived. `--self-test` proves by in-memory
 mutation that a falsified stored verdict is rejected.
 
+Corrective-2 hardening (P1-2, neighbor derivation): the derivation chain
+had a wiring defect shared by driver and validator — the directions dict
+fed to neighbor_share()/derive_verdicts() was filtered down to the 4 KiB
+tmpfs primary cells, so the frozen 64 KiB tmpfs and same-depth btrfs
+neighbors silently resolved to None (isolated verdicts could never upgrade
+to neighbor-supported ones). The self-test passed only because it
+hand-built complete directions, bypassing the defective entry point. The
+chain now runs directions_from() (ALL eligible cells) -> neighbor_share()
+-> derive_verdicts() (which itself selects the tmpfs primary family), and
+the self-test drives that exact production chain from synthetic per-cell
+VALUES, including mutants that require the 64 KiB / btrfs neighbors to
+carry the verdict.
+
 Modes:
   <session-id>                    single-session validation (scope read
-                                  from the session manifest: "full" or
-                                  "threaded-corrective"). A pre-corrective
+                                  from the session manifest: "full",
+                                  "threaded-corrective", or
+                                  "tmpfs-corrective"). A pre-corrective
                                   full-matrix session FAILS by design: its
                                   threaded runs lack the corrective gate
                                   fields (prereg §5 was violated); use
                                   --composite for the campaign-level
-                                  certification.
-  --composite <sid1> <sid2>       Corrective-1 campaign certification:
-                                  F0/F1 from the single-thread session,
-                                  F0-T/F1-T from the threaded-corrective
-                                  session; the native-1 threaded subset is
-                                  required to be the superseded shape and
-                                  is excluded from every derived number.
+                                  certification. A tmpfs-corrective session
+                                  must additionally be substrate-
+                                  authoritative for tmpfs and a clean
+                                  commit-pinned execution (Corrective-2).
+  --composite <sid1> <sid2> <sid3>
+                                  Corrective-2 campaign certification:
+                                  F0/F1 btrfs cells from the single-thread
+                                  session, F0-T/F1-T btrfs cells from the
+                                  threaded-corrective session, ALL tmpfs
+                                  cells from the tmpfs-corrective session
+                                  (real tmpfs); each session contributes
+                                  only labels it is substrate-
+                                  authoritative for; mislabeled rows are
+                                  required to be present in the superseded
+                                  shape and are excluded from every
+                                  derived number.
   --self-test                     in-memory mutation self-test; never
                                   touches session files.
 
 Usage:
   python3 check_g1_control_c0_analysis.py <session-id>
-  python3 check_g1_control_c0_analysis.py --composite <sid-single> <sid-threaded>
+  python3 check_g1_control_c0_analysis.py --composite <sid-single> \
+      <sid-threaded> <sid-tmpfs>
   python3 check_g1_control_c0_analysis.py --self-test
 """
 
@@ -224,7 +248,11 @@ def load_session(sid: str):
 
 
 def scope_arms(scope: str) -> list:
-    return ARMS if scope == "full" else THREAD_ARMS
+    return ARMS if scope in ("full", "tmpfs-corrective") else THREAD_ARMS
+
+
+def scope_fs(scope: str) -> list:
+    return ["tmpfs"] if scope == "tmpfs-corrective" else FS
 
 
 def values_by_cell(runs):
@@ -253,11 +281,15 @@ def directions_from(values: dict, arm0: str, arm1: str) -> dict:
 
 # ---- single-session mode -------------------------------------------------
 
+HEX = set("0123456789abcdef")
+
+
 def validate_single(sid: str) -> None:
     fails: list = []
     sd, manifest, gates, runs = load_session(sid)
     scope = manifest.get("scope", "full")
     expected_arms = scope_arms(scope)
+    expected_fs = scope_fs(scope)
 
     errs = gates.get("errors", [])
     if errs:
@@ -265,6 +297,25 @@ def validate_single(sid: str) -> None:
     for size in SIZES:
         if not manifest.get(f"expected_dst_sha256_{size}"):
             fails.append(f"expected_dst_sha256_{size} not frozen")
+
+    # Corrective-2 tmpfs-corrective discipline: the session must be
+    # substrate-authoritative for tmpfs AND a clean commit-pinned execution
+    # (recorded at generate time)
+    if scope == "tmpfs-corrective":
+        env = json.loads((sd / "environment.json").read_text())
+        actual = (env.get("filesystems", {}).get("tmpfs", {}) or {}) \
+            .get("type")
+        if actual != "tmpfs":
+            fails.append(f"tmpfs label resolved to '{actual}', expected "
+                         f"'tmpfs' (substrate gate)")
+        git = env.get("git", {})
+        if git.get("dirty_tracked") is not False:
+            fails.append(f"tracked worktree was dirty at generate time "
+                         f"(dirty_tracked={git.get('dirty_tracked')}) — "
+                         f"not commit-pinned")
+        head = git.get("head") or ""
+        if len(head) != 40 or any(c not in HEX for c in head):
+            fails.append(f"recorded head is not a 40-hex sha: {head!r}")
 
     ok_runs = [r for r in runs if r.get("ok")]
     by_cell: dict = {}
@@ -274,13 +325,14 @@ def validate_single(sid: str) -> None:
 
     # scope discipline + exact cell coverage
     for r in runs:
-        if r["arm"] not in expected_arms:
-            fails.append(f"{r['run_id']}: arm {r['arm']} outside "
+        if r["arm"] not in expected_arms or r["fs"] not in expected_fs:
+            fails.append(f"{r['run_id']}: cell {r['op']}/{r['size']}/"
+                         f"{r['depth']}/{r['fs']}/{r['arm']} outside "
                          f"scope '{scope}'")
     for op in OPS:
         for size in SIZES:
             for depth in DEPTHS_BY_SIZE[size]:
-                for fs in FS:
+                for fs in expected_fs:
                     for arm in expected_arms:
                         n = len(by_cell.get((op, size, depth, fs, arm), []))
                         if n != ROUNDS:
@@ -298,19 +350,19 @@ def validate_single(sid: str) -> None:
             gate_field_problems(r, fails)
         check_write_hash(r, manifest, fails)
 
-    # re-derive verdicts from raw and require stored == derived
+    # re-derive verdicts from raw and require stored == derived.
+    # Corrective-2 P1-2: the FULL eligible direction set feeds
+    # neighbor_share()/derive_verdicts(); the 64 KiB tmpfs and same-depth
+    # btrfs neighbors genuinely enter the verdict path.
     summary = json.loads((sd / "summary.json").read_text())
     values = values_by_cell(ok_runs)
-    if scope == "full":
+    if scope in ("full", "tmpfs-corrective"):
         dirs = directions_from(values, "F0", "F1")
-        primary = {f"{op}_4096_{d}_tmpfs": dirs[f"{op}_4096_{d}_tmpfs"]
-                   for op in OPS for d in PRIMARY_DEPTHS}
-        derived = derive_verdicts(primary, neighbor_share(primary))
-        # per-cell direction + ratio re-checks
+        derived = derive_verdicts(dirs, neighbor_share(dirs))
         for op in OPS:
             for size in SIZES:
                 for depth in DEPTHS_BY_SIZE[size]:
-                    for fs in FS:
+                    for fs in expected_fs:
                         cell = f"{op}_{size}_{depth}_{fs}"
                         stored = summary["per_cell"][cell]["f0"]["direction"]
                         if stored != dirs[cell]:
@@ -327,12 +379,10 @@ def validate_single(sid: str) -> None:
                                 abs(stored_ratio - ratio) > 5e-5:
                             fails.append(f"{cell}: ratio mismatch")
         compare_verdicts(summary["verdicts"], derived, "verdict", fails)
-    else:
-        dirs = directions_from(values, "F0-T", "F1-T")
-        primary = {f"{op}_4096_{d}_tmpfs": dirs[f"{op}_4096_{d}_tmpfs"]
-                   for op in OPS for d in PRIMARY_DEPTHS}
-        derived = derive_verdicts(primary, neighbor_share(primary))
-        compare_verdicts(summary.get("threaded_verdicts", {}), derived,
+    if scope in ("threaded-corrective", "tmpfs-corrective"):
+        tdirs = directions_from(values, "F0-T", "F1-T")
+        tderived = derive_verdicts(tdirs, neighbor_share(tdirs))
+        compare_verdicts(summary.get("threaded_verdicts", {}), tderived,
                          "threaded_verdicts", fails)
 
     report(f"ANALYSIS", fails, sid=sid, scope=scope, ok=len(ok_runs),
@@ -342,47 +392,94 @@ def validate_single(sid: str) -> None:
 
 # ---- composite mode -------------------------------------------------------
 
-def validate_composite(sid_single: str, sid_threaded: str) -> None:
+def validate_composite(sid_single: str, sid_threaded: str,
+                       sid_tmpfs: str) -> None:
     fails: list = []
     sd1, man1, gates1, runs1 = load_session(sid_single)
     sd2, man2, gates2, runs2 = load_session(sid_threaded)
+    sd3, man3, gates3, runs3 = load_session(sid_tmpfs)
 
-    for sid, gates in ((sid_single, gates1), (sid_threaded, gates2)):
+    for sid, gates in ((sid_single, gates1), (sid_threaded, gates2),
+                       (sid_tmpfs, gates3)):
         if gates.get("errors"):
             fails.append(f"{sid}: {len(gates['errors'])} gate errors")
     if man2.get("scope") != "threaded-corrective":
         fails.append(f"{sid_threaded}: manifest scope is not "
                      f"threaded-corrective")
+    if man3.get("scope") != "tmpfs-corrective":
+        fails.append(f"{sid_tmpfs}: manifest scope is not "
+                     f"tmpfs-corrective")
+
+    # Corrective-2 substrate authority: a session contributes only
+    # filesystem labels whose env-resolved fstype equals the canonical
+    # fstype of the label (prereg Amendment-5)
+    envs = {}
+    for sid in (sid_single, sid_threaded, sid_tmpfs):
+        envs[sid] = json.loads(
+            (RESULTS / sid / "environment.json").read_text())
+
+    def authoritative(env: dict, label: str) -> bool:
+        actual = (env.get("filesystems", {}).get(label, {}) or {}) \
+            .get("type")
+        return actual == label
+
+    if not authoritative(envs[sid_single], "btrfs"):
+        fails.append(f"{sid_single}: not substrate-authoritative for btrfs")
+    if not authoritative(envs[sid_threaded], "btrfs"):
+        fails.append(f"{sid_threaded}: not substrate-authoritative for "
+                     f"btrfs")
+    if not authoritative(envs[sid_tmpfs], "tmpfs"):
+        fails.append(f"{sid_tmpfs}: not substrate-authoritative for tmpfs")
+    # Corrective-2 P2: the tmpfs-corrective session must be a clean
+    # commit-pinned execution (recorded at generate time)
+    git3 = envs[sid_tmpfs].get("git", {})
+    if git3.get("dirty_tracked") is not False:
+        fails.append(f"{sid_tmpfs}: tracked worktree was dirty at generate "
+                     f"time (dirty_tracked={git3.get('dirty_tracked')}) — "
+                     f"not commit-pinned")
+    head3 = git3.get("head") or ""
+    if len(head3) != 40 or any(c not in HEX for c in head3):
+        fails.append(f"{sid_tmpfs}: recorded head is not a 40-hex sha: "
+                     f"{head3!r}")
 
     ok1 = [r for r in runs1 if r.get("ok")]
     ok2 = [r for r in runs2 if r.get("ok")]
-    cells1: dict = {}
-    for r in ok1:
-        cells1.setdefault((r["op"], r["size"], r["depth"], r["fs"],
-                           r["arm"]), []).append(r)
-    cells2: dict = {}
-    for r in ok2:
-        cells2.setdefault((r["op"], r["size"], r["depth"], r["fs"],
-                           r["arm"]), []).append(r)
+    ok3 = [r for r in runs3 if r.get("ok")]
 
-    for op in OPS:
-        for size in SIZES:
-            for depth in DEPTHS_BY_SIZE[size]:
-                for fs in FS:
-                    for arm in SINGLE_ARMS:
-                        n = len(cells1.get((op, size, depth, fs, arm), []))
-                        if n != ROUNDS:
-                            fails.append(f"{sid_single} {op}/{size}/{depth}/"
-                                         f"{fs}/{arm}: {n} valid runs "
-                                         f"(expected {ROUNDS})")
-                    for arm in THREAD_ARMS:
-                        n = len(cells2.get((op, size, depth, fs, arm), []))
-                        if n != ROUNDS:
-                            fails.append(f"{sid_threaded} {op}/{size}/"
-                                         f"{depth}/{fs}/{arm}: {n} valid "
-                                         f"runs (expected {ROUNDS})")
+    def ok_vals(runs, labels, arms):
+        out: dict = {}
+        for r in runs:
+            if r.get("ok") and r.get("bench") and r["fs"] in labels and \
+                    r["arm"] in arms:
+                out.setdefault((r["op"], r["size"], r["depth"], r["fs"],
+                                r["arm"]), []).append(
+                    r["bench"]["wall_per_op_ns"])
+        return out
 
-    # superseded-shape discipline on native-1's threaded subset
+    vals_single = ok_vals(runs1, ["btrfs"], ("F0", "F1"))
+    vals_threaded = ok_vals(runs2, ["btrfs"], ("F0-T", "F1-T"))
+    vals_tmpfs_single = ok_vals(runs3, ["tmpfs"], ("F0", "F1"))
+    vals_tmpfs_threaded = ok_vals(runs3, ["tmpfs"], ("F0-T", "F1-T"))
+
+    def coverage(vals, sid, expected):
+        for op in OPS:
+            for size in SIZES:
+                for depth in DEPTHS_BY_SIZE[size]:
+                    for fs in FS:
+                        for arm in expected:
+                            n = len(vals.get((op, size, depth, fs, arm), []))
+                            if n != ROUNDS:
+                                fails.append(
+                                    f"{sid} {op}/{size}/{depth}/{fs}/{arm}: "
+                                    f"{n} valid runs (expected {ROUNDS})")
+
+    coverage(vals_single, sid_single, ("F0", "F1"))
+    coverage(vals_threaded, sid_threaded, ("F0-T", "F1-T"))
+    coverage(vals_tmpfs_single, sid_tmpfs, ("F0", "F1"))
+    coverage(vals_tmpfs_threaded, sid_tmpfs, ("F0-T", "F1-T"))
+
+    # superseded-shape discipline on native-1: threaded subset (both
+    # labels) plus the wrong-substrate tmpfs-label single runs
     superseded = [r for r in runs1 if r["arm"] in THREAD_ARMS]
     if len(superseded) != 280:
         fails.append(f"{sid_single}: expected 280 superseded threaded runs, "
@@ -391,101 +488,153 @@ def validate_composite(sid_single: str, sid_threaded: str) -> None:
         if "threads_ready" in (r.get("bench") or {}):
             fails.append(f"{sid_single} {r['run_id']}: superseded threaded "
                          f"run unexpectedly carries corrective gate fields")
-    # scope discipline on native-2
+    superseded_fs_1 = [r for r in runs1 if r["fs"] == "tmpfs"
+                       and r["arm"] in ("F0", "F1")]
+    if len(superseded_fs_1) != 140:
+        fails.append(f"{sid_single}: expected 140 superseded tmpfs-label "
+                     f"single runs (WRONG SUBSTRATE), found "
+                     f"{len(superseded_fs_1)}")
+    # native-2 scope + superseded wrong-substrate subset
     for r in runs2:
         if r["arm"] not in THREAD_ARMS:
             fails.append(f"{sid_threaded} {r['run_id']}: arm outside "
                          f"threaded-corrective scope")
+    superseded_fs_2 = [r for r in runs2 if r["fs"] == "tmpfs"]
+    if len(superseded_fs_2) != 140:
+        fails.append(f"{sid_threaded}: expected 140 superseded tmpfs-label "
+                     f"runs (WRONG SUBSTRATE), found {len(superseded_fs_2)}")
 
     for r in ok1:
-        if r["arm"] in SINGLE_ARMS:
+        if r["arm"] in ("F0", "F1"):
             check_same_work(r, fails)
             check_write_hash(r, man1, fails)
     for r in ok2:
         check_same_work(r, fails)
         gate_field_problems(r, fails)
         check_write_hash(r, man2, fails)
+    for r in ok3:
+        check_same_work(r, fails)
+        if r["arm"] in THREAD_ARMS:
+            gate_field_problems(r, fails)
+        check_write_hash(r, man3, fails)
 
     # re-derive everything from raw and compare to composite-summary.json
-    comp_path = sd2 / "composite-summary.json"
+    comp_path = sd3 / "composite-summary.json"
     if not comp_path.is_file():
-        fails.append(f"{sid_threaded}: composite-summary.json missing "
+        fails.append(f"{sid_tmpfs}: composite-summary.json missing "
                      f"(run 'g1_control_c0.py composite {sid_single} "
-                     f"{sid_threaded}' first)")
+                     f"{sid_threaded} {sid_tmpfs}' first)")
     else:
         comp = json.loads(comp_path.read_text())
-        vals1 = values_by_cell(ok1)
-        vals2 = values_by_cell(ok2)
-        dirs_single = directions_from(vals1, "F0", "F1")
-        dirs_threaded = directions_from(vals2, "F0-T", "F1-T")
-        prim_single = {f"{op}_4096_{d}_tmpfs":
-                       dirs_single[f"{op}_4096_{d}_tmpfs"]
-                       for op in OPS for d in PRIMARY_DEPTHS}
-        prim_threaded = {f"{op}_4096_{d}_tmpfs":
-                         dirs_threaded[f"{op}_4096_{d}_tmpfs"]
-                         for op in OPS for d in PRIMARY_DEPTHS}
-        derived_v = derive_verdicts(prim_single,
-                                    neighbor_share(prim_single))
-        derived_tv = derive_verdicts(prim_threaded,
-                                     neighbor_share(prim_threaded))
+        # assemble the composite per-cell values from the authoritative
+        # sources and run the FULL derivation chain
+        per_cell_vals: dict = {}
+        for key, vals in ((("btrfs", "single"), vals_single),
+                          (("btrfs", "threaded"), vals_threaded),
+                          (("tmpfs", "single"), vals_tmpfs_single),
+                          (("tmpfs", "threaded"), vals_tmpfs_threaded)):
+            fs, kind = key
+            for (op, size, depth, fs2, arm), xs in vals.items():
+                per_cell_vals[(op, size, depth, fs2, arm)] = xs
+        dirs_single = directions_from(per_cell_vals, "F0", "F1")
+        dirs_threaded = directions_from(per_cell_vals, "F0-T", "F1-T")
+        derived_v = derive_verdicts(dirs_single,
+                                    neighbor_share(dirs_single))
+        derived_tv = derive_verdicts(dirs_threaded,
+                                     neighbor_share(dirs_threaded))
         compare_verdicts(comp.get("verdicts", {}), derived_v,
                          "composite verdicts", fails)
         compare_verdicts(comp.get("threaded_verdicts", {}), derived_tv,
                          "composite threaded_verdicts", fails)
         sup = comp.get("superseded", {})
-        if sup.get("session") != sid_single or \
-                set(sup.get("arms", [])) != set(THREAD_ARMS) or \
-                sup.get("runs") != len(superseded):
+        sup1 = sup.get(sid_single, {})
+        sup2 = sup.get(sid_threaded, {})
+        if (sup1.get("threaded_runs", {}).get("runs") != len(superseded) or
+                sup1.get("tmpfs_label_single_runs", {}).get("runs") !=
+                len(superseded_fs_1) or
+                sup2.get("tmpfs_label_threaded_runs", {}).get("runs") !=
+                len(superseded_fs_2)):
             fails.append(f"composite superseded provenance mismatch: {sup}")
         for key, sid in (("single_thread_source", sid_single),
-                         ("threaded_source", sid_threaded)):
+                         ("threaded_source", sid_threaded),
+                         ("tmpfs_source", sid_tmpfs)):
             src = comp.get(key, {})
             if src.get("session") != sid:
                 fails.append(f"composite {key}.session != {sid}")
-            if not src.get("git_head") or not src.get("bench_binary_sha256"):
+            if not src.get("git_head") or \
+                    not src.get("bench_binary_sha256"):
                 fails.append(f"composite {key}: provenance incomplete")
 
     report(f"COMPOSITE ANALYSIS", fails, sid=f"{sid_single} + "
-           f"{sid_threaded}", scope="composite",
-           ok=len(ok1) + len(ok2), note=None)
+           f"{sid_threaded} + {sid_tmpfs}", scope="composite",
+           ok=len(ok1) + len(ok2) + len(ok3), note=None)
 
 
 # ---- self-test ------------------------------------------------------------
 
 def self_test() -> None:
-    """In-memory mutation self-test (Corrective-1 P1-3): proves the verdict
-    derivation rejects a falsified stored verdict. Touches no files."""
-    def vals(center_f0, center_f1, spread0=2.0, spread1=1.0, n=7):
-        # deterministic value sets: F0/ F1 medians at the given centers
-        return ([center_f0 + (i % 3 - 1) * spread0 for i in range(n)],
-                [center_f1 + (i % 3 - 1) * spread1 for i in range(n)])
+    """In-memory mutation self-test (Corrective-1 P1-3, extended Corrective-2
+    P1-2). Touches no files. Drives the exact PRODUCTION derivation chain —
+    synthetic per-cell VALUES -> directions_from() (all eligible cells) ->
+    neighbor_share() -> derive_verdicts() — so a wiring defect that filters
+    the directions down to the primary cells before neighbor_share (the
+    Corrective-2 defect) can no longer pass undetected: the neighbor
+    mutants below then degrade to REGIME-LOCAL and fail the expectation.
+    Also proves the verdict gate rejects falsified stored verdicts."""
+    def vals_at(center, spread=2.0, n=7):
+        # deterministic value set with median == center and MAD == spread
+        return [center + (i % 3 - 1) * spread for i in range(n)]
 
-    def synthetic_directions(f1_faster: bool) -> dict:
+    CENTER = {"F1_FASTER": (1000.0, 900.0),      # ratio 1.111, separated
+              "F1_SLOWER": (1000.0, 1100.0),
+              "NONE": (1000.0, 1000.0)}
+
+    def chain(dir_map, arm0="F0", arm1="F1"):
+        """dir_map: {(op,size,depth,fs): direction} for the eligible cells;
+        any cell not named is NONE. Runs values -> directions_from ->
+        neighbor_share -> derive_verdicts (the production chain)."""
+        values = {}
+        for op in OPS:
+            for size in SIZES:
+                for depth in DEPTHS_BY_SIZE[size]:
+                    for fs in FS:
+                        d = dir_map.get((op, size, depth, fs), "NONE")
+                        c0, c1 = CENTER[d]
+                        values[(op, size, depth, fs, arm0)] = vals_at(c0)
+                        values[(op, size, depth, fs, arm1)] = vals_at(c1)
+        dirs = directions_from(values, arm0, arm1)
+        return derive_verdicts(dirs, neighbor_share(dirs))
+
+    def dirs_all(direction):
         d = {}
         for op in OPS:
-            d[f"{op}_4096_1_tmpfs"], d[f"{op}_4096_8_tmpfs"], \
-                d[f"{op}_4096_32_tmpfs"] = (
-                    ("F1_FASTER", "F1_FASTER", "F1_FASTER") if f1_faster
-                    else ("NONE", "NONE", "NONE"))
-            d[f"{op}_65536_1_tmpfs"] = "F1_FASTER" if f1_faster else "NONE"
-            d[f"{op}_4096_1_btrfs"] = "F1_FASTER" if f1_faster else "NONE"
-            d[f"{op}_4096_8_btrfs"] = "F1_FASTER" if f1_faster else "NONE"
-            d[f"{op}_4096_32_btrfs"] = "F1_FASTER" if f1_faster else "NONE"
+            for depth in PRIMARY_DEPTHS:
+                d[(op, 4096, depth, "tmpfs")] = direction
+                d[(op, 4096, depth, "btrfs")] = direction
+            d[(op, 65536, 1, "tmpfs")] = direction
+            d[(op, 2097152, 1, "tmpfs")] = direction
+            d[(op, 2097152, 1, "btrfs")] = direction
+        return d
+
+    def dirs_mut(base, overrides):
+        d = dict(base)
+        d.update(overrides)
         return d
 
     failures = []
+    BENEFIT = "FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED"
+    REGIME = "REGIME-LOCAL BENEFIT ESTABLISHED"
+    NOT_EST = "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
+    REGRESS = "FIXED-FILE PERFORMANCE REGRESSION"
 
     # scenario A: robust material F1-faster everywhere -> BENEFIT ESTABLISHED
-    dirs_a = synthetic_directions(f1_faster=True)
-    share_a = neighbor_share(dirs_a)
-    derived_a = derive_verdicts(dirs_a, share_a)
-    if any(v != "FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED"
-           for v in derived_a.values()):
+    derived_a = chain(dirs_all("F1_FASTER"))
+    if any(v != BENEFIT for v in derived_a.values()):
         failures.append(f"scenario A derivation wrong: {derived_a}")
     # mutation (benefit erasure): store NOT ESTABLISHED instead -> the
     # validator's verdict gate must flag it
     mutated_a = dict(derived_a)
-    mutated_a["READ"] = "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
+    mutated_a["READ"] = NOT_EST
     flagged: list = []
     compare_verdicts(mutated_a, derived_a, "mutated", flagged)
     if not flagged:
@@ -493,29 +642,72 @@ def self_test() -> None:
 
     # scenario B: all NONE -> NOT ESTABLISHED; mutate to BENEFIT ESTABLISHED
     # (benefit fabrication) -> the verdict gate must flag it
-    dirs_b = synthetic_directions(f1_faster=False)
-    share_b = neighbor_share(dirs_b)
-    derived_b = derive_verdicts(dirs_b, share_b)
-    if any(v != "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
-           for v in derived_b.values()):
+    derived_b = chain(dirs_all("NONE"))
+    if any(v != NOT_EST for v in derived_b.values()):
         failures.append(f"scenario B derivation wrong: {derived_b}")
     mutated_b = dict(derived_b)
-    mutated_b["READ"] = "FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED"
+    mutated_b["READ"] = BENEFIT
     flagged = []
     compare_verdicts(mutated_b, derived_b, "mutated", flagged)
     if not flagged:
         failures.append("scenario B mutation undetected")
 
+    # neighbor mutant N1 (Corrective-2): ONLY the primary 4K d8 cell and its
+    # 64 KiB tmpfs neighbor are F1_FASTER -> the 64 KiB neighbor must carry
+    # the verdict to BENEFIT ESTABLISHED. Under the Corrective-2 defect
+    # (primary-only directions into neighbor_share) this degraded to
+    # REGIME-LOCAL.
+    for op in OPS:
+        n1 = chain(dirs_mut(dirs_all("NONE"),
+                            {(op, 4096, 8, "tmpfs"): "F1_FASTER",
+                             (op, 65536, 1, "tmpfs"): "F1_FASTER"}))
+        if n1[op] != BENEFIT:
+            failures.append(f"mutant N1[{op}]: 64 KiB neighbor did not carry "
+                            f"the verdict: {n1[op]}")
+
+    # neighbor mutant N2: ONLY the primary 4K d8 cell and its same-depth
+    # btrfs neighbor are F1_FASTER -> the btrfs neighbor must carry the
+    # verdict to BENEFIT ESTABLISHED (degraded to REGIME-LOCAL under the
+    # Corrective-2 defect).
+    for op in OPS:
+        n2 = chain(dirs_mut(dirs_all("NONE"),
+                            {(op, 4096, 8, "tmpfs"): "F1_FASTER",
+                             (op, 4096, 8, "btrfs"): "F1_FASTER"}))
+        if n2[op] != BENEFIT:
+            failures.append(f"mutant N2[{op}]: btrfs neighbor did not carry "
+                            f"the verdict: {n2[op]}")
+
+    # negative control N3: isolated primary F1_FASTER with NO neighbor
+    # support -> must stay REGIME-LOCAL (proves the neighbors gate the
+    # upgrade rather than any F1_FASTER primary auto-promoting)
+    for op in OPS:
+        n3 = chain(dirs_mut(dirs_all("NONE"),
+                            {(op, 4096, 8, "tmpfs"): "F1_FASTER"}))
+        if n3[op] != REGIME:
+            failures.append(f"control N3[{op}]: isolated primary not "
+                            f"REGIME-LOCAL: {n3[op]}")
+
+    # neighbor mutant N4: neighbor-supported regression must reach the
+    # REGRESSION verdict through the same neighbor path
+    for op in OPS:
+        n4 = chain(dirs_mut(dirs_all("NONE"),
+                            {(op, 4096, 8, "tmpfs"): "F1_SLOWER",
+                             (op, 4096, 8, "btrfs"): "F1_SLOWER"}))
+        if n4[op] != REGRESS:
+            failures.append(f"mutant N4[{op}]: neighbor-supported regression "
+                            f"not derived: {n4[op]}")
+
     # the direction rule itself, on real numeric value sets
-    f0, f1 = vals(center_f0=1000.0, center_f1=900.0)   # ratio 1.111, robust
+    f0 = vals_at(1000.0)
+    f1 = vals_at(900.0)   # ratio 1.111, robust
     if direction_of(f0, f1) != "F1_FASTER":
         failures.append("direction rule: robust benefit not detected")
-    g0, g1 = vals(center_f0=1000.0, center_f1=985.0)   # ratio 1.0152 < 1.03
-    if direction_of(g0, g1) != "NONE":
+    g1 = vals_at(985.0)   # ratio 1.0152 < 1.03
+    if direction_of(f0, g1) != "NONE":
         failures.append("direction rule: sub-threshold ratio flagged")
-    h0, h1 = vals(center_f0=1000.0, center_f1=960.0, spread1=30.0)
+    h1 = vals_at(960.0, spread=30.0)
     # ratio 1.0417 >= 1.03 but 1.5*MAD separation must fail (wide spread)
-    if direction_of(h0, h1) != "NONE":
+    if direction_of(f0, h1) != "NONE":
         failures.append("direction rule: separation bypass detected")
 
     if failures:
@@ -523,9 +715,11 @@ def self_test() -> None:
         for f in failures:
             print(f"  - {f}")
         sys.exit(1)
-    print("SELF-TEST PASS: verdict derivation re-derives both scenarios "
-          "correctly and detects falsified stored verdicts "
-          "(benefit-erasure and benefit-fabrication mutations).")
+    print("SELF-TEST PASS: production-chain derivation re-derives all "
+          "scenarios correctly — neighbor mutants N1 (64 KiB) / N2 (btrfs) / "
+          "N4 (regression) upgrade through the neighbor path, isolated "
+          "control N3 stays REGIME-LOCAL, and falsified stored verdicts "
+          "(benefit-erasure / benefit-fabrication) are rejected.")
 
 
 # ---- report ----------------------------------------------------------------
@@ -553,11 +747,12 @@ def main() -> None:
     if args[0] == "--self-test":
         self_test()
     elif args[0] == "--composite":
-        if len(args) != 3:
+        if len(args) != 4:
             print("usage: check_g1_control_c0_analysis.py --composite "
-                  "<sid-single> <sid-threaded>", file=sys.stderr)
+                  "<sid-single> <sid-threaded> <sid-tmpfs>",
+                  file=sys.stderr)
             sys.exit(2)
-        validate_composite(args[1], args[2])
+        validate_composite(args[1], args[2], args[3])
     elif args[0].startswith("--"):
         print(f"unknown option {args[0]}", file=sys.stderr)
         sys.exit(2)

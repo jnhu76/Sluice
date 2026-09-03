@@ -12,32 +12,43 @@ Subcommands:
                         round-trip, feature flags, memlock, perf probe)
                         + FILE-ID-E0 deterministic identity witness +
                         replacement-window probe (AUDIT boundaries A/D)
-  generate <session-id> create fixtures for BOTH filesystems (tmpfs +
-                        btrfs) at both sizes (512 MiB for 4 KiB cells,
-                        1 GiB for 64 KiB / 2 MiB cells), validate the C++
-                        pattern generator against the Python generator,
-                        freeze the expected dst sha256 constants
+  generate <session-id> [--fs tmpfs,btrfs]
+                        create fixtures for the requested filesystem labels,
+                        validate the C++ pattern generator against the
+                        Python generator, freeze the expected dst sha256
+                        constants
   q0 <session-id>       Phase Q0 stability qualification: 30 runs of F0 at
                         4 KiB x d8 on tmpfs READ, full same-work gates.
-  formal <session-id> [--arms A1,A2]
+  formal <session-id> [--arms A1,A2] [--fs L1,L2]
                         frozen matrix: (op x 5 cells x 2 fs x 4 arms) x 7
-                        seeded-interleaved rounds = 560 runs, perf-wrapped.
-                        --arms restricts EXECUTION to a subset of the frozen
-                        combo list (run ids keep their full-plan positions);
-                        the session manifest is marked with the scope.
-                        Corrective-1 uses --arms F0-T,F1-T (280 runs).
+                        = 560 runs, perf-wrapped. --arms / --fs restrict
+                        EXECUTION to a subset of the frozen combo list
+                        (run ids keep their full-plan positions); the
+                        session manifest records the scope. Combining an
+                        --arms restriction with an --fs restriction is
+                        refused (no corrective needs it; keeps the scope
+                        vocabulary unambiguous). Corrective-1 used
+                        --arms F0-T,F1-T; Corrective-2 uses
+                        --fs tmpfs (native-3).
   summarize <session-id> runs.jsonl -> summary + analysis (per-cell
                         wall/op medians, F0-vs-F1 materiality per frozen
                         rule, neighbor consistency, threaded arms,
                         verdict vocabulary per prereg); scope-aware via the
-                        session manifest ("full" vs "threaded-corrective")
-  composite <single-sid> <threaded-sid>
-                        Corrective-1 thin evidence composition: campaign
-                        verdicts derive from the single-thread session only,
-                        threaded exploratory verdicts from the corrective
-                        session only; fail-closed, provenance-carrying;
-                        writes composite-summary.json into the threaded
-                        session
+                        session manifest ("full", "threaded-corrective",
+                        "tmpfs-corrective")
+  composite <sid-single> <sid-threaded> <sid-tmpfs>
+                        Corrective-2 campaign evidence composition,
+                        substrate-authoritative (a session contributes
+                        only filesystem labels whose env-resolved fstype
+                        equals the canonical fstype of the label):
+                        F0/F1 btrfs cells from the single-thread session,
+                        F0-T/F1-T btrfs cells from the threaded-corrective
+                        session, all tmpfs cells from the tmpfs-corrective
+                        session (real tmpfs). Mislabeled rows are
+                        SUPERSEDED — WRONG SUBSTRATE and excluded from
+                        every derived number; fail-closed,
+                        provenance-carrying; writes composite-summary.json
+                        into the tmpfs-corrective session
 
 Immutable session layout (mirrors research/rbuf-e0):
   results/<session-id>/{environment.json, manifest.json, gates.json,
@@ -84,6 +95,39 @@ ARMS = ["F0", "F1", "F0-T", "F1-T"]
 FILE_BYTES = {4096: 512 * 1024 * 1024, 65536: 1 << 30, 2097152: 1 << 30}
 
 KBLOCK = 4096
+
+# Corrective-2 substrate gate (prereg Amendment-5): the directory label is
+# NOT the substrate. A label is only usable when the filesystem it actually
+# resolves to equals its canonical fstype; anything else is fail-closed.
+# Per-label roots can be redirected (native-3: G1C0_FS_ROOT_TMPFS points at
+# real tmpfs) so the frozen "tmpfs (primary, /tmp)" cells can finally be
+# executed on the preregistered substrate.
+CANONICAL_FS = {"tmpfs": "tmpfs", "btrfs": "btrfs"}
+
+
+def fs_root(label: str) -> Path:
+    override = os.environ.get(f"G1C0_FS_ROOT_{label.upper()}")
+    return Path(override) if override else DATA_ROOT / label
+
+
+def resolved_fstype(path: Path) -> str:
+    r = subprocess.run(["findmnt", "-no", "FSTYPE", "-T", str(path)],
+                       capture_output=True, text=True)
+    return r.stdout.strip() or "unresolved"
+
+
+def substrate_problems(labels) -> list:
+    return [f"substrate gate: label '{label}' root {fs_root(label)} resolves "
+            f"to fstype '{resolved_fstype(fs_root(label))}', expected "
+            f"'{CANONICAL_FS[label]}'"
+            for label in labels
+            if resolved_fstype(fs_root(label)) != CANONICAL_FS[label]]
+
+
+def substrate_record(labels) -> dict:
+    return {label: {"root": str(fs_root(label)),
+                    "fstype": resolved_fstype(fs_root(label))}
+            for label in labels}
 
 
 # ---- deterministic pattern (must match bench/g1_control_c0_bench.cpp) ----
@@ -132,7 +176,11 @@ def git_state() -> dict:
             "branch": run("git", "branch", "--show-current"),
             "prereg_sha": run("git", "rev-parse", "HEAD:research/g1-control-c0/"
                              "G1-CONTROL-C0-PREREGISTRATION.md"),
-            "dirty": bool(run("git", "status", "--porcelain"))}
+            "dirty": bool(run("git", "status", "--porcelain")),
+            # the execution-pin gate: tracked files identical to HEAD.
+            # Untracked session output does not unpin the tooling.
+            "dirty_tracked": bool(run("git", "status", "--porcelain",
+                                      "--untracked-files=no"))}
 
 
 def environment_json() -> dict:
@@ -157,12 +205,13 @@ def environment_json() -> dict:
             l.split(":", 1) for l in Path("/proc/meminfo").read_text()
             .splitlines() if l.startswith(("MemTotal", "MemAvailable")))},
         "page_size": run("getconf", "PAGESIZE"),
-        "filesystems": {fs: {"type": run("findmnt", "-no", "FSTYPE", "-T",
-                                         str(DATA_ROOT / fs)),
+        "filesystems": {fs: {"root": str(fs_root(fs)),
+                             "type": run("findmnt", "-no", "FSTYPE", "-T",
+                                         str(fs_root(fs))),
                              "opts": run("findmnt", "-no", "OPTIONS", "-T",
-                                         str(DATA_ROOT / fs)),
+                                         str(fs_root(fs))),
                              "source": run("findmnt", "-no", "SOURCE", "-T",
-                                           str(DATA_ROOT / fs))}
+                                           str(fs_root(fs)))}
                         for fs in FS},
         "governor": run("cat", "/sys/devices/system/cpu/cpu0/cpufreq/"
                         "scaling_governor"),
@@ -175,6 +224,8 @@ def environment_json() -> dict:
         "io_uring_disabled": run("cat", "/proc/sys/kernel/io_uring_disabled"),
         "virtualization": run("systemd-detect-virt"),
         "git": git_state(),
+        "driver_path": str(Path(__file__).relative_to(REPO)),
+        "driver_sha256": sha256_file(Path(__file__)),
         "bench_binary_sha256": sha256_file(BENCH) if BENCH.is_file() else "?",
         "bench_binary_size": BENCH.stat().st_size if BENCH.is_file() else 0,
     }
@@ -256,7 +307,7 @@ class Gates:
 
 
 def data_paths(fs: str, size: int):
-    d = DATA_ROOT / fs
+    d = fs_root(fs)
     return d / f"src-{size}.bin", d / f"dst-{size}.bin"
 
 
@@ -468,31 +519,42 @@ def cmd_probe(session_id: str) -> None:
     print(f"FORMAL_ELIGIBLE: {'YES' if eligible else 'NO'}")
 
 
-def cmd_generate(session_id: str) -> None:
+def cmd_generate(session_id: str, fs_labels=None) -> None:
+    fs_labels = fs_labels or FS
+    unknown = [f for f in fs_labels if f not in FS]
+    if unknown:
+        print(f"unknown filesystem labels in --fs {fs_labels}",
+              file=sys.stderr)
+        sys.exit(1)
     sd = RESULTS / session_id
     sd.mkdir(parents=True, exist_ok=True)
+    problems = substrate_problems(fs_labels)
+    if problems:
+        print("GENERATE FAIL (substrate gate):", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
+        sys.exit(1)
     tile = master_tile()
     expected = {}
-    for fs in FS:
-        d = DATA_ROOT / fs
-        d.mkdir(parents=True, exist_ok=True)
+    for label in fs_labels:
+        (fs_root(label)).mkdir(parents=True, exist_ok=True)
     for size in SIZES:
         fb = FILE_BYTES[size]
         pat = pattern_bytes(fb, tile)
         pat_sha = sha256_bytes(pat)
         expected[f"expected_dst_sha256_{size}"] = pat_sha
-        for fs in FS:
-            src, dst = data_paths(fs, size)
+        for label in fs_labels:
+            src, dst = data_paths(label, size)
             if not src.is_file() or src.stat().st_size != fb:
                 subprocess.run([str(BENCH), "--mode", "generate",
                                 "--src", str(src),
                                 "--file-bytes", str(fb)], check=True)
             actual = sha256_file(src)
             if actual != pat_sha:
-                print(f"GENERATOR MISMATCH {fs} src-{size}: C++ {actual} != "
-                      f"Python {pat_sha}", file=sys.stderr)
+                print(f"GENERATOR MISMATCH {label} src-{size}: C++ {actual}"
+                      f" != Python {pat_sha}", file=sys.stderr)
                 sys.exit(1)
-            print(f"src {fs}/{size}: sha256 {actual} (matches Python "
+            print(f"src {label}/{size}: sha256 {actual} (matches Python "
                   f"generator)")
     (sd / "fixtures.json").write_text(json.dumps(expected, indent=1) + "\n")
     print(f"expected dst hashes frozen: {expected}")
@@ -504,6 +566,8 @@ def cmd_generate(session_id: str) -> None:
         manifest.update(expected)
     else:
         manifest = {"purpose": "generate", **expected}
+    manifest["fs_scope"] = fs_labels
+    manifest["substrate"] = substrate_record(fs_labels)
     (mf).write_text(json.dumps(manifest, indent=1) + "\n")
     env = environment_json()
     (RESULTS / session_id / "environment.json").write_text(
@@ -516,7 +580,14 @@ def cmd_q0(session_id: str, resume: bool = False) -> None:
         print(f"session {session_id} does not exist; run probe first",
               file=sys.stderr)
         sys.exit(1)
+    problems = substrate_problems(["tmpfs"])
+    if problems:
+        print("Q0 FAIL (substrate gate):", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
+        sys.exit(1)
     manifest = json.loads((sd / "manifest.json").read_text())
+    manifest["substrate"] = substrate_record(["tmpfs"])
     gates = Gates(sd)
     size, depth = Q0_CELL
     for i in range(1, Q0_RUNS + 1):
@@ -533,15 +604,33 @@ def cmd_q0(session_id: str, resume: bool = False) -> None:
           f"single-worker uring path QUALIFIED")
 
 
-def cmd_formal(session_id: str, resume: bool = False, arms=None) -> None:
+def cmd_formal(session_id: str, resume: bool = False, arms=None,
+               fs_labels=None) -> None:
     sd = RESULTS / session_id
     if not sd.is_dir():
         print(f"session {session_id} does not exist; run probe first",
               file=sys.stderr)
         sys.exit(1)
     arms = arms or ARMS
+    fs_labels = fs_labels or FS
     if any(a not in ARMS for a in arms):
         print(f"unknown arms in --arms {arms}", file=sys.stderr)
+        sys.exit(1)
+    if any(f not in FS for f in fs_labels):
+        print(f"unknown filesystem labels in --fs {fs_labels}",
+              file=sys.stderr)
+        sys.exit(1)
+    arms_restricted = sorted(arms) != sorted(ARMS)
+    fs_restricted = sorted(fs_labels) != sorted(FS)
+    if arms_restricted and fs_restricted:
+        print("refusing to combine --arms and --fs restrictions (keeps the "
+              "scope vocabulary unambiguous)", file=sys.stderr)
+        sys.exit(1)
+    problems = substrate_problems(fs_labels)
+    if problems:
+        print("FORMAL FAIL (substrate gate):", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
         sys.exit(1)
     manifest = json.loads((sd / "manifest.json").read_text())
     # expected dst hashes must be frozen
@@ -553,7 +642,7 @@ def cmd_formal(session_id: str, resume: bool = False, arms=None) -> None:
             else:
                 print(f"{key} not frozen; run generate first", file=sys.stderr)
                 sys.exit(1)
-    if arms != ARMS:
+    if arms_restricted:
         # scoped execution (Corrective-1): the session manifest records the
         # scope so summarize/validators interpret the evidence fail-closed.
         manifest["scope"] = "threaded-corrective"
@@ -562,16 +651,33 @@ def cmd_formal(session_id: str, resume: bool = False, arms=None) -> None:
             "g1-control-c0-native-1 threaded arms (F0-T/F1-T): workers "
             "exited before the measured span, violating the frozen prereg "
             "§5 threaded condition")
+    elif fs_restricted:
+        # scoped execution (Corrective-2, prereg Amendment-5): native-1/
+        # native-2 "tmpfs"-label rows resolved to btrfs (wrong substrate),
+        # so the frozen tmpfs primary cells were never executed until this
+        # session; the mislabeled rows are SUPERSEDED — WRONG SUBSTRATE.
+        if fs_labels != ["tmpfs"]:
+            print("fs-restricted scope is defined for tmpfs only",
+                  file=sys.stderr)
+            sys.exit(1)
+        manifest["scope"] = "tmpfs-corrective"
+        manifest["corrective"] = 2
+        manifest["supersedes"] = (
+            "g1-control-c0-native-1 and g1-control-c0-native-2-"
+            "threaded-corrective tmpfs-label rows: both labels resolved to "
+            "btrfs (/home), so the frozen tmpfs (primary, /tmp) cells were "
+            "never executed on the preregistered substrate")
+    else:
+        manifest["scope"] = "full"
+    manifest["arms_scope"] = arms
+    manifest["fs_scope"] = fs_labels
+    # record the RESOLVED substrate per label (Corrective-1 disclosure,
+    # Corrective-2 gate): the label is the data-directory name, the true
+    # substrate lives here and in environment.json
+    manifest["substrate_fstypes"] = {label: resolved_fstype(fs_root(label))
+                                     for label in fs_labels}
+    manifest["substrate"] = substrate_record(fs_labels)
     gates = Gates(sd)
-    # record the RESOLVED substrate fstype per label (Corrective-1: the
-    # native-1 "tmpfs" label actually resolved to btrfs; the label is the
-    # data-directory name, the true substrate lives here and in
-    # environment.json)
-    manifest["substrate_fstypes"] = {
-        fs: subprocess.run(["findmnt", "-no", "FSTYPE", "-T",
-                            str(DATA_ROOT / fs)],
-                           capture_output=True, text=True).stdout.strip()
-        or "unresolved" for fs in FS}
     # the plan is a property of the FULL frozen combo list (same seed, same
     # shuffle); scoped execution filters it, keeping full-plan run ids.
     combos = [(op, size, depth, fs, arm)
@@ -580,7 +686,8 @@ def cmd_formal(session_id: str, resume: bool = False, arms=None) -> None:
               for depth in depths
               for fs in FS
               for arm in ARMS]
-    plan = [(rid, c) for rid, c in run_plan(combos) if c[4] in arms]
+    plan = [(rid, c) for rid, c in run_plan(combos)
+            if c[4] in arms and c[3] in fs_labels]
     done_ids = {r.get("run_id") for r in
                 (load_runs(session_id) if (sd / "raw" / "runs.jsonl").is_file()
                  else [])}
@@ -623,9 +730,22 @@ PRIMARY_DEPTHS = DEPTHS_BY_SIZE[4096]
 
 
 def cell_directions(direction_of) -> dict:
-    """Primary-cell directions for one op set, keyed by cell name."""
-    return {f"{op}_4096_{d}_tmpfs": direction_of(op, 4096, d, "tmpfs")
-            for op in OPS for d in PRIMARY_DEPTHS}
+    """All verdict-eligible cell directions for one arm pair (prereg §13):
+    the 4 KiB tmpfs primary family, the 64 KiB tmpfs cell, and the 4 KiB
+    btrfs cells. derive_verdicts selects the tmpfs primary family for the
+    campaign verdict; neighbor_share consumes the FULL set — feeding it a
+    primary-only dict silently drops the 64 KiB and btrfs neighbors
+    (Corrective-2 P1-2 defect, now structurally impossible to reintroduce
+    at this entry point)."""
+    d = {}
+    for op in OPS:
+        for depth in PRIMARY_DEPTHS:
+            d[f"{op}_4096_{depth}_tmpfs"] = direction_of(op, 4096, depth,
+                                                         "tmpfs")
+            d[f"{op}_4096_{depth}_btrfs"] = direction_of(op, 4096, depth,
+                                                         "btrfs")
+        d[f"{op}_65536_1_tmpfs"] = direction_of(op, 65536, 1, "tmpfs")
+    return d
 
 
 def neighbor_share(directions: dict) -> dict:
@@ -675,7 +795,12 @@ def derive_verdicts(directions: dict, share: dict) -> dict:
 
 
 def scope_arms(scope: str) -> list:
-    return ARMS if scope == "full" else ["F0-T", "F1-T"]
+    return ARMS if scope in ("full", "tmpfs-corrective") else \
+        ["F0-T", "F1-T"]
+
+
+def scope_fs(scope: str) -> list:
+    return ["tmpfs"] if scope == "tmpfs-corrective" else FS
 
 
 def cmd_summarize(session_id: str) -> None:
@@ -700,14 +825,17 @@ def cmd_summarize(session_id: str) -> None:
         key = (r["op"], r["size"], r["depth"], r["fs"], r["arm"])
         cells.setdefault(key, []).append(r["bench"]["wall_per_op_ns"])
     expected_arms = scope_arms(scope)
+    expected_fs = scope_fs(scope)
     all_keys = {(op, size, depth, fs, arm)
                 for op in OPS for size in SIZES
-                for depth in DEPTHS_BY_SIZE[size] for fs in FS
+                for depth in DEPTHS_BY_SIZE[size]
+                for fs in expected_fs
                 for arm in expected_arms}
     # scope discipline: a scoped session must not contain formal runs of
-    # arms outside its scope
+    # arms or filesystem labels outside its scope
     outside = sorted({(r["op"], r["size"], r["depth"], r["fs"], r["arm"])
-                      for r in runs if r["arm"] not in expected_arms})
+                      for r in runs if r["arm"] not in expected_arms
+                      or r["fs"] not in expected_fs})
     missing = sorted(all_keys - set(cells))
     summary = {"session": session_id, "scope": scope,
                "runs_total": len(runs),
@@ -743,27 +871,39 @@ def cmd_summarize(session_id: str) -> None:
         prim.append({"cell": f"READ 4K d{depth} tmpfs",
                      **{k: c.get("f0", {}).get(k) for k in
                         ("ratio", "benefit", "regression", "direction")}})
+    # single-thread directions: the FULL eligible set; the frozen rule
+    # (neighbor_share + derive_verdicts) consumes it directly
+    directions = cell_directions(
+        lambda op, s, d, fs: direction_of(op, s, d, fs, "single"))
+    tdirs = cell_directions(
+        lambda op, s, d, fs: direction_of(op, s, d, fs, "threaded"))
+    # threaded arms are exploratory in every scope: same frozen rule applied
+    # to F0-T vs F1-T, reported separately, cannot carry a verdict
+    summary["threaded_directions"] = tdirs
+    summary["threaded_verdicts"] = derive_verdicts(tdirs,
+                                                   neighbor_share(tdirs))
     if scope == "full":
-        directions = {k: v for k, v in cell_directions(
-            lambda op, s, d, fs: direction_of(op, s, d, fs, "single")).items()}
-        share = neighbor_share(directions)
         summary["primary_cells"] = prim
-        summary["neighbor_support"] = share
-        # verdicts (prereg §13.1, derived by the frozen rule)
-        summary["verdicts"] = derive_verdicts(directions, share)
-        # threaded arms are exploratory: same frozen rule applied to
-        # F0-T vs F1-T, reported separately, cannot carry a verdict
-        tdirs = {k: v for k, v in cell_directions(
-            lambda op, s, d, fs: direction_of(op, s, d, fs, "threaded")).items()}
-        summary["threaded_directions"] = tdirs
-        summary["threaded_verdicts"] = derive_verdicts(tdirs,
-                                                       neighbor_share(tdirs))
+        summary["neighbor_support"] = neighbor_share(directions)
+        # campaign verdicts (prereg §13.1, derived by the frozen rule)
+        summary["verdicts"] = derive_verdicts(directions,
+                                              summary["neighbor_support"])
+        summary["verdict_basis"] = "campaign"
+    elif scope == "tmpfs-corrective":
+        # session-local derivation: btrfs neighbors are absent in-session
+        # (scope-restricted), so neighbor support can only come from tmpfs
+        # cells here; campaign verdicts derive from the composite
+        summary["primary_cells"] = prim
+        summary["neighbor_support"] = neighbor_share(directions)
+        summary["verdicts"] = derive_verdicts(directions,
+                                              summary["neighbor_support"])
+        summary["verdict_basis"] = (
+            "session-local (tmpfs-corrective scope; btrfs neighbors absent "
+            "in-session; campaign verdicts derive from the composite)")
     else:
-        tdirs = {k: v for k, v in cell_directions(
-            lambda op, s, d, fs: direction_of(op, s, d, fs, "threaded")).items()}
-        summary["threaded_directions"] = tdirs
-        summary["threaded_verdicts"] = derive_verdicts(tdirs,
-                                                       neighbor_share(tdirs))
+        summary["verdict_basis"] = (
+            "threaded-only scope; campaign verdicts derive from the "
+            "composite")
     (sd / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     with (sd / "summary.csv").open("w") as f:
         f.write("op,size,depth,fs,f0_median_ns,f1_median_ns,ratio,"
@@ -776,16 +916,15 @@ def cmd_summarize(session_id: str) -> None:
                     f"{f0.get('direction')},{v['threaded'].get('ratio')},"
                     f"{v['threaded'].get('direction')}\n")
     print(f"summary written to {sd / 'summary.json'} (scope: {scope})")
-    if scope == "full":
+    if scope in ("full", "tmpfs-corrective"):
+        basis = "" if scope == "full" else " (session-local, see basis)"
         for op in OPS:
-            print(f"{op}: {summary['verdicts'][op]}")
-        for op in OPS:
-            print(f"{op} (threaded, exploratory): "
-                  f"{summary['threaded_verdicts'][op]}")
-    else:
-        for op in OPS:
-            print(f"{op} (threaded, exploratory): "
-                  f"{summary['threaded_verdicts'][op]}")
+            print(f"{op}: {summary['verdicts'][op]}{basis}")
+    for op in OPS:
+        print(f"{op} (threaded, exploratory): "
+              f"{summary['threaded_verdicts'][op]}")
+    if scope != "full":
+        print(f"verdict basis: {summary['verdict_basis']}")
     if missing:
         print(f"MISSING CELLS: {missing}", file=sys.stderr)
     if outside:
@@ -793,18 +932,30 @@ def cmd_summarize(session_id: str) -> None:
         sys.exit(1)
 
 
-def cmd_composite(sid_single: str, sid_threaded: str) -> None:
-    """Corrective-1 thin evidence composition (fail-closed).
+def cmd_composite(sid_single: str, sid_threaded: str, sid_tmpfs: str) -> None:
+    """Corrective-2 campaign evidence composition (fail-closed).
 
-    composite input:
-        F0 / F1     from the single-thread session (native-1)
-        F0-T / F1-T from the threaded-corrective session (native-2)
-    The native-1 threaded subset is SUPERSEDED (prereg §5 violation) and is
-    excluded from every derived number; the composite records that
-    disposition with provenance. Any coverage/gate/scope problem aborts
-    WITHOUT writing composite-summary.json.
+    Substrate-authoritative sources (a session contributes ONLY the
+    filesystem labels whose env-resolved fstype equals the canonical
+    fstype of the label — prereg Amendment-5):
+        F0/F1 btrfs cells     <- sid_single   (native-1)
+        F0-T/F1-T btrfs cells <- sid_threaded (native-2, Corrective-1)
+        tmpfs cells, all arms <- sid_tmpfs   (native-3, real tmpfs)
+    Superseded (retained byte-identical, excluded from every derived
+    number):
+        sid_single threaded runs       (frozen prereg §5 violation)
+        sid_single tmpfs-label runs    (WRONG SUBSTRATE — resolved btrfs)
+        sid_threaded tmpfs-label runs  (WRONG SUBSTRATE — resolved btrfs)
+    The tmpfs-corrective session must additionally be a clean commit-pinned
+    execution (tracked files identical to a recorded 40-hex HEAD at
+    generate time — Corrective-2 P2). Any coverage/gate/scope/substrate
+    problem aborts WITHOUT writing composite-summary.json. Verdicts are
+    derived from the FULL eligible direction set through the frozen rule
+    (Corrective-2 P1-2: the 64 KiB tmpfs and same-depth btrfs neighbors
+    genuinely enter the verdict path).
     """
-    s1, s2 = RESULTS / sid_single, RESULTS / sid_threaded
+    s1, s2, s3 = (RESULTS / sid for sid in
+                  (sid_single, sid_threaded, sid_tmpfs))
     problems: list = []
 
     def runs_of(sid: str) -> list:
@@ -816,7 +967,10 @@ def cmd_composite(sid_single: str, sid_threaded: str) -> None:
              if not r["run_id"].startswith("q0-")]
     runs2 = [r for r in runs_of(sid_threaded)
              if not r["run_id"].startswith("q0-")]
-    for sid, runs in ((sid_single, runs1), (sid_threaded, runs2)):
+    runs3 = [r for r in runs_of(sid_tmpfs)
+             if not r["run_id"].startswith("q0-")]
+    for sid, runs in ((sid_single, runs1), (sid_threaded, runs2),
+                      (sid_tmpfs, runs3)):
         g = json.loads((RESULTS / sid / "gates.json").read_text())
         if g.get("errors"):
             problems.append(f"{sid}: {len(g['errors'])} gate errors")
@@ -824,61 +978,114 @@ def cmd_composite(sid_single: str, sid_threaded: str) -> None:
         if len(ids) != len(set(ids)):
             problems.append(f"{sid}: duplicate run ids")
 
-    by_cell1: dict = {}
-    for r in runs1:
-        if r.get("ok"):
-            by_cell1.setdefault((r["op"], r["size"], r["depth"], r["fs"],
-                                 r["arm"]), []).append(r)
-    by_cell2: dict = {}
-    for r in runs2:
-        if r.get("ok"):
-            by_cell2.setdefault((r["op"], r["size"], r["depth"], r["fs"],
-                                 r["arm"]), []).append(r)
+    def authoritative(env: dict, label: str) -> bool:
+        actual = (env.get("filesystems", {}).get(label, {}) or {}).get("type")
+        return actual == CANONICAL_FS[label]
 
-    # native-1: single-thread arms must cover the matrix exactly; threaded
-    # arms must be the OLD shape (no corrective gate fields) -> superseded.
-    for op in OPS:
-        for size in SIZES:
-            for depth in DEPTHS_BY_SIZE[size]:
-                for fs in FS:
-                    for arm in ("F0", "F1"):
-                        n = len(by_cell1.get((op, size, depth, fs, arm), []))
-                        if n != ROUNDS:
-                            problems.append(
-                                f"{sid_single} {op}/{size}/{depth}/{fs}/"
-                                f"{arm}: {n} valid runs (expected {ROUNDS})")
-    superseded_runs = [r for r in runs1 if r["arm"] in ("F0-T", "F1-T")]
+    env1 = json.loads((s1 / "environment.json").read_text())
+    env2 = json.loads((s2 / "environment.json").read_text())
+    env3 = json.loads((s3 / "environment.json").read_text())
+    man2 = json.loads((s2 / "manifest.json").read_text())
+    man3 = json.loads((s3 / "manifest.json").read_text())
+    if man2.get("scope") != "threaded-corrective":
+        problems.append(f"{sid_threaded}: manifest scope is not "
+                        f"threaded-corrective")
+    if man3.get("scope") != "tmpfs-corrective":
+        problems.append(f"{sid_tmpfs}: manifest scope is not "
+                        f"tmpfs-corrective")
+    if not authoritative(env1, "btrfs"):
+        problems.append(f"{sid_single}: not substrate-authoritative for "
+                        f"btrfs (env: {env1.get('filesystems', {})
+                          .get('btrfs', {})})")
+    if not authoritative(env2, "btrfs"):
+        problems.append(f"{sid_threaded}: not substrate-authoritative for "
+                        f"btrfs (env: {env2.get('filesystems', {})
+                          .get('btrfs', {})})")
+    if not authoritative(env3, "tmpfs"):
+        problems.append(f"{sid_tmpfs}: not substrate-authoritative for "
+                        f"tmpfs (env: {env3.get('filesystems', {})
+                          .get('tmpfs', {})})")
+    # Corrective-2 P2: the tmpfs-corrective session must be a clean
+    # commit-pinned execution (recorded at generate time)
+    g3 = env3.get("git", {})
+    head3 = g3.get("head") or ""
+    if g3.get("dirty_tracked") is not False:
+        problems.append(f"{sid_tmpfs}: tracked worktree was dirty at "
+                        f"generate time (dirty_tracked="
+                        f"{g3.get('dirty_tracked')}) — not commit-pinned")
+    if len(head3) != 40 or any(c not in "0123456789abcdef" for c in head3):
+        problems.append(f"{sid_tmpfs}: recorded head is not a 40-hex sha: "
+                        f"{head3!r}")
+
+    def ok_vals(runs, labels, arms):
+        """{(op,size,depth,fs,arm): [wall_per_op_ns]} for retained rows
+        only: fs label must be substrate-authoritative in this session."""
+        out: dict = {}
+        for r in runs:
+            if not (r.get("ok") and r.get("bench")):
+                continue
+            if r["arm"] not in arms or r["fs"] not in labels:
+                continue
+            out.setdefault((r["op"], r["size"], r["depth"], r["fs"],
+                            r["arm"]), []).append(
+                r["bench"]["wall_per_op_ns"])
+        return out
+
+    # retained sources
+    vals_single = ok_vals(runs1, ["btrfs"], ("F0", "F1"))
+    vals_threaded = ok_vals(runs2, ["btrfs"], ("F0-T", "F1-T"))
+    vals_tmpfs_single = ok_vals(runs3, ["tmpfs"], ("F0", "F1"))
+    vals_tmpfs_threaded = ok_vals(runs3, ["tmpfs"], ("F0-T", "F1-T"))
+
+    # coverage: every frozen cell of the composite matrix exactly ROUNDS
+    def coverage(vals, sid, expected):
+        for op in OPS:
+            for size in SIZES:
+                for depth in DEPTHS_BY_SIZE[size]:
+                    for fs in FS:
+                        for arm in expected:
+                            n = len(vals.get((op, size, depth, fs, arm), []))
+                            if n != ROUNDS:
+                                problems.append(
+                                    f"{sid} {op}/{size}/{depth}/{fs}/{arm}: "
+                                    f"{n} valid runs (expected {ROUNDS})")
+
+    coverage(vals_single, sid_single, ("F0", "F1"))
+    coverage(vals_threaded, sid_threaded, ("F0-T", "F1-T"))
+    coverage(vals_tmpfs_single, sid_tmpfs, ("F0", "F1"))
+    coverage(vals_tmpfs_threaded, sid_tmpfs, ("F0-T", "F1-T"))
+
+    # superseded-shape discipline
+    superseded_threaded_1 = [r for r in runs1 if r["arm"] in ("F0-T", "F1-T")]
     post_corrective_shape = [
-        r["run_id"] for r in superseded_runs
+        r["run_id"] for r in superseded_threaded_1
         if "threads_ready" in (r.get("bench") or {})]
     if post_corrective_shape:
         problems.append(
             f"{sid_single}: threaded runs already carry corrective gate "
             f"fields ({post_corrective_shape[:3]}...) — inconsistent with "
             f"the superseded-shape disposition")
-    if len(superseded_runs) != 280:
+    if len(superseded_threaded_1) != 280:
         problems.append(f"{sid_single}: expected 280 superseded threaded "
-                        f"runs, found {len(superseded_runs)}")
-
-    # native-2: threaded arms must cover the matrix exactly WITH the
-    # corrective gate fields; single-thread formal runs must not exist.
-    for op in OPS:
-        for size in SIZES:
-            for depth in DEPTHS_BY_SIZE[size]:
-                for fs in FS:
-                    for arm in ("F0-T", "F1-T"):
-                        vals = by_cell2.get((op, size, depth, fs, arm), [])
-                        if len(vals) != ROUNDS:
-                            problems.append(
-                                f"{sid_threaded} {op}/{size}/{depth}/{fs}/"
-                                f"{arm}: {len(vals)} valid runs "
-                                f"(expected {ROUNDS})")
-    single_in_2 = [r["run_id"] for r in runs2 if r["arm"] in ("F0", "F1")]
-    if single_in_2:
+                        f"runs, found {len(superseded_threaded_1)}")
+    superseded_fs_1 = [r for r in runs1 if r["fs"] == "tmpfs"
+                       and r["arm"] in ("F0", "F1")]
+    if len(superseded_fs_1) != 140:
+        problems.append(f"{sid_single}: expected 140 superseded tmpfs-label "
+                        f"single runs (WRONG SUBSTRATE), found "
+                        f"{len(superseded_fs_1)}")
+    superseded_fs_2 = [r for r in runs2 if r["fs"] == "tmpfs"]
+    if len(superseded_fs_2) != 140:
+        problems.append(f"{sid_threaded}: expected 140 superseded tmpfs-label "
+                        f"runs (WRONG SUBSTRATE), found {len(superseded_fs_2)}")
+    outside_scope_2 = [r["run_id"] for r in runs2
+                       if r["arm"] not in ("F0-T", "F1-T")]
+    if outside_scope_2:
         problems.append(f"{sid_threaded}: single-thread formal runs "
-                        f"outside scope: {single_in_2[:3]}...")
-    for r in [x for x in runs2 if x.get("ok") and
-              x["arm"] in ("F0-T", "F1-T")]:
+                        f"outside scope: {outside_scope_2[:3]}...")
+    # retained threaded runs must carry the corrective gate fields
+    for r in [x for x in runs2 + runs3
+              if x.get("ok") and x["arm"] in ("F0-T", "F1-T")]:
         b = r["bench"]
         if (b.get("threads_spawned") != THREADED_WORKERS or
                 b.get("threads_io_ok") != THREADED_WORKERS or
@@ -887,15 +1094,8 @@ def cmd_composite(sid_single: str, sid_threaded: str) -> None:
                 b.get("threads_released") != THREADED_WORKERS or
                 b.get("thread_gate_ready") is not True or
                 b.get("thread_gate_release_after_transfer") is not True):
-            problems.append(f"{sid_threaded} {r['run_id']}: corrective "
-                            f"threaded gate fields missing/unsatisfied")
-
-    env1 = json.loads((s1 / "environment.json").read_text())
-    env2 = json.loads((s2 / "environment.json").read_text())
-    man2 = json.loads((s2 / "manifest.json").read_text())
-    if man2.get("scope") != "threaded-corrective":
-        problems.append(f"{sid_threaded}: manifest scope is not "
-                        f"threaded-corrective")
+            problems.append(f"{r['run_id']}: corrective threaded gate "
+                            f"fields missing/unsatisfied")
 
     if problems:
         print(f"COMPOSITE FAIL ({len(problems)}):")
@@ -903,81 +1103,100 @@ def cmd_composite(sid_single: str, sid_threaded: str) -> None:
             print(f"  - {p}")
         sys.exit(1)
 
-    def material_from(vals_by_arm) -> dict:
-        return material(vals_by_arm.get("F0-T", []),
-                        vals_by_arm.get("F1-T", []))
+    def material_of(vals_f0, vals_f1) -> dict:
+        return material(vals_f0, vals_f1)
 
     per_cell = {}
-    dirs_single, dirs_threaded = {}, {}
     for op in OPS:
         for size in SIZES:
             for depth in DEPTHS_BY_SIZE[size]:
                 for fs in FS:
-                    f0 = [r["bench"]["wall_per_op_ns"] for r in
-                          by_cell1.get((op, size, depth, fs, "F0"), [])]
-                    f1 = [r["bench"]["wall_per_op_ns"] for r in
-                          by_cell1.get((op, size, depth, fs, "F1"), [])]
-                    f0t = [r["bench"]["wall_per_op_ns"] for r in
-                           by_cell2.get((op, size, depth, fs, "F0-T"), [])]
-                    f1t = [r["bench"]["wall_per_op_ns"] for r in
-                           by_cell2.get((op, size, depth, fs, "F1-T"), [])]
-                    m, mt = material(f0, f1), material(f0t, f1t)
+                    f0 = vals_single.get((op, size, depth, fs, "F0"), []) \
+                        if fs == "btrfs" else \
+                        vals_tmpfs_single.get((op, size, depth, fs, "F0"), [])
+                    f1 = vals_single.get((op, size, depth, fs, "F1"), []) \
+                        if fs == "btrfs" else \
+                        vals_tmpfs_single.get((op, size, depth, fs, "F1"), [])
+                    f0t = vals_threaded.get((op, size, depth, fs, "F0-T"), []) \
+                        if fs == "btrfs" else \
+                        vals_tmpfs_threaded.get(
+                            (op, size, depth, fs, "F0-T"), [])
+                    f1t = vals_threaded.get((op, size, depth, fs, "F1-T"), []) \
+                        if fs == "btrfs" else \
+                        vals_tmpfs_threaded.get(
+                            (op, size, depth, fs, "F1-T"), [])
                     per_cell[f"{op}_{size}_{depth}_{fs}"] = {
-                        "f0": m, "threaded": mt,
-                        "f0_source": sid_single, "threaded_source":
-                            sid_threaded}
-    for entry, kind in (("f0", "single"), ("threaded", "threaded")):
-        d = {}
-        for op in OPS:
-            for depth in PRIMARY_DEPTHS:
-                d[f"{op}_4096_{depth}_tmpfs"] = per_cell[
-                    f"{op}_4096_{depth}_tmpfs"][entry]["direction"]
-            d[f"{op}_65536_1_tmpfs"] = per_cell[f"{op}_65536_1_tmpfs"][
-                entry]["direction"]
-            d[f"{op}_4096_{depth}_btrfs"] = per_cell[
-                f"{op}_4096_{depth}_btrfs"][entry]["direction"]
-        if kind == "single":
-            dirs_single = d
-        else:
-            dirs_threaded = d
-    share_single = neighbor_share(
-        {k: dirs_single.get(k) for k in
-         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]})
-    share_threaded = neighbor_share(
-        {k: dirs_threaded.get(k) for k in
-         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]})
-    verdicts = derive_verdicts(
-        {k: dirs_single.get(k) for k in
-         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]},
-        share_single)
-    threaded_verdicts = derive_verdicts(
-        {k: dirs_threaded.get(k) for k in
-         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]},
-        share_threaded)
+                        "f0": material_of(f0, f1),
+                        "threaded": material_of(f0t, f1t),
+                        "f0_source": sid_single if fs == "btrfs"
+                        else sid_tmpfs,
+                        "threaded_source": sid_threaded if fs == "btrfs"
+                        else sid_tmpfs,
+                    }
+
+    def cell_dirs(kind: str) -> dict:
+        entry = "f0" if kind == "single" else "threaded"
+        return cell_directions(
+            lambda op, s, d, fs: per_cell[f"{op}_{s}_{d}_{fs}"][entry][
+                "direction"])
+
+    dirs_single = cell_dirs("single")
+    dirs_threaded = cell_dirs("threaded")
+    verdicts = derive_verdicts(dirs_single, neighbor_share(dirs_single))
+    threaded_verdicts = derive_verdicts(dirs_threaded,
+                                        neighbor_share(dirs_threaded))
+
+    def provenance(env, man, sid) -> dict:
+        git = env.get("git", {})
+        return {"session": sid,
+                "git_head": git.get("head"),
+                "git_dirty": git.get("dirty"),
+                "git_dirty_tracked": git.get("dirty_tracked"),
+                "driver_sha256": env.get("driver_sha256"),
+                "bench_binary_sha256": env.get("bench_binary_sha256"),
+                "scope": man.get("scope", "full")}
 
     composite = {
         "composite": True,
-        "corrective": "Corrective-1",
+        "corrective": "Corrective-2",
+        "substrate_rule": "a session contributes only filesystem labels "
+                          "whose env-resolved fstype equals the canonical "
+                          "fstype of the label (prereg Amendment-5)",
         "single_thread_source": {
-            "session": sid_single,
-            "git_head": env1.get("git", {}).get("head"),
-            "bench_binary_sha256": env1.get("bench_binary_sha256"),
-            "disposition": "authoritative for F0/F1 only",
+            **provenance(env1, json.loads((s1 / "manifest.json").read_text()),
+                         sid_single),
+            "disposition": "authoritative for btrfs F0/F1 only",
         },
         "threaded_source": {
-            "session": sid_threaded,
-            "git_head": env2.get("git", {}).get("head"),
-            "bench_binary_sha256": env2.get("bench_binary_sha256"),
-            "disposition": "authoritative for F0-T/F1-T (corrected prereg §5 "
-                           "threaded condition: workers parked across the "
-                           "measured span)",
+            **provenance(env2, man2, sid_threaded),
+            "disposition": "authoritative for btrfs F0-T/F1-T (corrected "
+                           "prereg §5 threaded condition: workers parked "
+                           "across the measured span)",
+        },
+        "tmpfs_source": {
+            **provenance(env3, man3, sid_tmpfs),
+            "disposition": "authoritative for all tmpfs cells (frozen "
+                           "tmpfs primary finally executed on the "
+                           "preregistered substrate)",
         },
         "superseded": {
-            "session": sid_single,
-            "arms": ["F0-T", "F1-T"],
-            "runs": len(superseded_runs),
-            "reason": "frozen prereg §5 threaded condition violated: "
-                      "workers were joined BEFORE the measured span",
+            sid_single: {
+                "threaded_runs": {
+                    "runs": len(superseded_threaded_1),
+                    "reason": "frozen prereg §5 threaded condition "
+                              "violated: workers were joined BEFORE the "
+                              "measured span (Amendment-1)"},
+                "tmpfs_label_single_runs": {
+                    "runs": len(superseded_fs_1),
+                    "reason": "WRONG SUBSTRATE: tmpfs label resolved to "
+                              "btrfs (Amendment-5)"},
+            },
+            sid_threaded: {
+                "tmpfs_label_threaded_runs": {
+                    "runs": len(superseded_fs_2),
+                    "reason": "WRONG SUBSTRATE: tmpfs label resolved to "
+                              "btrfs (Amendment-5)"},
+            },
         },
         "per_cell": per_cell,
         "verdicts": verdicts,
@@ -986,7 +1205,7 @@ def cmd_composite(sid_single: str, sid_threaded: str) -> None:
                                    "threaded arms cannot carry a campaign "
                                    "verdict",
     }
-    out = s2 / "composite-summary.json"
+    out = s3 / "composite-summary.json"
     out.write_text(json.dumps(composite, indent=1) + "\n")
     print(f"composite summary written to {out}")
     for op in OPS:
@@ -1012,20 +1231,27 @@ def main() -> None:
         if i + 1 >= len(sys.argv):
             usage()
         arms = [a.strip() for a in sys.argv[i + 1].split(",") if a.strip()]
+    fs_labels = None
+    if "--fs" in sys.argv:
+        i = sys.argv.index("--fs")
+        if i + 1 >= len(sys.argv):
+            usage()
+        fs_labels = [a.strip() for a in sys.argv[i + 1].split(",")
+                     if a.strip()]
     if cmd == "status":
         cmd_status()
     elif cmd == "probe" and session:
         cmd_probe(session)
     elif cmd == "generate" and session:
-        cmd_generate(session)
+        cmd_generate(session, fs_labels)
     elif cmd == "q0" and session:
         cmd_q0(session, resume)
     elif cmd == "formal" and session:
-        cmd_formal(session, resume, arms)
+        cmd_formal(session, resume, arms, fs_labels)
     elif cmd == "summarize" and session:
         cmd_summarize(session)
-    elif cmd == "composite" and session and len(sys.argv) > 3:
-        cmd_composite(session, sys.argv[3])
+    elif cmd == "composite" and session and len(sys.argv) > 4:
+        cmd_composite(session, sys.argv[3], sys.argv[4])
     else:
         usage()
 

@@ -390,14 +390,23 @@
  },
  "threaded_directions": {
   "READ_4096_1_tmpfs": "NONE",
+  "READ_4096_1_btrfs": "NONE",
   "READ_4096_8_tmpfs": "F1_FASTER",
+  "READ_4096_8_btrfs": "NONE",
   "READ_4096_32_tmpfs": "NONE",
+  "READ_4096_32_btrfs": "NONE",
+  "READ_65536_1_tmpfs": "NONE",
   "WRITE_4096_1_tmpfs": "F1_SLOWER",
+  "WRITE_4096_1_btrfs": "NONE",
   "WRITE_4096_8_tmpfs": "NONE",
-  "WRITE_4096_32_tmpfs": "NONE"
+  "WRITE_4096_8_btrfs": "NONE",
+  "WRITE_4096_32_tmpfs": "NONE",
+  "WRITE_4096_32_btrfs": "NONE",
+  "WRITE_65536_1_tmpfs": "NONE"
  },
  "threaded_verdicts": {
   "READ": "REGIME-LOCAL BENEFIT ESTABLISHED",
   "WRITE": "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
- }
+ },
+ "verdict_basis": "threaded-only scope; campaign verdicts derive from the composite"
 }
