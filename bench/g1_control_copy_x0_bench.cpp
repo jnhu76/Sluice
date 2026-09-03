@@ -678,7 +678,12 @@ void run_fixture_arm(int arm_idx, FixtureCtx& cx, std::size_t chunk) {
     } else {
         src_fd = ::open(cx.src_path.c_str(), O_RDONLY);
         if (src_fd < 0) die("open(fixture src)");
-        src_range_ck = checksum_range(src_fd, cx.src_off, cx.n);
+        // Source checksum covers the copyable span: EOF fixtures (S3) hold
+        // fewer bytes than requested; success moves exactly this many.
+        std::uint64_t ck_len = cx.src_off < cx.src_size
+                                   ? std::min(cx.n, cx.src_size - cx.src_off)
+                                   : 0;
+        src_range_ck = checksum_range(src_fd, cx.src_off, ck_len);
         src_full_ck_before = checksum_range(src_fd, 0, cx.src_size);
     }
     int dst_fd = ::open(dst.c_str(), O_WRONLY);
