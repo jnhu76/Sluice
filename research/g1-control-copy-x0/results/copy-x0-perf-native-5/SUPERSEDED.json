@@ -1,0 +1,1 @@
+{"superseded": true, "reason": "DEGRADED HOST CONDITIONS (Amendments 2+3): ext4 64MiB AA p90(max-of-9) 0.582 > 0.50; single-pair tail, ordinary WSL2 preemption jitter", "retained": "byte-identical, excluded from every derived number"}
