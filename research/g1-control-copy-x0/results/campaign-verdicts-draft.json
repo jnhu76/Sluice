@@ -1,0 +1,20 @@
+{
+  "COPY-X0-CAPABILITY": "BLOCKED (measurement infrastructure: A/A calibration bar exceeded at adjudicable scale (tmpfs|67108864: p90 0.6496 > 0.50) \u2014 session DEGRADED HOST CONDITIONS, supersede and re-run (prereg Amendments 2+3))",
+  "COPY-X0-SEMANTIC-EQUIVALENCE": "EQUIVALENT FOR DECLARED COPY CONTRACT",
+  "COPY-X0-TRANSFORMATION-BOUNDARY": "LEGAL TRANSFORMATION BOUNDARY SUPPORTED",
+  "COPY-X0-MINIMALITY": "LOCAL COPY BRANCH SUFFICIENT; GENERIC CAPABILITY FRAMEWORK NOT EARNED",
+  "COPY-X0-G1-CONTROL": "NOT ESTABLISHED (capability gate A unmeasured)",
+  "gates": {
+    "A_capability": false,
+    "B_semantic": true,
+    "C_control_value": true,
+    "D_minimality": true
+  },
+  "design_gate": {
+    "M6_design_gate": "PASS",
+    "b3_section_lines": 1,
+    "thin_ok": true
+  },
+  "PROMOTION": "STOP \u2014 NO C1"
+}
+campaign verdicts written: research/g1-control-copy-x0/results/copy-x0-perf-native-11/campaign-verdicts.json

@@ -501,26 +501,58 @@ def design_gate() -> dict:
     hits = [t for t in FORBIDDEN if t in text]
     if hits:
         return {"M6_design_gate": "FAIL", "forbidden_hits": hits}
-    # B3 thinness: lines in the B3 section (from its header comment to the
-    # next section separator).
+    # B3 thinness: the B3 section runs from its header comment to the start
+    # of the B1 section that follows it in the file.
     start = text.index("// B3 — thin research-only Copy boundary")
-    end = text.index("// ---------------------------------------------------------------------------",
-                     start + 10)
-    # the separator AFTER the B3 body: find the one following run_b3's closing
+    end = text.index("// B1 — production sluice::copy_all", start)
     b3_lines = text[start:end].count("\n")
-    # The B3 block ends before B1's header; take up to the B1 header if closer.
-    try:
-        b1 = text.index("// B1 — production sluice::copy_all", start)
-        end2 = min(end, b1)
-        b3_lines = text[start:end2].count("\n")
-    except ValueError:
-        pass
     return {"M6_design_gate": "PASS", "b3_section_lines": b3_lines,
             "thin_ok": b3_lines <= 200}
 
 
-def composite(qual: dict, sem: dict, perf: dict) -> dict:
+def composite(qual: dict, sem: dict, perf: dict | None,
+              perf_blocked_reason: str | None = None,
+              prove_selftest: bool = True) -> dict:
     gate = design_gate()
+    # Gate C carries its own proof obligation: the validator's sensitivity
+    # (M1-M5 rejection, both §9 falsification directions) is re-demonstrated
+    # as part of every composite derivation. Skipped only when composite is
+    # itself invoked FROM the self-test (recursion guard).
+    selftest_proven = not prove_selftest
+    if prove_selftest:
+        try:
+            import io
+            import contextlib
+            with contextlib.redirect_stdout(io.StringIO()):
+                self_test()
+            selftest_proven = True
+        except AssertionError:
+            selftest_proven = False
+    if perf is None:
+        # No measurement-valid perf session exists: prereg §9 "infrastructure
+        # blocked → BLOCKED (not a performance verdict)".
+        capability = ("BLOCKED (measurement infrastructure: " +
+                      (perf_blocked_reason or "no valid perf session") + ")")
+        semantic = sem["COPY-X0-SEMANTIC-EQUIVALENCE"]
+        boundary_ok = semantic.startswith("EQUIVALENT") and gate["M6_design_gate"] == "PASS"
+        return {
+            "COPY-X0-CAPABILITY": capability,
+            "COPY-X0-SEMANTIC-EQUIVALENCE": semantic,
+            "COPY-X0-TRANSFORMATION-BOUNDARY":
+                "LEGAL TRANSFORMATION BOUNDARY SUPPORTED" if boundary_ok
+                else "NOT ESTABLISHED",
+            "COPY-X0-MINIMALITY":
+                ("LOCAL COPY BRANCH SUFFICIENT; GENERIC CAPABILITY FRAMEWORK "
+                 "NOT EARNED" if gate["M6_design_gate"] == "PASS" and gate["thin_ok"]
+                 else "THINNESS VIOLATED"),
+            "COPY-X0-G1-CONTROL": "NOT ESTABLISHED (capability gate A unmeasured)",
+            "gates": {"A_capability": False,
+                      "B_semantic": semantic.startswith("EQUIVALENT"),
+                      "C_control_value": boundary_ok and selftest_proven,
+                      "D_minimality": gate["M6_design_gate"] == "PASS" and gate["thin_ok"]},
+            "design_gate": gate,
+            "PROMOTION": "STOP — NO C1",
+        }
     capability = perf["B2_vs_B0"]["verdict"]
     semantic = sem["COPY-X0-SEMANTIC-EQUIVALENCE"]
     boundary_ok = (semantic.startswith("EQUIVALENT") and gate["M6_design_gate"] == "PASS")
@@ -528,7 +560,7 @@ def composite(qual: dict, sem: dict, perf: dict) -> dict:
     gate_b = semantic.startswith("EQUIVALENT")
     # Gate C is demonstrated by the enforced validator rules themselves
     # (M1/M3/M4 rejections) plus the recorded S5/S6 declared dispositions.
-    gate_c = boundary_ok
+    gate_c = boundary_ok and selftest_proven
     gate_d = gate["M6_design_gate"] == "PASS" and gate["thin_ok"]
     g1 = "PARTIAL/POSITIVE EVIDENCE" if (gate_a and gate_b and gate_c and gate_d) \
         else "NOT ESTABLISHED"
@@ -844,10 +876,10 @@ def self_test() -> None:
         # --- composite smoke ---
         gate = design_gate()
         assert gate["M6_design_gate"] == "PASS" and gate["thin_ok"], gate
-        comp = composite({}, v, v9)
+        comp = composite({}, v, v9, prove_selftest=False)
         assert comp["COPY-X0-CAPABILITY"].startswith("MATERIAL")
         assert comp["COPY-X0-G1-CONTROL"] == "PARTIAL/POSITIVE EVIDENCE", comp
-        comp2 = composite({}, v, v8)
+        comp2 = composite({}, v, v8, prove_selftest=False)
         assert comp2["COPY-X0-G1-CONTROL"] == "NOT ESTABLISHED", comp2
         print("validate_copy_x0: self-test PASS (M1-M5, substrate, commit-pin, "
               "§9 both falsification directions, composite)")
@@ -873,10 +905,18 @@ def main() -> None:
             if (qual_dir / "verdicts.json").exists() else validate_session(qual_dir)
         sem = json.loads((sem_dir / "verdicts.json").read_text()) \
             if (sem_dir / "verdicts.json").exists() else validate_session(sem_dir)
-        perf = json.loads((perf_dir / "verdicts.json").read_text()) \
-            if (perf_dir / "verdicts.json").exists() else validate_session(perf_dir)
-        comp = composite(qual, sem, perf)
-        out = perf_dir / "campaign-verdicts.json"
+        perf = None
+        blocked_reason = None
+        if (perf_dir / "verdicts.json").exists():
+            perf = json.loads((perf_dir / "verdicts.json").read_text())
+        else:
+            try:
+                perf = validate_session(perf_dir)
+            except Invalid as e:
+                perf = None
+                blocked_reason = str(e)
+        comp = composite(qual, sem, perf, blocked_reason)
+        out = perf_dir.parent / "campaign-verdicts.json"
         out.write_text(json.dumps(comp, indent=2) + "\n")
         print(json.dumps(comp, indent=2))
         print(f"campaign verdicts written: {out}")
