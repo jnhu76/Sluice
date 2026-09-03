@@ -126,13 +126,15 @@ def direction_of(f0_vals, f1_vals) -> str:
 def neighbor_share(directions: dict) -> dict:
     """prereg §13 neighbor consistency: neighbors of a primary 4 KiB tmpfs
     cell are the other 4 KiB depths (tmpfs), the 64 KiB cell (tmpfs), and
-    the same cell on btrfs. True when >= 1 neighbor shares the direction."""
+    the same cell on btrfs. True when >= 1 neighbor shares the direction.
+    A NONE (or missing) primary is always False: agreement between two
+    NONE cells is not support."""
     share = {}
     for op in OPS:
         for d in PRIMARY_DEPTHS:
             cell = f"{op}_4096_{d}_tmpfs"
             own = directions.get(cell)
-            if own is None:
+            if own not in ("F1_FASTER", "F1_SLOWER"):
                 share[cell] = False
                 continue
             neighbor_dirs = [directions.get(f"{op}_4096_{d2}_tmpfs")
@@ -651,6 +653,18 @@ def self_test() -> None:
     compare_verdicts(mutated_b, derived_b, "mutated", flagged)
     if not flagged:
         failures.append("scenario B mutation undetected")
+
+    # post-review hygiene: a NONE primary must report NO neighbor support
+    # even when every neighbor is also NONE — direction agreement is only
+    # meaningful for a directional primary
+    none_dirs = {}
+    for op in OPS:
+        for d in PRIMARY_DEPTHS:
+            none_dirs[f"{op}_4096_{d}_tmpfs"] = "NONE"
+            none_dirs[f"{op}_4096_{d}_btrfs"] = "NONE"
+        none_dirs[f"{op}_65536_1_tmpfs"] = "NONE"
+    if any(neighbor_share(none_dirs).values()):
+        failures.append("neighbor_share: NONE primary reported support")
 
     # neighbor mutant N1 (Corrective-2): ONLY the primary 4K d8 cell and its
     # 64 KiB tmpfs neighbor are F1_FASTER -> the 64 KiB neighbor must carry

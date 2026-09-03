@@ -753,13 +753,16 @@ def neighbor_share(directions: dict) -> dict:
     """prereg §13 neighbor consistency: neighbors of a primary 4 KiB tmpfs
     cell are the other 4 KiB depths (tmpfs), the 64 KiB cell (tmpfs), and
     the same cell on btrfs. True when >= 1 neighbor shares the cell's
-    direction (only meaningful for non-NONE directions)."""
+    direction. A NONE (or missing) primary is always False: agreement
+    between two NONE cells is not support — the field is consumed by
+    derive_verdicts only for directional primaries, and must not claim
+    consistency where no direction was observed."""
     share = {}
     for op in OPS:
         for d in PRIMARY_DEPTHS:
             cell = f"{op}_4096_{d}_tmpfs"
             own = directions[cell]
-            if own is None:
+            if own not in ("F1_FASTER", "F1_SLOWER"):
                 share[cell] = False
                 continue
             neighbor_dirs = [directions[f"{op}_4096_{d2}_tmpfs"]
