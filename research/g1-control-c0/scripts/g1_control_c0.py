@@ -528,6 +528,9 @@ def cmd_generate(session_id: str, fs_labels=None) -> None:
         sys.exit(1)
     sd = RESULTS / session_id
     sd.mkdir(parents=True, exist_ok=True)
+    # the roots must exist for the substrate gate to resolve their fstype
+    for label in fs_labels:
+        (fs_root(label)).mkdir(parents=True, exist_ok=True)
     problems = substrate_problems(fs_labels)
     if problems:
         print("GENERATE FAIL (substrate gate):", file=sys.stderr)
@@ -536,8 +539,6 @@ def cmd_generate(session_id: str, fs_labels=None) -> None:
         sys.exit(1)
     tile = master_tile()
     expected = {}
-    for label in fs_labels:
-        (fs_root(label)).mkdir(parents=True, exist_ok=True)
     for size in SIZES:
         fb = FILE_BYTES[size]
         pat = pattern_bytes(fb, tile)
