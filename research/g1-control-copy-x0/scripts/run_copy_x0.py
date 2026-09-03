@@ -169,6 +169,9 @@ def cmd_qualify(args) -> None:
     rows = run_bench(env, bench, d / "rows.jsonl", ["selftest"])
     if not all(r.get("pass") for r in rows):
         fail("bench selftest failed")
+    # Prereg §10.2: the Q0 session records the mechanism-existence probe.
+    run_bench(env, bench, d / "rows.jsonl",
+              ["probe", env["roots"]["tmpfs"]["path"], env["roots"]["ext4"]["path"]])
     medians = {}
     for label in ("tmpfs", "ext4"):
         root = env["roots"][label]["path"]
