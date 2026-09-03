@@ -13,13 +13,22 @@ built at `7653fd8d` (post-#274 router R1, post-#258/#276 drain fixes).
 
 ```text
 G1-PERFORMANCE (HOST-0):  PARTIAL — regime-dependent
-  large / application-relevant I/O (2 MiB × d1..d2):
-      HOST-LOCAL PARITY with the semantic-equivalent floors,
-      no material residual detected in any tested cell
   control-plane-dominated small I/O (4 KiB × d1..d8):
-      HOST-LOCAL MATERIAL TAX — Sluice uring backend ≈ 2.8–5.1×
-      floor instructions/op, runtime layer ≈ 2.8–4.0× the
-      continuation floor; wall separation present in read cells
+      HOST-LOCAL MATERIAL BACKEND TAX — frozen composite verdicts
+      MATERIAL (btrfs S read; RE-2 4K×d1 read+write, 4K×d8 read),
+      Sluice uring boundary ≈ 2.8–5.1× floor instructions/op with
+      wall separation present on read cells
+  large / application-relevant I/O (64 KiB–2 MiB):
+      NO MATERIAL BACKEND TAX DETECTED in any tested cell — but
+      most of these cells are formally GRAY under the frozen
+      composite rule, NOT PARITY; the one clean PARITY witness is
+      2 MiB × d1 READ, and several cells carry recorded direction
+      anomalies (candidate faster in wall)
+  runtime layer (T_runtime): every frozen verdict GRAY — large
+      instruction overhead at 4 KiB (≈ 2.8–4.0× the hand-written
+      continuation) but the wall layer moves in the opposite
+      direction / lacks material separation, so the frozen
+      composite MATERIAL gate is never met
 GENERAL G1-PERFORMANCE:   NOT YET ADJUDICABLE
   (second machine class / modern NVMe / ARM64 unavailable; #270
   DEFERRED / NOT EXECUTED, remains OPEN)
@@ -27,7 +36,11 @@ GENERAL G1-PERFORMANCE:   NOT YET ADJUDICABLE
 
 This is the mission's PARTIAL shape, and it is a useful result: the
 residual tax is localized where the explicit machinery has the least
-work to amortize over, and it is quantitatively characterized per layer.
+work to amortize over, and it is quantitatively characterized per
+layer. The defensible large-I/O claim is "no material tax detected in
+the tested cells", not "parity proven": the frozen P8 vocabulary is
+the only verdict authority, and it returns GRAY for most large cells
+(§3.3, §6).
 
 ---
 
@@ -148,16 +161,20 @@ negative tax.
 - **Wall.** Read cell S shows the instr tax partially visible in wall
   (T_backend 1.35 MATERIAL); write cells are writeback-saturated and
   wall cannot resolve the instr-layer tax (frozen rule says GRAY, not
-  PARITY — recorded as such). Large cells: wall parity everywhere on
-  btrfs (within 0.5–3 %, some direction anomalies).
+  PARITY — recorded as such). Large cells: wall sits within 0.5–3 % of
+  baseline on btrfs with several direction anomalies — formally GRAY†,
+  not PARITY. (The only formal wall-PARITY of the whole campaign is
+  RE-2's 2 MiB × d1 READ; §6.)
 - **C_cont ≈ 1.99 wall / 1.27 instr (S read)** is the price of ANY
   waitable-completion consumer as hand-written (per-op futex wake):
   it is the *capability* baseline Z3 must beat, not a Sluice cost.
-  Notably Z3's wall is 16 % *below* Z1bw's (0.841): the Sluice runtime
-  wakes cheaper than the naive cv consumer while spending more user
-  instructions — wall and instructions diverge in opposite directions,
-  which is exactly why the frozen rule reports per-layer facts and
-  refuses to collapse them into one number.
+  Notably Z3's measured rep-envelope wall is 16 % *below* Z1bw's
+  (0.841) while spending materially more user instructions. The
+  mechanism behind this direction anomaly is NOT attributed: the two
+  arms share the rep envelope, not the substrate (AUDIT §3.1), and
+  wall-vs-instruction divergence is exactly why the frozen rule
+  reports per-layer facts and refuses to collapse them into one
+  number.
 
 Plots: `plots/z-ladder-instructions-per-op.svg`,
 `z-ladder-cost-ratios.svg`, `z-ladder-throughput.svg`.
@@ -187,18 +204,22 @@ e1 ladder unchanged; `W = depth` (competent fixed-pool sizing),
 **RE-1 primary question answered:** relative to a competent fixed
 ThreadPool, the synchronous/Sluice abstraction adds a MATERIAL wall cost
 only in the control-dominated small-read regime (1.8–2.0×); at 2 MiB the
-instruction layer is at parity (L2 +1.2 % over L1 read) and wall
-differences are latency-shaped, not CPU-shaped (see † below). The
+instruction layer shows no material tax (L2 +1.2 % over L1 read; frozen
+T_sluice GRAY) and wall differences are latency-shaped, not CPU-shaped
+(see † below). The
 L1-vs-L0 pool round-trip itself (T_pool 5.9–6.4 on S read) is larger
 than any Sluice increment — the execution-machinery cost dominates the
 explicit-control-plane increment on this host.
 
-† `T_sluice ≈ 2.5–2.8` on large-shallow reads with **instruction parity**
-(tmpfs L read: L2 538.6 µs ± tiny MAD vs L1 217.3 µs, instr 1.013): a
-pure round-trip/wake **latency** fact of the persistent-runtime path at
-depth ≤ 2, invisible to CPU accounting. The frozen rule reports GRAY
-(wall material, instructions not agreeing); recorded honestly as an
-open latency observation, not as CPU tax and not as parity.
+† `T_sluice ≈ 2.5–2.8` on large-shallow reads with the **instruction
+layer inside the parity band** (tmpfs L read: L2 538.6 µs ± tiny MAD vs
+L1 217.3 µs, instr 1.013; the frozen composite verdict stays GRAY): a
+wall-latency divergence whose cause is UNRESOLVED — wake path,
+scheduler/blocking-worker topology, storage scheduling and runtime
+round-trip shape are all candidate contributors. The frozen rule reports
+GRAY (wall material, instructions not agreeing); recorded as an open
+latency question, not as a claimed mechanism, not as CPU tax and not as
+parity.
 
 RSS (e1 arms, per raw launch JSON): ~4 MB class, no separation.
 Context switches: not collected (no reliable per-combo source; declared
@@ -208,45 +229,100 @@ in P7, not hidden). z-arm RSS: not emitted by the instrument; declared.
 
 ## 5. RESIDUAL ATTRIBUTION (CASE B earned: 4 KiB cells)
 
-Method per P9/§25: census first, no production change. Symbolized
-instruction census (same sources, releasedbg build for symbols only;
-formal numbers remain bound to the stripped formal binaries by SHA —
-the rebuilt formal binary reproduces its recorded SHA exactly,
-`7401213f…`, a reproducibility witness):
+Prereg P9 requires for CASE B: `census → rank → ONE causal ablation →
+remeasure`. The original evidence commit stopped after census/rank and
+described the result as a completed attribution. The #278 review
+correctly rejected that: **a census locates instructions; it does not
+prove the located sites causally explain the residual.** This section
+reports the corrected state: the census with its instrument disclosure,
+the corrected semantic-boundary reading, and the one preregistered
+causal ablation (`RE-1U-ATTR-B`, frozen separately before its own
+measurement).
+
+### 5.1 Census (as captured) and instrument disclosure
+
+Method per P9: census first, no production change. Symbolized
+instruction census (same sources; formal numbers remain bound to the
+stripped formal binaries by SHA — the rebuilt formal binary reproduces
+its recorded SHA exactly, `7401213f…`, a reproducibility witness):
 
 | share of user instructions (S read) | Z1b floor | Z2 backend | Z3 runtime |
 | --- | --- | --- | --- |
 | workload validation (`word_sum`) | **91.9 %** | 39.2 % | 33.8 % |
 | Sluice machinery (all sites) | ~3 % | ~57 % | ~60 % |
 
-Ranked Sluice sites in Z2 (percent of process user instructions):
-router/slot/prepared-op table probes
-(`vector::size()`-dominated validation: 4.8 + 3.8 + 1.3),
-`Completion` state `compare_exchange_strong` 2.1,
-mutex lock/unlock traffic ≈ 6.3 combined,
-`submit_transaction` 1.5, `RequestArena::validate_` 1.3,
-reap/publication and accounting spread below 1 % each.
-Z3 adds scheduler/wait mutex traffic (lock+unlock ≈ 11.5) on top.
+Ranked Sluice symbols in Z2 (percent of process user instructions, as
+captured): `RouterEntry::size()` 4.8, `RequestSlot::size()` 3.8,
+`Completion` state CAS 2.1, mutex lock/unlock traffic ≈ 6.3 combined,
+`submit_transaction` 1.5, `PreparedUringOp::size()` 1.3,
+`RequestArena::validate_` 1.3, reap/publication and accounting below
+1 % each. Z3 adds scheduler/wait mutex traffic (lock+unlock ≈ 11.5).
 
-**Causal interpretation:** the residual is a *distributed control-plane
-existence cost* — per-op arena admission/validation, router and slot
-table probes, completion state transitions, and lock traffic — with **no
-single site ≥ 10 %**. Consistent with #274/#275 history, it is not a
-pathological algorithm; it is the footprint of the required semantics
-themselves at a request size where the floor spends only ~100
-instructions/op. A single-site causal ablation has no meaningful target
-(the known guarded seams F01/F02 were already tested immaterial in
-TAX-0D), so no candidate shootout is authorized, and **no production
-change is proposed or made**. If engineering later wants to shrink this
-footprint, that is a new fix-selection campaign (#255 discipline) with
-its own measurement/ablation authority.
+**Instrument disclosure (corrective).** The symbolized census was
+captured on a `releasedbg` rebuild for symbols. In this project
+`releasedbg` is NOT an optimized mode: only `mode.debug`, `mode.release`
+and `mode.valgrind` rules are registered (`xmake.lua`), so a
+`releasedbg` configuration injects no optimization flag (clang default
+`-O0`, symtab only). At `-O0`, each `vector<T>::size()` probe is an
+outlined call whose body computes a pointer difference with an integer
+DIVISION by `sizeof(T)` (`idivq`) — a code shape that does not exist at
+the release `-O3` optimization of the measured binaries (user-CPU
+contrast on the same S-read workload: ≈ 7×). **The census per-symbol
+shares are therefore properties of the `-O0` symbolization build, not
+of the measured release binaries.** The census remains valid as
+evidence of which source-level code families execute per op (the
+ranking input P9 requires); its shares are never cited as
+release-binary share authority, and no claim in this report rests on
+them quantitatively. All instruction/wall measurements are unaffected
+(they were taken on the release binaries by SHA).
+
+### 5.2 Semantic-boundary reading (corrected)
+
+Z1b itself prices the required semantic capability: ≈ 1 097 instr/op at
+S read for the frozen F05 checklist (bounded in-flight, stable identity,
+stale protection, exactly-once, buffer safety). The Z1b→Z2 residual
+(≈ +2 000 instr/op) is therefore — by construction of the frozen
+decomposition — the cost of **Sluice's implementation** of those
+semantics, not the cost of the semantics themselves. The earlier
+description ("the footprint of the required semantics themselves") was
+contradicted by the campaign's own Z1→Z1b step and is withdrawn.
+
+The census is **consistent with** that implementation cost being
+distributed across Sluice's realization of the semantic boundary —
+per-op arena admission stages, dispatch/ledger bookkeeping, CQE
+routing/terminal/reap, completion publication — rather than concentrated
+in one pathological site (no single census symbol exceeded ~5 % of
+process instructions as captured). Consistency is not attribution:
+causal attribution is completed only by the preregistered ablation
+below (§5.3). Whether the distributed implementation overhead is
+structurally reducible remains an open engineering question outside
+this campaign's authority (a fix-selection campaign under #255
+discipline would own it).
+
+### 5.3 RE-1U-ATTR-B — the one preregistered causal ablation
+
+Frozen in `RE-H0-ATTR-B-PREREGISTRATION.md` BEFORE its own measurement
+(one narrowly defined, semantics-identical research-only treatment on
+the census-ranked family; R0 = production behavior, R1 = treatment;
+same protocol P6–P8; outcome vocabulary A/B/C with all three outcomes
+allowed, including "the family is falsified" and "attribution remains
+unresolved"). No production change is proposed or made; no candidate
+shootout is authorized. Result: recorded in the evidence commit that
+follows this document's correction.
 
 ```text
-backend material tax found : YES — 4 KiB cells only (instr layer)
-runtime material tax found : YES — 4 KiB cells only (instr layer)
-causal hotspot             : distributed control plane (census table)
-ablation                   : none possible at single-site granularity;
-                             F01/F02 known-immaterial (TAX-0D)
+backend material tax found : YES — 4 KiB cells only, instruction layer,
+                             with wall separation on read cells (frozen
+                             composite MATERIAL verdicts; §3.3/§6)
+runtime material tax found : NO under the frozen composite rule — every
+                             T_runtime verdict is GRAY; a large 4 KiB
+                             instruction overhead (≈ 2.8–4.0×) is
+                             observed, but the wall layer moves in the
+                             opposite direction / lacks material
+                             separation, so the frozen MATERIAL gate is
+                             not met (§3.3)
+causal attribution         : census-consistent distributed implementation
+                             cost; completed only by ATTR-B (§5.3)
 candidate                  : none selected
 production change          : NO
 ```
@@ -265,17 +341,19 @@ write **1.34 MATERIAL**, 4K×d8 read **1.39 MATERIAL**, 4K×d8 write
 1.09/1.02 GRAY, 2M×d1 read **1.004 PARITY**, 2M×d2 1.00/1.01 GRAY†.
 
 **Pool ladder L2/L1 (wall):** 4K×d8 read **1.94 MATERIAL** (both fs),
-4K×d1 read 1.01 GRAY, 2M reads 2.6–2.8 GRAY† (instruction parity — the
-latency observation from §4), writes 0.98–1.11 GRAY,
+4K×d1 read 1.01 GRAY, 2M reads 2.6–2.8 GRAY† (instruction layer inside
+the parity band — the latency observation from §4), writes 0.98–1.11 GRAY,
 tmpfs 4K×d8 write 1.55 MATERIAL, tmpfs 64K×d2 read 2.32 MATERIAL.
 
 **Envelope answer:** the residual abstraction tax is **NOT stable across
 Host-0 regimes — it is confined to the control-plane-dominated 4 KiB
-regime** and is bounded/undetectable at 64 KiB and above on the
-instructions layer, with wall parity returning at 2 MiB (CHUNK-E0's
-sweet region). Depth moves the 4K wall tax (d1 1.61 vs d8 1.39 read);
-operation asymmetry (read visible in wall, write masked by writeback)
-is recorded rather than averaged away.
+regime** and no MATERIAL tax is detected at 64 KiB and above on either
+layer. Those large cells are formally GRAY under the frozen composite
+rule, not PARITY (several carry direction anomalies; the clean PARITY
+witness is 2 MiB × d1 READ — CHUNK-E0's sweet region). Depth moves the
+4K wall tax (d1 1.61 vs d8 1.39 read); operation asymmetry (read
+visible in wall, write masked by writeback) is recorded rather than
+averaged away.
 
 **Mechanism comparison (NOT abstraction tax):** Sluice-Uring (Z2) vs
 Sluice-ThreadPool (L2), btrfs: uring wins every tested regime — S read
@@ -287,8 +365,10 @@ the gap was mechanism + geometry, not the abstraction boundary alone.
 **Z-zone classification (#227 vocabulary, Host-0, this campaign):**
 4 KiB control-dominated cells → Z2 PARITY-BREADTH-REQUIRED (parity not
 achieved on instructions; material tax measured). 64 KiB–2 MiB cells →
-border of Z2/Z3: parity achieved; no Z4 value claims are made here
-(safety/control value is out of this campaign's scope).
+border of Z2/Z3: no material tax detected in the tested cells, but
+formally mostly GRAY rather than PARITY (one clean PARITY witness,
+2 MiB × d1 read); no Z4 value claims are made here (safety/control
+value is out of this campaign's scope).
 
 ---
 
@@ -298,15 +378,23 @@ border of Z2/Z3: parity achieved; no Z4 value claims are made here
 G1-PERFORMANCE (HOST-0): PARTIAL
 ```
 
-> On Host-0, the Sluice io_uring boundary is within the preregistered
-> parity envelope relative to the competent hand-written
-> semantic-equivalent floor across every tested cell at 2 MiB and at
-> 64 KiB×d2 (instructions within +0.5–3.8 % of the raw floor), but
-> carries a preregistered MATERIAL instruction-layer tax — backend
-> ≈ 2.8–5.1×, runtime ≈ 2.8–4.0× floor — in the 4 KiB control-plane-
-> dominated regime, partially visible in wall on read cells. The tax is
-> attributed by census to the distributed per-op control plane, with no
-> single-site hotspot and no authorized optimization.
+> On Host-0, the Sluice io_uring boundary carries a preregistered
+> MATERIAL instruction-layer tax — backend ≈ 2.8–5.1× the
+> semantic-equivalent floor — in the 4 KiB control-plane-dominated
+> regime (frozen composite MATERIAL verdicts; wall separation confirmed
+> on read cells). At 64 KiB–2 MiB no MATERIAL backend tax is detected
+> in any tested cell, but those cells are formally GRAY under the
+> frozen composite rule rather than proven parity — the clean PARITY
+> witness is 2 MiB × d1 READ — so the defensible claim is "no material
+> tax detected in the tested cells", not "broad parity". The runtime
+> layer's frozen T_runtime verdicts are GRAY in every cell: a large
+> 4 KiB instruction overhead (≈ 2.8–4.0× the hand-written
+> continuation) is observed, but the wall layer never meets the frozen
+> MATERIAL gate. Attribution: the census is consistent with a
+> distributed Sluice implementation cost of the semantic boundary
+> (§5.2); causal attribution is completed only by the preregistered
+> RE-1U-ATTR-B ablation (§5.3). No single-site hotspot is claimed and
+> no optimization is authorized.
 
 Scope-bounded: Host-0, tested cells, buffered ordinary I/O, no
 SQPOLL/registered/fixed features, workers=1 (uring) / W=d (pool).
@@ -339,7 +427,8 @@ reason: second machine class unavailable; modern NVMe unavailable;
 - 2M×d2 treated as universal? **No** — "sweet-region representative of
   this host" only; RE-2 exists precisely to check breadth.
 - Unexpected ECANCELED retried away? **None occurred** (gate + formal,
-  800 launches total; retry logic does not exist in the runner).
+  160 qualification + 720 formal launches at this commit; retry logic
+  does not exist in the runner).
 - Stale evidence reused across changed code paths? **No** — everything
   re-measured on `7653fd8d`; only #274-closed router slope kept closed.
 - Cells added after results? **No** — matrix frozen in `a0281a93`;
@@ -350,6 +439,26 @@ reason: second machine class unavailable; modern NVMe unavailable;
   throughout; GENERAL declared NOT YET ADJUDICABLE.
 - Missing second host treated as success? **No** — recorded as an
   external-validity limitation, not a pass.
+- Formal verdicts (PARITY/MATERIAL/GRAY) replaced by summary prose?
+  **Caught and corrected** — the frozen composite verdict tables are
+  the only authority; "parity" is claimed only where the rule returned
+  PARITY (2 MiB × d1 read) and GRAY is never folded into parity (§0,
+  §3.3, §6, §7).
+- Census shares promoted to release-binary shares? **Caught and
+  corrected** — the symbolized census ran on a `-O0` symbolization
+  build (`releasedbg` carries no optimization flag in this project;
+  outlined `size()` bodies contain an `idivq` that does not exist at
+  `-O3`); shares rank families and confirm per-op paths only (§5.1).
+- Implementation overhead attributed to the "required semantics"?
+  **Caught and corrected** — Z1b prices the semantic capability; the
+  Z1b→Z2 residual is Sluice's implementation cost by construction of
+  the frozen decomposition (§5.2).
+- Causal language used before the preregistered ablation ran?
+  **Caught and corrected** — attribution was downgraded to
+  "census-consistent" and completed only by RE-1U-ATTR-B (§5.3).
+- Launch accounting? Formal 720 (RE-1U 200 + RE-1 120 + RE-2U 200 +
+  RE-2P 200) + qualification 160 = 880 at this commit; ATTR-B adds 30
+  (prereg A8).
 
 ---
 
@@ -372,5 +481,6 @@ Raw evidence is immutable; every number in this report traces to
 carried forward: wall on writeback-saturated write cells cannot resolve
 instr-layer taxes (frozen GRAYs, not PARITY); context switches and
 z-arm RSS not collected (declared); large-shallow pool read latency
-anomaly (2.5–2.8× wall at instruction parity) is observed and
+anomaly (2.5–2.8× wall with the instruction layer inside the parity
+band) is observed and
 unexplained — a bounded follow-up question, not a claim.

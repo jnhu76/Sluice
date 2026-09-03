@@ -17,6 +17,7 @@ G1-PERFORMANCE (Host-0) adjudication         RE-H0-REPORT.md
 ```text
 RE-H0-AUDIT.md             as-built instrument + production audit (pre-freeze)
 RE-H0-PREREGISTRATION.md   frozen protocol (thresholds, cells, stop law)
+RE-H0-ATTR-B-PREREGISTRATION.md  frozen CASE B ablation (corrective, #278)
 RE-H0-REPORT.md            results + Host-0 G1 adjudication
 scripts/re_h0.py           session runner (no retries; fail-closed)
 scripts/re_h0_analysis.py  mechanically recomputable analysis (P13 authority)
@@ -53,9 +54,12 @@ T_sluice  = L2/L1       Sluice pool incremental
 
 - HOST-0 ONLY (native Fedora 44, SATA SSD btrfs primary, tmpfs control).
 - No cross-host / modern-NVMe / ARM claim; #270 stays OPEN / NOT EXECUTED.
-- No production optimization authorized. Attribution is census-first;
-  any candidate selection stops before production (human adversarial
-  review gate, #255 discipline).
+- No production optimization authorized. Attribution is census-first,
+  then ONE preregistered causal ablation (RE-1U-ATTR-B); census shares
+  are ranking evidence from a `-O0` symbolization build, never
+  release-binary share authority (REPORT §5.1). Any candidate selection
+  stops before production (human adversarial review gate, #255
+  discipline).
 - #262 stop law: pre-measurement gate ran 160/160 clean; any formal-cell
   surprise ⇒ CELL INVALID / CAMPAIGN PAUSE, no retries.
 
