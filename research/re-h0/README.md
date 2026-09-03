@@ -21,7 +21,7 @@ RE-H0-ATTR-B-PREREGISTRATION.md  frozen CASE B ablation (corrective, #278)
 RE-H0-REPORT.md            results + Host-0 G1 adjudication
 scripts/re_h0.py           session runner (no retries; fail-closed)
 scripts/re_h0_analysis.py  mechanically recomputable analysis (P13 authority)
-scripts/check_re_h0_analysis.py  26 analysis diagnostics (TDD, red first)
+scripts/check_re_h0_analysis.py  38 analysis diagnostics (TDD, red first)
 scripts/plot_re_h0.py      SVG plots from summary/analysis JSON
 results/<session>/         immutable sessions (O(10) files):
                            environment/manifest/gates/runs.jsonl/

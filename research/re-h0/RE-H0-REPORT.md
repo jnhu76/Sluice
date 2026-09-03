@@ -294,11 +294,12 @@ per-op arena admission stages, dispatch/ledger bookkeeping, CQE
 routing/terminal/reap, completion publication — rather than concentrated
 in one pathological site (no single census symbol exceeded ~5 % of
 process instructions as captured). Consistency is not attribution:
-causal attribution is completed only by the preregistered ablation
-below (§5.3). Whether the distributed implementation overhead is
-structurally reducible remains an open engineering question outside
-this campaign's authority (a fix-selection campaign under #255
-discipline would own it).
+the preregistered ablation below (§5.3) is the campaign's only causal
+test, and it falsified the census-ranked hypothesis rather than
+completing attribution. Whether the distributed implementation
+overhead is structurally reducible remains an open engineering
+question outside this campaign's authority (a fix-selection campaign
+under #255 discipline would own it).
 
 ### 5.3 RE-1U-ATTR-B — the one preregistered causal ablation
 
@@ -355,13 +356,17 @@ Instrument witnesses and declared limitations:
 causally IMMATERIAL at the release optimization — removing every
 per-op extent recomputation recovers 0.6 % of the residual, below half
 the NO_RECOVERY threshold and far below the family's captured census
-share. H1's census-transfer reading is falsified. This strengthens the
-distributed-implementation interpretation of §5.2 with causal
-evidence: the Z1b→Z2 residual is spread across Sluice's realization of
-the semantic boundary, not concentrated in the (or any single
-isolatable) table-probe site. Causal attribution of the residual to a
-specific hotspot remains INCOMPLETE — none is identified, and none is
-claimed.
+share. H1's census-transfer reading is falsified. What the result
+proves is bounded: the F07 extent-probe family does not causally
+explain the measured release-optimized residual. It does NOT exclude
+the remaining candidate families (completion state transitions,
+mutex/locking traffic, RequestArena admission, dispatch/ledger
+bookkeeping, reap/publication, the scheduler/wait path) or another
+unidentified `-O3` hotspot. The distributed-implementation
+interpretation of §5.2 remains CONSISTENT with the evidence, but this
+ablation does not causally establish it. Causal attribution of the
+residual to a release-level hotspot remains UNRESOLVED — none is
+identified, and none is claimed.
 
 ```text
 backend material tax found : YES — 4 KiB cells only, instruction layer,
@@ -374,11 +379,14 @@ runtime material tax found : NO under the frozen composite rule — every
                              opposite direction / lacks material
                              separation, so the frozen MATERIAL gate is
                              not met (§3.3)
-causal attribution         : census-consistent distributed implementation
-                             cost; the one preregistered ablation
-                             (ATTR-B) found the ranked family causally
-                             immaterial (recovery 0.6 %, NO_RECOVERY) —
-                             no causal hotspot identified or claimed
+attribution status         : the one preregistered ablation (ATTR-B)
+                             found the census-ranked family causally
+                             immaterial (recovery 0.6 %, NO_RECOVERY);
+                             the distributed implementation-cost
+                             interpretation remains consistent with the
+                             evidence but is NOT causally established —
+                             the release-level causal hotspot is
+                             UNRESOLVED
 candidate                  : none selected
 production change          : NO
 ```
@@ -450,9 +458,11 @@ G1-PERFORMANCE (HOST-0): PARTIAL
 > distributed Sluice implementation cost of the semantic boundary
 > (§5.2); the one preregistered causal ablation (RE-1U-ATTR-B) then
 > found the census-ranked family causally immaterial at release
-> optimization — recovery 0.6 % of the residual, NO_RECOVERY — so the
-> distributed reading stands on causal evidence, no causal hotspot is
-> identified or claimed, and no optimization is authorized.
+> optimization — recovery 0.6 % of the residual, NO_RECOVERY. The
+> distributed interpretation therefore remains consistent with the
+> evidence but is NOT causally established: no release-level causal
+> hotspot has been identified, the `-O3` hotspot structure remains
+> unresolved, and no optimization is authorized.
 
 Scope-bounded: Host-0, tested cells, buffered ordinary I/O, no
 SQPOLL/registered/fixed features, workers=1 (uring) / W=d (pool).
@@ -513,7 +523,9 @@ reason: second machine class unavailable; modern NVMe unavailable;
   the frozen decomposition (§5.2).
 - Causal language used before the preregistered ablation ran?
   **Caught and corrected** — attribution was downgraded to
-  "census-consistent" and completed only by RE-1U-ATTR-B (§5.3).
+  "census-consistent", and RE-1U-ATTR-B — the campaign's only causal
+  test — falsified the census-ranked hypothesis rather than completing
+  attribution (§5.3).
 - Launch accounting? Formal 720 (RE-1U 200 + RE-1 120 + RE-2U 200 +
   RE-2P 200) + qualification 160 = 880 at this commit; ATTR-B adds 30
   (prereg A8).
