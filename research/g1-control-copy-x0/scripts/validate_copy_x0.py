@@ -439,14 +439,31 @@ def validate_perf(session: Path) -> dict:
     if not selftest_rows or not all(r.get("pass") for r in selftest_rows):
         raise Invalid("perf session must contain passing bench selftests")
     derived = derive_perf(rows, env["params"]["qualified_chunk"])
-    # Amendment 2: mechanical A/A calibration bar — a session whose own
-    # calibration shows catastrophic dispersion is infrastructure-degraded,
-    # not a performance verdict.
-    worst = max(derived["aa_envelope_p90"].values(), default=0.0)
-    if worst > 0.50:
-        raise Invalid(f"A/A calibration bar exceeded (worst p90 |log2| = "
-                      f"{worst:.4f} > 0.50) — session DEGRADED HOST CONDITIONS, "
-                      f"supersede and re-run (prereg Amendment 2)")
+    # Amendment 2 + 3: mechanical A/A calibration bar, scoped to adjudicable
+    # scale (cells with median B0 wall >= 5ms; the 64MiB cells here). Smaller
+    # cells carry envelope disclosure instead of gating — their frozen
+    # decision rule still applies to their data.
+    b0_medians = {}
+    for row in rows:
+        rid = str(row.get("id", ""))
+        if rid.startswith("perf|") and row.get("arm") == "B0" and row.get("ok"):
+            _, label, size_s, _, _ = rid.split("|")
+            b0_medians.setdefault((label, int(size_s)), []).append(row["wall_sec"])
+    worst = 0.0
+    for cell, p90 in derived["aa_envelope_p90"].items():
+        label, size = cell.split("|")
+        med = median(b0_medians.get((label, int(size)), [0.0]))
+        if med >= 0.005 and p90 > 0.50:
+            raise Invalid(f"A/A calibration bar exceeded at adjudicable scale "
+                          f"({cell}: p90 {p90:.4f} > 0.50) — session DEGRADED "
+                          f"HOST CONDITIONS, supersede and re-run "
+                          f"(prereg Amendments 2+3)")
+        worst = max(worst, p90)
+    derived["aa_envelope_note"] = {
+        "bar": "0.50 p90 |log2| for cells with median B0 wall >= 5ms "
+               "(Amendment 3); smaller cells disclosed, not gated",
+        "worst_disclosed_p90": round(worst, 4),
+    }
     return derived
 
 

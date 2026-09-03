@@ -1,0 +1,1 @@
+{"superseded": true, "reason": "DEGRADED HOST CONDITIONS (Amendments 2+3): tmpfs 64MiB AA p90 0.734 > 0.50 (initially masked by a validator label-parsing bug, fixed same day)", "retained": "byte-identical, excluded from every derived number"}

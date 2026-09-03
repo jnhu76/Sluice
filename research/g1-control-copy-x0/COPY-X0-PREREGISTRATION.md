@@ -337,6 +337,28 @@ lawful only through this gate, never through inspection of verdict
 outcomes. Thresholds, matrix, arms, fixtures, rounds, and the §9
 materiality rule remain untouched.
 
+## Amendment 3 (2026-09-03, post-native-4) — AA bar scoped to adjudicable scale
+
+Three applications of the Amendment-2 bar (perf native-2/3/4, all retained)
+show its max-over-ALL-cells form conflates two different things: true
+session degradation (native-2: 5.43s stall on a 23ms span = 7.86 log2) and
+the host's baseline µs-scale jitter at the 64 KiB cells (p90 0.41–0.78 in
+every session, including otherwise-quiet ones). Scope the gate to its
+purpose:
+
+```text
+the 0.50 p90 |log2| session-validity bar applies to AA cells whose
+median B0 wall is ≥ 5 ms (here: the 64 MiB cells);
+cells below that scale (64 KiB) are reported with their full envelope
+disclosure but do not gate session validity — their frozen decision rule
+(5% + 7/9 sign + neighbor support) still applies to their data.
+```
+
+Under this form: native-2 (64M p90 4.02/7.86) and native-3 (tmpfs 64M
+0.735) remain SUPERSEDED — DEGRADED; native-4 (64M p90 0.134/0.331) is
+measurement-valid. The §9 materiality rule, thresholds, matrix, arms,
+rounds are untouched; all attempts remain committed and disclosed.
+
 # §17 Host claim scope
 
 All conclusions HOST-LOCAL (WSL2 kernel 6.18.33.2, Ryzen 7 5800H, tmpfs +

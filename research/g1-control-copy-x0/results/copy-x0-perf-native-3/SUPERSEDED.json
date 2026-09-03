@@ -1,0 +1,1 @@
+{"superseded": true, "reason": "DEGRADED HOST CONDITIONS (prereg Amendment 2): AA p90 0.735 > 0.50 (tmpfs 64MiB, tail 3.13); persistent WSL2 host scheduling stalls", "retained": "byte-identical, excluded from every derived number"}
