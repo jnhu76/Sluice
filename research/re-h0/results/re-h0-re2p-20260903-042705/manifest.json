@@ -1,0 +1,1210 @@
+{
+ "protocol": {
+  "r_wall": 11,
+  "warmup": 2,
+  "perf_pairs": [
+   [
+    7,
+    14
+   ],
+   [
+    7,
+    14
+   ]
+  ],
+  "perf_events": [
+   "instructions:u",
+   "cycles:u"
+  ],
+  "order_seed": 20260903,
+  "pin_cpus": "2-9",
+  "normalization": "double-difference (total(R14)-total(R7))/7/ops",
+  "write_policy": "buffered writeback only, no fsync; sync+0.3s settle after every WRITE launch",
+  "retries": "NONE (fail-closed; #262 stop gate honored)"
+ },
+ "launches": [
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd1-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-4Kd8-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-64Kd2-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md1-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-btrfs-2Md2-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd1-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-4Kd8-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-64Kd2-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md1-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-read-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L2-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L2-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L2-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L2-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "re2p-tmpfs-2Md2-write-L2-P14-3",
+   "rc": 0,
+   "perf": true
+  }
+ ],
+ "failures": [],
+ "arm_order": [
+  {
+   "fs": "btrfs",
+   "cell": "4Kd1",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "4Kd1",
+   "op": "write",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "4Kd8",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "4Kd8",
+   "op": "write",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "64Kd2",
+   "op": "read",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "64Kd2",
+   "op": "write",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "2Md1",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "2Md1",
+   "op": "write",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "2Md2",
+   "op": "read",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "btrfs",
+   "cell": "2Md2",
+   "op": "write",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "4Kd1",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "4Kd1",
+   "op": "write",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "4Kd8",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "4Kd8",
+   "op": "write",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "64Kd2",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "64Kd2",
+   "op": "write",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "2Md1",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "2Md1",
+   "op": "write",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "2Md2",
+   "op": "read",
+   "order": [
+    "L2",
+    "L1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "2Md2",
+   "op": "write",
+   "order": [
+    "L1",
+    "L2"
+   ]
+  }
+ ]
+}

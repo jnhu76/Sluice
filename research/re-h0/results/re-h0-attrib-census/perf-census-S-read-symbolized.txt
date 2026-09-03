@@ -1,0 +1,39 @@
+== z1b rc=0 ==
+    91.93%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::word_sum(std::byte const*, unsigned long)
+     1.74%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::z1b_run((anonymous namespace)::Z1bShared&)
+     1.67%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<(anonymous namespace)::Z1bSlot, std::allocator<(anonymous namespace)::Z1bSlot> >::size() const
+     1.59%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<std::vector<std::byte, std::allocator<std::byte> >, std::allocator<std::vector<std::byte, std::allocator<std::byte> > > >::size() const
+     0.98%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::z1b_drain_cqes((anonymous namespace)::Z1bShared&)
+     0.48%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] io_uring_prep_rw
+     0.32%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] io_uring_get_sqe
+     0.24%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] io_uring_prep_read
+     0.19%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] io_uring_cqe_get_data64
+     0.16%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] unsigned long const& std::max<unsigned long>(unsigned long const&, unsigned long const&)
+     0.14%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] io_uring_peek_batch_cqe
+     0.12%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<std::vector<std::byte, std::allocator<std::byte> >, std::allocator<std::vector<std::byte, std::allocator<std::byte> > > >::operator[](unsigned long)
+== z2 rc=0 ==
+    39.24%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::word_sum(std::byte const*, unsigned long)
+     4.82%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::size() const
+     3.78%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<sluice::async::detail::RequestSlot, std::allocator<sluice::async::detail::RequestSlot> >::size() const
+     2.05%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::atomic<sluice::async::Completion<unsigned long>::State>::compare_exchange_strong(sluice::async::Completion<unsigned long>::State&, sluice::async::Completion<unsigned long>::State, std::memory_order, std::memory_order)
+     1.94%  tax0_z_ladder_b  libc.so.6             [.] pthread_mutex_lock@@GLIBC_2.2.5
+     1.65%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::mutex::lock()
+     1.54%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::z2_run((anonymous namespace)::RunState&, sluice::async::AsyncIoContext&, std::vector<sluice::async::Completion<unsigned long>, std::allocator<sluice::async::Completion<unsigned long> > >&)
+     1.52%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] sluice::Result<sluice::async::detail::SlotHandle> sluice::async::detail::submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > >(sluice::async::detail::RequestArena&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::completion_type&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::op_type const&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >&)
+     1.49%  tax0_z_ladder_b  libc.so.6             [.] __GI___pthread_mutex_unlock_usercnt
+     1.29%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<sluice::async::UringAsyncBackend::PreparedUringOp, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::size() const
+     1.26%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] sluice::async::detail::RequestArena::validate_(sluice::async::detail::SlotHandle)
+     1.20%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::mutex::unlock()
+== z3 rc=0 ==
+    33.81%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::word_sum(std::byte const*, unsigned long)
+     6.06%  tax0_z_ladder_b  libc.so.6             [.] __GI___pthread_mutex_unlock_usercnt
+     5.43%  tax0_z_ladder_b  libc.so.6             [.] pthread_mutex_lock@@GLIBC_2.2.5
+     5.28%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<sluice::async::detail::RequestSlot, std::allocator<sluice::async::detail::RequestSlot> >::size() const
+     3.97%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::size() const
+     1.78%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::mutex::lock()
+     1.65%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::atomic<sluice::async::Completion<unsigned long>::State>::compare_exchange_strong(sluice::async::Completion<unsigned long>::State&, sluice::async::Completion<unsigned long>::State, std::memory_order, std::memory_order)
+     1.07%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] (anonymous namespace)::z3_task_body(sluice::async::RuntimeTaskContext&, (anonymous namespace)::RunState&, (anonymous namespace)::Z3Outcome&)
+     1.01%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] sluice::Result<sluice::async::detail::SlotHandle> sluice::async::detail::submit_transaction<sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> > >(sluice::async::detail::RequestArena&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::completion_type&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >::op_type const&, sluice::async::UringAsyncBackend::SubmitPolicy<sluice::async::ReadOp, sluice::async::Completion<unsigned long> >&)
+     1.00%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::lock_guard<std::mutex>::lock_guard(std::mutex&)
+     0.99%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] std::vector<sluice::async::UringAsyncBackend::PreparedUringOp, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::size() const
+     0.83%  tax0_z_ladder_b  tax0_z_ladder_bench   [.] sluice::async::detail::RequestArena::free_slot_locked_(sluice::async::detail::RequestSlot*, unsigned int)

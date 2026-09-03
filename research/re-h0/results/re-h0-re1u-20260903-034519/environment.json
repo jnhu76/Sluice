@@ -1,0 +1,68 @@
+{
+  "timestamp_utc": "2026-09-02T19:45:19.247833+00:00",
+  "git": {
+    "head": "a0281a9369de8a590b2de16e74b6964f6591f4e8",
+    "branch": "research/re-h0-native-performance-closure",
+    "dirty": true
+  },
+  "system": {
+    "kernel": "7.1.9-200.fc44.x86_64",
+    "wsl": false,
+    "cpu_model": "Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz",
+    "logical_cpus": 20,
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "governor": "schedutil",
+    "perf_event_paranoid": "2",
+    "cache_line_bytes": "64",
+    "page_size_bytes": 4096
+  },
+  "filesystems": {
+    "btrfs_data": {
+      "dir": "/home/jnhu/Source/Sluice/build/re-h0-data",
+      "type": "btrfs",
+      "role": "primary real-storage path",
+      "mount": "btrfs compress=zstd:1 ssd on SATA SSD"
+    },
+    "tmpfs_data": {
+      "dir": "/tmp/re-h0-data",
+      "type": "tmpfs",
+      "role": "storage-latency control; never supports a real-I/O near-native claim"
+    }
+  },
+  "block_devices": "major minor  #blocks  name\n\n   8        0  468851544 sda\n   8        1     614400 sda1\n   8        2    2097152 sda2\n   8        3  466138112 sda3\n   8       16 3907018584 sdb\n   8       17      16367 sdb1\n   8       18 3907000320 sdb2\n 259        0  500107608 nvme0n1\n 259        1     307200 nvme0n1p1\n 259        2     131072 nvme0n1p2\n 259        3  499667968 nvme0n1p3\n 251        0    8388608 zram0",
+  "tools": {
+    "perf": "perf version 7.1.9-200.fc44.x86_64",
+    "python": "3.14.7",
+    "liburing": "2.13"
+  },
+  "build": {
+    "mode": "release",
+    "toolchain": "clang",
+    "z_bench_sha256": "7401213fd4eb618e673ef4cd810519cff9aa61eb9c90011425211be147bfc9d2",
+    "e1_bench_sha256": "a64932f6e402fa845dcca1563fe682238e942d4febf03e5ad9359afe88d3740a",
+    "compiler": [
+      "clang version 22.1.8 (Fedora 22.1.8-4.fc44)"
+    ]
+  }
+}

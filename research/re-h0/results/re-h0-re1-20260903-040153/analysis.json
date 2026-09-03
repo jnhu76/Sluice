@@ -1,0 +1,221 @@
+{
+ "blocks": [
+  {
+   "block": {
+    "fs": "btrfs",
+    "op": "read",
+    "request_size": 4096,
+    "depth": 8,
+    "workers": 8
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 5.869218180715881,
+    "delta_per_op": 1453.454345703125,
+    "base_median_wall_ns": 298.4985046386719,
+    "cand_median_wall_ns": 1751.9528503417969,
+    "verdict": "MATERIAL_TAX"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.8037716909480423,
+    "delta_per_op": 1408.1701049804688,
+    "base_median_wall_ns": 1751.9528503417969,
+    "cand_median_wall_ns": 3160.1229553222656,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "fs": "btrfs",
+    "op": "write",
+    "request_size": 4096,
+    "depth": 8,
+    "workers": 8
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 1.1906265170206471,
+    "delta_per_op": 445.96241760253906,
+    "base_median_wall_ns": 2339.4563598632812,
+    "cand_median_wall_ns": 2785.4187774658203,
+    "verdict": "MATERIAL_TAX"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0779841190569754,
+    "delta_per_op": 217.2184295654297,
+    "base_median_wall_ns": 2785.4187774658203,
+    "cand_median_wall_ns": 3002.63720703125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "fs": "btrfs",
+    "op": "read",
+    "request_size": 2097152,
+    "depth": 2,
+    "workers": 2
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 1.1485911613983473,
+    "delta_per_op": 25555.6171875,
+    "base_median_wall_ns": 171986.119140625,
+    "cand_median_wall_ns": 197541.736328125,
+    "verdict": "GRAY"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.7463438724069476,
+    "delta_per_op": 147434.064453125,
+    "base_median_wall_ns": 197541.736328125,
+    "cand_median_wall_ns": 344975.80078125,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "fs": "btrfs",
+    "op": "write",
+    "request_size": 2097152,
+    "depth": 2,
+    "workers": 2
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 1.0416400821272482,
+    "delta_per_op": 32546.6640625,
+    "base_median_wall_ns": 781618.6328125,
+    "cand_median_wall_ns": 814165.296875,
+    "verdict": "GRAY"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0219339601051145,
+    "delta_per_op": 17857.869140625,
+    "base_median_wall_ns": 814165.296875,
+    "cand_median_wall_ns": 832023.166015625,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "fs": "tmpfs",
+    "op": "read",
+    "request_size": 4096,
+    "depth": 8,
+    "workers": 8
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 6.42481424343241,
+    "delta_per_op": 1493.12548828125,
+    "base_median_wall_ns": 275.23992919921875,
+    "cand_median_wall_ns": 1768.3654174804688,
+    "verdict": "MATERIAL_TAX"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.032654412663365,
+    "delta_per_op": 1826.1103515625,
+    "base_median_wall_ns": 1768.3654174804688,
+    "cand_median_wall_ns": 3594.4757690429688,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "fs": "tmpfs",
+    "op": "write",
+    "request_size": 4096,
+    "depth": 8,
+    "workers": 8
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 2.3529956523399655,
+    "delta_per_op": 1156.2573547363281,
+    "base_median_wall_ns": 854.5905914306641,
+    "cand_median_wall_ns": 2010.8479461669922,
+    "verdict": "MATERIAL_TAX"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.6530094781394717,
+    "delta_per_op": 1313.102767944336,
+    "base_median_wall_ns": 2010.8479461669922,
+    "cand_median_wall_ns": 3323.950714111328,
+    "verdict": "MATERIAL_TAX"
+   }
+  },
+  {
+   "block": {
+    "fs": "tmpfs",
+    "op": "read",
+    "request_size": 2097152,
+    "depth": 2,
+    "workers": 2
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 0.9813893013146812,
+    "delta_per_op": -4120.982421875,
+    "base_median_wall_ns": 221430.828125,
+    "cand_median_wall_ns": 217309.845703125,
+    "verdict": "GRAY"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 2.4784754120657624,
+    "delta_per_op": 321287.263671875,
+    "base_median_wall_ns": 217309.845703125,
+    "cand_median_wall_ns": 538597.109375,
+    "verdict": "GRAY"
+   }
+  },
+  {
+   "block": {
+    "fs": "tmpfs",
+    "op": "write",
+    "request_size": 2097152,
+    "depth": 2,
+    "workers": 2
+   },
+   "T_pool": {
+    "cand": "L1",
+    "base": "L0",
+    "ratio": 2.30985894000138,
+    "delta_per_op": 387438.494140625,
+    "base_median_wall_ns": 295786.42578125,
+    "cand_median_wall_ns": 683224.919921875,
+    "verdict": "GRAY"
+   },
+   "T_sluice": {
+    "cand": "L2",
+    "base": "L1",
+    "ratio": 1.0063260246080372,
+    "delta_per_op": 4322.09765625,
+    "base_median_wall_ns": 683224.919921875,
+    "cand_median_wall_ns": 687547.017578125,
+    "verdict": "PARITY"
+   }
+  }
+ ],
+ "errors": []
+}

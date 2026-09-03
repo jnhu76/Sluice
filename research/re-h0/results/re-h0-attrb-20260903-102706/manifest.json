@@ -1,0 +1,200 @@
+{
+ "protocol": {
+  "r_wall": 11,
+  "warmup": 2,
+  "perf_pairs": [
+   [
+    7,
+    14
+   ],
+   [
+    7,
+    14
+   ]
+  ],
+  "perf_events": [
+   "instructions:u",
+   "cycles:u"
+  ],
+  "order_seed": 20260903,
+  "pin_cpus": "2-9",
+  "normalization": "double-difference (total(R14)-total(R7))/7/ops",
+  "write_policy": "buffered writeback only, no fsync; sync+0.3s settle after every WRITE launch",
+  "retries": "NONE (fail-closed; #262 stop gate honored)"
+ },
+ "launches": [
+  {
+   "tag": "attrb-btrfs-S-read-z1b-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z1b-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z1b-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z1b-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z1b-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r0-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r0-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r0-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r0-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r0-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-btrfs-S-read-z2r1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z1b-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z1b-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z1b-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z1b-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z1b-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r1-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r1-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r1-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r1-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r1-P14-3",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r0-W11",
+   "rc": 0,
+   "perf": false
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r0-P7-0",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r0-P14-1",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r0-P7-2",
+   "rc": 0,
+   "perf": true
+  },
+  {
+   "tag": "attrb-tmpfs-S-read-z2r0-P14-3",
+   "rc": 0,
+   "perf": true
+  }
+ ],
+ "failures": [],
+ "arm_order": [
+  {
+   "fs": "btrfs",
+   "cell": "S",
+   "op": "read",
+   "order": [
+    "z1b",
+    "z2r0",
+    "z2r1"
+   ]
+  },
+  {
+   "fs": "tmpfs",
+   "cell": "S",
+   "op": "read",
+   "order": [
+    "z1b",
+    "z2r1",
+    "z2r0"
+   ]
+  }
+ ]
+}
