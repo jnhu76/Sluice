@@ -316,6 +316,27 @@ environment.json as `cpu_pin`). Protocol hygiene only: thresholds, matrix,
 arms, fixtures, rounds, and materiality rules are untouched. Adopted
 BEFORE any formal session exists.
 
+## Amendment 2 (2026-09-03, post-native-2 supersession) — A/A calibration bar
+
+Formal perf session copy-x0-perf-native-2 recorded mechanically documented
+host stalls in its own A/A calibration (tmpfs 64 MiB pair 0.023s vs 5.43s =
+7.86 log2; ext4 64 MiB pair 16×), poisoning round signs for every cell.
+Freeze a mechanical validity bar, effective immediately and enforced by the
+validator (fail-closed):
+
+```text
+a perf session is measurement-valid only if the A/A envelope
+(max over cells of per-cell p90 |log2 paired ratio|) ≤ 0.50
+```
+
+Sessions exceeding the bar are SUPERSEDED — DEGRADED HOST CONDITIONS
+(retained byte-identical, excluded from every derived number) and re-run
+under new session names; every attempt is committed and disclosed. This
+converts stall-detection into a pre-declared calibration gate — reruns are
+lawful only through this gate, never through inspection of verdict
+outcomes. Thresholds, matrix, arms, fixtures, rounds, and the §9
+materiality rule remain untouched.
+
 # §17 Host claim scope
 
 All conclusions HOST-LOCAL (WSL2 kernel 6.18.33.2, Ryzen 7 5800H, tmpfs +

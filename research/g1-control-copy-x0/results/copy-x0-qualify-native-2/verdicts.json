@@ -1,0 +1,57 @@
+{
+  "session": "copy-x0-qualify-native-2",
+  "qualified_chunk": 262144,
+  "probe_rows": [
+    {
+      "id": "probe|tmpfs-tmpfs",
+      "phase": "probe",
+      "from": "tmpfs",
+      "to": "tmpfs",
+      "fstype_from": "tmpfs:0x1021994",
+      "fstype_to": "tmpfs:0x1021994",
+      "ret": 4096,
+      "errno": 0,
+      "ok": true
+    },
+    {
+      "id": "probe|tmpfs-ext4",
+      "phase": "probe",
+      "from": "tmpfs",
+      "to": "ext4",
+      "fstype_from": "tmpfs:0x1021994",
+      "fstype_to": "ext4:0xef53",
+      "ret": 0,
+      "errno": 18,
+      "ok": false
+    },
+    {
+      "id": "probe|ext4-tmpfs",
+      "phase": "probe",
+      "from": "ext4",
+      "to": "tmpfs",
+      "fstype_from": "ext4:0xef53",
+      "fstype_to": "tmpfs:0x1021994",
+      "ret": 0,
+      "errno": 18,
+      "ok": false
+    },
+    {
+      "id": "probe|ext4-ext4",
+      "phase": "probe",
+      "from": "ext4",
+      "to": "ext4",
+      "fstype_from": "ext4:0xef53",
+      "fstype_to": "ext4:0xef53",
+      "ret": 4096,
+      "errno": 0,
+      "ok": true
+    },
+    {
+      "id": "probe|single-call-cap",
+      "phase": "probe",
+      "ret": 67108864,
+      "errno": 0,
+      "fstype": "tmpfs:0x1021994"
+    }
+  ]
+}

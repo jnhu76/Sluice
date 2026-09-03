@@ -438,7 +438,16 @@ def validate_perf(session: Path) -> dict:
     selftest_rows = [r for r in rows if r["phase"] == "selftest"]
     if not selftest_rows or not all(r.get("pass") for r in selftest_rows):
         raise Invalid("perf session must contain passing bench selftests")
-    return derive_perf(rows, env["params"]["qualified_chunk"])
+    derived = derive_perf(rows, env["params"]["qualified_chunk"])
+    # Amendment 2: mechanical A/A calibration bar — a session whose own
+    # calibration shows catastrophic dispersion is infrastructure-degraded,
+    # not a performance verdict.
+    worst = max(derived["aa_envelope_p90"].values(), default=0.0)
+    if worst > 0.50:
+        raise Invalid(f"A/A calibration bar exceeded (worst p90 |log2| = "
+                      f"{worst:.4f} > 0.50) — session DEGRADED HOST CONDITIONS, "
+                      f"supersede and re-run (prereg Amendment 2)")
+    return derived
 
 
 def validate_qualify(session: Path) -> dict:

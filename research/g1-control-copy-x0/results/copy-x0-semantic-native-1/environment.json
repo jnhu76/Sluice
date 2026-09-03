@@ -1,0 +1,65 @@
+{
+  "session": "copy-x0-semantic-native-1",
+  "timestamp": "2026-09-03T23:51:00+0800",
+  "git_head": "95e70dbfb24ae1821309bce524fd7f0b7bfedc38",
+  "dirty_tracked": false,
+  "dirty_detail": [],
+  "branch": "research/g1-control-copy-x0",
+  "bench_sha256": "a13d39e1853ae0319458ddbf90d783d79ea16542f55e1dde48273671169914d7",
+  "compiler": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+  "build_mode": "release",
+  "kernel": "6.18.33.2-microsoft-standard-WSL2",
+  "libc": "ldd (Ubuntu GLIBC 2.43-2ubuntu2.3) 2.43",
+  "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+  "session_seed": 202609030,
+  "cpu_pin": "2",
+  "roots": {
+    "tmpfs": {
+      "path": "/tmp/copy-x0-native-tmpfs",
+      "fstype": "tmpfs:0x1021994"
+    },
+    "ext4": {
+      "path": "/home/hoo/.cache/copy-x0-native-ext4",
+      "fstype": "ext4:0xef53"
+    }
+  },
+  "mount": {
+    "tmpfs": "tmpfs tmpfs",
+    "ext4": "/dev/sdd ext4"
+  },
+  "params": {
+    "sizes": [
+      4096,
+      65536,
+      1048576,
+      67108864
+    ],
+    "arms": [
+      "B0",
+      "B1",
+      "B2",
+      "B3"
+    ],
+    "rounds": 9,
+    "qualified_chunk": 1048576,
+    "qualified_from": "copy-x0-qualify-native-1"
+  },
+  "commands": [
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench selftest",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S1 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S2 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S3 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S4 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S5 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S7 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S8 /tmp/copy-x0-native-tmpfs tmpfs 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S1 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S2 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S3 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S4 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S5 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S7 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench fixture S8 /home/hoo/.cache/copy-x0-native-ext4 ext4 202609030 --chunk 1048576",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench s6 /tmp/copy-x0-native-tmpfs /home/hoo/.cache/copy-x0-native-ext4 202609030 --chunk 1048576"
+  ]
+}

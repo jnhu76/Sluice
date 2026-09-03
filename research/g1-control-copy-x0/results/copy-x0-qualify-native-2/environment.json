@@ -1,0 +1,111 @@
+{
+  "session": "copy-x0-qualify-native-2",
+  "timestamp": "2026-09-03T23:53:34+0800",
+  "git_head": "0f0e64f315b7216f83170b0f4f0ff0323533938d",
+  "dirty_tracked": false,
+  "dirty_detail": [],
+  "branch": "research/g1-control-copy-x0",
+  "bench_sha256": "a13d39e1853ae0319458ddbf90d783d79ea16542f55e1dde48273671169914d7",
+  "compiler": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+  "build_mode": "release",
+  "kernel": "6.18.33.2-microsoft-standard-WSL2",
+  "libc": "ldd (Ubuntu GLIBC 2.43-2ubuntu2.3) 2.43",
+  "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+  "session_seed": 202609030,
+  "cpu_pin": "2",
+  "roots": {
+    "tmpfs": {
+      "path": "/tmp/copy-x0-native-tmpfs",
+      "fstype": "tmpfs:0x1021994"
+    },
+    "ext4": {
+      "path": "/home/hoo/.cache/copy-x0-native-ext4",
+      "fstype": "ext4:0xef53"
+    }
+  },
+  "mount": {
+    "tmpfs": "tmpfs tmpfs",
+    "ext4": "/dev/sdd ext4"
+  },
+  "params": {
+    "sizes": [
+      4096,
+      65536,
+      1048576,
+      67108864
+    ],
+    "arms": [
+      "B0",
+      "B1",
+      "B2",
+      "B3"
+    ],
+    "rounds": 9,
+    "chunk_candidates": [
+      8192,
+      65536,
+      262144,
+      1048576,
+      4194304
+    ],
+    "qualify_reps": 5
+  },
+  "commands": [
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench selftest",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench probe /tmp/copy-x0-native-tmpfs /home/hoo/.cache/copy-x0-native-ext4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench mk /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin 67108864 202609037",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 8192 qualify|tmpfs|8192|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 8192 qualify|tmpfs|8192|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 8192 qualify|tmpfs|8192|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 8192 qualify|tmpfs|8192|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 8192 qualify|tmpfs|8192|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 65536 qualify|tmpfs|65536|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 65536 qualify|tmpfs|65536|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 65536 qualify|tmpfs|65536|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 65536 qualify|tmpfs|65536|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 65536 qualify|tmpfs|65536|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 262144 qualify|tmpfs|262144|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 262144 qualify|tmpfs|262144|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 262144 qualify|tmpfs|262144|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 262144 qualify|tmpfs|262144|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 262144 qualify|tmpfs|262144|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 1048576 qualify|tmpfs|1048576|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 1048576 qualify|tmpfs|1048576|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 1048576 qualify|tmpfs|1048576|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 1048576 qualify|tmpfs|1048576|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 1048576 qualify|tmpfs|1048576|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 4194304 qualify|tmpfs|4194304|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 4194304 qualify|tmpfs|4194304|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 4194304 qualify|tmpfs|4194304|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 4194304 qualify|tmpfs|4194304|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/q-dst.bin 67108864 4194304 qualify|tmpfs|4194304|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench mk /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin 67108864 202609037",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 8192 qualify|ext4|8192|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 8192 qualify|ext4|8192|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 8192 qualify|ext4|8192|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 8192 qualify|ext4|8192|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 8192 qualify|ext4|8192|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 65536 qualify|ext4|65536|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 65536 qualify|ext4|65536|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 65536 qualify|ext4|65536|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 65536 qualify|ext4|65536|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 65536 qualify|ext4|65536|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 262144 qualify|ext4|262144|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 262144 qualify|ext4|262144|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 262144 qualify|ext4|262144|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 262144 qualify|ext4|262144|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 262144 qualify|ext4|262144|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 1048576 qualify|ext4|1048576|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 1048576 qualify|ext4|1048576|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 1048576 qualify|ext4|1048576|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 1048576 qualify|ext4|1048576|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 1048576 qualify|ext4|1048576|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 4194304 qualify|ext4|4194304|r0",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 4194304 qualify|ext4|4194304|r1",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 4194304 qualify|ext4|4194304|r2",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 4194304 qualify|ext4|4194304|r3",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/ext4/q-dst.bin 67108864 4194304 qualify|ext4|4194304|r4",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench mk /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/m5-src.bin 1048576 202609038",
+    "taskset -c 2 /home/hoo/Projects/Sluice/build/linux/x86_64/release/g1_control_copy_x0_bench bench B0 /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/m5-src.bin /home/hoo/Projects/Sluice/research/g1-control-copy-x0/results/copy-x0-qualify-native-2/work/tmpfs/m5-dst.bin 1048576 16 control|m5-weak-baseline|16B"
+  ]
+}
