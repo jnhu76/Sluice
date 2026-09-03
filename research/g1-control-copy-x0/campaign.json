@@ -1,0 +1,34 @@
+{
+  "campaign": "COPY-X0",
+  "title": "Explicit Copy as a Legal Transformation Boundary - adversarial falsification",
+  "roadmap": ["#227", "#259"],
+  "precedent": ["#279 G1-Control C0 fixed-file (STOP, product-capability-only)", "PR #280 merged C0 evidence"],
+  "g1_control_candidate": 2,
+  "working_thesis": "T-COPY-X0: explicit composed operations can serve as Legal Transformation Boundaries",
+  "primary_mechanism": "copy_file_range",
+  "secondary_mechanism": "splice (only under goal section 8 conditions)",
+  "base_master": "ecd84259",
+  "execution_host": {
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "cpu": "AMD Ryzen 7 5800H (8 logical)",
+    "substrates": ["tmpfs", "ext4"],
+    "note": "no btrfs on this host; prereg section 0 substitution is frozen"
+  },
+  "arms": {
+    "B0": "competent standalone buffered pread/pwrite copy",
+    "B1": "production sluice::copy_all over FileReader/FileWriter",
+    "B2": "competent standalone copy_file_range loop",
+    "B3": "research-only thin Sluice-shaped Copy boundary using copy_file_range"
+  },
+  "freeze_commit": null,
+  "phases": {
+    "audit": "done",
+    "preregistration": "frozen-pending-commit",
+    "harness": "pending",
+    "selftests": "pending",
+    "semantic_formal": "pending",
+    "perf_formal": "pending",
+    "verdicts": "pending",
+    "report": "pending"
+  }
+}
