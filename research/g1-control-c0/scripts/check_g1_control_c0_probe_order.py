@@ -11,8 +11,14 @@ from the executed session artifacts that:
   fileid:  each witness step is serialized on CQE reaping (dup2 before the
            stale-fd read; registration before the fixed read; the
            replacement update before its read);
-  window:  boundary A (prepare -> update -> submit) and boundary D
-           (submit -> reap -> update) are ordered by construction.
+  window:  boundary A (prepare -> update -> submit) is ordered by
+           construction, and the post-completion update control is what it
+           claims (update strictly after the CQE reap; Corrective-1 P1-2
+           withdrew the old in-flight "retention" interpretation — the
+           source and artifacts must not claim it);
+  threaded: the prereg §5 park gate is ordered by construction — all
+           workers ready BEFORE the measured span starts, released only
+           AFTER the span ends (Corrective-1 P1-1).
 
 Usage: python3 check_g1_control_c0_probe_order.py <session-id>
 """
@@ -72,7 +78,7 @@ def main() -> None:
             "replaced_marker = read_first_page"):
         fails.append("fileid: replaced read precedes the slot update")
 
-    # ---- window: boundary A and D ordering ----
+    # ---- window: boundary A ordering + post-completion update control ----
     if "boundary_a_update_errno" not in src:
         fails.append("window: boundary-A update missing")
     if pos("boundary_a_update_errno") > pos("io_uring_submit(&ring) == 1"):
@@ -80,6 +86,35 @@ def main() -> None:
     # the evaluation marker (assignment) must come after the CQE reap
     if pos("io_uring_wait_cqe(D)") > pos("boundary_d_marker = 0x41"):
         fails.append("window: boundary-D marker evaluated before CQE")
+    # Corrective-1 P1-2: the control step executes the update AFTER the
+    # reap and must not claim in-flight retention anywhere. (The fdsB
+    # update first appears in boundary A; search AFTER the D reap.)
+    p_wait_d = pos("io_uring_wait_cqe(D)")
+    p_upd_d = src.find("register_files_update(&ring, 0, fdsB, 1)",
+                       max(p_wait_d, 0))
+    if p_wait_d < 0 or p_upd_d < 0:
+        fails.append("window: post-completion update control topology "
+                     "missing (reap -> update)")
+    elif p_upd_d > pos("boundary_d_marker = 0x41"):
+        fails.append("window: post-completion update control does not "
+                     "update after the reap (topology changed)")
+    if "BOUNDARY-D RETENTION CONFIRMED" in src:
+        fails.append("window: withdrawn in-flight retention claim still "
+                     "present in source")
+    if "POST-COMPLETION UPDATE CONTROL" not in src:
+        fails.append("window: post-completion update control label missing")
+
+    # ---- threaded park gate ordering (Corrective-1 P1-1) ----------------
+    # all-ready wait BEFORE span start; release AFTER span end.
+    p_ready = pos("gate_wait_ready(&gate")
+    p_t0 = src.find("t0 = now_ns", p_ready) if p_ready >= 0 else -1
+    p_end = src.find("transfer_ns = now_ns() - t0", p_t0) if p_t0 >= 0 else -1
+    p_release = src.find("gate_release(&gate", p_end) if p_end >= 0 else -1
+    if min(p_ready, p_t0, p_end, p_release) < 0:
+        fails.append("threaded: park/release gate markers missing")
+    elif not (p_ready < p_t0 < p_end < p_release):
+        fails.append("threaded: gate ordering violated (ready must precede "
+                     "span start; release must follow span end)")
 
     # ---- executed-artifact checks ----
     sd = RESULTS / sid
@@ -94,6 +129,15 @@ def main() -> None:
     for art in ("fileid.json", "replacement-window.json"):
         if not (sd / "raw" / art).is_file():
             fails.append(f"session lacks raw/{art}")
+    if (sd / "raw" / "replacement-window.json").is_file():
+        w = json.loads((sd / "raw" / "replacement-window.json").read_text())
+        dv = w.get("boundary_d_verdict", "")
+        if "RETENTION CONFIRMED" in dv:
+            fails.append("executed window artifact: withdrawn in-flight "
+                         "retention claim still present")
+        if "POST-COMPLETION UPDATE CONTROL" not in dv:
+            fails.append("executed window artifact: post-completion update "
+                         "control label missing")
 
     if fails:
         print(f"PROBE ORDER FAIL ({len(fails)}):")

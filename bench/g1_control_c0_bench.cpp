@@ -22,9 +22,12 @@
 //                fd arm (dup2-forced reuse, no sleep/probability) + fixed
 //                L0 arm (frozen binding survives process-fd reuse) +
 //                replacement honored going forward.
-//   --replacement-window  AUDIT §6 boundaries A (prepare->update->submit
-//                binds post-update) and D (bound request keeps old target
-//                across update).
+//   --replacement-window  AUDIT §6 boundary A (prepare->update->submit
+//                binds post-update — executed witness) + a POST-COMPLETION
+//                UPDATE CONTROL (update executed after CQE reap; proves the
+//                update path works against a consumed request, and proves
+//                NOTHING about in-flight retention — the request is already
+//                complete when the update runs).
 //   --run        one formal measurement run for a (op, arm, size, depth,
 //                file_bytes) cell. Same-work gates are fail-closed
 //                (exit 3): exact op accounting, every CQE res ==
@@ -184,14 +187,49 @@ struct RunCounters {
     std::uint64_t short_writes = 0;
 };
 
-// Threaded-process condition: K worker threads each open the measured file
-// and perform ONE 4 KiB ordinary I/O (establishing a second file reference
-// in the shared files_struct), then exit. Deterministic: the main thread
-// joins each worker before the measured span begins — no sleeps, no parking.
+// Threaded-process condition (prereg §5, frozen): K worker threads each
+// open the measured file and perform ONE 4 KiB ordinary I/O (establishing a
+// second file reference in the shared files_struct), then PARK on a
+// condition variable. The main thread waits until all K are ready BEFORE
+// the measured span and releases them only AFTER the span ends — so the
+// measured span runs in a process whose K workers are alive and parked,
+// per the frozen threaded condition. Deterministic: mutex + condvar +
+// ready count + release flag; no sleeps, no yields, no busy-waiting.
+// readiness is marked unconditionally (even on worker I/O failure) so the
+// gate cannot deadlock; the threads_io_ok gate fails the run instead.
+struct ThreadGate {
+    pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+    int ready_count = 0;
+    bool release = false;
+};
+
+void gate_mark_ready(ThreadGate* g) {
+    ::pthread_mutex_lock(&g->mu);
+    ++g->ready_count;
+    ::pthread_cond_broadcast(&g->cv);
+    ::pthread_mutex_unlock(&g->mu);
+}
+
+void gate_wait_ready(ThreadGate* g, int k) {
+    ::pthread_mutex_lock(&g->mu);
+    while (g->ready_count < k) ::pthread_cond_wait(&g->cv, &g->mu);
+    ::pthread_mutex_unlock(&g->mu);
+}
+
+void gate_release(ThreadGate* g) {
+    ::pthread_mutex_lock(&g->mu);
+    g->release = true;
+    ::pthread_cond_broadcast(&g->cv);
+    ::pthread_mutex_unlock(&g->mu);
+}
+
 struct WorkerCtx {
     const char* path = nullptr;
     bool is_write = false;
+    ThreadGate* gate = nullptr;
     bool io_ok = false;
+    bool released = false;
     int io_errno = 0;
 };
 
@@ -200,14 +238,19 @@ void* worker_entry(void* arg) {
     int f = ::open(w->path, w->is_write ? O_WRONLY : O_RDONLY);
     if (f < 0) {
         w->io_errno = errno;
-        return nullptr;
+    } else {
+        std::byte buf[kThreadIoLen];
+        ssize_t x = w->is_write ? ::pwrite(f, buf, kThreadIoLen, 0)
+                                : ::pread(f, buf, kThreadIoLen, 0);
+        if (x == static_cast<ssize_t>(kThreadIoLen)) w->io_ok = true;
+        if (x < 0) w->io_errno = errno;
+        ::close(f);
     }
-    std::byte buf[kThreadIoLen];
-    ssize_t x = w->is_write ? ::pwrite(f, buf, kThreadIoLen, 0)
-                            : ::pread(f, buf, kThreadIoLen, 0);
-    if (x == static_cast<ssize_t>(kThreadIoLen)) w->io_ok = true;
-    if (x < 0) w->io_errno = errno;
-    ::close(f);
+    gate_mark_ready(w->gate);
+    ::pthread_mutex_lock(&w->gate->mu);
+    while (!w->gate->release) ::pthread_cond_wait(&w->gate->cv, &w->gate->mu);
+    ::pthread_mutex_unlock(&w->gate->mu);
+    w->released = true;  // observed only by main after pthread_join
     return nullptr;
 }
 
@@ -427,7 +470,13 @@ int run_replacement_window(const Config& cfg) {
             boundary_a_marker = 0x42;
     }
 
-    // ---- boundary D: submit while A bound -> reap A -> update -> verify -
+    // ---- post-completion update control (non-overlap) ------------------
+    // CORRECTIVE-1 (P1-2): the executed topology submits, reaps the CQE,
+    // and ONLY THEN updates the slot. The request is complete before the
+    // update, so this step proves the update path works against a consumed
+    // request — it does NOT witness in-flight retention. The retention
+    // mechanism claim stays source-supported/version-bound (audit §6:
+    // node->refs request-side retention); no overlap witness is claimed.
     const int fdsA2[1] = {fdA};
     if (::io_uring_register_files_update(&ring, 0, fdsA2, 1) != 1)
         g1_register_fail("register_files_update(window D)", EINVAL);
@@ -445,7 +494,7 @@ int run_replacement_window(const Config& cfg) {
             g1_fatal("io_uring_wait_cqe(D)", EINVAL);
         boundary_d_res = cqe->res;
         ::io_uring_cqe_seen(&ring, cqe);
-        // request bound A and holds the node; now replace S <- B
+        // request already completed and reaped; now replace S <- B
         const int ud = ::io_uring_register_files_update(&ring, 0, fdsB, 1);
         if (ud != 1) g1_register_fail("register_files_update(window D2)", EINVAL);
         std::vector<std::byte> pageA(kBlock);
@@ -476,7 +525,8 @@ int run_replacement_window(const Config& cfg) {
         boundary_d_res,
         boundary_d_marker == 0x41 ? 'A' : (boundary_d_marker == 0x42 ? 'B' : '?'),
         (boundary_d_marker == 0x41)
-            ? "BOUNDARY-D RETENTION CONFIRMED (bound request kept old target)"
+            ? "POST-COMPLETION UPDATE CONTROL (non-overlap: update executed "
+              "after CQE reap; not an in-flight retention witness)"
             : "INVALID");
     return 0;
 }
@@ -535,11 +585,18 @@ int run_one(const Config& cfg) {
         register_ns = now_ns() - t0;
     }
 
-    // Threaded condition: spawn K workers that each open the measured file
-    // and perform one 4 KiB I/O (second file reference), then park.
+    // Threaded condition (prereg §5): spawn K workers that each open the
+    // measured file and perform one 4 KiB I/O (second file reference), then
+    // wait until ALL are ready. Workers stay parked until released AFTER the
+    // measured span; join happens in teardown.
     int threads_spawned = 0;
     int threads_io_ok = 0;
     int threads_joined = 0;
+    int threads_ready = 0;
+    int threads_released = 0;
+    bool thread_gate_ready = false;
+    bool thread_gate_release_after_transfer = false;
+    ThreadGate gate;
     std::vector<pthread_t> ths;
     std::vector<WorkerCtx> wctx;
     if (is_threaded) {
@@ -548,16 +605,17 @@ int run_one(const Config& cfg) {
         for (int i = 0; i < kThreadedWorkers; ++i) {
             wctx[i].path = data_path.c_str();
             wctx[i].is_write = !is_read;
+            wctx[i].gate = &gate;
             if (::pthread_create(&ths[i], nullptr, worker_entry, &wctx[i]) !=
                 0)
                 g1_fatal("pthread_create", EAGAIN);
             ++threads_spawned;
         }
-        for (int i = 0; i < kThreadedWorkers; ++i) {
-            ::pthread_join(ths[i], nullptr);
-            ++threads_joined;
-            if (wctx[i].io_ok) ++threads_io_ok;
-        }
+        gate_wait_ready(&gate, kThreadedWorkers);
+        // Reached strictly before the measured span begins (main's program
+        // order); emitted as the machine-readable ready causality marker.
+        threads_ready = gate.ready_count;
+        thread_gate_ready = true;
     }
 
     const std::uint64_t setup_ns = now_ns() - t_setup0;
@@ -668,6 +726,20 @@ int run_one(const Config& cfg) {
         if (in_flight[s]) g1_semantic("in-flight op at span end");
     const std::uint64_t transfer_ns = now_ns() - t0;
 
+    // Release the parked workers only after the measured span ended (prereg
+    // §5: park until the main thread's transfer completes); emitted as the
+    // machine-readable release causality marker.
+    if (is_threaded) {
+        gate_release(&gate);
+        thread_gate_release_after_transfer = true;
+        for (int i = 0; i < kThreadedWorkers; ++i) {
+            ::pthread_join(ths[i], nullptr);
+            ++threads_joined;
+            if (wctx[i].io_ok) ++threads_io_ok;
+            if (wctx[i].released) ++threads_released;
+        }
+    }
+
     // ---- teardown (outside span) ----
     std::uint64_t unregister_ns = 0;
     if (is_fixed) {
@@ -737,6 +809,9 @@ int run_one(const Config& cfg) {
         "\"align_remainder\":%zu,\"slot_stride\":%llu,"
         "\"registered_files\":%llu,\"threads_spawned\":%d,"
         "\"threads_io_ok\":%d,\"threads_joined\":%d,"
+        "\"threads_ready\":%d,\"threads_released\":%d,"
+        "\"thread_gate_ready\":%s,"
+        "\"thread_gate_release_after_transfer\":%s,"
         "\"data_fd\":%d,\"ok\":true}\n",
         cfg.label.c_str(), cfg.op.c_str(), cfg.arm.c_str(),
         (unsigned long long)cfg.size, (unsigned long long)cfg.depth,
@@ -755,7 +830,9 @@ int run_one(const Config& cfg) {
         (unsigned long long)stime_us, ru1.ru_maxrss, ru1.ru_minflt,
         ru1.ru_majflt, align_remainder, (unsigned long long)cfg.size,
         (unsigned long long)(is_fixed ? 1 : 0), threads_spawned,
-        threads_io_ok, threads_joined, data_fd);
+        threads_io_ok, threads_joined, threads_ready, threads_released,
+        bool_s(thread_gate_ready).c_str(),
+        bool_s(thread_gate_release_after_transfer).c_str(), data_fd);
     return 0;
 }
 

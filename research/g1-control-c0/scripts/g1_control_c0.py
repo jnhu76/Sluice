@@ -19,12 +19,25 @@ Subcommands:
                         freeze the expected dst sha256 constants
   q0 <session-id>       Phase Q0 stability qualification: 30 runs of F0 at
                         4 KiB x d8 on tmpfs READ, full same-work gates.
-  formal <session-id>   frozen matrix: (op x 5 cells x 2 fs x 4 arms) x 7
-                        seeded-interleaved rounds = 560 runs, perf-wrapped
+  formal <session-id> [--arms A1,A2]
+                        frozen matrix: (op x 5 cells x 2 fs x 4 arms) x 7
+                        seeded-interleaved rounds = 560 runs, perf-wrapped.
+                        --arms restricts EXECUTION to a subset of the frozen
+                        combo list (run ids keep their full-plan positions);
+                        the session manifest is marked with the scope.
+                        Corrective-1 uses --arms F0-T,F1-T (280 runs).
   summarize <session-id> runs.jsonl -> summary + analysis (per-cell
                         wall/op medians, F0-vs-F1 materiality per frozen
                         rule, neighbor consistency, threaded arms,
-                        verdict vocabulary per prereg)
+                        verdict vocabulary per prereg); scope-aware via the
+                        session manifest ("full" vs "threaded-corrective")
+  composite <single-sid> <threaded-sid>
+                        Corrective-1 thin evidence composition: campaign
+                        verdicts derive from the single-thread session only,
+                        threaded exploratory verdicts from the corrective
+                        session only; fail-closed, provenance-carrying;
+                        writes composite-summary.json into the threaded
+                        session
 
 Immutable session layout (mirrors research/rbuf-e0):
   results/<session-id>/{environment.json, manifest.json, gates.json,
@@ -318,13 +331,20 @@ def bench_run(session_dir: Path, gates: Gates, manifest: dict, run_id: str,
         rec["gate_fail"] = "registration_table"
         gates.record(rec)
         return rec
-    if arm in ("F0-T", "F1-T") and (
-            b.get("threads_spawned") != THREADED_WORKERS or
-            b.get("threads_io_ok") != THREADED_WORKERS or
-            b.get("threads_joined") != THREADED_WORKERS):
-        rec["gate_fail"] = "threaded_condition"
-        gates.record(rec)
-        return rec
+    if arm in ("F0-T", "F1-T"):
+        # Corrective-1: the frozen prereg §5 threaded condition requires the
+        # workers ALIVE AND PARKED across the measured span. The gate fields
+        # are the machine-readable causality proof; all must hold fail-closed.
+        if (b.get("threads_spawned") != THREADED_WORKERS or
+                b.get("threads_io_ok") != THREADED_WORKERS or
+                b.get("threads_joined") != THREADED_WORKERS or
+                b.get("threads_ready") != THREADED_WORKERS or
+                b.get("threads_released") != THREADED_WORKERS or
+                b.get("thread_gate_ready") is not True or
+                b.get("thread_gate_release_after_transfer") is not True):
+            rec["gate_fail"] = "threaded_condition"
+            gates.record(rec)
+            return rec
     # WRITE: dst must hash to the frozen per-cell constant (pattern is
     # per-offset, independent of depth/arm -> one constant per size).
     if op == "WRITE":
@@ -513,11 +533,15 @@ def cmd_q0(session_id: str, resume: bool = False) -> None:
           f"single-worker uring path QUALIFIED")
 
 
-def cmd_formal(session_id: str, resume: bool = False) -> None:
+def cmd_formal(session_id: str, resume: bool = False, arms=None) -> None:
     sd = RESULTS / session_id
     if not sd.is_dir():
         print(f"session {session_id} does not exist; run probe first",
               file=sys.stderr)
+        sys.exit(1)
+    arms = arms or ARMS
+    if any(a not in ARMS for a in arms):
+        print(f"unknown arms in --arms {arms}", file=sys.stderr)
         sys.exit(1)
     manifest = json.loads((sd / "manifest.json").read_text())
     # expected dst hashes must be frozen
@@ -529,14 +553,34 @@ def cmd_formal(session_id: str, resume: bool = False) -> None:
             else:
                 print(f"{key} not frozen; run generate first", file=sys.stderr)
                 sys.exit(1)
+    if arms != ARMS:
+        # scoped execution (Corrective-1): the session manifest records the
+        # scope so summarize/validators interpret the evidence fail-closed.
+        manifest["scope"] = "threaded-corrective"
+        manifest["corrective"] = 1
+        manifest["supersedes"] = (
+            "g1-control-c0-native-1 threaded arms (F0-T/F1-T): workers "
+            "exited before the measured span, violating the frozen prereg "
+            "§5 threaded condition")
     gates = Gates(sd)
+    # record the RESOLVED substrate fstype per label (Corrective-1: the
+    # native-1 "tmpfs" label actually resolved to btrfs; the label is the
+    # data-directory name, the true substrate lives here and in
+    # environment.json)
+    manifest["substrate_fstypes"] = {
+        fs: subprocess.run(["findmnt", "-no", "FSTYPE", "-T",
+                            str(DATA_ROOT / fs)],
+                           capture_output=True, text=True).stdout.strip()
+        or "unresolved" for fs in FS}
+    # the plan is a property of the FULL frozen combo list (same seed, same
+    # shuffle); scoped execution filters it, keeping full-plan run ids.
     combos = [(op, size, depth, fs, arm)
               for op in OPS
               for size, depths in DEPTHS_BY_SIZE.items()
               for depth in depths
               for fs in FS
               for arm in ARMS]
-    plan = run_plan(combos)
+    plan = [(rid, c) for rid, c in run_plan(combos) if c[4] in arms]
     done_ids = {r.get("run_id") for r in
                 (load_runs(session_id) if (sd / "raw" / "runs.jsonl").is_file()
                  else [])}
@@ -575,6 +619,65 @@ def material(f0_vals: list, f1_vals: list) -> dict:
                          ("F1_SLOWER" if regression else "NONE")}
 
 
+PRIMARY_DEPTHS = DEPTHS_BY_SIZE[4096]
+
+
+def cell_directions(direction_of) -> dict:
+    """Primary-cell directions for one op set, keyed by cell name."""
+    return {f"{op}_4096_{d}_tmpfs": direction_of(op, 4096, d, "tmpfs")
+            for op in OPS for d in PRIMARY_DEPTHS}
+
+
+def neighbor_share(directions: dict) -> dict:
+    """prereg §13 neighbor consistency: neighbors of a primary 4 KiB tmpfs
+    cell are the other 4 KiB depths (tmpfs), the 64 KiB cell (tmpfs), and
+    the same cell on btrfs. True when >= 1 neighbor shares the cell's
+    direction (only meaningful for non-NONE directions)."""
+    share = {}
+    for op in OPS:
+        for d in PRIMARY_DEPTHS:
+            cell = f"{op}_4096_{d}_tmpfs"
+            own = directions[cell]
+            if own is None:
+                share[cell] = False
+                continue
+            neighbor_dirs = [directions[f"{op}_4096_{d2}_tmpfs"]
+                             for d2 in PRIMARY_DEPTHS if d2 != d]
+            neighbor_dirs.append(directions.get(f"{op}_65536_1_tmpfs"))
+            neighbor_dirs.append(directions.get(f"{op}_4096_{d}_btrfs"))
+            share[cell] = any(x == own for x in neighbor_dirs if x)
+    return share
+
+
+def derive_verdicts(directions: dict, share: dict) -> dict:
+    """Frozen prereg §13/§13.1 campaign verdict derivation from per-cell
+    directions. Pure function: the validator re-implements this rule
+    independently and compares."""
+    verdicts = {}
+    for op in OPS:
+        cells = [f"{op}_4096_{d}_tmpfs" for d in PRIMARY_DEPTHS]
+        dirs = [directions[c] for c in cells]
+        benefit_supported = any(d == "F1_FASTER" and share[c]
+                                for c, d in zip(cells, dirs))
+        regress_supported = any(d == "F1_SLOWER" and share[c]
+                                for c, d in zip(cells, dirs))
+        if benefit_supported:
+            verdicts[op] = "FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED"
+        elif regress_supported:
+            verdicts[op] = "FIXED-FILE PERFORMANCE REGRESSION"
+        elif any(d == "F1_FASTER" for d in dirs):
+            verdicts[op] = "REGIME-LOCAL BENEFIT ESTABLISHED"
+        else:
+            # an ISOLATED regression is a per-cell observation only; the
+            # frozen vocabulary has no isolated-regression campaign verdict
+            verdicts[op] = "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
+    return verdicts
+
+
+def scope_arms(scope: str) -> list:
+    return ARMS if scope == "full" else ["F0-T", "F1-T"]
+
+
 def cmd_summarize(session_id: str) -> None:
     sd = RESULTS / session_id
     runs = load_runs(session_id)
@@ -588,6 +691,7 @@ def cmd_summarize(session_id: str) -> None:
         print(f"no formal runs in {session_id}", file=sys.stderr)
         sys.exit(1)
     manifest = json.loads((sd / "manifest.json").read_text())
+    scope = manifest.get("scope", "full")
     gates = json.loads((sd / "gates.json").read_text())
     cells = {}
     for r in runs:
@@ -595,14 +699,22 @@ def cmd_summarize(session_id: str) -> None:
             continue
         key = (r["op"], r["size"], r["depth"], r["fs"], r["arm"])
         cells.setdefault(key, []).append(r["bench"]["wall_per_op_ns"])
+    expected_arms = scope_arms(scope)
     all_keys = {(op, size, depth, fs, arm)
                 for op in OPS for size in SIZES
-                for depth in DEPTHS_BY_SIZE[size] for fs in FS for arm in ARMS}
+                for depth in DEPTHS_BY_SIZE[size] for fs in FS
+                for arm in expected_arms}
+    # scope discipline: a scoped session must not contain formal runs of
+    # arms outside its scope
+    outside = sorted({(r["op"], r["size"], r["depth"], r["fs"], r["arm"])
+                      for r in runs if r["arm"] not in expected_arms})
     missing = sorted(all_keys - set(cells))
-    summary = {"session": session_id, "runs_total": len(runs),
+    summary = {"session": session_id, "scope": scope,
+               "runs_total": len(runs),
                "runs_ok": len([r for r in runs if r.get("ok")]),
                "gate_errors": len(gates.get("errors", [])),
                "cells_missing": missing,
+               "cells_outside_scope": outside,
                "per_cell": {}}
     for op in OPS:
         for size in SIZES:
@@ -618,47 +730,40 @@ def cmd_summarize(session_id: str) -> None:
                         "f0": m, "threaded": mt,
                         "n": len(f0) + len(f1) + len(f0t) + len(f1t),
                     }
+
+    def direction_of(op, size, depth, fs, kind):
+        entry = "f0" if kind == "single" else "threaded"
+        return summary["per_cell"][f"{op}_{size}_{depth}_{fs}"][entry][
+            "direction"]
+
     # primary cells: 4 KiB family on tmpfs
     prim = []
-    for depth in DEPTHS_BY_SIZE[4096]:
+    for depth in PRIMARY_DEPTHS:
         c = summary["per_cell"].get(f"READ_4096_{depth}_tmpfs", {})
         prim.append({"cell": f"READ 4K d{depth} tmpfs",
                      **{k: c.get("f0", {}).get(k) for k in
                         ("ratio", "benefit", "regression", "direction")}})
-    neighbor_support = {}
-    for op in OPS:
-        for depth in DEPTHS_BY_SIZE[4096]:
-            d = summary["per_cell"][f"{op}_4096_{depth}_tmpfs"]["f0"][
-                "direction"]
-            neighbors = [summary["per_cell"][f"{op}_4096_{d2}_tmpfs"]["f0"]
-                         for d2 in DEPTHS_BY_SIZE[4096] if d2 != depth]
-            neighbors += [summary["per_cell"][f"{op}_4096_{depth}_btrfs"]
-                          ["f0"]]
-            same = [n for n in neighbors if n["direction"] == d]
-            neighbor_support[f"{op}_4096_{depth}_tmpfs"] = bool(same)
-    # verdicts (prereg §13.1)
-    verdicts = {}
-    for op in OPS:
-        dirs = [summary["per_cell"][f"{op}_4096_{d}_tmpfs"]["f0"]["direction"]
-                for d in DEPTHS_BY_SIZE[4096]]
-        any_benefit = any(x == "F1_FASTER" for x in dirs)
-        any_regress = any(x == "F1_SLOWER" for x in dirs)
-        if any_benefit and any(
-                neighbor_support.get(f"{op}_4096_{d}_tmpfs")
-                for d in DEPTHS_BY_SIZE[4096]):
-            verdicts[op] = "FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED"
-        elif any_regress and any(
-                neighbor_support.get(f"{op}_4096_{d}_tmpfs")
-                for d in DEPTHS_BY_SIZE[4096]):
-            verdicts[op] = "FIXED-FILE PERFORMANCE REGRESSION"
-        elif any_benefit or any_regress:
-            verdicts[op] = "REGIME-LOCAL BENEFIT ESTABLISHED" \
-                if any_benefit else "REGIME-LOCAL EFFECT (ISOLATED CELL ONLY)"
-        else:
-            verdicts[op] = "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED"
-    summary["primary_cells"] = prim
-    summary["neighbor_support"] = neighbor_support
-    summary["verdicts"] = verdicts
+    if scope == "full":
+        directions = {k: v for k, v in cell_directions(
+            lambda op, s, d, fs: direction_of(op, s, d, fs, "single")).items()}
+        share = neighbor_share(directions)
+        summary["primary_cells"] = prim
+        summary["neighbor_support"] = share
+        # verdicts (prereg §13.1, derived by the frozen rule)
+        summary["verdicts"] = derive_verdicts(directions, share)
+        # threaded arms are exploratory: same frozen rule applied to
+        # F0-T vs F1-T, reported separately, cannot carry a verdict
+        tdirs = {k: v for k, v in cell_directions(
+            lambda op, s, d, fs: direction_of(op, s, d, fs, "threaded")).items()}
+        summary["threaded_directions"] = tdirs
+        summary["threaded_verdicts"] = derive_verdicts(tdirs,
+                                                       neighbor_share(tdirs))
+    else:
+        tdirs = {k: v for k, v in cell_directions(
+            lambda op, s, d, fs: direction_of(op, s, d, fs, "threaded")).items()}
+        summary["threaded_directions"] = tdirs
+        summary["threaded_verdicts"] = derive_verdicts(tdirs,
+                                                       neighbor_share(tdirs))
     (sd / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     with (sd / "summary.csv").open("w") as f:
         f.write("op,size,depth,fs,f0_median_ns,f1_median_ns,ratio,"
@@ -670,11 +775,224 @@ def cmd_summarize(session_id: str) -> None:
                     f"{f0.get('f1_median_ns')},{f0.get('ratio')},"
                     f"{f0.get('direction')},{v['threaded'].get('ratio')},"
                     f"{v['threaded'].get('direction')}\n")
-    print(f"summary written to {sd / 'summary.json'}")
-    for op in OPS:
-        print(f"{op}: {verdicts[op]}")
+    print(f"summary written to {sd / 'summary.json'} (scope: {scope})")
+    if scope == "full":
+        for op in OPS:
+            print(f"{op}: {summary['verdicts'][op]}")
+        for op in OPS:
+            print(f"{op} (threaded, exploratory): "
+                  f"{summary['threaded_verdicts'][op]}")
+    else:
+        for op in OPS:
+            print(f"{op} (threaded, exploratory): "
+                  f"{summary['threaded_verdicts'][op]}")
     if missing:
         print(f"MISSING CELLS: {missing}", file=sys.stderr)
+    if outside:
+        print(f"CELLS OUTSIDE SCOPE: {outside}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_composite(sid_single: str, sid_threaded: str) -> None:
+    """Corrective-1 thin evidence composition (fail-closed).
+
+    composite input:
+        F0 / F1     from the single-thread session (native-1)
+        F0-T / F1-T from the threaded-corrective session (native-2)
+    The native-1 threaded subset is SUPERSEDED (prereg §5 violation) and is
+    excluded from every derived number; the composite records that
+    disposition with provenance. Any coverage/gate/scope problem aborts
+    WITHOUT writing composite-summary.json.
+    """
+    s1, s2 = RESULTS / sid_single, RESULTS / sid_threaded
+    problems: list = []
+
+    def runs_of(sid: str) -> list:
+        raw = RESULTS / sid / "raw" / "runs.jsonl"
+        return [json.loads(l) for l in raw.read_text().splitlines()
+                if l.strip()]
+
+    runs1 = [r for r in runs_of(sid_single)
+             if not r["run_id"].startswith("q0-")]
+    runs2 = [r for r in runs_of(sid_threaded)
+             if not r["run_id"].startswith("q0-")]
+    for sid, runs in ((sid_single, runs1), (sid_threaded, runs2)):
+        g = json.loads((RESULTS / sid / "gates.json").read_text())
+        if g.get("errors"):
+            problems.append(f"{sid}: {len(g['errors'])} gate errors")
+        ids = [r["run_id"] for r in runs]
+        if len(ids) != len(set(ids)):
+            problems.append(f"{sid}: duplicate run ids")
+
+    by_cell1: dict = {}
+    for r in runs1:
+        if r.get("ok"):
+            by_cell1.setdefault((r["op"], r["size"], r["depth"], r["fs"],
+                                 r["arm"]), []).append(r)
+    by_cell2: dict = {}
+    for r in runs2:
+        if r.get("ok"):
+            by_cell2.setdefault((r["op"], r["size"], r["depth"], r["fs"],
+                                 r["arm"]), []).append(r)
+
+    # native-1: single-thread arms must cover the matrix exactly; threaded
+    # arms must be the OLD shape (no corrective gate fields) -> superseded.
+    for op in OPS:
+        for size in SIZES:
+            for depth in DEPTHS_BY_SIZE[size]:
+                for fs in FS:
+                    for arm in ("F0", "F1"):
+                        n = len(by_cell1.get((op, size, depth, fs, arm), []))
+                        if n != ROUNDS:
+                            problems.append(
+                                f"{sid_single} {op}/{size}/{depth}/{fs}/"
+                                f"{arm}: {n} valid runs (expected {ROUNDS})")
+    superseded_runs = [r for r in runs1 if r["arm"] in ("F0-T", "F1-T")]
+    post_corrective_shape = [
+        r["run_id"] for r in superseded_runs
+        if "threads_ready" in (r.get("bench") or {})]
+    if post_corrective_shape:
+        problems.append(
+            f"{sid_single}: threaded runs already carry corrective gate "
+            f"fields ({post_corrective_shape[:3]}...) — inconsistent with "
+            f"the superseded-shape disposition")
+    if len(superseded_runs) != 280:
+        problems.append(f"{sid_single}: expected 280 superseded threaded "
+                        f"runs, found {len(superseded_runs)}")
+
+    # native-2: threaded arms must cover the matrix exactly WITH the
+    # corrective gate fields; single-thread formal runs must not exist.
+    for op in OPS:
+        for size in SIZES:
+            for depth in DEPTHS_BY_SIZE[size]:
+                for fs in FS:
+                    for arm in ("F0-T", "F1-T"):
+                        vals = by_cell2.get((op, size, depth, fs, arm), [])
+                        if len(vals) != ROUNDS:
+                            problems.append(
+                                f"{sid_threaded} {op}/{size}/{depth}/{fs}/"
+                                f"{arm}: {len(vals)} valid runs "
+                                f"(expected {ROUNDS})")
+    single_in_2 = [r["run_id"] for r in runs2 if r["arm"] in ("F0", "F1")]
+    if single_in_2:
+        problems.append(f"{sid_threaded}: single-thread formal runs "
+                        f"outside scope: {single_in_2[:3]}...")
+    for r in [x for x in runs2 if x.get("ok") and
+              x["arm"] in ("F0-T", "F1-T")]:
+        b = r["bench"]
+        if (b.get("threads_spawned") != THREADED_WORKERS or
+                b.get("threads_io_ok") != THREADED_WORKERS or
+                b.get("threads_joined") != THREADED_WORKERS or
+                b.get("threads_ready") != THREADED_WORKERS or
+                b.get("threads_released") != THREADED_WORKERS or
+                b.get("thread_gate_ready") is not True or
+                b.get("thread_gate_release_after_transfer") is not True):
+            problems.append(f"{sid_threaded} {r['run_id']}: corrective "
+                            f"threaded gate fields missing/unsatisfied")
+
+    env1 = json.loads((s1 / "environment.json").read_text())
+    env2 = json.loads((s2 / "environment.json").read_text())
+    man2 = json.loads((s2 / "manifest.json").read_text())
+    if man2.get("scope") != "threaded-corrective":
+        problems.append(f"{sid_threaded}: manifest scope is not "
+                        f"threaded-corrective")
+
+    if problems:
+        print(f"COMPOSITE FAIL ({len(problems)}):")
+        for p in problems:
+            print(f"  - {p}")
+        sys.exit(1)
+
+    def material_from(vals_by_arm) -> dict:
+        return material(vals_by_arm.get("F0-T", []),
+                        vals_by_arm.get("F1-T", []))
+
+    per_cell = {}
+    dirs_single, dirs_threaded = {}, {}
+    for op in OPS:
+        for size in SIZES:
+            for depth in DEPTHS_BY_SIZE[size]:
+                for fs in FS:
+                    f0 = [r["bench"]["wall_per_op_ns"] for r in
+                          by_cell1.get((op, size, depth, fs, "F0"), [])]
+                    f1 = [r["bench"]["wall_per_op_ns"] for r in
+                          by_cell1.get((op, size, depth, fs, "F1"), [])]
+                    f0t = [r["bench"]["wall_per_op_ns"] for r in
+                           by_cell2.get((op, size, depth, fs, "F0-T"), [])]
+                    f1t = [r["bench"]["wall_per_op_ns"] for r in
+                           by_cell2.get((op, size, depth, fs, "F1-T"), [])]
+                    m, mt = material(f0, f1), material(f0t, f1t)
+                    per_cell[f"{op}_{size}_{depth}_{fs}"] = {
+                        "f0": m, "threaded": mt,
+                        "f0_source": sid_single, "threaded_source":
+                            sid_threaded}
+    for entry, kind in (("f0", "single"), ("threaded", "threaded")):
+        d = {}
+        for op in OPS:
+            for depth in PRIMARY_DEPTHS:
+                d[f"{op}_4096_{depth}_tmpfs"] = per_cell[
+                    f"{op}_4096_{depth}_tmpfs"][entry]["direction"]
+            d[f"{op}_65536_1_tmpfs"] = per_cell[f"{op}_65536_1_tmpfs"][
+                entry]["direction"]
+            d[f"{op}_4096_{depth}_btrfs"] = per_cell[
+                f"{op}_4096_{depth}_btrfs"][entry]["direction"]
+        if kind == "single":
+            dirs_single = d
+        else:
+            dirs_threaded = d
+    share_single = neighbor_share(
+        {k: dirs_single.get(k) for k in
+         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]})
+    share_threaded = neighbor_share(
+        {k: dirs_threaded.get(k) for k in
+         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]})
+    verdicts = derive_verdicts(
+        {k: dirs_single.get(k) for k in
+         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]},
+        share_single)
+    threaded_verdicts = derive_verdicts(
+        {k: dirs_threaded.get(k) for k in
+         [f"{op}_4096_{d}_tmpfs" for op in OPS for d in PRIMARY_DEPTHS]},
+        share_threaded)
+
+    composite = {
+        "composite": True,
+        "corrective": "Corrective-1",
+        "single_thread_source": {
+            "session": sid_single,
+            "git_head": env1.get("git", {}).get("head"),
+            "bench_binary_sha256": env1.get("bench_binary_sha256"),
+            "disposition": "authoritative for F0/F1 only",
+        },
+        "threaded_source": {
+            "session": sid_threaded,
+            "git_head": env2.get("git", {}).get("head"),
+            "bench_binary_sha256": env2.get("bench_binary_sha256"),
+            "disposition": "authoritative for F0-T/F1-T (corrected prereg §5 "
+                           "threaded condition: workers parked across the "
+                           "measured span)",
+        },
+        "superseded": {
+            "session": sid_single,
+            "arms": ["F0-T", "F1-T"],
+            "runs": len(superseded_runs),
+            "reason": "frozen prereg §5 threaded condition violated: "
+                      "workers were joined BEFORE the measured span",
+        },
+        "per_cell": per_cell,
+        "verdicts": verdicts,
+        "threaded_verdicts": threaded_verdicts,
+        "threaded_interpretation": "EXPLORATORY ONLY (prereg §5/§13): "
+                                   "threaded arms cannot carry a campaign "
+                                   "verdict",
+    }
+    out = s2 / "composite-summary.json"
+    out.write_text(json.dumps(composite, indent=1) + "\n")
+    print(f"composite summary written to {out}")
+    for op in OPS:
+        print(f"{op}: {verdicts[op]}")
+    for op in OPS:
+        print(f"{op} (threaded, exploratory): {threaded_verdicts[op]}")
 
 
 def usage() -> None:
@@ -688,6 +1006,12 @@ def main() -> None:
     cmd = sys.argv[1]
     session = sys.argv[2] if len(sys.argv) > 2 else None
     resume = "--resume" in sys.argv
+    arms = None
+    if "--arms" in sys.argv:
+        i = sys.argv.index("--arms")
+        if i + 1 >= len(sys.argv):
+            usage()
+        arms = [a.strip() for a in sys.argv[i + 1].split(",") if a.strip()]
     if cmd == "status":
         cmd_status()
     elif cmd == "probe" and session:
@@ -697,9 +1021,11 @@ def main() -> None:
     elif cmd == "q0" and session:
         cmd_q0(session, resume)
     elif cmd == "formal" and session:
-        cmd_formal(session, resume)
+        cmd_formal(session, resume, arms)
     elif cmd == "summarize" and session:
         cmd_summarize(session)
+    elif cmd == "composite" and session and len(sys.argv) > 3:
+        cmd_composite(session, sys.argv[3])
     else:
         usage()
 

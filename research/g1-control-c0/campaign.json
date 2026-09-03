@@ -26,8 +26,28 @@
   "perf_events": ["instructions:u", "cycles:u", "task-clock:u"],
   "verdict_vocabulary": {
     "perf": ["FIXED-FILE PERFORMANCE BENEFIT ESTABLISHED", "REGIME-LOCAL BENEFIT ESTABLISHED", "FIXED-FILE PERFORMANCE REGRESSION", "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED", "BLOCKED", "INVALID"],
-    "identity": ["ORDINARY-FD WRONG-TARGET REPRODUCED", "FIXED L0 BINDING PRESERVED TARGET", "FIXED L0 BINDING DID NOT PRESERVE TARGET", "BOUNDARY-A WINDOW CONFIRMED", "BOUNDARY-D RETENTION CONFIRMED", "BLOCKED", "INVALID"],
+    "identity": ["ORDINARY-FD WRONG-TARGET REPRODUCED", "FIXED L0 BINDING PRESERVED TARGET", "FIXED L0 BINDING DID NOT PRESERVE TARGET", "BOUNDARY-A WINDOW CONFIRMED", "POST-COMPLETION UPDATE CONTROL", "BOUNDARY-D RETENTION CONFIRMED (WITHDRAWN by Corrective-1 — executed topology was non-overlap)", "BLOCKED", "INVALID"],
     "minimality": ["L0 SUFFICIENT", "L1 REQUIRED", "L1 SUFFICIENT", "L2 GENERATION EARNED", "GENERATION NOT EARNED", "PER-REQUEST LIVE-USE EARNED", "PER-REQUEST LIVE-USE NOT EARNED", "UNRESOLVED"]
+  },
+  "corrective_1": {
+    "date": "2026-09-03",
+    "p1_1_threaded_condition": {
+      "finding": "native-1 threaded arms joined workers BEFORE the measured span (frozen prereg §5 violated: workers must park across the span)",
+      "disposition": "native-1 F0-T/F1-T SUPERSEDED; 280 affected runs re-executed in g1-control-c0-native-2-threaded-corrective with a deterministic park/release gate",
+      "single_thread_evidence": "UNAFFECTED"
+    },
+    "p1_2_boundary_d": {
+      "finding": "executed BOUNDARY-D topology updated the slot only AFTER the CQE reap — cannot witness in-flight retention",
+      "disposition": "executed retention claim WITHDRAWN; reclassified as POST-COMPLETION UPDATE CONTROL; retention remains SOURCE-SUPPORTED / VERSION-BOUND"
+    },
+    "p1_3_validator": {
+      "finding": "analysis validator checked campaign verdict vocabulary but did not independently re-derive the verdict from raw cells",
+      "disposition": "validator now re-derives READ/WRITE verdicts from raw and requires stored == derived; --self-test proves both mutation directions are rejected"
+    },
+    "substrate_disclosure": {
+      "finding": "native-1 environment.json resolves BOTH filesystem labels ('tmpfs', 'btrfs') to the SAME btrfs substrate — the §6 'tmpfs (primary, /tmp)' intent was not met; regime control did not vary the regime",
+      "disposition": "F0-vs-F1 causal comparison unaffected (identical substrate within every pair); regime language withdrawn; resolved substrate now recorded per session (manifest substrate_fstypes); corrective threaded cells executed on the SAME substrate for comparability"
+    }
   },
   "production": {"implementation": "NO", "public_api": "NO", "c1": "NOT ENTERED"},
   "host_scope": "HOST-LOCAL ONLY"

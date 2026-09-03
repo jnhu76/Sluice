@@ -443,3 +443,56 @@ PER-REQUEST LIVE-USE NOT EARNED | UNRESOLVED
 ```text
 (none — to be appended ONLY as additive, timestamped entries after freeze)
 ```
+
+AMENDMENT-1 (2026-09-03, Corrective-1 P1-1 — threaded-condition mismatch):
+session g1-control-c0-native-1 did NOT execute the frozen §5 threaded
+condition. The bench spawned the K=4 workers, let each perform its one
+setup I/O, and JOINED them BEFORE the measured span (spawn -> I/O ->
+join -> span), instead of parking them across the span (§5: park until
+the main thread's transfer completes). The native-1 threaded subset
+(F0-T/F1-T) is SUPERSEDED for every threaded claim; it is retained
+byte-identical as historical evidence. Corrective-1 re-executes exactly
+the affected cells (2 ops x 5 cells x 2 fs x 2 threaded arms x R=7 =
+280 runs) in session g1-control-c0-native-2-threaded-corrective with a
+deterministic mutex/condvar park-release gate (no sleeps/yields: workers
+ready before the span, released only after it; emitted gate fields
+threads_ready / threads_released / thread_gate_ready /
+thread_gate_release_after_transfer, driver- and validator-gated), same
+seeded-interleaved plan, same frozen thresholds and materiality.
+Single-thread arms (F0/F1) are unaffected; their native-1 evidence
+stands.
+
+AMENDMENT-2 (2026-09-03, Corrective-1 P1-2 — BOUNDARY-D claim withdrawn):
+the executed §14.3 BOUNDARY-D topology submits the fixed read, REAPS its
+CQE, and only then updates the slot. The request is complete before the
+update, so the executed step cannot witness in-flight retention. The
+executed claim "BOUNDARY-D RETENTION CONFIRMED" is WITHDRAWN; the step is
+reclassified as a POST-COMPLETION UPDATE CONTROL (non-overlap; not
+load-bearing). Already-bound-resource retention remains SOURCE-SUPPORTED,
+VERSION-BOUND (AUDIT §6: request-side node->refs retention,
+io_req_put_rsrc_nodes, fput at refs==0). No replacement overlap
+experiment is added.
+
+AMENDMENT-3 (2026-09-03, Corrective-1 — substrate-label disclosure):
+environment.json of g1-control-c0-native-1 records BOTH §6 filesystem
+labels ("tmpfs", "btrfs") resolving to the SAME btrfs substrate
+(/home, zstd:1, page-cache): the "tmpfs (primary, /tmp)" intent was not
+met by the executed session. The F0-vs-F1 causal comparison is unaffected
+(identical substrate within every arm pair; the only delta remains the
+file-lookup mechanism) and the substrate-share bias runs AGAINST F1
+(harder materiality), so the executed verdicts are not endangered by
+this defect. What is withdrawn: REGIME language — "tmpfs vs btrfs regime
+control" did not vary the regime; cross-label agreement is
+same-substrate replication. Corrective-1 keeps the frozen directory
+labels for run-id continuity, records the resolved substrate per session
+(manifest substrate_fstypes), and executes the corrective threaded cells
+on the SAME substrate as native-1 for comparability.
+
+AMENDMENT-4 (2026-09-03, Corrective-1 — interpretation split, §14.3
+BOUNDARY-A): the executed witness proves only that a
+prepared-but-unsubmitted SQE observed the POST-update binding
+(PRE-SUBMISSION FIXED BINDING NOT FROZEN). That binding occurs at the
+kernel issue path (io_assign_file / io_file_get_fixed) is
+SOURCE-SUPPORTED, VERSION-BOUND — an inference from source, not an
+executed fact. Boundaries B/C remain NOT DETERMINISTICALLY OBSERVABLE
+from userspace.
