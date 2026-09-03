@@ -1038,12 +1038,13 @@ def cmd_composite(sid_single: str, sid_threaded: str, sid_tmpfs: str) -> None:
     vals_tmpfs_single = ok_vals(runs3, ["tmpfs"], ("F0", "F1"))
     vals_tmpfs_threaded = ok_vals(runs3, ["tmpfs"], ("F0-T", "F1-T"))
 
-    # coverage: every frozen cell of the composite matrix exactly ROUNDS
-    def coverage(vals, sid, expected):
+    # coverage: every frozen cell of the composite matrix exactly ROUNDS,
+    # from the session that is substrate-authoritative for its label
+    def coverage(vals, sid, labels, expected):
         for op in OPS:
             for size in SIZES:
                 for depth in DEPTHS_BY_SIZE[size]:
-                    for fs in FS:
+                    for fs in labels:
                         for arm in expected:
                             n = len(vals.get((op, size, depth, fs, arm), []))
                             if n != ROUNDS:
@@ -1051,10 +1052,10 @@ def cmd_composite(sid_single: str, sid_threaded: str, sid_tmpfs: str) -> None:
                                     f"{sid} {op}/{size}/{depth}/{fs}/{arm}: "
                                     f"{n} valid runs (expected {ROUNDS})")
 
-    coverage(vals_single, sid_single, ("F0", "F1"))
-    coverage(vals_threaded, sid_threaded, ("F0-T", "F1-T"))
-    coverage(vals_tmpfs_single, sid_tmpfs, ("F0", "F1"))
-    coverage(vals_tmpfs_threaded, sid_tmpfs, ("F0-T", "F1-T"))
+    coverage(vals_single, sid_single, ["btrfs"], ("F0", "F1"))
+    coverage(vals_threaded, sid_threaded, ["btrfs"], ("F0-T", "F1-T"))
+    coverage(vals_tmpfs_single, sid_tmpfs, ["tmpfs"], ("F0", "F1"))
+    coverage(vals_tmpfs_threaded, sid_tmpfs, ["tmpfs"], ("F0-T", "F1-T"))
 
     # superseded-shape discipline
     superseded_threaded_1 = [r for r in runs1 if r["arm"] in ("F0-T", "F1-T")]
