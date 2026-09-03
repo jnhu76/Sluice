@@ -23,6 +23,10 @@
 // publication waits until both operation and control references retire.
 #include <sluice/async/uring_backend.hpp>
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include "tax0_ablation_seams.hpp"  // non-installed seam header; internal-testing builds only
+#endif
+
 #include <sluice/detail/io_validation.hpp>
 #include <sluice/error.hpp>
 #include <sluice/measurement.hpp>
@@ -520,6 +524,9 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     // production objects keep the pre-seam layout.
     cookie_table_for_test_ =
         std::make_unique<RouterCookieTableForTest>(config.request_capacity);
+    // RE-H0 ATTR-B F07 seam: cache the construction-invariant router
+    // extent once (router_ is never resized; see router_extent_()).
+    router_extent_cached_for_test_ = router_.size();
 #endif
     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, /*flags=*/0) == 0) {
@@ -1101,9 +1108,26 @@ std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
     return next_cookie_++;
 }
 
+// RE-H0 ATTR-B F07 research seam accessor (internal-testing builds only;
+// the declaration + cache member live under the guard in the public
+// header). R0 (flag off): exactly router_.size(). R1: the construction-
+// cached extent — identical by the never-resized invariant. The mode flag
+// is checked per call, so the R1 arm conservatively pays the branch. The
+// production build never compiles this definition and keeps its original
+// router_.size() text at every site (bit-identical production objects).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+std::size_t UringAsyncBackend::router_extent_() const noexcept {
+    return detail::tax0_f07_skip_extent_reprobes()
+               ? router_extent_cached_for_test_
+               : router_.size();
+}
+#endif
+
 // Find the router ARRAY index of the LIVE entry whose SlotHandle exactly
 // matches h. Returns router_.size() when no live entry matches (h is not
 // currently ring-owned). Bounded O(request_capacity), allocation-free.
+// (Cancel-path lookup: not part of the ATTR-B treated per-op surface —
+// the measured workload never exercises it.)
 std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) const noexcept {
     for (std::size_t i = 0; i < router_.size(); ++i) {
         const RouterEntry& e = router_[i];
@@ -1129,7 +1153,11 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     // traversal, kept as the causal-comparator direction. The production
     // build in the #else below carries the same reverse direction.
     std::size_t examined = 0;
-    std::size_t found = router_.size();
+    // F07 ATTR-B seam extent: identical to router_.size() in R0; the
+    // construction-cached value under the R1 flag (never-resized
+    // invariant). Production builds compile only the #else branch below.
+    const std::size_t extent = router_extent_();
+    std::size_t found = extent;
     const bool reverse =
         router_fix_mode_for_test_ == RouterFixModeForTest::reverse_scan ||
         (router_fix_mode_for_test_ ==
@@ -1145,7 +1173,7 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
         const std::size_t idx = cookie_table_for_test_->lookup(cookie);
         examined = static_cast<std::size_t>(cookie_table_for_test_->last_probes);
         if (idx != RouterCookieTableForTest::kMiss) {
-            if (idx >= router_.size() || !router_[idx].in_use ||
+            if (idx >= extent || !router_[idx].in_use ||
                 router_[idx].cookie != cookie) {
                 std::fprintf(stderr,
                              "sluice::async::UringAsyncBackend: router cookie "
@@ -1157,7 +1185,7 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
             found = idx;
         }
     } else if (reverse) {
-        for (std::size_t i = router_.size(); i-- > 0;) {
+        for (std::size_t i = extent; i-- > 0;) {
             ++examined;
             if (router_[i].in_use && router_[i].cookie == cookie) {
                 found = i;
@@ -1165,7 +1193,7 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
             }
         }
     } else {
-        for (std::size_t i = 0; i < router_.size(); ++i) {
+        for (std::size_t i = 0; i < extent; ++i) {
             ++examined;
             if (router_[i].in_use && router_[i].cookie == cookie) {
                 found = i;
@@ -1178,7 +1206,7 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     diag.lookup_calls += 1;
     if (reverse)
         diag.reverse_mode_calls += 1;
-    if (found != router_.size()) {
+    if (found != extent) {
         diag.lookup_hits += 1;
         diag.matched_router_index_sum += found;
         if (found > diag.matched_router_index_max)
@@ -1289,7 +1317,11 @@ void UringAsyncBackend::fold_router_lookup_diag_for_test(
 #endif
 
 void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    if (router_index >= router_extent_() || !router_[router_index].in_use) {
+#else
     if (router_index >= router_.size() || !router_[router_index].in_use) {
+#endif
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: invalid router retirement "
                              "(invariant violation)\n");
         std::fflush(stderr);
@@ -1321,8 +1353,13 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept 
 
 void UringAsyncBackend::finalize_operation_terminal_(
     std::size_t router_index, const detail::TerminalResult& terminal) noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    if (router_index >= router_extent_() || !router_[router_index].in_use ||
+        router_[router_index].control_state != RouterEntry::ControlState::none) {
+#else
     if (router_index >= router_.size() || !router_[router_index].in_use ||
         router_[router_index].control_state != RouterEntry::ControlState::none) {
+#endif
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: invalid operation terminal "
                              "finalization (invariant violation)\n");
         std::fflush(stderr);
@@ -1362,8 +1399,10 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         const std::size_t router_index = find_live_router_cookie_(target_cookie);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         fold_router_lookup_diag_for_test(RouterLookupKindForTest::control_cqe);
-#endif
+        if (router_index == router_extent_())
+#else
         if (router_index == router_.size())
+#endif
             return; // stale duplicate control CQE; its exact router is already retired
 
         RouterEntry& route = router_[router_index];
@@ -1392,8 +1431,10 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     const std::size_t router_index = find_live_router_cookie_(user_data);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     fold_router_lookup_diag_for_test(RouterLookupKindForTest::operation_cqe);
-#endif
+    if (router_index == router_extent_())
+#else
     if (router_index == router_.size())
+#endif
         return; // stale/unknown cookie; no live execution reference matched
     RouterEntry& entry = router_[router_index];
 

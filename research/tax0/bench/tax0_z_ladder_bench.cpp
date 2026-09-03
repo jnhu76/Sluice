@@ -840,9 +840,10 @@ void print_json(const Config& c, const RunState& rs, std::size_t queue_depth,
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     {
         const auto& m = sluice::async::detail::tax0_ablation_modes();
-        std::printf(",\"ablation\":{\"f01_r1\":%s,\"f02_r1\":%s}",
+        std::printf(",\"ablation\":{\"f01_r1\":%s,\"f02_r1\":%s,\"f07_r1\":%s}",
                     m.f01_gate_outstanding_eval ? "true" : "false",
-                    m.f02_skip_reap_seq ? "true" : "false");
+                    m.f02_skip_reap_seq ? "true" : "false",
+                    m.f07_skip_extent_reprobes ? "true" : "false");
     }
 #endif
     std::printf(",\"warmup\":[");
@@ -953,6 +954,10 @@ int main(int argc, char** argv) {
                 true;
         } else if (a == "--f02-r1") {
             sluice::async::detail::tax0_ablation_modes().f02_skip_reap_seq = true;
+        } else if (a == "--f07-r1") {
+            // RE-H0 ATTR-B: cached router-extent treatment (prereg A4).
+            sluice::async::detail::tax0_ablation_modes().f07_skip_extent_reprobes =
+                true;
 #endif
         } else {
             return usage_error(argv[0], "unknown argument");

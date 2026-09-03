@@ -50,6 +50,7 @@ import time
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
 Z_BENCH = REPO / "build/linux/x86_64/release/tax0_z_ladder_bench"
+ABLATION_BENCH = REPO / "build/linux/x86_64/release/tax0_ablation_bench"
 E1_BENCH = REPO / "build/linux/x86_64/release/e1_abstraction_tax_bench"
 RESULTS_ROOT = REPO / "research/re-h0/results"
 SCRIPTS = pathlib.Path(__file__).resolve().parent
@@ -81,6 +82,11 @@ RE2P_ARMS = ["L1", "L2"]    # pool floor vs Sluice ThreadPool path
 RE1U_ARMS = ["z1", "z1b", "z1bw", "z2", "z3"]
 RE1_ARMS = ["L0", "L1", "L2"]
 OPS = ["read", "write"]
+
+# RE-1U-ATTR-B (prereg A5): row arm -> (bench --arm value, extra flags).
+# z2r0 IS production behavior; z2r1 enables the F07 research-only seam.
+ATTRB_ARMS = {"z1b": ("z1b", []), "z2r0": ("z2", []),
+              "z2r1": ("z2", ["--f07-r1"])}
 
 R_WALL = 11
 WARMUP = 2
@@ -168,6 +174,8 @@ def capture_environment(session_dir):
         "mode": "release",
         "toolchain": "clang",
         "z_bench_sha256": sha256_file(Z_BENCH) if Z_BENCH.exists() else None,
+        "ablation_bench_sha256": (sha256_file(ABLATION_BENCH)
+                                  if ABLATION_BENCH.exists() else None),
         "e1_bench_sha256": sha256_file(E1_BENCH) if E1_BENCH.exists() else None,
         "compiler": (tool_version(["clang", "--version"]) or "").splitlines()[
             :1],
@@ -181,8 +189,8 @@ def capture_environment(session_dir):
 # commands
 # ---------------------------------------------------------------------------
 
-def z_cmd(arm, cell, op, data_root, reps):
-    return [str(Z_BENCH), "--arm", arm, "--op", op,
+def z_cmd(arm, cell, op, data_root, reps, extra=(), bench=None):
+    return [str(bench or Z_BENCH), "--arm", arm, "--op", op,
             "--file", str(data_root / f"data-{cell['request_size']}.bin"),
             "--request-size", str(cell["request_size"]),
             "--total-bytes", str(cell["total_bytes"]),
@@ -190,7 +198,7 @@ def z_cmd(arm, cell, op, data_root, reps):
             "--workers", "1",
             "--reps", str(reps),
             "--warmup", str(WARMUP),
-            "--runner-verify"]
+            "--runner-verify", *extra]
 
 
 def e1_cmd(ladder, cell, op, data_root, reps):
@@ -286,13 +294,17 @@ def _invalid_row(family, arm, cell_key, cell, op, fs, note):
     return {
         "family": family, "fs": fs, "op": op,
         "request_size": cell["request_size"], "depth": cell["depth"],
-        "workers": 1 if family.endswith("u") else cell["depth"],
+        "workers": 1 if _is_z_family(family) else cell["depth"],
         "arm": arm, "cell": cell_key, "ok": False, "ops": None,
         "total_bytes": cell["total_bytes"], "word_sum": None,
         "wall_ns_per_op_samples": [], "instr_u_per_op_estimates": None,
         "user_ns_per_op": None, "sys_ns_per_op": None,
         "write_verified": False, "binary_sha256": "", "error_note": note,
     }
+
+
+def _is_z_family(family):
+    return family.endswith("u") or family == "attrb"
 
 
 def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
@@ -302,8 +314,13 @@ def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
     rs = cell["request_size"]
     data = data_root / f"data-{rs}.bin"
     base_tag = f"{family}-{fs}-{cell_key}-{op}-{arm}"
-    if family.endswith("u"):
-        cmd = lambda reps: z_cmd(arm, cell, op, data_root, reps)
+    if _is_z_family(family):
+        if family == "attrb":
+            cli_arm, extra = ATTRB_ARMS[arm]
+            cmd = lambda reps: z_cmd(cli_arm, cell, op, data_root, reps,
+                                     extra, bench=ABLATION_BENCH)
+        else:
+            cmd = lambda reps: z_cmd(arm, cell, op, data_root, reps)
     else:
         cmd = lambda reps: e1_cmd(arm, cell, op, data_root, reps)
 
@@ -347,14 +364,14 @@ def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
                     / (r_hi - r_lo) / bench["ops"])
 
     ops = bench["ops"]
-    reps = bench["reps"] if family.endswith("u") else bench["reps_out"]
+    reps = bench["reps"] if _is_z_family(family) else bench["reps_out"]
     row = {
         "family": family,
         "fs": fs,
         "op": op,
         "request_size": rs,
         "depth": cell["depth"],
-        "workers": 1 if family.endswith("u") else cell["depth"],
+        "workers": 1 if _is_z_family(family) else cell["depth"],
         "arm": arm,
         "cell": cell_key,
         "ok": True,
@@ -370,7 +387,7 @@ def one_combo(session, family, arm, cell_key, cell, op, data_root, fs,
         "error_note": "",
     }
     if op == "write":
-        if family.endswith("u"):
+        if _is_z_family(family):
             # one byte-exact verify per combo, after the last launch
             # (file left by the final P launch; TAX-0B precedent)
             row["write_verified"] = runner_verify_write(data,
@@ -541,6 +558,35 @@ def action_re2(args):
     return rc
 
 
+def action_attrb(args):
+    """RE-1U-ATTR-B (RE-H0-ATTR-B-PREREGISTRATION.md, frozen): the ONE
+    preregistered CASE B causal ablation. Cell S (4K x d8) READ only,
+    btrfs primary + tmpfs control, arms z1b / z2r0 (= production
+    behavior) / z2r1 (F07 research-only seam). 3 arms x 2 fs x 5
+    launches = 30. Fail-closed inherited (no retries; A9 stop law)."""
+    s = _common_session_setup(args, "re-h0-attrb")
+    env = json.loads((s.dir / "environment.json").read_text())
+    sha = env["build"]["ablation_bench_sha256"]
+    if not sha:
+        sys.exit("ablation bench missing: xmake build tax0_ablation_bench")
+    cell = CELLS["S"]
+    op = "read"
+    for root, fs in ((BTRFS_DATA, "btrfs"), (TMPFS_DATA, "tmpfs")):
+        prepare_data_files({"S": cell}, root)
+        order = shuffled_arms(list(ATTRB_ARMS), "S", op, fs)
+        s.manifest.setdefault("arm_order", []).append(
+            {"fs": fs, "cell": "S", "op": op, "order": order})
+        for arm in order:
+            row = one_combo(s, "attrb", arm, "S", cell, op, root, fs, sha)
+            s.rows.append(row)
+            if row["ok"]:
+                est = row["instr_u_per_op_estimates"]
+                print(f"[OK] {fs} S {op} {arm}: "
+                      f"instr/op={est[0]:.0f}/{est[1]:.0f} "
+                      f"wall/op={median_wall(row):.0f}ns")
+    return finish_session(s)
+
+
 def action_analyze(args):
     sys.path.insert(0, str(SCRIPTS))
     import re_h0_analysis as an
@@ -553,9 +599,34 @@ def action_analyze(args):
     env = json.loads((sdir / "environment.json").read_text())
     sha_z = env["build"]["z_bench_sha256"]
     sha_e1 = env["build"]["e1_bench_sha256"]
+    sha_abl = env["build"].get("ablation_bench_sha256")
     results = {"blocks": [], "errors": []}
     bad = False
     for fs in ("btrfs", "tmpfs"):
+        # RE-1U-ATTR-B block (prereg A6): recovery of the Z1b->Z2 delta
+        # under the F07 treatment, per independent estimate.
+        sel = [r for r in rows
+               if r.get("family") == "attrb" and r.get("fs") == fs
+               and r.get("op") == "read" and r.get("cell") == "S"]
+        if len(sel) >= 3:
+            try:
+                v = an.attr_b_verdict(sel, fs, 4096, 8,
+                                      expected_binary_sha256=sha_abl)
+                fr = "/".join(f"{f:.3f}" for f in v["fractions"])
+                print(f"attrb {fs} S read: outcome={v['outcome']} "
+                      f"fraction={fr} "
+                      f"denom={v['denom_instr_per_op']:.0f} "
+                      f"wall_r1/r0={v['wall_r1_over_r0']:.3f}")
+                results["blocks"].append({"block": v["block"],
+                                          "attr_b": v})
+            except (an.SessionInvalid, an.IndeterminateMetric) as e:
+                results["errors"].append(
+                    {"family": "attrb", "fs": fs, "op": "read",
+                     "cell": "S", "error": str(e),
+                     "kind": type(e).__name__})
+                bad = True
+                print(f"[ANALYSIS-FAIL] attrb {fs} S read: "
+                      f"{type(e).__name__}: {e}")
         for cell_key in ("S", "L"):
             cell = CELLS[cell_key]
             for op in OPS:
@@ -645,7 +716,7 @@ def action_analyze(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("action", choices=["env", "qual262", "re1", "re1u",
-                                       "re2", "analyze"],
+                                       "re2", "attrb", "analyze"],
                     default="re1u", nargs="?")
     ap.add_argument("--session", default=None)
     ap.add_argument("--n", type=int, default=20,
@@ -669,6 +740,8 @@ def main():
         return action_re1u(args)
     if args.action == "re2":
         return action_re2(args)
+    if args.action == "attrb":
+        return action_attrb(args)
     if args.action == "analyze":
         return action_analyze(args)
     return 2

@@ -865,6 +865,20 @@ class UringAsyncBackend : public AsyncBackend {
     // Fold one completed lookup's iterations into its callsite family.
     void fold_router_lookup_diag_for_test(RouterLookupKindForTest kind)
         const noexcept;
+    // RE-H0 ATTR-B F07 research seam (RE-H0-ATTR-B-PREREGISTRATION.md A4):
+    // R1 reads the construction-invariant router extent from
+    // router_extent_cached_for_test_ instead of recomputing it from the
+    // vector header at each per-op probe site. router_ is constructed once
+    // at request_capacity and never resized, so the cached value equals
+    // router_.size() on every path; with the flag off (R0) the helper is
+    // exactly router_.size(). The mode flag is checked per call (TAX-0D
+    // seam shape) — the treatment is conservative by construction. The
+    // seam flag lives in the non-installed tax0_ablation_seams.hpp, so the
+    // definition stays in the .cpp (the public header never includes it).
+    // Layout cost exists only in internal-testing builds (AGENTS.md §15);
+    // production objects keep the pre-seam layout.
+    std::size_t router_extent_() const noexcept;
+    std::size_t router_extent_cached_for_test_ = 0;
 #endif
 #endif // SLUICE_HAS_LIBURING
 

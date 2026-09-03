@@ -249,6 +249,117 @@ class FailClosedTest(unittest.TestCase):
             an.validate_re1u_block(rows, "btrfs", "read", 4096, 8)
 
 
+class AttrBVerdictTest(unittest.TestCase):
+    """RE-H0-ATTR-B-PREREGISTRATION.md A6 frozen rule.
+
+    fraction_i = (z2r0_est_i - z2r1_est_i) / (z2r0_est_i - z1b_est_i)
+    MATERIAL_RECOVERY  both fraction_i >= 0.05
+    NO_RECOVERY        both fraction_i <  0.02
+    PARTIAL_RECOVERY   otherwise; negative fraction fails closed
+    (denominator <= 0 also fails closed: the CASE B witness must
+    reproduce in-session or the experiment refuses to attribute).
+    """
+
+    def _block(self, z1b_instr, z2r0_instr, z2r1_instr, fs="btrfs"):
+        rows = []
+        for arm, instr in (("z1b", z1b_instr), ("z2r0", z2r0_instr),
+                           ("z2r1", z2r1_instr)):
+            r = arm_variants(arm, 1200.0, instr)
+            r.update(op="read", request_size=4096, depth=8, fs=fs)
+            rows.append(r)
+        return rows
+
+    def test_material_recovery(self):
+        out = an.attr_b_verdict(self._block(1000.0, 3000.0, 2400.0),
+                                "btrfs", 4096, 8)
+        self.assertEqual(out["outcome"], "MATERIAL_RECOVERY")
+        self.assertAlmostEqual(out["denom_instr_per_op"], 2000.0)
+        for f in out["fractions"]:
+            self.assertAlmostEqual(f, 0.30)
+
+    def test_no_recovery(self):
+        out = an.attr_b_verdict(self._block(1000.0, 3000.0, 2990.0),
+                                "btrfs", 4096, 8)
+        self.assertEqual(out["outcome"], "NO_RECOVERY")
+        for f in out["fractions"]:
+            self.assertAlmostEqual(f, 0.005)
+
+    def test_partial_recovery_between_bands(self):
+        # recovery 60 of 2000 = 0.03: inside (0.02, 0.05)
+        out = an.attr_b_verdict(self._block(1000.0, 3000.0, 2940.0),
+                                "btrfs", 4096, 8)
+        self.assertEqual(out["outcome"], "PARTIAL_RECOVERY")
+
+    def test_mixed_estimates_collapse_to_partial(self):
+        # est pair 1 recovers 0.30, pair 2 recovers 0.00 -> PARTIAL
+        rows = self._block(1000.0, 3000.0, 2400.0)
+        for r in rows:
+            if r["arm"] == "z2r1":
+                r["instr_u_per_op_estimates"] = [2400.0, 2995.0]
+            elif r["arm"] == "z2r0":
+                r["instr_u_per_op_estimates"] = [3000.0, 3000.0]
+            elif r["arm"] == "z1b":
+                r["instr_u_per_op_estimates"] = [1000.0, 1000.0]
+        out = an.attr_b_verdict(rows, "btrfs", 4096, 8)
+        self.assertEqual(out["outcome"], "PARTIAL_RECOVERY")
+
+    def test_per_estimate_pairing_is_independent(self):
+        # denominators differ per estimate; fractions computed pairwise
+        rows = self._block(1000.0, 3000.0, 2400.0)
+        for r in rows:
+            if r["arm"] == "z2r0":
+                r["instr_u_per_op_estimates"] = [3000.0, 3100.0]
+            elif r["arm"] == "z2r1":
+                r["instr_u_per_op_estimates"] = [2400.0, 2500.0]
+        out = an.attr_b_verdict(rows, "btrfs", 4096, 8)
+        self.assertAlmostEqual(out["fractions"][0], 600.0 / 2000.0)
+        self.assertAlmostEqual(out["fractions"][1], 600.0 / 2100.0)
+
+    def test_non_positive_denominator_fails_closed(self):
+        with self.assertRaises(an.SessionInvalid):
+            an.attr_b_verdict(self._block(3000.0, 3000.0, 2400.0),
+                              "btrfs", 4096, 8)
+
+    def test_negative_recovery_fails_closed(self):
+        # R1 slower than R0 on the instruction layer is a treatment
+        # anomaly, never a "no recovery" verdict.
+        with self.assertRaises(an.SessionInvalid):
+            an.attr_b_verdict(self._block(1000.0, 3000.0, 3100.0),
+                              "btrfs", 4096, 8)
+
+    def test_missing_arm_fails_closed(self):
+        rows = self._block(1000.0, 3000.0, 2400.0)[:-1]
+        with self.assertRaises(an.SessionInvalid):
+            an.attr_b_verdict(rows, "btrfs", 4096, 8)
+
+    def test_same_work_mismatch_fails_closed(self):
+        rows = self._block(1000.0, 3000.0, 2400.0)
+        rows[1]["word_sum"] += 1
+        with self.assertRaises(an.SessionInvalid):
+            an.attr_b_verdict(rows, "btrfs", 4096, 8)
+
+    def test_missing_instr_estimates_indeterminate(self):
+        rows = self._block(1000.0, 3000.0, 2400.0)
+        rows[2]["instr_u_per_op_estimates"] = None
+        with self.assertRaises(an.IndeterminateMetric):
+            an.attr_b_verdict(rows, "btrfs", 4096, 8)
+
+    def test_sha_mismatch_fails_closed(self):
+        rows = self._block(1000.0, 3000.0, 2400.0)
+        rows[0]["binary_sha256"] = "b" * 64
+        with self.assertRaises(an.SessionInvalid):
+            an.attr_b_verdict(rows, "btrfs", 4096, 8,
+                              expected_binary_sha256="a" * 64)
+
+    def test_wall_sanity_ratio_reported(self):
+        rows = self._block(1000.0, 3000.0, 2400.0)
+        for r in rows:
+            if r["arm"] == "z2r1":
+                r["wall_ns_per_op_samples"] = [1210.0] * 11
+        out = an.attr_b_verdict(rows, "btrfs", 4096, 8)
+        self.assertAlmostEqual(out["wall_r1_over_r0"], 1.21 / 1.20)
+
+
 class RatioArithmeticTest(unittest.TestCase):
     def test_ratio_direction_is_candidate_over_baseline(self):
         base = [1000.0] * 11

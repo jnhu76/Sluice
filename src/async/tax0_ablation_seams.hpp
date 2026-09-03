@@ -18,6 +18,14 @@
 //        build is not Batch-safe (Batch::next() requires stamps); it exists
 //        for the causal A/B measurement only and is never a production
 //        candidate as-is.
+//   F07  UringAsyncBackend per-op router extent probes: every per-op probe
+//        site recomputes router_.size() from the vector header although the
+//        router is construction-fixed at request_capacity and never
+//        resized. R1 reads a construction-cached extent instead
+//        (RE-H0-ATTR-B-PREREGISTRATION.md A4). Semantics-identical by the
+//        invariance fact (the cached value equals router_.size() on every
+//        path); the mode flag is checked per call (conservative — the R1
+//        arm pays the branch). R0 remains the production behavior.
 //
 // The production targets never define SLUICE_ASYNC_INTERNAL_TESTING and
 // compile none of this. Default mode in every build is R0; the ablation
@@ -44,6 +52,9 @@ struct Tax0AblationModes {
     bool f01_gate_outstanding_eval = false;
     // F02 R1: ordinary (non-Batch) publications skip the reap-seq stamp.
     bool f02_skip_reap_seq = false;
+    // F07 R1 (RE-H0 ATTR-B): per-op router extent probes read the
+    // construction-cached extent instead of recomputing router_.size().
+    bool f07_skip_extent_reprobes = false;
 };
 
 inline Tax0AblationModes g_tax0_ablation_modes{};
@@ -56,6 +67,9 @@ inline bool tax0_f01_gate_outstanding_eval() noexcept {
 }
 inline bool tax0_f02_skip_reap_seq() noexcept {
     return g_tax0_ablation_modes.f02_skip_reap_seq;
+}
+inline bool tax0_f07_skip_extent_reprobes() noexcept {
+    return g_tax0_ablation_modes.f07_skip_extent_reprobes;
 }
 
 }  // namespace sluice::async::detail

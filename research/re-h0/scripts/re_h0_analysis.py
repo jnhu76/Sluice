@@ -336,3 +336,66 @@ def pair_verdict(rows, fs, op, request_size, depth, cand_arm, base_arm,
                     f"row {r.get('arm')} workers mismatch")
     verdicts = _verdict_rows(seen, [("pair", cand_arm, base_arm)])
     return verdicts["pair"]
+
+
+# ---------------------------------------------------------------------------
+# RE-1U-ATTR-B causal-ablation verdict (RE-H0-ATTR-B-PREREGISTRATION A6)
+# ---------------------------------------------------------------------------
+
+ATTR_B_ARMS = ["z1b", "z2r0", "z2r1"]
+ATTR_B_MATERIAL = 0.05   # recovery >= family's captured census share
+ATTR_B_NO_RECOVERY = 0.02
+
+
+def attr_b_verdict(rows, fs, request_size, depth,
+                   expected_binary_sha256=None):
+    """One-ablation recovery verdict for one ATTR-B block.
+
+    fraction_i is computed PER INDEPENDENT instruction estimate (the two
+    double-difference pairs stay pairwise independent end to end):
+        fraction_i = (z2r0_i - z2r1_i) / (z2r0_i - z1b_i)
+    Fail-closed: the CASE B witness must reproduce in-session
+    (denominator > 0 on every estimate) and the treatment must not
+    regress the instruction layer (negative fraction) — either defect
+    is SessionInvalid, never a verdict. Wall R1/R0 is reported as
+    sanity only (the claim is instruction-layer; prereg A6).
+    """
+    seen = _validate_block(rows, fs, "read", request_size, depth,
+                           ATTR_B_ARMS, expected_binary_sha256)
+    est = {arm: list(seen[arm]["instr_u_per_op_estimates"])
+           for arm in ATTR_B_ARMS}
+    for arm in ATTR_B_ARMS:
+        if len(est[arm]) < 2:
+            raise IndeterminateMetric(
+                f"arm {arm} needs 2 independent instruction estimates")
+    fractions = []
+    for i in (0, 1):
+        denom = est["z2r0"][i] - est["z1b"][i]
+        if denom <= 0:
+            raise SessionInvalid(
+                f"CASE B witness not reproduced in-session: z2r0-z1b "
+                f"estimate {i} = {denom:.0f} instr/op (denominator <= 0)")
+        recovery = est["z2r0"][i] - est["z2r1"][i]
+        if recovery < 0:
+            raise SessionInvalid(
+                f"treatment regressed the instruction layer: estimate {i} "
+                f"recovery = {recovery:.0f} instr/op (F07 seam anomaly)")
+        fractions.append(recovery / denom)
+    if all(f >= ATTR_B_MATERIAL for f in fractions):
+        outcome = "MATERIAL_RECOVERY"
+    elif all(f < ATTR_B_NO_RECOVERY for f in fractions):
+        outcome = "NO_RECOVERY"
+    else:
+        outcome = "PARTIAL_RECOVERY"
+    denom_med = (median(est["z2r0"]) - median(est["z1b"]))
+    r0_wall = median(seen["z2r0"]["wall_ns_per_op_samples"])
+    r1_wall = median(seen["z2r1"]["wall_ns_per_op_samples"])
+    return {
+        "block": {"fs": fs, "op": "read", "request_size": request_size,
+                  "depth": depth},
+        "instr_per_op": {arm: median(est[arm]) for arm in ATTR_B_ARMS},
+        "denom_instr_per_op": denom_med,
+        "fractions": fractions,
+        "outcome": outcome,
+        "wall_r1_over_r0": r1_wall / r0_wall,
+    }
