@@ -64,3 +64,8 @@ byte-identical, historical).
 - THREADED-PROCESS ADVANTAGE: NOT ESTABLISHED (HOST-LOCAL). No verdict
   change; the campaign Gate A feeds on single-thread primaries
   (NOT ESTABLISHED, unchanged).
+- Corrective-2 disposition (Amendment-5): the "tmpfs"-label rows above
+  are SUPERSEDED — WRONG SUBSTRATE; the authoritative btrfs-label
+  threaded cells are all NONE (READ 4K d8 1.0214). The session-local
+  REGIME-LOCAL reading (1.0495) is a historical record of the
+  mislabeled cell, excluded from the 3-session composite.

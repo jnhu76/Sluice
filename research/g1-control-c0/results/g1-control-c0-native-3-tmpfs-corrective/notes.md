@@ -82,8 +82,9 @@ WRITE (all 5 cells): NONE (ratios 0.9807-1.0118)
   F1_SLOWER cell (0.8591). The frozen vocabulary has no
   isolated-regression verdict, so the campaign verdict stays NOT
   ESTABLISHED; the cell is recorded as a per-cell observation.
-- The Corrective-1 threaded REGIME-LOCAL cell (btrfs 4K d8 1.0495) does
-  NOT replicate on real tmpfs (threaded 4K d8 tmpfs 1.0284, NONE):
+- The Corrective-1 threaded REGIME-LOCAL cell — the then-mislabeled
+  "tmpfs" row, physically btrfs (4K d8 1.0495) — does NOT replicate on
+  real tmpfs (threaded 4K d8 tmpfs 1.0284, NONE):
   threaded verdicts are NOT ESTABLISHED on both substrates (exploratory
   only in every case).
 - Cross-substrate observation (now a REAL regime comparison for the

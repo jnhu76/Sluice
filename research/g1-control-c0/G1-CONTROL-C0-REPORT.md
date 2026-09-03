@@ -177,12 +177,15 @@ WRITE (primary family + regime cells, real tmpfs): NONE (ratios
 
 THREADED ARMS (EXPLORATORY — cannot carry a verdict, prereg §5/§13;
 workers parked across the span, K=4):
-  tmpfs (native-3): READ and WRITE all cells NONE — the Corrective-1
-         REGIME-LOCAL btrfs cell (4K d8 1.0495) does NOT replicate on
-         the preregistered substrate (tmpfs 4K d8 1.0284).
-  btrfs (native-2): READ isolated material cell 4K d8 1.0495
-         (REGIME-LOCAL within ONE substrate, exploratory); WRITE one
-         isolated regression-shaped cell (4K d1 0.8981).
+  tmpfs (native-3): READ and WRITE eligible cells all NONE (READ 4K d8
+         1.0284) — the Corrective-1 REGIME-LOCAL threaded observation
+         does NOT replicate on the preregistered substrate.
+  btrfs (native-2; authoritative btrfs-label rows): READ and WRITE
+         eligible cells all NONE (READ 4K d8 1.0214). The Corrective-1
+         -era isolated readings (READ 4K d8 1.0495 REGIME-LOCAL; WRITE
+         4K d1 0.8981 regression-shaped) came from the mislabeled
+         "tmpfs" rows — physically btrfs, SUPERSEDED — WRONG SUBSTRATE —
+         and are excluded from the composite.
   THREADED-PROCESS ADVANTAGE: NOT ESTABLISHED (HOST-LOCAL; no material
   direction on either substrate).
 ```
@@ -414,9 +417,10 @@ Every falsified mechanism/thesis, explicitly:
    (HOST-LOCAL; corrected evidence, Corrective-1; substrate-completed,
    Corrective-2). Under the frozen §5 threaded condition (K=4 workers
    parked across the span), the ONE isolated material cell (4K d8,
-   1.0495) existed only on the btrfs substrate and does NOT replicate on
-   the preregistered tmpfs substrate (1.0284 NONE); no WRITE direction
-   on either substrate. The "threads => fixed files win" folk claim
+   1.0495) existed only on the btrfs substrate — in a then-mislabeled
+   "tmpfs" row, SUPERSEDED — WRONG SUBSTRATE since Corrective-2 — and
+   does NOT replicate on the preregistered tmpfs substrate (1.0284
+   NONE); no WRITE direction on either substrate. The "threads => fixed files win" folk claim
    remains falsified for this regime on this host, now on both
    substrates; the corrected data does not upgrade it (exploratory
    only, in every case).
@@ -567,7 +571,8 @@ P1-1 frozen tmpfs primary never executed:
            observations: the btrfs READ 4 KiB sub-material trend does
            NOT replicate on tmpfs (d1 flips to material F1_SLOWER
            0.8591, isolated); the Corrective-1 REGIME-LOCAL threaded
-           cell (btrfs 4K d8 1.0495) does NOT replicate on tmpfs
+           cell — the then-mislabeled "tmpfs" row, physically btrfs
+           (4K d8 1.0495) — does NOT replicate on tmpfs
            (1.0284 NONE) — threaded now NOT ESTABLISHED on both
            substrates (exploratory only, either way).
 

@@ -512,12 +512,12 @@
   }
  ],
  "neighbor_support": {
-  "READ_4096_1_tmpfs": true,
-  "READ_4096_8_tmpfs": true,
-  "READ_4096_32_tmpfs": true,
-  "WRITE_4096_1_tmpfs": true,
-  "WRITE_4096_8_tmpfs": true,
-  "WRITE_4096_32_tmpfs": true
+  "READ_4096_1_tmpfs": false,
+  "READ_4096_8_tmpfs": false,
+  "READ_4096_32_tmpfs": false,
+  "WRITE_4096_1_tmpfs": false,
+  "WRITE_4096_8_tmpfs": false,
+  "WRITE_4096_32_tmpfs": false
  },
  "verdicts": {
   "READ": "FIXED-FILE PERFORMANCE BENEFIT NOT ESTABLISHED",
