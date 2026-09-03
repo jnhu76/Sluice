@@ -161,19 +161,22 @@ struct ArmResult {
     OpCounts counts;
 };
 
-// Buffered loop core: rd/wr return bytes moved (>=0) or -errno.
+// Buffered loop core: rd/wr return bytes moved (>=0) or -errno. The scratch
+// buffer is CALLER-OWNED and must be allocated + prefaulted OUTSIDE any timed
+// span (prereg §10 fairness: allocation outside measured region).
 // EOF (read progress 0 with remaining>0) is a CLEAN stop (row 6).
 // Zero progress on a non-empty write is a deterministic error (row 8).
 template <class ReadFn, class WriteFn>
-ArmResult buffered_loop(ReadFn rd, WriteFn wr, std::uint64_t n, std::size_t chunk,
-                        OpCounts& c) {
+ArmResult buffered_loop(ReadFn rd, WriteFn wr, std::uint64_t n,
+                        std::span<std::byte> scratch, OpCounts& c) {
     ArmResult r;
-    std::vector<std::byte> buf(chunk ? chunk : 1);
+    std::size_t chunk = scratch.size();
+    std::byte* buf = scratch.data();
     while (r.bytes_moved < n) {
         std::size_t want =
             static_cast<std::size_t>(std::min<std::uint64_t>(chunk, n - r.bytes_moved));
         ++c.xfer_calls;
-        ssize_t got = rd(buf.data(), want);
+        ssize_t got = rd(buf, want);
         if (got < 0) {
             r.err = static_cast<int>(-got);
             r.err_class = "source_error";
@@ -190,7 +193,7 @@ ArmResult buffered_loop(ReadFn rd, WriteFn wr, std::uint64_t n, std::size_t chun
         if (static_cast<std::size_t>(got) < want) ++c.partial_events;
         std::size_t written = 0;
         while (written < static_cast<std::size_t>(got)) {
-            ssize_t w = wr(buf.data() + written, static_cast<std::size_t>(got) - written);
+            ssize_t w = wr(buf + written, static_cast<std::size_t>(got) - written);
             if (w < 0) {
                 r.err = static_cast<int>(-w);
                 r.err_class = "dest_error";
@@ -257,7 +260,7 @@ ArmResult cfr_loop(CfrFn cfr, std::uint64_t n, std::size_t chunk,
 // ---------------------------------------------------------------------------
 
 ArmResult run_b0(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst_off,
-                 std::uint64_t n, std::size_t chunk, OpCounts& c) {
+                 std::uint64_t n, std::span<std::byte> scratch, OpCounts& c) {
     std::uint64_t src_pos = src_off;
     std::uint64_t dst_pos = dst_off;
     OpCounts local; // returned ArmResult carries the counts; c stays in sync
@@ -278,7 +281,7 @@ ArmResult run_b0(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
             if (w > 0) dst_pos += static_cast<std::uint64_t>(w);
             return w < 0 ? -errno : w;
         },
-        n, chunk, local);
+        n, scratch, local);
     r.counts = local;
     c = local;
     return r;
@@ -350,7 +353,8 @@ std::string decision_json(const CopyDecisionX0& dec) {
 // the kernel result stays authoritative for every executed byte.
 ArmResult run_b3(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst_off,
                  std::uint64_t n, std::size_t chunk, Mechanism mech,
-                 UnsupportedPolicy policy, CopyDecisionX0& dec, OpCounts& c) {
+                 UnsupportedPolicy policy, std::span<std::byte> scratch,
+                 CopyDecisionX0& dec, OpCounts& c) {
     ArmResult r;
     dec.requested = mech;
     dec.selected = mech;
@@ -369,7 +373,7 @@ ArmResult run_b3(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
     if (mech == Mechanism::Buffered) {
         dec.reason = "buffered_selected";
         dec.mechanism_executed = "buffered_read_write";
-        return run_b0(src_fd, src_off, dst_fd, dst_off, n, chunk, c);
+        return run_b0(src_fd, src_off, dst_fd, dst_off, n, scratch, c);
     }
     r = run_b2(src_fd, src_off, dst_fd, dst_off, n, chunk, src_size, c);
     if (r.ok || r.err_class != std::string_view("unsupported")) {
@@ -389,7 +393,7 @@ ArmResult run_b3(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
     dec.fallback_occurred = true;
     dec.mechanism_executed = "buffered_read_write";
     OpCounts refused = c; // the failed file_range attempt(s), kept visible
-    ArmResult fb = run_b0(src_fd, src_off, dst_fd, dst_off, n, chunk, c);
+    ArmResult fb = run_b0(src_fd, src_off, dst_fd, dst_off, n, scratch, c);
     fb.counts.xfer_calls += refused.xfer_calls;
     fb.counts.partial_events += refused.partial_events;
     c = fb.counts;
@@ -397,8 +401,17 @@ ArmResult run_b3(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t ds
 }
 
 // ---------------------------------------------------------------------------
-// B1 — production sluice::copy_all over adopted-fd FileReader/FileWriter
-// ---------------------------------------------------------------------------
+// B1 — production sluice::copy_all over adopted-fd FileReader/FileWriter.
+// Split into prepare (caller setup, OUTSIDE any timed span: lseek, dup,
+// reader/writer construction, scratch allocation+prefault) and exec (the
+// composed copy_all call alone). The production contract treats readers,
+// writers and scratch as caller-owned parameters (prereg §10 fairness).
+
+struct B1Prepared {
+    sluice::FileReader reader{sluice::FileReader()};
+    sluice::FileWriter writer{sluice::FileWriter()};
+    std::vector<std::byte> scratch;
+};
 
 struct B1Result {
     ArmResult arm;
@@ -408,9 +421,11 @@ struct B1Result {
     std::uint64_t fast_path_calls = 0;
 };
 
-B1Result run_b1(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst_off,
-                std::uint64_t n, std::size_t chunk) {
+// Returns nullptr-shaped error via B1Result.arm on setup failure.
+B1Result prepare_b1(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst_off,
+                    std::size_t chunk, B1Prepared& prep, bool& ok) {
     B1Result out;
+    ok = true;
     // copy_all is non-positional (audit F-1): it advances the shared file
     // offsets from wherever the fds are positioned. Pre-position via lseek
     // (pipes cannot seek: with src_off==0 a pipe source proceeds unseeked —
@@ -419,11 +434,13 @@ B1Result run_b1(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst
         !(src_off == 0 && errno == ESPIPE)) {
         out.arm.err = errno;
         out.arm.err_class = "internal";
+        ok = false;
         return out;
     }
     if (::lseek(dst_fd, static_cast<off_t>(dst_off), SEEK_SET) < 0) {
         out.arm.err = errno;
         out.arm.err_class = "internal";
+        ok = false;
         return out;
     }
     // FileReader/FileWriter adopt fds and close them on destruction; dup so
@@ -432,37 +449,49 @@ B1Result run_b1(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst
     int sfd = ::dup(src_fd);
     int dfd = ::dup(dst_fd);
     if (sfd < 0 || dfd < 0) die("dup");
-    {
-        sluice::FileReader reader{sfd};
-        sluice::FileWriter writer{dfd};
-        std::vector<std::byte> scratch(chunk ? chunk : 1);
-        sluice::CopyOptions opts;
-        opts.limit = sluice::CopyLimit::bytes(n);
-        opts.strategy = sluice::CopyStrategy::Auto; // current library default
-        sluice::CopyStats stats{};
-        sluice::CopyDecision dec{};
-        auto res =
-            sluice::copy_all(reader, writer, std::span<std::byte>(scratch), opts, &stats, &dec);
-        out.copy_bytes_read = stats.bytes_read;
-        out.copy_bytes_written = stats.bytes_written;
-        out.scratch_calls = stats.scratch_path_calls;
-        out.fast_path_calls = stats.buffered_fast_path_calls;
-        out.arm.counts.xfer_calls = stats.scratch_path_calls;
-        out.arm.counts.xfer_bytes = stats.bytes_written;
-        if (res.has_value()) {
-            out.arm.ok = true;
-            out.arm.bytes_moved = res.value();
-        } else {
-            out.arm.err = static_cast<int>(res.error().code);
-            out.arm.os_errno = res.error().os_errno;
-            out.arm.err_class = "transfer_error";
-            // Production copy_all discards partial progress in its error
-            // result (audit F-3); CopyStats.bytes_written is the honest
-            // witness of what actually landed.
-            out.arm.bytes_moved = stats.bytes_written;
-        }
+    prep.reader = sluice::FileReader{sfd};
+    prep.writer = sluice::FileWriter{dfd};
+    prep.scratch.assign(chunk ? chunk : 1, std::byte{0});
+    return out;
+}
+
+B1Result exec_b1(B1Prepared& prep, std::uint64_t n) {
+    B1Result out;
+    sluice::CopyOptions opts;
+    opts.limit = sluice::CopyLimit::bytes(n);
+    opts.strategy = sluice::CopyStrategy::Auto; // current library default
+    sluice::CopyStats stats{};
+    sluice::CopyDecision dec{};
+    auto res = sluice::copy_all(prep.reader, prep.writer,
+                                std::span<std::byte>(prep.scratch), opts, &stats, &dec);
+    out.copy_bytes_read = stats.bytes_read;
+    out.copy_bytes_written = stats.bytes_written;
+    out.scratch_calls = stats.scratch_path_calls;
+    out.fast_path_calls = stats.buffered_fast_path_calls;
+    out.arm.counts.xfer_calls = stats.scratch_path_calls;
+    out.arm.counts.xfer_bytes = stats.bytes_written;
+    if (res.has_value()) {
+        out.arm.ok = true;
+        out.arm.bytes_moved = res.value();
+    } else {
+        out.arm.err = static_cast<int>(res.error().code);
+        out.arm.os_errno = res.error().os_errno;
+        out.arm.err_class = "transfer_error";
+        // Production copy_all discards partial progress in its error
+        // result (audit F-3); CopyStats.bytes_written is the honest
+        // witness of what actually landed.
+        out.arm.bytes_moved = stats.bytes_written;
     }
     return out;
+}
+
+B1Result run_b1(int src_fd, std::uint64_t src_off, int dst_fd, std::uint64_t dst_off,
+                std::uint64_t n, std::size_t chunk) {
+    B1Prepared prep;
+    bool ok = false;
+    B1Result out = prepare_b1(src_fd, src_off, dst_fd, dst_off, chunk, prep, ok);
+    if (!ok) return out;
+    return exec_b1(prep, n);
 }
 
 // ---------------------------------------------------------------------------
@@ -707,8 +736,9 @@ void run_fixture_arm(int arm_idx, FixtureCtx& cx, std::size_t chunk) {
 
     ArmResult r;
     CopyDecisionX0 dec;
+    std::vector<std::byte> scratch(chunk); // fixture path: untimed
     if (arm_idx == 0) {
-        r = run_b0(src_fd, cx.src_off, dst_fd, cx.dst_off, cx.n, chunk, r.counts);
+        r = run_b0(src_fd, cx.src_off, dst_fd, cx.dst_off, cx.n, scratch, r.counts);
     } else if (arm_idx == 1) {
         B1Result b1 = run_b1(src_fd, cx.src_off, dst_fd, cx.dst_off, cx.n, chunk);
         r = b1.arm;
@@ -717,7 +747,8 @@ void run_fixture_arm(int arm_idx, FixtureCtx& cx, std::size_t chunk) {
                    r.counts);
     } else {
         r = run_b3(src_fd, cx.src_off, dst_fd, cx.dst_off, cx.n, chunk,
-                   Mechanism::FileRange, UnsupportedPolicy::Fail, dec, r.counts);
+                   Mechanism::FileRange, UnsupportedPolicy::Fail, scratch, dec,
+                   r.counts);
     }
 
     std::uint64_t src_off_after = cur_offset(src_fd);
@@ -882,23 +913,39 @@ struct TimedRun {
 TimedRun timed_arm(const char* arm, int src_fd, int dst_fd, std::uint64_t size,
                    std::size_t chunk, std::uint64_t src_size) {
     TimedRun t;
+    // Pre-span caller setup (prereg §10 fairness): scratch allocated AND
+    // prefaulted (first-touch page faults are the costliest hidden
+    // allocation step); B1's reader/writer construction + positioning also
+    // live here. The timed span contains ONLY the composed copy call.
+    std::vector<std::byte> scratch(chunk);
+    std::memset(scratch.data(), 0, scratch.size()); // prefault every page
+    B1Prepared b1prep;
+    bool b1_ok = false;
+    B1Result b1setup{};
+    if (arm[1] == '1') {
+        b1setup = prepare_b1(src_fd, 0, dst_fd, 0, chunk, b1prep, b1_ok);
+    }
     struct rusage ru0 {}, ru1 {};
     struct timespec t0 {}, t1 {};
     getrusage(RUSAGE_SELF, &ru0);
     clock_gettime(CLOCK_MONOTONIC, &t0);
     if (arm[1] == '0') {
-        t.r = run_b0(src_fd, 0, dst_fd, 0, size, chunk, t.r.counts);
+        t.r = run_b0(src_fd, 0, dst_fd, 0, size, scratch, t.r.counts);
         t.dec.mechanism_executed = "buffered_read_write";
     } else if (arm[1] == '1') {
-        B1Result b1 = run_b1(src_fd, 0, dst_fd, 0, size, chunk);
-        t.r = b1.arm;
+        if (!b1_ok) {
+            t.r = b1setup.arm;
+        } else {
+            B1Result b1 = exec_b1(b1prep, size);
+            t.r = b1.arm;
+        }
         t.dec.mechanism_executed = "buffered_read_write";
     } else if (arm[1] == '2') {
         t.r = run_b2(src_fd, 0, dst_fd, 0, size, chunk, src_size, t.r.counts);
         t.dec.mechanism_executed = "copy_file_range";
     } else if (arm[1] == '3') {
         t.r = run_b3(src_fd, 0, dst_fd, 0, size, chunk, Mechanism::FileRange,
-                     UnsupportedPolicy::Fail, t.dec, t.r.counts);
+                     UnsupportedPolicy::Fail, scratch, t.dec, t.r.counts);
     } else {
         die("arm");
     }
@@ -974,6 +1021,7 @@ void selftest_check(const char* name, bool pass) {
 }
 
 void run_selftest() {
+    std::byte sbuf[8] = {};
     { // partial reads/writes accounted; EOF clean (rows 6/7).
         OpCounts c;
         int rdc = 0;
@@ -986,7 +1034,7 @@ void run_selftest() {
             ++wrc;
             return static_cast<ssize_t>(std::min<std::size_t>(len, wrc % 2 ? 2 : 1));
         };
-        ArmResult r = buffered_loop(rd, wr, 4, 8, c);
+        ArmResult r = buffered_loop(rd, wr, 4, std::span<std::byte>(sbuf), c);
         selftest_check("buffered_partial_eof_accounting",
                        r.ok && r.bytes_moved == 4 && c.xfer_bytes == 4);
     }
@@ -994,7 +1042,7 @@ void run_selftest() {
         OpCounts c;
         auto rd = [](std::byte*, std::size_t) -> ssize_t { return 4; };
         auto wr = [](const std::byte*, std::size_t) -> ssize_t { return 0; };
-        ArmResult r = buffered_loop(rd, wr, 8, 8, c);
+        ArmResult r = buffered_loop(rd, wr, 8, std::span<std::byte>(sbuf), c);
         selftest_check("buffered_zero_progress_error",
                        !r.ok && std::string_view(r.err_class) == "zero_progress");
     }
@@ -1033,8 +1081,10 @@ void run_selftest() {
         if (nfd < 0) die("open(/dev/null)");
         CopyDecisionX0 dec;
         OpCounts c;
+        std::byte s8[8] = {};
         ArmResult r = run_b3(p[0], 0, nfd, 0, 8, 8, Mechanism::FileRange,
-                             UnsupportedPolicy::FallbackToBuffered, dec, c);
+                             UnsupportedPolicy::FallbackToBuffered,
+                             std::span<std::byte>(s8), dec, c);
         selftest_check("b3_precondition_no_fallback",
                        !r.ok && std::string_view(r.err_class) == "precondition" &&
                            !dec.fallback_occurred &&
@@ -1158,9 +1208,10 @@ void s6_mode(const std::string& rt, const std::string& re, std::uint64_t seed) {
                 if (sfd < 0 || dfd < 0) die("open(S6fb)");
                 CopyDecisionX0 dec;
                 OpCounts c;
+                std::vector<std::byte> fb_scratch(g_chunk);
                 ArmResult r =
                     run_b3(sfd, 0, dfd, 0, size, g_chunk, Mechanism::FileRange,
-                           UnsupportedPolicy::FallbackToBuffered, dec, c);
+                           UnsupportedPolicy::FallbackToBuffered, fb_scratch, dec, c);
                 std::uint64_t src_ck = checksum_range(sfd, 0, size);
                 // dfd is write-only; verification reads through a separate fd.
                 int vfd = ::open(dst.c_str(), O_RDONLY);

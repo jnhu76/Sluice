@@ -294,9 +294,11 @@ def p90_nearest(xs):
 
 
 def derive_perf(rows: list[dict], chunk_expected: int) -> dict:
-    perf = [r for r in rows if r["phase"] == "perf"]
-    aa = [r for r in rows if r["phase"] == "aa"]
-    controls = [r for r in rows if str(r.get("id", "")).startswith("control")]
+    # Rows are classified by id prefix: bench emits phase=perf for every timed
+    # run; A/A calibration runs carry aa| ids and control rows control| ids.
+    perf = [r for r in rows if str(r.get("id", "")).startswith("perf|")]
+    aa = [r for r in rows if str(r.get("id", "")).startswith("aa|")]
+    controls = [r for r in rows if str(r.get("id", "")).startswith("control|")]
     if controls:
         raise Invalid("control rows must not live in a formal perf session")
 
