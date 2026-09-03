@@ -1,0 +1,42 @@
+{
+ "blocks": [
+  {
+   "block": {
+    "fs": "btrfs",
+    "op": "read",
+    "request_size": 4096,
+    "depth": 8
+   },
+   "attr_b": {
+    "block": {
+     "fs": "btrfs",
+     "op": "read",
+     "request_size": 4096,
+     "depth": 8
+    },
+    "instr_per_op": {
+     "z1b": 1096.941929408482,
+     "z2r0": 3301.567395891462,
+     "z2r1": 3287.567416599819
+    },
+    "denom_instr_per_op": 2204.6254664829803,
+    "fractions": [
+     0.006350271093446074,
+     0.006350280092672297
+    ],
+    "outcome": "NO_RECOVERY",
+    "wall_r1_over_r0": 1.0057724954971443
+   }
+  }
+ ],
+ "errors": [
+  {
+   "family": "attrb",
+   "fs": "tmpfs",
+   "op": "read",
+   "cell": "S",
+   "error": "treatment regressed the instruction layer: estimate 0 recovery = -12 instr/op (F07 seam anomaly)",
+   "kind": "SessionInvalid"
+  }
+ ]
+}

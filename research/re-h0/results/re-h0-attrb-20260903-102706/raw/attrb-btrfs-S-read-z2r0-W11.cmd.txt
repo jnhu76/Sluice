@@ -1,0 +1,1 @@
+taskset -c 2-9 /home/jnhu/Source/Sluice/build/linux/x86_64/release/tax0_ablation_bench --arm z2 --op read --file /home/jnhu/Source/Sluice/build/re-h0-data/data-4096.bin --request-size 4096 --total-bytes 268435456 --depth 8 --workers 1 --reps 11 --warmup 2 --runner-verify

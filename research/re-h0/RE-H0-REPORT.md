@@ -84,8 +84,9 @@ same-work mismatch    : 0
 
 **PASS — 160/160 clean.** The campaign proceeded; #262 remains OPEN for
 the unresolved kernel-originated trigger (its historical observations are
-WSL2-specific; zero Host-0 events across 160 qualification launches AND
-720 formal launches below). No stop-gate event occurred at any point in
+WSL2-specific; zero Host-0 events across 160 qualification launches,
+720 formal launches and 30 ATTR-B corrective launches). No stop-gate
+event occurred at any point in
 this campaign; there was nothing to retry.
 
 ---
@@ -307,8 +308,60 @@ the census-ranked family; R0 = production behavior, R1 = treatment;
 same protocol P6–P8; outcome vocabulary A/B/C with all three outcomes
 allowed, including "the family is falsified" and "attribution remains
 unresolved"). No production change is proposed or made; no candidate
-shootout is authorized. Result: recorded in the evidence commit that
-follows this document's correction.
+shootout is authorized.
+
+Session `re-h0-attrb-20260903-102706`: 30 launches, 0 invalid, 0
+stop-gate events; measured at freeze head `2e247aee` (tracked tree
+clean; the session's `dirty` flag is the untracked build dirs), bench
+SHA `e2695993…` (internal-testing link — the F01/F02/F07 seams live
+only there). Same-work word_sum identical across all arms and equal to
+the formal campaign's.
+
+| btrfs S read (4K × d8) | instr/op (2 estimates) | wall/op |
+| --- | --- | --- |
+| Z1b floor | 1 097 / 1 097 | 828 ns |
+| Z2-R0 (production behavior) | 3 302 / 3 302 | 1 123 ns |
+| Z2-R1 (F07 cached extents) | 3 288 / 3 288 | 1 129 ns |
+
+```text
+denominator (Z2-R0 − Z1b)     : 2 205 instr/op  (CASE B witness
+                                reproduced in-session)
+recovery (R0 − R1)            :   14 instr/op
+fraction (per estimate)       : 0.006 / 0.006   → threshold: < 0.02
+OUTCOME                       : NO_RECOVERY   (frozen A7 mapping B)
+wall R1/R0                    : 1.006 (parity band; the treatment's
+                                per-call mode-flag branch costs nothing
+                                measurable)
+```
+
+Instrument witnesses and declared limitations:
+
+- Z1b reproduces the formal RE-1U floor EXACTLY (1 097 = 1 097
+  instr/op) — the A/B instrument reproduces the campaign floor.
+- Z2-R0 sits ≈ +6.6 % above the formal production-binary z2 level
+  (3 302 vs 3 098): the seam build carries the guarded TAX-0U lookup
+  diagnostics on the CQE path in BOTH arms, so the A/B subtracts it
+  out; the absolute z2 level in this binary is not a production
+  number (the production numbers remain bound to `7401213f…`).
+- The tmpfs control block was NOT classified: its R0-vs-R1 estimate
+  pair crosses zero at noise level (3 440 vs 3 452 on one estimate,
+  −12 instr/op ≈ −0.35 %), and the frozen A6 rule fails CLOSED on any
+  negative recovery (a treatment anomaly, never a verdict). Declared
+  as refused-by-rule; |Δ| ≤ 12 instr/op bounds any tmpfs effect far
+  below the NO_RECOVERY threshold, but per the frozen rule the control
+  block supports no classification at all.
+
+**Outcome B reading:** the census-ranked router extent-probe family is
+causally IMMATERIAL at the release optimization — removing every
+per-op extent recomputation recovers 0.6 % of the residual, below half
+the NO_RECOVERY threshold and far below the family's captured census
+share. H1's census-transfer reading is falsified. This strengthens the
+distributed-implementation interpretation of §5.2 with causal
+evidence: the Z1b→Z2 residual is spread across Sluice's realization of
+the semantic boundary, not concentrated in the (or any single
+isolatable) table-probe site. Causal attribution of the residual to a
+specific hotspot remains INCOMPLETE — none is identified, and none is
+claimed.
 
 ```text
 backend material tax found : YES — 4 KiB cells only, instruction layer,
@@ -322,7 +375,10 @@ runtime material tax found : NO under the frozen composite rule — every
                              separation, so the frozen MATERIAL gate is
                              not met (§3.3)
 causal attribution         : census-consistent distributed implementation
-                             cost; completed only by ATTR-B (§5.3)
+                             cost; the one preregistered ablation
+                             (ATTR-B) found the ranked family causally
+                             immaterial (recovery 0.6 %, NO_RECOVERY) —
+                             no causal hotspot identified or claimed
 candidate                  : none selected
 production change          : NO
 ```
@@ -392,9 +448,11 @@ G1-PERFORMANCE (HOST-0): PARTIAL
 > continuation) is observed, but the wall layer never meets the frozen
 > MATERIAL gate. Attribution: the census is consistent with a
 > distributed Sluice implementation cost of the semantic boundary
-> (§5.2); causal attribution is completed only by the preregistered
-> RE-1U-ATTR-B ablation (§5.3). No single-site hotspot is claimed and
-> no optimization is authorized.
+> (§5.2); the one preregistered causal ablation (RE-1U-ATTR-B) then
+> found the census-ranked family causally immaterial at release
+> optimization — recovery 0.6 % of the residual, NO_RECOVERY — so the
+> distributed reading stands on causal evidence, no causal hotspot is
+> identified or claimed, and no optimization is authorized.
 
 Scope-bounded: Host-0, tested cells, buffered ordinary I/O, no
 SQPOLL/registered/fixed features, workers=1 (uring) / W=d (pool).
@@ -459,6 +517,24 @@ reason: second machine class unavailable; modern NVMe unavailable;
 - Launch accounting? Formal 720 (RE-1U 200 + RE-1 120 + RE-2U 200 +
   RE-2P 200) + qualification 160 = 880 at this commit; ATTR-B adds 30
   (prereg A8).
+- ATTR-B run after its freeze? **Yes** — prereg + analysis authority +
+  F07 seam committed at `2e247aee`; the session measured AT that head
+  (tracked tree clean; environment `dirty` flag = untracked build
+  dirs). Thresholds, arms, cell and outcome mapping were not touched
+  after any ATTR-B number existed.
+- ATTR-B pilot data before the freeze? **No** — only instrument probes
+  on unchanged R0 behavior (the `-O0`/`-O3` contrast and the `-O3`
+  machine-code audit) informed the disclosure, never the thresholds;
+  no R0-vs-R1 comparison was run before the freeze.
+- ATTR-B R0-arm comparability? **Declared** — the seam build carries
+  the guarded TAX-0U lookup diagnostics in BOTH arms (subtracted out
+  by the A/B); its absolute z2 level is ≈ +6.6 % above the production
+  binary and is never cited as a production number; Z1b reproduces the
+  formal floor exactly (1 097 = 1 097).
+- tmpfs control treated as a verdict? **No** — the frozen fail-closed
+  rule refused classification on a noise-level negative estimate
+  (−12 instr/op); declared as refused-by-rule, never reinterpreted
+  (§5.3).
 
 ---
 
@@ -471,16 +547,21 @@ reason: second machine class unavailable; modern NVMe unavailable;
 | RE-1 formal (120 launches) | `results/re-h0-re1-20260903-040153` |
 | RE-2 uring (200 launches) | `results/re-h0-re2u-20260903-041016` |
 | RE-2 pool (200 launches) | `results/re-h0-re2p-20260903-042705` |
+| ATTR-B ablation (30 launches) | `results/re-h0-attrb-20260903-102706` |
 | attribution census | `results/re-h0-attrib-census/` |
-| analysis diagnostics | `python3 scripts/check_re_h0_analysis.py` → 26/26 |
+| analysis diagnostics | `python3 scripts/check_re_h0_analysis.py` → 38/38 |
 | analysis authority | `analysis.json` per session (machine-derived) |
-| reproducibility witness | rebuilt formal binary SHA == recorded `7401213f…` |
+| reproducibility witness | rebuilt formal binary SHA == recorded `7401213f…` (re-verified after the F07 seam: unchanged) |
 
-Raw evidence is immutable; every number in this report traces to
-`summary.json`/`analysis.json` of the named sessions. Known limitations
-carried forward: wall on writeback-saturated write cells cannot resolve
-instr-layer taxes (frozen GRAYs, not PARITY); context switches and
-z-arm RSS not collected (declared); large-shallow pool read latency
+Launch accounting: 160 qualification + 720 formal + 30 ATTR-B
+corrective = **910 campaign launches**. Raw evidence is immutable;
+every number in this report traces to `summary.json`/`analysis.json`
+of the named sessions. Known limitations carried forward: wall on
+writeback-saturated write cells cannot resolve instr-layer taxes
+(frozen GRAYs, not PARITY); context switches and z-arm RSS not
+collected (declared); census per-symbol shares are `-O0`
+symbolization-build facts (§5.1); large-shallow pool read latency
 anomaly (2.5–2.8× wall with the instruction layer inside the parity
-band) is observed and
-unexplained — a bounded follow-up question, not a claim.
+band) is observed and unexplained — a bounded follow-up question, not
+a claim; causal attribution of the 4 KiB residual remains incomplete
+(§5.3 outcome B).

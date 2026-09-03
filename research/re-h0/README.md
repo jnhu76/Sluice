@@ -73,6 +73,8 @@ python3 research/re-h0/scripts/re_h0.py qual262
 python3 research/re-h0/scripts/re_h0.py re1u
 python3 research/re-h0/scripts/re_h0.py re1
 python3 research/re-h0/scripts/re_h0.py re2
+xmake build tax0_ablation_bench   # ATTR-B instrument (internal-testing link)
+python3 research/re-h0/scripts/re_h0.py attrb
 python3 research/re-h0/scripts/re_h0.py analyze --session <id>
 python3 research/re-h0/scripts/plot_re_h0.py --session <id>...
 ```
