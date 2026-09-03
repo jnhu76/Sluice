@@ -89,6 +89,7 @@ def capture_environment(session_dir: Path, args, bench: str, extra: dict) -> dic
             (l.split(":", 1)[1].strip() for l in Path("/proc/cpuinfo").read_text().splitlines()
              if l.startswith("model name")), "unknown"),
         "session_seed": SESSION_SEED,
+        "cpu_pin": "2",  # Amendment 1: taskset -c 2 on every bench invocation
         "roots": {
             "tmpfs": {"path": str(Path(args.tmp_root).resolve()),
                       "fstype": statfs_fstype(args.tmp_root)},
@@ -112,7 +113,10 @@ def capture_environment(session_dir: Path, args, bench: str, extra: dict) -> dic
 
 
 def run_bench(env: dict, bench: str, out: Path, args: list[str]) -> list[dict]:
-    cmd = [bench] + args
+    # Amendment 1 (prereg §16): pin every bench invocation to one fixed CPU —
+    # AA dispersion on this WSL2 host otherwise dominates small cells
+    # (goal §10 "CPU placement where useful"). Recorded in environment.json.
+    cmd = ["taskset", "-c", env.get("cpu_pin", "2"), bench] + args
     env["commands"].append(" ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:

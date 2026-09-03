@@ -304,6 +304,18 @@ Corrective-2 pattern: old evidence retained byte-identical, excluded from
 derived numbers), or add narrowly-justified secondary mechanisms (splice —
 only under the goal §8 conditions).
 
+# §16 Amendments
+
+## Amendment 1 (2026-09-03, pre-formal) — CPU pinning of bench invocations
+
+Smoke calibration on the execution host showed A/A dispersion (p90 of
+|log2 paired ratio| up to ~0.46) dominated by WSL2 scheduler placement.
+Per goal §10 ("CPU placement where useful"), every bench invocation in
+every session is now pinned (`taskset -c 2`, recorded per session in
+environment.json as `cpu_pin`). Protocol hygiene only: thresholds, matrix,
+arms, fixtures, rounds, and materiality rules are untouched. Adopted
+BEFORE any formal session exists.
+
 # §17 Host claim scope
 
 All conclusions HOST-LOCAL (WSL2 kernel 6.18.33.2, Ryzen 7 5800H, tmpfs +
