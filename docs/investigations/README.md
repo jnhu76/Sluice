@@ -42,9 +42,12 @@ currently holds no investigation files.
 - [`S0-CONTRACT-CANDIDATES.md`](S0-CONTRACT-CANDIDATES.md) — open
   contract↔authority↔C++ drift hypotheses handed to the Safety S0B freeze
   (#289) by the S0-DOCS audit (#290). Every row is UNCONFIRMED by design.
-
-(The four completed root-cause investigations from issue #167 are archived
-under `docs/history/issues/`.)
+- [`s0b-contract-reality.md`](s0b-contract-reality.md) — the frozen
+  B01–B10 contract ↔ correctness-authority ↔ C++ map (#292 / #289 Phase
+  S0B): per-property authority owners, C++ entry points, witnesses, formal
+  links, drift adjudication (3 DOC_TOO_WEAK reference fixes, 0 production
+  changes), S1A handoff. Live until S1A supersedes its formal-coverage
+  columns.
 
 ## Move slices (issue #167 Step 5) — all executed
 
