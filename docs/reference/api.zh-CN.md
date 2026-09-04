@@ -37,8 +37,11 @@ struct IoError {
 （Decision 6）引入：四个 arena 后端都参与该词汇——
 `ThreadPoolBackend` 与 `UringAsyncBackend` 在 reserve 之后（Stage 1.5）
 以 `invalid_argument` 拒绝畸形描述符；所有 arena 后端对无法解析
-（unbound / 跨上下文 / stale）的 waiter 或取消查找返回 `not_found`；
-缺少能力的后端返回 `not_supported`。取消 disposition 查找对缺失或
+（unbound / 跨上下文 / stale）的 `register_waiter` 目标返回
+`invalid_state`（provenance 误用——Decision 6 "direct use of an
+invalid/stale key"），而取消类查找（`cancel_waiter`、请求取消、
+`request_state`）对同类缺失返回 `not_found`；缺少能力的后端返回
+`not_supported`。取消 disposition 查找对缺失或
 过期 generation 返回 `not_found`，而非重载 `invalid_state`。
 
 **辅助函数：**

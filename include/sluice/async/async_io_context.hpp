@@ -194,7 +194,9 @@ public:
     // (unbound / cross-context / stale) returns invalid_state (provenance
     // misuse, Decision 6). cancel_waiter removes ONLY the waiter — never the
     // I/O, never the borrow — and returns the moved-out lease on success
-    // (not_found when reap already closed the registration). Default
+    // (not_found when reap already closed the registration or the Completion
+    // is unresolvable — a benign miss for a cancel lookup, distinct from
+    // register_waiter's provenance misuse above). Default
     // implementations return not_supported for backends without the
     // RequestArena waiter machinery.
     virtual Result<void> register_waiter(Completion<std::size_t>& c,

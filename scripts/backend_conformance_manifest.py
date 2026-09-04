@@ -475,6 +475,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2c_waiter_delivery_exactly_once",
             "uring_c2c_stale_waiter_authority_harmless",
             "uring_c2c_register_waiter_after_record_terminal_before_reap",
+            "uring_c2c_waiter_error_vocabulary_split",
         ),
         notes="C2c rows 11-14a Uring integration (Phase D3, real-liburing only; "
               "stub mode is classified INCOMPLETE by required_modes): borrow "

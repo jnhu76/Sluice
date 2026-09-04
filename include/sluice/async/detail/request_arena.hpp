@@ -638,14 +638,19 @@ public:
     // section, so the state guard is the single registration-window authority —
     // a future path that closes registration without completion_ready must
     // restore a closed-registration guard) and for a duplicate waiter. A stale
-    // handle returns not_found. On any failure the candidate lease is consumed
+    // handle returns invalid_state: registering a waiter is an install action
+    // on a caller-held Completion, so an absent/stale key is provenance
+    // misuse (Decision 6 "direct use of an invalid/stale key") — NOT the
+    // benign not_found that Decision 6 grants only to cancel lookups (the
+    // cancel_waiter/cancel paths below keep not_found for the same misses).
+    // On any failure the candidate lease is consumed
     // at the by-value call boundary and released inline — never transferred to
     // the slot (ADR :661-662: "Scheduler reclaims it or completes inline as
     // appropriate"; the arena completes inline).
     Result<void> register_waiter(SlotHandle h, WaiterToken token, RoutingLease lease) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
-        if (!s) return make_unexpected<void>(IoError{IoError::Code::not_found});
+        if (!s) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued &&
             s->state_ != RequestState::running && s->state_ != RequestState::backend_ready) {
             // reserved/prepared: not accepted yet (pre-commit binding window);

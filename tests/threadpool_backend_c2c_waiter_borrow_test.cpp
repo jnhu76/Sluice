@@ -28,6 +28,8 @@
 // failure is reported (issue #68 §13 fail-path discipline).
 #include "harness.hpp"
 
+#include "support/waiter_error_vocabulary_cases.hpp"
+
 #include <sluice/async/completion.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
@@ -42,6 +44,7 @@
 #include <cstdlib>
 #include <fcntl.h>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <sys/types.h>
 #include <thread>
@@ -799,9 +802,9 @@ SLUICE_TEST_CASE(tp_stale_waiter_authority_harmless) {
             auto stale_register = backend.register_waiter_handle_for_test(
                 *h0, WaiterToken{9, 9, 9}, detail::RoutingLease{300});
             if (stale_register.has_value()) {
-                fail_msg = "stale register_waiter must resolve to not_found";
-            } else if (stale_register.error().code != IoError::Code::not_found) {
-                fail_msg = "stale register_waiter must report not_found";
+                fail_msg = "stale register_waiter must resolve to invalid_state";
+            } else if (stale_register.error().code != IoError::Code::invalid_state) {
+                fail_msg = "stale register_waiter must report invalid_state";
             } else {
                 auto w = backend.waiter_for_test(*h1);
                 if (!w.has_value() ||
@@ -850,4 +853,28 @@ SLUICE_TEST_CASE(tp_stale_waiter_authority_harmless) {
 
     ::close(fd);
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// S0B-CORRECTIVE-1 W1 — the adjudicated register/cancel error-vocabulary
+// split (unbound / cross-context / duplicate / post-reap / stale / no-
+// registration), driven through the PUBLIC ThreadPoolBackend interface with
+// a real worker-thread write.
+SLUICE_TEST_CASE(threadpool_waiter_error_vocabulary_split) {
+    TempPath tp{"waiter_vocab"};
+    int fd = open_temp(tp.path());
+    auto rc = waiter_error_vocabulary::run_waiter_error_vocabulary_cases<
+        ThreadPoolBackend>(
+        [] { return std::make_unique<ThreadPoolBackend>(
+                  ThreadPoolConfig{/*capacity=*/4, /*workers=*/1}); },
+        fd,
+        [](ThreadPoolBackend& b, Completion<std::size_t>& c) {
+            const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+            while (b.poll() == 0) {
+                if (std::chrono::steady_clock::now() >= deadline) return false;
+                std::this_thread::yield();
+            }
+            return c.ready();
+        });
+    ::close(fd);
+    if (rc != nullptr) SLUICE_FAIL(rc);
 }

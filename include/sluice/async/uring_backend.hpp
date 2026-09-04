@@ -169,11 +169,13 @@ class UringAsyncBackend : public AsyncBackend {
     // (ADR Decision 10), forwarded verbatim to the REAL arena authorities
     // through the same resolve_completion identity bridge as cancel. No
     // side-band waiter map. register_waiter: success, or invalid_state for a
-    // second registration / a non-accepted-or-already-reaped slot; not_found
-    // for an unresolvable (unbound, cross-context, stale) Completion.
+    // second registration / a non-accepted-or-already-reaped slot / an
+    // unresolvable (unbound, cross-context, stale) Completion — the last is
+    // provenance misuse (Decision 6), not a lookup miss.
     // cancel_waiter: removes ONLY the waiter (never the I/O, never the borrow)
     // and returns the moved-out lease, or not_found when reap already closed
-    // the registration. Stub builds have no live ring but the RequestArena
+    // the registration or the Completion is unresolvable (benign cancel-lookup
+    // miss). Stub builds have no live ring but the RequestArena
     // machinery is still authoritative (the same stub conformance rules).
     Result<void> register_waiter(Completion<std::size_t>& c,
                                  detail::WaiterToken token,

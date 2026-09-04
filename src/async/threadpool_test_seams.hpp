@@ -415,16 +415,16 @@ inline void ThreadPoolBackend::set_submit_stage_failure_injection(
 // verbatim. Guarded; production builds carry nothing. ----------------------
 
 // Register one waiter on the slot bound to a real accepted Completion.
-// Returns the arena's own register_waiter result (not_found for an
-// unbound/stale Completion; invalid_state for a second registration or a
-// non-accepted/unreaped slot — registration is orthogonal to execution
-// state, ADR Decision 10).
+// Returns the arena's own register_waiter result (invalid_state for an
+// unbound/stale Completion — provenance misuse, Decision 6; invalid_state
+// for a second registration or a non-accepted/unreaped slot — registration
+// is orthogonal to execution state, ADR Decision 10).
 inline Result<void> ThreadPoolBackend::register_waiter_for_test(
     Completion<std::size_t>& c, detail::WaiterToken token,
     detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::not_found});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     return arena_.register_waiter(*h, token, std::move(lease));
 }
@@ -432,7 +432,7 @@ inline Result<void> ThreadPoolBackend::register_waiter_for_test(
     Completion<void>& c, detail::WaiterToken token, detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::not_found});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     return arena_.register_waiter(*h, token, std::move(lease));
 }

@@ -34,9 +34,12 @@ rejection, stale-key lookup, and capability refusal distinct from one another an
 configured-capacity `would_block`, lifecycle `invalid_state`, and genuine-init `no_space`.
 All four arena backends participate in this vocabulary: `ThreadPoolBackend` and
 `UringAsyncBackend` reject malformed descriptors with `invalid_argument` (Stage 1.5,
-after reserve), every arena backend returns `not_found` for an unresolvable/stale
-waiter or cancel lookup (the reference backends defer descriptor validation per
-DIV-14), and backends without a capability return `not_supported`. The cancel disposition
+after reserve), every arena backend rejects an unresolvable/stale `register_waiter`
+target with `invalid_state` (provenance misuse — Decision 6 "direct use of an
+invalid/stale key"; the reference backends defer descriptor validation per
+DIV-14), while cancel lookups (`cancel_waiter`, request cancel, `request_state`)
+return `not_found` for the same misses, and backends without a capability return
+`not_supported`. The cancel disposition
 lookup returns `not_found` for an absent or stale generation rather than overloading
 `invalid_state`.
 
@@ -1515,13 +1518,15 @@ public:
     // (ADR-explicit-io-request-contract Decision 10; the infrastructure
     // layer beneath RuntimeTaskContext::await_completion). register_waiter
     // installs ONE waiter (stable token + move-only routing lease) on the
-    // slot bound to the accepted Completion: success, invalid_state for a
-    // second registration or a non-accepted/already-reaped slot, not_found
-    // for an unresolvable (unbound / cross-context / stale) Completion.
+    // slot bound to the accepted Completion: success, or invalid_state for
+    // a duplicate registration, a non-accepted/already-reaped slot, or an
+    // unresolvable (unbound / cross-context / stale) Completion — the last
+    // is provenance misuse (Decision 6), not a lookup miss.
     // cancel_waiter removes ONLY the waiter — never the I/O, never the
     // borrow — and returns the moved-out lease on success (not_found when
-    // reap already closed the registration). Serialized like every
-    // consuming backend access.
+    // reap already closed the registration or the Completion is
+    // unresolvable — the benign miss Decision 6 grants to cancel lookups).
+    // Serialized like every consuming backend access.
     Result<void> register_waiter(Completion<std::size_t>& c,
                                  detail::WaiterToken token,
                                  detail::RoutingLease lease);

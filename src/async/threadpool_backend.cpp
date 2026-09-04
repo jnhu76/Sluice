@@ -849,7 +849,7 @@ Result<void> ThreadPoolBackend::register_waiter(Completion<std::size_t>& c,
                                                 detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::not_found});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     return arena_.register_waiter(*h, token, std::move(lease));
 }
@@ -859,7 +859,7 @@ Result<void> ThreadPoolBackend::register_waiter(Completion<void>& c,
                                                 detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::not_found});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     return arena_.register_waiter(*h, token, std::move(lease));
 }
