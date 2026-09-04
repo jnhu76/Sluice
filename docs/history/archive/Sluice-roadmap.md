@@ -1,3 +1,5 @@
+> **HISTORICAL — NOT CURRENT AUTHORITY.** Archived by S0-DOCS (#290, 2026-09-04). Execution ordering lives in GitHub #227; this record is retained for provenance only.
+
 # Sluice Roadmap
 
 ## 1. 项目方向
@@ -79,7 +81,7 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
     `sluice-tail`（向后 last-N + follow）；
   * 全部仅使用 `include/sluice/*` 公共头文件，无测试接缝、无 `src/` 包含；
   * 计划与实测证据（性能、内存上界、sanitizer、与系统工具对比）：
-    `docs/applications/file-tools-plan.md`、`docs/applications/file-tools-findings.md`；
+    `docs/history/implementation-plans/file-tools-plan.md`、`docs/applications/file-tools-findings.md`；
   * 已知遗留：`sluice-grep` 相对 grep/ugrep 的差距是 matcher 算法级别
     （SIMD/kwset 一类），V1 明确不修，作为后续候选记录。
 
@@ -878,7 +880,7 @@ rename to final path
 * benchmark evidence schema + 结构校验器
   （`scripts/bench/perf-evidence-validate.py`，pre-push/CI 强制）；
 * environment fingerprint（git/build/system/WSL/filesystem mountinfo/tools）；
-* 性能反馈台账（`docs/roadmap/performance-feedback-ledger.md`）；
+* 性能反馈台账（`docs/applications/performance-feedback-ledger.md`）；
 * 比率化指标（Core Increment / Core Overhead Ratio / Core Share）；
 * microarchitecture drilldown 分级（M0–M4，方法论文档 §6）；
 * round-1 grep canonical evidence（`../results/performance-attribution/`）。

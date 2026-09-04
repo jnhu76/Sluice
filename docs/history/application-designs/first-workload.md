@@ -5,7 +5,7 @@
 > implemented; the first application round chose single-purpose file tools
 > instead, which met the same public-layer-only validation goal.
 > Superseded by:
-> - `docs/applications/file-tools-plan.md`
+> - `docs/history/implementation-plans/file-tools-plan.md`
 > - `docs/applications/file-tools-findings.md`
 > This document is not current authority.
 

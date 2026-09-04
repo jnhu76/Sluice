@@ -1,3 +1,5 @@
+> **HISTORICAL — NOT CURRENT AUTHORITY.** Archived by S0-DOCS (#290, 2026-09-04). Execution ordering lives in GitHub #227; this record is retained for provenance only.
+
 # File Tools Application Track — Audit and Plan (Phase A)
 
 **Status:** ACTIVE — plan for the copy / hash / grep / tail application track

@@ -1,7 +1,7 @@
 // sluice-copy Version C — safe atomic output (temp file + rename).
 //
 // Implements the Version C destination lifecycle from the file-tools track
-// (docs/applications/file-tools-plan.md §3.1):
+// (docs/history/implementation-plans/file-tools-plan.md §3.1):
 //
 //   source -> mkstemp in the destination directory -> pipelined copy into the
 //   temp fd (sync policy applies to the TEMP fd) -> close -> atomic rename

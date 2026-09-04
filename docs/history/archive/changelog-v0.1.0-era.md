@@ -66,7 +66,7 @@ Documentation-only change; no production library behavior changed.
 - `sluice-hash` — bounded streaming SHA-256 (`apps/sluice-hash/`).
 - `sluice-copy` Version C — safe output via temp file + atomic rename +
   directory durability.
-- Application-track evidence: `docs/applications/file-tools-plan.md`,
+- Application-track evidence: `docs/history/implementation-plans/file-tools-plan.md`,
   `docs/applications/file-tools-findings.md` (measured performance, memory
   bounds, sanitizer evidence, system-tool comparisons). Known deferral:
   `sluice-grep` matcher algorithm (SIMD/kwset-class) — algorithmic gap,

@@ -6,7 +6,7 @@ evidence. The governing methodology (funnel, scaling signatures,
 drill-down, economics, placement, promotion rules) lives in
 [`performance-engineering.md`](performance-engineering.md); this page
 applies it and cross-links back. Findings feed
-[`docs/roadmap/performance-feedback-ledger.md`](../roadmap/performance-feedback-ledger.md).
+[`docs/applications/performance-feedback-ledger.md`](../applications/performance-feedback-ledger.md).
 
 Every performance claim in this repository must answer one question:
 

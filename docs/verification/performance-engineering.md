@@ -127,7 +127,7 @@ Example: a task doing `submit; await; submit; await` serially may mean
 "APP failed to pipeline" **or** "the Core API makes pipelining impractical".
 The first resolves to APP; the second is a Boundary symptom that may reveal
 a Core abstraction deficiency (and feeds the App Feedback Ledger /
-`docs/roadmap/app-feedback-ledger.md`).
+`docs/applications/app-feedback-ledger.md`).
 
 BOUNDARY findings MUST eventually be resolved into APP, CORE, environment,
 or artifact. They may open API work; they never authorize silently changing
@@ -169,7 +169,7 @@ Interpretation rule: if a cost scales with request count at fixed bytes, a
 per-request fixed cost is supported (fixed handoff/wake/reap tax); if it
 scales with bytes, it is bandwidth/copy-class. The first Core Cost
 Decomposition experiment (buffer-size sweep) is specified in
-`docs/roadmap/Sluice-roadmap.md` (Milestone 7).
+`docs/history/archive/Sluice-roadmap.md` (Milestone 7; historical record).
 
 ## 6. Microarchitecture drill-down (progressive, M0 → M4)
 

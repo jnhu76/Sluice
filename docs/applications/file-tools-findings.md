@@ -2,7 +2,7 @@
 
 **Track:** copy / hash / grep / tail (`apps/`) — application-driven
 development round 1.
-**Plan:** `docs/applications/file-tools-plan.md`.
+**Plan:** `docs/history/implementation-plans/file-tools-plan.md`.
 **Environment:** WSL2 Linux x86_64, Clang Release (`-m release`), workloads
 on tmpfs `/tmp` (warm page cache), 1 GiB inputs; comparisons against GNU
 coreutils (cp 9.x, sha256sum 9.x, grep 3.12, tail 9.x) and ugrep 7.5 as a
