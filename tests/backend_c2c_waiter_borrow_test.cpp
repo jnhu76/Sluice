@@ -13,6 +13,8 @@
 // sluice_async_internal_testing for the guarded seams.
 #include "harness.hpp"
 
+#include "support/waiter_error_vocabulary_cases.hpp"
+
 #include <sluice/async/completion.hpp>
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/error.hpp>
@@ -20,6 +22,7 @@
 #include <sluice/result.hpp>
 
 #include <cstddef>
+#include <memory>
 
 using namespace sluice::async;
 using sluice::IoError;
@@ -241,9 +244,11 @@ SLUICE_TEST_CASE(fake_io_cancel_keeps_waiter) {
 
 // ---- Row 12a/14a: stale waiter authority cannot touch the N+1 occupant ------
 // After release + reuse of the same physical slot, a stale-generation
-// register/cancel_waiter handle resolves to not_found with ZERO side effect on
-// the live N+1 occupant's registration (token B + lease 200 intact); the new
-// occupant still delivers B exactly once at reap.
+// handle cannot touch the live N+1 occupant's waiter: register rejects
+// invalid_state (provenance misuse, Decision 6 — W1, S0B-CORRECTIVE-1) and
+// cancel rejects not_found (benign cancel-lookup miss), both with ZERO side
+// effect on the live occupant's registration (token B + lease 200 intact);
+// the new occupant still delivers B exactly once at reap.
 SLUICE_TEST_CASE(fake_stale_waiter_authority_harmless) {
     FakeAsyncBackend backend{/*request_capacity=*/1};
     std::byte buf[8]{};
@@ -272,15 +277,16 @@ SLUICE_TEST_CASE(fake_stale_waiter_authority_harmless) {
                                                   detail::RoutingLease{200})
                      .has_value());
 
-    // Inject the STALE N-handle through the REAL waiter authorities: both must
-    // resolve to not_found and leave B's registration untouched.
+    // Inject the STALE N-handle through the REAL waiter authorities: register
+    // rejects invalid_state, cancel rejects not_found, both leave B's
+    // registration untouched.
     auto stale_cancel = backend.cancel_waiter_handle_for_test(*h0);
     SLUICE_CHECK(!stale_cancel.has_value());
     SLUICE_CHECK(stale_cancel.error().code == IoError::Code::not_found);
     auto stale_register = backend.register_waiter_handle_for_test(
         *h0, WaiterToken{9, 9, 9}, detail::RoutingLease{300});
     SLUICE_CHECK(!stale_register.has_value());
-    SLUICE_CHECK(stale_register.error().code == IoError::Code::not_found);
+    SLUICE_CHECK(stale_register.error().code == IoError::Code::invalid_state);
 
     // The live N+1 occupant's registration is untouched.
     auto w = backend.waiter_for_test(*h1);
@@ -305,10 +311,12 @@ SLUICE_TEST_CASE(fake_stale_waiter_authority_harmless) {
 }
 
 // ---- Row 12a: waiter seam on an unbound / released Completion ----------------
-// The seam resolves the Completion through the arena's real identity bridge:
-// an unbound (or already-released) Completion resolves nothing -> not_found,
-// and no waiter state machine is manufactured by the test.
-SLUICE_TEST_CASE(fake_waiter_seam_unbound_completion_not_found) {
+// The seam resolves the Completion through the arena's real identity bridge.
+// W1 (S0B-CORRECTIVE-1): an unbound (or already-released) Completion resolves
+// nothing -> register_waiter rejects invalid_state (provenance misuse,
+// Decision 6) while cancel_waiter keeps not_found (benign cancel-lookup
+// miss); no waiter state machine is manufactured by the test.
+SLUICE_TEST_CASE(fake_waiter_seam_unbound_completion_error_split) {
     FakeAsyncBackend backend{/*request_capacity=*/1};
     std::byte buf[8]{};
     Completion<std::size_t> c;
@@ -317,7 +325,7 @@ SLUICE_TEST_CASE(fake_waiter_seam_unbound_completion_not_found) {
     auto r = backend.register_waiter_for_test(unbound, WaiterToken{1, 0, 0},
                                               detail::RoutingLease{1});
     SLUICE_CHECK(!r.has_value());
-    SLUICE_CHECK(r.error().code == IoError::Code::not_found);
+    SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
     auto rl = backend.cancel_waiter_for_test(unbound);
     SLUICE_CHECK(!rl.has_value());
     SLUICE_CHECK(rl.error().code == IoError::Code::not_found);
@@ -330,6 +338,21 @@ SLUICE_TEST_CASE(fake_waiter_seam_unbound_completion_not_found) {
     auto r2 = backend.register_waiter_for_test(c, WaiterToken{1, 0, 0},
                                                detail::RoutingLease{1});
     SLUICE_CHECK(!r2.has_value());
-    SLUICE_CHECK(r2.error().code == IoError::Code::not_found);
+    SLUICE_CHECK(r2.error().code == IoError::Code::invalid_state);
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+// S0B-CORRECTIVE-1 W1 — the adjudicated register/cancel error-vocabulary
+// split (unbound / cross-context / duplicate / post-reap / stale / no-
+// registration), driven through the PUBLIC FakeAsyncBackend interface.
+SLUICE_TEST_CASE(fake_waiter_error_vocabulary_split) {
+    auto rc = waiter_error_vocabulary::run_waiter_error_vocabulary_cases<
+        FakeAsyncBackend>(
+        [] { return std::make_unique<FakeAsyncBackend>(/*request_capacity=*/4); },
+        /*fd=*/0,
+        [](FakeAsyncBackend& b, Completion<std::size_t>& c) {
+            b.complete_oldest_with_bytes(8);
+            return b.poll() == 1;
+        });
+    if (rc != nullptr) SLUICE_FAIL(rc);
 }

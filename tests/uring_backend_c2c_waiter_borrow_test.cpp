@@ -12,6 +12,7 @@
 // mode=real before this target can satisfy the uring_c2c_borrow_waiter_
 // integration record (G2: the pinned case set must run exactly once each).
 #include "harness.hpp"
+#include "support/waiter_error_vocabulary_cases.hpp"
 
 #include <sluice/async/completion.hpp>
 #include <sluice/async/uring_backend.hpp>
@@ -22,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <thread>
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -621,8 +623,10 @@ SLUICE_TEST_CASE(uring_c2c_waiter_delivery_exactly_once) {
 
 // ---------------------------------------------------------------------------
 // C2c row 14a — stale waiter authority: a captured generation-N handle cannot
-// register/cancel a waiter on the live N+1 occupant (not_found, zero side
-// effect); the live occupant's registration is untouched.
+// register/cancel a waiter on the live N+1 occupant; register rejects
+// invalid_state (provenance misuse, Decision 6 — W1, S0B-CORRECTIVE-1),
+// cancel rejects not_found (benign cancel-lookup miss), both with zero side
+// effect; the live occupant's registration is untouched.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_c2c_stale_waiter_authority_harmless) {
     UringAsyncBackend backend{UringConfig{4, 4}};
@@ -654,7 +658,7 @@ SLUICE_TEST_CASE(uring_c2c_stale_waiter_authority_harmless) {
         backend.register_waiter_handle_for_test(*hA, WaiterToken{1, 1, 1},
                                                 detail::RoutingLease{1});
     SLUICE_CHECK(!stale_register.has_value());
-    SLUICE_CHECK(stale_register.error().code == IoError::Code::not_found);
+    SLUICE_CHECK(stale_register.error().code == IoError::Code::invalid_state);
     auto stale_cancel = backend.cancel_waiter_handle_for_test(*hA);
     SLUICE_CHECK(!stale_cancel.has_value());
     SLUICE_CHECK(stale_cancel.error().code == IoError::Code::not_found);
@@ -716,6 +720,32 @@ SLUICE_TEST_CASE(uring_c2c_register_waiter_after_record_terminal_before_reap) {
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
 }
 
+// S0B-CORRECTIVE-1 W1 — the adjudicated register/cancel error-vocabulary
+// split (unbound / cross-context / duplicate / post-reap / stale / no-
+// registration), driven through the PUBLIC UringAsyncBackend interface with
+// real kernel write completions.
+SLUICE_TEST_CASE(uring_c2c_waiter_error_vocabulary_split) {
+    UringAsyncBackend backend{UringConfig{8, 4}};
+    if (!backend.available())
+        return;
+    TempFile file;
+    SLUICE_CHECK(file.valid());
+    auto rc = waiter_error_vocabulary::run_waiter_error_vocabulary_cases<
+        UringAsyncBackend>(
+        [] { return std::make_unique<UringAsyncBackend>(UringConfig{8, 4}); },
+        file.fd(),
+        [](UringAsyncBackend& b, Completion<std::size_t>& c) {
+            const auto deadline = std::chrono::steady_clock::now() +
+                                  std::chrono::seconds(5);
+            while (b.poll() == 0) {
+                if (std::chrono::steady_clock::now() >= deadline) return false;
+                std::this_thread::yield();
+            }
+            return c.ready();
+        });
+    if (rc != nullptr) SLUICE_FAIL(rc);
+}
+
 #else // !SLUICE_HAS_LIBURING — stub mode: build/API honesty only.
 
 SLUICE_TEST_CASE(uring_c2c_borrow_active_through_lifecycle) {}
@@ -731,6 +761,7 @@ SLUICE_TEST_CASE(uring_c2c_io_cancel_keeps_waiter) {}
 SLUICE_TEST_CASE(uring_c2c_waiter_delivery_exactly_once) {}
 SLUICE_TEST_CASE(uring_c2c_stale_waiter_authority_harmless) {}
 SLUICE_TEST_CASE(uring_c2c_register_waiter_after_record_terminal_before_reap) {}
+SLUICE_TEST_CASE(uring_c2c_waiter_error_vocabulary_split) {}
 
 #endif // SLUICE_HAS_LIBURING
 

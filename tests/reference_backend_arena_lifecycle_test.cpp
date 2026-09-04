@@ -19,6 +19,7 @@
 // These tests do NOT duplicate the contract suite; they assert the Phase B
 // reference lifecycle was actually plumbed through.
 #include "harness.hpp"
+#include "support/waiter_error_vocabulary_cases.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
@@ -199,6 +200,21 @@ SLUICE_TEST_CASE(fake_arena_bounded_admission_rejects_full) {
     ctx.poll();
     c1.reset();
     c2.reset();
+}
+
+// S0B-CORRECTIVE-1 W1 — the adjudicated register/cancel error-vocabulary
+// split (unbound / cross-context / duplicate / post-reap / stale / no-
+// registration), driven through the PUBLIC SyncBackend interface (ops settle
+// at the next poll).
+SLUICE_TEST_CASE(sync_waiter_error_vocabulary_split) {
+    auto rc = waiter_error_vocabulary::run_waiter_error_vocabulary_cases<
+        SyncBackend>(
+        [] { return std::make_unique<SyncBackend>(); },
+        /*fd=*/0,
+        [](SyncBackend& b, Completion<std::size_t>& c) {
+            return b.poll() == 1 && c.ready();
+        });
+    if (rc != nullptr) SLUICE_FAIL(rc);
 }
 
 SLUICE_MAIN()

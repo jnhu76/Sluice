@@ -194,17 +194,19 @@ class FakeAsyncBackend : public AsyncBackend {
     // cancel path uses — and the call is forwarded verbatim to the REAL arena
     // authorities. No side-band waiter map, no reimplementation of the waiter
     // state machine. register_waiter: success, or invalid_state for a second
-    // registration / a non-accepted-or-already-reaped slot; not_found for an
-    // unresolvable (unbound, cross-context, stale) Completion. cancel_waiter:
+    // registration / a non-accepted-or-already-reaped slot / an unresolvable
+    // (unbound, cross-context, stale) Completion — the last is provenance
+    // misuse (Decision 6), not a lookup miss. cancel_waiter:
     // removes ONLY the waiter (never the I/O, never the borrow) and returns
     // the moved-out lease, or not_found when reap already closed the
-    // registration.
+    // registration or the Completion is unresolvable (benign cancel-lookup
+    // miss).
     Result<void> register_waiter(Completion<std::size_t>& c,
                                  detail::WaiterToken token,
                                  detail::RoutingLease lease) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::not_found});
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
@@ -213,7 +215,7 @@ class FakeAsyncBackend : public AsyncBackend {
                                  detail::RoutingLease lease) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::not_found});
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
@@ -355,16 +357,16 @@ class FakeAsyncBackend : public AsyncBackend {
     // forwarded verbatim. Guarded; production builds carry nothing. ---
 
     // Register one waiter on the slot bound to a real accepted Completion.
-    // Returns the arena's own register_waiter result (not_found for an
-    // unbound/stale Completion; invalid_state for a second registration or a
-    // non-accepted/unreaped slot — registration is orthogonal to execution
-    // state, ADR Decision 10).
+    // Returns the arena's own register_waiter result (invalid_state for an
+    // unbound/stale Completion — provenance misuse, Decision 6; invalid_state
+    // for a second registration or a non-accepted/unreaped slot — registration
+    // is orthogonal to execution state, ADR Decision 10).
     Result<void> register_waiter_for_test(Completion<std::size_t>& c,
                                           detail::WaiterToken token,
                                           detail::RoutingLease lease) {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::not_found});
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
@@ -373,7 +375,7 @@ class FakeAsyncBackend : public AsyncBackend {
                                           detail::RoutingLease lease) {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::not_found});
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }

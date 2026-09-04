@@ -2,6 +2,11 @@
 
 本文档是与 `include/sluice/` 并列的当前公开 API 参考伴随文档：头文件与本参考共同承载当前公共契约。最近一次全量参考审计基线是 `v0.0.1`；基线之后的对应关系由当前工作按需选择性复核。当本文档与公开头文件不一致时，应把不一致当作缺陷处理，而不是把 `v0.0.1` 当作漂移的借口。"准稳定"意味着删除或静默重新语义化会破坏使用者；视为在小版本间冻结，仅在有计划的弃用时更改。
 
+本中文参考是英文 `docs/reference/api.md` 的精简伴随文档。对异步显式 I/O
+表面（Completion/AsyncBackend/AsyncIoContext/Batch/取消与 waiter 面），
+S0B（#292）已校正本文对应小节，但完整契约语义以英文
+`docs/reference/api.md` 为同步权威；两侧不一致时以英文版与头文件为准。
+
 内部细节和实验性 API 见 `docs/history/archive/api-audit.md`。
 
 ## 错误模型
@@ -19,11 +24,25 @@ struct IoError {
         permission_denied,// 访问被拒绝 (EACCES, EPERM, ENOENT, ENOTDIR)
         invalid_state,    // 前置条件违反（如出错后仍尝试 flush 脏字节）
         backend_error,    // 未分类 / 原始 errno
+        invalid_argument, // 畸形操作描述符（ADR-explicit-io-request-contract Decision 6）
+        not_found,        // stale/未知 RequestKey（取消/reap 查找）
+        not_supported,    // 后端/平台不提供该操作或取消能力
     };
     Code code;
     int os_errno = 0;     // 保留的 POSIX errno（不适用时为 0）
 };
 ```
+
+`invalid_argument` / `not_found` / `not_supported` 由显式 I/O 请求契约
+（Decision 6）引入：四个 arena 后端都参与该词汇——
+`ThreadPoolBackend` 与 `UringAsyncBackend` 在 reserve 之后（Stage 1.5）
+以 `invalid_argument` 拒绝畸形描述符；所有 arena 后端对无法解析
+（unbound / 跨上下文 / stale）的 `register_waiter` 目标返回
+`invalid_state`（provenance 误用——Decision 6 "direct use of an
+invalid/stale key"），而取消类查找（`cancel_waiter`、请求取消、
+`request_state`）对同类缺失返回 `not_found`；缺少能力的后端返回
+`not_supported`。取消 disposition 查找对缺失或
+过期 generation 返回 `not_found`，而非重载 `invalid_state`。
 
 **辅助函数：**
 
@@ -783,26 +802,34 @@ public:
 | `threaded` | 每个阻塞等待消耗一个 OS 线程（`std::condition_variable`）。 | 任意 |
 | `evented` | Fiber 在单线程上挂起/恢复；需要 `fiber_ctx::supported`。 | x86_64 Linux |
 
-### `sluice::async::CancellationToken` / `sluice::async::CancelState`
+### `sluice::async::CancelToken` / `sluice::async::CancelState`
 
-协作式取消原语（E27）。`CancelToken` 是取消请求状态；`CancelState`
-是每消费者的保护/确认状态。
+协作式取消原语（ADR-cancel-request-epoch）。`CancelToken` 是取消请求状态
+（pending 位 + 单调请求 epoch）；`CancelState` 是每消费者的保护/已确认 epoch。
 
 ```cpp
 class CancelToken {
 public:
-    void request() noexcept;          // 幂等的取消请求
+    void request() noexcept;          // 幂等的取消请求（pending 时为 no-op）
     bool is_requested() const noexcept;
+    void rearm() noexcept;            // 重新武装已确认的请求（Zig recancel）
+    void clear() noexcept;            // 清除 pending（epoch 不变）
 };
 
 enum class CancelProtection : std::uint8_t { unblocked, blocked };
 
 class CancelState {
 public:
-    void protect() noexcept;          // 进入保护区域（阻止传递）
-    void unprotect() noexcept;        // 退出保护区域
-    Result<void> check_cancel(const CancelToken&) noexcept;
+    void protect() noexcept;                          // 进入保护区域（阻止传递）
+    void unprotect() noexcept;                        // 退出保护区域
+    bool acknowledged(const CancelToken&) const noexcept;
+    void acknowledge(const CancelToken&) noexcept;    // check_cancel 的规范调用者
+    void reset_acknowledgement() noexcept;            // 每消费者重新武装
 };
+
+// 取消点：当且仅当未受保护、token pending 且本消费者尚未确认该 epoch 时
+// 传递一次 IoError::canceled 并记录确认。
+Result<void> check_cancel(const CancelToken& token, CancelState& state) noexcept;
 ```
 
 ### `sluice::async::Future<T>`
@@ -858,78 +885,133 @@ public:
 
 ### `sluice::async::Completion<T>`
 
-单个未完成操作的状态（E17）。调用者拥有，地址稳定，不可复制、不可移动。
+单个未完成操作的状态。调用者拥有，地址稳定，不可复制、不可移动
+（ADR-explicit-io-completion-authority）。发布变更器（claim/publish/
+rollback）为 PRIVATE——普通调用者无法伪造状态转换。`result()` 非
+`noexcept`；`reset()` 为 `noexcept`。
 
 ```cpp
 template <class T>
 class Completion {
 public:
-    Completion() noexcept = default;
+    Completion() = default;
+    ~Completion();                      // outstanding/publishing/resetting 时 fail-fast
+    Completion(const Completion&) = delete;
+    Completion& operator=(const Completion&) = delete;
+    Completion(Completion&&) = delete;
+    Completion& operator=(Completion&&) = delete;
 
     bool ready() const noexcept;
-    Result<T> result() const noexcept;   // 仅 ready 时有效
-    void reset() noexcept;               // 回到 idle 可复用
-
-    std::size_t next_reap_seq() const noexcept;  // reap 顺序
+    bool outstanding() const noexcept;  // outstanding 或瞬态 publishing
+    bool idle() const noexcept;
+    Result<T> result() const;           // 仅 ready 时有效（L9：否则 Debug assert /
+                                        // Release 返回 invalid_state）
+    void reset() noexcept;              // ready → resetting → idle；idle → no-op；
+                                        // outstanding/publishing/resetting → fail-fast
 };
 ```
 
+ADR-explicit-io-request-contract（Accepted，Decision 15）：对经任意一个
+arena 后端（FakeAsyncBackend、SyncBackend、ThreadPoolBackend、
+UringAsyncBackend 真实路径——四者都经共享 `detail::submit_transaction`
+阶梯接纳并安装 Completion binding）接纳的请求，`ready` 状态的 `reset()`
+同时也是槽释放握手：commit 时绑定的槽在 `reset()`（或 ready Completion
+析构）把它归还给有界 arena 并 `generation++` 之前持续计入
+`slot_in_use`。任何释放失败（stale handle、存活 enqueue pin、打开的
+waiter 注册、错误槽状态）都是内部协议违反，Debug 与 Release 都
+fail-fast。
+
 ### `sluice::async::AsyncBackend`
 
-内部后端边界（ADR §4）。不对外暴露；`AsyncIoContext` 委托给它。
+公开后端扩展点（ADR §4）。`AsyncIoContext` 经 `std::unique_ptr` 委托给它。
+任何派生 `AsyncBackend` 的类都是受信任的后端作者：继承受保护的
+`try_claim` / `publish` / `rollback_claim_before_accept` 及两阶段
+binding 助手。可选的 split-phase 等待能力（`wait_source` /
+`wait_one_is_nonblocking`）与请求身份能力（`supports_request_identity`）
+见英文参考与头文件。
 
 ```cpp
 class AsyncBackend {
 public:
     virtual ~AsyncBackend() = default;
+    AsyncBackend(const AsyncBackend&) = delete;
+    AsyncBackend& operator=(const AsyncBackend&) = delete;
+
+    void attach_stats(AsyncStats* s);
+
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
     virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
-    virtual std::size_t poll() = 0;      // 非阻塞 reap
-    virtual std::size_t wait_one() = 0;  // 阻塞 reap
+
+    virtual std::size_t poll() = 0;               // 非阻塞 reap
+    virtual Result<std::size_t> wait_one() = 0;   // 阻塞 reap
+
+    virtual void cancel(Completion<std::size_t>& c);  // 尽力而为的单操作取消
+    virtual void cancel(Completion<void>& c);
+
+    virtual std::size_t outstanding() const noexcept = 0;
 };
 ```
 
 ### `sluice::async::AsyncIoContext`
 
 公开 L1 异步 API 表面。拥有 `AsyncBackend`（经 `std::unique_ptr`）。
-不可复制；遵循移动语义。
+不可复制；遵循移动语义。完整的方法清单、split-phase 等待语义
+（控制面唤醒定理、有界 park、commit-to-park 握手）、waiter 注册面
+（`register_waiter` / `cancel_waiter` / `set_ready_sink` /
+`arm_backend_wait_commit`）与身份返回提交
+（`submit_*_request` / `request_state`）以英文
+`docs/reference/api.md` 为同步权威。
 
 ```cpp
 class AsyncIoContext {
 public:
-    template <class Backend, class... Args>
-    explicit AsyncIoContext(in_place_type_t<Backend>, Args&&... args);
+    explicit AsyncIoContext(std::unique_ptr<AsyncBackend> backend,
+                            AsyncStats* stats = nullptr);
+    ~AsyncIoContext();
+    AsyncIoContext(const AsyncIoContext&) = delete;
+    AsyncIoContext& operator=(const AsyncIoContext&) = delete;
+    AsyncIoContext(AsyncIoContext&&) noexcept;
+    AsyncIoContext& operator=(AsyncIoContext&&) noexcept;
 
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c);
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    std::size_t poll();              // 非阻塞
-    std::size_t wait_one();          // 阻塞
+    std::size_t poll();                        // 非阻塞
+    Result<std::size_t> wait_one();            // 阻塞；返回 reap 计数
+    Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
+    void interrupt_backend_waiters() noexcept; // 控制面唤醒
 
-    std::size_t cancel();            // 取消所有未完成操作
+    void cancel(Completion<std::size_t>& c);   // 单操作尽力而为取消
+    void cancel(Completion<void>& c);
 
-    void attach_stats(AsyncStats* s);  // 调用者拥有，可空
+    std::size_t outstanding() const noexcept;
+    const AsyncStats* stats() const noexcept;
 };
 ```
 
 ### `sluice::async::Batch`
 
-分组完成（E30）。一起提交 N 个操作，整体等待，通过 `next()` 按完成顺序迭代。
+分组完成（E30）。默认构造；`add()` 接收 `BatchOp`；`await_one(ctx)` 经
+指定 `AsyncIoContext` reap 并返回 `Result<std::size_t>`；`next()` 按 reap
+顺序迭代。**没有 `cancel()` 方法。**
 
 ```cpp
 class Batch {
 public:
-    explicit Batch(AsyncIoContext& io);
-    ~Batch();
+    Batch() = default;
+    Batch(const Batch&) = delete;
+    Batch& operator=(const Batch&) = delete;
+    Batch(Batch&&) = delete;
+    Batch& operator=(Batch&&) = delete;
 
-    void add(BatchOp op);            // 添加一个操作
-    void await_one();                // 等待 >=1 完成
-    std::optional<BatchResult> next();  // 按 reap 顺序迭代
-    std::size_t cancel();            // 取消所有未完成操作
+    std::size_t add(BatchOp op);
+    Result<std::size_t> await_one(AsyncIoContext& ctx);
+    std::optional<BatchResult> next() noexcept;
+    std::size_t pending_count() const noexcept;
 };
 ```
 
@@ -964,12 +1046,8 @@ public:
 `SlotIndex` 表示域一致；`queue_depth` 必须非零。显式配置无效时，构造器会在分配任何
 后端状态之前抛出 `std::invalid_argument`。旧构造器继续保留 `0 -> 64` 映射。
 
-工厂函数：
-
-```cpp
-AsyncIoContext threadpool_backend();
-AsyncIoContext uring_backend();
-```
+不存在工厂函数：直接构造后端并传入 `AsyncIoContext`（`RuntimeBuilder`
+是应用运行时层的构造入口）。
 
 ## 测量
 

@@ -1,9 +1,11 @@
 # S0-CONTRACT-CANDIDATES — Safety S0B input ledger
 
-**Status:** LIVE — open candidates for the #289 S0B contract / correctness
-authority / C++ reality freeze.
+**Status:** ADJUDICATED (2026-09-05) — every row below was dispositioned by
+the S0B freeze (#292); the full per-property map lives in
+[`s0b-contract-reality.md`](s0b-contract-reality.md). Kept for provenance:
+each row's pre-adjudication hypothesis and the S0B outcome note.
 
-**Authority:** none. Every row below is an **UNCONFIRMED hypothesis** observed
+**Authority:** none. Every row below was an **UNCONFIRMED hypothesis** observed
 during the S0-DOCS documentation audit (#290, 2026-09-04). None was fixed
 beyond pure documentation-role/stale-prose repair, because each involves
 "what behavior should be" rather than "what documentation role/path should
@@ -28,7 +30,7 @@ undocumented / unknown) with test or static evidence.
   reference can hide contract drift in both directions.
 - **Evidence inspected:** #227 stable-checkpoint section; PR #287 merge
   (`bc97ac35`); api.md header line.
-- **Status:** UNCONFIRMED.
+- **Status:** ADJUDICATED BY S0B — S0B outcome: participating surfaces (submit family, Completion, cancel, waiter/deadline, borrow, shutdown, capacity, failure vocabulary) verified against headers; 3 DOC_TOO_WEAK reference fixes landed (D1/D2/D3 in s0b-contract-reality.md). CopyStrategy is present in BOTH api.md and include/sluice/copy_strategy.hpp (PR #287 removed only the deferred-slot speculation) and is outside the async kernel. Remaining full-reference correspondence = separate API-maintenance debt.
 - **Recommended S0B scope:** check only the public surfaces that participate
   in the selected S0B Boundary/Safety authorities — request identity /
   acceptance (`RequestHandle`, submit family), Completion lifecycle /
@@ -50,7 +52,7 @@ undocumented / unknown) with test or static evidence.
 - **Why safety-relevant:** durability contracts (`flush` ≠ durability,
   `sync_data`/`sync_all`) are Boundary/Safety-critical semantics.
 - **Evidence inspected:** header lines only; no re-verification performed.
-- **Status:** UNCONFIRMED.
+- **Status:** ADJUDICATED BY S0B — S0B outcome: recorded as bounded maintenance debt (docs/investigations/s0b-contract-reality.md, spillover section) — independent of the async correctness kernel; re-stamp deferred to a docs-maintenance pass.
 - **Recommended S0B scope:** re-verify or re-stamp these two documents against
   current `src/`; record the verification command/date.
 
@@ -66,7 +68,7 @@ undocumented / unknown) with test or static evidence.
 - **Why safety-relevant:** generation/ABA defense, exactly-once terminal, and
   borrow lifetime are the load-bearing correctness kernel.
 - **Evidence inspected:** none beyond reading; this is planned S0B work.
-- **Status:** UNCONFIRMED (planned).
+- **Status:** ADJUDICATED BY S0B — S0B outcome: executed — B01–B10 rows frozen in s0b-contract-reality.md with named C++ authority owners and witnesses.
 - **Recommended S0B scope:** the S0B table in #289 §2, rows identity /
   accept-rollback / terminal winner / publication / borrow / shutdown.
 
@@ -82,7 +84,7 @@ undocumented / unknown) with test or static evidence.
 - **Why safety-relevant:** Debug/Release fail-fast coverage claims depend on
   this correspondence.
 - **Evidence inspected:** gate scripts; no site-by-site audit performed.
-- **Status:** UNCONFIRMED.
+- **Status:** ADJUDICATED BY S0B — S0B outcome: participating-site audit done (all named Debug+Release fail-fasts; only the documented L9 debug assert on the participating surface). No global assert cleanup.
 - **Recommended S0B scope:** site-by-site correspondence audit
   (model ↔ allowlist ↔ envelope ↔ code).
 
@@ -97,6 +99,6 @@ undocumented / unknown) with test or static evidence.
 - **Why safety-relevant:** claiming a gate runs when it does not is exactly the
   silent-coverage class Safety must eliminate.
 - **Evidence inspected:** README + pre-push.sh; no per-row wiring audit.
-- **Status:** UNCONFIRMED.
+- **Status:** ADJUDICATED BY S0B — S0B outcome: only the claims S0B closure rests on were verified (conformance/arena/lifecycle/death/negative-compile targets wired in xmake/tests). No repository-wide census.
 - **Recommended S0B scope:** row-by-row wiring verification during the S0B
   verification-authority pass.

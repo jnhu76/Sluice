@@ -18,7 +18,9 @@
 //             closes it: legal in pending/enqueued/running/backend_ready
 //             while registration is open; reserved/prepared (pre-commit
 //             binding window) and completion_ready (reap closed) are
-//             invalid_state; stale not_found. A failed registration consumes
+//             invalid_state; stale invalid_state (provenance misuse — direct
+//             use of an invalid/stale key, Decision 6; W1, S0B-CORRECTIVE-1).
+//             A failed registration consumes
 //             the candidate lease at the by-value call boundary and releases
 //             it inline — it is never transferred to the slot (ADR :661-662:
 //             "Scheduler reclaims it or completes inline as appropriate" —
@@ -593,14 +595,15 @@ SLUICE_TEST_CASE(arena_waiter_registration_state_matrix) {
     SLUICE_CHECK(!cand_cr.valid());
     arena.release_completed_binding(h3);
 
-    // stale -> not_found (generation advanced past the captured handle); the
-    // candidate lease is consumed at the boundary and never touches a later
-    // occupant.
+    // stale -> invalid_state (generation advanced past the captured handle —
+    // direct use of an invalid/stale key, provenance misuse per Decision 6;
+    // W1, S0B-CORRECTIVE-1); the candidate lease is consumed at the boundary
+    // and never touches a later occupant.
     RoutingLease cand_stale{8};
     auto reg_stale = arena.register_waiter(h3, WaiterToken{8, 0, 0},
                                            std::move(cand_stale));
     SLUICE_CHECK(!reg_stale.has_value());
-    SLUICE_CHECK(reg_stale.error().code == sluice::IoError::Code::not_found);
+    SLUICE_CHECK(reg_stale.error().code == sluice::IoError::Code::invalid_state);
     SLUICE_CHECK(!cand_stale.valid());
     SLUICE_CHECK(arena.slot_in_use() == 0);
 

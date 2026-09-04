@@ -163,16 +163,16 @@ inline detail::CancelDisposition UringAsyncBackend::cancel_handle_for_test(
 }
 
 // Register one waiter on the slot bound to a real accepted Completion.
-// Forwards verbatim to the arena authority (not_found for an unbound/stale
-// Completion; invalid_state for a second registration or an
-// already-reaped slot — registration is orthogonal to execution state,
-// ADR Decision 10).
+// Forwards verbatim to the arena authority (invalid_state for an
+// unbound/stale Completion — provenance misuse, Decision 6; invalid_state
+// for a second registration or an already-reaped slot — registration is
+// orthogonal to execution state, ADR Decision 10).
 inline Result<void> UringAsyncBackend::register_waiter_for_test(
     Completion<std::size_t>& c, detail::WaiterToken token,
     detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::not_found});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     return arena_.register_waiter(*h, token, std::move(lease));
 }
@@ -180,7 +180,7 @@ inline Result<void> UringAsyncBackend::register_waiter_for_test(
     Completion<void>& c, detail::WaiterToken token, detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::not_found});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     return arena_.register_waiter(*h, token, std::move(lease));
 }
