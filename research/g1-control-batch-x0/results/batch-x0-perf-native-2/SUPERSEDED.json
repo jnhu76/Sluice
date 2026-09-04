@@ -1,0 +1,9 @@
+{
+  "superseded": true,
+  "date": "2026-09-04",
+  "reason": "formal performance session violated the frozen prereg §9 substrate rule: preregistration requires one pre-created regular file on the host ext4 filesystem; the driver executed its work files on /tmp tmpfs. The session's environment.json carries no filesystem record at all (the substrate was neither verified nor recorded at run time). Superseded by BATCH-X0 Corrective-1, finding P1-1.",
+  "rows_retained": "timed rows (840) and strace-enter totals are retained unmodified as non-authoritative observations; nothing was deleted.",
+  "verdict_status": "the verdicts.json in this directory was derived by the pre-corrective validator and is no longer a formal campaign claim. Performance-side verdicts (TRANSPORT, CONTROL, PERFORMANCE, SLUICE-SPECIFIC-VALUE, G1-CONTROL) revert to BLOCKED / NOT ESTABLISHED pending a compliant-substrate run. Semantic verdicts (SEMANTIC-GRANT via S9 DIVERGENCE; MINIMALITY as a static design gate) are substrate-independent and stand. PROMOTION = STOP — NO C1 stands fail-closed.",
+  "rerun_status": "BLOCKED — the corrected driver (run_batch_x0.py --work-dir) mechanically requires a verified ext4 work directory, and this host has no usable ext4 filesystem (the only ext4 is the 1.9 GiB /boot system partition; /home is btrfs, /tmp is tmpfs). No substitution is authorized (Corrective-1 §21).",
+  "note_on_qualification": "results/batch-x0-qualify-native-2 (strace-free A/A PASS 47/48) remains the Amendment-1 variance record, but under the corrected validator it is not admissible as formal A/A admission evidence: it ran on tmpfs and its gate is now recomputed from raw rows only for sessions with a verified ext4 record."
+}
