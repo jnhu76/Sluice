@@ -1,0 +1,72 @@
+{
+  "campaign": "SEMANTIC-DIET-0",
+  "date": "2026-09-04",
+  "branch": "research/semantic-diet-0",
+  "baseline_head": "eba6e3bb",
+  "verdict": "PASS — SPECULATIVE SEMANTIC SURFACE REMOVED",
+  "k1_keep": [
+    "Completion terminal state machine",
+    "RequestHandle (context, slot, generation)",
+    "RequestArena/RequestSlot/RequestKey generation identity",
+    "stale-completion prevention",
+    "cancel-vs-complete precedence (CancelToken epoch)",
+    "publication ordering",
+    "reader/writer short-I/O and zero-progress contracts",
+    "positional I/O",
+    "fail-fast vocabulary"
+  ],
+  "k2_keep_pending_safety": [
+    "request/arena capacity and admission bounds",
+    "blocking-I/O pool bounds",
+    "CopyLimit bounds",
+    "shutdown/drain semantics",
+    "accounting"
+  ],
+  "k3_keep": [
+    "copy_all + CopyLimit",
+    "CopyStrategy Auto/Scratch/BufferedFirst",
+    "CopyDecision observability",
+    "SyncableWriter durability boundary",
+    "IoContext backend boundary",
+    "Batch grouped completions (no group-admission claim)",
+    "Future/Group",
+    "sync primitives",
+    "ApplicationRuntime lifecycle",
+    "experimental io_uring mechanisms"
+  ],
+  "k4_demoted": [],
+  "k5_removed": [
+    "CopyStrategy::VectorDeferred",
+    "CopyStrategy::FileRangeDeferred",
+    "CopyStrategy::SendfileDeferred",
+    "CopyStrategy::SpliceDeferred",
+    "UnsupportedStrategyPolicy",
+    "CopyOptions::unsupported_policy",
+    "CopyDecision::unsupported_requested",
+    "CopyStats::strategy_deferred_rejected_calls",
+    "CopyStats::strategy_deferred_fallback_calls",
+    "is_deferred dispatch + to_string cases",
+    "tests/copy_deferred_strategy_test.cpp",
+    "fuzz StrategyKind::DeferredReject/DeferredFallback + corpus seeds",
+    "api.md/api.zh-CN.md deferred-slot documentation"
+  ],
+  "k6_deferred": [],
+  "docs_overclaim_found": false,
+  "control_specialization": "CLOSED_BY_DEFAULT",
+  "g1_control_reopened": false,
+  "validation": {
+    "debug_clang_full_test": "202/202 PASSED",
+    "release_clang": "PASS (sluice_core + copy tests)",
+    "fuzz_smoke": "PASS (46-seed corpus, mod3 encoding)",
+    "check_doc_links": "PASS",
+    "verify_architecture_docs": "PASS",
+    "pre_push_gate": "ALL CHECKS PASSED"
+  },
+  "notes": [
+    "Only K5 cluster found; all other audited semantics have independent correctness/resource/product/mechanism justification",
+    "No current-authority doc overclaims Control authority",
+    "Deferred slots were the sole 'reserved for future optimizer/mechanism' surface (design-copy-strategy.md:39-40 'Forward compatibility... reserved enum slots')",
+    "v0.0.1 is tag-only (no semver/stability promise); removal disclosed",
+    "G1-Safety experimental targets untouched; STOP-GATE-B protected categories untouched"
+  ]
+}
