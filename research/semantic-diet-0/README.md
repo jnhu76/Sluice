@@ -29,14 +29,19 @@ Removed: the `CopyStrategy` deferred-slot cluster
 + `UnsupportedStrategyPolicy` + deferred option/decision/stats fields + test/
 fuzz/example/doc surface). These were reserved for future copy mechanisms
 (vector copy, copy_file_range, sendfile, splice) that are not implemented and
-not earned (COPY-X0: STOP, NO C1).
+not earned (COPY-X0: STOP, NO C1). The strategy-specific mechanisms were
+unimplemented, but the reservation created a real public contract — a deferred
+request observably returned `invalid_state` or explicitly fell back to Auto
+(with decision/stats observation). Removal is an intentional public
+source-surface reduction, accepted and disclosed on the tag-only v0.0.1
+baseline (no declared stability promise); "no break" is not claimed.
 
 Kept: all correctness, identity, lifetime, boundedness, cancellation, shutdown
 and natural-product semantics (K1/K2/K3) and all mechanism seams with real
-consumers (K4). The three implemented CopyStrategies and CopyDecision
-observability are unchanged. No G1-Safety experimental target is touched.
-Control specialization remains CLOSED BY DEFAULT (governance default, not a
-runtime toggle).
+consumers (K4). The retained Auto/Scratch/BufferedFirst copy behavior and
+CopyDecision observability are unchanged. No G1-Safety experimental target is
+touched. Control specialization remains CLOSED BY DEFAULT (governance default,
+not a runtime toggle).
 
 ## Rules honored
 

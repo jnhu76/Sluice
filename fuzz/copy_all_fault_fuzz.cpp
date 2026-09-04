@@ -26,7 +26,7 @@
 //
 // Then the terminal result is classified:
 //
-//   early validation rejection; deferred strategy rejection; broken Reader;
+//   early validation rejection; broken Reader;
 //   Reader error; Writer zero-progress; Writer error; consume-buffered error;
 //   clean EOF; limit stop; successful full copy.
 #include <sluice/copy.hpp>
@@ -269,7 +269,7 @@ static void check_oracle(const CopyConfig& cfg, std::span<const std::byte> sourc
         return;
     }
 
-    // From here: non-zero scratch, non-zero limit, not broken, not deferred-reject.
+    // From here: non-zero scratch, non-zero limit, not broken.
 
     // --- CB1 (positive): for Auto/BufferedFirst with a non-empty buffered
     //     prefix, the fast path must have ACTIVATED — production must have

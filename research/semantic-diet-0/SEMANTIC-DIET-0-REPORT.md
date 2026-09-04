@@ -96,10 +96,16 @@ Removed (all in the K5 cluster):
   CopyDecision sections; test-target count 203 → 202 in the two mechanical-facts
   rows (architecture gate + history issue).
 
-Nothing was merely hidden; the removed surface was dead contract, so deletion
-is the honest disposition. No generic Control toggle was added (§11 of the
-campaign — Control specialization stays CLOSED BY DEFAULT as a governance
-default, not a runtime switch).
+Nothing was merely hidden. The removed surface was a speculative but **real**
+public contract: the strategy-specific mechanisms were unimplemented, but a
+deferred request observably returned `invalid_state` (default policy) or
+explicitly fell back to Auto — executing a real copy, reporting
+`unsupported_requested`, and incrementing the fallback stat. Deletion removes
+that reject/fallback/observation behavior together with the names; it is an
+intentional reduction of public semantic surface, not a dead-code cleanup. No
+generic Control toggle was added (§11 of the campaign — Control
+specialization stays CLOSED BY DEFAULT as a governance default, not a runtime
+switch).
 
 ## 6. Why
 
@@ -132,16 +138,27 @@ evidence is a stop signal."
 ## 8. Risks
 
 - **Future mechanism re-add:** a real vector-copy/copy_file_range/sendfile/
-  splice strategy re-adds an enum value. Non-breaking (no consumer exists).
+  splice strategy re-adds an enum value. Acceptable on the current tag-only,
+  no-declared-stability-promise baseline, but it is public surface growth, not
+  a guaranteed-non-breaking change.
 - **"Design intent evidence" loss:** COPY-X0's F-2 used FileRangeDeferred as
   design-intent evidence. The campaign is closed; the historical record
   (AUDIT + research docs) preserves the intent. The observable-fallback
   principle ("fallback legal only when explicitly requested AND explicitly
   reported") remains documented in the archived design document.
-- **Public enum removal:** the slots were in the v0.0.1 tag. They were
-  documented as NOT implemented; no program can observe any behavior from them
-  other than rejection. Disclosed in this report/PR.
-- No remaining risk to correctness, boundedness, or current product semantics.
+- **Public source/ABI surface reduction (intentional, accepted, disclosed):**
+  the slots and fields were in the v0.0.1 tag. The strategy-specific
+  mechanisms were unimplemented, but the contract had real observable
+  behavior: `invalid_state` rejection (default policy) or explicit
+  fallback-to-Auto — a real executed copy with
+  `CopyDecision::unsupported_requested` set and
+  `CopyStats::strategy_deferred_fallback_calls` incremented. External source
+  naming the removed symbols stops compiling, and public struct layouts
+  change. `PUBLIC SOURCE SURFACE CHANGE: YES`; the break is intentionally
+  accepted on the experimental, tag-only, no-stability-promise baseline with
+  no known in-repo product consumer — "no break" is NOT claimed.
+- No remaining risk to correctness, boundedness, or current product semantics;
+  retained Auto/Scratch/BufferedFirst behavior is byte-identical.
 
 ## 9. Validation
 
@@ -156,8 +173,20 @@ evidence is a stop signal."
 - `python3 scripts/verify-architecture-docs.py`: PASS.
 - `bash scripts/gates/pre-push.sh` (doc links, architecture docs, mechanical
   facts, assert-hygiene, claim-hygiene): **ALL CHECKS PASSED**.
-- ASan/TSan/negative-compile: N/A — no ownership/concurrency/API-signature
-  change (removed dead enum values + supporting fields; no behavior mutation).
+- Mutation proof (`bash scripts/run-wal-copy-mutations.sh`): **PASS — 13/13
+  killed, 0 survived / 0 invalid / 0 blocked.** M-COPY-06 (deferred Reject
+  policy must return, not fall through) was retired by the PR #287
+  corrective: its target was the intentionally removed deferred-rejection
+  contract, and no retained surface can request a deferred strategy, so the
+  mutant has no target and no equivalent surviving invariant (the remaining
+  Auto/Scratch/BufferedFirst strategies are all implemented). Mutant count
+  14 → 13; no replacement mutant was fabricated to preserve the count.
+- ASan/TSan: N/A — no ownership/lifetime or concurrency change.
+- Authority negative-compile gates (capability unforgeability, template
+  constraints, lifetime ownership): N/A — unaffected; no authority surface
+  touched.
+- Public source compatibility: intentionally changed — a breaking
+  source-surface reduction, explicitly accepted and disclosed (see Risks).
 - io_uring real-liburing: N/A — sync-core change only.
 
 ## 10. Impact on the next #227 rewrite
@@ -195,9 +224,11 @@ deferred-mechanism fields; the copy contract has no "nameable-but-impossible"
 states.
 
 **Q6** Does the simplification sacrifice correctness/boundedness/product
-semantics? No — all remaining strategies are implemented and honored;
-byte-level copy behavior is unchanged; stats/decision observability for real
-strategies is unchanged.
+semantics? Not for the retained surface — Auto/Scratch/BufferedFirst copy
+behavior is byte-identical and their stats/decision observability is
+unchanged. The deferred contract's own reject/fallback/observation behavior
+is removed — that removal is the intentional semantic reduction under test,
+not collateral.
 
 **Q7** Does Sluice still carry "API reserved for a future optimizer" design
 debt? No — no remaining reserved/future-only surface was found.

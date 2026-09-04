@@ -149,14 +149,24 @@ byte-identical (same paths, same decision fields, same path/strategy counters).
 mechanism (vector copy, copy_file_range, sendfile, splice) and the
 reject/fallback machinery that exists only to serve those names.
 
-**Consumer audit (all repo consumers enumerated by grep):** production src/
-(dispatch only), tests (self-referential mechanism tests), example, fuzz target
-+ corpus seeds, api reference docs. **No application or product code consumes
-the deferred slots.** The g1_control_copy_x0 research bench defines its own
-`CopyDecisionX0` and uses only `CopyStrategy::Auto` — unaffected.
+**Consumer audit:** production src/ (dispatch only), tests (self-referential
+mechanism tests), example, fuzz target + corpus seeds, api reference docs,
+plus evidence machinery that referenced the deleted contract —
+`scripts/run-wal-copy-mutations.sh` M-COPY-06 (mutation target = the deleted
+deferred-rejection block), the `deferred_reject`/`deferred_fallback` curated
+seed generators in `fuzz/gen_seeds.cpp`, and stale deferred comments in
+`fuzz/copy_all_fault_fuzz.cpp`. The initial sweep missed the evidence
+machinery; the PR #287 corrective retires it (M-COPY-06 removed, 14 → 13
+mutants; stale seed generators and comments removed). **No application or
+product code consumes the deferred slots.** The g1_control_copy_x0 research
+bench defines its own `CopyDecisionX0` and uses only `CopyStrategy::Auto` —
+unaffected.
 
-**Risk:** future mechanism addition must re-add an enum value (trivially
-non-breaking: no consumer exists today); COPY-X0's "design intent evidence"
+**Risk:** future mechanism addition must re-add an enum value — acceptable on
+the current tag-only, no-declared-stability-promise baseline, but it is public
+surface growth, not a guaranteed-non-breaking change (no in-repo consumer
+exists today; unknown external consumers of the installed headers would see an
+addition, which is source-compatible). COPY-X0's "design intent evidence"
 (F-2) is historical and stays in research docs; the "observable fallback"
 principle (fallback legal only when explicitly requested AND explicitly
 reported) remains a documented design rule in the archived design document.
@@ -165,10 +175,10 @@ reported) remains a documented design rule in the archived design document.
 
 | Rule | Assessment |
 | --- | --- |
-| D1 no correctness invariant depends on it | PASS — the reserved slots are always rejected; removing them removes the request path. All remaining strategies are implemented and honored. |
-| D2 no product-visible behavior depends | PASS — no app/product uses deferred slots. |
+| D1 no correctness invariant depends on it | PASS — the reserved slots had no strategy-specific mechanism; a request either returned `invalid_state` (default policy) or, under `FallbackToAuto`, explicitly normalized to Auto and executed a real copy while reporting `unsupported_requested` and a fallback counter. Both behaviors existed only to serve the reservation. Removing the slots removes the request path entirely; retained Auto/Scratch/BufferedFirst behavior is byte-identical. |
+| D2 no product-visible behavior depends | PASS — no current in-repo product/application code uses the deferred slots. External source consumers of the public headers are covered by the D4 compatibility disclosure, not here. |
 | D3 no user/test/research consumer requires it | PASS — the only test/example/fuzz consumers are self-referential (they test the mechanism being removed); COPY-X0 is closed. |
-| D4 no public compatibility promise requires it | PASS with disclosure — v0.0.1 is **tag-only** (no semver/stability promise); api.md documents the slots as "reserved (not implemented)"; this change updates the reference in the same change. |
+| D4 no public compatibility promise requires it | PASS with disclosure — v0.0.1 is **tag-only** (no semver/stability promise). The removal is nonetheless a **real public source/ABI surface reduction** (enum values, a public enum type, struct fields; struct layouts change; external source naming the removed symbols stops compiling). It is intentionally accepted and disclosed, not claimed non-breaking. api.md documents the slots as "reserved (not implemented)"; this change updates the reference in the same change. |
 | D5 primary rationale is speculative future Control/specialization | PASS — design-copy-strategy.md:39-40: "Forward compatibility. Future strategies (vector copy, kernel zero-copy) can be added as reserved enum slots." |
 | D6 removal does not invalidate G1-Safety evidence | PASS — no G1-Safety experiment exists; deferred slots are not safety semantics. |
 | D7 simpler replacement preserves remaining behavior | PASS — the three implemented strategies + decision observability are fully preserved. |
@@ -180,7 +190,7 @@ reported) remains a documented design rule in the archived design document.
 | A1 test expresses correctness expectation | Tests express the reserved-slot response only; without reserved slots there is no such request path. Removed with the mechanism. |
 | A2 fake/real backend obligation | N/A — copy_all is sync core; no backend. |
 | A3 cancellation/shutdown implicit dependency | None. |
-| A4 published contract? | Documented in tag-only baseline + api.md as *not implemented*; removal is a placeholder removal, not a behavioral break (no caller can observe success from a deferred slot). |
+| A4 published contract? | Documented in tag-only baseline + api.md as *not implemented*; the contract nevertheless had real observable behavior — `invalid_state` rejection (default) or explicit fallback-to-Auto execution with `unsupported_requested` + fallback stats. Removal is therefore an intentional public source/ABI surface reduction (enum set and struct layouts change), accepted and disclosed on the no-stability-promise baseline — not a no-op placeholder cleanup. |
 | A5 "not useful for Control → not useful at all" | Not committed — implemented strategies stay; only empty reservations go. |
 | A6 breaks G1-Safety comparability | No — not safety semantics. |
 
