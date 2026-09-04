@@ -58,9 +58,8 @@ enum class FailKind { Disabled, AfterCalls, AfterBytes };
 enum class LimitKind { Unlimited, Zero, Bounded };
 enum class ReaderCapability { Plain, Buffered };
 
-// Which deferred-strategy mode to exercise. The two *Deferred variants pair a
-// reserved slot with a policy; the rest are the active strategies.
-enum class StrategyKind { Scratch, Auto, BufferedFirst, DeferredReject, DeferredFallback };
+// Which strategy mode to exercise. All three are implemented.
+enum class StrategyKind { Scratch, Auto, BufferedFirst };
 
 // An observation of a single scratch read request, paired with the destination
 // bytes already committed before that request was issued. Used by the oracle to
@@ -111,7 +110,7 @@ inline constexpr std::size_t kMaxBufferedPrefix = 4096;
 //   rshort:u32[1..64]                wshort:u32[1..64]
 //   rfail:mod3                       rfail_thresh:u8
 //   wfail:mod3                       wfail_thresh:u8
-//   injected:mod3                    strategy:mod5      broken:mod2
+//   injected:mod3                    strategy:mod3      broken:mod2
 //   capability:mod2                  buffered_prefix:u32[0..kMaxBufferedPrefix]
 //   consume_fail:mod2                writer_zero_progress:mod2
 //   early_eof_after:u32
@@ -142,7 +141,7 @@ inline CopyConfig decode_config(ByteCursor& cur) {
         break;
     }
 
-    cfg.strategy = static_cast<StrategyKind>(cur.take_mod(5));
+    cfg.strategy = static_cast<StrategyKind>(cur.take_mod(3));
     cfg.broken_reader = cur.take_mod(2) == 1;
 
     // --- BufferedReadable coverage. ---

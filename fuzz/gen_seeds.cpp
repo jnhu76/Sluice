@@ -10,7 +10,7 @@
 // copy_all_fault config layout mirrors fuzz::decode_config():
 //   scratch:u32 | limit:mod3(u8) | limit_val:u32 | rshort:u32 | wshort:u32
 //   rfail:mod3(u8) | rfail_thresh:u8 | wfail:mod3(u8) | wfail_thresh:u8
-//   injected:mod3(u8) | strategy:mod5(u8) | broken:mod2(u8)
+//   injected:mod3(u8) | strategy:mod3(u8) | broken:mod2(u8)
 //   capability:mod2(u8) | buffered_prefix:u32 | consume_fail:mod2(u8)
 //   writer_zero_progress:mod2(u8) | early_eof_after:u32
 //   then the source payload bytes.
@@ -347,18 +347,11 @@ static void gen_copy_all_fault() {
         src(v, 100);
         write_file("broken_reader", v);
     }
-    // deferred strategy Reject (strategy 3).
-    {
-        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 3, 0);
-        src(v, 100);
-        write_file("deferred_reject", v);
-    }
-    // deferred strategy FallbackToAuto (strategy 4).
-    {
-        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 4, 0);
-        src(v, 100);
-        write_file("deferred_fallback", v);
-    }
+    // The deferred_reject / deferred_fallback curated seeds were retired with
+    // the deferred-strategy public contract (SEMANTIC-DIET-0, PR #287): the
+    // strategy selector is mod3 over the three implemented strategies, so no
+    // deferred strategy is representable and no seed can request one.
+
     // binary source containing 0x00 and 0xFF.
     {
         auto v = cfg(64, 0, 0, 64, 64);

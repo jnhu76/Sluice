@@ -1,7 +1,6 @@
 // Tests for CopyStats strategy selection counters (CPPIO-CORE-007F). Verifies
-// exactly one strategy counter fires per top-level copy_all call, deferred
-// rejected/fallback are counted, nothing() still counts the strategy, and path
-// byte counters remain correct.
+// exactly one strategy counter fires per top-level copy_all call, nothing()
+// still counts the strategy, and path byte counters remain correct.
 #include "harness.hpp"
 
 #include <sluice/buffer.hpp>
@@ -31,12 +30,10 @@ bool eq(std::string_view s, const std::vector<std::byte>& b) {
 }
 
 sluice::CopyOptions opts_with(
-    sluice::CopyStrategy s, sluice::CopyLimit lim = sluice::CopyLimit::unlimited(),
-    sluice::UnsupportedStrategyPolicy p = sluice::UnsupportedStrategyPolicy::ReturnInvalidState) {
+    sluice::CopyStrategy s, sluice::CopyLimit lim = sluice::CopyLimit::unlimited()) {
     sluice::CopyOptions o;
     o.strategy = s;
     o.limit = lim;
-    o.unsupported_policy = p;
     return o;
 }
 
@@ -87,43 +84,6 @@ SLUICE_TEST_CASE(buffered_first_increments_buffered_first_counter) {
     SLUICE_CHECK(st.strategy_buffered_first_calls == 1);
     SLUICE_CHECK(st.strategy_scratch_calls == 0);
     SLUICE_CHECK(st.strategy_auto_calls == 0);
-}
-
-SLUICE_TEST_CASE(deferred_rejected_increments_deferred_rejected_counter) {
-    auto reader = sluice::MemoryReader::from_string("abc");
-    sluice::MemoryWriter writer;
-    std::vector<std::byte> scratch(8);
-    sluice::CopyStats st;
-    auto res = sluice::copy_all(reader, writer, std::span<std::byte>(scratch),
-                                opts_with(sluice::CopyStrategy::VectorDeferred), &st);
-    SLUICE_CHECK(!res.has_value());
-    SLUICE_CHECK(st.strategy_deferred_rejected_calls == 1);
-    SLUICE_CHECK(st.strategy_deferred_fallback_calls == 0);
-    // Rejected strategies do not count as a selected strategy.
-    SLUICE_CHECK(st.strategy_auto_calls == 0);
-    SLUICE_CHECK(st.strategy_scratch_calls == 0);
-    SLUICE_CHECK(st.strategy_buffered_first_calls == 0);
-}
-
-SLUICE_TEST_CASE(deferred_fallback_increments_fallback_and_selected_counters) {
-    CountingReader inner("0123456789ABCDEF");
-    std::vector<std::byte> rbuf(64);
-    sluice::BufferedReader br(inner, rbuf);
-    std::vector<std::byte> primed(4);
-    (void)br.read_some(std::span<std::byte>(primed));
-    sluice::MemoryWriter writer;
-    std::vector<std::byte> scratch(8);
-    sluice::CopyStats st;
-    auto res = sluice::copy_all(br, writer, std::span<std::byte>(scratch),
-                                opts_with(sluice::CopyStrategy::SendfileDeferred,
-                                          sluice::CopyLimit::unlimited(),
-                                          sluice::UnsupportedStrategyPolicy::FallbackToAuto),
-                                &st);
-    SLUICE_CHECK(res.has_value());
-    SLUICE_CHECK(st.strategy_deferred_fallback_calls == 1);
-    // The fallback normalized to Auto, so Auto is also counted as selected.
-    SLUICE_CHECK(st.strategy_auto_calls == 1);
-    SLUICE_CHECK(st.strategy_deferred_rejected_calls == 0);
 }
 
 SLUICE_TEST_CASE(strategy_counters_fire_even_with_nothing_limit) {

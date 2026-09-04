@@ -26,7 +26,7 @@
 //
 // Then the terminal result is classified:
 //
-//   early validation rejection; deferred strategy rejection; broken Reader;
+//   early validation rejection; broken Reader;
 //   Reader error; Writer zero-progress; Writer error; consume-buffered error;
 //   clean EOF; limit stop; successful full copy.
 #include <sluice/copy.hpp>
@@ -54,8 +54,7 @@ using fuzz::ModelWriter;
 using fuzz::ReaderCapability;
 using fuzz::StrategyKind;
 
-// Map the decoded strategy kind to production's CopyOptions (strategy + the
-// deferred policy when relevant).
+// Map the decoded strategy kind to production's CopyOptions.
 static sluice::CopyOptions make_options(const CopyConfig& cfg) {
     sluice::CopyOptions opt;
     switch (cfg.strategy) {
@@ -67,14 +66,6 @@ static sluice::CopyOptions make_options(const CopyConfig& cfg) {
         break;
     case StrategyKind::BufferedFirst:
         opt.strategy = sluice::CopyStrategy::BufferedFirst;
-        break;
-    case StrategyKind::DeferredReject:
-        opt.strategy = sluice::CopyStrategy::VectorDeferred;
-        opt.unsupported_policy = sluice::UnsupportedStrategyPolicy::ReturnInvalidState;
-        break;
-    case StrategyKind::DeferredFallback:
-        opt.strategy = sluice::CopyStrategy::VectorDeferred;
-        opt.unsupported_policy = sluice::UnsupportedStrategyPolicy::FallbackToAuto;
         break;
     }
     return opt;
@@ -252,18 +243,6 @@ static void check_oracle(const CopyConfig& cfg, std::span<const std::byte> sourc
         return;
     }
 
-    // --- Deferred reject returns invalid_state, touches nothing. ---
-    if (cfg.strategy == StrategyKind::DeferredReject) {
-        FUZZ_ASSERT(!result.has_value());
-        FUZZ_ASSERT(result.error().code == sluice::IoError::Code::invalid_state);
-        FUZZ_ASSERT(decision.unsupported_requested);
-        FUZZ_ASSERT(rv.read_calls() == 0);
-        FUZZ_ASSERT(writer.bytes_written() == 0);
-        FUZZ_ASSERT(rv.peek_calls() == 0);
-        FUZZ_ASSERT(rv.consume_calls() == 0);
-        return;
-    }
-
     // --- Empty scratch with a non-zero/unlimited copy => invalid_state. ---
     // Bounded(0) is excluded: production returns success(0) immediately without
     // touching endpoints (is_effectively_zero).
@@ -290,7 +269,7 @@ static void check_oracle(const CopyConfig& cfg, std::span<const std::byte> sourc
         return;
     }
 
-    // From here: non-zero scratch, non-zero limit, not broken, not deferred-reject.
+    // From here: non-zero scratch, non-zero limit, not broken.
 
     // --- CB1 (positive): for Auto/BufferedFirst with a non-empty buffered
     //     prefix, the fast path must have ACTIVATED — production must have
@@ -405,12 +384,6 @@ static void check_oracle(const CopyConfig& cfg, std::span<const std::byte> sourc
             sink_size == source.size()) {
             FUZZ_ASSERT(rv.buffered_remaining() == 0);
         }
-    }
-
-    // --- Deferred fallback behaves like Auto and records the decision. ---
-    if (cfg.strategy == StrategyKind::DeferredFallback) {
-        FUZZ_ASSERT(decision.unsupported_requested);
-        FUZZ_ASSERT(decision.selected == sluice::CopyStrategy::BufferedFirst);
     }
 
     // --- Stats sanity on the success path. ---

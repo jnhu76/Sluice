@@ -10,7 +10,7 @@ local tests = {
     "wrapper_noncopyable", "limit", "measurement",
     "writer_vec", "reader_vec", "file_vec", "wal_vec", "vector_stats",
     "buffered_readable", "copy_fast_path", "copy_stats_fast_path", "copy_strategy",
-    "copy_scratch_strategy", "copy_buffered_first_strategy", "copy_deferred_strategy",
+    "copy_scratch_strategy", "copy_buffered_first_strategy",
     "copy_strategy_stats", "syncable_writer", "file_sync", "wal_writer",
     "io_context_api", "blocking_io_context", "read_vec_all",
     "memory_reader_convenience", "memory_io_context",

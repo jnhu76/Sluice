@@ -96,8 +96,6 @@ target-specific `-max_len`).
 | `one_byte_short_reads` | reader_short = 1 |
 | `one_byte_short_writes` | writer_short = 1 |
 | `broken_reader` | broken-reader over-report (got > requested) |
-| `deferred_reject` | VectorDeferred + ReturnInvalidState |
-| `deferred_fallback` | VectorDeferred + FallbackToAuto |
 | `binary_source` | source with 0x00 and 0xFF |
 | `buffered_full` | BufferedReadable prefix fully satisfies unlimited Auto copy |
 | `buffered_then_scratch` | buffered prefix then scratch tail (CB5 transition) |

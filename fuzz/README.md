@@ -116,8 +116,8 @@ the unit tests; for the fuzz targets, pass a single seed to reproduce:
 
 ## Mutation proof
 
-`scripts/run-wal-copy-mutations.sh` applies 14 hand-authored mutations
-(6 WAL + 8 copy_all) to production source in an **isolated git worktree**
+`scripts/run-wal-copy-mutations.sh` applies 13 hand-authored mutations
+(6 WAL + 7 copy_all) to production source in an **isolated git worktree**
 checked out at `BASE_SHA` and replays the seed corpus **tracked at BASE_SHA**
 for each. The proof is hermetic:
 
@@ -147,7 +147,10 @@ creates a detached worktree at that SHA, and traps cleanup on exit. The mutation
 set includes a common-mode checksum mutant (M-WAL-06) that drifts both WAL
 writers and the reader together — killed only by the independent canonical-
 format oracle — and two buffered-path mutants (M-COPY-07 limit clamp, M-COPY-08
-consume-before-write-success).
+consume-before-write-success). The former M-COPY-06 (deferred Reject policy)
+was retired with the deferred-strategy public contract (SEMANTIC-DIET-0,
+PR #287): the deferred enum slots no longer exist, so no program can request a
+deferred strategy and the mutant has no target.
 
 ```sh
 bash scripts/run-wal-copy-mutations.sh

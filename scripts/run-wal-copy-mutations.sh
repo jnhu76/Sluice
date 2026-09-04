@@ -522,31 +522,13 @@ EOF
 run_mutation "M-COPY-05" "$COPY" "$TMPDIR/copy05.old" "$TMPDIR/copy05.new" "copy" \
     "copy_all_fault_fuzz" "$COPY_SEEDS"
 
-# M-COPY-06: make the deferred Reject policy fall through instead of returning.
-cat > "$TMPDIR/copy06.old" << 'EOF'
-            // Default policy: return invalid_state, touch nothing.
-            dec.unsupported_requested = true;
-            dec.reason = "deferred_not_implemented";
-            if (stats) {
-                ++stats->strategy_deferred_rejected_calls;
-                ++stats->reader_error_stops;
-            }
-            return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
-        }
-EOF
-cat > "$TMPDIR/copy06.new" << 'EOF'
-            // Default policy: return invalid_state, touch nothing.
-            dec.unsupported_requested = true;
-            dec.reason = "deferred_not_implemented";
-            if (stats) {
-                ++stats->strategy_deferred_rejected_calls;
-                ++stats->reader_error_stops;
-            }
-            // mutation: fall through instead of returning
-        }
-EOF
-run_mutation "M-COPY-06" "$COPY" "$TMPDIR/copy06.old" "$TMPDIR/copy06.new" "copy" \
-    "copy_all_fault_fuzz" "$COPY_SEEDS"
+# NOTE: M-COPY-06 (deferred Reject policy must return, not fall through) was
+# RETIRED by SEMANTIC-DIET-0 (PR #287): the deferred-strategy public contract
+# (reject / fallback-to-Auto) was intentionally removed, so no program can
+# request a deferred strategy anymore and the mutant has no target. The
+# remaining Auto/Scratch/BufferedFirst strategies are all implemented; there is
+# no unsupported-strategy path left to witness. Do not re-add a placeholder
+# mutant to preserve the count.
 
 # M-COPY-07: remove the BUFFERED-path remaining-limit clamp. The fast path
 # computes `allowed` from the limit; removing the clamp lets a bounded copy
@@ -631,8 +613,8 @@ TOTAL_BLOCKED=$((WAL_BLOCKED + CP_BLOCKED))
 
 echo "--------------------------------------------------"
 echo "WAL:  KILLED=${WAL_KILLED}  SURVIVED=${WAL_SURVIVED}  INVALID=${WAL_INVALID}  BLOCKED=${WAL_BLOCKED}  (of 6)"
-echo "COPY: KILLED=${CP_KILLED}  SURVIVED=${CP_SURVIVED}  INVALID=${CP_INVALID}  BLOCKED=${CP_BLOCKED}  (of 8)"
-echo "TOTAL: KILLED=${TOTAL_KILLED}  SURVIVED=${TOTAL_SURVIVED}  INVALID=${TOTAL_INVALID}  BLOCKED=${TOTAL_BLOCKED}  (of 14)"
+echo "COPY: KILLED=${CP_KILLED}  SURVIVED=${CP_SURVIVED}  INVALID=${CP_INVALID}  BLOCKED=${CP_BLOCKED}  (of 7)"
+echo "TOTAL: KILLED=${TOTAL_KILLED}  SURVIVED=${TOTAL_SURVIVED}  INVALID=${TOTAL_INVALID}  BLOCKED=${TOTAL_BLOCKED}  (of 13)"
 echo "=================================================="
 echo "EVIDENCE LOGS: ${EVIDENCE_DIR}"
 
@@ -640,5 +622,5 @@ if [[ $TOTAL_SURVIVED -gt 0 || $TOTAL_INVALID -gt 0 || $TOTAL_BLOCKED -gt 0 ]]; 
     echo "VERDICT: FAIL (survived=${TOTAL_SURVIVED} invalid=${TOTAL_INVALID} blocked=${TOTAL_BLOCKED})"
     exit 1
 fi
-echo "VERDICT: PASS (all 14 mutants killed by tracked BASE_SHA seeds)"
+echo "VERDICT: PASS (all 13 mutants killed by tracked BASE_SHA seeds)"
 exit 0
