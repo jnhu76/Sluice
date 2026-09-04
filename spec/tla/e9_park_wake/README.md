@@ -327,6 +327,38 @@ mixed):
   discipline is proven by the deterministic production tests).
 - E4/E5 caller re-entry after a no-progress return (the run-return
   boundary is modeled; the caller's re-entry policy is out of scope).
+- Worker STARTUP / population establishment (deliberate; see the next
+  section — declared as the model's refinement boundary at S1A, #223).
+
+## Worker-population establishment boundary (#223, declared at S1A)
+
+`Init` sets `workerAlive = [w \in Workers |-> TRUE]` and every
+`workerPhase = "Active"`: the model's refinement boundary begins AFTER the
+configured worker population is established. The only `workerAlive`
+transitions are retire steps (`TRUE -> FALSE`); there is no `StartWorker`
+(`FALSE -> TRUE`) action and no partially activated state.
+
+This is a deliberate abstraction, now documented (previously implicit). The
+C++ reality it excludes: in the multi-worker path each worker publishes
+`WorkerState::active` INSIDE its own spawned thread
+(`src/async/scheduler.cpp`, the `run_impl` thread lambda), so during startup
+the invocation legally contains partially activated populations (e.g. W1
+active while W0 is not yet), and the R2 transferable election — which scans
+`active` workers — legitimately elects the lowest ACTIVE worker in that
+window (the role-swap shape observed by #210; no production defect was ever
+alleged). The single-worker path publishes `active` from the calling thread
+before the loop and has no such window.
+
+Obligations this boundary carries:
+
+- Every E9 conformance/trace test that fixes a prehistory MUST causally
+  establish full population establishment before its observation window —
+  the #222 T4 ticket-seam handshake pattern; the #196 corpus fixtures carry
+  an explicit `prehistory` field for exactly this purpose.
+- Startup-skew interleavings (start-W0-first vs start-W1-first, election
+  across partial activation, startup → steady-state refinement) are outside
+  this model. They are registered as an S2 stronger-proof candidate in the
+  S1A coverage matrix; do not read E9's green as covering them.
 
 ## #196 trace-conformance pilot (2026-08-24): real C++ traces vs this model
 
