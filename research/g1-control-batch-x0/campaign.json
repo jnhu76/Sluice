@@ -1,7 +1,11 @@
 {
   "campaign": "BATCH-X0",
   "title": "Explicit Batch as a bounded control-plane amortization grant - adversarial falsification",
-  "roadmap": ["#227", "#221", "#259"],
+  "roadmap": [
+    "#227",
+    "#221",
+    "#259"
+  ],
   "g1_control_candidate": 3,
   "precedent": [
     "#279 G1-Control C0 fixed-file (STOP, product-capability-only)",
@@ -31,9 +35,22 @@
     "MB3": "same mini backend, one admission section + one flush per batch (fused floor); per-op arena identity preserved"
   },
   "matrix": {
-    "ops": ["READ", "WRITE"],
-    "sizes": [4096, 65536],
-    "batch_n": [1, 2, 4, 8, 16, 32],
+    "ops": [
+      "READ",
+      "WRITE"
+    ],
+    "sizes": [
+      4096,
+      65536
+    ],
+    "batch_n": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
     "capacity": 64,
     "reps": 7,
     "backend": "real io_uring"
@@ -51,13 +68,37 @@
     "PROMOTION"
   ],
   "phases": {
-    "audit": "done (pre-freeze)",
-    "preregistration": "frozen at the freeze commit",
-    "harness": "pending",
-    "selftests": "pending",
-    "semantic_formal": "pending",
-    "perf_formal": "pending",
-    "verdicts": "pending",
-    "report": "pending"
-  }
+    "audit": "done (pre-freeze, BATCH-X0-AUDIT.md)",
+    "preregistration": "frozen c0da5db5 + Amendment 1 (2d2108cf)",
+    "harness": "done (bench + driver + validator; M1-M5 REJECT; validator selftest 4/4)",
+    "selftests": "done",
+    "semantic_formal": "done — S1-S10 PASS; S9 DIVERGENCE (batch-x0-semantic-native-1)",
+    "perf_formal": "done — batch-x0-perf-native-2 (840 rows + enter counters); native-1 SUPERSEDED (dirty_tracked at run time)",
+    "qualify": "A/A: strace-wrapped FAIL x2 (retained) -> strace-free PASS 97.9% (batch-x0-qualify-native-1/-2)",
+    "verdicts": "derived mechanically — verdicts.json (validator VALIDATION PASS)",
+    "report": "done (BATCH-X0-REPORT.md)"
+  },
+  "freeze_commit": "c0da5db5",
+  "amendments": [
+    "Amendment 1 (pre-formal, disclosed): strace removed from the timed window (ptrace variance); A/A gate then PASS 97.9%. strace retained as the untimed enter-counter instrument."
+  ],
+  "evidence_head": "see PR (results commit)",
+  "final_verdicts": {
+    "BATCH-X0-SEMANTIC-GRANT": "CURRENT BATCH DOES NOT GRANT GROUP ADMISSION",
+    "BATCH-X0-TRANSPORT-AMORTIZATION": "ALREADY OBTAINED BY PRIMITIVE SUBMITS",
+    "BATCH-X0-CONTROL-AMORTIZATION": "NOT MATERIAL",
+    "BATCH-X0-PERFORMANCE": "NOT MATERIAL",
+    "BATCH-X0-MINIMALITY": "THIN FLOOR SUFFICIENT",
+    "BATCH-X0-SLUICE-SPECIFIC-VALUE": "PORTABLE THIN-BASELINE VALUE ONLY",
+    "BATCH-X0-G1-CONTROL": "NOT ESTABLISHED",
+    "PROMOTION": "STOP — NO C1"
+  },
+  "host_facts": [
+    "kernel 7.1.9 native Fedora, liburing 2.13, clang release, cpu-pinned",
+    "B1 vs B2 io_uring_enter totals over identical grid: 19488 vs 19539 (0.26%)",
+    "S9: per-op accepts {A1,A2,B}; fused accepts {A1,A2,A3} — DIVERGENCE",
+    "MB3-MB1 fusion delta: noise (sign-inconsistent, |median| < 2% typical)",
+    "B0 fastest in every cell (e.g. read 4K N=32: 929 vs B1 1317 vs B2 1425 ns/op)",
+    "wrapper B2-B1: mixed sign, not material; negative trend at 4K N>=16 reads"
+  ]
 }
