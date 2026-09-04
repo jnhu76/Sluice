@@ -2,10 +2,10 @@
 
 > Historical research closeout. This document records how the G1-Control thesis was tested, what the experiments established, how external prior work changes the interpretation, and the resulting STOP/reopen rule. It is evidence/history, not current architecture authority.
 
-**Date:** 2026-09-04  
-**Decision issue:** [#283](https://github.com/jnhu76/Sluice/issues/283)  
-**Governing roadmap before rewrite:** [#227](https://github.com/jnhu76/Sluice/issues/227)  
-**Evidence campaign:** [#221](https://github.com/jnhu76/Sluice/issues/221)  
+**Date:** 2026-09-04\
+**Decision issue:** [#283](https://github.com/jnhu76/Sluice/issues/283)\
+**Governing roadmap before rewrite:** [#227](https://github.com/jnhu76/Sluice/issues/227)\
+**Evidence campaign:** [#221](https://github.com/jnhu76/Sluice/issues/221)\
 **Subordinate control/data-movement roadmap:** [#259](https://github.com/jnhu76/Sluice/issues/259)
 
 ## 0. Executive verdict
@@ -624,43 +624,43 @@ That is a valid research closure even though the original strong thesis did not 
 
 ### R1 — LLVM semantic/optimization attributes
 
-LLVM Project. **LLVM Language Reference Manual**. `noalias`, pointer/attribute semantics, `speculatable`.  
+LLVM Project. **LLVM Language Reference Manual**. `noalias`, pointer/attribute semantics, `speculatable`.\
 https://llvm.org/docs/LangRef.html
 
 ### R2 — System R / declarative query optimization
 
-P. Griffiths Selinger, M. M. Astrahan, D. D. Chamberlin, R. A. Lorie, T. G. Price. **Access Path Selection in a Relational Database Management System**. ACM SIGMOD, 1979.  
-IBM Research: https://research.ibm.com/publications/access-path-selection-in-a-relational-database-management-system  
+P. Griffiths Selinger, M. M. Astrahan, D. D. Chamberlin, R. A. Lorie, T. G. Price. **Access Path Selection in a Relational Database Management System**. ACM SIGMOD, 1979.\
+IBM Research: https://research.ibm.com/publications/access-path-selection-in-a-relational-database-management-system\
 DOI: https://doi.org/10.1145/582095.582099
 
 ### R3 — Halide algorithm/schedule separation
 
-Jonathan Ragan-Kelley et al. **Halide: A Language and Compiler for Optimizing Parallelism, Locality, and Recomputation in Image Processing Pipelines**. PLDI 2013.  
+Jonathan Ragan-Kelley et al. **Halide: A Language and Compiler for Optimizing Parallelism, Locality, and Recomputation in Image Processing Pipelines**. PLDI 2013.\
 Halide overview/publications: https://halide-lang.org/
 
 ### R4 — Idempotent API contracts
 
-Malcolm Featonby. **Making retries safe with idempotent APIs**. Amazon Builders' Library.  
+Malcolm Featonby. **Making retries safe with idempotent APIs**. Amazon Builders' Library.\
 https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/
 
 ### R5 — POSIX advice as information without semantic change
 
-POSIX / Linux man-pages. **posix_fadvise(3p)**.  
+POSIX / Linux man-pages. **posix_fadvise(3p)**.\
 https://man7.org/linux/man-pages/man3/posix_fadvise.3p.html
 
 ### R6 — io_uring registered-resource mechanism
 
-Linux man-pages. **io_uring_register(2)**.  
+Linux man-pages. **io_uring_register(2)**.\
 https://man7.org/linux/man-pages/man2/io_uring_register.2.html
 
 ### R7 — io_uring linked-request contract
 
-liburing/Linux man-pages. **io_uring_linked_requests(7)**.  
+liburing/Linux man-pages. **io_uring_linked_requests(7)**.\
 https://man7.org/linux/man-pages/man7/io_uring_linked_requests.7.html
 
 ### R8 — io_uring multishot completion contract
 
-liburing/Linux man-pages. **io_uring_multishot(7)**.  
+liburing/Linux man-pages. **io_uring_multishot(7)**.\
 https://man7.org/linux/man-pages/man7/io_uring_multishot.7.html
 
 ---
