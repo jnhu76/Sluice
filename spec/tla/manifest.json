@@ -51,7 +51,7 @@
       ],
       "positive_gate_count": 2,
       "negative_gate_count": 6,
-      "reachability_gate_count": 5,
+      "reachability_gate_count": 6,
       "owner_docs": [
         "docs/verification/formal/cpp-model-coverage.md"
       ],
@@ -61,7 +61,7 @@
         "src/async/threadpool_backend.cpp",
         "src/async/uring_backend.cpp"
       ],
-      "notes": "Protocol: RequestArena/RequestSlot explicit-I/O accepted-request lifecycle (five-stage admission, Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once, running-cancel intent verbatim law, reap-only publication gated on the acknowledged enqueue pin, generation advance before reuse, borrow-through-reap). Closes the former request-arena-lifecycle formal-debt gap with the smallest single-slot model (e13 FAULT-constant negatives NEG-RA-1..6, wrong-property controls, witnesses W1-W5; residual multi-slot ready-ring ORDER scope recorded in the coverage gap). Authority layering (PR #125 review P1): the two detail headers are the Layer-A leaf-safety authority the model proves; the two backend files bind the Layer-B EXTERNAL obligations only — WF(Enqueue) is the submit-path obligation (enqueue_after_commit) and WF(Reap) is the progress-loop obligation (poll/wait_one/reaper call sites of arena_.reap), neither guaranteed by the arena leaf, and every cfg sets CHECK_DEADLOCK FALSE (no deadlock-freedom claim). RecordCanceledConfirmed is a BACKEND obligation: the leaf record_canceled checks only state/exactly-once (no provenance) and has NO production caller today — future backend obligation, exercised by tests and pinned adversarially by NEG-RA-6. NEG-RA-2's stale key is causal (committed and freed in an earlier generation racing the W4 reuse)."
+      "notes": "Protocol: RequestArena/RequestSlot explicit-I/O accepted-request lifecycle (five-stage admission, Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once, running-cancel intent verbatim law, reap-only publication gated on the acknowledged enqueue pin, generation advance before reuse, borrow-through-reap). Closes the former request-arena-lifecycle formal-debt gap with the smallest single-slot model (e13 FAULT-constant negatives NEG-RA-1..6, wrong-property controls, witnesses W1-W5; residual multi-slot ready-ring ORDER scope recorded in the coverage gap). Authority layering (PR #125 review P1): the two detail headers are the Layer-A leaf-safety authority the model proves; the two backend files bind the Layer-B EXTERNAL obligations only — WF(Enqueue) is the submit-path obligation (enqueue_after_commit) and WF(Reap) is the progress-loop obligation (poll/wait_one/reaper call sites of arena_.reap), neither guaranteed by the arena leaf, and every cfg sets CHECK_DEADLOCK FALSE (no deadlock-freedom claim). RecordCanceledConfirmed is a BACKEND obligation: the leaf record_canceled checks only state/exactly-once (no provenance) and has NO production caller today — future backend obligation, exercised by tests and pinned adversarially by NEG-RA-6. NEG-RA-2's stale key is causal (committed and freed in an earlier generation racing the W4 reuse). S1A (#294, 2026-09-05): RecordTerminalKernelCanceled added — a verbatim backend real result that IS canceled without any caller cancel intent (the issue-#262 shape handed to S1A by the S0B freeze #292; kernel-originated -ECANCELED). LegitimateCancelSources gains \"kernel_canceled\"; InvCanceledTerminalSource now states the three-source law (Scheme-B cancel win / confirmed interruption / verbatim kernel result). Non-vacuity witness W6 (NotReach_W6_KernelCanceledNoIntent, cancels-free reachability of the #262 shape) gates the new action; NEG-RA-6 still names the forbidden cancel_running stamp. C++ bridge: tests/reference_backend_arena_lifecycle_test.cpp fake_kernel_canceled_completion_verbatim_without_caller_cancel."
     },
     {
       "id": "f1-wait-record",
@@ -521,7 +521,9 @@
         "per-backend C2 integration tests (C2b/C2c/C2d/C2e rows on Fake + ThreadPool)",
         "8-13 single-point production mutation executions per C2 class",
         "death tests (fail-fast rollback, stale handle, live pin, open registration)",
-        "FORMAL: spec/tla/request_arena (positive safety + liveness + NEG-RA-1..6 + W1..W5)"
+        "FORMAL: spec/tla/request_arena (positive safety + liveness + NEG-RA-1..6 + W1..W5)",
+        "FORMAL (S1A #294): kernel-canceled verbatim completion shape modeled (RecordTerminalKernelCanceled + W6 witness) with C++ bridge tests/reference_backend_arena_lifecycle_test.cpp fake_kernel_canceled_completion_verbatim_without_caller_cancel",
+        "WEAK-MEMORY (S1A #294 reconciliation): the completion publication/reset kernel (#197, spec/weakmem) covers the memory-order face of residual (c) (Completion idle->binding->outstanding CAS chain); residual (c) remains OPEN only for the submit-transaction/rollback PROTOCOL face (close-vs-submit arbitration), which stays executable-evidence scope"
       ],
       "implementation_bindings": [
         "include/sluice/async/detail/request_arena.hpp",
@@ -546,7 +548,7 @@
         "docs/verification/formal-models.md",
         "docs/verification/formal/cpp-model-coverage.md"
       ],
-      "notes": "Formerly the consolidated ACCEPTED FORMAL-DEBT record for issue #100 (audit umbrella #94). The 2026-08-18 C++/TLA+ realignment audit re-judged the debt per its own revisit policy and extracted the smallest single-slot model rather than extending the debt. This entry is RETAINED (not deleted) because the multi-slot ready-ring-order scope is still unmodeled; per-suite gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. The suite does NOT claim formal verification of the C++ implementation (AGENTS.md section 17)."
+      "notes": "Formerly the consolidated ACCEPTED FORMAL-DEBT record for issue #100 (audit umbrella #94). The 2026-08-18 C++/TLA+ realignment audit re-judged the debt per its own revisit policy and extracted the smallest single-slot model rather than extending the debt. This entry is RETAINED (not deleted) because the multi-slot ready-ring-order scope is still unmodeled; per-suite gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. The suite does NOT claim formal verification of the C++ implementation (AGENTS.md section 17). S1A (#294) reconciliation: residual (c) splits into a memory-order face (covered by the #197 GenMC kernel) and a protocol face (still open, recorded here)."
     }
   ]
 }
