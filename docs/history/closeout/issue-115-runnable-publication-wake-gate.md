@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Issue #115 — Runnable-Publication Wake Obligation: Compliance Gate
 
 **Change class:** post-freeze evidence-derived correctness fix (Issue #115).

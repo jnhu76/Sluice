@@ -33,7 +33,7 @@ Which capability objects and layers are affected?
 
 ```text
 Capability:   [AsyncIoContext | Scheduler | Runtime | Backend | Group | Batch | primitive]
-Layer:        [L0 | L1 | L2 | E7-E13 | E16]
+Layer:        [L0 | L1 | L2 | Scheduler | Runtime | Backend | primitive]
 Holder:       [who holds this capability at the call site]
 ```
 
@@ -42,7 +42,7 @@ Holder:       [who holds this capability at the call site]
 ## 4. As-Built Path
 
 Describe the CURRENT code path that this design modifies. Use the format from
-`docs/architecture/as-built-async-architecture.md`. Do not describe how you
+`docs/history/closeout/as-built-async-architecture.md`. Do not describe how you
 wish it worked — describe how it actually works today.
 
 > Required: sequence of calls with authority annotations.

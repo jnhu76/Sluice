@@ -31,7 +31,7 @@ bridge, which is Phase G (separate, untouched).
   `ReadyRoutingSink`; the O(N) `Completion::ready()` re-scan is removed from the
   arena path; duplicate-waiter `invalid_state` + cross-context provenance on the
   Scheduler side; `cancel_waiter` removes only the waiter. Gate:
-  [phase-f1-compliance-gate](../../architecture/phase-f1-compliance-gate.md) (COMPLETE).
+  [phase-f1-compliance-gate](phase-f1-compliance-gate.md) (COMPLETE).
 - **F2 (commit `d096f1f`):** `BatchResultOrigin` (`rejected` vs
   `accepted_and_completed`) on `BatchResult` — ADR Decision 9 (Batch consumes
   outcome origin explicitly, orthogonal to success/error).
@@ -41,7 +41,7 @@ bridge, which is Phase G (separate, untouched).
   `identity_of` / `request_handle_state` / private virtual
   `resolve_identity_state`, sole friend `AsyncIoContext`; overrides private;
   negative-compile 9/9). Gate:
-  [phase-f3-compliance-gate](../../architecture/phase-f3-compliance-gate.md) (COMPLETE).
+  [phase-f3-compliance-gate](phase-f3-compliance-gate.md) (COMPLETE).
 
 ## Gate 0 — scope and authority
 

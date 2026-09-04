@@ -7,13 +7,13 @@
 > MIXED-WAKE backstop, and the wake-bridge lost-wake closure — remain
 > documented in CURRENT authority: `docs/adr/ADR-execution-model.md`
 > §9.4/§9.4.7.2, `docs/architecture/foundation-freeze.md`,
-> `docs/architecture/phase-g-compliance-gate.md`, and the `e9_park_wake` TLA
+> `docs/history/closeout/phase-g-compliance-gate.md`, and the `e9_park_wake` TLA
 > model (`spec/tla/e9_park_wake/`). Body preserved as-written; see
 > `docs/history/README.md`.
 
 **Status:** IMPLEMENTED / COMPLETE (2026-08-15, closeout branch
 closeout-phase-g-foundation-freeze). Evidence of record:
-`docs/architecture/phase-g-compliance-gate.md` (Gate 4 executed rows),
+`docs/history/closeout/phase-g-compliance-gate.md` (Gate 4 executed rows),
 `tests/phase_g_closeout_test.cpp` (deterministic causal proofs Cases A–D +
 TP-G1..G7), `tests/phase_g_closeout_uring_test.cpp` (UR-G1..G7, real
 liburing, `mode=real`), and `spec/tla/e9_park_wake/` (R1–R4 + bridge model,

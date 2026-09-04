@@ -3,7 +3,7 @@
 > **Archived 2026-08-25 (issue #167 Step 5).** Moved from
 > `docs/investigations/`. Classification at move: CLOSED-HISTORY (repair live
 > in production; gate record at
-> `docs/architecture/issue-116-reentry-liveness-gate.md`). Body preserved
+> `docs/history/closeout/issue-116-reentry-liveness-gate.md`). Body preserved
 > as-written; see `docs/history/README.md`.
 >
 > **Note (Step 5d adjudication, issue #167):** this file's §13 statement that
@@ -15,7 +15,7 @@
 **Status:** ROOT_CAUSE_PROVEN_AND_FIXED
 **Baseline master SHA:** `ff003fd8f266eb561e9f4f9062bb73ac71e81ff8` (post-#117)
 **Fix branch:** `fix/issue-116-runtime-reentry-liveness`
-**Compliance gate:** `docs/architecture/issue-116-reentry-liveness-gate.md`
+**Compliance gate:** `docs/history/closeout/issue-116-reentry-liveness-gate.md`
 **Classification:** post-freeze application-derived correctness fix (Issue #116)
 
 ---
@@ -422,5 +422,5 @@ Mechanical/documentation gates: executed individually (table above);
 - `scripts/hardening/phases.py` — forensics round in the Version B soak.
 - `scripts/gates/mechanical-facts.py` — test-total claims verified
   mechanically (`test:default-gate-targets` rows vs. lua registrations).
-- `docs/architecture/issue-116-reentry-liveness-gate.md` — compliance gate.
+- `docs/history/closeout/issue-116-reentry-liveness-gate.md` — compliance gate.
 - This document.

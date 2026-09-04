@@ -30,12 +30,12 @@
 //   request_capacity > queue_depth is LEGAL; excess accepted work stays
 //   enqueued locally until an SQE is available.
 //
-// Shutdown (ADR Decision 15; AGENTS.md §14): destruction is quiescent. The
+// Shutdown (ADR Decision 15; AGENTS.md §3.7): destruction is quiescent. The
 // destructor tears down the ring; it does NOT implicitly cancel, drain, wait
 // for a CQE, publish, or discard accepted work. Non-quiescent destruction is
 // a contract violation.
 //
-// See docs/architecture/phase-d1-uring-frozen-design.md (the frozen design /
+// See docs/history/closeout/phase-d1-uring-frozen-design.md (the frozen design /
 // compliance gate). State is instance-owned (no globals).
 #pragma once
 
@@ -501,7 +501,7 @@ class UringAsyncBackend : public AsyncBackend {
     }
 
     // Descriptor validation for a REAL syscall backend (ADR Decision 6;
-    // AGENTS.md §9.1 — no fcntl(F_GETFD) preflight TOCTOU).
+    // AGENTS.md §3.8 — no fcntl(F_GETFD) preflight TOCTOU).
     static Result<void> validate_read(ReadOp op);
     static Result<void> validate_write(WriteOp op);
     static Result<void> validate_sync(SyncDataOp op);
@@ -824,7 +824,7 @@ class UringAsyncBackend : public AsyncBackend {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // D3/D4 deterministic pause gates (see the guarded setters above).
     // Compiled out of production builds; the layout cost in the
-    // internal-testing target is accepted and documented (AGENTS.md §15).
+    // internal-testing target is accepted and documented (AGENTS.md §3.9).
     std::atomic<AfterCommitBeforeEnqueuePauseGate*> after_commit_before_enqueue_gate_{nullptr};
     std::atomic<BeforeDispatchTransferPauseGate*> before_dispatch_transfer_gate_{nullptr};
     std::atomic<BeforeCommitBindingPauseGate*> before_commit_binding_gate_{nullptr};
@@ -838,7 +838,7 @@ class UringAsyncBackend : public AsyncBackend {
     // call domain (poll/wait_one/submit/cancel serialization — the same
     // domain that already serializes CQE reap without dispatch_mtx_).
     // mutable: the lookup itself is const. Layout cost exists only in
-    // internal-testing builds (AGENTS.md §15); production objects keep the
+    // internal-testing builds (AGENTS.md §3.9); production objects keep the
     // pre-seam layout.
     mutable RouterScanModeForTest router_scan_mode_for_test_ =
         RouterScanModeForTest::reverse_production;
@@ -846,7 +846,7 @@ class UringAsyncBackend : public AsyncBackend {
     // TAX-0 router-fix shootout state (#255): candidate selector + the R3
     // fixed cookie table. Same single-driver call domain as the U0 seam
     // state above (plain members are sound; mutable: lookups are const).
-    // Layout cost exists only in internal-testing builds (AGENTS.md §15).
+    // Layout cost exists only in internal-testing builds (AGENTS.md §3.9).
     mutable RouterFixModeForTest router_fix_mode_for_test_ =
         RouterFixModeForTest::production_baseline;
     std::unique_ptr<RouterCookieTableForTest> cookie_table_for_test_;
@@ -875,7 +875,7 @@ class UringAsyncBackend : public AsyncBackend {
     // seam shape) — the treatment is conservative by construction. The
     // seam flag lives in the non-installed tax0_ablation_seams.hpp, so the
     // definition stays in the .cpp (the public header never includes it).
-    // Layout cost exists only in internal-testing builds (AGENTS.md §15);
+    // Layout cost exists only in internal-testing builds (AGENTS.md §3.9);
     // production objects keep the pre-seam layout.
     std::size_t router_extent_() const noexcept;
     std::size_t router_extent_cached_for_test_ = 0;

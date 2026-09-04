@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase F3 Compliance Gate — Public RequestHandle
 
 **Phase:** F3 (issue #98) — public accepted-request identity surface.
@@ -104,7 +106,7 @@ contract; this gate records the as-built evidence.
   `scripts/verify-architecture-docs.py` (PASS); `bash scripts/gates/pre-push.sh`
   — ALL CHECKS PASSED.
 - [x] C2b row 4b / C2c rows 12b + 14b closed with implementation + test pointers
-  (see [phase-f-compliance-gate](../history/closeout/phase-f-compliance-gate.md) + the C2b/C2c gates).
+  (see [phase-f-compliance-gate](phase-f-compliance-gate.md) + the C2b/C2c gates).
 
 ## Non-goals (Phase G and later)
 

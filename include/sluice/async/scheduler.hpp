@@ -1425,7 +1425,7 @@ private:
         void on_ready(detail::ReadyEvent event) noexcept override;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // Phase F1 diagnostics (layout cost accepted, AGENTS.md §15): the
+        // Phase F1 diagnostics (layout cost accepted, AGENTS.md §3.9): the
         // identity-route counters. deliveries = events carrying a waiter;
         // routed = records marked delivered (the fiber will be woken by the
         // drain); stale_dropped = generation/scheduler-identity mismatches;
@@ -1553,7 +1553,7 @@ private:
     std::size_t take_deferred_publications(void** out, std::size_t cap);
 
     // Transient deferred-publication transit (FE-2; compliance gate
-    // docs/architecture/fe2-frontend-seam-compliance-gate.md Gate 1/2).
+    // docs/history/closeout/fe2-frontend-seam-compliance-gate.md Gate 1/2).
     // Entries are raw frontend delivery records (experimental stackless
     // frontend). Producer: winner tails under G. Consumer: frontend drain.
     std::vector<void*> deferred_publications_ SLUICE_GUARDED_BY(global_mtx_){};
@@ -1979,7 +1979,7 @@ private:
     // global field mis-attributes when another worker classifies between
     // this worker's classify and its park commit).
     // Layout cost accepted for the internal-testing build only
-    // (AGENTS.md §15); absent from production.
+    // (AGENTS.md §3.9); absent from production.
     struct ParkLedgerRecord {
         std::uint64_t park_seq = 0;         // global monotonic park id
         unsigned worker_id = 0;

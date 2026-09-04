@@ -1671,7 +1671,7 @@ Consequences, recorded as amendments to §9.4.7.1's baseline:
   under `global_mtx_` together with a backend lock (no
   backend-mtx → Scheduler-global-mtx edge).
 
-Evidence: `docs/architecture/phase-g-compliance-gate.md` (closeout rows),
+Evidence: `docs/history/closeout/phase-g-compliance-gate.md` (closeout rows),
 `tests/phase_g_closeout_test.cpp` (Cases A–D), `tests/phase_g_closeout_uring_test.cpp`
 (UR-G1..G7, real liburing), `spec/tla/e9_park_wake/` (bridge/control-epoch model).
 

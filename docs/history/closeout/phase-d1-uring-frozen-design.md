@@ -1,9 +1,11 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase D1 — UringAsyncBackend Private-Ring RequestArena Migration: Frozen Design
 
 **Status:** IMPLEMENTED AND VERIFIED
 **Date:** 2026-08-09
 **Author:** jnhu
-**Governing plan:** `docs/architecture/phase-d-uring-migration-plan.md` (head `825c47b`)
+**Governing plan:** `docs/history/closeout/phase-d-uring-migration-plan.md` (head `825c47b`)
 **Governing contract:** `docs/adr/ADR-explicit-io-request-contract.md` (Accepted), as amended by
 Decision 18 (Uring execution-ownership clarification, committed `fa66ddf`)
 **Reference backend:** `ThreadPoolBackend` (portable RequestArena reference production backend)

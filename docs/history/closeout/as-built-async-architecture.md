@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # As-Built Async Architecture
 
 **Authority:** This document describes what the code *actually does* at commit
@@ -6,7 +8,7 @@ disagree, this document records the implementation truth and flags the
 discrepancy.
 
 **Target-design boundary:**
-[ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
+[ADR-explicit-io-request-contract](../../adr/ADR-explicit-io-request-contract.md)
 is Accepted (2026-08-02). Its `RequestKey`, bounded `RequestSlot`, identity-bearing
 reap, capacity, cancel disposition, and close-admission lifecycle were **not**
 present in the `b20bcc7` baseline; they are implemented today at the reference
@@ -19,7 +21,7 @@ in §9. Re-baselined by audit issue #94 (2026-08-13).
 **Request lifecycle navigation (issue #139):** the end-to-end story of ONE
 explicit-I/O request — annotated state diagram, authority table, and a worked
 ThreadPoolBackend walkthrough from `submit_write` to `Completion::reset` —
-lives in [async-request-lifecycle.md](async-request-lifecycle.md). This file
+lives in [async-request-lifecycle.md](../../architecture/async-request-lifecycle.md). This file
 keeps the component/progress/shutdown view; that file owns the per-request
 narrative.
 
@@ -59,7 +61,7 @@ ApplicationRuntime (E16)
 ## 2. L1 I/O Submission Path (per backend)
 
 > Per-request narrative (state diagram, authority table, full walkthrough):
-> [async-request-lifecycle.md](async-request-lifecycle.md) — this section keeps
+> [async-request-lifecycle.md](../../architecture/async-request-lifecycle.md) — this section keeps
 > the per-backend submission-shape comparison.
 
 ### 2.1 Common entry
@@ -103,7 +105,7 @@ corrected by PR #61 to name the backend as the claim authority.
 > publication; real-syscall descriptor validation before commit; and a
 > persistent ready-epoch wake. See
 > `docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md` and
-> `docs/architecture/phase-e-compliance-gate.md`. DIV-03 and
+> `docs/history/closeout/phase-e-compliance-gate.md`. DIV-03 and
 > DIV-12 are Resolved; DIV-14 is partially resolved for ThreadPool.
 
 ```text
@@ -175,7 +177,7 @@ wait_one()
 > serialization; and quiescent destruction fail-fast. The C2b/C2c/C2d/C2e
 > conformance records are closed with real-liburing evidence; KernelIo is
 > ELIGIBLE in real mode and honestly INCOMPLETE in stub builds. See
-> `docs/architecture/phase-d-uring-migration-plan.md`,
+> `docs/history/closeout/phase-d-uring-migration-plan.md`,
 > `phase-d2-uring-failure-noalloc-gate.md`,
 > `docs/history/closeout/phase-d3-uring-identity-waiter-gate.md`, and
 > `docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md`. P0-02, P1-06, and DIV-14 are
@@ -568,7 +570,7 @@ backend migration is complete: ThreadPool in Phase E (PR #64 — see
 ### 9.1 Phase F1 delta — production Scheduler consumes identity-bearing reap
 
 > Added by Phase F1 (issue #98; `docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md`,
-> `docs/architecture/phase-f1-compliance-gate.md`). This is the first
+> `docs/history/closeout/phase-f1-compliance-gate.md`). This is the first
 > PRODUCTION consumer of the arena's identity-bearing reap: the Scheduler no
 > longer recovers identity by scanning `Completion*`-keyed maps and re-checking
 > `c->ready()`.

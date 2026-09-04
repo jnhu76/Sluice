@@ -1212,7 +1212,7 @@ removed, reap validates the slot's own binding and publishes Completion-ready th
 the leaf domain — C2/C3) and the three Important findings (completed-binding release fails fast
 on any failure — I1; `record_terminal` validates state before writing and the unconditional
 pin-acknowledge escape hatch is gone — I2; `queue_full_retries` no longer counts lifecycle
-violations — I3). Full evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
+violations — I3). Full evidence ledger: `docs/history/closeout/phase-b-compliance-gate.md`.
 
 ### Round-4 review closeout
 
@@ -1407,7 +1407,7 @@ from *possibly kernel-consumed* work, because `io_uring_submit()` advances the u
 before the kernel enter and therefore a negative return value does not prove that zero SQEs were
 consumed. Only definitely-not-consumed work may receive local `backend_error` after a structural
 proof that no future original CQE can exist; possibly-kernel-owned work must remain bound for CQE
-recovery. See `docs/architecture/phase-d-uring-migration-plan.md` §8.2 and the Phase D1 frozen
+recovery. See `docs/history/closeout/phase-d-uring-migration-plan.md` §8.2 and the Phase D1 frozen
 design for the binding policy.
 
 ## Decision 19: io_uring permanent-submit recovery authority
@@ -1447,7 +1447,7 @@ The production recovery contract is:
 Authority remains layered: `io_uring_submit()` is transport evidence only. Class-A terminal
 authority comes from the recovery controller's execution-impossibility proof, not from the syscall
 itself. The full source proof and implementation gate are recorded in
-`docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`.
+`docs/history/closeout/phase-d1-uring-permanent-submit-failure-audit.md`.
 
 ## Open risks and deferred decisions
 

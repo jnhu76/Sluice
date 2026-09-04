@@ -15,7 +15,7 @@ AC-13, AC-14, AC-15
 This design fills the design-compliance gate (Gate 0–4) for the Phase B reference lifecycle
 PR. It is binding for the implementation; divergence requires a superseding ADR or closeout
 note (AGENTS.md §2). The companion evidence/status document is
-`docs/architecture/phase-b-compliance-gate.md`.
+`docs/history/closeout/phase-b-compliance-gate.md`.
 
 ## Phase B closeout (PR #63 review findings)
 

@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Issue #229 — Deadline Test-Seam Observation Race: Compliance Gate
 
 **Change class:** focused correctness repair of a test-seam data race
@@ -258,7 +260,7 @@ src/async/scheduler.cpp
 src/async/scheduler_test_access.hpp
   Declaration comment updated to record the synchronized-snapshot contract
   and the sibling distinction.
-docs/architecture/issue-229-deadline-test-seam-lock-gate.md
+docs/history/closeout/issue-229-deadline-test-seam-lock-gate.md
   This note (indexed in docs/architecture/README.md).
 ```
 

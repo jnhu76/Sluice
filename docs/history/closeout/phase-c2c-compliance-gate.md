@@ -1,7 +1,9 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase C2c Compliance Gate — Waiter / Borrow / Delivery-Lease Conformance
 
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL; C2c COMPLETE)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 8, 9, 10; invariants I7, I13, I16, I18
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 8, 9, 10; invariants I7, I13, I16, I18
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — C2c scope (rows 11–14)
 **Branch:** test/phase-c2c-borrow-waiter-delivery-lease
 **Scope:** Tests + test-only guarded header seams + gate scripts + docs + ONE production
@@ -253,7 +255,7 @@ alternative; a test-only nonconforming fixture would require duplicating the Req
 Each defect class was proven by a temporary mutation of the real production logic in
 `include/sluice/async/detail/request_arena.hpp`, a focused filtered test run, and an immediate
 restore verified by `git diff` (no `MUTANT` marker may remain). See
-[`docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md`](../verification/phase-c2c-waiter-borrow-mutation-evidence.md)
+[`docs/verification/phase-c2c-waiter-borrow-mutation-evidence.md`](../../verification/phase-c2c-waiter-borrow-mutation-evidence.md)
 for the full per-mutant patch/command/exit-code/restore ledger.
 
 | Mutant | Deliberate defect (§13 class) | Expected failing case | Actual failing case |

@@ -460,7 +460,7 @@ sluice_internal_async_test("application_runtime_drain_starvation_test", {platfor
 -- poll()'s. Both assert EXACT final counters, not just liveness. Under the
 -- pre-fix code TSan flags the non-atomic concurrent writes; the fix puts every
 -- accounting access back inside access_mtx_. Run under TSan for the race proof
--- (AGENTS.md §16.3).
+-- (AGENTS.md §6).
 sluice_internal_async_test("async_stats_wait_race_test", {platform_gate = {"linux", "macosx"}})
 
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
@@ -671,7 +671,7 @@ do
 end
 
 -- FE-2 minimal stackless frontend proof-of-value (FE campaign;
--- docs/architecture/fe2-frontend-seam-compliance-gate.md). The tiny
+-- docs/history/closeout/fe2-frontend-seam-compliance-gate.md). The tiny
 -- coroutine task/awaiter/record are test-only; everything semantically
 -- load-bearing (shared Event admission ladder, WaitResume token, defer/take
 -- delivery split, winner-tail kind switch) is production code. Needs the

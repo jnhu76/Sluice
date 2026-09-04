@@ -1,7 +1,9 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase B Compliance Gate — Bounded RequestKey / RequestSlot Reference Lifecycle
 
-**Design:** [`docs/history/implementation-plans/phase-b-request-slot-reference.md`](../history/implementation-plans/phase-b-request-slot-reference.md)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
+**Design:** [`docs/history/implementation-plans/phase-b-request-slot-reference.md`](../implementation-plans/phase-b-request-slot-reference.md)
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Branch:** `feat/bounded-request-slot-reference`
 **Status:** Gate 0–3 complete at design time; Gate 4 evidence filled as each commit lands
 (per `design-compliance-gate.md`: pre-filling PASS before execution is forbidden).

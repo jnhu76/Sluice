@@ -17,7 +17,7 @@
 // + reap (poll/wait_one) is the SOLE Completion-ready publication authority
 //
 // See docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md
-// (the frozen design record) and docs/architecture/phase-e-compliance-gate.md
+// (the frozen design record) and docs/history/closeout/phase-e-compliance-gate.md
 // (the evidence ledger).
 //
 // Resource bounds (AC-7, ADR Decision 13) — these are DISTINCT resources:
@@ -39,7 +39,7 @@
 // interruption would record err(canceled) explicitly and win; this backend does
 // not implement one. cancel never publishes Completion-ready directly.
 //
-// Shutdown (ADR Decision 15; AGENTS.md §14): close_admission() rejects new
+// Shutdown (ADR Decision 15; AGENTS.md §3.7): close_admission() rejects new
 // reserve with invalid_state (Completion idle, no borrow) while existing accepted
 // requests continue; cancel/poll/wait_one/reap remain legal. close_admission()
 // ALSO wakes any participant parked in the ready wait: a one-shot
@@ -333,7 +333,7 @@ class ThreadPoolBackend : public AsyncBackend {
 
         // noexcept push. Caller guarantees room (dispatch capacity == request
         // capacity, and a committed request holds its slot); a full push is an
-        // invariant fail-fast, not would_block (AGENTS.md §12).
+        // invariant fail-fast, not would_block (AGENTS.md §3.5).
         void push_back(detail::SlotHandle h) noexcept;
         // noexcept pop; returns false if empty.
         bool pop_front(detail::SlotHandle& out) noexcept;
@@ -360,7 +360,7 @@ class ThreadPoolBackend : public AsyncBackend {
     // does NOT apply — ThreadPool issues real syscalls). Returns invalid_argument
     // for a malformed descriptor (negative fd, null buffer with nonzero length,
     // offset beyond off_t, length beyond SSIZE_MAX). Does NOT use fcntl(F_GETFD)
-    // preflight (TOCTOU — AGENTS.md §9.1): a non-negative but closed fd is
+    // preflight (TOCTOU — AGENTS.md §3.8): a non-negative but closed fd is
     // accepted and later completes with the real EBADF terminal.
     static Result<void> validate_read(ReadOp op);
     static Result<void> validate_write(WriteOp op);

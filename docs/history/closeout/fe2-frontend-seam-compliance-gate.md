@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # FE-2 Frontend Seam Compliance Gate
 
 Phase-specific architecture compliance gate (AGENTS.md §8) for the FE-2

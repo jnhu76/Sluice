@@ -1,7 +1,9 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase C2d Compliance Gate — Failure Injection / Accepted-Terminal under Allocator Failure
 
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL; C2d COMPLETE)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 5, 6, 8, 12, 13, 14, 15; invariants I7, I9, I17, I19
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 5, 6, 8, 12, 13, 14, 15; invariants I7, I9, I17, I19
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — C2d scope (rows 9–10)
 **Branch:** test/phase-c2d-failure-injection-accepted-terminal
 **Baseline:** `origin/master` @ `8b24ede5b54bc41fde67decb3b820c6385faf125` (PR #71, C2c merged)
@@ -310,7 +312,7 @@ C2b/C2c-precedented alternative), applied by a harness that snapshots the
 pristine file, applies one exact replacement, rebuilds, runs exactly the
 detector case, records the RED exit + diagnostic, restores the pristine file,
 and re-runs the case GREEN. See
-[`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`](../verification/phase-c2d-failure-injection-mutation-evidence.md)
+[`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`](../../verification/phase-c2d-failure-injection-mutation-evidence.md)
 for the full per-mutant ledger.
 
 | Mutant | Deliberate defect | Expected failing case | Actual failing case / failure mode |

@@ -1,6 +1,6 @@
 // Phase D1 real-liburing submit-failure / transport-progress tests.
 //
-// These tests verify the FROZEN DESIGN (docs/architecture/phase-d1-uring-
+// These tests verify the FROZEN DESIGN (docs/history/closeout/phase-d1-uring-
 // frozen-design.md §5/§6) invariants of the new private-ring model:
 //
 //   * io_uring_submit() is TRANSPORT PROGRESS — it MUST NOT mutate

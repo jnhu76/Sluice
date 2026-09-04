@@ -9,7 +9,7 @@
 **Date:** 2026-08-04
 **Status:** Design frozen (governs the `feat/phase-e-bounded-threadpool-explicit-io` implementation)
 **Governing ADR:** [ADR-explicit-io-request-contract](../../adr/ADR-explicit-io-request-contract.md) (Accepted)
-**Compliance gate:** [phase-e-compliance-gate.md](../../architecture/phase-e-compliance-gate.md)
+**Compliance gate:** [phase-e-compliance-gate.md](../closeout/phase-e-compliance-gate.md)
 **Constitution rules touched:** AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-10,
 AC-11, AC-12, AC-13
 

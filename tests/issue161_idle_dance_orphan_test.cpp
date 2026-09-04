@@ -4,7 +4,7 @@
 // termination forever (the async_rwlock T22 hang shape; TLC counterexample
 // M4 in spec/tla/e12_rwlock_scheduler_liveness/).
 //
-// Defect class (as-built master, docs/architecture/
+// Defect class (as-built master, docs/history/closeout/
 // issue-161-idle-dance-contribution-generation-gate.md):
 //   A worker that pops a runnable ticket erases the shared idle count at
 //   scheduler.cpp (the `if (f)` branch) with NO wake-domain signal. If a

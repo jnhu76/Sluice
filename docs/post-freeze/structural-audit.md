@@ -24,7 +24,7 @@ Phase G is closed and the foundation is frozen by
 | Synchronous core contract (`Reader`/`Writer`/`Result<T>`/`IoError`, buffering, copy, WAL, durability) | `docs/reference/sync-io-model.md`, AC-1..AC-7 |
 | Request identity & lifecycle (`RequestKey`, RequestArena/RequestSlot, generation) | `docs/adr/ADR-explicit-io-request-contract.md`, AC-2/AC-14 |
 | Completion publication authority | `docs/adr/ADR-explicit-io-completion-authority.md`, AC-5/AC-13 |
-| Backend wait/park/wake + interrupt bridge (R1–R4, `backend_wait_active_` gating) | `docs/history/implementation-plans/phase-g-backend-progress-wake.md`, `docs/architecture/phase-g-compliance-gate.md` |
+| Backend wait/park/wake + interrupt bridge (R1–R4, `backend_wait_active_` gating) | `docs/history/implementation-plans/phase-g-backend-progress-wake.md`, `docs/history/closeout/phase-g-compliance-gate.md` |
 | Scheduler wake/park protocol, split-wait bridge model | Phase G closeout, `spec/tla/e9_park_wake` |
 | Cancellation layers (task/wait/op/syscall-interrupt/admission/drain/abort) | `AGENTS.md` §11, ADR-cancel-request-epoch |
 | Deadline/timeout semantics (`deadline_t`, `advance_clock`, `*_until` waits) | E11 deadline design |

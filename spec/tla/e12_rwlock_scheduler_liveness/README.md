@@ -11,7 +11,7 @@ invalidation events".
 Tracking issue: **#161**. Verifier: `scripts/formal/verify-e12-sched-liveness.sh`
 (8 positive gates PASS, 6 negative gates CEX, 1 fail-closed reachability
 witness). Owner doc:
-`docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`.
+`docs/history/closeout/issue-161-idle-dance-contribution-generation-gate.md`.
 
 **Split-window model round (this revision):** the two unlocked erase sites
 are now modeled as the TWO steps the C++ performs — the `exchange(0)`
@@ -154,7 +154,7 @@ route-publication erase — the three genuine invalidation events (each an
 The G-section erase sites stay single atomic actions (`EraseIdleBumping`);
 the two UNLOCKED sites are modeled as the split exchange/bump pairs the
 C++ performs. The shipped refinement follows three ordering rules (full
-argument in `docs/architecture/issue-161-idle-dance-contribution-
+argument in `docs/history/closeout/issue-161-idle-dance-contribution-
 generation-gate.md` §Gate 1):
 
 1. the dancer records the generation strictly BEFORE its `fetch_add`;

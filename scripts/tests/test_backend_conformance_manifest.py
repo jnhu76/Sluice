@@ -26,7 +26,7 @@
 # IMPORTANT: this module MUST NOT execute sys.exit() at module top level. An
 # earlier version called sys.exit(0) at import time, which `unittest discover`
 # surfaced as a SystemExit -> _FailedTest -> ERROR -> FAILED (errors=1),
-# breaking CI. See docs/architecture/phase-c1-conformance-gate.md.
+# breaking CI. See docs/history/closeout/phase-c1-conformance-gate.md.
 """Pure-data invariant + result-attribution tests for Phase C1."""
 
 import importlib.util

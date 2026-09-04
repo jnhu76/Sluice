@@ -14,7 +14,7 @@
 // sleeps as proof); the race case uses a barrier plus outcome invariants.
 //
 // Design: docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md
-// Gate:   docs/architecture/phase-f1-compliance-gate.md (Gate 4 evidence)
+// Gate:   docs/history/closeout/phase-f1-compliance-gate.md (Gate 4 evidence)
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>

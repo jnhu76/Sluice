@@ -1,6 +1,6 @@
 // fe2_stackless_event_pov_test — FE-2 minimal stackless frontend
 // proof-of-value (FE campaign; compliance gate
-// docs/architecture/fe2-frontend-seam-compliance-gate.md Gate 4).
+// docs/history/closeout/fe2-frontend-seam-compliance-gate.md Gate 4).
 //
 // Purpose: prove that ONE stackless (C++20 coroutine) continuation passes
 // through the SAME Event semantic authorities as the stackful Fiber
@@ -10,7 +10,7 @@
 // (publish_wait_winner_locked switching on the WaitResume kind) — WITHOUT
 // creating any second terminal/timer/cancel/admission authority.
 //
-// What is test-only (AGENTS.md §15 / FE-1c scope): the tiny coroutine task,
+// What is test-only (AGENTS.md §3.9 / FE-1c scope): the tiny coroutine task,
 // the awaiter, and the FeDeferredRecord continuation record. Everything the
 // proof depends on semantically is PRODUCTION code: the shared ladder, the
 // token seam, defer/take delivery split, and the winner tails.
@@ -26,7 +26,7 @@
 // Publication guard fail-closed direction     -> fe2_pov_record_guard_unit
 //
 // Determinism: causal phase seams + the test clock only. NO sleep proves
-// any ordering (AGENTS.md §13.3).
+// any ordering (AGENTS.md §6).
 #include "harness.hpp"
 
 #include "async_test_control.hpp"

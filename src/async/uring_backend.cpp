@@ -3,7 +3,7 @@
 // Migrated onto the bounded RequestArena / RequestSlot lifecycle
 // with a PRIVATE io_uring ring per backend instance (ADR Decision 18 — Uring
 // execution-ownership amendment). See
-// docs/architecture/phase-d1-uring-frozen-design.md.
+// docs/history/closeout/phase-d1-uring-frozen-design.md.
 //
 //   RequestArena            = logical request lifecycle / generation / terminal
 //   one private io_uring    = execution ownership domain
@@ -233,7 +233,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
 
     // noexcept push. Caller guarantees room (dispatch capacity == request
     // capacity, and a committed request holds its slot); a full push is an
-    // invariant fail-fast, not would_block (AGENTS.md §12).
+    // invariant fail-fast, not would_block (AGENTS.md §3.5).
     void push_back(detail::SlotHandle h) noexcept {
         if (size_ >= capacity_) {
             std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch ring overflow "
@@ -387,7 +387,7 @@ class UringAsyncBackend::TransportLedger {
 };
 
 // ---------------------------------------------------------------------------
-// Descriptor validation (ADR Decision 6; AGENTS.md §9.1). A REAL syscall
+// Descriptor validation (ADR Decision 6; AGENTS.md §3.8). A REAL syscall
 // backend validates representationally malformed descriptors before commit.
 // No fcntl(F_GETFD) preflight (TOCTOU): a non-negative but closed fd may be
 // accepted and later complete with the real EBADF terminal.
@@ -559,7 +559,7 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, UringBackendSubmitTestH
 #endif
 
 UringAsyncBackend::~UringAsyncBackend() {
-    // Quiescent preflight (AGENTS.md §14; mirrors ThreadPoolBackend). Fail-fast
+    // Quiescent preflight (AGENTS.md §3.7; mirrors ThreadPoolBackend). Fail-fast
     // BEFORE io_uring_queue_exit() so a non-quiescent destroy is reported as a
     // contract violation, not masked by ring teardown. This is quiescent
     // teardown only — it does NOT cancel/drain/wait/reap. The preflight order is
@@ -1862,7 +1862,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
                 // — the wake is deferred past the lock scope below instead of
                 // being dropped by an early return (state published, wake
                 // obligation missing would strand a parked wait_one forever;
-                // AGENTS.md §13.2).
+                // AGENTS.md §3.6).
                 newly_poisoned = true;
             } else {
                 sqe = ::io_uring_get_sqe(&ring_state_->ring);
