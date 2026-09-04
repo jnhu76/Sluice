@@ -1,0 +1,8 @@
+{
+  "gate": "A/A",
+  "instrument": "strace-wrapped timed window (ptrace)",
+  "attempt_1": {"cells": 48, "cells_within_5pct": 32, "fraction_within_5pct": 0.6667, "pass": false, "median_ratio": 0.0314, "max_ratio": 0.2030},
+  "attempt_2": {"cells": 48, "cells_within_5pct": 30, "fraction_within_5pct": 0.625, "pass": false,
+    "violators_head": [["B2","write",4096,16,0.294],["B1","write",65536,1,0.237],["B2","write",65536,1,0.189],["B1","write",4096,16,0.179],["B2","read",65536,2,0.153],["B1","write",4096,8,0.136],["B1","write",65536,2,0.118],["B2","write",65536,4,0.110]]},
+  "note": "per-rep rows of the wrapped attempts were not retained (the qualification runner reused its work directory before the instrument diagnosis); verdict numbers above are the machine-printed gate output captured at run time. Amendment 1 records the resulting protocol repair."
+}

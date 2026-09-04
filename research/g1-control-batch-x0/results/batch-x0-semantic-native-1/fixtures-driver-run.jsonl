@@ -1,0 +1,12 @@
+{"kind":"meta","supported":true,"mode":"semantic"}
+{"kind":"fixture","fixture":"S1","result":"PASS","detail":"ok"}
+{"kind":"fixture","fixture":"S2","result":"PASS","detail":"4 accepted + 2 would_block, rejections first"}
+{"kind":"fixture","fixture":"S3","result":"PASS","detail":"rejected(would_block) vs accepted(io_error) distinguished"}
+{"kind":"fixture","fixture":"S4","result":"PASS","detail":"reap order 2,0,1 preserved"}
+{"kind":"fixture","fixture":"S5","result":"PASS","detail":"mixed kinds iterated with per-kind payloads"}
+{"kind":"fixture","fixture":"S6","result":"PASS","detail":"idle + busy-context (external drained) recorded"}
+{"kind":"fixture","fixture":"S7","result":"PASS","detail":"N=1 negative control clean"}
+{"kind":"fixture","fixture":"S8","result":"PASS","detail":"C-1/C/C+1 rejection shape exact"}
+{"kind":"fixture","fixture":"S10","result":"PASS","detail":"per-member terminals independent; canceled member origin accepted"}
+{"kind":"fixture","fixture":"S9","verdict":"DIVERGENCE","per_op_accepted":["A1","A2","B"],"per_op_rejected":["A3:would_block","A4:would_block"],"fused_accepted":["A1","A2","A3"],"fused_rejected":["A4:would_block","B:would_block"]}
+{"kind":"fixture","fixture":"S9","result":"PASS","detail":"witness recorded: DIVERGENCE"}

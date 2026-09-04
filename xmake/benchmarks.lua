@@ -430,3 +430,29 @@ if has_config("with-liburing") then
         target_end()
     end
 end
+
+-- g1_control_batch_x0_bench (BATCH-X0 — G1-Control Candidate 3, prereg
+-- research/g1-control-batch-x0/BATCH-X0-PREREGISTRATION.md): research-only
+-- explicit-Batch control-plane amortization falsification bench. Arms:
+-- B0 raw liburing loop / B1 production per-op submit_* + manual drive /
+-- B2 production Batch / MB1+MB3 mini research floor (full per-op identity
+-- ladder; MB3 = one admission section per batch). Semantic fixtures S1-S10
+-- (incl. the decisive S9 interleaving witness) + mutant self-tests + perf
+-- cells. Links the PRODUCTION sluice_async (B1/B2) and raw liburing (B0/MB);
+-- built only under --with-liburing (default builds and CI stay liburing-free,
+-- matching every other research bench). Production code untouched.
+if has_config("with-liburing") then
+    local R = SLUICE_ROOT
+    local bx = R .. "bench/g1_control_batch_x0_bench.cpp"
+    if os.isfile(bx) then
+        target("g1_control_batch_x0_bench")
+            set_kind("binary")
+            set_default(false)
+            set_group("bench")
+            add_deps("sluice_core", "sluice_async")
+            add_files(bx)
+            add_packages("liburing")
+            add_syslinks("pthread")
+        target_end()
+    end
+end

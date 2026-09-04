@@ -1,0 +1,11 @@
+{
+  "kernel": "7.1.9-200.fc44.x86_64",
+  "cpu_model": "Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz",
+  "cpus": 20,
+  "loadavg_start": "0.04",
+  "governor": "schedutil",
+  "dirty_tracked": false,
+  "commit": "2d2108cf4f65f56f40ce8ee11c714bae047428f1",
+  "binary_sha256": "33e56a36ce983678df62438983414327f8cd1a34808d268f2c91a5bab5df07bb",
+  "ts": "2026-09-04T11:40:22"
+}
