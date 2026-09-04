@@ -42,14 +42,17 @@ adjudicated. The full authority/trace evidence per row is below.
 | B09 | Resource accounting / retirement | ALIGNED | none |
 | B10 | Shutdown / quiescence | ALIGNED | none |
 | D1 | api.md reset()-slot-release scope | DOC_TOO_WEAK | docs fixed (this PR) |
-| D2 | api.md error-vocabulary emitter scope | DOC_TOO_WEAK | docs fixed (this PR) |
+| D2 | api.md error-vocabulary emitter scope | DOC_TOO_WEAK | docs fixed (this PR); the register-waiter half was re-adjudicated as W1 below |
 | D3 | api.md AsyncIoContext waiter/sink surface | DOC_TOO_WEAK | docs fixed (this PR) |
+| W1 | Waiter error vocabulary (register vs cancel split) | IMPLEMENTATION_DRIFT | fixed in S0B-CORRECTIVE-1 (this PR): minimal shared-layer C++ change + regressions |
 
-No production C++ change was required: every B-row's implementation matches
-its frozen authority, and all three discovered mismatches are documentation
-understatements about post-Phase-D/E/F reality (Case 2 — code behavior proven
-intended by DIV-02's completed four-backend migration record and the shared
-`detail::submit_transaction` ladder).
+B01–B10 were ALIGNED as originally frozen (no production change was required
+for any B-row's audited property). S0B-CORRECTIVE-1 (adversarial review of
+this matrix) then surfaced W1 — a genuine production IMPLEMENTATION_DRIFT in
+the waiter error vocabulary that the original pass had mis-classified as the
+doc-only finding D2. W1 is adjudicated and corrected in this PR (Case 1:
+authority upheld, code corrected, regressions added); D1–D3 remain doc-only
+Case-2 fixes. Full W1 record below.
 
 ---
 
@@ -97,8 +100,9 @@ checked in `validate_`).
 
 **Failure behavior.** Stale handle on enqueue/dispatch → named fail-fast
 (reuse-before-ack is an invariant, not a recoverable race). Stale cancel /
-waiter / identity → `not_found`. Out-of-range introspection index → named
-fail-fast.
+identity lookup → `not_found`; stale waiter REGISTRATION → `invalid_state`
+(provenance misuse — W1 split; waiter-cancel keeps `not_found`). Out-of-range
+introspection index → named fail-fast.
 
 **Independent witness.** `tests/request_arena_test.cpp`;
 `tests/request_lifecycle_scheme_b_test.cpp ::
@@ -131,7 +135,7 @@ rejection.
 
 **Public/observable contract.** AC-3; ADR Decision 5 (five-stage reserve →
 prepare → commit → enqueue → dispatch; Step-5 LP); Decision 6 (error
-vocabulary); AGENTS.md §10.2; `api.md` submit/L8 clauses.
+vocabulary); AGENTS.md §3.2; `api.md` submit/L8 clauses.
 
 **Internal authority.** The ONE shared pre-accept ladder
 `detail::submit_transaction` (`include/sluice/async/detail/
@@ -199,7 +203,8 @@ successful no-op; neither outcome leaves both pending linkage and ready
 linkage live.
 
 **Public/observable contract.** ADR Decision 12 / I10 / I17; AGENTS.md
-§10.5; AC-5; `api.md` `exactly_once_terminal` conformance clause.
+§3.2 (single terminal-winner arbitration); AC-5; `api.md`
+`exactly_once_terminal` conformance clause.
 
 **Internal authority.** `RequestArena::record_terminal` / `RequestArena::
 cancel` under the arena leaf mutex — state validated BEFORE the terminal
@@ -253,7 +258,7 @@ release-store is the single linearization point; an acquire observer of
 accounting, and ended borrow.
 
 **Public/observable contract.** AC-5 / AC-13 / AC-15; ADR Decisions 9 / I11
-/ I18; AGENTS.md §4.3, §10.6; `api.md` AsyncBackend section (protected
+/ I18; AGENTS.md §3.3; `api.md` AsyncBackend section (protected
 publish helpers, trusted backend-author role).
 
 **Internal authority.** `RequestArena::reap` invokes the slot's
@@ -311,8 +316,8 @@ or shutdown-requested ends the borrow. The caller may not mutate a write
 source, touch a read destination, or close/reuse the fd before the
 Completion reports ready.
 
-**Public/observable contract.** ADR Decision 8 / I7; AGENTS.md §9 (borrowed
-buffer address stability), §10.7; `api.md` op descriptors + L7
+**Public/observable contract.** ADR Decision 8 / I7; AGENTS.md §3.8
+(borrowed buffer address stability); `api.md` op descriptors + L7
 address-stability clause.
 
 **Internal authority.** `RequestSlot::borrow_` (fd/address/length/active),
@@ -367,7 +372,7 @@ AsyncCancel whose CQE is control-informational and never independently owns
 the terminal; stale generation ⇒ `not_found`; terminal ⇒ `already_terminal`.
 Exactly-once terminal is preserved on every path.
 
-**Public/observable contract.** AC-9; ADR Decision 11; AGENTS.md §11;
+**Public/observable contract.** AC-9; ADR Decision 11; AGENTS.md §3.4;
 `api.md` cancel clauses + RuntimeTaskContext `cancel_waiter` section
 (wait-cancel ≠ I/O-cancel); ADR-cancel-request-epoch (token rearm).
 
@@ -413,17 +418,19 @@ conformance `cancel_yields_defined_terminal` family;
 (Scheme-B).
 
 **Historical evidence.** Round-4 finding 1; Phase D3 C2b/C2c seams; issue
-#262 (intermittent multi-worker write canceled terminal) — open bug,
-teardown-interaction class, referenced below under Residual.
+#262 (open incident; attribution unresolved — see Residual).
 
 **Drift classification:** ALIGNED. **Resolution:** none. **Residual:**
-open issue #262 reports an intermittent multi-worker uring write
-canceled-terminal/teardown abort. It is a suspected defect in the real
-multi-driver interleaving, NOT a contract/code mismatch classifiable in S0B's
-static correspondence pass (the single-driver protocol conforms; the bug
-candidate lives in teardown interleavings that S0B's witnesses do not
-deterministically cover). Recorded as bounded residual → real-bug mining
-(#289 S1B track) with this matrix as the contract baseline.
+issue #262 is a naturally occurring unresolved incident: a kernel-originated
+operation CQE delivered `-ECANCELED` with no repository-local explicit cancel
+request identified; the trigger and causal-layer attribution remain
+unresolved. A separate historical teardown symptom has only provisional
+attribution and is NOT proven to share one root cause. The deterministic
+contract↔C++ paths audited here are aligned, but #262 may represent an
+unmodeled environment/interleaving/state — it is adversarial input for S1A
+formal coverage and the later discrimination/real-incident track (recorded
+with this matrix as the contract baseline; no Sluice/kernel/WSL2/
+multi-driver/teardown classification is claimed).
 
 ## B07 — Deadline / timeout semantics
 
@@ -439,7 +446,8 @@ WaitNode.
 **Public/observable contract.** `api.md` synchronization glossary (absolute
 monotonic deadline; already-due; admission precedence resource-first except
 Condition deadline-first); ADR-async-primitive-lifetime-failfast; AGENTS.md
-§13; TimerRegistration header contract.
+§3.6 (wake obligation for every progress-enabling state change);
+TimerRegistration header contract.
 
 **Internal authority.** `Scheduler` owns the clock (`monotonic_now` /
 test-clock seam), the deadline heap, and `pump_deadlines_locked`;
@@ -489,7 +497,7 @@ Backend ready progress (split-phase epoch wait), Scheduler runnable routing
 (wake epoch + interrupt bridge), timer expiry (deadline pump), and the
 commit-to-park handshake each close their own window.
 
-**Public/observable contract.** AC-6; AGENTS.md §13.2; `api.md`
+**Public/observable contract.** AC-6; AGENTS.md §3.6; `api.md`
 AsyncIoContext wait_one control-wake theorem block; DIV-04/DIV-05 (2 ms
 bounded observation interval is protocol authority for MIXED-WAKE backend
 progress).
@@ -555,7 +563,7 @@ caller-owned Completions (caller-bounded). Counters `slot_in_use` /
 never conflated with lifecycle violations.
 
 **Public/observable contract.** AC-7; ADR Decision 13 / I8 / I9;
-AGENTS.md §12; `api.md` ThreadPoolBackend resource-observation table
+AGENTS.md §3.5; `api.md` ThreadPoolBackend resource-observation table
 (AC-1a).
 
 **Internal authority.** `RequestArena` (slot_in_use, accepted_outstanding,
@@ -613,7 +621,7 @@ acceptance (serialized against the Step-5 LP) while accepted work continues
 to ordinary terminals; a parked waiter is woken exactly once to re-evaluate.
 
 **Public/observable contract.** ADR Decision 15 / I12 / I14; AGENTS.md
-§14; AC-4; `api.md` ThreadPoolBackend / FakeAsyncBackend close_admission
+§3.7; AC-4; `api.md` ThreadPoolBackend / FakeAsyncBackend close_admission
 clauses + AsyncIoContext L11 note + ApplicationRuntime state table.
 
 **Internal authority.** `AsyncIoContext::~AsyncIoContext`
@@ -658,14 +666,17 @@ quiescence; post-poison Class-A); `spec/tla/e16_application_runtime/`;
 drain fix (#258).
 
 **Drift classification:** ALIGNED. **Resolution:** none. **Residual:**
-issue #262 (see B06 residual) intersects teardown; tracked there.
+issue #262 (see B06 residual) is an open incident whose possible teardown
+intersection is itself unproven; tracked as adversarial input there.
 
 ---
 
 ## Documentation drift findings (pre-fix records)
 
-Each record follows the required Step-D shape. All three were fixed in this
-PR's docs commit; the records below preserve the pre-fix state.
+Each record follows the required Step-D shape. D1–D3 were fixed in this PR's
+original docs commit; the records below preserve the pre-fix state. W1 (next
+section) was found by S0B-CORRECTIVE-1 re-adjudicating D2's waiter half and
+is preserved in the same format.
 
 ### D1 — api.md reset()-slot-release scope (DOC_TOO_WEAK)
 
@@ -705,6 +716,14 @@ CLASSIFICATION: DOC_TOO_WEAK (Case 2).
 RESOLUTION: docs — api.md IoError section now states the full emitter
   set; api.zh-CN.md error model now lists all three contract codes and
   the emitter set.
+CORRECTIVE-1 ADDENDUM: the DOC_TOO_WEAK classification above was correct
+  only for the cancel-lookup and descriptor-validation halves. The
+  "all four arena backends return not_found for unresolvable waiter
+  registration" half was NOT a doc understatement: the base
+  AsyncBackend contract says invalid_state, the ADR grants not_found
+  only to cancel lookups, and all four backends implementing not_found
+  was an undocumented production drift. Re-adjudicated as W1 below;
+  the original record is preserved verbatim.
 ```
 
 ### D3 — api.md AsyncIoContext waiter/sink surface (DOC_TOO_WEAK)
@@ -732,6 +751,89 @@ RESOLUTION: docs — api.md AsyncIoContext section now lists the six methods
   sync authority. Remaining zh-CN↔English correspondence outside the
   participating surfaces is translation debt (C-01 scope rule).
 ```
+
+### W1 — waiter error-vocabulary authority conflict (S0B-CORRECTIVE-1, IMPLEMENTATION_DRIFT)
+
+The original freeze carried D2's claim — "every arena backend returns
+`not_found` for an unresolvable/stale waiter ... lookup" — into api.md as a
+pure-doc fix. Adversarial review rejected that adjudication: the three-way
+correspondence (Accepted ADR vs base interface header vs derived production
+implementation) had never been resolved. The pre-fix record:
+
+```text
+EXPECTED CONTRACT (governing authority):
+  ADR-explicit-io-request-contract Decision 6: invalid_state covers caller
+    lifecycle/provenance misuse INCLUDING "direct use of an invalid/stale
+    key"; the not_found exception is granted EXPLICITLY and ONLY to cancel
+    lookup ("A cancel lookup may return CancelDisposition::not_found for an
+    absent or stale generation").
+  Decision 10: duplicate waiter registration -> synchronous invalid_state;
+    a failed registration consumes the candidate lease at the by-value
+    boundary.
+  Registering a waiter is an INSTALL action on a caller-held Completion, not
+  a lookup; the ADR grants it no not_found exception.
+BASE INTERFACE (include/sluice/async/async_io_context.hpp, AsyncBackend):
+  register_waiter: "an unresolvable Completion (unbound / cross-context /
+    stale) returns invalid_state (provenance misuse, Decision 6)";
+  cancel_waiter: not_found when reap already closed the registration.
+ACTUAL BACKENDS (pre-fix, all identical):
+  Fake / Sync / ThreadPool / Uring: resolve_completion miss ->
+    register_waiter returned not_found — contradicting the base contract
+    they implement. The four derived headers even documented not_found,
+    while the base header documented invalid_state: the F1 commit
+    (41a05a64) introduced both sides of the contradiction at once, so no
+    later accepted authority superseded Decision 6 — this is production
+    drift, not superseded docs.
+  Arena register_waiter also returned not_found for a stale SlotHandle;
+  invalid_state for reserved/prepared/completion_ready/duplicate (that
+  half matched the ADR).
+EXISTING TEST ORACLE: the corpus pinned the DRIFT, not the ADR:
+  tp_stale_waiter_authority_harmless, uring_c2c_stale_waiter_authority_
+  harmless, fake_waiter_seam_unbound_completion_not_found, and the arena
+  stale-registration case all asserted not_found; the F1 closeout recorded
+  the Scheduler NORMALIZING not_found back to invalid_state for
+  await_completion — evidence the production consumer never relied on the
+  drifted code.
+WHY THEY DIFFER: implementation shortcut took the cancel-lookup vocabulary
+  for the shared resolve miss without an authority decision; the S0B
+  original pass mistook the resulting test/comment consensus for intended
+  semantics.
+CLASSIFICATION: IMPLEMENTATION_DRIFT (Case 1 — code violates the governing
+  authority; authority upheld, code corrected).
+```
+
+The adjudicated split, pinned by the new shared regression
+(`tests/support/waiter_error_vocabulary_cases.hpp`, driven through the PUBLIC
+interface on all four arena backends):
+
+| Surface | Fake | Sync | ThreadPool | Uring | Base contract | ADR (D6+D10) |
+| --- | --- | --- | --- | --- | --- | --- |
+| register_waiter, unbound Completion | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state | invalid_state |
+| register_waiter, cross-context | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state | invalid_state |
+| register_waiter, stale/released | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state (was not_found) | invalid_state | invalid_state |
+| register_waiter, duplicate | invalid_state | invalid_state | invalid_state | invalid_state | invalid_state | invalid_state |
+| register_waiter, post-reap (closed) | invalid_state | invalid_state | invalid_state | invalid_state | invalid_state | invalid_state |
+| register_waiter, reserved/prepared | invalid_state | invalid_state | invalid_state | invalid_state | (not in header text) | invalid_state |
+| cancel_waiter, no registration | not_found | not_found | not_found | not_found | not_found | not_found (cancel lookup) |
+| cancel_waiter, unresolvable/stale | not_found | not_found | not_found | not_found | not_found | not_found (cancel lookup) |
+| cancel_waiter, reap closed | not_found | not_found | not_found | not_found | not_found | not_found (cancel lookup) |
+
+`RequestHandle::request_state()` keeps `not_found` for stale/wrong-context/
+released/invalid handles — a read-only observation surface with its own
+granted vocabulary (ADR-public-request-handle); unchanged by W1. The I/O
+`cancel` disposition keeps `CancelDisposition::not_found`; unchanged.
+
+RESOLUTION (minimal shared layer, four-backend): `RequestArena::
+register_waiter` stale-handle branch → `invalid_state`; the resolve-miss
+branch of the eight `register_waiter` forwarders (4 backends × public +
+test-seam layers) → `invalid_state`; `cancel_waiter` paths untouched.
+Header contracts (base + four derived) now state the split explicitly.
+Lease exactly-once on failure is structural (by-value move boundary) and
+is asserted by the regression via the move-only type. api.md /
+api.zh-CN.md corrected; production consumers audited —
+`Scheduler::await_completion_*` treats both codes identically (retire
+record → c.ready() check → invalid_state upward), so no runtime behavior
+change beyond the code itself.
 
 ## Bounded spillover handling (S0-CONTRACT-CANDIDATES)
 
@@ -788,18 +890,41 @@ B10             → d1_uring_poison, e16_application_runtime, blocking_io_pool
        relies on executable evidence.
 ```
 
+#262 as a model adversary (formal-coverage question, NOT a root-cause
+claim — S1A should answer it without assuming an answer):
+
+```text
+Can the current cancellation / uring models represent:
+  no caller-requested cancel
+  + an operation CQE returning -ECANCELED
+  + the terminal result propagated verbatim?
+Does any model (or model invariant) incorrectly assume:
+  canceled terminal => caller cancel intent existed?
+```
+
 S1A begins from this PR's merge HEAD. S0B adds no new models by scope rule.
 
 ## Residual uncertainty (bounded)
 
-1. **Issue #262** — intermittent multi-worker uring write canceled-terminal /
-   teardown abort. Contract↔code correspondence is conformant on every
-   deterministically-witnessed path; the reported interleaving is not covered
-   by an existing deterministic witness. Handed to the S1B real-bug track
-   with this matrix as the frozen contract baseline.
+1. **Issue #262** — a naturally occurring unresolved incident: a
+   kernel-originated operation CQE delivered `-ECANCELED` with no
+   repository-local explicit cancel request identified. Unresolved: the
+   trigger and the causal-layer attribution (no Sluice/kernel/WSL2/
+   multi-driver/teardown classification is claimed; the historical teardown
+   symptom's attribution is provisional and not proven to share one root
+   cause). Non-reproduction on native Host-0 (880 launches, zero
+   #262-family symptoms) is non-reproduction, NOT disproof. The
+   deterministic contract↔C++ paths audited here are aligned, but #262 may
+   represent an unmodeled environment/interleaving/state. Consumed by S1A
+   as a model-adversary question (above) and handed to the later
+   discrimination/real-incident track with this matrix as the frozen
+   contract baseline.
 2. **Multi-slot TLA scope** (see handoff) — executable-evidence debt, S1A.
 3. **`no_space` reserve-path vocabulary nuance** (see B02 residual) —
    structural distinction holds; no emitter exists because arena
    construction failure precedes any Result channel.
 4. **api.md↔header correspondence outside the B01–B10 surface** — separate
    API-maintenance debt (C-01 scope rule).
+5. **zh-CN translation debt beyond the participating surfaces** — the
+   English reference remains the sync authority for the async explicit-I/O
+   surface (see D3 resolution).
