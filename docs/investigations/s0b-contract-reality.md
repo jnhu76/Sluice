@@ -116,7 +116,7 @@ handed to S1A below).
 #5 (64-bit generation with fail-fast); PR #106 (F3 sealed handle seam).
 
 **Drift classification:** ALIGNED. **Resolution:** none. **Residual:**
-TLA+ request-arena suite models the single-slot protocol; multi-slot
+TLA+ request_arena suite models the single-slot protocol; multi-slot
 interleavings rest on C++ executable evidence only (S1A handoff).
 
 ## B02 — Admission / submit transaction / rollback
@@ -408,8 +408,8 @@ conformance `cancel_yields_defined_terminal` family;
 `tests/uring_backend_c2e_close_drain_test.cpp` (cancel + close/drain);
 `tests/runtime_wait_test.cpp` (wait-cancel / I/O independence).
 
-**Formal evidence.** `spec/tla/cancel-token-epoch/` (1 pos / 5 neg);
-`spec/tla/e10-waitnode/` (wait cancel); `spec/tla/request_arena/`
+**Formal evidence.** `spec/tla/cancel_token_epoch/` (1 pos / 5 neg);
+`spec/tla/e10_waitnode/` (wait cancel); `spec/tla/request_arena/`
 (Scheme-B).
 
 **Historical evidence.** Round-4 finding 1; Phase D3 C2b/C2c seams; issue
@@ -471,8 +471,8 @@ a no-op loser; registration admission allocations happen before any mutation
 test.cpp`; E11 timer suite (`timer_wait_test.cpp` family); issue #229
 closeout (deadline seam race fixed + regression).
 
-**Formal evidence.** `spec/tla/e11-timer-wait/` (2 pos / 6 neg);
-`spec/tla/e13-select-*` (timer arms).
+**Formal evidence.** `spec/tla/e11_timer_wait/` (2 pos / 6 neg);
+`spec/tla/e13_select/` (timer arms).
 
 **Historical evidence.** E11/E13 phase gates; issue #229.
 
@@ -531,9 +531,9 @@ cpp`; `tests/issue116_interrupt_reevaluation_regression_test.cpp`;
 `scheduler_identity_wake_test.cpp` (+ death);
 `tests/scheduler_progress_test.cpp`.
 
-**Formal evidence.** `spec/tla/e9-park-wake/` (4 pos / 8 neg);
-`e9-wake-handle-lifetime/`; `spawn-wake-epoch/`; `e7-publication/`;
-`e7-multiworker-progress/`; `f1-wait-record/`.
+**Formal evidence.** `spec/tla/e9_park_wake/` (4 pos / 8 neg);
+`e9_wake_handle_lifetime/`; `spawn_wake_epoch/`; `e7_publication/`;
+`e7_multiworker_progress/`; `f1_wait_record/`.
 
 **Historical evidence.** Issues #115/#116/#161 closeouts; Phase G gate.
 
@@ -591,8 +591,8 @@ capacity family + `stats_accounting` + `capacity_stats_are_exact`;
 `tests/async_stats_wait_race_test.cpp` (metric vocabulary:
 `queue_full_retries` ≠ `invalid_state_rejections`).
 
-**Formal evidence.** `spec/tla/blocking-io-pool/` (worker/shutdown
-protocol); `spec/tla/d1-uring-poison/` (ledger boundedness/quiescence).
+**Formal evidence.** `spec/tla/blocking_io_pool/` (worker/shutdown
+protocol); `spec/tla/d1_uring_poison/` (ledger boundedness/quiescence).
 
 **Historical evidence.** Phase E design/closure; TAX-0 resource-seam
 additions (#234).
@@ -650,9 +650,9 @@ close_drain_test.cpp` (+ death); `tests/fake_backend_c2e_close_drain_test.
 cpp`; `tests/async_io_context_death_test.cpp`;
 `tests/runtime_wait_death_test.cpp`; D4-RM11 destructor-order probe.
 
-**Formal evidence.** `spec/tla/d1-uring-poison/` (exact control-reference
-quiescence; post-poison Class-A); `spec/tla/e16-application-runtime/`;
-`spec/tla/blocking-io-pool/` (shutdown drain).
+**Formal evidence.** `spec/tla/d1_uring_poison/` (exact control-reference
+quiescence; post-poison Class-A); `spec/tla/e16_application_runtime/`;
+`spec/tla/blocking_io_pool/` (shutdown drain).
 
 **Historical evidence.** Phase D4 / C2e / E closeouts; sluice-copy Phase-3
 drain fix (#258).
@@ -750,7 +750,7 @@ RESOLUTION: docs — api.md AsyncIoContext section now lists the six methods
   in a docs-maintenance pass); NOT expanded into this campaign.
 - **C-04 (failure model):** audited only the sites participating in B01–B10.
   All use named Debug+Release fail-fasts (`request_arena_*`,
-  `completion_*`, `threadpool_/uring_non_quiescent_*`); the only `assert()`
+  `completion_*`, the threadpool/uring non-quiescent destruction fail-fasts); the only `assert()`
   on a participating path is the documented L9 `result()` debug check with a
   Release typed fallback. No global assert cleanup performed.
 - **C-05 (verification wiring):** verified only the claims this closure
@@ -765,25 +765,25 @@ Property → current model → suspected gap:
 ```text
 B01/B02/B03/B04 → spec/tla/request_arena (2 pos / 6 neg)
     → multi-slot interleavings unmodeled (manifest coverage_gaps:
-       request-arena-lifecycle PARTIALLY MODELED); reap-vs-release ordering
+       request_arena-lifecycle PARTIALLY MODELED); reap-vs-release ordering
        across slots rests on C++ evidence.
 B05             → request_arena (borrow flag) 
     → no dedicated borrow-end-vs-publication model beyond I18 trace tests.
-B06             → cancel-token-epoch, e10-waitnode, request_arena
+B06             → cancel_token_epoch, e10_waitnode, request_arena
     → no model of uring control-CQE/deferred-terminal interplay (the
        single-driver domain assumption is the abstraction boundary).
-B07             → e11-timer-wait (2 pos / 6 neg)
+B07             → e11_timer_wait (2 pos / 6 neg)
     → admission-precedence variants (resource-first vs deadline-first per
        primitive) not uniformly modeled.
-B08             → e9-park-wake, spawn-wake-epoch, e7-publication,
-                  e7-multiworker-progress, f1-wait-record, e9-wake-handle-
-                  lifetime
+B08             → e9_park_wake, spawn_wake_epoch, e7_publication,
+                  e7_multiworker_progress, f1_wait_record,
+                  e9_wake_handle_lifetime
     → backend split-phase epoch protocol (ReadyWaitSource/UringWaitSource
        snapshot→park closure) has no direct model; covered by C++ causal
        regressions (#115/#116/#161).
-B09             → blocking-io-pool, d1-uring-poison
+B09             → blocking_io_pool, d1_uring_poison
     → arena counter invariants unmodeled beyond the lifecycle suite scope.
-B10             → d1-uring-poison, e16-application-runtime, blocking-io-pool
+B10             → d1_uring_poison, e16_application_runtime, blocking_io_pool
     → ThreadPool drain/destruction interleaving with in-flight workers
        relies on executable evidence.
 ```
