@@ -207,11 +207,14 @@ int main() {
 
 ## 项目状态
 
-- **参考基线：** `v0.0.1` —— 为六域审计战役冻结的 explicit-I/O 产品面：
-  同步核心、异步调度器与 fiber 运行时、同步原语、后端集合，以及第一批
-  真实应用（copy / hash / grep / tail）。见 #227。
-- **开发在 master 上继续**，超出 tag——见
-  [路线图](docs/roadmap/README.md)。
+- **参考基线：** `v0.0.1` —— 已冻结的 explicit-I/O 产品面：同步核心、异步
+  调度器与 fiber 运行时、同步原语、后端集合，以及第一批真实应用
+  （copy / hash / grep / tail）。见 #227。
+- **当前工作在 GitHub 上跟踪** ——
+  [#227](https://github.com/jnhu76/Sluice/issues/227)（唯一执行顺序
+  roadmap）、[#289](https://github.com/jnhu76/Sluice/issues/289)
+  （Boundary / Safety）、[#259](https://github.com/jnhu76/Sluice/issues/259)
+  （Performance）。
 - **实验性：** `UringAsyncBackend` —— real-liburing 验证证据仍依赖环境。
 - **未实现：** 网络与外存数据结构（KV / B+ tree / LSM）。它们是未来的
   工作负载方向——用于产生 API 压力的证据生成器，不是当前能力——见
