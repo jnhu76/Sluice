@@ -6,9 +6,11 @@
 // heuristics (such as an implicit buffered fast path triggered by a
 // dynamic_cast probe) and makes each path testable.
 //
-// Auto / Scratch / BufferedFirst are implemented. The *Deferred
-// strategies are reserved slots that report as unsupported (return invalid_state
-// or fall back to Auto) rather than pretending to work.
+// Auto / Scratch / BufferedFirst are implemented. A future copy mechanism
+// (vector copy, copy_file_range, sendfile, splice) is added as a normal
+// implemented strategy when it is actually built; no unimplemented reservation
+// is part of the contract (SEMANTIC-DIET-0: speculative reserved slots removed
+// — research/semantic-diet-0/SEMANTIC-DIET-0-REPORT.md).
 #pragma once
 
 #include <sluice/limit.hpp>
@@ -23,17 +25,6 @@ enum class CopyStrategy {
     Auto,          // default; currently behaves as BufferedFirst
     Scratch,       // force the scratch read/write loop; never use fast path
     BufferedFirst, // drain buffered bytes first, then scratch
-
-    VectorDeferred,    // reserved slot; NOT implemented
-    FileRangeDeferred, // reserved slot; NOT implemented
-    SendfileDeferred,  // reserved slot; NOT implemented
-    SpliceDeferred,    // reserved slot; NOT implemented
-};
-
-// What to do when a requested strategy is a deferred (unsupported) slot.
-enum class UnsupportedStrategyPolicy {
-    ReturnInvalidState, // default: return invalid_state, touch nothing
-    FallbackToAuto,     // mark unsupported, then run Auto
 };
 
 // Caller-facing options. Existing copy_all overloads delegate with
@@ -41,7 +32,6 @@ enum class UnsupportedStrategyPolicy {
 struct CopyOptions {
     CopyLimit limit = CopyLimit::unlimited();
     CopyStrategy strategy = CopyStrategy::Auto;
-    UnsupportedStrategyPolicy unsupported_policy = UnsupportedStrategyPolicy::ReturnInvalidState;
 };
 
 // Explains what strategy was requested vs what actually ran. Filled by copy_all
@@ -53,11 +43,9 @@ struct CopyDecision {
     std::string_view reason = "auto";
     bool used_buffered_fast_path = false;
     bool used_scratch_path = false;
-    bool unsupported_requested = false;
 };
 
 // Stable string views over string literals (so they outlive any temporary).
 std::string_view to_string(CopyStrategy strategy);
-std::string_view to_string(UnsupportedStrategyPolicy policy);
 
 } // namespace sluice

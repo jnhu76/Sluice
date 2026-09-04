@@ -1,5 +1,5 @@
 // mvp_copy_strategy: demonstrates the CopyStrategy layer (CPPIO-CORE-007).
-// Runs five scenarios against the same data, printing the decision + path bytes
+// Runs three scenarios against the same data, printing the decision + path bytes
 // for each. NOT a performance claim — it only shows the strategy boundary is
 // explicit and observable.
 #include <sluice/buffer.hpp>
@@ -42,7 +42,6 @@ void run(const char* label, StrReader& reader, sluice::BufferedReader* buffered,
     std::printf("  requested_strategy=%s\n", sluice::to_string(dec.requested).data());
     std::printf("  selected_strategy=%s\n", sluice::to_string(dec.selected).data());
     std::printf("  reason=%s\n", std::string(dec.reason).c_str());
-    std::printf("  unsupported_requested=%d\n", dec.unsupported_requested ? 1 : 0);
     std::printf("  buffered_fast_path_bytes=%llu\n",
                 static_cast<unsigned long long>(st.buffered_fast_path_bytes));
     std::printf("  scratch_path_bytes=%llu\n",
@@ -86,27 +85,6 @@ int main() {
         sluice::CopyOptions o;
         o.strategy = sluice::CopyStrategy::Auto;
         run("Auto", r, &br, w, scratch, o);
-    }
-    // 4. Deferred strategy rejected (default policy)
-    {
-        StrReader r(data);
-        sluice::MemoryWriter w;
-        sluice::CopyOptions o;
-        o.strategy = sluice::CopyStrategy::VectorDeferred;
-        run("VectorDeferred (rejected)", r, nullptr, w, scratch, o);
-    }
-    // 5. Deferred strategy fallback to Auto
-    {
-        StrReader r(data);
-        std::vector<std::byte> rbuf(64);
-        sluice::BufferedReader br(r, rbuf);
-        std::vector<std::byte> primed(4);
-        (void)br.read_some(primed);
-        sluice::MemoryWriter w;
-        sluice::CopyOptions o;
-        o.strategy = sluice::CopyStrategy::SpliceDeferred;
-        o.unsupported_policy = sluice::UnsupportedStrategyPolicy::FallbackToAuto;
-        run("SpliceDeferred (fallback)", r, &br, w, scratch, o);
     }
     return 0;
 }

@@ -164,10 +164,6 @@ enum class CopyStrategy {
     Auto,            // default; currently behaves as BufferedFirst
     Scratch,         // force scratch read/write loop
     BufferedFirst,   // drain buffered bytes first, then scratch
-    VectorDeferred,  // reserved (not implemented)
-    FileRangeDeferred,
-    SendfileDeferred,
-    SpliceDeferred,
 };
 ```
 
@@ -177,8 +173,6 @@ enum class CopyStrategy {
 struct CopyOptions {
     CopyLimit limit = CopyLimit::unlimited();
     CopyStrategy strategy = CopyStrategy::Auto;
-    UnsupportedStrategyPolicy unsupported_policy =
-        UnsupportedStrategyPolicy::ReturnInvalidState;
 };
 ```
 
@@ -191,7 +185,6 @@ struct CopyDecision {
     string_view reason = "auto";
     bool used_buffered_fast_path = false;
     bool used_scratch_path = false;
-    bool unsupported_requested = false;
 };
 ```
 

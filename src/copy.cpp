@@ -14,17 +14,6 @@
 
 namespace sluice {
 
-namespace {
-
-// Whether a strategy is one of the deferred (not-yet-implemented) reserved
-// slots. They never execute their named path.
-bool is_deferred(CopyStrategy s) {
-    return s == CopyStrategy::VectorDeferred || s == CopyStrategy::FileRangeDeferred ||
-           s == CopyStrategy::SendfileDeferred || s == CopyStrategy::SpliceDeferred;
-}
-
-} // namespace
-
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyOptions options, CopyStats* stats, CopyDecision* decision) {
     if (stats) {
@@ -38,30 +27,6 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     dec.reason = to_string(options.strategy);
     dec.used_buffered_fast_path = false;
     dec.used_scratch_path = false;
-    dec.unsupported_requested = false;
-
-    // --- Deferred strategies: explicitly unsupported. ---
-    if (is_deferred(options.strategy)) {
-        if (options.unsupported_policy == UnsupportedStrategyPolicy::FallbackToAuto) {
-            dec.unsupported_requested = true;
-            dec.selected = CopyStrategy::Auto;
-            dec.reason = "deferred_fallback_to_auto";
-            if (stats) {
-                ++stats->strategy_deferred_fallback_calls;
-            }
-            // Fall through to Auto behavior below by normalizing the strategy.
-            options.strategy = CopyStrategy::Auto;
-        } else {
-            // Default policy: return invalid_state, touch nothing.
-            dec.unsupported_requested = true;
-            dec.reason = "deferred_not_implemented";
-            if (stats) {
-                ++stats->strategy_deferred_rejected_calls;
-                ++stats->reader_error_stops;
-            }
-            return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
-        }
-    }
 
     // Resolve Auto: currently Auto == BufferedFirst (buffered-first is the
     // default). Documented and tested; may change after measurement. Auto
@@ -73,11 +38,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         dec.reason = "auto";
     }
 
-    // One strategy-selection counter per top-level call. For a deferred-fallback
-    // this runs in addition to strategy_deferred_fallback_calls above (the call
-    // was both a deferred fallback AND resolved to Auto/BufferedFirst). counts
-    // the SELECTED strategy, so Auto is recorded as Auto even though it executes
-    // as BufferedFirst.
+    // One strategy-selection counter per top-level call. The counter records
+    // the SELECTED strategy, so Auto is recorded as Auto even though it
+    // executes as BufferedFirst.
     if (stats) {
         switch (options.strategy) {
         case CopyStrategy::Auto:
@@ -89,15 +52,6 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         case CopyStrategy::BufferedFirst:
             ++stats->strategy_buffered_first_calls;
             break;
-        // Deferred strategies never reach here: rejected returned early, and
-        // fallback normalized options.strategy to Auto above (counted as Auto).
-        case CopyStrategy::VectorDeferred:
-        case CopyStrategy::FileRangeDeferred:
-        case CopyStrategy::SendfileDeferred:
-        case CopyStrategy::SpliceDeferred:
-            break;
-        default:
-            break; // future enum values: do not double-count
         }
     }
 

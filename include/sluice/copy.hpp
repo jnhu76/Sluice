@@ -18,9 +18,8 @@ namespace sluice {
 // options.strategy, respects options.limit, and fills *decision (if non-null)
 // with requested vs selected and which path moved bytes. Auto currently behaves
 // as BufferedFirst. Scratch forces the scratch read/write loop and never
-// uses the buffered fast path. Deferred (unimplemented) strategies follow
-// options.unsupported_policy (invalid_state, or fallback to Auto). If
-// `stats` is non-null, copy loop / byte / stop-reason counters are recorded.
+// uses the buffered fast path. If `stats` is non-null, copy loop / byte /
+// stop-reason counters are recorded.
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyOptions options, CopyStats* stats = nullptr,
                                CopyDecision* decision = nullptr);

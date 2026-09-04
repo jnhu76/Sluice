@@ -149,10 +149,6 @@ enum class CopyStrategy {
     Auto,            // 默认；当前行为同 BufferedFirst
     Scratch,         // 强制使用暂存读写循环
     BufferedFirst,   // 先排空缓冲字节，再使用暂存
-    VectorDeferred,  // 保留槽位（未实现）
-    FileRangeDeferred,
-    SendfileDeferred,
-    SpliceDeferred,
 };
 ```
 
@@ -162,8 +158,6 @@ enum class CopyStrategy {
 struct CopyOptions {
     CopyLimit limit = CopyLimit::unlimited();
     CopyStrategy strategy = CopyStrategy::Auto;
-    UnsupportedStrategyPolicy unsupported_policy =
-        UnsupportedStrategyPolicy::ReturnInvalidState;
 };
 ```
 
@@ -176,7 +170,6 @@ struct CopyDecision {
     string_view reason = "auto";
     bool used_buffered_fast_path = false;
     bool used_scratch_path = false;
-    bool unsupported_requested = false;
 };
 ```
 

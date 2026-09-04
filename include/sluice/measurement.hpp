@@ -67,16 +67,12 @@ struct CopyStats {
     std::uint64_t scratch_path_calls = 0;
     std::uint64_t scratch_path_bytes = 0;
     // Strategy selection counters. Exactly one strategy counter
-    // is incremented per top-level copy_all call, recording the SELECTED strategy
-    // (after Auto resolution and deferred-fallback). These answer "which
-    // strategy was selected?", distinct from the path counters above which answer
-    // "which path moved bytes?".
+    // is incremented per top-level copy_all call, recording the SELECTED strategy.
+    // These answer "which strategy was selected?", distinct from the path
+    // counters above which answer "which path moved bytes?".
     std::uint64_t strategy_auto_calls = 0;
     std::uint64_t strategy_scratch_calls = 0;
     std::uint64_t strategy_buffered_first_calls = 0;
-    // A deferred strategy that was rejected (default policy) vs fell back to Auto.
-    std::uint64_t strategy_deferred_rejected_calls = 0;
-    std::uint64_t strategy_deferred_fallback_calls = 0;
 };
 
 // Counts explicit sync operations on a SyncableWriter. Opt-in
