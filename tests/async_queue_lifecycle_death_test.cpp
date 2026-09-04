@@ -239,7 +239,7 @@ void child_snapshot_after_teardown_size() {
 // MUST fail-fast. Deterministic: the teardown thread cannot run before the
 // snapshot is admitted, and the snapshot cannot retire before the teardown
 // thread runs (it spins on the gate). No sleeps; the pause protocol is the
-// ordering proof (AGENTS.md §13.3).
+// ordering proof (AGENTS.md §6).
 //
 // Pre-fix (snapshot without lifecycle entry): size() never increments
 // active_port_calls_, begin_teardown returns a session, the teardown thread

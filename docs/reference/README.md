@@ -27,7 +27,7 @@ fix the stale artifact.
 
 - Public API changes require explicit approval and synchronized updates to
   headers, contract tests, the canonical reference, examples, and README text
-  where affected (AGENTS.md §16.1).
+  where affected (AGENTS.md §6).
 - `api.zh-CN.md` should be updated with the same public facts whenever
   `api.md` changes. A translation mismatch is documentation debt, never an
   alternate contract.

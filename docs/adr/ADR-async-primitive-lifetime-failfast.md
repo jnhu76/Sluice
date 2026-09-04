@@ -65,7 +65,7 @@ not.
 4. No recovery, no cleanup, no synthesized outcomes: the destructor MUST NOT
    cancel waiters, wake waiters, unlink Select arms, force-release ownership,
    implicitly unlock, drain, or fabricate results before failing fast. The
-   violation is reported, never repaired (AGENTS.md §14).
+   violation is reported, never repaired (AGENTS.md §3.7).
 5. Same `[[noreturn]] noexcept` contract as every other `fail_fast.hpp`
    entry: no allocation, no locking, no I/O, no dynamic strings, ultimately
    `std::terminate()`.
@@ -137,7 +137,7 @@ Actual test layout (this ADR's change):
   four named entries as canonical instances once both land (no text
   dependency in either direction).
 
-## 6. AGENTS.md §8 design-compliance record
+## 6. AGENTS.md §4 design-compliance record
 
 This ADR changes synchronization-primitive lifetime behavior, which triggers
 the §8 architecture compliance gate. Compact record (all other §8 fields are
@@ -159,7 +159,7 @@ no-change):
 - **Gate 3 (resource capacity)**: N/A — no queue, arena, worker, or
   capacity model is touched; no allocation anywhere on the new path.
 - **Gate 4 (shutdown semantics)**: invalid destruction is a T6 named
-  fail-fast in Debug AND Release (AGENTS.md §14): **no drain, no cancel,
+  fail-fast in Debug AND Release (AGENTS.md §3.7): **no drain, no cancel,
   no wait, no allocation, no recovery — a destructor violation is
   terminate-only.** Quiescent destruction remains side-effect-free and
   silent.

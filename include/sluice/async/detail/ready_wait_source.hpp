@@ -1,5 +1,5 @@
 // sluice::async::detail::ReadyWaitSource — split-phase readiness wait domain
-// (AGENTS.md §13.2).
+// (AGENTS.md §3.6).
 //
 // Holding AsyncIoContext::access_mtx_ across ThreadPoolBackend::wait_one's
 // ready-cv park would block a second participant's poll/reap (the ONLY reap
@@ -229,7 +229,7 @@ class ReadyWaitSource final : public BackendWaitSource {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // Deterministic wait-phase entry flag (see set_wait_phase_flag). Compiled
     // out of production builds; the layout cost in the internal-testing target
-    // is accepted and documented (AGENTS.md §8).
+    // is accepted and documented (AGENTS.md §3.9).
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
     // D4-RM14: per-entry wait counter (see set_wait_prepark_counter).
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};

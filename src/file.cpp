@@ -118,7 +118,7 @@ Result<void> FileReader::close() noexcept {
 }
 
 FileReader::~FileReader() {
-    // Best-effort, unreportable by design (AGENTS.md §9: a destructor must
+    // Best-effort, unreportable by design (AGENTS.md §3.8: a destructor must
     // not invent success and must not throw). Callers that need the close
     // result call close() explicitly before destruction.
     (void)close();
@@ -392,7 +392,7 @@ Result<void> FileWriter::close() noexcept {
 }
 
 FileWriter::~FileWriter() {
-    // Best-effort, unreportable by design (AGENTS.md §9: a destructor must
+    // Best-effort, unreportable by design (AGENTS.md §3.8: a destructor must
     // not invent success and must not throw). Callers that need the close
     // result call close() explicitly before destruction.
     (void)close();

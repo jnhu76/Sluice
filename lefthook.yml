@@ -13,7 +13,7 @@
 #
 #     lefthook --version
 #
-# Scope policy (see AGENTS.md §6.1): the local pre-push gate catches
+# Scope policy (see AGENTS.md §5): the local pre-push gate catches
 # deterministic mechanical failures (docs, manifests, whitespace) BEFORE a push
 # consumes a CI round trip. It intentionally does NOT run the build, full test
 # suite, sanitizers, real-liburing, or formal models — those remain CI /

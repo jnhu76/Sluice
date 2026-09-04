@@ -44,7 +44,7 @@ namespace sluice::async {
 // notification — a missing notify would leave the production thread blocked
 // in resume.wait and is caught by the case-level watchdog, never a silent
 // spin. These are compiled out of production sluice_async; the layout cost
-// in the internal-testing target is accepted and documented (AGENTS.md §15).
+// in the internal-testing target is accepted and documented (AGENTS.md §3.9).
 struct ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate {
     std::atomic<bool> paused{false};
     std::atomic<bool> resume{false};
@@ -190,7 +190,7 @@ struct ThreadPoolBackend::BeforeCommitBindingPauseGate {
 // defined `backend_error` terminal through the arena's terminal-winner
 // authority INSTEAD of pushing the handle onto the dispatch ring — the
 // ADR Decision-12 "post-commit dispatch failure after execution ownership
-// is proven absent" winner candidate (AGENTS.md §10.5). The handle was
+// is proven absent" winner candidate (AGENTS.md §3.2). The handle was
 // never visible to any worker (workers dequeue only under work_mtx_, which
 // the injection holds), so no worker, ring, kernel, or other executor
 // holds execution ownership; submit still returns success; reap publishes
@@ -217,7 +217,7 @@ struct ThreadPoolBackend::DispatchFailureInjection {
 // reserve -> prepare -> begin_binding, so no well-formed test could drive
 // that branch without this seam (review P1). `*_fired` increments exactly
 // once per injected submit at that stage; the test reads it to distinguish
-// "seam fired" from a natural failure. TEST-ONLY (AGENTS.md §15):
+// "seam fired" from a natural failure. TEST-ONLY (AGENTS.md §3.9):
 // production builds carry no branch, no local, no symbol (the whole seam
 // block is compiled out).
 struct ThreadPoolBackend::SubmitStageFailureInjection {

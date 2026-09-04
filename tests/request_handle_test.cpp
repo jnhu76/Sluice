@@ -10,7 +10,7 @@
 //
 // Each case quiesces before scope exit: an accepted Completion is completed,
 // reaped, and reset so the context is destroyed with zero outstanding work
-// (AGENTS.md §14 — non-quiescent destruction fails fast).
+// (AGENTS.md §3.7 — non-quiescent destruction fails fast).
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>

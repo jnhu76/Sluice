@@ -9,7 +9,7 @@ Use this skill to make a C++ change predictable and reviewable. The target is a 
 
 ## Authority and mechanical sources of truth
 
-Use the authority chain in `AGENTS.md §3`. Do not maintain a second precedence list here. Project contracts and accepted ADRs decide allowed semantics; generic C++ guidance does not override them.
+Use the authority chain in `AGENTS.md §2`. Do not maintain a second precedence list here. Project contracts and accepted ADRs decide allowed semantics; generic C++ guidance does not override them.
 
 For mechanical C++ style and static-analysis policy, use the repository itself:
 

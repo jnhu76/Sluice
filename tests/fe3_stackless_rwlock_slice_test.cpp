@@ -15,7 +15,7 @@
 //     release core, and the grant-time ownership commit NEVER touch the
 //     ResumeTarget delivery token.
 //
-// What is test-only (AGENTS.md §15 / FE-1c scope): the coroutine task, the
+// What is test-only (AGENTS.md §3.9 / FE-1c scope): the coroutine task, the
 // awaiters, the FeDeferredRecord delivery record, and the ACTOR TOKENS
 // (plain test-scope objects whose addresses outlive each suspension — the
 // FE-1a stability rule; the awaiters here reference case-owned node/ctx/

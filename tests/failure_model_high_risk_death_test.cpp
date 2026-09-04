@@ -1,7 +1,7 @@
 // failure_model_high_risk_death_test — PR-D (#135 Case B) death-test
 // obligations for the ScriptedAsyncBackend fail-closed guards.
 //
-// The #147 policy (AGENTS.md §9.2, docs/architecture/failure-model.md)
+// The #147 policy (AGENTS.md §3.8, docs/architecture/failure-model.md)
 // requires a T3/T6 no-channel fail-fast to be a NAMED fail-fast, active in
 // Debug AND Release, and DEATH-TESTED. The two guards live in
 // tests/support/scripted_async_backend.cpp:

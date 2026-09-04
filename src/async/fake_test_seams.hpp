@@ -28,7 +28,7 @@ namespace sluice::async {
 // cancel exactly in the Scheme-B window (the window AsyncIoContext::
 // access_mtx_ serialization hides). Test-only: production builds of this
 // header (no macro) carry no field and no pause; the layout cost is
-// accepted and documented (AGENTS.md §8 — internal-testing variants may
+// accepted and documented (AGENTS.md §3.9 — internal-testing variants may
 // carry guarded seams).
 struct FakeAsyncBackend::SubmitPauseGate {
     std::atomic<bool> paused{false};  // the submit path set this when paused

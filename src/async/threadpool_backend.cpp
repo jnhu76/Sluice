@@ -41,7 +41,7 @@ namespace {
 // Fail-fast for a post-commit dispatch-ring push that cannot fit. Because the
 // dispatch capacity equals the request capacity and a committed request holds
 // its slot, a full push means an invariant violation (double-enqueue or ring
-// accounting corruption), never legitimate capacity pressure (AGENTS.md §12).
+// accounting corruption), never legitimate capacity pressure (AGENTS.md §3.5).
 [[noreturn]] void threadpool_dispatch_queue_invariant_fail_fast() noexcept {
     std::fprintf(stderr,
                  "sluice::async::ThreadPoolBackend: post-commit dispatch-ring push "
@@ -145,7 +145,7 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
 }
 
 ThreadPoolBackend::~ThreadPoolBackend() {
-    // Quiescent persistent-worker teardown only (AGENTS.md §14): verify no
+    // Quiescent persistent-worker teardown only (AGENTS.md §3.7): verify no
     // accepted work, active worker, or ring entry remains, then set stop,
     // notify all idle workers, join the fixed pool. This join is worker-pool
     // teardown, NOT an I/O drain. Non-quiescent destruction fail-fasts in BOTH
@@ -342,9 +342,9 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             // `backend_error` terminal through the arena's terminal-winner
             // authority instead of pushing — the ADR Decision-12
             // "post-commit dispatch failure after execution ownership is
-            // proven absent" winner candidate (AGENTS.md §10.5). reap
+            // proven absent" winner candidate (AGENTS.md §3.2). reap
             // publishes it exactly once; the borrow stays active until reap.
-            // TEST-ONLY probe (AGENTS.md §15): production dispatch cannot fail
+            // TEST-ONLY probe (AGENTS.md §3.9): production dispatch cannot fail
             // by construction (bounded ring, allocation-free push; a full push
             // is the §12 invariant fail-fast), so this branch proves the
             // SHARED arena's terminal-winner/reap machinery under a simulated
@@ -425,7 +425,7 @@ Result<void> ThreadPoolBackend::terminal_to_void(const detail::TerminalResult& t
 
 void ThreadPoolBackend::worker_loop() {
     // The outermost guard: an exception must never escape a worker thread
-    // (AGENTS.md §9, ADR Decision 16). A syscall failure is a terminal result,
+    // (AGENTS.md §3.8, ADR Decision 16). A syscall failure is a terminal result,
     // not an exception. If the unexpected happens, terminate deterministically
     // rather than corrupt shared state.
     try {

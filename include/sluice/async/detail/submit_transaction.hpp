@@ -1,7 +1,7 @@
 // detail::submit_transaction — the ONE pre-accept submission ladder shared
 // by every in-repo explicit-I/O backend.
 //
-// Authority (AGENTS.md §4; docs/architecture/async-request-lifecycle.md):
+// Authority (AGENTS.md §3.2; docs/architecture/async-request-lifecycle.md):
 // this function owns ONLY the correctness-critical pre-accept ladder —
 //
 //   stage0_precheck -> reserve -> validate -> prepare -> write_scratch

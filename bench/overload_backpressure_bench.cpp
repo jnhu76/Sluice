@@ -2,7 +2,7 @@
 // measurement for bounded arena admission.
 //
 // The resource placed under sustained overload is the RequestArena ADMISSION
-// CAPACITY (AGENTS.md §12 resource distinction: request_capacity is not
+// CAPACITY (AGENTS.md §3.5 resource distinction: request_capacity is not
 // worker count, not queue depth, not pipeline depth). FakeAsyncBackend keeps
 // every accepted op outstanding until the driver explicitly completes it, so
 // the window stays full deterministically — no worker noise, no disk noise,

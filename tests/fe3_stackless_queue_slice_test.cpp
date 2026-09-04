@@ -12,7 +12,7 @@
 //   - close disposition, timer retirement (ordinary deadline authority), and
 //     queue_cancel — each publishing through the same winner-kind tail.
 //
-// What is test-only (AGENTS.md §15 / FE-1c scope): the coroutine task, the
+// What is test-only (AGENTS.md §3.9 / FE-1c scope): the coroutine task, the
 // awaiters, and the FeDeferredRecord delivery record. The QueueWaitCtx and
 // the item lease live in the COROUTINE FRAME (FE-1a lifetime rule: the grant
 // winner writes through ctx->prod_lease / ctx->cons_out after suspension, so

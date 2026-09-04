@@ -1,5 +1,5 @@
 // sluice::async::detail::UringWaitSource — split-phase readiness wait domain
-// for the Uring backend (AGENTS.md §13.2).
+// for the Uring backend (AGENTS.md §3.6).
 //
 // AsyncIoContext::wait_one's split protocol (snapshot -> poll -> park) requires
 // a backend wait source that can block for progress WITHOUT holding
@@ -11,7 +11,7 @@
 // (close_admission / interrupt_backend_waiters) uses a one-shot control
 // eventfd (EFD_NONBLOCK) written AFTER the control epoch is published.
 //
-// Lost-wake protocol (the three-window theorem, AGENTS.md §13.2):
+// Lost-wake protocol (the three-window theorem, AGENTS.md §3.6):
 //   * progress/control BEFORE poll            -> epoch check sees it (and the
 //                                                caller's poll/reap observes
 //                                                ring readability directly);
@@ -47,7 +47,7 @@
 //     acknowledges exactly once (pending_wake_count_--), releasing the gate
 //     when the last parked-at-publish waiter acknowledges;
 //   * a future-generation waiter's drain is GATED on pending_wake_count_ == 0
-//     (a persistent predicate + CV notify, AGENTS.md §13.2 — no lost wake, no
+//     (a persistent predicate + CV notify, AGENTS.md §3.6 — no lost wake, no
 //     busy-spin): it cannot consume the transport token while any old-
 //     generation waiter still needs it, and it re-checks the epochs after the
 //     gate so a wake that belongs to ITS invocation is reported.
@@ -201,7 +201,7 @@ class UringWaitSource final : public BackendWaitSource {
                 // interrupt. Block until every parked-at-publish waiter
                 // acknowledged (persistent predicate + notify; the CV wait
                 // releases mtx_, and the acknowledged waiters need only mtx_
-                // to return). No lost wake (AGENTS.md §13.2).
+                // to return). No lost wake (AGENTS.md §3.6).
                 cv_.wait(lk, [this] { return pending_wake_count_ == 0; });
                 // A publish may have landed while THIS waiter was blocked on
                 // the gate: re-check the epochs BEFORE draining, so a wake
@@ -240,7 +240,7 @@ class UringWaitSource final : public BackendWaitSource {
                 // blocks on count == N with atomic::wait (the notify below
                 // pairs with the increment; a case-level watchdog bounds a
                 // genuine stall) — no sleep and no deadline is ever the
-                // ordering proof (AGENTS.md §13.3). One-way latch; disarm by
+                // ordering proof (AGENTS.md §6). One-way latch; disarm by
                 // null. Compiled out of production builds.
                 if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
                     c->fetch_add(1, std::memory_order_relaxed);
@@ -653,7 +653,7 @@ class UringWaitSource final : public BackendWaitSource {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // Deterministic wait-phase entry flag (see set_wait_phase_flag). Compiled
     // out of production builds; the layout cost in the internal-testing target
-    // is accepted and documented (AGENTS.md §15).
+    // is accepted and documented (AGENTS.md §3.9).
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
     std::atomic<ControlWakeFinalReapPauseGate*> control_wake_final_reap_gate_{nullptr};

@@ -4,11 +4,11 @@ Protocol: **explicit-I/O accepted-request lifecycle** — the slot state machine
 every migrated async backend runs on (`free → reserved → prepared → pending →
 enqueued → running → backend_ready → completion_ready → free` with generation
 increment), per ADR-explicit-io-request-contract (Accepted) and
-AGENTS.md §10.
+AGENTS.md §3.2.
 
 This suite closes the manifest's former `request-arena-lifecycle` ACCEPTED
 FORMAL-DEBT gap with the smallest model that captures the load-bearing races
-(AGENTS.md §17): Scheme-B enqueue/cancel arbitration, terminal-winner
+(AGENTS.md §7): Scheme-B enqueue/cancel arbitration, terminal-winner
 exactly-once, running-cancel intent vs verbatim ordinary results, reap-only
 Completion publication gated on the acknowledged enqueue pin, generation
 advance before reuse, and borrow-through-reap.
@@ -130,7 +130,7 @@ Every load-bearing model property maps to existing executable regressions
   cycle; generation 2 is reached only as the terminal free state after the
   second release and admits no further `Reserve`.
 - The backend admission transaction around commit (Completion
-  `idle → binding → outstanding`, AGENTS.md §4.3) is a different protocol and
+  `idle → binding → outstanding`, AGENTS.md §3.3) is a different protocol and
   is NOT modeled here.
 - Fairness: `WF(Enqueue)` = backend submit-path obligation,
   `WF(Reap)` = backend/runtime progress-loop obligation — **external

@@ -316,7 +316,7 @@ class FakeAsyncBackend : public AsyncBackend {
     // NON-INSTALLED seam header src/async/fake_test_seams.hpp (included at
     // the bottom of this file under this same guard). Test-only: production
     // builds of this header (no macro) carry no field and no pause; the
-    // layout cost is accepted and documented (AGENTS.md §8).
+    // layout cost is accepted and documented (AGENTS.md §3.9).
     struct SubmitPauseGate;
     void set_submit_pause_after_commit(SubmitPauseGate* gate) noexcept;
 

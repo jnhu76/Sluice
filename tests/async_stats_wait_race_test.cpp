@@ -1,6 +1,6 @@
 // Issue #67 P1 follow-up regression: AsyncStats fields are plain std::uint64_t
 // (caller-owned, never atomic — see include/sluice/measurement.hpp), and
-// access_mtx_ is their single serialized accounting domain (AGENTS.md §4.1,
+// access_mtx_ is their single serialized accounting domain (AGENTS.md §3.2,
 // §13.1 leaf domain). The split-wait fix moved the PARK out of access_mtx_ but
 // a follow-on review found that stats accounting had also leaked out:
 //   - wait_calls was bumped BEFORE acquiring access_mtx_ in wait_one();

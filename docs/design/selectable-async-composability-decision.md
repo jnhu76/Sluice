@@ -5,7 +5,7 @@
 | Status | **Decision — intentional defer** (closes issue #99; audit umbrella #94) |
 | Date | 2026-08-14 |
 | Related ADRs | [ADR-async-io-model](../adr/ADR-async-io-model.md), [ADR-execution-model](../adr/ADR-execution-model.md) (E13 select winner protocol, E11 timer registrations) |
-| Authority | AGENTS.md §8 (architecture gate), §13.2 (wake obligation for any new wait surface) |
+| Authority | AGENTS.md §4 (architecture gate), §3.6 (wake obligation for any new wait surface) |
 
 ## Question
 

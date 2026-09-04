@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """assert-hygiene.py — changed-lines assert-family gate (issue #144 / #135).
 
-Policy authority: AGENTS.md §9.2 and docs/architecture/failure-model.md.
+Policy authority: AGENTS.md §3.8 and docs/architecture/failure-model.md.
 `NDEBUG` is not semantic authority: a bare assert() vanishes in Release and in
 every downstream build that defines NDEBUG, so it must never be the sole
 enforcement for correctness, liveness, ownership, lifetime, request lifecycle,
@@ -15,7 +15,7 @@ WHAT IT CHECKS (changed lines only — existing sites are grandfathered):
     - #include <cassert>
     - #include <assert.h> / "assert.h"
 
-ALLOWED shapes (AGENTS.md §9.2 / failure-model.md §5):
+ALLOWED shapes (AGENTS.md §3.8 / failure-model.md §5):
   1. internal-testing preconditions — lines INSIDE a preprocessor region that
      is provably active only when SLUICE_ASYNC_INTERNAL_TESTING is defined
      are auto-allowed. Guard detection is deliberately under-allowing: only

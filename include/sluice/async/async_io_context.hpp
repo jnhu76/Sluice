@@ -52,7 +52,7 @@ struct SyncAllOp {   // fsync (W4)
     int fd = -1;
 };
 
-// --- Split-phase readiness wait (AGENTS.md §13.2) ---------------------------
+// --- Split-phase readiness wait (AGENTS.md §3.6) ---------------------------
 // A backend MAY expose an observe-only readiness wait so a caller can block
 // for progress WITHOUT holding AsyncIoContext::access_mtx_ (the pre-fix code
 // held it across ThreadPoolBackend::wait_one, starving every other poll/reap
@@ -65,7 +65,7 @@ struct BackendWaitToken {
     // Epochs are monotonic and published under the wait source's own mutex
     // BEFORE any notification. A wait for an observed token returns when
     // either epoch advances; the predicate protocol closes the lost-wake
-    // window between snapshot and park (AGENTS.md §13.2).
+    // window between snapshot and park (AGENTS.md §3.6).
     std::uint64_t progress_generation = 0;  // real readiness published
     std::uint64_t control_generation = 0;   // control-plane wake (close/stop)
 };
@@ -593,7 +593,7 @@ public:
     // src/async/async_io_context_test_seams.hpp (included at the bottom of
     // this file under this same guard). Compiled out of production builds;
     // the layout cost in the internal-testing target is accepted and
-    // documented (AGENTS.md §15).
+    // documented (AGENTS.md §3.9).
     struct WaitSourceProgressPauseGate;
     void set_wait_source_progress_pause_gate_for_test(
         WaitSourceProgressPauseGate* gate) noexcept;
@@ -616,7 +616,7 @@ private:
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // D4-RM13 detector seam state (see WaitSourceProgressPauseGate). Compiled
     // out of production builds; the layout cost in the internal-testing target
-    // is accepted and documented (AGENTS.md §15).
+    // is accepted and documented (AGENTS.md §3.9).
     std::atomic<WaitSourceProgressPauseGate*> wait_source_progress_gate_{nullptr};
     void pause_after_wait_source_progress_() noexcept;
 #endif

@@ -5,7 +5,7 @@
 #   Catch deterministic mechanical failures — documentation link validation,
 #   architecture-doc structure, the backend-conformance manifest self-test,
 #   mechanical facts, performance-evidence structural validation, the
-#   changed-lines assert-family policy (AGENTS.md §9.2), and whitespace
+#   changed-lines assert-family policy (AGENTS.md §3.8), and whitespace
 #   damage — BEFORE a push consumes a GitHub CI round trip. This is
 #   developer tooling only.
 #
@@ -225,7 +225,7 @@ run_gate "performance evidence artifacts" "${PERF_EVIDENCE_REPRO}" \
 # with zero false positives (static_assert, <cstdint>/<cstddef>, comments,
 # context/removed lines, guarded seam lines, allowlisted paths, and tests/
 # must all pass). Proves the changed-lines assert-family policy gate
-# (AGENTS.md §9.2, docs/architecture/failure-model.md) actually catches.
+# (AGENTS.md §3.8, docs/architecture/failure-model.md) actually catches.
 ASSERT_HYGIENE_SELFTEST_REPRO="python3 scripts/gates/assert-hygiene.py --self-test"
 run_gate "assert-hygiene self-test" "${ASSERT_HYGIENE_SELFTEST_REPRO}" \
     python3 scripts/gates/assert-hygiene.py --self-test
@@ -273,7 +273,7 @@ run_gate "SE-1 hazard corpus integrity" "${SE1_CORPUS_REPRO}" \
 # `git diff --check` reports trailing whitespace, indentation with spaces
 # before tabs, and unresolved merge conflict markers. The assert-hygiene gate
 # scans the ADDED lines of the same range(s) for unregistered assert-family
-# additions (AGENTS.md §9.2).
+# additions (AGENTS.md §3.8).
 #
 # Range selection, first match wins:
 #   1. explicit — `--range <a>..<b>` (repeatable): scan exactly the given

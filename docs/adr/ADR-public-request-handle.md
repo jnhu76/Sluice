@@ -10,7 +10,7 @@ type, its construction authority, the additive `submit_*_request` entry points,
 and the read-only `request_state` identity consumer.
 **Baseline:** `e2b9f37` (`master`, PR #105 / Phase F1 merged)
 **Governing authority:** `ADR-explicit-io-request-contract` (Accepted), Decision 7
-in particular; Constitution AC-2 / AC-13 / AC-14 / AC-15; AGENTS.md §4.1, §4.4,
+in particular; Constitution AC-2 / AC-13 / AC-14 / AC-15; AGENTS.md §3.2, §3.3,
 §9, §10, §12.
 
 ## Acceptance
@@ -67,7 +67,7 @@ A `RequestHandle` MUST NOT become an owner of, or extend the lifetime of:
 - the `RoutingLease` or `WaitRecord`;
 - the terminal result.
 
-The ownership model is unchanged (AGENTS.md §9, ADR Decision 8): the caller owns
+The ownership model is unchanged (AGENTS.md §3.8, ADR Decision 8): the caller owns
 the Completion; the context/backend owns the RequestSlot; the Scheduler owns the
 wait record / Fiber routing. A handle copy outliving a Completion `reset()` does
 NOT keep the slot alive — after reset releases the slot (generation++), the stale
@@ -86,7 +86,7 @@ cannot read or set them. The type has:
   debug `describe()` that returns a non-authoritative diagnostic string.
 
 Public callers therefore **cannot** manufacture `(context=123, slot=7,
-generation=4)` and use it as authority (Constitution AC-13, AC-14; AGENTS.md §10,
+generation=4)` and use it as authority (Constitution AC-13, AC-14; AGENTS.md §3.2,
 task §10). The construction authority is the backend commit path: the same
 `install_binding_for_backend(arena, SlotHandle)` step that privately binds the
 `Completion` (ADR Decision 5) is the source of the handle's identity.
@@ -130,7 +130,7 @@ arena binding (legacy/external backends — Decision 7). This requires:
 - **no per-backend overrides** (all four arena backends already call
   `install_binding`);
 - **no slot scan** (the binding is stored on the Completion); and
-- **no new global request registry** (AGENTS.md §12, §26: one authoritative
+- **no new global request registry** (AGENTS.md §3.5: one authoritative
   identity — the `RequestArena` `RequestKey`, reached through the Completion
   binding).
 
@@ -175,7 +175,7 @@ The four production arena backends (Fake, Sync, ThreadPool, Uring) override
 `supports_request_identity()` to return `true`. A custom/external backend that
 does not implement the RequestArena identity contract keeps the default and
 truthfully reports `not_supported` — it MUST NOT fabricate a `RequestKey` or
-return a forgeable pointer-based handle (AGENTS.md §12.1, task §13).
+return a forgeable pointer-based handle (AGENTS.md §3.5, task §13).
 
 This is source-compatible: existing `AsyncBackend` subclasses compile unchanged
 (they simply opt out of identity).
@@ -220,7 +220,7 @@ override it with a one-line delegation to their arena.
 ## Decision 7: distinct from waiter identity and I/O cancellation
 
 This ADR deliberately does NOT add handle-keyed waiter registration or I/O
-cancellation. Three concepts remain distinct (AGENTS.md §11, task §15):
+cancellation. Three concepts remain distinct (AGENTS.md §3.4, task §15):
 
 1. **request identity** — `RequestHandle` (this ADR);
 2. **waiter identity** — one registered consumer per request, registered via the
@@ -234,7 +234,7 @@ A `RequestHandle` does NOT register a waiter, does NOT cancel I/O, and does NOT
 cancel a waiter. Waiter cancellation continues to remove ONLY the waiter (the I/O
 and borrow are untouched); I/O cancellation continues to compete under the
 terminal-winner protocol. This keeps exactly one waiter authority (the arena slot
-+ Scheduler record) and avoids a second source of truth (AGENTS.md §26).
++ Scheduler record) and avoids a second source of truth (AGENTS.md §3.3).
 
 ## Decision 8: thread safety, capacity, and resource bounds
 
@@ -245,7 +245,7 @@ terminal-winner protocol. This keeps exactly one waiter authority (the arena slo
   acquire no new lock and introduce no lock-order edge.
 - No new container, map, registry, `shared_ptr`, or per-op heap allocation is
   introduced. The single authoritative identity remains the `RequestArena`
-  `RequestKey`, reached through the Completion binding (AC-7, AGENTS.md §12).
+  `RequestKey`, reached through the Completion binding (AC-7, AGENTS.md §3.5).
 
 ## Decision 9: lock-order and wake impact
 
@@ -260,7 +260,7 @@ code. No wake obligation changes (Phase G is untouched).
 
 `RequestHandle` is a value; it imposes no shutdown obligation. Destroying a
 context with outstanding accepted work remains a contract violation
-(AGENTS.md §14) regardless of whether handles exist. A handle does not pin the
+(AGENTS.md §3.7) regardless of whether handles exist. A handle does not pin the
 context or the slot; after the accepted request is reaped and the Completion
 reset, the handle is simply stale (`request_state == not_found`).
 
@@ -279,7 +279,7 @@ reset, the handle is simply stale (`request_state == not_found`).
   without new semantics. (Task §9: the handle is identity, not ownership.)
 - **D — change `submit_*` to return `Result<RequestHandle>`.** Rejected: it
   breaks source compatibility for every caller and every `AsyncBackend` subclass
-  (AGENTS.md §16.1, task §12–§13). The additive `submit_*_request` family is
+  (AGENTS.md §6, task §12–§13). The additive `submit_*_request` family is
   strictly safer.
 - **E — public raw `RequestKey`.** Rejected (ADR Decision 7, AC-14): it would
   expose the internal identity tuple as a forgeable public aggregate and

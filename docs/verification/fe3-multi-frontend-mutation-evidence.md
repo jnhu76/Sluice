@@ -2,7 +2,7 @@
 
 Purpose: prove the FE-3 slice/mixing tests FAIL on deliberately nonconforming
 behavior of the shared authorities they claim to guard (same methodology as
-the Phase C2x mutation campaigns; AGENTS.md §16/§17 spirit). Each mutation is
+the Phase C2x mutation campaigns; AGENTS.md §6/§7 spirit). Each mutation is
 a single-point production/seam edit applied to the FE-3 closeout tree, the
 affected test binaries are relinked and run, the RED result is recorded, and
 the mutation is reverted (tree restored to `fe48e19` + the new M5 coverage

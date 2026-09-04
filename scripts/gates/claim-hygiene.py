@@ -6,7 +6,7 @@ Machine enforcement for the #163 §12 claim vocabulary rule:
     None of the claim classes alone means "the C++ implementation is
     formally verified."
 
-AGENTS.md §21 and docs/verification/formal-models.md state the prohibition in
+AGENTS.md §7 and docs/verification/formal-models.md state the prohibition in
 prose; this gate fails when NEW text (added lines in the scanned diff) makes
 an affirmative claim of the overclaim class about the implementation. Scope:
 Markdown files under docs/ and spec/, plus the root README.md and AGENTS.md.

@@ -26,7 +26,7 @@ namespace sluice::async {
 // snapshot — the exact inter-iteration window where a control wake used
 // to be absorbed into a fresh snapshot (rebaselined away), drained, and
 // reparked forever. Compiled out of production builds; the layout cost in
-// the internal-testing target is accepted and documented (AGENTS.md §15).
+// the internal-testing target is accepted and documented (AGENTS.md §3.9).
 struct AsyncIoContext::WaitSourceProgressPauseGate {
     std::atomic<bool> paused{false};  // reached the pause point
     std::atomic<bool> exited{false};  // pause exited (for RAII release)
