@@ -70,35 +70,46 @@
   "phases": {
     "audit": "done (pre-freeze, BATCH-X0-AUDIT.md)",
     "preregistration": "frozen c0da5db5 + Amendment 1 (2d2108cf)",
-    "harness": "done (bench + driver + validator; M1-M5 REJECT; validator selftest 4/4)",
-    "selftests": "done",
-    "semantic_formal": "done — S1-S10 PASS; S9 DIVERGENCE (batch-x0-semantic-native-1)",
-    "perf_formal": "done — batch-x0-perf-native-2 (840 rows + enter counters); native-1 SUPERSEDED (dirty_tracked at run time)",
-    "qualify": "A/A: strace-wrapped FAIL x2 (retained) -> strace-free PASS 97.9% (batch-x0-qualify-native-1/-2)",
-    "verdicts": "derived mechanically — verdicts.json (validator VALIDATION PASS)",
-    "report": "done (BATCH-X0-REPORT.md)"
+    "harness": "done (bench + driver + validator; M1-M5 REJECT)",
+    "selftests": "done — validator selftest expanded to 20 named tests by Corrective-1, all passing",
+    "semantic_formal": "done — S1-S10 PASS; S9 DIVERGENCE (batch-x0-semantic-native-1); STANDS (substrate-independent)",
+    "perf_formal": "SUPERSEDED — batch-x0-perf-native-2 ran on /tmp tmpfs vs frozen ext4 substrate (native-1 SUPERSEDED: dirty_tracked at run time); marked with SUPERSEDED.json, rows retained as non-authoritative observations",
+    "qualify": "A/A history: strace-wrapped FAIL x2 (retained) -> strace-free PASS 47/48 on tmpfs (Amendment-1 variance record; not ext4-admissible post-Corrective-1)",
+    "verdicts": "no validator verdicts.json post-supersession; verdict state is the campaign-level fail-closed state in BATCH-X0-REPORT.md §0.3",
+    "corrective_1": "done — P1-1..P1-5 + P2 closed (verified-ext4 substrate gate, A/A recomputation + explicit binding, real git ancestry, blocked-gate ordering, per-cell enter evidence); perf rerun BLOCKED: host has no usable ext4 (only ext4 = /boot 1.9G system partition; /home btrfs; /tmp tmpfs)",
+    "report": "done (BATCH-X0-REPORT.md, Corrective-1 integrated)"
   },
-  "freeze_commit": "c0da5db5",
+  "freeze_commit": "c0da5db505d24bb8f7c576459b74eaee8ef68ad5",
   "amendments": [
-    "Amendment 1 (pre-formal, disclosed): strace removed from the timed window (ptrace variance); A/A gate then PASS 97.9%. strace retained as the untimed enter-counter instrument."
+    "Amendment 1 (pre-formal, disclosed): strace removed from the timed window (ptrace variance); A/A gate then PASS 97.9%. strace retained as the untimed enter-counter instrument.",
+    "Corrective-1 (post-review, disclosed): evidence-gate closure (P1-1..P1-5, P2); batch-x0-perf-native-2 SUPERSEDED (tmpfs vs frozen ext4); ext4 rerun BLOCKED on this host per the no-substitution protocol. No frozen rule changed."
   ],
-  "evidence_head": "see PR (results commit)",
-  "final_verdicts": {
+  "evidence_head": "see PR (corrective commit series)",
+  "verdict_state_post_corrective_1": {
+    "derivation": "campaign-level fail-closed state (REPORT §0.3), NOT a validator verdicts.json — no compliant-substrate matrix exists",
     "BATCH-X0-SEMANTIC-GRANT": "CURRENT BATCH DOES NOT GRANT GROUP ADMISSION",
-    "BATCH-X0-TRANSPORT-AMORTIZATION": "ALREADY OBTAINED BY PRIMITIVE SUBMITS",
-    "BATCH-X0-CONTROL-AMORTIZATION": "NOT MATERIAL",
-    "BATCH-X0-PERFORMANCE": "NOT MATERIAL",
+    "BATCH-X0-TRANSPORT-AMORTIZATION": "BLOCKED",
+    "BATCH-X0-CONTROL-AMORTIZATION": "BLOCKED",
+    "BATCH-X0-PERFORMANCE": "BLOCKED",
     "BATCH-X0-MINIMALITY": "THIN FLOOR SUFFICIENT",
-    "BATCH-X0-SLUICE-SPECIFIC-VALUE": "PORTABLE THIN-BASELINE VALUE ONLY",
+    "BATCH-X0-SLUICE-SPECIFIC-VALUE": "NOT ESTABLISHED",
     "BATCH-X0-G1-CONTROL": "NOT ESTABLISHED",
     "PROMOTION": "STOP — NO C1"
   },
+  "superseded_sessions": [
+    "results/batch-x0-perf-native-1-superseded (dirty_tracked at run time)",
+    "results/batch-x0-perf-native-2 (tmpfs substrate vs frozen ext4; Corrective-1 P1-1)"
+  ],
+  "rerun_blocker": {
+    "status": "BLOCKED",
+    "reason": "no usable ext4 filesystem on the host: only ext4 is /boot (sda2, 1.9GiB system partition, ~1.2GiB free); /home is btrfs 445GiB; /tmp is tmpfs; nvme0n1p2/sdb1 unformatted; no device-mapper or loop devices; interactive sudo only. No substitution authorized (Corrective-1 §21).",
+    "rerun_recipe": "on any host with a real ext4 work filesystem: run_batch_x0.py qualify --work-dir <ext4 path>; then matrix --work-dir <ext4 path> --qualification <qualify session>; the corrected validator enforces substrate, A/A (recomputed), ancestry, per-cell enter evidence, and blocked-gate ordering mechanically"
+  },
   "host_facts": [
     "kernel 7.1.9 native Fedora, liburing 2.13, clang release, cpu-pinned",
-    "B1 vs B2 io_uring_enter totals over identical grid: 19488 vs 19539 (0.26%)",
-    "S9: per-op accepts {A1,A2,B}; fused accepts {A1,A2,A3} — DIVERGENCE",
-    "MB3-MB1 fusion delta: noise (sign-inconsistent, |median| < 2% typical)",
-    "B0 fastest in every cell (e.g. read 4K N=32: 929 vs B1 1317 vs B2 1425 ns/op)",
-    "wrapper B2-B1: mixed sign, not material; negative trend at 4K N>=16 reads"
+    "filesystem inventory (Corrective-1): sda2 ext4 /boot 1.9GiB; sda3 btrfs 445GiB /+/home; /tmp tmpfs; no mapper/loop; sudo interactive-only",
+    "S9: per-op accepts {A1,A2,B}; fused accepts {A1,A2,A3} — DIVERGENCE (STANDS)",
+    "audit F5 (STANDS): production backend never io_uring_submit per op; flush at poll/wait_one",
+    "[SUPERSEDED tmpfs session] B1 vs B2 enter totals 19488 vs 19539 (0.26%); MB3-MB1 noise; B0 fastest in every cell; wrapper mixed-sign — non-authoritative observations, retained in the superseded session"
   ]
 }

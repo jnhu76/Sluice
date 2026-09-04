@@ -8,6 +8,16 @@ topology while preserving every per-operation correctness authority.
 **RESEARCH ONLY. Production code untouched. The current public Batch
 contract is unchanged. No C1 is authorized by this campaign.**
 
+Post-review Corrective-1: the evidence-gate/validator findings are closed
+(verified-ext4 substrate gate, A/A recomputed from raw rows + explicit
+binding, real git ancestry, blocked-gate ordering before promotion,
+per-cell enter evidence), the formal performance session
+(batch-x0-perf-native-2) is SUPERSEDED for violating the frozen ext4
+substrate rule, and the compliant-substrate rerun is BLOCKED — this host
+has no usable ext4 filesystem. The semantic result (S9 DIVERGENCE) is
+substrate-independent and stands. Terminal verdict: **STOP — NO C1**
+(fail-closed). See BATCH-X0-REPORT.md §0.
+
 ## Contents
 
 ```text
