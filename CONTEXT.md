@@ -15,9 +15,12 @@
 ## 1. What Sluice is
 
 Sluice is an experimental C++20 explicit-I/O and control-flow library: a
-bounded, explicit, inspectable I/O execution layer that makes I/O capability,
-request identity, resource ownership, execution policy, and backend mechanism
-visible, controllable, and verifiable.
+bounded, explicit, inspectable I/O execution layer. It exposes only the
+observable I/O semantics and true named resource bounds that callers must
+rely on; centralizes the correctness authorities needed to enforce those
+contracts inside the library; and keeps backend capability and execution
+policy local, replaceable, and pay-for-play unless a caller-facing contract
+independently earns exposure.
 
 ## 2. North star (frozen)
 

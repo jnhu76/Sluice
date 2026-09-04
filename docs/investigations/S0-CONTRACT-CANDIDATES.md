@@ -29,8 +29,14 @@ undocumented / unknown) with test or static evidence.
 - **Evidence inspected:** #227 stable-checkpoint section; PR #287 merge
   (`bc97ac35`); api.md header line.
 - **Status:** UNCONFIRMED.
-- **Recommended S0B scope:** diff `docs/reference/api.md` against
-  `include/sluice/` headers; classify every divergence doc-vs-code.
+- **Recommended S0B scope:** check only the public surfaces that participate
+  in the selected S0B Boundary/Safety authorities — request identity /
+  acceptance (`RequestHandle`, submit family), Completion lifecycle /
+  publication, cancel, deadline / wait, borrow / lifetime, shutdown,
+  resource-bound observable behavior (capacity refusal), and public failure
+  contracts. Unrelated public API / reference drift is documentation and
+  API-maintenance debt and does not enter Safety S0B unless it affects a
+  selected safety property.
 
 ## C-02 — "Last verified against" anchors on sync architecture docs
 

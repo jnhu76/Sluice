@@ -6,7 +6,7 @@
 
 ## 1. Mission 与项目原则
 
-Sluice 是实验性的 C++20 显式 I/O 与控制流库，核心目标是让 I/O 能力、请求身份、资源所有权、执行策略和后端机制可见、可控制、可验证。当前 north star 与语义权威见 GitHub `#225`（architecture constitution）；执行顺序见 `#227`（唯一 roadmap）。
+Sluice 是实验性的 C++20 显式 I/O 与控制流库：只向调用者暴露其必须依赖的可观察 I/O 语义与真实命名的资源边界；把执行这些契约所需的正确性权威集中沉淀在库内部；后端能力与执行策略默认保持局部、可替换、按需付费，除非某个 caller-facing 契约通过独立证据证明值得暴露。当前 north star 与语义权威见 GitHub `#225`（architecture constitution）；执行顺序见 `#227`（唯一 roadmap）。
 
 必须保持以下层次独立：
 

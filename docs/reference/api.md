@@ -1,6 +1,6 @@
 # API Reference
 
-Public, stable-ish APIs as of the `v0.0.1` reference baseline. "Stable-ish" means removing or silently re-semanticizing these would break consumers; treat as frozen across minor work, change only with deliberate deprecation.
+This document is the current public API reference companion to `include/sluice/`: the headers and this reference together carry the current public contract. The last full reference-audit baseline was `v0.0.1`; post-baseline correspondence is re-checked selectively by current work. When this document and the public headers disagree, treat the mismatch as a defect rather than treating `v0.0.1` as an excuse for drift. "Stable-ish" means removing or silently re-semanticizing these would break consumers; treat as frozen across minor work, change only with deliberate deprecation.
 
 For internal details and experimental APIs, see `docs/history/archive/api-audit.md`.
 
