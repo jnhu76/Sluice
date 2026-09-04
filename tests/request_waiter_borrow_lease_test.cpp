@@ -46,7 +46,7 @@
 // Links sluice_async_internal_testing: the generation-validated
 // borrow_for_test / waiter_for_test observation seams and the
 // publication_order_for_test I18 trace are guarded by
-// SLUICE_ASYNC_INTERNAL_TESTING (AGENTS.md §15; production carries nothing).
+// SLUICE_ASYNC_INTERNAL_TESTING (AGENTS.md §3.9; production carries nothing).
 //
 // All waits are bounded and every case restores slot_in_use == 0 before the
 // arena destructs (fail-path discipline, issue #68 §13: an outstanding slot

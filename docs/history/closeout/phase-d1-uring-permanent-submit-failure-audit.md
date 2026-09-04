@@ -1,9 +1,11 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase D1 — Permanent `io_uring_submit()` Failure Recovery Audit
 
 **Status:** IMPLEMENTED AND VERIFIED — source audit and merge-gate evidence complete.
 **Date:** 2026-08-09
 **Author:** jnhu
-**Governing:** `docs/architecture/phase-d1-uring-frozen-design.md` §6 (HARD GATE)
+**Governing:** `docs/history/closeout/phase-d1-uring-frozen-design.md` §6 (HARD GATE)
 **Scope:** determine, from authoritative liburing + Linux-kernel sources, whether a clean Class-A
 local-retirement proof exists for D1's exact configuration, and freeze the production
 poison/recovery contract licensed by that proof.

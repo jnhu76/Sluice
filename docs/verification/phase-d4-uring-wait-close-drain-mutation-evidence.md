@@ -269,7 +269,7 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
 - Mutated: `src/async/uring_backend.cpp`, `~UringAsyncBackend()` — the
   quiescence preflight's fail-fast replaced by an unbounded wait loop (the
   migration plan §13 priority mutant "destructor drains/cancels implicitly" —
-  AGENTS.md §14 prohibits destructors that wait for async progress).
+  AGENTS.md §3.7 prohibits destructors that wait for async progress).
 - Detector: `uring_c2e_death_destroy_with_pending` (the pinned 10-case death
   matrix, `uring_backend_c2e_death_test`; a representative child case was used
   for the RED run — the 60s child watchdog makes a full-matrix hang run
@@ -637,7 +637,7 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   deferred wake at the function tail was therefore SKIPPED on the
   newly-poisoned path: a waiter already parked in the split-phase ready
   wait could sleep forever on published terminals — state published, wake
-  obligation missing (AC-6 / AGENTS.md §13.2). `enqueue_after_commit()`
+  obligation missing (AC-6 / AGENTS.md §3.6). `enqueue_after_commit()`
   had no such hole (its poison path falls through to the tail wake).
 - Repaired: `src/async/uring_backend.cpp` — the newly-poisoned branch no
   longer returns; it records `newly_poisoned` and falls out of the lock

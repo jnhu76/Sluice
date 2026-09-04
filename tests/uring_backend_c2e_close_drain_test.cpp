@@ -611,7 +611,7 @@ SLUICE_TEST_CASE(uring_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin) {
 
 // ---------------------------------------------------------------------------
 // C2e §23 — interrupt_all() wakes ALL parked participants (N=3), not one.
-// Deterministic proof (AGENTS.md §13.3 — NO sleep is the ordering proof): a
+// Deterministic proof (AGENTS.md §6 — NO sleep is the ordering proof): a
 // guarded per-participant pre-poll park counter records EACH waiter reaching
 // the final pre-poll point (epoch checked, eventfd drained, about to poll).
 // The test waits for count == N using a bounded deadline ONLY as a hang
@@ -985,7 +985,7 @@ SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {
 // progress. The caller (wait_one) then runs its final non-blocking poll/reap,
 // which reaps any co-ready CQE and returns its real count.
 //
-// Deterministic proof (AGENTS.md §13.3 — NO sleep is the ordering proof): a
+// Deterministic proof (AGENTS.md §6 — NO sleep is the ordering proof): a
 // test-only pre-poll barrier (BeforePhysicalPollPauseGate) parks the waiter at
 // the physical-poll boundary, and a test-only ring-fd poll override makes the
 // "ring" readable with a pipe. The test then drives interrupt_all (bumps
@@ -1103,7 +1103,7 @@ SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {
 // already gone and B still blocked, drain the stale control token, and park
 // forever: the control wake was swallowed by physical ring progress.
 //
-// Deterministic proof (AGENTS.md §13.3): the production bug requires T1's
+// Deterministic proof (AGENTS.md §6): the production bug requires T1's
 // poll(2) to observe BOTH the ring fd readable (A's CQE pending) AND the
 // control fd readable (interrupt), so the mutant's ring-POLLIN-returns-progress
 // branch fires. A real ring fd's readability cannot be held while A is reaped
@@ -1268,7 +1268,7 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
 // interrupted (0) — its single acknowledgement releases the gate — and T2
 // then drains the stale token, parks, and wakes on REAL progress.
 //
-// Ordering proof (AGENTS.md §13.3 — deadlines are hang watchdogs only): T1
+// Ordering proof (AGENTS.md §6 — deadlines are hang watchdogs only): T1
 // returning interrupted within a bounded join (the pre-fix code strands it
 // forever: its poll finds an empty counter and re-sleeps), and T2 returning
 // the reaped count only after real progress. The barrier-arrival

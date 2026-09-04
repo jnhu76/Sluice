@@ -5,7 +5,7 @@
 // threadpool_backend_test.cpp and threadpool_backend_reap_test.cpp. They cover:
 //   - capacity / would_block (I3/I8, ADR Decision 13)
 //   - descriptor validation (ADR Decision 6; DIV-14 does NOT apply)
-//   - closed-fd -> accepted -> real EBADF terminal (AGENTS.md §9.1)
+//   - closed-fd -> accepted -> real EBADF terminal (AGENTS.md §3.8)
 //   - exactly-once defined terminal under concurrent submit+cancel
 //     (the deterministic no-execute and verbatim proofs live in
 //     threadpool_backend_scheme_b_race_test.cpp)
@@ -184,7 +184,7 @@ SLUICE_TEST_CASE(phase_e_zero_length_null_buffer_allowed) {
 }
 
 // ---- closed nonnegative fd -> accepted -> real EBADF terminal ---------------
-// AGENTS.md §9.1: no fcntl(F_GETFD) preflight (TOCTOU). A non-negative but
+// AGENTS.md §3.8: no fcntl(F_GETFD) preflight (TOCTOU). A non-negative but
 // closed fd is accepted; the syscall returns EBADF and that becomes the accepted
 // terminal error.
 SLUICE_TEST_CASE(phase_e_closed_fd_accepted_then_ebadf_terminal) {

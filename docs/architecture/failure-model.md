@@ -5,7 +5,7 @@ issue #144 for the historical backlog).
 
 Authority chain for this document:
 
-1. `AGENTS.md` §9.2 (binding rules for the `assert()` family).
+1. `AGENTS.md` §3.8.2 (binding rules for the `assert()` family).
 2. This document (taxonomy and mechanical decision rules).
 3. `scripts/gates/assert-hygiene.py` + `scripts/gates/assert-hygiene.allowlist`
    (changed-lines enforcement, wired into `scripts/gates/pre-push.sh` and CI).
@@ -63,11 +63,11 @@ short transfer, a missing file. A correct caller can sensibly react at runtime
 Rules:
 
 - MUST surface as `Result<T>` carrying `IoError` with raw OS error information
-  preserved (AGENTS.md §9).
+  preserved (AGENTS.md §3.8).
 - MUST NOT assert, terminate, or abort.
 - Destructors and `[[noreturn]]` paths have no `Result` channel: a T1 that
   would otherwise be reported there is a design smell — the operation belongs
-  on a path that can report it (AGENTS.md §9: destructors must not invent
+  on a path that can report it (AGENTS.md §3.8: destructors must not invent
   unreportable I/O success or hide unreportable I/O failure).
 
 ### T2 — Admission / capacity refusal
@@ -79,7 +79,7 @@ Rules:
 
 - MUST return a synchronous, reportable rejection (`would_block`, `no_space`)
   before acceptance, leaving the Completion idle and no borrow behind
-  (AGENTS.md §10.2).
+  (AGENTS.md §3.2).
 - MUST NOT terminate; capacity pressure is a designed operating condition.
 - After commit/accept, the same physical condition is no longer T2 — it must
   not retroactively reject (post-accept liveness is a design obligation, not a
@@ -144,7 +144,7 @@ Rules:
 Ownership ends in a state the contract forbids: destroying an `AsyncIoContext`
 with outstanding Completions, destroying a backend with accepted work,
 destroying a held async primitive, destroying a Scheduler with live waiters
-(AGENTS.md §14). Quiescent teardown MUST succeed silently; the violation is the
+(AGENTS.md §3.7). Quiescent teardown MUST succeed silently; the violation is the
 non-quiescent state, not the destruction itself.
 
 Rules:
@@ -174,7 +174,7 @@ Rules:
 - Short transfers are looped by callers/coordinators, never treated as errors
   by the primitive.
 - Zero progress on a non-empty write is an invalid backend state (T4), not a
-  T7 condition and not an infinite-retry loop (AGENTS.md §9).
+  T7 condition and not an infinite-retry loop (AGENTS.md §3.8).
 - Tracked defects of this class live in #142 (EINTR-001) and #143 (ERR-001);
   #141 (FILEOP-001) is a T1 fidelity defect.
 
@@ -302,5 +302,5 @@ At policy adoption (master `d7ee077`):
 - one established Completion L9 typed-fallback pair.
 
 Existing code is evidence of history, not automatic architectural precedent
-(AGENTS.md §3): each grandfathered site is reclassified only through reviewed
+(AGENTS.md §2): each grandfathered site is reclassified only through reviewed
 change (issue #144 and the per-phase PRs of the #135 remediation).

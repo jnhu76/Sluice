@@ -91,7 +91,7 @@ std::size_t apply_staged_locked(ScriptedBackendSharedState& s) {
 
 namespace {
 
-// T3 named fail-fast authority (AGENTS.md §9.2,
+// T3 named fail-fast authority (AGENTS.md §3.8,
 // docs/architecture/failure-model.md §3/§5): constructing the backend without
 // a shared state is a test-author contract violation with no recovery
 // channel. Same contract as the production detail::fail_fast.hpp family
@@ -120,7 +120,7 @@ namespace {
 ScriptedAsyncBackend::ScriptedAsyncBackend(
     std::shared_ptr<ScriptedBackendSharedState> state)
     : state_(std::move(state)) {
-    // T3 caller-contract check (AGENTS.md §9.2): a null shared state is a
+    // T3 caller-contract check (AGENTS.md §3.8): a null shared state is a
     // test-author bug with no recovery; the named fail-fast is active in
     // Debug AND Release (the previous bare assert left Release test binaries
     // a silent null dereference at first use).
@@ -145,7 +145,7 @@ ScriptedAsyncBackend::~ScriptedAsyncBackend() {
     // terminates on the empty wait / shutdown boundary).
     state_->ready_wait.interrupt_all();
 
-    // T6 lifetime-contract check (AGENTS.md §9.2,
+    // T6 lifetime-contract check (AGENTS.md §3.8,
     // docs/architecture/failure-model.md §6): destroying a backend with
     // accepted work still outstanding — pending or staged — is a lifetime
     // violation, not an ordinary caller-contract slip: the caller contract

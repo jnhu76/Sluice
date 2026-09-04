@@ -1,5 +1,5 @@
 // Phase D4 — Uring C2e non-quiescent destruction death matrix (Issue #68 row
-// 16; ADR Decision 15; AGENTS.md §14).
+// 16; ADR Decision 15; AGENTS.md §3.7).
 //
 // POSIX-only (fork/exec/waitpid). Each child case re-execs this binary via
 // death_test_runner_posix.hpp, installs a deterministic terminate handler, and

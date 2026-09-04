@@ -183,10 +183,10 @@ source diff review.
 
 **Files:**
 
-- Modify: `docs/architecture/phase-d2-uring-failure-noalloc-gate.md`
-- Modify: `docs/architecture/phase-d-uring-migration-plan.md`
-- Modify: `docs/architecture/remediation-roadmap.md`
-- Modify: `docs/architecture/phase-c2d-compliance-gate.md`
+- Modify: `docs/history/closeout/phase-d2-uring-failure-noalloc-gate.md`
+- Modify: `docs/history/closeout/phase-d-uring-migration-plan.md`
+- Modify: `docs/history/closeout/remediation-roadmap.md`
+- Modify: `docs/history/closeout/phase-c2d-compliance-gate.md`
 - Modify: `docs/verification/phase-d2-uring-failure-noalloc-mutation-evidence.md`
 
 1. Update stale prose to D0/D0.5 complete, D1 complete via PR #78, D2 complete only on final passing

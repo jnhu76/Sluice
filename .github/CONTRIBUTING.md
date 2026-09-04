@@ -100,7 +100,7 @@ Use `.github/pull_request_template.md` as the review contract.
 
 ## Architecture-sensitive changes
 
-Changes involving async I/O ownership, request lifecycle, Completion publication, cancellation, scheduler wake/progress, synchronization primitives, runtime ownership, resource bounds, shutdown/drain, or io_uring ownership require the architecture compliance process in `AGENTS.md §8` before production implementation.
+Changes involving async I/O ownership, request lifecycle, Completion publication, cancellation, scheduler wake/progress, synchronization primitives, runtime ownership, resource bounds, shutdown/drain, or io_uring ownership require the architecture compliance process in `AGENTS.md §4` before production implementation.
 
 Unknown authority, wake, failure, or capacity semantics block implementation.
 

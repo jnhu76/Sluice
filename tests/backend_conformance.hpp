@@ -271,7 +271,7 @@ std::string run_capacity_case(CapacityFixture& fx, const char* backend_name,
 //
 // CloseDrainFixture owns the AsyncIoContext + AsyncStats + the tracked-
 // Completion list for the shared close/drain cases. The DRIVER wires two
-// per-backend seams as instance-level closures (AGENTS.md §15 — production
+// per-backend seams as instance-level closures (AGENTS.md §3.9 — production
 // builds carry nothing; the suite itself stays backend-agnostic):
 //   close       — routes to the concrete backend's public close_admission()
 //                 (FakeAsyncBackend / ThreadPoolBackend both expose it;
@@ -360,7 +360,7 @@ std::string run_close_drain_case(CloseDrainFixture& fx, const char* backend_name
 // case owns its fixture + Completions in the same frame). The DRIVER supplies
 // a fixture factory that builds a fresh backend at a small capacity and wires
 // the `close` / `slot_in_use` closures over the concrete backend's PUBLIC
-// close_admission() and arena_slot_in_use() (AGENTS.md §15 instance-level
+// close_admission() and arena_slot_in_use() (AGENTS.md §3.9 instance-level
 // seams; the suite itself stays backend-agnostic). Returns the empty string
 // on full pass, or the stable name of the FIRST failing case. Implemented
 // out-of-line in backend_conformance_test.cpp.

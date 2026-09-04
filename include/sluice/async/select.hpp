@@ -60,7 +60,7 @@ public:
     }
 
     [[nodiscard]] constexpr std::size_t index() const noexcept {
-        // L9 pattern (AGENTS.md §9.2): Debug tripwire; Release returns the
+        // L9 pattern (AGENTS.md §3.8): Debug tripwire; Release returns the
         // deterministic no-winner fallback 0 instead of relying on the
         // implicit member default. Mirrors kind()/timer_outcome() below.
         if (!has_winner_) {

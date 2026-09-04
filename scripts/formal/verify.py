@@ -123,7 +123,7 @@ def _check_suite_bindings(manifest: dict) -> list[str]:
 
     Every suite must either bind at least one concrete repo file or carry a
     non-empty `binding_rationale` explaining why it is protocol-level /
-    cross-file (AGENTS.md §17 evidence discipline: a suite that nobody can map
+    cross-file (AGENTS.md §7 evidence discipline: a suite that nobody can map
     to real code is unauditable). All referenced files must exist.
     """
     errors: list[str] = []

@@ -215,12 +215,14 @@ Backend internals, conformance evidence, and the io_uring runbook live under
 
 ## Project status
 
-- **Reference baseline:** `v0.0.1` — the explicit-I/O product surface frozen
-  for the six-domain audit campaign: synchronous core, async scheduler and
-  fiber runtime, synchronization primitives, the backend set, and the first
-  real applications (copy / hash / grep / tail). See #227.
-- **Development continues on master** beyond the tag — see the
-  [roadmap](docs/roadmap/README.md).
+- **Reference baseline:** `v0.0.1` — the frozen explicit-I/O product surface:
+  synchronous core, async scheduler and fiber runtime, synchronization
+  primitives, the backend set, and the first real applications
+  (copy / hash / grep / tail). See #227.
+- **Active work is tracked on GitHub** — [#227](https://github.com/jnhu76/Sluice/issues/227)
+  (sole execution-order roadmap), [#289](https://github.com/jnhu76/Sluice/issues/289)
+  (Boundary / Safety), [#259](https://github.com/jnhu76/Sluice/issues/259)
+  (Performance).
 - **Experimental:** `UringAsyncBackend` — real-liburing validation evidence
   remains environment-dependent.
 - **Not implemented:** networking and external-memory data structures

@@ -1,7 +1,9 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase C2b Compliance Gate — Generation / Stale-Key / Cancel-Winner / Identity-Bearing Reap
 
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL; C2b COMPLETE)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 9, 11, 12; invariants I16, I17, I18, I19
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 9, 11, 12; invariants I16, I17, I18, I19
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — Revision 3 (PLAN READY), C2b scope (rows 3–8)
 **Branch:** test/phase-c2b-generation-stale-cancel-matrix
 **Scope:** Tests + gate scripts + docs only. **No `src/` or `include/sluice/` production change.**
@@ -194,7 +196,7 @@ invariant and the verbatim-result invariant (ADR Decision 11 / DIV-10):
 | G | worker publishes the Completion before poll/reap | `tp_publication_boundary_reap_gates_ready` | same |
 
 Full mutation matrix, commands, exit codes, and revert verification are recorded in
-[`docs/verification/phase-c2b-identity-mutation-evidence.md`](../verification/phase-c2b-identity-mutation-evidence.md).
+[`docs/verification/phase-c2b-identity-mutation-evidence.md`](../../verification/phase-c2b-identity-mutation-evidence.md).
 
 ## 4. Test case ledger (issue #68 C2b cases)
 

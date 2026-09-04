@@ -276,7 +276,7 @@ SLUICE_TEST_CASE(final_backend_ready_request_drains_at_shutdown) {
 // before the park commitment is exposed: the upcoming wait_one() uses the
 // ARMED generation as its baseline and observes the stop.
 //
-// Deterministic proof (AGENTS.md §13.3 — deadlines are hang watchdogs only):
+// Deterministic proof (AGENTS.md §6 — deadlines are hang watchdogs only):
 //   1. the MW-S2 participant pauses at the commit-to-wait_one seam
 //      (mw_s2_committed_before_wait_one — reached AFTER the registration,
 //      OUTSIDE global_mtx_);

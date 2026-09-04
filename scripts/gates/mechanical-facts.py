@@ -28,7 +28,7 @@ of those facts is the wrong tool; this gate checks them mechanically:
      only inside the SLUICE_ASYNC_INTERNAL_TESTING guard; app production
      sources must reference app seam headers only inside the app guard; and
      the production sluice_async / sluice-copy targets must never define the
-     macros, gain a seam include path, or list a seam source (AGENTS.md §15
+     macros, gain a seam include path, or list a seam source (AGENTS.md §3.9
      persistence contract — one mechanical authority for every seam family).
 
 Fail-closed: exits non-zero on the first category with findings, printing
@@ -473,7 +473,7 @@ def fact_docs(root_dir=None):
 # references and would trip the tracker-ref detector).
 TEST_TOTAL_EXTRA_DOCS = [
     "docs/history/issues/issue-116-runtime-reentry-liveness.md",
-    "docs/architecture/issue-116-reentry-liveness-gate.md",
+    "docs/history/closeout/issue-116-reentry-liveness-gate.md",
 ]
 
 
@@ -483,7 +483,7 @@ TEST_TOTAL_EXTRA_DOCS = [
 #    seam headers — src/async/*_test_seams.hpp for async,
 #    apps/sluice-copy/safe_output_test_seams.hpp for the copy app — included
 #    by production-compiled sources ONLY under the matching *_INTERNAL_TESTING
-#    macro. AGENTS.md §15 persistence contract, mechanically enforced for every
+#    macro. AGENTS.md §3.9 persistence contract, mechanically enforced for every
 #    seam family: production targets never compile test control plane.
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -576,7 +576,7 @@ def _implicit_target_regions(text, names):
 
 
 def check_seam_production_exclusion(root=None):
-    """C4 (issue #135) persistence contract (AGENTS.md §15), extended by the
+    """C4 (issue #135) persistence contract (AGENTS.md §3.9), extended by the
     #142 review to app-private seams: production targets never compile
     testing-only control-plane code. Mechanical facts:
       - installed headers reference seam headers only inside the

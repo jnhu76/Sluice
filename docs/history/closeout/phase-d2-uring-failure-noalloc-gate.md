@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase D2 Uring failure-injection / no-allocation compliance gate
 
 **Status:** COMPLETE — command-backed real-liburing evidence passed on the Phase D2 final head.
@@ -107,7 +109,7 @@ Phase D2 keeps the Class-A proof layered exactly where the authority lives. It m
 as a second, independent reproduction of the real kernel negative-submit physical state:
 
 ```text
-D1 proof (docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md):
+D1 proof (docs/history/closeout/phase-d1-uring-permanent-submit-failure-audit.md):
   real non-SQPOLL negative io_uring_submit()
   -> liburing/kernel source theorem: post-flush / zero-consumed
   -> every retained ledger entry is execution-impossible Class-A

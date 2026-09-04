@@ -42,7 +42,7 @@ namespace {
 
 // Shared close/drain fixture setup (Phase C2e). Each backend driver builds its
 // concrete backend at a small capacity, then wires the two instance-level seams
-// (AGENTS.md §15) over the backend's PUBLIC close_admission() and
+// (AGENTS.md §3.9) over the backend's PUBLIC close_admission() and
 // arena_slot_in_use() — the suite itself stays backend-agnostic. This helper
 // factors the common raw-pointer capture + CloseDrainFixture construction +
 // close/slot_in_use closure wiring shared by the Fake / ThreadPool / Uring
@@ -218,7 +218,7 @@ SLUICE_TEST_CASE(conformance_capacity_uring) {
 
 // Phase C2e — shared close/drain/destruction cases (Issue #68 rows 15-16),
 // driven per-backend. The DRIVER builds the backend at a small capacity and
-// wires the two instance-level seams (AGENTS.md §15) as closures over the
+// wires the two instance-level seams (AGENTS.md §3.9) as closures over the
 // concrete backend's PUBLIC close_admission() and arena_slot_in_use() — the
 // suite itself stays backend-agnostic. Each run asserts ONLY the shared
 // boundary; the aggregate gate drives these per-backend in isolated
@@ -231,7 +231,7 @@ SLUICE_TEST_CASE(conformance_close_drain_fake) {
     // Per-case fixture factory: each close/drain case builds a FRESH backend
     // (close_admission is irreversible) and the closures bind to that backend's
     // PUBLIC close_admission() / arena_slot_in_use(). The suite stays
-    // backend-agnostic; these are instance-level test seams (AGENTS.md §15).
+    // backend-agnostic; these are instance-level test seams (AGENTS.md §3.9).
     const sluice_test::conformance::MakeCloseDrainFixture make_fx = [] {
         return make_close_drain_fixture(
             [] { return std::make_unique<FakeAsyncBackend>(4); });

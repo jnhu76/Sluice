@@ -1,7 +1,9 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase C2a Compliance Gate — Shared Capacity / Admission / Rejection / Accounting Conformance
 
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL; C2a COMPLETE)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 5, 6, 13; invariants I3, I8
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 5, 6, 13; invariants I3, I8
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — Revision 3 (PLAN READY), C2a scope (rows 1–2)
 **Branch:** test/phase-c2-capacity-admission-rejection (see the PR)
 **Scope:** Tests + gate scripts + docs only. **No `src/` or `include/sluice/` production change.**

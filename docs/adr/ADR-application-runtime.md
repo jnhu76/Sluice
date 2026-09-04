@@ -323,7 +323,7 @@ This matches existing contracts:
 - `Group::~Group()` fail-fast (`group.cpp:117-122`).
 - `Scheduler::~Scheduler()` asserts quiescence (`scheduler.cpp:165-196`).
 
-Rationale: hidden blocking in a destructor is an anti-pattern (AGENTS.md §7).
+Rationale: hidden blocking in a destructor is an anti-pattern (AGENTS.md §3.7).
 `shutdown()` returns `Result`, enabling error reporting.
 
 Evidence: `docs/history/implementation-plans/e16-application-runtime.md` §10, §18.

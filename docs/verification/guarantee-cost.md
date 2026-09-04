@@ -60,7 +60,7 @@ Artifact: [`v6-overload-backpressure.json`](../results/performance-attribution/v
 (`scripts/bench/perf-attribution.py overload`, kind `overload`, Release).
 Instrument: `bench/overload_backpressure_bench.cpp` — FakeAsyncBackend
 (deterministic: no worker or disk noise, single thread), so the overloaded
-resource is unambiguous per the AGENTS.md §12 resource distinction: the
+resource is unambiguous per the AGENTS.md §3.5 resource distinction: the
 **RequestArena admission capacity** (not worker count, not queue depth, not
 pipeline depth).
 

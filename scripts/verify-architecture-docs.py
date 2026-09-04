@@ -28,13 +28,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 REQUIRED_DOCS = [
     "docs/architecture/overview.md",
-    "docs/architecture/as-built-async-architecture.md",
+    "docs/history/closeout/as-built-async-architecture.md",
     "docs/architecture/zig-io-conformance-map.md",
     "docs/architecture/architecture-constitution.md",
     "docs/architecture/design-compliance-gate.md",
     "docs/architecture/divergence-registry.md",
-    "docs/architecture/current-architecture-findings.md",
-    "docs/architecture/remediation-roadmap.md",
+    "docs/history/closeout/current-architecture-findings.md",
+    "docs/history/closeout/remediation-roadmap.md",
     "docs/templates/architecture-design-template.md",
 ]
 

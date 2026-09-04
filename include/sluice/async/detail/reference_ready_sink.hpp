@@ -34,12 +34,12 @@ namespace sluice::async::detail {
 // counter exists ONLY for
 // test assertions of exactly-once publication, so it is guarded by
 // SLUICE_ASYNC_INTERNAL_TESTING (keep test-only delivery
-// accounting out of the production sink — AGENTS.md §8). Production builds
+// accounting out of the production sink — AGENTS.md §3.9). Production builds
 // therefore carry no counter field and no exported test surface.
 //
 // The guarded observation additionally records the LAST delivered event's
 // waiter payload (has_waiter, token, lease id) as plain by-value scalars — a
-// FIXED-SIZE, allocation-free, test-only observation (AGENTS.md §12: no
+// FIXED-SIZE, allocation-free, test-only observation (AGENTS.md §3.5: no
 // long-lived per-delivery storage, no heap history). The lease itself is NOT
 // stored or consumed: on_ready still drops the by-value event exactly like the
 // production no-op, so the observation never changes ownership semantics. A

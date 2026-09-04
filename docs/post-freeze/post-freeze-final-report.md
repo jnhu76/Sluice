@@ -67,7 +67,7 @@ comment-only, no behavior change);
 idle-count erase sites become `exchange(0)` + a conditional generation
 bump, the park-commit identity-refusal term, and the per-worker test
 seams; see
-`docs/architecture/issue-161-idle-dance-contribution-generation-gate.md`);
+`docs/history/closeout/issue-161-idle-dance-contribution-generation-gate.md`);
 `scheduler.cpp` 2085 → 2065 (2026-08-22, Issue #170 — removal of the inert
 worker-inbox notification surface: the never-populated `WorkerState::inbox`
 deque, the no-consumer `inbox_cv`, all 9 inert notifies, and the three
@@ -100,7 +100,7 @@ split; comment-only, no behavior change);
 locked snapshot (TSan data race repair: the coordinator fiber polled the
 unlocked counter while workers mutated it); test-only vocabulary, production
 behavior/layout unchanged — see
-`docs/architecture/issue-229-deadline-test-seam-lock-gate.md`);
+`docs/history/closeout/issue-229-deadline-test-seam-lock-gate.md`);
 `scheduler_timer.cpp` 509 → 536, `scheduler_queue.cpp` 499 → 515,
 `scheduler_rwlock.cpp` 674 → 677, `scheduler_mutex.cpp` 344 → 340,
 `scheduler_semaphore.cpp` 316 → 312, `scheduler_event.cpp` 397 → 393,

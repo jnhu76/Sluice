@@ -76,7 +76,7 @@ A non-zero TLC exit alone is NOT a pass for a negative gate.
 
 ## Governing principle
 
-TLA+ serves the C++ design, never the reverse (AGENTS.md §17). The pipeline
+TLA+ serves the C++ design, never the reverse (AGENTS.md §7). The pipeline
 every suite in this tree follows:
 
 ```text

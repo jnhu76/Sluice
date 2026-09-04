@@ -196,7 +196,7 @@ struct PhaseProbe {
 // The abort decision is a PURE function of explicit time inputs (no threads,
 // no sleeps, no I/O): watchdog_decide() below is proven deterministically with
 // controlled timestamps in tp_watchdog_decision_policy_controlled_timestamps.
-// AGENTS.md §13.3: sleep_for must not prove liveness — the policy is proven
+// AGENTS.md §6: sleep_for must not prove liveness — the policy is proven
 // with injected time; the fork-based cases below are end-to-end wiring checks,
 // and their sleeps are pacing/diagnosis only.
 enum class WatchdogDecision : std::uint8_t {
@@ -1344,7 +1344,7 @@ SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
     const auto deadline = std::chrono::steady_clock::now() + kDrainDeadline;
     // Wait for the worker to record the terminal (backend_ready), BEFORE any
     // reap runs. This case has no pause gate, so the bounded yield loop is the
-    // observation mechanism (AGENTS.md §13.2 permits bounded observation, just
+    // observation mechanism (AGENTS.md §3.6 permits bounded observation, just
     // not as a correctness proof); inspect attributes it for the watchdog.
     probe.set(CasePhase::inspect);
     while (backend.backend_ready_count_for_test() == 0) {
@@ -2210,7 +2210,7 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
 //   no progress >= full-budget threshold  -> AbortStalled (the ONLY abort)
 // plus the continuous-stall check (frozen progress is caught before any window
 // expires), the inclusive threshold boundary, and that a re-armed window
-// (ReportProgressContinued) does not lose the stall guard. AGENTS.md §13.3:
+// (ReportProgressContinued) does not lose the stall guard. AGENTS.md §6:
 // sleep_for must not prove liveness — here nothing is slept; every input is an
 // explicit timestamp. The fork-based regression above only wires this policy
 // through the real loop.

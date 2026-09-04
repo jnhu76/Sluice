@@ -82,8 +82,9 @@ Architecture Decision Records for Sluice.
 - **Current authority?** Yes — the unified RequestKey / RequestSlot / RequestArena
   lifecycle, the five-stage admission transaction, terminal-winner arbitration,
   reap-only publication, and the borrow/waiter/release rules are the binding
-  async request contract. Fake, Sync/Synthetic, and ThreadPool backends conform;
-  Uring is mid-migration (see Phase D). Amended by the Decision 18 execution-ownership
+  async request contract. All four backends (Fake, Sync/Synthetic, ThreadPool,
+  Uring) run the unified RequestArena lifecycle (Phase B–D complete; see DIV-02
+  in the divergence registry). Amended by the Decision 18 execution-ownership
   clarification (Uring private-ring execution ownership).
 - **Implementation:** RequestArena / RequestSlot / RequestKey landed; Fake, Sync,
   and ThreadPool backends migrated; conformance manifest tracks the remaining
@@ -96,7 +97,9 @@ Architecture Decision Records for Sluice.
 - **Supersedes:** none
 - **Superseded by:** none
 - **Current authority?** Yes — defines the Threaded/Evented execution strategy contract.
-- **Implementation:** E10–E13 (scheduler, timer, primitives) complete. Evented (E14+) deferred.
+- **Implementation:** E10–E16 complete (scheduler, timer, primitives,
+  Threaded/Evented parity, runtime foundation, ApplicationRuntime); see the
+  archived closeout records under `docs/history/`.
 
 ### ADR-cancel-request-epoch (T1): Cancel Request Epoch (rearm semantics)
 

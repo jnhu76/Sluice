@@ -1,3 +1,9 @@
+> **HISTORICAL — NOT CURRENT AUTHORITY.** Point-in-time migration report
+> (BASE `37bfb53`, PR #41 era). Current formal-model coverage authority:
+> `docs/verification/formal-models.md` and
+> `docs/verification/formal/cpp-model-coverage.md`. Suite inventories and
+> NOT STARTED rows below describe the state at that commit, not today.
+
 # Formal Verification System — Migration Report
 
 ## BASE SHA

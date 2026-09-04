@@ -16,7 +16,7 @@
 #   * uploads all evidence (stdout/stderr per iteration, JSONL, summary,
 #     environment report, and a best-effort core/backtrace).
 #
-# See issue #47 §12-§14 and AGENTS.md §9 for the evidence contract.
+# See issue #47 §12-§14 and AGENTS.md §3.8 for the evidence contract.
 name: issue47-diagnostic
 
 on:

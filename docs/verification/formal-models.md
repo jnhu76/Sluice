@@ -52,9 +52,9 @@ When a code change alters a modeled state transition, admission rule, winner rul
 
 **Never report "formally verified implementation" when only the abstract protocol model was checked.**
 
-## Coverage gaps (AGENTS.md §17 — recorded, not invented)
+## Coverage gaps (AGENTS.md §7 — recorded, not invented)
 
-Not every load-bearing protocol has a TLA+ model. AGENTS.md §17 permits, for a
+Not every load-bearing protocol has a TLA+ model. AGENTS.md §7 permits, for a
 high-risk protocol, *either* a focused model *or* a recorded justified gap with
 a follow-up trigger. Each accepted gap is recorded as a `coverage_gaps` entry in
 `spec/tla/manifest.json` and summarized here. An accepted gap is formal debt, not
@@ -92,7 +92,7 @@ state and exactly-once and has no production caller today.
 ORDER across two or more simultaneously backend_ready slots (ADR Decision 9
 backend-known order), multi-slot free-list/accounting interference, and the
 backend admission transaction around commit (Completion
-`idle → binding → outstanding`, AGENTS.md §4.3). A capacity-2 suite variant
+`idle → binding → outstanding`, AGENTS.md §3.3). A capacity-2 suite variant
 is the recorded follow-up; trigger: any change to the ready-ring ordering
 rule.
 

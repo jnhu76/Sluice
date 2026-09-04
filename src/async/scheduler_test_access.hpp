@@ -144,7 +144,7 @@ struct Scheduler::AsyncTestAccess {
 
     // Phase F1 (issue #98): identity-routing diagnostics. The
     // Scheduler-owned ReadyRoutingSink counts deliveries/routes under the
-    // internal-testing build (layout cost accepted, AGENTS.md §15); the
+    // internal-testing build (layout cost accepted, AGENTS.md §3.9); the
     // legacy-map probe proves a registration took the identity path (no
     // Completion*-keyed fallback entry).
     static std::size_t ready_sink_deliveries(const Scheduler& s) noexcept {
@@ -662,7 +662,7 @@ struct Scheduler::AsyncTestAccess {
     static bool evented_admission_override() noexcept;
 
     // ---- FE-2 minimal stackless frontend seams (fe2-frontend-seam
-    // compliance gate; non-installed control plane per AGENTS.md §15) ----
+    // compliance gate; non-installed control plane per AGENTS.md §3.9) ----
     //
     // FeDeferredRecord is the experimental stackless frontend's continuation
     // record: frame-embedded (same address-stability rule as the WaitNode

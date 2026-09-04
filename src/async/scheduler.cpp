@@ -1201,7 +1201,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         // would re-check and the run would never terminate
                         // after the final work completed (deterministic hang:
                         // st16_multi_worker_owner_routing). Persistent state
-                        // first, then notify (AGENTS.md §13.2); the dance
+                        // first, then notify (AGENTS.md §3.6); the dance
                         // re-checks under global_mtx_, so the signal is
                         // advisory only and coalesces safely (G-I3).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

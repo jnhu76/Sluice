@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase F1 Compliance Gate — Scheduler consumes identity-bearing reap
 
 **Phase:** F1 (Issue #98, re-baselined after the 2026-08-13 corrective pass)

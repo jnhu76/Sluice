@@ -62,7 +62,7 @@ records are classified in "Phase-record classification" below.
 | E12-F AsyncRwLock | `docs/history/implementation-plans/e12-rwlock.md` | `docs/history/closeout/e10-e12-api-semantic-closure.md` |
 | E13 Select | `docs/history/implementation-plans/e13-select-*.md` | `docs/history/closeout/e13-select-p7-rollback-closeout.md` |
 | E14 Threaded/Evented Parity | `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md` | — |
-| Phase E — Bounded Blocking-I/O Backend | `docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md` (archived design record) | `docs/architecture/phase-e-compliance-gate.md` |
+| Phase E — Bounded Blocking-I/O Backend | `docs/history/implementation-plans/phase-e-bounded-threadpool-backend.md` (archived design record) | `docs/history/closeout/phase-e-compliance-gate.md` |
 
 ## Phase-record classification (issue #167 Step 5b, baseline `master@6d8ebf1`)
 
@@ -89,7 +89,7 @@ no active verification anchor depends on the current path (mirrors
 
 - [`phase-b-request-slot-reference.md`](../history/implementation-plans/phase-b-request-slot-reference.md)
   (CLOSED-HISTORY / MOVE-NOW) — relocatable consumers updated atomically:
-  `docs/architecture/phase-b-compliance-gate.md:3` (link),
+  `docs/history/closeout/phase-b-compliance-gate.md:3` (link),
   `tests/request_arena_test.cpp:6` (test comment),
   `xmake/tests/async.lua:12` (lua comment — found on re-scan, not in the Step
   5b inventory). Historical banner added. Old path registered in `KNOWN_MOVED`
@@ -97,8 +97,8 @@ no active verification anchor depends on the current path (mirrors
 - [`phase-e-bounded-threadpool-backend.md`](../history/implementation-plans/phase-e-bounded-threadpool-backend.md)
   (PINNED-EVIDENCE / MOVE-WITH-CONSUMERS, executed 5e2) — production "frozen
   design" comments redirected to the historical record (the current invariants
-  they cite have CURRENT homes: ADR-explicit-io-request-contract, AGENTS.md
-  §12.1, async-request-lifecycle.md). Consumers updated atomically:
+  they cite have CURRENT homes: ADR-explicit-io-request-contract, AGENTS.md §3.5,
+  async-request-lifecycle.md). Consumers updated atomically:
   `threadpool_backend.hpp:19`, `threadpool_backend.cpp:5`,
   `phase-e-compliance-gate.md:3`, `divergence-registry.md:102`,
   `as-built-async-architecture.md:104`. Banner added; old path in `KNOWN_MOVED`.

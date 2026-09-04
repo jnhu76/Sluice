@@ -1,6 +1,6 @@
 # API Reference
 
-Public, stable-ish APIs as of v0.1-mvp. "Stable-ish" means removing or silently re-semanticizing these would break consumers; treat as frozen across minor work, change only with deliberate deprecation.
+This document is the current public API reference companion to `include/sluice/`: the headers and this reference together carry the current public contract. The last full reference-audit baseline was `v0.0.1`; post-baseline correspondence is re-checked selectively by current work. When this document and the public headers disagree, treat the mismatch as a defect rather than treating `v0.0.1` as an excuse for drift. "Stable-ish" means removing or silently re-semanticizing these would break consumers; treat as frozen across minor work, change only with deliberate deprecation.
 
 For internal details and experimental APIs, see `docs/history/archive/api-audit.md`.
 
@@ -566,7 +566,7 @@ public:
 ```
 
 Layout note (FE-2, accepted and documented in
-`docs/architecture/fe2-frontend-seam-compliance-gate.md` Gate 2): the token
+`docs/history/closeout/fe2-frontend-seam-compliance-gate.md` Gate 2): the token
 widened the node from a bare `Fiber*` to `WaitResume` (pointer + kind tag),
 +8 bytes per live wait node. No other layout change.
 
@@ -1204,7 +1204,7 @@ public:
 };
 ```
 
-Accessors follow the Completion L9 pattern (AGENTS.md §9.2): calling them on
+Accessors follow the Completion L9 pattern (AGENTS.md §3.8): calling them on
 a no-winner (or, for `timer_outcome()`, non-timer) result is a caller
 contract violation — Debug asserts; Release returns the deterministic
 fallback (`index() == 0`, `kind() == SelectKind::event`,
@@ -1620,7 +1620,7 @@ cancel/drain/publish; the caller must `close_admission` + drain to
 6; `invalid_argument` for negative fd, null buffer with nonzero length, offset
 beyond `off_t`, length beyond `SSIZE_MAX`) runs before commit; a non-negative
 but closed fd is accepted and later completes with the real `EBADF` terminal
-(AGENTS.md §9.1 — no `fcntl(F_GETFD)` preflight).
+(AGENTS.md §3.8 — no `fcntl(F_GETFD)` preflight).
 
 #### ThreadPoolBackend resource observations (AC-1a)
 

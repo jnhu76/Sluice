@@ -13,8 +13,8 @@ D4 COMPLETE (draft PR stacked on the D3 head, branch
 gate lift).
 **Date:** 2026-08-11
 **Author:** jnhu
-**Governing authority:** [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
-(Accepted), [Architecture Constitution](architecture-constitution.md),
+**Governing authority:** [ADR-explicit-io-request-contract](../../adr/ADR-explicit-io-request-contract.md)
+(Accepted), [Architecture Constitution](../../architecture/architecture-constitution.md),
 [remediation roadmap](remediation-roadmap.md), and the Phase B/C2/Phase E compliance ledgers.
 
 This document supersedes the earlier Phase D0 draft on this branch. The earlier draft was built
@@ -543,7 +543,7 @@ SQPOLL later becomes a transport/recovery enhancement rather than a RequestArena
 
 **D1 implementation is forbidden until this permanent-failure proof is present in its frozen
 design.** The frozen design and the Class-A proof policy live in
-`docs/architecture/phase-d1-uring-frozen-design.md` §6.
+`docs/history/closeout/phase-d1-uring-frozen-design.md` §6.
 
 ---
 

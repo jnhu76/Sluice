@@ -9,6 +9,11 @@ header, reference document, accepted ADR, or approved task disagrees, do **not**
 silently pick one: resolve the conflict through the AGENTS authority chain and
 fix the stale artifact.
 
+`api.md` is the current public-contract companion to the headers, not a frozen
+snapshot: the last full reference-audit baseline was `v0.0.1`, and post-baseline
+correspondence is re-checked selectively by current work — a header/reference
+mismatch is a defect, never excused by the baseline.
+
 > **Translation status (2026-08-18):** `api.zh-CN.md` predates several recent
 > explicit-I/O request/runtime additions and is not yet fully synchronized with
 > `api.md`. Until that synchronization pass is complete, use the installed
@@ -27,7 +32,7 @@ fix the stale artifact.
 
 - Public API changes require explicit approval and synchronized updates to
   headers, contract tests, the canonical reference, examples, and README text
-  where affected (AGENTS.md §16.1).
+  where affected (AGENTS.md §6).
 - `api.zh-CN.md` should be updated with the same public facts whenever
   `api.md` changes. A translation mismatch is documentation debt, never an
   alternate contract.

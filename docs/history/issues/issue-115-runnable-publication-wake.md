@@ -10,7 +10,7 @@
 > corrective — `spawn()`/`spawn_on()` advance the wake epoch and the G1
 > park-commit refusal re-check is unconditional for runnable tickets. Current
 > evidence: the gate record
-> (`docs/architecture/issue-115-runnable-publication-wake-gate.md`, Gate 0–4,
+> (`docs/history/closeout/issue-115-runnable-publication-wake-gate.md`, Gate 0–4,
 > 168/168), the fix attribution
 > (`docs/post-freeze/post-freeze-final-report.md`), and the formal model
 > `spawn-wake-epoch` (`docs/verification/formal/cpp-model-coverage.md`).
@@ -22,7 +22,7 @@
 **Status:** RUNNABLE_WAKE_ROOT_CAUSE_FIXED
 **Baseline master SHA:** `fbb3ea074db8c7c2aafc3c5e4599166e2381f458` (post #119)
 **Fix branch:** `fix/issue-115-runnable-publication-wake`
-**Compliance gate:** `docs/architecture/issue-115-runnable-publication-wake-gate.md`
+**Compliance gate:** `docs/history/closeout/issue-115-runnable-publication-wake-gate.md`
 **Classification:** post-freeze evidence-derived correctness fix (Issue #115)
 
 ---

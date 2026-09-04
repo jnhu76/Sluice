@@ -137,7 +137,7 @@ returns `invalid_argument` from the Prepare probe instead of the expected
 must beat a malformed descriptor); no dedicated mutant exercises it because
 the defect (probing the descriptor before Reserve) has no separate M-row —
 it is covered by the production change in
-`docs/architecture/phase-c2e-compliance-gate.md` §4 item 3. Re-running the
+`docs/history/closeout/phase-c2e-compliance-gate.md` §4 item 3. Re-running the
 full harness to add an M13 row is a recorded follow-up (issue #74).
 - The harness force-rebuilds each target (`xmake build -r`) so the run binary
   always matches the applied mutation (an incremental-build hash skip in the

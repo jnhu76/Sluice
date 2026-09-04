@@ -54,7 +54,7 @@ under [`apps/`](../../apps/), all using only `include/sluice/*` public headers
 
 Documents in this directory:
 
-- [`file-tools-plan.md`](file-tools-plan.md) — the track plan (Phase A audit,
+- [`file-tools-plan.md`](../history/implementation-plans/file-tools-plan.md) — the track plan (Phase A audit,
   capability inventory, per-app scope).
 - [`file-tools-findings.md`](file-tools-findings.md) — measured results:
   performance, memory bounds, sanitizer evidence, comparisons with system
@@ -85,7 +85,7 @@ workload evidence exposes.
 A foundation change candidate recorded by an application becomes real work
 only through:
 
-1. an entry in the [application feedback ledger](../roadmap/app-feedback-ledger.md)
+1. an entry in the [application feedback ledger](app-feedback-ledger.md)
    (evidence candidate, not a foundation change);
 2. a design under [`../design/`](../design/README.md) or an ADR when it
    changes a decided contract;

@@ -1,8 +1,10 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase C1 Conformance Gate — Explicit-I/O Backend Conformance Framework
 
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
-**DIV-13:** [`divergence-registry.md`](divergence-registry.md) — AsyncBackend public extension point
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted)
+**DIV-13:** [`divergence-registry.md`](../../architecture/divergence-registry.md) — AsyncBackend public extension point
 **PR:** https://github.com/jnhu76/Sluice/pull/66 ("test/phase-c-explicit-io-conformance-gate" git branch, OPEN)
 **Scope:** Test/framework only. No `src/` or `include/sluice/` change.
 
@@ -27,7 +29,7 @@ matrix did not catch but GitHub CI did:
 
 2. **Cross-backend result attribution.** The aggregate gate drove the shared conformance suite
    for all three backends in **one process**. The in-binary test harness
-   ([`tests/harness.hpp`](../../tests/harness.hpp)) **breaks on the first failing case**, so a
+   ([`tests/harness.hpp`](../../../tests/harness.hpp)) **breaks on the first failing case**, so a
    single backend's shared-case failure made the driver exit non-zero and the gate then
    attributed that one `RUN_FAIL` to **all three** backends — including the unrelated Fake and
    the Uring(stub) case that never ran.
@@ -41,7 +43,7 @@ only — no `src/`, no `include/sluice/`, no test-binary change.
 The shared suite is now driven **once per registered backend in a separate subprocess**,
 filtered to that backend's case via `SLUICE_TEST_FILTER=<driver_case>` (the harness case names
 `conformance_fake` / `conformance_threadpool` / `conformance_uring` already exist in
-[`tests/backend_conformance_driver_test.cpp`](../../tests/backend_conformance_driver_test.cpp)).
+[`tests/backend_conformance_driver_test.cpp`](../../../tests/backend_conformance_driver_test.cpp)).
 Each subprocess owns:
 
 - its own exit code (→ `PASS` / `RUN_FAIL` for that backend only);
@@ -73,7 +75,7 @@ wrong — it runs ZERO cases and fabricates a green banner.)
 
 Closed at two layers:
 
-- **Harness ([`tests/harness.hpp`](../../tests/harness.hpp))**: `SLUICE_TEST_FILTER` tokens
+- **Harness ([`tests/harness.hpp`](../../../tests/harness.hpp))**: `SLUICE_TEST_FILTER` tokens
   must now be EXACT registered case names (no substring matching), and a set filter that
   matches zero cases prints `SLUICE_TEST_FILTER matched zero cases` and exits non-zero — a
   zero-case run can never print `ALL TESTS PASSED`. This is fail-closed for every harness
@@ -82,7 +84,7 @@ Closed at two layers:
   (`verify-runnable-steal-stability.sh`, `verify-select-rollback-stability.sh`) now say
   "exact case name". All committed callers already pass full case names; no CI step passes a
   prefix.
-- **Gate ([`scripts/verify-backend-conformance.py`](../../scripts/verify-backend-conformance.py)
+- **Gate ([`scripts/verify-backend-conformance.py`](../../../scripts/verify-backend-conformance.py)
   `_classify_shared_run`)**: a per-backend shared run is PASS only when ALL of the following
   hold:
   1. subprocess returncode == 0 (else `RUN_FAIL`);
@@ -435,8 +437,8 @@ tests/external_backend_authority_negative_probe.cpp (new)  neg-compile probe
 tests/backend_conformance.hpp                    (mod)  + profile/mode fields, emit_meta
 tests/backend_conformance_driver_test.cpp        (mod)  + [conformance-meta] lines
 xmake/tests/async.lua                            (mod)  + external_backend_admission_test
-docs/architecture/remediation-roadmap.md         (mod)  Phase C: C1 implemented, C2 pending
-docs/architecture/phase-c1-conformance-gate.md   (new)  this ledger
+docs/history/closeout/remediation-roadmap.md         (mod)  Phase C: C1 implemented, C2 pending
+docs/history/closeout/phase-c1-conformance-gate.md   (new)  this ledger
 ```
 
 ### C1 corrective (implementation-fix head)
@@ -452,8 +454,8 @@ scripts/verify-backend-conformance.py            (mod)  drive shared suite once 
                                                           RunResult store; fail-closed
                                                           mandatory/missing-backend handling
 .github/workflows/ci.yml                         (mod)  +3 explicit Phase C1 steps
-docs/architecture/phase-c1-conformance-gate.md   (mod)  this corrective section + matrices
-docs/architecture/remediation-roadmap.md         (mod)  C1 corrective note
+docs/history/closeout/phase-c1-conformance-gate.md   (mod)  this corrective section + matrices
+docs/history/closeout/remediation-roadmap.md         (mod)  C1 corrective note
 ```
 
 ### C1 review-fix (this head)
@@ -483,7 +485,7 @@ scripts/run_test_repeated.sh                     (mod)  header: exact case-name 
                                                           uses a full case name
 scripts/verify-runnable-steal-stability.sh       (mod)  header: exact case-name filter
 scripts/verify-select-rollback-stability.sh      (mod)  header: exact case-name filter
-docs/architecture/phase-c1-conformance-gate.md   (mod)  this review-fix section + matrix + residual
+docs/history/closeout/phase-c1-conformance-gate.md   (mod)  this review-fix section + matrix + residual
                                                           closure
 ```
 
@@ -513,7 +515,7 @@ tests/external_backend_authority_negative_probe.cpp (mod) positive control exerc
                                                           declarations (protected->private guard)
 .github/workflows/ci.yml                         (mod)  linux-clang-debug job budget 30 -> 60 min
                                                           (aggregate-gate subprocess timeouts)
-docs/architecture/phase-c1-conformance-gate.md   (mod)  this round-2 section + matrix + full SHA
+docs/history/closeout/phase-c1-conformance-gate.md   (mod)  this round-2 section + matrix + full SHA
                                                           for the implementation-fix head +
                                                           duplicate heading removed
 ```

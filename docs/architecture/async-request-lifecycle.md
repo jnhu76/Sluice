@@ -9,12 +9,12 @@ definitions, which move rarely.
 
 **Governing contracts (in authority order):**
 
-- [AGENTS.md §10](../../AGENTS.md) — explicit request lifecycle invariants
+- [AGENTS.md §3.2](../../AGENTS.md) — explicit request lifecycle invariants
 - [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
   (Accepted) — the five-stage submission transaction, identity, capacity, cancel
 - [ADR-explicit-io-completion-authority](../adr/ADR-explicit-io-completion-authority.md)
   (Accepted) — Completion binding/publication authority
-- [as-built-async-architecture](as-built-async-architecture.md) — component
+- [as-built-async-architecture](../history/closeout/as-built-async-architecture.md) — component
   topology, Scheduler progress model, shutdown paths
 - [architecture-constitution](architecture-constitution.md) — AC-3 (transactional
   submission), AC-14 (provenance/generation)
@@ -62,7 +62,7 @@ Every transition is validated under the single arena leaf mutex
 (`RequestArena::mutex_`); an illegal transition fails fast rather than
 best-effort recovering. `pending` is the state between commit and enqueue —
 it exists so that pending-cancel and enqueue can arbitrate under one state
-authority (AGENTS.md §10.3).
+authority (AGENTS.md §3.2).
 
 ### 1.2 Completion::State — the caller-owned publication object
 
@@ -193,7 +193,7 @@ check.
 | Anything after `commit_binding` | NEVER a submit rejection — terminal path only | `outstanding` | terminal result via reap |
 | Cancellation winning at pending/enqueued | canceled terminal → `backend_ready`; enqueue no-ops (Scheme B); reap defers until pin acknowledged | `outstanding` | `canceled` terminal |
 | Running-syscall failure | terminal VERBATIM (cancel intent never rewrites it) | `outstanding` | real error code |
-| Shutdown (close_admission) | only gates NEW acceptance (`reserve`); accepted requests must still be reaped and reset before destruction | — | quiescent-destruction contract (AGENTS.md §14) |
+| Shutdown (close_admission) | only gates NEW acceptance (`reserve`); accepted requests must still be reaped and reset before destruction | — | quiescent-destruction contract (AGENTS.md §3.7) |
 
 ### 2.2 Ownership transfers that are NOT state transitions
 

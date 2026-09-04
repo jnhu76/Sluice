@@ -254,7 +254,7 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
     // Stats accounting stays inside access_mtx_: AsyncStats fields are plain
     // std::uint64_t (caller-owned, never atomic — see measurement.hpp), and
     // access_mtx_ is the single serialized consuming/accounting domain for
-    // this context (AGENTS.md §4.1/§13.1 leaf domain). The split-wait fix
+    // this context (AGENTS.md §3.2/§3.6 leaf domain). The split-wait fix
     // moved the PARK out of the lock; it MUST NOT also move accounting out,
     // or two wait_one() callers (or a wait_one() and a poll()) race on
     // wait_calls / completed_ops.
@@ -390,7 +390,7 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             // progress, BEFORE the next internal snapshot — the exact window
             // where a control wake used to be rebaselined away and the
             // participant reparked forever. Compiled out of production builds
-            // (AGENTS.md §15); the layout cost in the internal-testing target
+            // (AGENTS.md §3.9); the layout cost in the internal-testing target
             // is accepted and documented.
             pause_after_wait_source_progress_();
 #endif

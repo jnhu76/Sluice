@@ -1,7 +1,9 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Phase C2e Compliance Gate — Close / Drain / Reset / Destruction
 
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL; C2e COMPLETE)
-**Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 11, 13, 15; invariants I8, I9, I17, I19
+**Governing ADR:** [`ADR-explicit-io-request-contract`](../../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 11, 13, 15; invariants I8, I9, I17, I19
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — C2e scope (rows 15–16)
 **Branch:** test/phase-c2e-close-drain-destruction
 **Baseline:** `origin/master` @ `0b6c0b9126e6461d0317dee81e460f2abcc22f02` (PR #72, C2d merged)
@@ -382,7 +384,7 @@ public API change beyond the reference method below.
 ## 7. Validity evidence (mutations)
 
 M1–M12 in
-[`docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md`](../verification/phase-c2e-close-drain-destruction-mutation-evidence.md):
+[`docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md`](../../verification/phase-c2e-close-drain-destruction-mutation-evidence.md):
 11 of 13 backend-specific mutation executions (10 of 12 defect classes;
 M11/M11-fake are one defect class exercised on two backends) made the targeted
 detector case(s) fail RED (M1–M5, M8, M9, M10, M11, M11-fake, M12 — M8 via the

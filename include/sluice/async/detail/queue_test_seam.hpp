@@ -1,7 +1,7 @@
 // sluice::async::detail — internal-testing deterministic pause seam for the
 // QueuePort snapshot projections (Queue snapshot lifecycle compliance).
 //
-// LAYERING (mirrors mutex_test_seam.hpp; AGENTS.md §15):
+// LAYERING (mirrors mutex_test_seam.hpp; AGENTS.md §3.9):
 //
 //   production snapshot bodies   (src/async/queue_port.cpp)
 //       |

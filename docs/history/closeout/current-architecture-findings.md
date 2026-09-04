@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Current Architecture Findings
 
 **Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Findings retain
@@ -17,7 +19,7 @@ Severity:
 
 ## Proposed request-contract impact (not resolution evidence)
 
-[ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
+[ADR-explicit-io-request-contract](../../adr/ADR-explicit-io-request-contract.md)
 now supplies a concrete target for the remaining request-lifecycle findings.
 The ADR is Accepted (2026-08-02); the reference layer (Phase B, PR #63),
 `ThreadPoolBackend` (Phase E, PR #64), and `UringAsyncBackend` (Phase D,
@@ -50,7 +52,7 @@ missing regression, or current backend defect resolved.
 > gate Slice 12), so no accepted-request worker path can throw
 > `std::bad_alloc` and terminate the process. The finding text below describes
 > the pre-Phase-E legacy model and is retained as the historical audit record.
-> Evidence: `docs/architecture/phase-e-compliance-gate.md` (Slices 5/12);
+> Evidence: `docs/history/closeout/phase-e-compliance-gate.md` (Slices 5/12);
 > `tests/threadpool_backend_reap_test.cpp`.
 
 **Finding:** If `ready_size_.push_back()` or `ready_void_.push_back()` throws
@@ -170,7 +172,7 @@ Scheduler/Batch consumption. The ADR decision alone is not resolution evidence.
 > ring, a `TransportLedger` preserving unsubmitted suffixes after partial submit
 > (P0-D recovery), and accepted-terminal paths that allocate nothing. The
 > finding text below describes the pre-Phase-D legacy model and is retained as
-> the historical audit record. Evidence: `docs/architecture/phase-d2-uring-failure-noalloc-gate.md`,
+> the historical audit record. Evidence: `docs/history/closeout/phase-d2-uring-failure-noalloc-gate.md`,
 > `docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md`; real-liburing conformance run
 > (audit issue #94): KernelIo ELIGIBLE.
 
@@ -261,7 +263,7 @@ an explicit cancel disposition remains P1-09.
 > synchronous construction-time admission boundary — no submit path can hit a
 > `std::thread` construction throw after the Completion claim. The finding text
 > below describes the pre-Phase-E legacy model and is retained as the historical
-> audit record. Evidence: `docs/architecture/phase-e-compliance-gate.md` (Slice
+> audit record. Evidence: `docs/history/closeout/phase-e-compliance-gate.md` (Slice
 > 11: partial worker-construction cleanup) and the Phase E contract suite.
 >
 > **C2d resolution (Phase C):** the missing regression test is now
@@ -275,7 +277,7 @@ an explicit cancel disposition remains P1-09.
 > joined (surviving the failed construction with no `std::terminate` IS the
 > join proof — an unjoined joinable thread vector aborts), and that a normal
 > construction afterwards succeeds with the full worker count. See
-> `docs/architecture/phase-c2d-compliance-gate.md` §3.2 and
+> `docs/history/closeout/phase-c2d-compliance-gate.md` §3.2 and
 > `docs/verification/phase-c2d-failure-injection-mutation-evidence.md`
 > (mutants M4/M5/M9).
 

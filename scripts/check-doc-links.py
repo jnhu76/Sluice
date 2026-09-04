@@ -194,7 +194,7 @@ HISTORICAL_ALLOWLIST = {
 #                         "design reference only, not a dependency"). Docs
 #                         like docs/adr/ADR-execution-model.md reference
 #                         `Io/fiber.zig`, `Io/Uring.zig`, etc. via ZIG_ROOT.
-#   - .c-review-results/: automated review findings (AGENTS.md §10).
+#   - .c-review-results/: automated review findings (AGENTS.md §5).
 #   - .agents/, .zcode/,
 #     .mimocode/        : local agent/skill tooling.
 #   - states/           : TLC transient disk state (.gitignore).
@@ -343,6 +343,74 @@ KNOWN_MOVED = {
         "docs/history/closeout/phase-d3-uring-identity-waiter-gate.md",
     "docs/architecture/phase-d4-uring-wait-close-drain-gate.md":
         "docs/history/closeout/phase-d4-uring-wait-close-drain-gate.md",
+    # S0-DOCS archive moves (#290, 2026-09-04): point-in-time
+    # compliance/audit evidence relocated from docs/architecture/ to
+    # docs/history/closeout/. Mechanical pins (verify-architecture-docs.py
+    # REQUIRED_DOCS, mechanical-facts.py TEST_TOTAL_EXTRA_DOCS,
+    # spec/tla/manifest.json owner_docs) and every live Markdown / comment
+    # consumer were updated in the same change; docs/history internal
+    # references were path-repaired so the historical exemption is not
+    # affected.
+    "docs/architecture/as-built-async-architecture.md":
+        "docs/history/closeout/as-built-async-architecture.md",
+    "docs/architecture/current-architecture-findings.md":
+        "docs/history/closeout/current-architecture-findings.md",
+    "docs/architecture/remediation-roadmap.md":
+        "docs/history/closeout/remediation-roadmap.md",
+    "docs/architecture/phase-b-compliance-gate.md":
+        "docs/history/closeout/phase-b-compliance-gate.md",
+    "docs/architecture/phase-c1-conformance-gate.md":
+        "docs/history/closeout/phase-c1-conformance-gate.md",
+    "docs/architecture/phase-c2a-compliance-gate.md":
+        "docs/history/closeout/phase-c2a-compliance-gate.md",
+    "docs/architecture/phase-c2b-compliance-gate.md":
+        "docs/history/closeout/phase-c2b-compliance-gate.md",
+    "docs/architecture/phase-c2c-compliance-gate.md":
+        "docs/history/closeout/phase-c2c-compliance-gate.md",
+    "docs/architecture/phase-c2d-compliance-gate.md":
+        "docs/history/closeout/phase-c2d-compliance-gate.md",
+    "docs/architecture/phase-c2e-compliance-gate.md":
+        "docs/history/closeout/phase-c2e-compliance-gate.md",
+    "docs/architecture/phase-d-uring-migration-plan.md":
+        "docs/history/closeout/phase-d-uring-migration-plan.md",
+    "docs/architecture/phase-d1-uring-frozen-design.md":
+        "docs/history/closeout/phase-d1-uring-frozen-design.md",
+    "docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md":
+        "docs/history/closeout/phase-d1-uring-permanent-submit-failure-audit.md",
+    "docs/architecture/phase-d2-uring-failure-noalloc-gate.md":
+        "docs/history/closeout/phase-d2-uring-failure-noalloc-gate.md",
+    "docs/architecture/phase-e-compliance-gate.md":
+        "docs/history/closeout/phase-e-compliance-gate.md",
+    "docs/architecture/phase-f1-compliance-gate.md":
+        "docs/history/closeout/phase-f1-compliance-gate.md",
+    "docs/architecture/phase-f3-compliance-gate.md":
+        "docs/history/closeout/phase-f3-compliance-gate.md",
+    "docs/architecture/phase-g-compliance-gate.md":
+        "docs/history/closeout/phase-g-compliance-gate.md",
+    "docs/architecture/issue-115-runnable-publication-wake-gate.md":
+        "docs/history/closeout/issue-115-runnable-publication-wake-gate.md",
+    "docs/architecture/issue-116-reentry-liveness-gate.md":
+        "docs/history/closeout/issue-116-reentry-liveness-gate.md",
+    "docs/architecture/issue-161-idle-dance-contribution-generation-gate.md":
+        "docs/history/closeout/issue-161-idle-dance-contribution-generation-gate.md",
+    "docs/architecture/issue-229-deadline-test-seam-lock-gate.md":
+        "docs/history/closeout/issue-229-deadline-test-seam-lock-gate.md",
+    "docs/architecture/fe2-frontend-seam-compliance-gate.md":
+        "docs/history/closeout/fe2-frontend-seam-compliance-gate.md",
+    "docs/architecture/fe3-multi-frontend-equivalence-audit.md":
+        "docs/history/closeout/fe3-multi-frontend-equivalence-audit.md",
+    # S0-DOCS roadmap-authority collapse (#290, 2026-09-04): the repo-local
+    # roadmap is superseded by GitHub #227 (sole execution order); empirical
+    # ledgers moved to docs/applications/; the completed file-tools plan is
+    # archived. Live consumers repointed in the same change.
+    "docs/roadmap/Sluice-roadmap.md":
+        "docs/history/archive/Sluice-roadmap.md",
+    "docs/roadmap/app-feedback-ledger.md":
+        "docs/applications/app-feedback-ledger.md",
+    "docs/roadmap/performance-feedback-ledger.md":
+        "docs/applications/performance-feedback-ledger.md",
+    "docs/applications/file-tools-plan.md":
+        "docs/history/implementation-plans/file-tools-plan.md",
     # #167 Step 5c safe archive moves (2026-08-25): issue-110 / issue-123 /
     # phase-b moved to docs/history/. Every exact-path consumer was updated
     # atomically in the same change (issue-123: phase-g-backend-progress-wake.md

@@ -2,7 +2,7 @@
 
 **Status:** Current
 **Authority:** Architecture (durability model)
-**Last verified against:** v0.1.0
+**Last verified against:** v0.0.1 (reference baseline)
 
 Defines the blocking durability model: the three durability-related operations, what each
 guarantees, and the benchmark **sync-policy names** used by the W1–W4 blocking

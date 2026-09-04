@@ -1,3 +1,5 @@
+> **HISTORICAL / EVIDENCE — NOT CURRENT AUTHORITY.** Archived from `docs/architecture/` by S0-DOCS (#290, 2026-09-04). Point-in-time record; do not cite as authority for new decisions.
+
 # Remediation Roadmap
 
 **Purpose:** Order the design and implementation work derived from the async
@@ -6,11 +8,11 @@ architecture audit. A phase may not claim completion without its named evidence.
 **Baseline:** `b20bcc7` (master, including PR #60 and PR #61). This roadmap is
 governed by the current findings, divergence registry, Zig conformance map, and
 the Accepted
-[Unified Explicit I/O Request Contract](../adr/ADR-explicit-io-request-contract.md).
+[Unified Explicit I/O Request Contract](../../adr/ADR-explicit-io-request-contract.md).
 Statuses below reflect the Phase-G closeout (branch
 closeout-phase-g-foundation-freeze). **Phases A–G are COMPLETE (2026-08-15).
 The async foundation is FROZEN — see
-[foundation-freeze.md](foundation-freeze.md); no Phase H is planned.** Future
+[foundation-freeze.md](../../architecture/foundation-freeze.md); no Phase H is planned.** Future
 foundation work is application-triggered only, through the freeze policy's
 entry conditions and a normal `AGENTS.md` §8 gate.
 
@@ -108,7 +110,7 @@ consumption remains Phase F and wake integration remains Phase G.
 **Status:** COMPLETE — merged to master via PR #63 (merge commit `7f434f0`).
 The bounded `RequestArena` / `RequestSlot` reference lifecycle landed with
 `FakeAsyncBackend` and `SyncBackend` migrated, along with the Phase B evidence
-ledger in `docs/architecture/phase-b-compliance-gate.md`.
+ledger in `docs/history/closeout/phase-b-compliance-gate.md`.
 
 ```text
 feat(async): add bounded RequestKey / RequestSlot reference lifecycle
@@ -334,7 +336,7 @@ coverage).
     set passed. See
     [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md),
     [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md)
-    and [`phase-d4-uring-wait-close-drain-gate.md`](../history/closeout/phase-d4-uring-wait-close-drain-gate.md).
+    and [`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md).
 
   - **C2e — close / drain / destruction: COMPLETE.** Row 15 (close/drain/reset
     sequence) is now FULL and row 16 (quiescent destruction) is FULL
@@ -435,13 +437,13 @@ integration matrix; D4 complete via PR #84 (branch
 `feat/phase-d4-uring-wait-close-drain`) implementing the wait source,
 close/drain/destruction proof and lifting the KernelIo fail-closed gate only
 after the complete mandatory real-mode evidence set passed
-([`phase-d4-uring-wait-close-drain-gate.md`](../history/closeout/phase-d4-uring-wait-close-drain-gate.md)).
+([`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md)).
 Full Phase D is complete; the KernelIo profile is ELIGIBLE in real mode and
 honestly INCOMPLETE in stub builds.
 
 **D0 audit / PR decomposition (2026-08-08):** COMPLETE. The complete audit and
 the D1–D4 decomposition are in
-[`docs/architecture/phase-d-uring-migration-plan.md`](phase-d-uring-migration-plan.md)
+[`docs/history/closeout/phase-d-uring-migration-plan.md`](phase-d-uring-migration-plan.md)
 (historical baseline `1349a6f`). PR #78 completed D1, including the private-ring
 RequestArena migration and permanent-submit P0-D recovery. D2 closed the
 C2d failure/no-allocation record and reconciled the already-satisfied C2a
@@ -466,7 +468,7 @@ refactor(async): replace per-op threads with bounded blocking-I/O workers
 ```
 
 **Status:** COMPLETE — merged to master via PR #64 (merge commit `a8178d8`).
-The full evidence ledger is `docs/architecture/phase-e-compliance-gate.md`
+The full evidence ledger is `docs/history/closeout/phase-e-compliance-gate.md`
 (validated implementation head `9f91bd3`, evidence-recording head `4af082b`,
 master merge commit `a8178d8`).
 
@@ -515,7 +517,7 @@ which is a separate, untouched phase.
   origin explicitly);
 - **F3 — COMPLETE.** Public `RequestHandle` identity surface (ADR:
   `docs/adr/ADR-public-request-handle.md`; gate:
-  `docs/architecture/phase-f3-compliance-gate.md`). Additive
+  `docs/history/closeout/phase-f3-compliance-gate.md`). Additive
   `submit_*_request -> Result<RequestHandle>` (success ⇒ exactly one valid
   handle; rejection ⇒ no handle; non-identity backend ⇒ `not_supported` with no
   side effect); the read-only `request_state` identity consumer (outstanding /
@@ -530,7 +532,7 @@ which is a separate, untouched phase.
   every arena-backed backend reap to the pinned Scheduler wait record; the
   drain routes the resumed fiber exactly once under `global_mtx_` (design:
   `docs/history/implementation-plans/phase-f1-scheduler-ready-sink.md`; gate:
-  `docs/architecture/phase-f1-compliance-gate.md`);
+  `docs/history/closeout/phase-f1-compliance-gate.md`);
 - the O(N) `Completion::ready()` re-scan is removed from the
   completion-progress path for arena backends. The legacy
   `Completion*`-keyed `waiting_size_`/`waiting_void_` maps remain ONLY as a
@@ -565,7 +567,7 @@ production path. No wake-bridge dependency.
 closeout-phase-g-foundation-freeze). Design
 `docs/history/implementation-plans/phase-g-backend-progress-wake.md` implemented (R1–R4 park
 protocol, split-wait bridge); compliance gate
-`docs/architecture/phase-g-compliance-gate.md`; causal closeout matrices
+`docs/history/closeout/phase-g-compliance-gate.md`; causal closeout matrices
 `tests/phase_g_closeout_test.cpp` (Cases A–D, TP-G1..G7) and
 `tests/phase_g_closeout_uring_test.cpp` (UR-G1..G7, real liburing); formal
 model `spec/tla/e9_park_wake/` (bridge/control-epoch, 4 positive + 4 negative

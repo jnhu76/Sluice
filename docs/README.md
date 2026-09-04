@@ -4,46 +4,59 @@ This is the entry point for people **working on** Sluice — contributors,
 maintainers, and coding agents. If you want to *use* Sluice as a library,
 start at the root [README](../README.md) instead.
 
-## Start here
+**Load the minimum relevant authority for the task. Do not recursively load
+every historical or evidence document.**
 
-| You are... | Start with |
-|------------|------------|
-| Any contributor or coding agent | [`AGENTS.md`](../AGENTS.md) — the repository operating contract |
-| Understanding the architecture | [`architecture/overview.md`](architecture/overview.md) |
-| Locating production code or build ownership | [`architecture/overview.md`](architecture/overview.md#authoritative-implementation-map) → `xmake/*.lua` |
-| Changing the public API | [`reference/api.md`](reference/api.md) + the relevant [ADR](adr/README.md) |
-| Changing the async runtime | [`architecture/async-runtime.md`](architecture/async-runtime.md) → ADR → [verification](verification/README.md) |
-| Working on applications | [`applications/README.md`](applications/README.md) |
-| Investigating a live problem | [`investigations/`](investigations/) |
-| Looking for historical context | [`history/`](history/README.md) |
+## Task routing
 
-## Authority and conflict resolution
+| Task | Load first |
+|------|------------|
+| Use the library | root [README](../README.md) → [`reference/`](reference/README.md) |
+| Change public semantics | relevant public header + [`reference/api.md`](reference/api.md) + governing [ADR](adr/README.md) |
+| Change request lifecycle | [`architecture/async-request-lifecycle.md`](architecture/async-request-lifecycle.md) + [ADR-explicit-io-request-contract](adr/ADR-explicit-io-request-contract.md) + [verification](verification/README.md) |
+| Change wait / synchronization | [`architecture/async-synchronization.md`](architecture/async-synchronization.md) + [ADR-execution-model](adr/ADR-execution-model.md) + [verification](verification/README.md) |
+| Change backend / io_uring | [`architecture/async-io-foundation.md`](architecture/async-io-foundation.md) + [ADR](adr/README.md) + [verification](verification/README.md) |
+| Change Scheduler / concurrency | [`architecture/async-runtime.md`](architecture/async-runtime.md) + [constitution AC-6](architecture/architecture-constitution.md) + [verification](verification/README.md) |
+| Change failure behavior | [`architecture/failure-model.md`](architecture/failure-model.md) + public contract if observable |
+| Change build / CI | [`architecture/overview.md`](architecture/overview.md) (authoritative implementation map) + [verification](verification/README.md) |
+| Formal methods work | [`verification/formal-models.md`](verification/formal-models.md) + `spec/tla/manifest.json` |
+| Run Safety (S0) work | [#289](https://github.com/jnhu76/Sluice/issues/289) + current contract/architecture only |
+| Application / workload work | [`applications/README.md`](applications/README.md) |
+| Historical rationale | [`history/`](history/README.md) |
 
-[`AGENTS.md` §3](../AGENTS.md) is the canonical, complete authority chain. This
-page is navigation, not an independent authority definition — when sources
-disagree, resolve the conflict through that chain, fix the stale artifact, and
-record intentional divergence rather than silently picking a winner.
+Governing discipline: [`AGENTS.md`](../AGENTS.md) is the durable repository
+operating contract (hard invariants, authorization, verification posture).
+This page is navigation, not an independent authority — it does not duplicate
+the AGENTS authority chain.
 
-Scanner reports, investigations, roadmap notes, comments, commit messages, and
-historical documents are **evidence**, not automatic authority. Documents under
-[`history/`](history/README.md) are never current authority.
+## What is current vs historical
+
+- [`architecture/README.md`](architecture/README.md) classifies every
+  architecture document: CURRENT authority vs point-in-time evidence/history.
+- Documents under [`history/`](history/README.md) (superseded plans, closeouts,
+  point-in-time audit evidence) are **never current authority**.
+- Scanner reports, investigations, ledgers, comments, commit messages, and
+  closeout documents are **evidence**, not automatic authority. When sources
+  disagree, resolve through the AGENTS authority chain, fix the stale
+  artifact, and record intentional divergence rather than silently picking a
+  winner.
 
 ## Directory map
 
 | Directory | Question it answers | Audience |
 |-----------|--------------------|----------|
-| [`reference/`](reference/) | What exactly is the public contract? | All |
-| [`architecture/`](architecture/README.md) | How does it work? Start at the [classification index](architecture/README.md) for current vs evidence/history documents. | Contributor |
-| [`adr/`](adr/) | Why was it designed this way? | Contributor |
-| [`verification/`](verification/) | How do we prove it works? | Contributor |
-| [`applications/`](applications/) | What have real workloads taught us? | Contributor |
-| [`design/`](design/) | What are we considering next? | Contributor |
-| [`investigations/`](investigations/) | What is being diagnosed right now? | Contributor |
-| [`known-issues/`](known-issues/) | What is deliberately deferred? | Contributor |
-| [`roadmap/`](roadmap/) | What is active future work? | Contributor |
-| [`history/`](history/README.md) | How did we get here? | Maintainer |
-| [`post-freeze/`](post-freeze/structural-audit.md) | Post-freeze structural-hygiene records (pinned by the mechanical-facts gate) | Maintainer |
-| [`results/`](results/) | Committed benchmark/validation evidence artifacts | Maintainer |
+| [`reference/`](reference/README.md) | What exactly is the public contract? | All |
+| [`architecture/`](architecture/README.md) | How does it work? Current authority + classification index. | Contributor |
+| [`adr/`](adr/README.md) | Why was it designed this way? | Contributor |
+| [`verification/`](verification/README.md) | How do we prove it works? | Contributor |
+| [`applications/`](applications/README.md) | What have real workloads taught us? | Contributor |
+| [`design/`](design/README.md) | What designs are proposed or intentionally deferred? | Contributor |
+| [`investigations/`](investigations/README.md) | Where do open investigations live? (empty between investigations) | Contributor |
+| [`known-issues/`](known-issues/security-review-followups.md) | What is deliberately deferred, and why? | Contributor |
+| [`roadmap/`](roadmap/README.md) | Where is execution ordering tracked? (thin pointer to GitHub Issues) | Contributor |
+| [`history/`](history/README.md) | How did we get here? Superseded plans, closeouts, audits. | Maintainer |
+| [`post-freeze/`](post-freeze/post-freeze-final-report.md) | Post-freeze structural audit evidence; live verification anchor scanned by `scripts/gates/mechanical-facts.py` | Maintainer |
+| [`results/`](results/README.md) | Machine-produced validation / benchmark evidence artifacts | Maintainer |
 | [`templates/`](templates/) | Document templates used by the architecture gates | Contributor |
 
 ## Subsystem map
@@ -84,14 +97,11 @@ Exact target membership remains executable in `xmake.lua` and `xmake/*.lua`.
 2. This document — orientation only.
 3. The governing **ADR** and any explicitly active design/closeout document.
 4. The **current architecture document** for the subsystem under
-   [`architecture/`](architecture/).
+   [`architecture/`](architecture/README.md).
 5. The **public API contract** in [`reference/api.md`](reference/api.md).
 6. The **verification guide** under [`verification/`](verification/README.md).
 7. The **production implementation** under `src/`.
 8. The **tests** under `tests/`.
-
-For historical context, see [`history/`](history/README.md). Historical
-documents are not current authority.
 
 ## Navigation stability
 
@@ -116,6 +126,6 @@ Authority: Public Contract | ADR | Architecture | Design | Verification | Histor
 ```
 
 Treat this metadata as a classification aid, not as a replacement for the
-repository-wide authority chain in `AGENTS.md` §3. Some current references do
+repository-wide authority chain in `AGENTS.md` §2. Some current references do
 not yet carry a status block; absence of metadata does not make a document
 historical, and a stale status label never outranks a higher authority.
