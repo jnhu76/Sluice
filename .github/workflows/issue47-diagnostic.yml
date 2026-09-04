@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
@@ -73,7 +73,7 @@ jobs:
           xmake-version: latest
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
@@ -207,7 +207,7 @@ jobs:
 
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: issue47-shard-${{ matrix.shard }}-${{ inputs.mode }}
           path: evidence/
