@@ -32,7 +32,11 @@ struct IoError {
 request contract (ADR-explicit-io-request-contract, Decision 6). They keep admission
 rejection, stale-key lookup, and capability refusal distinct from one another and from
 configured-capacity `would_block`, lifecycle `invalid_state`, and genuine-init `no_space`.
-The reference backends (`FakeAsyncBackend`, `SyncBackend`) emit them; the cancel disposition
+All four arena backends participate in this vocabulary: `ThreadPoolBackend` and
+`UringAsyncBackend` reject malformed descriptors with `invalid_argument` (Stage 1.5,
+after reserve), every arena backend returns `not_found` for an unresolvable/stale
+waiter or cancel lookup (the reference backends defer descriptor validation per
+DIV-14), and backends without a capability return `not_supported`. The cancel disposition
 lookup returns `not_found` for an absent or stale generation rather than overloading
 `invalid_state`.
 
@@ -1263,8 +1267,11 @@ public:
 ```
 
 ADR-explicit-io-request-contract (Accepted, Decision 15): `reset()` from
-`ready` is also the slot-release handshake for a request accepted through the
-reference backends (FakeAsyncBackend, SyncBackend). The slot bound at commit
+`ready` is also the slot-release handshake for a request accepted through ANY
+of the four arena backends (FakeAsyncBackend, SyncBackend, ThreadPoolBackend,
+UringAsyncBackend real path — all accept through the shared
+`detail::submit_transaction` ladder, which installs the Completion binding).
+The slot bound at commit
 remains in use (`slot_in_use` accounting) until `reset()` — or ready-Completion
 destruction — returns it to the bounded arena with `generation++`. The context/
 backend must therefore outlive every bound slot: destroying a context (or arena)
@@ -1494,6 +1501,42 @@ public:
     // wait_one()'s observe phase so shutdown / admission close can
     // re-evaluate. No-op for backends without the split wait capability.
     void interrupt_backend_waiters() noexcept;
+
+    // Commit-to-park handshake: register the one-shot control-observation
+    // baseline for the NEXT wait_one() invocation. Called by the Scheduler's
+    // parked participant at its commit (under the Scheduler admission
+    // authority, before this call) so a control wake published between the
+    // commit and the wait_one() entry is observed instead of being
+    // rebaselined as a past event. No-op for backends without the split
+    // wait capability; never blocks.
+    void arm_backend_wait_commit() noexcept;
+
+    // Production waiter registration / cancellation
+    // (ADR-explicit-io-request-contract Decision 10; the infrastructure
+    // layer beneath RuntimeTaskContext::await_completion). register_waiter
+    // installs ONE waiter (stable token + move-only routing lease) on the
+    // slot bound to the accepted Completion: success, invalid_state for a
+    // second registration or a non-accepted/already-reaped slot, not_found
+    // for an unresolvable (unbound / cross-context / stale) Completion.
+    // cancel_waiter removes ONLY the waiter — never the I/O, never the
+    // borrow — and returns the moved-out lease on success (not_found when
+    // reap already closed the registration). Serialized like every
+    // consuming backend access.
+    Result<void> register_waiter(Completion<std::size_t>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease);
+    Result<void> register_waiter(Completion<void>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease);
+    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c);
+    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c);
+
+    // Attach the identity-bearing ReadySink the backend delivers by-value
+    // reap events to (null restores the no-op default). The Scheduler
+    // installs its routing sink at construction and detaches at destruction;
+    // a standalone context keeps the no-op sink. Serialized against an
+    // in-flight poll/reap.
+    void set_ready_sink(detail::SynchronousReadySink* sink);
 
     // Cancel
     void cancel(Completion<std::size_t>& c);
