@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # mechanical-facts.py validates historical pinned-SHA claims, so the
           # Debug governance gate needs the full object history.
@@ -131,7 +131,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         # Release does not run historical/doc governance, so the default
         # shallow checkout is sufficient and avoids unnecessary transfer.
 
