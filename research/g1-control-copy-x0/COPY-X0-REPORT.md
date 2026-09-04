@@ -29,7 +29,12 @@ PROMOTION:                       STOP — NO C1
 
 Gates: A_capability=false (BLOCKED), B_semantic=true, C_control_value=true
 (validator sensitivity re-proven in-process), D_minimality=true (B3 section
-= 81 lines; M6 design gate PASS).
+= 81 lines; M6 design gate PASS). The machine-readable verdict splits gate C
+as `C_boundary_control_property=true`, `C_sluice_specific_premium=false`;
+`C_control_value` is retained unchanged as the frozen prereg vocabulary.
+
+Gate C demonstrates a portable boundary/control property. It does NOT
+establish a Sluice-specific premium over a competent thin standalone wrapper.
 
 A stop verdict is a successful campaign outcome. C1 is NOT authorized by
 this evidence; no production code was touched.
@@ -100,6 +105,7 @@ declared differences of rows 9/11/12 verified, not assumed.
 | Bar's max-over-all-cells form conflates µs-jitter (64K cells) with session degradation | Amendment 3: bar scoped to adjudicable cells (median wall ≥5ms); native-2/3 stay superseded on merits |
 | Validator scale-check read nonexistent row field (label lives in id) → bar silently not gating | fixed; native-4 correctly failed thereafter |
 | perf native-2..11 | all SUPERSEDED-DEGRADED (§5) |
+| P2 corrective (human review of PR #281): gate name `C_control_value` readable as "Sluice-specific control passed" | disclosure-only: machine-readable verdict split into `C_boundary_control_property=true` / `C_sluice_specific_premium=false`; frozen vocabulary retained; verdicts re-derived from the same `--composite` inputs (stored==derived); no session rerun, no frozen rule touched |
 
 # 5 Performance arm: BLOCKED — measurement infrastructure
 
@@ -258,6 +264,9 @@ target default changed.
 PROMOTION: STOP — NO C1
 reason:    COPY-X0-CAPABILITY BLOCKED (measurement infrastructure);
            G1-CONTROL NOT ESTABLISHED
+gates:     A_capability=false B_semantic=true C_control_value=true
+           C_boundary_control_property=true C_sluice_specific_premium=false
+           D_minimality=true
 retained:  semantic + boundary + minimality evidence (valid, host-local)
 reopen:    a measurement window passing the frozen A/A gate, then the
            frozen §9 rule applies unchanged; splice arm only under goal §8

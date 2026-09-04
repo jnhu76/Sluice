@@ -546,9 +546,17 @@ def composite(qual: dict, sem: dict, perf: dict | None,
                  "NOT EARNED" if gate["M6_design_gate"] == "PASS" and gate["thin_ok"]
                  else "THINNESS VIOLATED"),
             "COPY-X0-G1-CONTROL": "NOT ESTABLISHED (capability gate A unmeasured)",
+            # C_control_value is the frozen prereg vocabulary; the two fields
+            # below are a P2 disclosure split (human review of PR #281):
+            # gate C proves a portable boundary/control property only.
+            # C_sluice_specific_premium is a fixed claim-hygiene disclosure,
+            # not a derived fact — premium over a competent thin standalone
+            # wrapper was never an arm of this campaign, in either branch.
             "gates": {"A_capability": False,
                       "B_semantic": semantic.startswith("EQUIVALENT"),
                       "C_control_value": boundary_ok and selftest_proven,
+                      "C_boundary_control_property": boundary_ok and selftest_proven,
+                      "C_sluice_specific_premium": False,
                       "D_minimality": gate["M6_design_gate"] == "PASS" and gate["thin_ok"]},
             "design_gate": gate,
             "PROMOTION": "STOP — NO C1",
@@ -574,8 +582,12 @@ def composite(qual: dict, sem: dict, perf: dict | None,
             ("LOCAL COPY BRANCH SUFFICIENT; GENERIC CAPABILITY FRAMEWORK NOT EARNED"
              if gate_d else "THINNESS VIOLATED"),
         "COPY-X0-G1-CONTROL": g1,
+        # Same P2 disclosure split as the BLOCKED branch above.
         "gates": {"A_capability": gate_a, "B_semantic": gate_b,
-                  "C_control_value": gate_c, "D_minimality": gate_d},
+                  "C_control_value": gate_c,
+                  "C_boundary_control_property": gate_c,
+                  "C_sluice_specific_premium": False,
+                  "D_minimality": gate_d},
         "design_gate": gate,
         "PROMOTION": "PROMOTE-CONSIDER" if g1 != "NOT ESTABLISHED" else "STOP — NO C1",
     }

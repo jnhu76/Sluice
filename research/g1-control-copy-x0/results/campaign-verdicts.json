@@ -8,6 +8,8 @@
     "A_capability": false,
     "B_semantic": true,
     "C_control_value": true,
+    "C_boundary_control_property": true,
+    "C_sluice_specific_premium": false,
     "D_minimality": true
   },
   "design_gate": {
