@@ -50,7 +50,8 @@ def env_record():
         "cpus": os.cpu_count(),
         "loadavg_start": load,
         "governor": governor,
-        "dirty_tracked": sh(["git", "-C", str(ROOT), "status", "--porcelain"]).stdout.strip() != "",
+        "dirty_tracked": sh(["git", "-C", str(ROOT), "status",
+                          "--porcelain", "--untracked-files=no"]).stdout.strip() != "",
         "commit": sh(["git", "-C", str(ROOT), "rev-parse", "HEAD"]).stdout.strip(),
         "binary_sha256": sh(["sha256sum", str(BENCH)]).stdout.split()[0],
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -70,16 +71,16 @@ def arm_order(rng):
     return arms
 
 
-def run_cell(arm, op, size, n, cpu, write_buf, with_strace=True):
+def run_cell(arm, op, size, n, cpu, write_buf, with_strace=True, reps=REPS):
     data = WORK / "data.bin"
     if op == "write":
         target = WORK / f"scratch-{arm}.bin"
         if not target.exists():
             shutil.copy(write_buf, target)
         data = target
-    cmd = ([\"strace\", \"-c\", \"-e\", \"trace=io_uring_enter\"] if with_strace else []) + [
+    cmd = (["strace", "-c", "-e", "trace=io_uring_enter"] if with_strace else []) + [
            str(BENCH), "perf", "--arm", arm, "--op", op, "--size", str(size),
-           "--n", str(n), "--reps", str(REPS), "--cpu", str(cpu),
+           "--n", str(n), "--reps", str(reps), "--cpu", str(cpu),
            "--file", str(data)]
     r = sh(cmd)
     rows, enters = [], None
@@ -87,13 +88,16 @@ def run_cell(arm, op, size, n, cpu, write_buf, with_strace=True):
         line = line.strip()
         if line.startswith('{"kind":"perf"'):
             rows.append(json.loads(line))
-    # parse strace summary for io_uring_enter call count
+    # parse strace -c summary: "% time seconds usecs/call calls [errors] syscall"
+    # calls is field index 3; errors column present only when nonzero
     for line in r.stderr.splitlines():
-        if "io_uring_enter" in line:
-            parts = line.split()
-            if len(parts) >= 4 and parts[1].isdigit():
-                enters = int(parts[1])
-                break
+        parts = line.split()
+        if parts and parts[-1].startswith("io_uring_enter") and len(parts) >= 5:
+            try:
+                enters = int(parts[3])
+            except ValueError:
+                pass
+            break
     return rows, enters, r.returncode, r.stderr
 
 
@@ -108,20 +112,34 @@ def do_matrix(outdir, cpu):
     strace_enter_total = {}
     for idx, (op, size, n) in enumerate(cells):
         for arm in arm_order(rng):
-            rows, enters, rc, err = run_cell(arm, op, size, n, cpu, write_src)
+            # timed rows are collected WITHOUT ptrace (disclosed amendment:
+            # strace-wrapped timing amplifies run-to-run variance on this
+            # host; the prereg defines strace as the enter COUNTER, not the
+            # timing harness). Enter counts come from a separate 1-rep
+            # strace-wrapped pass below.
+            rows, _, rc, err = run_cell(arm, op, size, n, cpu, write_src,
+                                        with_strace=False)
             if rc != 0 or not rows:
                 print(f"FAIL arm={arm} op={op} size={size} n={n} rc={rc}\n{err[-500:]}",
                       file=sys.stderr)
                 return None
-            for row in rows:
-                row["kernel_enters_strace"] = enters
             all_rows.extend(rows)
-            strace_enter_total[arm] = strace_enter_total.get(arm, 0) + (enters or 0)
             print(f"[{idx+1}/{len(cells)*len(ARMS)}] {arm} {op} {size} n={n} "
-                  f"median={sorted(r['wall_per_op_ns'] for r in rows)[len(rows)//2]:.0f} ns/op "
-                  f"enters={enters}")
+                  f"median={sorted(r['wall_per_op_ns'] for r in rows)[len(rows)//2]:.0f} ns/op")
             (outdir / "rows.jsonl").open("a").write(
                 "\n".join(json.dumps(r) for r in rows) + "\n")
+    # separate enter-counter pass: 1 strace-wrapped rep per arm x cell
+    # (untimed; M6 evidence)
+    for idx, (op, size, n) in enumerate(cells):
+        for arm in arm_order(rng):
+            _, enters, rc, err = run_cell(arm, op, size, n, cpu, write_src,
+                                          with_strace=True, reps=1)
+            if rc != 0:
+                print(f"STRACE FAIL arm={arm} op={op} size={size} n={n}\n{err[-300:]}",
+                      file=sys.stderr)
+                return None
+            strace_enter_total[arm] = strace_enter_total.get(arm, 0) + (enters or 0)
+            print(f"[enters {idx+1}] {arm} {op} {size} n={n} enters={enters}")
     (outdir / "strace-enter-totals.json").write_text(
         json.dumps(strace_enter_total, indent=2))
     return all_rows
@@ -190,7 +208,7 @@ def do_qualify(cpu):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["qualify", "matrix", "semantic"])
+    ap.add_argument("mode", choices=["qualify", "matrix", "semantic", "enters"])
     ap.add_argument("--out", required=True)
     ap.add_argument("--cpu", type=int, default=2)
     args = ap.parse_args()
@@ -214,6 +232,29 @@ def main():
         return 0 if ok else 9
     if args.mode == "qualify":
         return 0 if do_qualify(args.cpu) else 10
+    if args.mode == "enters":
+        # enter-counter pass only (M6); rewrites strace-enter-totals.json
+        out = Path(args.out)
+        write_src = WORK / "data.bin"
+        rng = random.Random(43)
+        totals = {}
+        cells = cell_grid()
+        for idx, (op, size, n) in enumerate(cells):
+            for arm in arm_order(rng):
+                _, enters, rc, err = run_cell(arm, op, size, n, args.cpu,
+                                              write_src, with_strace=True,
+                                              reps=1)
+                if rc != 0 or enters is None:
+                    print(f"enters FAIL {arm} {op} {size} n={n}: {err[-200:]}",
+                          file=sys.stderr)
+                    return 12
+                totals[arm] = totals.get(arm, 0) + enters
+                if idx % 6 == 0:
+                    print(f"[enters {idx+1}/24 cells] {arm} {op} {size} n={n} "
+                          f"enters={enters}")
+        (out / "strace-enter-totals.json").write_text(json.dumps(totals, indent=2))
+        print(json.dumps(totals, indent=2))
+        return 0
     if args.mode == "matrix":
         out = Path(args.out)
         if (out / "rows.jsonl").exists():

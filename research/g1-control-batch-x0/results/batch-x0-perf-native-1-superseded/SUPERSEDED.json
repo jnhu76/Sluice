@@ -1,0 +1,1 @@
+{"superseded": true, "reason": "session recorded dirty_tracked=true: driver amendments uncommitted at run time; timed rows valid but the session record does not meet the frozen commit-pin discipline. Re-executed cleanly as batch-x0-perf-native-2 after committing all measurement infrastructure and Amendment 1."}

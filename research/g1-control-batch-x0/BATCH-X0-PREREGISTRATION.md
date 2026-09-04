@@ -378,3 +378,24 @@ Recorded now, answered again in the report (goal §33):
 - We pre-commit to disclosing any harness defect found AFTER formal rows as
   a superseded run, never as a silent re-run (COPY-X0 discipline).
 ```
+
+---
+
+## Amendment 1 (pre-formal, disclosed) — strace removed from the TIMED window
+
+Two A/A qualification attempts with the timing window wrapped in
+`strace -c` FAILED the frozen gate (66.7% and 62.5% of cells within 5%;
+violators concentrated in 4K WRITE and 64K cells, max ratio 29%). A
+strace-free A/A rerun PASSED: 47/48 cells (97.9%) within 5%, median
+ratio 0.95% (only violator: B1/read/4K/N=1, the highest-variance
+single-op cell). ptrace adds two context switches per syscall; on this
+DRAM-less NVMe host that amplifies run-to-run variance beyond the frozen
+gate.
+
+Decision (harness repair, NOT a gate change): formal timed rows are
+collected WITHOUT ptrace; `strace -c -e trace=io_uring_enter` remains the
+M6 enter COUNTER, collected in a SEPARATE untimed 1-rep pass per
+arm×cell. The A/A gate, the 5%/90% thresholds, the matrix, and every
+verdict rule are unchanged. Evidence: results/batch-x0-qualify-native-1
+(strace-wrapped, FAIL) and results/batch-x0-qualify-native-2 (strace-free,
+PASS).
