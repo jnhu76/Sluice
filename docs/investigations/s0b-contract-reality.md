@@ -767,7 +767,7 @@ B01/B02/B03/B04 → spec/tla/request_arena (2 pos / 6 neg)
     → multi-slot interleavings unmodeled (manifest coverage_gaps:
        request_arena-lifecycle PARTIALLY MODELED); reap-vs-release ordering
        across slots rests on C++ evidence.
-B05             → request_arena (borrow flag) 
+B05             → request_arena (borrow flag)
     → no dedicated borrow-end-vs-publication model beyond I18 trace tests.
 B06             → cancel_token_epoch, e10_waitnode, request_arena
     → no model of uring control-CQE/deferred-terminal interplay (the
