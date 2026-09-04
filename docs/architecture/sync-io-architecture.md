@@ -2,7 +2,7 @@
 
 **Status:** Current
 **Authority:** Architecture (synchronous I/O model)
-**Last verified against:** v0.1.0
+**Last verified against:** v0.0.1 (reference baseline)
 
 This is the *architecture* layer of the synchronous/blocking I/O model. It defines what the
 sync model **is** — the backend taxonomy, the execution-model (runtime) taxonomy,

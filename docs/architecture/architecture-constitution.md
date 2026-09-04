@@ -55,10 +55,10 @@ terminate it.
 storage. The Accepted ADR-explicit-io-request-contract selects a transitional
 C++ adaptation in which the context/backend owns a bounded `RequestSlot` arena
 and fixes logical identity as `(ContextIdentity, SlotIndex, Generation)`.
-DIV-02 records that as an active transitional decision (Phase B): FakeAsyncBackend
-and SyncBackend now use RequestArena / RequestSlot; ThreadPoolBackend and
-UringAsyncBackend remain on legacy paths until their roadmap phases (E/D) complete
-and MUST NOT claim generation-safe conformance in the meantime.
+DIV-02 records the completed migration: all four backends (FakeAsyncBackend,
+SyncBackend, ThreadPoolBackend, UringAsyncBackend) now run the unified
+`RequestArena` / `RequestSlot` lifecycle with generation-safe identity
+(the Phase B–D migration record lives in the divergence registry).
 
 **Required evidence:**
 - Each backend documents how an accepted op is tracked from submit to reap.
@@ -69,9 +69,11 @@ and MUST NOT claim generation-safe conformance in the meantime.
 - No operation exists only as a closure with no queryable identity.
 
 **Allowed exceptions:**
-- During the explicitly staged migration, a backend still on a legacy path may
+- During an explicitly staged migration, a backend still on a legacy path may
   retain pointer/container tracking only while the roadmap names its removal
   phase and its tests do not claim generation/provenance conformance.
+  (Historical example: the Phase B–G backend migration, now complete — no
+  backend is on a legacy path today.)
 - A raw pointer may remain a validated locating optimization after migration;
   it is never the sole logical identity.
 

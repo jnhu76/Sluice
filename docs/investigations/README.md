@@ -39,8 +39,12 @@ currently holds no investigation files.
 
 ## LIVE investigations
 
-None — no active investigation remains; all four completed investigations are
-archived under `docs/history/issues/`.
+- [`S0-CONTRACT-CANDIDATES.md`](S0-CONTRACT-CANDIDATES.md) — open
+  contract↔authority↔C++ drift hypotheses handed to the Safety S0B freeze
+  (#289) by the S0-DOCS audit (#290). Every row is UNCONFIRMED by design.
+
+(The four completed root-cause investigations from issue #167 are archived
+under `docs/history/issues/`.)
 
 ## Move slices (issue #167 Step 5) — all executed
 
@@ -61,13 +65,13 @@ archived under `docs/history/issues/`.
   `docs/history/issues/issue-116-runtime-reentry-liveness.md:370`.
 - [`issue-115-runnable-publication-wake.md`](../history/issues/issue-115-runnable-publication-wake.md)
   — deferred disposition adjudicated **superseded** (Phase D); relocatable
-  consumers updated atomically: `issue-115-runnable-publication-wake-gate.md:7`,
+  consumers updated atomically: `docs/history/closeout/issue-115-runnable-publication-wake-gate.md`,
   `docs/post-freeze/post-freeze-final-report.md:54`. The historical banner
   carries the adjudication.
 - [`issue-116-runtime-reentry-liveness.md`](../history/issues/issue-116-runtime-reentry-liveness.md)
   — mechanical pin `TEST_TOTAL_EXTRA_DOCS` updated atomically in
   `scripts/gates/mechanical-facts.py`; consumers updated:
-  `issue-116-reentry-liveness-gate.md:35,238`,
+  `docs/history/closeout/issue-116-reentry-liveness-gate.md`,
   `tests/issue116_interrupt_reevaluation_regression_test.cpp:3`,
   `xmake/tests/async_internal.lua:40`. Banner notes the stale §13 #115
   cross-reference (predates the #115 fix).
