@@ -12,8 +12,11 @@
   findings are closed, the formal performance session is SUPERSEDED
   (frozen substrate violation), and the compliant-substrate rerun is
   BLOCKED on this host. The semantic result is unaffected and stands.
+- Corrective-2 (status closure) applied: the validator CLI now
+  distinguishes VALIDATION FAIL / VALIDATION BLOCKED / VALIDATION PASS
+  (§0.5); no research conclusion, verdict, or measurement changed.
 
-## 0. Corrective-1 (post-review) — evidence-gate closure
+## 0. Post-review correctives — evidence-gate closure (Corrective-1) and status closure (Corrective-2)
 
 Adversarial review of the original report found that several claimed
 formal gates were not actually mechanically enforced, and that the formal
@@ -30,8 +33,8 @@ P1-1  Frozen substrate mismatch
               recorded no filesystem evidence.
       after:  run_batch_x0.py formal modes (qualify/matrix/enters) require
               --work-dir; the gate runs findmnt -T <dir> and fails closed
-              (exit 13) on any non-ext4 filesystem BEFORE any file
-              creation or measurement; environment.json records
+              (exit 13) on any non-ext4 filesystem BEFORE any benchmark
+              data-file creation or measurement; environment.json records
               work_dir / filesystem_type / filesystem_source /
               mount_target. matrix additionally requires --qualification.
       proof:  live probes — `matrix` and `qualify` with
@@ -108,12 +111,14 @@ P2    Selftest/report wording overstated enforcement
       before: "validator self-test 4/4 corrupted evidence rejected"
               counted a verdict-sensitivity test as a corruption test.
       after:  the selftest enumerates what each test actually proves
-              (20 named tests; M6-B is labeled a verdict recomputation,
-              not a rejection); the report uses the same precision.
+              (21 named tests after Corrective-2; M6-B is labeled a
+              verdict recomputation, not a rejection); the report uses
+              the same precision.
 ```
 
-Validator selftest suite after Corrective-1: 20 named tests, all passing
-(`validate_batch_x0.py --selftest`).
+Validator selftest suite: 21 named tests, all passing
+(`validate_batch_x0.py --selftest`; 20 from Corrective-1 + the
+Corrective-2 validation-status test).
 
 ### 0.2 Superseded performance evidence and the blocked rerun
 
@@ -192,6 +197,38 @@ tmpfs superseded matrix       results/batch-x0-perf-native-2 + SUPERSEDED.json
 ext4 qualification / matrix   BLOCKED (no usable ext4 on this host)
 per-cell enter evidence       BLOCKED with the matrix (the counter pass is
                               part of the formal session)
+```
+
+### 0.5 Corrective-2 (status closure) — validator CLI status model
+
+```text
+Defect: after Corrective-1, validate_matrix() correctly derived
+        CONTROL=BLOCKED / PROMOTION=STOP for anchor-blocked evidence, but
+        the CLI still printed "VALIDATION PASS" (exit 0) for such a
+        result — a blocked campaign could look like a passing validation.
+after:  the CLI distinguishes three states, keyed on the explicit
+        experiment-level gate authority blocked_reasons (domain verdicts
+        such as TRANSPORT=BLOCKED from valid measurements NEVER decide
+        the status):
+          VALIDATION FAIL     malformed/non-authoritative evidence   exit 1
+          VALIDATION BLOCKED  valid evidence, a preregistered gate
+                              (S-9 substrate anchor) stops the
+                              downstream claims; verdicts.json is still
+                              written with blocked_reasons          exit 2
+          VALIDATION PASS     all mandatory gates passed             exit 0
+proof:  selftest "final validation status" (valid session → PASS,
+        anchor-blocked valid session → BLOCKED); live CLI probes —
+        synthetic valid session → VALIDATION PASS (exit 0,
+        blocked_reasons=[]), synthetic anchor-blocked session →
+        VALIDATION BLOCKED (exit 2, verdicts.json preserved with
+        blocked_reasons=['S-9 substrate anchor |MB1−B1|/B1 = -0.500 >
+        0.3']), the superseded native-2 session → VALIDATION FAIL
+        (exit 1, structurally non-authoritative).
+Also:   Corrective-1's P1-1 wording "before any file creation or
+        measurement" is narrowed to "before any benchmark data-file
+        creation or measurement" — the driver creates the (empty) work
+        directory before findmnt probes it; no measurement or data file
+        precedes the gate. Driver behavior unchanged.
 ```
 
 ---
@@ -425,13 +462,15 @@ U-6  All performance-side questions on a COMPLIANT (ext4) substrate:
 
 ```text
 bench selftest:            M1-M5 REJECT + M4 sanity (exit 0)
-validator selftest:        20 named tests, all passing (§0.1; Corrective-1
+validator selftest:        21 named tests, all passing (§0.1; Corrective-1
                            expanded suite with real-git ancestry, A/A
-                           recomputation, substrate, per-cell enter gates)
+                           recomputation, substrate, per-cell enter gates;
+                           Corrective-2 added the final-status test)
 live fail-closed probes:   driver matrix/qualify on /tmp tmpfs → REFUSED
                            (exit 13, before any measurement); validator on
                            the superseded native-2 session → VALIDATION
-                           FAIL (exit 1)
+                           FAIL (exit 1); CLI status probes §0.5 — valid
+                           synthetic → PASS (0), anchor-blocked → BLOCKED (2)
 semantic fixtures:         S1-S10 PASS, S9 DIVERGENCE recorded [STANDS]
 A/A gate:                  strace-wrapped FAIL ×2 (retained) → Amendment 1 →
                            47/48 on tmpfs [variance record; not ext4-

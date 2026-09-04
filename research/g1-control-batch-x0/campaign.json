@@ -71,13 +71,14 @@
     "audit": "done (pre-freeze, BATCH-X0-AUDIT.md)",
     "preregistration": "frozen c0da5db5 + Amendment 1 (2d2108cf)",
     "harness": "done (bench + driver + validator; M1-M5 REJECT)",
-    "selftests": "done — validator selftest expanded to 20 named tests by Corrective-1, all passing",
+    "selftests": "done — validator selftest: 20 named tests (Corrective-1) + the Corrective-2 final-status test = 21, all passing",
     "semantic_formal": "done — S1-S10 PASS; S9 DIVERGENCE (batch-x0-semantic-native-1); STANDS (substrate-independent)",
     "perf_formal": "SUPERSEDED — batch-x0-perf-native-2 ran on /tmp tmpfs vs frozen ext4 substrate (native-1 SUPERSEDED: dirty_tracked at run time); marked with SUPERSEDED.json, rows retained as non-authoritative observations",
     "qualify": "A/A history: strace-wrapped FAIL x2 (retained) -> strace-free PASS 47/48 on tmpfs (Amendment-1 variance record; not ext4-admissible post-Corrective-1)",
     "verdicts": "no validator verdicts.json post-supersession; verdict state is the campaign-level fail-closed state in BATCH-X0-REPORT.md §0.3",
     "corrective_1": "done — P1-1..P1-5 + P2 closed (verified-ext4 substrate gate, A/A recomputation + explicit binding, real git ancestry, blocked-gate ordering, per-cell enter evidence); perf rerun BLOCKED: host has no usable ext4 (only ext4 = /boot 1.9G system partition; /home btrfs; /tmp tmpfs)",
-    "report": "done (BATCH-X0-REPORT.md, Corrective-1 integrated)"
+    "corrective_2": "done — validator CLI status closure: VALIDATION FAIL (exit 1, malformed/non-authoritative) / VALIDATION BLOCKED (exit 2, valid evidence stopped by the S-9 gate; verdicts.json preserved with blocked_reasons) / VALIDATION PASS (exit 0); keyed on blocked_reasons only, never on domain verdicts",
+    "report": "done (BATCH-X0-REPORT.md, Corrective-1 + Corrective-2 integrated)"
   },
   "freeze_commit": "c0da5db505d24bb8f7c576459b74eaee8ef68ad5",
   "amendments": [

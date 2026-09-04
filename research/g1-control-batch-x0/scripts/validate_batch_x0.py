@@ -720,6 +720,19 @@ def selftest():
         print("SELFTEST OK: P1-4 substrate-anchor failure → CONTROL=BLOCKED, "
               "G1=NOT ESTABLISHED, PROMOTION=STOP even with otherwise "
               "favorable (MATERIAL) synthetic measurements")
+
+        # -- Corrective-2: final validation status follows blocked_reasons --
+        # The verdict artifact above (CONTROL=BLOCKED / PROMOTION=STOP) is a
+        # legitimate derived record for VALID evidence; the final CLI status
+        # must distinguish it from PASS without turning it into a Fail.
+        assert not res["blocked_reasons"], res
+        assert validation_status(res) == "PASS", res
+        assert res4["blocked_reasons"], res4
+        assert validation_status(res4) == "BLOCKED" \
+            and validation_status(res4) != "PASS", res4
+        print("SELFTEST OK: final validation status — structurally valid "
+              "session → PASS; anchor-blocked valid session → BLOCKED "
+              "(never PASS)")
     finally:
         shutil.rmtree(tmp)
     if bad:
@@ -727,6 +740,17 @@ def selftest():
         return 1
     print("SELFTEST RESULT: all tests passed")
     return 0
+
+
+def validation_status(res):
+    """Final CLI status (Corrective-2). blocked_reasons is the explicit
+    experiment-level gate authority: nonempty means the evidence is
+    structurally valid and fully derived, but a preregistered
+    qualification gate (S-9 substrate anchor) stops the downstream
+    claims — the session reports VALIDATION BLOCKED, never
+    VALIDATION PASS. Domain verdicts alone (e.g. TRANSPORT=BLOCKED from
+    valid measurements) do not decide the status."""
+    return "BLOCKED" if res["blocked_reasons"] else "PASS"
 
 
 def _build_semantic(sdir):
@@ -767,6 +791,9 @@ def main():
     print(f"enter cells: {res['enter_cells']}; blocked_reasons: {res['blocked_reasons']}")
     (mdir / "verdicts.json").write_text(
         json.dumps(res, indent=2, ensure_ascii=False))
+    if validation_status(res) == "BLOCKED":
+        print("VALIDATION BLOCKED")
+        return 2
     print("VALIDATION PASS")
     return 0
 
