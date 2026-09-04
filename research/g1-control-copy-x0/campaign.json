@@ -1,0 +1,58 @@
+{
+  "campaign": "COPY-X0",
+  "title": "Explicit Copy as a Legal Transformation Boundary - adversarial falsification",
+  "roadmap": [
+    "#227",
+    "#259"
+  ],
+  "precedent": [
+    "#279 G1-Control C0 fixed-file (STOP, product-capability-only)",
+    "PR #280 merged C0 evidence"
+  ],
+  "g1_control_candidate": 2,
+  "working_thesis": "T-COPY-X0: explicit composed operations can serve as Legal Transformation Boundaries",
+  "primary_mechanism": "copy_file_range",
+  "secondary_mechanism": "splice (only under goal section 8 conditions)",
+  "base_master": "ecd84259",
+  "execution_host": {
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "cpu": "AMD Ryzen 7 5800H (8 logical)",
+    "substrates": [
+      "tmpfs",
+      "ext4"
+    ],
+    "note": "no btrfs on this host; prereg section 0 substitution is frozen"
+  },
+  "arms": {
+    "B0": "competent standalone buffered pread/pwrite copy",
+    "B1": "production sluice::copy_all over FileReader/FileWriter",
+    "B2": "competent standalone copy_file_range loop",
+    "B3": "research-only thin Sluice-shaped Copy boundary using copy_file_range"
+  },
+  "freeze_commit": "715c7711",
+  "phases": {
+    "audit": "done",
+    "preregistration": "frozen 715c7711 + Amendments 1-3",
+    "harness": "done (two pre-formal defect repairs + one post-formal driver repair, all disclosed)",
+    "selftests": "done (bench 6/6, validator self-test, design gate)",
+    "semantic_formal": "done — copy-x0-semantic-native-2 VALID (native-1 superseded)",
+    "perf_formal": "BLOCKED — 11 attempts, all superseded-degraded (frozen A/A gate)",
+    "verdicts": "derived — results/campaign-verdicts.json",
+    "report": "done"
+  },
+  "evidence_head": "883d54f6",
+  "final_verdicts": {
+    "COPY-X0-CAPABILITY": "BLOCKED (measurement infrastructure)",
+    "COPY-X0-SEMANTIC-EQUIVALENCE": "EQUIVALENT FOR DECLARED COPY CONTRACT",
+    "COPY-X0-TRANSFORMATION-BOUNDARY": "LEGAL TRANSFORMATION BOUNDARY SUPPORTED",
+    "COPY-X0-MINIMALITY": "LOCAL COPY BRANCH SUFFICIENT; GENERIC CAPABILITY FRAMEWORK NOT EARNED",
+    "COPY-X0-G1-CONTROL": "NOT ESTABLISHED (capability gate A unmeasured)",
+    "PROMOTION": "STOP — NO C1"
+  },
+  "mechanism_facts_host_local": [
+    "copy_file_range works same-fs on tmpfs and ext4",
+    "cross-fs tmpfs<->ext4 refused EXDEV both directions",
+    "single call moved full 64 MiB",
+    "sparse source: all arms dense dest, no arm-divergent layout"
+  ]
+}

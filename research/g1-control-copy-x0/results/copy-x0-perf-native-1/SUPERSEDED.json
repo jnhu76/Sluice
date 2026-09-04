@@ -1,0 +1,1 @@
+{"superseded": true, "reason": "qualified against copy-x0-qualify-native-1 (SUPERSEDED-INCOMPLETE: missing prereg 10.2 probe rows); native-2 re-derived qualified chunk 262144 != 1048576, so these sessions were executed under a superseded qualification", "retained": "byte-identical, excluded from every derived number"}

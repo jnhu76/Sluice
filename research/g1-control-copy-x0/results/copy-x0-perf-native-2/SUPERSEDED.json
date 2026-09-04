@@ -1,0 +1,1 @@
+{"superseded": true, "reason": "DEGRADED HOST CONDITIONS (prereg Amendment 2): A/A calibration recorded mechanically documented host stalls (tmpfs 64MiB pair 0.023s vs 5.43s = 7.86 log2 p90; ext4 64MiB 16x), poisoning round signs; AA bar 0.50 exceeded", "retained": "byte-identical, excluded from every derived number"}
