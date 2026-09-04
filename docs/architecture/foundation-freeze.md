@@ -82,7 +82,9 @@ Post-freeze structural work (e.g. the R0/R1 hygiene pass,
 the following. Each row names the **current authority** (the contract) and the
 **historical / verification evidence** that witnessed it. Archived gates are
 evidence and provenance only — they carry HISTORICAL banners and are never
-current binding authority.
+current binding authority. Formal models (TLA+/GenMC) and test suites are
+verification evidence too — never product semantic authority (`AGENTS.md`
+§7: model checking is not a proof of the C++ implementation).
 
 | Frozen surface | Current authority | Historical / verification evidence |
 |---|---|---|
@@ -90,7 +92,7 @@ current binding authority.
 | Public async API surface (`include/sluice/async/` headers, `docs/reference/api.md`) | the headers + `docs/reference/api.md` themselves; any change runs the `AGENTS.md` §4 design-compliance gate | — |
 | Operation state transitions (`free→…→completion-ready→free+generation`) and the five-stage submission transaction | `AGENTS.md` §3.2, `docs/adr/ADR-explicit-io-request-contract.md` | phase-B / submission-transaction gates (`docs/history/closeout/`) |
 | Wakeup semantics: park/wake obligation, predicate protocol, split-wait bridge, MIXED-WAKE backstop | AC-6, `docs/adr/ADR-execution-model.md` §9.4/§9.4.7.2 | Phase G design + gate (`docs/history/implementation-plans/phase-g-backend-progress-wake.md`, `docs/history/closeout/phase-g-compliance-gate.md`) |
-| Backend wait semantics: `backend_wait_active_` gating of the interrupt bridge; external control wake always has a route into a backend-domain park | `docs/adr/ADR-execution-model.md` §9.4, `spec/tla/e9_park_wake` | Phase G closeout (PR #109; `docs/history/closeout/phase-g-compliance-gate.md`) |
+| Backend wait semantics: `backend_wait_active_` gating of the interrupt bridge; external control wake always has a route into a backend-domain park | AC-6, `docs/adr/ADR-execution-model.md` §9.4 | `spec/tla/e9_park_wake` formal model; Phase G closeout (PR #109; `docs/history/closeout/phase-g-compliance-gate.md`) |
 | Deadline behavior: monotonic `deadline_t`, `advance_clock`, `*_until`/`*_deadline` waits, timer-select reconcile | `docs/architecture/async-synchronization.md`, `docs/adr/ADR-execution-model.md` | E11 deadline closeout, Phase G gate (`docs/history/closeout/`) |
 | Interruption behavior: backend-owned interruption only; cancel intent never rewrites an ordinary result | `AGENTS.md` §3.4 | — |
 | Cancellation behavior: the seven distinct layers; pending/enqueued/running/kernel-owned dispositions; exactly-once terminal winner | `AGENTS.md` §3.4, `docs/adr/ADR-cancel-request-epoch.md` | phase-C2 gates (`docs/history/closeout/`) |

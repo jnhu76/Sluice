@@ -84,7 +84,7 @@ RequestArena slot-lifecycle 是 leaf domain：持有它时不得调用 Scheduler
 
 未经明确授权，禁止 commit、push、merge、rebase、force-push、切换他人分支或执行破坏性 Git 操作；未经要求不得 merge。PR 使用 `.github/pull_request_template.md`，如实填写 baseline、语义变化、实际命令结果、跳过项和剩余风险，不得预填 PASS。
 
-STOP 条件（停止扩大施工、记录 residual 并报告，不绕过）：移动被机械 pin 的文档会改变可执行语义；两个 CURRENT 权威对产品语义真实冲突；公共 header/docs 契约问题无法 docs-only 解决；一次移动需要生产 C++ 行为变化；历史证据移动会丢失 verifier provenance；对本文件的 slim 会删除唯一硬不变量。Residual 留给 S0B 或后续 bounded corrective，不隐瞒。
+STOP 条件（停止扩大施工、记录 residual 并报告，不绕过）：当前权威对产品语义存在真实冲突且无法在本任务授权范围内裁决；承重的 lifecycle、ownership、失败或容量语义仍为 Unknown/TBD；任务会超出已授权范围或需要未经批准的新语义；继续施工无法保持权威、实现、测试与文档同步。Residual 留给后续 bounded corrective，不隐瞒。
 
 ## 5. 工作树与 Git 安全
 
