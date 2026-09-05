@@ -8,7 +8,7 @@
 #   RequestArenaLiveness         -> WF(Enqueue) + WF(Reap) liveness PASS
 #   Fault* cfgs (NEG-RA-1..6)    -> each violates its NAMED invariant
 #   WrongProp1/2                 -> fault runs must NOT trip unrelated laws
-#   SceneW1..W5                  -> NotReach_* witnesses VIOLATED (reachable)
+#   SceneW1..W6                  -> NotReach_* witnesses VIOLATED (reachable)
 #
 # Source-safe: TLC runs in an isolated mktemp workspace.
 set -euo pipefail

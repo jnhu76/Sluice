@@ -32,7 +32,7 @@ C++ bridge for every strengthened model → freeze.
 
 | Change | Layer | Driving evidence |
 | --- | --- | --- |
-| `RecordTerminalKernelCanceled` action + `kernel_canceled` legitimate source + updated `InvCanceledTerminalSource` law (three-source) + `NotReach_W6_KernelCanceledNoIntent` witness + verifier W6 gate + manifest updates | TLA model (request-arena) | S0B handoff question #262: the model could NOT represent "no caller cancel + operation CQE returns -ECANCELED + terminal propagated verbatim", and `InvCanceledTerminalSource` structurally encoded `canceled ⇒ cancel-arbitration provenance` — an assumption the C++ does not make (B03/B06: real result wins verbatim) |
+| `RecordTerminalKernelCanceled` action + `kernel_canceled` legitimate source + updated `InvCanceledTerminalSource` law (three-class recording-source admissibility) + `NotReach_W6_KernelCanceledNoIntent` witness + verifier W6 gate + manifest updates | TLA model (request-arena) | S0B handoff question #262: the model could NOT represent "no caller cancel + operation CQE returns -ECANCELED + terminal propagated verbatim", and `InvCanceledTerminalSource` structurally encoded `canceled ⇒ cancel-arbitration provenance` — an assumption the C++ does not make (B03/B06: real result wins verbatim) |
 | `fake_kernel_canceled_completion_verbatim_without_caller_cancel` regression | C++ bridge | Same; completes an op with kernel-canceled status, no caller cancel; asserts verbatim canceled terminal, exactly-once publication, accounting retirement |
 | Worker-population establishment boundary DECLARED (e9 README section, trace-conformance doc boundary #5, manifest e9 notes) | docs (model correspondence boundary) | #223: E9 `Init` assumes full population; C++ multi-worker startup legally has partially activated states (per-thread `active` publication, `scheduler.cpp` run_impl lambda); exclusion was deliberate but undocumented — Option A repair (document + prehistory obligation); startup refinement registered as S2 candidate |
 | Stale "V2/V3 not started" claims in `cpp-model-coverage.md` corrected; request-arena matrix row + debt register refreshed (W1–W6) | docs | V2 (#196) and V3 (#197) evidence already exists; the register claimed otherwise |
@@ -72,14 +72,21 @@ FIX (this phase, issue #294):
   RecordTerminalKernelCanceled (enqueued/running → backend_ready, terminal
   canceled VERBATIM, consumes any live intent, source "kernel_canceled");
   LegitimateCancelSources += "kernel_canceled"; invariant comment states the
-  three-source law; NotReach_W6_KernelCanceledNoIntent pins non-vacuity
-  (canceled terminal from the kernel action with NO intent ever recorded);
+  canceled-terminal recording-source admissibility law (the stamp identifies
+  the recording path, not cancellation cause or caller-intent absence);
+  NotReach_W6_KernelCanceledNoIntent pins non-vacuity EXISTENTIALLY
+  (a reachable canceled terminal from the kernel action with NO intent
+  ever recorded — not the universal "every kernel_canceled is intent-free");
   NEG-RA-6 unchanged and still exact (ill-behaved caller still stamps the
-  forbidden "cancel_running"). C++ bridge proves the production path
-  (complete-with-canceled, zero cancel calls → verbatim canceled terminal).
+  forbidden "cancel_running"). The reference-backend C++ bridge pins the
+  shared arena/reap/publication contract for a canceled backend result
+  (complete-with-canceled, zero cancel calls → verbatim canceled terminal,
+  exactly-once, accounting retired); it does NOT exercise the real io_uring
+  CQE translation path.
 
 VERDICT: REPAIRED at #294. Post-repair, the model represents the #262 shape
-and the invariant asserts the contract's actual three-source law. The
+and the invariant asserts the contract's actual three-class
+recording-source admissibility law. The
 unresolved root-cause/attribution question of #262 itself (which kernel
 path produced the CQE) remains with the later real-incident track, per the
 S0B residual — S1A only closes the formal-representation gap.
@@ -281,7 +288,8 @@ MODEL:        request-arena (Scheme-B + intent law + NEW
               per epoch per consumer between the two explicit re-arm
               authorities); e12-rwlock (cancel reconcile + WriterRevoke
               control); e13 (cancel/restore); e11 (cancel/expire).
-PROPERTY:     InvCanceledTerminalSource (three-source law post-#294);
+PROPERTY:     InvCanceledTerminalSource (canceled-terminal recording-source
+              admissibility law, three classes, post-#294);
               InvSingleShotPerEpoch; RW cancel/expire reconcile invariants.
 INIT/FAIRNESS/BOUNDS: per-suite (arena: no fairness, MaxGen=2; token: no
               fairness clause — rearm() is an explicit advance path).
@@ -293,18 +301,24 @@ C++ BRIDGE:   request_arena_cancel_intent_test (6 cases — ordinary success
               verbatim_without_caller_cancel (#262 bridge).
 A:            MODEL_COVERS_PROPERTY (protocol layer, now including the
               kernel-canceled shape).
-B:            STRONG at protocol layer; weak-memory face EVALUATED:
-              GenMC kernel NOT REQUIRED — the token is a single-atomic-word
-              protocol (state_ is the only shared data; request/rearm/clear
-              are word-only RMWs), per-consumer CancelState fields are plain
-              but thread-confined by fiber ownership, and every post-delivery
-              cross-thread action goes through separately synchronized APIs.
-              A kernel would have no discriminating power (the Completion
-              kernel's N1-class hazards need plain payload publication,
-              which the token lacks). Boundary recorded: CancelState::
-              acknowledged() is a best-effort introspection over a plain
-              field — no cross-thread ordering claim; any future consumer
-              reading CancelState cross-thread reopens this evaluation.
+B:            STRONG at protocol layer; weak-memory face EVALUATED
+              (argument-based, not GenMC-checked): GenMC kernel NOT
+              REQUIRED — the token is a single-atomic-word protocol
+              (state_ is the only shared data; request/rearm/clear are
+              word-only RMWs), per-consumer CancelState fields are plain
+              but thread-confined by fiber ownership, and every
+              post-delivery cross-thread action goes through separately
+              synchronized APIs. A kernel would have no discriminating
+              power (the Completion kernel's N1-class hazards need plain
+              payload publication, which the token lacks). Boundary
+              recorded: CancelState::acknowledged() is a best-effort
+              introspection over a plain field — no cross-thread ordering
+              claim. REOPEN triggers (any one): CancelState becomes
+              cross-thread visible/read; the token protocol becomes
+              multi-word or multi-atomic; correctness starts depending on
+              ordering between the token atomic and another shared
+              atomic/state; epoch/reuse semantics introduce an
+              ABA-sensitive cross-thread relation.
 CHANGE:       #262 model repair + bridge (above).
 RESIDUAL:     uring control-CQE/deferred-terminal interplay unmodeled (the
               single-driver domain assumption is the documented abstraction
@@ -435,7 +449,7 @@ RESIDUAL:     ThreadPool drain/destruction interleaving with in-flight
 | Face | TLA SC adequacy | GenMC status |
 | --- | --- | --- |
 | Completion publication/reset | protocol-order face only | **COVERED** — K1/K2 + 5 rejected controls (#197) |
-| CancelToken word | **ADEQUATE** — single-word protocol, thread-confined per-consumer state | NOT REQUIRED (evaluated #294; reopen if CancelState is ever read cross-thread) |
+| CancelToken word | **ADEQUATE** — single-word protocol, thread-confined per-consumer state | NOT REQUIRED (argument-based evaluation #294; reopen triggers in F06/B: cross-thread CancelState, multi-word/multi-atomic token, cross-atomic ordering dependence, ABA-sensitive epoch/reuse) |
 | RequestSlot generation/reuse | **ADEQUATE** — pure-mutex leaf, zero atomics | NOT REQUIRED |
 | Park-commit vs wake epoch | protocol face covered by e9; memory-order face unextracted | CANDIDATE (unextracted; pay only with a scheduler-domain model change) |
 | Worker `active` topology publication | not representable (protocol/topology-level) | Not the right tool; owned by the #223 boundary + S2 candidate |
@@ -477,9 +491,12 @@ RESIDUAL:     ThreadPool drain/destruction interleaving with in-flight
                 election LowestAlive ↔ R2 active-scan
    proof boundary: abstract-protocol only; no whole-scheduler claim
 
-2. CANCELED-TERMINAL PROVENANCE LAW (strengthened by #294)
-   property:    every canceled terminal carries one of exactly three
-                provenances; intent-only running cancel never wins
+2. CANCELED-TERMINAL RECORDING-SOURCE LAW (strengthened by #294)
+   property:    every canceled terminal was recorded through one of exactly
+                three source classes (Scheme-B cancel win / confirmed
+                interruption / verbatim kernel result — the stamp is the
+                recording path, not causal attribution); intent-only
+                running cancel never wins
    C++ owner:   RequestArena record_terminal/record_canceled/cancel
    why insufficient: modeled + witnessed, but the Decision-11 clause (b) is
                 an environment contract — no model can prove a future
@@ -533,9 +550,12 @@ SKIPPED: full 26-suite TLC sweep (smoke tier) — change-class rule: only the
 ## Claim boundary
 
 - **About the abstract models:** request-arena now represents and witnesses
-  the kernel-canceled verbatim shape and asserts the contract's three-source
-  canceled-provenance law under its stated bounds (single slot, MaxGen 2,
-  Layer-B WF obligations, no deadlock-freedom claim). E9's refinement
+  the kernel-canceled verbatim shape (W6: existentially, the no-caller-intent
+  execution) and asserts the contract's three-class canceled-terminal
+  recording-source admissibility law under its stated bounds (single slot,
+  MaxGen 2, Layer-B WF obligations, no deadlock-freedom claim; the
+  `kernel_canceled` stamp identifies the recording path, not cancellation
+  cause or caller-intent absence). E9's refinement
   boundary now explicitly excludes worker-startup skew, with the prehistory
   obligation on every conformance/trace test.
 - **About C++ correspondence:** every strengthened property has an
