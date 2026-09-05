@@ -35,6 +35,21 @@ scripts/formal/verify-e9-park-wake.sh BEFORE any TLC invocation):
       Drained -- the model text itself names Life7 "the bridge's liveness
       obligation (and the model-level M1 mutation detector)".
 
+  E9ParkWakeNegStartUnrefinedElection  (R-F1 fail-closed startup control, #223)
+      mutation: the eligibility authority Eligible keeps the pre-R-F1
+      workerAlive-only shape (the naive startup extension -- Init gains
+      workerStarted = FALSE but nothing gates on it), so an unstarted worker
+      parks and takes the MW-S2 participant slot.
+      detector: InvStartupWellFormed (its park-phase clause reads
+      workerStarted directly and stays refined; every Eligible-routed
+      predicate, including Inv6, is unrefined by the same fragment).
+
+  E9ParkWakeNegStartUnsettledTerminal  (R-F1 fail-closed startup control, #223)
+      mutation: the Settled (join-boundary) conjunct removed from
+      ReturnQuiescent -- the run classifies ReturnedQuiescent from the
+      extended Init with zero started workers.
+      detector: InvPopulationTerminal.
+
 NOT generated (kept hand-written, do not add them here):
   E9ParkWakeBuggyPrePark / E9ParkWakeBuggyMixedSource -- snapshots of the
   pre-Phase-G E9-A protocol (a structurally different model: no SplitWait,
@@ -43,7 +58,7 @@ NOT generated (kept hand-written, do not add them here):
   auto-tracks the current positive model.
 
 Usage:
-    python3 _gen_neg.py            # regenerate the 4 committed artifacts
+    python3 _gen_neg.py            # regenerate the committed generated artifacts
     python3 _gen_neg.py --check    # read-only freshness verification
 
 `--check` renders the expected bytes in memory and compares them against the
@@ -150,6 +165,37 @@ NEG_OLD_ESCAPE = (
 NEG_NAIVE_ESCAPE = (
     "            /\\ \\/ (~SplitWait /\\ observationArmed[w])",
     "            /\\ \\/ (~SplitWait /\\ ExternalWakePossible)",
+)
+
+# NEG R-F1 unrefined election: the naive #223 startup extension — Init
+# gains workerStarted = FALSE but the eligibility AUTHORITY (Eligible)
+# keeps the pre-R-F1 workerAlive-only shape, so election and park
+# admission see a configured-but-unstarted worker as electable. An
+# unstarted W0 then commits as the MW-S2 backend participant (the
+# scheduler.cpp:706-717 election scan reads active, which is FALSE until
+# own-thread startup publication :460 — the mutant model loses exactly
+# that gate). Detector: InvStartupWellFormed's park-phase clause — it
+# reads workerStarted DIRECTLY, so it stays refined while every
+# Eligible-routed predicate (including Inv6) is unrefined by the same
+# single-fragment mutation.
+NEG_START_UNREFINED_ELECTION = (
+    "Eligible(w) == workerAlive[w] /\\ workerStarted[w]",
+    "Eligible(w) == workerAlive[w]",
+)
+
+# NEG R-F1 unsettled terminal: the join-boundary gate dropped from the
+# run-ending classification. run_impl returns only after join() of every
+# configured thread (scheduler.cpp:472-475) and the idle-dance threshold
+# live_loop_workers_ still counts unstarted workers — the Settled
+# conjunct on ReturnQuiescent encodes that; removing it lets the run
+# classify ReturnedQuiescent from the extended Init with ZERO started
+# workers. Detector: InvPopulationTerminal (reads workerStarted directly).
+NEG_START_UNSETTLED_TERMINAL = (
+    "    /\\ Settled   \\* R-F1: the run cannot classify its return before every\n"
+    "                  \\* configured thread has run (run_impl join,\n"
+    "                  \\* scheduler.cpp:472-475)\n"
+    "    /\\ Quiescent",
+    "    /\\ Quiescent",
 )
 
 CASES = [
@@ -265,6 +311,56 @@ CASES = [
             "external wait is not a return cause in the as-built park."
         ),
         "invariants": ["InvNoCauselessReturn"],
+    },
+    {
+        "module": "E9ParkWakeNegStartUnrefinedElection",
+        "desc": (
+            "GENERATED NEGATIVE (R-F1 fail-closed startup control, #223): the\n"
+            "  naive startup extension -- Init gains workerStarted = FALSE but\n"
+            "  the eligibility authority Eligible keeps the pre-R-F1\n"
+            "  workerAlive-only shape, so election and park admission treat a\n"
+            "  configured-but-unstarted worker as electable. An unstarted W0\n"
+            "  commits as the MW-S2 backend participant and parks; the C++\n"
+            "  election scan reads active (scheduler.cpp:706-717), FALSE until\n"
+            "  own-thread startup publication (:460), so the mutant loses\n"
+            "  exactly that gate. Expected TLC verdict: VIOLATION of\n"
+            "  InvStartupWellFormed (its park-phase clause reads\n"
+            "  workerStarted directly and stays refined; every Eligible-routed\n"
+            "  predicate, including Inv6, is unrefined by the same single-\n"
+            "  fragment mutation -- that masking is itself the finding: a\n"
+            "  diluted eligibility authority silences its own detectors).\n"
+            "  Every other rule is the current E9ParkWake verbatim."
+        ),
+        "mutations": [NEG_START_UNREFINED_ELECTION],
+        "cfg_comment": (
+            "R-F1 startup control (generated). The unrefined eligibility\n"
+            "authority: an unstarted worker parks and takes the participant\n"
+            "slot -- InvStartupWellFormed VIOLATED. See\n"
+            "E9ParkWakeWitnessStart2.cfg for the legal skewed shape."
+        ),
+        "invariants": ["InvStartupWellFormed"],
+    },
+    {
+        "module": "E9ParkWakeNegStartUnsettledTerminal",
+        "desc": (
+            "GENERATED NEGATIVE (R-F1 fail-closed startup control, #223): the\n"
+            "  join-boundary gate dropped from the run-ending classification.\n"
+            "  run_impl returns only after join() of every configured thread\n"
+            "  (scheduler.cpp:472-475) and the idle-dance threshold\n"
+            "  live_loop_workers_ still counts unstarted workers; the Settled\n"
+            "  conjunct on ReturnQuiescent encodes that. Removing it lets the\n"
+            "  run classify ReturnedQuiescent from the extended Init with\n"
+            "  ZERO started workers. Expected TLC verdict: VIOLATION of\n"
+            "  InvPopulationTerminal. Every other rule is the current\n"
+            "  E9ParkWake verbatim."
+        ),
+        "mutations": [NEG_START_UNSETTLED_TERMINAL],
+        "cfg_comment": (
+            "R-F1 startup control (generated). The dropped join-boundary\n"
+            "gate: the run classifies its return with zero started workers --\n"
+            "InvPopulationTerminal VIOLATED."
+        ),
+        "invariants": ["InvPopulationTerminal"],
     },
 ]
 

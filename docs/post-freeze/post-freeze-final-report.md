@@ -40,14 +40,17 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
 | `src/async/scheduler_fe2_test_seam.cpp` | 431 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
-| `src/async/scheduler.cpp` | 2231 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2245 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
 Post-freeze corrective deltas update the count here with their attribution:
 `scheduler_park_wake.cpp` 1113 → 1144 (2026-08-17, Issue #116 — test-only
 `SLUICE_ASYNC_INTERNAL_TESTING` forensics extension of
-`dump_park_forensics_for_test`; production park/wake behavior unchanged);
+`dump_park_forensics_for_test`; production park/wake behavior unchanged) and 2231 → 2245
+(2026-09-05, the #223 R-F1 startup-skew round — test-only
+`SLUICE_ASYNC_INTERNAL_TESTING` startup-publication seam in the run_impl
+thread lambda; production behavior unchanged);
 `scheduler_park_wake.cpp` 1144 → 1153 and `scheduler.cpp` 1952 → 1975
 (2026-08-17, Issue #115 — test-only post-baseline park seam in the
 internal-testing variant + the spawn/spawn_on runnable-publication wake

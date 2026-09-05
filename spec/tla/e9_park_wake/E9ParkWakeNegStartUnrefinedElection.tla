@@ -1,4 +1,4 @@
-------------------------------- MODULE E9ParkWakeNegNaiveEscape -------------------------------
+------------------------------- MODULE E9ParkWakeNegStartUnrefinedElection -------------------------------
 (*
   GENERATED ARTIFACT -- DO NOT EDIT.
   Regenerate with: python3 spec/tla/e9_park_wake/_gen_neg.py
@@ -7,14 +7,21 @@
   unexpected generated artifact fails the formal gate instead of
   silently checking an outdated mutation.)
 
-  GENERATED NEGATIVE (#185 fail-closed escape control): the naive
-  `~SplitWait /\ ExternalWakePossible` escape -- a registered-
-  but-not-ready external wait (externalWaitRegistered /\
-  ~externalReady) is NOT a wake publication in C++ (registration
-  is not a publication; the ready flag publication is the wake).
-  Expected TLC verdict: VIOLATION of InvNoCauselessReturn -- the
-  registered-not-ready causeless return is detected. Every other
-  rule is the current E9ParkWake verbatim.
+  GENERATED NEGATIVE (R-F1 fail-closed startup control, #223): the
+  naive startup extension -- Init gains workerStarted = FALSE but
+  the eligibility authority Eligible keeps the pre-R-F1
+  workerAlive-only shape, so election and park admission treat a
+  configured-but-unstarted worker as electable. An unstarted W0
+  commits as the MW-S2 backend participant and parks; the C++
+  election scan reads active (scheduler.cpp:706-717), FALSE until
+  own-thread startup publication (:460), so the mutant loses
+  exactly that gate. Expected TLC verdict: VIOLATION of
+  InvStartupWellFormed (its park-phase clause reads
+  workerStarted directly and stays refined; every Eligible-routed
+  predicate, including Inv6, is unrefined by the same single-
+  fragment mutation -- that masking is itself the finding: a
+  diluted eligibility authority silences its own detectors).
+  Every other rule is the current E9ParkWake verbatim.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -141,7 +148,7 @@ UnguardedProgressPendingExcept(w) ==
    whose thread has not yet started (the run_impl join()/live_loop_
    workers_ fact), and election of such a worker is the #210/#223
    defect class this refinement closes. *)
-Eligible(w) == workerAlive[w] /\ workerStarted[w]
+Eligible(w) == workerAlive[w]
 
 (* R-F1: no configured worker is still unstarted-and-unretired -- the
    population-establishment boundary. C++: run_impl returns only after
@@ -483,7 +490,7 @@ LeaveParkEnabled(w) ==
     /\ workerPhase[w] = "Parked"
     /\ \/ (backendWaitParticipant = w /\ BackendDomainWakeDue)
        \/ (backendWaitParticipant # w
-            /\ \/ (~SplitWait /\ ExternalWakePossible)
+            /\ \/ (~SplitWait /\ observationArmed[w])
                \/ SchedulerDomainWakeDue
                \/ runState # "Active")
 

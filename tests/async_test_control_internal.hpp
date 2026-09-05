@@ -223,6 +223,18 @@ enum class PhaseTag : unsigned char {
     // test_phase_worker (per-worker arming).
     worker_ticket_erase_done,
 
+    // R-F1 / issue #223 startup-publication seam: a worker's run_impl thread
+    // paused INSIDE its own thread lambda, BEFORE its active.store(true)
+    // publication (scheduler.cpp run_impl multi-worker lambda). Holding a
+    // worker here realizes the configured-but-unstarted state: the worker is
+    // part of the published topology (active_worker_count_ / live_loop_
+    // workers_ already count it) but is invisible to the MW-S2 election scan
+    // (active == false until the own-thread store) — the deterministic
+    // #223/#210 startup-skew construction, the C++ counterpart of the E9
+    // model's StartWorker / Eligible authority. No locks are held at this
+    // point. Fired through test_phase_worker (per-worker arming).
+    worker_startup_before_publication,
+
     count
 };
 

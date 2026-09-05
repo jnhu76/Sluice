@@ -160,16 +160,20 @@ Documented mapping notes:
    authority is persistent state, so R4/fused advances that the C++ trace
    does not observe as separate signals are invisible to the mapping
    (projection semantics).
-5. **Worker-population establishment (declared at S1A, #223)**: the model's
-   refinement boundary begins AFTER the configured worker population is
-   active (`Init`: `workerAlive = TRUE` for all; no `StartWorker`
-   transition). Partially activated startup states are legal C++ (each
-   worker publishes `active` inside its own thread) but outside the model.
-   Every corpus trace that fixes a prehistory MUST causally establish full
-   population establishment before its observation window (the #222 T4
-   ticket-seam handshake; fixtures carry the `prehistory` field). Boundaries
-   documented in `spec/tla/e9_park_wake/README.md`
-   ("Worker-population establishment boundary").
+5. **Worker-population establishment (#223; declared at S1A, MODELED at
+   R-F1)**: pre-R-F1 the model's refinement boundary began AFTER the
+   configured worker population was active (`workerAlive = TRUE` for all;
+   no `StartWorker`), and startup skew was outside the model. As of R-F1
+   the startup population protocol is MODELED (`workerStarted` Init FALSE;
+   `StartWorker`), and every corpus replay causally establishes full
+   population before its observation window: the replay wrapper compiles
+   the population-establishment steps (`StartWorker(W0)`, `StartWorker(W1)`)
+   as the FIRST pinned prefix, so the #222 T4 obligation is enforced by the
+   replay itself (the fixtures' `prehistory` field continues to declare the
+   in-test C++ pre-run; the #222 T4 ticket-seam handshake pattern remains
+   the in-test construction discipline). Boundaries documented in
+   `spec/tla/e9_park_wake/README.md`
+   ("Worker-population establishment").
 
 ## Reproduce
 

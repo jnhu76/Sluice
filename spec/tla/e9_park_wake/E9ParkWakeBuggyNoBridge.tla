@@ -33,6 +33,9 @@ VARIABLES
     backendWaitParticipant,
     bridgePending,
     workerAlive,
+    workerStarted,   \* R-F1: startup publication (FALSE -> TRUE via
+                      \* StartWorker; the C++ active.store(true) inside the
+                      \* run_impl thread lambda, scheduler.cpp:460)
     idleCount,
     terminateFlag,
     runMode,
@@ -130,20 +133,43 @@ ObserverExistsExcept(w) ==
 UnguardedProgressPendingExcept(w) ==
     (runnableVisible \/ SomeBackendWork) /\ ~ObserverExistsExcept(w)
 
-(* Routing/draining actions execute INSIDE a Worker loop (production:
-   route_runnable_locked / the loop-top and Phase-D drains run on worker
-   threads). The abstract producer actions below therefore require a live
-   Active Worker — with every Worker parked or retired there is no
-   executor, and a phantom routing would fabricate exactly the strand
+(* R-F1: the single startup-aware eligibility authority. C++ counterpart:
+   the WorkerState::active flag as read by the MW-S2 election scan
+   (scheduler.cpp:706-717) -- true exactly from the worker's own-thread
+   startup publication (scheduler.cpp:460) to its loop exit (:468/:1301).
+   workerAlive alone cannot serve: it is TRUE for a configured worker
+   whose thread has not yet started (the run_impl join()/live_loop_
+   workers_ fact), and election of such a worker is the #210/#223
+   defect class this refinement closes. *)
+Eligible(w) == workerAlive[w] /\ workerStarted[w]
+
+(* R-F1: no configured worker is still unstarted-and-unretired -- the
+   population-establishment boundary. C++: run_impl returns only after
+   join() of every configured thread (scheduler.cpp:472-475), and the
+   idle-dance convergence threshold live_loop_workers_ (set to the
+   configured count at :420, decremented only at the retire epilogue
+   :1291) still counts an unstarted worker, so the dance cannot converge
+   -- and the run cannot classify its return -- while one remains. *)
+Settled ==
+    \A v \in Workers : workerStarted[v] \/ ~workerAlive[v]
+
+(* The abstract producer actions below therefore require a live Active
+   Worker -- with every Worker parked or retired there is no executor,
+   and a phantom routing would fabricate exactly the strand
    class Inv9 exists to catch (the abstract external producer and the
    backend's own readiness are NOT Worker-executed and stay unguarded). *)
 SomeActiveWorker ==
-    \E w \in Workers : workerAlive[w] /\ workerPhase[w] = "Active"
+    \E w \in Workers : Eligible(w) /\ workerPhase[w] = "Active"
 
-(* R2: the transferable election — the lowest-id ALIVE worker. *)
+(* R2: the transferable election -- the lowest-id ALIVE worker.
+   R-F1: "alive" for election purposes is Eligible (started and not
+   retired), the exact scan domain of scheduler.cpp:706-717; a configured
+   worker whose thread has not published startup is invisible to it
+   (the #223/#210 startup-skew shape: W0 unstarted makes W1 the lowest
+   ALIVE elector). *)
 LowestAlive ==
-    IF workerAlive[W0] THEN W0
-    ELSE IF workerAlive[W1] THEN W1
+    IF Eligible(W0) THEN W0
+    ELSE IF Eligible(W1) THEN W1
     ELSE NONE
 
 (* The one-shot control wake to the backend participant (the bridge).
@@ -197,7 +223,7 @@ ExternalReadyPublish ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount,
+                   workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* A Scheduler Worker observes externalReady and routes the waiting Fiber
@@ -213,7 +239,7 @@ DrainExternalReady ==
     /\ BridgeEffect(1 - wakeEpoch)
     /\ UNCHANGED <<runningVisible, backendOutstanding, backendReady,
                    workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* A backend op becomes ready. Persistent state first; the MW-S2 BACKEND
@@ -229,7 +255,7 @@ BackendReadyPublish ==
                    backendOutstanding, externalWaitRegistered,
                    externalReady, wakeEpoch, bridgePending,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
+                   workerAlive, workerStarted, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* A running Fiber submits a backend op. *)
 SubmitBackend ==
@@ -240,7 +266,7 @@ SubmitBackend ==
     /\ UNCHANGED <<runnableVisible, runningVisible, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* A Scheduler Worker drains backendReady into runnable. *)
@@ -254,7 +280,7 @@ DrainBackendReady ==
     /\ BridgeEffect(1 - wakeEpoch)
     /\ UNCHANGED <<runningVisible, externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* A Fiber publishes runnable work from inside a Worker (route + wake). *)
@@ -267,7 +293,7 @@ PublishRunnable ==
     /\ UNCHANGED <<runningVisible, backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
+                   workerAlive, workerStarted, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* =========================================================================
    Park-admission actions (Worker side). Globally coordinated under the
@@ -277,7 +303,8 @@ PublishRunnable ==
 (* BeginParkCandidate: a live Worker with no local work elects itself a
    candidate. *)
 BeginParkCandidate(w) ==
-    /\ workerAlive[w]
+    /\ Eligible(w)   \* R-F1: a worker whose thread has not published
+                      \* startup runs no loop code (scheduler.cpp:460)
     /\ workerPhase[w] = "Active"
     /\ runState = "Active"
     /\ ParkAdmitted
@@ -288,7 +315,7 @@ BeginParkCandidate(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* FinalParkRecheckAndCommit: the candidate does a final drain + classify,
@@ -320,14 +347,14 @@ FinalParkRecheckAndCommit(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
+                   workerAlive, workerStarted, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* AbandonParkCandidate: the candidate returns to Active without
    committing. R1: the refusal beside unguarded progress must SIGNAL the
    wake domain (wake the sleeping electable sibling) — the bundled
    BridgeEffect below is the Phase G refusal signal. *)
 AbandonParkCandidate(w) ==
-    /\ workerAlive[w]
+    /\ Eligible(w)
     /\ runState = "Active"
     /\ workerPhase[w] = "ParkCandidate"
     /\ \/ ~ParkAdmitted
@@ -342,7 +369,7 @@ AbandonParkCandidate(w) ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
+                   workerAlive, workerStarted, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* EnterPhysicalPark: the committed Worker releases the wake mutex and
    parks on its chosen domain. Domain selection (P3 + Phase G):
@@ -365,7 +392,7 @@ AbandonParkCandidate(w) ==
    bridgePending set since the commit is delivered to THIS park (the
    LeavePark backend branch consumes it). *)
 EnterPhysicalPark(w) ==
-    /\ workerAlive[w]
+    /\ Eligible(w)
     /\ runState = "Active"
     /\ workerPhase[w] = "ParkCommitted"
     /\ IF /\ wakeEpoch = observedEpoch[w]   \* no pending SCHEDULER wake
@@ -408,7 +435,7 @@ EnterPhysicalPark(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   observedEpoch, workerAlive, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun>>
+                   observedEpoch, workerAlive, workerStarted, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun>>
 
 (* LeavePark: a parked Worker returns to Active to re-drain.
 
@@ -460,7 +487,7 @@ LeaveParkEnabled(w) ==
                \/ runState # "Active")
 
 LeavePark(w) ==
-    /\ workerAlive[w]
+    /\ Eligible(w)
     /\ runState = "Active"
     /\ LeaveParkEnabled(w)
     /\ IF backendWaitParticipant = w
@@ -476,8 +503,32 @@ LeavePark(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
-                   wakeEpoch, observedEpoch, workerAlive,
+                   wakeEpoch, observedEpoch, workerAlive, workerStarted,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun>>
+
+(* =========================================================================
+   R-F1: worker startup publication. Each configured worker's OS thread
+   publishes its own startup (the run_impl thread lambda's
+   worker->active.store(true), scheduler.cpp:460) independently, so
+   partial populations are legal (W0 unstarted while W1 started is the
+   #223/#210 skew shape). The publication carries NO wake: the thread
+   lambda signals nothing before entering worker_loop. It is also not
+   gated on runState: a thread starts when the hosted execution
+   environment schedules it, even
+   beside an already-published terminate (though a post-terminal start is
+   unreachable here because every terminal classification is Settled-
+   gated and retire requires startup -- the model's encoding of
+   run_impl's join, scheduler.cpp:472-475).
+   ========================================================================= *)
+StartWorker(w) ==
+    /\ ~workerStarted[w]
+    /\ workerStarted' = [workerStarted EXCEPT ![w] = TRUE]
+    /\ UNCHANGED <<runnableVisible, runningVisible,
+                   backendOutstanding, backendReady,
+                   externalWaitRegistered, externalReady,
+                   wakeEpoch, workerPhase, observedEpoch,
+                   backendWaitParticipant, bridgePending, workerAlive, idleCount,
+                   terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* =========================================================================
    R3: terminate-path retire — TWO production exit paths, neither of which
@@ -518,7 +569,7 @@ LeavePark(w) ==
       (R1) satisfies NEITHER precondition: it must re-loop and elect as
       the observer (Inv10's structural obligation). *)
 ParticipantNoProgressExit(w) ==
-    /\ workerAlive[w]
+    /\ Eligible(w)
     /\ runState = "Active"
     /\ workerPhase[w] = "Parked"
     /\ backendWaitParticipant = w
@@ -541,10 +592,17 @@ ParticipantNoProgressExit(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
+                   workerStarted,
                    observedEpoch, idleCount, runMode, retireFired, observationArmed>>
 
 RetireWorkerQuiescent(w) ==
-    /\ workerAlive[w]
+    /\ Eligible(w)
+    /\ Settled   \* R-F1: the dance-threshold convergence gate -- the C++
+                  \* idle dance cannot reach last-idle (live_loop_workers_,
+                  \* scheduler.cpp:1084/:1149) while a configured worker is
+                  \* unstarted-and-unretired; only the participant's
+                  \* no-progress exit (ParticipantNoProgressExit) retires
+                  \* without settlement.
     /\ runState = "Active"
     /\ workerPhase[w] = "Active"
     /\ \/ Quiescent
@@ -561,6 +619,7 @@ RetireWorkerQuiescent(w) ==
     /\ UNCHANGED <<runnableVisible, runningVisible,
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
+                   workerStarted,
                    workerPhase, observedEpoch,
                    backendWaitParticipant, idleCount, runMode,
                    participantExitFired, participantExitEndedRun, observationArmed>>
@@ -571,6 +630,9 @@ RetireWorkerQuiescent(w) ==
 
 ReturnStalled ==
     /\ runState = "Active"
+    /\ Settled   \* R-F1: the run cannot classify its return before every
+                  \* configured thread has run (run_impl join,
+                  \* scheduler.cpp:472-475)
     /\ GlobalClass = "MWS3"
     /\ ~ParkAdmitted
     /\ terminateFlag' = TRUE
@@ -579,11 +641,14 @@ ReturnStalled ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    runMode, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 ReturnQuiescent ==
     /\ runState = "Active"
+    /\ Settled   \* R-F1: the run cannot classify its return before every
+                  \* configured thread has run (run_impl join,
+                  \* scheduler.cpp:472-475)
     /\ Quiescent
     /\ terminateFlag' = TRUE
     /\ runState' = "ReturnedQuiescent"
@@ -591,13 +656,31 @@ ReturnQuiescent ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    runMode, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
-(* ShutdownSignal: a coordinated termination condition. Advances the wake
-   epoch (bridging into a parked participant) and ends the invocation. *)
+(* ShutdownSignal: the FUSED model action "coordinated stop publication +
+   workers observe it + convergence + invocation-end classification"
+   (runState' = "Shutdown"). ABSTRACTION BOUNDARY (R-F1 Corrective-1
+   re-audit): because the action fuses the stop publication WITH the
+   invocation end, its Settled guard states the terminal-invocation-
+   CLASSIFICATION rule -- the run may be classified as ended only after
+   every configured thread has run (the run_impl join boundary,
+   scheduler.cpp:472-475). It does NOT state that the raw termination
+   publication can never arise before settlement: C++ CAN publish
+   global_terminate_ from the MW-S2 no-progress participant exit while
+   another configured worker has not yet started, and this model
+   represents exactly that by ParticipantNoProgressExit publishing
+   terminateFlag' = TRUE with NO Settled gate. A pre-settlement stop
+   publication is therefore representable; only the terminal
+   classification / run return is population-gated. *)
 ShutdownSignal ==
     /\ runState = "Active"
+    /\ Settled   \* R-F1: only the terminal invocation classification /
+                  \* run return is population-gated (run_impl join,
+                  \* scheduler.cpp:472-475); the raw stop publication can
+                  \* arise pre-settlement and is represented by
+                  \* ParticipantNoProgressExit's ungated terminateFlag.
     /\ BridgeEffect(1 - wakeEpoch)
     /\ terminateFlag' = TRUE
     /\ runState' = "Shutdown"
@@ -605,7 +688,7 @@ ShutdownSignal ==
                    backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    workerPhase, observedEpoch, backendWaitParticipant,
-                   workerAlive, idleCount, runMode, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
+                   workerAlive, workerStarted, idleCount, runMode, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* =========================================================================
    Fiber lifecycle (collapsed).
@@ -621,7 +704,7 @@ RunFiber ==
     /\ UNCHANGED <<backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 SuspendFiber ==
@@ -633,7 +716,7 @@ SuspendFiber ==
     /\ UNCHANGED <<runnableVisible, backendOutstanding, backendReady,
                    externalReady, wakeEpoch, bridgePending, workerPhase,
                    observedEpoch, backendWaitParticipant, workerAlive,
-                   idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
+                   workerStarted, idleCount, terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 FinishFiber ==
     /\ runState = "Active"
@@ -642,7 +725,7 @@ FinishFiber ==
     /\ UNCHANGED <<runnableVisible, backendOutstanding, backendReady,
                    externalWaitRegistered, externalReady,
                    wakeEpoch, bridgePending, workerPhase, observedEpoch,
-                   backendWaitParticipant, workerAlive, idleCount,
+                   backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 (* =========================================================================
@@ -654,7 +737,7 @@ vars ==
       backendOutstanding, backendReady,
       externalWaitRegistered, externalReady,
       wakeEpoch, workerPhase, observedEpoch,
-      backendWaitParticipant, bridgePending, workerAlive, idleCount,
+      backendWaitParticipant, bridgePending, workerAlive, workerStarted, idleCount,
       terminateFlag, runMode, runState, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
 TerminalStutter ==
@@ -697,6 +780,7 @@ IdleResidentStutter ==
     /\ UNCHANGED vars
 
 Next ==
+    \/ \E w \in Workers : StartWorker(w)
     \/ ExternalReadyPublish
     \/ DrainExternalReady
     \/ SubmitBackend
@@ -732,6 +816,9 @@ Init ==
     /\ backendWaitParticipant = NONE
     /\ bridgePending = FALSE
     /\ workerAlive = [w \in Workers |-> TRUE]
+    /\ workerStarted = [w \in Workers |-> FALSE]   \* R-F1: no configured
+                                                    \* thread has published
+                                                    \* startup yet
     /\ idleCount = 0
     /\ terminateFlag = FALSE
     /\ runMode \in {"Drain", "Live"}
@@ -768,12 +855,19 @@ Inv4ExternalReadyWakes ==
 
 (* E9-Inv6: at most one backend blocking participant, and it is ALIVE
    (R2: a retired worker can never remain the elected participant — the
-   stale-election manifestation). *)
+   stale-election manifestation).
+   R-F1: "alive" for the participant is Eligible — started AND not
+   retired. A configured worker whose thread has not published startup
+   must never hold the participant slot: the election scan that fills it
+   reads the C++ active flag (scheduler.cpp:706-717), which is FALSE
+   until own-thread startup publication (:460). This refinement IS the
+   detector of NegStartUnrefinedElection (the naive extension that
+   extends Init but leaves the eligibility authority unrefined). *)
 Inv6OneBackendParticipant ==
     /\ (backendWaitParticipant = NONE
        \/ backendWaitParticipant \in Workers)
     /\ (backendWaitParticipant = NONE
-       \/ workerAlive[backendWaitParticipant])
+       \/ Eligible(backendWaitParticipant))
 
 (* E9-Inv7: MIXED-WAKE liveness authority is a STRUCTURAL obligation of
    EnterPhysicalPark's BACKEND-branch precondition, not a state formula:
@@ -829,7 +923,7 @@ Inv8BridgeReachesBackendPark ==
 Inv9NoStrandedRunnable ==
     runnableVisible
     => (  \/ \E w \in Workers :
-              workerAlive[w] /\ workerPhase[w] \in {"Active", "ParkCandidate", "ParkCommitted"}
+              Eligible(w) /\ workerPhase[w] \in {"Active", "ParkCandidate", "ParkCommitted"}
         \/ backendWaitParticipant # NONE
         \/ runState # "Active")
 
@@ -869,7 +963,7 @@ Inv10BackendProgressHasObserver ==
     \/ terminateFlag
     \/ backendWaitParticipant # NONE
     \/ (\E w \in Workers :
-           workerAlive[w]
+           Eligible(w)
            /\ workerPhase[w] \in {"Active", "ParkCandidate", "ParkCommitted"})
     \/ runState # "Active"
 
@@ -890,6 +984,31 @@ InvNoCauselessReturn ==
            /\ ~observationArmed[w]
            /\ runState = "Active")
 
+(* R-F1 startup well-formedness: the (started, alive) pair has no
+   illegal combination. (FALSE, FALSE) = retired-never-started is
+   impossible: every retire action requires Eligible(w), i.e. startup
+   happened first (the C++ loop code only runs inside the thread after
+   its active.store(true), scheduler.cpp:460). A worker in a park phase
+   or holding the participant slot is likewise necessarily started --
+   the representable-but-meaningless combinations a naive extension
+   would admit. *)
+InvStartupWellFormed ==
+    /\ \A w \in Workers : workerStarted[w] \/ workerAlive[w]
+    /\ \A w \in Workers :
+           (workerPhase[w] \in {"ParkCandidate", "ParkCommitted", "Parked"}
+            => workerStarted[w])
+
+(* R-F1 population-establishment terminal boundary: the invocation can
+   never classify its return while a configured thread has not run.
+   C++: run_impl blocks in join() on every spawned thread
+   (scheduler.cpp:472-475), so runState # "Active" (the model's
+   invocation-return classification) implies every configured worker
+   published startup. Detector of NegStartUnsettledTerminal (the Settled
+   gate dropped from the run-ending classifications). *)
+InvPopulationTerminal ==
+    runState # "Active"
+    => \A w \in Workers : workerStarted[w]
+
 Inv ==
     /\ Inv2NoLostWake
     /\ Inv4ExternalReadyWakes
@@ -899,6 +1018,8 @@ Inv ==
     /\ Inv9NoStrandedRunnable
     /\ Inv10BackendProgressHasObserver
     /\ InvNoCauselessReturn
+    /\ InvStartupWellFormed
+    /\ InvPopulationTerminal
 
 (* =========================================================================
    E9-LIFE run-lifetime properties (E9-CORRECTIVE spec 7).
@@ -959,6 +1080,27 @@ FairRetire ==
     /\ \A w \in Workers : WF_vars (ParticipantNoProgressExit(w))
     /\ \A w \in Workers : WF_vars (RetireWorkerQuiescent(w))
 
+(* R-F1: startup publication is fair -- an explicit HOST /
+   EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION: after successful
+   OS-thread creation, the hosted execution environment eventually
+   schedules each worker sufficiently for the thread function to reach
+   its startup publication. This assumption lives in the liveness
+   boundary only:
+   - it is NOT a Safety invariant;
+   - it is NOT a claim that std::thread universally guarantees
+     starvation freedom (the standard guarantees the thread function's
+     execution semantics once scheduled; it imposes no scheduling or
+     progress deadline);
+   - it is NOT proof against hostile or failed scheduler environments.
+   Without it, a created-but-never-scheduled thread would stall the
+   dance-threshold convergence forever and the Drain/Live return
+   liveness laws would fail. The Safety invariants and the W-START
+   startup-reachability witnesses do NOT depend on this fairness (they
+   hold on Spec, which carries no fairness); only the LivenessSpec
+   return laws (Life2/4/7/8) use it. *)
+FairStartWorker ==
+    \A w \in Workers : WF_vars (StartWorker(w))
+
 (* R2 election progress: candidacy and commit are fair (a refusal cycle
    must not starve the election that repairs it). *)
 FairElect ==
@@ -987,6 +1129,7 @@ LivenessSpec ==
     /\ FairRetire
     /\ FairElect
     /\ FairDrain
+    /\ FairStartWorker
 
 (* E9-LIFE-2: Drain MW-S3 returns (no producer/backend fairness). *)
 Life2DrainMWS3Returns ==
@@ -1120,5 +1263,75 @@ NoReachRefDrainMWS3ArmedPark ==
     ~(~SplitWait /\ runMode = "Drain" /\ GlobalClass = "MWS3"
       /\ \E w \in Workers :
           workerPhase[w] = "Parked" /\ observationArmed[w])
+
+(* =========================================================================
+   R-F1 startup reachability / non-vacuity witnesses (#223). Each is
+   DELIBERATELY FALSE at the target -- TLC's counterexample is the
+   witness that the startup states are genuinely represented, not
+   syntactically present. workerStarted is monotone (FALSE -> TRUE
+   only), so "started[W0] /\ ~started[W1]" is exactly "W0 published
+   before W1".
+
+   NoReachStartW0First (W-START-1): W0's startup publication precedes
+   W1's.
+
+   NoReachStartW1First (W-START-2): W1 publishes before W0 -- THE
+   historical #223/#210 shape (W0 configured-unstarted, W1
+   startup-visible). In the two-worker domain this state is also exactly
+   W-START-3 (a partial population: exactly one configured worker
+   startup-visible).
+
+   NoReachPopulationEstablished (W-START-4): the declared steady-state
+   population boundary is reached -- every configured worker has
+   published startup while the rest of the state still sits at the
+   pre-R-F1 Init values (Quiescent, no participant, no parked worker,
+   idle 0): the state the S1A boundary took as its starting point, now
+   causally established by the StartWorker steps themselves. This is the
+   transition-correspondence anchor: at states satisfying the all-started
+   boundary the extended model's guards coincide point-for-point with
+   the pre-R-F1 guard forms (Eligible == workerAlive, Settled == TRUE) --
+   a TRANSITION-SCHEMA correspondence for future transitions, NOT
+   reachable-state equivalence (W-START-5 below witnesses a settled
+   state the pre-R-F1 Init cannot generate). *)
+NoReachStartW0First ==
+    ~(workerStarted[W0] /\ ~workerStarted[W1])
+
+NoReachStartW1First ==
+    ~(workerStarted[W1] /\ ~workerStarted[W0])
+
+NoReachPopulationEstablished ==
+    ~( /\ \A w \in Workers : workerStarted[w]
+       /\ Quiescent
+       /\ runState = "Active"
+       /\ idleCount = 0
+       /\ backendWaitParticipant = NONE
+       /\ ~AnyParked )
+
+(* W-START-5 (R-F1 Corrective-1): STARTUP-HISTORY CARRY-OVER into a
+   settled state. W1 acquires the backend participant role DURING the
+   startup skew (W0 configured-unstarted makes W1 the lowest elector);
+   W0 subsequently publishes startup; the population becomes settled
+   (both started => Settled) with W1 STILL the incumbent participant and
+   the run still Active. The pre-R-F1 model cannot generate this state:
+   with both workers alive from Init, LowestAlive = W0 always, so only
+   W0 could ever take the participant slot while W0 was alive. The
+   settled reachable-state sets of the two models therefore DIFFER --
+   the mechanical proof that post-settlement guard coincidence
+   (transition-schema correspondence) is NOT reachable-state refinement.
+
+   This state is LEGAL, not a defect: the intended incumbent semantics
+   is that a late starter does NOT displace the participant (election
+   requires admission_ == none, scheduler.cpp:705; EnterPhysicalPark
+   requires an empty slot). The witness pins history sensitivity, not a
+   late-worker displacement obligation. The runState = "Active" conjunct
+   scopes the target to the live-run incumbent shape, excluding the
+   unrelated terminal-collapse family. *)
+NoReachStartW1IncumbentAfterSettlement ==
+    ~( /\ workerStarted[W0]
+       /\ workerStarted[W1]
+       /\ workerAlive[W0]
+       /\ workerAlive[W1]
+       /\ backendWaitParticipant = W1
+       /\ runState = "Active" )
 
 ====
