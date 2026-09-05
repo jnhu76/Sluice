@@ -74,6 +74,10 @@ to that obligation).
   W1 publishes before W0 — the #223/#210 partial-population skew shape.
 - `E9ParkWakeWitnessStartEstablished.cfg` — R-F1 non-vacuity witness
   (W-START-4): the steady-state population boundary, causally established.
+- `E9ParkWakeWitnessStart5.cfg`    — R-F1 Corrective-1 non-vacuity witness
+  (W-START-5): startup-history carry-over — W1 remains the incumbent
+  backend participant after W0 later starts and the population settles
+  (a settled state the pre-R-F1 Init cannot generate).
 - `E9ParkWakeNegStartUnrefinedElection.tla/.cfg` — negative model (R-F1
   fail-closed startup control): the naive startup extension — `Eligible`
   keeps the workerAlive-only shape, an unstarted worker parks and takes the
@@ -128,7 +132,7 @@ delete them.
 bash scripts/formal/verify-e9-park-wake.sh
 ```
 
-(four positive gates + ten reachability-witness gates + ten negative
+(four positive gates + eleven reachability-witness gates + ten negative
 gates; TLC runs in an isolated mktemp workspace — never in this
 directory.)
 
@@ -383,25 +387,43 @@ R-F1 adjudicated `R-F1_MODEL_VALUE_CONFIRMED` (report:
   to loop exit.
 - `LowestAlive`, `SomeActiveWorker`, and the Inv6/Inv9/Inv10 observer
   disjuncts are defined over `Eligible` (refined in place: post-settlement
-  `Eligible == workerAlive`, so every pre-R-F1 guard coincides
-  point-for-point — steady-state proofs are conserved, not re-derived).
+  `Eligible == workerAlive`, so the startup-sensitive guards reduce to the
+  pre-R-F1 guard forms for future transitions — a POST-SETTLEMENT
+  TRANSITION-SCHEMA CORRESPONDENCE. This is NOT reachable-state or
+  behavioral refinement: startup history can carry settled states the
+  pre-R-F1 Init cannot generate, witnessed by `WitnessStart5` (a skew-
+  elected W1 incumbent that persists after W0 starts and the population
+  settles), so no full refinement theorem is claimed).
 - `Settled` (no configured worker is unstarted-and-unretired) gates the
   run-ENDING classifications (`RetireWorkerQuiescent`, `ReturnQuiescent`,
   `ReturnStalled`, `ShutdownSignal`): `run_impl` returns only after `join()`
   of every configured thread (scheduler.cpp:472-475), and the idle-dance
   threshold `live_loop_workers_` still counts unstarted workers.
   `ParticipantNoProgressExit` is deliberately NOT Settled-gated (C++ :1000 is
-  not threshold-gated). `FairStartWorker` is in `LivenessSpec` — a
-  `std::thread` guarantee, not fairness invented to hide a stuck state.
+  not threshold-gated) — which is also why a raw stop publication CAN arise
+  pre-settlement (the participant's ungated `terminateFlag`); only the
+  terminal invocation classification / run return is population-gated
+  (`ShutdownSignal` is the fused stop-publication + convergence +
+  invocation-end action, and its abstraction boundary is stated on the
+  action). `FairStartWorker` is in `LivenessSpec` — an explicit HOST /
+  EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION (after successful
+  thread creation the hosted environment eventually schedules each worker
+  enough to reach its startup publication), NOT a `std::thread` semantic
+  guarantee and NOT a Safety invariant: the Safety set and the W-START
+  witnesses hold on the fairness-free `Spec`.
 - New invariants in `Inv` (both configs): `InvStartupWellFormed`
   (retired-never-started and unstarted park phases are unrepresentable) and
   `InvPopulationTerminal` (terminal ⇒ all started).
 - Reachability witnesses: `WitnessStart1` (W0 publishes first),
   `WitnessStart2` (W1 first — the #223/#210 skew shape; in the two-worker
-  domain this is exactly the partial-population state), and
+  domain this is exactly the partial-population state),
   `WitnessStartEstablished` (the declared steady-state population boundary,
   now causally established by the `StartWorker` steps themselves — the
-  projection anchor back to the pre-R-F1 model).
+  transition-correspondence anchor back to the pre-R-F1 guard forms), and
+  `WitnessStart5` (Corrective-1: startup-history carry-over — the skew-
+  elected W1 participant persists after W0 later starts and the population
+  settles; a settled state the pre-R-F1 model cannot reach, proving the
+  correspondence is transition-schema, not reachable-state equivalence).
 - Generated fail-closed negatives (`_gen_neg.py`):
   `NegStartUnrefinedElection` (the naive extension — `Eligible` keeps the
   workerAlive-only shape; an unstarted worker parks and takes the participant
@@ -427,11 +449,14 @@ Obligations this boundary carries (post-R-F1 form):
   now mechanically enforced by the replay wrapper's population prefix (and
   still the #222 T4 ticket-seam handshake pattern for in-test construction).
 - Startup-skew interleavings (start-W0-first vs start-W1-first, election
-  across partial activation, startup → steady-state refinement) are INSIDE
-  this model as of R-F1 (witnessed + negatively controlled above). What
+  across partial activation, the post-settlement transition correspondence)
+  are INSIDE this model as of R-F1 (witnessed + negatively controlled
+  above; the history-sensitive settled state is `WitnessStart5`). What
   remains outside: N > 2 worker populations (the domain is fixed
   `Workers = {W0, W1}`) and the OS thread-scheduler fairness assumption
-  beyond `WF(StartWorker)` (documented, real `std::thread` guarantee).
+  beyond `WF(StartWorker)` — which is itself an explicit HOST /
+  EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION, not a `std::thread`
+  semantic guarantee (see the bullets above).
   S1A coverage matrix; do not read E9's green as covering them.
 
 ## #196 trace-conformance pilot (2026-08-24): real C++ traces vs this model

@@ -1,8 +1,15 @@
-# R-F1 — E9 worker startup → steady-state formal refinement
+# R-F1 — E9 worker startup population modeling (post-settlement transition correspondence)
 
 Status: **CLOSED — R-F1_MODEL_VALUE_CONFIRMED** (2026-09-05).
 Preregistration: [#223 comment 5549587072](https://github.com/jnhu76/Sluice/issues/223#issuecomment-5549587072).
 Owner issue: #223. Roadmaps: #289 (Safety), #296 (R-F1 Tier-1). Execution order: #227.
+
+Claim-boundary note (adversarial-review Corrective-1, 2026-09-05): this
+report states a **post-settlement transition-schema correspondence** —
+NOT a reachable-state or behavioral refinement of the pre-R-F1 model.
+The distinction is mechanically witnessed by W-START-5 (§4). The
+verdict is unchanged: the corrective bounds the strength of the
+correspondence claim, not the model value.
 
 ```text
 BASE:   f4212eb5e65e65a544f0ca7b18fd80a054e038c5  (PR #295 merge, S1A freeze)
@@ -60,12 +67,24 @@ guards:     Eligible(w) == workerAlive[w] /\ workerStarted[w]
             ParticipantNoProgressExit deliberately NOT Settled-gated
               (C++ :1000 is not threshold-gated)
 bounds:     unchanged domain (Workers={W0,W1}, Fibers={F0})
-fairness:   + FairStartWorker = WF_vars(StartWorker(w)) — a real std::thread
-              guarantee (the thread function runs); NOT fairness invented to
-              hide a stuck state
-projection: post-settlement Eligible == workerAlive and Settled == TRUE, so
-            every guard/preservation coincides point-for-point with the
-            pre-R-F1 model; pi = strip workerStarted, drop StartWorker.
+fairness:   + FairStartWorker = WF_vars(StartWorker(w)) — an explicit HOST /
+              EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION: after
+              successful OS-thread creation, the hosted environment
+              eventually schedules each worker enough to reach its startup
+              publication. LivenessSpec only — NOT a Safety invariant, NOT
+              an unconditional std::thread guarantee (the standard
+              imposes no scheduling/progress deadline), NOT proof against
+              hostile/failed scheduler environments
+correspondence:
+            post-settlement Eligible == workerAlive and Settled == TRUE,
+            so the startup-sensitive guards REDUCE to the pre-R-F1 guard
+            forms for future transitions — POST-SETTLEMENT TRANSITION-
+            SCHEMA CORRESPONDENCE (pi = strip workerStarted, drop
+            StartWorker, applied to the transition schema). Startup
+            history may carry additional state into the settled region
+            (W-START-5: a skew-elected W1 incumbent persisting after W0
+            starts), so this is NOT reachable-state or behavioral
+            refinement; no full refinement theorem is claimed.
             W-START-4 witnesses the boundary state (old-Init shape reached
             by the StartWorker steps themselves).
 ```
@@ -74,13 +93,24 @@ New invariants in `Inv` (both configs): `InvStartupWellFormed`
 (retired-never-started and unstarted park phases are unrepresentable) and
 `InvPopulationTerminal` (`runState ≠ Active ⇒ ∀w: started[w]`).
 
-## 4. Reachability (W-START-1..4)
+## 4. Reachability (W-START-1..5)
 
 | Witness | Formula (NoReach*, violated = causal witness) | Result |
 | --- | --- | --- |
 | W-START-1 | `NoReachStartW0First` = ~(started[W0] ∧ ~started[W1]) | violated (reachable) |
 | W-START-2/3 | `NoReachStartW1First` = ~(started[W1] ∧ ~started[W0]) — the #223/#210 shape; in the 2-worker domain this state IS the partial population | violated (reachable) |
-| W-START-4 | `NoReachPopulationEstablished` = ~(∀w started ∧ Quiescent ∧ old-Init shape) — the projection anchor | violated (reachable) |
+| W-START-4 | `NoReachPopulationEstablished` = ~(∀w started ∧ Quiescent ∧ old-Init shape) — the transition-correspondence anchor | violated (reachable) |
+| W-START-5 | `NoReachStartW1IncumbentAfterSettlement` = ~(both started ∧ both alive ∧ participant = W1 ∧ Active) — startup-history carry-over: W1 takes the participant role during the skew, W0 later publishes startup, W1 REMAINS the incumbent in the settled run | violated (reachable) |
+
+W-START-5 is the Corrective-1 boundary witness: the pre-R-F1 model cannot
+generate this state (with both workers alive from Init, `LowestAlive = W0`
+always, so only W0 could ever become participant while W0 was alive). The
+settled reachable-state sets of the two models therefore differ — guard
+coincidence is transition-schema correspondence, not reachable-state
+equivalence. The witnessed state is LEGAL (a late starter does not
+displace the incumbent: election requires `admission_ == none`,
+scheduler.cpp:705); it pins history sensitivity, not a displacement
+defect.
 
 ## 5. Safety properties adjudicated
 
@@ -91,7 +121,7 @@ New invariants in `Inv` (both configs): `InvStartupWellFormed`
 | P3 startup role safety (W0-inactive / W1-active → W1 LowestAlive) | CONTRACTUAL (legal, witnessed) | representable (W-START-2); role is stable — election requires `admission_ == none` (:705) and `EnterPhysicalPark` requires an empty slot |
 | P4 late arrival | CONTRACTUAL (no displacement) | structural; no new action; documented |
 | P5 no stranded backend progress | CONTRACTUAL (Inv10) | holds, refined to `Eligible` observers |
-| P6 startup → steady-state refinement | MODEL-INTERNAL | guard-coincidence argument (§3 projection) + W-START-4 anchor; steady-state gates all re-run green |
+| P6 post-settlement transition correspondence | MODEL-INTERNAL | Outcome: after all configured workers have started, `Eligible == workerAlive` and `Settled == TRUE`, so the startup-sensitive guards reduce to the pre-R-F1 transition forms. Limitation: startup history may produce settled states not reachable from the pre-R-F1 Init; W-START-5 witnesses one such state. No full reachable-state or behavioral refinement theorem is claimed. (Corrective-1 reclassification of the former "startup → steady-state refinement" — guard-coincidence alone does not prove refinement, and demonstrating something stronger was out of scope.) |
 
 Key coverage finding: the refinement was NOT cosmetic — Inv6/Inv9/Inv10
 counted an unstarted worker as a live observer/eligible under the old
@@ -189,15 +219,19 @@ signal.
 ```text
 python3 scripts/formal/verify.py doctor   PASS
 python3 scripts/formal/verify.py check    PASS (manifest/structure/docs)
-bash scripts/formal/verify-e9-park-wake.sh   24/24 PASS (4 positive,
-  10 witnesses, 10 negatives; freshness gate over 14 generated artifacts)
+bash scripts/formal/verify-e9-park-wake.sh   25/25 PASS (4 positive,
+  11 witnesses incl. W-START-5, 10 negatives; freshness gate over 14
+  generated artifacts)   [Corrective-1 re-run]
 bash scripts/formal/verify-e9-trace-conformance.sh  PASS (self-test
   accept+reject legs, 11 corpus fixtures, 3 malformed fail-closed)
-Affected Debug tests: 13 scheduler/E9 targets PASS (multi_worker*,
-  scheduler_* topology/identity/tls, phase_g*, issue115, issue161×2,
-  e9_trace_conformance); new test 20/20 deterministic runs.
-State-space cost: safety split 32,328 / reference 32,092 distinct states
-  (extended model); full gate ~40s at TLC_WORKERS=4.
+  [Corrective-1 re-run]
+Corrective C++ evidence: issue223_startup_skew_election_test PASS (the
+  corrective changed no C++ file, so the original 13-target scheduler/E9
+  Debug evidence at 290bddc4 remains current).
+State-space cost: unchanged by the corrective (W-START-5 adds a witness
+  invariant definition, not a transition) — safety split 32,328 /
+  reference 32,092 distinct states; the full gate is one witness leg
+  longer than the original run at TLC_WORKERS=4.
 ```
 
 ## 10. Adversarial answers (mission §21)
@@ -212,10 +246,15 @@ State-space cost: safety split 32,328 / reference 32,092 distinct states
    election ↔ :706-717 (pinned by the new deterministic test), settlement ↔
    join (pinned by the same test's completion), retirement ↔ the epilogue
    (existing #189/#191 evidence).
-5. No — `FairStartWorker` encodes the `std::thread` guarantee that the
-   thread function runs; it UNLOCKS the real convergence path (a never-
-   started thread would legally stall the dance threshold), it does not
-   paper over one.
+5. No — `FairStartWorker` is an explicit HOST / EXECUTION-ENVIRONMENT
+   FORWARD-PROGRESS ASSUMPTION: after successful thread creation, the
+   hosted execution environment eventually schedules each worker enough
+   to reach its startup publication. It is not an unconditional
+   `std::thread` guarantee (the standard imposes no scheduling or
+   progress deadline) and not a Safety invariant. It UNLOCKS the real
+   convergence path (a created-but-never-scheduled thread would legally
+   stall the dance threshold), it does not paper over one; the Safety
+   set and the W-START witnesses hold on the fairness-free `Spec`.
 6. Duplicated authority: none found (RD-2). Over-permissive representation:
    the pair encoding's illegal corners are pinned; C++'s single-reader
    discipline is documented (RD-3), with two comment/name corrections
@@ -227,14 +266,17 @@ State-space cost: safety split 32,328 / reference 32,092 distinct states
 
 ## 11. SP-1 stronger-proof disposition
 
-**NOT_WORTH_STRONGER_PROOF** for the #223 gap as registered. The startup →
-steady-state refinement and election safety are now covered at the TLA+ layer
-with witnesses and negative controls; the residual (N > 2 worker
-populations) is a state-space parameterization question, not a
-proof-tool question — a `Workers = {W0, W1, W2}` config would extend the
-same checks without a new tool family. The S1A S2 candidate "startup →
-steady-state population refinement / election safety (#223)" is discharged
-by this experiment.
+**NOT_WORTH_STRONGER_PROOF** for the #223 gap as registered. Startup-
+sensitive Safety obligations are modeled; the post-settlement transition
+correspondence is established; history-sensitive settled states are
+explicitly witnessed (W-START-5); no residual theorem obligation currently
+earns mechanization. The residual (N > 2 worker populations) is a
+state-space parameterization question, not a proof-tool question — a
+`Workers = {W0, W1, W2}` config would extend the same checks without a new
+tool family. The S1A S2 candidate "startup → steady-state population
+refinement / election safety (#223)" is discharged by this experiment at
+the corrected claim strength: transition correspondence, not a full
+refinement theorem.
 
 ## 12. Residual
 
@@ -249,7 +291,56 @@ by this experiment.
   for future authority refactorings: consolidate the authority, but keep at
   least one detector that reads the raw fact.
 
-## 13. Verdict
+## 13. Claim-boundary corrective record (Corrective-1, 2026-09-05)
+
+Focused adversarial-review corrective on PR #297; R-F1 core result NOT
+reopened, production C++ semantics unchanged.
+
+**P1-1 — refinement claim corrected.** The original §3 "projection"
+wording (every guard/preservation coincides point-for-point ⇒ the
+extended model projects to the pre-R-F1 model) was over-strong:
+post-settlement guard coincidence establishes a TRANSITION-SCHEMA
+CORRESPONDENCE, not reachable-state/behavioral refinement. Startup
+history can carry additional state into the settled region — W-START-5
+witnesses the concrete shape (StartWorker(W1) → W1 takes the participant
+role during the skew → StartWorker(W0) → settled with W1 still
+incumbent), which the pre-R-F1 Init cannot generate (both alive from
+Init ⇒ LowestAlive = W0 always). Corrected throughout (model header,
+suite README, §3, §5 P6, §11, manifest, coverage matrix).
+
+**P1-2 — fairness reclassified.** `FairStartWorker` is retained (Life2/
+4/7/8 genuinely require it: a created-but-never-scheduled worker would
+indefinitely block the dance-threshold convergence) but restated as an
+explicit HOST / EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION —
+not an unconditional `std::thread` semantic guarantee. No new fairness
+mutant was invented; the negative-control set is unchanged. The Safety
+claim does not depend on `FairStartWorker`: the Safety set and all
+W-START witnesses hold on the fairness-free `Spec`.
+
+**ShutdownSignal / Settled re-audit.** `ShutdownSignal` is the FUSED
+model action "stop publication + workers observe + convergence +
+invocation-end classification"; its `Settled` guard is the terminal-
+invocation-CLASSIFICATION rule (the run_impl join boundary), NOT a
+claim that a raw stop publication cannot arise before settlement — the
+C++ no-progress participant exit publishes `global_terminate_` before
+settlement, and the model represents that exactly by
+`ParticipantNoProgressExit`'s ungated `terminateFlag' = TRUE`.
+`ReturnQuiescent`/`ReturnStalled`/`RetireWorkerQuiescent` gates are
+classification/dance-convergence gates consistent with the same
+boundary. Abstraction made explicit on the action; no redesign.
+
+**Q5 both-sides pinning.** Model side: W-START-5 (mechanical witness).
+C++ side: structural — the only reader of `WorkerState::active` is the
+MW-S2 election scan (scheduler.cpp:706-717), which additionally requires
+`admission_ == none` (:705); a startup publication touches neither the
+admission authority nor the incumbent, so no displacement path exists.
+The deterministic test pins the election-during-skew half and the join
+boundary; the exact "late worker starts while incumbent persists" C++
+execution order is covered by this structural argument, not by a
+dedicated test execution (test changes were outside the corrective's
+authorized scope).
+
+## 14. Verdict
 
 ```text
 R-F1_MODEL_VALUE_CONFIRMED
@@ -257,9 +348,15 @@ R-F1_MODEL_VALUE_CONFIRMED
   the startup expansion exposes material new Safety evidence
   (eligibility/observer refinement forced by the enlarged state space,
   the terminal population boundary as a proved invariant, both
-  publication orders + the skew-election shape witnessed, two
+  publication orders + the skew-election shape witnessed, the
+  history-sensitive settled state witnessed (W-START-5), two
   fail-closed negative controls, and a deterministic C++ witness for the
-  #210 shape); the expansion is retained in the E9 suite at 24 gates.
+  #210 shape); the expansion is retained in the E9 suite at 25 gates.
+
+  Claim strength (Corrective-1): startup population modeled;
+  post-settlement transition correspondence established; startup-history
+  carry-over mechanically witnessed; full old-model reachable-state
+  equivalence NOT claimed; FairStartWorker explicitly environmental.
 
 PRODUCTION C++ CHANGED: NO (test-only seam + read-only test accessor).
 SP-1: NOT_WORTH_STRONGER_PROOF.

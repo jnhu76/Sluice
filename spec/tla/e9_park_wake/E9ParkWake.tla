@@ -117,11 +117,25 @@
   (ParticipantNoProgressExit has no Settled guard). A late starter never
   displaces an incumbent participant: election requires
   admission_ == none (scheduler.cpp:705) and the model's
-  EnterPhysicalPark requires backendWaitParticipant = NONE. StartWorker
-  publishes NO wake (the thread lambda signals nothing before the loop)
-  and is fair in LivenessSpec (std::thread guarantees the thread
-  function runs -- a real system guarantee, not a fairness assumption
-  invented to hide a stuck state).
+  EnterPhysicalPark requires backendWaitParticipant = NONE -- so startup
+  history can carry the participant role INTO the settled region
+  (W-START-5 witnesses W1 remaining the incumbent after W0 later starts
+  and the population settles). StartWorker publishes NO wake (the thread
+  lambda signals nothing before the loop) and is fair in LivenessSpec:
+  an explicit HOST / EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION
+  (after successful thread creation, the hosted environment eventually
+  schedules each worker enough to reach its startup publication) -- NOT
+  a std::thread semantic guarantee (see the FairStartWorker note).
+
+  CLAIM BOUNDARY (R-F1 Corrective-1, #223): once all configured workers
+  have started, Eligible(w) == workerAlive[w] and Settled == TRUE, so the
+  startup-sensitive guards REDUCE to the pre-R-F1 guard forms for future
+  transitions -- a POST-SETTLEMENT TRANSITION-SCHEMA CORRESPONDENCE.
+  Startup history may still carry additional state into the settled
+  region (a skew-elected incumbent; W-START-5), so this is NOT a proof
+  that the set of settled reachable states or behaviors equals the
+  pre-R-F1 reachable state space. No reachable-state or behavioral
+  refinement theorem is claimed.
 
   Persistent state (runnable/running/backend/external ready) is kept
   SEPARATE from the wake signal/epoch. The wake notification is NOT the
@@ -635,7 +649,8 @@ LeavePark(w) ==
    partial populations are legal (W0 unstarted while W1 started is the
    #223/#210 skew shape). The publication carries NO wake: the thread
    lambda signals nothing before entering worker_loop. It is also not
-   gated on runState: a thread starts when the OS schedules it, even
+   gated on runState: a thread starts when the hosted execution
+   environment schedules it, even
    beside an already-published terminate (though a post-terminal start is
    unreachable here because every terminal classification is Settled-
    gated and retire requires startup -- the model's encoding of
@@ -780,16 +795,28 @@ ReturnQuiescent ==
                    backendWaitParticipant, workerAlive, workerStarted, idleCount,
                    runMode, retireFired, participantExitFired, participantExitEndedRun, observationArmed>>
 
-(* ShutdownSignal: a coordinated termination condition. Advances the wake
-   epoch (bridging into a parked participant) and ends the invocation. *)
+(* ShutdownSignal: the FUSED model action "coordinated stop publication +
+   workers observe it + convergence + invocation-end classification"
+   (runState' = "Shutdown"). ABSTRACTION BOUNDARY (R-F1 Corrective-1
+   re-audit): because the action fuses the stop publication WITH the
+   invocation end, its Settled guard states the terminal-invocation-
+   CLASSIFICATION rule -- the run may be classified as ended only after
+   every configured thread has run (the run_impl join boundary,
+   scheduler.cpp:472-475). It does NOT state that the raw termination
+   publication can never arise before settlement: C++ CAN publish
+   global_terminate_ from the MW-S2 no-progress participant exit while
+   another configured worker has not yet started, and this model
+   represents exactly that by ParticipantNoProgressExit publishing
+   terminateFlag' = TRUE with NO Settled gate. A pre-settlement stop
+   publication is therefore representable; only the terminal
+   classification / run return is population-gated. *)
 ShutdownSignal ==
     /\ runState = "Active"
-    /\ Settled   \* R-F1: the fused stop-publication -> threads-observe ->
-                  \* join-completes step ends the invocation, so it
-                  \* requires the population boundary (run_impl join,
-                  \* scheduler.cpp:472-475); a stop publication before
-                  \* settlement is delivered through the wake/bridge
-                  \* machinery and the workers converge first.
+    /\ Settled   \* R-F1: only the terminal invocation classification /
+                  \* run return is population-gated (run_impl join,
+                  \* scheduler.cpp:472-475); the raw stop publication can
+                  \* arise pre-settlement and is represented by
+                  \* ParticipantNoProgressExit's ungated terminateFlag.
     /\ BridgeEffect(1 - wakeEpoch)
     /\ terminateFlag' = TRUE
     /\ runState' = "Shutdown"
@@ -1189,12 +1216,24 @@ FairRetire ==
     /\ \A w \in Workers : WF_vars (ParticipantNoProgressExit(w))
     /\ \A w \in Workers : WF_vars (RetireWorkerQuiescent(w))
 
-(* R-F1: startup publication is fair. std::thread guarantees the spawned
-   thread's function runs (the OS schedules it); without this fairness a
-   thread that never starts would stall the dance-threshold convergence
-   forever and the Drain/Live return liveness laws would fail on a state
-   the real system cannot stay in. This encodes a real system guarantee;
-   it is NOT fairness invented to hide a startup stuck state. *)
+(* R-F1: startup publication is fair -- an explicit HOST /
+   EXECUTION-ENVIRONMENT FORWARD-PROGRESS ASSUMPTION: after successful
+   OS-thread creation, the hosted execution environment eventually
+   schedules each worker sufficiently for the thread function to reach
+   its startup publication. This assumption lives in the liveness
+   boundary only:
+   - it is NOT a Safety invariant;
+   - it is NOT a claim that std::thread universally guarantees
+     starvation freedom (the standard guarantees the thread function's
+     execution semantics once scheduled; it imposes no scheduling or
+     progress deadline);
+   - it is NOT proof against hostile or failed scheduler environments.
+   Without it, a created-but-never-scheduled thread would stall the
+   dance-threshold convergence forever and the Drain/Live return
+   liveness laws would fail. The Safety invariants and the W-START
+   startup-reachability witnesses do NOT depend on this fairness (they
+   hold on Spec, which carries no fairness); only the LivenessSpec
+   return laws (Life2/4/7/8) use it. *)
 FairStartWorker ==
     \A w \in Workers : WF_vars (StartWorker(w))
 
@@ -1384,9 +1423,12 @@ NoReachRefDrainMWS3ArmedPark ==
    pre-R-F1 Init values (Quiescent, no participant, no parked worker,
    idle 0): the state the S1A boundary took as its starting point, now
    causally established by the StartWorker steps themselves. This is the
-   projection anchor: from states satisfying the all-started boundary
-   the extended model's guards coincide point-for-point with the
-   pre-R-F1 model (Eligible == workerAlive, Settled == TRUE). *)
+   transition-correspondence anchor: at states satisfying the all-started
+   boundary the extended model's guards coincide point-for-point with
+   the pre-R-F1 guard forms (Eligible == workerAlive, Settled == TRUE) --
+   a TRANSITION-SCHEMA correspondence for future transitions, NOT
+   reachable-state equivalence (W-START-5 below witnesses a settled
+   state the pre-R-F1 Init cannot generate). *)
 NoReachStartW0First ==
     ~(workerStarted[W0] /\ ~workerStarted[W1])
 
@@ -1400,5 +1442,32 @@ NoReachPopulationEstablished ==
        /\ idleCount = 0
        /\ backendWaitParticipant = NONE
        /\ ~AnyParked )
+
+(* W-START-5 (R-F1 Corrective-1): STARTUP-HISTORY CARRY-OVER into a
+   settled state. W1 acquires the backend participant role DURING the
+   startup skew (W0 configured-unstarted makes W1 the lowest elector);
+   W0 subsequently publishes startup; the population becomes settled
+   (both started => Settled) with W1 STILL the incumbent participant and
+   the run still Active. The pre-R-F1 model cannot generate this state:
+   with both workers alive from Init, LowestAlive = W0 always, so only
+   W0 could ever take the participant slot while W0 was alive. The
+   settled reachable-state sets of the two models therefore DIFFER --
+   the mechanical proof that post-settlement guard coincidence
+   (transition-schema correspondence) is NOT reachable-state refinement.
+
+   This state is LEGAL, not a defect: the intended incumbent semantics
+   is that a late starter does NOT displace the participant (election
+   requires admission_ == none, scheduler.cpp:705; EnterPhysicalPark
+   requires an empty slot). The witness pins history sensitivity, not a
+   late-worker displacement obligation. The runState = "Active" conjunct
+   scopes the target to the live-run incumbent shape, excluding the
+   unrelated terminal-collapse family. *)
+NoReachStartW1IncumbentAfterSettlement ==
+    ~( /\ workerStarted[W0]
+       /\ workerStarted[W1]
+       /\ workerAlive[W0]
+       /\ workerAlive[W1]
+       /\ backendWaitParticipant = W1
+       /\ runState = "Active" )
 
 ====
