@@ -207,6 +207,19 @@ struct Scheduler::AsyncTestAccess {
         return true;
     }
 
+    // R-F1 / issue #223 startup-skew observation: the current MW-S2
+    // admission owner (admission_owner_; static_cast<unsigned>(-1) when no
+    // admission is in progress). Acquires global_mtx_ internally — call only
+    // from a coordinator thread while every worker is parked or seam-held
+    // outside the lock (the mw_s2_committed_before_wait_one seam pause is
+    // outside global_mtx_ by design).
+    static unsigned elected_participant_id(Scheduler& s) {
+        s.global_mtx_.lock();
+        unsigned id = s.admission_owner_;
+        s.global_mtx_.unlock();
+        return id;
+    }
+
     // Register a test deadline from a non-worker thread (the coordinator).
     // Mirrors await_wait_deadline admission MINUS the fiber-suspend path.
     // Acquires global_mtx_ internally (the caller does NOT hold it).

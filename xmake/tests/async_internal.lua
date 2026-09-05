@@ -716,3 +716,13 @@ sluice_internal_async_test("fe3_cross_frontend_mixing_test",
 -- resolves via the public src/async include path of
 -- sluice_async_internal_testing.
 sluice_internal_async_test("tax0_ablation_seam_test")
+
+-- Issue #223 / R-F1 deterministic startup-skew correspondence witness: a
+-- worker held BEFORE its own-thread active publication (WorkerStartupSeam)
+-- is invisible to the MW-S2 election scan, so worker 1 legitimately elects
+-- as the backend participant while worker 0 is configured-but-unstarted —
+-- the #223/#210 skew shape, schedule-pinned (the E9 model's StartWorker /
+-- Eligible authority), plus the join boundary (the run returns only after
+-- every configured thread has run). Deterministic (per-worker causal seams);
+-- NO sleep-ordering.
+sluice_internal_async_test("issue223_startup_skew_election_test")

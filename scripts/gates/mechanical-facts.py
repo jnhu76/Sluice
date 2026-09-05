@@ -100,6 +100,10 @@ KNOWN_TRACKER_REFS = {
                                        # frontend-neutrality separation;
                                        # 2026-08-27 AC-2c-b LOC delta attribution
                                        # in this report references it)
+    223,                                # worker-start population abstraction
+                                       # boundary (2026-09-05, R-F1 startup-skew
+                                       # round — test-only seam LOC delta
+                                       # attribution in this report)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

@@ -238,6 +238,29 @@ struct Issue161EraseDoneSeam {
     }
 };
 
+// ---- R-F1 / issue #223 startup-publication seam ----
+// Holds a worker's run_impl thread BEFORE its own-thread active publication
+// (the configured-but-unstarted state). Per-worker arming: the sibling's pass
+// through the same site is let through unpaused, so a test can pin W0
+// unstarted while W1 publishes — the deterministic #223/#210 startup-skew
+// construction and the C++ counterpart of the E9 model's StartWorker /
+// Eligible authority.
+struct WorkerStartupSeam {
+    static void arm_for_worker(sluice::async::Scheduler& s,
+                               unsigned worker_id) noexcept {
+        sluice_async_test::arm_worker(
+            s, PhaseTag::worker_startup_before_publication, worker_id);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::worker_startup_before_publication);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::worker_startup_before_publication);
+    }
+};
+
 // ---- Phase G G1 reproducer construction: run-entry seam. run_impl pauses
 // AFTER publishing the invocation topology (active_worker_count_ set,
 // pending_spawn_ distributed, terminate cleared) and BEFORE starting any

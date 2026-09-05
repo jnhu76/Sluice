@@ -457,6 +457,20 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
             threads.emplace_back([this, worker, &run_workers] {
                 g_worker = worker;
                 worker->owner_scheduler = this; // caller-validation identity
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                // R-F1 (#223) startup-publication seam: pause this worker
+                // BEFORE its own-thread active publication. Holding a
+                // configured worker here is the deterministic #223/#210
+                // startup-skew construction: the topology already counts it,
+                // but the MW-S2 election scan (which reads `active`) cannot
+                // see it until the store below. Per-worker arming; no locks
+                // held. The single-worker path has no such window (the flag
+                // is published by the calling thread before the loop).
+                sluice_async_test::test_phase_worker(
+                    *this,
+                    sluice_async_test::PhaseTag::worker_startup_before_publication,
+                    worker->id);
+#endif
                 worker->active.store(true, std::memory_order_release);
                 worker->idle_dance_contributed_.store(0, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
