@@ -1,0 +1,1125 @@
+{
+  "baselines": {
+    "A_file_only": {
+      "description": "changed file -> manifest implementation_bindings -> suites -> claims",
+      "false_positives_vs_expected": 19,
+      "note": "file-level recall is full on this corpus (every anchor file is also a binding file), but it drags in every suite sharing the file: 17 extra claim flags across 9 nonzero specimens, e.g. T10 flags 4 claims where F04 alone is defensible."
+    },
+    "B_explicit_anchors_only": {
+      "description": "changed symbol == registered anchor (engine depth 0)",
+      "note": "misses every helper/bypass/thunk case (T2/T3/T9/T10): the core value SCIP adds over annotation-only.",
+      "recall_hits": 6
+    },
+    "C_scip_graph": {
+      "description": "direction-monotonic bounded traversal, depth 2, namespace hubs excluded",
+      "false_positives_vs_expected": 3,
+      "note": "T5's F03 extra is a conservative true-ish positive (record_terminal validates through the edited gate); T7's F01/F06 extras come from arena-family neighborhoods of the moved TU.",
+      "recall_hits": 10
+    }
+  },
+  "default_max_depth": 2,
+  "depth_experiment": {
+    "by_depth": {
+      "0": {
+        "claims": 6,
+        "recall_hits": 6
+      },
+      "1": {
+        "claims": 9,
+        "recall_hits": 8
+      },
+      "2": {
+        "claims": 13,
+        "recall_hits": 10
+      },
+      "3": {
+        "claims": 13,
+        "recall_hits": 10
+      }
+    },
+    "chosen_default": 2,
+    "justification": "depth 2 is the smallest depth reaching full recall (T3 two-hop, T10 thunk-chain need 2); depth 3 adds zero claims on this corpus.",
+    "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO)."
+  },
+  "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299)",
+  "generated_at": "2026-09-05T16:54:20Z",
+  "head_sha": "48f89d90cf228e2055d81d5c98ce0ab9f7068721",
+  "historical_validation": {
+    "index_stale_flag": "fired as designed (graph head != historical commit head); hits kept but marked unverified",
+    "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
+    "result": {
+      "changed_symbols_exemplar": "sluice_async_test::PhaseTag::worker_startup_before_publication",
+      "claims": [
+        "F08"
+      ],
+      "classification": "DIRECT_FORMAL_IMPACT",
+      "note": "a real historical formal-relevant commit is recovered with the correct claim; run_impl body edits attribute via nearest-preceding definition",
+      "path": "PhaseTag::worker_startup_before_publication <- referenced by <- Scheduler::run_impl (F08 anchor)"
+    }
+  },
+  "llm_adjudication": {
+    "cases": [
+      {
+        "context": {
+          "full": {
+            "approx_tokens": 6898,
+            "bytes": 27593
+          },
+          "reduced": {
+            "approx_tokens": 2698,
+            "bytes": 10794
+          }
+        },
+        "full": {
+          "F08": "NO_SEMANTIC_CHANGE_LIKELY"
+        },
+        "id": "T1",
+        "note": "engine surfaced exactly F08 (DIRECT); both modes identical verdict",
+        "reduced": {
+          "F08": "NO_SEMANTIC_CHANGE_LIKELY"
+        }
+      },
+      {
+        "context": {
+          "full": {
+            "approx_tokens": 7020,
+            "bytes": 28083
+          },
+          "reduced": {
+            "approx_tokens": 2821,
+            "bytes": 11284
+          }
+        },
+        "full": {
+          "F08": "NO_SEMANTIC_CHANGE_LIKELY"
+        },
+        "id": "T2",
+        "note": "path evidence notify_external_wake -> signal_wake_locked correct",
+        "reduced": {
+          "F08": "NO_SEMANTIC_CHANGE_LIKELY"
+        }
+      },
+      {
+        "context": {
+          "full": {
+            "approx_tokens": 6686,
+            "bytes": 26747
+          },
+          "reduced": {
+            "approx_tokens": 212,
+            "bytes": 849
+          }
+        },
+        "full": {
+          "F01": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F03": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F04": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F06": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F08": "NO_SEMANTIC_CHANGE_LIKELY"
+        },
+        "id": "T4",
+        "note": "reduced mode had zero claims to read (849 bytes); full mode forced the adjudicator to read and dismiss all 5 claims (~6.7KB) for the same outcome",
+        "reduced": {
+          "(no claims)": "NO_SEMANTIC_CHANGE_LIKELY (engine NO accepted: no path, no binding, no risk)"
+        }
+      },
+      {
+        "context": {
+          "full": {
+            "approx_tokens": 7200,
+            "bytes": 28800
+          },
+          "reduced": {
+            "approx_tokens": 3908,
+            "bytes": 15635
+          }
+        },
+        "full": {
+          "F01": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F03": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F04": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F06": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F08": "NO_SEMANTIC_CHANGE_LIKELY"
+        },
+        "id": "T5",
+        "note": "reduced set {F01,F03,F06} is the defensible review set; full adds F04/F08 noise",
+        "reduced": {
+          "F01": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F03": "NO_SEMANTIC_CHANGE_LIKELY",
+          "F06": "NO_SEMANTIC_CHANGE_LIKELY"
+        }
+      },
+      {
+        "context": {
+          "full": {
+            "approx_tokens": 6865,
+            "bytes": 27463
+          },
+          "reduced": {
+            "approx_tokens": 1407,
+            "bytes": 5631
+          }
+        },
+        "full": {
+          "F04": "NO_SEMANTIC_CHANGE_LIKELY"
+        },
+        "id": "T10",
+        "note": "thunk -> AsyncBackend::publish -> publish_from_reap path matches the real publication chain",
+        "reduced": {
+          "F04": "NO_SEMANTIC_CHANGE_LIKELY"
+        }
+      }
+    ],
+    "context_reduction": {
+      "per_case": {
+        "T1": 0.391,
+        "T10": 0.205,
+        "T2": 0.402,
+        "T4": 0.032,
+        "T5": 0.543
+      },
+      "ratio": 0.319,
+      "total_full_bytes": 138686,
+      "total_reduced_bytes": 44193
+    },
+    "disclosure": "The adjudicator is the implementing agent itself (same model, single run, no rater diversity). All specimens are comment-only edits by design (the pilot must not change production semantics), so every verdict is NO_SEMANTIC_CHANGE_LIKELY. This experiment therefore measures CONTEXT REDUCTION AND CLAIM TARGETING ONLY, not semantic discrimination on substantive diffs. Verdicts are advisory and never refresh anything.",
+    "verdict_vocabulary": [
+      "REVALIDATE_REQUIRED",
+      "MODEL_UPDATE_LIKELY",
+      "CLAIM_BOUNDARY_REVIEW",
+      "NO_SEMANTIC_CHANGE_LIKELY",
+      "INSUFFICIENT_EVIDENCE"
+    ]
+  },
+  "specimens": [
+    {
+      "baseline_a_claims": [
+        "F03",
+        "F04",
+        "F08"
+      ],
+      "changed_files": [
+        "src/async/scheduler_park_wake.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        }
+      },
+      "description": "direct anchor edit: body of Scheduler::signal_wake_locked (F08 authority)",
+      "expected_claims": [
+        "F08"
+      ],
+      "expected_class": "DIRECT_FORMAL_IMPACT",
+      "got_claims": [
+        "F08"
+      ],
+      "got_class": "DIRECT_FORMAL_IMPACT",
+      "id": "T1",
+      "notes": "",
+      "patch": "build/formal-impact/specimen-T1.patch",
+      "patch_bytes": 281,
+      "result": {
+        "claims": [
+          {
+            "class": "DIRECT_FORMAL_IMPACT",
+            "evidence": [
+              "docs/verification/formal/e9-trace-conformance.md",
+              "tests/issue115_runnable_publication_wake_test.cpp",
+              "tests/issue161_idle_dance_orphan_test.cpp",
+              "tests/issue223_startup_skew_election_test.cpp"
+            ],
+            "formal_suites": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
+            "id": "F08",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+              ]
+            ],
+            "title": "wait / wake / lost-wakeup closure",
+            "via": [
+              "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8). (changed symbol is a registered anchor)"
+            ]
+          }
+        ],
+        "classification": "DIRECT_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F03",
+        "F04",
+        "F08"
+      ],
+      "changed_files": [
+        "src/async/scheduler_park_wake.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        }
+      },
+      "description": "helper edit: Scheduler::notify_external_wake calls the signal_wake_locked anchor",
+      "expected_claims": [
+        "F08"
+      ],
+      "expected_class": "STRUCTURAL_FORMAL_IMPACT",
+      "got_claims": [
+        "F08"
+      ],
+      "got_class": "STRUCTURAL_FORMAL_IMPACT",
+      "id": "T2",
+      "notes": "",
+      "patch": "build/formal-impact/specimen-T2.patch",
+      "patch_bytes": 292,
+      "result": {
+        "claims": [
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "docs/verification/formal/e9-trace-conformance.md",
+              "tests/issue115_runnable_publication_wake_test.cpp",
+              "tests/issue161_idle_dance_orphan_test.cpp",
+              "tests/issue223_startup_skew_election_test.cpp"
+            ],
+            "formal_suites": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
+            "id": "F08",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
+                "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+              ],
+              [
+                "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
+                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+              ],
+              [
+                "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
+                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8).",
+                "cxx . . $ sluice/async/Scheduler#wake_epoch_."
+              ]
+            ],
+            "title": "wait / wake / lost-wakeup closure",
+            "via": [
+              "structural path depth 1",
+              "structural path depth 2"
+            ]
+          }
+        ],
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F04",
+        "F08"
+      ],
+      "changed_files": [
+        "src/async/scheduler.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        }
+      },
+      "description": "two-hop helper: drain_routed_completion_waits_locked -> (direct caller) -> signal_wake_locked",
+      "expected_claims": [
+        "F08"
+      ],
+      "expected_class": "STRUCTURAL_FORMAL_IMPACT",
+      "got_claims": [
+        "F08"
+      ],
+      "got_class": "STRUCTURAL_FORMAL_IMPACT",
+      "id": "T3",
+      "notes": "mid-layer drain helper two reference-hops from the F08 wake authority",
+      "patch": "build/formal-impact/specimen-T3.patch",
+      "patch_bytes": 261,
+      "result": {
+        "claims": [
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "docs/verification/formal/e9-trace-conformance.md",
+              "tests/issue115_runnable_publication_wake_test.cpp",
+              "tests/issue161_idle_dance_orphan_test.cpp",
+              "tests/issue223_startup_skew_election_test.cpp"
+            ],
+            "formal_suites": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
+            "id": "F08",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/Scheduler#drain_routed_completion_waits_locked(c9857a73d68e59ba).",
+                "cxx . . $ sluice/async/Scheduler#route_runnable_locked(141ce49096d81f8f).",
+                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+              ],
+              [
+                "cxx . . $ sluice/async/Scheduler#drain_routed_completion_waits_locked(c9857a73d68e59ba).",
+                "cxx . . $ sluice/async/Scheduler#worker_loop(92dc9e636c862d24).",
+                "cxx . . $ sluice/async/Scheduler#run_impl(48d6119b2b26e612)."
+              ]
+            ],
+            "title": "wait / wake / lost-wakeup closure",
+            "via": [
+              "structural path depth 2"
+            ]
+          }
+        ],
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [],
+      "changed_files": [
+        "src/reader.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        }
+      },
+      "description": "unrelated code: sluice_core Reader::read_exact (outside all formal bindings)",
+      "expected_claims": [],
+      "expected_class": "NO_FORMAL_IMPACT",
+      "got_claims": [],
+      "got_class": "NO_FORMAL_IMPACT",
+      "id": "T4",
+      "notes": "",
+      "patch": "build/formal-impact/specimen-T4.patch",
+      "patch_bytes": 224,
+      "result": {
+        "claims": [],
+        "classification": "NO_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F01",
+        "F03",
+        "F04",
+        "F06"
+      ],
+      "changed_files": [
+        "include/sluice/async/detail/request_arena.hpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [
+            "F01",
+            "F06"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F01",
+            "F03",
+            "F06"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F01",
+            "F03",
+            "F06"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F01",
+            "F03",
+            "F06"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        }
+      },
+      "description": "shared authority: RequestArena::validate_ is anchored by F01 (identity gate) and F06 (stale-generation gate)",
+      "expected_claims": [
+        "F01",
+        "F06"
+      ],
+      "expected_class": "DIRECT_FORMAL_IMPACT",
+      "got_claims": [
+        "F01",
+        "F03",
+        "F06"
+      ],
+      "got_class": "DIRECT_FORMAL_IMPACT",
+      "id": "T5",
+      "notes": "",
+      "patch": "build/formal-impact/specimen-T5.patch",
+      "patch_bytes": 305,
+      "result": {
+        "claims": [
+          {
+            "class": "DIRECT_FORMAL_IMPACT",
+            "evidence": [
+              "tests/request_lifecycle_scheme_b_test.cpp",
+              "docs/verification/formal/cpp-model-coverage.md"
+            ],
+            "formal_suites": [
+              "request-arena"
+            ],
+            "id": "F01",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+              ]
+            ],
+            "title": "request identity / generation / stale reuse",
+            "via": [
+              "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb). (changed symbol is a registered anchor)"
+            ]
+          },
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "tests/request_lifecycle_scheme_b_test.cpp",
+              "tests/threadpool_backend_scheme_b_race_test.cpp"
+            ],
+            "formal_suites": [
+              "request-arena",
+              "e10-waitnode",
+              "e13-select-core",
+              "e13-select-safety"
+            ],
+            "id": "F03",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb).",
+                "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1)."
+              ],
+              [
+                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb).",
+                "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1).",
+                "cxx . . $ sluice/async/UringAsyncBackend#finalize_operation_terminal_(70241e5ab4dc9963)."
+              ]
+            ],
+            "title": "terminal winner / exactly-once",
+            "via": [
+              "structural path depth 1",
+              "structural path depth 2"
+            ]
+          },
+          {
+            "class": "DIRECT_FORMAL_IMPACT",
+            "evidence": [
+              "tests/request_arena_cancel_intent_test.cpp",
+              "tests/cancel_token_test.cpp"
+            ],
+            "formal_suites": [
+              "request-arena",
+              "cancel-token-epoch",
+              "e12-rwlock"
+            ],
+            "id": "F06",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+              ]
+            ],
+            "title": "cancel vs ordinary completion",
+            "via": [
+              "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb). (changed symbol is a registered anchor)"
+            ]
+          }
+        ],
+        "classification": "DIRECT_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F03",
+        "F04",
+        "F08"
+      ],
+      "changed_files": [
+        "include/sluice/async/scheduler.hpp",
+        "src/async/async_io_context.cpp",
+        "src/async/scheduler.cpp",
+        "src/async/scheduler_park_wake.cpp",
+        "src/async/scheduler_semaphore.cpp",
+        "src/async/scheduler_timer.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        }
+      },
+      "description": "anchor rename: signal_wake_locked -> publish_wake_locked across all 6 files",
+      "expected_claims": [
+        "F08"
+      ],
+      "expected_class": "UNKNOWN_FORMAL_IMPACT",
+      "got_claims": [
+        "F08"
+      ],
+      "got_class": "DIRECT_FORMAL_IMPACT",
+      "id": "T6",
+      "notes": "renamed mechanically (sed) across all references so the tree still parses; the registry anchor must go UNRESOLVED and F08 must fail closed, never NO",
+      "result": {
+        "claims": [
+          {
+            "class": "DIRECT_FORMAL_IMPACT",
+            "evidence": [
+              "docs/verification/formal/e9-trace-conformance.md",
+              "tests/issue115_runnable_publication_wake_test.cpp",
+              "tests/issue161_idle_dance_orphan_test.cpp",
+              "tests/issue223_startup_skew_election_test.cpp"
+            ],
+            "formal_suites": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
+            "id": "F08",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+              ]
+            ],
+            "title": "wait / wake / lost-wakeup closure",
+            "via": [
+              "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf). (changed symbol is a registered anchor)",
+              "include/sluice/async/scheduler.hpp: registered anchor of F08 is UNRESOLVED at current HEAD (renamed/moved/removed?) \u2014 fail closed",
+              "src/async/scheduler.cpp: registered anchor of F08 is UNRESOLVED at current HEAD (renamed/moved/removed?) \u2014 fail closed",
+              "src/async/scheduler_park_wake.cpp: registered anchor of F08 is UNRESOLVED at current HEAD (renamed/moved/removed?) \u2014 fail closed"
+            ]
+          }
+        ],
+        "classification": "DIRECT_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F01",
+        "F03",
+        "F04",
+        "F06"
+      ],
+      "changed_files": [
+        "src/async/threadpool_backend.cpp"
+      ],
+      "check_after": "see pilot report (anchor resolution table)",
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [
+            "F03"
+          ],
+          "classification": "UNKNOWN_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F03"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F01",
+            "F03",
+            "F06"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F01",
+            "F03",
+            "F06"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        }
+      },
+      "description": "moved implementation: ThreadPoolBackend::run_syscall moved to a new TU",
+      "expected_claims": [
+        "F03"
+      ],
+      "expected_class": "STRUCTURAL_FORMAL_IMPACT",
+      "got_claims": [
+        "F01",
+        "F03",
+        "F06"
+      ],
+      "got_class": "STRUCTURAL_FORMAL_IMPACT",
+      "id": "T7",
+      "notes": "scip-clang C++ symbols embed no defining-file segment, so name identity survives the move; expected: anchor still resolves with def-site drift",
+      "result": {
+        "claims": [
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "tests/request_lifecycle_scheme_b_test.cpp",
+              "docs/verification/formal/cpp-model-coverage.md"
+            ],
+            "formal_suites": [
+              "request-arena"
+            ],
+            "id": "F01",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                "cxx . . $ sluice/async/detail/RequestArena#mark_running(e3f57498ff552dbc).",
+                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+              ]
+            ],
+            "title": "request identity / generation / stale reuse",
+            "via": [
+              "structural path depth 2"
+            ]
+          },
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "tests/request_lifecycle_scheme_b_test.cpp",
+              "tests/threadpool_backend_scheme_b_race_test.cpp"
+            ],
+            "formal_suites": [
+              "request-arena",
+              "e10-waitnode",
+              "e13-select-core",
+              "e13-select-safety"
+            ],
+            "id": "F03",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1)."
+              ]
+            ],
+            "title": "terminal winner / exactly-once",
+            "via": [
+              "src/async/threadpool_backend.cpp: registered anchor of F03 is UNRESOLVED at current HEAD (renamed/moved/removed?) \u2014 fail closed",
+              "structural path depth 1"
+            ]
+          },
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "tests/request_arena_cancel_intent_test.cpp",
+              "tests/cancel_token_test.cpp"
+            ],
+            "formal_suites": [
+              "request-arena",
+              "cancel-token-epoch",
+              "e12-rwlock"
+            ],
+            "id": "F06",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                "cxx . . $ sluice/async/detail/RequestArena#mark_running(e3f57498ff552dbc).",
+                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+              ]
+            ],
+            "title": "cancel vs ordinary completion",
+            "via": [
+              "structural path depth 2"
+            ]
+          }
+        ],
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F03",
+        "F04",
+        "F08"
+      ],
+      "changed_files": [
+        "src/async/scheduler_park_wake.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": false,
+      "depth_matrix": {
+        "0": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "DIRECT_FORMAL_IMPACT"
+        }
+      },
+      "description": "new helper introduced, called by the anchor: signal_wake_locked delegates the epoch flip",
+      "expected_claims": [
+        "F08"
+      ],
+      "expected_class": "STRUCTURAL_FORMAL_IMPACT",
+      "got_claims": [
+        "F08"
+      ],
+      "got_class": "DIRECT_FORMAL_IMPACT",
+      "id": "T8",
+      "notes": "",
+      "result": {
+        "claims": [
+          {
+            "class": "DIRECT_FORMAL_IMPACT",
+            "evidence": [
+              "docs/verification/formal/e9-trace-conformance.md",
+              "tests/issue115_runnable_publication_wake_test.cpp",
+              "tests/issue161_idle_dance_orphan_test.cpp",
+              "tests/issue223_startup_skew_election_test.cpp"
+            ],
+            "formal_suites": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
+            "id": "F08",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+              ]
+            ],
+            "title": "wait / wake / lost-wakeup closure",
+            "via": [
+              "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8). (changed symbol is a registered anchor)"
+            ]
+          }
+        ],
+        "classification": "DIRECT_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F03",
+        "F04",
+        "F08"
+      ],
+      "changed_files": [
+        "include/sluice/async/scheduler.hpp",
+        "src/async/scheduler_park_wake.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F08"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        }
+      },
+      "description": "new path bypasses the anchor: rogue member writes wake_epoch_ directly",
+      "expected_claims": [
+        "F08"
+      ],
+      "expected_class": "STRUCTURAL_FORMAL_IMPACT",
+      "got_claims": [
+        "F08"
+      ],
+      "got_class": "STRUCTURAL_FORMAL_IMPACT",
+      "id": "T9",
+      "notes": "the anchored STATE (Scheduler::wake_epoch_) catches writers that never pass through signal_wake_locked; this is a deliberate design finding",
+      "result": {
+        "claims": [
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "docs/verification/formal/e9-trace-conformance.md",
+              "tests/issue115_runnable_publication_wake_test.cpp",
+              "tests/issue161_idle_dance_orphan_test.cpp",
+              "tests/issue223_startup_skew_election_test.cpp"
+            ],
+            "formal_suites": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
+            "id": "F08",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/Scheduler#ftlr0_specimen_rogue_wake(49f6e7a06ebc5aa8).",
+                "cxx . . $ sluice/async/Scheduler#wake_epoch_."
+              ],
+              [
+                "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+              ],
+              [
+                "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+              ]
+            ],
+            "title": "wait / wake / lost-wakeup closure",
+            "via": [
+              "structural path depth 1"
+            ]
+          }
+        ],
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "risks": []
+      }
+    },
+    {
+      "baseline_a_claims": [
+        "F01",
+        "F03",
+        "F04",
+        "F06"
+      ],
+      "changed_files": [
+        "src/async/threadpool_backend.cpp"
+      ],
+      "claims_ok": true,
+      "class_ok": true,
+      "depth_matrix": {
+        "0": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "1": {
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
+        },
+        "2": {
+          "claims": [
+            "F04"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        },
+        "3": {
+          "claims": [
+            "F04"
+          ],
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
+        }
+      },
+      "description": "function-pointer thunk: ThreadPoolBackend::publish_size_ready reaches the F04 anchor via AsyncBackend::publish",
+      "expected_claims": [
+        "F04"
+      ],
+      "expected_class": "STRUCTURAL_FORMAL_IMPACT",
+      "got_claims": [
+        "F04"
+      ],
+      "got_class": "STRUCTURAL_FORMAL_IMPACT",
+      "id": "T10",
+      "notes": "",
+      "patch": "build/formal-impact/specimen-T10.patch",
+      "patch_bytes": 299,
+      "result": {
+        "claims": [
+          {
+            "class": "STRUCTURAL_FORMAL_IMPACT",
+            "evidence": [
+              "docs/results/weak-memory/completion-publication.json",
+              "tests/completion_authority_death_test.cpp"
+            ],
+            "formal_suites": [
+              "request-arena",
+              "f1-wait-record"
+            ],
+            "id": "F04",
+            "paths": [
+              [
+                "cxx . . $ sluice/async/ThreadPoolBackend#publish_size_ready(b7446ad5d43806d2).",
+                "cxx . . $ sluice/async/AsyncBackend#publish(f6d1eacd8bb7cb96).",
+                "cxx . . $ sluice/async/Completion#publish_from_reap(df20d15edffa6cdc)."
+              ]
+            ],
+            "title": "Completion publication",
+            "via": [
+              "structural path depth 2"
+            ]
+          }
+        ],
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "risks": []
+      }
+    }
+  ],
+  "toolchain": {
+    "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
+    "graph_bytes": 3800000,
+    "graph_symbols": 3187,
+    "index_bytes": 4500000,
+    "index_config": "xmake configured with --with-liburing=true (94 src TUs, real uring variants); default config indexes the uring stub surface only (config-gated anchor unresolved)",
+    "index_time_seconds": 21,
+    "query_time_seconds": "<1 (graph.json in memory)",
+    "reference_edges": 12571,
+    "scip_clang": "0.4.0 (bundled LLVM; pinned by scripts/formal/scip-clang.lock.json, sha256-verified bootstrap)"
+  },
+  "wall_seconds": 331.8
+}
