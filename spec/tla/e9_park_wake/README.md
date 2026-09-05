@@ -68,6 +68,22 @@ to that obligation).
   `ParticipantNoProgressExit` fires with the departure wake.
 - `E9ParkWakeWitnessPnpEndedRun.cfg`— #191 non-vacuity witness (2/2): the
   last-alive `ReturnedStalled` classification.
+- `E9ParkWakeWitnessStart1.cfg`    — R-F1 non-vacuity witness (W-START-1):
+  W0's startup publication precedes W1's.
+- `E9ParkWakeWitnessStart2.cfg`    — R-F1 non-vacuity witness (W-START-2/3):
+  W1 publishes before W0 — the #223/#210 partial-population skew shape.
+- `E9ParkWakeWitnessStartEstablished.cfg` — R-F1 non-vacuity witness
+  (W-START-4): the steady-state population boundary, causally established.
+- `E9ParkWakeNegStartUnrefinedElection.tla/.cfg` — negative model (R-F1
+  fail-closed startup control): the naive startup extension — `Eligible`
+  keeps the workerAlive-only shape, an unstarted worker parks and takes the
+  participant slot. `InvStartupWellFormed` counterexample. GENERATED from
+  the current positive model by `_gen_neg.py` (freshness-gated).
+- `E9ParkWakeNegStartUnsettledTerminal.tla/.cfg` — negative model (R-F1
+  fail-closed startup control): the join-boundary `Settled` gate dropped
+  from the run-ending classification — the run classifies its return with
+  zero started workers. `InvPopulationTerminal` counterexample. GENERATED
+  from the current positive model by `_gen_neg.py` (freshness-gated).
 - `E9ParkWakeBuggyNoBridge.tla/.cfg` — negative model (Phase G): the
   model-level M1 mutation — wake publications advance `wakeEpoch` but
   never set `bridgePending`. Produces an `Inv8BridgeReachesBackendPark`
@@ -87,9 +103,11 @@ to that obligation).
   GENERATED from the current positive model by `_gen_neg.py` (#191;
   freshness-gated, do not edit by hand).
 - `_gen_neg.py`                  — generates the duplicated-snapshot
-  negatives (`NegRetireDead`, `BuggyNoBridge`, `NegParticipantDead`) from
+  negatives (`NegRetireDead`, `BuggyNoBridge`, `NegParticipantDead`,
+  `NegOldEscape`, `NegNaiveEscape`, `NegStartUnrefinedElection`,
+  `NegStartUnsettledTerminal`) from
   the current `E9ParkWake.tla`; `--check` is the read-only freshness gate
-  the verifier runs before any TLC invocation (#192, #191).
+  the verifier runs before any TLC invocation (#192, #191, #185, R-F1).
 - `E9ParkWakeBuggyDrainParks.tla/.cfg` — negative model C (E9-CORRECTIVE,
   historical): the shipped Drain-park defect. `Life2Buggy`
   counterexample.
@@ -110,13 +128,15 @@ delete them.
 bash scripts/formal/verify-e9-park-wake.sh
 ```
 
-(four positive gates + four reachability-witness gates + six negative
+(four positive gates + ten reachability-witness gates + ten negative
 gates; TLC runs in an isolated mktemp workspace — never in this
 directory.)
 
 ## Generated negatives + freshness gate (#192, #191)
 
-`NegRetireDead`, `BuggyNoBridge`, and `NegParticipantDead` are FULL
+`NegRetireDead`, `BuggyNoBridge`, `NegParticipantDead`, `NegOldEscape`,
+`NegNaiveEscape`, `NegStartUnrefinedElection`, and
+`NegStartUnsettledTerminal` are FULL
 DUPLICATED SNAPSHOTS of the positive model, so they are GENERATED from the
 current `E9ParkWake.tla` by `_gen_neg.py` (each mutation is a declared
 exact-fragment swap whose anchor must match exactly one location — zero or
@@ -124,8 +144,8 @@ multiple matches aborts generation fail-closed) and freshness-gated:
 `verify-e9-park-wake.sh` runs `_gen_neg.py --check` BEFORE any TLC run,
 so a stale, missing, or unexpected generated artifact fails the formal
 gate without starting TLC (a stale negative would keep checking an
-outdated mutation while CI stays green). Never edit those six files by
-hand — regenerate with `python3 spec/tla/e9_park_wake/_gen_neg.py`.
+outdated mutation while CI stays green). Never edit those fourteen files
+by hand — regenerate with `python3 spec/tla/e9_park_wake/_gen_neg.py`.
 
 `BuggyPrePark` / `BuggyMixedSource` (pre-Phase-G protocol snapshots) and
 `BuggyDrainParks` (an EXTENDS-based minimal mutant that auto-tracks the
@@ -327,20 +347,20 @@ mixed):
   discipline is proven by the deterministic production tests).
 - E4/E5 caller re-entry after a no-progress return (the run-return
   boundary is modeled; the caller's re-entry policy is out of scope).
-- Worker STARTUP / population establishment (deliberate; see the next
-  section — declared as the model's refinement boundary at S1A, #223).
+- Worker STARTUP / population establishment (MODELED as of R-F1, #223 —
+  see the next section; pre-R-F1 it was the declared S1A refinement
+  boundary, `MODEL_SCOPE_EXCLUDED`).
 
-## Worker-population establishment boundary (#223, declared at S1A)
+## Worker-population establishment (#223) — pre-R-F1 boundary, then MODELED (R-F1)
 
-`Init` sets `workerAlive = [w \in Workers |-> TRUE]` and every
-`workerPhase = "Active"`: the model's refinement boundary begins AFTER the
-configured worker population is established. The only `workerAlive`
-transitions are retire steps (`TRUE -> FALSE`); there is no `StartWorker`
-(`FALSE -> TRUE`) action and no partially activated state.
-
-This is a deliberate abstraction, now documented (previously implicit). The
-C++ reality it excludes: in the multi-worker path each worker publishes
-`WorkerState::active` INSIDE its own spawned thread
+**Pre-R-F1 state (S1A, preserved verbatim as history):** `Init` set
+`workerAlive = [w \in Workers |-> TRUE]` with every `workerPhase = "Active"`:
+the model's refinement boundary began AFTER the configured worker population
+was established; the only `workerAlive` transitions were retire steps
+(`TRUE -> FALSE`), there was no `StartWorker` (`FALSE -> TRUE`) action, and no
+partially activated state. Startup skew was `MODEL_SCOPE_EXCLUDED` — declared,
+not proved. The C++ reality that exclusion covered: in the multi-worker path
+each worker publishes `WorkerState::active` INSIDE its own spawned thread
 (`src/async/scheduler.cpp`, the `run_impl` thread lambda), so during startup
 the invocation legally contains partially activated populations (e.g. W1
 active while W0 is not yet), and the R2 transferable election — which scans
@@ -349,15 +369,69 @@ window (the role-swap shape observed by #210; no production defect was ever
 alleged). The single-worker path publishes `active` from the calling thread
 before the loop and has no such window.
 
-Obligations this boundary carries:
+**Post-R-F1 (this revision): the startup population protocol is MODELED** —
+R-F1 adjudicated `R-F1_MODEL_VALUE_CONFIRMED` (report:
+`docs/investigations/rf1-e9-startup-refinement.md`):
+
+- `workerStarted : Workers -> Bool`, Init all `FALSE`; `StartWorker(w)`
+  (`FALSE -> TRUE`, no wake) is the per-thread `active.store(true)`
+  (scheduler.cpp:460). `workerAlive` KEEPS its meaning "has not retired from
+  the loop" (the join / `live_loop_workers_` accounting fact);
+  `Eligible(w) == workerAlive[w] /\ workerStarted[w]` is the single
+  election/observer authority — the C++ `active` flag as read by the
+  election scan (scheduler.cpp:706-717), true exactly from own-thread entry
+  to loop exit.
+- `LowestAlive`, `SomeActiveWorker`, and the Inv6/Inv9/Inv10 observer
+  disjuncts are defined over `Eligible` (refined in place: post-settlement
+  `Eligible == workerAlive`, so every pre-R-F1 guard coincides
+  point-for-point — steady-state proofs are conserved, not re-derived).
+- `Settled` (no configured worker is unstarted-and-unretired) gates the
+  run-ENDING classifications (`RetireWorkerQuiescent`, `ReturnQuiescent`,
+  `ReturnStalled`, `ShutdownSignal`): `run_impl` returns only after `join()`
+  of every configured thread (scheduler.cpp:472-475), and the idle-dance
+  threshold `live_loop_workers_` still counts unstarted workers.
+  `ParticipantNoProgressExit` is deliberately NOT Settled-gated (C++ :1000 is
+  not threshold-gated). `FairStartWorker` is in `LivenessSpec` — a
+  `std::thread` guarantee, not fairness invented to hide a stuck state.
+- New invariants in `Inv` (both configs): `InvStartupWellFormed`
+  (retired-never-started and unstarted park phases are unrepresentable) and
+  `InvPopulationTerminal` (terminal ⇒ all started).
+- Reachability witnesses: `WitnessStart1` (W0 publishes first),
+  `WitnessStart2` (W1 first — the #223/#210 skew shape; in the two-worker
+  domain this is exactly the partial-population state), and
+  `WitnessStartEstablished` (the declared steady-state population boundary,
+  now causally established by the `StartWorker` steps themselves — the
+  projection anchor back to the pre-R-F1 model).
+- Generated fail-closed negatives (`_gen_neg.py`):
+  `NegStartUnrefinedElection` (the naive extension — `Eligible` keeps the
+  workerAlive-only shape; an unstarted worker parks and takes the participant
+  slot; caught by `InvStartupWellFormed`, whose workerStarted-direct reading
+  stays refined while every Eligible-routed predicate, including Inv6, is
+  unrefined by the same fragment) and `NegStartUnsettledTerminal` (the
+  Settled gate dropped from the run-ending classification; caught by
+  `InvPopulationTerminal`).
+- Deterministic C++ correspondence: `tests/issue223_startup_skew_election_test.cpp`
+  holds worker 0 BEFORE its startup publication (the `WorkerStartupSeam`)
+  while worker 1 publishes, drives the MW-S2 admission, and is observed as
+  the elected participant — the #210 forensic shape, schedule-pinned. The
+  run completes only after both configured threads have run (join boundary).
+  The #196 trace-corpus replay now compiles population establishment into
+  every replay wrapper as the first pinned prefix (`StartWorker(W0)`,
+  `StartWorker(W1)`), so the #222 T4 obligation is enforced by the replay
+  itself.
+
+Obligations this boundary carries (post-R-F1 form):
 
 - Every E9 conformance/trace test that fixes a prehistory MUST causally
   establish full population establishment before its observation window —
-  the #222 T4 ticket-seam handshake pattern; the #196 corpus fixtures carry
-  an explicit `prehistory` field for exactly this purpose.
+  now mechanically enforced by the replay wrapper's population prefix (and
+  still the #222 T4 ticket-seam handshake pattern for in-test construction).
 - Startup-skew interleavings (start-W0-first vs start-W1-first, election
-  across partial activation, startup → steady-state refinement) are outside
-  this model. They are registered as an S2 stronger-proof candidate in the
+  across partial activation, startup → steady-state refinement) are INSIDE
+  this model as of R-F1 (witnessed + negatively controlled above). What
+  remains outside: N > 2 worker populations (the domain is fixed
+  `Workers = {W0, W1}`) and the OS thread-scheduler fairness assumption
+  beyond `WF(StartWorker)` (documented, real `std::thread` guarantee).
   S1A coverage matrix; do not read E9's green as covering them.
 
 ## #196 trace-conformance pilot (2026-08-24): real C++ traces vs this model

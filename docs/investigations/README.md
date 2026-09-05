@@ -54,6 +54,13 @@ currently holds no investigation files.
   negative controls, C++ bridges, verdicts; the #262 model-adversary
   repair and the #223 population-boundary declaration; the ranked S2
   stronger-proof candidate handoff.
+- [`rf1-e9-startup-refinement.md`](rf1-e9-startup-refinement.md) — the
+  closed R-F1 experiment (#223 / #296 Tier-1): the S1A
+  `MODEL_SCOPE_EXCLUDED` worker-startup boundary modeled in E9
+  (`workerStarted` / `Eligible` / `Settled`), witnesses + generated
+  fail-closed negatives, the deterministic startup-skew C++ witness, the
+  reverse-design audit (RD-1..RD-5), verdict
+  `R-F1_MODEL_VALUE_CONFIRMED`, SP-1 `NOT_WORTH_STRONGER_PROOF`.
 
 ## Move slices (issue #167 Step 5) — all executed
 
