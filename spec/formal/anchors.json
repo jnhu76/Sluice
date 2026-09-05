@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "description": "FTLR-0 / SCIP-PILOT formal anchor registry (issue #299). This file is the SOLE cross-domain authority binding C++ semantic authorities to formal claims. C++-internal relationships are never recorded here; they are recovered mechanically from the SCIP index (scip-clang over the Xmake compile_commands.json). Suite ids must match spec/tla/manifest.json. Claim ids follow the S1A property matrix (docs/investigations/s1a-formal-coverage.md); F02/F05/F07/F09/F10 are intentionally not seeded in this pilot (bounded corpus). This registry is experiment-scoped: it is a precursor schema for the #298 FDG-0 correspondence registry, not a replacement for any existing authority.",
+  "claim_class_vocabulary": [
+    "MODEL_PROPERTY",
+    "ACTION_TRANSITION_CORRESPONDENCE",
+    "TRACE_CONFORMANCE_TESTED_EXECUTIONS",
+    "REACHABLE_STATE_RELATION",
+    "BEHAVIORAL_REFINEMENT",
+    "WEAK_MEMORY_KERNEL",
+    "MODEL_SCOPE_EXCLUDED"
+  ],
+  "anchor_roles": [
+    "authority",
+    "state",
+    "observation",
+    "publication",
+    "gate"
+  ],
+  "claims": [
+    {
+      "id": "F01",
+      "title": "request identity / generation / stale reuse",
+      "claim_class": "ACTION_TRANSITION_CORRESPONDENCE",
+      "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B01, ALIGNED)",
+      "cpp_anchors": [
+        {
+          "file": "include/sluice/async/detail/request_arena.hpp",
+          "symbol": "RequestArena::validate_",
+          "role": "gate",
+          "note": "identity gate: stale-generation / free / out-of-range handles rejected before any slot transition"
+        },
+        {
+          "file": "include/sluice/async/detail/request_arena.hpp",
+          "symbol": "RequestArena::free_slot_locked_",
+          "role": "state",
+          "note": "generation advance before freed slot re-enters the free list"
+        }
+      ],
+      "formal_suites": ["request-arena"],
+      "evidence": [
+        {
+          "kind": "bridge_test",
+          "path": "tests/request_lifecycle_scheme_b_test.cpp",
+          "names": ["generation_reuse_stale_attempts"]
+        },
+        {
+          "kind": "doc",
+          "path": "docs/verification/formal/cpp-model-coverage.md"
+        }
+      ],
+      "notes": "Contract: stable K=(context,slot,generation); generation++ BEFORE freed slot re-enters free list; stale g can never mutate/terminalize/observe the new occupant. Residual: multi-slot interleavings = executable-evidence scope (manifest coverage_gaps)."
+    },
+    {
+      "id": "F03",
+      "title": "terminal winner / exactly-once",
+      "claim_class": "MODEL_PROPERTY",
+      "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B03, ALIGNED)",
+      "cpp_anchors": [
+        {
+          "file": "include/sluice/async/detail/request_arena.hpp",
+          "symbol": "RequestArena::record_terminal",
+          "role": "authority",
+          "note": "first backend_ready terminal wins under the leaf mutex; losers never overwrite"
+        },
+        {
+          "file": "src/async/threadpool_backend.cpp",
+          "symbol": "ThreadPoolBackend::run_syscall",
+          "role": "authority",
+          "note": "blocking backend producer of real terminals"
+        },
+        {
+          "file": "src/async/uring_backend.cpp",
+          "symbol": "UringAsyncBackend::finalize_operation_terminal_",
+          "role": "authority",
+          "config_gate": "SLUICE_HAS_LIBURING",
+          "note": "io_uring backend producer of real terminals. The default xmake config compiles this TU in UNSUPPORTED-STUB mode (the terminal machinery is compiled out), so this anchor resolves only in an index built with `xmake f --with-liburing=y`. A default-config check reports it as a config-gated unresolved anchor: a visible declared gap, not a silent miss."
+        }
+      ],
+      "formal_suites": ["request-arena", "e10-waitnode", "e13-select-core", "e13-select-safety"],
+      "evidence": [
+        {
+          "kind": "bridge_test",
+          "path": "tests/request_lifecycle_scheme_b_test.cpp",
+          "names": ["exactly_one_terminal_winner", "pending_cancel_wins_before_enqueue_then_enqueue_noop"]
+        },
+        {
+          "kind": "bridge_test",
+          "path": "tests/threadpool_backend_scheme_b_race_test.cpp"
+        }
+      ],
+      "notes": "Contract: exactly one terminal per accepted generation; Scheme-B single-domain arbitration. Model coverage spans request-arena (NEG-RA-1), e10-waitnode (primitive domain), e13 select winner linearization."
+    },
+    {
+      "id": "F04",
+      "title": "Completion publication",
+      "claim_class": "WEAK_MEMORY_KERNEL",
+      "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B04, ALIGNED)",
+      "cpp_anchors": [
+        {
+          "file": "include/sluice/async/detail/request_arena.hpp",
+          "symbol": "RequestArena::reap",
+          "role": "publication",
+          "note": "the only path that may drive a caller-owned Completion to ready (through the installed CompletionBinding thunk)"
+        },
+        {
+          "file": "include/sluice/async/completion.hpp",
+          "symbol": "Completion::publish_from_reap",
+          "role": "publication",
+          "note": "single release-store linearization point of Completion-ready (template member; grep-audited single invoker)"
+        }
+      ],
+      "formal_suites": ["request-arena", "f1-wait-record"],
+      "evidence": [
+        {
+          "kind": "genmc_kernel",
+          "path": "docs/results/weak-memory/completion-publication.json"
+        },
+        {
+          "kind": "bridge_test",
+          "path": "tests/completion_authority_death_test.cpp"
+        }
+      ],
+      "notes": "Contract: only the designated reap path makes a caller-owned Completion ready; ready release-store is the single LP; observer of ready sees result + closed registration + retired accounting + ended borrow. Memory-order face: GenMC K1/K2 (#197, spec/weakmem). Protocol face: request-arena NEG-RA-3 + f1-wait-record E7-T2."
+    },
+    {
+      "id": "F06",
+      "title": "cancel vs ordinary completion",
+      "claim_class": "ACTION_TRANSITION_CORRESPONDENCE",
+      "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B06, ALIGNED)",
+      "cpp_anchors": [
+        {
+          "file": "include/sluice/async/detail/request_arena.hpp",
+          "symbol": "RequestArena::cancel",
+          "role": "authority",
+          "note": "single disposition authority: pending/enqueued cancel may win the terminal (Scheme B); running cancel records intent only"
+        },
+        {
+          "file": "include/sluice/async/detail/request_arena.hpp",
+          "symbol": "RequestArena::validate_",
+          "role": "gate",
+          "note": "stale generation => not_found; SHARED anchor with F01 (deliberate T5 shared-authority specimen)"
+        },
+        {
+          "file": "src/async/cancel.cpp",
+          "symbol": "CancelToken::request",
+          "role": "authority",
+          "note": "task-layer request-epoch advance (single CAS with rearm); defined out-of-line in cancel.cpp"
+        },
+        {
+          "file": "src/async/cancel.cpp",
+          "symbol": "check_cancel",
+          "role": "gate",
+          "note": "free friend function (not a member): single-shot delivery per epoch per consumer between the two explicit re-arm authorities; reads ONE atomic snapshot"
+        }
+      ],
+      "formal_suites": ["request-arena", "cancel-token-epoch", "e12-rwlock"],
+      "evidence": [
+        {
+          "kind": "bridge_test",
+          "path": "tests/request_arena_cancel_intent_test.cpp"
+        },
+        {
+          "kind": "bridge_test",
+          "path": "tests/cancel_token_test.cpp",
+          "names": ["cancel_rearm_re_enables_delivery", "cancel_shared_token_two_consumers_deliver_and_rearm"]
+        }
+      ],
+      "notes": "Contract: layered cancellation; kernel-owned cancel CQE is control-informational; terminal => already_terminal. Weak-memory face of the token EVALUATED NOT REQUIRED (S1A argument-based; reopen triggers recorded in F06/B)."
+    },
+    {
+      "id": "F08",
+      "title": "wait / wake / lost-wakeup closure",
+      "claim_class": "TRACE_CONFORMANCE_TESTED_EXECUTIONS",
+      "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B08, ALIGNED)",
+      "cpp_anchors": [
+        {
+          "file": "src/async/scheduler_park_wake.cpp",
+          "symbol": "Scheduler::signal_wake_locked",
+          "role": "authority",
+          "note": "unified wake source: every progress-enabling publication routes here; advances wake_epoch_ and notifies the wake domain"
+        },
+        {
+          "file": "src/async/scheduler_park_wake.cpp",
+          "symbol": "Scheduler::park_on_wake_source",
+          "role": "authority",
+          "note": "park commit: epoch predicate, split-wait bridge, MW-S2/S3 classification"
+        },
+        {
+          "file": "src/async/scheduler.cpp",
+          "symbol": "Scheduler::run_impl",
+          "role": "authority",
+          "note": "R-F1 per-thread startup publication (active.store(true)) and the Settled-gated run_impl join boundary"
+        },
+        {
+          "file": "include/sluice/async/scheduler.hpp",
+          "symbol": "Scheduler::wake_epoch_",
+          "role": "state",
+          "note": "the monotonically-advanced wake epoch field itself (state authority; catches direct writers that bypass the wake functions)"
+        }
+      ],
+      "formal_suites": [
+        "e9-park-wake",
+        "e9-trace-conformance",
+        "spawn-wake-epoch",
+        "e8-suspend-switch",
+        "e12-async-condition",
+        "e12-rwlock-scheduler-liveness"
+      ],
+      "evidence": [
+        {
+          "kind": "trace_conformance",
+          "path": "docs/verification/formal/e9-trace-conformance.md"
+        },
+        {
+          "kind": "bridge_test",
+          "path": "tests/issue115_runnable_publication_wake_test.cpp"
+        },
+        {
+          "kind": "bridge_test",
+          "path": "tests/issue161_idle_dance_orphan_test.cpp"
+        },
+        {
+          "kind": "bridge_test",
+          "path": "tests/issue223_startup_skew_election_test.cpp"
+        }
+      ],
+      "notes": "Contract: every progress-enabling change declares persistent predicate/producer/consumer/signal/commit-to-sleep closure. Claim boundary (R-F1 #223): post-settlement TRANSITION-SCHEMA correspondence, NOT reachable-state or behavioral refinement; startup population modeled with FairStartWorker as a host/environment liveness assumption. wake_epoch_ is anchored as a STATE authority so a new writer that bypasses signal_wake_locked is still structurally reachable (T9 design finding)."
+    }
+  ]
+}
