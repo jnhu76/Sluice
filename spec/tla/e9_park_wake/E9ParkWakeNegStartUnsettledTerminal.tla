@@ -1,4 +1,4 @@
-------------------------------- MODULE E9ParkWakeNegOldEscape -------------------------------
+------------------------------- MODULE E9ParkWakeNegStartUnsettledTerminal -------------------------------
 (*
   GENERATED ARTIFACT -- DO NOT EDIT.
   Regenerate with: python3 spec/tla/e9_park_wake/_gen_neg.py
@@ -7,15 +7,15 @@
   unexpected generated artifact fails the formal gate instead of
   silently checking an outdated mutation.)
 
-  GENERATED NEGATIVE (#185 fail-closed escape control): the EXACT
-  pre-#185 non-participant LeavePark escape -- the unconditional
-  `~SplitWait` disjunct that let a reference-config parked worker
-  return without ANY scheduler-domain cause and without an
-  entry-armed observation. The as-built scheduler-domain park has
-  no such return (scheduler_park_wake.cpp:400-469: unbounded
-  unless entry-armed or a deadline is active). Expected TLC
-  verdict: VIOLATION of InvNoCauselessReturn -- the invented
-  return class is detected. Every other rule is the current
+  GENERATED NEGATIVE (R-F1 fail-closed startup control, #223): the
+  join-boundary gate dropped from the run-ending classification.
+  run_impl returns only after join() of every configured thread
+  (scheduler.cpp:472-475) and the idle-dance threshold
+  live_loop_workers_ still counts unstarted workers; the Settled
+  conjunct on ReturnQuiescent encodes that. Removing it lets the
+  run classify ReturnedQuiescent from the extended Init with
+  ZERO started workers. Expected TLC verdict: VIOLATION of
+  InvPopulationTerminal. Every other rule is the current
   E9ParkWake verbatim.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
@@ -485,7 +485,7 @@ LeaveParkEnabled(w) ==
     /\ workerPhase[w] = "Parked"
     /\ \/ (backendWaitParticipant = w /\ BackendDomainWakeDue)
        \/ (backendWaitParticipant # w
-            /\ \/ ~SplitWait
+            /\ \/ (~SplitWait /\ observationArmed[w])
                \/ SchedulerDomainWakeDue
                \/ runState # "Active")
 
@@ -648,9 +648,6 @@ ReturnStalled ==
 
 ReturnQuiescent ==
     /\ runState = "Active"
-    /\ Settled   \* R-F1: the run cannot classify its return before every
-                  \* configured thread has run (run_impl join,
-                  \* scheduler.cpp:472-475)
     /\ Quiescent
     /\ terminateFlag' = TRUE
     /\ runState' = "ReturnedQuiescent"

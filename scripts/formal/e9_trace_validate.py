@@ -59,21 +59,29 @@ design: the model ends the invocation; the C++ physically drains it):
                             causeless or un-armed-escape return is rejected
                             even post-terminal)
 
-Pre-history (compiled, #202): C++ pre-run fiber admission / pre-run
-backend submit publish NO wake; the model reaches those states only
-through epoch-advancing producers. Each declared pre-history is therefore
-COMPILED into those real model actions and replayed from the TRUE Init as
-the FIRST required steps of the wrapper — TLC must fire them under their
-actual guards, so the pre-history state's reachability is mechanically
-established by the same search (no hand-written state formula, no Init
-disjunct). The pre-history is a PINNED prefix: no silent step may fire
-until it is consumed (the C++ pre-run is a fixed contiguous sequence
-before the recorded window opens; a silent interleave would drift the
-pre-history state — e.g. a silent SubmitBackend turning the MWS3 wait
-into MWS2, which the self-test REJECT leg guards against):
+Pre-history (compiled, #202; R-F1 population prefix #223): C++ pre-run
+fiber admission / pre-run backend submit publish NO wake; the model
+reaches those states only through epoch-advancing producers. Each
+declared pre-history is therefore COMPILED into those real model actions
+and replayed from the TRUE Init as the FIRST required steps of the
+wrapper — TLC must fire them under their actual guards, so the
+pre-history state's reachability is mechanically established by the same
+search (no hand-written state formula, no Init disjunct). The pre-history
+is a PINNED prefix: no silent step may fire until it is consumed (the
+C++ pre-run is a fixed contiguous sequence before the recorded window
+opens; a silent interleave would drift the pre-history state — e.g. a
+silent SubmitBackend turning the MWS3 wait into MWS2, which the
+self-test REJECT leg guards against). Since the R-F1 startup refinement
+(#223) the model Init has NO worker started (workerStarted = FALSE), so
+EVERY replay begins with the population-establishment prefix
+StartWorker(W0), StartWorker(W1) — the replay itself now causally
+establishes full population before the recorded window opens (the #222
+T4 obligation, mechanically enforced instead of fixture-declared):
 
-  external_wait_registered == Init -> PublishRunnable -> RunFiber -> SuspendFiber
-  backend_outstanding      == Init -> PublishRunnable -> RunFiber
+  population           == Init -> StartWorker(W0) -> StartWorker(W1)
+  external_wait_registered == population -> PublishRunnable -> RunFiber
+                              -> SuspendFiber
+  backend_outstanding      == population -> PublishRunnable -> RunFiber
                               -> SubmitBackend -> FinishFiber
 
 Claim supported by an ACCEPT: TRACE-CONFORMANT (TESTED EXECUTIONS) for this
@@ -262,7 +270,15 @@ def gen_wrapper(actions, split_wait, run_mode, prehistory, test):
             ("SubmitBackend", None), ("FinishFiber", None)],
     }.get(prehistory, [])
 
-    all_actions = pre_actions + actions
+    # R-F1 (#223): the model Init has no worker started, so every replay
+    # causally establishes the worker population (the per-thread startup
+    # publication, scheduler.cpp:460) before anything else. Pinned like
+    # the rest of the pre-history: the recorded window opens only after
+    # full population establishment (the #222 T4 obligation).
+    population_prefix = [("StartWorker", 0), ("StartWorker", 1)]
+
+    prelude = population_prefix + pre_actions
+    all_actions = prelude + actions
     steps = []
     for idx, (act, worker) in enumerate(all_actions, start=1):
         call = act if worker is None else f"{act}(W{worker})"
@@ -276,24 +292,21 @@ def gen_wrapper(actions, split_wait, run_mode, prehistory, test):
         f"Step{i}" for i in range(1, len(all_actions) + 1))
 
     # The trace records the observed run mode; pin Init to it so the replay
-    # realizes the trace under exactly the observed configuration.
-    if pre_actions:
-        init2 = ("Init2 == Init /\\ runMode = \"%s\" /\\ tstep = 0 /\\ "
-                 "sbudget = %d /\\ failed = FALSE"
-                 % (run_mode.capitalize(), SILENT_BUDGET))
-    else:
-        init2 = ("Init2 == Init /\\ tstep = 0 /\\ sbudget = %d /\\ "
-                 "failed = FALSE" % SILENT_BUDGET)
+    # realizes the trace under exactly the observed configuration. (Always
+    # pinned since R-F1: the population-establishment prefix is unconditional,
+    # so every replay carries a compiled pre-history.)
+    init2 = ("Init2 == Init /\\ runMode = \"%s\" /\\ tstep = 0 /\\ "
+             "sbudget = %d /\\ failed = FALSE"
+             % (run_mode.capitalize(), SILENT_BUDGET))
 
-    if pre_actions:
-        pre_comment = (
-            f"   The first {len(pre_actions)} steps are the COMPILED\n"
-            "   PRE-HISTORY (Step1..Step%d) — real model actions replayed\n"
-            "   from the TRUE Init as a PINNED prefix (no silent step may\n"
-            "   fire until they are consumed, matching the contiguous C++\n"
-            "   pre-run). The trace steps follow.\n" % len(pre_actions))
-    else:
-        pre_comment = ""
+    pre_comment = (
+        f"   The first {len(population_prefix) + len(pre_actions)} steps are the COMPILED\n"
+        "   PRE-HISTORY (Step1..Step%d) — real model actions replayed\n"
+        "   from the TRUE Init as a PINNED prefix (no silent step may\n"
+        "   fire until they are consumed, matching the contiguous C++\n"
+        "   pre-run). The first two steps are the R-F1 population\n"
+        "   establishment (#223); the trace steps follow.\n"
+        % (len(population_prefix) + len(pre_actions)))
 
     module = f"""---------------------------- MODULE E9TraceReplay -------------------------------
 (* GENERATED by scripts/formal/e9_trace_validate.py (#196) — do not edit.
@@ -319,7 +332,7 @@ VARIABLES tstep, sbudget, failed
    window opens, so no other model action may interleave and drift the
    pre-history state (e.g. a silent SubmitBackend turning the MWS3 wait
    into MWS2). Silent steps re-arm only after the pre-history is consumed. *)
-PreLen == {len(pre_actions)}
+PreLen == {len(prelude)}
 
 TraceLen == {len(all_actions)}
 {init2}
