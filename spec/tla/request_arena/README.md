@@ -37,17 +37,33 @@ The model separates two authorities and never blurs them:
     CONDITIONAL on these obligations, and every cfg sets
     `CHECK_DEADLOCK FALSE` because terminal states legitimately have no
     enabled action: **this suite does not prove deadlock-freedom**.
-  - *Decision-11 provenance*: `RecordCanceledConfirmed` models the
-    **backend obligation** to call `record_canceled` only after a CONFIRMED
-    interruption. The C++ leaf `record_canceled(h)` is just
-    `record_terminal(err(canceled))` — it validates handle generation, slot
-    state, and exactly-once, but performs NO cancel-intent or provenance
-    check, and **no production backend currently calls it** (tests simulate
-    the confirming backend). `InvCanceledTerminalSource` is therefore an
-    environment-contract invariant: "IF callers honor the obligation THEN
-    no intent-only running cancel yields a canceled terminal" — the leaf
-    does not enforce the discipline, and NEG-RA-6 pins the ill-behaved
-    caller.
+  - *Decision-11 canceled-terminal sources*: `InvCanceledTerminalSource`
+    states the **canceled-terminal recording-source admissibility law**: a
+    canceled terminal may be recorded only through (a) Scheme-B
+    pending/enqueued cancel (`CancelPendingOrEnqueued`, leaf-enforced via
+    the arena's own `cancel()` entry), (b) a CONFIRMED running
+    interruption (`RecordCanceledConfirmed` — the backend obligation to
+    call `record_canceled` only after a confirmed interruption; the C++
+    leaf `record_canceled(h)` is just `record_terminal(err(canceled))`:
+    it validates handle generation, slot state, and exactly-once, performs
+    NO cancel-intent or provenance check, and **no production backend
+    currently calls it** — tests simulate the confirming backend), or
+    (c) a backend real result that itself carries canceled status
+    (`RecordTerminalKernelCanceled`, the issue-#262 shape). The
+    `kernel_canceled` stamp is a **terminal-result source stamp**: it
+    identifies WHERE the canceled payload entered the protocol (the
+    backend real-result recording path), not WHY the backend produced
+    ECANCELED and not WHETHER any caller cancel intent existed — the
+    action legally consumes a live intent (Decision 11: the real result
+    wins verbatim). The no-caller-intent shape is W6's alone:
+    `NotReach_W6_KernelCanceledNoIntent` is an EXISTENTIAL witness —
+    there is a reachable execution recording a kernel-canceled terminal
+    with `intentSeen = FALSE` — and does not claim that every
+    `kernel_canceled` terminal is intent-free. Clause (b) remains an
+    environment contract ("IF callers honor the obligation THEN no
+    intent-only running cancel yields a canceled terminal" — the leaf
+    does not enforce the discipline), and NEG-RA-6 pins the ill-behaved
+    caller via the forbidden `cancel_running` stamp.
 
 A compositional RequestArena + backend-progress refinement is recorded as
 debt in `docs/verification/formal/cpp-model-coverage.md` rather than folded
@@ -66,7 +82,8 @@ into this leaf model.
 | NEG-RA-5 reap ignores live pin | `RequestArenaFaultReapIgnoresPin.cfg` | `InvNoPinnedPublication` violated |
 | NEG-RA-6 running cancel stores terminal | `RequestArenaFaultRunningCancelStores.cfg` | `InvCanceledTerminalSource` violated |
 | Wrong-property controls ×2 | `RequestArenaWrongProp1/2.cfg` | PASS (faults do NOT trip unrelated laws) |
-| Witnesses W1–W5 | `RequestArenaSceneW1..W5.cfg` | `NotReach_*` violated (scenes reachable) |
+| Witnesses W1–W5 (cancel/terminal/noop/reuse/waiter scenes) | `RequestArenaSceneW1..W5.cfg` | `NotReach_*` violated (scenes reachable) |
+| W6 kernel-canceled verbatim terminal without caller intent (#262) | `RequestArenaSceneW6.cfg` | `NotReach_W6_KernelCanceledNoIntent` violated (reachable) |
 
 Negative models use the e13 FAULT-constant pattern: each `Fault_*` action is
 enabled only under its `FAULT` value and performs exactly the buggy
@@ -86,7 +103,8 @@ as the restore gate.
 | `rollback_reserved_or_prepared` | `RollbackPreCommit` |
 | `enqueue` (Scheme-B outcomes, ADR Decision 5) | `Enqueue` (enqueued / terminal_noop pin ack) |
 | `mark_running` | `MarkRunning` |
-| `record_terminal` (verbatim winner) | `RecordTerminal` |
+| `record_terminal` with a non-canceled real result (verbatim winner) | `RecordTerminal` |
+| `record_terminal` with a **canceled** real result (backend/CQE errno delivered as the operation's own terminal — the issue-#262 shape; payload split is analytical: ONE leaf entry point, two model actions, `cancelSource` is a ghost stamp with no C++ counterpart) | `RecordTerminalKernelCanceled` |
 | `record_canceled` — **backend obligation, not leaf-enforced; no production caller today** (leaf checks only state/exactly-once; see Authority layering) | `RecordCanceledConfirmed` |
 | `cancel` pending/enqueued (terminal_won) | `CancelPendingOrEnqueued` |
 | `cancel` running (`intent_recorded`, Decision 11) | `CancelRunningIntent` |
@@ -112,6 +130,7 @@ Every load-bearing model property maps to existing executable regressions
 | State machine + illegal transitions | `tests/request_lifecycle_scheme_b_test.cpp` (`arena_mainline_state_transition_matrix`, `arena_illegal_transition_contract_errors`); `tests/request_arena_test.cpp` (supporting: `arena_capacity_bounded`, `arena_stale_key_rejected`, `arena_accounting_tracks_slot_in_use_vs_accepted_outstanding`, `arena_borrow_lifecycle`) |
 | Stale identity (W4, NEG-RA-2/4) | `tests/request_lifecycle_scheme_b_test.cpp` (`generation_reuse_stale_attempts`, `arena_stale_handle_leaves_live_occupant_untouched`), `tests/request_arena_death_test.cpp` |
 | Running-cancel intent vs verbatim (W3, NEG-RA-6) | `tests/request_arena_cancel_intent_test.cpp` |
+| Kernel-canceled verbatim terminal without caller intent (W6, #262) | `tests/reference_backend_arena_lifecycle_test.cpp` (`fake_kernel_canceled_completion_verbatim_without_caller_cancel` — FakeAsyncBackend; pins the shared arena/reap/publication contract for a canceled backend result, NOT the real io_uring CQE translation path) |
 | Waiter exactly-once delivery (W5) | `tests/request_lifecycle_scheme_b_test.cpp` (`reap_wins_lease_over_wait_cancel`, `waiter_registration_cardinality`); `tests/request_waiter_borrow_lease_test.cpp` (supporting register-vs-reap / cancel_waiter-vs-reap) |
 | Reap-only publication / acquire ordering | `tests/request_lifecycle_scheme_b_test.cpp` (`acquire_observer_of_ready_sees_all_effects`); `tests/threadpool_backend_reap_test.cpp` (supporting) |
 | Close-admission vs in-flight submission | `close_admission_rejects_new_but_existing_reapable`, `close_admission_gates_reserve_not_inflight_prepared_slot` |

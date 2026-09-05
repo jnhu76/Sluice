@@ -48,6 +48,12 @@ currently holds no investigation files.
   links, drift adjudication (3 DOC_TOO_WEAK reference fixes, 0 production
   changes), S1A handoff. Live until S1A supersedes its formal-coverage
   columns.
+- [`s1a-formal-coverage.md`](s1a-formal-coverage.md) — the frozen
+  F01–F10 protocol-coverage × implementation-correspondence matrix
+  (#294 / #289 Phase S1A): per-property model, assumptions, bounds,
+  negative controls, C++ bridges, verdicts; the #262 model-adversary
+  repair and the #223 population-boundary declaration; the ranked S2
+  stronger-proof candidate handoff.
 
 ## Move slices (issue #167 Step 5) — all executed
 

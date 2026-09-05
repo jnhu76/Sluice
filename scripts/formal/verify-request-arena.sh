@@ -8,7 +8,7 @@
 #   RequestArenaLiveness         -> WF(Enqueue) + WF(Reap) liveness PASS
 #   Fault* cfgs (NEG-RA-1..6)    -> each violates its NAMED invariant
 #   WrongProp1/2                 -> fault runs must NOT trip unrelated laws
-#   SceneW1..W5                  -> NotReach_* witnesses VIOLATED (reachable)
+#   SceneW1..W6                  -> NotReach_* witnesses VIOLATED (reachable)
 #
 # Source-safe: TLC runs in an isolated mktemp workspace.
 set -euo pipefail
@@ -133,6 +133,8 @@ expect_fail "W4 reused slot carries a second committed occupant" \
   RequestArenaSceneW4.cfg NotReach_W4_ReusedSlotCommitted w4 || rc=1
 expect_fail "W5 registered waiter delivered by reap" \
   RequestArenaSceneW5.cfg NotReach_W5_WaiterDeliveredByReap w5 || rc=1
+expect_fail "W6 kernel-canceled verbatim terminal without caller intent (#262)" \
+  RequestArenaSceneW6.cfg NotReach_W6_KernelCanceledNoIntent w6 || rc=1
 
 echo
 if [[ "$rc" -eq 0 ]]; then

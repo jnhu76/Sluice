@@ -19,7 +19,11 @@
 (*     overwrite);                                                          *)
 (*   - running-cancel records INTENT only; the ordinary syscall result is   *)
 (*     recorded VERBATIM (never rewritten to canceled) unless the backend   *)
-(*     CONFIRMS the interruption (ADR Decision 11);                         *)
+(*     CONFIRMS the interruption (ADR Decision 11); a backend real result   *)
+(*     that itself IS canceled (kernel-originated -ECANCELED — the issue    *)
+(*     #262 shape; a caller cancel intent may or may not exist, and the     *)
+(*     real result still wins verbatim) propagates verbatim as a canceled   *)
+(*     terminal;                                                            *)
 (*   - reap is the ONLY Completion-ready publication path, and only after   *)
 (*     the enqueue pin is acknowledged (I17/I19);                           *)
 (*   - generation increments before slot reuse; a stale key never mutates   *)
@@ -82,10 +86,20 @@ SlotStates == {"free", "reserved", "prepared"} \union AcceptedStates
 RegStates == {"open_no_waiter", "open_registered", "closed"}
 \* Who wrote a canceled terminal. "cancel_running" is UNREACHABLE in the
 \* correct protocol (running cancel records intent only — Decision 11).
-CancelSources == {"none", "record_terminal", "cancel_pending",
-                  "cancel_enqueued", "cancel_running", "confirmed_interruption"}
+\* "kernel_canceled" is a TERMINAL-RESULT SOURCE STAMP: the canceled
+\* payload entered the protocol through the backend/kernel real-result
+\* recording path (operation CQE / syscall errno that itself is canceled —
+\* the issue #262 shape handed to S1A by the S0B freeze #292). The stamp
+\* is NOT causal attribution: it does not establish why the backend
+\* produced -ECANCELED, and a caller cancel intent may or may not have
+\* existed (the action consumes any live intent; W6 separately witnesses
+\* the no-intent existential shape). Legitimate by Decision 11: the real
+\* result wins verbatim.
+CancelSources == {"none", "record_terminal", "kernel_canceled",
+                  "cancel_pending", "cancel_enqueued", "cancel_running",
+                  "confirmed_interruption"}
 LegitimateCancelSources == {"cancel_pending", "cancel_enqueued",
-                            "confirmed_interruption"}
+                            "confirmed_interruption", "kernel_canceled"}
 
 VARIABLES state, gen, pin, terminalStored, terminalCanceled, cancelIntent,
           regState, deliveryPresent, borrowActive, bindingInstalled,
@@ -227,10 +241,44 @@ RecordTerminal ==
                   admissionClosed, destroyed, committed, published, freed,
                   intentSeen, waiterDelivered>>
 
+\* Kernel/backend-originated canceled real result (S0B #292 handoff; the
+\* issue #262 shape): an operation CQE / syscall completes with the KERNEL's
+\* own canceled status (device- or fd-initiated cancellation is the #262
+\* instance). Decision 11's verbatim law governs real results regardless of
+\* provenance, so the canceled status is recorded VERBATIM as the terminal
+\* — never synthesized from intent. The source stamp records WHERE the
+\* canceled payload was recorded from (the real-result path); it is not
+\* causal attribution, and the guard deliberately does NOT require the
+\* absence of a caller cancel intent — a live intent is simply consumed
+\* (the real result wins). The no-caller-intent existential shape is
+\* witnessed separately by W6. The distinct stamp lets
+\* InvCanceledTerminalSource separate this legal shape from both
+\* leaf-arbitration cancel wins and the NEG-RA-6 fault stamp.
+\* Fires only where a backend real result can exist (submitted work:
+\* enqueued/running; a pending slot has no backend completion). Like
+\* RecordTerminal, it consumes any live cancel intent — the real result
+\* wins, and the source stamp records WHERE the canceled status came from.
+RecordTerminalKernelCanceled ==
+  /\ ~terminalStored
+  /\ state \in {"enqueued", "running"}
+  /\ terminalStored' = TRUE
+  /\ terminalCanceled' = TRUE
+  /\ cancelIntent' = FALSE
+  /\ state' = "backend_ready"
+  /\ onRing' = TRUE
+  /\ terminalWinner' = [terminalWinner EXCEPT ![gen] = @ + 1]
+  /\ cancelSource' = [cancelSource EXCEPT ![gen] = "kernel_canceled"]
+  /\ UNCHANGED <<gen, pin, regState, deliveryPresent, borrowActive,
+                  bindingInstalled, slotInUse, acceptedOutstanding,
+                  admissionClosed, destroyed, committed, published, freed,
+                  intentSeen, waiterDelivered>>
+
 \* ENVIRONMENT/BACKEND OBLIGATION (Layer B, PR #125 review P1-2) — NOT a
 \* leaf-enforced capability. A backend that CONFIRMS a running interruption
 \* took effect may store the canceled terminal explicitly (ADR Decision 11)
-\* — this is the only running path to a canceled terminal. The guards below
+\* — the only path where a RECORDED INTENT yields a canceled terminal
+\* (kernel-originated canceled real results are RecordTerminalKernelCanceled's
+\* verbatim law, not this obligation). The guards below
 \* (running + live cancelIntent + source stamp "confirmed_interruption")
 \* model the WELL-BEHAVED caller the obligation permits. The C++ leaf
 \* record_canceled(h) is only record_terminal(err(canceled)): it validates
@@ -568,6 +616,7 @@ Next ==
   \/ Enqueue
   \/ MarkRunning
   \/ RecordTerminal
+  \/ RecordTerminalKernelCanceled
   \/ RecordCanceledConfirmed
   \/ CancelPendingOrEnqueued
   \/ CancelRunningIntent
@@ -680,15 +729,20 @@ InvReleasePath ==
 InvReapRequiresBinding ==
   (published[gen] >= 1) => bindingInstalled
 
-\* ENVIRONMENT-CONTRACT invariant (PR #125 review P1-2): a canceled terminal
-\* was written only by Scheme-B pending/enqueued cancel (leaf-enforced via
-\* the arena's own cancel() entry) or a CONFIRMED running interruption
-\* (caller discipline — see RecordCanceledConfirmed). The leaf API does not
-\* enforce the confirmed-interruption provenance; this law holds of the
-\* modeled environment in which callers honor the Decision-11 obligation,
-\* and NEG-RA-6 shows the violation an ill-behaved caller produces.
-\* Decision 11 verbatim law: a running cancel that merely recorded intent
-\* never yields "cancel_running".
+\* ENVIRONMENT-CONTRACT invariant (PR #125 review P1-2): the canceled-terminal
+\* recording-source admissibility law — a canceled terminal was written only
+\* by (a) Scheme-B pending/enqueued cancel (leaf-enforced via the arena's
+\* own cancel() entry), (b) a CONFIRMED running interruption (caller
+\* discipline — see RecordCanceledConfirmed), or (c) a verbatim backend
+\* real result carrying the kernel's own canceled status
+\* (RecordTerminalKernelCanceled; the issue #262 shape the S0B freeze
+\* handed to S1A — the stamp identifies the RECORDING path only, not
+\* cancellation cause or caller-intent absence). The leaf API does not
+\* enforce the confirmed-interruption provenance; clause (b)'s law holds
+\* of the modeled environment in which callers honor the Decision-11
+\* obligation, and NEG-RA-6 shows the violation an ill-behaved caller
+\* produces. Decision 11 verbatim law: a running cancel that merely
+\* recorded intent never yields "cancel_running".
 InvCanceledTerminalSource ==
   /\ \A g \in Gen : cancelSource[g] # "cancel_running"
   /\ terminalCanceled => cancelSource[gen] \in LegitimateCancelSources
@@ -816,5 +870,23 @@ NotReach_W4_ReusedSlotCommitted ==
 \* W5: a registered waiter was delivered exactly-once by reap (the
 \* register-after-terminal-before-reap window).
 NotReach_W5_WaiterDeliveredByReap == ~(waiterDelivered[gen] = TRUE)
+
+\* W6: EXISTENTIAL witness that the issue-#262 no-caller-intent shape is
+\* REPRESENTED — there exists a reachable execution with a canceled
+\* terminal whose canceled status came from the backend/kernel (source
+\* "kernel_canceled") and no running cancel intent ever recorded
+\* (intentSeen FALSE) and no leaf cancel win (the source stamp excludes
+\* CancelPendingOrEnqueued). This is NOT the universal claim "every
+\* kernel_canceled terminal is intent-free" (false — the action consumes
+\* live intent); it proves only that the model can produce the #262
+\* execution shape. Source "kernel_canceled" is writable ONLY by
+\* RecordTerminalKernelCanceled (faults stamp
+\* "cancel_running"/"cancel_pending"), so reachability of this shape is
+\* exactly the new action's non-vacuity.
+NotReach_W6_KernelCanceledNoIntent ==
+  ~( /\ terminalStored
+     /\ terminalCanceled
+     /\ cancelSource[gen] = "kernel_canceled"
+     /\ ~intentSeen[gen] )
 
 =============================================================================

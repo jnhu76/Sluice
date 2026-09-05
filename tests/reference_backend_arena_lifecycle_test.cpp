@@ -217,4 +217,34 @@ SLUICE_TEST_CASE(sync_waiter_error_vocabulary_split) {
     if (rc != nullptr) SLUICE_FAIL(rc);
 }
 
+// S1A #262 bridge (TLA action RecordTerminalKernelCanceled / witness W6): the
+// backend completes an operation with the kernel's OWN canceled status while
+// NO caller cancel was ever requested. Decision 11's verbatim law governs real
+// results regardless of provenance: the canceled status is recorded as the
+// terminal (never synthesized from intent, never swallowed), exactly-once,
+// with the normal reap/publication handshake. No ctx.cancel() call exists in
+// this test — the canceled terminal proves the ordinary completion path
+// carries a canceled payload verbatim.
+SLUICE_TEST_CASE(fake_kernel_canceled_completion_verbatim_without_caller_cancel) {
+    auto backend = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    std::byte b[8]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 8, 0}, c).has_value());
+    // Kernel-originated canceled completion: no caller cancel, no intent.
+    raw->complete_oldest_with_error(IoError{IoError::Code::canceled});
+
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(!c.result().has_value());
+    SLUICE_CHECK(c.result().error().code == IoError::Code::canceled);
+    SLUICE_CHECK(ctx.outstanding() == 0);        // accounting retired once
+    SLUICE_CHECK(raw->arena_slot_in_use() == 1); // still bound until reset
+    SLUICE_CHECK(raw->sink_deliveries() == 1);   // exactly-once publication
+    c.reset();
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
+}
+
 SLUICE_MAIN()
