@@ -1120,6 +1120,36 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     if (ready.load(std::memory_order::acquire)) return;
+#if defined(SLUICE_TV1_C001_MUTANT)
+    // #305 TV-1 MUTANT WORLD ONLY (never defined in production, CI, or any
+    // gate build): the historical pre-422036cd await shape — register under
+    // global_mtx_, readiness recheck OUTSIDE it, suspension state change
+    // last. A wake landing between the registration and make_waiting() finds
+    // the registration with the fiber still Running: the wake path erases
+    // the registration, its make_runnable CAS fails, no ticket is routed,
+    // and the fiber then suspends unregistered — invisible to the classifier
+    // and to every future wake scan. The tv1_c001_registered_presuspend seam
+    // (internal-testing guarded) pins the peer's wake scan inside exactly
+    // that window for the TV1-A broken leg.
+    {
+        LockGuard lk(global_mtx_);
+        waiting_ready_[&ready] = {me, ws};
+    }
+    if (ready.load(std::memory_order::acquire)) {
+        LockGuard lk(global_mtx_);
+        waiting_ready_.erase(&ready);
+        return;
+    }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::tv1_c001_registered_presuspend);
+#endif
+    me->make_waiting();
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+#else
     // See await_completion_size for the unified suspend protocol.
     // register + recheck + commit_suspend_locked under global_mtx_; only
     // context_switch is outside.
@@ -1140,6 +1170,7 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+#endif
 }
 
 void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
