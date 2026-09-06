@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""FTLR-0 / SCIP-PILOT formal impact resolver (issue #299).
+"""FTLR-0 / SCIP-PILOT formal impact resolver (issue #299) + FDG-0 Phase A
+Build Truth (issue #298).
 
-Answers ONE bounded question for the pilot:
+Answers ONE bounded question:
 
     a C++ diff possibly affects which formal claims / TLA+ suites,
     so which formal review is required?
@@ -12,11 +13,21 @@ Chain (issue #299 §1):
              -> nearest registered formal anchor -> formal claim
              -> TLA+ suite / trace / bridge evidence
 
+FDG-0 Phase A (#298) replaces the pilot's `file.startswith("src/")` source
+selection with Xmake Build Truth: the SCIP graph is built from the selected
+production world (sluice_async + its dependency closure) joined to exact
+compile_commands entries via Xmake target ownership. The Build Manifest
+(build/formal-impact/build-manifest.json) records the build identity; a
+changed or unverifiable build world fails closed (UNKNOWN_BUILD_WORLD /
+BUILD_WORLD_CHANGED / BUILD_GRAPH_STALE), never silently NO.
+
 Hard rules (#299 §10, §24):
 
     * NO_FORMAL_IMPACT requires: no anchor hit, no SCIP path hit, no
       implementation_bindings hit, and no unresolved-risk condition.
       "SCIP could not see it" is UNKNOWN, never NO.
+    * Build identity is part of implementation identity: unknown/stale
+      build world -> UNKNOWN formal impact -> fail closed.
     * Impact findings never claim a semantic disposition: the resolver
       always reports `semantic disposition: UNDETERMINED`. Whether a TLA+
       model actually needs updating is decided by later bounded semantic
@@ -25,13 +36,15 @@ Hard rules (#299 §10, §24):
       or CI, and it does not modify formal claims.
 
 Subcommands:
-    index       build the SCIP index (scip-clang) and the symbol graph
-    check       validate the anchor registry + anchor resolution (S1-S3)
-    impact      classify a diff's formal impact (DIRECT/STRUCTURAL/COARSE/UNKNOWN/NO)
-    explain     show one claim's anchors, suites, evidence, resolution
-    adjudicate  assemble the reduced-context LLM adjudication prompt (experiment)
+    build-world  generate the Build Manifest from the current Xmake config
+    index        refresh compile_commands, generate the Build Manifest, build
+                 the SCIP index + symbol graph from the selected world
+    check        validate the anchor registry + anchor resolution (S1-S3)
+    impact       classify a diff's formal impact (DIRECT/STRUCTURAL/COARSE/UNKNOWN/NO)
+    explain      show one claim's anchors, suites, evidence, resolution
+    adjudicate   assemble the reduced-context LLM adjudication prompt (experiment)
 
-Exit contract (corrective-1): the default CLI fails closed.
+Exit contract (corrective-1 + FDG-0 Phase A): the default CLI fails closed.
 
     NO/DIRECT/STRUCTURAL/COARSE      -> exit 0
     UNKNOWN_FORMAL_IMPACT            -> exit 1
@@ -39,6 +52,10 @@ Exit contract (corrective-1): the default CLI fails closed.
     UNRESOLVED non-gated anchor      -> exit 1
     frontier/traversal UNKNOWN       -> exit 1
     missing graph for a C++ diff     -> exit 1
+    build world changed / unknown    -> exit 1 (aggregate UNKNOWN + candidates)
+
+Tooling/environment hard errors (missing xmake metadata, malformed target
+metadata, missing/ambiguous compile command at build time) -> exit 2.
 
 `--allow-unknown-for-eval` is the explicit experiment opt-in that lets the
 evaluation harness observe UNKNOWN results with exit 0; it never changes the
@@ -47,6 +64,7 @@ resolution by default; `check --structure-only` explicitly scopes the run
 to registry validation.
 
 Usage:
+    python3 scripts/formal/formal_impact.py build-world
     python3 scripts/formal/formal_impact.py index
     python3 scripts/formal/formal_impact.py check
     python3 scripts/formal/formal_impact.py impact --range master..HEAD
@@ -60,7 +78,7 @@ import re
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
@@ -74,7 +92,14 @@ COMPDB_SRC_PATH = BUILD_DIR / "compile_commands.src.json"
 SCIP_CLANG_BIN = BUILD_DIR / "bin" / "scip-clang"
 SCIP_CLANG_LOCK = SCRIPT_DIR / "scip-clang.lock.json"
 
-GRAPH_SCHEMA = "sluice-formal-impact-graph/1"
+# FDG-0 Phase A: the selected production root target (issue #298 §4). The
+# formalized build world is this target plus its Xmake dependency closure.
+DEFAULT_BUILD_ROOT = "sluice_async"
+
+GRAPH_SCHEMA = "sluice-formal-impact-graph/2"
+# Schema /1 (pre-Build-Truth graphs) still loads; graphs without a build
+# identity block cannot be world-verified and are handled explicitly.
+GRAPH_SCHEMAS = {"sluice-formal-impact-graph/1", GRAPH_SCHEMA}
 REGISTRY_SCHEMA = 1
 
 # Fallback traversal depth. The depth experiment (issue #299 §11) compares
@@ -100,6 +125,7 @@ P_EXPLICIT = "EXPLICIT"
 P_COMPILER = "COMPILER"
 P_HEURISTIC = "HEURISTIC"
 P_FALLBACK = "FALLBACK"
+P_BUILD = "BUILD"
 
 PROVENANCE_LEGEND = {
     P_EXPLICIT: "registry-declared binding (spec/formal/anchors.json: anchor <-> claim)",
@@ -109,6 +135,7 @@ PROVENANCE_LEGEND = {
         "no enclosing ranges; NOT a compiler-proven enclosure)"
     ),
     P_FALLBACK: "file-level coarse mapping (manifest implementation_bindings / anchor files)",
+    P_BUILD: "Xmake-derived target/source/config/build fact (Build Manifest / compile_commands.json)",
 }
 
 
@@ -197,6 +224,10 @@ class Graph:
         # Provenance of the derived edges (corrective-1 C5). Older graphs
         # without the block default to the documented scip-clang 0.4.0 shape.
         self.provenance = data.get("provenance", {})
+        # FDG-0 Phase A: the Build Manifest identity this graph was built
+        # from. Absent on schema /1 and synthetic graphs: world verification
+        # is then impossible and is skipped explicitly (never silently).
+        self.build = data.get("build") or {}
         self.nodes: dict[str, dict] = data["nodes"]
         self.reverse: dict[str, list[str]] = data["reverse"]
         self.documents: dict[str, list[str]] = data["documents"]
@@ -219,7 +250,7 @@ class Graph:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise ImpactError(f"malformed graph {path}: {exc}") from exc  # S9
-        if data.get("schema") != GRAPH_SCHEMA:
+        if data.get("schema") not in GRAPH_SCHEMAS:
             raise ImpactError(f"unsupported graph schema: {data.get('schema')!r}")
         return cls(data)
 
@@ -598,6 +629,7 @@ def classify_impact(
     unresolved_gated_claims: set[str],
     max_depth: int,
     expected_head: str | None = None,
+    build_state: dict | None = None,
 ) -> dict:
     """Core classification. Never raises; always fail-closed on uncertainty.
 
@@ -750,9 +782,10 @@ def classify_impact(
             return UNKNOWN
         return NO_IMPACT
 
-    # Candidate snapshot BEFORE stale demotion (what the current graph
-    # suggests), then the stale demotion itself (corrective-1 C2): a stale
-    # graph never carries authoritative confidence.
+    # Candidate snapshot BEFORE stale/build demotion (what the current graph
+    # suggests), then the demotions themselves (corrective-1 C2 + FDG-0
+    # Phase A): a stale graph or a changed build world never carries
+    # authoritative confidence.
     candidate_classification = aggregate_class()
     candidate_claims = None
     candidate_reason = None
@@ -774,6 +807,28 @@ def classify_impact(
                 f"{expected_head[:12]}) suggests {candidate_classification}; "
                 "UNVERIFIED until the index is rebuilt at the queried head"
             )
+
+    build_fail = (
+        build_state is not None
+        and build_state.get("verified") is False
+        and cxx_changed
+    )
+    if build_fail:
+        reason_key = build_state["reasons"][0]
+        detail = build_state.get("detail", "")
+        for cid, entry in claim_hits.items():
+            if CLASS_ORDER[entry["class"]] > CLASS_ORDER[UNKNOWN]:
+                demote_claim(entry, reason_key, detail)
+        if candidate_classification != UNKNOWN:
+            candidate_claims = sorted(
+                cid for cid, e in claim_hits.items() if e.get("candidate_class")
+            )
+            candidate_reason = (
+                f"the graph's recorded build world no longer matches the "
+                f"current build world ({reason_key}); {detail}"
+            )
+        unknown_reasons.append(reason_key)
+        risks.append(f"build world mismatch ({reason_key}): {detail}")
     classification = aggregate_class()
 
     non_gated_unresolved = sorted(set(unresolved_anchor_claims) - set(unresolved_gated_claims))
@@ -797,6 +852,12 @@ def classify_impact(
         fail_closed_reasons.append(
             "TRAVERSAL_UNKNOWN: structural traversal hit the frontier cap — "
             "candidate paths are incomplete"
+        )
+    if build_fail:
+        fail_closed_reasons.append(
+            f"{build_state['reasons'][0]}: {build_state.get('detail')} — "
+            "the graph does not describe the current build world; re-run "
+            "'formal_impact.py index'"
         )
     if classification == UNKNOWN:
         fail_closed_reasons.append(f"UNKNOWN_FORMAL_IMPACT: {unknown_reason_key(unknown_reasons)}")
@@ -837,6 +898,7 @@ def classify_impact(
         "graph_present": graph is not None,
         "graph_head": graph.head_sha if graph else None,
         "stale_index": stale,
+        "build_world": build_state,
         "semantic_disposition": "UNDETERMINED",
         "provenance_legend": PROVENANCE_LEGEND,
         "fail_closed": fail_closed,
@@ -859,6 +921,10 @@ def unknown_reason_key(unknown_reasons: list[str]) -> str:
         "UNRESOLVED_ANCHOR",
         "TRAVERSAL_UNKNOWN",
         "UNATTRIBUTED_CXX_CHANGE",
+        "UNKNOWN_BUILD_WORLD",
+        "UNKNOWN_BUILD_MANIFEST",
+        "BUILD_WORLD_CHANGED",
+        "BUILD_GRAPH_STALE",
     ):
         if key in unknown_reasons:
             return key
@@ -888,10 +954,11 @@ def cmd_index(args) -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     started = time.time()
 
-    if not COMPDB_PATH.is_file():
+    if not COMPDB_PATH.is_file() and not args.no_refresh_compdb:
         print(
-            f"error: {COMPDB_PATH} not found. Generate it from the current xmake "
-            "config with: xmake project -k compile_commands",
+            f"error: {COMPDB_PATH} not found. It is generated from the current "
+            "xmake config by 'xmake project -k compile_commands' (or by running "
+            "'index', which regenerates it automatically).",
             file=sys.stderr,
         )
         return 2
@@ -905,18 +972,46 @@ def cmd_index(args) -> int:
             print(f"  - {p}", file=sys.stderr)
         return 2
 
-    compdb = json.loads(COMPDB_PATH.read_text(encoding="utf-8"))
-    # Production graph: src/ TUs only. The full-tree compdb includes tests,
-    # bench, examples, fuzz — irrelevant to formal anchor traversal and ~5x
-    # the index cost. Header symbols are indexed through the src TUs that
-    # include them. With `--with-liburing=y` configuration the compdb carries
-    # the REAL uring variants (SLUICE_HAS_LIBURING); the stub variants index
-    # only the public interface. Both may be present; merging is additive.
-    src_entries = [e for e in compdb if e.get("file", "").startswith("src/")]
+    # --- FDG-0 Phase A: refresh compile_commands, generate Build Manifest ---
+    # The compdb is regenerated from the CURRENT xmake configuration so the
+    # exact pipeline "Xmake source graph -> compile_commands -> Build
+    # Manifest -> SCIP" holds (issue #298 §8, §9). A manual compdb edit or a
+    # stale file cannot silently drop or inject a production TU.
+    import build_truth as bt
+
+    if not args.no_refresh_compdb:
+        print("==> regenerating compile_commands.json from the xmake config ...")
+        try:
+            bt.run_capture_ok(["xmake", "project", "-k", "compile_commands"])
+        except bt.BuildTruthError as exc:
+            print(f"error: compile_commands regeneration failed: {exc}", file=sys.stderr)
+            return 2
+
+    try:
+        build_manifest = bt.build_manifest([DEFAULT_BUILD_ROOT])
+    except bt.BuildTruthError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    manifest_out = bt.MANIFEST_PATH
+    manifest_out.parent.mkdir(parents=True, exist_ok=True)
+    manifest_out.write_text(json.dumps(build_manifest, indent=1), encoding="utf-8")
+
+    world = build_manifest["worlds"][0]
+    world_targets = set(world["dependency_closure"])
+    selected_tus = set(world["tus"])
+    compdb = bt.load_compdb()
+    src_entries = [
+        e
+        for e in compdb
+        if str(PurePosixPath(str(e.get("file", "")))) in selected_tus
+        and bt.compdb_owner(e) in world_targets
+    ]
     if not src_entries:
-        print("error: compile_commands.json has no src/ entries", file=sys.stderr)
+        print("error: selected build world produced no compile_commands entries", file=sys.stderr)
         return 2
     COMPDB_SRC_PATH.write_text(json.dumps(src_entries, indent=1), encoding="utf-8")
+    print(f"==> selected world {world['id']}: {len(world['dependency_closure'])} target(s), "
+          f"{len(selected_tus)} TUs, {len(src_entries)} compile commands")
 
     if not SCIP_CLANG_BIN.is_file():
         print(
@@ -956,11 +1051,26 @@ def cmd_index(args) -> int:
         "schema": GRAPH_SCHEMA,
         "head_sha": head_sha,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        # FDG-0 Phase A: the exact build world this graph was built from.
+        # build_id is the deterministic Build Manifest identity; impact/check
+        # verify it against the CURRENT Xmake configuration and fail closed
+        # on drift (issue #298 §6, §12).
+        "build": {
+            "schema": bt.MANIFEST_SCHEMA,
+            "manifest": "build/formal-impact/build-manifest.json",
+            "build_id": build_manifest["build_id"],
+            "world_id": world["id"],
+            "config_id": build_manifest["config"]["id"],
+            "compdb_entries": len(src_entries),
+            "selected_tus": len(selected_tus),
+            "provenance": P_BUILD,
+        },
         "toolchain": {
             "scip_clang": meta.tool_version,
             "scip_clang_bin_sha256": sha256_file(SCIP_CLANG_BIN),
             "project_root": meta.project_root,
             "compdb_entries": len(src_entries),
+            "selected_world": world["id"],
             "lock_file": "scripts/formal/scip-clang.lock.json",
         },
         # Edge provenance (corrective-1 C5): scip-clang 0.4.0 emits no
@@ -971,6 +1081,7 @@ def cmd_index(args) -> int:
         "provenance": {
             "symbol_identity": P_COMPILER,
             "reference_edges": P_HEURISTIC,
+            "build_world": P_BUILD,
             "note": (
                 "reference edges attribute each SCIP occurrence to the "
                 "nearest-preceding named definition in its document; path "
@@ -993,6 +1104,7 @@ def cmd_index(args) -> int:
     total_secs = time.time() - started
     print("==> index built")
     print(f"    head:            {head_sha[:12]}")
+    print(f"    build world:     {world['id']}  build_id {build_manifest['build_id'][:12]}")
     print(f"    scip-clang:      {meta.tool_version}")
     print(f"    documents:       {graph['stats']['documents']}")
     print(f"    symbols:         {graph['stats']['symbols']}")
@@ -1003,10 +1115,107 @@ def cmd_index(args) -> int:
     return 0
 
 
+def cmd_build_world(args) -> int:
+    """Generate the Build Manifest from the current Xmake configuration and
+    write it to build/formal-impact/build-manifest.json (issue #298 §3)."""
+    import build_truth as bt
+
+    try:
+        manifest = bt.build_manifest([DEFAULT_BUILD_ROOT])
+    except bt.BuildTruthError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    out = bt.MANIFEST_PATH
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    world = manifest["worlds"][0]
+    print(f"==> build manifest written: {out}")
+    print(f"    schema:        {manifest['schema']}")
+    print(f"    head:          {manifest['head_sha'][:12]}")
+    print(f"    xmake:         {manifest['xmake_version']}")
+    print(f"    config id:     {manifest['config']['id'][:12]}")
+    print(f"    world:         {world['id']}  roots={world['root_targets']}")
+    print(f"    closure:       {world['dependency_closure']}")
+    print(f"    targets:       {len(world['targets'])}")
+    print(f"    TUs:           {len(world['tus'])}")
+    print(f"    compdb:        {world['compdb']['selected_entries']}/{world['compdb']['total_entries']} entries selected")
+    print(f"    build_id:      {manifest['build_id']}")
+    return 0
+
+
 def sha256_file(path: Path) -> str:
     import hashlib
 
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# --- FDG-0 Phase A: build-world verification ---------------------------------
+
+
+def check_build_world(graph: Graph | None, manifest_path: Path | None = None) -> dict:
+    """Verify that the graph's recorded build world matches the current
+    Xmake configuration + Build Manifest (issue #298 §6, §12).
+
+    Returns a state dict (never raises):
+      verified: True  — graph build identity == manifest == current world
+                False — a build-truth mismatch (fail closed)
+                None  — graph carries no build identity (schema /1 or
+                        synthetic graph): cannot verify, explicitly skipped
+    """
+    if graph is None or not graph.build:
+        return {
+            "verified": None,
+            "reasons": [],
+            "detail": (
+                "graph carries no build identity block (pre-Build-Truth or "
+                "synthetic graph); build-world verification skipped"
+            ),
+        }
+    try:
+        import build_truth as bt
+
+        manifest = bt.load_manifest(manifest_path) if manifest_path else bt.load_manifest()
+    except Exception as exc:  # noqa: BLE001 — any failure here is fail-closed
+        return {
+            "verified": False,
+            "reasons": ["UNKNOWN_BUILD_MANIFEST"],
+            "detail": f"build manifest unavailable: {exc}",
+        }
+    graph_build_id = graph.build.get("build_id")
+    if graph_build_id != manifest.get("build_id"):
+        return {
+            "verified": False,
+            "reasons": ["BUILD_GRAPH_STALE"],
+            "detail": (
+                f"graph build_id {str(graph_build_id)[:12]} != manifest "
+                f"build_id {str(manifest.get('build_id'))[:12]} — the graph "
+                "was not built from the current Build Manifest; re-run 'index'"
+            ),
+            "manifest_build_id": manifest.get("build_id"),
+        }
+    try:
+        current = bt.verify_current_world(manifest)
+    except Exception as exc:  # noqa: BLE001 — cannot compute the world
+        return {
+            "verified": False,
+            "reasons": ["UNKNOWN_BUILD_WORLD"],
+            "detail": f"current build world cannot be computed: {exc}",
+        }
+    if not current.get("fresh"):
+        return {
+            "verified": False,
+            "reasons": ["BUILD_WORLD_CHANGED"],
+            "detail": current.get("detail"),
+            "current_build_id": current.get("current_build_id"),
+            "manifest_build_id": current.get("manifest_build_id"),
+        }
+    return {
+        "verified": True,
+        "reasons": [],
+        "build_id": manifest.get("build_id"),
+        "current_build_id": current.get("current_build_id"),
+        "detail": "build world verified (graph == manifest == current Xmake config)",
+    }
 
 
 def build_claim_index_and_families(registry: dict, manifest: dict, graph: Graph | None):
@@ -1075,6 +1284,36 @@ def cmd_check(args) -> int:
               f"working HEAD — results would not describe the current tree")
         print("FAIL  rebuild with 'formal_impact.py index', or pass --structure-only")
         return 1
+
+    # FDG-0 Phase A: the graph must describe the CURRENT build world. A
+    # graph with a build identity block is verified against the Build
+    # Manifest and the live Xmake configuration; any drift is a failure.
+    if graph.build:
+        try:
+            import build_truth as bt
+
+            bm_path = Path(args.build_manifest) if args.build_manifest else None
+            build_manifest = bt.load_manifest(bm_path) if bm_path else bt.load_manifest()
+            if graph.build.get("build_id") != build_manifest.get("build_id"):
+                print(f"FAIL  graph build_id {str(graph.build.get('build_id'))[:12]} != "
+                      f"manifest build_id {str(build_manifest.get('build_id'))[:12]} — "
+                      "the graph was not built from the current Build Manifest")
+                print("FAIL  rebuild with 'formal_impact.py index'")
+                return 1
+            current = bt.verify_current_world(build_manifest)
+        except Exception as exc:  # noqa: BLE001 — cannot verify is a failure
+            print(f"FAIL  build world unverifiable: {exc}")
+            return 1
+        if not current.get("fresh"):
+            print(f"FAIL  build world changed: {current.get('detail')}")
+            print("FAIL  rebuild with 'formal_impact.py index' at the current "
+                  "HEAD/configuration, or pass --structure-only")
+            return 1
+        print(f"OK    build world verified (world {graph.build.get('world_id')}, "
+              f"build_id {graph.build.get('build_id', '')[:12]})")
+    else:
+        print("NOTE  graph carries no build identity block (pre-Build-Truth or "
+              "synthetic graph); build-world verification skipped")
 
     resolutions = resolve_anchors(registry, graph)
     bad = 0
@@ -1148,6 +1387,13 @@ def cmd_impact(args) -> int:
         print("NO_FORMAL_IMPACT (empty diff)")
         return 0
 
+    # FDG-0 Phase A: verify the graph's recorded build world against the
+    # current Xmake configuration + Build Manifest. A drift is a fail-closed
+    # UNKNOWN (with candidates preserved), never a silent NO.
+    build_state = check_build_world(
+        graph, Path(args.build_manifest) if args.build_manifest else None
+    )
+
     result = classify_impact(
         graph,
         graph_error,
@@ -1158,6 +1404,7 @@ def cmd_impact(args) -> int:
         unresolved_gated,
         max_depth=args.max_depth,
         expected_head=expected_head,
+        build_state=build_state,
     )
     result["range"] = args.range
     result["base"] = base
@@ -1178,6 +1425,15 @@ def cmd_impact(args) -> int:
 
     print("FORMAL IMPACT")
     print()
+    if result["build_world"] is not None:
+        bw = result["build_world"]
+        if bw.get("verified") is True:
+            print(f"build world:   OK ({bw.get('build_id', '')[:12]})")
+        elif bw.get("verified") is False:
+            print(f"build world:   FAIL-CLOSED {','.join(bw.get('reasons', []))} — {bw.get('detail')}")
+        else:
+            print(f"build world:   unverifiable (no build identity in graph) — {bw.get('detail')}")
+        print()
     print("changed:")
     for path in result["changed_files"]:
         print(f"  {path}")
@@ -1403,6 +1659,8 @@ def add_artifact_args(p):
     p.add_argument("--registry", help="anchor registry JSON (default: spec/formal/anchors.json)")
     p.add_argument("--manifest", help="formal manifest JSON (default: spec/tla/manifest.json)")
     p.add_argument("--graph", help="symbol graph JSON (default: build/formal-impact/graph.json)")
+    p.add_argument("--build-manifest",
+                   help="Build Manifest JSON (default: build/formal-impact/build-manifest.json)")
 
 
 def main(argv: list[str]) -> int:
@@ -1411,7 +1669,15 @@ def main(argv: list[str]) -> int:
 
     p_index = sub.add_parser("index", help="Build SCIP index + symbol graph")
     p_index.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH, help=argparse.SUPPRESS)
+    p_index.add_argument("--no-refresh-compdb", action="store_true",
+                         help="do not regenerate compile_commands.json from the "
+                              "current xmake config before indexing (dangerous: "
+                              "the selected world is joined to the on-disk compdb)")
     p_index.set_defaults(func=cmd_index)
+
+    p_bw = sub.add_parser("build-world",
+                          help="Generate the Build Manifest from the current Xmake config")
+    p_bw.set_defaults(func=cmd_build_world)
 
     p_check = sub.add_parser("check", help="Validate registry + anchor resolution")
     p_check.add_argument("--structure-only", action="store_true",

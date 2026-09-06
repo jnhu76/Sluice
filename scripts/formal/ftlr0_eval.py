@@ -681,8 +681,10 @@ class Evaluator:
         return {
             "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
             "index_config": (
-                f"compdb from the current xmake config ({toolchain.get('compdb_entries', '?')} src TUs); "
-                "config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y"
+                f"compdb from the current xmake config, selected world only "
+                f"({toolchain.get('compdb_entries', '?')} selected-world TUs; "
+                "FDG-0 Phase A Build Truth); config-gated anchors "
+                "(SLUICE_HAS_LIBURING) resolve only under --with-liburing=y"
             ),
             "scip_clang": toolchain.get("scip_clang", "unknown"),
             "graph_symbols": stats.get("symbols"),

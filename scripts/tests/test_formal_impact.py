@@ -488,7 +488,7 @@ class ProvenanceReporting(unittest.TestCase):
         result = classify(make_graph(), changes_for("src/other.cpp", [(51, 52)]))
         self.assertEqual(
             set(result["provenance_legend"]),
-            {fi.P_EXPLICIT, fi.P_COMPILER, fi.P_HEURISTIC, fi.P_FALLBACK},
+            {fi.P_EXPLICIT, fi.P_COMPILER, fi.P_HEURISTIC, fi.P_FALLBACK, fi.P_BUILD},
         )
 
     def test_coarse_hit_records_fallback_provenance(self):

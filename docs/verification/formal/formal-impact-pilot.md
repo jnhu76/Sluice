@@ -292,6 +292,13 @@ only place a C++ ↔ formal edge exists.
   evaluation harness. It does NOT demonstrate `xmake` source-graph change →
   compile_commands regeneration → SCIP → formal impact end-to-end; that
   build-graph integration remains a #298 follow-up.
+  **Follow-up delivered:** FDG-0 Phase A now demonstrates the real
+  end-to-end pipeline (Xmake glob membership → `xmake project -k
+  compile_commands` → Build Manifest → SCIP → anchor resolves at the new
+  site, no manual compile-database injection) — see
+  [`fdg0-phase-a-build-truth.md`](fdg0-phase-a-build-truth.md) §7 (T7-A).
+  The #300 T7 result above remains the historical pilot record; it was not
+  rewritten.
 - `spec/tla/manifest.json` is untouched; `implementation_bindings` remain
   the coarse file-level layer that COARSE classification builds on. The
   registry refines it; it does not replace it.
