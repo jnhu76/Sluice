@@ -1,0 +1,229 @@
+{
+  "all_pass": true,
+  "experiment": "FDG-0 Phase A \u2014 Xmake Build Truth adversarial suite (issue #298)",
+  "generated_at": "2026-09-06T05:55:56Z",
+  "head_sha": "aabdc779103493634d87337f3d6aa62148ebb150",
+  "root_target": "sluice_async",
+  "specimens": {
+    "A11_liburing_f03_reproducible": {
+      "all_anchors_resolve": true,
+      "check_exit": 0,
+      "f03_uring_anchor_lines": [
+        "OK    F03  UringAsyncBackend::finalize_operation_terminal_  ->  1 symbol(s)"
+      ],
+      "no_config_gate_warning": true,
+      "pass": true
+    },
+    "A4_missing_compdb_entry": {
+      "entries_after": 417,
+      "entries_before": 418,
+      "exit_code": 2,
+      "expected": "UNKNOWN_BUILD_WORLD, non-zero exit",
+      "pass": true,
+      "stderr_excerpt": [
+        "error: UNKNOWN_BUILD_WORLD: Xmake-owned TU src/async/cancel.cpp (owning targets: ['sluice_async']) has no compile_commands entry owned by any of its owning targets (sibling/dependency-target entries for the same path are a different compiler interpretation and are not borrowed; stale compdb? regenerate with 'xmake project -k compile_commands')"
+      ]
+    },
+    "A5_exclusion": {
+      "all_tus_have_compdb_identity": true,
+      "experimental_excluded": true,
+      "internal_testing_variant_excluded": true,
+      "pass": true,
+      "selected_entries": 41,
+      "total_entries": 418,
+      "tus": [
+        "src/async/application_runtime.cpp",
+        "src/async/async_io_context.cpp",
+        "src/async/await_op_helpers.cpp",
+        "src/async/batch.cpp",
+        "src/async/cancel.cpp",
+        "src/async/fail_fast.cpp",
+        "src/async/fiber.cpp",
+        "src/async/fiber_ctx.cpp",
+        "src/async/group.cpp",
+        "src/async/mutex_test_seam.cpp",
+        "src/async/op_helpers.cpp",
+        "src/async/queue_port.cpp",
+        "src/async/queue_test_seam.cpp",
+        "src/async/request_handle.cpp",
+        "src/async/scheduler.cpp",
+        "src/async/scheduler_condition.cpp",
+        "src/async/scheduler_event.cpp",
+        "src/async/scheduler_fe2_test_seam.cpp",
+        "src/async/scheduler_mutex.cpp",
+        "src/async/scheduler_park_wake.cpp",
+        "src/async/scheduler_queue.cpp",
+        "src/async/scheduler_rwlock.cpp",
+        "src/async/scheduler_semaphore.cpp",
+        "src/async/scheduler_timer.cpp",
+        "src/async/select.cpp",
+        "src/async/select_event.cpp",
+        "src/async/select_timer.cpp",
+        "src/async/threadpool_backend.cpp",
+        "src/async/uring_backend.cpp",
+        "src/async/wait_policy.cpp",
+        "src/blocking_io_pool.cpp",
+        "src/buffer.cpp",
+        "src/copy.cpp",
+        "src/copy_strategy.cpp",
+        "src/fault.cpp",
+        "src/file.cpp",
+        "src/io_context.cpp",
+        "src/observed.cpp",
+        "src/reader.cpp",
+        "src/wal.cpp",
+        "src/writer.cpp"
+      ],
+      "tus_outside_src": [],
+      "uring_backend_defines": [
+        "-DNDEBUG",
+        "-DSLUICE_HAS_LIBURING"
+      ],
+      "uring_backend_owning_targets": [
+        "sluice_async"
+      ]
+    },
+    "A6_new_production_tu": {
+      "build_id": "da55b02f0eef1d3661adb12e67b096da2ebaf4551c41c2e8cff4ebe609a72026",
+      "compdb_has_tu": true,
+      "graph_indexes_tu": true,
+      "manifest_discovers_tu": true,
+      "manifest_owning_targets": [
+        "sluice_async"
+      ],
+      "pass": true,
+      "selected_entries": 42
+    },
+    "A7_t7a_real_move": {
+      "anchor_resolves_at_new_site": true,
+      "baseline_tu": "src/async/threadpool_backend.cpp",
+      "build_manifest_evidence": {
+        "build_id": "44efc9bbfd7e20e70c3f2af3f0d4484d73553aa668604aaacbfdf373ed97a9ad",
+        "tu_count": 42,
+        "world_id": "sluice_async-liburing"
+      },
+      "check_anchor_drift_lines": [
+        "OK    F03  ThreadPoolBackend::run_syscall  ->  1 symbol(s) (def-site drift: src/async/threadpool_run_syscall.cpp)"
+      ],
+      "check_exit": 0,
+      "compdb_evidence": {
+        "new_tu_entries": 2,
+        "new_tu_production_entry": true
+      },
+      "f03_surfaced": true,
+      "impact_not_no": true,
+      "impact_result": {
+        "build_world_verified": true,
+        "changed_files": [
+          "src/async/threadpool_backend.cpp",
+          "src/async/threadpool_run_syscall.cpp"
+        ],
+        "claims": [
+          "F01",
+          "F03",
+          "F06"
+        ],
+        "classification": "DIRECT_FORMAL_IMPACT",
+        "fail_closed": false
+      },
+      "manual_compdb_injection_used": "NO",
+      "moved_to_tu": "src/async/threadpool_run_syscall.cpp",
+      "pass": true,
+      "scip_evidence": {
+        "graph_documents": 107,
+        "new_tu_indexed": true
+      },
+      "xmake_membership_change": {
+        "anchor_file_still_present": true,
+        "new_tu_in_resolved_sources": true,
+        "new_tu_owning_targets": [
+          "sluice_async"
+        ]
+      }
+    },
+    "A8_path_not_authority": {
+      "graph_excludes_it": true,
+      "manifest_excludes_it": true,
+      "pass": true,
+      "selected_entries_unchanged": 41,
+      "tu_set_unchanged": true
+    },
+    "A9_A10_config_drift_stale_manifest": {
+      "a10_check_exit": 1,
+      "a10_check_lines": [
+        "FAIL  graph build_id dce0dd5673ef != manifest build_id 15c1a02d9755 \u2014 the graph was not built from the current Build Manifest",
+        "FAIL  rebuild with 'formal_impact.py index'"
+      ],
+      "a10_fails_closed": true,
+      "a9_identity_differs": true,
+      "config_restored": true,
+      "liburing_build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+      "liburing_world_id": "sluice_async-liburing",
+      "pass": true,
+      "restored_build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+      "stub_build_id": "15c1a02d9755d9a95390d250298e14ae0b39f95a366e0a00139dd9d4917e07ae",
+      "stub_world_id": "sluice_async-default"
+    },
+    "B0_baseline": {
+      "build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+      "config": {
+        "id": "3cf36140eeea1fcd53ea9cb8e92416c7f19e71eb3f4d9513bbca19a804be98cb",
+        "options": {
+          "arch": "x86_64",
+          "hardened": "false",
+          "mode": "release",
+          "plat": "linux",
+          "toolchain": null,
+          "with-liburing": "true",
+          "with-uring-registered-buffers": "false",
+          "with-uring-registered-files": "false"
+        }
+      },
+      "graph": {
+        "build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+        "documents": 106,
+        "schema": "sluice-formal-impact-graph/2",
+        "symbols": 2351,
+        "world_id": "sluice_async-liburing"
+      },
+      "head_sha": "aabdc779103493634d87337f3d6aa62148ebb150",
+      "world": {
+        "compdb": {
+          "path": "compile_commands.json",
+          "selected_entries": 41,
+          "total_entries": 418
+        },
+        "dependency_closure": [
+          "sluice_async",
+          "sluice_core"
+        ],
+        "id": "sluice_async-liburing",
+        "root_targets": [
+          "sluice_async"
+        ],
+        "targets": [
+          "sluice_async",
+          "sluice_core"
+        ],
+        "tu_count": 41
+      },
+      "xmake_version": "v3.0.9+HEAD.2b184e1"
+    },
+    "C2_empty_diff_build_precondition": {
+      "drifted_build_reasons": [
+        "BUILD_WORLD_CHANGED"
+      ],
+      "drifted_fail_closed": true,
+      "drifted_world_class": "UNKNOWN_FORMAL_IMPACT",
+      "drifted_world_exit": 1,
+      "expected": "empty diff + drifted config -> UNKNOWN_FORMAL_IMPACT (BUILD_WORLD_CHANGED), exit != 0; verified world + empty diff -> NO_FORMAL_IMPACT, exit 0",
+      "pass": true,
+      "restored_world_class": "NO_FORMAL_IMPACT",
+      "restored_world_exit": 0,
+      "verified_world_build": true,
+      "verified_world_class": "NO_FORMAL_IMPACT",
+      "verified_world_exit": 0
+    }
+  },
+  "wall_seconds": 231.9
+}

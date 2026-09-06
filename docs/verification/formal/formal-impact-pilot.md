@@ -74,7 +74,10 @@ python3 scripts/formal/formal_impact.py explain F08
 ```
 
 Rebuild artifacts: the index and graph are gitignored and rebuilt by
-`index` in a clean checkout (~20 s for the 94-TU production surface).
+`index` in a clean checkout (~14 s for the 41-TU selected production
+world; the pre-Phase-A surface was 94 `src/` TUs — FDG-0 Phase A replaced
+the path filter with Xmake Build Truth, see
+[`fdg0-phase-a-build-truth.md`](fdg0-phase-a-build-truth.md)).
 The index should be rebuilt whenever HEAD moves (corrective-1: a stale
 graph no longer reports hits as authoritative — see §5).
 
@@ -158,8 +161,11 @@ enclosing relation was compiler-verified.
 ## 5. Results (summary — full data in the results JSON)
 
 Corrective-1 numbers (measured on the committed corrective state,
-`--with-liburing=y` index config, 94 src TUs; the results JSON is fully
-driver-generated):
+`--with-liburing=y` index config, 94 `src/` TUs under the then-current
+`src/` path filter; the results JSON is fully driver-generated and was
+regenerated under the FDG-0 Phase A 41-TU selected world — all specimen
+outcomes unchanged, see §8 and
+[`fdg0-phase-a-build-truth.md`](fdg0-phase-a-build-truth.md) §10 A12):
 
 - **Recall (adversarial T1–T10): 10/10** at depth 2. Explicit anchors only
   (depth 0) surfaces 4/10 and misses every helper / bypass / move / thunk
@@ -292,6 +298,13 @@ only place a C++ ↔ formal edge exists.
   evaluation harness. It does NOT demonstrate `xmake` source-graph change →
   compile_commands regeneration → SCIP → formal impact end-to-end; that
   build-graph integration remains a #298 follow-up.
+  **Follow-up delivered:** FDG-0 Phase A now demonstrates the real
+  end-to-end pipeline (Xmake glob membership → `xmake project -k
+  compile_commands` → Build Manifest → SCIP → anchor resolves at the new
+  site, no manual compile-database injection) — see
+  [`fdg0-phase-a-build-truth.md`](fdg0-phase-a-build-truth.md) §7 (T7-A).
+  The #300 T7 result above remains the historical pilot record; it was not
+  rewritten.
 - `spec/tla/manifest.json` is untouched; `implementation_bindings` remain
   the coarse file-level layer that COARSE classification builds on. The
   registry refines it; it does not replace it.

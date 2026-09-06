@@ -43,8 +43,8 @@
     "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO; T6 requires F08 present at ANY class \u2014 the claim is fail-closed demoted, see corrective-1 C2)."
   },
   "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299, corrective-1)",
-  "generated_at": "2026-09-06T02:30:21Z",
-  "head_sha": "292e44ff3a0f73f464148b76426e21902058f0c5",
+  "generated_at": "2026-09-06T06:02:07Z",
+  "head_sha": "6a27403afe3edfe0e48f030f086be4062c893d93",
   "historical_sanity_probe": {
     "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
     "result": {
@@ -52,9 +52,9 @@
         "F08"
       ],
       "candidate_classification": "DIRECT_FORMAL_IMPACT",
-      "changed_symbols_exemplar": "cxx . . $ sluice/async/Scheduler#AsyncTestAccess#elected_participant_id(f0899e25f78e42d1).",
+      "changed_symbols_exemplar": "cxx . . $ sluice/async/Scheduler#run_impl(48d6119b2b26e612).",
       "classification": "UNKNOWN_FORMAL_IMPACT",
-      "first_risk": "stale index: graph head 292e44ff3a0f != diff head 8d4b72a03c43; symbol-level results are UNVERIFIED_STALE_GRAPH \u2014 rebuild with 'formal_impact.py index' at the queried head"
+      "first_risk": "src/async/scheduler_test_access.hpp: C++ change could not be attributed to any indexed symbol (new/unindexed code or non-definition hunk)"
     },
     "status": "HISTORICAL SANITY PROBE \u2014 UNVERIFIED: the graph is built at the current HEAD, not at 8d4b72a0; the stale-graph demotion applies (candidate evidence only, never authoritative confidence)"
   },
@@ -368,8 +368,8 @@
                 ],
                 "hops": [
                   "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
-                  "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
-                  "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+                  "cxx . . $ sluice/async/Scheduler#backend_wait_active_.",
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
                 ],
                 "provenance": "HEURISTIC",
                 "uses_heuristic_attribution": true
@@ -767,7 +767,6 @@
         "F08"
       ],
       "changed_files": [
-        "docs/verification/formal/formal-impact-pilot.md",
         "include/sluice/async/scheduler.hpp",
         "src/async/async_io_context.cpp",
         "src/async/scheduler.cpp",
@@ -880,7 +879,6 @@
         "F06"
       ],
       "changed_files": [
-        "docs/verification/formal/formal-impact-pilot.md",
         "src/async/threadpool_backend.cpp"
       ],
       "check_after": {
@@ -1169,7 +1167,6 @@
         "F08"
       ],
       "changed_files": [
-        "docs/verification/formal/formal-impact-pilot.md",
         "include/sluice/async/scheduler.hpp",
         "src/async/scheduler_park_wake.cpp"
       ],
@@ -1232,23 +1229,11 @@
             "paths": [
               {
                 "hop_provenance": [
-                  "COMPILER",
-                  "HEURISTIC"
-                ],
-                "hops": [
-                  "cxx . . $ sluice/async/Scheduler#ftlr0_specimen_rogue_wake(49f6e7a06ebc5aa8).",
-                  "cxx . . $ sluice/async/Scheduler#wake_epoch_."
-                ],
-                "provenance": "HEURISTIC",
-                "uses_heuristic_attribution": true
-              },
-              {
-                "hop_provenance": [
                   "HEURISTIC",
                   "HEURISTIC"
                 ],
                 "hops": [
-                  "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                  "cxx . . $ sluice/async/Scheduler#backend_wait_active_.",
                   "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
                 ],
                 "provenance": "HEURISTIC",
@@ -1260,8 +1245,48 @@
                   "HEURISTIC"
                 ],
                 "hops": [
-                  "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                  "cxx . . $ sluice/async/Scheduler#backend_wait_active_.",
                   "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#backend_wait_active_.",
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#backend_wait_active_.",
+                  "cxx . . $ sluice/async/Scheduler#worker_loop(92dc9e636c862d24).",
+                  "cxx . . $ sluice/async/Scheduler#run_impl(48d6119b2b26e612)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "COMPILER",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#ftlr0_specimen_rogue_wake(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/Scheduler#wake_epoch_."
                 ],
                 "provenance": "HEURISTIC",
                 "uses_heuristic_attribution": true
@@ -1274,7 +1299,8 @@
             },
             "title": "wait / wake / lost-wakeup closure",
             "via": [
-              "structural path depth 1"
+              "structural path depth 1",
+              "structural path depth 2"
             ]
           }
         ],
@@ -1381,11 +1407,11 @@
   "toolchain": {
     "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
     "edge_provenance": "HEURISTIC",
-    "graph_symbols": 3175,
-    "index_config": "compdb from the current xmake config (94 src TUs); config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y",
+    "graph_symbols": 2350,
+    "index_config": "compdb from the current xmake config, selected world only (41 selected-world TUs; FDG-0 Phase A Build Truth); config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y",
     "query_time_seconds": "<1 (graph.json in memory)",
-    "reference_edges": 12520,
+    "reference_edges": 9609,
     "scip_clang": "0.4.0"
   },
-  "wall_seconds": 437.0
+  "wall_seconds": 337.9
 }
