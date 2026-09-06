@@ -3,12 +3,13 @@
     "A_file_only": {
       "description": "changed file -> manifest implementation_bindings -> suites -> claims",
       "false_positives_vs_expected": 19,
-      "note": "file-level recall is full on this corpus (every anchor file is also a binding file), but it drags in every suite sharing the file: 17 extra claim flags across 9 nonzero specimens, e.g. T10 flags 4 claims where F04 alone is defensible."
+      "note": "file-level bindings drag in every suite sharing the touched file; counts over the specimens that ran.",
+      "recall_hits": 10
     },
     "B_explicit_anchors_only": {
       "description": "changed symbol == registered anchor (engine depth 0)",
-      "note": "misses every helper/bypass/thunk case (T2/T3/T9/T10): the core value SCIP adds over annotation-only.",
-      "recall_hits": 6
+      "note": "misses every helper/bypass/thunk case (T2/T3/T8/T9/T10): the core value SCIP adds over annotation-only.",
+      "recall_hits": 4
     },
     "C_scip_graph": {
       "description": "direction-monotonic bounded traversal, depth 2, namespace hubs excluded",
@@ -21,8 +22,8 @@
   "depth_experiment": {
     "by_depth": {
       "0": {
-        "claims": 6,
-        "recall_hits": 6
+        "claims": 4,
+        "recall_hits": 4
       },
       "1": {
         "claims": 9,
@@ -38,26 +39,27 @@
       }
     },
     "chosen_default": 2,
-    "justification": "depth 2 is the smallest depth reaching full recall (T3 two-hop, T10 thunk-chain need 2); depth 3 adds zero claims on this corpus.",
-    "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO)."
+    "justification": "depth 2 is the smallest depth reaching full recall (10/10); depth 3 adds nothing.",
+    "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO; T6 requires F08 present at ANY class \u2014 the claim is fail-closed demoted, see corrective-1 C2)."
   },
-  "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299)",
-  "generated_at": "2026-09-05T16:54:20Z",
-  "head_sha": "48f89d90cf228e2055d81d5c98ce0ab9f7068721",
-  "historical_validation": {
-    "index_stale_flag": "fired as designed (graph head != historical commit head); hits kept but marked unverified",
+  "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299, corrective-1)",
+  "generated_at": "2026-09-06T02:30:21Z",
+  "head_sha": "292e44ff3a0f73f464148b76426e21902058f0c5",
+  "historical_sanity_probe": {
     "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
     "result": {
-      "changed_symbols_exemplar": "sluice_async_test::PhaseTag::worker_startup_before_publication",
-      "claims": [
+      "candidate_claims": [
         "F08"
       ],
-      "classification": "DIRECT_FORMAL_IMPACT",
-      "note": "a real historical formal-relevant commit is recovered with the correct claim; run_impl body edits attribute via nearest-preceding definition",
-      "path": "PhaseTag::worker_startup_before_publication <- referenced by <- Scheduler::run_impl (F08 anchor)"
-    }
+      "candidate_classification": "DIRECT_FORMAL_IMPACT",
+      "changed_symbols_exemplar": "cxx . . $ sluice/async/Scheduler#AsyncTestAccess#elected_participant_id(f0899e25f78e42d1).",
+      "classification": "UNKNOWN_FORMAL_IMPACT",
+      "first_risk": "stale index: graph head 292e44ff3a0f != diff head 8d4b72a03c43; symbol-level results are UNVERIFIED_STALE_GRAPH \u2014 rebuild with 'formal_impact.py index' at the queried head"
+    },
+    "status": "HISTORICAL SANITY PROBE \u2014 UNVERIFIED: the graph is built at the current HEAD, not at 8d4b72a0; the stale-graph demotion applies (candidate evidence only, never authoritative confidence)"
   },
   "llm_adjudication": {
+    "carried_note": "Carried verbatim from the corrective-0 run (2026-09-05, head 48f89d90): the T1/T2/T4/T5/T10 specimen shapes are unchanged; T8 was redesigned in corrective-1 (helper-only diff) and was never part of the LLM experiment. Advisory evidence only.",
     "cases": [
       {
         "context": {
@@ -262,10 +264,22 @@
             ],
             "id": "F08",
             "paths": [
-              [
-                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8). (changed symbol is a registered anchor)"
@@ -273,6 +287,8 @@
           }
         ],
         "classification": "DIRECT_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -344,21 +360,52 @@
             ],
             "id": "F08",
             "paths": [
-              [
-                "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
-                "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
-                "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
-              ],
-              [
-                "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
-                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
-              ],
-              [
-                "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
-                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8).",
-                "cxx . . $ sluice/async/Scheduler#wake_epoch_."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
+                  "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                  "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#notify_external_wake(ced63f7c635d850d).",
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/Scheduler#wake_epoch_."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 1",
@@ -367,6 +414,8 @@
           }
         ],
         "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -435,17 +484,40 @@
             ],
             "id": "F08",
             "paths": [
-              [
-                "cxx . . $ sluice/async/Scheduler#drain_routed_completion_waits_locked(c9857a73d68e59ba).",
-                "cxx . . $ sluice/async/Scheduler#route_runnable_locked(141ce49096d81f8f).",
-                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
-              ],
-              [
-                "cxx . . $ sluice/async/Scheduler#drain_routed_completion_waits_locked(c9857a73d68e59ba).",
-                "cxx . . $ sluice/async/Scheduler#worker_loop(92dc9e636c862d24).",
-                "cxx . . $ sluice/async/Scheduler#run_impl(48d6119b2b26e612)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#drain_routed_completion_waits_locked(c9857a73d68e59ba).",
+                  "cxx . . $ sluice/async/Scheduler#route_runnable_locked(141ce49096d81f8f).",
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#drain_routed_completion_waits_locked(c9857a73d68e59ba).",
+                  "cxx . . $ sluice/async/Scheduler#worker_loop(92dc9e636c862d24).",
+                  "cxx . . $ sluice/async/Scheduler#run_impl(48d6119b2b26e612)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 2"
@@ -453,6 +525,8 @@
           }
         ],
         "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -493,6 +567,8 @@
       "result": {
         "claims": [],
         "classification": "NO_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -570,10 +646,22 @@
             ],
             "id": "F01",
             "paths": [
-              [
-                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "request identity / generation / stale reuse",
             "via": [
               "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb). (changed symbol is a registered anchor)"
@@ -593,16 +681,38 @@
             ],
             "id": "F03",
             "paths": [
-              [
-                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb).",
-                "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1)."
-              ],
-              [
-                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb).",
-                "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1).",
-                "cxx . . $ sluice/async/UringAsyncBackend#finalize_operation_terminal_(70241e5ab4dc9963)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb).",
+                  "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb).",
+                  "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1).",
+                  "cxx . . $ sluice/async/UringAsyncBackend#finalize_operation_terminal_(70241e5ab4dc9963)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "terminal winner / exactly-once",
             "via": [
               "structural path depth 1",
@@ -622,10 +732,22 @@
             ],
             "id": "F06",
             "paths": [
-              [
-                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "cancel vs ordinary completion",
             "via": [
               "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb). (changed symbol is a registered anchor)"
@@ -633,6 +755,8 @@
           }
         ],
         "classification": "DIRECT_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -643,6 +767,7 @@
         "F08"
       ],
       "changed_files": [
+        "docs/verification/formal/formal-impact-pilot.md",
         "include/sluice/async/scheduler.hpp",
         "src/async/async_io_context.cpp",
         "src/async/scheduler.cpp",
@@ -657,25 +782,25 @@
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "UNKNOWN_FORMAL_IMPACT"
         },
         "1": {
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "UNKNOWN_FORMAL_IMPACT"
         },
         "2": {
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "UNKNOWN_FORMAL_IMPACT"
         },
         "3": {
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "UNKNOWN_FORMAL_IMPACT"
         }
       },
       "description": "anchor rename: signal_wake_locked -> publish_wake_locked across all 6 files",
@@ -686,13 +811,15 @@
       "got_claims": [
         "F08"
       ],
-      "got_class": "DIRECT_FORMAL_IMPACT",
+      "got_class": "UNKNOWN_FORMAL_IMPACT",
       "id": "T6",
       "notes": "renamed mechanically (sed) across all references so the tree still parses; the registry anchor must go UNRESOLVED and F08 must fail closed, never NO",
       "result": {
         "claims": [
           {
-            "class": "DIRECT_FORMAL_IMPACT",
+            "candidate_class": "DIRECT_FORMAL_IMPACT",
+            "candidate_reason": "resolved anchors of F08 still support DIRECT_FORMAL_IMPACT; the authority set is incomplete (None)",
+            "class": "UNKNOWN_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
               "tests/issue115_runnable_publication_wake_test.cpp",
@@ -709,11 +836,24 @@
             ],
             "id": "F08",
             "paths": [
-              [
-                "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "wait / wake / lost-wakeup closure",
+            "unverified_reason": "UNRESOLVED_ANCHOR",
             "via": [
               "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf). (changed symbol is a registered anchor)",
               "include/sluice/async/scheduler.hpp: registered anchor of F08 is UNRESOLVED at current HEAD (renamed/moved/removed?) \u2014 fail closed",
@@ -722,8 +862,14 @@
             ]
           }
         ],
-        "classification": "DIRECT_FORMAL_IMPACT",
-        "risks": []
+        "classification": "UNKNOWN_FORMAL_IMPACT",
+        "fail_closed": true,
+        "fail_closed_reasons": [
+          "UNRESOLVED_ANCHOR (non-gated): F08 \u2014 registry integrity precondition failed",
+          "UNKNOWN_FORMAL_IMPACT: UNRESOLVED_ANCHOR"
+        ],
+        "risks": [],
+        "unknown_reason": "UNRESOLVED_ANCHOR"
       }
     },
     {
@@ -734,17 +880,21 @@
         "F06"
       ],
       "changed_files": [
+        "docs/verification/formal/formal-impact-pilot.md",
         "src/async/threadpool_backend.cpp"
       ],
-      "check_after": "see pilot report (anchor resolution table)",
+      "check_after": {
+        "def_site_drift_lines": [
+          "OK    F03  ThreadPoolBackend::run_syscall  ->  1 symbol(s) (def-site drift: src/async/threadpool_run_syscall.cpp)"
+        ],
+        "exit": 0
+      },
       "claims_ok": true,
       "class_ok": true,
       "depth_matrix": {
         "0": {
-          "claims": [
-            "F03"
-          ],
-          "classification": "UNKNOWN_FORMAL_IMPACT"
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
         },
         "1": {
           "claims": [
@@ -769,7 +919,7 @@
           "classification": "STRUCTURAL_FORMAL_IMPACT"
         }
       },
-      "description": "moved implementation: ThreadPoolBackend::run_syscall moved to a new TU",
+      "description": "moved implementation: ThreadPoolBackend::run_syscall moved to a new TU (injected into the ROOT compdb so scip-clang actually indexes it)",
       "expected_claims": [
         "F03"
       ],
@@ -781,7 +931,7 @@
       ],
       "got_class": "STRUCTURAL_FORMAL_IMPACT",
       "id": "T7",
-      "notes": "scip-clang C++ symbols embed no defining-file segment, so name identity survives the move; expected: anchor still resolves with def-site drift",
+      "notes": "corrective-1 C4 fixture fix: the corrective-0 clone went into the FILTERED compdb, which 'index' regenerates from the root compdb \u2014 the injected TU never reached scip-clang and the anchor silently went UNRESOLVED, so 'symbol identity survives cross-TU moves' was never demonstrated. With the TU actually indexed: check_after records the anchor resolving at the new location with def-site drift (identity survivability, exit 0). The impact query stays STRUCTURAL because the new TU is an UNTRACKED file and `git diff HEAD` does not see it: the only visible hunk is the moved-away side, attributing to worker_loop, which reaches the run_syscall anchor at depth 1. A direct hit would require staging the new file, which the driver avoids.",
       "result": {
         "claims": [
           {
@@ -795,12 +945,26 @@
             ],
             "id": "F01",
             "paths": [
-              [
-                "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
-                "cxx . . $ sluice/async/detail/RequestArena#mark_running(e3f57498ff552dbc).",
-                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/detail/RequestArena#mark_running(e3f57498ff552dbc).",
+                  "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "request identity / generation / stale reuse",
             "via": [
               "structural path depth 2"
@@ -820,14 +984,38 @@
             ],
             "id": "F03",
             "paths": [
-              [
-                "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
-                "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/ThreadPoolBackend#run_syscall(17bd751c67ed5736)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/detail/RequestArena#record_terminal(7b072c264dcc81c1)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "terminal winner / exactly-once",
             "via": [
-              "src/async/threadpool_backend.cpp: registered anchor of F03 is UNRESOLVED at current HEAD (renamed/moved/removed?) \u2014 fail closed",
               "structural path depth 1"
             ]
           },
@@ -844,12 +1032,26 @@
             ],
             "id": "F06",
             "paths": [
-              [
-                "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
-                "cxx . . $ sluice/async/detail/RequestArena#mark_running(e3f57498ff552dbc).",
-                "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/ThreadPoolBackend#worker_loop(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/detail/RequestArena#mark_running(e3f57498ff552dbc).",
+                  "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "cancel vs ordinary completion",
             "via": [
               "structural path depth 2"
@@ -857,6 +1059,8 @@
           }
         ],
         "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -870,34 +1074,32 @@
         "src/async/scheduler_park_wake.cpp"
       ],
       "claims_ok": true,
-      "class_ok": false,
+      "class_ok": true,
       "depth_matrix": {
         "0": {
-          "claims": [
-            "F08"
-          ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "claims": [],
+          "classification": "NO_FORMAL_IMPACT"
         },
         "1": {
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
         },
         "2": {
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
         },
         "3": {
           "claims": [
             "F08"
           ],
-          "classification": "DIRECT_FORMAL_IMPACT"
+          "classification": "STRUCTURAL_FORMAL_IMPACT"
         }
       },
-      "description": "new helper introduced, called by the anchor: signal_wake_locked delegates the epoch flip",
+      "description": "new-helper maintenance (two-phase): baseline world has the anchor delegate to ftlr0_specimen_advance_wake_epoch; the evaluated diff edits the helper body ONLY (anchor / state anchor / registry untouched)",
       "expected_claims": [
         "F08"
       ],
@@ -905,13 +1107,15 @@
       "got_claims": [
         "F08"
       ],
-      "got_class": "DIRECT_FORMAL_IMPACT",
+      "got_class": "STRUCTURAL_FORMAL_IMPACT",
       "id": "T8",
-      "notes": "",
+      "notes": "corrective-1 C3 redesign: the evaluated diff must not touch signal_wake_locked, so a DIRECT answer would be a fixture bug; expected miss at depth 0, STRUCTURAL at bounded structural depth",
+      "patch": "build/formal-impact/specimen-T8.patch",
+      "patch_bytes": 331,
       "result": {
         "claims": [
           {
-            "class": "DIRECT_FORMAL_IMPACT",
+            "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
               "tests/issue115_runnable_publication_wake_test.cpp",
@@ -928,17 +1132,33 @@
             ],
             "id": "F08",
             "paths": [
-              [
-                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#ftlr0_specimen_advance_wake_epoch(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/Scheduler#wake_epoch_."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "wait / wake / lost-wakeup closure",
             "via": [
-              "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8). (changed symbol is a registered anchor)"
+              "structural path depth 1"
             ]
           }
         ],
-        "classification": "DIRECT_FORMAL_IMPACT",
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -949,6 +1169,7 @@
         "F08"
       ],
       "changed_files": [
+        "docs/verification/formal/formal-impact-pilot.md",
         "include/sluice/async/scheduler.hpp",
         "src/async/scheduler_park_wake.cpp"
       ],
@@ -1009,19 +1230,48 @@
             ],
             "id": "F08",
             "paths": [
-              [
-                "cxx . . $ sluice/async/Scheduler#ftlr0_specimen_rogue_wake(49f6e7a06ebc5aa8).",
-                "cxx . . $ sluice/async/Scheduler#wake_epoch_."
-              ],
-              [
-                "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
-                "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
-              ],
-              [
-                "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
-                "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
-              ]
+              {
+                "hop_provenance": [
+                  "COMPILER",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#ftlr0_specimen_rogue_wake(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/Scheduler#wake_epoch_."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                  "cxx . . $ sluice/async/Scheduler#park_on_wake_source(705b6ce07f66eebf)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              },
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/Scheduler#park_ledger_total_.",
+                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 1"
@@ -1029,6 +1279,8 @@
           }
         ],
         "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     },
@@ -1093,12 +1345,26 @@
             ],
             "id": "F04",
             "paths": [
-              [
-                "cxx . . $ sluice/async/ThreadPoolBackend#publish_size_ready(b7446ad5d43806d2).",
-                "cxx . . $ sluice/async/AsyncBackend#publish(f6d1eacd8bb7cb96).",
-                "cxx . . $ sluice/async/Completion#publish_from_reap(df20d15edffa6cdc)."
-              ]
+              {
+                "hop_provenance": [
+                  "HEURISTIC",
+                  "HEURISTIC",
+                  "HEURISTIC"
+                ],
+                "hops": [
+                  "cxx . . $ sluice/async/ThreadPoolBackend#publish_size_ready(b7446ad5d43806d2).",
+                  "cxx . . $ sluice/async/AsyncBackend#publish(f6d1eacd8bb7cb96).",
+                  "cxx . . $ sluice/async/Completion#publish_from_reap(df20d15edffa6cdc)."
+                ],
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
+              }
             ],
+            "provenance": {
+              "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
+              "symbol_identity": "COMPILER"
+            },
             "title": "Completion publication",
             "via": [
               "structural path depth 2"
@@ -1106,20 +1372,20 @@
           }
         ],
         "classification": "STRUCTURAL_FORMAL_IMPACT",
+        "fail_closed": false,
+        "fail_closed_reasons": [],
         "risks": []
       }
     }
   ],
   "toolchain": {
     "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
-    "graph_bytes": 3800000,
-    "graph_symbols": 3187,
-    "index_bytes": 4500000,
-    "index_config": "xmake configured with --with-liburing=true (94 src TUs, real uring variants); default config indexes the uring stub surface only (config-gated anchor unresolved)",
-    "index_time_seconds": 21,
+    "edge_provenance": "HEURISTIC",
+    "graph_symbols": 3175,
+    "index_config": "compdb from the current xmake config (94 src TUs); config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y",
     "query_time_seconds": "<1 (graph.json in memory)",
-    "reference_edges": 12571,
-    "scip_clang": "0.4.0 (bundled LLVM; pinned by scripts/formal/scip-clang.lock.json, sha256-verified bootstrap)"
+    "reference_edges": 12520,
+    "scip_clang": "0.4.0"
   },
-  "wall_seconds": 331.8
+  "wall_seconds": 437.0
 }

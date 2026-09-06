@@ -1,7 +1,9 @@
 # FTLR-0 / SCIP-PILOT — C++ ↔ TLA+ formal impact recovery
 
 > **Status: method-selection experiment (issue #299), awaiting adversarial
-> human review.** This is NOT a production gate: it is not wired into
+> human review. Corrective-1 applied (C1–C5): fail-closed exit contract,
+> stale-graph demotion, T8 helper-only redesign, T7 claim-boundary note,
+> edge provenance.** This is NOT a production gate: it is not wired into
 > `scripts/gates/pre-push.sh`, CI, or any workflow. It does not modify any
 > formal claim, TLA+ model, bridge test, or production C++ semantic. The
 > machine-readable experiment record is
@@ -41,7 +43,7 @@ advisory only).
 | SCIP index | `build/formal-impact/index.scip` (gitignored) | compiler-derived C++ symbol/reference structure (scip-clang 0.4.0, pinned by `scripts/formal/scip-clang.lock.json`) |
 | Symbol graph | `build/formal-impact/graph.json` (gitignored) | deterministic derived view: symbols, reference edges, per-file definition positions |
 | Resolver CLI | `scripts/formal/formal_impact.py` | `index` / `check` / `impact` / `explain` / `adjudicate` |
-| Self-tests | `scripts/tests/test_formal_impact.py` | S1–S10 fail-closed behavior (22 cases, stdlib-only) |
+| Self-tests | `scripts/tests/test_formal_impact.py` | S1–S10 fail-closed behavior + R1–R10 exit/provenance contract (42 cases, stdlib-only) |
 | Evaluation driver | `scripts/formal/ftlr0_eval.py` | adversarial specimens T1–T10, depth matrix, baselines |
 
 Design constraint honored: **only cross-domain edges are maintained by
@@ -57,8 +59,13 @@ bash scripts/formal/bootstrap-scip-clang.sh
 xmake project -k compile_commands        # after `xmake f` configuration
 python3 scripts/formal/formal_impact.py index
 
-# registry + anchor-resolution validation (S1–S3)
+# registry + anchor-resolution validation (S1-S3)
+# default check REQUIRES a fresh graph (head == HEAD) and full anchor
+# resolution of non-gated anchors; a missing or stale graph is a failure.
 python3 scripts/formal/formal_impact.py check
+
+# explicit registry-only validation (no graph required)
+python3 scripts/formal/formal_impact.py check --structure-only
 
 # the experiment query
 python3 scripts/formal/formal_impact.py impact --range master..HEAD
@@ -68,9 +75,30 @@ python3 scripts/formal/formal_impact.py explain F08
 
 Rebuild artifacts: the index and graph are gitignored and rebuilt by
 `index` in a clean checkout (~20 s for the 94-TU production surface).
-The index should be rebuilt whenever HEAD moves; a graph whose
-`head_sha` differs from the diff head produces results explicitly flagged
-as stale (hits kept, marked unverified).
+The index should be rebuilt whenever HEAD moves (corrective-1: a stale
+graph no longer reports hits as authoritative — see §5).
+
+### Exit contract (corrective-1 C1)
+
+The default CLI fails closed; `--json` follows the same semantics.
+
+```text
+NO_FORMAL_IMPACT             -> exit 0
+DIRECT_FORMAL_IMPACT         -> exit 0
+STRUCTURAL_FORMAL_IMPACT     -> exit 0
+COARSE_FORMAL_IMPACT         -> exit 0   (graph present)
+
+UNKNOWN_FORMAL_IMPACT        -> exit 1
+stale graph                  -> exit 1   (aggregate UNKNOWN + candidates)
+UNRESOLVED non-gated anchor  -> exit 1
+frontier/traversal UNKNOWN   -> exit 1
+missing graph for a C++ diff -> exit 1
+```
+
+`--allow-unknown-for-eval` is the explicit experiment opt-in used by the
+evaluation harness to OBSERVE unknown results with exit 0; it changes the
+exit code only, never the classification, and production/default usage
+never passes it.
 
 ## 4. Classification (fail-closed)
 
@@ -94,22 +122,76 @@ assumed:
    paints whole subsystems (T6 false-positive pump). They are excluded from
    changed-symbol attribution and traversal expansion.
 
+### Stale graphs never carry authoritative confidence (corrective-1 C2)
+
+When the graph's `head_sha` differs from the queried HEAD, the aggregate
+result demotes to `UNKNOWN_FORMAL_IMPACT` with
+`unknown_reason: UNVERIFIED_STALE_GRAPH`. What the stale graph *suggested*
+is preserved as non-authoritative candidate evidence:
+`candidate_classification` (e.g. `DIRECT_FORMAL_IMPACT`),
+`candidate_claims`, and `candidate_reason` — never as `confidence:`. The
+same demotion applies per claim whose registered anchor set is incomplete
+(a renamed anchor leaves the claim UNKNOWN with the resolved-anchor
+evidence preserved as `candidate_class`, so a rename can never mask as a
+clean answer — the T6 case).
+
+### Edge provenance (corrective-1 C5)
+
+SCIP paths are NOT uniformly "compiler-precise". Every result carries a
+four-level provenance vocabulary (`provenance_legend` in every impact
+result; per-hop labels on every path):
+
+| Level | Applies to | Meaning |
+| --- | --- | --- |
+| `EXPLICIT` | anchor ↔ claim binding | registry-declared in `spec/formal/anchors.json` (the only hand-maintained edges) |
+| `COMPILER` | SCIP symbol identity, definition positions | compiler-derived fact from scip-clang |
+| `HEURISTIC` | nearest-preceding attribution | scip-clang 0.4.0 emits **no enclosing ranges**, so both reference attribution and hunk attribution use the nearest-preceding named definition — a heuristic, NOT a compiler-proven enclosure |
+| `FALLBACK` | manifest/anchor file-level mapping | the pre-existing coarse `implementation_bindings` layer |
+
+Every structural path reports `provenance` and
+`uses_heuristic_attribution`; in the current toolchain every multi-hop
+path is `HEURISTIC` end-to-end because every reference edge inherits the
+nearest-preceding attribution. Consumers (including the LLM adjudication
+prompt, which states this inline) must not read a path as proof that the
+enclosing relation was compiler-verified.
+
 ## 5. Results (summary — full data in the results JSON)
 
+Corrective-1 numbers (measured on the committed corrective state,
+`--with-liburing=y` index config, 94 src TUs; the results JSON is fully
+driver-generated):
+
 - **Recall (adversarial T1–T10): 10/10** at depth 2. Explicit anchors only
-  (depth 0) surfaces 6/10 claim sets and misses every helper / bypass /
-  thunk case (T2/T3/T9/T10). File-level `implementation_bindings` alone has
+  (depth 0) surfaces 4/10 and misses every helper / bypass / move / thunk
+  case (T2/T3/T7/T8/T9/T10). File-level `implementation_bindings` alone has
   full recall on this small corpus but 19 false-positive claim flags versus
   3 for the symbol-level engine.
-- **Depth experiment:** 0 → 6, 1 → 8, 2 → 10, 3 → 10 (recall hits /10);
+- **Depth experiment:** 0 → 4, 1 → 8, 2 → 10, 3 → 10 (recall hits /10);
   default depth 2 is the smallest full-recall depth; depth 3 adds nothing.
-- **Fail-closed verified:** anchor rename ⇒ `check` exits 1 with
-  `UNRESOLVED_ANCHOR` and the impact query flags the touched files
-  (T6); cross-file move keeps SCIP symbol identity so the claim survives
-  with a def-site-drift warning (T7); a rogue writer of the anchored state
-  `Scheduler::wake_epoch_` is caught structurally without any annotation
-  (T9); missing/failed index or malformed artifacts degrade to UNKNOWN or
-  hard failure, never NO (S9/S10).
+  (Corrective-0 reported 6 at depth 0 — inflated by the T8 fixture bug
+  below and by T7's masked fail-closed state.)
+- **T8 (corrected, two-phase helper-only diff):** depth 0 →
+  `NO_FORMAL_IMPACT` (no direct anchor hit — the fixture no longer edits
+  the anchor), depth ≥ 1 → `STRUCTURAL: F08` with got claims exactly
+  `['F08']`. This is the load-bearing new-helper-maintenance evidence the
+  original fixture failed to produce.
+- **T7 (corrected, moved TU actually indexed):** `check` exits 0 and
+  records the anchor resolving at the new location with a visible def-site
+  drift — **this is the evidence for SCIP cross-TU symbol-identity
+  survivability**, which the corrective-0 fixture never actually
+  demonstrated (its injected TU was silently dropped from the compdb and
+  the anchor went UNRESOLVED). The impact query answers `STRUCTURAL: F03`
+  at depth 1 via the caller chain, because the untracked new TU is not
+  part of `git diff HEAD` (see §7.7). T7 proves SCIP cross-TU
+  symbol-identity survivability only; xmake build-graph regeneration
+  remains #298 follow-up.
+- **Fail-closed verified:** anchor rename ⇒ `check` exit 1 + the impact
+  query demotes the touched claim to UNKNOWN with the resolved-anchor
+  evidence preserved as a candidate (T6, now `[fail-closed]`); stale
+  graph ⇒ aggregate UNKNOWN + candidates, exit 1 (R3/R4); missing graph
+  for a C++ diff ⇒ exit 1 (R1/R2); frontier saturation ⇒ explicit
+  UNKNOWN risk; missing/failed index or malformed artifacts degrade to
+  UNKNOWN or hard failure, never NO (S9/S10).
 - **T9 design finding:** anchoring one data member (`wake_epoch_`) as a
   state authority extends coverage to *bypass* paths that no function-level
   annotation scheme would catch. The residual is stated in §7.
@@ -119,21 +201,23 @@ assumed:
   and dismiss all 5 claims even for an unrelated change. The adjudicator
   was the implementing agent itself (disclosed in the results JSON); all
   specimens are comment-only by design, so this measures context reduction
-  and claim targeting, not semantic discrimination.
-- **Historical validation:** the R-F1 witness commit (8d4b72a0, PR #297)
-  resolves to `DIRECT_FORMAL_IMPACT: F08` via
-  `PhaseTag::worker_startup_before_publication ← Scheduler::run_impl` — a
-  real formal-relevant commit recovered with the correct claim.
+  and claim targeting, not semantic discrimination. Carried verbatim from
+  the corrective-0 run (specimen shapes T1/T2/T4/T5/T10 unchanged).
+- **Historical sanity probe (downgraded per corrective-1 C2):** the R-F1
+  witness commit (8d4b72a0, PR #297) queried against the CURRENT graph
+  demotes to `UNKNOWN` with candidate `DIRECT: F08` and
+  `UNVERIFIED_STALE_GRAPH` — recorded as a probe, NOT validation evidence,
+  because the graph is not rebuilt at the historical HEAD.
 
 ### Verdict
 
 `SCIP_GRAPH_EARNED` — with honest scale caveats. The structural graph
 earns its place on the three safety-relevant margins: helper/indirect
-recall (10/10 vs 6/10 for annotation-only), false-positive pressure versus
+recall (10/10 vs 4/10 for annotation-only), false-positive pressure versus
 file-level (19 → 3 on this corpus), and mechanically verified fail-closed
-behavior on rename/move/missing-index. The caveats: at the current corpus
-size (5 claims), file-level bindings already achieve full recall, so the
-SCIP margin is precision and review targeting, not recall; and the
+behavior on rename/move/stale/missing-index. The caveats: at the current
+corpus size (5 claims), file-level bindings already achieve full recall,
+so the SCIP margin is precision and review targeting, not recall; and the
 toolchain is a real cost (pinned 149 MB binary, ~20 s index, a
 multi-config wrinkle below). Whether that trade holds at #298's larger
 registry is exactly what the human review of this report should decide.
@@ -169,11 +253,14 @@ only place a C++ ↔ formal edge exists.
    the installed target. Editing an existing thunk is still recovered
    (T10: the thunk's own body references the anchor chain); a *brand-new*
    thunk installed into the slot is attributed only after reindexing.
-3. **Nearest-preceding-definition attribution.** scip-clang 0.4.0 emits no
-   enclosing ranges; reference attribution and hunk attribution both use
-   nearest-preceding named definitions. Field-initializer and
+3. **Nearest-preceding-definition attribution is a HEURISTIC.** scip-clang
+   0.4.0 emits no enclosing ranges; reference attribution and hunk
+   attribution both use nearest-preceding named definitions, and every
+   result labels this (`uses_heuristic_attribution` per path, §4). Field-initializer and
    namespace-body references can mis-attribute in rare shapes (observed
-   and mitigated for namespace hubs; other shapes remain possible).
+   and mitigated for namespace hubs; other shapes remain possible). A
+   future scip-clang with enclosing ranges would upgrade these edges to
+   `COMPILER` provenance without changing the traversal.
 4. **Multi-config surface.** The default xmake config compiles
    `uring_backend.cpp` in stub mode, so the F03 uring terminal-producer
    anchor resolves only with `--with-liburing=y` indexing. The registry
@@ -186,12 +273,25 @@ only place a C++ ↔ formal edge exists.
 6. **LLM experiment is weak evidence.** Single adjudicator (the
    implementing agent), comment-only specimens, single run. It measures
    context reduction and targeting only.
+7. **Untracked new files are invisible to the diff layer.** `--working-tree`
+   uses `git diff HEAD`, which does not see untracked files (measured in
+   T7: the moved-to TU contributes no hunk until staged, so the impact
+   query saw only the moved-away side and answered STRUCTURAL at depth 1
+   via the caller chain; `check` separately proved the anchor resolution
+   survived with def-site drift). A brand-new source file therefore
+   reaches the resolver only after `git add` — the same gap any
+   diff-based tooling has, but it must be stated.
 
 ## 8. Scope boundaries (unchanged by this pilot)
 
 - No production C++ semantic changes; no TLA+ model changes; no claim
   upgrades; no bridge-test rewrites.
 - No pre-push or CI enforcement — the resolver is a manual command.
+- T7 (cross-TU move) proves **SCIP cross-TU symbol-identity survivability
+  only**: its compile-database entry for the new TU is cloned by the
+  evaluation harness. It does NOT demonstrate `xmake` source-graph change →
+  compile_commands regeneration → SCIP → formal impact end-to-end; that
+  build-graph integration remains a #298 follow-up.
 - `spec/tla/manifest.json` is untouched; `implementation_bindings` remain
   the coarse file-level layer that COARSE classification builds on. The
   registry refines it; it does not replace it.
