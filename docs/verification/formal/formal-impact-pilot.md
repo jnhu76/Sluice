@@ -74,7 +74,10 @@ python3 scripts/formal/formal_impact.py explain F08
 ```
 
 Rebuild artifacts: the index and graph are gitignored and rebuilt by
-`index` in a clean checkout (~20 s for the 94-TU production surface).
+`index` in a clean checkout (~14 s for the 41-TU selected production
+world; the pre-Phase-A surface was 94 `src/` TUs — FDG-0 Phase A replaced
+the path filter with Xmake Build Truth, see
+[`fdg0-phase-a-build-truth.md`](fdg0-phase-a-build-truth.md)).
 The index should be rebuilt whenever HEAD moves (corrective-1: a stale
 graph no longer reports hits as authoritative — see §5).
 
@@ -158,8 +161,11 @@ enclosing relation was compiler-verified.
 ## 5. Results (summary — full data in the results JSON)
 
 Corrective-1 numbers (measured on the committed corrective state,
-`--with-liburing=y` index config, 94 src TUs; the results JSON is fully
-driver-generated):
+`--with-liburing=y` index config, 94 `src/` TUs under the then-current
+`src/` path filter; the results JSON is fully driver-generated and was
+regenerated under the FDG-0 Phase A 41-TU selected world — all specimen
+outcomes unchanged, see §8 and
+[`fdg0-phase-a-build-truth.md`](fdg0-phase-a-build-truth.md) §10 A12):
 
 - **Recall (adversarial T1–T10): 10/10** at depth 2. Explicit anchors only
   (depth 0) surfaces 4/10 and misses every helper / bypass / move / thunk
