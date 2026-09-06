@@ -1,8 +1,59 @@
 {
-  "b10_b12_coverage": "hermetic: scripts/tests/test_formal_impact_facets.py (FR6 stale demotion, FR7 unresolved never PRECISE, FV1-FV12 registry structural negatives)",
+  "b10_b12_coverage": "hermetic: scripts/tests/test_formal_impact_facets.py (FR6 stale demotion, FR7 unresolved never PRECISE, FV1-FV16 registry structural negatives incl. corrective-1 C5 trace-vocab fail-closed)",
   "experiment": "FDG-0 Phase B formal facets adversarial corpus (issue #298)",
-  "generated_at": "2026-09-06T09:34:28Z",
-  "head_sha": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+  "frozen_precise_row_keys": [
+    [
+      "B1a",
+      "F08"
+    ],
+    [
+      "B1b",
+      "F08"
+    ],
+    [
+      "B2",
+      "F08"
+    ],
+    [
+      "B3",
+      "F08"
+    ],
+    [
+      "B4",
+      "F08"
+    ],
+    [
+      "B5",
+      "F06"
+    ],
+    [
+      "B7",
+      "F08"
+    ]
+  ],
+  "generated_at": "2026-09-06T10:13:10Z",
+  "head_sha": "58a994221ed894a9a55c37871db8db9287f46e2c",
+  "integrity": {
+    "all_pass": true,
+    "duplicate_rows": [],
+    "frozen_precise_rows_complete": true,
+    "missing_required_rows": [],
+    "specimen_errors": [],
+    "unexpected_rows": [
+      [
+        "B6b",
+        "F01"
+      ],
+      [
+        "B6b",
+        "F06"
+      ],
+      [
+        "B9",
+        "F08"
+      ]
+    ]
+  },
   "measurement": {
     "conservative_cases": {
       "detail": [
@@ -18,13 +69,6 @@
           "claim": "F03",
           "facet_targets": 4,
           "reduction": 0.0,
-          "specimen": "B5"
-        },
-        {
-          "baseline_targets": 3,
-          "claim": "F06",
-          "facet_targets": 2,
-          "reduction": 0.3333,
           "specimen": "B5"
         },
         {
@@ -77,7 +121,7 @@
           "specimen": "B11"
         }
       ],
-      "rows": 10
+      "rows": 9
     },
     "precise_b1_b7": {
       "detail": [
@@ -117,6 +161,13 @@
           "specimen": "B4"
         },
         {
+          "baseline_targets": 3,
+          "claim": "F06",
+          "facet_targets": 2,
+          "reduction": 0.3333,
+          "specimen": "B5"
+        },
+        {
           "baseline_targets": 6,
           "claim": "F08",
           "facet_targets": 6,
@@ -125,7 +176,7 @@
         }
       ],
       "mean_reduction": 0.3333,
-      "rows": 6
+      "rows": 7
     },
     "supplementary_precise": {
       "detail": [
@@ -162,8 +213,40 @@
       "rows": 4
     },
     "threshold": {
+      "authoritative": true,
       "met": true,
-      "metric": "mean reduction over PRECISE B1-B7 rows",
+      "metric": "mean reduction over the frozen PRECISE B1-B7 (specimen, claim) row keys",
+      "required_row_keys": [
+        [
+          "B1a",
+          "F08"
+        ],
+        [
+          "B1b",
+          "F08"
+        ],
+        [
+          "B2",
+          "F08"
+        ],
+        [
+          "B3",
+          "F08"
+        ],
+        [
+          "B4",
+          "F08"
+        ],
+        [
+          "B5",
+          "F06"
+        ],
+        [
+          "B7",
+          "F08"
+        ]
+      ],
+      "rows_present": 7,
       "value": 0.3
     }
   },
@@ -190,44 +273,101 @@
       {
         "claim": "F08",
         "deviations": [
-          "class DIRECT_FORMAL_IMPACT != STRUCTURAL_FORMAL_IMPACT"
-        ],
-        "note": "prereg value NOT rewritten; deviation explained in the phase-B doc",
-        "specimen": "B3"
-      },
-      {
-        "claim": "F01",
-        "deviations": [
-          "claim F01 not expected",
-          "class STRUCTURAL_FORMAL_IMPACT != DIRECT_FORMAL_IMPACT",
-          "targets 1 != 4"
-        ],
-        "note": "prereg value NOT rewritten; deviation explained in the phase-B doc",
-        "specimen": "B6b"
-      },
-      {
-        "claim": "F06",
-        "deviations": [
-          "claim F06 not expected",
-          "class STRUCTURAL_FORMAL_IMPACT != DIRECT_FORMAL_IMPACT",
-          "facet_scope PRECISE != CONSERVATIVE_ALL",
-          "targets 2 != 4"
-        ],
-        "note": "prereg value NOT rewritten; deviation explained in the phase-B doc",
-        "specimen": "B6b"
-      },
-      {
-        "claim": "F08",
-        "deviations": [
           "targets 6 != 5"
         ],
         "note": "prereg value NOT rewritten; deviation explained in the phase-B doc",
         "specimen": "B7"
       }
     ],
+    "duplicate_rows": [],
+    "missing_expected_rows": [],
+    "missing_specimens": [],
     "prereg_head": "a708884de15f87585b883dd96f21a9940290e67d",
-    "rows_checked": 16,
-    "rows_matching": 10
+    "rows_checked": 18,
+    "rows_expected": [
+      [
+        "B11",
+        "F01"
+      ],
+      [
+        "B1a",
+        "F08"
+      ],
+      [
+        "B1b",
+        "F08"
+      ],
+      [
+        "B2",
+        "F08"
+      ],
+      [
+        "B3",
+        "F08"
+      ],
+      [
+        "B4",
+        "F08"
+      ],
+      [
+        "B5",
+        "F01"
+      ],
+      [
+        "B5",
+        "F03"
+      ],
+      [
+        "B5",
+        "F06"
+      ],
+      [
+        "B6a",
+        "F03"
+      ],
+      [
+        "B6b",
+        "F03"
+      ],
+      [
+        "B7",
+        "F08"
+      ],
+      [
+        "B8",
+        "F08"
+      ],
+      [
+        "S-04a",
+        "F04"
+      ],
+      [
+        "S-04b",
+        "F04"
+      ],
+      [
+        "S-06a",
+        "F06"
+      ],
+      [
+        "S-06b",
+        "F06"
+      ]
+    ],
+    "rows_matching": 15,
+    "rows_present": 20,
+    "unexpected_rows": [
+      {
+        "claim": "F01",
+        "note": "not a preregistered required claim row; retained as evidence",
+        "specimen": "B6b"
+      },
+      {
+        "claim": "F06",
+        "note": "not a preregistered required claim row; retained as evidence",
+        "specimen": "B6b"
+      }
+    ]
   },
   "rows": [
     {
@@ -284,12 +424,12 @@
       ],
       "baseline_targets": 6,
       "claim": "F08",
-      "class": "DIRECT_FORMAL_IMPACT",
+      "class": "STRUCTURAL_FORMAL_IMPACT",
       "facet_scope": "PRECISE",
       "facet_targets": 5,
       "fail_closed": false,
       "reached_anchor_ids": [
-        "wake-signal"
+        "wake-epoch-state"
       ],
       "reduction": 0.1667,
       "specimen": "B3"
@@ -532,8 +672,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -630,7 +770,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -654,8 +794,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -751,7 +891,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -775,8 +915,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -874,7 +1014,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -892,32 +1032,25 @@
     },
     {
       "id": "B3",
-      "mode": "working-tree",
-      "note": "rogue wake_epoch_ writer bypassing the wake functions (T9 shape)",
+      "mode": "two-phase-reindex",
+      "note": "rogue wake_epoch_ writer bypassing the wake functions (T9 shape, two-phase: never called, safe declaration point)",
+      "patch": "build/formal-impact/fdg0b-specimen-B3.patch",
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
         },
         "changed_files": [
-          "include/sluice/async/scheduler.hpp",
           "src/async/scheduler_park_wake.cpp"
         ],
         "changed_symbols": {
-          "cxx . . $ sluice/async/Scheduler#backend_wait_active_.": {
+          "cxx . . $ sluice/async/Scheduler#fdg0b_specimen_rogue_epoch_writer(49f6e7a06ebc5aa8).": {
             "attribution": "HEURISTIC",
-            "display": "sluice::async::Scheduler::backend_wait_active_",
-            "files": [
-              "include/sluice/async/scheduler.hpp"
-            ]
-          },
-          "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8).": {
-            "attribution": "COMPILER",
-            "display": "sluice::async::Scheduler::signal_wake_locked",
+            "display": "sluice::async::Scheduler::fdg0b_specimen_rogue_epoch_writer",
             "files": [
               "src/async/scheduler_park_wake.cpp"
             ]
@@ -949,7 +1082,7 @@
                 }
               }
             ],
-            "class": "DIRECT_FORMAL_IMPACT",
+            "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
               "tests/issue115_runnable_publication_wake_test.cpp",
@@ -969,21 +1102,24 @@
             "paths": [
               {
                 "hop_provenance": [
-                  "COMPILER"
+                  "HEURISTIC",
+                  "HEURISTIC"
                 ],
                 "hops": [
-                  "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8)."
+                  "cxx . . $ sluice/async/Scheduler#fdg0b_specimen_rogue_epoch_writer(49f6e7a06ebc5aa8).",
+                  "cxx . . $ sluice/async/Scheduler#wake_epoch_."
                 ],
-                "provenance": "COMPILER",
-                "uses_heuristic_attribution": false
+                "provenance": "HEURISTIC",
+                "uses_heuristic_attribution": true
               }
             ],
             "provenance": {
               "anchor_binding": "EXPLICIT",
+              "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
             "reached_anchor_ids": [
-              "wake-signal"
+              "wake-epoch-state"
             ],
             "revalidation_targets": [
               "e12-async-condition",
@@ -994,17 +1130,17 @@
             ],
             "title": "wait / wake / lost-wakeup closure",
             "via": [
-              "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8). (changed symbol is a registered anchor)"
+              "structural path depth 1"
             ]
           }
         ],
-        "classification": "DIRECT_FORMAL_IMPACT",
+        "classification": "STRUCTURAL_FORMAL_IMPACT",
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
-        "head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "head": null,
         "provenance_legend": {
           "BUILD": "Xmake-derived target/source/config/build fact (Build Manifest / compile_commands.json)",
           "COMPILER": "compiler-derived fact (SCIP symbol identity / definition positions)",
@@ -1026,8 +1162,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1113,7 +1249,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1137,8 +1273,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1312,7 +1448,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1336,8 +1472,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1402,7 +1538,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1426,8 +1562,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1592,7 +1728,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1616,8 +1752,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1753,7 +1889,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1777,8 +1913,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1831,7 +1967,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1856,7 +1992,7 @@
       "result": {
         "base": null,
         "build_world": {
-          "detail": "graph build_id 0236ca5bb6ff != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
+          "detail": "graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
           "manifest_build_id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
           "reasons": [
             "BUILD_GRAPH_STALE"
@@ -1867,7 +2003,7 @@
           "F08"
         ],
         "candidate_classification": "DIRECT_FORMAL_IMPACT",
-        "candidate_reason": "the graph's recorded build world no longer matches the current build world (BUILD_GRAPH_STALE); graph build_id 0236ca5bb6ff != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
+        "candidate_reason": "the graph's recorded build world no longer matches the current build world (BUILD_GRAPH_STALE); graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
         "changed_files": [
           "src/async/scheduler_park_wake.cpp"
         ],
@@ -1898,7 +2034,7 @@
               ],
               "note": "diagnostic only: facet_scope stays CONSERVATIVE_ALL while the reach is untrusted (stale graph / build drift / unresolved anchor / coarse fallback / traversal uncertainty)"
             },
-            "candidate_reason": "graph build_id 0236ca5bb6ff != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
+            "candidate_reason": "graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
             "class": "UNKNOWN_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -1955,12 +2091,12 @@
         "exit_code": 0,
         "fail_closed": true,
         "fail_closed_reasons": [
-          "BUILD_GRAPH_STALE: graph build_id 0236ca5bb6ff != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index' \u2014 the graph does not describe the current build world; re-run 'formal_impact.py index'",
+          "BUILD_GRAPH_STALE: graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index' \u2014 the graph does not describe the current build world; re-run 'formal_impact.py index'",
           "UNKNOWN_FORMAL_IMPACT: BUILD_GRAPH_STALE"
         ],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
-        "head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "provenance_legend": {
           "BUILD": "Xmake-derived target/source/config/build fact (Build Manifest / compile_commands.json)",
           "COMPILER": "compiler-derived fact (SCIP symbol identity / definition positions)",
@@ -1970,7 +2106,7 @@
         },
         "range": null,
         "risks": [
-          "build world mismatch (BUILD_GRAPH_STALE): graph build_id 0236ca5bb6ff != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'"
+          "build world mismatch (BUILD_GRAPH_STALE): graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'"
         ],
         "semantic_disposition": "UNDETERMINED",
         "stale_index": false,
@@ -1988,8 +2124,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2048,7 +2184,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2072,8 +2208,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2151,7 +2287,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2175,8 +2311,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2252,7 +2388,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2276,8 +2412,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2356,7 +2492,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2380,8 +2516,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
-          "current_build_id": "0236ca5bb6ff66cdc3603f37e59ec08edf23650dcd5d2d04d44d592eddbf2008",
+          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2460,7 +2596,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "3524c24b6ad9133829343c97f2a0d6a9421fe6b3",
+        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2477,5 +2613,5 @@
       }
     }
   ],
-  "wall_seconds": 183.0
+  "wall_seconds": 168.4
 }
