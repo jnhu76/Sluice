@@ -31,6 +31,21 @@ Subcommands:
     explain     show one claim's anchors, suites, evidence, resolution
     adjudicate  assemble the reduced-context LLM adjudication prompt (experiment)
 
+Exit contract (corrective-1): the default CLI fails closed.
+
+    NO/DIRECT/STRUCTURAL/COARSE      -> exit 0
+    UNKNOWN_FORMAL_IMPACT            -> exit 1
+    stale graph                      -> exit 1 (aggregate UNKNOWN + candidates)
+    UNRESOLVED non-gated anchor      -> exit 1
+    frontier/traversal UNKNOWN       -> exit 1
+    missing graph for a C++ diff     -> exit 1
+
+`--allow-unknown-for-eval` is the explicit experiment opt-in that lets the
+evaluation harness observe UNKNOWN results with exit 0; it never changes the
+reported classification. `check` requires a fresh graph and full anchor
+resolution by default; `check --structure-only` explicitly scopes the run
+to registry validation.
+
 Usage:
     python3 scripts/formal/formal_impact.py index
     python3 scripts/formal/formal_impact.py check
@@ -72,6 +87,29 @@ DEFAULT_MAX_DEPTH = 2
 FRONTIER_CAP = 4096
 
 CXX_EXTS = {".cpp", ".cc", ".cxx", ".c", ".h", ".hh", ".hpp", ".hxx"}
+
+# --- provenance vocabulary (corrective-1 C5) ---------------------------------
+#
+# Every edge in the derived graph is NOT equally "SCIP precise". scip-clang
+# 0.4.0 emits no enclosing ranges, so each reference occurrence is attributed
+# to the nearest-preceding named definition — a heuristic, not a
+# compiler-proven enclosure. Provenance travels with the results so no
+# consumer can mistake a heuristic path for compiler-verified structure.
+
+P_EXPLICIT = "EXPLICIT"
+P_COMPILER = "COMPILER"
+P_HEURISTIC = "HEURISTIC"
+P_FALLBACK = "FALLBACK"
+
+PROVENANCE_LEGEND = {
+    P_EXPLICIT: "registry-declared binding (spec/formal/anchors.json: anchor <-> claim)",
+    P_COMPILER: "compiler-derived fact (SCIP symbol identity / definition positions)",
+    P_HEURISTIC: (
+        "nearest-preceding-named-definition attribution (scip-clang 0.4.0 emits "
+        "no enclosing ranges; NOT a compiler-proven enclosure)"
+    ),
+    P_FALLBACK: "file-level coarse mapping (manifest implementation_bindings / anchor files)",
+}
 
 
 class ImpactError(Exception):
@@ -156,11 +194,19 @@ class Graph:
         self.head_sha = data["head_sha"]
         self.generated_at = data["generated_at"]
         self.toolchain = data.get("toolchain", {})
+        # Provenance of the derived edges (corrective-1 C5). Older graphs
+        # without the block default to the documented scip-clang 0.4.0 shape.
+        self.provenance = data.get("provenance", {})
         self.nodes: dict[str, dict] = data["nodes"]
         self.reverse: dict[str, list[str]] = data["reverse"]
         self.documents: dict[str, list[str]] = data["documents"]
         self.def_positions: dict[str, list] = data.get("def_positions", {})
         self.stats = data.get("stats", {})
+
+    @property
+    def edge_provenance(self) -> str:
+        """Provenance of reference-derived edges (see PROVENANCE_LEGEND)."""
+        return self.provenance.get("reference_edges", P_HEURISTIC)
 
     @classmethod
     def load(cls, path: Path = GRAPH_PATH) -> "Graph":
@@ -225,6 +271,7 @@ def resolve_anchors(registry: dict, graph: Graph | None) -> dict:
                 {
                     "symbol": anchor["symbol"],
                     "file": anchor["file"],
+                    "config_gate": anchor.get("config_gate"),
                     "status": "resolved" if syms else "UNRESOLVED_ANCHOR",
                     "symbols": syms,
                     "resolved_files": resolved_files,
@@ -364,12 +411,14 @@ def changed_symbols(graph: Graph, changes: dict) -> dict:
 
     Two attribution rules, mirroring the graph builder's own attribution so
     diff hunks and index references see the same world:
-      a) exact: a defined symbol whose definition range intersects a hunk;
+      a) exact: a defined symbol whose definition range intersects a hunk
+         (COMPILER provenance: the def position is compiler-derived);
       b) enclosing: a hunk inside a function body attributes to the
-         nearest-preceding named definition in the same file (body-only
-         edits therefore reach their enclosing function).
+         nearest-preceding named definition in the same file (HEURISTIC
+         provenance per PROVENANCE_LEGEND — not a compiler-proven enclosure).
 
-    Returns {symbol: {'files': sorted files, 'via': sorted (path, line)}}.
+    Returns {symbol: {'files': sorted files, 'via': sorted (path, line),
+    'attribution': COMPILER|HEURISTIC}}; the strongest rule that hit wins.
     """
     out: dict[str, dict] = {}
     for path, info in sorted(changes.items()):
@@ -388,7 +437,10 @@ def changed_symbols(graph: Graph, changes: dict) -> dict:
                 r = node["def_range"]
                 def_line_start, def_line_end = r[0], r[2]
                 if hunk_start0 <= def_line_end and def_line_start <= end - 1:
-                    entry = out.setdefault(sym, {"files": [], "via": []})
+                    entry = out.setdefault(
+                        sym, {"files": [], "via": [], "attribution": P_COMPILER}
+                    )
+                    entry["attribution"] = P_COMPILER  # exact hit is the strongest rule
                     if path not in entry["files"]:
                         entry["files"].append(path)
                     entry["via"].append((path, def_line_start + 1))
@@ -404,7 +456,9 @@ def changed_symbols(graph: Graph, changes: dict) -> dict:
                     break
             if enclosing is not None:
                 sym, line0 = enclosing
-                entry = out.setdefault(sym, {"files": [], "via": []})
+                entry = out.setdefault(
+                    sym, {"files": [], "via": [], "attribution": P_HEURISTIC}
+                )
                 if path not in entry["files"]:
                     entry["files"].append(path)
                 entry["via"].append((path, line0 + 1))
@@ -505,6 +559,35 @@ def find_structural_hits(
     return hits, risks
 
 
+def make_path_record(hops: list[str], start_attribution: str, edge_provenance: str) -> dict:
+    """Attach per-hop provenance to a structural path (corrective-1 C5).
+
+    hop 0 = the changed symbol (COMPILER when the hunk intersected its
+    definition range, HEURISTIC when attributed nearest-preceding);
+    every later hop is a reference-derived edge whose provenance is the
+    graph's edge attribution (HEURISTIC for scip-clang 0.4.0)."""
+    hop_prov = [start_attribution] + [edge_provenance] * (len(hops) - 1)
+    uses_heuristic = any(h == P_HEURISTIC for h in hop_prov)
+    return {
+        "hops": list(hops),
+        "hop_provenance": hop_prov,
+        "provenance": P_HEURISTIC if uses_heuristic else (hop_prov[0] if hop_prov else P_COMPILER),
+        "uses_heuristic_attribution": uses_heuristic,
+    }
+
+
+def demote_claim(entry: dict, reason_key: str, candidate_reason: str | None) -> None:
+    """Strip authoritative confidence from a claim whose evidence basis is
+    incomplete (stale graph / unresolved anchor), preserving the candidate
+    the current evidence suggested (corrective-1 C2 semantics)."""
+    if CLASS_ORDER[entry["class"]] > CLASS_ORDER[UNKNOWN]:
+        entry["candidate_class"] = entry["class"]
+        entry["class"] = UNKNOWN
+        if candidate_reason:
+            entry["candidate_reason"] = candidate_reason
+    entry["unverified_reason"] = reason_key
+
+
 def classify_impact(
     graph: Graph | None,
     graph_error: str | None,
@@ -512,6 +595,7 @@ def classify_impact(
     claim_index: ClaimIndex,
     anchor_families: dict[str, set[str]],
     unresolved_anchor_claims: set[str],
+    unresolved_gated_claims: set[str],
     max_depth: int,
     expected_head: str | None = None,
 ) -> dict:
@@ -519,46 +603,60 @@ def classify_impact(
 
     Returns a result dict with:
       classification: one of the five states (aggregate max)
-      claims: [{id, class, paths, via}]
-      changed_symbols: {...}
-      risks: [...]
+      claims: [{id, class, candidate_class?, unverified_reason?, paths, via}]
+      paths: [{hops, hop_provenance, provenance, uses_heuristic_attribution}]
+      changed_symbols: {..., attribution}
+      risks / unknown_reason / fail_closed / fail_closed_reasons
+      candidate_classification / candidate_claims (stale graph only)
       graph_present / graph_head / stale_index
+      semantic_disposition: UNDETERMINED (always)
     """
     risks: list[str] = []
+    unknown_reasons: list[str] = []
+    traversal_risks: list[str] = []
     stale = False
+    cxx_changed = [p for p in changes if is_cxx(p)]
     if graph is not None and expected_head is not None and graph.head_sha != expected_head:
         stale = True
-        risks.append(
-            f"stale index: graph head {graph.head_sha[:12]} != diff head {expected_head[:12]}; "
-            "rebuild with 'formal_impact.py index' before trusting symbol-level results"
-        )
+        if cxx_changed:
+            risks.append(
+                f"stale index: graph head {graph.head_sha[:12]} != diff head {expected_head[:12]}; "
+                "symbol-level results are UNVERIFIED_STALE_GRAPH — rebuild with "
+                "'formal_impact.py index' at the queried head"
+            )
+            unknown_reasons.append("UNVERIFIED_STALE_GRAPH")
 
     claim_hits: dict[str, dict] = {}
     changed_syms: dict[str, dict] = {}
 
-    def add_hit(cid: str, cls: str, paths: list[list[str]] | None, via: str):
-        entry = claim_hits.setdefault(cid, {"class": cls, "paths": [], "via": []})
+    def add_hit(cid: str, cls: str, paths: list[dict] | None, via: str):
+        entry = claim_hits.setdefault(cid, {"class": NO_IMPACT, "paths": [], "via": [], "coarse": False})
         if CLASS_ORDER[cls] > CLASS_ORDER[entry["class"]]:
             entry["class"] = cls
         if paths:
+            seen = {tuple(p["hops"]) for p in entry["paths"]}
             for p in paths:
-                if p not in entry["paths"]:
+                if tuple(p["hops"]) not in seen:
                     entry["paths"].append(p)
+                    seen.add(tuple(p["hops"]))
         entry["via"].append(via)
 
     if graph is None:
-        risks.append(f"no SCIP-derived graph available: {graph_error}")
-        for path in sorted(changes):
-            if is_cxx(path):
+        if cxx_changed:
+            risks.append(f"no SCIP-derived graph available: {graph_error}")
+            unknown_reasons.append("MISSING_GRAPH")
+            for path in sorted(cxx_changed):
                 risks.append(
                     f"{path}: C++ change without a symbol graph — structural reachability "
                     "cannot be established (fail-closed UNKNOWN unless file-level bound)"
                 )
                 for cid in claim_index.claims_for_file(path):
                     add_hit(cid, COARSE, None, f"{path} (file-level binding, no graph)")
+                    claim_hits[cid]["coarse"] = True
                 if not claim_index.claims_for_file(path):
                     risks.append(f"{path}: no file-level formal binding known; impact UNKNOWN")
     else:
+        edge_prov = graph.edge_provenance
         changed_syms = changed_symbols(graph, changes)
         start_symbols = set(changed_syms)
         direct_claims: set[str] = set()
@@ -566,7 +664,12 @@ def classify_impact(
             for cid, anchors in sorted(anchor_families.items()):
                 if sym in anchors:
                     direct_claims.add(cid)
-                    add_hit(cid, DIRECT, [[sym]], f"{sym} (changed symbol is a registered anchor)")
+                    add_hit(
+                        cid,
+                        DIRECT,
+                        [make_path_record([sym], changed_syms[sym]["attribution"], edge_prov)],
+                        f"{sym} (changed symbol is a registered anchor)",
+                    )
         structural, traversal_risks = find_structural_hits(
             graph,
             {cid: syms for cid, syms in anchor_families.items() if cid not in direct_claims},
@@ -575,8 +678,16 @@ def classify_impact(
         )
         for cid, paths in sorted(structural.items()):
             for p in paths:
-                add_hit(cid, STRUCTURAL, [p], f"structural path depth {len(p) - 1}")
-        risks.extend(traversal_risks)
+                start_attr = changed_syms.get(p[0], {}).get("attribution", P_HEURISTIC)
+                add_hit(
+                    cid,
+                    STRUCTURAL,
+                    [make_path_record(p, start_attr, edge_prov)],
+                    f"structural path depth {len(p) - 1}",
+                )
+        if traversal_risks:
+            risks.extend(traversal_risks)
+            unknown_reasons.append("TRAVERSAL_UNKNOWN")
 
         # File-level coarse fallback + unindexed-change risk (per file).
         unattributed = files_without_symbols(graph, changes, changed_syms)
@@ -586,14 +697,19 @@ def classify_impact(
             # code absent from the index, or a hunk outside any definition).
             for cid in bound_claims:
                 add_hit(cid, COARSE, None, f"{path} (file-level binding; no symbol-level hit)")
+                claim_hits[cid]["coarse"] = True
             if info_has_symbolless_change(changes[path]):
                 risks.append(
                     f"{path}: C++ change could not be attributed to any indexed symbol "
                     "(new/unindexed code or non-definition hunk)"
                 )
+                unknown_reasons.append("UNATTRIBUTED_CXX_CHANGE")
 
-        # Unresolved registered anchors make related claims UNKNOWN on touch.
+        # Unresolved registered anchors strip authoritative confidence from
+        # the claims they belong to when those claims are touched
+        # (fail-closed demotion, preserving the candidate evidence).
         for cid in sorted(unresolved_anchor_claims):
+            gated = cid in unresolved_gated_claims
             anchor_files = {
                 a["file"]
                 for claim in claim_index.claims
@@ -602,53 +718,118 @@ def classify_impact(
             }
             for path in sorted(changes):
                 if path in anchor_files or path in claim_index.claim_files.get(cid, set()):
-                    add_hit(
-                        cid,
-                        UNKNOWN,
-                        None,
-                        f"{path}: registered anchor of {cid} is UNRESOLVED at current HEAD "
-                        "(renamed/moved/removed?) — fail closed",
+                    gated_note = (
+                        "unresolved under its declared config gate "
+                        "(this index config cannot see it)"
+                        if gated
+                        else "UNRESOLVED at current HEAD (renamed/moved/removed?)"
                     )
+                    entry = claim_hits.setdefault(
+                        cid, {"class": UNKNOWN, "paths": [], "via": [], "coarse": False}
+                    )
+                    candidate = entry.get("candidate_class", entry["class"])
+                    demote_claim(
+                        entry,
+                        "CONFIG_GATE_UNRESOLVED" if gated else "UNRESOLVED_ANCHOR",
+                        (
+                            f"resolved anchors of {cid} still support {candidate}; "
+                            f"the authority set is incomplete ({entry.get('unverified_reason')})"
+                        )
+                        if CLASS_ORDER[candidate] > CLASS_ORDER[UNKNOWN]
+                        else None,
+                    )
+                    entry["via"].append(f"{path}: registered anchor of {cid} is {gated_note} — fail closed")
+                    unknown_reasons.append("UNRESOLVED_ANCHOR")
 
-        if stale:
-            for cid in list(claim_hits):
-                entry = claim_hits[cid]
-                if CLASS_ORDER[entry["class"]] < CLASS_ORDER[UNKNOWN]:
-                    pass  # keep direct/structural hits but flag them
-            risks.append("results computed against a stale index — treat as unverified")
-
-    # Aggregate classification.
-    classification = NO_IMPACT
-    if claim_hits:
-        classification = max((e["class"] for e in claim_hits.values()), key=lambda c: CLASS_ORDER[c])
-    else:
-        # NO only if there is truly no risk condition.
-        cxx_changed = [p for p in changes if is_cxx(p)]
+    def aggregate_class() -> str:
+        if claim_hits:
+            return max((e["class"] for e in claim_hits.values()), key=lambda c: CLASS_ORDER[c])
         if graph is None and cxx_changed:
-            classification = UNKNOWN
-        elif risks:
-            classification = UNKNOWN
+            return UNKNOWN
+        if risks:
+            return UNKNOWN
+        return NO_IMPACT
+
+    # Candidate snapshot BEFORE stale demotion (what the current graph
+    # suggests), then the stale demotion itself (corrective-1 C2): a stale
+    # graph never carries authoritative confidence.
+    candidate_classification = aggregate_class()
+    candidate_claims = None
+    candidate_reason = None
+    if stale and cxx_changed:
+        for cid, entry in claim_hits.items():
+            if CLASS_ORDER[entry["class"]] > CLASS_ORDER[UNKNOWN]:
+                demote_claim(
+                    entry,
+                    "UNVERIFIED_STALE_GRAPH",
+                    "current (stale) graph suggests this class; rebuild the index "
+                    "at the queried head to verify",
+                )
+        if candidate_classification != UNKNOWN:
+            candidate_claims = sorted(
+                cid for cid, e in claim_hits.items() if e.get("candidate_class")
+            )
+            candidate_reason = (
+                f"the stale graph (built at {graph.head_sha[:12]}, queried at "
+                f"{expected_head[:12]}) suggests {candidate_classification}; "
+                "UNVERIFIED until the index is rebuilt at the queried head"
+            )
+    classification = aggregate_class()
+
+    non_gated_unresolved = sorted(set(unresolved_anchor_claims) - set(unresolved_gated_claims))
+
+    fail_closed_reasons: list[str] = []
+    if stale and cxx_changed:
+        fail_closed_reasons.append(
+            f"UNVERIFIED_STALE_GRAPH: graph head {graph.head_sha[:12]} != queried head "
+            f"{expected_head[:12]} — rebuild 'formal_impact.py index' at the queried head"
+        )
+    if graph is None and cxx_changed:
+        fail_closed_reasons.append(
+            "MISSING_GRAPH: a C++ diff cannot be assessed without the SCIP-derived graph"
+        )
+    if non_gated_unresolved and cxx_changed:
+        fail_closed_reasons.append(
+            "UNRESOLVED_ANCHOR (non-gated): " + ", ".join(non_gated_unresolved)
+            + " — registry integrity precondition failed"
+        )
+    if traversal_risks:
+        fail_closed_reasons.append(
+            "TRAVERSAL_UNKNOWN: structural traversal hit the frontier cap — "
+            "candidate paths are incomplete"
+        )
+    if classification == UNKNOWN:
+        fail_closed_reasons.append(f"UNKNOWN_FORMAL_IMPACT: {unknown_reason_key(unknown_reasons)}")
+    fail_closed = bool(fail_closed_reasons)
 
     claims_out = []
     for cid, entry in sorted(claim_hits.items()):
         claim = next(c for c in claim_index.claims if c["id"] == cid)
-        claims_out.append(
-            {
-                "id": cid,
-                "title": claim.get("title", ""),
-                "class": entry["class"],
-                "paths": entry["paths"],
-                "via": sorted(set(entry["via"])),
-                "formal_suites": claim.get("formal_suites", []),
-                "evidence": [e.get("path") for e in claim.get("evidence", [])],
-            }
-        )
+        out_entry = {
+            "id": cid,
+            "title": claim.get("title", ""),
+            "class": entry["class"],
+            "paths": entry["paths"],
+            "via": sorted(set(entry["via"])),
+            "formal_suites": claim.get("formal_suites", []),
+            "evidence": [e.get("path") for e in claim.get("evidence", [])],
+            "provenance": claim_provenance(entry),
+        }
+        if entry.get("candidate_class"):
+            out_entry["candidate_class"] = entry["candidate_class"]
+            out_entry["unverified_reason"] = entry.get("unverified_reason")
+            out_entry["candidate_reason"] = entry.get("candidate_reason")
+        claims_out.append(out_entry)
 
-    return {
+    result = {
         "classification": classification,
         "claims": claims_out,
         "changed_symbols": {
-            sym: {"display": graph.nodes[sym]["display"] if graph else sym, "files": v["files"]}
+            sym: {
+                "display": graph.nodes[sym]["display"] if graph else sym,
+                "files": v["files"],
+                "attribution": v["attribution"],
+            }
             for sym, v in sorted(changed_syms.items())
         },
         "changed_files": sorted(changes),
@@ -657,7 +838,41 @@ def classify_impact(
         "graph_head": graph.head_sha if graph else None,
         "stale_index": stale,
         "semantic_disposition": "UNDETERMINED",
+        "provenance_legend": PROVENANCE_LEGEND,
+        "fail_closed": fail_closed,
+        "fail_closed_reasons": fail_closed_reasons,
     }
+    if classification == UNKNOWN:
+        result["unknown_reason"] = unknown_reason_key(unknown_reasons)
+        result["unknown_reasons"] = sorted(set(unknown_reasons))
+    if candidate_claims is not None:
+        result["candidate_classification"] = candidate_classification
+        result["candidate_claims"] = candidate_claims
+        result["candidate_reason"] = candidate_reason
+    return result
+
+
+def unknown_reason_key(unknown_reasons: list[str]) -> str:
+    for key in (
+        "UNVERIFIED_STALE_GRAPH",
+        "MISSING_GRAPH",
+        "UNRESOLVED_ANCHOR",
+        "TRAVERSAL_UNKNOWN",
+        "UNATTRIBUTED_CXX_CHANGE",
+    ):
+        if key in unknown_reasons:
+            return key
+    return "RISK_CONDITION"
+
+
+def claim_provenance(entry: dict) -> dict:
+    """Claim-level provenance summary (corrective-1 C5)."""
+    prov = {"anchor_binding": P_EXPLICIT, "symbol_identity": P_COMPILER}
+    if any(p.get("provenance") == P_HEURISTIC for p in entry["paths"]):
+        prov["structural_attribution"] = P_HEURISTIC
+    if entry.get("coarse"):
+        prov["coarse_mapping"] = P_FALLBACK
+    return prov
 
 
 def info_has_symbolless_change(info: dict) -> bool:
@@ -748,6 +963,20 @@ def cmd_index(args) -> int:
             "compdb_entries": len(src_entries),
             "lock_file": "scripts/formal/scip-clang.lock.json",
         },
+        # Edge provenance (corrective-1 C5): scip-clang 0.4.0 emits no
+        # enclosing ranges, so every reference edge attributes its
+        # occurrence to the nearest-preceding named definition — a
+        # heuristic, not a compiler-proven enclosure. Identity stays
+        # compiler-derived.
+        "provenance": {
+            "symbol_identity": P_COMPILER,
+            "reference_edges": P_HEURISTIC,
+            "note": (
+                "reference edges attribute each SCIP occurrence to the "
+                "nearest-preceding named definition in its document; path "
+                "consumers must not treat them as compiler-proven enclosures"
+            ),
+        },
         **scip_index.graph_to_json(graph),
         "timings": {
             "scip_index_seconds": round(index_secs, 1),
@@ -781,35 +1010,46 @@ def sha256_file(path: Path) -> str:
 
 
 def build_claim_index_and_families(registry: dict, manifest: dict, graph: Graph | None):
+    """Returns (claim_index, anchor_families, unresolved_claims,
+    unresolved_gated_claims). `unresolved_claims` is ALL claims with at
+    least one UNRESOLVED anchor; `unresolved_gated_claims` is the subset
+    whose every unresolved anchor carries a declared config_gate (a visible
+    declared gap, not a registry defect)."""
     claim_index = ClaimIndex(registry, manifest)
     if graph is None:
-        return claim_index, {}, set()
+        return claim_index, {}, set(), set()
     resolutions = resolve_anchors(registry, graph)
     families: dict[str, set[str]] = {}
     unresolved: set[str] = set()
+    unresolved_gated: set[str] = set()
     for claim in registry["claims"]:
         cid = claim["id"]
         syms: set[str] = set()
+        claim_gated = True
         for res in resolutions[cid]:
             if res["status"] == "resolved":
                 syms.update(res["symbols"])
             elif res["status"] == "UNRESOLVED_ANCHOR":
                 unresolved.add(cid)
+                if not res.get("config_gate"):
+                    claim_gated = False
         if syms:
             families[cid] = syms
-    return claim_index, families, unresolved
+        if cid in unresolved and claim_gated:
+            unresolved_gated.add(cid)
+    return claim_index, families, unresolved, unresolved_gated
 
 
-def load_graph_or_none() -> tuple[Graph | None, str | None]:
+def load_graph_or_none(path: Path = GRAPH_PATH) -> tuple[Graph | None, str | None]:
     try:
-        return Graph.load(), None
+        return Graph.load(path), None
     except ImpactError as exc:
         return None, str(exc)
 
 
 def cmd_check(args) -> int:
-    registry = load_registry()
-    manifest = load_manifest()
+    registry = load_registry(Path(args.registry) if args.registry else ANCHORS_PATH)
+    manifest = load_manifest(Path(args.manifest) if args.manifest else MANIFEST_PATH)
     problems = validate_registry(registry, manifest)
     if problems:
         print("FAIL: anchor registry validation:")
@@ -817,15 +1057,24 @@ def cmd_check(args) -> int:
             print(f"  - {p}")
         return 1
     print("OK    registry structure (unique ids, manifest suites, paths, vocab)")
-
-    graph, graph_error = load_graph_or_none()
-    if graph is None:
-        print(f"NOTE  anchor resolution unverifiable: {graph_error}")
-        print("NOTE  check is INCOMPLETE without the SCIP graph (run 'index'); "
-              "this is not a pass")
-        if args.require_graph:
-            return 1
+    if args.structure_only:
+        print("OK    structure-only check requested: registry validation passed "
+              "(anchor resolution NOT verified)")
         return 0
+
+    # Default check: a fresh graph + full anchor resolution is the pass
+    # condition (corrective-1 C1). A missing or stale graph is a failure.
+    graph, graph_error = load_graph_or_none(Path(args.graph) if args.graph else GRAPH_PATH)
+    if graph is None:
+        print(f"FAIL  anchor resolution unverifiable: {graph_error}")
+        print("FAIL  default check requires the SCIP graph; run 'index', or pass "
+              "--structure-only for registry-only validation")
+        return 1
+    if graph.head_sha != git_rev("HEAD"):
+        print(f"FAIL  graph is stale for HEAD: graph head {graph.head_sha[:12]} != "
+              f"working HEAD — results would not describe the current tree")
+        print("FAIL  rebuild with 'formal_impact.py index', or pass --structure-only")
+        return 1
 
     resolutions = resolve_anchors(registry, graph)
     bad = 0
@@ -863,7 +1112,11 @@ def resolve_range(args) -> tuple[str | None, str | None, dict, str | None]:
     """Returns (base, head, changes, expected_head)."""
     if args.diff_file:
         diff_text = Path(args.diff_file).read_text(encoding="utf-8")
-        return None, None, diff_to_changes(diff_text), None
+        # --assume-head declares the patch's provenance HEAD; without it the
+        # caller asserts the graph matches the diff's world and the
+        # staleness check is skipped.
+        assume_head = getattr(args, "assume_head", None)
+        return None, assume_head, diff_to_changes(diff_text), assume_head
     if args.working_tree:
         return None, git_rev("HEAD"), changed_files_from_head(), git_rev("HEAD")
     if not args.range:
@@ -876,8 +1129,8 @@ def resolve_range(args) -> tuple[str | None, str | None, dict, str | None]:
 
 
 def cmd_impact(args) -> int:
-    registry = load_registry()
-    manifest = load_manifest()
+    registry = load_registry(Path(args.registry) if args.registry else ANCHORS_PATH)
+    manifest = load_manifest(Path(args.manifest) if args.manifest else MANIFEST_PATH)
     problems = validate_registry(registry, manifest)
     if problems:
         print("error: anchor registry invalid:", file=sys.stderr)
@@ -886,8 +1139,10 @@ def cmd_impact(args) -> int:
         return 2
 
     base, head, changes, expected_head = resolve_range(args)
-    graph, graph_error = load_graph_or_none()
-    claim_index, families, unresolved = build_claim_index_and_families(registry, manifest, graph)
+    graph, graph_error = load_graph_or_none(Path(args.graph) if args.graph else GRAPH_PATH)
+    claim_index, families, unresolved, unresolved_gated = build_claim_index_and_families(
+        registry, manifest, graph
+    )
 
     if not changes:
         print("NO_FORMAL_IMPACT (empty diff)")
@@ -900,6 +1155,7 @@ def cmd_impact(args) -> int:
         claim_index,
         families,
         unresolved,
+        unresolved_gated,
         max_depth=args.max_depth,
         expected_head=expected_head,
     )
@@ -907,9 +1163,18 @@ def cmd_impact(args) -> int:
     result["base"] = base
     result["head"] = head
 
+    # Exit contract (corrective-1 C1): fail closed on UNKNOWN, stale graph,
+    # unresolved non-gated anchors, traversal UNKNOWN, or a missing graph
+    # for a C++ diff. --allow-unknown-for-eval is the explicit experiment
+    # opt-in for the evaluation harness; it changes the exit code only,
+    # never the classification.
+    allow_unknown = getattr(args, "allow_unknown_for_eval", False)
+    exit_code = 1 if (result["fail_closed"] and not allow_unknown) else 0
+
     if args.json:
+        result["exit_code"] = exit_code
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 0
+        return exit_code
 
     print("FORMAL IMPACT")
     print()
@@ -919,7 +1184,7 @@ def cmd_impact(args) -> int:
     if result["changed_symbols"]:
         print("  symbols:")
         for sym, info in result["changed_symbols"].items():
-            print(f"    {info['display']}")
+            print(f"    {info['display']}  [{info['attribution']}]")
     print()
     classification = result["classification"]
     if classification == NO_IMPACT:
@@ -930,12 +1195,24 @@ def cmd_impact(args) -> int:
         for claim in result["claims"]:
             print(f"  {claim['id']} — {claim['title']}")
             print(f"    class:        {claim['class']}")
+            if claim.get("candidate_class"):
+                print(f"    candidate:    {claim['candidate_class']} "
+                      f"[{claim['unverified_reason']}] — NOT authoritative")
+                if claim.get("candidate_reason"):
+                    print(f"                  {claim['candidate_reason']}")
             for p in claim["paths"]:
                 print("    path:")
-                for i, sym in enumerate(p):
+                for i, sym in enumerate(p["hops"]):
                     display = graph.nodes[sym]["display"] if graph and sym in graph.nodes else sym
                     arrow = "      " if i == 0 else "      -> "
                     print(f"{arrow}{display}")
+                prov_note = (
+                    " (nearest-preceding attribution — not compiler-proven enclosure)"
+                    if p["uses_heuristic_attribution"]
+                    else ""
+                )
+                print(f"      provenance: {p['provenance']}{prov_note}")
+            print(f"    provenance:   {json.dumps(claim['provenance'], sort_keys=True)}")
             for via in claim["via"]:
                 if via.startswith("cxx "):
                     display = graph.nodes[via]["display"] if graph and via in graph.nodes else via
@@ -950,34 +1227,56 @@ def cmd_impact(args) -> int:
                 print("    evidence:")
                 for e in claim["evidence"]:
                     print(f"      {e}")
+    if result.get("candidate_classification") is not None:
+        print()
+        print(
+            f"UNVERIFIED_STALE_GRAPH candidates: candidate_classification="
+            f"{result['candidate_classification']} candidate_claims={result['candidate_claims']}"
+        )
+        print(f"  {result['candidate_reason']}")
     if result["risks"]:
         print()
         print("risks (fail-closed conditions):")
         for risk in result["risks"]:
             print(f"  - {risk}")
     print()
+    if result["fail_closed"]:
+        print("FAIL-CLOSED:")
+        for reason in result["fail_closed_reasons"]:
+            print(f"  - {reason}")
+        if allow_unknown:
+            print("  (--allow-unknown-for-eval: exiting 0 for the experiment harness; "
+                  "the fail-closed condition above is unchanged)")
     print(f"confidence: {classification}")
     print("semantic disposition: UNDETERMINED")
     print("  (this resolver never claims a TLA+ update is or is not required;")
     print("   that verdict belongs to bounded semantic review)")
-    return 0
+    return exit_code
 
 
 def cmd_explain(args) -> int:
-    registry = load_registry()
-    manifest = load_manifest()
+    registry = load_registry(Path(args.registry) if args.registry else ANCHORS_PATH)
+    manifest = load_manifest(Path(args.manifest) if args.manifest else MANIFEST_PATH)
     claim = next((c for c in registry["claims"] if c["id"] == args.claim), None)
     if claim is None:
         print(f"error: unknown claim id: {args.claim}", file=sys.stderr)
         return 2
-    graph, _ = load_graph_or_none()
+    graph, _ = load_graph_or_none(Path(args.graph) if args.graph else GRAPH_PATH)
     print(f"CLAIM {claim['id']} — {claim.get('title', '')}")
     print(f"  claim_class:     {claim.get('claim_class')}")
     print(f"  source evidence: {claim.get('source_evidence')}")
+    print("  provenance:")
+    print(f"    anchor <-> claim binding: {P_EXPLICIT} (registry-declared)")
+    if graph:
+        print(f"    graph symbol identity:    {P_COMPILER}")
+        print(f"    graph reference edges:    {graph.edge_provenance}")
+        print(f"      ({PROVENANCE_LEGEND.get(graph.edge_provenance, '')})")
     print("  C++ anchors:")
     resolutions = resolve_anchors(registry, graph) if graph else None
     for i, anchor in enumerate(claim.get("cpp_anchors", [])):
         line = f"    [{anchor.get('role', '?')}] {anchor['symbol']}  ({anchor['file']})"
+        if anchor.get("config_gate"):
+            line += f"  [config_gate: {anchor['config_gate']}]"
         print(line)
         print(f"      {anchor.get('note', '')}")
         if resolutions:
@@ -1012,11 +1311,13 @@ def cmd_adjudicate(args) -> int:
     findings. This command writes the prompt file; verdicts are recorded
     separately by the evaluation harness and are ADVISORY forever.
     """
-    registry = load_registry()
-    manifest = load_manifest()
+    registry = load_registry(Path(args.registry) if args.registry else ANCHORS_PATH)
+    manifest = load_manifest(Path(args.manifest) if args.manifest else MANIFEST_PATH)
     base, head, changes, expected_head = resolve_range(args)
-    graph, graph_error = load_graph_or_none()
-    claim_index, families, unresolved = build_claim_index_and_families(registry, manifest, graph)
+    graph, graph_error = load_graph_or_none(Path(args.graph) if args.graph else GRAPH_PATH)
+    claim_index, families, unresolved, unresolved_gated = build_claim_index_and_families(
+        registry, manifest, graph
+    )
     result = classify_impact(
         graph,
         graph_error,
@@ -1024,6 +1325,7 @@ def cmd_adjudicate(args) -> int:
         claim_index,
         families,
         unresolved,
+        unresolved_gated,
         max_depth=args.max_depth,
         expected_head=expected_head,
     )
@@ -1056,7 +1358,11 @@ def cmd_adjudicate(args) -> int:
     for sym, info in result["changed_symbols"].items():
         parts.append(f"- {info['display']} ({', '.join(info['files'])})")
     parts.append("")
-    parts.append("=== SCIP PATHS TO FORMAL ANCHORS (deterministic engine output) ===")
+    parts.append(
+        "=== SCIP PATHS TO FORMAL ANCHORS (deterministic engine output; path"
+        " provenance HEURISTIC = nearest-preceding attribution, not a"
+        " compiler-proven enclosure) ==="
+    )
     parts.append(json.dumps(result["claims"], indent=1))
     parts.append("")
     parts.append("=== FORMAL CLAIM METADATA ===")
@@ -1090,6 +1396,15 @@ def cmd_adjudicate(args) -> int:
     return 0
 
 
+def add_artifact_args(p):
+    """Artifact-location overrides: lets self-tests run hermetically against
+    synthetic registry/manifest/graph files and lets humans point the
+    resolver at an alternate artifact set."""
+    p.add_argument("--registry", help="anchor registry JSON (default: spec/formal/anchors.json)")
+    p.add_argument("--manifest", help="formal manifest JSON (default: spec/tla/manifest.json)")
+    p.add_argument("--graph", help="symbol graph JSON (default: build/formal-impact/graph.json)")
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1099,8 +1414,10 @@ def main(argv: list[str]) -> int:
     p_index.set_defaults(func=cmd_index)
 
     p_check = sub.add_parser("check", help="Validate registry + anchor resolution")
-    p_check.add_argument("--require-graph", action="store_true",
-                         help="fail when the SCIP graph is absent (default: NOTE + pass)")
+    p_check.add_argument("--structure-only", action="store_true",
+                         help="validate registry structure only (no graph required); "
+                              "default check requires a FRESH graph + full anchor resolution")
+    add_artifact_args(p_check)
     p_check.set_defaults(func=cmd_check)
 
     def add_query_args(p):
@@ -1108,16 +1425,24 @@ def main(argv: list[str]) -> int:
         q.add_argument("--range", help="git diff range <base>..<head>")
         q.add_argument("--diff-file", help="read a unified diff from file instead of git")
         q.add_argument("--working-tree", action="store_true", help="diff working tree vs HEAD")
+        p.add_argument("--assume-head",
+                       help="with --diff-file: declare the patch's provenance HEAD "
+                            "(enables the stale-graph check)")
         p.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH,
                        help=f"structural traversal depth (default {DEFAULT_MAX_DEPTH})")
         p.add_argument("--json", action="store_true", help="machine-readable output")
 
     p_impact = sub.add_parser("impact", help="Classify formal impact of a diff")
     add_query_args(p_impact)
+    p_impact.add_argument("--allow-unknown-for-eval", action="store_true",
+                          help="EXPERIMENT OPT-IN: exit 0 on UNKNOWN/fail-closed results so the "
+                               "evaluation harness can observe them; never changes classification")
+    add_artifact_args(p_impact)
     p_impact.set_defaults(func=cmd_impact)
 
     p_explain = sub.add_parser("explain", help="Show one claim's full record")
     p_explain.add_argument("claim", help="claim id (e.g. F08)")
+    add_artifact_args(p_explain)
     p_explain.set_defaults(func=cmd_explain)
 
     p_adj = sub.add_parser("adjudicate", help="Assemble reduced-context LLM adjudication prompt")
@@ -1125,6 +1450,7 @@ def main(argv: list[str]) -> int:
     p_adj.add_argument("--out", required=True, help="output prompt file path")
     p_adj.add_argument("--full-corpus", action="store_true",
                        help="include ALL claims (full-corpus LLM baseline, not reduced set)")
+    add_artifact_args(p_adj)
     p_adj.set_defaults(func=cmd_adjudicate)
 
     args = parser.parse_args(argv)

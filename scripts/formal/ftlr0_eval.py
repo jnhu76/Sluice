@@ -10,12 +10,19 @@ Phases:
   * diff-file specimens (T1-T5, T10): edits are applied to the working tree,
     a real `git diff` is captured as a patch file, the tree is restored, and
     the impact engine runs with --diff-file against the index at HEAD.
-  * reindex specimens (T6-T9): the edit is applied to the working tree, the
-    SCIP index + graph are rebuilt from the edited sources (so new/renamed
+  * reindex specimens (T6, T7, T9): the edit is applied to the working tree,
+    the SCIP index + graph are rebuilt from the edited sources (so new/renamed
     symbols are visible, exactly like a developer rebuilding at HEAD), the
     engine runs with --working-tree, then the tree is restored and the index
     is rebuilt at HEAD again. No git history is touched: no commits, no
     reset, no stash.
+  * T8 (corrective-1 C3) is a TWO-PHASE reindex specimen: phase A builds the
+    baseline world (the helper exists and the anchor delegates to it —
+    indexed, so the graph contains it); phase B is the EVALUATED diff, a
+    body-only edit inside the pre-existing helper (anchor, state anchor and
+    registry untouched), indexed again and applied as a post-A -> post-B
+    patch. Only this patch is queried, so the fixture measures
+    new-helper maintenance, not an anchor edit.
 
 Worktree safety: the driver snapshots every file it touches, refuses to run
 on a dirty tree for the reindex phase, restores bytes verbatim, and
@@ -30,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -45,9 +53,9 @@ RESULTS_PATH = REPO_ROOT / "docs" / "results" / "formal" / "ftlr0-scip-pilot.jso
 SCIP_CLANG = BUILD = None
 
 
-def sh(*args: str, cwd: Path = REPO_ROOT) -> str:
+def sh(*args: str, cwd: Path = REPO_ROOT, ok: tuple[int, ...] = (0,)) -> str:
     result = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
-    if result.returncode != 0:
+    if result.returncode not in ok:
         raise RuntimeError(f"{' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout
 
@@ -184,21 +192,36 @@ def build_specimens() -> list[Specimen]:
         ),
         Specimen(
             "T7",
-            "moved implementation: ThreadPoolBackend::run_syscall moved to a new TU",
+            "moved implementation: ThreadPoolBackend::run_syscall moved to a new TU "
+            "(injected into the ROOT compdb so scip-clang actually indexes it)",
             [],
             expected_claims=["F03"],
             expected_class=fi.STRUCTURAL,
             needs_reindex=True,
-            notes="scip-clang C++ symbols embed no defining-file segment, so name identity "
-                  "survives the move; expected: anchor still resolves with def-site drift",
+            notes="corrective-1 C4 fixture fix: the corrective-0 clone went into the "
+                  "FILTERED compdb, which 'index' regenerates from the root compdb — "
+                  "the injected TU never reached scip-clang and the anchor silently went "
+                  "UNRESOLVED, so 'symbol identity survives cross-TU moves' was never "
+                  "demonstrated. With the TU actually indexed: check_after records the "
+                  "anchor resolving at the new location with def-site drift (identity "
+                  "survivability, exit 0). The impact query stays STRUCTURAL because the "
+                  "new TU is an UNTRACKED file and `git diff HEAD` does not see it: the "
+                  "only visible hunk is the moved-away side, attributing to worker_loop, "
+                  "which reaches the run_syscall anchor at depth 1. A direct hit would "
+                  "require staging the new file, which the driver avoids.",
         ),
         Specimen(
             "T8",
-            "new helper introduced, called by the anchor: signal_wake_locked delegates the epoch flip",
+            "new-helper maintenance (two-phase): baseline world has the anchor delegate "
+            "to ftlr0_specimen_advance_wake_epoch; the evaluated diff edits the helper "
+            "body ONLY (anchor / state anchor / registry untouched)",
             [],
             expected_claims=["F08"],
             expected_class=fi.STRUCTURAL,
             needs_reindex=True,
+            notes="corrective-1 C3 redesign: the evaluated diff must not touch "
+                  "signal_wake_locked, so a DIRECT answer would be a fixture bug; "
+                  "expected miss at depth 0, STRUCTURAL at bounded structural depth",
         ),
         Specimen(
             "T9",
@@ -278,22 +301,40 @@ def build_t7_setup() -> tuple[list[WorktreeEdit], str, str]:
     return [remove_edit], "src/async/threadpool_run_syscall.cpp", new_content
 
 
-def build_t8_edits() -> list[WorktreeEdit]:
-    """Add a new helper the anchor delegates to, then the specimen 'change'
-    is the helper's own body (the eval queries the helper-edit state)."""
-    park = REPO_ROOT / "src" / "async" / "scheduler_park_wake.cpp"
-    text = park.read_text(encoding="utf-8")
+T8_HELPER_NAME = "ftlr0_specimen_advance_wake_epoch"
+T8_HELPER_FILE = "src/async/scheduler_park_wake.cpp"
+T8_HELPER_COMMENT = "    // ftlr0 T8 specimen helper: owns the epoch advance on behalf of\n"
+
+
+def build_t8_phase_a() -> list[WorktreeEdit]:
+    """Phase A — baseline specimen world: the helper EXISTS and the anchor
+    delegates to it. This edit is indexed but is NOT part of the evaluated
+    diff."""
     anchor_fn = "void Scheduler::signal_wake_locked() {"
     helper = (
-        "void Scheduler::ftlr0_specimen_advance_wake_epoch() {\n"
-        "    // ftlr0 T8 specimen helper: owns the epoch advance on behalf of\n"
-        "    // signal_wake_locked (new code the registry has no annotation for).\n"
+        f"void Scheduler::{T8_HELPER_NAME}() {{\n"
+        + T8_HELPER_COMMENT
+        + "    // signal_wake_locked (baseline world; the registry has no\n"
+        "    // annotation for this helper).\n"
         "    wake_epoch_.fetch_add(1, std::memory_order_acq_rel);\n"
         "}\n"
         "\n"
     )
-    delegate = anchor_fn + "\n    ftlr0_specimen_advance_wake_epoch();"
-    return [WorktreeEdit("src/async/scheduler_park_wake.cpp", anchor_fn, helper + delegate)]
+    delegate = anchor_fn + f"\n    {T8_HELPER_NAME}();"
+    return [WorktreeEdit(T8_HELPER_FILE, anchor_fn, helper + delegate)]
+
+
+def build_t8_phase_b() -> list[WorktreeEdit]:
+    """Phase B — the EVALUATED diff: a body-only edit inside the
+    pre-existing helper. The anchor, the state anchor declaration and the
+    registry are untouched, so a DIRECT answer would be a fixture bug."""
+    return [
+        WorktreeEdit(
+            T8_HELPER_FILE,
+            T8_HELPER_COMMENT,
+            T8_HELPER_COMMENT + "    // ftlr0 specimen touch (evaluated diff: helper body only)\n",
+        )
+    ]
 
 
 def build_t9_edits() -> list[WorktreeEdit]:
@@ -366,14 +407,32 @@ class Evaluator:
     # -- engine invocation --
 
     def run_impact(self, args: list[str]) -> dict:
+        # --allow-unknown-for-eval is the corrective-1 C1 experiment opt-in:
+        # the harness must be able to OBSERVE UNKNOWN results; production
+        # default CLI still exits non-zero on them.
         out = sh(
             sys.executable,
             str(SCRIPT_DIR / "formal_impact.py"),
             "impact",
             "--json",
+            "--allow-unknown-for-eval",
             *args,
         )
         return json.loads(out)
+
+    @staticmethod
+    def summarize(result: dict) -> dict:
+        out = {
+            "classification": result["classification"],
+            "claims": result["claims"],
+            "risks": result["risks"],
+            "fail_closed": result.get("fail_closed", False),
+            "fail_closed_reasons": result.get("fail_closed_reasons", []),
+        }
+        for key in ("candidate_classification", "candidate_claims", "candidate_reason", "unknown_reason"):
+            if result.get(key) is not None:
+                out[key] = result[key]
+        return out
 
     def reindex(self):
         sh(sys.executable, str(SCRIPT_DIR / "formal_impact.py"), "index")
@@ -400,23 +459,21 @@ class Evaluator:
             "expected_class": spec.expected_class,
             "notes": spec.notes,
         }
+        changes: dict | None = None
         if spec.needs_reindex:
             assert not self.skip_reindex, f"{spec.id} requires reindex phase"
-            edits = {
-                "T6": lambda: build_t6_edits(),
-                "T7": None,
-                "T8": build_t8_edits,
-                "T9": build_t9_edits,
-            }[spec.id]
             if spec.id == "T7":
                 remove_edits, new_rel, new_content = build_t7_setup()
                 extra = {new_rel: new_content}
                 self.snapshot_and_apply(remove_edits, extra)
-                # The filtered compdb is a derived artifact; snapshot it so
-                # the post-specimen restore removes the appended TU again.
-                compdb_path = fi.BUILD_DIR / "compile_commands.src.json"
-                self.saved[str(compdb_path)] = compdb_path.read_bytes()
-                compdb = json.loads(compdb_path.read_text())
+                # Inject the new TU into the ROOT compile database: `index`
+                # re-derives the filtered compdb from it on every run, so a
+                # clone in the filtered file would be silently wiped
+                # (corrective-0 fixture bug — the injected TU never reached
+                # scip-clang, which is why the anchor went UNRESOLVED).
+                root_compdb = fi.COMPDB_PATH
+                self.saved[str(root_compdb)] = root_compdb.read_bytes()
+                compdb = json.loads(root_compdb.read_text())
                 template = next(
                     e for e in compdb if e["file"] == "src/async/threadpool_backend.cpp"
                 )
@@ -429,28 +486,66 @@ class Evaluator:
                             "threadpool_backend.cpp.o", "threadpool_run_syscall.cpp.o"
                         )
                 compdb.append(clone)
-                compdb_path.write_text(json.dumps(compdb))
+                root_compdb.write_text(json.dumps(compdb))
                 self.reindex()
+                # Record the actual anchor-resolution evidence under the move.
+                chk = sh(sys.executable, str(SCRIPT_DIR / "formal_impact.py"), "check")
+                record["check_after"] = {
+                    "exit": 0,
+                    "def_site_drift_lines": [
+                        l.strip() for l in chk.splitlines() if "def-site drift" in l
+                    ],
+                }
                 result = self.run_impact(["--working-tree", "--max-depth", str(depth)])
                 record["changed_files"] = result["changed_files"]
-                record["result"] = {
-                    "classification": result["classification"],
-                    "claims": result["claims"],
-                    "risks": result["risks"],
-                }
-                # also record the check behavior under the rename/move
-                record["check_after"] = "see pilot report (anchor resolution table)"
+                record["result"] = self.summarize(result)
+                record["_query_args"] = ["--working-tree"]
+            elif spec.id == "T8":
+                # Corrective-1 C3: two-phase fixture.
+                # Phase A: baseline world (helper exists, anchor delegates).
+                # Indexed so the graph contains the helper; NOT part of the
+                # evaluated diff.
+                phase_a = build_t8_phase_a()
+                self.snapshot_and_apply(phase_a)
+                self.reindex()
+                base_dir = fi.BUILD_DIR / "t8-baseline"
+                base_files = {e.path: (REPO_ROOT / e.path).read_bytes() for e in phase_a}
+                # Phase B: the evaluated diff — helper body only.
+                # (snapshot_and_apply applies the edit exactly once.)
+                phase_b = build_t8_phase_b()
+                self.snapshot_and_apply(phase_b)
+                self.reindex()
+                rel = next(iter(base_files))
+                base_prefix = f"build/formal-impact/t8-baseline/"
+                base_file = REPO_ROOT / base_prefix / rel
+                base_file.parent.mkdir(parents=True, exist_ok=True)
+                base_file.write_bytes(base_files[rel])
+                # `git diff --no-index` exits 1 when files differ.
+                patch = sh(
+                    "git", "diff", "--no-index", "--no-renames", "-U0",
+                    base_prefix + rel, rel, ok=(0, 1),
+                )
+                # Cosmetic: point the old-side header at the real path so the
+                # patch reads as an ordinary edit of the specimen file.
+                patch = patch.replace(f"a/{base_prefix}{rel}", f"a/{rel}")
+                shutil.rmtree(REPO_ROOT / base_prefix, ignore_errors=True)
+                patch_path = fi.BUILD_DIR / "specimen-T8.patch"
+                patch_path.write_text(patch, encoding="utf-8")
+                record["patch"] = str(patch_path.relative_to(REPO_ROOT))
+                record["patch_bytes"] = len(patch)
+                record["_query_args"] = ["--diff-file", str(patch_path)]
+                result = self.run_impact(["--diff-file", str(patch_path), "--max-depth", str(depth)])
+                record["changed_files"] = result["changed_files"]
+                record["result"] = self.summarize(result)
+                changes = fi.diff_to_changes(patch)
             else:
-                self.snapshot_and_apply(edits())
+                builder = {"T6": build_t6_edits, "T9": build_t9_edits}[spec.id]
+                self.snapshot_and_apply(builder())
                 self.reindex()
                 result = self.run_impact(["--working-tree", "--max-depth", str(depth)])
                 record["changed_files"] = result["changed_files"]
-                record["result"] = {
-                    "classification": result["classification"],
-                    "claims": result["claims"],
-                    "risks": result["risks"],
-                }
-            record["_query_args"] = ["--working-tree"]
+                record["result"] = self.summarize(result)
+                record["_query_args"] = ["--working-tree"]
         else:
             # diff-file mode: apply edits, capture real git diff, restore.
             self.snapshot_and_apply(spec.edits)
@@ -464,22 +559,14 @@ class Evaluator:
             result = self.run_impact(
                 ["--diff-file", str(patch_path), "--max-depth", str(depth)]
             )
-            record["result"] = {
-                "classification": result["classification"],
-                "claims": result["claims"],
-                "risks": result["risks"],
-            }
+            record["result"] = self.summarize(result)
             record["changed_files"] = result["changed_files"]
+            changes = fi.diff_to_changes(patch)
 
         # Baselines A and B on the same changed set.
-        if spec.needs_reindex:
+        if changes is None:
             # working-tree mode: the tree still carries the specimen edits.
-            changes = fi.diff_to_changes(
-                sh("git", "diff", "--no-renames", "-U0")
-            )
-        else:
-            patch_path = fi.BUILD_DIR / f"specimen-{spec.id}.patch"
-            changes = fi.diff_to_changes(patch_path.read_text(encoding="utf-8"))
+            changes = fi.diff_to_changes(sh("git", "diff", "--no-renames", "-U0"))
         record["baseline_a_claims"] = self.baseline_a(changes)
 
         # Expected-outcome adjudication (deterministic comparison).
@@ -489,17 +576,134 @@ class Evaluator:
         record["claims_ok"] = set(got_claims) >= set(spec.expected_claims) if spec.expected_claims else (
             record["got_class"] == fi.NO_IMPACT
         )
-        record["class_ok"] = (
-            record["got_class"] == spec.expected_class
-            if spec.expected_class != fi.UNKNOWN
-            else record["got_class"] in (fi.UNKNOWN, fi.STRUCTURAL, fi.DIRECT, fi.COARSE)
-        )
+        record["class_ok"] = record["got_class"] == spec.expected_class
         return record
+
+    @staticmethod
+    def _surfaced(record: dict, claims: list[str], classification: str) -> bool:
+        if record["expected_claims"]:
+            return set(record["expected_claims"]) <= set(claims)
+        return classification == fi.NO_IMPACT
+
+    def compute_sections(self) -> dict:
+        """Derive the depth-experiment and baseline sections from the
+        specimen records (corrective-1: the results file is fully
+        driver-generated; definitions documented in each note)."""
+        records = [r for r in self.results if "error" not in r and "skipped" not in r]
+        by_depth = {}
+        for d in ("0", "1", "2", "3"):
+            claims_total = 0
+            recall = 0
+            for r in records:
+                dm = r.get("depth_matrix", {}).get(d)
+                if not dm:
+                    continue
+                claims_total += len(dm["claims"])
+                if self._surfaced(r, dm["claims"], dm["classification"]):
+                    recall += 1
+            by_depth[d] = {"claims": claims_total, "recall_hits": recall}
+
+        a_fp = sum(
+            len(set(r["baseline_a_claims"]) - set(r["expected_claims"])) for r in records
+        )
+        a_recall = sum(
+            1 for r in records if self._surfaced(r, r["baseline_a_claims"], fi.NO_IMPACT)
+        )
+        c_fp = sum(len(set(r["got_claims"]) - set(r["expected_claims"])) for r in records)
+        c_recall = sum(
+            1 for r in records if self._surfaced(r, r["got_claims"], r["got_class"])
+        )
+        chosen = fi.DEFAULT_MAX_DEPTH
+        full_depths = [d for d, v in by_depth.items() if v["recall_hits"] == len(records)]
+        justification = (
+            f"depth {chosen} is the smallest depth reaching full recall "
+            f"({len(records)}/{len(records)}); depth 3 adds nothing."
+            if str(chosen) in full_depths and by_depth[str(chosen)]["recall_hits"] == len(records)
+            else f"MEASURED: recall by depth {by_depth}; no depth reaches full recall."
+        )
+        return {
+            "depth_experiment": {
+                "by_depth": by_depth,
+                "chosen_default": chosen,
+                "justification": justification,
+                "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO; T6 requires F08 present at ANY class — the claim is fail-closed demoted, see corrective-1 C2).",
+            },
+            "baselines": {
+                "A_file_only": {
+                    "description": "changed file -> manifest implementation_bindings -> suites -> claims",
+                    "false_positives_vs_expected": a_fp,
+                    "recall_hits": a_recall,
+                    "note": "file-level bindings drag in every suite sharing the touched file; counts over the specimens that ran.",
+                },
+                "B_explicit_anchors_only": {
+                    "description": "changed symbol == registered anchor (engine depth 0)",
+                    "recall_hits": by_depth["0"]["recall_hits"],
+                    "note": "misses every helper/bypass/thunk case (T2/T3/T8/T9/T10): the core value SCIP adds over annotation-only.",
+                },
+                "C_scip_graph": {
+                    "description": "direction-monotonic bounded traversal, depth 2, namespace hubs excluded",
+                    "false_positives_vs_expected": c_fp,
+                    "recall_hits": c_recall,
+                    "note": "T5's F03 extra is a conservative true-ish positive (record_terminal validates through the edited gate); T7's F01/F06 extras come from arena-family neighborhoods of the moved TU.",
+                },
+            },
+        }
+
+    def historical_probe(self) -> dict:
+        """Corrective-1 C2: the R-F1 witness query against the CURRENT graph
+        is a sanity probe only — the graph is NOT rebuilt at the historical
+        HEAD, so the result is UNVERIFIED by construction and recorded as a
+        demoted candidate, never as validation evidence."""
+        probe = self.run_impact(["--range", "8d4b72a0^..8d4b72a0"])
+        return {
+            "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
+            "status": (
+                "HISTORICAL SANITY PROBE — UNVERIFIED: the graph is built at the "
+                "current HEAD, not at 8d4b72a0; the stale-graph demotion applies "
+                "(candidate evidence only, never authoritative confidence)"
+            ),
+            "result": {
+                "classification": probe["classification"],
+                "candidate_classification": probe.get("candidate_classification"),
+                "candidate_claims": probe.get("candidate_claims"),
+                "changed_symbols_exemplar": next(iter(probe.get("changed_symbols", {})), None),
+                "first_risk": (probe.get("risks") or [None])[0],
+            },
+        }
+
+    def toolchain_section(self) -> dict:
+        try:
+            gdata = json.loads(fi.GRAPH_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            gdata = {}
+        toolchain = gdata.get("toolchain", {})
+        stats = gdata.get("stats", {})
+        return {
+            "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
+            "index_config": (
+                f"compdb from the current xmake config ({toolchain.get('compdb_entries', '?')} src TUs); "
+                "config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y"
+            ),
+            "scip_clang": toolchain.get("scip_clang", "unknown"),
+            "graph_symbols": stats.get("symbols"),
+            "reference_edges": stats.get("reference_edges"),
+            "edge_provenance": gdata.get("provenance", {}).get("reference_edges"),
+            "query_time_seconds": "<1 (graph.json in memory)",
+        }
 
     def run(self) -> dict:
         started = time.time()
         specimens = build_specimens()
         default_depth = fi.DEFAULT_MAX_DEPTH
+
+        # Freshness precondition: the diff-file specimens query the on-disk
+        # graph without a staleness check (the patch carries no HEAD), so the
+        # suite MUST start from an index built at the current HEAD.
+        if self.skip_reindex:
+            print("WARNING --skip-reindex: diff-file specimens trust the on-disk "
+                  "graph; rebuild it yourself or results may be stale")
+        else:
+            self.reindex()
 
         for spec in specimens:
             if spec.needs_reindex and self.skip_reindex:
@@ -526,7 +730,7 @@ class Evaluator:
                 self.reindex()
 
         summary = {
-            "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299)",
+            "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299, corrective-1)",
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "head_sha": sh("git", "rev-parse", "HEAD").strip(),
             "default_max_depth": default_depth,
@@ -535,6 +739,10 @@ class Evaluator:
         }
         for record in summary["specimens"]:
             record.pop("_query_args", None)
+            record.pop("_changes", None)
+        summary.update(self.compute_sections())
+        summary["historical_sanity_probe"] = self.historical_probe()
+        summary["toolchain"] = self.toolchain_section()
         return summary
 
 
@@ -574,6 +782,24 @@ def main(argv: list[str]) -> int:
             evaluator.restore()
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
+        # Carry the advisory LLM-adjudication experiment forward verbatim:
+        # it is a single-run disclosure-bound record, not regenerated per
+        # corrective round (the T1/T2/T4/T5/T10 specimen shapes are
+        # unchanged; T8 was redesigned and was never part of it).
+        prior_section = None
+        if out.exists():
+            try:
+                prior_section = json.loads(out.read_text(encoding="utf-8")).get("llm_adjudication")
+            except (OSError, json.JSONDecodeError):
+                prior_section = None
+        if prior_section:
+            prior_section["carried_note"] = (
+                "Carried verbatim from the corrective-0 run (2026-09-05, head 48f89d90): "
+                "the T1/T2/T4/T5/T10 specimen shapes are unchanged; T8 was redesigned in "
+                "corrective-1 (helper-only diff) and was never part of the LLM experiment. "
+                "Advisory evidence only."
+            )
+            summary["llm_adjudication"] = prior_section
         out.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
         print(f"==> results written: {out}")
         for r in summary["specimens"]:
@@ -584,8 +810,9 @@ def main(argv: list[str]) -> int:
                 print(f"  {r['id']}: SKIPPED ({r['skipped']})")
                 continue
             ok = "OK " if r["claims_ok"] and r["class_ok"] else "MISS"
+            fc = " [fail-closed]" if r.get("result", {}).get("fail_closed") else ""
             print(
-                f"  {r['id']}: {ok} got {r['got_class']} claims={r['got_claims']} "
+                f"  {r['id']}: {ok} got {r['got_class']} claims={r['got_claims']}{fc} "
                 f"(expected {r['expected_class']} claims={r['expected_claims']})"
             )
         return 0
