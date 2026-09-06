@@ -104,6 +104,11 @@ KNOWN_TRACKER_REFS = {
                                        # boundary (2026-09-05, R-F1 startup-skew
                                        # round — test-only seam LOC delta
                                        # attribution in this report)
+    305,                                # TV-1 historical drift sensitivity
+                                       # (2026-09-07, mutant-world + window-freeze
+                                       # seam LOC delta attribution in this
+                                       # report; see docs/verification/formal/
+                                       # tv1-trace-drift-sensitivity.md)
 }
 
 TOKEN_RE = re.compile(r"[A-Z][A-Z0-9_]{7,}")

@@ -2,7 +2,7 @@
 
 > Owner doc for TV-1 (issue #305, authority chain #298 → #196/#163).
 > Established 2026-09-07 at master `9c79bf1c` (PR #304 merge), branch
-> `research/tv1-trace-drift`. Research-only: no production semantics, no
+> research/tv1-trace-drift. Research-only: no production semantics, no
 > static-FDG routing, no enforcement wiring.
 >
 > **Verdict: TRACE_CHANNEL_PARTIAL.** The existing E9 channel — real

@@ -30,7 +30,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 
 | File | Lines | Domain |
 |---|---|---|
-| `src/async/scheduler_park_wake.cpp` | 1318 | park/wake, R1-R4 protocol, interrupt bridge |
+| `src/async/scheduler_park_wake.cpp` | 1349 | park/wake, R1-R4 protocol, interrupt bridge |
 | `src/async/scheduler_timer.cpp` | 631 | deadline heap, clock, test-clock |
 | `src/async/scheduler_event.cpp` | 407 | SchedulerEvent wake targets |
 | `src/async/scheduler_semaphore.cpp` | 315 | semaphore waits |
@@ -40,7 +40,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
 | `src/async/scheduler_fe2_test_seam.cpp` | 431 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
-| `src/async/scheduler.cpp` | 2245 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2258 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -238,6 +238,15 @@ deferred Queue admission entries (lifecycle gate + `active_port_calls_`
 interval + control transition reproduced) and the 12-case slice test
 live in the internal-testing seam TU / test target; no public API
 change.)
+`scheduler_park_wake.cpp` 1318 → 1349 and `scheduler.cpp` 2245 → 2258
+(2026-09-07, issue #305 TV-1 — the C-001 mutant world: `await_ready_flag`
+gains the pre-`422036cd` three-step shape under `SLUICE_TV1_C001_MUTANT`
+(a define set by no repo config, CI, or gate) with the
+`tv1_c001_registered_presuspend` internal-testing pause seam, and the
+worker-loop drain gains the `tv1_wake_scan_routed` pause-only window-freeze
+seam (internal-testing guarded, no event kind, compiles out of
+production); production park/wake behavior unchanged; see
+`docs/verification/formal/tv1-trace-drift-sensitivity.md`.)
 `scheduler_rwlock.cpp` 685 → 692, `scheduler_internal.hpp` 71 → 89,
 `scheduler_fe2_test_seam.cpp` 210 → 333, `scheduler.hpp` +
 `wait_node.hpp` (declarations only), and the new test target
