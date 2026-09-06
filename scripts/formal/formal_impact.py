@@ -248,14 +248,28 @@ def _validate_trace_vocab(cid: str, fid: str, events: list) -> list[str]:
     authority (e9_trace_validate KNOWN_EVENTS) — mechanically checkable
     because that validator already owns the vocabulary. Model-action names
     are NOT mechanically checked: no TLA parsing exists to make them
-    compiler-authoritative, so they stay declared EXPLICIT metadata."""
+    compiler-authoritative, so they stay declared EXPLICIT metadata.
+
+    Fail-closed (Phase-B corrective-1 C5): a facet that declares
+    trace_events DEPENDS on the vocabulary authority — if that authority
+    cannot be loaded or owns no KNOWN_EVENTS, validation must produce a
+    problem rather than silently accepting arbitrary events. A facet with
+    no declared trace_events does not depend on the authority at all."""
+    if not events:
+        return []
     try:
         import e9_trace_validate
-    except Exception:  # noqa: BLE001 — vocabulary authority unavailable
-        return []
+    except Exception:  # noqa: BLE001 — declared vocabulary authority unavailable
+        return [
+            f"claim {cid}: facet {fid}: trace_events declared but the "
+            f"vocabulary authority (e9_trace_validate) is unavailable"
+        ]
     known = getattr(e9_trace_validate, "KNOWN_EVENTS", None)
     if not known:
-        return []
+        return [
+            f"claim {cid}: facet {fid}: trace_events declared but the "
+            f"authority owns no KNOWN_EVENTS vocabulary"
+        ]
     return [
         f"claim {cid}: facet {fid}: unknown trace event {e!r} "
         f"(not in the declared authority vocabulary)"
@@ -314,9 +328,7 @@ def _validate_claim_facets(
                 problems.append(f"claim {cid}: facet {fid}: suite not in parent claim: {s}")
             suite_union.add(s)
         labels = facet.get("semantic_labels") or {}
-        events = labels.get("trace_events") or []
-        if events:
-            problems.extend(_validate_trace_vocab(cid, fid, events))
+        problems.extend(_validate_trace_vocab(cid, fid, labels.get("trace_events") or []))
         for ev_path in facet.get("evidence", []) or []:
             if not (root / ev_path).exists():
                 problems.append(f"claim {cid}: facet {fid}: evidence path missing: {ev_path}")

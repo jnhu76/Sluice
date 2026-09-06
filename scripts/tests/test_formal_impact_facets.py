@@ -15,6 +15,10 @@ Registry structural negatives (task book §17 B12 / §18 invariants):
     FV10 schema-1 registry declaring facets       -> registry invalid
     FV11 unknown trace event (authority vocab)    -> registry invalid
     FV12 valid faceted registry                   -> no problems
+    FV13 trace_events declared, authority import unavailable -> invalid (C5)
+    FV14 trace_events declared, KNOWN_EVENTS missing         -> invalid (C5)
+    FV15 trace_events declared, KNOWN_EVENTS empty           -> invalid (C5)
+    FV16 no trace_events declared -> no dependency on the authority (C5)
 
 Facet routing semantics (task book §11-§16 / §17 B10/B11):
 
@@ -28,6 +32,17 @@ Facet routing semantics (task book §11-§16 / §17 B10/B11):
     FR8  non-faceted claim            -> CONSERVATIVE_ALL, parent targets (B11)
     FR9  no facets in registry at all -> NO facet fields (legacy shape)
     FR10 facet targets always ⊆ parent; claim class never weakened by facets
+
+Corrective-1 corpus gates (PR #303 review C1-C4; live B3 shape = CR8/CR9
+is exercised by scripts/formal/fdg0_phase_b_eval.py on the real machine):
+
+    CR1  frozen PRECISE denominator is exactly the 7 prereg row keys
+    CR2  B5/F06 participates in the threshold denominator
+    CR3  missing B4 row -> integrity failure + non-authoritative threshold
+    CR4  specimen exception -> integrity failure
+    CR5  duplicate frozen row -> integrity failure
+    CR6  prereg comparison reports a missing expected row
+    CR7  prereg comparison reports unexpected extra claim rows cleanly
 
 Pure stdlib, synthetic graphs; no scip-clang, no build, no repo mutation.
 """
@@ -46,6 +61,7 @@ sys.path.insert(0, str(FORMAL_DIR))
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import formal_impact as fi  # noqa: E402
+import fdg0_phase_b_eval as ev  # noqa: E402
 
 
 # --- synthetic world ----------------------------------------------------------
@@ -361,6 +377,70 @@ class FacetRegistryValidation(unittest.TestCase):
         problems = self.validate(reg)
         self.assertTrue(any("unknown trace event" in p for p in problems), problems)
 
+    # C5: the trace-vocabulary authority is a fail-closed dependency.
+
+    @staticmethod
+    def poison_e9_authority(mode):
+        """Swap the e9_trace_validate module entry for the duration of one
+        test: None makes `import` raise (authority unavailable); any other
+        value becomes a bare module whose KNOWN_EVENTS is that value (a
+        string = attribute absent, a list = empty/usable vocabulary)."""
+        import types
+
+        saved = sys.modules.get("e9_trace_validate")
+        if mode is None:
+            sys.modules["e9_trace_validate"] = None
+        else:
+            fake = types.ModuleType("e9_trace_validate")
+            if not isinstance(mode, list):
+                mode = None
+            if mode is not None:
+                fake.KNOWN_EVENTS = mode
+            sys.modules["e9_trace_validate"] = fake
+
+        def restore():
+            if saved is None:
+                sys.modules.pop("e9_trace_validate", None)
+            else:
+                sys.modules["e9_trace_validate"] = saved
+
+        return restore
+
+    def with_poisoned_authority(self, mode):
+        self.addCleanup(self.poison_e9_authority(mode))
+
+    def test_fv13_trace_events_authority_unavailable_invalid(self):
+        reg = make_registry()
+        reg["claims"][0]["facets"][0]["semantic_labels"]["trace_events"] = ["WakePublished"]
+        self.with_poisoned_authority(None)
+        problems = self.validate(reg)
+        self.assertTrue(
+            any("vocabulary authority (e9_trace_validate) is unavailable" in p
+                for p in problems),
+            problems,
+        )
+
+    def test_fv14_known_events_missing_invalid(self):
+        reg = make_registry()
+        reg["claims"][0]["facets"][0]["semantic_labels"]["trace_events"] = ["WakePublished"]
+        self.with_poisoned_authority("module-without-known-events")
+        problems = self.validate(reg)
+        self.assertTrue(any("owns no KNOWN_EVENTS vocabulary" in p for p in problems), problems)
+
+    def test_fv15_known_events_empty_invalid(self):
+        reg = make_registry()
+        reg["claims"][0]["facets"][0]["semantic_labels"]["trace_events"] = ["WakePublished"]
+        self.with_poisoned_authority([])
+        problems = self.validate(reg)
+        self.assertTrue(any("owns no KNOWN_EVENTS vocabulary" in p for p in problems), problems)
+
+    def test_fv16_no_trace_events_declared_needs_no_authority(self):
+        # facets declare no trace_events (empty list or absent labels): the
+        # registry must validate WITHOUT any dependency on the authority
+        reg = make_registry()
+        self.with_poisoned_authority(None)
+        self.assertEqual(self.validate(reg), [])
+
     def test_anchor_without_id_on_faceted_claim_rejected(self):
         reg = make_registry()
         del reg["claims"][0]["cpp_anchors"][0]["id"]
@@ -583,6 +663,151 @@ class FacetCliJson(unittest.TestCase):
         self.assertIn("facets (EXPLICIT hand-maintained mapping", out)
         self.assertIn("anchor id: wake-signal", out)
         self.assertIn("formal targets: s1, s2, s3", out)
+
+
+# --- corrective-1: fail-closed corpus gates (C1/C3/C4) ---------------------------
+#
+# CR8/CR9 (repaired B3 reaches ONLY wake-epoch-state via wake-publication)
+# are live-machine evidence produced by scripts/formal/fdg0_phase_b_eval.py;
+# they are recorded in docs/results/formal/fdg0-phase-b.json, not here.
+
+
+class Corrective1CorpusGates(unittest.TestCase):
+    @staticmethod
+    def row(spec, claim, reduction=0.0, baseline=6, facet=6,
+            klass="DIRECT_FORMAL_IMPACT", scope="PRECISE"):
+        return {
+            "specimen": spec, "claim": claim, "class": klass,
+            "facet_scope": scope, "reached_anchor_ids": [], "affected_facets": [],
+            "baseline_targets": baseline, "facet_targets": facet,
+            "reduction": reduction, "fail_closed": False,
+        }
+
+    def frozen_rows(self, drop=(), extra=(), duplicates=()):
+        keys = ev.frozen_precise_row_keys(ev.load_prereg())
+        reductions = {"B1a": 0.1667, "B1b": 0.5, "B2": 0.5, "B3": 0.1667,
+                      "B4": 0.6667, "B5": 0.3333, "B7": 0.0}
+        rows = []
+        for spec, claim in keys:
+            if (spec, claim) in drop:
+                continue
+            base = 6 if claim == "F08" else 3
+            red = reductions[spec]
+            rows.append(self.row(spec, claim, red, base, base - round(red * base)))
+        rows.extend(extra)
+        for key in duplicates:
+            rows.append(self.row(*key))
+        return keys, rows
+
+    def test_cr1_frozen_denominator_is_exactly_seven_keys(self):
+        keys = ev.frozen_precise_row_keys(ev.load_prereg())
+        self.assertEqual(keys, [
+            ("B1a", "F08"), ("B1b", "F08"), ("B2", "F08"), ("B3", "F08"),
+            ("B4", "F08"), ("B5", "F06"), ("B7", "F08"),
+        ])
+        self.assertEqual(len(set(keys)), 7)
+
+    def test_cr2_b5_f06_participates_in_threshold(self):
+        keys, rows = self.frozen_rows()
+        integrity = ev.compute_integrity(rows, [], keys, keys)
+        self.assertTrue(integrity["all_pass"], integrity)
+        m = ev.measurement_section(rows, keys, integrity)
+        self.assertEqual(m["threshold"]["rows_present"], 7)
+        self.assertTrue(m["threshold"]["authoritative"])
+        self.assertTrue(m["threshold"]["met"])
+        detail = {(d["specimen"], d["claim"]) for d in m["precise_b1_b7"]["detail"]}
+        self.assertIn(("B5", "F06"), detail)
+
+    def test_cr3_missing_b4_row_fails_corpus_and_threshold(self):
+        keys, rows = self.frozen_rows(drop={("B4", "F08")})
+        integrity = ev.compute_integrity(rows, [], keys, keys)
+        self.assertFalse(integrity["all_pass"])
+        self.assertIn({"specimen": "B4", "claim": "F08"},
+                      integrity["missing_required_rows"])
+        self.assertFalse(integrity["frozen_precise_rows_complete"])
+        m = ev.measurement_section(rows, keys, integrity)
+        self.assertFalse(m["threshold"]["authoritative"])
+        self.assertIsNone(m["threshold"]["met"])
+
+    def test_cr4_specimen_exception_fails_corpus(self):
+        keys, rows = self.frozen_rows()
+        records = [{"id": "B6b", "error": "RuntimeError: specimen exploded"}]
+        integrity = ev.compute_integrity(rows, records, keys, keys)
+        self.assertFalse(integrity["all_pass"])
+        self.assertEqual(integrity["specimen_errors"],
+                         [{"id": "B6b", "error": "RuntimeError: specimen exploded"}])
+        self.assertFalse(integrity["frozen_precise_rows_complete"])
+        # a record with neither result nor error is equally a failure
+        records2 = [{"id": "B8"}]
+        integrity2 = ev.compute_integrity(rows, records2, keys, keys)
+        self.assertFalse(integrity2["all_pass"])
+        self.assertIn("specimen produced no result",
+                      integrity2["specimen_errors"][0]["error"])
+
+    def test_cr5_duplicate_frozen_row_is_integrity_failure(self):
+        keys, rows = self.frozen_rows(duplicates={("B1a", "F08")})
+        integrity = ev.compute_integrity(rows, [], keys, keys)
+        self.assertFalse(integrity["all_pass"])
+        self.assertEqual(integrity["duplicate_rows"],
+                         [{"specimen": "B1a", "claim": "F08", "occurrences": 2}])
+        self.assertFalse(integrity["frozen_precise_rows_complete"])
+
+    def test_cr6_prereg_comparison_reports_missing_expected_row(self):
+        prereg = ev.load_prereg()
+        all_expected = ev.expected_row_keys(prereg)
+        self.assertIn(("B4", "F08"), all_expected)
+        rows = [self.row(s, c) for s, c in all_expected if (s, c) != ("B4", "F08")]
+        comp = ev.compare_with_prereg(rows, prereg)
+        self.assertIn({"specimen": "B4", "claim": "F08"},
+                      comp["missing_expected_rows"])
+        self.assertIn("B4", comp["missing_specimens"])
+
+    def test_cr7_prereg_comparison_reports_unexpected_rows_cleanly(self):
+        prereg = ev.load_prereg()
+        all_expected = ev.expected_row_keys(prereg)
+        rows = [self.row(s, c) for s, c in all_expected]
+        # the real B6b extras (F01/F06 reach) plus a fully unknown row
+        rows.append(self.row("B6b", "F06", klass="STRUCTURAL_FORMAL_IMPACT"))
+        rows.append(self.row("ZZ", "F99"))
+        comp = ev.compare_with_prereg(rows, prereg)
+        unexpected = {(u["specimen"], u["claim"]) for u in comp["unexpected_rows"]}
+        self.assertIn(("B6b", "F06"), unexpected)
+        self.assertIn(("ZZ", "F99"), unexpected)
+        # unexpected rows are evidence only: not value-compared, so they
+        # cannot masquerade as prereg deviations of the expected row
+        dev_keys = {(d["specimen"], d["claim"]) for d in comp["deviations"]}
+        self.assertNotIn(("ZZ", "F99"), dev_keys)
+        # the preregistered B6b/F03 row is still compared normally
+        self.assertNotIn(("B6b", "F03"), unexpected)
+        # class-only shapes (B9) are compared, not flagged unexpected
+        rows.append(self.row("B9", "F08", klass="UNKNOWN_FORMAL_IMPACT",
+                             scope="CONSERVATIVE_ALL"))
+        rows[-1]["fail_closed"] = True
+        comp9 = ev.compare_with_prereg(rows, prereg)
+        self.assertNotIn(("B9", "F08"),
+                         {(u["specimen"], u["claim"]) for u in comp9["unexpected_rows"]})
+        self.assertGreaterEqual(comp9["rows_checked"], comp["rows_checked"] + 1)
+
+    def test_cr_prereg_duplicate_detection(self):
+        prereg = ev.load_prereg()
+        all_expected = ev.expected_row_keys(prereg)
+        rows = [self.row(s, c) for s, c in all_expected]
+        rows.append(self.row("B1a", "F08"))
+        comp = ev.compare_with_prereg(rows, prereg)
+        self.assertEqual(comp["duplicate_rows"],
+                         [{"specimen": "B1a", "claim": "F08", "occurrences": 2}])
+
+    def test_cr_real_prereg_expected_rows_are_wellformed(self):
+        # sanity on the frozen artifact itself: 17 required live rows,
+        # including the three B5 per-claim rows and the four supplementary rows
+        keys = ev.expected_row_keys(ev.load_prereg())
+        self.assertEqual(len(keys), 17)
+        self.assertEqual(len(set(keys)), 17)
+        for pair in (("B5", "F01"), ("B5", "F03"), ("B5", "F06"),
+                     ("S-04a", "F04"), ("S-04b", "F04"),
+                     ("S-06a", "F06"), ("S-06b", "F06")):
+            self.assertIn(pair, keys)
+        self.assertNotIn(("B9", "F08"), keys)  # class-only shape
 
 
 if __name__ == "__main__":
