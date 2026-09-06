@@ -391,6 +391,17 @@ MIGRATION_TABLE_FILES = [
     "docs/verification/formal/migration-report.md",
 ]
 
+# FDG-0 Phase C historical-corpus data (issue #298 Phase C): the frozen
+# candidate inventory records, per historical commit, the files that commit
+# changed — including paths that predate the migration (e.g. commits that
+# touched docs/spec/ or the flat spec/tla/ layout). Those strings are frozen
+# CORPUS DATA about past states, never live authority references, so the
+# old-path scan must not flag them. Only the exact inventory artifact is
+# excluded; gold/results/docs stay fully scanned.
+CORPUS_DATA_FILES = [
+    "docs/results/formal/fdg0-phase-c-candidates.json",
+]
+
 
 def _scan_files() -> dict[str, str]:
     """Return {relative_path: lowercase_content} for tracked text files."""
@@ -511,7 +522,7 @@ def cmd_check(manifest: dict) -> int:
     files = _scan_files()
     old_refs: list[tuple[str, str]] = []
     for rel, content in files.items():
-        if _is_historical(rel) or _is_implementation(rel):
+        if _is_historical(rel) or _is_implementation(rel) or rel in CORPUS_DATA_FILES:
             continue
         if rel in MIGRATION_TABLE_FILES:
             # Only check non-table lines (table rows document the mapping).

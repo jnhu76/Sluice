@@ -2,7 +2,7 @@
 
 > Owner doc for FDG-0 Phase C (issue #298, "Phase C only — Historical Gold
 > Corpus"). Established 2026-09-06 at master `b6e24e67` (PR #303 merge),
-> branch `safety/fdg0-phase-c-historical-gold`; C0 preregistration commit
+> branch safety/fdg0-phase-c-historical-gold; C0 preregistration commit
 > `704dc65b` (inventory + frozen gold) precedes C1 harness `01b71530`
 > precedes C2 results. The gold file was not modified after C0.
 >
@@ -133,6 +133,18 @@ facet route narrowed away a gold-required target (C-011). File-only
 mapping achieved higher raw recall at higher noise; explicit-only mapping
 achieves neither recall nor usable precision. FACETS_EARNED (Phase B,
 synthetic specimens) does not transfer unconditionally to real history.
+
+## Mechanical-gate registration (disclosed)
+
+The frozen candidate inventory (docs/results/formal/fdg0-phase-c-candidates.json)
+records, per historical commit, the files that commit changed — including paths
+that predate the layout migration (the removed docs/spec tree, the flat
+pre-migration spec/tla layout). Those
+strings are frozen corpus data about past states, not live authority references,
+so the file is registered in scripts/formal/verify.py's `CORPUS_DATA_FILES`
+old-path-scan exclusion (the same class of exclusion as docs/history/). Only the
+inventory artifact is excluded; the gold, results, and this doc remain fully
+scanned.
 
 ## Residuals
 
