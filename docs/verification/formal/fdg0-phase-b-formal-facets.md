@@ -2,7 +2,7 @@
 
 > Owner doc for the FDG-0 Phase B facet layer (issue #298; governing issue,
 > "Phase B only — Formal Facets"). Established 2026-09-06 at master
-> `a708884d` (PR #302 merge), branch `safety/fdg0-phase-b-formal-facets`.
+> `a708884d` (PR #302 merge), branch safety/fdg0-phase-b-formal-facets.
 >
 > **Claim (exact wording, never stronger):** facets are EXPLICIT routing
 > metadata that partition an existing formal claim's reopened-evidence
@@ -132,17 +132,61 @@ was not rewritten. Machine-readable results:
 | claim-level recall (T1–T10 depth 2, see regression) | unchanged vs #300 reference |
 | silent NO | 0 |
 | incorrectly narrowed COARSE/UNKNOWN | 0 (B8 6 targets, B9 6 targets + fail-closed, all conservative rows full parent sets) |
-| F08 useful facets | YES (park 6→3, startup 6→2) |
+| F08 useful facets | YES (park 6→3, startup 6→2, state-anchor bypass 6→5) |
 | independent second useful claim | YES (F04 release face 2→1; F06 both faces 3→2) |
-| **mean PRECISE B1–B7 fan-out reduction** | **33.33%** (threshold 30% — MET) |
+| **mean PRECISE B1–B7 fan-out reduction (frozen denominator)** | **33.33% over the 7 frozen (specimen, claim) row keys incl. B5/F06** (threshold 30% — MET, authoritative) |
 | supplementary F04/F06 rows (raw, outside the frozen denominator) | 29.17% mean (S-04a 0% is the honest cost of the f1 Race-B overlap) |
 
-Per-row PRECISE results: B1a 5/6 (wake), B1b 3/6 (park), B2 3/6
-(helper→park only), B3 5/6 (rogue state writer → wake), B4 2/6 (startup),
+Per-row PRECISE results (corrective-1 run): B1a 5/6 (wake), B1b 3/6
+(park), B2 3/6 (helper→park only), B3 5/6 (rogue state writer →
+wake-epoch-state ONLY; wake-signal NOT reached), B4 2/6 (startup),
 B5-F06 2/3 (arena facet survives the shared-anchor row), B7 6/6 (park+we
 union — the full claim; union is the honest answer for a two-anchor path).
 
-### Preregistration comparison (10/16 rows match; deviations disclosed)
+### Corrective-1 (PR #303 adversarial review — experiment-integrity repairs)
+
+The first posted run had five review-verified integrity defects, repaired
+without touching the facet architecture or the frozen preregistration:
+
+- **C1 — exact frozen denominator.** The driver now reads the threshold
+  denominator from the prereg `predictions.precise_b1_b7_rows` and
+  resolves it to EXACTLY seven (specimen, claim) row keys: B1a/B1b/B2/
+  B3/B4/B7→F08 plus **B5/F06** (previously omitted, shrinking the
+  denominator to six). B5/F01, B5/F03, B6*, B8/B9 and S-* stay outside.
+- **C2 — B3 proves the state-anchor bypass.** The T9-shaped fixture had
+  the hpp declaration inserted after `signal_wake_locked`'s declaration,
+  where the nearest-preceding attribution fold misrouted the result to
+  `wake-signal` (DIRECT). B3 is now two-phase: the rogue writer is
+  declared at the audited-safe B7 insertion point and never called; the
+  evaluated diff touches only the rogue body. Corrected result:
+  STRUCTURAL_FORMAL_IMPACT, reached_anchor_ids exactly
+  `["wake-epoch-state"]`, facet wake-publication (5 targets);
+  `wake-signal` NOT reached. B3 now MATCHES the prereg. Both epoch
+  fixtures also now advance `wake_epoch_` with a well-formed assignment
+  (`wake_epoch_ = wake_epoch_ + 1`): the old `fetch_add`/`store` member
+  calls were ill-formed on the plain `std::uint64_t` and only produced
+  their edges via clang error recovery.
+- **C3 — corpus fails closed.** Any specimen error / missing result /
+  missing required prereg row / duplicate row sets
+  `integrity.all_pass = false` and exits non-zero. The frozen threshold
+  is `authoritative` (met ≠ null) only when every frozen row key is
+  present exactly once and no specimen errored — the denominator can no
+  longer shrink silently.
+- **C4 — prereg comparison covers the corpus.** Missing expected
+  rows/specimens, duplicate rows, and unexpected extra claim rows are
+  reported explicitly. Unexpected rows remain evidence (never failures):
+  B6b's real F01/F06 reach is now listed as two unexpected evidence rows
+  instead of misleading field-by-field comparisons.
+- **C5 — trace vocabulary fails closed.** A facet declaring
+  `semantic_labels.trace_events` hard-depends on the
+  `e9_trace_validate` authority: unavailable authority, or missing/empty
+  `KNOWN_EVENTS`, is a registry validation problem. Facets without
+  declared trace_events have no such dependency.
+
+Corrected run (at 58a99422): integrity all_pass, 7/7 frozen keys present
+exactly once, mean 33.33% ≥ 30% (authoritative), 15/18 prereg rows match.
+
+### Preregistration comparison (15/18 rows match; deviations disclosed)
 
 1. **B1a/B1b** — prereg predicted a both-direction anchor union (park+wake
    for both wake- and park-side edits); the implementation routes DIRECT
@@ -151,17 +195,20 @@ union — the full claim; union is the honest answer for a two-anchor path).
    implementation after smoke-testing, before the corpus ran. Direction is
    toward MORE precision, never less; targets for B1a match the prereg
    number anyway (wake facet = 5 suites).
-2. **B3** — class DIRECT vs prereg STRUCTURAL: the T9-shaped edit also
-   inserts the hpp declaration, whose hunk attributes directly to a wake
-   anchor. Facet outcome identical (wake-publication, 5 targets).
-3. **B6b** — prereg predicted F03 only; the real graph carries
+2. **B6b extras (unexpected evidence rows, not deviations)** — prereg
+   predicted F03 only; the real graph carries
    finalize→record_terminal→validate_, so F01 (conservative) and F06
    (PRECISE arena facet via the identity-gate terminal) legitimately
-   surface. The prereg under-predicted real reach; nothing was narrowed
-   that was not anchor-backed.
-4. **B7** — facet targets 6 vs prereg 5: prereg arithmetic error (park ∪
+   surface. Corrective-1 C4 represents these as explicit unexpected
+   evidence rows. The prereg under-predicted real reach; nothing was
+   narrowed that was not anchor-backed.
+3. **B7** — facet targets 6 vs prereg 5: prereg arithmetic error (park ∪
    wake facets = all six suites). The 0% reduction is the honest cost of
    the union rule for a two-anchor path.
+
+(B3 is no longer a deviation: the corrective-1 C2 fixture repair makes
+the live row match the prereg exactly — STRUCTURAL, wake-epoch-state,
+wake-publication, 5 targets.)
 
 Fixture repairs made DURING development, before the final corpus run (both
 are #300-precedented fixture-bug classes, not result tuning): two-phase
@@ -183,9 +230,9 @@ fabricates structural paths).
 | facet→anchor refs | 0 | 10 |
 | facet→suite mappings | 0 | 17 |
 | semantic_labels blocks | 0 | 7 |
-| resolver LOC (formal_impact.py) | 1812 | 2153 (+341, incl. docs/validation) |
-| new test LOC | — | 589 (26 hermetic tests) |
-| new corpus driver LOC | — | 622 |
+| resolver LOC (formal_impact.py) | 1812 | 2165 (+353, incl. docs/validation + corrective-1 C5) |
+| hermetic facet tests | — | 39 (corrective-1: +4 C5 vocabulary, +9 corpus-integrity gates) |
+| corpus driver LOC | — | 866 (corrective-1: fail-closed integrity + coverage comparison + two-phase B3) |
 
 The review-noise reduction costs ~110 registry lines and 7 hand-maintained
 facets, each carrying an explicit authority citation. The union invariant
@@ -196,11 +243,17 @@ makes drift LOUD: adding a suite to a claim without placing it in a facet
 
 - `python3 -m unittest scripts.tests.test_formal_impact
   scripts.tests.test_formal_impact_facets scripts.tests.test_build_truth`
-  → 101 tests OK (26 new).
-- `formal_impact.py index` + `check` at HEAD → all 16 anchors resolve,
-  build world verified.
+  → 114 tests OK (39 in the facet module: 26 original + 13 corrective-1).
+- `formal_impact.py index` + `check` at HEAD dc6b2cbd → all 16 anchors
+  resolve, build world verified.
+- `fdg0_phase_b_eval.py run` (corrective-1 driver, at 58a99422) → exit 0,
+  integrity all_pass, 7/7 frozen PRECISE keys exactly once, mean 33.33%
+  (authoritative, met); B3 = STRUCTURAL / [wake-epoch-state] /
+  wake-publication / 5 targets, wake-signal NOT reached. See
+  docs/results/formal/fdg0-phase-b.json.
 - `ftlr0_eval.py run` (T1–T10) and `fdg0_phase_a_eval.py run` (A-specimens)
-  → see docs/results/formal/*.json (regenerated on this branch).
+  regenerated after corrective-1 → all OK / all_pass, depth matrix
+  unchanged (0:4/4, 1:8, 2:10/10, 3:10/10). See docs/results/formal/*.json.
 - `verify.py check` → PASS. `bash scripts/gates/pre-push.sh` → see PR body.
 
 ## Residuals
@@ -215,9 +268,19 @@ makes drift LOUD: adding a suite to a claim without placing it in a facet
    anchor and split it out; Phase B did not expand authority.
 3. The nearest-preceding attribution heuristic makes header-inserted
    declarations fold into preceding inline members' refs (documented above);
-   future fixture/registry work near scheduler.hpp must account for it.
+   future fixture/registry work near scheduler.hpp must account for it
+   (the corrective-1 B3 misroute was exactly this fold; the audited-safe
+   insertion point is now the shared B3/B7 location).
 4. Semantic disposition remains UNDETERMINED everywhere; facet ordering
    says nothing about whether a model must change (Phase C / later work).
+5. **HEURISTIC precision boundary (corrective-1, documentation only):**
+   Phase-B PRECISE means precise relative to the current recovered SCIP
+   graph. Structural/reference paths may include HEURISTIC
+   nearest-preceding attribution and therefore are NOT compiler-proven
+   impact slices. Before facet narrowing is promoted into enforcement that
+   runs only the narrowed suites, Phase C / later promotion must establish
+   a false-negative boundary using historical gold data or stronger
+   enclosure evidence.
 
 STOP: Phase C (historical gold corpus, AST semantic fingerprint, CodeQL,
 semantic refresh workflow, pre-push/CI enforcement) is NOT started and is
