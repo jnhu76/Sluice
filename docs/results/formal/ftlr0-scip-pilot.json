@@ -43,8 +43,8 @@
     "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO; T6 requires F08 present at ANY class \u2014 the claim is fail-closed demoted, see corrective-1 C2)."
   },
   "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299, corrective-1)",
-  "generated_at": "2026-09-06T09:42:23Z",
-  "head_sha": "b595c9be4af00a04aa5fdb54d50d905bfee8ac82",
+  "generated_at": "2026-09-06T10:20:21Z",
+  "head_sha": "cb2252f166e8f44375e1c4b698275f1db635e31b",
   "historical_sanity_probe": {
     "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
     "result": {
@@ -1750,11 +1750,11 @@
   "toolchain": {
     "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
     "edge_provenance": "HEURISTIC",
-    "graph_symbols": 2352,
+    "graph_symbols": 2351,
     "index_config": "compdb from the current xmake config, selected world only (41 selected-world TUs; FDG-0 Phase A Build Truth); config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y",
     "query_time_seconds": "<1 (graph.json in memory)",
-    "reference_edges": 9610,
+    "reference_edges": 9611,
     "scip_clang": "0.4.0"
   },
-  "wall_seconds": 364.8
+  "wall_seconds": 373.8
 }
