@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "description": "FTLR-0 / SCIP-PILOT formal anchor registry (issue #299). This file is the SOLE cross-domain authority binding C++ semantic authorities to formal claims. C++-internal relationships are never recorded here; they are recovered mechanically from the SCIP index (scip-clang over the Xmake compile_commands.json). Suite ids must match spec/tla/manifest.json. Claim ids follow the S1A property matrix (docs/investigations/s1a-formal-coverage.md); F02/F05/F07/F09/F10 are intentionally not seeded in this pilot (bounded corpus). This registry is experiment-scoped: it is a precursor schema for the #298 FDG-0 correspondence registry, not a replacement for any existing authority.",
+  "schema_version": 2,
+  "description": "FTLR-0 / SCIP-PILOT formal anchor registry (issue #299), extended by FDG-0 Phase B formal facets (issue #298). This file is the SOLE cross-domain authority binding C++ semantic authorities to formal claims. C++-internal relationships are never recorded here; they are recovered mechanically from the SCIP index (scip-clang over the selected Xmake build world). Suite ids must match spec/tla/manifest.json. Claim ids follow the S1A property matrix (docs/investigations/s1a-formal-coverage.md); F02/F05/F07/F09/F10 are intentionally not seeded in this pilot (bounded corpus). Schema 2 adds OPTIONAL per-anchor ids and OPTIONAL per-claim facets: facets are internal subdivisions of an existing claim (never new claims); every facet suite must belong to the parent claim and the facet-suite union must equal the parent set (overlap allowed, loss/expansion forbidden); facet routing is anchor/path-derived and a facet NEVER creates a narrower answer where trust is missing (facet precision optional, claim-level conservatism required). Facet mapping provenance is EXPLICIT (hand-maintained cross-domain authority). This registry is experiment-scoped: it is a precursor schema for the #298 FDG-0 correspondence registry, not a replacement for any existing authority.",
   "claim_class_vocabulary": [
     "MODEL_PROPERTY",
     "ACTION_TRANSITION_CORRESPONDENCE",
@@ -98,12 +98,14 @@
       "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B04, ALIGNED)",
       "cpp_anchors": [
         {
+          "id": "reap-publication",
           "file": "include/sluice/async/detail/request_arena.hpp",
           "symbol": "RequestArena::reap",
           "role": "publication",
           "note": "the only path that may drive a caller-owned Completion to ready (through the installed CompletionBinding thunk)"
         },
         {
+          "id": "ready-release-lp",
           "file": "include/sluice/async/completion.hpp",
           "symbol": "Completion::publish_from_reap",
           "role": "publication",
@@ -111,6 +113,31 @@
         }
       ],
       "formal_suites": ["request-arena", "f1-wait-record"],
+      "facets": [
+        {
+          "id": "arena-reap-publication",
+          "anchor_refs": ["reap-publication"],
+          "formal_suites": ["request-arena", "f1-wait-record"],
+          "note": "reap owns the arena lifecycle face (NEG-RA-3 reap-only publication, accounting/borrow-end) and f1-wait-record Race B models the arena-leaf cancel/reap single-authority race, so the f1 overlap is kept deliberately conservative. Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "docs/investigations/s1a-formal-coverage.md B04 + request-arena NEG-RA-3",
+            "trace_events": [],
+            "model_actions": []
+          }
+        },
+        {
+          "id": "completion-ready-release",
+          "anchor_refs": ["ready-release-lp"],
+          "formal_suites": ["f1-wait-record"],
+          "evidence": ["docs/results/weak-memory/completion-publication.json"],
+          "note": "publish_from_reap is the single release-store LP: the waiter-domain protocol face is f1-wait-record E7-T2 single publication; the memory-order face is the GenMC K1/K2 kernel (evidence reference only, no memory claim is made here). request-arena is an SC model and does not own the LP memory order. Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "docs/investigations/s1a-formal-coverage.md B04 + f1-wait-record E7-T2",
+            "trace_events": [],
+            "model_actions": []
+          }
+        }
+      ],
       "evidence": [
         {
           "kind": "genmc_kernel",
@@ -130,24 +157,28 @@
       "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B06, ALIGNED)",
       "cpp_anchors": [
         {
+          "id": "cancel-disposition",
           "file": "include/sluice/async/detail/request_arena.hpp",
           "symbol": "RequestArena::cancel",
           "role": "authority",
           "note": "single disposition authority: pending/enqueued cancel may win the terminal (Scheme B); running cancel records intent only"
         },
         {
+          "id": "identity-gate",
           "file": "include/sluice/async/detail/request_arena.hpp",
           "symbol": "RequestArena::validate_",
           "role": "gate",
           "note": "stale generation => not_found; SHARED anchor with F01 (deliberate T5 shared-authority specimen)"
         },
         {
+          "id": "request-epoch",
           "file": "src/async/cancel.cpp",
           "symbol": "CancelToken::request",
           "role": "authority",
           "note": "task-layer request-epoch advance (single CAS with rearm); defined out-of-line in cancel.cpp"
         },
         {
+          "id": "delivery-gate",
           "file": "src/async/cancel.cpp",
           "symbol": "check_cancel",
           "role": "gate",
@@ -155,6 +186,30 @@
         }
       ],
       "formal_suites": ["request-arena", "cancel-token-epoch", "e12-rwlock"],
+      "facets": [
+        {
+          "id": "arena-cancel-arbitration",
+          "anchor_refs": ["cancel-disposition", "identity-gate"],
+          "formal_suites": ["request-arena", "e12-rwlock"],
+          "note": "arena disposition authority + stale-generation gate own the request-arena Scheme-B/intent-law face; e12-rwlock is the primitive-domain cancel reconcile face of the SAME layered-cancellation claim (no dedicated anchor exists for it), so the overlap is kept deliberately conservative. Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "docs/investigations/s1a-formal-coverage.md B06",
+            "trace_events": [],
+            "model_actions": []
+          }
+        },
+        {
+          "id": "request-epoch-delivery",
+          "anchor_refs": ["request-epoch", "delivery-gate"],
+          "formal_suites": ["cancel-token-epoch", "e12-rwlock"],
+          "note": "task-layer request epoch + single-shot delivery own the cancel-token-epoch face (ADR-cancel-request-epoch); same e12-rwlock conservative overlap rationale. Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "docs/investigations/s1a-formal-coverage.md B06",
+            "trace_events": [],
+            "model_actions": []
+          }
+        }
+      ],
       "evidence": [
         {
           "kind": "bridge_test",
@@ -175,24 +230,28 @@
       "source_evidence": "docs/investigations/s1a-formal-coverage.md (S1A B08, ALIGNED)",
       "cpp_anchors": [
         {
+          "id": "wake-signal",
           "file": "src/async/scheduler_park_wake.cpp",
           "symbol": "Scheduler::signal_wake_locked",
           "role": "authority",
           "note": "unified wake source: every progress-enabling publication routes here; advances wake_epoch_ and notifies the wake domain"
         },
         {
+          "id": "park-boundary",
           "file": "src/async/scheduler_park_wake.cpp",
           "symbol": "Scheduler::park_on_wake_source",
           "role": "authority",
           "note": "park commit: epoch predicate, split-wait bridge, MW-S2/S3 classification"
         },
         {
+          "id": "startup-settlement",
           "file": "src/async/scheduler.cpp",
           "symbol": "Scheduler::run_impl",
           "role": "authority",
           "note": "R-F1 per-thread startup publication (active.store(true)) and the Settled-gated run_impl join boundary"
         },
         {
+          "id": "wake-epoch-state",
           "file": "include/sluice/async/scheduler.hpp",
           "symbol": "Scheduler::wake_epoch_",
           "role": "state",
@@ -206,6 +265,57 @@
         "e8-suspend-switch",
         "e12-async-condition",
         "e12-rwlock-scheduler-liveness"
+      ],
+      "facets": [
+        {
+          "id": "wake-publication",
+          "anchor_refs": ["wake-signal", "wake-epoch-state"],
+          "formal_suites": [
+            "e9-park-wake",
+            "e9-trace-conformance",
+            "spawn-wake-epoch",
+            "e12-async-condition",
+            "e12-rwlock-scheduler-liveness"
+          ],
+          "note": "the unified wake source + the wake-epoch state own every wake-publication obligation: e9-park-wake models the epoch/wake protocol, spawn-wake-epoch IS the runnable-publication obligation (#115), e12-async-condition and e12-rwlock-scheduler-liveness model downstream wake-closure faces (condition lost-notify closure; idle-dance genuine invalidation sites are wake publications). Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+            "trace_events": ["WakePublished"],
+            "model_actions": [
+              "ExternalReadyPublish",
+              "PublishRunnable",
+              "ShutdownSignal",
+              "RetireWorkerQuiescent"
+            ]
+          }
+        },
+        {
+          "id": "park-commit-return",
+          "anchor_refs": ["park-boundary"],
+          "formal_suites": ["e9-park-wake", "e9-trace-conformance", "e8-suspend-switch"],
+          "note": "park commit/enter/return/refusal owns the park transient face; e8-suspend-switch models the register+make_waiting+physical-switch transient (the park-domain steal-refusal window). Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+            "trace_events": ["ParkCommitted", "ParkEntered", "ParkReturned", "ParkRefused"],
+            "model_actions": [
+              "FinalParkRecheckAndCommit",
+              "EnterPhysicalPark",
+              "LeavePark",
+              "AbandonParkCandidate"
+            ]
+          }
+        },
+        {
+          "id": "startup-population",
+          "anchor_refs": ["startup-settlement"],
+          "formal_suites": ["e9-park-wake", "e9-trace-conformance"],
+          "note": "run_impl owns the R-F1 startup-population face (per-thread active publication + Settled-gated join boundary): exactly the two suites that model/require worker-population establishment are reopened (workerStarted/StartWorker/Settled/Eligible; the replay pinned StartWorker prefix). Provenance: EXPLICIT.",
+          "semantic_labels": {
+            "source": "e9-park-wake manifest notes (R-F1, #223) + docs/verification/formal/e9-trace-conformance.md boundary 5",
+            "trace_events": [],
+            "model_actions": ["StartWorker"]
+          }
+        }
       ],
       "evidence": [
         {

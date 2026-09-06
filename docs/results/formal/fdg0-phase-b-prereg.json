@@ -1,0 +1,395 @@
+{
+  "experiment": "FDG-0 Phase B - Formal Facets preregistration (issue #298)",
+  "frozen_at_head": "a708884de15f87585b883dd96f21a9940290e67d",
+  "frozen_at": "2026-09-06",
+  "status": "PREREGISTERED - frozen BEFORE facet implementation and BEFORE any routing result was generated. Expected values below are predictions derived from the Stage-0 reality audit (S1A frozen matrix, manifest notes, e9 trace-conformance authority table, and direct SCIP graph edge inspection at the frozen head). They are NOT to be rewritten after observing results.",
+  "permanent_rule": "facet precision is OPTIONAL; claim-level conservatism is REQUIRED; a facet must never create a new false negative",
+
+  "measurement_method": {
+    "baseline": "claim-level semantics: affected claim -> all claim.formal_suites",
+    "method_f": "trusted reached anchor(s) -> facet(s) -> union of facet formal_suites",
+    "per_row": "one row per (specimen, claim); reduction = (len(claim.formal_suites) - len(facet_targets)) / len(claim.formal_suites)",
+    "precise_denominator": "rows where facet_scope == PRECISE among the preregistered B1-B7 specimens (the task-book threshold denominator); supplementary S-rows are reported raw but OUTSIDE the frozen threshold denominator",
+    "conservative_rows": "B8-B10 and every CONSERVATIVE_ALL row are reported separately and never counted as narrowed",
+    "threshold": {
+      "metric": "mean reduction over PRECISE B1-B7 rows",
+      "value": 0.30,
+      "source": "issue #298 section 8 / phase-B task book section 22 (frozen before final execution)"
+    },
+    "verdict_conditions": {
+      "FACETS_EARNED_requires": [
+        "no new claim-level false negative / silent NO (T1-T10 recall non-decreasing, reference depth2 = 10/10)",
+        "all COARSE / UNKNOWN / stale / unresolved cases remain conservative (facet_scope != PRECISE)",
+        "F08 admits evidence-backed useful separation",
+        "at least one independent second claim admits useful separation",
+        "mean PRECISE B1-B7 fan-out reduction >= 0.30",
+        "no parallel hand-maintained cross-domain authority beyond anchors.json itself"
+      ]
+    }
+  },
+
+  "reality_audit_matrix": {
+    "F01": {
+      "title": "request identity / generation / stale reuse",
+      "anchors": [
+        "RequestArena::validate_ (gate; SHARED with F06)",
+        "RequestArena::free_slot_locked_ (state)"
+      ],
+      "formal_suites": ["request-arena"],
+      "evidence": [
+        "docs/investigations/s1a-formal-coverage.md B01 (ALIGNED)",
+        "tests/request_lifecycle_scheme_b_test.cpp generation_reuse_stale_attempts",
+        "docs/verification/formal/cpp-model-coverage.md"
+      ],
+      "facet_decision": "NOT_FACETED",
+      "rationale": "single formal suite: facet machinery has nothing to partition (fan-out already 1); any split would be cosmetic",
+      "role_in_corpus": "B11 non-faceted compatibility claim"
+    },
+    "F03": {
+      "title": "terminal winner / exactly-once",
+      "anchors": [
+        "RequestArena::record_terminal (authority)",
+        "ThreadPoolBackend::run_syscall (authority)",
+        "UringAsyncBackend::finalize_operation_terminal_ (authority, config_gate SLUICE_HAS_LIBURING)"
+      ],
+      "formal_suites": ["request-arena", "e10-waitnode", "e13-select-core", "e13-select-safety"],
+      "evidence": [
+        "docs/investigations/s1a-formal-coverage.md B03 (ALIGNED)",
+        "request-arena manifest notes (backend files bind Layer-B EXTERNAL obligations WF(Enqueue)/WF(Reap))",
+        "tests/threadpool_backend_scheme_b_race_test.cpp"
+      ],
+      "facet_decision": "NOT_FACETED",
+      "rationale": "audit finding: all three anchors own the request-arena terminal face (arbitration AND both producers are modeled by request-arena as the kernel + Layer-B obligations), so an arbitration/producer split maps every anchor to the same suite (zero reduction, cosmetic). The e10-waitnode / e13-* faces are consumer-domain models (WaitNode resolution, select winner linearization) with NO registered C++ anchor; a consumer facet would have zero anchors (invalid per invariant) and registering a new consumer anchor would expand hand-maintained authority without an evidence-backed anchor-to-suite mapping. Recorded as an honest negative of the audit.",
+      "role_in_corpus": "B6 producer variants (conservative); B11 second non-faceted compatibility claim"
+    },
+    "F04": {
+      "title": "Completion publication",
+      "anchors": [
+        "RequestArena::reap (publication)",
+        "Completion::publish_from_reap (publication, template family)"
+      ],
+      "formal_suites": ["request-arena", "f1-wait-record"],
+      "evidence": [
+        "docs/investigations/s1a-formal-coverage.md B04 (ALIGNED)",
+        "request-arena NEG-RA-3 (reap-only publication)",
+        "f1-wait-record E7-T2 single publication + Race B (arena-leaf cancel/reap race)",
+        "GenMC kernel docs/results/weak-memory/completion-publication.json (K1/K2, #197)"
+      ],
+      "facet_decision": "FACETED",
+      "facets": [
+        {
+          "id": "arena-reap-publication",
+          "anchor_refs": ["reap-publication"],
+          "formal_suites": ["request-arena", "f1-wait-record"],
+          "rationale": "reap owns the arena lifecycle face (NEG-RA-3 reap-only, accounting/borrow-end) AND f1-wait-record's Race B models the arena-leaf cancel/reap single-authority race, so the f1 overlap is kept deliberately conservative"
+        },
+        {
+          "id": "completion-ready-release",
+          "anchor_refs": ["ready-release-lp"],
+          "formal_suites": ["f1-wait-record"],
+          "rationale": "publish_from_reap is the single release-store LP; the protocol face in the waiter domain is f1 E7-T2; the memory-order face is GenMC K1/K2 (evidence metadata). request-arena's model is SC and does not own the LP memory order",
+          "evidence_metadata": ["docs/results/weak-memory/completion-publication.json"]
+        }
+      ],
+      "union_check": "request-arena + f1-wait-record == parent",
+      "role_in_corpus": "INDEPENDENT SECOND CLAIM (S-04a/S-04b supplementary rows)"
+    },
+    "F06": {
+      "title": "cancel vs ordinary completion",
+      "anchors": [
+        "RequestArena::cancel (authority)",
+        "RequestArena::validate_ (gate; SHARED with F01)",
+        "CancelToken::request (authority)",
+        "check_cancel (gate, free function)"
+      ],
+      "formal_suites": ["request-arena", "cancel-token-epoch", "e12-rwlock"],
+      "evidence": [
+        "docs/investigations/s1a-formal-coverage.md B06 (ALIGNED)",
+        "request-arena Scheme-B + intent law + RecordTerminalKernelCanceled",
+        "cancel-token-epoch (single-shot per epoch per consumer, two explicit re-arm authorities)",
+        "e12-rwlock (cancel reconcile + WriterRevoke control)"
+      ],
+      "facet_decision": "FACETED",
+      "facets": [
+        {
+          "id": "arena-cancel-arbitration",
+          "anchor_refs": ["cancel-disposition", "identity-gate"],
+          "formal_suites": ["request-arena", "e12-rwlock"],
+          "rationale": "arena disposition authority + stale-generation gate own the request-arena Scheme-B face; e12-rwlock is the primitive-domain cancel reconcile face of the SAME layered-cancellation claim and has no dedicated anchor, so the overlap is kept deliberately conservative"
+        },
+        {
+          "id": "request-epoch-delivery",
+          "anchor_refs": ["request-epoch", "delivery-gate"],
+          "formal_suites": ["cancel-token-epoch", "e12-rwlock"],
+          "rationale": "task-layer request epoch + single-shot delivery own the cancel-token-epoch face; same e12-rwlock conservative overlap rationale"
+        }
+      ],
+      "union_check": "request-arena + cancel-token-epoch + e12-rwlock == parent",
+      "role_in_corpus": "THIRD faceted claim (B5 shared-anchor row + S-06 supplementary rows)"
+    },
+    "F08": {
+      "title": "wait / wake / lost-wakeup closure",
+      "anchors": [
+        "Scheduler::signal_wake_locked (authority; unified wake source)",
+        "Scheduler::park_on_wake_source (authority; park commit)",
+        "Scheduler::run_impl (authority; R-F1 startup publication + Settled join boundary)",
+        "Scheduler::wake_epoch_ (state; catches bypass writers)"
+      ],
+      "formal_suites": [
+        "e9-park-wake",
+        "e9-trace-conformance",
+        "spawn-wake-epoch",
+        "e8-suspend-switch",
+        "e12-async-condition",
+        "e12-rwlock-scheduler-liveness"
+      ],
+      "evidence": [
+        "docs/verification/formal/e9-trace-conformance.md authority table (event -> model action)",
+        "e9-park-wake manifest notes (R-F1: workerStarted/StartWorker/Settled/Eligible modeled startup population; W-START witnesses)",
+        "spawn-wake-epoch manifest notes (#115 runnable publication must advance the wake epoch)",
+        "e12-async-condition manifest notes (lost-notification closure)",
+        "e12-rwlock-scheduler-liveness manifest notes (genuine invalidation sites are wake publications)",
+        "SCIP graph edges at frozen head: park_on_wake_source -> signal_wake_locked; park_on_wake_source -> wake_epoch_; signal_wake_locked -> wake_epoch_; run_impl -> (neither)"
+      ],
+      "facet_decision": "FACETED (primary pilot)",
+      "facets": [
+        {
+          "id": "wake-publication",
+          "anchor_refs": ["wake-signal", "wake-epoch-state"],
+          "formal_suites": [
+            "e9-park-wake",
+            "e9-trace-conformance",
+            "spawn-wake-epoch",
+            "e12-async-condition",
+            "e12-rwlock-scheduler-liveness"
+          ],
+          "semantic_labels": {
+            "trace_events": ["WakePublished"],
+            "model_actions": [
+              "ExternalReadyPublish",
+              "PublishRunnable",
+              "ShutdownSignal",
+              "RetireWorkerQuiescent"
+            ],
+            "source": "docs/verification/formal/e9-trace-conformance.md authority table"
+          },
+          "rationale": "the unified wake source + the epoch state own every wake-publication obligation: e9-park-wake models the epoch/wake protocol, spawn-wake-epoch IS the publication obligation (#115), e12-async-condition and e12-rwlock-scheduler-liveness model downstream wake-closure faces (condition lost-notify; idle-dance invalidation sites are wake publications)"
+        },
+        {
+          "id": "park-commit-return",
+          "anchor_refs": ["park-boundary"],
+          "formal_suites": ["e9-park-wake", "e9-trace-conformance", "e8-suspend-switch"],
+          "semantic_labels": {
+            "trace_events": ["ParkCommitted", "ParkEntered", "ParkReturned", "ParkRefused"],
+            "model_actions": [
+              "FinalParkRecheckAndCommit",
+              "EnterPhysicalPark",
+              "LeavePark",
+              "AbandonParkCandidate"
+            ],
+            "source": "docs/verification/formal/e9-trace-conformance.md authority table"
+          },
+          "rationale": "park commit/enter/return/refusal owns the park transient face; e8-suspend-switch models the register+make_waiting+physical-switch transient (the park-domain steal-refusal window)"
+        },
+        {
+          "id": "startup-population",
+          "anchor_refs": ["startup-settlement"],
+          "formal_suites": ["e9-park-wake", "e9-trace-conformance"],
+          "semantic_labels": {
+            "trace_events": [],
+            "model_actions": ["StartWorker"],
+            "invariants_note": "Eligible/Settled/workerStarted refined predicates; W-START witnesses (R-F1, #223)",
+            "source": "e9-park-wake manifest notes (R-F1) + e9-trace-conformance owner doc boundary 5 (StartWorker pinned prefix)"
+          },
+          "rationale": "run_impl owns the R-F1 startup population face (per-thread active publication + Settled-gated join); exactly the two suites that model/require the population establishment are reopened"
+        }
+      ],
+      "union_check": "5 + 3 + 2 suites with overlap on e9-park-wake/e9-trace-conformance == parent 6",
+      "role_in_corpus": "PRIMARY PILOT (B1-B4, B7, B8)"
+    }
+  },
+
+  "b_corpus_expectations": [
+    {
+      "id": "B1a",
+      "shape": "body insert inside Scheduler::signal_wake_locked",
+      "expected": {"claims": ["F08"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+        "reached_anchor_ids": ["wake-signal", "wake-epoch-state", "park-boundary"],
+        "reach_rationale": "direct hit + forward edge signal->wake_epoch_ + reverse edge park->signal (9 referrers include park)",
+        "affected_facets": ["park-commit-return", "wake-publication"],
+        "baseline_targets": 6, "facet_targets": 5, "predicted_reduction": 0.167}
+    },
+    {
+      "id": "B1b",
+      "shape": "body insert inside Scheduler::park_on_wake_source",
+      "expected": {"claims": ["F08"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+        "reached_anchor_ids": ["park-boundary", "wake-signal", "wake-epoch-state"],
+        "reach_rationale": "direct hit + forward edges park->signal and park->wake_epoch_ (verified in graph)",
+        "affected_facets": ["park-commit-return", "wake-publication"],
+        "baseline_targets": 6, "facet_targets": 5, "predicted_reduction": 0.167}
+    },
+    {
+      "id": "B2",
+      "shape": "two-phase helper: phase A injects an INERT helper called by park_on_wake_source (indexed); phase B edits the helper body only. The helper must NOT touch wake_epoch_ (so the wake facet is not pulled in)",
+      "expected": {"claims": ["F08"], "class": "STRUCTURAL_FORMAL_IMPACT", "facet_scope": "PRECISE",
+        "reached_anchor_ids": ["park-boundary"],
+        "reach_rationale": "reverse edge park->helper only (helper inert, no forward anchor refs)",
+        "affected_facets": ["park-commit-return"],
+        "baseline_targets": 6, "facet_targets": 3, "predicted_reduction": 0.5,
+        "must_not": "reopen the full F08 facet set merely because the parent claim is F08"}
+    },
+    {
+      "id": "B3",
+      "shape": "rogue member writes Scheduler::wake_epoch_ directly, bypassing signal_wake_locked (T9 shape: new declaration + definition, never called)",
+      "expected": {"claims": ["F08"], "class": "STRUCTURAL_FORMAL_IMPACT", "facet_scope": "PRECISE",
+        "reached_anchor_ids": ["wake-epoch-state"],
+        "reach_rationale": "forward edge rogue->wake_epoch_ (state anchor catches bypass writers; T9 design finding)",
+        "affected_facets": ["wake-publication"],
+        "baseline_targets": 6, "facet_targets": 5, "predicted_reduction": 0.167}
+    },
+    {
+      "id": "B4",
+      "shape": "body insert inside Scheduler::run_impl, no other F08 anchor reached",
+      "expected": {"claims": ["F08"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+        "reached_anchor_ids": ["startup-settlement"],
+        "reach_rationale": "direct hit; run_impl references NEITHER signal_wake_locked NOR wake_epoch_ (verified in graph at frozen head)",
+        "affected_facets": ["startup-population"],
+        "baseline_targets": 6, "facet_targets": 2, "predicted_reduction": 0.667,
+        "must_not": "automatically reopen park-only targets"}
+    },
+    {
+      "id": "B5",
+      "shape": "body insert inside RequestArena::validate_ (shared F01/F06 anchor)",
+      "expected": {
+        "rows": [
+          {"claims": ["F01"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "CONSERVATIVE_ALL", "targets": 1, "note": "non-faceted claim"},
+          {"claims": ["F03"], "class": "STRUCTURAL_FORMAL_IMPACT", "facet_scope": "CONSERVATIVE_ALL", "targets": 4, "note": "record_terminal validates through validate_ (T5 conservative extra; non-faceted claim)"},
+          {"claims": ["F06"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+            "reached_anchor_ids": ["identity-gate", "cancel-disposition"],
+            "reach_rationale": "direct hit + reverse edge cancel->validate_ (verified in graph)",
+            "affected_facets": ["arena-cancel-arbitration"],
+            "baseline_targets": 3, "facet_targets": 2, "predicted_reduction": 0.333}
+        ],
+        "must": "surface BOTH F01 and F06 with their corresponding facets; facet machinery must not force global single ownership"
+      }
+    },
+    {
+      "id": "B6a",
+      "shape": "body insert inside ThreadPoolBackend::run_syscall (default selected world; current config is liburing=y so both producer variants resolve in one index)",
+      "expected": {"claims": ["F03"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "CONSERVATIVE_ALL",
+        "targets": 4, "note": "F03 audited NOT_FACETED; conservative claim-level routing unchanged"}
+    },
+    {
+      "id": "B6b",
+      "shape": "body insert inside UringAsyncBackend::finalize_operation_terminal_ (config-gated anchor, resolves in the current liburing=y world)",
+      "expected": {"claims": ["F03"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "CONSERVATIVE_ALL",
+        "targets": 4, "note": "config-gated behavior exercised under the REAL Build Truth variant, no synthetic graph"}
+    },
+    {
+      "id": "B7",
+      "shape": "two-phase helper called by park_on_wake_source whose body DOES advance wake_epoch_ (phase A indexes it; phase B edits the helper body)",
+      "expected": {"claims": ["F08"], "class": "STRUCTURAL_FORMAL_IMPACT", "facet_scope": "PRECISE",
+        "reached_anchor_ids": ["park-boundary", "wake-epoch-state"],
+        "reach_rationale": "reverse edge park->helper + forward edge helper->wake_epoch_",
+        "affected_facets": ["park-commit-return", "wake-publication"],
+        "baseline_targets": 6, "facet_targets": 5, "predicted_reduction": 0.167,
+        "must": "facet UNION, not arbitrary first-match"}
+    },
+    {
+      "id": "B8",
+      "shape": "hunk before any definition in src/async/scheduler_condition.cpp (file bound only through e12-async-condition implementation_bindings; scheduler_condition.cpp references no F08 anchor)",
+      "expected": {"claims": ["F08"], "class": "COARSE_FORMAL_IMPACT", "facet_scope": "CONSERVATIVE_ALL",
+        "targets": 6,
+        "must": "COARSE fallback must NOT fabricate facet precision; any narrowing is FAIL"}
+    },
+    {
+      "id": "B9",
+      "shape": "stale Build Truth: build-manifest.json build_id drifts from the graph's recorded build identity (Phase-A machinery)",
+      "expected": {"class": "UNKNOWN_FORMAL_IMPACT", "fail_closed": true, "facet_scope": "CONSERVATIVE_ALL",
+        "must": "facet precision not authoritative; candidate facets may be retained only as diagnostics; non-zero exit"}
+    },
+    {
+      "id": "B10",
+      "shape": "hermetic (unit tests): duplicate/unknown anchor_ref structural negatives; runtime UNRESOLVED anchor demotion; traversal-frontier UNKNOWN",
+      "expected": {"must": "existing fail-closed semantics preserved; facet_scope not PRECISE in any of them"}
+    },
+    {
+      "id": "B11",
+      "shape": "body insert inside RequestArena::free_slot_locked_ (F01 anchor; F01 stays non-faceted)",
+      "expected": {"claims": ["F01"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "CONSERVATIVE_ALL",
+        "targets": 1, "must": "non-faceted claim compatibility: current claim-level routing unchanged"}
+    },
+    {
+      "id": "B12",
+      "shape": "hermetic registry structural negatives: duplicate facet id; duplicate anchor id; unknown anchor_ref; facet suite not in parent claim; parent formal suite omitted from every facet; faceted anchor referenced by no facet; facet with zero anchors; facet with zero formal targets; facet evidence path missing; schema-1 registry declaring facets",
+      "expected": {"must": "ALL fail structural validation"}
+    }
+  ],
+
+  "supplementary_precise_rows": [
+    {"id": "S-04a", "shape": "body insert inside RequestArena::reap",
+     "expected": {"claims": ["F04"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+       "affected_facets": ["arena-reap-publication"], "baseline_targets": 2, "facet_targets": 2,
+       "predicted_reduction": 0.0,
+       "note": "f1-wait-record kept in the arena facet (Race B overlap, conservative); the 0 percent is the honest cost of the overlap"}},
+    {"id": "S-04b", "shape": "body insert inside Completion::publish_from_reap",
+     "expected": {"claims": ["F04"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+       "affected_facets": ["completion-ready-release"], "baseline_targets": 2, "facet_targets": 1,
+       "predicted_reduction": 0.5,
+       "note": "publish_from_reap has no reverse edges to the arena at the frozen head (verified); prediction subject to the real traversal"}},
+    {"id": "S-06a", "shape": "body insert inside CancelToken::request",
+     "expected": {"claims": ["F06"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+       "affected_facets": ["request-epoch-delivery"], "baseline_targets": 3, "facet_targets": 2,
+       "predicted_reduction": 0.333}},
+    {"id": "S-06b", "shape": "body insert inside check_cancel",
+     "expected": {"claims": ["F06"], "class": "DIRECT_FORMAL_IMPACT", "facet_scope": "PRECISE",
+       "affected_facets": ["request-epoch-delivery"], "baseline_targets": 3, "facet_targets": 2,
+       "predicted_reduction": 0.333}}
+  ],
+
+  "predictions": {
+    "precise_b1_b7_rows": ["B1a", "B1b", "B2", "B3", "B4", "B5/F06", "B7"],
+    "predicted_mean_reduction_b1_b7": 0.311,
+    "predicted_mean_reduction_all_precise_rows_incl_supplementary": 0.285,
+    "honest_note": "the frozen task-book threshold denominator is B1-B7 (issue #298 section 22); the supplementary F04/F06 rows are reported raw and include a 0-percent row (S-04a overlap). All raw numbers are reported regardless of which side of the threshold they fall on.",
+    "t1_t10_recall_reference": {"depth0": 4, "depth1": 8, "depth2": 10, "depth3": 10}
+  },
+
+  "registry_schema_plan": {
+    "schema_version": 2,
+    "compatibility": "schema 1 registries remain loadable; a schema-1 registry declaring facets is invalid; claims without facets are valid in schema 2 and keep exact current behavior",
+    "anchor_identity": "optional per-anchor id, unique WITHIN the claim, added only to faceted claims (F04/F06/F08); no separate anchor database; anchors.json stays the sole hand-maintained authority",
+    "facet_identity": "per-claim facets: {id, anchor_refs, formal_suites, semantic_labels?, evidence?, note?}; facet ids unique within the claim",
+    "validation_invariants": [
+      "anchor ids unique within claim",
+      "facet ids unique within claim",
+      "every facet anchor_ref exists in the claim",
+      "every faceted anchor belongs to >= 1 facet",
+      "every facet formal_suite belongs to the parent claim formal_suites",
+      "union(facet formal_suites) == parent formal_suites (overlap allowed, loss/expansion forbidden)",
+      "facet with zero anchors invalid; facet with zero formal targets invalid",
+      "facet evidence paths exist",
+      "declared trace_events must be in the existing authority vocabulary (e9_trace_validate KNOWN_EVENTS) where such an authority is declared as source"
+    ],
+    "provenance": "facet mapping is EXPLICIT (hand-maintained cross-domain authority); routing chain stays BUILD -> COMPILER -> HEURISTIC -> EXPLICIT; no confidence percentages"
+  },
+
+  "routing_semantics_plan": {
+    "PRECISE_conditions": "build world verified; graph fresh; no unresolved/global fail-closed risk; claim impacted via DIRECT/STRUCTURAL anchor reach (never coarse-only); facet mapping for reached anchors known",
+    "CONSERVATIVE_ALL_conditions": "COARSE file fallback; UNKNOWN; stale graph; stale build world; unresolved anchor; frontier overflow; unattributed C++ change; facet mapping ambiguity; claim without facets",
+    "NONE": "claim not impacted at all (no entry)",
+    "candidates": "stale/unknown results may retain candidate_facets as diagnostics; authoritative scope stays CONSERVATIVE_ALL and targets stay the parent set",
+    "result_fields": ["facet_scope", "reached_anchor_ids", "affected_facets", "revalidation_targets", "candidate_facets?"]
+  },
+
+  "non_goals_frozen": [
+    "no new top-level claims (F08a/F08b etc. forbidden)",
+    "no TLA+/GenMC semantic changes",
+    "no AST/LibTooling/Tree-sitter/CodeQL",
+    "no graph database/embeddings/LLM authority",
+    "no semantic disposition (always UNDETERMINED)",
+    "no pre-push/CI enforcement",
+    "no production C++ semantic changes (temporary byte-restored specimens only)",
+    "no Phase C work"
+  ]
+}

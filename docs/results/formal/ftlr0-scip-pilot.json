@@ -43,8 +43,8 @@
     "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO; T6 requires F08 present at ANY class \u2014 the claim is fail-closed demoted, see corrective-1 C2)."
   },
   "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299, corrective-1)",
-  "generated_at": "2026-09-06T06:02:07Z",
-  "head_sha": "6a27403afe3edfe0e48f030f086be4062c893d93",
+  "generated_at": "2026-09-06T10:20:21Z",
+  "head_sha": "cb2252f166e8f44375e1c4b698275f1db635e31b",
   "historical_sanity_probe": {
     "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
     "result": {
@@ -247,6 +247,30 @@
       "result": {
         "claims": [
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance",
+                  "spawn-wake-epoch",
+                  "e12-async-condition",
+                  "e12-rwlock-scheduler-liveness"
+                ],
+                "id": "wake-publication",
+                "semantic_labels": {
+                  "model_actions": [
+                    "ExternalReadyPublish",
+                    "PublishRunnable",
+                    "ShutdownSignal",
+                    "RetireWorkerQuiescent"
+                  ],
+                  "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+                  "trace_events": [
+                    "WakePublished"
+                  ]
+                }
+              }
+            ],
             "class": "DIRECT_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -254,6 +278,7 @@
               "tests/issue161_idle_dance_orphan_test.cpp",
               "tests/issue223_startup_skew_election_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "e9-park-wake",
               "e9-trace-conformance",
@@ -280,6 +305,16 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "wake-signal"
+            ],
+            "revalidation_targets": [
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness",
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch"
+            ],
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "cxx . . $ sluice/async/Scheduler#signal_wake_locked(49f6e7a06ebc5aa8). (changed symbol is a registered anchor)"
@@ -343,6 +378,30 @@
       "result": {
         "claims": [
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance",
+                  "spawn-wake-epoch",
+                  "e12-async-condition",
+                  "e12-rwlock-scheduler-liveness"
+                ],
+                "id": "wake-publication",
+                "semantic_labels": {
+                  "model_actions": [
+                    "ExternalReadyPublish",
+                    "PublishRunnable",
+                    "ShutdownSignal",
+                    "RetireWorkerQuiescent"
+                  ],
+                  "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+                  "trace_events": [
+                    "WakePublished"
+                  ]
+                }
+              }
+            ],
             "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -350,6 +409,7 @@
               "tests/issue161_idle_dance_orphan_test.cpp",
               "tests/issue223_startup_skew_election_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "e9-park-wake",
               "e9-trace-conformance",
@@ -406,6 +466,17 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "wake-epoch-state",
+              "wake-signal"
+            ],
+            "revalidation_targets": [
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness",
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch"
+            ],
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 1",
@@ -467,6 +538,44 @@
       "result": {
         "claims": [
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance"
+                ],
+                "id": "startup-population",
+                "semantic_labels": {
+                  "model_actions": [
+                    "StartWorker"
+                  ],
+                  "source": "e9-park-wake manifest notes (R-F1, #223) + docs/verification/formal/e9-trace-conformance.md boundary 5",
+                  "trace_events": []
+                }
+              },
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance",
+                  "spawn-wake-epoch",
+                  "e12-async-condition",
+                  "e12-rwlock-scheduler-liveness"
+                ],
+                "id": "wake-publication",
+                "semantic_labels": {
+                  "model_actions": [
+                    "ExternalReadyPublish",
+                    "PublishRunnable",
+                    "ShutdownSignal",
+                    "RetireWorkerQuiescent"
+                  ],
+                  "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+                  "trace_events": [
+                    "WakePublished"
+                  ]
+                }
+              }
+            ],
             "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -474,6 +583,7 @@
               "tests/issue161_idle_dance_orphan_test.cpp",
               "tests/issue223_startup_skew_election_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "e9-park-wake",
               "e9-trace-conformance",
@@ -518,6 +628,17 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "startup-settlement",
+              "wake-signal"
+            ],
+            "revalidation_targets": [
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness",
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch"
+            ],
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 2"
@@ -641,6 +762,7 @@
               "tests/request_lifecycle_scheme_b_test.cpp",
               "docs/verification/formal/cpp-model-coverage.md"
             ],
+            "facet_scope": "CONSERVATIVE_ALL",
             "formal_suites": [
               "request-arena"
             ],
@@ -662,6 +784,9 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "revalidation_targets": [
+              "request-arena"
+            ],
             "title": "request identity / generation / stale reuse",
             "via": [
               "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb). (changed symbol is a registered anchor)"
@@ -673,6 +798,7 @@
               "tests/request_lifecycle_scheme_b_test.cpp",
               "tests/threadpool_backend_scheme_b_race_test.cpp"
             ],
+            "facet_scope": "CONSERVATIVE_ALL",
             "formal_suites": [
               "request-arena",
               "e10-waitnode",
@@ -713,6 +839,12 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "revalidation_targets": [
+              "request-arena",
+              "e10-waitnode",
+              "e13-select-core",
+              "e13-select-safety"
+            ],
             "title": "terminal winner / exactly-once",
             "via": [
               "structural path depth 1",
@@ -720,11 +852,26 @@
             ]
           },
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "request-arena",
+                  "e12-rwlock"
+                ],
+                "id": "arena-cancel-arbitration",
+                "semantic_labels": {
+                  "model_actions": [],
+                  "source": "docs/investigations/s1a-formal-coverage.md B06",
+                  "trace_events": []
+                }
+              }
+            ],
             "class": "DIRECT_FORMAL_IMPACT",
             "evidence": [
               "tests/request_arena_cancel_intent_test.cpp",
               "tests/cancel_token_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "request-arena",
               "cancel-token-epoch",
@@ -748,6 +895,13 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "identity-gate"
+            ],
+            "revalidation_targets": [
+              "e12-rwlock",
+              "request-arena"
+            ],
             "title": "cancel vs ordinary completion",
             "via": [
               "cxx . . $ sluice/async/detail/RequestArena#validate_(cdd9eef033f04cdb). (changed symbol is a registered anchor)"
@@ -817,6 +971,19 @@
         "claims": [
           {
             "candidate_class": "DIRECT_FORMAL_IMPACT",
+            "candidate_facets": {
+              "affected_facets": [
+                {
+                  "formal_suites": [
+                    "e9-park-wake",
+                    "e9-trace-conformance",
+                    "e8-suspend-switch"
+                  ],
+                  "id": "park-commit-return"
+                }
+              ],
+              "note": "diagnostic only: facet_scope stays CONSERVATIVE_ALL while the reach is untrusted (stale graph / build drift / unresolved anchor / coarse fallback / traversal uncertainty)"
+            },
             "candidate_reason": "resolved anchors of F08 still support DIRECT_FORMAL_IMPACT; the authority set is incomplete (None)",
             "class": "UNKNOWN_FORMAL_IMPACT",
             "evidence": [
@@ -825,6 +992,7 @@
               "tests/issue161_idle_dance_orphan_test.cpp",
               "tests/issue223_startup_skew_election_test.cpp"
             ],
+            "facet_scope": "CONSERVATIVE_ALL",
             "formal_suites": [
               "e9-park-wake",
               "e9-trace-conformance",
@@ -851,6 +1019,17 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "park-boundary"
+            ],
+            "revalidation_targets": [
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch",
+              "e8-suspend-switch",
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness"
+            ],
             "title": "wait / wake / lost-wakeup closure",
             "unverified_reason": "UNRESOLVED_ANCHOR",
             "via": [
@@ -938,6 +1117,7 @@
               "tests/request_lifecycle_scheme_b_test.cpp",
               "docs/verification/formal/cpp-model-coverage.md"
             ],
+            "facet_scope": "CONSERVATIVE_ALL",
             "formal_suites": [
               "request-arena"
             ],
@@ -963,6 +1143,9 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "revalidation_targets": [
+              "request-arena"
+            ],
             "title": "request identity / generation / stale reuse",
             "via": [
               "structural path depth 2"
@@ -974,6 +1157,7 @@
               "tests/request_lifecycle_scheme_b_test.cpp",
               "tests/threadpool_backend_scheme_b_race_test.cpp"
             ],
+            "facet_scope": "CONSERVATIVE_ALL",
             "formal_suites": [
               "request-arena",
               "e10-waitnode",
@@ -1012,17 +1196,38 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "revalidation_targets": [
+              "request-arena",
+              "e10-waitnode",
+              "e13-select-core",
+              "e13-select-safety"
+            ],
             "title": "terminal winner / exactly-once",
             "via": [
               "structural path depth 1"
             ]
           },
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "request-arena",
+                  "e12-rwlock"
+                ],
+                "id": "arena-cancel-arbitration",
+                "semantic_labels": {
+                  "model_actions": [],
+                  "source": "docs/investigations/s1a-formal-coverage.md B06",
+                  "trace_events": []
+                }
+              }
+            ],
             "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "tests/request_arena_cancel_intent_test.cpp",
               "tests/cancel_token_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "request-arena",
               "cancel-token-epoch",
@@ -1050,6 +1255,13 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "identity-gate"
+            ],
+            "revalidation_targets": [
+              "e12-rwlock",
+              "request-arena"
+            ],
             "title": "cancel vs ordinary completion",
             "via": [
               "structural path depth 2"
@@ -1113,6 +1325,30 @@
       "result": {
         "claims": [
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance",
+                  "spawn-wake-epoch",
+                  "e12-async-condition",
+                  "e12-rwlock-scheduler-liveness"
+                ],
+                "id": "wake-publication",
+                "semantic_labels": {
+                  "model_actions": [
+                    "ExternalReadyPublish",
+                    "PublishRunnable",
+                    "ShutdownSignal",
+                    "RetireWorkerQuiescent"
+                  ],
+                  "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+                  "trace_events": [
+                    "WakePublished"
+                  ]
+                }
+              }
+            ],
             "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -1120,6 +1356,7 @@
               "tests/issue161_idle_dance_orphan_test.cpp",
               "tests/issue223_startup_skew_election_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "e9-park-wake",
               "e9-trace-conformance",
@@ -1148,6 +1385,16 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "wake-epoch-state"
+            ],
+            "revalidation_targets": [
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness",
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch"
+            ],
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 1"
@@ -1210,6 +1457,67 @@
       "result": {
         "claims": [
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance",
+                  "e8-suspend-switch"
+                ],
+                "id": "park-commit-return",
+                "semantic_labels": {
+                  "model_actions": [
+                    "FinalParkRecheckAndCommit",
+                    "EnterPhysicalPark",
+                    "LeavePark",
+                    "AbandonParkCandidate"
+                  ],
+                  "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+                  "trace_events": [
+                    "ParkCommitted",
+                    "ParkEntered",
+                    "ParkReturned",
+                    "ParkRefused"
+                  ]
+                }
+              },
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance"
+                ],
+                "id": "startup-population",
+                "semantic_labels": {
+                  "model_actions": [
+                    "StartWorker"
+                  ],
+                  "source": "e9-park-wake manifest notes (R-F1, #223) + docs/verification/formal/e9-trace-conformance.md boundary 5",
+                  "trace_events": []
+                }
+              },
+              {
+                "formal_suites": [
+                  "e9-park-wake",
+                  "e9-trace-conformance",
+                  "spawn-wake-epoch",
+                  "e12-async-condition",
+                  "e12-rwlock-scheduler-liveness"
+                ],
+                "id": "wake-publication",
+                "semantic_labels": {
+                  "model_actions": [
+                    "ExternalReadyPublish",
+                    "PublishRunnable",
+                    "ShutdownSignal",
+                    "RetireWorkerQuiescent"
+                  ],
+                  "source": "docs/verification/formal/e9-trace-conformance.md (authority table)",
+                  "trace_events": [
+                    "WakePublished"
+                  ]
+                }
+              }
+            ],
             "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -1217,6 +1525,7 @@
               "tests/issue161_idle_dance_orphan_test.cpp",
               "tests/issue223_startup_skew_election_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "e9-park-wake",
               "e9-trace-conformance",
@@ -1297,6 +1606,20 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "park-boundary",
+              "startup-settlement",
+              "wake-epoch-state",
+              "wake-signal"
+            ],
+            "revalidation_targets": [
+              "e12-async-condition",
+              "e12-rwlock-scheduler-liveness",
+              "e8-suspend-switch",
+              "e9-park-wake",
+              "e9-trace-conformance",
+              "spawn-wake-epoch"
+            ],
             "title": "wait / wake / lost-wakeup closure",
             "via": [
               "structural path depth 1",
@@ -1360,11 +1683,25 @@
       "result": {
         "claims": [
           {
+            "affected_facets": [
+              {
+                "formal_suites": [
+                  "f1-wait-record"
+                ],
+                "id": "completion-ready-release",
+                "semantic_labels": {
+                  "model_actions": [],
+                  "source": "docs/investigations/s1a-formal-coverage.md B04 + f1-wait-record E7-T2",
+                  "trace_events": []
+                }
+              }
+            ],
             "class": "STRUCTURAL_FORMAL_IMPACT",
             "evidence": [
               "docs/results/weak-memory/completion-publication.json",
               "tests/completion_authority_death_test.cpp"
             ],
+            "facet_scope": "PRECISE",
             "formal_suites": [
               "request-arena",
               "f1-wait-record"
@@ -1391,6 +1728,12 @@
               "structural_attribution": "HEURISTIC",
               "symbol_identity": "COMPILER"
             },
+            "reached_anchor_ids": [
+              "ready-release-lp"
+            ],
+            "revalidation_targets": [
+              "f1-wait-record"
+            ],
             "title": "Completion publication",
             "via": [
               "structural path depth 2"
@@ -1407,11 +1750,11 @@
   "toolchain": {
     "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
     "edge_provenance": "HEURISTIC",
-    "graph_symbols": 2350,
+    "graph_symbols": 2351,
     "index_config": "compdb from the current xmake config, selected world only (41 selected-world TUs; FDG-0 Phase A Build Truth); config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y",
     "query_time_seconds": "<1 (graph.json in memory)",
-    "reference_edges": 9609,
+    "reference_edges": 9611,
     "scip_clang": "0.4.0"
   },
-  "wall_seconds": 337.9
+  "wall_seconds": 373.8
 }

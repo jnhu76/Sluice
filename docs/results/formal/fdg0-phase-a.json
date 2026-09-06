@@ -1,8 +1,8 @@
 {
   "all_pass": true,
   "experiment": "FDG-0 Phase A \u2014 Xmake Build Truth adversarial suite (issue #298)",
-  "generated_at": "2026-09-06T05:55:56Z",
-  "head_sha": "aabdc779103493634d87337f3d6aa62148ebb150",
+  "generated_at": "2026-09-06T10:24:24Z",
+  "head_sha": "b8653d5096cb91816b807f8db12e68f3c446495f",
   "root_target": "sluice_async",
   "specimens": {
     "A11_liburing_f03_reproducible": {
@@ -84,7 +84,7 @@
       ]
     },
     "A6_new_production_tu": {
-      "build_id": "da55b02f0eef1d3661adb12e67b096da2ebaf4551c41c2e8cff4ebe609a72026",
+      "build_id": "509748378227fd5dffb528d297edf9c02ab7c7c61eb9ad563fc2470e6bc3289a",
       "compdb_has_tu": true,
       "graph_indexes_tu": true,
       "manifest_discovers_tu": true,
@@ -98,7 +98,7 @@
       "anchor_resolves_at_new_site": true,
       "baseline_tu": "src/async/threadpool_backend.cpp",
       "build_manifest_evidence": {
-        "build_id": "44efc9bbfd7e20e70c3f2af3f0d4484d73553aa668604aaacbfdf373ed97a9ad",
+        "build_id": "2377bfabcca0fecb27139767daab7722dd58e4fd2bdfcc0d5301555f963851a1",
         "tu_count": 42,
         "world_id": "sluice_async-liburing"
       },
@@ -151,21 +151,21 @@
     "A9_A10_config_drift_stale_manifest": {
       "a10_check_exit": 1,
       "a10_check_lines": [
-        "FAIL  graph build_id dce0dd5673ef != manifest build_id 15c1a02d9755 \u2014 the graph was not built from the current Build Manifest",
+        "FAIL  graph build_id 9aca3f695dc4 != manifest build_id 7cd777085d9a \u2014 the graph was not built from the current Build Manifest",
         "FAIL  rebuild with 'formal_impact.py index'"
       ],
       "a10_fails_closed": true,
       "a9_identity_differs": true,
       "config_restored": true,
-      "liburing_build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+      "liburing_build_id": "9aca3f695dc4c7a80b2961b749a55e6be48ee9f15717682192abf7007c898345",
       "liburing_world_id": "sluice_async-liburing",
       "pass": true,
-      "restored_build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
-      "stub_build_id": "15c1a02d9755d9a95390d250298e14ae0b39f95a366e0a00139dd9d4917e07ae",
+      "restored_build_id": "9aca3f695dc4c7a80b2961b749a55e6be48ee9f15717682192abf7007c898345",
+      "stub_build_id": "7cd777085d9a5e1a3625f75548d8d318f28f3b6b11eabb25022f19c466335216",
       "stub_world_id": "sluice_async-default"
     },
     "B0_baseline": {
-      "build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+      "build_id": "9aca3f695dc4c7a80b2961b749a55e6be48ee9f15717682192abf7007c898345",
       "config": {
         "id": "3cf36140eeea1fcd53ea9cb8e92416c7f19e71eb3f4d9513bbca19a804be98cb",
         "options": {
@@ -180,13 +180,13 @@
         }
       },
       "graph": {
-        "build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+        "build_id": "9aca3f695dc4c7a80b2961b749a55e6be48ee9f15717682192abf7007c898345",
         "documents": 106,
         "schema": "sluice-formal-impact-graph/2",
         "symbols": 2351,
         "world_id": "sluice_async-liburing"
       },
-      "head_sha": "aabdc779103493634d87337f3d6aa62148ebb150",
+      "head_sha": "b8653d5096cb91816b807f8db12e68f3c446495f",
       "world": {
         "compdb": {
           "path": "compile_commands.json",
@@ -225,5 +225,5 @@
       "verified_world_exit": 0
     }
   },
-  "wall_seconds": 231.9
+  "wall_seconds": 183.5
 }
