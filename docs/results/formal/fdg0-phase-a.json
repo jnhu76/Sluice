@@ -1,8 +1,8 @@
 {
   "all_pass": true,
   "experiment": "FDG-0 Phase A \u2014 Xmake Build Truth adversarial suite (issue #298)",
-  "generated_at": "2026-09-06T04:56:05Z",
-  "head_sha": "51f8e28c45857a4237986edbe1a843b42cd372b2",
+  "generated_at": "2026-09-06T05:55:56Z",
+  "head_sha": "aabdc779103493634d87337f3d6aa62148ebb150",
   "root_target": "sluice_async",
   "specimens": {
     "A11_liburing_f03_reproducible": {
@@ -21,7 +21,7 @@
       "expected": "UNKNOWN_BUILD_WORLD, non-zero exit",
       "pass": true,
       "stderr_excerpt": [
-        "error: UNKNOWN_BUILD_WORLD: Xmake-owned TU src/async/cancel.cpp has no compile_commands entry owned by the selected world (stale compdb? regenerate with 'xmake project -k compile_commands')"
+        "error: UNKNOWN_BUILD_WORLD: Xmake-owned TU src/async/cancel.cpp (owning targets: ['sluice_async']) has no compile_commands entry owned by any of its owning targets (sibling/dependency-target entries for the same path are a different compiler interpretation and are not borrowed; stale compdb? regenerate with 'xmake project -k compile_commands')"
       ]
     },
     "A5_exclusion": {
@@ -84,7 +84,7 @@
       ]
     },
     "A6_new_production_tu": {
-      "build_id": "31e1e9836a43c98bd3d646a3c44f011886819ad480718c1dab2fb2222a25606c",
+      "build_id": "da55b02f0eef1d3661adb12e67b096da2ebaf4551c41c2e8cff4ebe609a72026",
       "compdb_has_tu": true,
       "graph_indexes_tu": true,
       "manifest_discovers_tu": true,
@@ -98,7 +98,7 @@
       "anchor_resolves_at_new_site": true,
       "baseline_tu": "src/async/threadpool_backend.cpp",
       "build_manifest_evidence": {
-        "build_id": "0853a5a7692b63cabf47bbeb5f9a64f03c117164fb80febdb59746083c79fba6",
+        "build_id": "44efc9bbfd7e20e70c3f2af3f0d4484d73553aa668604aaacbfdf373ed97a9ad",
         "tu_count": 42,
         "world_id": "sluice_async-liburing"
       },
@@ -151,21 +151,21 @@
     "A9_A10_config_drift_stale_manifest": {
       "a10_check_exit": 1,
       "a10_check_lines": [
-        "FAIL  graph build_id fef855db806a != manifest build_id 7dda4d360917 \u2014 the graph was not built from the current Build Manifest",
+        "FAIL  graph build_id dce0dd5673ef != manifest build_id 15c1a02d9755 \u2014 the graph was not built from the current Build Manifest",
         "FAIL  rebuild with 'formal_impact.py index'"
       ],
       "a10_fails_closed": true,
       "a9_identity_differs": true,
       "config_restored": true,
-      "liburing_build_id": "fef855db806a50bda9f7b0af5f16c05fcf220245d6ffe1a910f6df4fdd874f77",
+      "liburing_build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
       "liburing_world_id": "sluice_async-liburing",
       "pass": true,
-      "restored_build_id": "fef855db806a50bda9f7b0af5f16c05fcf220245d6ffe1a910f6df4fdd874f77",
-      "stub_build_id": "7dda4d3609171e67f0149d0c031481d413ee892ecd1541ced719781c9b8a5d70",
+      "restored_build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
+      "stub_build_id": "15c1a02d9755d9a95390d250298e14ae0b39f95a366e0a00139dd9d4917e07ae",
       "stub_world_id": "sluice_async-default"
     },
     "B0_baseline": {
-      "build_id": "fef855db806a50bda9f7b0af5f16c05fcf220245d6ffe1a910f6df4fdd874f77",
+      "build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
       "config": {
         "id": "3cf36140eeea1fcd53ea9cb8e92416c7f19e71eb3f4d9513bbca19a804be98cb",
         "options": {
@@ -180,13 +180,13 @@
         }
       },
       "graph": {
-        "build_id": "fef855db806a50bda9f7b0af5f16c05fcf220245d6ffe1a910f6df4fdd874f77",
+        "build_id": "dce0dd5673efec593419d507632dff1e51d445dd3dfbf320d1c95e7e1f3a85a3",
         "documents": 106,
         "schema": "sluice-formal-impact-graph/2",
-        "symbols": 2350,
+        "symbols": 2351,
         "world_id": "sluice_async-liburing"
       },
-      "head_sha": "51f8e28c45857a4237986edbe1a843b42cd372b2",
+      "head_sha": "aabdc779103493634d87337f3d6aa62148ebb150",
       "world": {
         "compdb": {
           "path": "compile_commands.json",
@@ -208,7 +208,22 @@
         "tu_count": 41
       },
       "xmake_version": "v3.0.9+HEAD.2b184e1"
+    },
+    "C2_empty_diff_build_precondition": {
+      "drifted_build_reasons": [
+        "BUILD_WORLD_CHANGED"
+      ],
+      "drifted_fail_closed": true,
+      "drifted_world_class": "UNKNOWN_FORMAL_IMPACT",
+      "drifted_world_exit": 1,
+      "expected": "empty diff + drifted config -> UNKNOWN_FORMAL_IMPACT (BUILD_WORLD_CHANGED), exit != 0; verified world + empty diff -> NO_FORMAL_IMPACT, exit 0",
+      "pass": true,
+      "restored_world_class": "NO_FORMAL_IMPACT",
+      "restored_world_exit": 0,
+      "verified_world_build": true,
+      "verified_world_class": "NO_FORMAL_IMPACT",
+      "verified_world_exit": 0
     }
   },
-  "wall_seconds": 110.5
+  "wall_seconds": 231.9
 }
