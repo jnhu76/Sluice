@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -58,8 +59,19 @@ from pathlib import Path, PurePosixPath
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
+# FDG-0 Phase C analysis-root seam (issue #298 Phase C; task book §5/§16):
+# SLUICE_FDGC_ANALYSIS_ROOT points the BUILD-WORLD facts (xmake queries,
+# compile_commands, Build Manifest, git HEAD) at a historical worktree while
+# the authority artifacts stay wherever this tooling lives. Unset (the
+# normal case) it equals REPO_ROOT and behavior is unchanged.
+ANALYSIS_ROOT = (
+    Path(os.environ["SLUICE_FDGC_ANALYSIS_ROOT"]).resolve()
+    if os.environ.get("SLUICE_FDGC_ANALYSIS_ROOT")
+    else REPO_ROOT
+)
+
 MANIFEST_SCHEMA = "sluice-build-manifest/1"
-MANIFEST_PATH = REPO_ROOT / "build" / "formal-impact" / "build-manifest.json"
+MANIFEST_PATH = ANALYSIS_ROOT / "build" / "formal-impact" / "build-manifest.json"
 
 # Fixed list of build options recorded in the manifest. These are the options
 # that can change implementation visibility / compile interpretation. The
@@ -96,7 +108,7 @@ class BuildTruthError(Exception):
 # --- subprocess wrapper (monkeypatchable in hermetic tests) ------------------
 
 
-def run_capture(args: list[str], cwd: Path = REPO_ROOT) -> str:
+def run_capture(args: list[str], cwd: Path = ANALYSIS_ROOT) -> str:
     result = subprocess.run(
         args, cwd=cwd, capture_output=True, text=True, timeout=120
     )
@@ -108,7 +120,7 @@ def run_capture(args: list[str], cwd: Path = REPO_ROOT) -> str:
     return result.stdout
 
 
-def run_capture_ok(args: list[str], cwd: Path = REPO_ROOT, ok: tuple = (0,)) -> str:
+def run_capture_ok(args: list[str], cwd: Path = ANALYSIS_ROOT, ok: tuple = (0,)) -> str:
     result = subprocess.run(
         args, cwd=cwd, capture_output=True, text=True, timeout=120
     )
@@ -124,7 +136,7 @@ def run_capture_ok(args: list[str], cwd: Path = REPO_ROOT, ok: tuple = (0,)) -> 
 
 
 def xmake_version() -> str:
-    out = run_capture(["xmake", "--version"], cwd=REPO_ROOT)
+    out = run_capture(["xmake", "--version"], cwd=ANALYSIS_ROOT)
     first = out.splitlines()[0] if out.splitlines() else ""
     # "xmake v3.0.9+HEAD.2b184e1, ..." -> "v3.0.9+HEAD.2b184e1"
     parts = first.split()
@@ -147,7 +159,7 @@ CONFIG_LUA = (
 
 def config_options() -> dict:
     """Read the current configured option state from Xmake itself."""
-    out = run_capture(["xmake", "lua", "-c", CONFIG_LUA], cwd=REPO_ROOT)
+    out = run_capture(["xmake", "lua", "-c", CONFIG_LUA], cwd=ANALYSIS_ROOT)
     options: dict[str, str | None] = {}
     for line in out.splitlines():
         if "=" not in line:
@@ -166,7 +178,7 @@ def config_options() -> dict:
 
 def depgraph() -> dict:
     out = run_capture(
-        ["xmake", "show", "--info=depgraph", "--format=json"], cwd=REPO_ROOT
+        ["xmake", "show", "--info=depgraph", "--format=json"], cwd=ANALYSIS_ROOT
     )
     try:
         return json.loads(out)
@@ -175,7 +187,7 @@ def depgraph() -> dict:
 
 
 def target_metadata(name: str) -> dict:
-    out = run_capture(["xmake", "show", "-t", name, "--format=json"], cwd=REPO_ROOT)
+    out = run_capture(["xmake", "show", "-t", name, "--format=json"], cwd=ANALYSIS_ROOT)
     try:
         data = json.loads(out)
     except json.JSONDecodeError as exc:
@@ -210,7 +222,7 @@ def resolved_sources(name: str) -> list[str]:
     the authoritative source list — new files under a target's glob are seen
     without reconfigure (verified)."""
     script = SOURCEBATCH_LUA % json.dumps(name)
-    out = run_capture(["xmake", "lua", "-c", script], cwd=REPO_ROOT)
+    out = run_capture(["xmake", "lua", "-c", script], cwd=ANALYSIS_ROOT)
     files = []
     for line in out.splitlines():
         line = line.strip()
@@ -225,7 +237,7 @@ def resolved_sources(name: str) -> list[str]:
 
 def load_compdb(path: Path | None = None) -> list[dict]:
     if path is None:
-        path = REPO_ROOT / "compile_commands.json"
+        path = ANALYSIS_ROOT / "compile_commands.json"
     if not path.is_file():
         raise BuildTruthError(f"compile_commands.json not found: {path}")
     try:
@@ -583,7 +595,7 @@ def build_manifest(
 
 def current_head() -> str:
     result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"], cwd=ANALYSIS_ROOT, capture_output=True, text=True
     )
     if result.returncode != 0:
         raise BuildTruthError("git rev-parse HEAD failed")

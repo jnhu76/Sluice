@@ -94,6 +94,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -104,10 +105,22 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 ANCHORS_PATH = REPO_ROOT / "spec" / "formal" / "anchors.json"
 MANIFEST_PATH = REPO_ROOT / "spec" / "tla" / "manifest.json"
-BUILD_DIR = REPO_ROOT / "build" / "formal-impact"
+
+# FDG-0 Phase C analysis-root seam (issue #298 Phase C; task book §5/§16):
+# the AUTHORITY artifacts (anchor registry, formal manifest, and registry
+# path validation) always resolve against REPO_ROOT — the repository this
+# tooling lives in. ANALYSIS_ROOT is the repository/worktree whose git
+# history, Xmake build world, and SCIP artifacts are analyzed. Unset (the
+# normal case) it equals REPO_ROOT and every default path is unchanged.
+ANALYSIS_ROOT = (
+    Path(os.environ["SLUICE_FDGC_ANALYSIS_ROOT"]).resolve()
+    if os.environ.get("SLUICE_FDGC_ANALYSIS_ROOT")
+    else REPO_ROOT
+)
+BUILD_DIR = ANALYSIS_ROOT / "build" / "formal-impact"
 GRAPH_PATH = BUILD_DIR / "graph.json"
 SCIP_PATH = BUILD_DIR / "index.scip"
-COMPDB_PATH = REPO_ROOT / "compile_commands.json"
+COMPDB_PATH = ANALYSIS_ROOT / "compile_commands.json"
 COMPDB_SRC_PATH = BUILD_DIR / "compile_commands.src.json"
 SCIP_CLANG_BIN = BUILD_DIR / "bin" / "scip-clang"
 SCIP_CLANG_LOCK = SCRIPT_DIR / "scip-clang.lock.json"
@@ -449,7 +462,7 @@ def resolve_anchors(registry: dict, graph: Graph | None) -> dict:
 
 def git_output(*args: str) -> str:
     result = subprocess.run(
-        ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True
+        ["git", *args], cwd=ANALYSIS_ROOT, capture_output=True, text=True
     )
     if result.returncode != 0:
         raise ImpactError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
@@ -1338,7 +1351,7 @@ def cmd_index(args) -> int:
             "--log-level=warning",
             "--no-progress-report",
         ],
-        cwd=REPO_ROOT,
+        cwd=ANALYSIS_ROOT,
     )
     if result.returncode != 0:
         print("error: scip-clang failed (STOP_SCIP_TOOLCHAIN_BLOCKED territory)", file=sys.stderr)
