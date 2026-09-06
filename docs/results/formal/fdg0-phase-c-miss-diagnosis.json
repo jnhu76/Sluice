@@ -1,0 +1,37 @@
+{
+  "schema": "sluice-fdg0-phase-c-miss-diagnosis/1",
+  "kind": "POST_HOC_HUMAN_DIAGNOSIS",
+  "note": "Human-authored root-cause diagnosis of the frozen Phase-C miss set (verdict METHOD_RECALL_NOT_EARNED). This is deliberately NOT machine-derived: machine-derived metrics and post-hoc human root-cause diagnosis never share a counter. Embedding this block in results.json changes no score; the official frozen score lives in the machine metrics and verdict logic only.",
+  "mechanisms": {
+    "C-001": {
+      "gold": "F08 HIGH",
+      "classification": "STRUCTURAL_REACH_LIMIT",
+      "evidence": [
+        "attributed hunks receive no coarse fallback",
+        "no depth-2 monotonic path reaches the resolved wake anchors",
+        "case still fails closed UNKNOWN (F04 unresolved-anchor demotion); F08 absent"
+      ]
+    },
+    "C-007": {
+      "gold": "F03 MEDIUM",
+      "classification": "AUTHORITY_SPAN_LIMIT",
+      "evidence": [
+        "winner-outcome symbols live in the scheduler wait domain",
+        "no depth-2 path reaches the arena/backend terminal anchors",
+        "scheduler.cpp is not in F03's file bindings"
+      ]
+    },
+    "C-012": {
+      "gold": "F08 MEDIUM",
+      "frozen_world_config": "with-liburing=false (default xmake, frozen for every case)",
+      "changed_semantic_code_compiled_in_frozen_world": "NO",
+      "classification": "CONFIG_WORLD_CONFOUNDED_HEURISTIC_ATTRIBUTION",
+      "evidence": [
+        "commit 869be913 modifies the real io_uring path (submit_sync_all, enqueue_after_commit, issue_running_cancel, signal_ready_progress poison wake)",
+        "src/async/uring_backend.cpp compiles the stub path when SLUICE_HAS_LIBURING is absent and the real path when present; the frozen world has with-liburing=false, so the real uring definitions are absent from the analyzed world",
+        "observed graph effect: real uring definitions absent; diff hunk attribution falls onto a stub-world nearest-preceding symbol (`available`)",
+        "HEURISTIC attribution is the visible failure mode, but cannot be isolated as the sole causal mechanism (the config gate is the enabling condition)"
+      ]
+    }
+  }
+}

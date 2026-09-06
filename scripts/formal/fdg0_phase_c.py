@@ -7,7 +7,12 @@ merged resolver, and scores the results per the preregistered thresholds.
 
 Hard sequencing rule (task book §0/§14): this driver must never be run
 before the gold commit exists; the gold file is never edited after the
-first run. A historical miss is a result, not something to fix here.
+first run. A historical miss is a result, not something to fix here. The
+freeze is machine-enforced at runtime (C3): the driver verifies the gold
+bytes against FROZEN_GOLD_COMMIT, that no later commit touched the gold,
+and that the freeze commit is an ancestor of the harness/results/run
+heads, then passes that verified flag into the verdict logic — a failed
+freeze gate fails the corpus closed.
 
 Method under test (fixed by #300/#302/#303):
 
@@ -65,6 +70,19 @@ SCIP_CLANG_LOCK = SCRIPT_DIR / "scip-clang.lock.json"
 ANALYSIS_ENV = "SLUICE_FDGC_ANALYSIS_ROOT"
 RUN_DIR = REPO_ROOT / ".fdgc-run"
 
+# C3: immutable Phase-C freeze anchor, outside the gold file. The gold is
+# never edited after the first run; this is the C0 preregistration commit that
+# added the frozen gold, and the driver machine-verifies the freeze at runtime
+# instead of trusting a hard-coded boolean.
+FROZEN_GOLD_COMMIT = "704dc65b2991b0fdb4be310002e913dec1c6a3df"
+
+# C1: human-authored post-hoc diagnosis of the frozen miss set (reporting
+# only). Deliberately a separate artifact: machine-derived metrics and
+# post-hoc root-cause diagnosis never share a counter.
+MISS_DIAGNOSIS_PATH = (
+    REPO_ROOT / "docs" / "results" / "formal" / "fdg0-phase-c-miss-diagnosis.json"
+)
+
 CLAIM_CLASSES = {
     "DIRECT_FORMAL_IMPACT",
     "STRUCTURAL_FORMAL_IMPACT",
@@ -107,6 +125,30 @@ def git_output(*args: str, cwd: Path = REPO_ROOT) -> str:
 
 def rev_full(rev: str) -> str:
     return git_output("rev-parse", "--verify", rev).strip()
+
+
+def git_show_bytes(rev: str, path: str) -> bytes:
+    """Byte-exact `git show <rev>:<path>` (freeze byte comparison)."""
+    result = subprocess.run(
+        ["git", "show", f"{rev}:{path}"], cwd=REPO_ROOT,
+        capture_output=True, timeout=300,
+    )
+    if result.returncode != 0:
+        raise PhaseCError(f"git show {rev}:{path} failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+def git_is_ancestor(ancestor: str, descendant: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=REPO_ROOT, capture_output=True, timeout=300,
+    )
+    if result.returncode not in (0, 1):
+        raise PhaseCError(
+            f"git merge-base --is-ancestor {ancestor} {descendant} failed: "
+            f"{result.stderr.strip()}"
+        )
+    return result.returncode == 0
 
 
 # --- gold validation (pure) ---------------------------------------------------
@@ -208,6 +250,58 @@ def load_and_validate_gold() -> dict:
     return gold
 
 
+# --- gold-freeze gate (C3, pure) -----------------------------------------------
+
+
+def verify_gold_freeze(*, gold_bytes: bytes, committed_bytes: bytes,
+                       latest_commit_touching_gold: str, frozen_commit: str,
+                       run_head: str, harness_commit: str, results_commit: str,
+                       is_ancestor) -> dict:
+    """Machine verification that the gold was frozen before any harness work
+    (C3). Pure: `is_ancestor(a, b) -> bool` is injected (git in prod, a real
+    mini-repo in the hermetic tests). The verdict logic must receive
+    `gold_frozen_first == verified`; a failed freeze gate makes a positive
+    verdict structurally impossible and fails the corpus (all_pass = false,
+    exit != 0)."""
+    bytes_match = gold_bytes == committed_bytes
+    latest_commit_is_frozen = latest_commit_touching_gold == frozen_commit
+    ancestor_of_run_head = is_ancestor(frozen_commit, run_head)
+    harness_after_freeze = is_ancestor(frozen_commit, harness_commit)
+    results_after_freeze = is_ancestor(frozen_commit, results_commit)
+    verified = (
+        bytes_match
+        and latest_commit_is_frozen
+        and ancestor_of_run_head
+        and harness_after_freeze
+        and results_after_freeze
+    )
+    return {
+        "frozen_commit": frozen_commit,
+        "latest_commit_touching_gold": latest_commit_touching_gold,
+        "latest_commit_is_frozen": latest_commit_is_frozen,
+        "bytes_match": bytes_match,
+        "ancestor_of_run_head": ancestor_of_run_head,
+        "harness_after_freeze": harness_after_freeze,
+        "results_after_freeze": results_after_freeze,
+        "verified": verified,
+    }
+
+
+def h6_graph_identity(graph_head: str | None, head_sha: str | None,
+                      main_graph_head: str | None) -> bool | None:
+    """C4 per-case replay identity. `graph_head` is a SHA, so a name-substring
+    test proves nothing; this is the meaningful check — the result is keyed to
+    the historical head world AND that world is distinct from the current
+    repository's main graph. None when the current graph is absent (not
+    verifiable); the global main-graph checksum H6 remains the authority for
+    'current graph not reused'."""
+    if graph_head is None or head_sha is None:
+        return False
+    if main_graph_head is None:
+        return None
+    return graph_head == head_sha and main_graph_head != head_sha
+
+
 # --- Baseline A (pure): file-only mapping -------------------------------------
 
 
@@ -259,6 +353,33 @@ def case_uses_heuristic(impact_result: dict, claim_id: str) -> bool:
             if sym.get("attribution") == "HEURISTIC":
                 return True
     return False
+
+
+def heuristic_boundary(rows: list[dict], facet_rows: list[dict],
+                       posthoc_mechanisms: dict | None = None) -> dict:
+    """C1 HEURISTIC boundary. Machine-derived counters (recovered rows / facet
+    rows) and post-hoc human root-cause diagnosis never share a counter: a
+    missed claim has no recovered path, so
+    `missed_claims_with_machine_observable_heuristic_path` is structurally 0 —
+    the machine cannot observe HEURISTIC attribution on a miss. Why a miss
+    happened is a separate, human-authored channel embedded verbatim below and
+    never merged into a machine counter."""
+    return {
+        "recovered_positive_claims_using_heuristic": sum(
+            1 for r in rows if r["found"] and r["uses_heuristic"]
+        ),
+        "precise_routes_using_heuristic": sum(
+            1 for r in facet_rows
+            if r.get("resolver_scope") == "PRECISE" and r.get("uses_heuristic")
+        ),
+        "missed_claims_with_machine_observable_heuristic_path": sum(
+            1 for r in rows if not r["found"] and bool(r["uses_heuristic"])
+        ),
+        "unsafe_facet_narrowing_with_machine_observable_heuristic": sum(
+            1 for r in facet_rows if r.get("safety_failure") and r.get("uses_heuristic")
+        ),
+        "posthoc_diagnosed_miss_mechanisms": posthoc_mechanisms or {},
+    }
 
 
 def score_positive_case(case: dict, impact_result: dict) -> dict:
@@ -351,9 +472,11 @@ def score_facet_case(case: dict, impact_result: dict) -> dict | None:
     }
 
 
-def compute_integrity(gold: dict, records: list[dict], rows: list[dict]) -> dict:
+def compute_integrity(gold: dict, records: list[dict], rows: list[dict],
+                      gold_frozen_verified: bool = True) -> dict:
     """§21 corpus integrity (pure): every required case exactly once, every
-    expected label exactly one scored row, no execution errors."""
+    expected label exactly one scored row, no execution errors, and (C3) the
+    gold freeze gate verified. A failed freeze gate fails the corpus closed."""
     required = list(gold["required_case_ids"])
     by_id: dict[str, list[dict]] = {}
     for rec in records:
@@ -394,6 +517,7 @@ def compute_integrity(gold: dict, records: list[dict], rows: list[dict]) -> dict
         and not missing_rows
         and not duplicate_rows
         and len(scored_positives) == expected_rows
+        and gold_frozen_verified
     )
     return {
         "all_pass": all_pass,
@@ -407,6 +531,7 @@ def compute_integrity(gold: dict, records: list[dict], rows: list[dict]) -> dict
         "required_result_rows": expected_rows,
         "scored_result_rows": len(scored_positives),
         "unscored_required_cases": unscored,
+        "gold_frozen_verified": gold_frozen_verified,
     }
 
 
@@ -457,6 +582,8 @@ def verdict_logic(integrity: dict, metrics: dict, facet_rows: list[dict],
     if integrity["all_pass"] and reconstructed_scored >= 20 and recall_ok and silent_ok \
             and not facet_omissions and gold_frozen_first:
         return "HISTORICAL_GOLD_EARNED", reasons
+    if not gold_frozen_first:
+        reasons.append("gold freeze verification failed; positive verdict impossible")
     if facet_omissions or metrics["silent_no"] > 0 or (metrics["expected_claim_misses"] > 0 and reconstructed_scored >= 20):
         if heuristic_narrow:
             reasons.append(
@@ -574,7 +701,7 @@ def prepare_build_world(head_wt: Path) -> dict:
     return {"compdb_generated": True}
 
 
-def execute_case(case: dict, tmp_root: Path) -> dict:
+def execute_case(case: dict, tmp_root: Path, main_graph_head: str | None = None) -> dict:
     """Full replay of one case. Raises PhaseCError on reconstruction
     failure (classified); records H1-H8 replay identity checks."""
     started = time.time()
@@ -675,9 +802,14 @@ def execute_case(case: dict, tmp_root: Path) -> dict:
         rec["replay_checks"]["H5_result_from_historical_graph"] = (
             method_c.get("graph_head") == rec["head_sha"]
         )
-        rec["replay_checks"]["H6_current_graph_not_reused"] = (
-            method_c.get("graph_head") == rec["head_sha"]
-            and REPO_ROOT.name not in str(method_c.get("graph_head"))
+        # C4: `graph_head` is a SHA, so a name-substring test proves nothing.
+        # The meaningful per-case identity is: the result is keyed to the
+        # historical head world AND that world is distinct from the current
+        # repository's main graph (None when the current graph is absent).
+        # The global main-graph checksum H6 remains the authority for
+        # "current graph not reused".
+        rec["replay_checks"]["H6_result_from_historical_world"] = h6_graph_identity(
+            method_c.get("graph_head"), rec["head_sha"], main_graph_head
         )
         rec["replay_checks"]["H8_result_identity_matches_case"] = (
             method_c.get("head", "").endswith(case["head_sha"])
@@ -747,9 +879,44 @@ def cmd_run(args) -> int:
         return 2
 
     main_worktree_clean()
+
+    # C3: machine gold-freeze gate (replaces a hard-coded True). If the gold
+    # bytes changed, a later commit touched the gold, or the freeze commit is
+    # not an ancestor of the harness/results/run heads, the corpus fails
+    # closed and a positive verdict is structurally impossible.
+    gold_freeze = verify_gold_freeze(
+        gold_bytes=GOLD_PATH.read_bytes(),
+        committed_bytes=git_show_bytes(FROZEN_GOLD_COMMIT, "docs/results/formal/fdg0-phase-c-gold.json"),
+        latest_commit_touching_gold=git_output(
+            "log", "-n", "1", "--format=%H", "--",
+            "docs/results/formal/fdg0-phase-c-gold.json").strip(),
+        frozen_commit=FROZEN_GOLD_COMMIT,
+        run_head=rev_full("HEAD"),
+        harness_commit=git_output(
+            "log", "-n", "1", "--format=%H", "--",
+            "scripts/formal/fdg0_phase_c.py").strip(),
+        results_commit=git_output(
+            "log", "-n", "1", "--format=%H", "--",
+            "docs/results/formal/fdg0-phase-c-results.json").strip(),
+        is_ancestor=git_is_ancestor,
+    )
+    if not gold_freeze["verified"]:
+        print("FAIL gold freeze verification:", file=sys.stderr)
+        print("  " + json.dumps(gold_freeze, indent=2), file=sys.stderr)
+
+    # C4: current main graph identity (None when absent). Used by the per-case
+    # H6 check to prove the result world is distinct from the current graph.
+    main_graph_path = REPO_ROOT / "build" / "formal-impact" / "graph.json"
+    main_graph_head = None
+    if main_graph_path.is_file():
+        try:
+            main_graph_head = json.loads(main_graph_path.read_text(encoding="utf-8")).get("head_sha")
+        except (json.JSONDecodeError, OSError):
+            main_graph_head = None
+
     main_graph_before = (
-        sha256_file(REPO_ROOT / "build" / "formal-impact" / "graph.json")
-        if (REPO_ROOT / "build" / "formal-impact" / "graph.json").is_file()
+        sha256_file(main_graph_path)
+        if main_graph_path.is_file()
         else None
     )
 
@@ -765,7 +932,7 @@ def cmd_run(args) -> int:
         record_path = RUN_DIR / f"{case['case_id']}.json"
         tmp_root = Path(tempfile.mkdtemp(prefix=f"fdgc-{case['case_id']}-"))
         try:
-            rec = execute_case(case, tmp_root)
+            rec = execute_case(case, tmp_root, main_graph_head)
         finally:
             shutil.rmtree(tmp_root, ignore_errors=True)
         record_path.write_text(json.dumps(rec, indent=1))
@@ -791,8 +958,8 @@ def cmd_run(args) -> int:
 
     # H6: the CURRENT world's graph was never touched by the historical runs.
     main_graph_after = (
-        sha256_file(REPO_ROOT / "build" / "formal-impact" / "graph.json")
-        if (REPO_ROOT / "build" / "formal-impact" / "graph.json").is_file()
+        sha256_file(main_graph_path)
+        if main_graph_path.is_file()
         else None
     )
     current_graph_untouched = main_graph_before == main_graph_after
@@ -881,7 +1048,8 @@ def cmd_run(args) -> int:
         and cases[rec["case_id"]]["gold_kind"] == "NEGATIVE"
     ]
 
-    integrity = compute_integrity(gold, records, rows)
+    integrity = compute_integrity(gold, records, rows,
+                                  gold_frozen_verified=gold_freeze["verified"])
     metrics_c = method_metrics(pos_scores_c, neg_scores_c, rows)
     metrics_a = method_metrics(pos_scores_a, neg_scores_a, rows_a)
     metrics_b = method_metrics(pos_scores_b, neg_scores_b, rows_b)
@@ -889,21 +1057,15 @@ def cmd_run(args) -> int:
 
     verdict, verdict_reasons = verdict_logic(
         integrity, metrics_c, facet_rows, reconstructed_scored,
-        gold_frozen_first=True,
+        gold_frozen_first=gold_freeze["verified"],
     )
 
-    heuristic = {
-        "positive_recoveries_using_heuristic": sum(
-            1 for r in rows if r["found"] and r["uses_heuristic"]
-        ),
-        "precise_routes_using_heuristic": sum(
-            1 for r in facet_rows if r.get("resolver_scope") == "PRECISE" and r.get("uses_heuristic")
-        ),
-        "misses_correlated_with_heuristic": 0,
-        "unsafe_facet_narrowing_correlated_with_heuristic": sum(
-            1 for r in facet_rows if r.get("safety_failure") and r.get("uses_heuristic")
-        ),
-    }
+    posthoc_mechanisms = {}
+    if MISS_DIAGNOSIS_PATH.is_file():
+        posthoc_mechanisms = json.loads(
+            MISS_DIAGNOSIS_PATH.read_text(encoding="utf-8")
+        ).get("mechanisms", {})
+    heuristic = heuristic_boundary(rows, facet_rows, posthoc_mechanisms)
 
     results = {
         "schema": "sluice-fdg0-phase-c-results/1",
@@ -912,11 +1074,8 @@ def cmd_run(args) -> int:
             "path": "docs/results/formal/fdg0-phase-c-gold.json",
             "required_result_rows": gold["required_result_rows"],
             "gold_freeze": {
-                "last_commit_touching_gold": git_output(
-                    "log", "-n", "1", "--format=%H", "--",
-                    "docs/results/formal/fdg0-phase-c-gold.json").strip(),
+                **gold_freeze,
                 "run_head_sha": rev_full("HEAD"),
-                "gold_matches_committed": None,  # verified at closure (C2 commit diff)
             },
         },
         "method_under_test": {
@@ -1009,6 +1168,8 @@ def cmd_run(args) -> int:
     out_path.write_text(json.dumps(results, indent=1), encoding="utf-8")
     print(f"==> results written: {out_path}")
     print(f"    integrity:  all_pass={integrity['all_pass']}")
+    print(f"    gold freeze: verified={gold_freeze['verified']} "
+          f"(frozen {FROZEN_GOLD_COMMIT[:12]})")
     print(f"    verdict:    {verdict}")
     for r in verdict_reasons:
         print(f"                - {r}")

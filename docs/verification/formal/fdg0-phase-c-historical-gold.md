@@ -6,6 +6,12 @@
 > `704dc65b` (inventory + frozen gold) precedes C1 harness `01b71530`
 > precedes C2 results. The gold file was not modified after C0.
 >
+> Corrective-1 (reporting/integrity only): HEURISTIC miss accounting split
+> into machine-observable and post-hoc human-diagnosis channels (C1); C-012
+> re-diagnosed as CONFIG-WORLD CONFOUNDED (C2); gold freeze machine-verified
+> at runtime (C3); per-case H6 identity corrected (C4); wording tightened
+> (C5). Official frozen score and verdict unchanged.
+>
 > **Verdict (preregistered logic, task book §39):**
 > **METHOD_RECALL_NOT_EARNED.** 3 of 12 non-AMBIGUOUS positive expected
 > claims were missed (silent NO = 0; every miss occurred on a case that
@@ -55,7 +61,7 @@ Every miss is listed explicitly — none is averaged away:
 |---|---|---|---|---|
 | C-001 | 422036cd (07-08) | F08 | HIGH lost-wake window fix | scheduler.cpp hunks attributed to `await_completion_*`/`await_ready_flag` symbols; attributed hunks get no coarse fallback; no depth-2 monotonic path reaches the (resolved) wake anchors. Case still UNKNOWN (F04 unresolved-anchor demotion), but F08 absent. File-only (A) catches this one via file binding. |
 | C-007 | 96e3d66e (08-13) | F03 | MEDIUM frozen winner outcome | winner-outcome symbols live in the scheduler wait domain; no depth-2 path reaches the arena/backend terminal anchors; scheduler.cpp is not in F03's file bindings. Both A and C miss. |
-| C-012 | 869be913 (08-11) | F08 | MEDIUM uring cancel-path poison wake | scip-clang 0.4.0 (no enclosing ranges) folds all hunks into the nearest-preceding definition `available` — the wrong start symbol — so traversal starts nowhere useful; F08 absent (F03 surfaced UNKNOWN via the gated uring anchor). HEURISTIC-correlated. Both A and C miss. |
+| C-012 | 869be913 (08-11) | F08 | MEDIUM uring cancel-path poison wake | Frozen world is `with-liburing=false`; the diff modifies the real io_uring path (`issue_running_cancel`, `signal_ready_progress` poison wake), which is NOT compiled in the frozen stub world. Real uring definitions absent; hunks fold onto the stub-world nearest-preceding symbol `available` — traversal starts nowhere useful; F08 absent (F03 surfaced UNKNOWN via the gated uring anchor). **CONFIG-WORLD CONFOUNDED**: HEURISTIC attribution is the visible failure mode but cannot be isolated as the sole causal mechanism (post-hoc diagnosis; see below). Both A and C miss. |
 
 Baselines agree with the misses where they must: A (file-only) misses
 exactly C-007 and C-012 (their changed files are not bound to the missed
@@ -90,8 +96,16 @@ history.** CONSERVATIVE_ALL (C-005) was safe, as designed.
   most start attributions) is nearest-preceding by construction; no
   recovery on this corpus was free of it.
 - PRECISE facet routes involving HEURISTIC: 4 of 4.
-- misses correlated with HEURISTIC attribution: **1 of 3** (C-012 — wrong
-  start-symbol fold; the other two misses are structural-reach limits).
+- missed claims with a **machine-observable** HEURISTIC path: **0** — a
+  missed claim has no recovered path, so `uses_heuristic` is unobservable on
+  it; the machine cannot derive HEURISTIC correlation for a miss
+  (results.json `heuristic_boundary.missed_claims_with_machine_observable_heuristic_path`).
+- **post-hoc diagnosed** miss mechanisms: **3** (C-001 structural-reach
+  limit; C-007 authority-span limit; C-012 CONFIG-WORLD CONFOUNDED HEURISTIC
+  attribution — see the C-012 row above and
+  `fdg0-phase-c-miss-diagnosis.json`). The earlier "1 of 3 HEURISTIC-correlated
+  miss" (C-012) is a POST-HOC human diagnosis, not a machine counter; the two
+  channels are separated by design and never share a counter.
 - unsafe facet narrowing correlated with HEURISTIC: **1** (C-011).
 - negative-noise corroboration: comment-only commits (C-015, C-016) and a
   mechanical enum rename (C-022) surface STRUCTURAL/DIRECT claims purely
@@ -114,25 +128,48 @@ never scored).
 H1 base/head worktrees distinct — yes (all 23); H2 historical
 compile_commands regenerated — yes; H3 Build Manifest head/build ids belong
 to the historical world — yes; H4 SCIP graph head historical — yes; H5
-resolver result from the historical graph — yes; H6 current graph not
-reused — yes (main-graph checksum unchanged across the run); H7 worktrees
-removed — yes (`git worktree list` clean, no leaked case worktrees); H8
-result identity matches frozen case base/head — yes.
+resolver result from the historical graph — yes; H6 result keyed to the
+historical head world and distinct from the current repository's main graph
+— yes (per-case; `graph_head` is a SHA, so identity is checked as head-world
+equality + distinctness from the current main-graph head, not by a name
+substring); the global main-graph checksum unchanged across the run remains
+the authority for "current graph not reused"; H7 worktrees removed — yes
+(`git worktree list` clean, no leaked case worktrees); H8 result identity
+matches frozen case base/head — yes.
 
 ## Answering Phase C's governing question (§46)
 
 > Does the whole stack survive contact with real repository history?
 
-**Not unconditionally.** The stack never lies (silent NO = 0; every
-uncertainty stayed fail-closed; conservative UNKNOWN behavior worked in
-every partial epoch), but on this frozen corpus it missed 3 of 12 expected
-positive claims — one from structural-reach limits (C-001), one from
-authority that genuinely does not span the scheduler wait domain (C-007,
-MEDIUM), one from HEURISTIC start-symbol folding (C-012) — and one PRECISE
-facet route narrowed away a gold-required target (C-011). File-only
-mapping achieved higher raw recall at higher noise; explicit-only mapping
-achieves neither recall nor usable precision. FACETS_EARNED (Phase B,
-synthetic specimens) does not transfer unconditionally to real history.
+**Not unconditionally.** The aggregate classifier never collapsed these
+misses into an overall NO_FORMAL_IMPACT on this corpus: fail-closed UNKNOWN
+remained active (silent aggregate NO = 0). However, three required claim
+labels were missed (claim-level misses = 3) and one PRECISE facet route
+omitted a required formal target (unsafe PRECISE narrowing = 1) — C-001
+(structural-reach limit), C-007 (authority that does not span the scheduler
+wait domain, MEDIUM), C-012 (CONFIG-WORLD CONFOUNDED HEURISTIC attribution
+under the frozen with-liburing=false world), and C-011 (HEURISTIC PRECISE
+narrowing away of a gold-required target). File-only mapping achieved higher
+raw recall at higher noise; explicit-only mapping achieves neither recall
+nor usable precision. FACETS_EARNED (Phase B, synthetic specimens) does not
+transfer unconditionally to real history.
+
+## Phase-C finding — single-build-world coverage
+
+**Single-build-world coverage is now a demonstrated residual: config-gated
+implementation semantics can be absent from the analyzed world.** The frozen
+world builds every case with the default `with-liburing=false` configuration.
+C-012 (`869be913`) modifies the real io_uring path (`issue_running_cancel`,
+`signal_ready_progress` poison wake), which is compiled only when
+`SLUICE_HAS_LIBURING` is present; the frozen stub world does not compile those
+definitions, so the diff's hunks fold onto the stub-world nearest-preceding
+symbol `available`. The miss remains a real miss of the preregistered
+experiment — unchanged, still scored, still in the denominator — but its
+causal mechanism cannot be isolated as a pure HEURISTIC failure: it is
+CONFIG-WORLD CONFOUNDED. A config-gated implementation change can be
+semantically invisible to the analyzed world; any future variant-aware
+analysis must treat build configuration as part of the analysis world, not an
+afterthought.
 
 ## Mechanical-gate registration (disclosed)
 
@@ -158,7 +195,10 @@ scanned.
    additional misses move recall by 8.3 points. The verdict is
    corpus-relative and preregistered, not a general recall estimate.
 4. Build config was frozen to the default world; liburing-gated behavior
-   is uniformly a declared config-gated gap.
+   is uniformly a declared config-gated gap — and, as C-012 demonstrates,
+   config-gated implementation semantics can be entirely absent from the
+   analyzed world (single-build-world coverage is a demonstrated residual;
+   see the Phase-C finding above).
 5. Baseline A/B were computed on the same frozen worlds; B shares C's
    conservative machinery at depth 0.
 

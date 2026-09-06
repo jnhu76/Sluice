@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -348,6 +349,203 @@ class BaselinesAndVerdict(unittest.TestCase):
                                             reconstructed_scored=23, gold_frozen_first=True)
         self.assertEqual(verdict, "METHOD_RECALL_NOT_EARNED")
         self.assertTrue(any("HEURISTIC" in r for r in reasons))
+
+
+# --- corrective-1: HEURISTIC accounting (CR1, CR2) -----------------------------
+
+class HeuristicBoundary(unittest.TestCase):
+    def test_cr1_missed_claim_has_no_machine_heuristic_path(self):
+        # A missed claim has no recovered path, so the machine counter for
+        # misses with an observable HEURISTIC path is structurally 0 — even
+        # when a human later diagnoses the miss as HEURISTIC-related.
+        rows = [
+            {"case_id": "C-001", "claim": "F08", "found": False, "uses_heuristic": None},
+            {"case_id": "C-012", "claim": "F08", "found": False, "uses_heuristic": None},
+            {"case_id": "C-009", "claim": "F08", "found": True, "uses_heuristic": True},
+        ]
+        hb = pc.heuristic_boundary(rows, [], {})
+        self.assertEqual(hb["missed_claims_with_machine_observable_heuristic_path"], 0)
+        self.assertEqual(hb["recovered_positive_claims_using_heuristic"], 1)
+        # the posthoc channel is separate: a diagnosed C-012 must not leak
+        # into the machine counter
+        hb2 = pc.heuristic_boundary(
+            rows, [],
+            {"C-012": {"classification": "CONFIG_WORLD_CONFOUNDED_HEURISTIC_ATTRIBUTION"}})
+        self.assertEqual(hb2["missed_claims_with_machine_observable_heuristic_path"], 0)
+        self.assertIn("C-012", hb2["posthoc_diagnosed_miss_mechanisms"])
+
+    def test_cr2_posthoc_diagnosis_does_not_alter_official_scoring(self):
+        case = base_case()
+        score = pc.score_positive_case(case, impact("UNKNOWN_FORMAL_IMPACT", []))
+        rows = score["rows"]
+        metrics = pc.method_metrics([score], [], rows)
+        self.assertEqual(metrics["claims_found"], 0)
+        self.assertEqual(metrics["expected_claim_misses"], 1)
+        # embedding the diagnosis changes reporting only, never the metrics
+        hb = pc.heuristic_boundary(
+            rows, [],
+            {"C-012": {
+                "frozen_world_config": "with-liburing=false",
+                "changed_semantic_code_compiled_in_frozen_world": "NO",
+                "classification": "CONFIG_WORLD_CONFOUNDED_HEURISTIC_ATTRIBUTION"}})
+        self.assertEqual(
+            hb["posthoc_diagnosed_miss_mechanisms"]["C-012"]["classification"],
+            "CONFIG_WORLD_CONFOUNDED_HEURISTIC_ATTRIBUTION")
+        self.assertEqual(hb["missed_claims_with_machine_observable_heuristic_path"], 0)
+        self.assertEqual(pc.method_metrics([score], [], rows), metrics)
+
+    def test_cr2_diagnosis_artifact_is_valid(self):
+        # the human-authored diagnosis artifact is a reporting channel with
+        # the frozen miss set and the corrected C-012 classification
+        p = SCRIPT_DIR.parent.parent / "docs" / "results" / "formal" / \
+            "fdg0-phase-c-miss-diagnosis.json"
+        diag = json.loads(p.read_text())
+        self.assertEqual(diag["schema"], "sluice-fdg0-phase-c-miss-diagnosis/1")
+        self.assertEqual(set(diag["mechanisms"]), {"C-001", "C-007", "C-012"})
+        self.assertEqual(
+            diag["mechanisms"]["C-012"]["classification"],
+            "CONFIG_WORLD_CONFOUNDED_HEURISTIC_ATTRIBUTION")
+        self.assertEqual(
+            diag["mechanisms"]["C-012"]["changed_semantic_code_compiled_in_frozen_world"], "NO")
+
+
+# --- corrective-1: gold-freeze gate (CR3-CR7) ------------------------------------
+
+@contextmanager
+def _mini_freeze_repo():
+    """Real mini git repo: gold committed at a freeze commit, then a harness
+    commit and a results commit after it. Yields the repo facts and an
+    is_ancestor bound to that repo."""
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td)
+
+        def git(*a):
+            subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True)
+        git("init", "-q")
+        git("config", "user.email", "t@t")
+        git("config", "user.name", "t")
+        gold = repo / "gold.json"
+        gold.write_text('{"v": 1}\n')
+        git("add", "gold.json")
+        git("commit", "-qm", "C0 gold freeze")
+        freeze = subprocess.run(
+            ["git", "log", "-n", "1", "--format=%H"],
+            cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+        committed = subprocess.run(
+            ["git", "show", f"{freeze}:gold.json"],
+            cwd=repo, capture_output=True, check=True).stdout
+        (repo / "harness.py").write_text("# harness\n")
+        git("add", "harness.py")
+        git("commit", "-qm", "C1 harness")
+        harness = subprocess.run(
+            ["git", "log", "-n", "1", "--format=%H"],
+            cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+        (repo / "results.json").write_text("{}\n")
+        git("add", "results.json")
+        git("commit", "-qm", "C2 results")
+        results = subprocess.run(
+            ["git", "log", "-n", "1", "--format=%H"],
+            cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+        def is_ancestor(a, b):
+            r = subprocess.run(["git", "merge-base", "--is-ancestor", a, b], cwd=repo)
+            return r.returncode == 0
+
+        yield {"gold": gold, "freeze": freeze, "harness": harness,
+               "results": results, "committed": committed,
+               "is_ancestor": is_ancestor}
+
+
+class GoldFreezeGate(unittest.TestCase):
+    def _state(self, f, **over):
+        kwargs = {
+            "gold_bytes": f["gold"].read_bytes(),
+            "committed_bytes": f["committed"],
+            "latest_commit_touching_gold": f["freeze"],
+            "frozen_commit": f["freeze"],
+            "run_head": f["results"],
+            "harness_commit": f["harness"],
+            "results_commit": f["results"],
+            "is_ancestor": f["is_ancestor"],
+        }
+        kwargs.update(over)
+        return pc.verify_gold_freeze(**kwargs)
+
+    def test_cr3_exact_frozen_gold_bytes_pass(self):
+        with _mini_freeze_repo() as f:
+            state = self._state(f)
+            self.assertTrue(state["verified"])
+            self.assertTrue(state["bytes_match"])
+            self.assertTrue(state["latest_commit_is_frozen"])
+            self.assertTrue(state["ancestor_of_run_head"])
+            self.assertTrue(state["harness_after_freeze"])
+            self.assertTrue(state["results_after_freeze"])
+
+    def test_cr4_modified_gold_after_freeze_fails(self):
+        with _mini_freeze_repo() as f:
+            f["gold"].write_text('{"v": 2}\n')
+            state = self._state(f)
+            self.assertFalse(state["verified"])
+            self.assertFalse(state["bytes_match"])
+
+    def test_cr5_later_commit_touching_gold_fails(self):
+        with _mini_freeze_repo() as f:
+            state = self._state(f, latest_commit_touching_gold=f["harness"])
+            self.assertFalse(state["verified"])
+            self.assertFalse(state["latest_commit_is_frozen"])
+
+    def test_cr6_non_ancestor_freeze_commit_fails(self):
+        with _mini_freeze_repo() as f:
+            # freeze commit is not an ancestor of the run head -> gate fails
+            state = self._state(f, frozen_commit="0" * 40,
+                                is_ancestor=lambda a, b: False)
+            self.assertFalse(state["verified"])
+            self.assertFalse(state["ancestor_of_run_head"])
+
+    def test_cr3_freeze_failure_fails_corpus_closed(self):
+        gold = base_gold([base_case(),
+                          base_case(case_id="C-002", gold_kind="NEGATIVE", expected_claims=[])])
+        records = [{"case_id": "C-001", "reconstruction": {"status": "RECONSTRUCTED"},
+                    "replay_checks": {}},
+                   {"case_id": "C-002", "reconstruction": {"status": "RECONSTRUCTED"},
+                    "replay_checks": {}}]
+        rows = [{"case_id": "C-001", "claim": "F08", "found": True,
+                 "silent_no": False, "hit_class": "UNKNOWN_FORMAL_IMPACT"}]
+        integ = pc.compute_integrity(gold, records, rows, gold_frozen_verified=False)
+        self.assertFalse(integ["all_pass"])
+        self.assertFalse(integ["gold_frozen_verified"])
+        integ_ok = pc.compute_integrity(gold, records, rows, gold_frozen_verified=True)
+        self.assertTrue(integ_ok["all_pass"])
+
+    def test_cr7_verdict_cannot_earn_when_gold_freeze_unverified(self):
+        integrity = {"all_pass": True}
+        metrics = {"claim_recall": 1.0, "claims_found": 12, "expected_claim_labels": 12,
+                   "expected_claim_misses": 0, "silent_no": 0}
+        verdict, reasons = pc.verdict_logic(integrity, metrics, [], reconstructed_scored=23,
+                                            gold_frozen_first=False)
+        self.assertNotEqual(verdict, "HISTORICAL_GOLD_EARNED")
+        self.assertTrue(any("gold freeze" in r for r in reasons))
+
+
+# --- corrective-1: H6 replay identity (CR8) -------------------------------------
+
+class ReplayIdentity(unittest.TestCase):
+    def test_cr8_h6_identity_has_meaningful_semantics(self):
+        # result keyed to the historical head AND distinct from the current graph
+        self.assertTrue(pc.h6_graph_identity("deadbeef", "deadbeef", "beefdead"))
+        # result world IS the current graph -> not a historical replay
+        self.assertFalse(pc.h6_graph_identity("deadbeef", "deadbeef", "deadbeef"))
+        # current graph absent -> not verifiable, not a pass
+        self.assertIsNone(pc.h6_graph_identity("deadbeef", "deadbeef", None))
+        # no graph_head -> not historical
+        self.assertFalse(pc.h6_graph_identity(None, "deadbeef", "beefdead"))
+
+    def test_cr8_old_name_substring_check_is_gone(self):
+        # the previous H6 sub-condition (REPO_ROOT.name not in a SHA) proved
+        # nothing — a SHA never contains the repo name — so it must be gone
+        src = Path(pc.__file__).read_text()
+        self.assertNotIn("REPO_ROOT.name not in str", src)
+        self.assertNotIn("H6_current_graph_not_reused", src)
 
 
 if __name__ == "__main__":
