@@ -13,6 +13,13 @@ Chain (issue #299 §1):
              -> nearest registered formal anchor -> formal claim
              -> TLA+ suite / trace / bridge evidence
 
+FDG-0 Phase B (#298) adds an OPTIONAL facet routing layer over that chain:
+a trusted explicit anchor reach may narrow the reopened formal targets to
+the affected facets' suites (PRECISE); every coarse/unknown/stale/unresolved
+state stays CONSERVATIVE_ALL on the full parent claim suite set. Facets are
+internal subdivisions of existing claims (never new claims); facet mapping
+is EXPLICIT registry authority (spec/formal/anchors.json schema 2).
+
 FDG-0 Phase A (#298) replaces the pilot's `file.startswith("src/")` source
 selection with Xmake Build Truth: the SCIP graph is built from the selected
 production world (sluice_async + its dependency closure) joined to exact
@@ -113,7 +120,12 @@ GRAPH_SCHEMA = "sluice-formal-impact-graph/2"
 # Schema /1 (pre-Build-Truth graphs) still loads; graphs without a build
 # identity block cannot be world-verified and are handled explicitly.
 GRAPH_SCHEMAS = {"sluice-formal-impact-graph/1", GRAPH_SCHEMA}
-REGISTRY_SCHEMA = 1
+# FDG-0 Phase B: registry schema 2 adds optional per-anchor ids and optional
+# per-claim facets (internal subdivisions of an existing claim, never new
+# claims). Schema 1 registries stay loadable; declaring facets under schema 1
+# is invalid.
+REGISTRY_SCHEMA = 2
+REGISTRY_SCHEMAS = {1, 2}
 
 # Fallback traversal depth. The depth experiment (issue #299 §11) compares
 # 0..3; the measured choice and its recall/explosion data live in
@@ -181,10 +193,16 @@ def load_manifest(path: Path = MANIFEST_PATH) -> dict:
 def validate_registry(registry: dict, manifest: dict, root: Path = REPO_ROOT) -> list[str]:
     """Structural registry validation. Returns a list of problems (empty =
     valid). Deliberately deterministic: duplicate ids, unknown suites,
-    missing paths, unknown vocab, missing fields."""
+    missing paths, unknown vocab, missing fields — plus the FDG-0 Phase B
+    facet invariants (§18 of the phase-B task book): anchor/facet id
+    uniqueness, anchor_ref existence, facet-suite ⊆ parent, facet-suite
+    union == parent, zero-anchor/zero-target facets, evidence paths, and
+    the declared trace-event vocabulary where an existing authority owns
+    it."""
     problems: list[str] = []
-    if registry.get("schema_version") != REGISTRY_SCHEMA:
-        problems.append(f"schema_version must be {REGISTRY_SCHEMA}")
+    schema_version = registry.get("schema_version")
+    if schema_version not in REGISTRY_SCHEMAS:
+        problems.append(f"schema_version must be one of {sorted(REGISTRY_SCHEMAS)}")
     suite_ids = {s.get("id") for s in manifest.get("suites", [])}
     claim_class_vocab = set(registry.get("claim_class_vocabulary", []))
     roles_vocab = set(registry.get("anchor_roles", []))
@@ -215,6 +233,7 @@ def validate_registry(registry: dict, manifest: dict, root: Path = REPO_ROOT) ->
                 problems.append(f"claim {cid}: anchor file missing: {anchor['file']}")
             if "role" in anchor and anchor["role"] not in roles_vocab:
                 problems.append(f"claim {cid}: unknown anchor role {anchor['role']!r}")
+        _validate_claim_facets(claim, cid, suite_ids, root, problems, schema_version)
         for evidence in claim.get("evidence", []):
             epath = evidence.get("path")
             if not epath:
@@ -222,6 +241,93 @@ def validate_registry(registry: dict, manifest: dict, root: Path = REPO_ROOT) ->
             elif not (root / epath).exists():
                 problems.append(f"claim {cid}: evidence path missing: {epath}")
     return problems
+
+
+def _validate_trace_vocab(cid: str, fid: str, events: list) -> list[str]:
+    """Validate declared trace events against the EXISTING vocabulary
+    authority (e9_trace_validate KNOWN_EVENTS) — mechanically checkable
+    because that validator already owns the vocabulary. Model-action names
+    are NOT mechanically checked: no TLA parsing exists to make them
+    compiler-authoritative, so they stay declared EXPLICIT metadata."""
+    try:
+        import e9_trace_validate
+    except Exception:  # noqa: BLE001 — vocabulary authority unavailable
+        return []
+    known = getattr(e9_trace_validate, "KNOWN_EVENTS", None)
+    if not known:
+        return []
+    return [
+        f"claim {cid}: facet {fid}: unknown trace event {e!r} "
+        f"(not in the declared authority vocabulary)"
+        for e in events
+        if e not in known
+    ]
+
+
+def _validate_claim_facets(
+    claim: dict, cid: str, suite_ids: set, root: Path, problems: list[str], schema_version
+) -> None:
+    facets = claim.get("facets")
+    if not facets:
+        return
+    if schema_version != 2:
+        problems.append(f"claim {cid}: facets require registry schema_version 2")
+        return
+    anchor_ids: set[str] = set()
+    for anchor in claim.get("cpp_anchors", []):
+        aid = anchor.get("id")
+        if not aid:
+            problems.append(
+                f"claim {cid}: faceted claim has anchor without id: {anchor.get('symbol')!r}"
+            )
+            continue
+        if aid in anchor_ids:
+            problems.append(f"claim {cid}: duplicate anchor id: {aid}")
+        anchor_ids.add(aid)
+    parent_suites = set(claim.get("formal_suites", []))
+    facet_ids: set[str] = set()
+    covered: set[str] = set()
+    suite_union: set[str] = set()
+    for facet in facets:
+        fid = facet.get("id")
+        if not fid:
+            problems.append(f"claim {cid}: facet without id")
+            continue
+        if fid in facet_ids:
+            problems.append(f"claim {cid}: duplicate facet id: {fid}")
+        facet_ids.add(fid)
+        refs = facet.get("anchor_refs", [])
+        if not refs:
+            problems.append(f"claim {cid}: facet {fid}: zero anchors")
+        for ref in refs:
+            if ref not in anchor_ids:
+                problems.append(f"claim {cid}: facet {fid}: unknown anchor_ref: {ref!r}")
+            else:
+                covered.add(ref)
+        fsuites = facet.get("formal_suites", [])
+        if not fsuites:
+            problems.append(f"claim {cid}: facet {fid}: zero formal targets")
+        for s in fsuites:
+            if s not in suite_ids:
+                problems.append(f"claim {cid}: facet {fid}: formal suite not in manifest: {s}")
+            elif s not in parent_suites:
+                problems.append(f"claim {cid}: facet {fid}: suite not in parent claim: {s}")
+            suite_union.add(s)
+        labels = facet.get("semantic_labels") or {}
+        events = labels.get("trace_events") or []
+        if events:
+            problems.extend(_validate_trace_vocab(cid, fid, events))
+        for ev_path in facet.get("evidence", []) or []:
+            if not (root / ev_path).exists():
+                problems.append(f"claim {cid}: facet {fid}: evidence path missing: {ev_path}")
+    missing = sorted(parent_suites - suite_union)
+    if missing:
+        problems.append(
+            f"claim {cid}: parent formal suite(s) omitted from every facet: {missing}"
+        )
+    unref = sorted(anchor_ids - covered)
+    if unref:
+        problems.append(f"claim {cid}: faceted anchor(s) referenced by no facet: {unref}")
 
 
 # --- graph ------------------------------------------------------------------
@@ -643,18 +749,26 @@ def classify_impact(
     max_depth: int,
     expected_head: str | None = None,
     build_state: dict | None = None,
+    facet_index: dict | None = None,
 ) -> dict:
     """Core classification. Never raises; always fail-closed on uncertainty.
 
     Returns a result dict with:
       classification: one of the five states (aggregate max)
-      claims: [{id, class, candidate_class?, unverified_reason?, paths, via}]
+      claims: [{id, class, candidate_class?, unverified_reason?, paths, via,
+                facet_scope, revalidation_targets, reached_anchor_ids?,
+                affected_facets?, candidate_facets?}]
       paths: [{hops, hop_provenance, provenance, uses_heuristic_attribution}]
       changed_symbols: {..., attribution}
       risks / unknown_reason / fail_closed / fail_closed_reasons
       candidate_classification / candidate_claims (stale graph only)
       graph_present / graph_head / stale_index
       semantic_disposition: UNDETERMINED (always)
+
+    FDG-0 Phase B: when facet_index is present, every impacted claim also
+    carries facet routing fields. PRECISE narrows revalidation_targets to
+    the affected facets' suites ONLY on a trusted explicit anchor reach;
+    every untrusted state stays CONSERVATIVE_ALL on the full parent set.
     """
     risks: list[str] = []
     unknown_reasons: list[str] = []
@@ -673,6 +787,7 @@ def classify_impact(
 
     claim_hits: dict[str, dict] = {}
     changed_syms: dict[str, dict] = {}
+    start_symbols: set[str] = set()
 
     def add_hit(cid: str, cls: str, paths: list[dict] | None, via: str):
         entry = claim_hits.setdefault(cid, {"class": NO_IMPACT, "paths": [], "via": [], "coarse": False})
@@ -893,6 +1008,28 @@ def classify_impact(
             out_entry["candidate_class"] = entry["candidate_class"]
             out_entry["unverified_reason"] = entry.get("unverified_reason")
             out_entry["candidate_reason"] = entry.get("candidate_reason")
+        if facet_index is not None:
+            # FDG-0 Phase B facet routing (task book §13/§14). Reached
+            # anchors = DIRECT triggering anchors + structural path
+            # terminals. Trust requires: a trusted symbol-level reach
+            # (DIRECT/STRUCTURAL, never the coarse file fallback), a fresh
+            # graph, a verified build world, no unresolved anchor and no
+            # traversal uncertainty on the claim. Any demotion (stale graph
+            # / build drift / unresolved) keeps the facet evidence only as
+            # candidate diagnostics.
+            trusted = (
+                entry["class"] in (DIRECT, STRUCTURAL)
+                and not entry.get("coarse")
+                and not entry.get("candidate_class")
+                and cid not in unresolved_anchor_claims
+                and not traversal_risks
+                and not build_fail
+                and not (stale and cxx_changed)
+            )
+            reached = facet_reached_families(facet_index, cid, start_symbols, entry["paths"])
+            out_entry.update(
+                facet_route(claim, facet_index.get(cid), reached, trusted)
+            )
         claims_out.append(out_entry)
 
     result = {
@@ -952,6 +1089,154 @@ def claim_provenance(entry: dict) -> dict:
     if entry.get("coarse"):
         prov["coarse_mapping"] = P_FALLBACK
     return prov
+
+
+# --- FDG-0 Phase B: formal facets (issue #298) --------------------------------
+#
+# Facets are internal subdivisions of an EXISTING claim (never new claims).
+# Facet routing is anchor/path-derived: a trustworthy DIRECT/STRUCTURAL
+# reach of an explicit anchor selects the facets that explicitly contain
+# that anchor; every other state (COARSE fallback, UNKNOWN, stale graph,
+# stale build world, unresolved anchor, frontier overflow, claim without
+# facets) stays CONSERVATIVE_ALL with the FULL parent suite set. Facet
+# precision is optional enrichment; it may never convert an impact into NO
+# and never narrows a conservative answer. Facet mapping provenance is
+# EXPLICIT (hand-maintained cross-domain authority, spec/formal/anchors.json).
+
+FACET_PRECISE = "PRECISE"
+FACET_CONSERVATIVE_ALL = "CONSERVATIVE_ALL"
+
+
+def build_facet_index(registry: dict, graph: Graph | None) -> dict | None:
+    """Per-claim facet routing table: {claim_id: {family_to_anchor,
+    facets}} where family_to_anchor maps each RESOLVED SCIP symbol family
+    of an id-carrying anchor to that anchor's id. Returns None when the
+    registry declares no facets at all (legacy shape: results carry no
+    facet fields)."""
+    if graph is None:
+        return None
+    if not any(c.get("facets") for c in registry.get("claims", [])):
+        return None
+    resolutions = resolve_anchors(registry, graph)
+    index: dict[str, dict] = {}
+    for claim in registry.get("claims", []):
+        facets = claim.get("facets") or []
+        if not facets:
+            continue
+        id_by_anchor_symbol = {
+            a["symbol"]: a["id"] for a in claim.get("cpp_anchors", []) if a.get("id")
+        }
+        family_to_anchor: dict[str, str] = {}
+        for res in resolutions.get(claim["id"], []):
+            aid = id_by_anchor_symbol.get(res["symbol"])
+            if aid and res["status"] == "resolved":
+                for fam in res["symbols"]:
+                    family_to_anchor[fam] = aid
+        index[claim["id"]] = {
+            "family_to_anchor": family_to_anchor,
+            "facets": {
+                f["id"]: {
+                    "anchor_refs": list(f.get("anchor_refs", [])),
+                    "formal_suites": list(f.get("formal_suites", [])),
+                    "semantic_labels": f.get("semantic_labels"),
+                    "note": f.get("note"),
+                }
+                for f in facets
+                if f.get("id")
+            },
+        }
+    return index
+
+
+def facet_reached_families(
+    facet_index: dict | None,
+    cid: str,
+    start_symbols: set[str],
+    structural_paths: list[dict],
+) -> set[str]:
+    """Anchor families that route facets for one claim (task book §13/§14):
+    DIRECT triggering anchors (changed symbol == registered anchor) plus
+    the TERMINAL hop of each structural path (never intermediate helpers,
+    never a second both-direction sweep — claim-level conservatism already
+    covers recall; facet selection is identity-based)."""
+    if not facet_index:
+        return set()
+    fdata = facet_index.get(cid)
+    if not fdata:
+        return set()
+    fmap = fdata["family_to_anchor"]
+    reached = {s for s in start_symbols if s in fmap}
+    for p in structural_paths:
+        hops = p.get("hops") or []
+        if hops and hops[-1] in fmap:
+            reached.add(hops[-1])
+    return reached
+
+
+def facet_route(
+    claim: dict, fdata: dict | None, reached_families: set[str], trusted: bool
+) -> dict:
+    """Decide the facet routing fields for one impacted claim.
+
+    Routing semantics (phase-B task book §13/§14): a DIRECT hit routes by
+    the TRIGGERING anchor id(s) (the changed symbol that IS a registered
+    anchor); a STRUCTURAL hit routes by the TERMINAL anchor(s) of the
+    structural paths. The claim's facet set is the union of the facets
+    containing those anchors. PRECISE requires trust (fresh graph, verified
+    build world, symbol-level reach, no unresolved/traversal uncertainty);
+    every other state — including a claim WITHOUT facets — is
+    CONSERVATIVE_ALL with the FULL parent set (issue #298 §4.3/§16).
+    """
+    parent = list(claim.get("formal_suites", []))
+    out: dict = {"facet_scope": FACET_CONSERVATIVE_ALL, "revalidation_targets": parent}
+    if fdata is None:
+        return out
+    anchor_ids = sorted(
+        {fdata["family_to_anchor"][s] for s in reached_families if s in fdata["family_to_anchor"]}
+    )
+    out["reached_anchor_ids"] = anchor_ids
+    facet_ids = sorted(
+        fid
+        for fid, f in fdata["facets"].items()
+        if anchor_ids and set(f["anchor_refs"]) & set(anchor_ids)
+    )
+    if not trusted or not anchor_ids or not facet_ids:
+        # Untrusted or unmapped reach: keep the diagnostic, never narrow.
+        if anchor_ids:
+            out["candidate_facets"] = {
+                "affected_facets": [
+                    {
+                        "id": fid,
+                        "formal_suites": fdata["facets"][fid]["formal_suites"],
+                    }
+                    for fid in facet_ids
+                ],
+                "note": (
+                    "diagnostic only: facet_scope stays CONSERVATIVE_ALL while the "
+                    "reach is untrusted (stale graph / build drift / unresolved "
+                    "anchor / coarse fallback / traversal uncertainty)"
+                ),
+            }
+        return out
+    targets = sorted({s for fid in facet_ids for s in fdata["facets"][fid]["formal_suites"]})
+    # Belt and braces: a facet target outside the parent (registry defect)
+    # or an empty union must never narrow — fall back to the parent set.
+    if not targets or not set(targets) <= set(parent):
+        return out
+    affected = []
+    for fid in facet_ids:
+        entry = {"id": fid, "formal_suites": fdata["facets"][fid]["formal_suites"]}
+        if fdata["facets"][fid].get("semantic_labels"):
+            entry["semantic_labels"] = fdata["facets"][fid]["semantic_labels"]
+        affected.append(entry)
+    out.update(
+        {
+            "facet_scope": FACET_PRECISE,
+            "affected_facets": affected,
+            "revalidation_targets": targets,
+        }
+    )
+    return out
 
 
 def info_has_symbolless_change(info: dict) -> bool:
@@ -1411,6 +1696,7 @@ def cmd_impact(args) -> int:
     claim_index, families, unresolved, unresolved_gated = build_claim_index_and_families(
         registry, manifest, graph
     )
+    facet_index = build_facet_index(registry, graph)
 
     # Corrective-1 C2: Build Truth verification is a PRECONDITION of
     # NO_FORMAL_IMPACT, so it runs BEFORE the empty-diff short-circuit.
@@ -1468,6 +1754,7 @@ def cmd_impact(args) -> int:
         max_depth=args.max_depth,
         expected_head=expected_head,
         build_state=None if legacy_bypass else build_state,
+        facet_index=facet_index,
     )
     result["range"] = args.range
     result["base"] = base
@@ -1539,15 +1826,41 @@ def cmd_impact(args) -> int:
                 )
                 print(f"      provenance: {p['provenance']}{prov_note}")
             print(f"    provenance:   {json.dumps(claim['provenance'], sort_keys=True)}")
+            if "facet_scope" in claim:
+                anchors_txt = (
+                    ", ".join(claim.get("reached_anchor_ids", [])) or "(none reached)"
+                )
+                print(f"    facet scope:  {claim['facet_scope']} (reached anchors: {anchors_txt})")
+                for facet in claim.get("affected_facets", []):
+                    labels = facet.get("semantic_labels") or {}
+                    label_bits = []
+                    if labels.get("trace_events"):
+                        label_bits.append("trace: " + ", ".join(labels["trace_events"]))
+                    if labels.get("model_actions"):
+                        label_bits.append("actions: " + ", ".join(labels["model_actions"]))
+                    suffix = f"  [{'; '.join(label_bits)}]" if label_bits else ""
+                    print(
+                        f"      facet {facet['id']} -> {', '.join(facet['formal_suites'])}{suffix}"
+                    )
+                cand = claim.get("candidate_facets")
+                if cand:
+                    print(
+                        "      candidate facets (DIAGNOSTIC ONLY, not authoritative): "
+                        + ", ".join(f["id"] for f in cand.get("affected_facets", []))
+                    )
             for via in claim["via"]:
                 if via.startswith("cxx "):
                     display = graph.nodes[via]["display"] if graph and via in graph.nodes else via
                     print(f"    via: {display} (changed symbol is a registered anchor)")
                 else:
                     print(f"    via: {via}")
-            if claim["formal_suites"]:
-                print("    required review:")
-                for suite in claim["formal_suites"]:
+            review_targets = claim.get("revalidation_targets") or claim["formal_suites"]
+            narrowed = (
+                "facet targets" if claim.get("facet_scope") == "PRECISE" else "all claim suites"
+            )
+            if review_targets:
+                print(f"    required review ({narrowed}):")
+                for suite in review_targets:
                     print(f"      {suite}")
             if claim["evidence"]:
                 print("    evidence:")
@@ -1600,11 +1913,20 @@ def cmd_explain(args) -> int:
         print(f"      ({PROVENANCE_LEGEND.get(graph.edge_provenance, '')})")
     print("  C++ anchors:")
     resolutions = resolve_anchors(registry, graph) if graph else None
+    facet_index = build_facet_index(registry, graph) if graph else None
+    fdata = facet_index.get(claim["id"]) if facet_index else None
     for i, anchor in enumerate(claim.get("cpp_anchors", [])):
         line = f"    [{anchor.get('role', '?')}] {anchor['symbol']}  ({anchor['file']})"
         if anchor.get("config_gate"):
             line += f"  [config_gate: {anchor['config_gate']}]"
         print(line)
+        if anchor.get("id"):
+            containing = sorted(
+                fid
+                for fid, f in (fdata or {}).get("facets", {}).items()
+                if anchor["id"] in f["anchor_refs"]
+            )
+            print(f"      anchor id: {anchor['id']}  facets: {', '.join(containing) or '(none)'}")
         print(f"      {anchor.get('note', '')}")
         if resolutions:
             res = resolutions[claim["id"]][i]
@@ -1615,6 +1937,26 @@ def cmd_explain(args) -> int:
                 )
             else:
                 print(f"      status: {res['status']}")
+    if fdata:
+        print("  facets (EXPLICIT hand-maintained mapping; internal subdivisions, not new claims):")
+        for fid, f in sorted(fdata["facets"].items()):
+            print(f"    {fid}")
+            print(f"      anchors: {', '.join(f['anchor_refs'])}")
+            print(f"      formal targets: {', '.join(f['formal_suites'])}")
+            labels = f.get("semantic_labels") or {}
+            if labels.get("source"):
+                print(f"      label source: {labels['source']}")
+            if labels.get("trace_events"):
+                print(f"      trace events: {', '.join(labels['trace_events'])}")
+            if labels.get("model_actions"):
+                print(f"      model actions: {', '.join(labels['model_actions'])}")
+            if f.get("note"):
+                print(f"      note: {f['note']}")
+        print(
+            "      facet routing is anchor/path-derived: PRECISE only on a trusted "
+            "explicit anchor reach; COARSE/UNKNOWN/stale/unresolved stay "
+            "CONSERVATIVE_ALL on the full parent suite set"
+        )
     print("  formal suites:")
     for suite in claim.get("formal_suites", []):
         entry = next((s for s in manifest["suites"] if s["id"] == suite), {})
