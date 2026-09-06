@@ -43,8 +43,8 @@
     "note": "depth 0 == baseline B (explicit anchors only). Recall = specimens whose expected claim set is fully surfaced (T4 requires NO; T6 requires F08 present at ANY class \u2014 the claim is fail-closed demoted, see corrective-1 C2)."
   },
   "experiment": "FTLR-0 / SCIP-PILOT adversarial suite (issue #299, corrective-1)",
-  "generated_at": "2026-09-06T05:03:25Z",
-  "head_sha": "2564d37f95c0290a8595c6af4dea0cf161b763ea",
+  "generated_at": "2026-09-06T06:02:07Z",
+  "head_sha": "6a27403afe3edfe0e48f030f086be4062c893d93",
   "historical_sanity_probe": {
     "query": "impact --range 8d4b72a0^..8d4b72a0 (R-F1 startup-skew witness commit, PR #297)",
     "result": {
@@ -767,7 +767,6 @@
         "F08"
       ],
       "changed_files": [
-        "docs/verification/formal/fdg0-phase-a-build-truth.md",
         "include/sluice/async/scheduler.hpp",
         "src/async/async_io_context.cpp",
         "src/async/scheduler.cpp",
@@ -880,7 +879,6 @@
         "F06"
       ],
       "changed_files": [
-        "docs/verification/formal/fdg0-phase-a-build-truth.md",
         "src/async/threadpool_backend.cpp"
       ],
       "check_after": {
@@ -1409,11 +1407,11 @@
   "toolchain": {
     "compile_db": "xmake 'plugin.compile_commands.autoupdate' + 'xmake project -k compile_commands'",
     "edge_provenance": "HEURISTIC",
-    "graph_symbols": 2351,
+    "graph_symbols": 2350,
     "index_config": "compdb from the current xmake config, selected world only (41 selected-world TUs; FDG-0 Phase A Build Truth); config-gated anchors (SLUICE_HAS_LIBURING) resolve only under --with-liburing=y",
     "query_time_seconds": "<1 (graph.json in memory)",
-    "reference_edges": 9610,
+    "reference_edges": 9609,
     "scip_clang": "0.4.0"
   },
-  "wall_seconds": 384.4
+  "wall_seconds": 337.9
 }
