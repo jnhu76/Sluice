@@ -21,13 +21,24 @@ compile_commands entries via Xmake target ownership. The Build Manifest
 changed or unverifiable build world fails closed (UNKNOWN_BUILD_WORLD /
 BUILD_WORLD_CHANGED / BUILD_GRAPH_STALE), never silently NO.
 
-Hard rules (#299 §10, §24):
+Hard rules (#299 §10, §24 + #298 corrective-1):
 
-    * NO_FORMAL_IMPACT requires: no anchor hit, no SCIP path hit, no
+    * NO_FORMAL_IMPACT requires: a VERIFIED build world (checked BEFORE the
+      empty-diff short-circuit, C2), no anchor hit, no SCIP path hit, no
       implementation_bindings hit, and no unresolved-risk condition.
       "SCIP could not see it" is UNKNOWN, never NO.
     * Build identity is part of implementation identity: unknown/stale
-      build world -> UNKNOWN formal impact -> fail closed.
+      build world -> UNKNOWN formal impact -> fail closed — regardless of
+      whether any C++ file changed (C3: config-only or membership-only
+      drift fails closed too).
+    * A graph without a build identity block (schema /1 / synthetic) is
+      UNKNOWN_BUILD_WORLD and fails closed by default (C1); the explicit
+      `--allow-legacy-graph-for-eval` opt-in (check/impact) is for
+      evaluation fixtures only and never bypasses a FAILED verification.
+    * The compdb join is per-TU exact: a TU never borrows a sibling or
+      dependency target's compile command (C4), and the owning target comes
+      only from the `-o` object path (C6). Unrelated compdb cardinality
+      does not enter the build identity (C5).
     * Impact findings never claim a semantic disposition: the resolver
       always reports `semantic disposition: UNDETERMINED`. Whether a TLA+
       model actually needs updating is decided by later bounded semantic
@@ -52,7 +63,9 @@ Exit contract (corrective-1 + FDG-0 Phase A): the default CLI fails closed.
     UNRESOLVED non-gated anchor      -> exit 1
     frontier/traversal UNKNOWN       -> exit 1
     missing graph for a C++ diff     -> exit 1
-    build world changed / unknown    -> exit 1 (aggregate UNKNOWN + candidates)
+    build world changed / unknown    -> exit 1 (aggregate UNKNOWN + candidates;
+                                        applies to an EMPTY diff too, C2)
+    legacy graph, no build identity  -> exit 1 unless --allow-legacy-graph-for-eval
 
 Tooling/environment hard errors (missing xmake metadata, malformed target
 metadata, missing/ambiguous compile command at build time) -> exit 2.
@@ -78,7 +91,7 @@ import re
 import subprocess
 import sys
 import time
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
@@ -808,13 +821,13 @@ def classify_impact(
                 "UNVERIFIED until the index is rebuilt at the queried head"
             )
 
-    build_fail = (
-        build_state is not None
-        and build_state.get("verified") is False
-        and cxx_changed
-    )
+    # Corrective-1 C3 (permanent rule): a build-world mismatch fails closed
+    # UNCONDITIONALLY — config-only or membership-only drift with no changed
+    # C++ file is still a wrong-world analysis. NO_FORMAL_IMPACT requires a
+    # verified build world AND no impact.
+    build_fail = build_state is not None and build_state.get("verified") is not True
     if build_fail:
-        reason_key = build_state["reasons"][0]
+        reason_key = build_state["reasons"][0] if build_state.get("reasons") else "UNKNOWN_BUILD_WORLD"
         detail = build_state.get("detail", "")
         for cid, entry in claim_hits.items():
             if CLASS_ORDER[entry["class"]] > CLASS_ORDER[UNKNOWN]:
@@ -997,15 +1010,12 @@ def cmd_index(args) -> int:
     manifest_out.write_text(json.dumps(build_manifest, indent=1), encoding="utf-8")
 
     world = build_manifest["worlds"][0]
-    world_targets = set(world["dependency_closure"])
     selected_tus = set(world["tus"])
     compdb = bt.load_compdb()
-    src_entries = [
-        e
-        for e in compdb
-        if str(PurePosixPath(str(e.get("file", "")))) in selected_tus
-        and bt.compdb_owner(e) in world_targets
-    ]
+    # Exact per-TU owner join (corrective-1 C4): the SAME rule the manifest
+    # builder used, so what scip-clang indexes is exactly the world's
+    # selected compile interpretation set.
+    src_entries = bt.select_world_entries(compdb, world)
     if not src_entries:
         print("error: selected build world produced no compile_commands entries", file=sys.stderr)
         return 2
@@ -1160,15 +1170,21 @@ def check_build_world(graph: Graph | None, manifest_path: Path | None = None) ->
       verified: True  — graph build identity == manifest == current world
                 False — a build-truth mismatch (fail closed)
                 None  — graph carries no build identity (schema /1 or
-                        synthetic graph): cannot verify, explicitly skipped
+                        synthetic graph): the build world is UNKNOWN. This
+                        is a fail-closed state by default (corrective-1 C1);
+                        only the explicit `--allow-legacy-graph-for-eval`
+                        opt-in may proceed past it, and only when verified
+                        is None (a verification FAILURE is never bypassed).
     """
     if graph is None or not graph.build:
         return {
             "verified": None,
-            "reasons": [],
+            "reasons": ["UNKNOWN_BUILD_WORLD"],
             "detail": (
                 "graph carries no build identity block (pre-Build-Truth or "
-                "synthetic graph); build-world verification skipped"
+                "synthetic graph); the build world is UNKNOWN and fails "
+                "closed by default (--allow-legacy-graph-for-eval is the "
+                "explicit evaluation-only opt-in)"
             ),
         }
     try:
@@ -1285,10 +1301,26 @@ def cmd_check(args) -> int:
         print("FAIL  rebuild with 'formal_impact.py index', or pass --structure-only")
         return 1
 
-    # FDG-0 Phase A: the graph must describe the CURRENT build world. A
-    # graph with a build identity block is verified against the Build
-    # Manifest and the live Xmake configuration; any drift is a failure.
-    if graph.build:
+    # FDG-0 Phase A + corrective-1 C1: the graph must describe the CURRENT
+    # build world. A graph WITH a build identity block is verified against
+    # the Build Manifest and the live Xmake configuration; any drift is a
+    # failure. A graph WITHOUT one is UNKNOWN_BUILD_WORLD and fails closed
+    # by default; --allow-legacy-graph-for-eval is the explicit
+    # evaluation-only opt-in (historical schema /1 fixtures, synthetic
+    # graphs) and is reported in the output. It never bypasses a FAILED
+    # verification.
+    legacy_ok = getattr(args, "allow_legacy_graph_for_eval", False)
+    if not graph.build:
+        if not legacy_ok:
+            print("FAIL  UNKNOWN_BUILD_WORLD: graph carries no build identity block "
+                  "(pre-Build-Truth / synthetic graph); the build world cannot be "
+                  "verified and 'build world unknown' must not silently pass")
+            print("FAIL  rebuild with 'formal_impact.py index', or pass "
+                  "--allow-legacy-graph-for-eval for evaluation-only runs")
+            return 1
+        print("NOTE  LEGACY GRAPH ACCEPTED FOR EVAL (--allow-legacy-graph-for-eval): "
+              "build-world verification skipped; do not use for authoritative runs")
+    else:
         try:
             import build_truth as bt
 
@@ -1311,9 +1343,6 @@ def cmd_check(args) -> int:
             return 1
         print(f"OK    build world verified (world {graph.build.get('world_id')}, "
               f"build_id {graph.build.get('build_id', '')[:12]})")
-    else:
-        print("NOTE  graph carries no build identity block (pre-Build-Truth or "
-              "synthetic graph); build-world verification skipped")
 
     resolutions = resolve_anchors(registry, graph)
     bad = 0
@@ -1383,16 +1412,50 @@ def cmd_impact(args) -> int:
         registry, manifest, graph
     )
 
-    if not changes:
-        print("NO_FORMAL_IMPACT (empty diff)")
-        return 0
-
-    # FDG-0 Phase A: verify the graph's recorded build world against the
-    # current Xmake configuration + Build Manifest. A drift is a fail-closed
-    # UNKNOWN (with candidates preserved), never a silent NO.
+    # Corrective-1 C2: Build Truth verification is a PRECONDITION of
+    # NO_FORMAL_IMPACT, so it runs BEFORE the empty-diff short-circuit.
+    # NO_FORMAL_IMPACT requires a verified build world AND no impact.
     build_state = check_build_world(
         graph, Path(args.build_manifest) if args.build_manifest else None
     )
+    legacy_ok = getattr(args, "allow_legacy_graph_for_eval", False)
+    # The eval opt-in applies ONLY to a graph that has no build identity
+    # block (verified is None). A verification FAILURE (verified False) is
+    # never bypassed, with or without the flag.
+    legacy_bypass = (
+        legacy_ok
+        and graph is not None
+        and not graph.build
+        and build_state.get("verified") is None
+    )
+    build_verified = build_state.get("verified") is True or legacy_bypass
+
+    if not changes and build_verified:
+        if getattr(args, "json", False):
+            print(json.dumps({
+                "classification": NO_IMPACT,
+                "claims": [],
+                "changed_files": [],
+                "changed_symbols": {},
+                "risks": [],
+                "graph_present": graph is not None,
+                "build_world": None if legacy_bypass else build_state,
+                "build_world_eval_skipped": (
+                    "legacy graph without build identity accepted for eval "
+                    "(--allow-legacy-graph-for-eval); build-world verification skipped"
+                ) if legacy_bypass else None,
+                "semantic_disposition": "UNDETERMINED",
+                "fail_closed": False,
+                "fail_closed_reasons": [],
+                "empty_diff": True,
+                "range": args.range,
+                "base": base,
+                "head": head,
+                "exit_code": 0,
+            }, indent=2, sort_keys=True))
+        else:
+            print("NO_FORMAL_IMPACT (empty diff; build world verified)")
+        return 0
 
     result = classify_impact(
         graph,
@@ -1404,11 +1467,16 @@ def cmd_impact(args) -> int:
         unresolved_gated,
         max_depth=args.max_depth,
         expected_head=expected_head,
-        build_state=build_state,
+        build_state=None if legacy_bypass else build_state,
     )
     result["range"] = args.range
     result["base"] = base
     result["head"] = head
+    if legacy_bypass:
+        result["build_world_eval_skipped"] = (
+            "legacy graph without build identity accepted for eval "
+            "(--allow-legacy-graph-for-eval); build-world verification skipped"
+        )
 
     # Exit contract (corrective-1 C1): fail closed on UNKNOWN, stale graph,
     # unresolved non-gated anchors, traversal UNKNOWN, or a missing graph
@@ -1425,14 +1493,16 @@ def cmd_impact(args) -> int:
 
     print("FORMAL IMPACT")
     print()
-    if result["build_world"] is not None:
+    if result.get("build_world_eval_skipped"):
+        print(f"build world:   SKIPPED-FOR-EVAL ({result['build_world_eval_skipped']})")
+        print()
+    elif result["build_world"] is not None:
         bw = result["build_world"]
         if bw.get("verified") is True:
             print(f"build world:   OK ({bw.get('build_id', '')[:12]})")
-        elif bw.get("verified") is False:
-            print(f"build world:   FAIL-CLOSED {','.join(bw.get('reasons', []))} — {bw.get('detail')}")
         else:
-            print(f"build world:   unverifiable (no build identity in graph) — {bw.get('detail')}")
+            reasons = ",".join(bw.get("reasons") or ["UNKNOWN_BUILD_WORLD"])
+            print(f"build world:   FAIL-CLOSED {reasons} — {bw.get('detail')}")
         print()
     print("changed:")
     for path in result["changed_files"]:
@@ -1486,8 +1556,9 @@ def cmd_impact(args) -> int:
     if result.get("candidate_classification") is not None:
         print()
         print(
-            f"UNVERIFIED_STALE_GRAPH candidates: candidate_classification="
-            f"{result['candidate_classification']} candidate_claims={result['candidate_claims']}"
+            f"UNVERIFIED candidates (stale graph / build world): "
+            f"candidate_classification={result['candidate_classification']} "
+            f"candidate_claims={result['candidate_claims']}"
         )
         print(f"  {result['candidate_reason']}")
     if result["risks"]:
@@ -1683,6 +1754,11 @@ def main(argv: list[str]) -> int:
     p_check.add_argument("--structure-only", action="store_true",
                          help="validate registry structure only (no graph required); "
                               "default check requires a FRESH graph + full anchor resolution")
+    p_check.add_argument("--allow-legacy-graph-for-eval",
+                         action="store_true",
+                         help="EVALUATION OPT-IN: accept a graph without a build identity "
+                              "block (schema /1 fixture / synthetic); default fails closed "
+                              "with UNKNOWN_BUILD_WORLD. Never bypasses a FAILED verification.")
     add_artifact_args(p_check)
     p_check.set_defaults(func=cmd_check)
 
@@ -1703,6 +1779,10 @@ def main(argv: list[str]) -> int:
     p_impact.add_argument("--allow-unknown-for-eval", action="store_true",
                           help="EXPERIMENT OPT-IN: exit 0 on UNKNOWN/fail-closed results so the "
                                "evaluation harness can observe them; never changes classification")
+    p_impact.add_argument("--allow-legacy-graph-for-eval", action="store_true",
+                          help="EVALUATION OPT-IN: accept a graph without a build identity "
+                               "block (schema /1 fixture / synthetic); default fails closed "
+                               "with UNKNOWN_BUILD_WORLD. Never bypasses a FAILED verification.")
     add_artifact_args(p_impact)
     p_impact.set_defaults(func=cmd_impact)
 

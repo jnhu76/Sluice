@@ -19,6 +19,16 @@ database. No xmake, scip-clang, or C++ build is required.
     A10 stale Build Manifest under a different configuration -> not fresh
     A11 duplicate/ambiguous compile commands for one TU -> fail closed
     provenance: BUILD is recorded in the manifest
+
+Corrective-1 (PR #302 review) regressions:
+
+    CR6 a TU must not borrow a sibling/dependency target's compdb entry:
+        owning target missing while another closure target owns the same
+        path -> UNKNOWN_BUILD_WORLD
+    CR7 unrelated compdb cardinality (diagnostics) does not change the
+        selected build identity
+    CR8 compdb ownership derives ONLY from the `-o` object path, never from
+        arbitrary command text containing `/.objs/...`
 """
 from __future__ import annotations
 
@@ -319,6 +329,137 @@ class BuildTruthTests(unittest.TestCase):
         self.assertIn("BUILD", manifest["provenance"])
         self.assertIn("build_id", manifest)
         self.assertEqual(len(manifest["build_id"]), 64)
+
+    # --- corrective-1: exact per-TU owner join (CR6 / C4) --------------------
+
+    def test_c4_cr6_tu_cannot_borrow_sibling_target_entry(self):
+        # src/async/a.cpp is owned ONLY by sluice_async. Its sluice_async
+        # compdb entry is removed while a sluice_core-owned entry for the
+        # SAME path remains. sluice_core is inside the dependency closure,
+        # but borrowing its compile command would analyze the TU under the
+        # wrong target's compiler interpretation -> fail closed.
+        compdb = [
+            e
+            for e in default_compdb()
+            if not (e["file"] == "src/async/a.cpp"
+                    and bt.compdb_owner(e) == "sluice_async")
+        ]
+        compdb.append(
+            cc_entry("src/async/a.cpp", "sluice_core", defines=["-DSLUICE_HAS_LIBURING"])
+        )
+        with self.assertRaises(bt.BuildTruthError) as ctx:
+            make_manifest(compdb=compdb)
+        message = str(ctx.exception)
+        self.assertIn("UNKNOWN_BUILD_WORLD", message)
+        self.assertIn("src/async/a.cpp", message)
+        self.assertIn("sluice_async", message)
+
+    def test_c4_owner_outside_both_tu_and_closure_never_selected(self):
+        # Defense in depth: an entry owned by a NON-closure target is still
+        # excluded even when the TU's owning target entry is missing (the
+        # failure is UNKNOWN_BUILD_WORLD, not a silent borrow).
+        compdb = [
+            e
+            for e in default_compdb()
+            if not (e["file"] == "src/async/a.cpp"
+                    and bt.compdb_owner(e) == "sluice_async")
+        ]
+        compdb.append(
+            cc_entry("src/async/a.cpp", "sluice_experimental_uring",
+                     defines=["-DSLUICE_HAS_LIBURING"])
+        )
+        with self.assertRaises(bt.BuildTruthError) as ctx:
+            make_manifest(compdb=compdb)
+        self.assertIn("UNKNOWN_BUILD_WORLD", str(ctx.exception))
+
+    # --- corrective-1: build identity scope (CR7 / C5) -----------------------
+
+    def test_c5_cr7_unrelated_compdb_entry_does_not_change_build_id(self):
+        # An unrelated test entry appearing in compile_commands.json changes
+        # the compdb cardinality diagnostics but must NOT change the
+        # production build identity (selected world is unchanged).
+        base = make_manifest()
+        with_extra = make_manifest(
+            compdb=default_compdb()
+            + [cc_entry("tests/unrelated_test.cpp", "some_other_test")]
+        )
+        self.assertNotEqual(
+            base["worlds"][0]["compdb"]["total_entries"],
+            with_extra["worlds"][0]["compdb"]["total_entries"],
+        )
+        self.assertEqual(
+            base["worlds"][0]["compdb"]["selected_entries"],
+            with_extra["worlds"][0]["compdb"]["selected_entries"],
+        )
+        self.assertEqual(base["build_id"], with_extra["build_id"])
+
+    # --- corrective-1: -o-derived ownership (CR8 / C6) ------------------------
+
+    def test_c6_cr8_owner_derives_from_o_argument_only(self):
+        # An include path that happens to contain /.objs/<fake>/ must NOT be
+        # treated as the owner; ownership comes from the -o object path.
+        entry = {
+            "file": "src/async/a.cpp",
+            "directory": "/repo",
+            "arguments": [
+                COMPILER,
+                "-I/tmp/.objs/fake/include",
+                "-DSLUICE_HAS_LIBURING",
+                "-c", "src/async/a.cpp",
+                "-o", obj_path("sluice_async", "src/async/a.cpp"),
+            ],
+        }
+        self.assertEqual(bt.compdb_owner(entry), "sluice_async")
+
+    def test_c6_cr8_command_string_is_shell_tokenized_before_o_lookup(self):
+        entry = {
+            "file": "src/async/a.cpp",
+            "directory": "/repo",
+            "command": (
+                f"{COMPILER} -I/tmp/.objs/fake/include -c src/async/a.cpp "
+                f"-o {obj_path('sluice_core', 'src/async/a.cpp')}"
+            ),
+        }
+        self.assertEqual(bt.compdb_owner(entry), "sluice_core")
+
+    def test_c6_cr8_owner_unknown_without_determinable_o(self):
+        base = {"file": "x.cpp", "directory": "/r"}
+        # No -o at all.
+        self.assertIsNone(
+            bt.compdb_owner({**base, "arguments": [COMPILER, "-c", "x.cpp"]})
+        )
+        # Trailing -o with no value.
+        self.assertIsNone(
+            bt.compdb_owner({**base, "arguments": [COMPILER, "-c", "x.cpp", "-o"]})
+        )
+        # Two incompatible -o outputs: ambiguous -> unknown.
+        self.assertIsNone(
+            bt.compdb_owner({
+                **base,
+                "arguments": [COMPILER, "-c", "x.cpp",
+                              "-o", obj_path("t1", "x.cpp"),
+                              "-o", obj_path("t2", "x.cpp")],
+            })
+        )
+        # -o present but the object path is outside the known xmake .objs
+        # layout -> ownership not derivable.
+        self.assertIsNone(
+            bt.compdb_owner({**base, "arguments": [COMPILER, "-c", "x.cpp",
+                                                   "-o", "/tmp/somewhere/x.o"]})
+        )
+
+    def test_c6_cr8_flags_like_wl_o_are_not_output_flags(self):
+        # `-Wl,-o,...`-style tokens or values containing -o must not be
+        # mistaken for the output flag.
+        entry = {
+            "file": "src/async/a.cpp",
+            "directory": "/repo",
+            "arguments": [
+                COMPILER, "-Wl,-o,build/.objs/other/x.o", "-c", "src/async/a.cpp",
+                "-o", obj_path("sluice_async", "src/async/a.cpp"),
+            ],
+        }
+        self.assertEqual(bt.compdb_owner(entry), "sluice_async")
 
     def test_compdb_owner_parsing(self):
         self.assertEqual(

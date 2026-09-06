@@ -95,23 +95,32 @@ worlds: [ one live world ]
                      source_globs, resolved_sources, compiler, compiler_flags } }
   tus: { path: { owning_targets, compdb_identity, compiler,
                  defines, includes, flags } }
-  compdb: { path, total_entries, selected_entries }
+  compdb: { path, total_entries, selected_entries }   # DIAGNOSTICS ONLY:
+                                                      # excluded from build_id
 provenance: { BUILD: ... }
 ```
 
 Every selected TU carries an exact `compdb_identity` (sha256 of the full
-compile command). There is no second hand-maintained source list: expected
-lists appear only inside small hermetic fixtures; production membership
-authority is Xmake output (§15 of #298).
+compile command) and its `owning_targets` — the exact join key set for that
+TU (corrective-1 C4). There is no second hand-maintained source list:
+expected lists appear only inside small hermetic fixtures; production
+membership authority is Xmake output (§15 of #298).
 
 ## 5. Build identity
 
-`build_id` is a deterministic sha256 over: schema, HEAD SHA, xmake version,
-config identity (option state), and the selected world (targets, TU set,
-dependency closure, defines/includes/flags, per-TU compile command
-interpretation). It changes when any relevant build interpretation changes
-— including `xmake f --with-liburing=y` vs `=n` under the SAME HEAD
-(verified: different `build_id`, A9).
+`build_id` is a deterministic sha256 over the SEMANTIC projection of the
+manifest: schema, HEAD SHA, xmake version, config identity (option state),
+and, per world: the selected targets, dependency closure, TU set with
+`owning_targets`, and per-TU compile interpretation. It changes when any
+relevant build interpretation changes — including `xmake f
+--with-liburing=y` vs `=n` under the SAME HEAD (verified: different
+`build_id`, A9).
+
+The world's `compdb` cardinality block (`total_entries` /
+`selected_entries`) is deliberately EXCLUDED from `build_id`
+(corrective-1 C5): an unrelated test entry appearing in or disappearing
+from `compile_commands.json` is a diagnostics change, not a change of the
+production build world (regression CR7).
 
 The graph records its build identity:
 
@@ -185,20 +194,48 @@ New fail-closed states (all exit non-zero; `impact` exit 1, tooling hard
 errors exit 2):
 
 ```text
-UNKNOWN_BUILD_WORLD        Xmake-owned TU missing its compile_commands entry,
-                           or the current world cannot be computed
+UNKNOWN_BUILD_WORLD        Xmake-owned TU missing a compile_commands entry
+                           owned by one of ITS owning targets (C4: a
+                           sibling/dependency target's entry for the same
+                           path is never borrowed), or the current world
+                           cannot be computed, or the graph has NO build
+                           identity block (C1)
 ambiguous TU command       incompatible duplicate compile commands, no
                            deterministic Xmake-derived choice
 BUILD_WORLD_CHANGED        manifest/graph identity != current Xmake config
+                           (C3: fails closed even with NO changed C++ file)
 BUILD_GRAPH_STALE          graph build_id != manifest build_id
 UNKNOWN_BUILD_MANIFEST     manifest missing/malformed
 ```
 
 `index` regenerates `compile_commands.json` first (killing the stale-compdb
 class entirely), then fails closed on any join gap. `check`/`impact` never
-regenerate; they verify. A graph without a build identity block
-(pre-Phase-A or synthetic) is handled explicitly: verification is skipped
-with a visible NOTE, never silently assumed.
+regenerate; they verify.
+
+Corrective-1 hardening (PR #302 review):
+
+- **C1 — legacy graphs fail closed.** A graph without a build identity
+  block (schema /1 or synthetic) is `UNKNOWN_BUILD_WORLD`: default `check`
+  and `impact` exit non-zero. `--allow-legacy-graph-for-eval` is the
+  explicit evaluation-only opt-in for historical fixtures; it is reported
+  in the output (`LEGACY GRAPH ACCEPTED FOR EVAL` /
+  `build_world_eval_skipped`) and never bypasses a FAILED verification —
+  only a missing identity block.
+- **C2 — build verification precedes `NO_FORMAL_IMPACT`.** `impact` checks
+  the build world BEFORE the empty-diff short-circuit: with a drifted
+  config, even `impact --range HEAD..HEAD` answers
+  `UNKNOWN_FORMAL_IMPACT` / `BUILD_WORLD_CHANGED` with exit 1 (CR4, real
+  machine). `NO_FORMAL_IMPACT` requires a verified build world AND no
+  impact.
+- **C3 — no `cxx_changed` escape hatch.** A build-world mismatch fails
+  closed unconditionally: config-only or membership-only drift with a
+  docs-only or empty diff is still a wrong-world analysis (CR5).
+- **C6 — ownership parses `-o`, not the command text.** The owning target
+  comes from the entry's `-o` object path located as an exact `-o`
+  argument (shell-tokenized for `command`-string entries); `-o` missing,
+  ambiguous, or outside the known `build/.objs/<target>/` layout makes the
+  owner unknown (fail closed). An `-I` path that happens to contain
+  `/.objs/<fake>/` never decides ownership (CR8).
 
 ## 10. A1–A12 evidence
 
@@ -216,6 +253,19 @@ with a visible NOTE, never silently assumed.
 | A10 | stale Build Manifest fails closed | `test_a10_*` + real driver A10 (`check` under the switched config exits 1) |
 | A11 | liburing F03 reproducibility | real driver A11 (full index + check, anchor `OK`) |
 | A12 | #300 regression | `python3 scripts/formal/ftlr0_eval.py run` re-run (T1–T10 + depth matrix + UNKNOWN count) |
+
+### Corrective-1 regressions (PR #302 adversarial review)
+
+| # | Requirement | Where proven |
+| --- | --- | --- |
+| CR1 | legacy graph without build identity → default `check` fails | `scripts/tests/test_formal_impact.py::LegacyGraphFailClosed::test_cr1_*` |
+| CR2 | legacy graph `impact` → UNKNOWN / non-zero (non-empty AND empty diff) | `LegacyGraphFailClosed::test_cr2_*` |
+| CR3 | `--allow-legacy-graph-for-eval` opt-in works and is reported | `LegacyGraphFailClosed::test_cr3_*` |
+| CR4 | empty diff + build config drift → UNKNOWN / non-zero | real driver `C2_empty_diff_build_precondition` (results JSON) |
+| CR5 | build mismatch with no changed C++ file → UNKNOWN / non-zero | `BuildWorldFailClosed::test_cr5_*` |
+| CR6 | TU cannot borrow a sibling/dependency target's compdb entry | `scripts/tests/test_build_truth.py::test_c4_cr6_*` |
+| CR7 | unrelated compdb entry does not change the selected `build_id` | `test_build_truth.py::test_c5_cr7_*` |
+| CR8 | ownership derives from `-o`, never arbitrary argument text | `test_build_truth.py::test_c6_cr8_*` + real-compdb equivalence re-validation (418/418) |
 
 ## 11. Explicit non-goals (Phase A)
 

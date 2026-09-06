@@ -30,8 +30,16 @@ Xmake reality (measured on xmake v3.0.9+HEAD, 2026-09):
     entries) — that is the deterministic join key from target membership to
     per-TU compiler interpretation.
 
-Fail-closed rules (FDG-0 Phase A §7, §17):
+Fail-closed rules (FDG-0 Phase A §7, §17 + corrective-1 C4/C6):
   * membership comes from Xmake, never from path prefixes;
+  * the compdb join is per-TU EXACT: an entry counts only when its owner is
+    one of THAT TU's Xmake owning targets — a sibling/dependency target's
+    entry for the same path is a wrong compiler interpretation
+    (-> UNKNOWN_BUILD_WORLD), never borrowed;
+  * the owning target comes ONLY from the entry's `-o` object path
+    (`-o` argument located exactly, object path matched against the
+    `build/.objs/<target>/` layout) — never from arbitrary command text
+    that happens to contain `/.objs/...`;
   * an Xmake-owned TU with no compile_commands entry   -> UNKNOWN_BUILD_WORLD;
   * a selected TU with ambiguous incompatible entries  -> UNKNOWN_BUILD_WORLD;
   * unknown/stale build interpretation                 -> non-zero, never NO.
@@ -43,6 +51,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 import subprocess
 from pathlib import Path, PurePosixPath
 
@@ -69,7 +78,10 @@ CONFIG_OPTIONS = [
 ]
 
 # Object-path owner pattern: `build/.objs/<target>/...`. Verified on 100% of
-# the repository's 418 compile_commands entries (xmake 3.0.9+HEAD).
+# the repository's 418 compile_commands entries (xmake 3.0.9+HEAD). Applied
+# ONLY to the `-o` argument's value (corrective-1 C6), never to the whole
+# joined command — an include path or unrelated argument that happens to
+# contain `/.objs/<name>/` must not decide ownership.
 OBJ_OWNER_RE = re.compile(r"/\.objs/([^/]+)/")
 
 # Relevant xmake option for the liburing gate (defines SLUICE_HAS_LIBURING).
@@ -225,17 +237,37 @@ def load_compdb(path: Path | None = None) -> list[dict]:
     return data
 
 
-def compdb_owner(entry: dict) -> str | None:
-    """Owning target name from the entry's object path
-    (`build/.objs/<target>/...`), or None when the entry carries no object
-    path (an entry without a deterministic owner is not usable as build
-    truth)."""
+def _entry_argv(entry: dict) -> list[str] | None:
+    """The compile command as an argument vector: `arguments` when present,
+    otherwise a shell-safe tokenization of `command`. None when the entry
+    carries neither usable form."""
     args = entry.get("arguments")
-    if isinstance(args, list):
-        joined = " ".join(args)
-    else:
-        joined = str(entry.get("command", ""))
-    match = OBJ_OWNER_RE.search(joined)
+    if isinstance(args, list) and args:
+        return [str(a) for a in args]
+    command = entry.get("command")
+    if isinstance(command, str) and command.strip():
+        return shlex.split(command)
+    return None
+
+
+def compdb_owner(entry: dict) -> str | None:
+    """Owning target name, derived ONLY from the entry's `-o` object path
+    (`build/.objs/<target>/...`), or None when ownership is not
+    determinable. Unknown owner is a fail-closed state, never a guess:
+      * `-o` missing                                       -> None;
+      * more than one `-o` output path (ambiguous command) -> None;
+      * object path outside the known xmake `.objs` layout -> None.
+    Text elsewhere in the command (include paths, macro values, ...) is
+    never inspected (corrective-1 C6)."""
+    argv = _entry_argv(entry)
+    if not argv:
+        return None
+    object_paths = [
+        argv[i + 1] for i, a in enumerate(argv) if a == "-o" and i + 1 < len(argv)
+    ]
+    if len(object_paths) != 1:
+        return None
+    match = OBJ_OWNER_RE.search(object_paths[0])
     return match.group(1) if match else None
 
 
@@ -255,9 +287,7 @@ def entry_summary(entry: dict) -> dict:
     """Human-usable summary of one compile command: compiler, relevant
     defines, include dirs, and the remaining flags (the `-o` object path is
     the join key and is preserved inside `flags`)."""
-    args = entry.get("arguments")
-    if not isinstance(args, list):
-        args = str(entry.get("command", "")).split()
+    args = _entry_argv(entry) or []
     compiler = args[0] if args else None
     defines: list[str] = []
     includes: list[str] = []
@@ -315,18 +345,34 @@ def dependency_closure(root_targets: list[str], graph: dict) -> list[str]:
     return order
 
 
-def select_compdb_entries(compdb: list[dict], tu_path: str, world_targets: set[str]) -> list[dict]:
-    """Compile_commands entries for one TU owned by a target in the selected
-    world. Entries owned by targets outside the world (test seams, internal
-    testing variants, unselected libs) are excluded — membership comes from
-    Xmake target ownership, not from the source path."""
+def select_compdb_entries(
+    compdb: list[dict], tu_path: str, owning_targets: set[str]
+) -> list[dict]:
+    """Compile_commands entries for one TU whose owner is one of THAT TU's
+    Xmake owning targets (corrective-1 C4 exact join). Entries owned by any
+    other target — even one inside the same dependency closure — are a
+    different compiler interpretation and must never be borrowed."""
     tu = normalize_path(tu_path)
     out = []
     for entry in compdb:
         if normalize_path(str(entry.get("file", ""))) != tu:
             continue
         owner = compdb_owner(entry)
-        if owner in world_targets:
+        if owner is not None and owner in owning_targets:
+            out.append(entry)
+    return out
+
+
+def select_world_entries(compdb: list[dict], world: dict) -> list[dict]:
+    """All compile_commands entries of a manifest world's TU set, joined by
+    each TU's exact owning targets (the single join rule shared by the
+    manifest builder and `index`)."""
+    tus = world.get("tus", {})
+    out: list[dict] = []
+    for entry in compdb:
+        tu = normalize_path(str(entry.get("file", "")))
+        owners = tus.get(tu, {}).get("owning_targets")
+        if owners and compdb_owner(entry) in set(owners):
             out.append(entry)
     return out
 
@@ -360,7 +406,6 @@ def build_world(
     """Construct one selected build world (manifest `worlds[0]`). Fails
     closed (BuildTruthError) on missing/ambiguous compile interpretations."""
     closure = dependency_closure(root_targets, graph)
-    world_targets = set(closure)
 
     targets: dict[str, dict] = {}
     for name in closure:
@@ -392,11 +437,15 @@ def build_world(
 
     selected_entries = 0
     for tu in sorted(tus):
-        entries = select_compdb_entries(compdb, tu, world_targets)
+        owners = set(tus[tu]["owning_targets"])
+        entries = select_compdb_entries(compdb, tu, owners)
         if not entries:
             raise BuildTruthError(
-                f"UNKNOWN_BUILD_WORLD: Xmake-owned TU {tu} has no compile_commands "
-                "entry owned by the selected world (stale compdb? regenerate with "
+                f"UNKNOWN_BUILD_WORLD: Xmake-owned TU {tu} (owning targets: "
+                f"{sorted(owners)}) has no compile_commands entry owned by any of "
+                "its owning targets (sibling/dependency-target entries for the "
+                "same path are a different compiler interpretation and are not "
+                "borrowed; stale compdb? regenerate with "
                 "'xmake project -k compile_commands')"
             )
         identities = {entry_identity(e) for e in entries}
@@ -450,18 +499,41 @@ def _first_compiler_flags(meta: dict) -> str | None:
     return None
 
 
-def compute_build_identity(manifest: dict) -> str:
-    """Deterministic build-world identity. Changes when any relevant build
-    interpretation changes: selected targets, TU set, dependency closure,
-    defines/options, or per-TU compile commands (see FDG-0 Phase A §6)."""
-    payload = {
+def build_identity_payload(manifest: dict) -> dict:
+    """The SEMANTIC projection of a manifest that build identity is computed
+    over (corrective-1 C5): selected targets, dependency closure, TU set
+    with owning targets, per-TU compile interpretation, config options,
+    xmake version, HEAD. The world's `compdb` block (total/selected entry
+    counts) is diagnostics-only and deliberately EXCLUDED: an unrelated
+    compile_commands entry appearing or disappearing must not change the
+    production build identity."""
+    return {
         "schema": manifest.get("schema"),
         "head_sha": manifest.get("head_sha"),
         "xmake_version": manifest.get("xmake_version"),
         "config": manifest.get("config"),
-        "worlds": manifest.get("worlds"),
+        "worlds": [
+            {
+                "id": w.get("id"),
+                "root_targets": w.get("root_targets"),
+                "config": w.get("config"),
+                "dependency_closure": w.get("dependency_closure"),
+                "targets": w.get("targets"),
+                "tus": w.get("tus"),
+            }
+            for w in manifest.get("worlds", [])
+        ],
     }
-    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def compute_build_identity(manifest: dict) -> str:
+    """Deterministic build-world identity. Changes when any relevant build
+    interpretation changes: selected targets, TU set, dependency closure,
+    defines/options, or per-TU compile commands (see FDG-0 Phase A §6).
+    Unrelated compdb cardinality changes do NOT affect it (C5)."""
+    return hashlib.sha256(
+        canonical_json(build_identity_payload(manifest)).encode("utf-8")
+    ).hexdigest()
 
 
 def build_manifest(
@@ -560,7 +632,7 @@ def verify_current_world(manifest: dict, compdb: list[dict] | None = None) -> di
         "config": {"id": config_id(options), "options": {k: options.get(k) for k in CONFIG_OPTIONS}},
         "worlds": [world],
     }
-    probe_id = hashlib.sha256(canonical_json(probe).encode("utf-8")).hexdigest()
+    probe_id = compute_build_identity(probe)
 
     recorded_head = manifest.get("head_sha")
     recorded_cfg = (manifest.get("config") or {}).get("id")

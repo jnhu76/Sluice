@@ -22,6 +22,10 @@ Executes the real adversarial specimens A4–A11 against the live repository:
           -> fail closed
     A11 liburing F03 reproducibility: the gated uring terminal anchor
           resolves under the declared liburing variant
+    C2  corrective-1: build-world verification precedes the empty-diff
+          NO_FORMAL_IMPACT — with a drifted xmake config, `impact
+          --range HEAD..HEAD` (EMPTY diff) must answer
+          UNKNOWN_FORMAL_IMPACT / BUILD_WORLD_CHANGED with a non-zero exit
 
 Worktree safety (mirrors ftlr0_eval.py): snapshots every touched file,
 refuses to run on a dirty tree, restores bytes verbatim, restores the xmake
@@ -153,6 +157,21 @@ class Driver:
             "--json", "--allow-unknown-for-eval", *args,
         )
         return json.loads(out)
+
+    def run_impact_raw(self, args: list[str]) -> tuple[int, dict]:
+        """impact WITHOUT --allow-unknown-for-eval: observes the DEFAULT
+        exit contract (fail-closed -> non-zero), which is exactly what the
+        C2/CR4 specimen must prove."""
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "formal_impact.py"),
+             "impact", "--json", *args],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        )
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            payload = {"stdout": result.stdout[-2000:], "stderr": result.stderr[-2000:]}
+        return result.returncode, payload
 
     def compdb_entries_for(self, path: str) -> list[dict]:
         compdb = json.loads((REPO_ROOT / "compile_commands.json").read_text())
@@ -468,6 +487,51 @@ class Driver:
         )
         self.records["A9_A10_config_drift_stale_manifest"] = rec
 
+    def c2_empty_diff_build_precondition(self):
+        """Corrective-1 C2/CR4: with a drifted xmake config, an EMPTY diff
+        must NOT answer NO_FORMAL_IMPACT. `impact --range HEAD..HEAD` under
+        the drifted config -> UNKNOWN_FORMAL_IMPACT + BUILD_WORLD_CHANGED,
+        default exit contract non-zero. Restores the config and re-proves
+        the verified-world NO."""
+        rec = {
+            "expected": (
+                "empty diff + drifted config -> UNKNOWN_FORMAL_IMPACT "
+                "(BUILD_WORLD_CHANGED), exit != 0; verified world + empty "
+                "diff -> NO_FORMAL_IMPACT, exit 0"
+            )
+        }
+        head = fi.git_rev("HEAD")
+        self.reindex()
+        rc0, res0 = self.run_impact_raw(["--range", f"{head}..{head}"])
+        rec["verified_world_exit"] = rc0
+        rec["verified_world_class"] = res0.get("classification")
+        rec["verified_world_build"] = (res0.get("build_world") or {}).get("verified")
+        try:
+            sh("xmake", "f", "--with-liburing=n")
+            sh("xmake", "project", "-k", "compile_commands")
+            rc1, res1 = self.run_impact_raw(["--range", f"{head}..{head}"])
+            rec["drifted_world_exit"] = rc1
+            rec["drifted_world_class"] = res1.get("classification")
+            rec["drifted_build_reasons"] = (res1.get("build_world") or {}).get("reasons")
+            rec["drifted_fail_closed"] = res1.get("fail_closed")
+        finally:
+            sh("xmake", "f", "--with-liburing=y")
+            sh("xmake", "project", "-k", "compile_commands")
+        self.reindex()
+        rc2, res2 = self.run_impact_raw(["--range", f"{head}..{head}"])
+        rec["restored_world_exit"] = rc2
+        rec["restored_world_class"] = res2.get("classification")
+        rec["pass"] = (
+            rc0 == 0 and res0.get("classification") == fi.NO_IMPACT
+            and (res0.get("build_world") or {}).get("verified") is True
+            and rc1 != 0
+            and res1.get("classification") == fi.UNKNOWN
+            and "BUILD_WORLD_CHANGED" in (rec["drifted_build_reasons"] or [])
+            and res1.get("fail_closed") is True
+            and rc2 == 0 and res2.get("classification") == fi.NO_IMPACT
+        )
+        self.records["C2_empty_diff_build_precondition"] = rec
+
     def a11_liburing_f03_reproducible(self):
         rec = {}
         rc, out = self.run_check()
@@ -512,6 +576,7 @@ class Driver:
             self.a7_t7a_real_move()
             self.a8_path_not_authority()
             self.a9_a10_config_drift_and_stale_manifest()
+            self.c2_empty_diff_build_precondition()
             self.a11_liburing_f03_reproducible()
         finally:
             self.restore()

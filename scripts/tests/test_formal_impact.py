@@ -23,7 +23,17 @@ Covers S1-S10 plus the corrective-1 exit/provenance contract (R1-R10):
     R7  helper-only diff (T8 shape)                 -> STRUCTURAL at depth >= 1
     R8  helper-only diff at depth 0                 -> no direct anchor hit (NO)
     R9  provenance in machine-readable results      -> EXPLICIT/COMPILER/HEURISTIC present
-    R10 DIRECT/STRUCTURAL/COARSE/NO success paths     -> exit 0
+    R10 DIRECT/STRUCTURAL/COARSE/NO success paths   -> exit 0
+
+FDG-0 Phase A corrective-1 (Build Truth hardening, PR #302 review):
+
+    CR1 legacy graph (no build identity) -> default check fails
+    CR2 legacy graph impact              -> UNKNOWN/non-zero (non-empty AND
+                                            empty diff; C2 ordering)
+    CR3 --allow-legacy-graph-for-eval    -> explicit evaluation-only opt-in
+                                            works and is reported
+    CR4 empty diff + build config drift  -> UNKNOWN/non-zero (C2)
+    CR5 build drift with no changed C++ file -> UNKNOWN/non-zero (C3)
 
 These tests are pure stdlib and operate on synthetic graphs + a minimal
 hand-built SCIP byte payload; they do NOT require scip-clang or a build.
@@ -46,6 +56,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 import formal_impact as fi  # noqa: E402
 import scip_index as si  # noqa: E402
+import build_truth as bt  # noqa: E402
 
 
 # --- fixtures ---------------------------------------------------------------
@@ -587,6 +598,12 @@ class ExitContract(unittest.TestCase):
             "--manifest", str(self.manifest),
         ]
 
+    def art_legacy(self):
+        # The synthetic fixture graph carries no build identity block, so
+        # the default CLI fails closed (corrective-1 C1); evaluation-only
+        # tests pass the explicit opt-in.
+        return self.art() + ["--allow-legacy-graph-for-eval"]
+
     def test_r1_unknown_impact_exits_nonzero(self):
         patch = self.tmp / "unknown.patch"
         patch.write_text(diff_patch("src/new_unindexed.cpp", 1, 2), encoding="utf-8")
@@ -659,7 +676,7 @@ class ExitContract(unittest.TestCase):
 
     def test_default_check_with_fresh_graph_passes(self):
         self.write_graph_from(make_graph(head_sha=fi.git_rev("HEAD")))
-        rc, out = self.run_cli("check", *self.art())
+        rc, out = self.run_cli("check", "--allow-legacy-graph-for-eval", *self.art())
         self.assertEqual(rc, 0, out)
         self.assertIn("all registered anchors resolve", out)
 
@@ -679,7 +696,7 @@ class ExitContract(unittest.TestCase):
         for name, (start, expected) in cases.items():
             patch = self.tmp / name
             patch.write_text(diff_patch("src/async/fake_sched.cpp", start), encoding="utf-8")
-            rc, out = self.run_cli("impact", "--diff-file", str(patch), "--json", *self.art())
+            rc, out = self.run_cli("impact", "--diff-file", str(patch), "--json", *self.art_legacy())
             self.assertEqual(rc, 0, f"{name}: {out}")
             result = json.loads(out)
             self.assertEqual(result["classification"], expected, name)
@@ -688,9 +705,206 @@ class ExitContract(unittest.TestCase):
     def test_r10_no_impact_exits_zero(self):
         patch = self.tmp / "other.patch"
         patch.write_text(diff_patch("src/other.cpp", 51), encoding="utf-8")
-        rc, out = self.run_cli("impact", "--diff-file", str(patch), "--json", *self.art())
+        rc, out = self.run_cli("impact", "--diff-file", str(patch), "--json", *self.art_legacy())
         self.assertEqual(rc, 0, out)
         self.assertEqual(json.loads(out)["classification"], fi.NO_IMPACT)
+
+
+# --- corrective-1 Phase-A: legacy graph fail-closed (CR1/CR2/CR3) ---------------
+
+
+class LegacyGraphFailClosed(unittest.TestCase):
+    """Corrective-1 C1: a graph without a build identity block is
+    UNKNOWN_BUILD_WORLD and fails closed by default, in `check` and in
+    `impact`; only the explicit --allow-legacy-graph-for-eval opt-in may
+    proceed (and is reported)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.registry = self.tmp / "registry.json"
+        self.manifest = self.tmp / "manifest.json"
+        self.graph = self.tmp / "graph.json"
+        self.registry.write_text(json.dumps(CLI_REGISTRY), encoding="utf-8")
+        self.manifest.write_text(json.dumps(CLI_MANIFEST), encoding="utf-8")
+        # Legacy schema-/1-shaped graph: no `build` block at all.
+        self.graph.write_text(
+            json.dumps({
+                "schema": "sluice-formal-impact-graph/1",
+                "head_sha": fi.git_rev("HEAD"),
+                "generated_at": "2026-09-05T00:00:00Z",
+                "toolchain": {},
+                "nodes": make_graph().nodes,
+                "reverse": make_graph().reverse,
+                "documents": make_graph().documents,
+                "def_positions": make_graph().def_positions,
+                "stats": {},
+            }),
+            encoding="utf-8",
+        )
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def run_cli(self, *argv: str):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = fi.main(list(argv))
+        return rc, buf.getvalue()
+
+    def art(self):
+        return [
+            "--graph", str(self.graph),
+            "--registry", str(self.registry),
+            "--manifest", str(self.manifest),
+        ]
+
+    def test_cr1_legacy_graph_check_fails_closed(self):
+        rc, out = self.run_cli("check", *self.art())
+        self.assertEqual(rc, 1, out)
+        self.assertIn("UNKNOWN_BUILD_WORLD", out)
+        self.assertIn("no build identity", out)
+
+    def test_cr2_legacy_graph_impact_fails_closed(self):
+        patch = self.tmp / "helper.patch"
+        patch.write_text(diff_patch("src/async/fake_sched.cpp", 65), encoding="utf-8")
+        rc, out = self.run_cli("impact", "--diff-file", str(patch), "--json", *self.art())
+        self.assertEqual(rc, 1, out)
+        result = json.loads(out)
+        self.assertEqual(result["classification"], fi.UNKNOWN)
+        self.assertEqual(result["unknown_reason"], "UNKNOWN_BUILD_WORLD")
+        self.assertEqual(result["build_world"]["verified"], None)
+        self.assertNotEqual(result["classification"], fi.NO_IMPACT)
+
+    def test_cr2_legacy_graph_empty_diff_fails_closed(self):
+        # Even an EMPTY diff must not answer NO against an unverifiable
+        # build world (C2: build verification precedes the empty-diff NO).
+        rc, out = self.run_cli("impact", "--range", "HEAD..HEAD", "--json", *self.art())
+        self.assertEqual(rc, 1, out)
+        result = json.loads(out)
+        self.assertEqual(result["classification"], fi.UNKNOWN)
+
+    def test_cr3_eval_optin_allows_legacy_graph_and_is_reported(self):
+        rc, out = self.run_cli("check", "--allow-legacy-graph-for-eval", *self.art())
+        self.assertEqual(rc, 0, out)
+        self.assertIn("LEGACY GRAPH ACCEPTED FOR EVAL", out)
+
+        patch = self.tmp / "direct.patch"
+        patch.write_text(diff_patch("src/async/fake_sched.cpp", 11), encoding="utf-8")
+        rc, out = self.run_cli(
+            "impact", "--diff-file", str(patch), "--json",
+            "--allow-legacy-graph-for-eval", *self.art(),
+        )
+        self.assertEqual(rc, 0, out)
+        result = json.loads(out)
+        self.assertEqual(result["classification"], fi.DIRECT)
+        self.assertIn("build_world_eval_skipped", result)
+
+
+# --- corrective-1 Phase-A: build world precedes NO / cxx independence (CR4/CR5) --
+
+
+class BuildWorldFailClosed(unittest.TestCase):
+    """Corrective-1 C2/C3: build-world verification runs BEFORE the
+    empty-diff NO_FORMAL_IMPACT short-circuit, and a build-world mismatch
+    fails closed regardless of whether any C++ file changed. Hermetic: the
+    graph carries a build identity block and the Build Truth layer is
+    monkeypatched to report a stale world."""
+
+    BUILD_ID = "b" * 64
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.registry = self.tmp / "registry.json"
+        self.manifest = self.tmp / "manifest.json"
+        self.graph = self.tmp / "graph.json"
+        self.registry.write_text(json.dumps(CLI_REGISTRY), encoding="utf-8")
+        self.manifest.write_text(json.dumps(CLI_MANIFEST), encoding="utf-8")
+        self.graph.write_text(
+            json.dumps({
+                "schema": fi.GRAPH_SCHEMA,
+                "head_sha": fi.git_rev("HEAD"),
+                "generated_at": "2026-09-05T00:00:00Z",
+                "toolchain": {},
+                "nodes": make_graph().nodes,
+                "reverse": make_graph().reverse,
+                "documents": make_graph().documents,
+                "def_positions": make_graph().def_positions,
+                "stats": {},
+                "build": {
+                    "schema": "sluice-build-manifest/1",
+                    "build_id": self.BUILD_ID,
+                    "world_id": "sluice_async-liburing",
+                },
+            }),
+            encoding="utf-8",
+        )
+        self._real_load = bt.load_manifest
+        self._real_verify = bt.verify_current_world
+        bt.load_manifest = lambda path=None: {
+            "schema": "sluice-build-manifest/1", "build_id": self.BUILD_ID,
+        }
+        bt.verify_current_world = lambda manifest, compdb=None: {
+            "fresh": False,
+            "reason": "BUILD_WORLD_CHANGED",
+            "detail": "fixture: current xmake config != manifest world",
+        }
+
+    def tearDown(self):
+        bt.load_manifest = self._real_load
+        bt.verify_current_world = self._real_verify
+        self._tmp.cleanup()
+
+    def run_cli(self, *argv: str):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = fi.main(list(argv))
+        return rc, buf.getvalue()
+
+    def art(self):
+        return [
+            "--graph", str(self.graph),
+            "--registry", str(self.registry),
+            "--manifest", str(self.manifest),
+        ]
+
+    def test_cr4_empty_diff_with_drifted_build_world_fails_closed(self):
+        rc, out = self.run_cli("impact", "--range", "HEAD..HEAD", "--json", *self.art())
+        self.assertEqual(rc, 1, out)
+        result = json.loads(out)
+        self.assertEqual(result["classification"], fi.UNKNOWN)
+        self.assertNotEqual(result["classification"], fi.NO_IMPACT)
+        self.assertTrue(result["fail_closed"])
+        self.assertEqual(result["build_world"]["verified"], False)
+        self.assertIn("BUILD_WORLD_CHANGED", result["build_world"]["reasons"])
+        self.assertIn("BUILD_WORLD_CHANGED", result["fail_closed_reasons"][0])
+
+    def test_cr5_build_drift_fails_closed_without_cxx_change(self):
+        # A docs-only diff: no C++ file changed, yet the stale build world
+        # still fails closed (C3 permanent rule).
+        patch = self.tmp / "docs.patch"
+        patch.write_text(diff_patch("docs/some_note.md", 1), encoding="utf-8")
+        rc, out = self.run_cli("impact", "--diff-file", str(patch), "--json", *self.art())
+        self.assertEqual(rc, 1, out)
+        result = json.loads(out)
+        self.assertEqual(result["classification"], fi.UNKNOWN)
+        self.assertEqual(result["unknown_reason"], "BUILD_WORLD_CHANGED")
+        self.assertTrue(result["fail_closed"])
+
+    def test_verified_build_world_with_empty_diff_still_answers_no(self):
+        # Control: with the world verified, an empty diff IS a NO (C2 keeps
+        # the short-circuit; it only refuses to answer NO while unverified).
+        bt.verify_current_world = lambda manifest, compdb=None: {
+            "fresh": True,
+            "current_build_id": self.BUILD_ID,
+            "manifest_build_id": self.BUILD_ID,
+        }
+        rc, out = self.run_cli("impact", "--range", "HEAD..HEAD", "--json", *self.art())
+        self.assertEqual(rc, 0, out)
+        result = json.loads(out)
+        self.assertEqual(result["classification"], fi.NO_IMPACT)
+        self.assertEqual(result["build_world"]["verified"], True)
 
 
 # --- diff parsing + SCIP symbol naming ----------------------------------------
