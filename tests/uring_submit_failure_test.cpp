@@ -26,6 +26,7 @@
 #include <liburing.h>
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -55,6 +56,7 @@ constexpr bool kAddressSpaceProbeActive = true;
 namespace {
 
 using sluice::IoError;
+using sluice::async::BackendWakeReason;
 using sluice::async::Completion;
 using sluice::async::ReadOp;
 using sluice::async::UringAsyncBackend;
@@ -798,6 +800,172 @@ SLUICE_TEST_CASE(uring_poison_wait_drains_old_kernel_work_without_resubmitting_c
     SLUICE_CHECK(write_recovered);
     SLUICE_CHECK(old_kernel_work_drained);
     SLUICE_CHECK(quarantined_write_never_executed);
+}
+
+// #305 TV-1 B1 specimen: the D4-RM17 cancel-path poison-wake hole (869be913).
+//
+// A RUNNING kernel-side operation (blocked pipe read) is cancelled while the
+// physical SQ is full of dispatched-but-unsubmitted write SQEs. The cancel's
+// best-effort AsyncCancel append finds get_sqe == null and flushes transport
+// progress; the flush is scripted -EIO — a PERMANENT failure that newly
+// poisons the backend. Poison recovery retires the proven-zero-consumption
+// Class-A ledger (the four writes) to backend_error/EIO terminals with NO
+// reap running. A waiter parked in the split-phase ready wait (park announced
+// through the deterministic wait-phase latch BEFORE the stimulus) must be
+// woken by that publication:
+//   repaired world: the deferred signal_ready_progress() at the
+//     issue_running_cancel tail fires (newly-poisoned branch falls out of the
+//     lock scope) -> the waiter returns with reason progress.
+//   broken world (SLUICE_TV1_C012_MUTANT, the pre-869be913 early return):
+//     the wake is dropped; the waiter stays parked on PUBLISHED terminals —
+//     the D4-RM17 signature. The test recovers it with the control plane
+//     (interrupt_all) and fails fail-closed.
+// Trace-channel result (TV-1 report): TRACE_COVERAGE_GAP — the E9 semantic
+// vocabulary does not exist in this target (backend-domain waits are outside
+// the scheduler park/wake protocol); the specimen is runtime-level evidence.
+SLUICE_TEST_CASE(uring_tv1_b1_cancel_path_poison_wake_waiter) {
+    constexpr std::array steps{kRealSubmit, -EIO};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{6, 3}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    int pipe_fds[2]{-1, -1};
+    SLUICE_CHECK(::pipe(pipe_fds) == 0);
+    TempFile file;
+    std::byte read_byte{};
+    std::array<std::byte, 4> write_bytes{std::byte{1}, std::byte{2}, std::byte{3},
+                                         std::byte{4}};
+    Completion<std::size_t> read_completion;
+    std::array<Completion<std::size_t>, 4> write_completions;
+
+    // 1. The RUNNING operation: a kernel-side blocked pipe read.
+    SLUICE_CHECK(
+        backend.submit_read(ReadOp{pipe_fds[0], &read_byte, 1, 0}, read_completion)
+            .has_value());
+    SLUICE_CHECK(backend.poll() == 0); // consumes kRealSubmit: the read runs in the kernel
+
+    // 2. Fill the physical SQ (ring_entries = 4 for depth-3 config). Each
+    // submit_write enqueues and dispatches INLINE (install-only — the transport
+    // submit happens at poll/wait_one), so four writes occupy the four ring
+    // slots and the next get_sqe returns null.
+    for (std::size_t i = 0; i < 4; ++i) {
+        SLUICE_CHECK(backend
+                         .submit_write(
+                             WriteOp{file.fd(), write_bytes.data() + i, 1, 0},
+                             write_completions[i])
+                         .has_value());
+    }
+
+    // 3. The waiter: parks in the split-phase ready wait BEFORE the stimulus.
+    // The wait-phase latch announces the park deterministically (persistent
+    // state first; no sleep-based ordering proof). All observation windows
+    // below record flags FIRST and check them only after the waiter was
+    // recovered and joined — every early exit stays fail-closed, never a
+    // joinable thread, never a fabricated readiness.
+    std::atomic<bool> waiter_parked{false};
+    std::atomic<bool> waiter_done{false};
+    backend.set_wait_phase_flag_for_test(&waiter_parked);
+    const auto observed = backend.wait_source()->snapshot();
+    BackendWakeReason reason = BackendWakeReason::interrupted;
+    std::thread waiter([&] {
+        reason = backend.wait_source()->wait_for_change(observed);
+        waiter_done.store(true, std::memory_order_release);
+    });
+    auto spin_until = [&](std::atomic<bool>& flag) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!flag.load(std::memory_order_acquire) &&
+               std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::yield();
+        }
+        return flag.load(std::memory_order_acquire);
+    };
+    const bool parked_ok = spin_until(waiter_parked);
+    backend.set_wait_phase_flag_for_test(nullptr);
+
+    // 4. THE STIMULUS: cancel the running op. get_sqe is null (SQ full); the
+    // retry flush is scripted -EIO -> the cancel path newly poisons the
+    // backend and the Class-A recovery retires the four writes.
+    backend.cancel(read_completion);
+
+    // 5. THE WAKE OBLIGATION under scrutiny — classified with NO other
+    // driver active: the defect's geometry is "no reap runs on this path",
+    // so between the cancel and the wake classification this thread must not
+    // poll/wait the backend (a reap's own ready-progress signal would mask
+    // the dropped cancel-path wake). The parked waiter is the only observer.
+    const bool waiter_woke = spin_until(waiter_done);
+#if defined(SLUICE_TV1_C012_MUTANT)
+    if (!waiter_woke) {
+        std::fprintf(stderr,
+                     "e9-trace: TV1-B broken-world signature: waiter parked "
+                     "on published terminals (wake obligation missing)\n");
+    } else {
+        std::fprintf(stderr,
+                     "e9-trace: TV1-B broken-world signature MISSING: the "
+                     "waiter woke despite the dropped cancel-path poison "
+                     "wake\n");
+    }
+#endif
+    if (!waiter_woke)
+        backend.wait_source()->interrupt_all();
+    waiter.join();
+
+    // 6. The woken driver repolls: the reap publishes the retired Class-A
+    // terminals to the Completions (split-phase protocol: state, wake, then
+    // reap publishes once). Post-poison poll enters with to_submit=0.
+    bool all_retired = false;
+    {
+        const auto retire_deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (std::chrono::steady_clock::now() < retire_deadline) {
+            (void)backend.poll();
+            all_retired = true;
+            for (const auto& completion : write_completions) {
+                all_retired = all_retired && completion.ready() &&
+                              !completion.result().has_value() &&
+                              completion.result().error().code ==
+                                  IoError::Code::backend_error &&
+                              completion.result().error().os_errno == EIO;
+            }
+            if (all_retired)
+                break;
+            std::this_thread::yield();
+        }
+    }
+
+    SLUICE_CHECK(parked_ok);
+    SLUICE_CHECK(all_retired);
+
+    // Teardown: the kernel-side read survives the poison (Class-C, already
+    // submitted). Complete it and drain its CQE (post-poison wait_one enters
+    // with to_submit=0 — no resubmission, no script step).
+    const unsigned char seed = 0x6b;
+    SLUICE_CHECK(::write(pipe_fds[1], &seed, 1) == 1);
+    const auto waited = backend.wait_one();
+    SLUICE_CHECK(waited.has_value() && waited.value() == 1);
+    SLUICE_CHECK(read_completion.ready() && read_completion.result().has_value() &&
+                 read_completion.result().value() == 1 && read_byte == std::byte{0x6b});
+
+    if (read_completion.ready())
+        read_completion.reset();
+    for (auto& completion : write_completions) {
+        if (completion.ready())
+            completion.reset();
+    }
+    (void)::close(pipe_fds[0]);
+    (void)::close(pipe_fds[1]);
+
+#if !defined(SLUICE_TV1_C012_MUTANT)
+    // Repaired: the deferred wake at the poison tail fired.
+    SLUICE_CHECK(waiter_woke && reason == BackendWakeReason::progress);
+#else
+    // Broken: the dropped wake IS the specimen outcome — the case FAILS
+    // fail-closed (the wake obligation is not world-conditional). This case
+    // is also the regression coverage the 869be913 fix shipped without: the
+    // mutant world cannot stay green.
+    SLUICE_FAIL("TV1-B: cancel-path poison wake was dropped (D4-RM17 "
+                "signature: waiter parked on published terminals)");
+#endif
 }
 
 // P0-D control-quiescence detector. A positively submitted AsyncCancel is a

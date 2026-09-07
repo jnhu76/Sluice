@@ -1855,6 +1855,15 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         if (sqe == nullptr) {
             (void)submit_transport_locked();
             if (fatal_error_.has_value()) {
+#if defined(SLUICE_TV1_C012_MUTANT)
+                // #305 TV-1 B1 MUTANT WORLD ONLY (never defined in production,
+                // CI, or any gate build): the pre-869be913 D4-RM17 early
+                // return — the transport flush's poison retires the Class-A
+                // ledger to backend-ready terminals, but this return drops the
+                // deferred wake at the function tail, so a waiter parked in
+                // the split-phase ready wait sleeps on PUBLISHED terminals.
+                return;
+#endif
                 // THIS call's transport flush permanently
                 // poisoned the backend and retired the retained ledger
                 // entries to backend-ready terminals. No reap runs on this

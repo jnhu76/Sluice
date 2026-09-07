@@ -31,8 +31,8 @@
       "F08"
     ]
   ],
-  "generated_at": "2026-09-06T10:13:10Z",
-  "head_sha": "58a994221ed894a9a55c37871db8db9287f46e2c",
+  "generated_at": "2026-09-07T01:35:41Z",
+  "head_sha": "05d067619ccab171e15cb2ec70d557569441f376",
   "integrity": {
     "all_pass": true,
     "duplicate_rows": [],
@@ -672,8 +672,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -770,7 +770,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -794,8 +794,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -891,7 +891,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -915,8 +915,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1014,7 +1014,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1038,8 +1038,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1138,7 +1138,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1162,8 +1162,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1249,7 +1249,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1273,8 +1273,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1448,7 +1448,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1472,8 +1472,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1538,7 +1538,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1562,8 +1562,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1728,7 +1728,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1752,8 +1752,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1889,7 +1889,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1913,8 +1913,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -1967,7 +1967,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -1992,7 +1992,7 @@
       "result": {
         "base": null,
         "build_world": {
-          "detail": "graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
+          "detail": "graph build_id 675ab6cc0dd5 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
           "manifest_build_id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
           "reasons": [
             "BUILD_GRAPH_STALE"
@@ -2003,7 +2003,7 @@
           "F08"
         ],
         "candidate_classification": "DIRECT_FORMAL_IMPACT",
-        "candidate_reason": "the graph's recorded build world no longer matches the current build world (BUILD_GRAPH_STALE); graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
+        "candidate_reason": "the graph's recorded build world no longer matches the current build world (BUILD_GRAPH_STALE); graph build_id 675ab6cc0dd5 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
         "changed_files": [
           "src/async/scheduler_park_wake.cpp"
         ],
@@ -2034,7 +2034,7 @@
               ],
               "note": "diagnostic only: facet_scope stays CONSERVATIVE_ALL while the reach is untrusted (stale graph / build drift / unresolved anchor / coarse fallback / traversal uncertainty)"
             },
-            "candidate_reason": "graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
+            "candidate_reason": "graph build_id 675ab6cc0dd5 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'",
             "class": "UNKNOWN_FORMAL_IMPACT",
             "evidence": [
               "docs/verification/formal/e9-trace-conformance.md",
@@ -2091,12 +2091,12 @@
         "exit_code": 0,
         "fail_closed": true,
         "fail_closed_reasons": [
-          "BUILD_GRAPH_STALE: graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index' \u2014 the graph does not describe the current build world; re-run 'formal_impact.py index'",
+          "BUILD_GRAPH_STALE: graph build_id 675ab6cc0dd5 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index' \u2014 the graph does not describe the current build world; re-run 'formal_impact.py index'",
           "UNKNOWN_FORMAL_IMPACT: BUILD_GRAPH_STALE"
         ],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
-        "head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "head": "05d067619ccab171e15cb2ec70d557569441f376",
         "provenance_legend": {
           "BUILD": "Xmake-derived target/source/config/build fact (Build Manifest / compile_commands.json)",
           "COMPILER": "compiler-derived fact (SCIP symbol identity / definition positions)",
@@ -2106,7 +2106,7 @@
         },
         "range": null,
         "risks": [
-          "build world mismatch (BUILD_GRAPH_STALE): graph build_id c6d57d62d818 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'"
+          "build world mismatch (BUILD_GRAPH_STALE): graph build_id 675ab6cc0dd5 != manifest build_id ffffffffffff \u2014 the graph was not built from the current Build Manifest; re-run 'index'"
         ],
         "semantic_disposition": "UNDETERMINED",
         "stale_index": false,
@@ -2124,8 +2124,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2184,7 +2184,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2208,8 +2208,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2287,7 +2287,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2311,8 +2311,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2388,7 +2388,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2412,8 +2412,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2492,7 +2492,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2516,8 +2516,8 @@
       "result": {
         "base": null,
         "build_world": {
-          "build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
-          "current_build_id": "c6d57d62d8182066a733782087b1ead9dda5f970c0de4966d03e89a0aad2c4fa",
+          "build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
+          "current_build_id": "675ab6cc0dd5d11d56b8077ebfcde3de71c4cc0a678f8d46eb5aa3aaa8bf4d41",
           "detail": "build world verified (graph == manifest == current Xmake config)",
           "reasons": [],
           "verified": true
@@ -2596,7 +2596,7 @@
         "exit_code": 0,
         "fail_closed": false,
         "fail_closed_reasons": [],
-        "graph_head": "58a994221ed894a9a55c37871db8db9287f46e2c",
+        "graph_head": "05d067619ccab171e15cb2ec70d557569441f376",
         "graph_present": true,
         "head": null,
         "provenance_legend": {
@@ -2613,5 +2613,5 @@
       }
     }
   ],
-  "wall_seconds": 168.4
+  "wall_seconds": 194.9
 }

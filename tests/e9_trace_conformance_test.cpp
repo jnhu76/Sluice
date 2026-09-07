@@ -936,4 +936,236 @@ SLUICE_TEST_CASE(e9_trace_t5_prebaseline_publication_refuses_park) {
                            "external_wait_registered", evs);
 }
 
+// ---- TV1-A: C-001 historical drift sensitivity (#305) ---------------------
+// Two-world experiment over the C-001 lost-wake defect (422036cd: the await
+// suspend primitives performed register -> readiness-recheck -> suspension
+// commit as SEPARATE steps; a wake landing in that window erased the
+// registration while the fiber was still Running, the make_runnable CAS
+// failed, and the fiber then suspended unregistered — invisible to the
+// classifier and to every future wake scan).
+//
+// The EXTERNAL action sequence is identical in both worlds (2-worker live
+// run; the fiber holds at its world's suspend-protocol point; the coordinator
+// sets the flag and notifies; the executor worker runs wake_ready_flags_locked
+// during the hold; the fiber is released and must complete):
+//
+//   repaired world: the hold is scheduler_suspend_before_physical_switch —
+//     AFTER the atomic register+recheck+commit_suspend critical section. The
+//     wake path finds the registration with the fiber Waiting: the
+//     make_runnable CAS succeeds and the ticket is routed
+//     (WakePublished{runnable_route}) while the fiber is held — the relevant
+//     semantic boundary, captured in-window. (After the release the resumed
+//     worker also refuses the unneeded park at its commit recheck — the
+//     runnable-first law — but the drain loop then refuses every ~1 ms poll,
+//     so that half of the boundary is observed out-of-window to keep the
+//     sticky ring noise-free.)
+//   broken world (mutant branch, SLUICE_TV1_C001_MUTANT): the hold is the
+//     preregistered tv1_c001_registered_presuspend transient — the fiber is
+//     REGISTERED but still Running (the state InvRegisteredWaiting forbids).
+//     The same wake path erases the registration with a FAILING CAS and no
+//     route. After release the fiber suspends unregistered, the classifier
+//     sees no waiter, the run quiesces, and the fiber never completes.
+//
+// Discipline: zero new event kinds; the broken world's seam is a
+// deterministic phase-control pause only (side-effect-free, internal-testing
+// guarded, mapped to the named C-001 window); bounded watchdogs fail closed
+// and the #210 RunnerCleanup pattern makes every early exit fail-safe. The
+// broken world is EXPECTED to fail the testcase (EXECUTION_DIVERGED class in
+// the TV-1 report): the E9 event window there shows a healthy park/wake
+// domain with the route publication MISSING — the defect lives in the
+// untraced registration domain and is decisive only through the execution
+// outcome plus the absent publication.
+//
+// DECLARED new observation point (repaired world, pause-only): the
+// tv1_wake_scan_routed window-freeze seam (scheduler.cpp readiness-drain
+// pass that routed a ready-flag waiter). Without it the trace window cannot
+// be closed deterministically: once the route lands while the waiter's
+// owner is held at the suspension seam, the routing peer's park attempts
+// refuse in a tight loop and overflow the sticky 64-event ring in under a
+// millisecond — faster than any poll-based close. The seam fires only on a
+// routing pass, carries no event kind, holds no lock, and compiles out of
+// production.
+#if defined(SLUICE_TV1_C001_MUTANT)
+constexpr stest::PhaseTag kTv1SuspendHold =
+    stest::PhaseTag::tv1_c001_registered_presuspend;
+#else
+constexpr stest::PhaseTag kTv1SuspendHold =
+    stest::PhaseTag::scheduler_suspend_before_physical_switch;
+#endif
+
+SLUICE_TEST_CASE(e9_trace_tv1a_c001_lost_wake_sensitivity) {
+    if constexpr (!sa::fiber_ctx::supported) return;
+
+    sa::AsyncIoContext ctx(std::make_unique<sa::ThreadPoolBackend>());
+    Scheduler sched(ctx);
+    stest::ControllerGuard ctrl(sched);
+    sa::SchedulerWakeHandle wh = sched.make_wake_handle();
+
+    std::atomic<bool> flag{false};
+    std::atomic<bool> fiber_done{false};
+    Fiber f;
+    FiberStack fs;
+    f.set_entry([&](Fiber&) {
+        // The C-001 protocol face: suspend on a not-yet-set ready flag.
+        sched.await_ready_flag(flag);
+        fiber_done.store(true, std::memory_order_release);
+    });
+    SLUICE_CHECK(sched.init_fiber(f, fs.base(), fs.size()));
+    sched.spawn(f);  // first spawn -> first worker's inbox at distribute
+
+    // Hold the fiber at its world's suspend-protocol point. Repaired world
+    // only: arm the post-route window freeze (see the seam comment) — it
+    // fires on the first drain pass that ROUTED a ready-flag waiter, i.e.
+    // exactly the boundary pass, and lets the coordinator close the trace
+    // window before the drained peer's tight refuse loop floods the ring.
+    stest::arm(sched, kTv1SuspendHold);
+#if !defined(SLUICE_TV1_C001_MUTANT)
+    stest::arm(sched, stest::PhaseTag::tv1_wake_scan_routed);
+#endif
+
+    stest::E9TraceRecorder::enable(sched);
+    std::thread runner([&] { sched.run_live(2); });
+    // #210: every checked step below can fire while the runner is joinable;
+    // the guard releases both seams (state-based, idempotent), closes the
+    // trace window, resolves the flag, and joins instead of destroying a
+    // joinable thread.
+    RunnerCleanup cleanup(runner, [&] {
+        stest::release(sched, stest::PhaseTag::tv1_wake_scan_routed);
+        stest::release(sched, kTv1SuspendHold);
+        stest::E9TraceRecorder::disable(sched);
+        flag.store(true, std::memory_order_release);
+        (void)wh.notify();
+    });
+
+    // 1. The fiber is held inside the suspend protocol.
+    if (!wait_paused_bounded(sched, kTv1SuspendHold, "TV1-A fiber hold")) {
+        dump_trace("TV1-A fiber-hold miss", stest::E9TraceRecorder::events(sched));
+        SLUICE_FAIL("TV1-A: fiber never reached its suspend-protocol hold");
+    }
+
+    // 2. The executor worker parks in the wake domain (no work of its own).
+    std::vector<TraceEvent> evs = wait_trace(
+        sched,
+        [](const std::vector<TraceEvent>& v) {
+            std::size_t enters = 0;
+            for (const TraceEvent& e : v) {
+                if (static_cast<stest::TraceEventKind>(e.kind) ==
+                    stest::TraceEventKind::park_entered) {
+                    ++enters;
+                }
+            }
+            return enters >= 1;
+        },
+        "TV1-A executor park");
+
+    // 3. THE STIMULUS (identical both worlds): set the flag, then publish a
+    // wake so the executor's re-loop runs wake_ready_flags_locked while the
+    // fiber is held.
+    flag.store(true, std::memory_order_release);
+    SLUICE_CHECK(wh.notify());
+
+    // 4. Witness: the executor returned from its park after the stimulus (its
+    // re-loop took global_mtx_ and ran the wake path during the hold).
+    // Repaired world: the boundary completes with the route publication —
+    // the wake found the held fiber REGISTERED (what the C-001 window
+    // destroyed). Broken world: no route can follow (the registration was
+    // erased with a failing CAS), so the wait stops at the return.
+#if defined(SLUICE_TV1_C001_MUTANT)
+    evs = wait_trace(
+        sched,
+        [](const std::vector<TraceEvent>& v) {
+            bool saw_external = false;
+            for (const TraceEvent& e : v) {
+                if (is_wake(e, stest::WakeCause::external_notify)) {
+                    saw_external = true;
+                    continue;
+                }
+                if (saw_external &&
+                    static_cast<stest::TraceEventKind>(e.kind) ==
+                        stest::TraceEventKind::park_returned) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        "TV1-A post-stimulus executor return");
+#else
+    // The routing worker freezes right after the boundary pass (the freeze
+    // seam fires only when the scan routed) — wait for the freeze first so
+    // the ring is quiescent, then read the boundary window.
+    if (!wait_paused_bounded(sched, stest::PhaseTag::tv1_wake_scan_routed,
+                             "TV1-A post-route window freeze")) {
+        dump_trace("TV1-A freeze miss", stest::E9TraceRecorder::events(sched));
+        SLUICE_FAIL("TV1-A: the routing worker never froze after the route");
+    }
+    evs = wait_trace(
+        sched,
+        [](const std::vector<TraceEvent>& v) {
+            std::size_t want = 0;  // external wake -> park return -> route
+            for (const TraceEvent& e : v) {
+                if (want == 0 && is_wake(e, stest::WakeCause::external_notify)) {
+                    want = 1;
+                } else if (want == 1 && static_cast<stest::TraceEventKind>(e.kind) ==
+                                             stest::TraceEventKind::park_returned) {
+                    want = 2;
+                } else if (want == 2 &&
+                           is_wake(e, stest::WakeCause::runnable_route)) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        "TV1-A stimulus boundary (external -> return -> route)");
+#endif
+    // The window closes at the boundary, BEFORE the release: after the route
+    // the draining worker loop refuses parks in a tight poll cycle
+    // (ParkRefused + park_refuse wake per attempt) while the owner stays
+    // held — channel noise that would fill the sticky 64-event ring. Those
+    // refusals are out-of-band execution facts, not trace evidence; the
+    // captured boundary is the C-001-relevant window.
+    stest::E9TraceRecorder::disable(sched);
+    stest::release(sched, stest::PhaseTag::tv1_wake_scan_routed);
+    stest::release(sched, kTv1SuspendHold);
+
+    // 5. The fiber must complete. Repaired: the route ticket was published
+    // during the hold, the resumed worker pops the fiber, and finishes.
+    // Broken: the fiber suspends unregistered, the run quiesces, and this
+    // bounded wait times out — the EXECUTION_DIVERGED classification of the
+    // TV-1 report. The window is captured before failing fail-closed.
+    if (!wait_flag(fiber_done, kWatchdog)) {
+        std::fprintf(stderr,
+                     "e9-trace: TV1-A broken-world signature: fiber suspended "
+                     "unregistered; run quiesced without any "
+                     "WakePublished(runnable_route)\n");
+        dump_trace("TV1-A fiber stranded", evs);
+#if defined(SLUICE_TV1_C001_MUTANT)
+        (void)write_trace_json("tv1a_c001_broken", /*split_wait=*/true, "live",
+                               "external_wait_registered", evs);
+#endif
+        SLUICE_FAIL("TV1-A: fiber never completed (lost-wake divergence)");
+    }
+
+    runner.join();
+
+    SLUICE_CHECK(!stest::E9TraceRecorder::overflow(sched));
+#if !defined(SLUICE_TV1_C001_MUTANT)
+    // Repaired-world shape obligation: the route publication is in the
+    // window (the wake reached the registered waiter — the semantic boundary
+    // C-001 closed).
+    bool route_seen = false;
+    for (const TraceEvent& e : evs) {
+        if (is_wake(e, stest::WakeCause::runnable_route)) route_seen = true;
+    }
+    SLUICE_CHECK(route_seen);
+    SLUICE_CHECK(f.state() == FiberState::done);
+#endif
+    (void)write_trace_json(
+#if defined(SLUICE_TV1_C001_MUTANT)
+        "tv1a_c001_broken",
+#else
+        "tv1a_c001_repaired",
+#endif
+        /*split_wait=*/true, "live", "external_wait_registered", evs);
+}
+
 SLUICE_MAIN()

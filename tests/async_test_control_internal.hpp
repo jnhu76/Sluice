@@ -235,6 +235,27 @@ enum class PhaseTag : unsigned char {
     // point. Fired through test_phase_worker (per-worker arming).
     worker_startup_before_publication,
 
+    // #305 TV-1 window freeze (research-only observation point, pause-only —
+    // no event kind): the worker_loop readiness-drain pass whose
+    // wake_ready_flags_locked call ROUTED a ready-flag waiter
+    // (make_runnable succeeded). A coordinator holding a waiter at the
+    // C-001 suspension seam waits here to close the E9 trace window
+    // deterministically: after the route publication the drained peer's
+    // park attempts refuse in a tight loop (the ticket's owner is still
+    // held at the suspension seam), which fills the sticky 64-event ring
+    // before any poll-based window close. No locks are held at this point.
+    tv1_wake_scan_routed,
+
+    // #305 TV-1 mutant-world hold (compiled into the library ONLY under
+    // SLUICE_TV1_C001_MUTANT): the historical C-001 lost-wake window —
+    // registration published, readiness recheck done, suspension NOT yet
+    // committed (the fiber is still Running, the state the repaired atomic
+    // register+recheck+commit critical section makes impossible). Pausing a
+    // fiber's worker here lets a peer's wake scan erase the registration
+    // with a failing make_runnable CAS, reproducing the 422036cd defect
+    // interleaving deterministically. Never armed in the repaired world.
+    tv1_c001_registered_presuspend,
+
     count
 };
 
