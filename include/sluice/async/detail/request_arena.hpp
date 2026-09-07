@@ -451,11 +451,6 @@ class RequestArena {
         return slots_[slot.value].key_;
     }
 
-    Generation generation_of(SlotIndex slot) const noexcept {
-        check_slot_in_range_(slot);
-        std::lock_guard<std::mutex> lk(mutex_);
-        return slots_[slot.value].generation_;
-    }
     RequestState state_of(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
         std::lock_guard<std::mutex> lk(mutex_);
@@ -489,12 +484,6 @@ class RequestArena {
         std::lock_guard<std::mutex> lk(mutex_);
         return slots_[slot.value].borrow_.active;
     }
-    OperationKind kind_of(SlotIndex slot) const noexcept {
-        check_slot_in_range_(slot);
-        std::lock_guard<std::mutex> lk(mutex_);
-        return slots_[slot.value].op_kind_;
-    }
-
     std::uint64_t requested_bytes_of(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
         std::lock_guard<std::mutex> lk(mutex_);
