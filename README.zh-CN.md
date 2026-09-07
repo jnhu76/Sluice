@@ -2,13 +2,13 @@
 
 Sluice 是一个 C++20 显式 I/O library/runtime。
 
-它的目标不是做大而全的异步框架，而是：**只暴露调用者真正必须依赖的 I/O 语义和资源边界，用尽可能小的正确性机制忠实执行这些语义，并让执行机制可以替换但不能反过来污染公共语义。**
+它的目标是：**只暴露保持可观察 I/O 语义、正确性与真实资源边界所必需的信息；语义授权必须显式，执行机制与执行策略保持局部、可替换，并且只保留已经证明有价值的机制。**
 
 [English](README.md)
 
 ## 项目宗旨
 
-Sluice 的长期原则固定为：
+Sluice 的长期原则来自现有研究结论：
 
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
@@ -22,9 +22,8 @@ Minimum mechanism.
 ```
 
 - [`docs/mission.md`](docs/mission.md) —— 冻结的规范性项目宗旨。
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 解释为什么这样决定、tradeoff、后果和明确拒绝的替代路线。
-
-`mission.md` 定义 **Sluice 应该成为什么，以及什么东西不应进入 Sluice**。当前 C++ 与构建定义负责回答“仓库今天实际上做什么”；架构文档只从当前代码描述现状，不能反过来覆盖代码事实，也不能扩大 mission。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 解释这些原则如何由 Sluice 的研究结果得到。
+- [`research/RESULTS.md`](research/RESULTS.md) —— 当前保留的研究证据与结论。
 
 ## 架构一览
 
@@ -32,38 +31,48 @@ Minimum mechanism.
   <img src="docs/assets/sluice-architecture.svg" alt="Sluice 架构概览" width="100%">
 </p>
 
-这张图只负责压缩展示当前实现形态，不是新的规范性事实来源；当前行为仍以代码和构建定义为准。
+这张图只负责压缩展示当前实现形态。当前代码“现在是什么”以代码与构建定义为准；项目“应该遵守什么边界”以 mission 与 ADR 为准。
 
-## 当前仓库
+## 研究已经冻结的设计护栏
+
+现有研究不支持“更多显式信息自然带来更多 generic control / specialization / performance”的项目级假设。
+
+长期保持：
 
 ```text
-include/              C++ 头文件
-src/                  生产实现
-apps/                 真实应用
-xmake.lua、xmake/      构建配置
-docs/                 冻结宗旨、ADR 与代码推导出的架构文档
-research/RESULTS.md    保留的研究结论
+resource identity != fixed-resource optimization authority
+operation grouping != fused / atomic admission authority
+backend capability != semantic authority
+hint / information != authority
 ```
 
-旧 campaign 脚手架、过时 tests/benchmarks/examples、旧 CI、旧文档和旧形式化模型都不是当前设计 authority。Git 历史只作为归档存在。
+Copy 研究表明，显式 composed operation 可以成为合法 transformation boundary，但一个 thin local branch 已足以表达得到证明的能力，generic capability framework 没有被赚到。
+
+Batch 研究表明，知道 operations 属于同一 Batch 不等于获得 group-admission authority。
+
+性能研究同样要求把 semantic contract 与 execution policy 分开：alignment、chunk size、queue depth、worker count、backend mechanism 等可以显著影响性能，但不能因为 benchmark 结果就自动升级成 public semantics。
 
 ## 当前实现
 
-现存代码包含同步 I/O core 和可选异步 runtime。
+当前代码包含同步 I/O core 和可选异步 runtime。
 
 同步部分提供 `Result<T>` / `IoError`、Reader/Writer 风格 I/O、文件与 positional I/O、copy helper、durability 操作及相关工具。
 
 异步部分包含显式 operation、caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施和 backend execution。
 
-这些实现细节仍然可以继续减肥。任何 abstraction、backend、helper、state 或 public type，只有在它确实买来了必要 I/O 语义、关键 correctness invariant、真实 resource bound、真实 execution difference、真实 caller 或不可替代验证价值时，才有长期生存资格。
+这些实现细节将在后续架构审计中按以下类别重新判断：
 
-“以后可能有用”“架构更完整”“理论上可以有第二个实现”都不是默认保留理由。
+```text
+SEMANTIC_CONTRACT
+CORRECTNESS_AUTHORITY
+RESOURCE_BOUND
+BACKEND_CAPABILITY
+EXECUTION_POLICY
+HINT / OBSERVATION
+LEGACY / UNJUSTIFIED
+```
 
-## 边界规则
-
-Application 应依赖公共 semantic boundary，而不是实现内部件。Backend capability、observation、hint 或 execution policy 不会因为存在就自动升级为 public semantic authority。
-
-显式语义也不自动意味着 generic optimization、specialization 或更高性能。Correctness、performance、semantic authority 必须分别证明，不能互相代替。
+一个 abstraction 是否继续存在，取决于它实际定义了什么语义、正确性、资源边界或真实执行价值，而不是“架构完整”。
 
 ## 应用
 
@@ -85,15 +94,12 @@ xmake
 
 当前可用 target 以 `xmake.lua` 和 `xmake/` 为准。
 
-## Correctness 与验证
+## 文档
 
-正确性是硬要求，但验证机制也必须服从最小原则。Deterministic tests、property tests、fuzzing、sanitizers 和 formal model 应围绕真实 invariant 生长，而不是再形成一套平行的大框架。
-
-形式化模型证明的是模型本身，不会单独证明 C++ 实现正确。重要模型必须建立明确的 C++ state / transition / authority 对应关系，并用实现侧证据证明这种对应不是空的。
-
-## Research
-
-过去研究只保留 [research/RESULTS.md](research/RESULTS.md) 中值得长期保留的结论，不保留 campaign 过程。
+- [`docs/mission.md`](docs/mission.md) —— 项目宗旨。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论对应的设计决策。
+- `docs/architecture.md` —— 从当前代码推导出的架构快照。
+- [`research/RESULTS.md`](research/RESULTS.md) —— 保留的研究结论。
 
 ## License
 
