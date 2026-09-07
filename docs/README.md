@@ -21,6 +21,7 @@ every historical or evidence document.**
 | Change build / CI | [`architecture/overview.md`](architecture/overview.md) (authoritative implementation map) + [verification](verification/README.md) |
 | Formal methods work | [`verification/formal-models.md`](verification/formal-models.md) + `spec/tla/manifest.json` |
 | Run Safety (S0) work | [#289](https://github.com/jnhu76/Sluice/issues/289) + current contract/architecture only |
+| Performance / data-movement research | [#259](https://github.com/jnhu76/Sluice/issues/259) (research roadmap; execution order remains [#227](https://github.com/jnhu76/Sluice/issues/227)) |
 | Application / workload work | [`applications/README.md`](applications/README.md) |
 | Historical rationale | [`history/`](history/README.md) |
 
@@ -31,8 +32,10 @@ the AGENTS authority chain.
 
 ## What is current vs historical
 
-- [`architecture/README.md`](architecture/README.md) classifies every
-  architecture document: CURRENT authority vs point-in-time evidence/history.
+- [`architecture/README.md`](architecture/README.md) is the **navigation
+  index** for current architecture material; it does not classify documents.
+  A document's authority follows `AGENTS.md` §2 and its own local
+  `Status` / `Authority` declaration (where present).
 - Documents under [`history/`](history/README.md) (superseded plans, closeouts,
   point-in-time audit evidence) are **never current authority**.
 - Scanner reports, investigations, ledgers, comments, commit messages, and
@@ -46,7 +49,7 @@ the AGENTS authority chain.
 | Directory | Question it answers | Audience |
 |-----------|--------------------|----------|
 | [`reference/`](reference/README.md) | What exactly is the public contract? | All |
-| [`architecture/`](architecture/README.md) | How does it work? Current authority + classification index. | Contributor |
+| [`architecture/`](architecture/README.md) | How does it work? Navigation index for current architecture material. | Contributor |
 | [`adr/`](adr/README.md) | Why was it designed this way? | Contributor |
 | [`verification/`](verification/README.md) | How do we prove it works? | Contributor |
 | [`applications/`](applications/README.md) | What have real workloads taught us? | Contributor |

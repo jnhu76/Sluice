@@ -135,8 +135,9 @@ not re-stated here.
 G -> A        classify_locked / drain poll (unchanged)
 G -> B        arm_backend_wait_commit at the MW-S2 commit (backend or MIXED domain)
 G -> W        signal_wake_locked under G (wake publication)
-G -> W -> B   signal_wake_locked -> interrupt_backend_waiters (W and B are leaves;
-              no reverse edge exists — no wait-source path acquires wake_mtx_)
+G -> W -> B   signal_wake_locked -> interrupt_backend_waiters (B is a leaf; the
+              bridge runs after W is released; no reverse edge exists — no
+              wait-source path acquires wake_mtx_)
 G -> I        routing: route_runnable_locked / spawn / steal push under inbox_mtx
 A -> B        context wait_one snapshot/poll/wait_for_change
 A -> L        poll/reap
@@ -147,8 +148,11 @@ W -> I        park predicate: local_runnable read acquires inbox_mtx NESTED
 ```
 
 `G -> W -> B` is one-directional: `signal_wake_locked` advances the wake epoch
-under `W`, releases it, then interrupts backend waiters. W and B are leaves
-with inbound edges only from G/A; no path acquires G, A, or W while holding B.
+under `W`, releases it, then interrupts backend waiters. B is a leaf — it has
+inbound edges only from G/A/lifecycle and no outgoing edge: no path acquires
+G, A, or W while holding B. W is not a leaf: the park predicate acquires I
+(the per-worker `inbox_mtx`) while holding W (edge `W -> I` in the allowed-edge
+list above), and the reverse edge `I -> W` is forbidden.
 
 ### Forbidden reverse edges
 

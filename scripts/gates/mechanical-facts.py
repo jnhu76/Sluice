@@ -21,13 +21,13 @@ of those facts is the wrong tool; this gate checks them mechanically:
      resolve to real git objects.
   E. tracker references — #NNN references in docs/post-freeze/ must be in
      the explicit KNOWN_TRACKER_REFS registry (offline, deterministic).
-  F. test totals — ``test:default-gate-targets`` rows must equal the
-     mechanically counted default-`xmake test` gate size (the
-     ``running.test`` line count of a Linux Clang Debug run), derived from
-     the xmake lua registration constructs, not hand-typed. Live
-     validation input is the current fact docs only; docs/history/issue
-     and closeout records are historical snapshots, not current test-count
-     truth.
+  F. test totals — ``test:default-gate-targets`` rows in docs/post-freeze/
+     must equal the mechanically counted default-`xmake test` gate size
+     (the ``running.test`` line count of a Linux Clang Debug run), derived
+     from the xmake lua registration constructs, not hand-typed. The rows
+     are historical evidence claims checked for consistency against the
+     mechanical count, not the source of that count; docs/history/issue
+     and closeout records are historical snapshots and are not validated.
   G. seam/production exclusion (C4 / issue #135, extended by #142 review) —
      the internal-testing control plane lives in NON-INSTALLED seam headers
      (src/async/*_test_seams.hpp, apps/sluice-copy/safe_output_test_seams.hpp)
@@ -61,8 +61,10 @@ CODE_DIRS = ["src", "include", "tests", "bench", "xmake"]
 CODE_EXTS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".ipp", ".lua"}
 SCAN_SELF_EXEMPT = {"mechanical-facts.py"}
 
-# Docs whose tables/claims are verified.
-FACT_DOCS_DIR = REPO / "docs" / "post-freeze"
+# Historical evidence docs whose claim rows are verified against mechanical
+# facts (post-freeze report + related). The facts themselves come from the
+# live tree and policy constants below, never from these docs.
+POST_FREEZE_DOCS_DIR = REPO / "docs" / "post-freeze"
 
 # Layout authority: the gate expectation, not cached scan output. This is the
 # policy-pinned scheduler split inventory (post-freeze R1). It is a gate
@@ -88,8 +90,9 @@ EXPECTED_SCHEDULER_SPLIT_FILES = frozenset({
 SPLIT_GLOB_CPP = "src/async/scheduler_*.cpp"
 SPLIT_GLOB_HPP = "src/async/scheduler_internal.hpp"
 
-# Offline registry of tracker references allowed in fact docs. Adding a new
-# issue/PR reference requires adding its number here (one line, reviewed).
+# Offline registry of tracker references allowed in the post-freeze docs.
+# Adding a new issue/PR reference requires adding its number here (one line,
+# reviewed).
 KNOWN_TRACKER_REFS = {
     94, 95, 96, 97, 98, 99, 100, 101,  # audit #94-#101 closeout
     109, 110, 111, 112,                # Phase G closeout / freeze / known limits
@@ -321,11 +324,11 @@ def check_tracker_refs(doc_paths):
 #      | `test:default-gate-targets` | NNN |
 #    must equal the number of tests registered into the default `xmake test`
 #    gate (Linux semantics: every current platform_gate includes linux).
-#    Live validation input is the current fact docs only
-#    (docs/post-freeze/*.md). docs/history/issues and docs/history/closeout
-#    records are historical snapshots — their quoted test totals are
-#    evidence about the past, not current test-count truth, so they are not
-#    live validation input.
+#    The only doc claims validated against the mechanical count are the rows
+#    in docs/post-freeze/*.md — historical evidence claims, not current
+#    truth. docs/history/issues and docs/history/closeout records are
+#    historical snapshots — their quoted test totals are evidence about the
+#    past, not current test-count truth, so they are not validated.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Virtual row path reserved for the default-gate test-target count.
@@ -484,8 +487,8 @@ def check_test_total_claims(doc_paths, root=None):
     return errs
 
 
-def fact_docs(root_dir=None):
-    d = root_dir or FACT_DOCS_DIR
+def post_freeze_docs(root_dir=None):
+    d = root_dir or POST_FREEZE_DOCS_DIR
     return sorted(p for p in d.glob("*.md")) if d.is_dir() else []
 
 
@@ -656,9 +659,9 @@ def run_all():
     errs = []
     canon = canonical_identifiers()
     errs += check_identifier_near_miss(canon)
-    docs = fact_docs()
+    docs = post_freeze_docs()
     if not docs:
-        return ["mechanical-facts: no fact docs found under docs/post-freeze/"]
+        return ["mechanical-facts: no post-freeze docs found under docs/post-freeze/"]
     errs += check_doc_loc_claims(docs, root=REPO)
     errs += check_split_layout(root=REPO)
     errs += check_sha_references(docs)
