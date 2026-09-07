@@ -53,21 +53,23 @@ class SyncBackend : public AsyncBackend {
 
     bool wait_one_is_nonblocking() const noexcept override { return true; }
 
-    void cancel(Completion<std::size_t>& c) override {
+    Result<void> cancel(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
             if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
             }
         }
+        return {};
     }
-    void cancel(Completion<void>& c) override {
+    Result<void> cancel(Completion<void>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
             if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
             }
         }
+        return {};
     }
 
     Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,

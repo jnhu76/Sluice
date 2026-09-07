@@ -113,8 +113,14 @@ class AsyncBackend {
 
     virtual Result<std::size_t> wait_one() = 0;
 
-    virtual void cancel(Completion<std::size_t>& c) { (void)c; }
-    virtual void cancel(Completion<void>& c) { (void)c; }
+    virtual Result<void> cancel(Completion<std::size_t>& c) {
+        (void)c;
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    virtual Result<void> cancel(Completion<void>& c) {
+        (void)c;
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
 
     virtual std::size_t outstanding() const noexcept = 0;
 
@@ -217,8 +223,8 @@ class AsyncIoContext {
 
     void arm_backend_wait_commit() noexcept;
 
-    void cancel(Completion<std::size_t>& c);
-    void cancel(Completion<void>& c);
+    Result<void> cancel(Completion<std::size_t>& c);
+    Result<void> cancel(Completion<void>& c);
 
     void set_ready_sink(detail::SynchronousReadySink* sink);
 

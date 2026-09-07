@@ -625,10 +625,10 @@ void ThreadPoolBackend::wait_before_commit_binding_pause_() noexcept {
 }
 #endif
 
-void ThreadPoolBackend::cancel(Completion<std::size_t>& c) {
+Result<void> ThreadPoolBackend::cancel(Completion<std::size_t>& c) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value())
-        return;
+        return {};
     detail::SlotHandle handle = *h;
     detail::CancelDisposition disp;
     {
@@ -641,12 +641,13 @@ void ThreadPoolBackend::cancel(Completion<std::size_t>& c) {
         tally_canceled();
         signal_ready_progress();
     }
+    return {};
 }
 
-void ThreadPoolBackend::cancel(Completion<void>& c) {
+Result<void> ThreadPoolBackend::cancel(Completion<void>& c) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value())
-        return;
+        return {};
     detail::SlotHandle handle = *h;
     detail::CancelDisposition disp;
     {
@@ -658,6 +659,7 @@ void ThreadPoolBackend::cancel(Completion<void>& c) {
         tally_canceled();
         signal_ready_progress();
     }
+    return {};
 }
 
 Result<void> ThreadPoolBackend::register_waiter(Completion<std::size_t>& c,

@@ -289,13 +289,13 @@ void AsyncIoContext::arm_backend_wait_commit() noexcept {
     }
 }
 
-void AsyncIoContext::cancel(Completion<std::size_t>& c) {
+Result<void> AsyncIoContext::cancel(Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
-    backend_->cancel(c);
+    return backend_->cancel(c);
 }
-void AsyncIoContext::cancel(Completion<void>& c) {
+Result<void> AsyncIoContext::cancel(Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
-    backend_->cancel(c);
+    return backend_->cancel(c);
 }
 
 void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {

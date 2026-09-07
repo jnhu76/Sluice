@@ -16,6 +16,7 @@
 #include <sluice/result.hpp>
 
 #include <cstddef>
+#include <memory>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
@@ -302,6 +303,44 @@ SLUICE_TEST(T0_6_generation_blocks_stale_reuse) {
 
     c2.reset();
     CHECK(arena.slot_in_use() == 0);
+}
+
+
+// A backend exercising the interface capability defaults: it implements only
+// the pure-virtual core, so every optional capability falls through to the
+// interface default.
+class BareCapabilitiesBackend final : public AsyncBackend {
+  public:
+    Result<void> submit_read(ReadOp, Completion<std::size_t>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    Result<void> submit_write(WriteOp, Completion<std::size_t>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    Result<void> submit_sync_data(SyncDataOp, Completion<void>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    Result<void> submit_sync_all(SyncAllOp, Completion<void>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    std::size_t poll() override { return 0; }
+    Result<std::size_t> wait_one() override { return Result<std::size_t>{0}; }
+    std::size_t outstanding() const noexcept override { return 0; }
+};
+
+// A backend that does not implement cancellation must report that explicitly
+// like every other unsupported optional capability (the register_waiter /
+// cancel_waiter default convention), instead of silently claiming success.
+SLUICE_TEST(C1_cancel_unsupported_backend_is_explicit) {
+    AsyncIoContext ctx{std::make_unique<BareCapabilitiesBackend>()};
+    Completion<std::size_t> cs;
+    auto rs = ctx.cancel(cs);
+    CHECK(rs.has_value() == false);
+    CHECK(rs.error().code == IoError::Code::not_supported);
+    Completion<void> cv;
+    auto rv = ctx.cancel(cv);
+    CHECK(rv.has_value() == false);
+    CHECK(rv.error().code == IoError::Code::not_supported);
 }
 
 } // namespace

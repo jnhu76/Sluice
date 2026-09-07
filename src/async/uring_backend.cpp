@@ -58,8 +58,12 @@ std::size_t UringAsyncBackend::poll() {
 Result<std::size_t> UringAsyncBackend::wait_one() {
     return std::size_t{0};
 }
-void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
-void UringAsyncBackend::cancel(Completion<void>&) {}
+Result<void> UringAsyncBackend::cancel(Completion<std::size_t>&) {
+    return make_unexpected<void>(IoError{IoError::Code::not_supported});
+}
+Result<void> UringAsyncBackend::cancel(Completion<void>&) {
+    return make_unexpected<void>(IoError{IoError::Code::not_supported});
+}
 
 Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>&, detail::WaiterToken,
                                                 detail::RoutingLease) {
@@ -1287,22 +1291,24 @@ void UringAsyncBackend::wait_before_admission_lock_pause_() noexcept {
 }
 #endif
 
-void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
+Result<void> UringAsyncBackend::cancel(Completion<std::size_t>& c) {
     if (!have_ring_)
-        return;
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value())
-        return;
+        return {};
     (void)cancel_handle_(*h);
+    return {};
 }
 
-void UringAsyncBackend::cancel(Completion<void>& c) {
+Result<void> UringAsyncBackend::cancel(Completion<void>& c) {
     if (!have_ring_)
-        return;
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value())
-        return;
+        return {};
     (void)cancel_handle_(*h);
+    return {};
 }
 
 Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>& c,

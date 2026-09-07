@@ -88,8 +88,8 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t poll() override;
     Result<std::size_t> wait_one() override;
 
-    void cancel(Completion<std::size_t>& c) override;
-    void cancel(Completion<void>& c) override;
+    Result<void> cancel(Completion<std::size_t>& c) override;
+    Result<void> cancel(Completion<void>& c) override;
 
     Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
                                  detail::RoutingLease lease) override;
