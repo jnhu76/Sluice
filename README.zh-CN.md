@@ -1,32 +1,78 @@
 # Sluice
 
-Sluice 是一个正在收缩为小型、稳定工程基线的 C++20 I/O runtime/library。
+Sluice 是一个 C++20 显式 I/O library/runtime。
+
+它的目标是：**只暴露保持可观察 I/O 语义、正确性与真实资源边界所必需的信息；语义授权必须显式，执行机制与执行策略保持局部、可替换，并且只保留已经证明有价值的机制。**
 
 [English](README.md)
 
-## 当前仓库
+## 项目宗旨
+
+Sluice 的长期原则来自现有研究结论：
+
+> **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
 ```text
-include/              公共 C++ 头文件
-src/                  生产实现
-apps/                 基于公共 API 的真实应用
-research/RESULTS.md    保留的研究结论
-xmake.lua、xmake/      构建配置
+Minimal semantics.
+Clear boundaries.
+Explicit authority.
+Named bounds.
+Replaceable execution.
+Minimum mechanism.
 ```
 
-当前 C++ 实现是主要事实来源。`apps/` 被保留，因为它们是真实的库使用者。
+- [`docs/mission.md`](docs/mission.md) —— 冻结的规范性项目宗旨。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 解释这些原则如何由 Sluice 的研究结果得到。
+- [`research/RESULTS.md`](research/RESULTS.md) —— 当前保留的研究证据与结论。
 
-旧 tests、benchmarks、examples、scripts、CI、docs、形式化模型、TLA+ 以及 research campaign 脚手架都已经从当前树删除。Git 历史就是归档。
+## 架构一览
 
-## 系统形态
+<p align="center">
+  <img src="docs/assets/sluice-architecture.svg" alt="Sluice 架构概览" width="100%">
+</p>
+
+这张图只负责压缩展示当前实现形态。当前代码“现在是什么”以代码与构建定义为准；项目“应该遵守什么边界”以 mission 与 ADR 为准。
+
+## 研究已经冻结的设计护栏
+
+现有研究不支持“更多显式信息自然带来更多 generic control / specialization / performance”的项目级假设。
+
+长期保持：
+
+```text
+resource identity != fixed-resource optimization authority
+operation grouping != fused / atomic admission authority
+backend capability != semantic authority
+hint / information != authority
+```
+
+Copy 研究表明，显式 composed operation 可以成为合法 transformation boundary，但一个 thin local branch 已足以表达得到证明的能力，generic capability framework 没有被赚到。
+
+Batch 研究表明，知道 operations 属于同一 Batch 不等于获得 group-admission authority。
+
+性能研究同样要求把 semantic contract 与 execution policy 分开：alignment、chunk size、queue depth、worker count、backend mechanism 等可以显著影响性能，但不能因为 benchmark 结果就自动升级成 public semantics。
+
+## 当前实现
 
 当前代码包含同步 I/O core 和可选异步 runtime。
 
-同步部分提供 `Result<T>` / `IoError`、Reader/Writer 风格 I/O、文件与 positional I/O、copy helper 和 durability 操作。
+同步部分提供 `Result<T>` / `IoError`、Reader/Writer 风格 I/O、文件与 positional I/O、copy helper、durability 操作及相关工具。
 
-异步部分包含显式 operation、caller-owned completion、有界 request state、scheduler/runtime、同步原语、取消和 backend execution。Linux io_uring 支持由当前构建配置决定。
+异步部分包含显式 operation、caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施和 backend execution。
 
-真正保留下来的能力以当前 headers 和 build files 为准，不再由旧文档定义。
+这些实现细节将在后续架构审计中按以下类别重新判断：
+
+```text
+SEMANTIC_CONTRACT
+CORRECTNESS_AUTHORITY
+RESOURCE_BOUND
+BACKEND_CAPABILITY
+EXECUTION_POLICY
+HINT / OBSERVATION
+LEGACY / UNJUSTIFIED
+```
+
+一个 abstraction 是否继续存在，取决于它实际定义了什么语义、正确性、资源边界或真实执行价值，而不是“架构完整”。
 
 ## 应用
 
@@ -48,24 +94,12 @@ xmake
 
 当前可用 target 以 `xmake.lua` 和 `xmake/` 为准。
 
-## Research
+## 文档
 
-过去研究只保留 [research/RESULTS.md](research/RESULTS.md) 中的最终结论，不保留研究过程。
-
-## 当前方向
-
-```text
-保证保留的 C++ 可用
-    -> 删除不必要模块和抽象
-    -> 固定精简后的架构
-    -> 根据当前行为重建 tests
-    -> 根据当前代码重写 docs
-    -> 根据当前 C++ 重建形式化验证和 TLA+
-    -> 建立 C++ <-> TLA+ 显式对应
-    -> 只优化测量出的局部热点
-```
-
-正确性仍然是硬要求。性能优化放在架构稳定之后，并且只做细粒度、可测量的局部优化。
+- [`docs/mission.md`](docs/mission.md) —— 项目宗旨。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论对应的设计决策。
+- `docs/architecture.md` —— 从当前代码推导出的架构快照。
+- [`research/RESULTS.md`](research/RESULTS.md) —— 保留的研究结论。
 
 ## License
 

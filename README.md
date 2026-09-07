@@ -1,32 +1,78 @@
 # Sluice
 
-Sluice is a C++20 I/O library and runtime currently being reduced to a smaller, stable engineering baseline.
+Sluice is a C++20 explicit-I/O library and runtime.
+
+Its purpose is to **expose only the information required to preserve observable I/O semantics, correctness, and real resource boundaries; make semantic authority explicit; keep execution mechanisms and policy local and replaceable; and retain only mechanisms that have earned their cost through evidence.**
 
 [中文说明](README.zh-CN.md)
 
-## Repository shape
+## Mission
+
+Sluice follows six long-term principles distilled from the retained research results:
 
 ```text
-include/              public C++ headers
-src/                  production implementation
-apps/                 real applications using the public API
-research/RESULTS.md    retained research conclusions
-xmake.lua, xmake/      build configuration
+Minimal semantics.
+Clear boundaries.
+Explicit authority.
+Named bounds.
+Replaceable execution.
+Minimum mechanism.
 ```
 
-The current C++ implementation is the primary source of truth. `apps/` matter because they are real consumers of the public API.
+> **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
-Historical tests, benchmarks, examples, scripts, CI workflows, documentation, formal models, and research campaign scaffolding were deliberately removed from the current tree. Git history remains the archive.
+- [`docs/mission.md`](docs/mission.md) — frozen normative mission.
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — how the research results support these design decisions.
+- [`research/RESULTS.md`](research/RESULTS.md) — retained research evidence and conclusions.
 
-## What Sluice contains
+## Architecture at a glance
 
-The retained codebase includes a synchronous I/O core and an opt-in asynchronous runtime.
+<p align="center">
+  <img src="docs/assets/sluice-architecture.svg" alt="Sluice architecture overview" width="100%">
+</p>
 
-The synchronous side provides the `Result<T>` / `IoError` error model, Reader/Writer-style I/O, file and positional I/O, copy helpers, and durability operations.
+The diagram summarizes the current implementation shape. Current code and build definitions describe what exists today; the mission and ADR define the research-backed design boundary.
 
-The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduling/runtime machinery, synchronization primitives, cancellation, and backend execution. Linux io_uring support remains optional where enabled by the build.
+## Research-backed guardrails
 
-The exact retained surface is defined by the current headers and build files, not by historical documentation.
+The retained research does not support a project-level assumption that more explicit information naturally produces more generic control, specialization, or performance.
+
+The following distinctions remain fixed:
+
+```text
+resource identity != fixed-resource optimization authority
+operation grouping != fused / atomic admission authority
+backend capability != semantic authority
+hint / information != authority
+```
+
+The Copy experiments showed that an explicit composed operation can form a legal transformation boundary, while a thin local branch was sufficient for the capability that was actually earned; a generic capability framework was not justified.
+
+The Batch experiments showed that knowing operations belong to one Batch does not grant group-admission authority.
+
+Performance research likewise keeps semantic contracts separate from execution policy: alignment, chunk size, queue depth, worker count, and backend mechanisms can matter materially, but benchmark results do not automatically promote those controls into public semantics.
+
+## Current implementation
+
+The current codebase contains a synchronous I/O core and an opt-in asynchronous runtime.
+
+The synchronous side provides `Result<T>` / `IoError`, Reader/Writer-style I/O, file and positional I/O, copy helpers, durability operations, and related utilities.
+
+The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduler/runtime machinery, cancellation, synchronization facilities, and backend execution.
+
+Future architecture audits classify concepts by their actual role:
+
+```text
+SEMANTIC_CONTRACT
+CORRECTNESS_AUTHORITY
+RESOURCE_BOUND
+BACKEND_CAPABILITY
+EXECUTION_POLICY
+HINT / OBSERVATION
+LEGACY / UNJUSTIFIED
+```
+
+An abstraction survives because it defines real semantics, correctness, resource bounds, or execution value—not because a larger framework would look more complete.
 
 ## Applications
 
@@ -48,24 +94,12 @@ xmake
 
 `xmake.lua` and `xmake/` define the targets that currently exist.
 
-## Research record
+## Documentation
 
-Past research is reduced to [research/RESULTS.md](research/RESULTS.md). It keeps durable conclusions, not campaign process.
-
-## Current direction
-
-```text
-keep the retained C++ usable
-        -> remove unnecessary modules and abstractions
-        -> freeze the smaller architecture
-        -> rebuild tests from current behavior
-        -> rewrite documentation from current code
-        -> rebuild formal verification and TLA+ from current C++
-        -> establish C++ <-> formal-model correspondence
-        -> optimize measured local hotspots
-```
-
-Correctness remains mandatory. Performance work comes later and should be fine-grained and measurement-driven.
+- [`docs/mission.md`](docs/mission.md) — project mission.
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — research-backed design decision.
+- `docs/architecture.md` — architecture snapshot derived from current code.
+- [`research/RESULTS.md`](research/RESULTS.md) — retained research conclusions.
 
 ## License
 
