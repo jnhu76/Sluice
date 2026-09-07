@@ -5,6 +5,14 @@
 > research/tv1-trace-drift. Research-only: no production semantics, no
 > static-FDG routing, no enforcement wiring.
 >
+> Corrective round (adversarial review of PR #306, same day): C1 evidence
+> provenance restated at the true source revision (below); C2 prehistory
+> sensitivity diagnostic added (non-scoring); C3 Phase-C comparison
+> restored to the frozen miss/safety-failure facts; C4 the
+> `tv1_wake_scan_routed` capture moved under the internal-testing guard
+> (a production TU now contains no `tv1` identifier — preprocessor-level
+> verified). No experimental verdict changed.
+>
 > **Verdict: TRACE_CHANNEL_PARTIAL.** The existing E9 channel — real
 > deterministic C++ → semantic events → trace artifact → TLC replay against
 > the pristine same-revision model — decisively discriminates the repaired
@@ -92,8 +100,8 @@ Results (same stimulus, same choreography):
 
 ```json
 { "schema": 1, "suite": "e9_park_wake", "test": "tv1a_c001_broken",
-  "cpp_revision": "9c79bf1c8323f9ec7fa96c86e70bba1835123aeb",
-  "model_revision": "9c79bf1c8323f9ec7fa96c86e70bba1835123aeb",
+  "cpp_revision": "89b86ab884b6324d352d54cc8fcb9c74e91df2ef",
+  "model_revision": "89b86ab884b6324d352d54cc8fcb9c74e91df2ef",
   "split_wait": true, "run_mode": "live",
   "prehistory": "external_wait_registered",
   "events": [
@@ -117,6 +125,57 @@ Results (same stimulus, same choreography):
   "erased registration"); it is the model refusing a shape that violates
   its park-admission law. The channel discriminates; it does not
   localize.
+
+Evidence provenance (corrective C1 — the original run mislabeled both
+traces with the BASE SHA `9c79bf1c`, but the executable necessarily
+contained post-BASE specimen code: the `SLUICE_TV1_C001_MUTANT` branch,
+`tv1_c001_registered_presuspend`, and `tv1_wake_scan_routed` exist only
+from `104d3759` on; `write_trace_json` stamps the
+`SLUICE_E9_TRACE_REVISION` string verbatim and the validator only checks
+cpp_revision == model_revision as 40-hex — neither verifies
+binary/source identity, so provenance honesty is a procedure obligation).
+Both legs were re-run and re-validated at the committed corrective source
+state:
+
+| field | value |
+| --- | --- |
+| source revision (`cpp_revision` = `model_revision`) | `89b86ab884b6324d352d54cc8fcb9c74e91df2ef` (contains the full TV-1 specimen incl. the C4 guard fix; `E9ParkWake.tla` unchanged from BASE) |
+| repaired build variant | default debug config (no extra defines) |
+| broken build variant | same source + `-DSLUICE_TV1_C001_MUTANT` (compile-time variant, not a source revision) |
+
+Permanent clarification for the #196 channel: **the revision binding
+binds the SOURCE revision, not the compiler/build variant** — a mutant
+define is a build variant of one source revision, recorded as such.
+Rerun outcomes: repaired trace ACCEPT with the same action sequence;
+broken trace byte-identical to the original six events (deterministic),
+REJECT unchanged.
+
+Prehistory sensitivity (non-scoring diagnostic, corrective C2): the same
+six broken events with `prehistory` changed to `none`, replayed once, no
+tuning either way → **REJECT as well — EVENTS_ALONE_SENSITIVE**: the
+REJECT verdict is not an artifact of the declared prehistory. The
+mechanism split is the informative part:
+
+- scored declaration (`external_wait_registered`): the prelude compiles
+  `PublishRunnable → RunFiber → SuspendFiber`, the waiter is registered,
+  `ParkAdmitted` holds at event 1, and the refusal lands at event 5 — the
+  re-park commit under `LatentExternalWork`, i.e. exactly the lost-route
+  shape C-001 fixed;
+- `none`: the prelude establishes only the worker population — no fiber,
+  no registered wait, no backend work → `GlobalClass = "QUIESCENT"` →
+  `ParkAdmitted` is FALSE → event 1's park commit is unrealizable and the
+  trace dies at its first event (TLC: 14 states generated, 6 distinct,
+  depth 4).
+
+Reading: the event sequence and the prehistory/refinement mapping are
+BOTH part of the correspondence authority. The events alone carry the
+discriminative verdict (REJECT under either declaration); the
+scenario-bound declaration carries the localization (without it the
+model refuses the trace for the generic reason that a quiescent world
+admits no park at all). "The trace alone found the bug" would overclaim;
+"the executed trace + its declared refinement mapping are jointly
+rejected by the pristine model" is what happened. Recorded as a
+diagnostic; no mapping rule added or changed; nothing re-scored.
 
 Discipline notes: zero new event kinds; the mutant is the named historical
 defect only, well-formed C++, model untouched; the broken world was run
@@ -211,16 +270,27 @@ drain race. → **TRACE_COVERAGE_GAP**. No generic F03 tracing was built.
 
 ## Phase-C comparison
 
-| Phase-C specimen | gold | Phase-C outcome | TV-1 trace channel | TV-1 runtime |
-| --- | --- | --- | --- | --- |
-| C-001 lost wake `422036cd` (F08) | HIGH | recalled | repaired **ACCEPT** / broken **REJECT** | repaired converges; broken **EXECUTION_DIVERGED** (bounded, healthy harness) |
-| C-012 poison wake `869be913` (F08) | MEDIUM | CONFIG_WORLD_CONFOUNDED | B0 **NOT_APPLICABLE_BUILD_WORLD**; B1 **TRACE_COVERAGE_GAP** | B1 repaired wake present; broken wake dropped → fail-closed |
-| C-011 dance-epoch `7afb9378` (F08) | HIGH | recalled | ACCEPT does **not** propagate (answer NO) | n/a (audit) |
-| C-007 frozen winner `96e3d66e` (F03) | MEDIUM | recalled | **TRACE_COVERAGE_GAP** | n/a (audit) |
+Frozen Phase-C facts (`fdg0-phase-c-historical-gold.md`): C-001, C-007,
+and C-012 were MISSES; C-011 was a facet-level SAFETY FAILURE.
 
-Every Phase-C miss-classification C-012 was blamed on (CONFIG_WORLD
-confounding) is resolved conservatively here: the build world is named per
-leg, and neither world claims trace coverage it does not have.
+| Phase-C specimen | gold | Phase-C outcome (frozen) | TV-1 trace channel | TV-1 runtime |
+| --- | --- | --- | --- | --- |
+| C-001 lost wake `422036cd` (F08) | HIGH | **F08 MISSED** — structural-reach limit (no depth-2 path to the wake anchors; file-only baseline A caught it via file binding, the facet route did not) | repaired **ACCEPT** / broken **REJECT** | repaired converges; broken **EXECUTION_DIVERGED** (bounded, healthy harness) |
+| C-012 poison wake `869be913` (F08) | MEDIUM | **F08 MISSED** — CONFIG_WORLD_CONFOUNDED (frozen world `with-liburing=false`; the diff's real io_uring path is not compiled there; post-hoc diagnosis) | B0 **NOT_APPLICABLE_BUILD_WORLD**; B1 **TRACE_COVERAGE_GAP** | B1 repaired wake present; broken wake dropped → fail-closed |
+| C-011 dance-epoch `7afb9378` (F08) | HIGH | top-level claim surfaced BUT **PRECISE facet narrowing omitted `e12-rwlock-scheduler-liveness` — SAFETY FAILURE** | ACCEPT does **not** propagate (answer NO) | n/a (audit) |
+| C-007 frozen winner `96e3d66e` (F03) | MEDIUM | **F03 MISSED** — authority-span limit (winner-outcome symbols in the scheduler wait domain; `scheduler.cpp` not in F03's file bindings) | **TRACE_COVERAGE_GAP** | n/a (audit) |
+
+Apples-to-apples information gain over the frozen Phase-C results: where
+static routing MISSED C-001, the runtime/trace channel discriminates it
+(both levels); where static routing MISSED C-007, the trace channel is
+ALSO blind — the vocabulary gap is confirmed at both layers, not healed;
+where static routing missed C-012 because the frozen build world was
+wrong, TV-1 names the build world per leg and confines the claim to the
+runtime level; and where C-011's facet narrowing was unsafe, the trace
+channel explicitly cannot substitute for downstream formal-obligation
+propagation. The one Phase-C confusion TV-1 does resolve conservatively
+is C-012's world confound: the build world is declared per leg, and
+neither world claims trace coverage it does not have.
 
 ## Mutation disclosure
 
@@ -231,19 +301,34 @@ leg, and neither world claims trace coverage it does not have.
 - Repaired behaviors falsely REJECTED: **0** (all repaired traces/scenarios
   accepted, including the entire standing corpus).
 
-## Regressions (current world, HEAD `9c79bf1c` + this change)
+## Regressions (corrective round; C4 at `89b86ab8`, results regenerated per HEAD)
 
 - `bash scripts/formal/verify-e9-trace-conformance.sh` → **PASS** (self-test
   + 7 accepts / 6 rejects, verdicts unchanged).
 - `python3 scripts/formal/e9_trace_validate.py --self-test` → **PASS**.
 - `bash scripts/formal/verify-e12-sched-liveness.sh` → **PASS** (15 gates,
   verdicts unchanged).
+- C-001 legs re-run at the true source revision `89b86ab8…`: repaired
+  **ACCEPT** / broken **REJECT** (six events byte-identical to the original
+  run — deterministic; see provenance above); C2 diagnostic **REJECT**
+  (`prehistory: none`), non-scoring.
+- C-012 B1 legs re-run (`xmake f -m debug --with-liburing=true`): repaired
+  **ALL TESTS PASSED** (17 cases incl.
+  `uring_tv1_b1_cancel_path_poison_wake_waiter`); mutant
+  (`-DSLUICE_TV1_C012_MUTANT`) **fails fail-closed** with the D4-RM17
+  signature (waiter parked on published terminals, wake obligation
+  missing).
 - `python3 scripts/formal/formal_impact.py check --structure-only` → **OK**
   (#300/FTLR-0 registry structure).
-- `python3 scripts/formal/fdg0_phase_a_eval.py run` / `fdg0_phase_b_eval.py
-  run` / `fdg0_phase_c.py validate-gold` → run on the committed clean tree
-  (the evals refuse modified tracked files); see PR body for the recorded
-  outputs.
+- `python3 scripts/formal/fdg0_phase_a_eval.py run` → all_pass **true** at
+  `89b86ab8` (committed `05d06761`); `fdg0_phase_b_eval.py run` →
+  integrity all_pass **true** at `05d06761` (committed `7145b6ec`; the
+  same known `unexpected_rows` as the established runs); Phase B frozen
+  PRECISE 7-key mean reduction **33.33%** (authoritative, met);
+  `fdg0_phase_c.py validate-gold` → **OK** (24 cases, 23 required, 12
+  non-AMBIGUOUS positives, 12 expected claim labels).
+- `python3 scripts/gates/mechanical-facts.py` → **OK** (LOC table synced
+  for C4: `scheduler.cpp` 2266, attribution paragraph added).
 
 ## Scope fences
 
@@ -260,9 +345,16 @@ above). Framework added: none.
 
 The channel is EARNED where its vocabulary reaches and honest where it
 does not: one of the two F08 park/wake specimens (C-001) is discriminated
-at the trace level by the pristine model itself — the stronger outcome,
-since the REJECT falls out of the model's park-admission law rather than
-from any TV-1-specific tuning — while C-012/C-007 are named blind spots
+at the trace level by the pristine model — the stronger outcome, since
+the REJECT falls out of the model's park-admission law rather than from
+any TV-1-specific tuning — while C-012/C-007 are named blind spots
 and C-011 marks the hard boundary between behavioral trace correspondence
-and formal-impact propagation. TRACE_CHANNEL_PARTIAL. No expansion; STOP:
-returned for adversarial review.
+and formal-impact propagation. The C2 diagnostic sharpens what "at the
+trace level" means: the REJECT verdict is carried by the six events
+themselves (robust to the prehistory declaration), but the C-001-specific
+localization — the refusal of the lost-route re-park, not a generic
+realizability failure — is carried jointly with the declared
+scenario-bound prehistory/refinement mapping. Both are part of the
+correspondence authority; neither alone is the whole channel.
+TRACE_CHANNEL_PARTIAL. No expansion; corrective round closed; returned
+for adversarial review.
