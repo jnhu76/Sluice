@@ -304,3 +304,91 @@ Correctness（同步面）        : Result 即时返回；EINTR 重试；64 位 
                               打开失败延迟报告（open_error()）
 Resource bound（同步面）     : 调用方提供 span/scratch——无隐藏缓冲预算
 ```
+
+## 6. 执行路径证明（retained semantic API 逐链）
+
+路径必须用当前代码证明：caller/root → symbol references → build membership → concrete implementation → terminal observable effect。全部路径在 W2/W3 构建成员内（§2）。
+
+### 6.1 异步 read 全链（write/sync 同构）
+
+```text
+caller            apps 任务体（如 apps/sluice-copy/copy_task.cpp:await_read_fill）
+  → await_op_helpers::await_read_once（src/async/await_op_helpers.cpp）
+  → RuntimeTaskContext::submit_read（src/async/application_runtime.cpp:25）
+  → AsyncIoContext::submit_read（src/async/async_io_context.cpp；access_mtx_ 串行化）
+  → ThreadPoolBackend::submit_read → detail::submit_transaction（include/sluice/async/detail/submit_transaction.hpp）
+      reserve → validate_op → prepare → install_publication_binding → begin_binding
+      → commit → install_binding → commit_binding → enqueue_after_commit
+  → BoundedDispatchQueue::push_back + work_cv_.notify_one
+  → backend worker：worker_loop → run_syscall（阻塞 pread；EINTR 重试、checked_posix_offset）
+  → RequestArena::record_terminal（槽位→backend_ready，挂 ready ring）
+驱动侧（三条合法驱动点，均已在树内激活）：
+  (a) Scheduler worker 循环 ctx_.poll()（src/async/scheduler.cpp:764）
+  (b) AsyncIoContext::wait_one(max_park)（split-wait 有界 park；src/async/async_io_context.cpp:173）
+  (c) Scheduler::park_on_wake_source 经 BackendWaitSource 唤醒后再 poll
+  → ThreadPoolBackend::poll → RequestArena::reap（arena 锁内 publish，锁外 sink.on_ready）
+  → Completion::publish_from_reap（outstanding→publishing→ready）
+  → ReadyRoutingSink::on_ready（WaitRecord delivered）
+  → Fiber runnable → await_completion 返回 → 任务体读 result()
+```
+
+三阶段 correctness boundary（与 docs/architecture.md §7 一致，本 campaign 在代码中独立复核）：
+backend 终结化（`record_terminal`，槽位 backend_ready）≠ Completion ready（`reap` 内 publish）≠ Fiber 恢复（就绪路由后）。reap 内顺序固定：锁内 publish、锁外路由。
+
+### 6.2 durability（sync_data/sync_all）
+
+```text
+sluice-copy --sync-data/--sync-all → copy_task → RuntimeTaskContext::submit_sync_*
+  → 同 6.1 事务 → run_syscall 的 sync 分支（fdatasync/fsync）→ Result<void> 发布
+同步面：FileWriter::sync_data/sync_all（src/file.cpp）→ ::fdatasync/::fsync（EINTR 重试）
+```
+
+### 6.3 cancellation
+
+```text
+sluice-tail follow：sigwait 信号线程 → ApplicationRuntime::request_stop
+  → runtime 取消发布（root_cancel_published）→ RuntimeTaskContext::cancel_token().is_requested()
+  → 任务体协作退出（apps/sluice-tail/tail_task.cpp:141,198,236）
+Completion 级：AsyncIoContext::cancel → ThreadPoolBackend::cancel → arena.cancel
+  （pending/enqueued → terminal canceled；running → cancel_intent）
+Waiter 级：RuntimeTaskContext::cancel_waiter → Scheduler::cancel_waiter → WaitRecord cancelled
+```
+
+### 6.4 wait / wake / split-wait
+
+```text
+Fiber park：await_completion_* → WaitRecord 注册（wait_capacity 上界，默认 256）
+  → 无进展时 park_on_wake_source
+  → BackendWaitSource::snapshot/wait_for_change（progress/control 双 generation token）
+  → 唤醒后重观察；bounded park 需 has_bounded_split_wait_capability（src/async/scheduler.cpp:465-539）
+外部唤醒：SchedulerWakeHandle（ApplicationRuntime 与 EventedWaitPolicy 持有）
+关闭路径：close_admission → arena.close_admission → 提交拒绝 invalid_state
+```
+
+### 6.5 task lifecycle / result transfer
+
+```text
+main → RuntimeBuilder().backend(ThreadPoolBackend).workers(n).build()
+  （校验：无 wait_source 且非 nonblocking 的后端拒绝构建）
+  → start()（driver 线程 + worker 拓扑 + 根 Group）
+  → submit(task)（admission 开关 + admitted/terminal 计数）
+  → 任务体经 TaskResultSlot 发布 → main drain()/join() → wait_and_take()
+```
+
+### 6.6 同步核心路径
+
+```text
+BlockingIoContext::open_reader（src/io_context.cpp）→ FileReader（src/file.cpp：open/pread/read，统计挂钩）
+copy_all（src/copy.cpp）：buffered 快路径（dynamic_cast<BufferedReadable*>，src/copy.cpp:57）
+  或 scratch 路径（read_some/write_all 循环）至 EOF 或 CopyLimit
+BufferedReader/Writer（src/buffer.cpp）：调用方缓冲；写侧析构断言无脏数据
+WAL/内存/故障/观测包装：仅自实现 TU 消费，无外部调用者（§7 S09–S12）
+```
+
+### 6.7 backend 替换性
+
+```text
+W3 四应用 → RuntimeBuilder::backend(std::make_unique<ThreadPoolBackend>(...))
+G1 world（未激活）：UringAsyncBackend 实现同一 AsyncBackend 契约
+合成后端（SyncBackend/FakeAsyncBackend）：实现契约但零注入点（§7 A12/A13）
+```
