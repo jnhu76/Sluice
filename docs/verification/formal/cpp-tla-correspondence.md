@@ -158,7 +158,7 @@ all schedules were explored
 the C++ memory model is proved
 all downstream formal suites are current
 the public contract is correct
-the whole C++ implementation is formally verified
+formal verification of the whole C++ implementation
 ```
 
 `TRACE_COVERAGE_GAP` and `NOT_APPLICABLE_BUILD_WORLD` are valid evidence
