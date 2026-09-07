@@ -2,9 +2,7 @@
 
 > **状态：FROZEN**
 >
-> 本文只冻结已经由 Sluice 研究结论支持的项目宗旨。它不承担代码风格、测试方法、注释规则、AI/LLM 上下文治理或一般工程规范。
->
-> 研究证据以 `research/RESULTS.md` 与 Minimal Semantic Surface 研究结论为依据；没有研究支撑的工程偏好不进入本文。
+> 本文只冻结已经由 Sluice 研究结论支持的项目宗旨。证据以 `research/RESULTS.md` 与 Minimal Semantic Surface 研究结论为依据。
 
 ## 一句话
 
