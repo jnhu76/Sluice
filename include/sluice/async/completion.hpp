@@ -114,12 +114,6 @@ template <class T> class Completion {
     }
 
   private:
-    bool try_claim_for_backend() noexcept {
-        State expected = State::idle;
-        return state_.compare_exchange_strong(
-            expected, State::outstanding, std::memory_order::acq_rel, std::memory_order::acquire);
-    }
-
     bool begin_binding_for_backend() noexcept {
         State expected = State::idle;
         return state_.compare_exchange_strong(expected, State::binding, std::memory_order::acq_rel,
@@ -148,14 +142,6 @@ template <class T> class Completion {
     void clear_binding_for_backend() noexcept {
         release_arena_ = nullptr;
         bound_slot_ = {};
-    }
-
-    void rollback_claim_before_accept() noexcept {
-        State expected = State::outstanding;
-        if (!state_.compare_exchange_strong(expected, State::idle, std::memory_order::acq_rel,
-                                            std::memory_order::acquire)) {
-            detail::completion_authority_fail_fast();
-        }
     }
 
     void publish_from_reap(Result<T>&& res) noexcept {
@@ -282,12 +268,6 @@ template <> class Completion<void> {
     }
 
   private:
-    bool try_claim_for_backend() noexcept {
-        State expected = State::idle;
-        return state_.compare_exchange_strong(
-            expected, State::outstanding, std::memory_order::acq_rel, std::memory_order::acquire);
-    }
-
     bool begin_binding_for_backend() noexcept {
         State expected = State::idle;
         return state_.compare_exchange_strong(expected, State::binding, std::memory_order::acq_rel,
@@ -316,14 +296,6 @@ template <> class Completion<void> {
     void clear_binding_for_backend() noexcept {
         release_arena_ = nullptr;
         bound_slot_ = {};
-    }
-
-    void rollback_claim_before_accept() noexcept {
-        State expected = State::outstanding;
-        if (!state_.compare_exchange_strong(expected, State::idle, std::memory_order::acq_rel,
-                                            std::memory_order::acquire)) {
-            detail::completion_authority_fail_fast();
-        }
     }
 
     void publish_from_reap(Result<void>&& res) noexcept {

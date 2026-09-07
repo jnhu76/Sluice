@@ -147,10 +147,6 @@ class AsyncBackend {
 
     detail::SynchronousReadySink* routing_sink_ = nullptr;
 
-    template <class T> static bool try_claim(Completion<T>& c) noexcept {
-        return c.try_claim_for_backend();
-    }
-
     template <class T> static bool begin_binding(Completion<T>& c) noexcept {
         return c.begin_binding_for_backend();
     }
@@ -166,16 +162,8 @@ class AsyncBackend {
                                 detail::SlotHandle h) noexcept {
         c.install_binding_for_backend(arena, h);
     }
-    template <class T> static void clear_binding(Completion<T>& c) noexcept {
-        c.clear_binding_for_backend();
-    }
-
     template <class T> static void publish(Completion<T>& c, Result<T>&& result) noexcept {
         c.publish_from_reap(std::move(result));
-    }
-
-    template <class T> static void rollback_claim_before_accept(Completion<T>& c) noexcept {
-        c.rollback_claim_before_accept();
     }
 };
 
