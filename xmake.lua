@@ -54,8 +54,10 @@ end
 -- Sub-configurations. Each file owns one concern:
 --   helpers.lua        — shared target-declaration helpers
 --   libraries.lua      — production libs (core, async, bench_common)
+--   tests.lua          — rebuilt minimal test executables
 -- ---------------------------------------------------------------------------
 
 includes("xmake/helpers.lua")
 includes("xmake/libraries.lua")
 includes("xmake/apps.lua")
+includes("xmake/tests.lua")
