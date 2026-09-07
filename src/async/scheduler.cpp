@@ -649,11 +649,17 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // runs on steady_clock; in test mode advance_clock() advances it. The
         // pump is inert when no deadline is due/active.
         MwState state;
-        [[maybe_unused]] bool tv1_routed = false;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        bool tv1_routed = false;
+#endif
         {
             LockGuard lk(global_mtx_);
             (void)drain_routed_completion_waits_locked();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             tv1_routed = wake_ready_flags_locked();
+#else
+            (void)wake_ready_flags_locked();
+#endif
             (void)pump_deadlines_locked();
             state = classify_locked(run_workers, ws);
         }
@@ -663,7 +669,9 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         // coordinator holding the routed waiter at the C-001 suspension seam
         // pauses here to close its trace window deterministically — after the
         // route, this worker's park attempts refuse in a tight loop while the
-        // owner stays held, which would flood the sticky trace ring.
+        // owner stays held, which would flood the sticky trace ring. The
+        // capture itself is testing-guarded too: no tv1 identifier exists in
+        // a production translation unit.
         if (tv1_routed) {
             sluice_async_test::test_phase(
                 *this, sluice_async_test::PhaseTag::tv1_wake_scan_routed);

@@ -40,7 +40,7 @@ the repository's established `select_event.cpp` / `select_timer.cpp` /
 | `src/async/scheduler_queue.cpp` | 628 | runnable queue, fiber routing |
 | `src/async/scheduler_internal.hpp` | 89 | non-installed: `g_worker` TLS (inline), `SchedulerWakeHandle::Control`, `RwWaitCtx` |
 | `src/async/scheduler_fe2_test_seam.cpp` | 431 | non-installed: FE-2/FE-3 stackless frontend seams (empty TU in production) |
-| `src/async/scheduler.cpp` | 2258 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
+| `src/async/scheduler.cpp` | 2266 | kept: ctor/dtor, worker loop, steal, spawn/run, classification |
 
 Line counts in this table are enforced by `scripts/gates/mechanical-facts.py`
 (LOC claims must equal `wc -l`), so the inventory cannot silently drift.
@@ -247,6 +247,14 @@ worker-loop drain gains the `tv1_wake_scan_routed` pause-only window-freeze
 seam (internal-testing guarded, no event kind, compiles out of
 production); production park/wake behavior unchanged; see
 `docs/verification/formal/tv1-trace-drift-sensitivity.md`.)
+`scheduler.cpp` 2258 → 2266 (2026-09-07, issue #305 TV-1 review
+corrective — the `tv1_wake_scan_routed` capture itself moves under the
+`SLUICE_ASYNC_INTERNAL_TESTING` guard: a production translation unit now
+contains no `tv1` identifier at all (previously the capture
+`[[maybe_unused]] bool tv1_routed` compiled in production and only the
+use was guarded), making the "compiles out of production" claim literal;
+`wake_ready_flags_locked()` still runs in production, only its unused
+result is discarded; no behavior change in either build.)
 `scheduler_rwlock.cpp` 685 → 692, `scheduler_internal.hpp` 71 → 89,
 `scheduler_fe2_test_seam.cpp` 210 → 333, `scheduler.hpp` +
 `wait_node.hpp` (declarations only), and the new test target
