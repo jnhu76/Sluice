@@ -115,7 +115,7 @@ graph TD
 
 按职责分组：
 
-- **操作与完成**：`async_io_context.hpp` 定义四种操作（`ReadOp`/`WriteOp`/`SyncDataOp`/`SyncAllOp`，fd + 缓冲 + 位置）、后端接口 `AsyncBackend`（`submit_*`/`poll`/`wait_one`/`cancel`/`register_waiter`/`wait_source`/请求身份）、后端等待源接口 `BackendWaitSource`，以及门面 `AsyncIoContext`（持有后端，提供提交/轮询/等待/取消/请求状态查询）。`completion.hpp` 定义 `Completion<T>` —— 调用方持有的完成槽，状态机为**六个独立状态** `idle`/`binding`/`outstanding`/`publishing`/`ready`/`resetting`（主路径 idle→binding→outstanding→publishing→ready→resetting→idle；另存在回滚边 binding→idle 与 outstanding→idle，以及跳过 binding 阶段的 idle→outstanding 直达认领），违规生命周期直接 fail-fast。`request_handle.hpp` 提供 `RequestHandle` 请求身份（context/slot/generation）。
+- **操作与完成**：`async_io_context.hpp` 定义四种操作（`ReadOp`/`WriteOp` 为 fd + 缓冲 + 长度 + 位置，`SyncDataOp`/`SyncAllOp` 仅含 fd）、后端接口 `AsyncBackend`（`submit_*`/`poll`/`wait_one`/`cancel`/`register_waiter`/`wait_source`/请求身份）、后端等待源接口 `BackendWaitSource`，以及门面 `AsyncIoContext`（持有后端，提供提交/轮询/等待/取消/请求状态查询）。`completion.hpp` 定义 `Completion<T>` —— 调用方持有的完成槽，状态机为**六个独立状态** `idle`/`binding`/`outstanding`/`publishing`/`ready`/`resetting`（主路径 idle→binding→outstanding→publishing→ready→resetting→idle；另存在回滚边 binding→idle 与 outstanding→idle，以及跳过 binding 阶段的 idle→outstanding 直达认领），违规生命周期直接 fail-fast。`request_handle.hpp` 提供 `RequestHandle` 请求身份（context/slot/generation）。
 - **应用运行时**：`application_runtime.hpp` 的 `RuntimeBuilder`（选后端、worker 数）→ `ApplicationRuntime`（`start`/`submit`/`request_stop`/`drain`/`join`/`shutdown` 显式生命周期，内部驱动线程与状态机）；任务体收到 `RuntimeTaskContext`，提供 `submit_*`、`await_completion`、`cancel_waiter` 与 `cancel_token()`。
 - **调度**：`scheduler.hpp`（`Scheduler`：Fiber 注册/派发、`run`/`run_live` 两种驱动循环、`await_completion_*`、等待队列 `await_wait`/`wake_wait_one`/`cancel_wait`、单调时钟与截止时间、select 准入）；`fiber.hpp` + `fiber_ctx.hpp`（`Fiber` 状态机 created→runnable→running→waiting→done；上下文切换为手写汇编，含 ASAN 协作支持）；`wait_node.hpp`/`wait_queue.hpp`（等待节点/队列）；`timer_registration.hpp`。
 - **同步原语**（构建在 Scheduler 的 park/wake 之上）：`async_mutex.hpp`、`async_rwlock.hpp`、`semaphore.hpp`、`condition.hpp`、`event.hpp`、`async_queue.hpp`（带 park/超时/关闭语义的并发队列）、`select.hpp` + `select_fwd.hpp`（最多 8 臂，Event/Timer 两类 case）。另有运行时内部使用的 `mutex.hpp`/`lock_guard.hpp`/`thread_annotations.hpp`（std::mutex 薄包装 + Clang TSA 注解）。
@@ -261,7 +261,7 @@ sequenceDiagram
 - **测试缝按域分宏门控**（三个宏当前在 `xmake.lua`/`xmake/` 中均无定义点，默认全部不激活）：
   - 核心文件域：`src/file.cpp` 的 close 失败脚本缝由 `SLUICE_FILE_INTERNAL_TESTING` 门控——该宏同时控制 `file_test_seams.hpp` 的引入（缝头本身无宏，仅在被引入时参与编译）与 `file.cpp` 内的调用点。
   - 异步域：`src/async/` 与 `include/sluice/async/` 中的测试缝统一由 `SLUICE_ASYNC_INTERNAL_TESTING` 门控——包括编译进库的缝 TU（`mutex_test_seam.cpp`/`queue_test_seam.cpp`/`scheduler_fe2_test_seam.cpp`）与生产头/实现内的门控块；`xmake/apps.lua` 明确注释应用构建不定义该宏、不含 `src/` include 路径。
-  - 应用域：`apps/sluice-copy/safe_output.cpp` 的目录 fsync 脚本缝（`DirFsyncScript`，拦截 `directory_fsync` 对 `::fsync` 的调用）由 `SLUICE_COPY_INTERNAL_TESTING` 门控，缝头 `safe_output_test_seams.hpp` 与调用点都在该宏之下。
+  - 应用域：`apps/sluice-copy/safe_output.cpp` 的目录 fsync 脚本缝（`DirFsyncScript`，拦截 `directory_fsync` 对 `::fsync` 的调用）由 `SLUICE_COPY_INTERNAL_TESTING` 门控——该宏同时控制 `safe_output_test_seams.hpp` 的引入（缝头本身无宏门控）与 `safe_output.cpp` 内的 seam 调用点。
 - **文档重建中**：`docs/` 目前只有本文档。
 - **experimental 未构建**：`src/experimental/*.cpp` 不被任何 glob 覆盖；`include/sluice/experimental/` 头文件公开，但其实现当前不编入任何库。
 - **io_uring 默认不可用**：`SLUICE_HAS_LIBURING` 在 `xmake.lua`/`xmake/` 中没有定义点，`UringAsyncBackend` 在默认构建中编译为不可用的降级实现；源码保留了完整条件编译路径。
