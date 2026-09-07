@@ -1,6 +1,3 @@
-
-
-
 #pragma once
 
 #include <cerrno>
@@ -20,12 +17,6 @@ struct IoError {
         invalid_state,
         backend_error,
 
-
-
-
-
-
-
         invalid_argument,
         not_found,
         not_supported,
@@ -36,7 +27,6 @@ struct IoError {
 
     friend bool operator==(const IoError&, const IoError&) noexcept = default;
 };
-
 
 inline constexpr std::string_view to_string(IoError::Code c) {
     switch (c) {
@@ -65,10 +55,6 @@ inline constexpr std::string_view to_string(IoError::Code c) {
     }
     return "unknown";
 }
-
-
-
-
 
 inline IoError from_errno_value(int err) {
     IoError e{};
@@ -108,4 +94,4 @@ inline IoError from_errno_value(int err) {
     return e;
 }
 
-}
+} // namespace sluice

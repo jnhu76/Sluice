@@ -1,9 +1,3 @@
-
-
-
-
-
-
 #include <sluice/async/cancel.hpp>
 
 #include <sluice/error.hpp>
@@ -13,11 +7,9 @@ namespace sluice::async {
 
 namespace {
 
-
-
 constexpr std::uint64_t kPendingBit = 1;
 constexpr std::uint64_t kEpochInc = 2;
-}
+} // namespace
 
 void CancelToken::request() noexcept {
     auto cur = state_.load(std::memory_order::relaxed);
@@ -26,8 +18,6 @@ void CancelToken::request() noexcept {
             return;
         }
         const auto next = (cur + kEpochInc) | kPendingBit;
-
-
 
         if (state_.compare_exchange_weak(cur, next, std::memory_order::release,
                                          std::memory_order::relaxed)) {
@@ -51,8 +41,6 @@ void CancelToken::rearm() noexcept {
             return;
         }
 
-
-
         const auto next = (cur + kEpochInc) | kPendingBit;
         if (state_.compare_exchange_weak(cur, next, std::memory_order::release,
                                          std::memory_order::relaxed)) {
@@ -62,8 +50,6 @@ void CancelToken::rearm() noexcept {
 }
 
 void CancelToken::clear() noexcept {
-
-
     state_.fetch_and(~kPendingBit, std::memory_order::release);
 }
 
@@ -74,10 +60,6 @@ CancelProtection CancelState::swap_protection(CancelProtection next) noexcept {
 }
 
 bool CancelState::acknowledged(const CancelToken& token) const noexcept {
-
-
-
-
     return token.is_requested() && acknowledged_epoch_ == token.epoch();
 }
 
@@ -85,19 +67,10 @@ void CancelState::acknowledge(const CancelToken& token) noexcept {
     acknowledged_epoch_ = token.epoch();
 }
 
-
-
-
-
-
-
-
 Result<void> check_cancel(const CancelToken& token, CancelState& state) noexcept {
     if (state.protection() == CancelProtection::blocked) {
         return {};
     }
-
-
 
     const auto word = token.state_.load(std::memory_order::acquire);
     if ((word & kPendingBit) == 0) {
@@ -108,9 +81,8 @@ Result<void> check_cancel(const CancelToken& token, CancelState& state) noexcept
         return {};
     }
 
-
     state.acknowledged_epoch_ = epoch;
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
-}
+} // namespace sluice::async

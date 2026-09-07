@@ -1,28 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/application_runtime.hpp>
@@ -41,35 +16,19 @@ namespace sluice::async {
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
 
-
-
-
-
 namespace detail {
 inline bool task_result_submit_throw_armed = false;
 
 inline bool task_result_test_inject_next_submit_throw() noexcept {
-    if (!task_result_submit_throw_armed) return false;
+    if (!task_result_submit_throw_armed)
+        return false;
     task_result_submit_throw_armed = false;
     return true;
 }
-}
+} // namespace detail
 #endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-template <class T>
-class TaskResultSlot {
+template <class T> class TaskResultSlot {
   public:
     static_assert(std::is_nothrow_move_constructible_v<T>,
                   "TaskResultSlot<T>: T must be nothrow move constructible "
@@ -80,31 +39,16 @@ class TaskResultSlot {
     TaskResultSlot(const TaskResultSlot&) = delete;
     TaskResultSlot& operator=(const TaskResultSlot&) = delete;
 
-
-
-
-
-
-
-
-
-
-
     void publish(T r) noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            if (done_) return;
+            if (done_)
+                return;
             out_.emplace(std::move(r));
             done_ = true;
         }
         cv_.notify_all();
     }
-
-
-
-
-
-
 
     T wait_and_take() {
         std::unique_lock<std::mutex> lk(mtx_);
@@ -122,75 +66,25 @@ class TaskResultSlot {
     bool done_ = false;
 };
 
-
-
-
-
-
-
-
-
-
-
-
-template <class T>
-Result<T> translate_task_exception() noexcept {
+template <class T> Result<T> translate_task_exception() noexcept {
     try {
         throw;
     } catch (const std::bad_alloc&) {
         return make_unexpected<T>(IoError{IoError::Code::no_space});
     } catch (const std::system_error& e) {
         IoError err{IoError::Code::backend_error};
-        if (e.code().value() > 0) err.os_errno = e.code().value();
+        if (e.code().value() > 0)
+            err.os_errno = e.code().value();
         return make_unexpected<T>(err);
     } catch (...) {
         return make_unexpected<T>(IoError{IoError::Code::backend_error});
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 template <class T, class TaskFn>
-Result<T> run_task_to_result(unsigned workers,
-                             std::unique_ptr<AsyncBackend> backend,
+Result<T> run_task_to_result(unsigned workers, std::unique_ptr<AsyncBackend> backend,
                              TaskFn&& task) {
-    static_assert(std::is_invocable_v<TaskFn&, RuntimeTaskContext&,
-                                      TaskResultSlot<Result<T>>&>,
+    static_assert(std::is_invocable_v<TaskFn&, RuntimeTaskContext&, TaskResultSlot<Result<T>>&>,
                   "task must be invocable as void(RuntimeTaskContext&, "
                   "TaskResultSlot<Result<T>>&)");
 
@@ -203,9 +97,6 @@ Result<T> run_task_to_result(unsigned workers,
     RuntimeBuilder builder;
     builder.backend(std::move(backend));
     builder.workers(workers);
-
-
-
 
     std::unique_ptr<ApplicationRuntime> rt;
     try {
@@ -220,30 +111,16 @@ Result<T> run_task_to_result(unsigned workers,
             return make_unexpected<T>(start_r.error());
         }
     } catch (...) {
-        if (rt) (void)rt->shutdown();
+        if (rt)
+            (void)rt->shutdown();
         return translate_task_exception<T>();
     }
-
-
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
     if (detail::task_result_test_inject_next_submit_throw()) {
         rt->test_inject_next_submit_throw();
     }
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     try {
         auto sub_r = rt->submit([&task, &slot](RuntimeTaskContext& ctx) {
@@ -262,10 +139,6 @@ Result<T> run_task_to_result(unsigned workers,
         return translate_task_exception<T>();
     }
 
-
-
-
-
     Result<T> result = slot.wait_and_take();
 
     rt->request_stop();
@@ -283,4 +156,4 @@ Result<T> run_task_to_result(unsigned workers,
     return result;
 }
 
-}
+} // namespace sluice::async

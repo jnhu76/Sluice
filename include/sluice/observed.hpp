@@ -1,5 +1,3 @@
-
-
 #pragma once
 
 #include <sluice/reader.hpp>
@@ -28,13 +26,8 @@ struct WriterStats {
 
 class ObservedReader final : public Reader {
   public:
-
-
-
     ObservedReader(Reader& inner, ReaderStats& stats, VectorStats* vec_stats = nullptr)
         : inner_(inner), stats_(stats), vec_stats_(vec_stats) {}
-
-
 
     ObservedReader(const ObservedReader&) = delete;
     ObservedReader& operator=(const ObservedReader&) = delete;
@@ -52,12 +45,8 @@ class ObservedReader final : public Reader {
 
 class ObservedWriter final : public Writer {
   public:
-
-
-
     ObservedWriter(Writer& inner, WriterStats& stats, VectorStats* vec_stats = nullptr)
         : inner_(inner), stats_(stats), vec_stats_(vec_stats) {}
-
 
     ObservedWriter(const ObservedWriter&) = delete;
     ObservedWriter& operator=(const ObservedWriter&) = delete;
@@ -74,4 +63,4 @@ class ObservedWriter final : public Writer {
     VectorStats* vec_stats_;
 };
 
-}
+} // namespace sluice

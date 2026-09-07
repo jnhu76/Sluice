@@ -1,55 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cassert>
@@ -63,36 +11,17 @@
 
 namespace sluice::async {
 
-
-
-
-
-
 class AsyncRwLock {
-public:
-
-
+  public:
     explicit AsyncRwLock(Scheduler& scheduler) noexcept
-        : scheduler_(scheduler),
-          active_readers_(0),
-          writer_active_(false),
+        : scheduler_(scheduler), active_readers_(0), writer_active_(false),
           writer_owner_(ActorId::none()),
-          expire_ctx_{&waiters_, &active_readers_, &writer_active_,
-                      &writer_owner_} {}
-
-
-
+          expire_ctx_{&waiters_, &active_readers_, &writer_active_, &writer_owner_} {}
 
     ~AsyncRwLock() {
-
-
-
-
         if (active_readers_ != 0 || writer_active_) {
-            assert(active_readers_ == 0 &&
-                   "AsyncRwLock destroyed with active readers");
-            assert(!writer_active_ &&
-                   "AsyncRwLock destroyed with active writer");
+            assert(active_readers_ == 0 && "AsyncRwLock destroyed with active readers");
+            assert(!writer_active_ && "AsyncRwLock destroyed with active writer");
             detail::async_rwlock_lifetime_fail_fast();
         }
     }
@@ -102,105 +31,49 @@ public:
     AsyncRwLock(AsyncRwLock&&) = delete;
     AsyncRwLock& operator=(AsyncRwLock&&) = delete;
 
-
-
-
-
-
-
-
-
     [[nodiscard]] bool try_read_lock() {
-        return scheduler_.rwlock_try_read_lock(waiters_, active_readers_,
-                                               writer_active_);
+        return scheduler_.rwlock_try_read_lock(waiters_, active_readers_, writer_active_);
     }
-
-
-
-
 
     void read_lock(WaitNode& node) {
-        scheduler_.rwlock_read_lock(waiters_, active_readers_, writer_active_,
-                                    node);
+        scheduler_.rwlock_read_lock(waiters_, active_readers_, writer_active_, node);
     }
 
-
-
     void read_lock_until(WaitNode& node, Scheduler::deadline_t deadline) {
-        scheduler_.rwlock_read_lock_until(waiters_, active_readers_,
-                                          writer_active_, node, deadline,
+        scheduler_.rwlock_read_lock_until(waiters_, active_readers_, writer_active_, node, deadline,
                                           &expire_ctx_);
     }
 
-
-
-
-
-
-
-
-
-
-
     [[nodiscard]] bool try_write_lock() {
-        return scheduler_.rwlock_try_write_lock(waiters_, active_readers_,
-                                                writer_active_, writer_owner_);
+        return scheduler_.rwlock_try_write_lock(waiters_, active_readers_, writer_active_,
+                                                writer_owner_);
     }
-
-
 
     void write_lock(WaitNode& node) {
-        scheduler_.rwlock_write_lock(waiters_, active_readers_, writer_active_,
-                                     writer_owner_, node);
+        scheduler_.rwlock_write_lock(waiters_, active_readers_, writer_active_, writer_owner_,
+                                     node);
     }
 
-
     void write_lock_until(WaitNode& node, Scheduler::deadline_t deadline) {
-        scheduler_.rwlock_write_lock_until(waiters_, active_readers_,
-                                           writer_active_, writer_owner_,
+        scheduler_.rwlock_write_lock_until(waiters_, active_readers_, writer_active_, writer_owner_,
                                            node, deadline, &expire_ctx_);
     }
 
-
-
-
-
-
     void unlock_read() noexcept {
-        scheduler_.rwlock_unlock_read(waiters_, active_readers_, writer_active_,
-                                      writer_owner_);
+        scheduler_.rwlock_unlock_read(waiters_, active_readers_, writer_active_, writer_owner_);
     }
-
-
-
-
 
     void unlock_write() noexcept {
-        scheduler_.rwlock_unlock_write(waiters_, active_readers_,
-                                       writer_active_, writer_owner_);
+        scheduler_.rwlock_unlock_write(waiters_, active_readers_, writer_active_, writer_owner_);
     }
-
-
-
-
-
-
 
     [[nodiscard]] bool cancel(WaitNode& node) {
-        return scheduler_.rwlock_cancel(waiters_, active_readers_,
-                                        writer_active_, writer_owner_, node);
+        return scheduler_.rwlock_cancel(waiters_, active_readers_, writer_active_, writer_owner_,
+                                        node);
     }
 
-private:
-
-
-
+  private:
     friend class Scheduler;
-
-
-
-
-
 
     struct ExpireCtx {
         WaitQueue* waiters;
@@ -217,4 +90,4 @@ private:
     ExpireCtx expire_ctx_;
 };
 
-}
+} // namespace sluice::async

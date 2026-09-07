@@ -1,55 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -75,22 +23,6 @@ class FakeAsyncBackend : public AsyncBackend {
         : arena_(detail::ContextIdentity::for_testing(next_backend_id()), request_capacity) {}
     ~FakeAsyncBackend() override = default;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     void auto_bytes(std::size_t n) {
         auto_mode_ = Auto::bytes;
         auto_bytes_ = n;
@@ -107,7 +39,6 @@ class FakeAsyncBackend : public AsyncBackend {
         auto_short_used_ = false;
     }
 
-
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
         return submit_size(op, c, detail::OperationKind::read);
     }
@@ -121,38 +52,16 @@ class FakeAsyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
-
-
     bool supports_request_identity() const noexcept override { return true; }
 
   private:
-
-
-
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override {
-        return arena_.identity_handle_state(detail::SlotIndex{slot},
-                                            detail::Generation{gen},
+        return arena_.identity_handle_state(detail::SlotIndex{slot}, detail::Generation{gen},
                                             detail::ContextIdentity{ctx});
     }
 
   public:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     void complete_oldest_with_bytes(std::size_t n) {
         resolve_size_terminal(detail::TerminalResult::ok_bytes(n));
     }
@@ -161,48 +70,19 @@ class FakeAsyncBackend : public AsyncBackend {
         resolve_size_terminal(detail::TerminalResult::err(e));
     }
 
-    void complete_oldest_sync_ok() {
-        resolve_void_terminal(detail::TerminalResult::ok_void());
-    }
+    void complete_oldest_sync_ok() { resolve_void_terminal(detail::TerminalResult::ok_void()); }
 
     void complete_oldest_sync_error(IoError e) {
         resolve_void_terminal(detail::TerminalResult::err(e));
     }
 
-
-
-
-
     std::size_t poll() override { return dispatch_and_reap(); }
 
-    Result<std::size_t> wait_one() override {
-
-        return dispatch_and_reap();
-    }
-
-
-
-
-
-
+    Result<std::size_t> wait_one() override { return dispatch_and_reap(); }
 
     bool wait_one_is_nonblocking() const noexcept override { return true; }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    Result<void> register_waiter(Completion<std::size_t>& c,
-                                 detail::WaiterToken token,
+    Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
                                  detail::RoutingLease lease) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
@@ -210,8 +90,7 @@ class FakeAsyncBackend : public AsyncBackend {
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
-    Result<void> register_waiter(Completion<void>& c,
-                                 detail::WaiterToken token,
+    Result<void> register_waiter(Completion<void>& c, detail::WaiterToken token,
                                  detail::RoutingLease lease) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
@@ -222,40 +101,17 @@ class FakeAsyncBackend : public AsyncBackend {
     Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
+            return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
         }
         return arena_.cancel_waiter(*h);
     }
     Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
+            return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
         }
         return arena_.cancel_waiter(*h);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     void cancel(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
@@ -276,31 +132,14 @@ class FakeAsyncBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     void close_admission() {
         std::lock_guard<std::mutex> lk(admission_mtx_);
         arena_.close_admission();
     }
 
-
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
-
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
@@ -314,32 +153,13 @@ class FakeAsyncBackend : public AsyncBackend {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
     struct SubmitPauseGate;
     void set_submit_pause_after_commit(SubmitPauseGate* gate) noexcept;
 
-
-
-
-
-    std::optional<detail::SlotHandle> handle_for_completion_for_test(
-        const void* completion) const noexcept {
+    std::optional<detail::SlotHandle>
+    handle_for_completion_for_test(const void* completion) const noexcept {
         return arena_.resolve_completion(completion);
     }
-
-
-
-
-
-
-
-
-
-
 
     detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept {
         detail::CancelDisposition disp = arena_.cancel(h);
@@ -349,20 +169,7 @@ class FakeAsyncBackend : public AsyncBackend {
         return disp;
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-    Result<void> register_waiter_for_test(Completion<std::size_t>& c,
-                                          detail::WaiterToken token,
+    Result<void> register_waiter_for_test(Completion<std::size_t>& c, detail::WaiterToken token,
                                           detail::RoutingLease lease) {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
@@ -370,8 +177,7 @@ class FakeAsyncBackend : public AsyncBackend {
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
-    Result<void> register_waiter_for_test(Completion<void>& c,
-                                          detail::WaiterToken token,
+    Result<void> register_waiter_for_test(Completion<void>& c, detail::WaiterToken token,
                                           detail::RoutingLease lease) {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
@@ -379,37 +185,23 @@ class FakeAsyncBackend : public AsyncBackend {
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
-
-
-
-
 
     Result<detail::RoutingLease> cancel_waiter_for_test(Completion<std::size_t>& c) {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
+            return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
         }
         return arena_.cancel_waiter(*h);
     }
     Result<detail::RoutingLease> cancel_waiter_for_test(Completion<void>& c) {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
+            return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
         }
         return arena_.cancel_waiter(*h);
     }
 
-
-
-
-
-
-
-
-    Result<void> register_waiter_handle_for_test(detail::SlotHandle h,
-                                                 detail::WaiterToken token,
+    Result<void> register_waiter_handle_for_test(detail::SlotHandle h, detail::WaiterToken token,
                                                  detail::RoutingLease lease) {
         return arena_.register_waiter(h, token, std::move(lease));
     }
@@ -417,20 +209,15 @@ class FakeAsyncBackend : public AsyncBackend {
         return arena_.cancel_waiter(h);
     }
 
-
-    std::optional<detail::RequestArena::BorrowSnapshot> borrow_for_test(
-        detail::SlotHandle h) const noexcept {
+    std::optional<detail::RequestArena::BorrowSnapshot>
+    borrow_for_test(detail::SlotHandle h) const noexcept {
         return arena_.borrow_for_test(h);
     }
 
-
-    std::optional<detail::RequestArena::WaiterObservation> waiter_for_test(
-        detail::SlotHandle h) const noexcept {
+    std::optional<detail::RequestArena::WaiterObservation>
+    waiter_for_test(detail::SlotHandle h) const noexcept {
         return arena_.waiter_for_test(h);
     }
-
-
-
 
     bool sink_last_has_waiter() const noexcept { return sink_.last_has_waiter(); }
     detail::WaiterToken sink_last_token() const noexcept { return sink_.last_token(); }
@@ -445,62 +232,40 @@ class FakeAsyncBackend : public AsyncBackend {
         return ++id;
     }
 
-
-
-
-
-
-
     void resolve_size_terminal(detail::TerminalResult res) {
         auto oh = arena_.oldest_enqueued_of(detail::OperationKind::read);
-
-
-
 
         auto wh = arena_.oldest_enqueued_of(detail::OperationKind::write);
         std::optional<detail::SlotHandle> target;
         if (oh.has_value() && wh.has_value()) {
-            target = (arena_.submit_seq_of(oh->slot) <= arena_.submit_seq_of(wh->slot))
-                         ? oh : wh;
+            target = (arena_.submit_seq_of(oh->slot) <= arena_.submit_seq_of(wh->slot)) ? oh : wh;
         } else if (oh.has_value()) {
             target = oh;
         } else {
             target = wh;
         }
-        if (!target.has_value()) return;
+        if (!target.has_value())
+            return;
         bool won = arena_.record_terminal(*target, res);
         tally_terminal_result(won, res);
     }
-
 
     void resolve_void_terminal(detail::TerminalResult res) {
         auto dh = arena_.oldest_enqueued_of(detail::OperationKind::sync_data);
         auto ah = arena_.oldest_enqueued_of(detail::OperationKind::sync_all);
         std::optional<detail::SlotHandle> target;
         if (dh.has_value() && ah.has_value()) {
-            target = (arena_.submit_seq_of(dh->slot) <= arena_.submit_seq_of(ah->slot))
-                         ? dh : ah;
+            target = (arena_.submit_seq_of(dh->slot) <= arena_.submit_seq_of(ah->slot)) ? dh : ah;
         } else if (dh.has_value()) {
             target = dh;
         } else {
             target = ah;
         }
-        if (!target.has_value()) return;
+        if (!target.has_value())
+            return;
         bool won = arena_.record_terminal(*target, res);
         tally_terminal_result(won, res);
     }
-
-
-
-
-
-
-
-
-
-
-
-
 
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind) {
@@ -514,7 +279,6 @@ class FakeAsyncBackend : public AsyncBackend {
             }
             h = r.value();
         }
-
 
         (void)arena_.enqueue(h);
         return {};
@@ -536,23 +300,12 @@ class FakeAsyncBackend : public AsyncBackend {
         return {};
     }
 
-
-
-
-
-
-
-
-
-
-    template <class Op, class Comp>
-    struct SubmitPolicy {
+    template <class Op, class Comp> struct SubmitPolicy {
         using completion_type = Comp;
         using op_type = Op;
 
         SubmitPolicy(FakeAsyncBackend& self, detail::OperationKind kind) noexcept
             : self_(self), kind_(kind) {}
-
 
         detail::OperationKind kind() const noexcept { return kind_; }
         static detail::BorrowMetadata borrow(const Op& op) noexcept {
@@ -577,17 +330,12 @@ class FakeAsyncBackend : public AsyncBackend {
             }
         }
 
-
-        static bool begin_binding(Comp& c) noexcept {
-            return FakeAsyncBackend::begin_binding(c);
-        }
+        static bool begin_binding(Comp& c) noexcept { return FakeAsyncBackend::begin_binding(c); }
         static void install_binding(Comp& c, detail::RequestArena* arena,
                                     detail::SlotHandle h) noexcept {
             FakeAsyncBackend::install_binding(c, arena, h);
         }
-        static void commit_binding(Comp& c) noexcept {
-            FakeAsyncBackend::commit_binding(c);
-        }
+        static void commit_binding(Comp& c) noexcept { FakeAsyncBackend::commit_binding(c); }
         static void rollback_binding(Comp& c) noexcept {
             FakeAsyncBackend::rollback_binding_before_accept(c);
         }
@@ -598,20 +346,13 @@ class FakeAsyncBackend : public AsyncBackend {
         void pause_before_commit_binding() noexcept {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
             self_.wait_submit_pause_();
 #endif
         }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-        std::optional<IoError> injected_precommit_stage_failure(
-            detail::SubmitStage) const noexcept {
+        std::optional<IoError>
+        injected_precommit_stage_failure(detail::SubmitStage) const noexcept {
             return std::nullopt;
         }
 #endif
@@ -621,9 +362,7 @@ class FakeAsyncBackend : public AsyncBackend {
         detail::OperationKind kind_;
     };
 
-
-    template <class Op>
-    static detail::BorrowMetadata borrow_of(const Op& op) {
+    template <class Op> static detail::BorrowMetadata borrow_of(const Op& op) {
         if constexpr (std::is_same_v<Op, ReadOp>) {
             return {op.fd, op.dst, op.len};
         } else {
@@ -631,41 +370,30 @@ class FakeAsyncBackend : public AsyncBackend {
         }
     }
 
-
-
-
-
-
-
     std::size_t dispatch_and_reap() {
         if (auto_mode_ != Auto::off) {
             drain_auto_size();
             drain_auto_void();
         }
 
-
-
-
         return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     }
 
     void drain_auto_size() {
-
-
-
         for (;;) {
             auto oh = arena_.oldest_enqueued_of(detail::OperationKind::read);
             auto wh = arena_.oldest_enqueued_of(detail::OperationKind::write);
             std::optional<detail::SlotHandle> target;
             if (oh.has_value() && wh.has_value()) {
-                target = (arena_.submit_seq_of(oh->slot) <= arena_.submit_seq_of(wh->slot))
-                             ? oh : wh;
+                target =
+                    (arena_.submit_seq_of(oh->slot) <= arena_.submit_seq_of(wh->slot)) ? oh : wh;
             } else if (oh.has_value()) {
                 target = oh;
             } else {
                 target = wh;
             }
-            if (!target.has_value()) break;
+            if (!target.has_value())
+                break;
             std::size_t requested =
                 static_cast<std::size_t>(arena_.requested_bytes_of(target->slot));
             detail::TerminalResult res = auto_size_result(requested);
@@ -679,26 +407,23 @@ class FakeAsyncBackend : public AsyncBackend {
             auto ah = arena_.oldest_enqueued_of(detail::OperationKind::sync_all);
             std::optional<detail::SlotHandle> target;
             if (dh.has_value() && ah.has_value()) {
-                target = (arena_.submit_seq_of(dh->slot) <= arena_.submit_seq_of(ah->slot))
-                             ? dh : ah;
+                target =
+                    (arena_.submit_seq_of(dh->slot) <= arena_.submit_seq_of(ah->slot)) ? dh : ah;
             } else if (dh.has_value()) {
                 target = dh;
             } else {
                 target = ah;
             }
-            if (!target.has_value()) break;
+            if (!target.has_value())
+                break;
             detail::TerminalResult res = (auto_mode_ == Auto::err)
                                              ? detail::TerminalResult::err(auto_err_)
                                              : detail::TerminalResult::ok_void();
-
-
 
             bool won = arena_.record_terminal(*target, res);
             tally_terminal_result(won, res);
         }
     }
-
-
 
     detail::TerminalResult auto_size_result(std::size_t requested) {
         switch (auto_mode_) {
@@ -717,22 +442,12 @@ class FakeAsyncBackend : public AsyncBackend {
         }
     }
 
-
-
-
-
-
-
-
-    static void publish_size_ready(void* completion,
-                                   const detail::TerminalResult& t) noexcept {
+    static void publish_size_ready(void* completion, const detail::TerminalResult& t) noexcept {
         AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion),
                               terminal_to_size(t));
     }
-    static void publish_void_ready(void* completion,
-                                   const detail::TerminalResult& t) noexcept {
-        AsyncBackend::publish(*static_cast<Completion<void>*>(completion),
-                              terminal_to_void(t));
+    static void publish_void_ready(void* completion, const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<void>*>(completion), terminal_to_void(t));
     }
 
     static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept {
@@ -746,17 +461,13 @@ class FakeAsyncBackend : public AsyncBackend {
         return {};
     }
 
-
-
-
-
-
-
     void tally_canceled() noexcept {
-        if (stats_) ++stats_->canceled_ops;
+        if (stats_)
+            ++stats_->canceled_ops;
     }
     void tally_terminal_result(bool won, const detail::TerminalResult& t) noexcept {
-        if (!stats_ || !won || !t.stored || !t.is_error) return;
+        if (!stats_ || !won || !t.stored || !t.is_error)
+            return;
         if (t.error.code == IoError::Code::canceled) {
             ++stats_->canceled_ops;
         } else {
@@ -772,21 +483,7 @@ class FakeAsyncBackend : public AsyncBackend {
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
 
-
-
-
-
-
-
     mutable std::mutex admission_mtx_;
-
-
-
-
-
-
-
-
 
     enum class Auto : std::uint8_t { off, bytes, err, short_then_full };
     Auto auto_mode_ = Auto::off;
@@ -795,12 +492,9 @@ class FakeAsyncBackend : public AsyncBackend {
     bool auto_short_used_ = false;
 };
 
-}
+} // namespace sluice::async
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
 
 #include "fake_test_seams.hpp"
 #endif

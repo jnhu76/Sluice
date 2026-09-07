@@ -1,5 +1,3 @@
-
-
 #include <sluice/fault.hpp>
 
 #include <algorithm>
@@ -72,4 +70,4 @@ Result<void> FaultWriter::flush() {
     return inner_.flush();
 }
 
-}
+} // namespace sluice

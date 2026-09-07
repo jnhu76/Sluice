@@ -1,41 +1,8 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstdint>
 
 namespace sluice::async::detail {
-
-
-
-
-
-
 
 struct ContextIdentity {
     std::uint64_t value;
@@ -63,4 +30,4 @@ struct RequestKey {
     friend bool operator==(const RequestKey&, const RequestKey&) noexcept = default;
 };
 
-}
+} // namespace sluice::async::detail

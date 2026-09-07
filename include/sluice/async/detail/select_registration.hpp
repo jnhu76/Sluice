@@ -1,24 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/timer_registration.hpp>
@@ -35,19 +14,8 @@ namespace detail {
 
 struct SelectArmSlot;
 
-
-
-
-
-
-
-
-
-
-
-
 class SelectTimerRegistration {
-public:
+  public:
     enum class State : std::uint8_t {
         active = 0,
         retired = 1,
@@ -64,9 +32,7 @@ public:
     SelectTimerRegistration(SelectTimerRegistration&&) = delete;
     SelectTimerRegistration& operator=(SelectTimerRegistration&&) = delete;
 
-    State state() const noexcept {
-        return state_.load(std::memory_order::acquire);
-    }
+    State state() const noexcept { return state_.load(std::memory_order::acquire); }
 
     bool is_active() const noexcept {
         return state_.load(std::memory_order::acquire) == State::active;
@@ -84,33 +50,18 @@ public:
     SelectArmSlot* arm() const noexcept { return arm_; }
     Scheduler* scheduler() const noexcept { return scheduler_; }
 
-private:
+  private:
     friend class ::sluice::async::Scheduler;
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     bool try_claim_expiry() noexcept {
         State expected = State::active;
-        return state_.compare_exchange_strong(expected, State::consumed,
-                                              std::memory_order::acq_rel,
+        return state_.compare_exchange_strong(expected, State::consumed, std::memory_order::acq_rel,
                                               std::memory_order::acquire);
     }
 
     bool retire() noexcept {
         State expected = State::active;
-        return state_.compare_exchange_strong(expected, State::retired,
-                                              std::memory_order::acq_rel,
+        return state_.compare_exchange_strong(expected, State::retired, std::memory_order::acq_rel,
                                               std::memory_order::acquire);
     }
 
@@ -119,18 +70,6 @@ private:
     Scheduler* scheduler_{nullptr};
     deadline_tick_t deadline_{0};
 };
-
-
-
-
-
-
-
-
-
-
-
-
 
 struct DeadlineHeapEntry {
     enum class Kind : std::uint8_t {
@@ -156,8 +95,7 @@ struct DeadlineHeapEntry {
         return e;
     }
 
-    static DeadlineHeapEntry for_select(
-        SelectTimerRegistration& reg) noexcept {
+    static DeadlineHeapEntry for_select(SelectTimerRegistration& reg) noexcept {
         DeadlineHeapEntry e;
         e.deadline = reg.deadline();
         e.kind = Kind::select;
@@ -166,13 +104,9 @@ struct DeadlineHeapEntry {
     }
 };
 
-
-
-
-inline bool heap_less_entry(const DeadlineHeapEntry& a,
-                            const DeadlineHeapEntry& b) noexcept {
+inline bool heap_less_entry(const DeadlineHeapEntry& a, const DeadlineHeapEntry& b) noexcept {
     return a.deadline < b.deadline;
 }
 
-}
-}
+} // namespace detail
+} // namespace sluice::async

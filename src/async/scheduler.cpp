@@ -1,21 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -32,10 +14,6 @@
 #include <cstdlib>
 #include <new>
 
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 #include "async_test_control_internal.hpp"
 #endif
@@ -43,8 +21,6 @@
 namespace sluice::async {
 
 namespace {
-
-
 
 void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
     (void)resumed_by;
@@ -57,47 +33,21 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
     fiber_ctx::context_switch_final(fiber->ctx, g_worker->sched_ctx);
 }
 
-}
-
-
-
+} // namespace
 
 namespace {
 std::uint64_t next_scheduler_identity() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     return ++counter;
 }
-}
+} // namespace
 
 Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
-    : ctx_(ctx),
-      wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity),
+    : ctx_(ctx), wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity),
       scheduler_identity_(next_scheduler_identity()) {
-
-
-
-
-
     detail::require_evented_supported(detail::evented_admission_check());
 
-
-
-
-
-
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
-
-
-
-
-
-
-
-
-
-
-
-
 
     wait_records_.reserve(wait_capacity_);
     for (std::size_t i = 0; i < wait_capacity_; ++i) {
@@ -107,10 +57,6 @@ Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
         wait_records_.push_back(std::move(rec));
     }
 
-
-
-
-
     WaitRecord** tail = &wait_record_free_head_;
     for (std::size_t i = 0; i < wait_capacity_; ++i) {
         WaitRecord* r = wait_records_[i].get();
@@ -119,40 +65,11 @@ Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
     }
     *tail = nullptr;
 
-
-
-
-
-
     ctx_.set_ready_sink(&ready_sink_);
 }
 
 Scheduler::~Scheduler() {
-
-
-
-
-
     ctx_.set_ready_sink(nullptr);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     if (wake_control_) {
         {
@@ -163,31 +80,12 @@ Scheduler::~Scheduler() {
         wake_control_.reset();
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     [[maybe_unused]] bool any_active_select = false;
     for (auto& r : select_timer_pool_) {
-        if (r.is_active()) { any_active_select = true; break; }
+        if (r.is_active()) {
+            any_active_select = true;
+            break;
+        }
     }
     assert(!any_active_select &&
            "~Scheduler: an ACTIVE SelectTimerRegistration remains (live Select "
@@ -196,22 +94,10 @@ Scheduler::~Scheduler() {
            "~Scheduler: active_deadline_count_ != 0 (a timer registration was "
            "not retired/consumed before teardown)");
 
-
-
-
-
-
-
-
-
-
-
     assert(waiting_select_count_ == 0 &&
            "~Scheduler: waiting_select_count_ != 0 (a suspended SelectGroup "
            "remains Armed — an Event-only Select with no active Timer escapes "
            "the timer teardown checks; caller contract violation)");
-
-
 
     {
         LockGuard rlk(wait_registry_mtx_);
@@ -224,20 +110,10 @@ Scheduler::~Scheduler() {
         }
     }
 
-
-
-
-
-
-
     if (!deferred_publications_.empty()) {
         detail::scheduler_deferred_publication_stranded_fail_fast();
     }
-    if (any_active_select || active_deadline_count_ != 0 ||
-        waiting_select_count_ != 0) {
-
-
-
+    if (any_active_select || active_deadline_count_ != 0 || waiting_select_count_ != 0) {
         detail::select_invariant_fail_fast();
     }
 }
@@ -245,25 +121,16 @@ Scheduler::~Scheduler() {
 bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
     if (force_init_fiber_fail_.exchange(false, std::memory_order_acq_rel)) {
         return false;
     }
 #endif
-    return fiber_ctx::init_context(fiber.ctx, &fiber_entry_bridge, &fiber,
-                                   stack_base, stack_size);
+    return fiber_ctx::init_context(fiber.ctx, &fiber_entry_bridge, &fiber, stack_base, stack_size);
 }
 
 void Scheduler::spawn(Fiber& fiber) noexcept {
-
-
-
     if (!fiber.make_runnable())
         return;
-
-
-
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -271,46 +138,27 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
 #endif
     LockGuard lk(global_mtx_);
     const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
-    if (participant_count != 0 &&
-        !global_terminate_.load(std::memory_order_acquire)) {
+    if (participant_count != 0 && !global_terminate_.load(std::memory_order_acquire)) {
         unsigned target = next_spawn_worker_++ % participant_count;
         {
             std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
             workers_[target]->local_runnable.push_back(&fiber);
 
-
             fiber_owner_[&fiber] = workers_[target].get();
         }
 
-
-
-
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-        sluice_async_test::set_trace_wake_cause(
-            *this, sluice_async_test::WakeCause::runnable_route,
-            static_cast<unsigned>(-1));
+        sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::runnable_route,
+                                                static_cast<unsigned>(-1));
 #endif
         signal_wake_locked();
     } else {
         pending_spawn_.push_back(&fiber);
-
-
     }
 }
 
 void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
-
-
-
-
     if (!fiber.make_runnable())
         return;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -319,12 +167,8 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
 #endif
     LockGuard lk(global_mtx_);
     const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
-    if (participant_count == 0 ||
-        global_terminate_.load(std::memory_order_acquire) ||
+    if (participant_count == 0 || global_terminate_.load(std::memory_order_acquire) ||
         worker_id >= participant_count) {
-
-
-
         pending_spawn_.push_back(&fiber);
         return;
     }
@@ -335,13 +179,10 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
         fiber_owner_[&fiber] = tgt;
     }
 
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    sluice_async_test::set_trace_wake_cause(
-        *this, sluice_async_test::WakeCause::runnable_route,
-        static_cast<unsigned>(-1));
+    sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::runnable_route,
+                                            static_cast<unsigned>(-1));
 #endif
     signal_wake_locked();
 }
@@ -351,24 +192,14 @@ WorkerState* Scheduler::current_worker() {
 }
 
 void Scheduler::run(unsigned worker_count) {
-
-
     run_impl(worker_count, RunMode::drain);
 }
 
 void Scheduler::run_live(unsigned worker_count) {
-
-
-
     run_impl(worker_count, RunMode::live);
 }
 
 void Scheduler::run_live(unsigned worker_count, bool (*stop_fn)(void*), void* stop_ctx) {
-
-
-
-
-
     invocation_stop_fn_ = stop_fn;
     invocation_stop_ctx_ = stop_ctx;
     run_impl(worker_count, RunMode::live);
@@ -390,14 +221,9 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
 #endif
         ensure_workers_locked(worker_count, run_workers);
 
-
-
-
         for (WorkerState* worker : run_workers) {
             fiber_ctx::reset_context(worker->sched_ctx);
         }
-
-
 
         unsigned target = 0;
         while (!pending_spawn_.empty()) {
@@ -425,22 +251,13 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
                                   sluice_async_test::PhaseTag::worker_topology_ready_before_start);
 #endif
 
-
-
-
-
     if (worker_count == 1) {
-
-
         WorkerState* worker = run_workers[0];
         g_worker = worker;
         worker->owner_scheduler = this;
         worker->active.store(true, std::memory_order_release);
         worker->idle_dance_contributed_.store(0, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
 
         worker->loop_exit_reason.store(WorkerState::LoopExitReason::live,
                                        std::memory_order_relaxed);
@@ -450,7 +267,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         worker->active.store(false, std::memory_order_release);
         g_worker = nullptr;
     } else {
-
         std::vector<std::thread> threads;
         threads.reserve(worker_count);
         for (WorkerState* worker : run_workers) {
@@ -459,23 +275,15 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
                 worker->owner_scheduler = this;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
                 sluice_async_test::test_phase_worker(
-                    *this,
-                    sluice_async_test::PhaseTag::worker_startup_before_publication,
+                    *this, sluice_async_test::PhaseTag::worker_startup_before_publication,
                     worker->id);
 #endif
                 worker->active.store(true, std::memory_order_release);
                 worker->idle_dance_contributed_.store(0, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                worker->loop_exit_reason.store(
-                    WorkerState::LoopExitReason::live, std::memory_order_relaxed);
+                worker->loop_exit_reason.store(WorkerState::LoopExitReason::live,
+                                               std::memory_order_relaxed);
                 worker->loop_exited.store(false, std::memory_order_relaxed);
 #endif
                 worker_loop(worker, run_workers);
@@ -501,9 +309,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
 }
 
 void Scheduler::ensure_workers_locked(unsigned worker_count, WorkerSnapshot& run_workers) {
-
-
-
     while (workers_.size() < worker_count) {
         workers_.push_back(std::make_unique<WorkerState>());
         workers_.back()->id = static_cast<unsigned>(workers_.size() - 1);
@@ -514,44 +319,11 @@ void Scheduler::ensure_workers_locked(unsigned worker_count, WorkerSnapshot& run
 }
 
 void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     while (true) {
-
-
-
-
-
-
-
-
-
-
-
         ws->idle_dance_contributed_.store(0, std::memory_order_release);
 
         Fiber* f = nullptr;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
-
-
-
 
         if (sluice_async_test::schedule_script_active(*this)) {
             f = sluice_async_test::schedule_script_pick(*this, ws);
@@ -570,23 +342,9 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                 f = pending_spawn_.front();
                 pending_spawn_.pop_front();
 
-
-
-
-
-
-
-
-
                 fiber_owner_[f] = ws;
             }
         }
-
-
-
-
-
-
 
         if (!f && run_workers.size() > 1) {
             if (try_steal(ws, run_workers)) {
@@ -597,56 +355,24 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         if (f) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-
-
-            sluice_async_test::test_phase_worker(*this,
-                sluice_async_test::PhaseTag::worker_ticket_popped, ws->id);
+            sluice_async_test::test_phase_worker(
+                *this, sluice_async_test::PhaseTag::worker_ticket_popped, ws->id);
 #endif
 
-
-
-
-
-
-
-
             {
-                const unsigned erased =
-                    idle_workers_.exchange(0, std::memory_order_acq_rel);
+                const unsigned erased = idle_workers_.exchange(0, std::memory_order_acq_rel);
                 if (erased != 0) {
                     dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
                 }
             }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-
-
-            sluice_async_test::test_phase_worker(*this,
-                sluice_async_test::PhaseTag::worker_ticket_erase_done, ws->id);
+            sluice_async_test::test_phase_worker(
+                *this, sluice_async_test::PhaseTag::worker_ticket_erase_done, ws->id);
 #endif
             run_next_on(ws, f);
             continue;
         }
-
-
-
-
-
-
 
         MwState state;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -665,83 +391,36 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
         if (tv1_routed) {
-            sluice_async_test::test_phase(
-                *this, sluice_async_test::PhaseTag::tv1_wake_scan_routed);
+            sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::tv1_wake_scan_routed);
         }
 #endif
 
-
-
-
         if (state == MwState::mw_s1) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             {
-                const unsigned erased =
-                    idle_workers_.exchange(0, std::memory_order_acq_rel);
+                const unsigned erased = idle_workers_.exchange(0, std::memory_order_acq_rel);
                 if (erased != 0) {
                     dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
                 }
             }
             if (global_terminate_.load(std::memory_order_acquire)) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                ws->loop_exit_reason =
-                    WorkerState::LoopExitReason::mw_s1_terminate_observed;
+                ws->loop_exit_reason = WorkerState::LoopExitReason::mw_s1_terminate_observed;
 #endif
                 break;
             }
-
         }
 
         if (state == MwState::mw_s2) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             bool elected = false;
             {
                 LockGuard lk(global_mtx_);
-
 
                 if (classify_locked(run_workers, ws) == MwState::mw_s2 &&
                     admission_ == AdmissionState::none) {
                     unsigned lowest_alive = static_cast<unsigned>(-1);
                     for (WorkerState* w : run_workers) {
-                        if (w->active.load(std::memory_order_acquire) &&
-                            w->id < lowest_alive) {
+                        if (w->active.load(std::memory_order_acquire) && w->id < lowest_alive) {
                             lowest_alive = w->id;
                         }
                     }
@@ -754,13 +433,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             }
 
             if (elected) {
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 sluice_async_test::test_phase(*this,
                                               sluice_async_test::PhaseTag::mw_admission_phase_b);
@@ -768,18 +440,12 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 
                 bool phase_b_committed = false;
 
-
-
-
-
-
                 bool ready_flag_observation = false;
                 {
                     LockGuard lk(global_mtx_);
                     ready_flag_observation = !waiting_ready_.empty();
 
                     if (admission_ != AdmissionState::candidate || admission_owner_ != ws->id) {
-
                         continue;
                     }
 
@@ -788,8 +454,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     (void)pump_deadlines_locked();
                     MwState s2 = classify_locked(run_workers, ws);
                     if (s2 != MwState::mw_s2) {
-
-
                         admission_ = AdmissionState::none;
                         admission_owner_ = static_cast<unsigned>(-1);
                         continue;
@@ -798,66 +462,18 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     admission_ = AdmissionState::committed;
                     phase_b_committed = true;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                     const bool split_wait = ctx_.has_split_wait_capability();
                     const bool bounded_park_needed =
                         ready_flag_observation ||
-                        earliest_active_deadline_.load(std::memory_order::acquire) !=
-                            kNoDeadline;
+                        earliest_active_deadline_.load(std::memory_order::acquire) != kNoDeadline;
                     const bool backend_park_ok =
                         split_wait &&
-                        (!bounded_park_needed ||
-                         ctx_.has_bounded_split_wait_capability());
-                    ws->park_domain =
-                        backend_park_ok
-                            ? WorkerState::ParkDomain::Backend
-                            : (!split_wait && !external_wake_possible_locked()
-                                   ? WorkerState::ParkDomain::Backend
-                                   : WorkerState::ParkDomain::Scheduler);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                        (!bounded_park_needed || ctx_.has_bounded_split_wait_capability());
+                    ws->park_domain = backend_park_ok
+                                          ? WorkerState::ParkDomain::Backend
+                                          : (!split_wait && !external_wake_possible_locked()
+                                                 ? WorkerState::ParkDomain::Backend
+                                                 : WorkerState::ParkDomain::Scheduler);
 
                     if (ws->park_domain == WorkerState::ParkDomain::Backend) {
                         ctx_.arm_backend_wait_commit();
@@ -865,26 +481,9 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     }
                 }
 
-
-
-
-
-
                 if (phase_b_committed) {
-
                     if (ws->park_domain == WorkerState::ParkDomain::Scheduler) {
-
-
-
-
-
                         ws->park_domain = WorkerState::ParkDomain::None;
-
-
-
-
-
-
 
                         park_on_wake_source(ws, true);
 
@@ -897,48 +496,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             (void)pump_deadlines_locked();
                         }
 
-
-
-
-
-
                         idle_workers_.store(0, std::memory_order_release);
                         continue;
                     }
 
-
-
-
-
-
-
-
                     ws->park_domain = WorkerState::ParkDomain::Backend;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-
-
                     sluice_async_test::test_phase(
-                        *this,
-                        sluice_async_test::PhaseTag::mw_s2_committed_before_wait_one);
+                        *this, sluice_async_test::PhaseTag::mw_s2_committed_before_wait_one);
 #endif
-
-
-
-
-
-
-
-
-
-
 
                     auto max_park = std::chrono::nanoseconds::max();
                     {
@@ -952,31 +519,18 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                                 if (earliest <= now_ticks) {
                                     max_park = std::chrono::nanoseconds::zero();
                                 } else {
-                                    max_park = std::chrono::milliseconds(
-                                        earliest - now_ticks);
+                                    max_park = std::chrono::milliseconds(earliest - now_ticks);
                                 }
                             }
                         }
                         if (ready_flag_observation) {
-                            const auto observation =
-                                std::chrono::milliseconds(2);
+                            const auto observation = std::chrono::milliseconds(2);
                             if (max_park == std::chrono::nanoseconds::max() ||
                                 max_park > observation) {
                                 max_park = observation;
                             }
                         }
                     }
-
-
-
-
-
-
-
-
-
-
-
 
                     if (max_park != std::chrono::nanoseconds::max() &&
                         !ctx_.has_bounded_split_wait_capability()) {
@@ -986,15 +540,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     backend_wait_active_.store(false, std::memory_order_release);
                     ws->park_domain = WorkerState::ParkDomain::None;
 
-
-
-
-
-
-
-
                     bool made_progress = wr.has_value() && wr.value() > 0;
-
 
                     {
                         LockGuard lk(global_mtx_);
@@ -1008,29 +554,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     if (!made_progress) {
                         LockGuard lk(global_mtx_);
 
-
-
                         if (classify_locked(run_workers, ws) == MwState::mw_s1) {
                             continue;
                         }
 
-
-
-
-
-
-
-
-
-
-
-
                         if (external_wake_possible_locked()) {
                             continue;
                         }
-
-
-
 
                         global_terminate_.store(true, std::memory_order_release);
 
@@ -1041,7 +571,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             static_cast<unsigned>(-1));
 #endif
                         signal_wake_locked();
-
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                         sluice_async_test::release_all_phases(*this);
@@ -1054,63 +583,23 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     continue;
                 }
             }
-
-
-
         }
-
-
-
 
         bool ready_flag_observation = false;
         {
             LockGuard lk(global_mtx_);
 
-
-
-
-
-
-
-
             ready_flag_observation = !waiting_ready_.empty();
 
-
-
             MwState final_state = classify_locked(run_workers, ws);
-
 
             if (final_state == MwState::mw_s1 || final_state == MwState::mw_s2) {
                 idle_workers_.store(0, std::memory_order_release);
             } else {
-
-
-
-
-
-
-
-
-
-
-
-
                 if (final_state == MwState::mw_s3_unresolved && run_mode_ == RunMode::live &&
                     external_wake_possible_locked()) {
-
-
-
-
                     if (invocation_stop_fn_ != nullptr &&
                         invocation_stop_fn_(invocation_stop_ctx_)) {
-
-
-
-
-
-
-
-
                         ws->dance_epoch_at_contribution_.store(
                             dance_epoch_.load(std::memory_order_acquire),
                             std::memory_order_release);
@@ -1122,79 +611,44 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                                 global_terminate_.store(true, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
                                 sluice_async_test::set_trace_wake_cause(
                                     *this, sluice_async_test::WakeCause::terminate,
                                     static_cast<unsigned>(-1));
 #endif
                                 signal_wake_locked();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                            sluice_async_test::release_all_phases(*this);
-                            ws->loop_exit_reason =
-                                WorkerState::LoopExitReason::e14f1_last_idle_terminate;
+                                sluice_async_test::release_all_phases(*this);
+                                ws->loop_exit_reason =
+                                    WorkerState::LoopExitReason::e14f1_last_idle_terminate;
 #endif
-                            break;
+                                break;
                             }
                             idle_workers_.store(0, std::memory_order_release);
 
-
-
-
-
-
-
-
-
                             continue;
                         } else {
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
                             sluice_async_test::set_trace_wake_cause(
-                                *this,
-                                sluice_async_test::WakeCause::idle_dance,
+                                *this, sluice_async_test::WakeCause::idle_dance,
                                 static_cast<unsigned>(-1));
 #endif
                             signal_wake_locked();
                         }
                     } else {
-
-
-
-
                         idle_workers_.store(0, std::memory_order_release);
-
                     }
                 } else {
-
-
-
-
-
-
-
                     ws->dance_epoch_at_contribution_.store(
-                        dance_epoch_.load(std::memory_order_acquire),
-                        std::memory_order_release);
+                        dance_epoch_.load(std::memory_order_acquire), std::memory_order_release);
                     unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
                     ws->idle_dance_contributed_.store(1, std::memory_order_release);
                     if (prev + 1 >= live_loop_workers_) {
-
                         MwState still = classify_locked(run_workers, ws);
                         if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
-
-
-
-
-
-
                             global_terminate_.store(true, std::memory_order_release);
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
 
                             sluice_async_test::set_trace_wake_cause(
                                 *this, sluice_async_test::WakeCause::terminate,
@@ -1202,43 +656,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 #endif
                             signal_wake_locked();
 
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                             sluice_async_test::release_all_phases(*this);
-                            ws->loop_exit_reason =
-                                WorkerState::LoopExitReason::last_idle_terminate;
+                            ws->loop_exit_reason = WorkerState::LoopExitReason::last_idle_terminate;
 #endif
                             break;
                         }
                         idle_workers_.store(0, std::memory_order_release);
 
-
-
-
-
-
-
-
-
                         continue;
                     } else {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
                         sluice_async_test::set_trace_wake_cause(
@@ -1253,85 +680,28 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 
         if (global_terminate_.load(std::memory_order_acquire)) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            ws->loop_exit_reason =
-                WorkerState::LoopExitReason::final_park_terminate;
+            ws->loop_exit_reason = WorkerState::LoopExitReason::final_park_terminate;
 #endif
             break;
         }
 
-
-
-
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase_worker(*this,
-            sluice_async_test::PhaseTag::scheduler_park_candidate, ws->id);
+        sluice_async_test::test_phase_worker(
+            *this, sluice_async_test::PhaseTag::scheduler_park_candidate, ws->id);
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         park_on_wake_source(ws, ready_flag_observation);
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-
-
-
-
-
-        sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::worker_park_returned);
+        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::worker_park_returned);
 #endif
     }
-
-
-
-
-
-
-
-
 
     {
         LockGuard glk(global_mtx_);
 
-
-
         --live_loop_workers_;
-
-
-
-
-
-
-
-
 
         ws->active.store(false, std::memory_order_release);
         {
@@ -1344,14 +714,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             }
         }
 
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
 
         sluice_async_test::set_trace_wake_cause(
             *this, sluice_async_test::WakeCause::retire_epilogue, ws->id);
@@ -1361,20 +724,11 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
     ws->loop_exited.store(true, std::memory_order_release);
 #endif
 }
 
 void Scheduler::run_next_on(WorkerState* ws, Fiber* fiber) {
-
-
-
-
-
     if (!fiber->make_running()) {
         detail::scheduler_invalid_runnable_ticket_fail_fast();
     }
@@ -1385,42 +739,12 @@ void Scheduler::run_next_on(WorkerState* ws, Fiber* fiber) {
     s.new_ = &fiber->ctx;
     (void)fiber_ctx::context_switch(&s);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     ws->suspend_switch_pending.store(false, std::memory_order_release);
     ws->current = nullptr;
     running_fiber_count_.fetch_sub(1, std::memory_order_acq_rel);
 }
 
 void Scheduler::commit_suspend_locked(WorkerState* ws, Fiber* fiber) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     ws->suspend_switch_pending.store(true, std::memory_order_release);
     if (!fiber->make_waiting()) {
         detail::scheduler_invalid_suspend_transition_fail_fast();
@@ -1428,7 +752,6 @@ void Scheduler::commit_suspend_locked(WorkerState* ws, Fiber* fiber) {
 }
 
 void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
-
     if (owner) {
         std::lock_guard<std::mutex> lk(owner->inbox_mtx);
         owner->local_runnable.push_back(f);
@@ -1438,13 +761,6 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
 }
 
 bool Scheduler::drain_routed_completion_waits_locked() {
-
-
-
-
-
-
-
     (void)ctx_.poll();
     bool woken = false;
     WaitRecord* head = nullptr;
@@ -1471,22 +787,12 @@ bool Scheduler::drain_routed_completion_waits_locked() {
             --wait_record_live_count_;
         }
 
-
-
-
-
-
         f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
         if (f->make_runnable()) {
             route_runnable_locked(f, owner);
             woken = true;
         }
     }
-
-
-
-
-
 
     for (auto it = waiting_size_.begin(); it != waiting_size_.end();) {
         auto* c = static_cast<Completion<std::size_t>*>(it->first);
@@ -1523,20 +829,11 @@ bool Scheduler::drain_routed_completion_waits_locked() {
     return woken;
 }
 
-
-
-
-
-
-
-
 void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
     Scheduler* s = scheduler_;
-    if (s == nullptr) return;
+    if (s == nullptr)
+        return;
     if (!event.waiter.has_waiter) {
-
-
-
         return;
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1544,8 +841,6 @@ void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
 #endif
     const detail::WaiterToken& t = event.waiter.token;
     LockGuard rlk(s->wait_registry_mtx_);
-
-
 
     if (t.scheduler_identity != s->scheduler_identity_) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1567,7 +862,6 @@ void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
         return;
     }
     if (r->state != WaitRecordState::registered) {
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         ++cancel_lost_;
 #endif
@@ -1579,9 +873,6 @@ void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     ++routed_;
 #endif
-
-
-
 }
 
 bool Scheduler::wake_ready_flags_locked() {
@@ -1603,45 +894,21 @@ bool Scheduler::wake_ready_flags_locked() {
 }
 
 void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
-
     const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
     if (participant_count == 0) {
-
-
         pending_spawn_.push_back(f);
         signal_wake_locked();
         return;
     }
 
-
-
     global_terminate_.store(false, std::memory_order_release);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     {
-        const unsigned erased =
-            idle_workers_.exchange(0, std::memory_order_acq_rel);
+        const unsigned erased = idle_workers_.exchange(0, std::memory_order_acq_rel);
         if (erased != 0) {
             dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
         }
     }
-
-
-
-
-
 
     if (admission_ == AdmissionState::candidate) {
         admission_ = AdmissionState::none;
@@ -1660,24 +927,15 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
         target->local_runnable.push_back(f);
     }
 
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    sluice_async_test::set_trace_wake_cause(
-        *this, sluice_async_test::WakeCause::runnable_route,
-        static_cast<unsigned>(-1));
+    sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::runnable_route,
+                                            static_cast<unsigned>(-1));
 #endif
     signal_wake_locked();
 }
 
 WorkerState* Scheduler::owner_for_fiber_locked(Fiber* fiber) {
-
-
-
     auto it = fiber_owner_.find(fiber);
     if (it == fiber_owner_.end() || it->second == nullptr) {
         detail::scheduler_missing_fiber_owner_fail_fast();
@@ -1686,9 +944,6 @@ WorkerState* Scheduler::owner_for_fiber_locked(Fiber* fiber) {
 }
 
 bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
-
-
-
     WorkerState* owner = owner_for_fiber_locked(fiber);
     if (!fiber->make_runnable()) {
         return false;
@@ -1698,15 +953,6 @@ bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
 }
 
 void Scheduler::publish_wait_winner_locked(WaitNode& won) {
-
-
-
-
-
-
-
-
-
     const WaitResume& r = won.resume();
     switch (r.kind()) {
     case WaitResume::Kind::fiber:
@@ -1721,27 +967,8 @@ void Scheduler::publish_wait_winner_locked(WaitNode& won) {
 }
 
 void Scheduler::defer_publication_locked(void* delivery_record) noexcept {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     try {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
 
         if (sluice_async_test::deferred_publication_alloc_should_fail(*this)) {
             throw std::bad_alloc();
@@ -1754,20 +981,16 @@ void Scheduler::defer_publication_locked(void* delivery_record) noexcept {
 }
 
 std::size_t Scheduler::take_deferred_publications(void** out, std::size_t cap) {
-
-
-
-
-    if (cap == 0) return 0;
+    if (cap == 0)
+        return 0;
     LockGuard lk(global_mtx_);
     const std::size_t n = std::min(cap, deferred_publications_.size());
-    if (n == 0) return 0;
+    if (n == 0)
+        return 0;
     std::move(deferred_publications_.begin(),
-              deferred_publications_.begin() + static_cast<std::ptrdiff_t>(n),
-              out);
-    deferred_publications_.erase(
-        deferred_publications_.begin(),
-        deferred_publications_.begin() + static_cast<std::ptrdiff_t>(n));
+              deferred_publications_.begin() + static_cast<std::ptrdiff_t>(n), out);
+    deferred_publications_.erase(deferred_publications_.begin(),
+                                 deferred_publications_.begin() + static_cast<std::ptrdiff_t>(n));
     return n;
 }
 
@@ -1775,14 +998,9 @@ Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers,
                                               WorkerState* classify_ws) const {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
     const MwState traced = classify_locked_impl(run_workers);
     if (classify_ws != nullptr) {
-        classify_ws->last_classify.store(static_cast<int>(traced),
-                                         std::memory_order_relaxed);
+        classify_ws->last_classify.store(static_cast<int>(traced), std::memory_order_relaxed);
         classify_ws->classify_seq.fetch_add(1, std::memory_order_relaxed);
     }
     return traced;
@@ -1793,7 +1011,6 @@ Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers,
 }
 
 Scheduler::MwState Scheduler::classify_locked_impl(const WorkerSnapshot& run_workers) const {
-
     bool any_runnable = !pending_spawn_.empty();
     if (!any_runnable) {
         for (WorkerState* worker : run_workers) {
@@ -1808,17 +1025,9 @@ Scheduler::MwState Scheduler::classify_locked_impl(const WorkerSnapshot& run_wor
     if (any_runnable || any_running)
         return MwState::mw_s1;
 
-
-
-
     const bool any_outstanding = ctx_.outstanding() > 0;
     if (any_outstanding)
         return MwState::mw_s2;
-
-
-
-
-
 
     const bool any_wait = !waiting_size_.empty() || !waiting_void_.empty() ||
                           !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
@@ -1830,69 +1039,44 @@ Scheduler::MwState Scheduler::classify_locked_impl(const WorkerSnapshot& run_wor
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-void Scheduler::AsyncTestAccess::set_arm_state(Scheduler& s,
-                                                detail::SelectArmSlot& arm,
-                                                detail::ArmState st) {
+void Scheduler::AsyncTestAccess::set_arm_state(Scheduler& s, detail::SelectArmSlot& arm,
+                                               detail::ArmState st) {
     LockGuard lk(s.global_mtx_);
     arm.state = st;
 }
 
-
-
-
-
-
-bool Scheduler::AsyncTestAccess::detached_claim_winner(
-    detail::SelectGroup& group, std::uint32_t arm_index) noexcept {
+bool Scheduler::AsyncTestAccess::detached_claim_winner(detail::SelectGroup& group,
+                                                       std::uint32_t arm_index) noexcept {
     assert(group.scheduler_ == nullptr &&
            "detached winner-CAS accessor requires scheduler_ == nullptr");
-    assert(group.arms_ == nullptr &&
-           "detached winner-CAS accessor requires arms_ == nullptr");
-    assert(group.arm_count_ == 0 &&
-           "detached winner-CAS accessor requires arm_count_ == 0");
+    assert(group.arms_ == nullptr && "detached winner-CAS accessor requires arms_ == nullptr");
+    assert(group.arm_count_ == 0 && "detached winner-CAS accessor requires arm_count_ == 0");
     return group.claim_winner_locked(arm_index);
 }
 
-
-
-
-
-
-bool Scheduler::AsyncTestAccess::select_process_group(
-    Scheduler& s, detail::SelectGroup& group, std::uint32_t candidate_index) {
+bool Scheduler::AsyncTestAccess::select_process_group(Scheduler& s, detail::SelectGroup& group,
+                                                      std::uint32_t candidate_index) {
     LockGuard lk(s.global_mtx_);
     return s.select_process_group_locked(group, candidate_index);
 }
 
-
-
-bool Scheduler::AsyncTestAccess::select_all_authority_closed(
-    const Scheduler& s, const detail::SelectGroup& group) {
+bool Scheduler::AsyncTestAccess::select_all_authority_closed(const Scheduler& s,
+                                                             const detail::SelectGroup& group) {
     LockGuard lk(s.global_mtx_);
     return s.select_all_authority_closed_locked(group);
 }
-
-
-
 
 void Scheduler::AsyncTestAccess::assert_select_all_authority_closed(
     const Scheduler& s, const detail::SelectGroup& group) {
     LockGuard lk(s.global_mtx_);
     const bool closed = s.select_all_authority_closed_locked(group);
-    assert(closed &&
-           "Select publication requires all arm authority closed");
-    if (!closed) detail::select_invariant_fail_fast();
+    assert(closed && "Select publication requires all arm authority closed");
+    if (!closed)
+        detail::select_invariant_fail_fast();
 }
 
-
-
-
-
-
-
-
-void Scheduler::AsyncTestAccess::select_event_forge_stale_home(
-    Scheduler& s, Event& event, detail::SelectArmSlot& arm) {
+void Scheduler::AsyncTestAccess::select_event_forge_stale_home(Scheduler& s, Event& event,
+                                                               detail::SelectArmSlot& arm) {
     LockGuard lk(s.global_mtx_);
     assert(&event.scheduler_ == &s &&
            "select_event_forge_stale_home: Event does not belong to this Scheduler");
@@ -1901,58 +1085,37 @@ void Scheduler::AsyncTestAccess::select_event_forge_stale_home(
     assert(arm.next_ == nullptr && arm.prev_ == nullptr &&
            "select_event_forge_stale_home: arm must be fully unlinked");
 
-
-    for (detail::SelectArmSlot* p = event.select_port_.head_; p != nullptr;
-         p = p->next_) {
+    for (detail::SelectArmSlot* p = event.select_port_.head_; p != nullptr; p = p->next_) {
         assert(p != &arm && "select_event_forge_stale_home: arm is actually "
-               "linked into the port intrusive list; cannot forge stale home_");
+                            "linked into the port intrusive list; cannot forge stale home_");
     }
     arm.home_ = &event.select_port_;
 }
 
-void Scheduler::AsyncTestAccess::select_event_forge_wrong_home(
-    Scheduler& s, Event& event_a, Event& event_b,
-    detail::SelectArmSlot& arm) {
+void Scheduler::AsyncTestAccess::select_event_forge_wrong_home(Scheduler& s, Event& event_a,
+                                                               Event& event_b,
+                                                               detail::SelectArmSlot& arm) {
     LockGuard lk(s.global_mtx_);
     assert(&event_a.scheduler_ == &s && &event_b.scheduler_ == &s &&
            "select_event_forge_wrong_home: Events must belong to this Scheduler");
-    assert(arm.kind == detail::ArmKind::event &&
-           arm.event.event_ == &event_a &&
+    assert(arm.kind == detail::ArmKind::event && arm.event.event_ == &event_a &&
            "select_event_forge_wrong_home: arm must be an Event arm bound to event_a");
-
-
 
     arm.home_ = &event_b.select_port_;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 namespace {
-
-
-
 
 struct ForgedRwWaitCtx {
     enum class Mode : std::uint8_t { read, write };
     Mode mode;
 };
-}
-void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_head_mode(
-    Scheduler& s, AsyncRwLock& rw) {
-
-    struct BadCtx { std::uint8_t mode{99}; } bad;
+} // namespace
+void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_head_mode(Scheduler& s,
+                                                                      AsyncRwLock& rw) {
+    struct BadCtx {
+        std::uint8_t mode{99};
+    } bad;
     WaitNode forged_head;
     forged_head.set_user(&bad);
     {
@@ -1960,20 +1123,14 @@ void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_head_mode(
         LockGuard qlk(rw.waiters_.mtx());
         (void)rw.waiters_.register_wait_locked(forged_head, WaitResume::none());
         ++s.waiting_waitq_count_;
-
-
-
     }
 
-
     LockGuard glk(s.global_mtx_);
-    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_,
-                                    rw.writer_active_, rw.writer_owner_);
-
+    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_, rw.writer_active_,
+                                    rw.writer_owner_);
 }
 
-void Scheduler::AsyncTestAccess::rwlock_death_forge_null_head_user(
-    Scheduler& s, AsyncRwLock& rw) {
+void Scheduler::AsyncTestAccess::rwlock_death_forge_null_head_user(Scheduler& s, AsyncRwLock& rw) {
     WaitNode forged_head;
 
     {
@@ -1983,18 +1140,16 @@ void Scheduler::AsyncTestAccess::rwlock_death_forge_null_head_user(
         ++s.waiting_waitq_count_;
     }
     LockGuard lk(s.global_mtx_);
-    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_,
-                                    rw.writer_active_, rw.writer_owner_);
-
+    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_, rw.writer_active_,
+                                    rw.writer_owner_);
 }
 
-void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_batch_member(
-    Scheduler& s, AsyncRwLock& rw) {
-
-
-
+void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_batch_member(Scheduler& s,
+                                                                         AsyncRwLock& rw) {
     ForgedRwWaitCtx good_read{ForgedRwWaitCtx::Mode::read};
-    struct BadCtx { std::uint8_t mode{99}; } bad;
+    struct BadCtx {
+        std::uint8_t mode{99};
+    } bad;
     WaitNode forged_head;
     WaitNode forged_second;
     forged_head.set_user(&good_read);
@@ -2007,9 +1162,8 @@ void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_batch_member(
         s.waiting_waitq_count_ += 2;
     }
     LockGuard lk(s.global_mtx_);
-    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_,
-                                    rw.writer_active_, rw.writer_owner_);
-
+    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_, rw.writer_active_,
+                                    rw.writer_owner_);
 }
 #endif
 
@@ -2025,26 +1179,10 @@ std::size_t Scheduler::runnable_count() const {
 }
 
 bool Scheduler::unguarded_progress_pending_locked() const {
-
-
-
-
-
-
-
-
-
-
     if (!pending_spawn_.empty()) {
         return true;
     }
-    const unsigned active_count =
-        active_worker_count_.load(std::memory_order_acquire);
-
-
-
-
-
+    const unsigned active_count = active_worker_count_.load(std::memory_order_acquire);
 
     for (unsigned i = 0; i < active_count && i < workers_.size(); ++i) {
         WorkerState* w = workers_[i].get();
@@ -2054,34 +1192,16 @@ bool Scheduler::unguarded_progress_pending_locked() const {
         }
     }
 
-
-
-
-
     if (running_fiber_count_.load(std::memory_order_acquire) > 0 ||
         backend_wait_active_.load(std::memory_order_acquire) ||
         admission_ != AdmissionState::none) {
         return false;
     }
 
-
     return ctx_.outstanding() > 0;
 }
 
 bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers) {
-
-
-
-
-
-
-
-
-
-
-
-
-
     if (run_workers.size() <= 1)
         return false;
 
@@ -2092,13 +1212,6 @@ bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers)
         unsigned vidx = (thief->id + k) % n;
         WorkerState* victim = run_workers[vidx];
 
-
-
-
-
-
-
-
         if (victim->suspend_switch_pending.load(std::memory_order_acquire)) {
             continue;
         }
@@ -2106,30 +1219,25 @@ bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers)
         {
             std::lock_guard<std::mutex> vlk(victim->inbox_mtx);
 
-
-
-
-            for (auto it = victim->local_runnable.begin();
-                 it != victim->local_runnable.end(); ++it) {
+            for (auto it = victim->local_runnable.begin(); it != victim->local_runnable.end();
+                 ++it) {
                 Fiber* f = *it;
-                if (f->state() != FiberState::runnable) continue;
+                if (f->state() != FiberState::runnable)
+                    continue;
                 auto oit = fiber_owner_.find(f);
-                if (oit == fiber_owner_.end() || oit->second != victim) continue;
+                if (oit == fiber_owner_.end() || oit->second != victim)
+                    continue;
                 stolen = f;
                 victim->local_runnable.erase(it);
                 break;
             }
         }
         if (stolen) {
-
             fiber_owner_[stolen] = thief;
             {
                 std::lock_guard<std::mutex> tlk(thief->inbox_mtx);
                 thief->local_runnable.push_back(stolen);
             }
-
-
-
 
             return true;
         }
@@ -2137,87 +1245,70 @@ bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers)
     return false;
 }
 
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-TimerRegistration* Scheduler::AsyncTestAccess::register_test_deadline(
-    Scheduler& s, WaitNode* node, WaitQueue* q, deadline_t deadline) {
+TimerRegistration* Scheduler::AsyncTestAccess::register_test_deadline(Scheduler& s, WaitNode* node,
+                                                                      WaitQueue* q,
+                                                                      deadline_t deadline) {
     LockGuard lk(s.global_mtx_);
     return s.register_test_deadline_locked(node, q, deadline);
 }
 
-
-
-std::size_t Scheduler::AsyncTestAccess::timer_pool_size(
-    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+std::size_t Scheduler::AsyncTestAccess::timer_pool_size(const Scheduler& s) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     return s.timer_pool_.size();
 }
 
-std::size_t Scheduler::AsyncTestAccess::deadline_heap_size(
-    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+std::size_t Scheduler::AsyncTestAccess::deadline_heap_size(const Scheduler& s) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     return s.deadline_heap_.size();
 }
 
-std::size_t Scheduler::AsyncTestAccess::deadline_heap_capacity(
-    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+std::size_t Scheduler::AsyncTestAccess::deadline_heap_capacity(const Scheduler& s) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     return s.deadline_heap_.capacity();
 }
 
-
-
-
-
-
-std::size_t Scheduler::AsyncTestAccess::active_deadline_count(
-    const Scheduler& s) noexcept {
+std::size_t Scheduler::AsyncTestAccess::active_deadline_count(const Scheduler& s) noexcept {
     LockGuard lk(s.global_mtx_);
     return s.active_deadline_count_;
 }
 
 std::size_t Scheduler::AsyncTestAccess::timer_pool_count_in_state(
-    const Scheduler& s, TimerRegistration::State st) noexcept
-    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    const Scheduler& s, TimerRegistration::State st) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     std::size_t n = 0;
     for (const auto& r : s.timer_pool_) {
-        if (r.state() == st) ++n;
+        if (r.state() == st)
+            ++n;
     }
     return n;
 }
 
-bool Scheduler::AsyncTestAccess::earliest_active_deadline(
-    Scheduler& s, deadline_t& out) {
+bool Scheduler::AsyncTestAccess::earliest_active_deadline(Scheduler& s, deadline_t& out) {
     LockGuard lk(s.global_mtx_);
     return s.earliest_active_deadline_locked(out);
 }
-
-
 
 void Scheduler::AsyncTestAccess::advance_clock(Scheduler& s, deadline_t t) {
     s.advance_clock(t);
 }
 
-std::size_t Scheduler::AsyncTestAccess::select_timer_pool_size(
-    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+std::size_t Scheduler::AsyncTestAccess::select_timer_pool_size(const Scheduler& s) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     return s.select_timer_pool_.size();
 }
 
 std::size_t Scheduler::AsyncTestAccess::select_timer_count_in_state(
     const Scheduler& s,
-    detail::SelectTimerRegistration::State st) noexcept
-    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    detail::SelectTimerRegistration::State st) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     std::size_t n = 0;
     for (const auto& r : s.select_timer_pool_) {
-        if (r.state() == st) ++n;
+        if (r.state() == st)
+            ++n;
     }
     return n;
 }
 
-std::array<std::size_t, 2>
-Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(
+std::array<std::size_t, 2> Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(
     const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     std::array<std::size_t, 2> counts{0, 0};
     for (const auto& e : s.deadline_heap_) {
@@ -2230,29 +1321,22 @@ Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(
     return counts;
 }
 
-
-
-
 bool Scheduler::AsyncTestAccess::deadline_heap_has_select_target(
     const Scheduler& s,
-    const detail::SelectTimerRegistration* target) noexcept
-    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    const detail::SelectTimerRegistration* target) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     for (const auto& e : s.deadline_heap_) {
-        if (e.kind == detail::DeadlineHeapEntry::Kind::select &&
-            e.target.select == target) {
+        if (e.kind == detail::DeadlineHeapEntry::Kind::select && e.target.select == target) {
             return true;
         }
     }
     return false;
 }
 
-
-
 namespace detail {
 void set_evented_admission_override_impl(bool supported) noexcept;
 void clear_evented_admission_override_impl() noexcept;
 bool get_evented_admission_override_impl() noexcept;
-}
+} // namespace detail
 
 void Scheduler::AsyncTestAccess::set_evented_admission_override(bool supported) noexcept {
     detail::set_evented_admission_override_impl(supported);
@@ -2263,4 +1347,4 @@ bool Scheduler::AsyncTestAccess::evented_admission_override() noexcept {
 }
 #endif
 
-}
+} // namespace sluice::async

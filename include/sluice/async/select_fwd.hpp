@@ -1,20 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <concepts>
@@ -31,16 +14,12 @@ class TimerSelectCase;
 inline constexpr std::size_t kSelectMaxArms = 8;
 
 template <class T>
-concept SelectCaseType =
-    std::same_as<std::remove_cvref_t<T>, EventSelectCase> ||
-    std::same_as<std::remove_cvref_t<T>, TimerSelectCase>;
+concept SelectCaseType = std::same_as<std::remove_cvref_t<T>, EventSelectCase> ||
+                         std::same_as<std::remove_cvref_t<T>, TimerSelectCase>;
 
 template <class... Cases>
-    requires (
-        sizeof...(Cases) >= 1 &&
-        sizeof...(Cases) <= kSelectMaxArms &&
-        (SelectCaseType<Cases> && ...)
-    )
+    requires(sizeof...(Cases) >= 1 && sizeof...(Cases) <= kSelectMaxArms &&
+             (SelectCaseType<Cases> && ...))
 SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
-}
+} // namespace sluice::async

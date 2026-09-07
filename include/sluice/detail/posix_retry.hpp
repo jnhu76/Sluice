@@ -1,15 +1,8 @@
-
 #pragma once
 
 #include <cerrno>
 
 namespace sluice::detail {
-
-
-
-
-
-
 
 template <class Fn> auto retry_on_eintr(Fn&& fn) -> decltype(fn()) {
     for (;;) {
@@ -21,4 +14,4 @@ template <class Fn> auto retry_on_eintr(Fn&& fn) -> decltype(fn()) {
     }
 }
 
-}
+} // namespace sluice::detail

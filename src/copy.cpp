@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 #include <sluice/copy.hpp>
 #include <sluice/buffered_readable.hpp>
 
@@ -28,18 +20,12 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     dec.used_buffered_fast_path = false;
     dec.used_scratch_path = false;
 
-
-
-
     bool use_fast_path =
         (options.strategy == CopyStrategy::BufferedFirst || options.strategy == CopyStrategy::Auto);
     if (options.strategy == CopyStrategy::Auto) {
         dec.selected = CopyStrategy::BufferedFirst;
         dec.reason = "auto";
     }
-
-
-
 
     if (stats) {
         switch (options.strategy) {
@@ -57,7 +43,6 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
 
     const CopyLimit& limit = options.limit;
 
-
     if (limit.is_limited() && limit.remaining() == 0) {
         if (stats) {
             ++stats->limit_stops;
@@ -65,15 +50,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         return std::uint64_t{0};
     }
 
-
-
-
-
     if (scratch.empty()) {
         return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
     }
-
-
 
     BufferedReadable* br = use_fast_path ? dynamic_cast<BufferedReadable*>(&reader) : nullptr;
 
@@ -83,11 +62,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             ++stats->copy_loop_iterations;
         }
 
-
         if (br != nullptr) {
             auto buffered = br->peek_buffered();
             if (!buffered.empty()) {
-
                 std::size_t allowed = buffered.size();
                 if (limit.is_limited()) {
                     std::uint64_t left = limit.remaining() - total;
@@ -95,11 +72,8 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                         static_cast<std::size_t>(std::min<std::uint64_t>(buffered.size(), left));
                 }
                 if (allowed == 0) {
-
                     break;
                 }
-
-
 
                 auto wr = writer.write_all(buffered.first(allowed));
                 if (!wr.has_value()) {
@@ -110,7 +84,6 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 }
                 auto cr = br->consume_buffered(allowed);
                 if (!cr.has_value()) {
-
                     if (stats) {
                         ++stats->reader_error_stops;
                     }
@@ -127,9 +100,6 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 continue;
             }
         }
-
-
-
 
         std::size_t to_read = scratch.size();
         if (limit.is_limited()) {
@@ -155,7 +125,6 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             return total;
         }
         if (got > to_read) {
-
             if (stats) {
                 ++stats->reader_error_stops;
             }
@@ -204,4 +173,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer) {
     return copy_all(reader, writer, CopyLimit::unlimited());
 }
 
-}
+} // namespace sluice

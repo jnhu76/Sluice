@@ -1,24 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/detail/ready_sink.hpp>
@@ -26,24 +5,6 @@
 #include <cstddef>
 
 namespace sluice::async::detail {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class ReferenceReadySink final : public SynchronousReadySink {
   public:
@@ -74,4 +35,4 @@ class ReferenceReadySink final : public SynchronousReadySink {
 #endif
 };
 
-}
+} // namespace sluice::async::detail
