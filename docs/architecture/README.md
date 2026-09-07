@@ -1,8 +1,16 @@
-# Architecture — Current Authority Index
+# Architecture — Navigation Index
 
-Every document in this directory is **current architecture authority**: the
-as-built design, an active invariant, an active contract, or an active
-process/policy. Point-in-time compliance/audit/phase evidence lives in
+This page is the **hand-maintained navigation index** for current architecture
+material. It is **not** a classification authority, a generated view, or a
+derived generated index: listing a document here does not independently
+establish its semantic authority or status. Authority follows repository
+governance (`AGENTS.md` §2) and each document's own local authority declaration
+(document-local `Status` / `Authority` metadata, where present). The table
+below is maintained navigation, not a machine-derived inventory.
+
+The documents it lists are the current architecture material: the as-built
+design, active invariants, active contracts, or active process/policy.
+Point-in-time compliance/audit/phase evidence lives in
 [`docs/history/closeout/`](../history/closeout/) (see the KNOWN_MOVED
 registry in `scripts/check-doc-links.py` for the #290 move map).
 

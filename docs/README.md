@@ -55,7 +55,7 @@ the AGENTS authority chain.
 | [`known-issues/`](known-issues/security-review-followups.md) | What is deliberately deferred, and why? | Contributor |
 | [`roadmap/`](roadmap/README.md) | Where is execution ordering tracked? (thin pointer to GitHub Issues) | Contributor |
 | [`history/`](history/README.md) | How did we get here? Superseded plans, closeouts, audits. | Maintainer |
-| [`post-freeze/`](post-freeze/post-freeze-final-report.md) | Post-freeze structural audit evidence; live verification anchor scanned by `scripts/gates/mechanical-facts.py` | Maintainer |
+| [`post-freeze/`](post-freeze/post-freeze-final-report.md) | Post-freeze structural audit evidence — historical snapshot, **not a live mechanical-fact authority** (current facts derive from current machine-owned sources; only SHA-pinned evidence rows remain integrity-checked) | Maintainer |
 | [`results/`](results/README.md) | Machine-produced validation / benchmark evidence artifacts | Maintainer |
 | [`templates/`](templates/) | Document templates used by the architecture gates | Contributor |
 
@@ -129,3 +129,13 @@ Treat this metadata as a classification aid, not as a replacement for the
 repository-wide authority chain in `AGENTS.md` §2. Some current references do
 not yet carry a status block; absence of metadata does not make a document
 historical, and a stale status label never outranks a higher authority.
+
+## Document classification (transitional rule)
+
+Document classification has exactly **one manual owner**. Current
+document-local `Status` / `Authority` metadata (where present) is the present
+carrier of that classification; there is **no manually synchronized central
+classification registry**, and one must not be introduced. A future metadata
+migration may normalize this metadata into frontmatter; any future global index
+generated from metadata must be **derived**, not another hand-maintained truth
+source.

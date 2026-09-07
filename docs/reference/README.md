@@ -2,7 +2,7 @@
 
 This directory answers: *what exactly does Sluice promise to its users?*
 
-Repository-wide conflict resolution is governed by [`AGENTS.md` §3](../../AGENTS.md).
+Repository-wide conflict resolution is governed by [`AGENTS.md` §2](../../AGENTS.md).
 For day-to-day API lookup, the installed headers under `include/sluice/` and the
 canonical narrative reference `api.md` describe the current public surface. If a
 header, reference document, accepted ADR, or approved task disagrees, do **not**
