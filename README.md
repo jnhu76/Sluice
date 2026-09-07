@@ -1,32 +1,60 @@
 # Sluice
 
-Sluice is a C++20 I/O library and runtime currently being reduced to a smaller, stable engineering baseline.
+Sluice is a C++20 explicit-I/O library and runtime.
+
+Its purpose is to expose only the I/O semantics and resource boundaries callers truly need, enforce those contracts with the smallest practical correctness machinery, and keep execution mechanisms replaceable without letting backend details redefine the public semantics.
 
 [中文说明](README.zh-CN.md)
+
+## Design doctrine
+
+The project is governed by six long-term principles:
+
+```text
+Minimal semantics.
+Clear boundaries.
+Explicit authority.
+Named bounds.
+Replaceable execution.
+Minimum mechanism.
+```
+
+The normative design doctrine is documented in [`docs/design-doctrine.md`](docs/design-doctrine.md) (Chinese).
+
+A short Chinese rendering is:
+
+> **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
+
+The doctrine defines what Sluice is allowed to become. The current C++ implementation and build files define what the repository does today. Descriptive architecture documentation is derived from the code; it does not override the code or expand the doctrine.
 
 ## Repository shape
 
 ```text
-include/              public C++ headers
+include/              C++ headers
 src/                  production implementation
-apps/                 real applications using the public API
-research/RESULTS.md    retained research conclusions
+apps/                 real applications
 xmake.lua, xmake/      build configuration
+docs/                 stable design doctrine and code-derived architecture docs
+research/RESULTS.md    retained research conclusions
 ```
 
-The current C++ implementation is the primary source of truth. `apps/` matter because they are real consumers of the public API.
+Historical campaign scaffolding, obsolete tests, benchmarks, examples, CI workflows, old documentation, and old formal models are not design authority. Git history remains the archive.
 
-Historical tests, benchmarks, examples, scripts, CI workflows, documentation, formal models, and research campaign scaffolding were deliberately removed from the current tree. Git history remains the archive.
+## Current implementation
 
-## What Sluice contains
+The retained codebase contains a synchronous I/O core and an opt-in asynchronous runtime.
 
-The retained codebase includes a synchronous I/O core and an opt-in asynchronous runtime.
+The synchronous side provides `Result<T>` / `IoError`, Reader/Writer-style I/O, file and positional I/O, copy helpers, durability operations, and related utilities.
 
-The synchronous side provides the `Result<T>` / `IoError` error model, Reader/Writer-style I/O, file and positional I/O, copy helpers, and durability operations.
+The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduling/runtime machinery, cancellation, synchronization facilities, and backend execution.
 
-The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduling/runtime machinery, synchronization primitives, cancellation, and backend execution. Linux io_uring support remains optional where enabled by the build.
+These implementation details remain subject to subtraction: an abstraction, backend, helper, state, or public type survives only when it earns its cost through necessary semantics, correctness, boundedness, real execution needs, real callers, or indispensable verification value.
 
-The exact retained surface is defined by the current headers and build files, not by historical documentation.
+## Boundary rule
+
+Applications should depend on the public semantic boundary, not implementation internals. Backend capability, observation, hints, or execution policy do not automatically become public semantic authority.
+
+Explicit semantics also do not automatically imply generic optimization power or better performance. Correctness, performance, and semantic-authority claims are separate evidence lines.
 
 ## Applications
 
@@ -48,24 +76,15 @@ xmake
 
 `xmake.lua` and `xmake/` define the targets that currently exist.
 
+## Correctness and verification
+
+Correctness is mandatory, but verification machinery must remain proportional to the boundary it protects. Deterministic tests, property tests, fuzzing, sanitizers, and formal models should target real invariants rather than grow as parallel frameworks.
+
+A formal model proves the model, not the C++ implementation by itself; important models require explicit implementation correspondence.
+
 ## Research record
 
 Past research is reduced to [research/RESULTS.md](research/RESULTS.md). It keeps durable conclusions, not campaign process.
-
-## Current direction
-
-```text
-keep the retained C++ usable
-        -> remove unnecessary modules and abstractions
-        -> freeze the smaller architecture
-        -> rebuild tests from current behavior
-        -> rewrite documentation from current code
-        -> rebuild formal verification and TLA+ from current C++
-        -> establish C++ <-> formal-model correspondence
-        -> optimize measured local hotspots
-```
-
-Correctness remains mandatory. Performance work comes later and should be fine-grained and measurement-driven.
 
 ## License
 
