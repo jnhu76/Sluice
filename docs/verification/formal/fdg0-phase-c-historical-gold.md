@@ -206,6 +206,5 @@ scanned.
 
 Research evidence only. NOT production formal gating authority. Phase C
 does NOT authorize facet-narrowed CI, pre-push narrowing, auto-clear of
-formal impact, or MODEL_UPDATE_NOT_REQUIRED dispositions. STOP: AST-SF and
-enforcement are not started; do not merge automatically; return for
-adversarial human review.
+formal impact, or MODEL_UPDATE_NOT_REQUIRED dispositions. AST-SF and
+enforcement are not started.

@@ -1,9 +1,9 @@
 # FTLR-0 / SCIP-PILOT — C++ ↔ TLA+ formal impact recovery
 
-> **Status: method-selection experiment (issue #299), awaiting adversarial
-> human review. Corrective-1 applied (C1–C5): fail-closed exit contract,
-> stale-graph demotion, T8 helper-only redesign, T7 claim-boundary note,
-> edge provenance.** This is NOT a production gate: it is not wired into
+> **Status: method-selection experiment (issue #299), verdict `SCIP_GRAPH_EARNED`
+> (with honest scale caveats, §5). Corrective-1 applied (C1–C5): fail-closed exit
+> contract, stale-graph demotion, T8 helper-only redesign, T7 claim-boundary
+> note, edge provenance.** This is NOT a production gate: it is not wired into
 > `scripts/gates/pre-push.sh`, CI, or any workflow. It does not modify any
 > formal claim, TLA+ model, bridge test, or production C++ semantic. The
 > machine-readable experiment record is

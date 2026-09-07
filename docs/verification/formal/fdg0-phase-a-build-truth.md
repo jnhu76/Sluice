@@ -1,9 +1,13 @@
 # FDG-0 Phase A — Xmake Build Truth
 
-> **Status: issue #298 Phase A (Build Truth), awaiting adversarial human
-> review.** Phase B (semantic disposition / refresh workflow) and Phase C
-> (AST fingerprint / enforcement) are explicitly **not** started. The
-> machine-readable evidence record is
+> **Status: issue #298 Phase A (Build Truth) — established evidence artifact.**
+> What it establishes: Xmake is the build-truth authority for the formal-impact
+> pipeline (owning-target join via the `-o` object path, `build_id` over the
+> semantic projection, fail-closed `UNKNOWN_BUILD_WORLD` / `BUILD_WORLD_CHANGED`
+> / `BUILD_GRAPH_STALE` states, A1–A12 + CR1–CR8 evidence). Phase B (semantic
+> disposition / refresh workflow) and Phase C (AST fingerprint / enforcement)
+> are explicitly **not** part of this artifact's scope. The machine-readable
+> evidence record is
 > [docs/results/formal/fdg0-phase-a.json](../../results/formal/fdg0-phase-a.json).
 > This is NOT a production gate: it is not wired into
 > `scripts/gates/pre-push.sh` or CI, and it does not modify any formal

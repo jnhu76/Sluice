@@ -15,12 +15,12 @@ And the fail-closed rule is:
 
 ## Authority map
 
-| Issue | Role | Current status / result |
+| Issue | Role | Durable status / result |
 |---|---|---|
-| **#163** | Verification-architecture doctrine: C++-first bug finding, as-built modeling, evidence vocabulary, semantic trace layer | **CLOSED / durable doctrine.** Defines `TRACE-CONFORMANT (TESTED EXECUTIONS)` and keeps trace, weak-memory, fault/platform, and other evidence classes separate. |
-| **#196** | V2 E9 trace-conformance substrate | **CLOSED / completed.** PR #202 established real deterministic C++ → semantic E9 events → declared prehistory/refinement → TLC replay against the matching E9 model, with positive and rejected negative traces. |
-| **#298** | FDG-0 static formal-drift / impact research owner | **OPEN as research owner.** Phase C is closed with `METHOD_RECALL_NOT_EARNED`: 9/12 claim recall; C-001/F08, C-007/F03, C-012/F08 missed; C-011 exposed unsafe PRECISE narrowing. Static routing is research/advisory evidence, not enforcement authority. |
-| **#305** | TV-1 historical sensitivity of the #196 semantic-trace channel | **CLOSED / completed.** PR #306 verdict `TRACE_CHANNEL_PARTIAL`: C-001 was discriminated; C-012 and C-007 remain trace-vocabulary gaps; C-011 proves trace acceptance does not imply downstream formal-suite freshness. |
+| **#163** | Verification-architecture doctrine: C++-first bug finding, as-built modeling, evidence vocabulary, semantic trace layer | **Durable doctrine.** Defines `TRACE-CONFORMANT (TESTED EXECUTIONS)` and keeps trace, weak-memory, fault/platform, and other evidence classes separate. |
+| **#196** | V2 E9 trace-conformance substrate | **Durable substrate.** PR #202 established real deterministic C++ → semantic E9 events → declared prehistory/refinement → TLC replay against the matching E9 model, with positive and rejected negative traces. Claim: `TRACE-CONFORMANT (TESTED EXECUTIONS)`. |
+| **#298** | FDG-0 static formal-drift / impact research owner | **Research verdict: `METHOD_RECALL_NOT_EARNED`.** Phase C: 9/12 claim recall; C-001/F08, C-007/F03, C-012/F08 missed; C-011 exposed unsafe PRECISE narrowing. Static routing is research/advisory evidence, not enforcement authority. |
+| **#305** | TV-1 historical sensitivity of the #196 semantic-trace channel | **Research verdict: `TRACE_CHANNEL_PARTIAL`.** PR #306: C-001 was discriminated; C-012 and C-007 remain trace-vocabulary gaps; C-011 proves trace acceptance does not imply downstream formal-suite freshness. |
 
 Related but non-owning records:
 
