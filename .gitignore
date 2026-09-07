@@ -9,9 +9,10 @@ tla2tools.jar
 .zcode
 .mimocode
 
-# Xmake cache
+# Xmake
 .xmake/
 build/
+xmake-requires.lock
 
 # MacOS Cache
 .DS_Store
@@ -20,10 +21,6 @@ build/
 
 # Zig stdlib is a design reference only, never part of this codebase
 zig/
-
-# Build artifacts
-build/
-.xmake/
 
 # Generated / stray
 compile_commands.json
@@ -55,3 +52,7 @@ crash-*
 /hardening-artifacts/
 /.hardening-corpus/
 /.hardening.lock
+
+# Serena (semantic code tools); tool venv lives outside the repo under uv
+.serena/
+.venv/
