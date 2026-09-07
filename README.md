@@ -6,21 +6,17 @@ Sluice is a C++20 I/O library and runtime currently being reduced to a smaller, 
 
 ## Repository shape
 
-The current tree is intentionally small:
-
 ```text
 include/              public C++ headers
 src/                  production implementation
 apps/                 real applications using the public API
-docs/adr/             retained architectural decisions
-docs/architecture/    current architecture
-research/RESULTS.md    conclusions from the previous research phase
+research/RESULTS.md    retained research conclusions
 xmake.lua, xmake/      build configuration
 ```
 
-The implementation under `include/` and `src/` is the primary source of truth for current behavior. `apps/` matters because it provides real consumers of that API.
+The current C++ implementation is the primary source of truth. `apps/` matter because they are real consumers of the public API.
 
-Historical tests, benchmarks, examples, scripts, CI workflows, formal models, and research campaign scaffolding were deliberately removed from the current tree. Git history remains the archive.
+Historical tests, benchmarks, examples, scripts, CI workflows, documentation, formal models, and research campaign scaffolding were deliberately removed from the current tree. Git history remains the archive.
 
 ## What Sluice contains
 
@@ -28,20 +24,16 @@ The retained codebase includes a synchronous I/O core and an opt-in asynchronous
 
 The synchronous side provides the `Result<T>` / `IoError` error model, Reader/Writer-style I/O, file and positional I/O, copy helpers, and durability operations.
 
-The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduling/runtime machinery, synchronization primitives, cancellation, and backend execution. Linux io_uring support remains an optional implementation path where enabled by the build.
+The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduling/runtime machinery, synchronization primitives, cancellation, and backend execution. Linux io_uring support remains optional where enabled by the build.
 
-The exact retained surface is defined by the current headers and build files, not by historical roadmaps.
+The exact retained surface is defined by the current headers and build files, not by historical documentation.
 
 ## Applications
-
-The repository keeps real applications built on the public API:
 
 - [`sluice-copy`](apps/sluice-copy/README.md)
 - [`sluice-hash`](apps/sluice-hash/README.md)
 - [`sluice-grep`](apps/sluice-grep/README.md)
 - [`sluice-tail`](apps/sluice-tail/README.md)
-
-These applications are part of the current product surface and help determine which library capabilities still have real users.
 
 ## Build
 
@@ -54,39 +46,26 @@ xmake f -m release -y
 xmake
 ```
 
-`xmake.lua` and `xmake/` are the authority for the targets that currently exist. The build configuration is being simplified together with the repository.
+`xmake.lua` and `xmake/` define the targets that currently exist.
 
-## Documentation
+## Research record
 
-Current documentation is intentionally narrow:
-
-- [Architecture](docs/architecture/README.md)
-- [Architecture Decision Records](docs/adr/README.md)
-- [Research results](research/RESULTS.md)
-- [Current project context](CONTEXT.md)
-- [AI-agent guidance](AGENTS.md)
-
-Documentation should describe the current implementation. It should not preserve old project chronology as a second architecture.
+Past research is reduced to [research/RESULTS.md](research/RESULTS.md). It keeps durable conclusions, not campaign process.
 
 ## Current direction
-
-Sluice is no longer driven by broad research campaigns.
-
-The current sequence is:
 
 ```text
 keep the retained C++ usable
         -> remove unnecessary modules and abstractions
         -> freeze the smaller architecture
         -> rebuild tests from current behavior
+        -> rewrite documentation from current code
         -> rebuild formal verification and TLA+ from current C++
         -> establish C++ <-> formal-model correspondence
         -> optimize measured local hotspots
 ```
 
-Correctness remains mandatory, but correctness work is treated as engineering rather than as a separate research program.
-
-Performance work comes later and should be fine-grained: profile first, isolate one cost, change one local mechanism, measure, and keep or revert.
+Correctness remains mandatory. Performance work comes later and should be fine-grained and measurement-driven.
 
 ## License
 

@@ -1,81 +1,72 @@
 # Sluice Agent Guide
 
-This file contains only the rules an AI coding agent needs for the **current** repository.
+This file contains only the rules an AI coding agent needs for the current repository.
 It is not a history book, research log, roadmap, or architecture specification.
 
-## 1. Current authority
+## Current authority
 
-The current C++ implementation is the primary source of truth:
+For current behavior, read the repository in this order:
 
-- `include/` — public headers
-- `src/` — production implementation
-- `apps/` — real consumers of the public API
+1. `include/` — public headers
+2. `src/` — production implementation
+3. `apps/` — real consumers of the public API
+4. `xmake.lua` and `xmake/` — current build structure
 
-`docs/adr/` and `docs/architecture/` describe retained design intent, but they must follow the current implementation. If prose and code disagree, inspect the code first and update the prose rather than forcing the implementation to preserve historical structure.
+The current C++ implementation is the primary source of truth.
 
-Do not use old Issues, PRs, deleted documents, Git history, old formal models, or pre-reset tags as design authority unless a task explicitly asks for historical investigation.
+Do not use old Issues, PRs, deleted documents, Git history, old tests, old formal models, or pre-reset tags as design authority unless a task explicitly asks for historical investigation.
 
-## 2. Repository reset rules
+## Clean-room reset
 
-The repository is undergoing a clean-room reduction.
+The repository is intentionally being rebuilt from the retained C++ code.
 
-Do not resurrect deleted infrastructure merely because it existed before. In particular, old tests, benchmarks, examples, scripts, CI workflows, research campaigns, and formal models have no inheritance right.
+Old tests, benchmarks, examples, scripts, CI workflows, documentation, research campaigns, and formal models have no inheritance right.
+Their absence is intentional until a current need justifies rebuilding them.
 
-The absence of one of these components is intentional until it is rebuilt from the retained C++ code.
+`research/RESULTS.md` keeps conclusions only. Research process and chronology do not belong in the current tree.
 
-`research/RESULTS.md` keeps conclusions only. Research process, candidate ladders, campaign chronology, corrective history, and experimental scaffolding do not belong in the current tree.
+## Engineering order
 
-## 3. Engineering priorities
-
-Work in this order unless a task explicitly says otherwise:
+Unless a task explicitly says otherwise:
 
 1. keep the retained implementation usable;
 2. understand the current C++ as written;
 3. remove unnecessary modules and abstractions;
-4. freeze a smaller architecture;
-5. rebuild tests from the frozen implementation;
-6. rebuild formal verification and TLA+ from the current C++ state machines;
-7. optimize only measured, local hotspots.
+4. freeze the smaller architecture;
+5. rebuild tests from current behavior;
+6. rebuild documentation from the frozen code;
+7. rebuild formal verification and TLA+ from current C++ state machines;
+8. optimize only measured local hotspots.
 
 Correctness is an engineering requirement, not a separate research campaign.
 
-Do not start broad Safety, Control, Tax, or generic-performance research programs. Do not add architecture-wide optimization machinery without a measured local cause.
-
-## 4. Architecture discipline
+## Architecture discipline
 
 Prefer deletion and direct code over speculative abstraction.
 
 - No abstraction for hypothetical future users.
-- No fallback, adapter, backend, scheduler, policy, or framework merely for generality.
-- Existing modules are not automatically permanent.
-- If a module no longer has a real product role, removal is preferred to preservation for history.
-- `apps/` are important because they are real users of the library and may justify retained functionality.
+- No subsystem survives merely because it existed before.
+- `apps/` matter because they are real users of the library.
+- Avoid unrelated redesign while performing cleanup work.
 
-Avoid unrelated redesign while performing cleanup work.
+## C++ comments
 
-## 5. C++ comments
-
-Comments must describe the **current** implementation only.
+Comments must describe the current implementation only.
 
 Historical rationale, Issue/PR references, phase names, research terminology, and old formal-model references do not belong in production C++ comments.
 
-When comments are reintroduced, prefer a small number of comments that explain:
-
-- **Why** a non-obvious invariant or ordering exists;
-- **What** a state or responsibility means when names are insufficient;
-- **How** a non-obvious mechanism preserves that invariant.
-
+When comments are reintroduced, keep only concise comments that explain a non-obvious **Why**, necessary **What**, or non-obvious **How**.
 Do not comment code that already explains itself.
 
-## 6. Tests and formal verification
+## Tests, docs, and formal verification
 
-Old tests and old formal models were deliberately removed.
+Rebuild all three from the final C++ implementation rather than from deleted artifacts.
 
-When tests are rebuilt, derive them from the current public behavior, lifecycle, state transitions, failure behavior, and real applications. Do not recreate old test taxonomy merely because names can be recovered from Git.
+Tests should follow current public behavior, lifecycle, state transitions, failure behavior, and real applications.
+Documentation should explain only the current architecture and API.
+Formal models should map explicit C++ transitions to TLA+ actions and be validated against the implementation.
 
-When formal verification is rebuilt, derive the model from the frozen C++ implementation. Establish explicit correspondence between important C++ transitions and TLA+ actions. The model validates the implementation; it does not dictate a historical architecture.
-
-## 7. Performance work
+## Performance
 
 Performance work starts from measurement:
 
@@ -83,12 +74,8 @@ Performance work starts from measurement:
 
 No measured hotspot means no optimization task.
 
-Prefer fine-grained changes with a clear rollback boundary. Avoid coarse architecture-wide optimization campaigns.
+## Repository hygiene
 
-## 8. Build and repository hygiene
-
-`xmake.lua` and `xmake/` define the current build. Keep them aligned with the files and targets that actually remain in the repository.
-
-Do not add CI, scripts, test harnesses, formal tooling, or build targets unless the current task needs them.
-
-Keep commits narrow and reviewable. Do not merge a pull request unless explicitly instructed.
+Keep `xmake.lua` and `xmake/` aligned with files and targets that actually exist.
+Do not recreate CI, scripts, tests, docs, or formal tooling merely because the old repository had them.
+Keep commits narrow and reviewable. Do not merge unless explicitly instructed.
