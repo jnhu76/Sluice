@@ -1,29 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #include "cli_parse.hpp"
 #include "grep_task.hpp"
 
@@ -48,24 +22,24 @@ struct FdCloser {
     std::vector<int>& fds;
     ~FdCloser() {
         for (int fd : fds)
-            if (fd >= 0) ::close(fd);
+            if (fd >= 0)
+                ::close(fd);
     }
 };
 
-}
+} // namespace
 
 int main(int argc, char** argv) {
     CliArgs args;
     int rc = parse_args(argc, argv, args);
-    if (rc != 0) return rc;
+    if (rc != 0)
+        return rc;
     if (args.help) {
         sluice_grep::cli::usage(argv[0]);
         return 0;
     }
 
     const bool prefix_name = args.files.size() > 1;
-
-
 
     struct OpenFailure {
         std::size_t cli_index;
@@ -103,28 +77,23 @@ int main(int argc, char** argv) {
         open_fds.push_back(fd);
     }
 
-
-
-
-
-
     const bool line_flush = ::isatty(STDOUT_FILENO);
-    auto sink = [&](const std::string& path, std::uint64_t line_no,
-                    std::string_view line) {
-        if (prefix_name) std::fwrite(path.data(), 1, path.size(), stdout);
-        if (prefix_name && args.line_numbers) std::fputc(':', stdout);
-        if (args.line_numbers) std::printf("%llu:", static_cast<unsigned long long>(line_no));
+    auto sink = [&](const std::string& path, std::uint64_t line_no, std::string_view line) {
+        if (prefix_name)
+            std::fwrite(path.data(), 1, path.size(), stdout);
+        if (prefix_name && args.line_numbers)
+            std::fputc(':', stdout);
+        if (args.line_numbers)
+            std::printf("%llu:", static_cast<unsigned long long>(line_no));
         std::fwrite(line.data(), 1, line.size(), stdout);
         std::fputc('\n', stdout);
-        if (line_flush) std::fflush(stdout);
+        if (line_flush)
+            std::fflush(stdout);
     };
 
-    auto results =
-        sluice_grep::grep_files(args.pattern, std::move(inputs),
-                                args.buffer_size, args.max_line_bytes,
-                                args.workers, sink);
+    auto results = sluice_grep::grep_files(args.pattern, std::move(inputs), args.buffer_size,
+                                           args.max_line_bytes, args.workers, sink);
     std::fflush(stdout);
-
 
     bool any_error = false;
     bool any_match = false;
@@ -136,33 +105,31 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "%s: %s: not a regular file\n", argv[0],
                              args.files[i].c_str());
             else
-                std::fprintf(stderr, "%s: %s: %s\n", argv[0],
-                             args.files[i].c_str(), std::strerror(f.os_errno));
+                std::fprintf(stderr, "%s: %s: %s\n", argv[0], args.files[i].c_str(),
+                             std::strerror(f.os_errno));
             any_error = true;
         }
         if (gi < input_cli_index.size() && input_cli_index[gi] == i) {
             const auto& r = results[gi++];
-            if (r.match_count > 0) any_match = true;
+            if (r.match_count > 0)
+                any_match = true;
             if (r.dropped_long_lines)
                 std::fprintf(stderr,
                              "%s: %s: line longer than --max-line-bytes "
                              "skipped (not matched)\n",
                              argv[0], r.path.c_str());
             if (r.error.has_value()) {
-                std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0],
-                             r.path.c_str(),
-                             r.error->code == sluice::IoError::Code::canceled
-                                 ? "canceled"
-                                 : "read error",
+                std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0], r.path.c_str(),
+                             r.error->code == sluice::IoError::Code::canceled ? "canceled"
+                                                                              : "read error",
                              r.error->os_errno ? " (" : "",
-                             r.error->os_errno
-                                 ? std::strerror(r.error->os_errno)
-                                 : "");
+                             r.error->os_errno ? std::strerror(r.error->os_errno) : "");
                 any_error = true;
             }
         }
     }
 
-    if (any_error) return 2;
+    if (any_error)
+        return 2;
     return any_match ? 0 : 1;
 }

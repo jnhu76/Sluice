@@ -1,20 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstddef>
@@ -25,44 +8,24 @@
 
 namespace sluice_grep {
 
-
-
 struct MatchEvent {
     std::uint64_t line_no;
     std::string line;
 };
 
 class LineMatcher {
-public:
-
-
-
-
+  public:
     LineMatcher(std::string pattern, std::size_t max_line_bytes);
 
-
-
-
-    void feed(const std::uint8_t* data, std::size_t len,
-              std::vector<MatchEvent>& out);
-
-
-
+    void feed(const std::uint8_t* data, std::size_t len, std::vector<MatchEvent>& out);
 
     void finish(std::vector<MatchEvent>& out);
 
-
-
     bool dropped_long_lines() const { return dropped_long_; }
-
-
 
     std::uint64_t complete_lines() const { return line_no_; }
 
-private:
-
-
-
+  private:
     void scan_complete_region(const char* p, std::size_t i, std::size_t end,
                               std::vector<MatchEvent>& out);
 
@@ -76,9 +39,6 @@ private:
     bool dropped_long_ = false;
 };
 
-
-
-
 bool line_contains(std::string_view line, std::string_view pattern);
 
-}
+} // namespace sluice_grep

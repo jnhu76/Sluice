@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 #include "tail_task.hpp"
 
 #include <sluice/async/await_op_helpers.hpp>
@@ -29,29 +20,22 @@ namespace {
 using namespace sluice::async;
 using sluice::IoError;
 
-
-
-
-
 struct LineAssembler {
     std::size_t max_line_bytes;
     std::string carry;
     bool dropping = false;
     bool dropped_long = false;
 
-    explicit LineAssembler(std::size_t cap) : max_line_bytes(cap) {
-        carry.reserve(cap + 1);
-    }
+    explicit LineAssembler(std::size_t cap) : max_line_bytes(cap) { carry.reserve(cap + 1); }
 
-
-    void feed(const std::uint8_t* data, std::size_t len,
-              std::vector<std::string>& out) {
+    void feed(const std::uint8_t* data, std::size_t len, std::vector<std::string>& out) {
         std::size_t i = 0;
         while (i < len) {
             const void* nl = std::memchr(data + i, '\n', len - i);
             if (nl == nullptr) {
                 std::size_t rest = len - i;
-                if (dropping) return;
+                if (dropping)
+                    return;
                 if (carry.size() + rest <= max_line_bytes) {
                     carry.append(reinterpret_cast<const char*>(data + i), rest);
                 } else {
@@ -84,7 +68,6 @@ struct LineAssembler {
         }
     }
 
-
     void finish(std::vector<std::string>& out) {
         if (dropping) {
             dropping = false;
@@ -113,47 +96,39 @@ struct TailTask {
 
     void emit(std::vector<std::string>& lines, TailResult& r) {
         for (auto& l : lines) {
-            if (sink) sink(l);
+            if (sink)
+                sink(l);
             ++r.lines_emitted;
         }
         lines.clear();
     }
 
     void diag_msg(const char* msg) {
-        if (diag) diag(msg);
+        if (diag)
+            diag(msg);
     }
 
-
-
-    sluice::Result<std::size_t> read_at(RuntimeTaskContext& ctx,
-                                        Completion<std::size_t>& rc,
+    sluice::Result<std::size_t> read_at(RuntimeTaskContext& ctx, Completion<std::size_t>& rc,
                                         std::uint64_t offset) {
         return await_read_once(
             ctx, fd,
-            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
-                                 buffer.size()),
+            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
             offset, rc);
     }
 
-
-
-
-
-    sluice::Result<std::uint64_t> find_last_lines_offset(
-        RuntimeTaskContext& ctx, std::uint64_t size, std::size_t n) {
-        if (size == 0 || n == 0) return size;
-
+    sluice::Result<std::uint64_t> find_last_lines_offset(RuntimeTaskContext& ctx,
+                                                         std::uint64_t size, std::size_t n) {
+        if (size == 0 || n == 0)
+            return size;
 
         bool skip_final_nl = false;
         {
             Completion<std::size_t> rc;
             std::uint8_t last = 0;
 
-
-            auto rr = await_read_once(
-                ctx, fd,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1),
-                size - 1, rc);
+            auto rr = await_read_once(ctx, fd,
+                                      std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1),
+                                      size - 1, rc);
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             skip_final_nl = (last == '\n');
@@ -167,21 +142,15 @@ struct TailTask {
                 return size;
             std::uint64_t lo = (pos > buffer.size()) ? pos - buffer.size() : 0;
 
-
-
-
             std::size_t want = static_cast<std::size_t>(pos - lo);
             auto rr = await_read_once(
-                ctx, fd,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
-                                     want),
+                ctx, fd, std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), want),
                 lo, rc);
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             std::size_t got = rr.value();
             if (got != want)
-                return make_unexpected<std::uint64_t>(
-                    IoError{IoError::Code::backend_error});
+                return make_unexpected<std::uint64_t>(IoError{IoError::Code::backend_error});
             for (std::size_t i = got; i-- > 0;) {
                 if (buffer[i] == '\n') {
                     std::uint64_t abs_off = lo + i;
@@ -190,7 +159,8 @@ struct TailTask {
                         continue;
                     }
                     ++count;
-                    if (count >= n) return abs_off + 1;
+                    if (count >= n)
+                        return abs_off + 1;
                 }
             }
             pos = lo;
@@ -210,7 +180,6 @@ struct TailTask {
     }
 
     void run(RuntimeTaskContext& ctx, TailResult& r) {
-
         struct stat st{};
         if (::fstat(fd, &st) != 0) {
             r.error = sluice::from_errno_value(errno);
@@ -218,14 +187,7 @@ struct TailTask {
         }
         std::uint64_t size = static_cast<std::uint64_t>(st.st_size);
 
-
-
-
-
-
-
         std::uint64_t off = size;
-
 
         if (options.lines > 0) {
             auto start_r = find_last_lines_offset(ctx, size, options.lines);
@@ -249,7 +211,8 @@ struct TailTask {
                     return;
                 }
                 std::size_t n = rr.value();
-                if (n == 0) break;
+                if (n == 0)
+                    break;
                 asmbl.feed(buffer.data(), n, lines);
                 emit(lines, r);
                 off += n;
@@ -262,8 +225,8 @@ struct TailTask {
             }
         }
 
-        if (!options.follow) return;
-
+        if (!options.follow)
+            return;
 
         LineAssembler asmbl(options.max_line_bytes);
         std::vector<std::string> lines;
@@ -284,7 +247,6 @@ struct TailTask {
                 asmbl.feed(buffer.data(), n, lines);
                 emit(lines, r);
 
-
                 if (asmbl.dropped_long) {
                     r.dropped_long_lines = true;
                     diag_msg("line longer than --max-line-bytes skipped\n");
@@ -294,13 +256,11 @@ struct TailTask {
                 continue;
             }
 
-
-
-
             auto deadline = std::chrono::steady_clock::now() +
                             std::chrono::milliseconds(options.poll_interval_ms);
             while (std::chrono::steady_clock::now() < deadline) {
-                if (ctx.cancel_token().is_requested()) break;
+                if (ctx.cancel_token().is_requested())
+                    break;
                 std::this_thread::sleep_for(slice);
             }
 
@@ -316,16 +276,11 @@ struct TailTask {
                 off = 0;
                 asmbl.reset_partial();
             }
-
-
         }
     }
 };
 
-}
-
-
-
+} // namespace
 
 struct TailEngine::Impl {
     int fd;
@@ -342,18 +297,15 @@ struct TailEngine::Impl {
 namespace {
 
 bool options_valid(const TailOptions& o) {
-    return o.lines <= kMaxLines &&
-           o.buffer_size >= kMinBufferSize && o.buffer_size <= kMaxBufferSize &&
-           o.max_line_bytes > 0 && o.max_line_bytes <= kMaxMaxLineBytes &&
-           o.workers > 0 && o.workers <= kMaxWorkers &&
-           o.poll_interval_ms >= kMinPollMs &&
-           o.poll_interval_ms <= kMaxPollMs;
+    return o.lines <= kMaxLines && o.buffer_size >= kMinBufferSize &&
+           o.buffer_size <= kMaxBufferSize && o.max_line_bytes > 0 &&
+           o.max_line_bytes <= kMaxMaxLineBytes && o.workers > 0 && o.workers <= kMaxWorkers &&
+           o.poll_interval_ms >= kMinPollMs && o.poll_interval_ms <= kMaxPollMs;
 }
 
-}
+} // namespace
 
-TailEngine::TailEngine(int fd, TailOptions options, LineSink sink,
-                       DiagSink diag)
+TailEngine::TailEngine(int fd, TailOptions options, LineSink sink, DiagSink diag)
     : impl_(std::make_unique<Impl>()) {
     impl_->fd = fd;
     impl_->options = options;
@@ -365,8 +317,7 @@ TailEngine::~TailEngine() = default;
 
 sluice::Result<void> TailEngine::start() {
     if (!options_valid(impl_->options))
-        return sluice::make_unexpected<void>(
-            IoError{IoError::Code::invalid_state});
+        return sluice::make_unexpected<void>(IoError{IoError::Code::invalid_state});
     try {
         impl_->buffer.assign(impl_->options.buffer_size, 0);
     } catch (const std::bad_alloc&) {
@@ -385,20 +336,16 @@ sluice::Result<void> TailEngine::start() {
         if (!start_r.has_value())
             return sluice::make_unexpected<void>(start_r.error());
     } catch (...) {
-        if (impl_->rt) (void)impl_->rt->shutdown();
+        if (impl_->rt)
+            (void)impl_->rt->shutdown();
         return sluice::make_unexpected<void>(IoError{IoError::Code::no_space});
     }
 
-    TailTask task{impl_->fd,
-                  impl_->options,
-                  impl_->sink,
-                  impl_->diag,
-                  std::move(impl_->buffer),
-                  impl_->slot};
+    TailTask task{impl_->fd,   impl_->options,           impl_->sink,
+                  impl_->diag, std::move(impl_->buffer), impl_->slot};
 
-
-    auto sub_r = impl_->rt->submit(
-        [t = std::move(task)](RuntimeTaskContext& ctx) mutable { t(ctx); });
+    auto sub_r =
+        impl_->rt->submit([t = std::move(task)](RuntimeTaskContext& ctx) mutable { t(ctx); });
     if (!sub_r.has_value()) {
         (void)impl_->rt->shutdown();
         return sluice::make_unexpected<void>(sub_r.error());
@@ -414,12 +361,10 @@ void TailEngine::request_stop() noexcept {
 
 sluice::Result<TailResult> TailEngine::wait() {
     if (!impl_->started.load(std::memory_order::acquire))
-        return sluice::make_unexpected<TailResult>(
-            IoError{IoError::Code::invalid_state});
+        return sluice::make_unexpected<TailResult>(IoError{IoError::Code::invalid_state});
     bool already = false;
     if (!impl_->waited.compare_exchange_strong(already, true)) {
-        return sluice::make_unexpected<TailResult>(
-            IoError{IoError::Code::invalid_state});
+        return sluice::make_unexpected<TailResult>(IoError{IoError::Code::invalid_state});
     }
 
     TailResult out = impl_->slot.wait_and_take();
@@ -430,4 +375,4 @@ sluice::Result<TailResult> TailEngine::wait() {
     return std::move(out);
 }
 
-}
+} // namespace sluice_tail

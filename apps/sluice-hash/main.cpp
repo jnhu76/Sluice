@@ -1,27 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #include "cli_parse.hpp"
 #include "hash_task.hpp"
 
@@ -43,33 +19,30 @@ using sluice_hash::HashInput;
 using sluice_hash::cli::CliArgs;
 using sluice_hash::cli::parse_args;
 
-
-
-
-
 struct FdCloser {
     std::vector<int>& fds;
     ~FdCloser() {
         for (int fd : fds)
-            if (fd >= 0) ::close(fd);
+            if (fd >= 0)
+                ::close(fd);
     }
 };
 
-const char* errno_msg(int e) { return std::strerror(e); }
-
+const char* errno_msg(int e) {
+    return std::strerror(e);
 }
+
+} // namespace
 
 int main(int argc, char** argv) {
     CliArgs args;
     int rc = parse_args(argc, argv, args);
-    if (rc != 0) return rc;
+    if (rc != 0)
+        return rc;
     if (args.help) {
         sluice_hash::cli::usage(argv[0]);
         return 0;
     }
-
-
-
 
     struct OpenFailure {
         std::size_t cli_index;
@@ -108,10 +81,7 @@ int main(int argc, char** argv) {
         open_fds.push_back(fd);
     }
 
-    auto results = sluice_hash::hash_files(std::move(inputs), args.buffer_size,
-                                           args.workers);
-
-
+    auto results = sluice_hash::hash_files(std::move(inputs), args.buffer_size, args.workers);
 
     bool any_error = false;
     bool any_canceled = false;
@@ -124,31 +94,30 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "%s: %s: not a regular file\n", argv[0],
                              args.files[i].c_str());
             } else {
-                std::fprintf(stderr, "%s: %s: %s\n", argv[0],
-                             args.files[i].c_str(), errno_msg(f.os_errno));
+                std::fprintf(stderr, "%s: %s: %s\n", argv[0], args.files[i].c_str(),
+                             errno_msg(f.os_errno));
             }
             any_error = true;
         }
         if (gi < input_cli_index.size() && input_cli_index[gi] == i) {
             const FileHash& r = results[gi++];
             if (r.error.has_value()) {
-                bool canceled =
-                    r.error->code == sluice::IoError::Code::canceled;
-                std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0],
-                             r.path.c_str(),
-                             canceled ? "canceled" : "read error",
-                             r.error->os_errno ? " (" : "",
-                             r.error->os_errno ? errno_msg(r.error->os_errno)
-                                               : "");
+                bool canceled = r.error->code == sluice::IoError::Code::canceled;
+                std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0], r.path.c_str(),
+                             canceled ? "canceled" : "read error", r.error->os_errno ? " (" : "",
+                             r.error->os_errno ? errno_msg(r.error->os_errno) : "");
                 any_error = true;
-                if (canceled) any_canceled = true;
+                if (canceled)
+                    any_canceled = true;
                 continue;
             }
             std::printf("%s  %s\n", r.hex.c_str(), r.path.c_str());
         }
     }
 
-    if (any_canceled) return 3;
-    if (any_error) return 2;
+    if (any_canceled)
+        return 3;
+    if (any_error)
+        return 2;
     return 0;
 }

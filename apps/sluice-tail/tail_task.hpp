@@ -1,32 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/application_runtime.hpp>
@@ -43,7 +14,6 @@
 #include <string_view>
 
 namespace sluice_tail {
-
 
 constexpr std::size_t kMinBufferSize = 4 * 1024;
 constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
@@ -63,11 +33,7 @@ struct TailOptions {
     unsigned workers = 1;
 };
 
-
-
 using LineSink = std::function<void(std::string_view line)>;
-
-
 
 using DiagSink = std::function<void(std::string_view msg)>;
 
@@ -80,33 +46,22 @@ struct TailResult {
 };
 
 class TailEngine {
-public:
-
-
-    TailEngine(int fd, TailOptions options, LineSink sink,
-               DiagSink diag = nullptr);
+  public:
+    TailEngine(int fd, TailOptions options, LineSink sink, DiagSink diag = nullptr);
     ~TailEngine();
 
     TailEngine(const TailEngine&) = delete;
     TailEngine& operator=(const TailEngine&) = delete;
 
-
-
-
     sluice::Result<void> start();
-
-
-
 
     void request_stop() noexcept;
 
-
-
     sluice::Result<TailResult> wait();
 
-private:
+  private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
 
-}
+} // namespace sluice_tail

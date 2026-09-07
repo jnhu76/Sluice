@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstddef>
@@ -17,15 +5,9 @@
 
 namespace sluice_hash {
 
-
-
-
-
 class Sha256 {
-public:
+  public:
     Sha256();
-
-
 
     void update(const std::uint8_t* data, std::size_t len) noexcept;
     void final(std::uint8_t out_digest[32]) noexcept;
@@ -33,7 +15,7 @@ public:
     static constexpr std::size_t kDigestBytes = 32;
     static constexpr std::size_t kBlockBytes = 64;
 
-private:
+  private:
     void compress_block(const std::uint8_t* block) noexcept;
 
     std::uint32_t h_[8];
@@ -43,7 +25,6 @@ private:
     bool finalized_;
 };
 
-
 void sha256_hex(const std::uint8_t digest[32], char out[65]);
 
-}
+} // namespace sluice_hash

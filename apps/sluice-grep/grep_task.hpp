@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/application_runtime.hpp>
@@ -26,31 +16,19 @@
 
 namespace sluice_grep {
 
-
-
-
 constexpr std::size_t kMinBufferSize = 4 * 1024;
 constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kDefaultMaxLineBytes = 1 << 20;
 constexpr std::size_t kMaxMaxLineBytes = 64 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
 
-
-
 struct GrepInput {
     std::string path;
     int fd = -1;
 };
 
-
-
-
 using MatchSink =
-    std::function<void(const std::string& path, std::uint64_t line_no,
-                       std::string_view line)>;
-
-
-
+    std::function<void(const std::string& path, std::uint64_t line_no, std::string_view line)>;
 
 struct GrepFileResult {
     std::string path;
@@ -60,20 +38,13 @@ struct GrepFileResult {
     bool dropped_long_lines = false;
 };
 
+std::vector<GrepFileResult> grep_files(const std::string& pattern, std::vector<GrepInput> inputs,
+                                       std::size_t buffer_size, std::size_t max_line_bytes,
+                                       unsigned workers, MatchSink sink);
 
+std::vector<GrepFileResult>
+grep_files_with_backend(const std::string& pattern, std::vector<GrepInput> inputs,
+                        std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers,
+                        MatchSink sink, std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-
-
-
-std::vector<GrepFileResult> grep_files(
-    const std::string& pattern, std::vector<GrepInput> inputs,
-    std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers,
-    MatchSink sink);
-
-
-std::vector<GrepFileResult> grep_files_with_backend(
-    const std::string& pattern, std::vector<GrepInput> inputs,
-    std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers,
-    MatchSink sink, std::unique_ptr<sluice::async::AsyncBackend> backend);
-
-}
+} // namespace sluice_grep

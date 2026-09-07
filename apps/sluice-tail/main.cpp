@@ -1,32 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #include "cli_parse.hpp"
 #include "tail_task.hpp"
 
@@ -49,8 +20,6 @@ using sluice_tail::TailOptions;
 using sluice_tail::cli::CliArgs;
 using sluice_tail::cli::parse_args;
 
-
-
 bool block_signals() {
     sigset_t set;
     ::sigemptyset(&set);
@@ -59,20 +28,18 @@ bool block_signals() {
     return ::pthread_sigmask(SIG_BLOCK, &set, nullptr) == 0;
 }
 
-}
+} // namespace
 
 int main(int argc, char** argv) {
-
-
     if (!block_signals()) {
-        std::fprintf(stderr, "%s: cannot block signals: %s\n", argv[0],
-                     std::strerror(errno));
+        std::fprintf(stderr, "%s: cannot block signals: %s\n", argv[0], std::strerror(errno));
         return 2;
     }
 
     CliArgs args;
     int rc = parse_args(argc, argv, args);
-    if (rc != 0) return rc;
+    if (rc != 0)
+        return rc;
     if (args.help) {
         sluice_tail::cli::usage(argv[0]);
         return 0;
@@ -80,20 +47,19 @@ int main(int argc, char** argv) {
 
     int fd = ::open(args.file.c_str(), O_RDONLY);
     if (fd < 0) {
-        std::fprintf(stderr, "%s: cannot open '%s': %s\n", argv[0],
-                     args.file.c_str(), std::strerror(errno));
+        std::fprintf(stderr, "%s: cannot open '%s': %s\n", argv[0], args.file.c_str(),
+                     std::strerror(errno));
         return 2;
     }
     struct stat st{};
     if (::fstat(fd, &st) != 0) {
-        std::fprintf(stderr, "%s: cannot stat '%s': %s\n", argv[0],
-                     args.file.c_str(), std::strerror(errno));
+        std::fprintf(stderr, "%s: cannot stat '%s': %s\n", argv[0], args.file.c_str(),
+                     std::strerror(errno));
         ::close(fd);
         return 2;
     }
     if (!S_ISREG(st.st_mode)) {
-        std::fprintf(stderr, "%s: %s: not a regular file\n", argv[0],
-                     args.file.c_str());
+        std::fprintf(stderr, "%s: %s: not a regular file\n", argv[0], args.file.c_str());
         ::close(fd);
         return 2;
     }
@@ -108,14 +74,12 @@ int main(int argc, char** argv) {
 
     TailEngine engine(
         fd, options,
-[](std::string_view line) {
+        [](std::string_view line) {
             std::fwrite(line.data(), 1, line.size(), stdout);
             std::fputc('\n', stdout);
             std::fflush(stdout);
         },
-[](std::string_view msg) {
-            std::fwrite(msg.data(), 1, msg.size(), stderr);
-        });
+        [](std::string_view msg) { std::fwrite(msg.data(), 1, msg.size(), stderr); });
 
     auto start_r = engine.start();
     if (!start_r.has_value()) {
@@ -124,15 +88,9 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-
-
-
     std::atomic<bool> signal_seen{false};
     pthread_t sig_thread{};
     bool sig_thread_spawned = false;
-
-
-
 
     struct SigCtx {
         TailEngine* engine;
@@ -166,9 +124,6 @@ int main(int argc, char** argv) {
     auto result = engine.wait();
 
     if (sig_thread_spawned) {
-
-
-
         if (!signal_seen.load(std::memory_order_relaxed))
             ::pthread_kill(sig_thread, SIGINT);
         ::pthread_join(sig_thread, nullptr);
@@ -184,9 +139,7 @@ int main(int argc, char** argv) {
     const auto& r = result.value();
     if (r.error.has_value()) {
         std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0], args.file.c_str(),
-                     r.error->code == sluice::IoError::Code::canceled
-                         ? "canceled"
-                         : "read error",
+                     r.error->code == sluice::IoError::Code::canceled ? "canceled" : "read error",
                      r.error->os_errno ? " (" : "",
                      r.error->os_errno ? std::strerror(r.error->os_errno) : "");
         return 2;

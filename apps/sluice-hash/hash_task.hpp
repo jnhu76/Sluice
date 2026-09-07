@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/application_runtime.hpp>
@@ -23,22 +14,14 @@
 
 namespace sluice_hash {
 
-
-
-
-
 constexpr std::size_t kMinBufferSize = 4 * 1024;
 constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
-
-
-
 
 struct HashInput {
     std::string path;
     int fd = -1;
 };
-
 
 struct FileHash {
     std::string path;
@@ -47,19 +30,11 @@ struct FileHash {
     std::optional<sluice::IoError> error;
 };
 
+std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size,
+                                 unsigned workers);
 
+std::vector<FileHash> hash_files_with_backend(std::vector<HashInput> inputs,
+                                              std::size_t buffer_size, unsigned workers,
+                                              std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-
-
-
-
-std::vector<FileHash> hash_files(std::vector<HashInput> inputs,
-                                 std::size_t buffer_size, unsigned workers);
-
-
-
-std::vector<FileHash> hash_files_with_backend(
-    std::vector<HashInput> inputs, std::size_t buffer_size, unsigned workers,
-    std::unique_ptr<sluice::async::AsyncBackend> backend);
-
-}
+} // namespace sluice_hash

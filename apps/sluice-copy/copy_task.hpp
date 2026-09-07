@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/application_runtime.hpp>
@@ -23,31 +11,16 @@
 
 namespace sluice_copy {
 
-
 enum class SyncPolicy {
     none,
     data,
     all,
 };
 
-
-
-
-
-
-
-
-
-
-
-
 constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kMaxPipelineDepth = 64;
 constexpr std::size_t kMaxPipelineBytes = 512 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
-
-
-
 
 struct CopyStats {
     std::uint64_t bytes_copied = 0;
@@ -57,80 +30,21 @@ struct CopyStats {
     SyncPolicy sync = SyncPolicy::none;
 };
 
+sluice::Result<CopyStats> run_sequential_copy(int src_fd, int dst_fd, std::size_t buffer_size,
+                                              unsigned workers, SyncPolicy sync);
 
+sluice::Result<CopyStats>
+run_sequential_copy_with_backend(int src_fd, int dst_fd, std::size_t buffer_size, unsigned workers,
+                                 SyncPolicy sync,
+                                 std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-
-
-
-
-
-
-
-sluice::Result<CopyStats> run_sequential_copy(int src_fd, int dst_fd,
-                                              std::size_t buffer_size,
-                                              unsigned workers,
-                                              SyncPolicy sync);
-
-
-
-
-
-
-
-
-sluice::Result<CopyStats> run_sequential_copy_with_backend(
-    int src_fd, int dst_fd, std::size_t buffer_size, unsigned workers,
-    SyncPolicy sync, std::unique_ptr<sluice::async::AsyncBackend> backend);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-sluice::Result<CopyStats> run_pipelined_copy(int src_fd, int dst_fd,
-                                             std::size_t buffer_size,
-                                             std::size_t pipeline_depth,
-                                             unsigned workers,
+sluice::Result<CopyStats> run_pipelined_copy(int src_fd, int dst_fd, std::size_t buffer_size,
+                                             std::size_t pipeline_depth, unsigned workers,
                                              SyncPolicy sync);
 
+sluice::Result<CopyStats>
+run_pipelined_copy_with_backend(int src_fd, int dst_fd, std::size_t buffer_size,
+                                std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
+                                std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-
-
-sluice::Result<CopyStats> run_pipelined_copy_with_backend(
-    int src_fd, int dst_fd, std::size_t buffer_size,
-    std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
-    std::unique_ptr<sluice::async::AsyncBackend> backend);
-
-}
+} // namespace sluice_copy

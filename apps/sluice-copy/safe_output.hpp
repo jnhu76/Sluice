@@ -1,23 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include "copy_task.hpp"
@@ -29,8 +9,6 @@
 
 namespace sluice_copy {
 
-
-
 enum class SafeOpenFailure : std::uint8_t {
     none,
     src_open,
@@ -39,7 +17,6 @@ enum class SafeOpenFailure : std::uint8_t {
     dst_stat,
     dst_not_regular,
     same_file,
-
 
     temp_dir,
     temp_create,
@@ -57,27 +34,9 @@ struct SafeOpenOutcome {
     sluice::IoError error{};
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-SafeOpenOutcome open_atomic_copy(const std::string& src_path,
-                                 const std::string& dst_path);
-
+SafeOpenOutcome open_atomic_copy(const std::string& src_path, const std::string& dst_path);
 
 const char* safe_open_failure_message(SafeOpenFailure f);
-
-
-
 
 enum class SafeCommitStage : std::uint8_t {
     none,
@@ -85,35 +44,11 @@ enum class SafeCommitStage : std::uint8_t {
     rename,
     dir_sync,
 
-
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
-                                        const std::string& dst_path,
-                                        SyncPolicy sync,
-                                        SafeCommitStage* stage = nullptr);
-
-
-
+sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o, const std::string& dst_path,
+                                        SyncPolicy sync, SafeCommitStage* stage = nullptr);
 
 void discard_atomic_copy(SafeOpenOutcome& o);
 
-}
+} // namespace sluice_copy
