@@ -109,6 +109,91 @@ E9 added the external-wake subsystem:
   lease) through the Scheduler wake callback, so destruction cannot interleave
   with an in-flight callback.
 
+## Lock protocol and wake law
+
+The current durable lock/wake law below is the authority for lock ordering and
+wake obligations in the Scheduler/backend domain. It is stated as the current
+as-built protocol; the campaign that produced it (Phase G P5-CORRECTIVE, the
+2 ms MIXED-WAKE verdict, the interrupt bridge) is historical record in
+`docs/history/implementation-plans/phase-g-backend-progress-wake.md` §4 and is
+not re-stated here.
+
+### Lock inventory (guarded state)
+
+| Lock / domain | Guards |
+|---|---|
+| `G` — Scheduler global coordination lock (`global_mtx_`) | runnable routing, admission, classification, worker population bookkeeping |
+| `W` — wake epoch/predicate lock (`wake_mtx_`) | `wake_epoch_` + `wake_cv_`; per-worker park baselines (`observed_epoch`, park domain) |
+| `B` — backend wait-source domain | backend ready/control epochs (`ReadyWaitSource`) or progress/control epochs + eventfd counters (`UringWaitSource`); the parked `wait_one()` observer |
+| `A` — `AsyncIoContext` backend-serialization lock (`access_mtx_`) | serializes `poll()` / `wait_one()` across Workers |
+| `L` — `RequestArena` lifecycle leaf domain | slot lifecycle: generation, pin/reap, borrow, exactly-once terminal |
+| `I` — per-worker inbox lock/domain (`WorkerState::inbox_mtx`) | the worker's single `local_runnable` queue |
+
+### Allowed edges (current as-built)
+
+```text
+G -> A        classify_locked / drain poll (unchanged)
+G -> B        arm_backend_wait_commit at the MW-S2 commit (backend or MIXED domain)
+G -> W        signal_wake_locked under G (wake publication)
+G -> W -> B   signal_wake_locked -> interrupt_backend_waiters (B is a leaf; the
+              bridge runs after W is released; no reverse edge exists — no
+              wait-source path acquires wake_mtx_)
+G -> I        routing: route_runnable_locked / spawn / steal push under inbox_mtx
+A -> B        context wait_one snapshot/poll/wait_for_change
+A -> L        poll/reap
+L -> (release) -> sink.on_ready
+lifecycle -> B  request_stop -> interrupt_backend_waiters
+W -> I        park predicate: local_runnable read acquires inbox_mtx NESTED
+              under wake_mtx_ (the wake->inbox edge; never the reverse order)
+```
+
+`G -> W -> B` is one-directional: `signal_wake_locked` advances the wake epoch
+under `W`, releases it, then interrupts backend waiters. B is a leaf — it has
+inbound edges only from G/A/lifecycle and no outgoing edge: no path acquires
+G, A, or W while holding B. W is not a leaf: the park predicate acquires I
+(the per-worker `inbox_mtx`) while holding W (edge `W -> I` in the allowed-edge
+list above), and the reverse edge `I -> W` is forbidden.
+
+### Forbidden reverse edges
+
+```text
+I -> W   forbidden — taking wake_mtx_ under inbox_mtx would invert the park
+         predicate's wake->inbox edge (routing always signals AFTER releasing
+         the inbox lock)
+I -> G   forbidden — global_mtx_ is never acquired while holding inbox_mtx
+B -> G   forbidden — a backend wait source never calls the Scheduler
+B -> A   forbidden — the wait source never re-enters AsyncIoContext serialization
+```
+
+### Cycle / safety reasoning
+
+- **Leaf-domain reasoning:** `L` is a leaf domain — while holding it the code
+  never calls the Scheduler, `ReadySink`, or user code, never syscalls, joins,
+  or waits for backend/kernel progress (constitution AC-6; `AGENTS.md` §3.6).
+- **No B -> G:** a backend wait source never calls the Scheduler; the interrupt
+  bridge is a bounded mutex + epoch bump + non-blocking notify/eventfd write
+  (no Scheduler call, no user code, no join, no blocking syscall).
+- **Bridge is notification, not completion:** the notification bridge never
+  publishes a `Completion`, never mutates a `RequestSlot`, never routes a
+  Fiber, and never allocates (the epoch/eventfd protocol has no queue node).
+- **Wake obligation:** every producer publishes persistent state BEFORE the
+  wake (state first, then notify, in all sites). The commit-to-sleep race is
+  closed by the persistent epoch/predicate under `W` (`park_on_wake_source`
+  re-checks `wake_epoch_`, `global_terminate_`, and the inbox under the same
+  locks the producer uses), not by timeout.
+
+### Formal / safety pointers
+
+The lock/wake law is pinned by the repository's formal evidence, which is not
+modified by this document:
+
+- constitution **AC-6** (explicit wake obligation; the 2 ms MIXED-WAKE
+  backstop is protocol authority per usage site, not defense-in-depth);
+- anchor **F08** in `spec/formal/anchors.json` and its `wake-signal` /
+  `park-boundary` anchor states (`wake-epoch-state`);
+- the **e9-park-wake** TLA suite (`spec/tla/e9_park_wake/`) — R1–R4, the
+  split-wait bridge, non-vacuity witnesses and fail-closed negatives.
+
 ## Ownership and shutdown
 
 - The Scheduler **owns** its Workers, the deadline heap, and the WakeHandle
@@ -145,3 +230,5 @@ E9 added the external-wake subsystem:
 - ADR-execution-model.md — the accepted execution-strategy contract.
 - `docs/architecture/async-synchronization.md` — the primitive layer.
 - `docs/architecture/async-io-foundation.md` — Completion / AsyncIoContext / backends.
+- `docs/architecture/architecture-constitution.md` AC-6 — explicit wake obligation.
+- `spec/tla/e9_park_wake/` — R1–R4 park/wake TLA model and witnesses.

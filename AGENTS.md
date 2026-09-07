@@ -6,7 +6,7 @@
 
 ## 1. Mission 与项目原则
 
-Sluice 是实验性的 C++20 显式 I/O 与控制流库：只向调用者暴露其必须依赖的可观察 I/O 语义与真实命名的资源边界；把执行这些契约所需的正确性权威集中沉淀在库内部；后端能力与执行策略默认保持局部、可替换、按需付费，除非某个 caller-facing 契约通过独立证据证明值得暴露。当前 north star 与语义权威见 GitHub `#225`（architecture constitution）；执行顺序见 `#227`（唯一 roadmap）。
+Sluice 是实验性的 C++20 显式 I/O 与控制流库：只向调用者暴露其必须依赖的可观察 I/O 语义与真实命名的资源边界；把执行这些契约所需的正确性权威集中沉淀在库内部；后端能力与执行策略默认保持局部、可替换、按需付费，除非某个 caller-facing 契约通过独立证据证明值得暴露。当前 north star 与语义权威见 `docs/architecture/architecture-constitution.md`（AC-N；GitHub `#225` 仅作为该宪法的过程性出处）；执行顺序见 `#227`（唯一 roadmap）。
 
 必须保持以下层次独立：
 
@@ -42,7 +42,7 @@ Sluice 是实验性的 C++20 显式 I/O 与控制流库：只向调用者暴露�
 
 ### 3.1 职责分离
 
-公共/可观察语义面 ≠ 内部正确性内核 ≠ 资源边界 ≠ 后端能力 ≠ 执行策略 ≠ 观测/提示；信息、capability、观测本身都不是权威（`#225`）。
+公共/可观察语义面 ≠ 内部正确性内核 ≠ 资源边界 ≠ 后端能力 ≠ 执行策略 ≠ 观测/提示；信息、capability、观测本身都不是权威（`docs/architecture/architecture-constitution.md`）。
 
 ### 3.2 请求生命周期
 
@@ -124,19 +124,10 @@ Scanner 和 review finding 都是待验证假设：必须检查实际代码与�
 
 **只加载任务相关的最小权威；不要递归加载全部历史/证据文档。**
 
-| 任务 | 先读 |
-| --- | --- |
-| 使用 Sluice | 根 README → `docs/reference/` |
-| 改公共语义 | 公共 header + `docs/reference/api.md` + governing ADR |
-| 请求生命周期 | `docs/architecture/async-request-lifecycle.md` + ADR-explicit-io-request-contract + 验证 |
-| 等待 / 同步 | `docs/architecture/async-synchronization.md` + ADR-execution-model + 验证 |
-| 后端 / io_uring | `docs/architecture/async-io-foundation.md` + ADR-explicit-io-request-contract + 验证 |
-| Scheduler / 并发 | `docs/architecture/async-runtime.md` + constitution AC-6 + 验证 |
-| 失败处理 | `docs/architecture/failure-model.md` + 相关公共契约 |
-| 构建 / CI | `docs/architecture/overview.md`（authoritative implementation map）+ `docs/verification/README.md` |
-| 形式化 | `docs/verification/formal-models.md` + `spec/tla/manifest.json` |
-| 历史缘由 | `docs/history/` |
-| 当前要做什么 | `#227`（唯一执行顺序）；Safety `#289`；Performance `#259` |
+- 领域/任务文档导航（task → docs routing、子系统导航、当前文档发现、Safety/Performance 入口）：`docs/README.md`。
+- 执行顺序权威：GitHub `#227`（唯一）。
+
+领域细节、Safety 与 Performance 的具体入口一律从 `docs/README.md` 读取，不在本文件重复维护。
 
 ## 10. 完成报告与提交
 

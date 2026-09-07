@@ -158,12 +158,12 @@ semantic execution channel:
 
 Primary issue records:
 
-| Issue | Role | Current result |
+| Issue | Role | Durable result |
 |---|---|---|
-| #163 | verification doctrine / evidence vocabulary | closed; durable doctrine |
-| #196 | E9 trace-conformance substrate | completed; `TRACE-CONFORMANT (TESTED EXECUTIONS)` |
-| #298 | static formal-drift / impact research owner | Phase C closed: `METHOD_RECALL_NOT_EARNED`; static narrowing not enforcement authority |
-| #305 | historical semantic-trace sensitivity | completed: `TRACE_CHANNEL_PARTIAL` |
+| #163 | verification doctrine / evidence vocabulary | durable doctrine — evidence vocabulary and separate evidence classes |
+| #196 | E9 trace-conformance substrate | `TRACE-CONFORMANT (TESTED EXECUTIONS)` — deterministic C++ → semantic E9 events → prehistory/refinement → TLC replay substrate |
+| #298 | static formal-drift / impact research owner | Phase C verdict `METHOD_RECALL_NOT_EARNED`; static narrowing is not enforcement authority |
+| #305 | historical semantic-trace sensitivity | `TRACE_CHANNEL_PARTIAL` — historical drift sensitivity of the #196 channel |
 
 Permanent boundaries:
 

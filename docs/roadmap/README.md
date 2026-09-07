@@ -8,7 +8,7 @@ we are doing now, in what order, and where work stops — lives in GitHub Issues
 | What do we do next? (sole execution-order roadmap) | [#227](https://github.com/jnhu76/Sluice/issues/227) |
 | Boundary / Safety research program | [#289](https://github.com/jnhu76/Sluice/issues/289) |
 | Performance / data-movement research program | [#259](https://github.com/jnhu76/Sluice/issues/259) |
-| Architecture constitution (responsibilities, not order) | [#225](https://github.com/jnhu76/Sluice/issues/225) |
+| Architecture constitution (responsibilities, not order) | [`docs/architecture/architecture-constitution.md`](../architecture/architecture-constitution.md) (#225 as provenance) |
 
 ## Navigation
 

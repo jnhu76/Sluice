@@ -21,6 +21,7 @@ every historical or evidence document.**
 | Change build / CI | [`architecture/overview.md`](architecture/overview.md) (authoritative implementation map) + [verification](verification/README.md) |
 | Formal methods work | [`verification/formal-models.md`](verification/formal-models.md) + `spec/tla/manifest.json` |
 | Run Safety (S0) work | [#289](https://github.com/jnhu76/Sluice/issues/289) + current contract/architecture only |
+| Performance / data-movement research | [#259](https://github.com/jnhu76/Sluice/issues/259) (research roadmap; execution order remains [#227](https://github.com/jnhu76/Sluice/issues/227)) |
 | Application / workload work | [`applications/README.md`](applications/README.md) |
 | Historical rationale | [`history/`](history/README.md) |
 
@@ -31,8 +32,10 @@ the AGENTS authority chain.
 
 ## What is current vs historical
 
-- [`architecture/README.md`](architecture/README.md) classifies every
-  architecture document: CURRENT authority vs point-in-time evidence/history.
+- [`architecture/README.md`](architecture/README.md) is the **navigation
+  index** for current architecture material; it does not classify documents.
+  A document's authority follows `AGENTS.md` §2 and its own local
+  `Status` / `Authority` declaration (where present).
 - Documents under [`history/`](history/README.md) (superseded plans, closeouts,
   point-in-time audit evidence) are **never current authority**.
 - Scanner reports, investigations, ledgers, comments, commit messages, and
@@ -46,7 +49,7 @@ the AGENTS authority chain.
 | Directory | Question it answers | Audience |
 |-----------|--------------------|----------|
 | [`reference/`](reference/README.md) | What exactly is the public contract? | All |
-| [`architecture/`](architecture/README.md) | How does it work? Current authority + classification index. | Contributor |
+| [`architecture/`](architecture/README.md) | How does it work? Navigation index for current architecture material. | Contributor |
 | [`adr/`](adr/README.md) | Why was it designed this way? | Contributor |
 | [`verification/`](verification/README.md) | How do we prove it works? | Contributor |
 | [`applications/`](applications/README.md) | What have real workloads taught us? | Contributor |
@@ -55,7 +58,7 @@ the AGENTS authority chain.
 | [`known-issues/`](known-issues/security-review-followups.md) | What is deliberately deferred, and why? | Contributor |
 | [`roadmap/`](roadmap/README.md) | Where is execution ordering tracked? (thin pointer to GitHub Issues) | Contributor |
 | [`history/`](history/README.md) | How did we get here? Superseded plans, closeouts, audits. | Maintainer |
-| [`post-freeze/`](post-freeze/post-freeze-final-report.md) | Post-freeze structural audit evidence; live verification anchor scanned by `scripts/gates/mechanical-facts.py` | Maintainer |
+| [`post-freeze/`](post-freeze/post-freeze-final-report.md) | Post-freeze structural audit evidence — historical snapshot, **not a live mechanical-fact authority** (current facts derive from current machine-owned sources; only SHA-pinned evidence rows remain integrity-checked) | Maintainer |
 | [`results/`](results/README.md) | Machine-produced validation / benchmark evidence artifacts | Maintainer |
 | [`templates/`](templates/) | Document templates used by the architecture gates | Contributor |
 
@@ -129,3 +132,13 @@ Treat this metadata as a classification aid, not as a replacement for the
 repository-wide authority chain in `AGENTS.md` §2. Some current references do
 not yet carry a status block; absence of metadata does not make a document
 historical, and a stale status label never outranks a higher authority.
+
+## Document classification (transitional rule)
+
+Document classification has exactly **one manual owner**. Current
+document-local `Status` / `Authority` metadata (where present) is the present
+carrier of that classification; there is **no manually synchronized central
+classification registry**, and one must not be introduced. A future metadata
+migration may normalize this metadata into frontmatter; any future global index
+generated from metadata must be **derived**, not another hand-maintained truth
+source.

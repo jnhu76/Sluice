@@ -8,18 +8,26 @@ of those facts is the wrong tool; this gate checks them mechanically:
   A. identifier near-miss — any all-caps identifier in code that is edit
      distance 1 from a canonical SLUICE_* project identifier but is not
      itself canonical is an ERROR (the class that produced SLUCE_ ...).
-  B. doc LOC claims — every ``path`` | NNN | table row in docs/post-freeze/
-     must satisfy wc -l(path) == NNN.
+  B. doc LOC claims — ``path`` | NNN | table rows in docs/post-freeze/:
+     rows that pin a commit SHA are historical evidence-integrity claims
+     and must satisfy wc -l(path) == NNN AT that commit (via `git show`);
+     rows WITHOUT a pinned revision are historical-snapshot statements,
+     NOT live current-tree LOC truth, and are not gate authority.
   C. split layout completeness — the actual scheduler split file set must
-     equal the documented inventory set exactly (no missing/extra/duplicate).
+     equal EXPECTED_SCHEDULER_SPLIT_FILES exactly (no missing/extra). The
+     expectation is a gate constant (policy), not a cache of any doc table:
+     the historical final report is not live layout authority.
   D. SHA references — hex tokens referenced in docs/post-freeze/ must
      resolve to real git objects.
   E. tracker references — #NNN references in docs/post-freeze/ must be in
      the explicit KNOWN_TRACKER_REFS registry (offline, deterministic).
   F. test totals — ``test:default-gate-targets`` rows in docs/post-freeze/
      must equal the mechanically counted default-`xmake test` gate size
-     (the ``running.test`` line count of a Linux Clang Debug run),
-     derived from the xmake lua registration constructs, not hand-typed.
+     (the ``running.test`` line count of a Linux Clang Debug run), derived
+     from the xmake lua registration constructs, not hand-typed. The rows
+     are historical evidence claims checked for consistency against the
+     mechanical count, not the source of that count; docs/history/issue
+     and closeout records are historical snapshots and are not validated.
   G. seam/production exclusion (C4 / issue #135, extended by #142 review) —
      the internal-testing control plane lives in NON-INSTALLED seam headers
      (src/async/*_test_seams.hpp, apps/sluice-copy/safe_output_test_seams.hpp)
@@ -53,15 +61,38 @@ CODE_DIRS = ["src", "include", "tests", "bench", "xmake"]
 CODE_EXTS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".ipp", ".lua"}
 SCAN_SELF_EXEMPT = {"mechanical-facts.py"}
 
-# Docs whose tables/claims are verified.
-FACT_DOCS_DIR = REPO / "docs" / "post-freeze"
+# Historical evidence docs whose claim rows are verified against mechanical
+# facts (post-freeze report + related). The facts themselves come from the
+# live tree and policy constants below, never from these docs.
+POST_FREEZE_DOCS_DIR = REPO / "docs" / "post-freeze"
 
-# Layout authority: the actual split file set must equal the documented set.
+# Layout authority: the gate expectation, not cached scan output. This is the
+# policy-pinned scheduler split inventory (post-freeze R1). It is a gate
+# constant because the historical final-report table is historical snapshot,
+# not live current-tree layout truth; the comparison below is
+# EXPECTED_SCHEDULER_SPLIT_FILES vs the actual scheduler source glob.
+EXPECTED_SCHEDULER_SPLIT_FILES = frozenset({
+    "src/async/scheduler.cpp",
+    "src/async/scheduler_park_wake.cpp",
+    "src/async/scheduler_timer.cpp",
+    "src/async/scheduler_event.cpp",
+    "src/async/scheduler_semaphore.cpp",
+    "src/async/scheduler_mutex.cpp",
+    "src/async/scheduler_rwlock.cpp",
+    "src/async/scheduler_condition.cpp",
+    "src/async/scheduler_queue.cpp",
+    "src/async/scheduler_internal.hpp",
+    "src/async/scheduler_fe2_test_seam.cpp",
+})
+
+# Actual-set globs: every scheduler_*.cpp TU plus the RETAINED scheduler.cpp
+# TU and the shared internal header (split-layout completeness covers them).
 SPLIT_GLOB_CPP = "src/async/scheduler_*.cpp"
 SPLIT_GLOB_HPP = "src/async/scheduler_internal.hpp"
 
-# Offline registry of tracker references allowed in fact docs. Adding a new
-# issue/PR reference requires adding its number here (one line, reviewed).
+# Offline registry of tracker references allowed in the post-freeze docs.
+# Adding a new issue/PR reference requires adding its number here (one line,
+# reviewed).
 KNOWN_TRACKER_REFS = {
     94, 95, 96, 97, 98, 99, 100, 101,  # audit #94-#101 closeout
     109, 110, 111, 112,                # Phase G closeout / freeze / known limits
@@ -189,11 +220,15 @@ def check_identifier_near_miss(canon, files=None):
 
 
 def check_doc_loc_claims(doc_paths, root=None):
-    """Verify ``path`` | NNN | rows. If the row's line pins a commit SHA
-    (historical snapshot claim), verify the line count AT that commit via
-    `git show`; otherwise verify against the current tree. Rows with the
+    """Verify SHA-pinned ``path`` | NNN | rows: if the row's line pins a
+    commit SHA (historical snapshot claim), verify the line count AT that
+    commit via `git show`. Rows WITHOUT a pinned revision are historical
+    current-tree statements, not live gate authority: they are skipped (the
+    historical Markdown table is not current-tree LOC truth). Rows with the
     virtual ``test:`` path prefix are test-total claims handled by
-    check_test_total_claims, not file LOC claims."""
+    check_test_total_claims, not file LOC claims. Fail-closed behavior for
+    genuine pinned-evidence corruption is preserved: a pinned path absent at
+    the pinned SHA, or a count mismatch at that SHA, is an error."""
     errs = []
     for doc in doc_paths:
         for line in doc.read_text(errors="replace").splitlines():
@@ -204,72 +239,48 @@ def check_doc_loc_claims(doc_paths, root=None):
             if path.startswith("test:"):
                 continue  # verified by check_test_total_claims
             sha_m = SHA_RE.search(line)
-            if sha_m:
-                sha = sha_m.group(0)
-                r = subprocess.run(
-                    ["git", "-C", str(REPO), "show", f"{sha}:{path}"],
-                    capture_output=True,
-                )
-                if r.returncode != 0:
-                    errs.append(f"{doc.name}: '{path}' not present at {sha}")
-                    continue
-                actual = r.stdout.count(b"\n")
-                if actual != claimed:
-                    errs.append(
-                        f"{doc.name}: claims '{path}' = {claimed} lines at "
-                        f"{sha}, actual = {actual}"
-                    )
+            if not sha_m:
+                continue  # unversioned historical row: not live authority
+            sha = sha_m.group(0)
+            r = subprocess.run(
+                ["git", "-C", str(root or REPO), "show", f"{sha}:{path}"],
+                capture_output=True,
+            )
+            if r.returncode != 0:
+                errs.append(f"{doc.name}: '{path}' not present at {sha}")
                 continue
-            target = (root or REPO) / path
-            if not target.is_file():
-                errs.append(f"{doc.name}: LOC row references missing file '{path}'")
-                continue
-            # wc -l semantics: count newline bytes so a final unterminated
-            # line is not counted (docs quote wc -l, not editor line count).
-            actual = target.read_bytes().count(b"\n")
+            actual = r.stdout.count(b"\n")
             if actual != claimed:
                 errs.append(
-                    f"{doc.name}: claims '{path}' = {claimed} lines, wc -l = {actual}"
+                    f"{doc.name}: claims '{path}' = {claimed} lines at "
+                    f"{sha}, actual = {actual}"
                 )
     return errs
 
 
-def documented_split_set(doc_paths):
-    seen = {}
-    for doc in doc_paths:
-        for m in LOC_ROW_RE.finditer(doc.read_text(errors="replace")):
-            path = m.group(1).strip()
-            if re.match(r"src/async/scheduler", path):
-                if path in seen:
-                    seen[path] = "duplicate"
-                else:
-                    seen[path] = doc.name
-    return seen
-
-
-def check_split_layout(doc_paths, root=None):
-    # Layout authority is the as-built inventory table in the final report;
-    # other docs (e.g. the audit's historical risk matrix) may legitimately
-    # mention the same files without being completeness authorities.
-    base = root or REPO
+def check_split_layout(root=None):
+    """Split-layout completeness: the actual scheduler split file set (the
+    scheduler_*.cpp glob plus the retained scheduler.cpp and
+    scheduler_internal.hpp) must equal EXPECTED_SCHEDULER_SPLIT_FILES
+    exactly. The expectation is the gate's own policy constant — it is not
+    derived from any doc table, so a stale historical inventory can never
+    silently weaken or shift the layout gate. Missing and extra files are
+    each reported (fail-closed, no weakening)."""
+    base = Path(root) if root else REPO
     actual = {str(p.relative_to(base)) for p in base.glob(SPLIT_GLOB_CPP)}
-    # The RETAINED scheduler.cpp TU is part of the as-built inventory too
-    # (split-layout completeness covers it, not just the new scheduler_*.cpp).
     actual.add("src/async/scheduler.cpp")
     actual |= {SPLIT_GLOB_HPP}
-    documented = documented_split_set(
-        [p for p in doc_paths if p.name == "post-freeze-final-report.md"]
-        or doc_paths)
     errs = []
-    for path, where in documented.items():
-        if where == "duplicate":
-            errs.append(f"split layout: '{path}' listed more than once in doc tables")
-    doc_set = set(documented_keys_no_dup := {
-        p for p, w in documented.items() if w != "duplicate"})
-    for missing in sorted(actual - doc_set):
-        errs.append(f"split layout: file '{missing}' exists but is not in any doc table")
-    for extra in sorted(doc_set - actual):
-        errs.append(f"split layout: doc table lists '{extra}' but no such file exists")
+    for missing in sorted(EXPECTED_SCHEDULER_SPLIT_FILES - actual):
+        errs.append(
+            f"split layout: expected file '{missing}' is missing from the "
+            f"scheduler split (EXPECTED_SCHEDULER_SPLIT_FILES)"
+        )
+    for extra in sorted(actual - EXPECTED_SCHEDULER_SPLIT_FILES):
+        errs.append(
+            f"split layout: unexpected file '{extra}' in the scheduler split "
+            f"(not in EXPECTED_SCHEDULER_SPLIT_FILES)"
+        )
     return errs
 
 
@@ -313,6 +324,11 @@ def check_tracker_refs(doc_paths):
 #      | `test:default-gate-targets` | NNN |
 #    must equal the number of tests registered into the default `xmake test`
 #    gate (Linux semantics: every current platform_gate includes linux).
+#    The only doc claims validated against the mechanical count are the rows
+#    in docs/post-freeze/*.md — historical evidence claims, not current
+#    truth. docs/history/issues and docs/history/closeout records are
+#    historical snapshots — their quoted test totals are evidence about the
+#    past, not current test-count truth, so they are not validated.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Virtual row path reserved for the default-gate test-target count.
@@ -471,19 +487,9 @@ def check_test_total_claims(doc_paths, root=None):
     return errs
 
 
-def fact_docs(root_dir=None):
-    d = root_dir or FACT_DOCS_DIR
+def post_freeze_docs(root_dir=None):
+    d = root_dir or POST_FREEZE_DOCS_DIR
     return sorted(p for p in d.glob("*.md")) if d.is_dir() else []
-
-
-# Issue-116 fix docs carry test-total rows too; only check_test_total_claims
-# sees them (the other detectors keep their documented docs/post-freeze
-# scope — these docs quote e.g. `run_live#1` tokens that are not tracker
-# references and would trip the tracker-ref detector).
-TEST_TOTAL_EXTRA_DOCS = [
-    "docs/history/issues/issue-116-runtime-reentry-liveness.md",
-    "docs/history/closeout/issue-116-reentry-liveness-gate.md",
-]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -653,19 +659,14 @@ def run_all():
     errs = []
     canon = canonical_identifiers()
     errs += check_identifier_near_miss(canon)
-    docs = fact_docs()
+    docs = post_freeze_docs()
     if not docs:
-        return ["mechanical-facts: no fact docs found under docs/post-freeze/"]
+        return ["mechanical-facts: no post-freeze docs found under docs/post-freeze/"]
     errs += check_doc_loc_claims(docs, root=REPO)
-    errs += check_split_layout(docs, root=REPO)
+    errs += check_split_layout(root=REPO)
     errs += check_sha_references(docs)
     errs += check_tracker_refs(docs)
-    total_docs = list(docs)
-    for rel in TEST_TOTAL_EXTRA_DOCS:
-        p = REPO / rel
-        if p.is_file():
-            total_docs.append(p)
-    errs += check_test_total_claims(total_docs, root=REPO)
+    errs += check_test_total_claims(docs, root=REPO)
     errs += check_seam_production_exclusion(root=REPO)
     return errs
 
@@ -689,25 +690,52 @@ def self_test():
         if not check_identifier_near_miss(canon, [t / "src" / "a.cpp"]):
             failures.append("self-test: near-miss detector failed to fire")
 
-        # B: LOC claim mismatch.
+        # B: LOC claims — SHA-pinned rows are evidence-integrity claims
+        # (verified AT the pinned revision via `git show`); unversioned rows
+        # are historical current-tree statements, NOT live authority, and
+        # must not fire. Seed a real git repo so `git show <sha>:<path>`
+        # resolves inside the temp root.
+        subprocess.run(["git", "-C", str(t), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(t), "config", "user.email",
+                        "selftest@example.com"], check=True)
+        subprocess.run(["git", "-C", str(t), "config", "user.name",
+                        "selftest"], check=True)
+        (t / "src" / "a.cpp").write_text("int a;\nint b;\n")
+        subprocess.run(["git", "-C", str(t), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(t), "commit", "-qm", "seed"], check=True)
+        seed_sha = subprocess.run(
+            ["git", "-C", str(t), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True).stdout.strip()
         doc = t / "docs" / "r.md"
-        doc.write_text("|`src/a.cpp`|99|\n")
+        doc.write_text(f"|`src/a.cpp`|99| {seed_sha}\n")
         if not check_doc_loc_claims([doc], root=t):
-            failures.append("self-test: LOC-claim detector failed to fire")
+            failures.append("self-test: SHA-pinned LOC-claim detector failed to fire")
+        doc.write_text(f"|`src/ghost.cpp`|1| {seed_sha}\n")
+        if not check_doc_loc_claims([doc], root=t):
+            failures.append("self-test: SHA-pinned missing-file detector failed to fire")
+        # Unversioned rows are not live authority: no fire even when wrong or
+        # pointing at a missing file.
+        doc.write_text("|`src/a.cpp`|99|\n")
+        if check_doc_loc_claims([doc], root=t):
+            failures.append("self-test: unversioned LOC row falsely treated as live authority")
 
-        # C: layout mismatch (file missing) — validated against THIS temp
-        # root, plus a clean control proving no false positives when the
-        # documented set equals the actual set.
-        doc.write_text("|`src/async/scheduler_ghost.cpp`|10|\n")
-        if not check_split_layout([doc], root=t):
-            failures.append("self-test: layout detector failed to fire")
+        # C: layout mismatch — EXPECTED_SCHEDULER_SPLIT_FILES vs the actual
+        # glob. Complete inventory is the clean control; a ghost file (extra)
+        # and a removed expected file (missing) each must fire.
         (t / "src" / "async").mkdir(parents=True)
-        (t / "src" / "async" / "scheduler_one.cpp").write_text("int a;\n")
-        (t / "src" / "async" / "scheduler.cpp").write_text("int b;\n")
-        open(t / "src" / "async" / SPLIT_GLOB_HPP.split("/")[-1], "w").write("int c;\n")
-        doc.write_text("|`src/async/scheduler_one.cpp`|1|\n|`src/async/scheduler.cpp`|1|\n|`src/async/scheduler_internal.hpp`|1|\n")
-        if check_split_layout([doc], root=t):
+        for rel in sorted(EXPECTED_SCHEDULER_SPLIT_FILES):
+            f = t / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("int x;\n")
+        if check_split_layout(t):
             failures.append("self-test: layout false positive on complete inventory")
+        (t / "src" / "async" / "scheduler_ghost.cpp").write_text("int g;\n")
+        if not check_split_layout(t):
+            failures.append("self-test: extra-file layout detector failed to fire")
+        (t / "src" / "async" / "scheduler_ghost.cpp").unlink()
+        (t / "src" / "async" / "scheduler_timer.cpp").unlink()
+        if not check_split_layout(t):
+            failures.append("self-test: missing-file layout detector failed to fire")
 
         # E: unknown tracker ref.
         doc.write_text("see #99999\n")
@@ -744,7 +772,7 @@ def self_test():
             failures.append("self-test: test-total false positive on correct count")
 
         # Clean control: no false positives on canonical text.
-        doc.write_text("Refs #109 and #113.\n|`docs/r.md`|2|\n")
+        doc.write_text(f"Refs #109 and #113.\n|`src/a.cpp`|2| {seed_sha}\n")
         (t / "src" / "a.cpp").write_text("#define SLUICE_CANON_MACRO 1\n")
         if check_doc_loc_claims([doc], root=t):
             failures.append("self-test: LOC-claim false positive on clean input")
