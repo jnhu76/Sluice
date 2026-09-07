@@ -1,9 +1,3 @@
-
-
-
-
-
-
 #include <sluice/experimental/uring_write_batch.hpp>
 
 #include <sluice/detail/io_validation.hpp>
@@ -48,7 +42,6 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
     (void)bytes;
     (void)file_offset;
 
-
     return make_unexpected<UringWriteResult>(IoError{IoError::Code::backend_error});
 #else
     UringWriteResult result{};
@@ -65,9 +58,6 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
     while (remaining > 0) {
         io_uring_sqe* sqe = ::io_uring_get_sqe(ring);
         if (sqe == nullptr) {
-
-
-
             if (::io_uring_submit(ring) < 0) {
                 ++result.errors;
                 if (stats_)
@@ -103,8 +93,7 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
             if (stats_)
                 ++stats_->completion_errors;
             const IoError error =
-                wait < 0 ? from_errno_value(-wait)
-                         : IoError{IoError::Code::backend_error};
+                wait < 0 ? from_errno_value(-wait) : IoError{IoError::Code::backend_error};
             return make_unexpected<UringWriteResult>(error);
         }
         int res = cqe->res;
@@ -123,14 +112,12 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
         if (stats_)
             stats_->bytes_completed += wrote;
         if (wrote == 0) {
-
             ++result.errors;
             return make_unexpected<UringWriteResult>(IoError{IoError::Code::invalid_state});
         }
         if (wrote > chunk_length || wrote > remaining) {
             ++result.errors;
-            return make_unexpected<UringWriteResult>(
-                IoError{IoError::Code::invalid_state});
+            return make_unexpected<UringWriteResult>(IoError{IoError::Code::invalid_state});
         }
         remaining -= wrote;
         p += wrote;
@@ -140,4 +127,4 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
 #endif
 }
 
-}
+} // namespace sluice::experimental

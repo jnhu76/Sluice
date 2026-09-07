@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/result.hpp>
@@ -22,15 +11,9 @@ class BufferedReadable {
   public:
     virtual ~BufferedReadable() = default;
 
-
-
-
     virtual std::span<const std::byte> peek_buffered() const = 0;
-
-
-
 
     virtual Result<void> consume_buffered(std::size_t n) = 0;
 };
 
-}
+} // namespace sluice

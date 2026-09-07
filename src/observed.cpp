@@ -1,4 +1,3 @@
-
 #include <sluice/observed.hpp>
 
 namespace sluice {
@@ -19,13 +18,6 @@ Result<std::size_t> ObservedReader::read_some(std::span<std::byte> dst) {
 }
 
 Result<std::size_t> ObservedReader::read_vec(std::span<IoSlice> dsts) {
-
-
-
-
-
-
-
     auto r = inner_.read_vec(dsts);
     if (vec_stats_) {
         ++vec_stats_->read_vec_calls;
@@ -60,9 +52,6 @@ Result<std::size_t> ObservedWriter::write_some(std::span<const std::byte> src) {
 }
 
 Result<std::size_t> ObservedWriter::write_vec(std::span<const ConstIoSlice> srcs) {
-
-
-
     auto r = inner_.write_vec(srcs);
     if (vec_stats_) {
         ++vec_stats_->write_vec_calls;
@@ -91,4 +80,4 @@ Result<void> ObservedWriter::flush() {
     return {};
 }
 
-}
+} // namespace sluice

@@ -1,16 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/limit.hpp>
@@ -20,22 +7,16 @@
 
 namespace sluice {
 
-
 enum class CopyStrategy {
     Auto,
     Scratch,
     BufferedFirst,
 };
 
-
-
 struct CopyOptions {
     CopyLimit limit = CopyLimit::unlimited();
     CopyStrategy strategy = CopyStrategy::Auto;
 };
-
-
-
 
 struct CopyDecision {
     CopyStrategy requested = CopyStrategy::Auto;
@@ -45,7 +26,6 @@ struct CopyDecision {
     bool used_scratch_path = false;
 };
 
-
 std::string_view to_string(CopyStrategy strategy);
 
-}
+} // namespace sluice

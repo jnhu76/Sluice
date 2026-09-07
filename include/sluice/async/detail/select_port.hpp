@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <atomic>
@@ -31,8 +22,6 @@ namespace detail {
 class SelectGroup;
 class SelectPort;
 class SelectTimerRegistration;
-
-
 
 enum class ArmKind : std::uint8_t {
     event = 0,
@@ -63,17 +52,6 @@ enum class CompletionMode : std::uint8_t {
     suspended = 2,
 };
 
-
-
-
-
-
-
-
-
-
-
-
 struct EventArmPayload {
     Event* event_{nullptr};
 };
@@ -88,13 +66,10 @@ static_assert(std::is_trivially_destructible_v<EventArmPayload>,
 static_assert(std::is_trivially_destructible_v<TimerArmPayload>,
               "TimerArmPayload must be trivially destructible");
 
-
-
 struct SelectArmSlot {
     ArmKind kind{ArmKind::event};
     ArmState state{ArmState::detached};
     SelectGroup* group{nullptr};
-
 
     SelectArmSlot* next_{nullptr};
     SelectArmSlot* prev_{nullptr};
@@ -104,7 +79,6 @@ struct SelectArmSlot {
         EventArmPayload event;
         TimerArmPayload timer;
     };
-
 
     void construct_event(Event& e) noexcept {
         if (kind == ArmKind::timer) {
@@ -120,17 +94,12 @@ struct SelectArmSlot {
                          SelectTimerRegistration* reg = nullptr) noexcept {
         if (kind == ArmKind::event) {
             std::destroy_at(std::addressof(event));
-            std::construct_at(std::addressof(timer),
-                              TimerArmPayload{deadline, reg});
+            std::construct_at(std::addressof(timer), TimerArmPayload{deadline, reg});
         } else {
             timer = TimerArmPayload{deadline, reg};
         }
         kind = ArmKind::timer;
     }
-
-
-
-
 
     SelectArmSlot() noexcept : event{} {}
 
@@ -148,13 +117,10 @@ struct SelectArmSlot {
     SelectArmSlot& operator=(SelectArmSlot&&) = delete;
 };
 
-
-
-
 inline constexpr std::uint32_t kNoWinner = static_cast<std::uint32_t>(-1);
 
 class SelectGroup {
-public:
+  public:
     SelectGroup() = default;
 
     SelectGroup(const SelectGroup&) = delete;
@@ -171,21 +137,13 @@ public:
         }
     }
 
-
     void mark_admitted() noexcept { admitted_ = true; }
 
-    GroupPhase phase() const noexcept {
-        return phase_.load(std::memory_order::acquire);
-    }
+    GroupPhase phase() const noexcept { return phase_.load(std::memory_order::acquire); }
 
-    void set_phase(GroupPhase p) noexcept {
-        phase_.store(p, std::memory_order::release);
-    }
+    void set_phase(GroupPhase p) noexcept { phase_.store(p, std::memory_order::release); }
 
-    std::uint32_t winner() const noexcept {
-        return winner_.load(std::memory_order::relaxed);
-    }
-
+    std::uint32_t winner() const noexcept { return winner_.load(std::memory_order::relaxed); }
 
     Scheduler* scheduler_{nullptr};
     SelectArmSlot* arms_{nullptr};
@@ -193,43 +151,20 @@ public:
     Fiber* caller_{nullptr};
     WorkerState* caller_owner_{nullptr};
 
-
     CompletionMode completion_mode_{CompletionMode::none};
-
 
     SelectGroup* broadcast_next_{nullptr};
     std::uint64_t broadcast_epoch_{0};
 
-private:
+  private:
     friend class ::sluice::async::Scheduler;
-
-
-
-
-
 
     SelectResult result_{};
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     bool claim_winner_locked(std::uint32_t arm_index) noexcept {
         std::uint32_t expected = kNoWinner;
-        return winner_.compare_exchange_strong(expected, arm_index,
-                                                std::memory_order::relaxed,
-                                                std::memory_order::relaxed);
+        return winner_.compare_exchange_strong(expected, arm_index, std::memory_order::relaxed,
+                                               std::memory_order::relaxed);
     }
 
     std::atomic<GroupPhase> phase_{GroupPhase::building};
@@ -237,10 +172,8 @@ private:
     bool admitted_{false};
 };
 
-
-
 class SelectPort {
-public:
+  public:
     SelectPort() = default;
 
     SelectPort(const SelectPort&) = delete;
@@ -250,11 +183,11 @@ public:
 
     bool empty() const noexcept { return head_ == nullptr; }
 
-private:
+  private:
     friend class ::sluice::async::Scheduler;
 
     SelectArmSlot* head_{nullptr};
 };
 
-}
-}
+} // namespace detail
+} // namespace sluice::async

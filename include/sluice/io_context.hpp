@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/measurement.hpp>
@@ -20,13 +10,10 @@
 
 namespace sluice {
 
-
-
 struct OpenReaderOptions {
     SyscallStats* syscall_stats = nullptr;
     VectorStats* vector_stats = nullptr;
 };
-
 
 struct OpenWriterOptions {
     SyscallStats* syscall_stats = nullptr;
@@ -34,29 +21,16 @@ struct OpenWriterOptions {
     SyncStats* sync_stats = nullptr;
 };
 
-
-
-
-
 class IoContext {
   public:
     virtual ~IoContext() = default;
 
-
-
-
     [[nodiscard]] virtual Result<std::unique_ptr<Reader>>
     open_reader(std::string_view path, OpenReaderOptions options = {}) = 0;
-
-
-
 
     [[nodiscard]] virtual Result<std::unique_ptr<Writer>>
     open_writer(std::string_view path, OpenWriterOptions options = {}) = 0;
 };
-
-
-
 
 class BlockingIoContext final : public IoContext {
   public:
@@ -67,4 +41,4 @@ class BlockingIoContext final : public IoContext {
                                                 OpenWriterOptions options = {}) override;
 };
 
-}
+} // namespace sluice

@@ -1,44 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -58,31 +17,16 @@ class QueueOpaquePopResult;
 class QueueTeardownSession;
 class QueueItemFactory;
 
-
-
-
-
-
-
-
 [[noreturn]] void queue_lease_fail_fast() noexcept;
 
-
-
-
-
-
-
-
-template <class T>
-inline const void* queue_type_token() noexcept {
+template <class T> inline const void* queue_type_token() noexcept {
     static_assert(std::is_object_v<T>, "AsyncQueue<T> requires an object type");
     static const std::byte token{0};
     return &token;
 }
 
 class QueueItemControl final {
-public:
+  public:
     enum class Location : std::uint8_t {
         detached,
         producer_operation,
@@ -92,7 +36,7 @@ public:
         released,
     };
 
-private:
+  private:
     QueuePort* const owner_port_;
     void* const typed_node_;
     const void* const type_token_;
@@ -100,9 +44,7 @@ private:
 
     explicit QueueItemControl(QueuePort& owner_port, void* typed_node,
                               const void* type_token) noexcept
-        : owner_port_(&owner_port),
-          typed_node_(typed_node),
-          type_token_(type_token) {}
+        : owner_port_(&owner_port), typed_node_(typed_node), type_token_(type_token) {}
 
     QueueItemControl(const QueueItemControl&) = delete;
     QueueItemControl& operator=(const QueueItemControl&) = delete;
@@ -114,11 +56,10 @@ private:
     friend class QueueTeardownSession;
     friend class QueueItemFactory;
     friend class ::sluice::async::Scheduler;
-
 };
 
 class QueueItemLease final {
-public:
+  public:
     QueueItemLease(QueueItemLease&& other) noexcept
         : control_(std::exchange(other.control_, nullptr)) {}
 
@@ -126,7 +67,6 @@ public:
         if (this == &other) {
             return *this;
         }
-
 
         require_empty_or_terminate();
         control_ = std::exchange(other.control_, nullptr);
@@ -136,25 +76,17 @@ public:
     QueueItemLease(const QueueItemLease&) = delete;
     QueueItemLease& operator=(const QueueItemLease&) = delete;
 
-
-
-
     ~QueueItemLease() noexcept;
 
     explicit operator bool() const noexcept { return control_ != nullptr; }
 
-private:
+  private:
     QueueItemControl* control_{nullptr};
 
     QueueItemLease() noexcept = default;
-    explicit QueueItemLease(QueueItemControl& control) noexcept
-        : control_(&control) {}
+    explicit QueueItemLease(QueueItemControl& control) noexcept : control_(&control) {}
 
-
-    QueueItemControl* release_control() noexcept {
-        return std::exchange(control_, nullptr);
-    }
-
+    QueueItemControl* release_control() noexcept { return std::exchange(control_, nullptr); }
 
     void adopt_control(QueueItemControl& control) noexcept;
 
@@ -166,7 +98,6 @@ private:
     friend class QueueTeardownSession;
     friend class QueueItemFactory;
     friend class ::sluice::async::Scheduler;
-
 };
 
-}
+} // namespace sluice::async::detail

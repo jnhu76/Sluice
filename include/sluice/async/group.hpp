@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/cancel.hpp>
@@ -40,41 +17,11 @@
 
 namespace sluice::async {
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Scheduler;
 
 class Group {
-public:
-
-
+  public:
     Group() = default;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     explicit Group(Scheduler& sched);
 
@@ -85,14 +32,7 @@ public:
     Group(Group&&) = delete;
     Group& operator=(Group&&) = delete;
 
-
-
-
-
-
-
-    template <class Fn>
-    void async(Fn fn) {
+    template <class Fn> void async(Fn fn) {
         if (sched_) {
             async_evented<Fn>(std::move(fn));
         } else {
@@ -102,19 +42,8 @@ public:
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
     void test_set_tasks_throw_on_nth(std::size_t n) { tasks_throw_on_nth_ = n; }
     std::size_t test_tasks_throw_on_nth() const { return tasks_throw_on_nth_; }
-
-
-
-
-
-
-
 
     enum class EventedAdmissionFailPoint {
         none,
@@ -122,14 +51,8 @@ public:
         before_stack_storage_reserve,
         before_future_storage_reserve,
     };
-    void test_set_evented_admission_fail(EventedAdmissionFailPoint fp) {
-        evented_fail_point_ = fp;
-    }
-    EventedAdmissionFailPoint test_evented_admission_fail() const {
-        return evented_fail_point_;
-    }
-
-
+    void test_set_evented_admission_fail(EventedAdmissionFailPoint fp) { evented_fail_point_ = fp; }
+    EventedAdmissionFailPoint test_evented_admission_fail() const { return evented_fail_point_; }
 
     struct EventedStorageSnapshot {
         std::size_t fibers;
@@ -142,55 +65,25 @@ public:
     }
 #endif
 
-
-
     CancelToken& group_token() noexcept { return token_; }
 
-
-
-
-
-
     void await();
-
-
 
     void cancel() {
         token_.request();
         await();
     }
 
-
-
     std::size_t size() const noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
         return futures_.size();
     }
 
-private:
-
-
-
+  private:
     static bool group_stop_predicate(void* ctx);
 
-
-
-
-
-
-
-
-
-
-
-
-
-    template <class Fn>
-    void async_threaded(Fn fn) {
+    template <class Fn> void async_threaded(Fn fn) {
         auto fut = std::make_shared<Future<void>>();
-
-
-
 
         {
             std::lock_guard<std::mutex> lk(mtx_);
@@ -203,17 +96,12 @@ private:
             futures_.reserve(futures_.size() + 1);
         }
 
-
         std::thread w([fut, fn = std::move(fn), tok = &token_]() mutable {
             try {
                 fn(*tok);
-            } catch (...) {
-
-
-            }
+            } catch (...) {}
             fut->complete_with(sluice::Result<void>{});
         });
-
 
         {
             std::lock_guard<std::mutex> lk(mtx_);
@@ -222,11 +110,7 @@ private:
         }
     }
 
-
-
-
-    template <class Fn>
-    void async_evented(Fn fn);
+    template <class Fn> void async_evented(Fn fn);
 
     mutable std::mutex mtx_;
     std::vector<std::thread> tasks_;
@@ -235,96 +119,46 @@ private:
     Scheduler* sched_ = nullptr;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
     std::size_t tasks_throw_on_nth_ = 0;
-
-
 
     EventedAdmissionFailPoint evented_fail_point_ = EventedAdmissionFailPoint::none;
 #endif
 
-
-
-
     std::unique_ptr<class EventedWaitPolicy> evented_policy_;
-
-
 
     std::vector<std::unique_ptr<Fiber>> evented_fibers_;
     std::vector<std::unique_ptr<std::byte[]>> evented_stacks_;
 };
 
-}
-
+} // namespace sluice::async
 
 #include <sluice/async/evented_wait_policy.hpp>
 #include <sluice/async/scheduler.hpp>
 
 namespace sluice::async {
 
-template <class Fn>
-void Group::async_evented(Fn fn) {
-
-
-
-
-
+template <class Fn> void Group::async_evented(Fn fn) {
     auto fut = std::make_shared<Future<void>>(*evented_policy_);
-
-
 
     constexpr std::size_t kStackBytes = 64 * 1024;
     auto stack_up = std::unique_ptr<std::byte[]>(new std::byte[kStackBytes]);
     std::byte* stack_base = stack_up.get();
 
-
     auto fiber_up = std::make_unique<Fiber>();
     Fiber* fiber_raw = fiber_up.get();
-
-
-
 
     fiber_up->set_entry([fut, fn = std::move(fn), tok = &token_](Fiber&) mutable {
         try {
             fn(*tok);
-        } catch (...) {
-
-        }
+        } catch (...) {}
         fut->complete_with(sluice::Result<void>{});
     });
 
-
-
-
-
     bool ok = sched_->init_fiber(*fiber_raw, stack_base, kStackBytes);
     if (!ok) {
-        throw std::runtime_error(
-            "sluice::async::Group::async_evented: init_fiber failed "
-            "(invalid stack or unsupported architecture)");
+        throw std::runtime_error("sluice::async::Group::async_evented: init_fiber failed "
+                                 "(invalid stack or unsupported architecture)");
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     static_assert(std::is_nothrow_move_constructible_v<std::unique_ptr<Fiber>>,
                   "unique_ptr<Fiber> move must be noexcept for transactional commit");
@@ -336,10 +170,6 @@ void Group::async_evented(Fn fn) {
     {
         std::lock_guard<std::mutex> lk(mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
 
         const auto fp = evented_fail_point_;
         evented_fail_point_ = EventedAdmissionFailPoint::none;
@@ -361,17 +191,13 @@ void Group::async_evented(Fn fn) {
 #endif
         futures_.reserve(futures_.size() + 1);
 
-
-
         evented_fibers_.push_back(std::move(fiber_up));
         evented_stacks_.push_back(std::move(stack_up));
         futures_.push_back(std::move(fut));
         spawn_target = fiber_raw;
     }
 
-
-
     sched_->spawn(*spawn_target);
 }
 
-}
+} // namespace sluice::async

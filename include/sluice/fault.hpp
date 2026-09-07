@@ -1,9 +1,3 @@
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/reader.hpp>
@@ -18,8 +12,6 @@
 #include <vector>
 
 namespace sluice {
-
-
 
 class MemoryWriter final : public Writer {
   public:
@@ -54,17 +46,12 @@ class MemoryReader final : public Reader {
         return MemoryReader({bs.begin(), bs.end()});
     }
 
-
-
-
     static MemoryReader from_bytes(std::span<const std::byte> bytes) {
         return MemoryReader({bytes.begin(), bytes.end()});
     }
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override {
         std::size_t n = std::min(dst.size(), buf_.size() - pos_);
-
-
 
         if (n != 0) {
             std::memcpy(dst.data(), buf_.data() + pos_, n);
@@ -80,8 +67,6 @@ class MemoryReader final : public Reader {
     std::size_t pos_ = 0;
 };
 
-
-
 struct FaultPlan {
     std::optional<std::uint64_t> fail_after_read_calls;
     std::optional<std::uint64_t> fail_after_write_calls;
@@ -95,7 +80,6 @@ struct FaultPlan {
 class FaultReader final : public Reader {
   public:
     FaultReader(Reader& inner, const FaultPlan& plan) : inner_(inner), plan_(plan) {}
-
 
     FaultReader(const FaultReader&) = delete;
     FaultReader& operator=(const FaultReader&) = delete;
@@ -115,7 +99,6 @@ class FaultWriter final : public Writer {
   public:
     FaultWriter(Writer& inner, const FaultPlan& plan) : inner_(inner), plan_(plan) {}
 
-
     FaultWriter(const FaultWriter&) = delete;
     FaultWriter& operator=(const FaultWriter&) = delete;
     FaultWriter(FaultWriter&&) = delete;
@@ -131,4 +114,4 @@ class FaultWriter final : public Writer {
     std::uint64_t bytes_seen_ = 0;
 };
 
-}
+} // namespace sluice

@@ -1,44 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstdint>
@@ -48,11 +7,9 @@
 namespace sluice::async::detail {
 
 struct Tax0AblationModes {
-
     bool f01_gate_outstanding_eval = false;
 
     bool f02_skip_reap_seq = false;
-
 
     bool f07_skip_extent_reprobes = false;
 };
@@ -72,6 +29,6 @@ inline bool tax0_f07_skip_extent_reprobes() noexcept {
     return g_tax0_ablation_modes.f07_skip_extent_reprobes;
 }
 
-}
+} // namespace sluice::async::detail
 
 #endif

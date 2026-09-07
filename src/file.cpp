@@ -1,4 +1,3 @@
-
 #include <sluice/file.hpp>
 #include <sluice/detail/io_validation.hpp>
 #include <sluice/detail/posix_retry.hpp>
@@ -30,9 +29,6 @@ namespace sluice {
 
 namespace {
 
-
-
-
 Result<std::size_t> syscall_result(ssize_t n) {
     if (n < 0) {
         return make_unexpected<std::size_t>(from_errno_value(errno));
@@ -40,22 +36,11 @@ Result<std::size_t> syscall_result(ssize_t n) {
     return static_cast<std::size_t>(n);
 }
 
-
-
-
-
-
-
-
 long iov_max() {
     static const long cached = []() -> long {
 #ifdef IOV_MAX
-
-
         return static_cast<long>(kIovMaxConst);
 #else
-
-
         long v = ::sysconf(_SC_IOV_MAX);
         return v > 0 ? v : 16L;
 #endif
@@ -63,19 +48,9 @@ long iov_max() {
     return cached;
 }
 
-
-
-
-
 int iovcnt_clamped(std::size_t chunk) {
     return static_cast<int>(std::min<std::size_t>(chunk, static_cast<std::size_t>(INT_MAX)));
 }
-
-
-
-
-
-
 
 int close_fd(int fd) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
@@ -86,29 +61,20 @@ int close_fd(int fd) {
     return ::close(fd);
 }
 
-}
-
-
+} // namespace
 
 FileReader::FileReader(const std::string& path, SyscallStats* stats, VectorStats* vec_stats)
     : stats_(stats), vec_stats_(vec_stats) {
     fd_ = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd_ < 0) {
-
-
         open_error_ = from_errno_value(errno);
     }
 }
 
 Result<void> FileReader::close() noexcept {
     if (fd_ < 0) {
-
-
-
         return {};
     }
-
-
 
     const int fd = std::exchange(fd_, -1);
     if (close_fd(fd) != 0) {
@@ -118,16 +84,11 @@ Result<void> FileReader::close() noexcept {
 }
 
 FileReader::~FileReader() {
-
-
-
     (void)close();
 }
 
 Result<std::size_t> FileReader::read_some(std::span<std::byte> dst) {
     if (fd_ < 0) {
-
-
         if (stats_) {
             ++stats_->read_syscall_errors;
         }
@@ -151,9 +112,6 @@ Result<std::size_t> FileReader::read_some(std::span<std::byte> dst) {
 }
 
 Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
-
-
-
     std::vector<iovec> iovs;
     iovs.reserve(dsts.size());
     for (auto& d : dsts) {
@@ -166,16 +124,13 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
     if (vec_stats_) {
         ++vec_stats_->read_vec_calls;
         vec_stats_->read_vec_iovecs += iovs.size();
-
     }
-
 
     if (iovs.empty()) {
         return std::size_t{0};
     }
 
     if (fd_ < 0) {
-
         if (stats_) {
             ++stats_->read_syscall_errors;
         }
@@ -200,8 +155,6 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
             }
         }
         if (!r.has_value()) {
-
-
             return make_unexpected<std::size_t>(r.error());
         }
         std::size_t got = r.value();
@@ -210,16 +163,12 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
             break;
         }
 
-
-
         std::size_t remaining = got;
         while (offset < iovs.size() && remaining >= iovs[offset].iov_len) {
             remaining -= iovs[offset].iov_len;
             ++offset;
         }
         if (remaining > 0) {
-
-
             break;
         }
     }
@@ -261,7 +210,6 @@ Result<std::size_t> FileReader::read_at(std::uint64_t offset, std::span<std::byt
 }
 
 Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSlice> dsts) {
-
     std::vector<iovec> iovs;
     iovs.reserve(dsts.size());
     for (auto& d : dsts) {
@@ -287,9 +235,6 @@ Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSl
         return make_unexpected<std::size_t>(
             open_error_.value_or(IoError{.code = IoError::Code::permission_denied}));
     }
-
-
-
 
     std::size_t total = 0;
     std::size_t idx = 0;
@@ -352,8 +297,6 @@ Result<void> FileReader::read_at_exact(std::uint64_t offset, std::span<std::byte
         }
         std::size_t got = r.value();
         if (got == 0) {
-
-
             return make_unexpected(IoError{.code = IoError::Code::eof});
         }
         filled += got;
@@ -361,8 +304,6 @@ Result<void> FileReader::read_at_exact(std::uint64_t offset, std::span<std::byte
     }
     return {};
 }
-
-
 
 FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats* vec_stats,
                        SyncStats* sync_stats)
@@ -375,26 +316,17 @@ FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats
 
 Result<void> FileWriter::close() noexcept {
     if (fd_ < 0) {
-
-
-
         return {};
     }
 
-
     const int fd = std::exchange(fd_, -1);
     if (close_fd(fd) != 0) {
-
-
         return make_unexpected<void>(from_errno_value(errno));
     }
     return {};
 }
 
 FileWriter::~FileWriter() {
-
-
-
     (void)close();
 }
 
@@ -423,17 +355,12 @@ Result<std::size_t> FileWriter::write_some(std::span<const std::byte> src) {
 }
 
 Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
-
-
     std::vector<iovec> iovs;
     iovs.reserve(srcs.size());
     for (const auto& s : srcs) {
         if (s.bytes.empty()) {
             continue;
         }
-
-
-
 
         iovs.push_back(
             iovec{.iov_base = const_cast<void*>(static_cast<const void*>(s.bytes.data())),
@@ -443,9 +370,7 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
     if (vec_stats_) {
         ++vec_stats_->write_vec_calls;
         vec_stats_->write_vec_iovecs += iovs.size();
-
     }
-
 
     if (iovs.empty()) {
         return std::size_t{0};
@@ -476,8 +401,6 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
             }
         }
         if (!r.has_value()) {
-
-
             return make_unexpected<std::size_t>(r.error());
         }
         std::size_t wrote = r.value();
@@ -485,7 +408,6 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
         if (wrote == 0) {
             break;
         }
-
 
         std::size_t remaining = wrote;
         while (offset < iovs.size() && remaining >= iovs[offset].iov_len) {
@@ -535,7 +457,6 @@ Result<std::size_t> FileWriter::write_at(std::uint64_t offset, std::span<const s
 
 Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
                                              std::span<const ConstIoSlice> srcs) {
-
     std::vector<iovec> iovs;
     iovs.reserve(srcs.size());
     for (const auto& s : srcs) {
@@ -563,8 +484,6 @@ Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
         return make_unexpected<std::size_t>(
             open_error_.value_or(IoError{.code = IoError::Code::permission_denied}));
     }
-
-
 
     std::size_t total = 0;
     std::size_t idx = 0;
@@ -626,7 +545,6 @@ Result<void> FileWriter::write_at_all(std::uint64_t offset, std::span<const std:
         }
         std::size_t put = r.value();
         if (put == 0) {
-
             return make_unexpected(IoError{.code = IoError::Code::invalid_state});
         }
         written += put;
@@ -637,16 +555,11 @@ Result<void> FileWriter::write_at_all(std::uint64_t offset, std::span<const std:
 
 namespace {
 
-
-
-
 template <class Fn>
 Result<void> do_sync(int fd, const std::optional<IoError>& open_error, const Fn& fn,
                      SyncStats* stats, std::uint64_t SyncStats::* calls,
                      std::uint64_t SyncStats::* errors) {
     if (fd < 0) {
-
-
         if (stats) {
             ++(stats->*errors);
         }
@@ -668,7 +581,7 @@ Result<void> do_sync(int fd, const std::optional<IoError>& open_error, const Fn&
     return {};
 }
 
-}
+} // namespace
 
 Result<void> FileWriter::sync_data() {
     return do_sync(
@@ -682,4 +595,4 @@ Result<void> FileWriter::sync_all() {
         &SyncStats::sync_all_calls, &SyncStats::sync_all_errors);
 }
 
-}
+} // namespace sluice

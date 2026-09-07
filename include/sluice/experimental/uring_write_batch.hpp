@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/measurement.hpp>
@@ -33,13 +26,8 @@ class UringWriteBatch {
     UringWriteBatch(UringWriteBatch&&) = delete;
     UringWriteBatch& operator=(UringWriteBatch&&) = delete;
 
-
-
-
-
     Result<UringWriteResult> write_all(int fd, std::span<const std::byte> bytes,
                                        std::uint64_t file_offset);
-
 
     void set_stats(UringStats* stats) { stats_ = stats; }
 
@@ -53,4 +41,4 @@ class UringWriteBatch {
     UringStats* stats_ = nullptr;
 };
 
-}
+} // namespace sluice::experimental

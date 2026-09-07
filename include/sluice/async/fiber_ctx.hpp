@@ -1,36 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstddef>
@@ -62,26 +29,11 @@
 
 namespace sluice::async::fiber_ctx {
 
-
-
-
-
-
-
-
-
-
-
-
-
 #if defined(__x86_64__) && defined(__linux__)
 inline constexpr bool supported = true;
 #else
 inline constexpr bool supported = false;
 #endif
-
-
-
 
 struct Context {
     std::uint64_t rsp = 0;
@@ -90,15 +42,12 @@ struct Context {
 
 #if SLUICE_FIBER_ASAN_ENABLED
 
-
     void* asan_fake_stack = nullptr;
     const void* asan_stack_bottom = nullptr;
     std::size_t asan_stack_size = 0;
 #endif
 
 #if SLUICE_FIBER_TSAN_ENABLED
-
-
 
     void* sanitizer_fiber = nullptr;
     bool owns_sanitizer_fiber = false;
@@ -118,66 +67,29 @@ struct Context {
 #endif
 };
 
-
-
 struct Switch {
     Context* old;
     const Context* new_;
 };
 
-
-
-
-
-
 using Entry = void (*)(Switch* resumed_by, void* user_data);
 
 #if defined(__x86_64__)
-
-
-
-
-
-
-
-
 
 Switch* context_switch(Switch* s) noexcept;
 
 #else
 
-inline Switch* context_switch(Switch* ) noexcept {
-
-
+inline Switch* context_switch(Switch*) noexcept {
     return nullptr;
 }
 #endif
 
-
-
-
-
-
-
-
-
-
 [[noreturn]] void context_switch_final(Context& old, const Context& new_) noexcept;
 
-
-
-
-
-
-
-
-
-
-bool init_context(Context& ctx, Entry entry, void* user_data,
-                  std::byte* stack_base, std::size_t stack_size) noexcept;
-
-
+bool init_context(Context& ctx, Entry entry, void* user_data, std::byte* stack_base,
+                  std::size_t stack_size) noexcept;
 
 void reset_context(Context& ctx) noexcept;
 
-}
+} // namespace sluice::async::fiber_ctx

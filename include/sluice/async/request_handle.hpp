@@ -1,24 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstdint>
@@ -27,10 +6,6 @@ namespace sluice::async {
 
 class AsyncBackend;
 
-
-
-
-
 enum class RequestHandleState : std::uint8_t {
     outstanding,
     backend_ready,
@@ -38,21 +13,15 @@ enum class RequestHandleState : std::uint8_t {
     not_found,
 };
 
-
-
-
 class RequestHandle {
-public:
-
-
+  public:
     constexpr RequestHandle() noexcept = default;
 
     constexpr bool valid() const noexcept { return valid_; }
 
     friend bool operator==(const RequestHandle&, const RequestHandle&) noexcept = default;
 
-private:
-
+  private:
     friend class AsyncBackend;
     constexpr RequestHandle(std::uint64_t context, std::uint32_t slot,
                             std::uint64_t generation) noexcept
@@ -64,4 +33,4 @@ private:
     bool valid_ = false;
 };
 
-}
+} // namespace sluice::async

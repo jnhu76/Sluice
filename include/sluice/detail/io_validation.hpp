@@ -1,8 +1,3 @@
-
-
-
-
-
 #pragma once
 
 #include <sluice/error.hpp>
@@ -17,16 +12,14 @@
 
 namespace sluice::detail {
 
-static_assert(std::numeric_limits<off_t>::is_integer &&
-                  std::numeric_limits<off_t>::is_signed,
+static_assert(std::numeric_limits<off_t>::is_integer && std::numeric_limits<off_t>::is_signed,
               "sluice positional I/O requires a signed integral off_t");
 static_assert(std::numeric_limits<off_t>::digits >= 63,
               "sluice positional I/O requires 64-bit large-file support "
               "(_FILE_OFFSET_BITS=64 / LFS)");
 
 inline Result<off_t> checked_posix_offset(std::uint64_t offset) {
-    constexpr auto native_max =
-        static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
+    constexpr auto native_max = static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
     if (offset > native_max) {
         return make_unexpected<off_t>(IoError{.code = IoError::Code::invalid_state});
     }
@@ -34,18 +27,15 @@ inline Result<off_t> checked_posix_offset(std::uint64_t offset) {
 }
 
 inline Result<unsigned> checked_uring_length(std::size_t length) {
-    constexpr auto native_max =
-        static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
+    constexpr auto native_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
     if (length > native_max) {
-        return make_unexpected<unsigned>(
-            IoError{.code = IoError::Code::invalid_state});
+        return make_unexpected<unsigned>(IoError{.code = IoError::Code::invalid_state});
     }
     return static_cast<unsigned>(length);
 }
 
 inline unsigned uring_chunk_length(std::size_t remaining) noexcept {
-    constexpr auto native_max =
-        static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
+    constexpr auto native_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
     return static_cast<unsigned>(std::min(remaining, native_max));
 }
 
@@ -56,26 +46,19 @@ enum class UringSubmitProgress : std::uint8_t {
     complete,
 };
 
-
-
-
-
-
 inline UringSubmitProgress classify_uring_submit(int submit_result,
                                                  unsigned pending_before) noexcept {
-    if (submit_result < 0) return UringSubmitProgress::error;
-    if (pending_before == 0 ||
-        static_cast<unsigned>(submit_result) >= pending_before) {
+    if (submit_result < 0)
+        return UringSubmitProgress::error;
+    if (pending_before == 0 || static_cast<unsigned>(submit_result) >= pending_before) {
         return UringSubmitProgress::complete;
     }
-    if (submit_result == 0) return UringSubmitProgress::no_progress;
+    if (submit_result == 0)
+        return UringSubmitProgress::no_progress;
     return UringSubmitProgress::partial;
 }
 
-
-
-template <class WaitFn>
-int retry_uring_wait_on_eintr(WaitFn&& wait_fn) {
+template <class WaitFn> int retry_uring_wait_on_eintr(WaitFn&& wait_fn) {
     int result = 0;
     do {
         result = wait_fn();
@@ -83,4 +66,4 @@ int retry_uring_wait_on_eintr(WaitFn&& wait_fn) {
     return result;
 }
 
-}
+} // namespace sluice::detail

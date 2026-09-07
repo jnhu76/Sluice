@@ -1,26 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #include <sluice/async/uring_backend.hpp>
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -50,10 +27,6 @@ namespace sluice::async {
 
 #if !defined(SLUICE_HAS_LIBURING)
 
-
-
-
-
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth) : available_(false) {
     (void)queue_depth;
 }
@@ -64,7 +37,7 @@ namespace {
 Result<void> unsupported_stub() {
     return make_unexpected<void>(IoError{IoError::Code::backend_error});
 }
-}
+} // namespace
 
 Result<void> UringAsyncBackend::submit_read(ReadOp, Completion<std::size_t>&) {
     return unsupported_stub();
@@ -88,28 +61,21 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
 void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
 void UringAsyncBackend::cancel(Completion<void>&) {}
 
-Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>&,
-                                                detail::WaiterToken,
+Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>&, detail::WaiterToken,
                                                 detail::RoutingLease) {
     return make_unexpected<void>(IoError{IoError::Code::not_supported});
 }
-Result<void> UringAsyncBackend::register_waiter(Completion<void>&,
-                                                detail::WaiterToken,
+Result<void> UringAsyncBackend::register_waiter(Completion<void>&, detail::WaiterToken,
                                                 detail::RoutingLease) {
     return make_unexpected<void>(IoError{IoError::Code::not_supported});
 }
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(
-    Completion<std::size_t>&) {
-    return make_unexpected<detail::RoutingLease>(
-        IoError{IoError::Code::not_supported});
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<std::size_t>&) {
+    return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
 }
 Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<void>&) {
-    return make_unexpected<detail::RoutingLease>(
-        IoError{IoError::Code::not_supported});
+    return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
 }
-void UringAsyncBackend::close_admission() {
-
-}
+void UringAsyncBackend::close_admission() {}
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
 }
@@ -119,51 +85,6 @@ bool UringAsyncBackend::available() const noexcept {
 
 #else
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 struct UringRingState {
     ::io_uring ring{};
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -172,10 +93,6 @@ struct UringRingState {
 };
 
 namespace {
-
-
-
-
 
 constexpr std::uint64_t CONTROL_TAG = std::uint64_t{1} << 63u;
 constexpr std::uint64_t COOKIE_MASK = CONTROL_TAG - 1u;
@@ -192,34 +109,18 @@ constexpr std::uint64_t control_target_cookie(std::uint64_t user_data) noexcept 
     return user_data & COOKIE_MASK;
 }
 
-
 inline void bump(sluice::AsyncStats* s, std::uint64_t sluice::AsyncStats::* field) {
     if (s)
         ++(s->*field);
 }
 
-}
-
-
-
-
-
-
+} // namespace
 
 class UringAsyncBackend::BoundedDispatchQueue {
   public:
     explicit BoundedDispatchQueue(std::size_t capacity) : storage_(capacity), capacity_(capacity) {}
     bool empty() const noexcept { return size_ == 0; }
     std::size_t size() const noexcept { return size_; }
-
-
-
-
-
-
-
-
-
 
     detail::SlotHandle front() const noexcept {
         if (size_ == 0) {
@@ -230,9 +131,6 @@ class UringAsyncBackend::BoundedDispatchQueue {
         }
         return storage_[head_];
     }
-
-
-
 
     void push_back(detail::SlotHandle h) noexcept {
         if (size_ >= capacity_) {
@@ -253,13 +151,11 @@ class UringAsyncBackend::BoundedDispatchQueue {
         return true;
     }
 
-
     bool remove_exact(detail::SlotHandle h) noexcept {
         for (std::size_t i = 0; i < size_; ++i) {
             std::size_t idx = (head_ + i) % capacity_;
             if (storage_[idx].slot.value == h.slot.value &&
                 storage_[idx].generation.value == h.generation.value) {
-
                 for (std::size_t j = i; j + 1 < size_; ++j) {
                     std::size_t a = (head_ + j) % capacity_;
                     std::size_t b = (head_ + j + 1) % capacity_;
@@ -278,16 +174,6 @@ class UringAsyncBackend::BoundedDispatchQueue {
     std::size_t size_ = 0;
     std::size_t capacity_;
 };
-
-
-
-
-
-
-
-
-
-
 
 class UringAsyncBackend::TransportLedger {
   public:
@@ -386,13 +272,6 @@ class UringAsyncBackend::TransportLedger {
     std::uint32_t last_physical_position_ = 0;
 };
 
-
-
-
-
-
-
-
 Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     if (op.fd < 0)
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -403,11 +282,6 @@ Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
-
-
-
-
-
 
     auto nlen = sluice::detail::checked_uring_length(op.len);
     if (!nlen.has_value()) {
@@ -452,13 +326,6 @@ template <class Op> Result<void> UringAsyncBackend::validate_op(const Op& op) no
     }
 }
 
-
-
-
-
-
-
-
 void UringAsyncBackend::publish_size_ready(void* completion,
                                            const detail::TerminalResult& t) noexcept {
     AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion), terminal_to_size(t));
@@ -480,10 +347,6 @@ Result<void> UringAsyncBackend::terminal_to_void(const detail::TerminalResult& t
         return make_unexpected<void>(t.error);
     return {};
 }
-
-
-
-
 
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
     : UringAsyncBackend(UringConfig{static_cast<std::size_t>(queue_depth > 0 ? queue_depth : 64),
@@ -508,32 +371,17 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
       prepared_ops_(config.request_capacity), router_(config.request_capacity),
       cancel_scratch_(config.request_capacity), cookie_free_list_(config.request_capacity),
       queue_depth_(config.queue_depth), ring_state_(std::make_unique<UringRingState>()) {
-
-
-
-
-
-
     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
         cookie_free_list_[i] = detail::SlotIndex{i};
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-    cookie_table_for_test_ =
-        std::make_unique<RouterCookieTableForTest>(config.request_capacity);
-
+    cookie_table_for_test_ = std::make_unique<RouterCookieTableForTest>(config.request_capacity);
 
     router_extent_cached_for_test_ = router_.size();
 #endif
     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) == 0) {
-
-
-
-
         try {
             transport_ledger_ =
                 std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
@@ -546,9 +394,6 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
         have_ring_ = true;
         available_ = true;
     }
-
-
-
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -559,16 +404,6 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, UringBackendSubmitTestH
 #endif
 
 UringAsyncBackend::~UringAsyncBackend() {
-
-
-
-
-
-
-
-
-
-
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         const auto q = arena_.quiescence_snapshot();
@@ -582,13 +417,6 @@ UringAsyncBackend::~UringAsyncBackend() {
         }
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
-
-
-
 
     if (auto* fn = before_queue_exit_fn_.load(std::memory_order_acquire)) {
         fn(before_queue_exit_ctx_.load(std::memory_order_acquire));
@@ -627,33 +455,15 @@ std::size_t UringAsyncBackend::live_control_entries_for_test() const noexcept {
 }
 #endif
 
-
-
-
-
-
-
-
-
 template <class Op>
 Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
                                             detail::OperationKind kind) {
-
-
-
-
     detail::SlotHandle h{};
     {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
         wait_before_admission_lock_pause_();
 #endif
-
-
-
 
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         SubmitPolicy<Op, Completion<std::size_t>> policy{*this, kind};
@@ -666,15 +476,8 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
     wait_after_commit_before_enqueue_pause_();
 #endif
-
-
 
     enqueue_after_commit(h);
     return {};
@@ -683,8 +486,6 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
 template <class Op>
 Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
                                             detail::OperationKind kind) {
-
-
     detail::SlotHandle h{};
     {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -720,40 +521,20 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
     return submit_void(op, c, detail::OperationKind::sync_all);
 }
 
-
-
-
-
 void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     bool newly_poisoned = false;
     detail::EnqueueOutcome outcome;
     {
         std::unique_lock<std::mutex> lk(dispatch_mtx_);
 
-
-
         const bool poisoned_before = fatal_error_.has_value();
         outcome = arena_.enqueue(h);
         if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_->push_back(h);
 
-
-
-
-
-
-
-
-
             for (;;) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                if (before_dispatch_transfer_gate_.load(std::memory_order_acquire) !=
-                    nullptr) {
-
-
-
-
-
+                if (before_dispatch_transfer_gate_.load(std::memory_order_acquire) != nullptr) {
                     lk.unlock();
                     wait_before_dispatch_transfer_pause_();
                     lk.lock();
@@ -767,56 +548,25 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             }
         }
 
-
-
-
-
-
-
         newly_poisoned = !poisoned_before && fatal_error_.has_value();
     }
     if (outcome != detail::EnqueueOutcome::enqueued) {
-
-
-
         signal_ready_progress();
     }
-
-
-
-
-
-
-
 
     if (newly_poisoned) {
         signal_ready_progress();
     }
 }
 
-
-
-
 bool UringAsyncBackend::dispatch_one(detail::SlotHandle h) noexcept {
     std::lock_guard<std::mutex> lk(dispatch_mtx_);
     return dispatch_one_locked(h);
 }
 
-
-
-
-
-
-
 bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     if (fatal_error_.has_value())
         return false;
-
-
-
-
-
-
 
     if (cookie_free_list_.empty()) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: router exhaustion "
@@ -827,10 +577,6 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     detail::SlotIndex router_slot = cookie_free_list_.back();
     cookie_free_list_.pop_back();
 
-
-
-
-
     io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
     if (sqe == nullptr) {
         (void)submit_transport_locked();
@@ -840,19 +586,10 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         }
         sqe = ::io_uring_get_sqe(&ring_state_->ring);
         if (sqe == nullptr) {
-
-
-
             cookie_free_list_.push_back(router_slot);
             return false;
         }
     }
-
-
-
-
-
-
 
     const std::uint64_t op_cookie = allocate_cookie_();
     const PreparedUringOp& prep = prepared_ops_[h.slot.value];
@@ -873,8 +610,6 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         break;
     }
 
-
-
     ::io_uring_sqe_set_data64(sqe, op_cookie);
     RouterEntry& route = router_[router_slot.value];
     route = RouterEntry{};
@@ -884,20 +619,12 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     live_cookies_.fetch_add(1, std::memory_order_relaxed);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
     router_table_insert_(op_cookie, router_slot.value);
 #endif
     const auto& sq = ring_state_->ring.sq;
     const std::uint32_t physical_position =
         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
-
-
-
-
-
-
 
     if (!arena_.mark_running(h)) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: mark_running false "
@@ -907,8 +634,6 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         std::terminate();
     }
 
-
-
     if (!dispatch_->remove_exact(h)) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
                              "remove_exact miss after mark_running (invariant "
@@ -917,16 +642,8 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         std::terminate();
     }
 
-
-
-
     return true;
 }
-
-
-
-
-
 
 int UringAsyncBackend::submit_transport_locked() noexcept {
     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
@@ -991,10 +708,6 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
     if (err == EINTR || err == EAGAIN || err == EBUSY)
         return;
 
-
-
-
-
     poison_and_recover_locked(IoError{IoError::Code::backend_error, err});
 }
 
@@ -1032,8 +745,6 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
             if (route.control_state == RouterEntry::ControlState::none) {
                 finalize_operation_terminal_(router_index, terminal);
             } else {
-
-
                 route.deferred_terminal = terminal;
                 route.deferred_terminal_stored = true;
             }
@@ -1061,8 +772,6 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         physical.class_a_recovery_retired = true;
     }
 
-
-
     detail::SlotHandle local{};
     while (dispatch_->pop_front(local)) {
         if (!arena_.record_terminal(local, detail::TerminalResult::err(error))) {
@@ -1074,30 +783,9 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         cancel_scratch_[local.slot.value].cancel_queued = false;
         bump(stats_, &AsyncStats::completion_errors);
     }
-
-
-
-
-
-
-
-
-
 }
 
-
-
-
-
-
-
-
 std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
-
-
-
-
-
     if (next_cookie_ == 0 || next_cookie_ >= CONTROL_TAG) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: operation-cookie "
                              "domain exhausted (would enter tagged control range / "
@@ -1108,25 +796,12 @@ std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
     return next_cookie_++;
 }
 
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 std::size_t UringAsyncBackend::router_extent_() const noexcept {
-    return detail::tax0_f07_skip_extent_reprobes()
-               ? router_extent_cached_for_test_
-               : router_.size();
+    return detail::tax0_f07_skip_extent_reprobes() ? router_extent_cached_for_test_
+                                                   : router_.size();
 }
 #endif
-
-
-
-
-
 
 std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) const noexcept {
     for (std::size_t i = 0; i < router_.size(); ++i) {
@@ -1142,43 +817,22 @@ std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) con
 std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-
-
-
     std::size_t examined = 0;
-
-
 
     const std::size_t extent = router_extent_();
     std::size_t found = extent;
-    const bool reverse =
-        router_fix_mode_for_test_ == RouterFixModeForTest::reverse_scan ||
-        (router_fix_mode_for_test_ ==
-             RouterFixModeForTest::production_baseline &&
-         router_scan_mode_for_test_ !=
-             RouterScanModeForTest::forward_ablation);
-    if (router_fix_mode_for_test_ ==
-            RouterFixModeForTest::bounded_cookie_table &&
+    const bool reverse = router_fix_mode_for_test_ == RouterFixModeForTest::reverse_scan ||
+                         (router_fix_mode_for_test_ == RouterFixModeForTest::production_baseline &&
+                          router_scan_mode_for_test_ != RouterScanModeForTest::forward_ablation);
+    if (router_fix_mode_for_test_ == RouterFixModeForTest::bounded_cookie_table &&
         cookie_table_for_test_ != nullptr) {
-
-
-
         const std::size_t idx = cookie_table_for_test_->lookup(cookie);
         examined = static_cast<std::size_t>(cookie_table_for_test_->last_probes);
         if (idx != RouterCookieTableForTest::kMiss) {
-            if (idx >= extent || !router_[idx].in_use ||
-                router_[idx].cookie != cookie) {
-                std::fprintf(stderr,
-                             "sluice::async::UringAsyncBackend: router cookie "
-                             "table resolved a stale/non-matching router entry "
-                             "(invariant violation)\n");
+            if (idx >= extent || !router_[idx].in_use || router_[idx].cookie != cookie) {
+                std::fprintf(stderr, "sluice::async::UringAsyncBackend: router cookie "
+                                     "table resolved a stale/non-matching router entry "
+                                     "(invariant violation)\n");
                 std::fflush(stderr);
                 std::terminate();
             }
@@ -1214,21 +868,13 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     } else {
         diag.lookup_misses += 1;
     }
-    if (router_fix_mode_for_test_ ==
-        RouterFixModeForTest::bounded_cookie_table) {
+    if (router_fix_mode_for_test_ == RouterFixModeForTest::bounded_cookie_table) {
         diag.table_lookup_probes_total += examined;
         if (examined > diag.table_lookup_probes_max)
             diag.table_lookup_probes_max = examined;
     }
     return found;
 #else
-
-
-
-
-
-
-
 
     for (std::size_t i = router_.size(); i-- > 0;) {
         if (router_[i].in_use && router_[i].cookie == cookie)
@@ -1239,11 +885,6 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
-
 
 void UringAsyncBackend::router_table_insert_(std::uint64_t cookie,
                                              std::size_t router_index) noexcept {
@@ -1262,8 +903,8 @@ void UringAsyncBackend::router_table_erase_(std::uint64_t cookie) noexcept {
     fold_router_table_probes_for_test_('e', cookie_table_for_test_->last_probes);
 }
 
-void UringAsyncBackend::fold_router_table_probes_for_test_(
-    char which, std::uint64_t probes) const noexcept {
+void UringAsyncBackend::fold_router_table_probes_for_test_(char which,
+                                                           std::uint64_t probes) const noexcept {
     RouterScanDiagnosticsForTest& diag = router_diag_for_test_;
     switch (which) {
     case 'i':
@@ -1285,9 +926,6 @@ void UringAsyncBackend::fold_router_table_probes_for_test_(
 #endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
 
 void UringAsyncBackend::fold_router_lookup_diag_for_test(
     RouterLookupKindForTest kind) const noexcept {
@@ -1336,20 +974,12 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept 
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
     router_table_erase_(entry.cookie);
 #endif
     entry = RouterEntry{};
     cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
     live_cookies_.fetch_sub(1, std::memory_order_relaxed);
 }
-
-
-
-
-
-
 
 void UringAsyncBackend::finalize_operation_terminal_(
     std::size_t router_index, const detail::TerminalResult& terminal) noexcept {
@@ -1390,8 +1020,6 @@ void UringAsyncBackend::finalize_operation_terminal_(
 }
 
 void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcept {
-
-
     if (is_control_cookie(user_data)) {
         const std::uint64_t target_cookie = control_target_cookie(user_data);
         if (target_cookie == 0)
@@ -1423,11 +1051,6 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     if (user_data == 0)
         return;
 
-
-
-
-
-
     const std::size_t router_index = find_live_router_cookie_(user_data);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     fold_router_lookup_diag_for_test(RouterLookupKindForTest::operation_cqe);
@@ -1439,11 +1062,6 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     RouterEntry& entry = router_[router_index];
 
     const detail::SlotHandle h = entry.handle;
-
-
-
-
-
 
     const PreparedUringOp& prep = prepared_ops_[h.slot.value];
     const bool is_byte_op =
@@ -1457,10 +1075,6 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         terminal = detail::TerminalResult::ok_void();
     }
 
-
-
-
-
     if (entry.control_state != RouterEntry::ControlState::none) {
         if (!entry.deferred_terminal_stored) {
             entry.deferred_terminal = terminal;
@@ -1472,12 +1086,6 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
 }
 
 std::size_t UringAsyncBackend::reap_cqes() noexcept {
-
-
-
-
-
-
     std::size_t non_control_observed = 0;
     constexpr unsigned BATCH = 32;
     io_uring_cqe* cqes[BATCH];
@@ -1486,14 +1094,9 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
         for (unsigned i = 0; i < got; ++i) {
             io_uring_cqe* cqe = cqes[i];
 
-
-
-
-
             const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
             const int res = cqe->res;
             ::io_uring_cqe_seen(&ring_state_->ring, cqe);
-
 
             const bool is_op = (!is_control_cookie(user_data) && user_data != 0);
             handle_one_cqe(user_data, res);
@@ -1506,14 +1109,7 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
     return non_control_observed;
 }
 
-
-
-
-
 int UringAsyncBackend::wait_cqe_without_submit() noexcept {
-
-
-
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     if (ring_state_->test_hooks.before_poison_wait != nullptr)
@@ -1527,20 +1123,9 @@ std::size_t UringAsyncBackend::poll() {
     if (!have_ring_)
         return 0;
 
-
-
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         if (!fatal_error_.has_value()) {
-
-
-
-
-
-
-
-
-
             while (!dispatch_->empty()) {
                 detail::SlotHandle h = dispatch_->front();
                 if (!dispatch_one_locked(h))
@@ -1548,19 +1133,12 @@ std::size_t UringAsyncBackend::poll() {
             }
         }
 
-
-
         if (!fatal_error_.has_value())
             (void)submit_transport_locked();
     }
 
-
     (void)reap_cqes();
-    const std::size_t n =
-        arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
-
-
-
+    const std::size_t n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
 
     if (n > 0) {
         signal_ready_progress();
@@ -1572,13 +1150,7 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     if (!have_ring_)
         return std::size_t{0};
 
-
-
     {
-
-
-
-
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         if (!fatal_error_.has_value()) {
             while (!dispatch_->empty()) {
@@ -1600,11 +1172,6 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
         live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
         (fatal_error_.has_value() || transport_ledger_->empty()))
         return std::size_t{0};
-
-
-
-
-
 
     auto submit_and_wait_once = [&]() noexcept {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1632,16 +1199,10 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
             rc = sluice::detail::retry_uring_wait_on_eintr(
                 [&]() noexcept { return wait_cqe_without_submit(); });
         } else if (fatal_error_.has_value()) {
-
-
-
             rc = 0;
         }
 
         if (rc < 0 && rc != -EAGAIN && rc != -EBUSY) {
-
-
-
             return make_unexpected<std::size_t>(sluice::from_errno_value(-rc));
         }
         (void)reap_cqes();
@@ -1654,26 +1215,10 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
             live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
             (fatal_error_.has_value() || transport_ledger_->empty()))
             return std::size_t{0};
-
-
-
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-detail::CancelDisposition UringAsyncBackend::cancel_handle_(
-    detail::SlotHandle handle) noexcept {
+detail::CancelDisposition UringAsyncBackend::cancel_handle_(detail::SlotHandle handle) noexcept {
     detail::CancelDisposition disp;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -1681,13 +1226,9 @@ detail::CancelDisposition UringAsyncBackend::cancel_handle_(
         disp = arena_.cancel(handle);
     }
     if (disp == detail::CancelDisposition::terminal_won) {
-
-
         bump(stats_, &AsyncStats::canceled_ops);
         signal_ready_progress();
     } else if (disp == detail::CancelDisposition::intent_recorded) {
-
-
         issue_running_cancel(handle);
     }
 
@@ -1764,12 +1305,6 @@ void UringAsyncBackend::cancel(Completion<void>& c) {
     (void)cancel_handle_(*h);
 }
 
-
-
-
-
-
-
 Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>& c,
                                                 detail::WaiterToken token,
                                                 detail::RoutingLease lease) {
@@ -1780,8 +1315,7 @@ Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>& c,
     return arena_.register_waiter(*h, token, std::move(lease));
 }
 
-Result<void> UringAsyncBackend::register_waiter(Completion<void>& c,
-                                                detail::WaiterToken token,
+Result<void> UringAsyncBackend::register_waiter(Completion<void>& c, detail::WaiterToken token,
                                                 detail::RoutingLease lease) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
@@ -1790,38 +1324,27 @@ Result<void> UringAsyncBackend::register_waiter(Completion<void>& c,
     return arena_.register_waiter(*h, token, std::move(lease));
 }
 
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(
-    Completion<std::size_t>& c) {
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<std::size_t>& c) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<detail::RoutingLease>(
-            IoError{IoError::Code::not_found});
+        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
     }
     return arena_.cancel_waiter(*h);
 }
 
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(
-    Completion<void>& c) {
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<void>& c) {
     auto h = arena_.resolve_completion(&c);
     if (!h.has_value()) {
-        return make_unexpected<detail::RoutingLease>(
-            IoError{IoError::Code::not_found});
+        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
     }
     return arena_.cancel_waiter(*h);
 }
 
 void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
-
-
-
-
     bool newly_poisoned = false;
     std::uint64_t target_cookie = 0;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-
-
-
 
         if (fatal_error_.has_value())
             return;
@@ -1829,18 +1352,11 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         if (scratch.cancel_queued)
             return;
 
-
-
-
-
-
         const std::size_t idx = find_live_router_index_(h);
         if (idx == router_.size())
             return;
         target_cookie = router_[idx].cookie;
         if (target_cookie == 0 || target_cookie >= CONTROL_TAG) {
-
-
             std::fprintf(stderr, "sluice::async::UringAsyncBackend: issue_running_cancel "
                                  "found LIVE router entry with invalid cookie "
                                  "(invariant violation)\n");
@@ -1848,29 +1364,14 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             std::terminate();
         }
 
-
-
-
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
         if (sqe == nullptr) {
             (void)submit_transport_locked();
             if (fatal_error_.has_value()) {
 #if defined(SLUICE_TV1_C012_MUTANT)
 
-
-
-
-
-
                 return;
 #endif
-
-
-
-
-
-
-
 
                 newly_poisoned = true;
             } else {
@@ -1878,12 +1379,6 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             }
         }
         if (sqe != nullptr) {
-
-
-
-
-
-
             ::io_uring_prep_cancel64(sqe, target_cookie, 0);
             ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
             scratch.cancel_queued = true;
@@ -1903,32 +1398,10 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         }
     }
 
-
-
-
-
-
-
-
     if (newly_poisoned) {
         signal_ready_progress();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 void UringAsyncBackend::close_admission() {
     if (!have_ring_)
@@ -1953,4 +1426,4 @@ bool UringAsyncBackend::available() const noexcept {
 
 #endif
 
-}
+} // namespace sluice::async

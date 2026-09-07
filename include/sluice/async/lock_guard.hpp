@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/mutex.hpp>
@@ -18,7 +6,7 @@
 namespace sluice::async {
 
 class SLUICE_SCOPED_CAPABILITY LockGuard {
-public:
+  public:
     explicit LockGuard(Mutex& mu) SLUICE_ACQUIRE(mu) : mu_(mu) { mu_.lock(); }
     ~LockGuard() SLUICE_RELEASE() { mu_.unlock(); }
 
@@ -27,8 +15,8 @@ public:
     LockGuard(LockGuard&&) = delete;
     LockGuard& operator=(LockGuard&&) = delete;
 
-private:
+  private:
     Mutex& mu_;
 };
 
-}
+} // namespace sluice::async

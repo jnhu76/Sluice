@@ -1,74 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cassert>
@@ -81,33 +10,13 @@
 
 namespace sluice::async {
 
-
-
-
-
-
-
 class AsyncMutex {
-public:
-
-
-
-    explicit AsyncMutex(Scheduler& scheduler) noexcept
-        : scheduler_(scheduler), owner_(nullptr) {}
-
-
-
-
-
-
+  public:
+    explicit AsyncMutex(Scheduler& scheduler) noexcept : scheduler_(scheduler), owner_(nullptr) {}
 
     ~AsyncMutex() {
-
-
-
         if (owner_ != nullptr) {
-            assert(owner_ == nullptr &&
-                   "AsyncMutex destroyed while locked (owner != NoOwner)");
+            assert(owner_ == nullptr && "AsyncMutex destroyed while locked (owner != NoOwner)");
             detail::async_mutex_lifetime_fail_fast();
         }
     }
@@ -117,115 +26,19 @@ public:
     AsyncMutex(AsyncMutex&&) = delete;
     AsyncMutex& operator=(AsyncMutex&&) = delete;
 
+    [[nodiscard]] bool try_lock() { return scheduler_.mutex_try_lock(waiters_, owner_); }
 
-
-
-
-
-
-
-
-
-
-
-
-    [[nodiscard]] bool try_lock() {
-        return scheduler_.mutex_try_lock(waiters_, owner_);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    void lock(WaitNode& node) {
-        scheduler_.mutex_lock(waiters_, owner_, node);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    void lock(WaitNode& node) { scheduler_.mutex_lock(waiters_, owner_, node); }
 
     void lock_until(WaitNode& node, Scheduler::deadline_t deadline) {
         scheduler_.mutex_lock_until(waiters_, owner_, node, deadline);
     }
 
+    [[nodiscard]] bool cancel(WaitNode& node) { return scheduler_.mutex_cancel(waiters_, node); }
 
+    void unlock() { scheduler_.mutex_unlock(waiters_, owner_); }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    [[nodiscard]] bool cancel(WaitNode& node) {
-        return scheduler_.mutex_cancel(waiters_, node);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-    void unlock() {
-        scheduler_.mutex_unlock(waiters_, owner_);
-    }
-
-private:
-
-
-
-
-
-
-
-
-
-
-
+  private:
     friend class AsyncCondition;
 
     Scheduler& scheduler_;
@@ -233,4 +46,4 @@ private:
     WaitQueue waiters_;
 };
 
-}
+} // namespace sluice::async

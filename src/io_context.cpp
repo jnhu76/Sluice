@@ -1,5 +1,3 @@
-
-
 #include <sluice/io_context.hpp>
 #include <sluice/file.hpp>
 
@@ -11,12 +9,9 @@ namespace sluice {
 
 Result<std::unique_ptr<Reader>> BlockingIoContext::open_reader(std::string_view path,
                                                                OpenReaderOptions options) {
-
     auto reader = std::make_unique<FileReader>(std::string(path), options.syscall_stats,
                                                options.vector_stats);
     if (!reader->opened()) {
-
-
         return make_unexpected<std::unique_ptr<Reader>>(
             reader->open_error().value_or(IoError{.code = IoError::Code::permission_denied}));
     }
@@ -34,4 +29,4 @@ Result<std::unique_ptr<Writer>> BlockingIoContext::open_writer(std::string_view 
     return std::unique_ptr<Writer>(std::move(writer));
 }
 
-}
+} // namespace sluice

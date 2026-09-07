@@ -1,24 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 #include <sluice/async/detail/mutex_test_seam.hpp>
@@ -27,39 +6,32 @@
 
 namespace sluice::async::detail {
 
-
-
 struct InjectedMutexFailure final {};
 
 namespace {
 
-
 std::atomic<unsigned> g_lock_countdown{0};
-std::atomic<bool>     g_fail_next_try_lock{false};
+std::atomic<bool> g_fail_next_try_lock{false};
 
-}
+} // namespace
 
 void maybe_inject_mutex_failure(MutexTestOperation op) {
     if (op == MutexTestOperation::lock) {
-
-
-
-
         unsigned prev = g_lock_countdown.load(std::memory_order_relaxed);
         for (;;) {
-            if (prev == 0) return;
+            if (prev == 0)
+                return;
             unsigned next = (prev == 1) ? 0 : (prev - 1);
-            if (g_lock_countdown.compare_exchange_weak(
-                    prev, next, std::memory_order_relaxed,
-                    std::memory_order_relaxed)) {
+            if (g_lock_countdown.compare_exchange_weak(prev, next, std::memory_order_relaxed,
+                                                       std::memory_order_relaxed)) {
                 break;
             }
         }
-        if (prev == 1) throw InjectedMutexFailure{};
+        if (prev == 1)
+            throw InjectedMutexFailure{};
 
     } else {
-        if (g_fail_next_try_lock.exchange(false,
-                                          std::memory_order_relaxed)) {
+        if (g_fail_next_try_lock.exchange(false, std::memory_order_relaxed)) {
             throw InjectedMutexFailure{};
         }
     }
@@ -80,8 +52,8 @@ void disarm() noexcept {
     g_fail_next_try_lock.store(false, std::memory_order_relaxed);
 }
 
-}
+} // namespace test_hooks
 
-}
+} // namespace sluice::async::detail
 
 #endif
