@@ -1,8 +1,7 @@
-// Scheduler park/wake domain (wake handle, external wake + interrupt bridge, park forensics, WaitRecord pool, awaits) — implementation TU split from scheduler.cpp in the
-// post-freeze R1 structural pass (docs/post-freeze/structural-audit.md §6).
+// Scheduler park/wake domain (wake handle, external wake + interrupt bridge,
+// park forensics, WaitRecord pool, awaits).
 //
-// Pure relocation: every definition below is byte-identical to its pre-split
-// text at d9184de; the class declaration, lock domains, atomic orderings,
+// The class declaration, lock domains, atomic orderings,
 // and wake contracts remain in include/sluice/async/scheduler.hpp.
 #include <sluice/async/scheduler.hpp>
 
@@ -123,7 +122,7 @@ void Scheduler::notify_external_wake() noexcept {
     // the wake epoch and notify wake_cv_. Safe to call from any thread.
     // Refinement map: TLA+ ExternalReadyPublish (signal half).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // #196 trace: attribute the upcoming wake publication to the external
+    // Trace: attribute the upcoming wake publication to the external
     // notify producer (consumed by signal_wake_locked's wake record).
     sluice_async_test::set_trace_wake_cause(
         *this, sluice_async_test::WakeCause::external_notify,
@@ -141,7 +140,7 @@ void Scheduler::signal_wake_locked() {
         LockGuard lk(wake_mtx_);
         ++wake_epoch_;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // #196 trace: the single chokepoint every wake publication passes.
+        // Trace: the single chokepoint every wake publication passes.
         // Records wake_published with the pending producer attribution (or
         // cause=none when unattributed — the validator fail-closes on it).
         sluice_async_test::record_trace_wake(*this, wake_epoch_);
@@ -215,7 +214,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
 #endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // Phase G park-window forensics: snapshot the classify-authority
+    // Park-window forensics: snapshot the classify-authority
     // persistent state BEFORE the wake-domain baseline is recorded.
     // Gated OFF by default (the snapshot locks shift park timing and made a
     // seam-driven regression flaky); only the forensics case arms it.
@@ -247,7 +246,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     forensics_rec.ready_flag_bounded = bounded_backend_observation;
     forensics_rec.global_terminate =
         global_terminate_.load(std::memory_order_acquire);
-    // Per-worker classify evidence (Phase G review P2a): the classification
+    // Per-worker classify evidence: the classification
     // THIS worker last trusted — its own classify pair, not a Scheduler-global
     // last-writer value that another worker's classify could have overwritten
     // between this worker's decision and its park commit.
@@ -269,7 +268,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // (a) REFUSE to park when unguarded progress remains: a runnable
     //     ticket anywhere in the run domain (ALWAYS — never delegatable
     //     to a running Fiber: the owner may sit in an unbounded fiber
-    //     execution and no one else is awake to steal; Issue #115), or
+    //     execution and no one else is awake to steal), or
     //     accepted backend work with NO active observer (no backend-
     //     domain participant, no admission in flight). The refusing
     //     worker re-loops and BECOMES the observer (its loop-top steals
@@ -283,8 +282,8 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // The cv.wait below runs with BOTH locks released; the predicate
     // (epoch / terminate / own local_runnable) is unchanged from the original park protocol.
     //
-    // R4 (persistent-state backstop, final form after the adversarial
-    // review): the idle-dance condition is checked HERE, at the COMMIT
+    // R4 (persistent-state backstop): the idle-dance condition is checked
+    // HERE, at the COMMIT
     // recheck, against the worker's OWN dance contribution — NOT in the cv
     // predicate and NOT as a bare count comparison. Two rejected drafts
     // show why: (1) a predicate term observes the dancer's own count, so
@@ -306,7 +305,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
     // (predicate wake) — the absorbed-baseline window stays
     // closed with persistent state.
     //
-    // Issue #161 (contribution-identity law, third refusal term): the R4
+    // Contribution-identity law (third refusal term): the R4
     // idle>own comparison cannot distinguish a dancer's OWN stale count from
     // the eraser's fresh one — both read 1 == 1 after the unlocked erase
     // orphaned the dancer's contribution. The generation term closes that:
@@ -321,7 +320,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         LockGuard glk(global_mtx_);
         const unsigned own_dance =
             ws->idle_dance_contributed_.load(std::memory_order_acquire);
-        // Issue #161 (contribution-identity law): the identity term is
+        // Contribution-identity law: the identity term is
         // evaluated LAST — its dance_epoch_ load is sequenced AFTER the
         // idle_workers_ load above it, but that ordering does NOT (and
         // cannot) make the epoch load see the eraser's bump whenever the
@@ -365,7 +364,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
             // refuse and re-loop while the only electable worker sleeps
             // on a stale classification).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            // #196 trace: the refusal decision, then its bundled signal
+            // Trace: the refusal decision, then its bundled signal
             // (TLA+ AbandonParkCandidate's signaling branch is one fused
             // step — the two trace events compile to that single action).
             sluice_async_test::TraceEvent refuse_ev{};
@@ -384,9 +383,9 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         LockGuard wlk(wake_mtx_);
         ws->observed_epoch = wake_epoch_;  // arm UNDER the state authority
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // #196 trace: the park admission commit — the baseline this park
+        // Trace: the park admission commit — the baseline this park
         // will trust (TLA+ FinalParkRecheckAndCommit's observedEpoch capture).
-        // The armed flag records whether the E5-A2/#185 entry-armed bounded
+        // The armed flag records whether the E5-A2 entry-armed bounded
         // observation (2 ms reference park) applies to THIS park.
         {
             sluice_async_test::TraceEvent commit_ev{};
@@ -414,10 +413,10 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
 #endif
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // Issue #115 causal seam: the baseline is committed and NO lock is held.
+    // Causal seam: the baseline is committed and NO lock is held.
     // A publication issued while paused here is strictly post-commit — the
     // cv predicate is its only possible transport (an epoch advance fires it
-    // at wait entry; anything else is the #115 strand). Complements seam B
+    // at wait entry; anything else strands the publication). Complements seam B
     // (scheduler_park_commit), which pauses strictly PRE-baseline.
     sluice_async_test::test_phase(*this,
         sluice_async_test::PhaseTag::scheduler_park_baseline_recorded);
@@ -442,7 +441,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         return !ws->local_runnable.empty();
     };
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // #196 trace: record the physical-wait boundary and, at the return,
+    // Trace: record the physical-wait boundary and, at the return,
     // WHICH predicate terms held (evaluated under the same lock the wait
     // reacquired — the exact cause set the as-built park returned on).
     // park_entered + an immediate park_returned (predicate already true at
@@ -517,7 +516,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         // R4 note: the idle-dance backstop is enforced at the park COMMIT
         // (above), not here — see the R4 redesign comment there.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // #196 trace: an entry-true predicate is an immediate return (the
+        // Trace: an entry-true predicate is an immediate return (the
         // model's EnterPhysicalPark predicate-true branch); the manual check
         // is behaviorally identical to cv.wait's own entry evaluation.
         e9t_record_entered();
@@ -567,9 +566,9 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
         wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // #196 trace: see the unbounded branch above (same entry/immediate/
+    // Trace: see the unbounded branch above (same entry/immediate/
     // blocking discipline; a wait_until expiry with the predicate still
-    // false records the timeout bit — the E5-A2/#185 entry-armed
+    // false records the timeout bit — the E5-A2 entry-armed
     // observation return).
     e9t_record_entered();
     if (park_pred()) {
@@ -589,14 +588,14 @@ void Scheduler::park_on_wake_source(WorkerState* ws,
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void Scheduler::dump_park_forensics_for_test(const char* tag) {
-    // Phase G park-window forensics (G1 BLOCKED instrumentation). Called by
+    // Park-window forensics. Called by
     // a forensics test's watchdog when a bounded wait for progress expired —
     // the run is presumed stalled with worker(s) parked. Each domain lock is
     // taken separately (no nesting): global_mtx_ (worker list, admission,
     // waiting sets) -> wake_mtx_ (epoch, per-worker baselines) ->
     // park_ledger_mtx_ (ring). Cross-thread diagnostic fields
     // (WorkerState::park_domain / current / loop_exit_reason / loop_exited /
-    // last_classify) are atomics — Phase G review P2a: a "best-effort" racy
+    // last_classify) are atomics — a "best-effort" racy
     // read is still UB; the forensics facility must itself be race-free or
     // its evidence is worthless under sanitizers.
     std::fprintf(stderr, "=== park-forensics[%s] begin ===\n", tag);
@@ -606,7 +605,7 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
     const char* admission = "none";
     std::size_t w_size = 0, w_void = 0, w_ready = 0, w_waitq = 0, w_select = 0;
     std::size_t pending_spawn = 0;
-    // Issue #116 liveness forensics: the coordinated-run / convergence /
+    // Liveness forensics: the coordinated-run / convergence /
     // obligation counters a stalled-run classification argument needs. Same
     // domain (global_mtx_) as the fields above; printed with Domain 1.
     unsigned active_workers = 0, live_loop = 0, idle_now = 0;
@@ -1121,8 +1120,8 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     Fiber* me = ws->current;
     if (ready.load(std::memory_order::acquire)) return;
 #if defined(SLUICE_TV1_C001_MUTANT)
-    // #305 TV-1 MUTANT WORLD ONLY (never defined in production, CI, or any
-    // gate build): the historical pre-422036cd await shape — register under
+    // MUTANT WORLD ONLY (never defined in production, CI, or any
+    // gate build): the historical await shape — register under
     // global_mtx_, readiness recheck OUTSIDE it, suspension state change
     // last. A wake landing between the registration and make_waiting() finds
     // the registration with the fiber still Running: the wake path erases
