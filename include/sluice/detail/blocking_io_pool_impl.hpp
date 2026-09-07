@@ -1,13 +1,4 @@
-
-
-
-
-
 #pragma once
-
-
-
-
 
 #include <condition_variable>
 #include <exception>
@@ -25,16 +16,9 @@ class BlockingIoPool;
 
 namespace detail {
 
-
-
-
-
-
-
 Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool block);
 
 }
-
 
 template <class T> struct Task<T>::State {
     std::mutex mtx;
@@ -60,8 +44,6 @@ template <class T> struct Task<T>::State {
         cv.notify_all();
     }
 };
-
-
 
 template <class T, class Fn>
 std::function<void()> make_bound_job(Fn fn, std::shared_ptr<typename Task<T>::State> st,
@@ -117,7 +99,6 @@ template <class T> T Task<T>::get() {
     return std::move(*state_->value);
 }
 
-
 template <> struct Task<void>::State {
     std::mutex mtx;
     std::condition_variable cv;
@@ -152,7 +133,6 @@ template <> inline void Task<void>::get() {
     }
 }
 
-
 template <class F>
 inline Result<Task<std::invoke_result_t<F&&>>> BlockingIoPool::try_submit(F&& f) {
     using R = std::invoke_result_t<F&&>;
@@ -176,4 +156,4 @@ template <class F> inline Result<Task<std::invoke_result_t<F&&>>> BlockingIoPool
     return Task<R>(st);
 }
 
-}
+} // namespace sluice

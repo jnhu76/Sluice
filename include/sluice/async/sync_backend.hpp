@@ -1,41 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -57,15 +19,10 @@ namespace sluice::async {
 
 class SyncBackend : public AsyncBackend {
   public:
-
-
-
     explicit SyncBackend(std::size_t request_capacity = kDefaultCapacity)
         : arena_(detail::ContextIdentity::for_testing(next_backend_id()), request_capacity) {}
 
-    ~SyncBackend() override {
-
-    }
+    ~SyncBackend() override {}
 
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
         return submit_size(op, c, detail::OperationKind::read);
@@ -80,52 +37,21 @@ class SyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
-
-
     bool supports_request_identity() const noexcept override { return true; }
 
   private:
-
-
-
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override {
-        return arena_.identity_handle_state(detail::SlotIndex{slot},
-                                            detail::Generation{gen},
+        return arena_.identity_handle_state(detail::SlotIndex{slot}, detail::Generation{gen},
                                             detail::ContextIdentity{ctx});
     }
 
   public:
-
-
-
-
-
-
     std::size_t poll() override { return dispatch_and_reap(); }
 
-    Result<std::size_t> wait_one() override {
-
-        return dispatch_and_reap();
-    }
-
-
-
-
+    Result<std::size_t> wait_one() override { return dispatch_and_reap(); }
 
     bool wait_one_is_nonblocking() const noexcept override { return true; }
-
-
-
-
-
-
-
-
-
-
-
-
 
     void cancel(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
@@ -144,19 +70,7 @@ class SyncBackend : public AsyncBackend {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-    Result<void> register_waiter(Completion<std::size_t>& c,
-                                 detail::WaiterToken token,
+    Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
                                  detail::RoutingLease lease) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
@@ -164,8 +78,7 @@ class SyncBackend : public AsyncBackend {
         }
         return arena_.register_waiter(*h, token, std::move(lease));
     }
-    Result<void> register_waiter(Completion<void>& c,
-                                 detail::WaiterToken token,
+    Result<void> register_waiter(Completion<void>& c, detail::WaiterToken token,
                                  detail::RoutingLease lease) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
@@ -176,22 +89,19 @@ class SyncBackend : public AsyncBackend {
     Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
+            return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
         }
         return arena_.cancel_waiter(*h);
     }
     Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (!h.has_value()) {
-            return make_unexpected<detail::RoutingLease>(
-                IoError{IoError::Code::not_found});
+            return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
         }
         return arena_.cancel_waiter(*h);
     }
 
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
-
 
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
@@ -204,27 +114,10 @@ class SyncBackend : public AsyncBackend {
   private:
     static constexpr std::size_t kDefaultCapacity = 64;
 
-
-
-
-
     static std::uint64_t next_backend_id() noexcept {
         static std::atomic<std::uint64_t> id{0x51590000u};
         return ++id;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind) {
@@ -249,23 +142,11 @@ class SyncBackend : public AsyncBackend {
         return {};
     }
 
-
-
-
-
-
-
-
-
-
-
-    template <class Op, class Comp>
-    struct SubmitPolicy {
+    template <class Op, class Comp> struct SubmitPolicy {
         using completion_type = Comp;
         using op_type = Op;
 
         explicit SubmitPolicy(detail::OperationKind kind) noexcept : kind_(kind) {}
-
 
         detail::OperationKind kind() const noexcept { return kind_; }
         static detail::BorrowMetadata borrow(const Op& op) noexcept {
@@ -290,17 +171,12 @@ class SyncBackend : public AsyncBackend {
             }
         }
 
-
-        static bool begin_binding(Comp& c) noexcept {
-            return SyncBackend::begin_binding(c);
-        }
+        static bool begin_binding(Comp& c) noexcept { return SyncBackend::begin_binding(c); }
         static void install_binding(Comp& c, detail::RequestArena* arena,
                                     detail::SlotHandle h) noexcept {
             SyncBackend::install_binding(c, arena, h);
         }
-        static void commit_binding(Comp& c) noexcept {
-            SyncBackend::commit_binding(c);
-        }
+        static void commit_binding(Comp& c) noexcept { SyncBackend::commit_binding(c); }
         static void rollback_binding(Comp& c) noexcept {
             SyncBackend::rollback_binding_before_accept(c);
         }
@@ -311,8 +187,8 @@ class SyncBackend : public AsyncBackend {
         void pause_before_commit_binding() const noexcept {}
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-        std::optional<IoError> injected_precommit_stage_failure(
-            detail::SubmitStage) const noexcept {
+        std::optional<IoError>
+        injected_precommit_stage_failure(detail::SubmitStage) const noexcept {
             return std::nullopt;
         }
 #endif
@@ -321,9 +197,7 @@ class SyncBackend : public AsyncBackend {
         detail::OperationKind kind_;
     };
 
-
-    template <class Op>
-    static detail::BorrowMetadata borrow_of(const Op& op) {
+    template <class Op> static detail::BorrowMetadata borrow_of(const Op& op) {
         if constexpr (std::is_same_v<Op, ReadOp>) {
             return {op.fd, op.dst, op.len};
         } else {
@@ -331,27 +205,11 @@ class SyncBackend : public AsyncBackend {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     void dispatch_enqueued() {
         for (std::size_t i = 0; i < arena_.capacity(); ++i) {
             detail::SlotIndex idx{static_cast<std::uint32_t>(i)};
-            if (arena_.state_of(idx) != detail::RequestState::enqueued) continue;
+            if (arena_.state_of(idx) != detail::RequestState::enqueued)
+                continue;
             detail::SlotHandle h{idx, arena_.generation_of(idx)};
             detail::OperationKind kind = arena_.kind_of(idx);
             detail::TerminalResult res =
@@ -365,26 +223,15 @@ class SyncBackend : public AsyncBackend {
     std::size_t dispatch_and_reap() {
         dispatch_enqueued();
 
-
         return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     }
 
-
-
-
-
-
-
-
-    static void publish_size_ready(void* completion,
-                                   const detail::TerminalResult& t) noexcept {
+    static void publish_size_ready(void* completion, const detail::TerminalResult& t) noexcept {
         AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion),
                               terminal_to_size(t));
     }
-    static void publish_void_ready(void* completion,
-                                   const detail::TerminalResult& t) noexcept {
-        AsyncBackend::publish(*static_cast<Completion<void>*>(completion),
-                              terminal_to_void(t));
+    static void publish_void_ready(void* completion, const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<void>*>(completion), terminal_to_void(t));
     }
 
     static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept {
@@ -398,17 +245,13 @@ class SyncBackend : public AsyncBackend {
         return {};
     }
 
-
-
-
-
-
     void tally_canceled() noexcept {
-        if (stats_) ++stats_->canceled_ops;
+        if (stats_)
+            ++stats_->canceled_ops;
     }
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
 };
 
-}
+} // namespace sluice::async

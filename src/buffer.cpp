@@ -1,4 +1,3 @@
-
 #include <sluice/buffer.hpp>
 
 #include <algorithm>
@@ -6,12 +5,7 @@
 
 namespace sluice {
 
-
-
 Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
-
-
-
     if (buf_.empty()) {
         return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_state});
     }
@@ -26,7 +20,6 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
 
     std::size_t total = 0;
     while (!dst.empty()) {
-
         std::size_t avail = end_ - seek_;
         if (avail > 0) {
             std::size_t n = std::min(dst.size(), avail);
@@ -46,13 +39,7 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
             ++stats_->read_buffer_misses;
         }
 
-
-
-
-
         if (dst.size() > buf_.size()) {
-
-
             auto r = inner_.read_some(dst);
             if (!r.has_value()) {
                 if (total > 0) {
@@ -65,7 +52,6 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
 
             return total;
         }
-
 
         if (seek_ > 0) {
             std::memmove(buf_.data(), buf_.data() + seek_, end_ - seek_);
@@ -81,7 +67,6 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
         }
         std::size_t got = r.value();
         if (got == 0) {
-
             return total;
         }
         if (stats_) {
@@ -92,8 +77,6 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
     }
     return total;
 }
-
-
 
 Result<void> BufferedReader::consume_buffered(std::size_t n) {
     std::size_t avail = end_ - seek_;
@@ -134,7 +117,6 @@ Result<void> BufferedWriter::flush_dirty() {
 }
 
 Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
-
     if (buf_.empty()) {
         return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_state});
     }
@@ -160,8 +142,6 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
         }
 
         if (src.size() > buf_.size() && end_ == 0) {
-
-
             auto r = inner_.write_some(src);
             if (!r.has_value()) {
                 return total > 0 ? Result<std::size_t>{total}
@@ -181,7 +161,6 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
             src = src.subspan(n);
             continue;
         }
-
 
         std::size_t n = std::min(src.size(), room);
         std::memcpy(buf_.data() + end_, src.data(), n);
@@ -206,4 +185,4 @@ Result<void> BufferedWriter::flush() {
     return inner_.flush();
 }
 
-}
+} // namespace sluice

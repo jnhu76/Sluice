@@ -1,22 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 #include <sluice/async/detail/queue_test_seam.hpp>
@@ -28,9 +9,6 @@ namespace sluice::async::detail {
 
 namespace {
 
-
-
-
 std::atomic<QueueSnapshotPauseGate*> g_queue_snapshot_pause_gate{nullptr};
 
 }
@@ -40,8 +18,6 @@ void maybe_pause_queue_snapshot() noexcept {
     if (gate == nullptr) {
         return;
     }
-
-
 
     gate->paused.store(true, std::memory_order_release);
     while (!gate->resume.load(std::memory_order_acquire)) {
@@ -71,8 +47,8 @@ void disarm_queue_snapshot_pause() noexcept {
     g_queue_snapshot_pause_gate.store(nullptr, std::memory_order_release);
 }
 
-}
+} // namespace test_hooks
 
-}
+} // namespace sluice::async::detail
 
 #endif

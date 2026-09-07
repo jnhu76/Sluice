@@ -1,6 +1,3 @@
-
-
-
 #include <sluice/copy_strategy.hpp>
 
 namespace sluice {
@@ -17,4 +14,4 @@ std::string_view to_string(CopyStrategy strategy) {
     return "unknown";
 }
 
-}
+} // namespace sluice

@@ -1,42 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -59,12 +20,8 @@ class ReadyWaitSource final : public BackendWaitSource {
     }
 
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
-
-
         return wait_for_change(observed, std::chrono::nanoseconds::max());
     }
-
-
 
     bool supports_bounded_wait() const noexcept override { return true; }
 
@@ -73,31 +30,18 @@ class ReadyWaitSource final : public BackendWaitSource {
         std::unique_lock<std::mutex> lk(mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
         if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
             f->store(true, std::memory_order_release);
-
-
 
             f->notify_all();
         }
 
-
-
-
-
         if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
             c->fetch_add(1, std::memory_order_relaxed);
-
-
 
             c->notify_all();
         }
 #endif
-
-
-
 
         if (max_park == std::chrono::nanoseconds::max()) {
             ready_cv_.wait(lk, [&] {
@@ -111,16 +55,11 @@ class ReadyWaitSource final : public BackendWaitSource {
             });
         }
 
-
         if (control_epoch_ != observed.control_generation) {
             return BackendWakeReason::interrupted;
         }
         return BackendWakeReason::progress;
     }
-
-
-
-
 
     void interrupt_all() noexcept override {
         {
@@ -129,18 +68,6 @@ class ReadyWaitSource final : public BackendWaitSource {
         }
         ready_cv_.notify_all();
     }
-
-
-
-
-
-
-
-
-
-
-
-
 
     BackendWaitToken arm_committed_wait() noexcept override {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -157,11 +84,6 @@ class ReadyWaitSource final : public BackendWaitSource {
         return BackendWaitToken{ready_epoch_, control_epoch_};
     }
 
-
-
-
-
-
     void signal_progress() noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
@@ -175,23 +97,9 @@ class ReadyWaitSource final : public BackendWaitSource {
         wait_phase_flag_.store(flag, std::memory_order_release);
     }
 
-
     void set_wait_prepark_counter(std::atomic<int>* counter) noexcept {
         prepark_counter_.store(counter, std::memory_order_release);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     void wait_epoch_changed(BackendWaitToken observed) noexcept {
         std::unique_lock<std::mutex> lk(mtx_);
@@ -200,12 +108,6 @@ class ReadyWaitSource final : public BackendWaitSource {
                    control_epoch_ != observed.control_generation;
         });
     }
-
-
-
-
-
-
 
     std::optional<BackendWaitToken> try_snapshot() const noexcept {
         std::unique_lock<std::mutex> lk(mtx_, std::try_to_lock);
@@ -222,13 +124,10 @@ class ReadyWaitSource final : public BackendWaitSource {
     std::uint64_t ready_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
 
-
     std::uint64_t armed_control_generation_ = 0;
     bool armed_ = false;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
 
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
 
@@ -236,4 +135,4 @@ class ReadyWaitSource final : public BackendWaitSource {
 #endif
 };
 
-}
+} // namespace sluice::async::detail

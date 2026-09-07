@@ -1,24 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/cancel.hpp>
@@ -32,11 +11,6 @@
 
 namespace sluice::async {
 
-
-
-
-
-
 enum class FiberState : std::uint8_t {
     created,
     runnable,
@@ -45,31 +19,14 @@ enum class FiberState : std::uint8_t {
     done,
 };
 
-
-
-
-
-
 enum class CompletionWaitOutcome : std::uint8_t {
     pending,
     completed,
     canceled,
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
 class Fiber {
-public:
+  public:
     using Entry = std::function<void(Fiber&)>;
 
     Fiber() = default;
@@ -80,89 +37,32 @@ public:
     Fiber(Fiber&&) = delete;
     Fiber& operator=(Fiber&&) = delete;
 
-
-
-    FiberState state() const noexcept {
-        return state_.load(std::memory_order::acquire);
-    }
-
-
-
-
-
-
-
-
-
-
-
+    FiberState state() const noexcept { return state_.load(std::memory_order::acquire); }
 
     bool make_runnable() noexcept;
 
-
-
-
-
-
-
-
-
     bool make_running() noexcept;
-
-
-
-
-
-
-
 
     bool make_waiting() noexcept;
 
-
-
     void make_done() noexcept;
-
-
 
     Entry& entry() noexcept { return entry_; }
     const Entry& entry() const noexcept { return entry_; }
     void set_entry(Entry e) { entry_ = std::move(e); }
 
-
-
     CancelToken& cancel_token() noexcept { return token_; }
     CancelState& cancel_state() noexcept { return cstate_; }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     void* execution_tag() const noexcept { return execution_tag_; }
-
-
-
 
     CompletionWaitOutcome completion_wait_outcome() const noexcept {
         return completion_wait_outcome_;
     }
 
-private:
+  private:
     friend class Scheduler;
     void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
-
-
-
 
     void set_completion_wait_outcome(CompletionWaitOutcome o) noexcept {
         completion_wait_outcome_ = o;
@@ -174,14 +74,11 @@ private:
     CancelState cstate_{};
     void* execution_tag_{nullptr};
     CompletionWaitOutcome completion_wait_outcome_{CompletionWaitOutcome::pending};
-public:
 
-
-
-
+  public:
     fiber_ctx::Context ctx{};
-private:
 
+  private:
 };
 
-}
+} // namespace sluice::async

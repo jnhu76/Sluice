@@ -1,17 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cerrno>
@@ -21,9 +7,6 @@
 
 namespace sluice::file_testing {
 
-
-
-
 class CloseScript {
   public:
     struct Step {
@@ -31,8 +14,7 @@ class CloseScript {
         int err;
     };
 
-    explicit CloseScript(std::vector<Step> steps)
-        : steps_(std::move(steps)), prev_(active()) {
+    explicit CloseScript(std::vector<Step> steps) : steps_(std::move(steps)), prev_(active()) {
         active() = this;
     }
     ~CloseScript() {
@@ -43,21 +25,12 @@ class CloseScript {
     CloseScript(const CloseScript&) = delete;
     CloseScript& operator=(const CloseScript&) = delete;
 
-
-
-
     static CloseScript*& active() {
         static CloseScript* armed = nullptr;
         return armed;
     }
 
-
-
-
-
-
-
-    int next(int ) {
+    int next(int) {
         ++calls_;
         if (pos_ >= steps_.size()) {
             errno = EBADF;
@@ -77,4 +50,4 @@ class CloseScript {
     std::size_t calls_ = 0;
 };
 
-}
+} // namespace sluice::file_testing

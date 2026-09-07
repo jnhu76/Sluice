@@ -1,97 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -117,16 +23,10 @@ namespace sluice::async::detail {
 
 class UringWaitSource final : public BackendWaitSource {
   public:
-
-
-
-
-
     UringWaitSource() {
         control_fd_ = ::eventfd(0, EFD_NONBLOCK);
         if (control_fd_ < 0) {
-            throw std::runtime_error(
-                "sluice::async::detail::UringWaitSource: eventfd() failed");
+            throw std::runtime_error("sluice::async::detail::UringWaitSource: eventfd() failed");
         }
     }
     ~UringWaitSource() override {
@@ -138,8 +38,6 @@ class UringWaitSource final : public BackendWaitSource {
     UringWaitSource(const UringWaitSource&) = delete;
     UringWaitSource& operator=(const UringWaitSource&) = delete;
 
-
-
     void set_ring_fd(int ring_fd) noexcept { ring_fd_ = ring_fd; }
 
     BackendWaitToken snapshot() const noexcept override {
@@ -148,13 +46,8 @@ class UringWaitSource final : public BackendWaitSource {
     }
 
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
-
-
         return wait_for_change(observed, std::chrono::nanoseconds::max());
     }
-
-
-
 
     bool supports_bounded_wait() const noexcept override { return true; }
 
@@ -165,23 +58,15 @@ class UringWaitSource final : public BackendWaitSource {
                 std::unique_lock<std::mutex> lk(mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
                 if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
                     f->store(true, std::memory_order_release);
-
-
 
                     f->notify_all();
                 }
 #endif
 
-
-
-
                 if (control_epoch_ != observed.control_generation) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
 
                     pause_for_control_wake_final_reap_nolock_();
 #endif
@@ -191,28 +76,10 @@ class UringWaitSource final : public BackendWaitSource {
                     return BackendWakeReason::progress;
                 }
 
-
-
-
-
-
-
-
-
-
-
-
                 cv_.wait(lk, [this] { return pending_wake_count_ == 0; });
-
-
-
 
                 if (control_epoch_ != observed.control_generation) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
 
                     pause_for_control_wake_final_reap_nolock_();
 #endif
@@ -223,30 +90,11 @@ class UringWaitSource final : public BackendWaitSource {
                 }
                 drain_eventfd_nolock_();
 
-
-
-
-
-
-
-
                 ++parked_count_;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-
-
                 if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
                     c->fetch_add(1, std::memory_order_relaxed);
-
-
-
 
                     c->notify_all();
                 }
@@ -255,15 +103,7 @@ class UringWaitSource final : public BackendWaitSource {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-
-
-            if (auto* g = before_physical_poll_gate_.load(
-                    std::memory_order_acquire)) {
+            if (auto* g = before_physical_poll_gate_.load(std::memory_order_acquire)) {
                 g->arrivals.fetch_add(1, std::memory_order_acq_rel);
                 while (!g->release.load(std::memory_order_acquire)) {
                     std::this_thread::yield();
@@ -274,15 +114,9 @@ class UringWaitSource final : public BackendWaitSource {
             struct pollfd pfds[2];
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
-            const int ring_poll_fd =
-                poll_ring_fd_override_.load(std::memory_order_acquire) >= 0
-                    ? poll_ring_fd_override_.load(std::memory_order_acquire)
-                    : ring_fd_;
+            const int ring_poll_fd = poll_ring_fd_override_.load(std::memory_order_acquire) >= 0
+                                         ? poll_ring_fd_override_.load(std::memory_order_acquire)
+                                         : ring_fd_;
 #else
             const int ring_poll_fd = ring_fd_;
 #endif
@@ -293,15 +127,9 @@ class UringWaitSource final : public BackendWaitSource {
             pfds[1].events = POLLIN;
             pfds[1].revents = 0;
 
-
-
-
-
             int timeout_ms = -1;
             if (max_park != std::chrono::nanoseconds::max()) {
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              max_park)
-                              .count();
+                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(max_park).count();
                 if (ms < 0) {
                     ms = 0;
                 }
@@ -314,17 +142,8 @@ class UringWaitSource final : public BackendWaitSource {
             {
                 std::unique_lock<std::mutex> lk(mtx_);
 
-
                 --parked_count_;
                 if (rc < 0) {
-
-
-
-
-
-
-
-
                     if (errno != EINTR) {
                         std::fprintf(stderr,
                                      "sluice::async::detail::UringWaitSource: "
@@ -347,42 +166,17 @@ class UringWaitSource final : public BackendWaitSource {
                     }
                     continue;
                 }
-                if ((pfds[0].revents & POLLNVAL) != 0 ||
-                    (pfds[1].revents & POLLNVAL) != 0) {
-
-
-
-
-                    std::fprintf(stderr,
-                                 "sluice::async::detail::UringWaitSource: "
-                                 "parked wait observed a closed fd (contract "
-                                 "violation)\n");
+                if ((pfds[0].revents & POLLNVAL) != 0 || (pfds[1].revents & POLLNVAL) != 0) {
+                    std::fprintf(stderr, "sluice::async::detail::UringWaitSource: "
+                                         "parked wait observed a closed fd (contract "
+                                         "violation)\n");
                     std::fflush(stderr);
                     std::terminate();
                 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 if (control_epoch_ != observed.control_generation) {
                     acknowledge_parked_wake_locked_();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
 
                     pause_for_control_wake_final_reap_nolock_();
 #endif
@@ -396,66 +190,36 @@ class UringWaitSource final : public BackendWaitSource {
                     return BackendWakeReason::progress;
                 }
             }
-
-
         }
     }
-
-
-
-
-
-
 
     void interrupt_all() noexcept override {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++control_epoch_;
 
-
-
-
-
             pending_wake_count_ = parked_count_;
         }
         wake_pollers_();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
         cv_.notify_all();
 #endif
     }
-
-
-
-
-
 
     void signal_progress() noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++progress_epoch_;
 
-
             pending_wake_count_ = parked_count_;
         }
         wake_pollers_();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
         cv_.notify_all();
 #endif
     }
-
-
-
-
-
-
-
-
 
     BackendWaitToken arm_committed_wait() noexcept override {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -477,8 +241,6 @@ class UringWaitSource final : public BackendWaitSource {
         wait_phase_flag_.store(flag, std::memory_order_release);
     }
 
-
-
     void set_wait_prepark_counter(std::atomic<int>* counter) noexcept {
         prepark_counter_.store(counter, std::memory_order_release);
     }
@@ -492,9 +254,6 @@ class UringWaitSource final : public BackendWaitSource {
         control_wake_final_reap_gate_.store(gate, std::memory_order_release);
     }
 
-
-
-
     struct BeforePhysicalPollPauseGate {
         std::atomic<int> arrivals{0};
         std::atomic<bool> release{false};
@@ -503,15 +262,9 @@ class UringWaitSource final : public BackendWaitSource {
         before_physical_poll_gate_.store(gate, std::memory_order_release);
     }
 
-
-
     void set_poll_ring_fd_override_for_test(int fd) noexcept {
         poll_ring_fd_override_.store(fd, std::memory_order_release);
     }
-
-
-
-
 
     using PollFn = int (*)(struct pollfd*, unsigned long, int, void*);
     void set_poll_fn_for_test(PollFn fn, void* ctx) noexcept {
@@ -521,18 +274,6 @@ class UringWaitSource final : public BackendWaitSource {
 
     int control_fd_for_test() const noexcept { return control_fd_; }
 
-
-
-
-
-
-
-
-
-
-
-
-
     void wait_epoch_changed(BackendWaitToken observed) noexcept {
         std::unique_lock<std::mutex> lk(mtx_);
         cv_.wait(lk, [&] {
@@ -540,13 +281,6 @@ class UringWaitSource final : public BackendWaitSource {
                    control_epoch_ != observed.control_generation;
         });
     }
-
-
-
-
-
-
-
 
     std::optional<BackendWaitToken> try_snapshot() const noexcept {
         std::unique_lock<std::mutex> lk(mtx_, std::try_to_lock);
@@ -558,23 +292,10 @@ class UringWaitSource final : public BackendWaitSource {
 #endif
 
   private:
-
-
-
-
-
     void drain_eventfd_nolock_() noexcept {
         std::uint64_t value = 0;
-        while (::read(control_fd_, &value, sizeof(value)) == sizeof(value)) {
-        }
+        while (::read(control_fd_, &value, sizeof(value)) == sizeof(value)) {}
     }
-
-
-
-
-
-
-
 
     void acknowledge_parked_wake_locked_() noexcept {
         if (pending_wake_count_ > 0) {
@@ -587,19 +308,10 @@ class UringWaitSource final : public BackendWaitSource {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-
-
-
-
-
     void pause_for_control_wake_final_reap_nolock_() noexcept {
-        if (auto* g = control_wake_final_reap_gate_.load(
-                std::memory_order_acquire)) {
+        if (auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire)) {
             g->exited.store(false, std::memory_order_release);
             g->paused.store(true, std::memory_order_release);
-
-
-
 
             g->paused.notify_all();
             while (!g->resume.load(std::memory_order_acquire)) {
@@ -609,8 +321,6 @@ class UringWaitSource final : public BackendWaitSource {
         }
     }
 #endif
-
-
 
     int poll_nolock_(struct pollfd* pfds, unsigned long nfds, int timeout) noexcept {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -622,12 +332,6 @@ class UringWaitSource final : public BackendWaitSource {
         return ::poll(pfds, static_cast<nfds_t>(nfds), timeout);
     }
 
-
-
-
-
-
-
     void wake_pollers_() noexcept {
         const std::uint64_t one = 1;
         (void)::write(control_fd_, &one, sizeof(one));
@@ -638,12 +342,8 @@ class UringWaitSource final : public BackendWaitSource {
     std::uint64_t progress_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
 
-
-
-
     std::size_t parked_count_ = 0;
     std::size_t pending_wake_count_ = 0;
-
 
     std::uint64_t armed_control_generation_ = 0;
     bool armed_ = false;
@@ -651,8 +351,6 @@ class UringWaitSource final : public BackendWaitSource {
     int control_fd_ = -1;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
 
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
@@ -664,4 +362,4 @@ class UringWaitSource final : public BackendWaitSource {
 #endif
 };
 
-}
+} // namespace sluice::async::detail

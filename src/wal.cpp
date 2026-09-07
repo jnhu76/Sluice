@@ -1,4 +1,3 @@
-
 #include <sluice/wal.hpp>
 
 #include <algorithm>
@@ -9,9 +8,6 @@
 namespace sluice::wal {
 
 namespace detail {
-
-
-
 
 Result<std::uint32_t> checked_u32_len(std::size_t len) {
     if (len > static_cast<std::size_t>(UINT32_MAX)) {
@@ -25,7 +21,7 @@ std::size_t read_chunk_size(std::size_t remaining) noexcept {
     return std::min(remaining, kReadChunkBytes);
 }
 
-}
+} // namespace detail
 
 namespace {
 
@@ -51,7 +47,7 @@ std::uint32_t checksum_of(std::span<const std::byte> payload) {
     return static_cast<std::uint32_t>(sum & 0xFFFFFFFFU);
 }
 
-}
+} // namespace
 
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload) {
     auto len_res = detail::checked_u32_len(payload.size());
@@ -91,17 +87,12 @@ Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload
         return make_unexpected<void>(len_res.error());
     }
 
-
-
-
     std::array<std::byte, 8> header{};
     put_le_u32(header.data(), magic);
     put_le_u32(header.data() + 4, len_res.value());
 
     std::array<std::byte, 4> trailer{};
     put_le_u32(trailer.data(), checksum_of(payload));
-
-
 
     std::array<ConstIoSlice, 3> slices{};
     std::size_t count = 0;
@@ -136,16 +127,14 @@ Result<std::vector<std::byte>> read_record(Reader& reader) {
     }
     while (payload.size() < payload_size) {
         const std::size_t old_size = payload.size();
-        const std::size_t chunk =
-            detail::read_chunk_size(payload_size - old_size);
+        const std::size_t chunk = detail::read_chunk_size(payload_size - old_size);
         try {
             payload.resize(old_size + chunk);
         } catch (const std::bad_alloc&) {
             return make_unexpected<std::vector<std::byte>>(
                 IoError{.code = IoError::Code::backend_error});
         }
-        auto p = reader.read_exact(
-            std::span<std::byte>(payload).subspan(old_size, chunk));
+        auto p = reader.read_exact(std::span<std::byte>(payload).subspan(old_size, chunk));
         if (!p.has_value()) {
             return make_unexpected<std::vector<std::byte>>(p.error());
         }
@@ -164,8 +153,6 @@ Result<std::vector<std::byte>> read_record(Reader& reader) {
     }
     return payload;
 }
-
-
 
 WalWriter::WalWriter(Writer& writer) : writer_(writer), syncable_(nullptr) {}
 
@@ -201,7 +188,6 @@ Result<void> WalWriter::flush() {
 }
 
 Result<void> WalWriter::sync() {
-
     auto fr = flush();
     if (!fr.has_value()) {
         return make_unexpected<void>(fr.error());
@@ -217,4 +203,4 @@ Result<void> WalWriter::sync() {
     return {};
 }
 
-}
+} // namespace sluice::wal

@@ -1,6 +1,3 @@
-
-
-
 #pragma once
 
 #include <sluice/buffered_readable.hpp>
@@ -15,23 +12,12 @@
 
 namespace sluice {
 
-
-
-
-
-
-
 class BufferedReader final : public Reader, public BufferedReadable {
   public:
-
-
-
     BufferedReader(Reader& inner, std::span<std::byte> buffer, BufferStats* stats = nullptr)
         : inner_(inner), buf_(buffer), stats_(stats) {
         assert(!buffer.empty() && "BufferedReader requires a non-empty backing buffer");
     }
-
-
 
     BufferedReader(const BufferedReader&) = delete;
     BufferedReader& operator=(const BufferedReader&) = delete;
@@ -39,8 +25,6 @@ class BufferedReader final : public Reader, public BufferedReadable {
     BufferedReader& operator=(BufferedReader&&) = delete;
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
-
-
 
     std::span<const std::byte> peek_buffered() const override {
         return {buf_.data() + seek_, end_ - seek_};
@@ -55,17 +39,12 @@ class BufferedReader final : public Reader, public BufferedReadable {
     BufferStats* stats_ = nullptr;
 };
 
-
-
-
-
 class BufferedWriter final : public Writer {
   public:
     BufferedWriter(Writer& inner, std::span<std::byte> buffer, BufferStats* stats = nullptr)
         : inner_(inner), buf_(buffer), stats_(stats) {
         assert(!buffer.empty() && "BufferedWriter requires a non-empty backing buffer");
     }
-
 
     BufferedWriter(const BufferedWriter&) = delete;
     BufferedWriter& operator=(const BufferedWriter&) = delete;
@@ -75,20 +54,12 @@ class BufferedWriter final : public Writer {
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
     Result<void> flush() override;
 
-
-
-
-
-
-
-
     ~BufferedWriter() override {
         assert((end_ == 0 || flush_ever_failed_) &&
                "BufferedWriter destroyed with unflushed dirty bytes (did you forget flush()?)");
     }
 
   private:
-
     Result<void> flush_dirty();
 
     Writer& inner_;
@@ -98,4 +69,4 @@ class BufferedWriter final : public Writer {
     BufferStats* stats_ = nullptr;
 };
 
-}
+} // namespace sluice

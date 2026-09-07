@@ -1,9 +1,3 @@
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/error.hpp>
@@ -17,7 +11,6 @@ namespace sluice {
 template <class T> class Result;
 
 namespace detail {
-
 
 struct success_tag {};
 struct error_tag {};
@@ -35,9 +28,6 @@ template <class T> struct result_storage {
     explicit result_storage(error_tag, IoError e) : error_(e), has_value_(false) {}
 
     result_storage(const result_storage& o) : has_value_(false) {
-
-
-
         if (o.has_value_) {
             ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
             has_value_ = true;
@@ -47,8 +37,6 @@ template <class T> struct result_storage {
     }
     result_storage(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>)
         : has_value_(false) {
-
-
         if (o.has_value_) {
             ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
             has_value_ = true;
@@ -58,14 +46,6 @@ template <class T> struct result_storage {
     }
     result_storage& operator=(const result_storage& o) {
         if (this != &o) {
-
-
-
-
-
-
-
-
             destroy_and_clear();
             if (o.has_value_) {
                 ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
@@ -78,16 +58,9 @@ template <class T> struct result_storage {
         return *this;
     }
 
-
-
-
-
     result_storage&
     operator=(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>) {
         if (this != &o) {
-
-
-
             destroy_and_clear();
             if (o.has_value_) {
                 ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
@@ -101,18 +74,6 @@ template <class T> struct result_storage {
     }
     ~result_storage() { destroy(); }
 
-
-
-
-
-
-
-
-
-
-
-
-
     void destroy_and_clear() noexcept {
         if (has_value_) {
             value_.~T();
@@ -120,8 +81,6 @@ template <class T> struct result_storage {
         error_ = IoError{IoError::Code::invalid_state};
         has_value_ = false;
     }
-
-
 
     void destroy() {
         if (has_value_) {
@@ -145,8 +104,7 @@ template <> struct result_storage<void> {
     friend bool operator==(const result_storage&, const result_storage&) = default;
 };
 
-}
-
+} // namespace detail
 
 template <class T> Result<T> make_unexpected(IoError e) {
     return Result<T>(typename detail::error_tag{}, e);
@@ -162,11 +120,6 @@ template <class T> class [[nodiscard]] Result {
     Result(const Result&) = default;
     Result(Result&&) noexcept(std::is_nothrow_move_constructible_v<T>) = default;
     Result& operator=(const Result&) = default;
-
-
-
-
-
 
     Result& operator=(Result&&) noexcept(std::is_nothrow_move_constructible_v<T>) = default;
 
@@ -208,9 +161,8 @@ inline Result<void> make_unexpected_void(IoError e) {
     return Result<void>(typename detail::error_tag{}, e);
 }
 
-
 inline Result<void> make_unexpected(IoError e) {
     return make_unexpected_void(e);
 }
 
-}
+} // namespace sluice

@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cstdint>
@@ -45,14 +34,10 @@ class CopyLimit {
     constexpr std::uint64_t remaining() const noexcept { return remaining_; }
 
   private:
-
-
-
-
     constexpr CopyLimit() = default;
 
     Kind kind_ = Kind::limited;
     std::uint64_t remaining_ = 0;
 };
 
-}
+} // namespace sluice

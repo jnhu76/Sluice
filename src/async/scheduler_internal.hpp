@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 #ifndef SLUICE_ASYNC_SCHEDULER_INTERNAL_HPP
 #define SLUICE_ASYNC_SCHEDULER_INTERNAL_HPP
 
@@ -19,25 +8,7 @@
 
 namespace sluice::async {
 
-
-
-
-
-
-
 inline thread_local WorkerState* g_worker = nullptr;
-
-
-
-
-
-
-
-
-
-
-
-
 
 struct RwWaitCtx {
     enum class Mode : std::uint8_t { read, write };
@@ -45,36 +16,10 @@ struct RwWaitCtx {
     ActorId actor;
 };
 
-
-
 struct SchedulerWakeHandle::Control {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     Mutex mtx;
     Scheduler* scheduler SLUICE_GUARDED_BY(mtx){nullptr};
     bool alive SLUICE_GUARDED_BY(mtx){false};
-
-
-
-
-
-
-
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     bool lifetime_seam_armed{false};
@@ -84,6 +29,6 @@ struct SchedulerWakeHandle::Control {
 #endif
 };
 
-}
+} // namespace sluice::async
 
 #endif

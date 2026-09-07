@@ -1,32 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -43,10 +14,6 @@
 
 namespace sluice::async {
 
-
-
-
-
 struct BatchOp {
     ReadOp read{};
     WriteOp write{};
@@ -55,29 +22,10 @@ struct BatchOp {
     enum class Kind : std::uint8_t { read, write, sync_data, sync_all } kind = Kind::read;
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 enum class BatchResultOrigin : std::uint8_t {
     rejected,
     accepted_and_completed,
 };
-
-
 
 struct BatchResult {
     std::size_t index = 0;
@@ -87,10 +35,8 @@ struct BatchResult {
     std::optional<Result<void>> void_res;
 };
 
-
-
 class Batch {
-public:
+  public:
     Batch() = default;
 
     Batch(const Batch&) = delete;
@@ -98,47 +44,15 @@ public:
     Batch(Batch&&) = delete;
     Batch& operator=(Batch&&) = delete;
 
-
-
-
     std::size_t add(BatchOp op);
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     Result<std::size_t> await_one(AsyncIoContext& ctx);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     std::optional<BatchResult> next() noexcept;
-
-
 
     std::size_t pending_count() const noexcept { return slots_.size() - popped_; }
 
-private:
+  private:
     struct Slot {
         BatchOp op;
         bool submitted = false;
@@ -148,21 +62,13 @@ private:
         bool ready = false;
         bool popped = false;
 
-
-
-
-
-
-
-
         bool submit_rejected = false;
         std::optional<Result<std::size_t>> size_res{};
         std::optional<Result<void>> void_res{};
     };
 
-
     std::vector<std::unique_ptr<Slot>> slots_;
     std::size_t popped_ = 0;
 };
 
-}
+} // namespace sluice::async

@@ -1,19 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/reader.hpp>
@@ -30,44 +14,23 @@ namespace sluice::wal {
 
 inline constexpr std::uint32_t magic = 0x57414CU;
 
-
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload);
-
-
-
-
-
 
 Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload);
 
-
-
 Result<std::vector<std::byte>> read_record(Reader& reader);
-
-
-
-
-
-
 
 class WalWriter {
   public:
-
     explicit WalWriter(Writer& writer);
 
-
     WalWriter(Writer& writer, SyncableWriter* syncable);
-
 
     Result<void> write_record(std::span<const std::byte> payload);
 
     Result<void> write_record_vec(std::span<const std::byte> payload);
 
-
     Result<void> flush();
-
-
-
 
     Result<void> sync();
 
@@ -85,16 +48,10 @@ class WalWriter {
 
 namespace detail {
 
-
-
-
 Result<std::uint32_t> checked_u32_len(std::size_t len);
-
-
-
 
 std::size_t read_chunk_size(std::size_t remaining) noexcept;
 
-}
+} // namespace detail
 
-}
+} // namespace sluice::wal

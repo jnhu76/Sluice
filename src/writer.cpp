@@ -1,5 +1,3 @@
-
-
 #include <sluice/writer.hpp>
 
 #include <cstddef>
@@ -18,21 +16,12 @@ Result<void> Writer::write_all(std::span<const std::byte> src) {
             return make_unexpected(IoError{.code = IoError::Code::invalid_state});
         }
         if (n > src.size()) {
-
             return make_unexpected(IoError{.code = IoError::Code::invalid_state});
         }
         src = src.subspan(n);
     }
     return {};
 }
-
-
-
-
-
-
-
-
 
 Result<std::size_t> Writer::write_vec(std::span<const ConstIoSlice> srcs) {
     std::size_t total = 0;
@@ -46,7 +35,6 @@ Result<std::size_t> Writer::write_vec(std::span<const ConstIoSlice> srcs) {
         }
         std::size_t n = r.value();
         if (n > s.bytes.size()) {
-
             return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_state});
         }
         total += n;
@@ -57,19 +45,10 @@ Result<std::size_t> Writer::write_vec(std::span<const ConstIoSlice> srcs) {
     return total;
 }
 
-
-
-
-
-
 Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
     std::size_t idx = 0;
     std::size_t head_offset = 0;
     while (idx < srcs.size()) {
-
-
-
-
         std::size_t n_remaining = srcs.size() - idx;
         auto drive = [&](std::span<const ConstIoSlice> rem) { return write_vec(rem); };
         Result<std::size_t> r = [&]() -> Result<std::size_t> {
@@ -89,7 +68,6 @@ Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
         }
         std::size_t written = r.value();
         if (written == 0) {
-
             bool any_left = false;
             for (std::size_t i = idx; i < srcs.size(); ++i) {
                 std::size_t off = (i == idx) ? head_offset : 0;
@@ -103,7 +81,6 @@ Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
             }
             break;
         }
-
 
         while (written > 0 && idx < srcs.size()) {
             std::size_t left_in_slice = srcs[idx].bytes.size() - head_offset;
@@ -120,4 +97,4 @@ Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
     return {};
 }
 
-}
+} // namespace sluice

@@ -1,28 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/error.hpp>
@@ -41,25 +16,15 @@ class BlockingIoPool;
 
 namespace detail {
 
-
 Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool block);
 }
-
-
 
 struct BlockingIoPoolOptions {
     std::size_t worker_count = 0;
     std::size_t max_queue_depth = 0;
 };
 
-
-
-
 struct PoolStats {
-
-
-
-
     std::atomic<std::size_t> submitted{0};
     std::atomic<std::size_t> started{0};
     std::atomic<std::size_t> completed{0};
@@ -69,8 +34,6 @@ struct PoolStats {
     std::atomic<std::size_t> worker_count{0};
 };
 
-
-
 template <class T> class Task {
   public:
     Task() = default;
@@ -79,8 +42,6 @@ template <class T> class Task {
     Task& operator=(const Task&) = delete;
     Task(Task&&) noexcept = default;
     Task& operator=(Task&&) noexcept = default;
-
-
 
     T get();
     bool valid() const noexcept { return static_cast<bool>(state_); }
@@ -98,8 +59,6 @@ template <class T> class Task {
 
 class BlockingIoPool {
   public:
-
-
     explicit BlockingIoPool(BlockingIoPoolOptions opts, PoolStats* stats = nullptr);
     ~BlockingIoPool();
 
@@ -108,26 +67,16 @@ class BlockingIoPool {
     BlockingIoPool(BlockingIoPool&&) = delete;
     BlockingIoPool& operator=(BlockingIoPool&&) = delete;
 
-
-
     template <class F> Result<Task<std::invoke_result_t<F&&>>> try_submit(F&& f);
-
-
 
     template <class F> Result<Task<std::invoke_result_t<F&&>>> submit(F&& f);
 
-
-
-
     void wait_idle();
-
 
     void shutdown();
 
-
     std::size_t worker_count() const noexcept;
     std::size_t queue_depth() const noexcept;
-
 
     const PoolStats* stats() const noexcept;
 
@@ -139,12 +88,9 @@ class BlockingIoPool {
     PoolStats* pool_stats() noexcept;
 };
 
-
-
-
 Result<std::unique_ptr<BlockingIoPool>> make_blocking_io_pool(BlockingIoPoolOptions opts,
                                                               PoolStats* stats = nullptr);
 
-}
+} // namespace sluice
 
 #include <sluice/detail/blocking_io_pool_impl.hpp>

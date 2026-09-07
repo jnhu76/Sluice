@@ -1,5 +1,3 @@
-
-
 #include <sluice/blocking_io_pool.hpp>
 #include <sluice/detail/blocking_io_pool_impl.hpp>
 
@@ -35,7 +33,7 @@ BlockingIoPoolOptions validate_options_or_throw(BlockingIoPoolOptions opts) {
     }
     return opts;
 }
-}
+} // namespace
 
 struct BlockingIoPool::Impl {
     BlockingIoPoolOptions opts;
@@ -87,9 +85,7 @@ struct BlockingIoPool::Impl {
         }
     }
 
-    bool is_current_worker() const noexcept {
-        return current_blocking_io_pool == this;
-    }
+    bool is_current_worker() const noexcept { return current_blocking_io_pool == this; }
 
     bool is_current_worker_thread_id() const noexcept {
         const std::thread::id self = std::this_thread::get_id();
@@ -127,14 +123,11 @@ BlockingIoPool::BlockingIoPool(BlockingIoPoolOptions opts, PoolStats* stats)
     : impl_(std::make_unique<Impl>(validate_options_or_throw(opts), stats)) {
     impl_->workers.reserve(impl_->opts.worker_count);
 
-
-
     try {
         for (std::size_t i = 0; i < impl_->opts.worker_count; ++i) {
             impl_->workers.emplace_back([this] { impl_->worker_loop(); });
         }
     } catch (...) {
-
         impl_->shutdown();
         throw;
     }
@@ -145,8 +138,6 @@ BlockingIoPool::~BlockingIoPool() {
 }
 
 namespace detail {
-
-
 
 Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool block) {
     auto& impl = *pool.impl_;
@@ -187,7 +178,7 @@ Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool b
     return {};
 }
 
-}
+} // namespace detail
 
 PoolStats* BlockingIoPool::pool_stats() noexcept {
     return impl_->stats;
@@ -230,4 +221,4 @@ Result<std::unique_ptr<BlockingIoPool>> make_blocking_io_pool(BlockingIoPoolOpti
     return std::make_unique<BlockingIoPool>(opts, stats);
 }
 
-}
+} // namespace sluice

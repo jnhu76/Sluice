@@ -1,36 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -42,7 +9,7 @@
 namespace sluice::async {
 
 class SLUICE_CAPABILITY("mutex") Mutex {
-public:
+  public:
     Mutex() noexcept = default;
     ~Mutex() = default;
 
@@ -54,12 +21,6 @@ public:
     void lock() noexcept SLUICE_ACQUIRE() {
         try {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-
-
-
-
-
 
             detail::maybe_inject_mutex_failure(detail::MutexTestOperation::lock);
 #endif
@@ -80,8 +41,8 @@ public:
     }
     void unlock() noexcept SLUICE_RELEASE() { impl_.unlock(); }
 
-private:
+  private:
     std::mutex impl_;
 };
 
-}
+} // namespace sluice::async

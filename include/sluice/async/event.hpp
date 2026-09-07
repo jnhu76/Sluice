@@ -1,60 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <atomic>
@@ -68,29 +11,10 @@
 
 namespace sluice::async {
 
-
-
-
-
-
-
 class Event {
-public:
-
-
+  public:
     explicit Event(Scheduler& scheduler, bool initially_set = false) noexcept
         : scheduler_(scheduler), set_(initially_set) {}
-
-
-
-
-
-
-
-
-
-
-
 
     ~Event() noexcept {
         const bool select_registry_empty = select_port_.empty();
@@ -106,89 +30,23 @@ public:
     Event(Event&&) = delete;
     Event& operator=(Event&&) = delete;
 
+    [[nodiscard]] bool is_set() const noexcept { return set_.load(std::memory_order::acquire); }
 
+    void set() { scheduler_.event_set_broadcast(*this); }
 
-    [[nodiscard]] bool is_set() const noexcept {
-        return set_.load(std::memory_order::acquire);
-    }
+    void reset() { scheduler_.event_reset(set_); }
 
-
-
-
-
-
-    void set() {
-        scheduler_.event_set_broadcast(*this);
-    }
-
-
-
-
-
-    void reset() {
-        scheduler_.event_reset(set_);
-    }
-
-
-
-
-
-
-
-
-    void wait(WaitNode& node) {
-        scheduler_.await_event_wait(waiters_, set_, node);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    void wait(WaitNode& node) { scheduler_.await_event_wait(waiters_, set_, node); }
 
     void wait_until(WaitNode& node, Scheduler::deadline_t deadline) {
         scheduler_.await_event_wait_deadline(waiters_, set_, node, deadline);
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     [[nodiscard]] bool cancel(WaitNode& node) {
         return scheduler_.event_cancel_wait(waiters_, node);
     }
 
-private:
+  private:
     friend class Scheduler;
 
     Scheduler& scheduler_;
@@ -197,4 +55,4 @@ private:
     detail::SelectPort select_port_;
 };
 
-}
+} // namespace sluice::async
