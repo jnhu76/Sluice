@@ -26,6 +26,14 @@ Minimum mechanism.
 
 The mission defines what Sluice is allowed to become. Current C++ and build files define what the repository does today. Descriptive architecture documentation is derived from the code; it does not override the code or expand the mission.
 
+## Architecture at a glance
+
+<p align="center">
+  <img src="docs/assets/sluice-architecture.svg" alt="Sluice architecture overview" width="100%">
+</p>
+
+The diagram is a compact view of the current implementation shape. It is descriptive rather than normative: code and build definitions remain the source of truth for current behavior.
+
 ## Repository shape
 
 ```text
