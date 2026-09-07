@@ -1,8 +1,8 @@
-// Scheduler Event primitive — implementation TU split from scheduler.cpp
-// (docs/post-freeze/structural-audit.md §6).
-//
-// The class declaration, lock domains, atomic orderings, and wake contracts
-// remain in include/sluice/async/scheduler.hpp.
+
+
+
+
+
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/async_rwlock.hpp>
@@ -18,10 +18,10 @@
 #include <cstdio>
 #include <cstdlib>
 
-// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
-// the non-installed test-control header so the phase call sites below resolve to
-// the controller. In the production build this include is absent and the call
-// sites compile to nothing.
+
+
+
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 #include "async_test_control_internal.hpp"
 #endif
@@ -41,38 +41,38 @@ std::size_t Scheduler::event_set_broadcast(Event& event) {
     while (wake_wait_one_locked(event.waiters_) != nullptr) {
         ++woken;
     }
-    // The suspended-Event resolver, unlike the readiness-offer-only
-    // select_event_scan_locked. select_resolve_event_locked walks this Event's
-    // SelectPort, applies the single-group gate (multi-group DENIED ->
-    // fail-fast before any CAS), marks eligible arms CandidateReady, chooses
-    // the lowest INDEX ready arm, drives the group processor exactly once,
-    // and publishes exactly once. A zero-eligible return is a clean no-op (no
-    // suspended Select arms on this Event).
+
+
+
+
+
+
+
     (void)select_resolve_event_locked(event);
     return woken;
 }
 
 void Scheduler::event_reset(std::atomic<bool>& set_flag) {
-    // Transition `set_flag` to UNSET. Pure state flip: does NOT resolve, cancel,
-    // expire, unlink, or publish any WaitNode. A waiter already registered
-    // remains governed by future set(), deadline, or cancellation. Linearized
-    // under global_mtx_ so it serializes with set()'s drain and wait admission
-    // (the set/reset epoch isolation domain).
+
+
+
+
+
     LockGuard lk(global_mtx_);
     set_flag.store(false, std::memory_order::release);
 }
 
-// ---- Select registry operations (private Scheduler authority) ----
+
 
 void Scheduler::select_event_link_locked(Event& event,
                                          detail::SelectArmSlot& arm) {
-    // Event must belong to this Scheduler.
+
     assert(&event.scheduler_ == this &&
            "select_event_link_locked: Event does not belong to this Scheduler");
     if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
-    // Precondition: arm is not already linked.
-    // The caller (future select() admission) is responsible for setting
-    // arm.state to Prepared and arm.group to the owning SelectGroup.
+
+
+
     assert(arm.home_ == nullptr &&
            "select_event_link_locked: arm already linked");
     if (arm.home_ != nullptr) detail::select_invariant_fail_fast();
@@ -103,7 +103,7 @@ void Scheduler::select_event_link_locked(Event& event,
     arm.home_ = &event.select_port_;
     arm.state = detail::ArmState::registered;
 
-    // Insert at head of the doubly-linked list.
+
     detail::SelectPort& port = event.select_port_;
     arm.next_ = port.head_;
     if (port.head_ != nullptr) {
@@ -118,7 +118,7 @@ void Scheduler::select_event_unlink_locked(Event& event,
     assert(&event.scheduler_ == this &&
            "select_event_unlink_locked: Event does not belong to this Scheduler");
     if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
-    // Validate that the arm belongs to this Event's port.
+
     assert(arm.home_ == &event.select_port_ &&
            "select_event_unlink_locked: arm does not belong to this Event");
     if (arm.home_ != &event.select_port_)
@@ -135,20 +135,20 @@ void Scheduler::select_event_unlink_locked(Event& event,
 
     detail::SelectPort& port = event.select_port_;
 
-    // Repair predecessor link.
+
     if (arm.prev_ != nullptr) {
         arm.prev_->next_ = arm.next_;
     } else {
-        // Arm is the head.
+
         port.head_ = arm.next_;
     }
 
-    // Repair successor link.
+
     if (arm.next_ != nullptr) {
         arm.next_->prev_ = arm.prev_;
     }
 
-    // Clear arm linkage.
+
     arm.next_ = nullptr;
     arm.prev_ = nullptr;
     arm.home_ = nullptr;
@@ -158,9 +158,9 @@ std::size_t Scheduler::select_event_scan_locked(Event& event) {
     assert(&event.scheduler_ == this &&
            "select_event_scan_locked: Event does not belong to this Scheduler");
     if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
-    // Walk the Event's SelectPort, marking eligible Event Select arms
-    // CandidateReady. Readiness-offer only — no claim, no finalization,
-    // no publication, no unlink, no worklist construction.
+
+
+
     std::size_t marked = 0;
     detail::SelectArmSlot* arm = event.select_port_.head_;
     while (arm != nullptr) {
@@ -181,38 +181,38 @@ std::size_t Scheduler::select_event_scan_locked(Event& event) {
 
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
-    // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
-    // EXACT queue-membership validation. Event::cancel passes its private
-    // waiters_ here (NOT exposed to the caller). The contract (Corrective C):
-    //   returns true ONLY if node is currently Registered AND currently linked
-    //   in THIS Event's private WaitQueue AND CANCEL wins node.resolve_.
-    //   Otherwise returns false WITHOUT mutation.
-    //
-    // The membership check scans THIS queue's own intrusive list for &node
-    // while holding this Scheduler's global_mtx_ + this Event's q.mtx(). It
-    // does NOT read a foreign node's home_, does NOT lock a foreign Event or
-    // foreign Scheduler, and does NOT depend on cross-Scheduler
-    // synchronization. Wrong-Event (same OR different Scheduler), detached,
-    // Woken, Expired, and Cancelled nodes all return false safely.
-    //
-    // Generic Scheduler::cancel_wait is unchanged (its caller contract already
-    // guarantees membership); this Event-specific path is the one reached from
-    // untrusted Event::cancel callers. The resolve_ CAS remains the
-    // terminal-winner authority; contains_locked is the membership gate, taken
-    // BEFORE resolve_ so no mutation occurs on a non-member. This call CANNOT
-    // synthesize a RESOURCE_WAKE and CANNOT change Event SET/UNSET.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     LockGuard lk(global_mtx_);
     LockGuard qlk(q.mtx());
-    // Membership gate: a node not linked in THIS queue is not cancellable here.
-    // Covers wrong-Event (same/different Scheduler), detached, and (because a
-    // terminal winner is already unlinked) Woken/Expired/Cancelled nodes.
+
+
+
     if (!cancel_primitive_wait_locked(q, node)) return false;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // The cancel CAS won: the node is terminal+unlinked and the count is closed.
-    // Return true unconditionally — the winner identity is the resolve_ CAS, not
-    // the runnable publication (mirrors wake_wait_one_locked). The publication
-    // edge switches on the winner's ResumeTarget kind (fiber route / deferred
-    // obligation / none); its result does NOT undo the cancel.
+
+
+
+
+
     publish_wait_winner_locked(node);
     return true;
 }
@@ -220,59 +220,59 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
 Scheduler::WaitAdmitDisposition Scheduler::event_wait_admit_locked(
     WaitQueue& q, const std::atomic<bool>& set_flag, WaitNode& node,
     const WaitResume& resume, bool timed, deadline_t deadline) {
-    // FE shared Event admission ladder — the ONE textual
-    // register → SET-precedence → already-due → terminal-recheck sequence
-    // (FE-1c verdict: no duplicated admission law). Caller holds
-    // global_mtx_ + q.mtx(). Returns the disposition; the ENTRY commits its
-    // own PublicationEligibility in THIS critical section when `authorized`
-    // (fiber: commit_suspend_locked; deferred: frontend record arm) and
-    // performs physical suspension outside the lock. Inline resolutions
-    // (resolved_inline) publish nothing — the caller never suspended (L6).
+
+
+
+
+
+
+
+
     TimerRegistration* reg = nullptr;
     if (timed) {
-        // R2-ALLOC: allocations before any admission state mutation (a
-        // bad_alloc here leaves the node Detached and all counters intact).
+
+
         reg = prepare_ordinary_deadline_locked(&node, &q, deadline);
     }
     if (!q.register_wait_locked(node, resume)) {
-        // Node already registered or terminal: contract violation. The
-        // prepared block was never published; erase it so no orphan pool
-        // block outlives this epoch.
+
+
+
         if (timed) erase_popped_registration_locked(reg);
         return WaitAdmitDisposition::rejected;
     }
     ++waiting_waitq_count_;
     if (timed) {
-        // Publish the timer registration control block for this wait epoch
-        // (pool publication + ACTIVE count + heap push + park-cache refresh).
+
+
         publish_ordinary_deadline_locked(reg);
     }
-    // E12-A-EVENT-CORRECTIVE-1 (Corrective D): deterministic admission-before-
-    // final-set-check phase seam. When armed, pause the admission thread
-    // AFTER registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE
-    // the final SET check. This lets a causal test mechanically prove:
-    //   - admission-first: set()'s drain cannot complete until admission
-    //     releases serialization (a competing setter blocks on global_mtx_).
-    //   - set-first: if the setter stores SET first, admission (paused here
-    //     or about to run) cannot complete its drain until the setter
-    //     releases; admission then observes SET and resolves Woken inline.
-    // The seam blocks on its OWN mtx/cv (the production locks remain held),
-    // which is precisely the guarantee under test.
-    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+
+
+
+
+
+
+
+
+
+
+
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
         sluice_async_test::PhaseTag::event_admission_before_final_check);
 #endif
-    // Admission closure — Event SET takes precedence: if the resource is
-    // ready, the wait resolves Woken inline through the canonical resolve_
-    // authority (wake_node_locked, unlink in the same CS). The deadline is
-    // moot (the resource is ready). No publication: the caller never
-    // suspended (L6).
+
+
+
+
+
     if (set_flag.load(std::memory_order::acquire)) {
         if (q.wake_node_locked(node)) {
             if (timed) {
-                // ACTIVE->RETIRED via the ordinary deadline authority (no
-                // Event on_resolve hook exists; count decrement inside).
+
+
                 (void)retire_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
             }
@@ -281,63 +281,63 @@ Scheduler::WaitAdmitDisposition Scheduler::event_wait_admit_locked(
         return WaitAdmitDisposition::resolved_inline;
     }
     if (timed) {
-        // Already-due admission closure: if the deadline is ALREADY due (and
-        // the resource is NOT set), resolve Expired inline. The caller must
-        // NOT suspend and wait for a future timer scan merely because
-        // registration happened after the deadline was due.
+
+
+
+
         if (clock_now_unlocked() >= deadline) {
             if (q.expire_locked(node)) {
-                // ACTIVE->CONSUMED via the ordinary deadline authority; the
-                // already-due inline path keeps its immediate cache recompute.
+
+
                 (void)consume_ordinary_deadline_locked(*reg);
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 return WaitAdmitDisposition::resolved_inline;
             }
-            // If expire_locked lost, a concurrent resolver won; fall through
-            // to the terminal recheck.
+
+
         }
     }
-    // Defense-in-depth: if the node was resolved concurrently (it cannot be,
-    // since register_wait_locked just moved it to Registered under both
-    // locks and every resolver takes global_mtx_), undo and do not suspend.
+
+
+
     if (node.is_terminal()) {
         q.unlink_locked(node);
         --waiting_waitq_count_;
         if (timed) {
-            (void)retire_ordinary_deadline_locked(*reg);  // ACTIVE->RETIRED
+            (void)retire_ordinary_deadline_locked(*reg);
             recompute_earliest_deadline_locked();
         }
         return WaitAdmitDisposition::resolved_inline;
     }
-    // Suspension authorized. The epoch is Registered, un-resolved, and every
-    // resolver is excluded until THIS critical section releases; the entry
-    // commits its PublicationEligibility now (contract L7) and suspends
-    // physically afterwards (L10).
+
+
+
+
     return WaitAdmitDisposition::authorized;
 }
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
                                  WaitNode& node) {
-    // Event wait admission — stackful (Fiber) frontend entry over the shared
-    // ladder. The lost-set closure: register + check SET + (if SET) resolve
-    // Woken inline, OR commit suspension — all under one global_mtx_ + q.mtx()
-    // critical section (the same domain set()/reset() use). Only
-    // context_switch is outside the lock.
-    //
-    // If set_ is observed at admission (after registration), the wait resolves
-    // Woken inline via wake_node_locked (resolve_(Woken) + unlink), the timer
-    // (if any — none for this non-deadline overload) is retired, the count is
-    // decremented, and the fiber does NOT suspend. Because the current Fiber has
-    // not yet committed `waiting`, a successful admission-time Woken resolution
-    // may cause make_runnable() to return false for the RUNNING Fiber — that is
-    // expected and harmless (the fiber continues running and returns from wait).
+
+
+
+
+
+
+
+
+
+
+
+
+
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    // E12-A-EVENT-CORRECTIVE-2 (T31): mark that an admission attempt has begun,
-    // BEFORE acquiring global_mtx_. A causal test observes this marker is set
-    // while a setter holds global_mtx_ mid-drain, proving the admission could
-    // not have entered its critical section yet. Controller-driven (test variant).
+
+
+
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
         sluice_async_test::PhaseTag::event_admission_attempt_before_global_lock);
@@ -346,13 +346,13 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
         if (event_wait_admit_locked(q, set_flag, node, WaitResume::fiber(me),
-                                    /*timed=*/false,
+false,
                                     deadline_t{}) !=
             WaitAdmitDisposition::authorized) {
-            return;  // rejected or resolved inline: do NOT suspend
+            return;
         }
-        // Fiber-kind PublicationEligibility commit (FE-1b L7): same critical
-        // section, after authorization.
+
+
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -368,30 +368,30 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
 void Scheduler::await_event_wait_deadline(WaitQueue& q,
                                           const std::atomic<bool>& set_flag,
                                           WaitNode& node, deadline_t deadline) {
-    // Deadline-aware Event wait — stackful (Fiber) frontend entry over the
-    // shared ladder. The wait resolves when EXACTLY ONE cause wins the
-    // resolve_ CAS:
-    //   - set() broadcast (event_set_broadcast -> wake_wait_one_locked) -> Woken
-    //   - cancel_wait(q, node)                                   -> Cancelled
-    //   - the deadline elapsing (pump_deadlines_locked)           -> Expired
-    //
-    // Deadline precedence: at admission, Event SET readiness is checked
-    // BEFORE the already-due deadline predicate. Therefore Event SET +
-    // already-due deadline -> Woken inline (the resource is ready; the
-    // deadline is moot). This is the accepted production behavior. A
-    // non-timer winner retires the registration in the same CS (the
-    // timer-lifetime closure).
+
+
+
+
+
+
+
+
+
+
+
+
+
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
         if (event_wait_admit_locked(q, set_flag, node, WaitResume::fiber(me),
-                                    /*timed=*/true, deadline) !=
+true, deadline) !=
             WaitAdmitDisposition::authorized) {
-            return;  // rejected or resolved inline: do NOT suspend
+            return;
         }
-        // Fiber-kind PublicationEligibility commit (FE-1b L7).
+
         commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -404,4 +404,4 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
     (void)fiber_ctx::context_switch(&s);
 }
 
-}  // namespace sluice::async
+}

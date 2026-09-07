@@ -1,4 +1,4 @@
-// WAL record write/read implementation. Little-endian framing.
+
 #include <sluice/wal.hpp>
 
 #include <algorithm>
@@ -10,9 +10,9 @@ namespace sluice::wal {
 
 namespace detail {
 
-// Fits len in a u32 without truncation. Anything > UINT32_MAX cannot be framed
-// by the WAL record layout (the length field is 4 bytes LE) and must be
-// rejected up-front rather than silently truncated.
+
+
+
 Result<std::uint32_t> checked_u32_len(std::size_t len) {
     if (len > static_cast<std::size_t>(UINT32_MAX)) {
         return make_unexpected<std::uint32_t>(IoError{.code = IoError::Code::invalid_state});
@@ -25,7 +25,7 @@ std::size_t read_chunk_size(std::size_t remaining) noexcept {
     return std::min(remaining, kReadChunkBytes);
 }
 
-} // namespace detail
+}
 
 namespace {
 
@@ -51,7 +51,7 @@ std::uint32_t checksum_of(std::span<const std::byte> payload) {
     return static_cast<std::uint32_t>(sum & 0xFFFFFFFFU);
 }
 
-} // namespace
+}
 
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload) {
     auto len_res = detail::checked_u32_len(payload.size());
@@ -91,9 +91,9 @@ Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload
         return make_unexpected<void>(len_res.error());
     }
 
-    // Frame the record on the stack and emit header|payload|checksum as a single
-    // write_all_vec — byte-identical to write_record. The header/trailer arrays
-    // outlive the write_all_vec call, so the slices stay valid.
+
+
+
     std::array<std::byte, 8> header{};
     put_le_u32(header.data(), magic);
     put_le_u32(header.data() + 4, len_res.value());
@@ -101,8 +101,8 @@ Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload
     std::array<std::byte, 4> trailer{};
     put_le_u32(trailer.data(), checksum_of(payload));
 
-    // Max 3 slices (header, payload, checksum) — stack-allocated to avoid
-    // heap allocation (R.5, Per.19).
+
+
     std::array<ConstIoSlice, 3> slices{};
     std::size_t count = 0;
     slices[count++] = ConstIoSlice{std::span<const std::byte>(header)};
@@ -165,7 +165,7 @@ Result<std::vector<std::byte>> read_record(Reader& reader) {
     return payload;
 }
 
-// ---------------- WalWriter ----------------
+
 
 WalWriter::WalWriter(Writer& writer) : writer_(writer), syncable_(nullptr) {}
 
@@ -177,7 +177,7 @@ Result<void> WalWriter::write_record(std::span<const std::byte> payload) {
     if (!r.has_value()) {
         return make_unexpected<void>(r.error());
     }
-    // Framed size = 8 (header) + payload + 4 (checksum). Only advance on success.
+
     written_lsn_ += 8 + payload.size() + 4;
     return {};
 }
@@ -196,12 +196,12 @@ Result<void> WalWriter::flush() {
     if (!r.has_value()) {
         return make_unexpected<void>(r.error());
     }
-    flushed_lsn_ = written_lsn_; // advance only on success
+    flushed_lsn_ = written_lsn_;
     return {};
 }
 
 Result<void> WalWriter::sync() {
-    // Recommended semantics: flush first, then sync_data, then advance durable.
+
     auto fr = flush();
     if (!fr.has_value()) {
         return make_unexpected<void>(fr.error());
@@ -213,8 +213,8 @@ Result<void> WalWriter::sync() {
     if (!sr.has_value()) {
         return make_unexpected<void>(sr.error());
     }
-    durable_lsn_ = flushed_lsn_; // advance only on success
+    durable_lsn_ = flushed_lsn_;
     return {};
 }
 
-} // namespace sluice::wal
+}

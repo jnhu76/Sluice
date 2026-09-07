@@ -1,21 +1,21 @@
-// sluice::async::select — E13 Select public value types and constrained surface.
-//
-// This header defines the public Select API for the first production version:
-// typed Event/Timer case values, SelectResult, the SelectCaseType concept,
-// and the variadic select() entry point.
-//
-// The public variadic select() template is DEFINED here (a thin bridge).
-// A general function-template definition must be visible to arbitrary user TUs,
-// so it cannot live only in src/async/select.cpp. The template materializes a
-// fixed caller-frame std::array of SelectCaseDescriptor (preserving argument
-// order as the arm index) and forwards to ONE non-template Scheduler admission
-// function (Scheduler::select_admit) that owns all centralized admission logic
-// for BOTH the inline-ready and the no-ready suspended paths. No explicit-
-// instantiation combinatorial explosion; the admission core compiles once. See
-// docs/architecture/async-synchronization.md (§ Select) for the admission
-// design.
-//
-// See docs/architecture/async-synchronization.md (§ Select) for the frozen API surface.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <array>
@@ -31,28 +31,28 @@ namespace sluice::async {
 
 class Event;
 
-// ---- Constants and aliases ----
+
 
 using select_deadline_t = Scheduler::deadline_t;
 
-// ---- Winning kind ----
+
 
 enum class SelectKind : std::uint8_t {
     event = 0,
     timer = 1,
 };
 
-// ---- Timer outcome ----
+
 
 enum class SelectTimerOutcome : std::uint8_t {
     fired = 0,
 };
 
-// ---- SelectResult ----
+
 
 class SelectResult {
 public:
-    // Default: no winner sentinel.
+
     constexpr SelectResult() noexcept = default;
 
     [[nodiscard]] constexpr bool has_winner() const noexcept {
@@ -60,9 +60,9 @@ public:
     }
 
     [[nodiscard]] constexpr std::size_t index() const noexcept {
-        // L9 pattern (AGENTS.md §3.8): Debug tripwire; Release returns the
-        // deterministic no-winner fallback 0 instead of relying on the
-        // implicit member default. Mirrors kind()/timer_outcome() below.
+
+
+
         if (!has_winner_) {
             assert(false && "SelectResult::index() called with no winner");
             return 0;
@@ -89,11 +89,11 @@ public:
 private:
     friend class Scheduler;
 
-    // The narrow production construction path (see
-    // docs/architecture/async-synchronization.md § Select). Scheduler-only: an
-    // admitted group builds exactly ONE SelectResult from the winner index.
-    // Losers never construct a result. NOT public (no arbitrary-result
-    // constructor); a default-constructed SelectResult remains "no winner".
+
+
+
+
+
     constexpr SelectResult(std::size_t index, SelectKind kind,
                            SelectTimerOutcome timer_outcome) noexcept
         : index_(index), kind_(kind), timer_outcome_(timer_outcome),
@@ -116,7 +116,7 @@ private:
     bool has_winner_{false};
 };
 
-// ---- EventSelectCase ----
+
 
 class EventSelectCase {
 public:
@@ -124,11 +124,11 @@ public:
 
 private:
     friend class Scheduler;
-    friend class detail::SelectCaseDescriptor;  // matches definition (ODR tag)
+    friend class detail::SelectCaseDescriptor;
     Event* event_;
 };
 
-// ---- TimerSelectCase ----
+
 
 class TimerSelectCase {
 public:
@@ -138,23 +138,23 @@ public:
 
 private:
     friend class Scheduler;
-    friend class detail::SelectCaseDescriptor;  // matches definition (ODR tag)
+    friend class detail::SelectCaseDescriptor;
     Scheduler* scheduler_;
     select_deadline_t deadline_;
 };
 
-// ---- detail::SelectCaseDescriptor — the sealed variadic bridge type ----
-//
-// SelectCaseDescriptor is a CLASS with PRIVATE fields. Only
-// its typed constructors (from EventSelectCase/TimerSelectCase) can establish
-// descriptors; only friend Scheduler can read the fields. No public raw
-// pointer getter, no public field access. An ordinary TU cannot forge a
-// descriptor with arbitrary values.
-//
-// The public select() template constructs descriptors via the public typed
-// constructors, then passes the array to the single non-template
-// Scheduler::select_admit_inline (which reads fields under the Scheduler
-// friend grant). No intermediate bridge type is needed.
+
+
+
+
+
+
+
+
+
+
+
+
 namespace detail {
 
 class SelectCaseDescriptor {
@@ -179,24 +179,24 @@ private:
     select_deadline_t deadline_{0};
 };
 
-}  // namespace detail
+}
 
-// ---- constrained select() definition (thin variadic bridge) ----
-//
-// The public variadic entry point. 1 <= sizeof...(Cases) <= kSelectMaxArms.
-// The requires clause rejects empty packs, too-large packs, and non-case types
-// at compile time and keeps select() SFINAE-friendly (the SF compile-fail
-// tests evaluate SelectInvocable<...> to false on bad inputs).
-// Argument order IS the arm index (lowest-index tie-break); the variadic
-// expands into a fixed caller-frame array — no per-call heap for case storage.
-//
-// This template is deliberately THIN: it only materializes the case descriptor
-// array and calls Scheduler::select_admit directly (no intermediate bridge
-// struct). Scheduler friends this exact constrained template entity, so the
-// admission core remains private. No concrete bridge type is published.
-//
-// The admission logic compiles exactly once and is not duplicated per
-// Event/Timer permutation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 template <class... Cases>
     requires (
@@ -210,4 +210,4 @@ SelectResult select(Scheduler& scheduler, Cases&&... cases) {
     return scheduler.select_admit(descs.data(), sizeof...(Cases));
 }
 
-}  // namespace sluice::async
+}

@@ -1,5 +1,5 @@
-// Production BlockingIoPool non-template core.
-// Pure C++17/20: std primitives only. No C runtime mixing.
+
+
 #include <sluice/blocking_io_pool.hpp>
 #include <sluice/detail/blocking_io_pool_impl.hpp>
 
@@ -35,21 +35,21 @@ BlockingIoPoolOptions validate_options_or_throw(BlockingIoPoolOptions opts) {
     }
     return opts;
 }
-} // namespace
+}
 
 struct BlockingIoPool::Impl {
     BlockingIoPoolOptions opts;
     PoolStats* stats;
 
     std::mutex mtx;
-    std::condition_variable not_full;  // signaled when a slot frees
-    std::condition_variable not_empty; // signaled when a job is enqueued
-    std::condition_variable idle;      // signaled when queue + active work drain
+    std::condition_variable not_full;
+    std::condition_variable not_empty;
+    std::condition_variable idle;
     std::deque<std::function<void()>> queue;
     std::vector<std::thread> workers;
     std::once_flag shutdown_once;
     std::size_t active = 0;
-    bool accepting = true; // false once shutdown() begins
+    bool accepting = true;
 
     Impl(BlockingIoPoolOptions o, PoolStats* s) : opts(o), stats(s) {
         if (stats) {
@@ -109,8 +109,8 @@ struct BlockingIoPool::Impl {
             {
                 std::scoped_lock lk(mtx);
                 accepting = false;
-                not_empty.notify_all(); // wake all workers to see accepting==false
-                not_full.notify_all();  // wake any blocked submitters
+                not_empty.notify_all();
+                not_full.notify_all();
             }
 
             for (auto& w : workers) {
@@ -126,15 +126,15 @@ struct BlockingIoPool::Impl {
 BlockingIoPool::BlockingIoPool(BlockingIoPoolOptions opts, PoolStats* stats)
     : impl_(std::make_unique<Impl>(validate_options_or_throw(opts), stats)) {
     impl_->workers.reserve(impl_->opts.worker_count);
-    // If a thread constructor throws, the already-created threads in
-    // impl_->workers are joined by the Impl destructor (which runs as part of
-    // unique_ptr cleanup), and accepting stays true so they drain. No leak.
+
+
+
     try {
         for (std::size_t i = 0; i < impl_->opts.worker_count; ++i) {
             impl_->workers.emplace_back([this] { impl_->worker_loop(); });
         }
     } catch (...) {
-        // Roll back: signal shutdown so workers exit, then rethrow.
+
         impl_->shutdown();
         throw;
     }
@@ -146,8 +146,8 @@ BlockingIoPool::~BlockingIoPool() {
 
 namespace detail {
 
-// Enqueue a type-erased job. Reaches into the pool's Impl (friend). stats is
-// read from the Impl so the path matches the submit templates.
+
+
 Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool block) {
     auto& impl = *pool.impl_;
     PoolStats* stats = impl.stats;
@@ -187,7 +187,7 @@ Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool b
     return {};
 }
 
-} // namespace detail
+}
 
 PoolStats* BlockingIoPool::pool_stats() noexcept {
     return impl_->stats;
@@ -230,4 +230,4 @@ Result<std::unique_ptr<BlockingIoPool>> make_blocking_io_pool(BlockingIoPoolOpti
     return std::make_unique<BlockingIoPool>(opts, stats);
 }
 
-} // namespace sluice
+}

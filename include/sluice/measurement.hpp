@@ -1,20 +1,20 @@
-// sluice measurement structs — optional observability hooks for the core.
-//
-// Each stats struct is pure data: default-initialized to zero, copyable, and
-// attached to a core type via a nullable pointer (Stats*). A null pointer means
-// "no measurement" and costs nothing — the wired-in call sites guard on null
-// before incrementing. These do NOT change I/O semantics; they only count.
-//
-// Design rule: stats are caller-owned and never global. The
-// core holds raw pointers; callers keep the storage alive for the reader/
-// writer/copy operation's lifetime.
+
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <cstdint>
 
 namespace sluice {
 
-// Counts syscalls made by the POSIX file backend (FileReader/FileWriter).
+
 struct SyscallStats {
     std::uint64_t read_syscalls = 0;
     std::uint64_t read_syscall_bytes = 0;
@@ -24,7 +24,7 @@ struct SyscallStats {
     std::uint64_t write_syscall_errors = 0;
 };
 
-// Counts buffer hit/miss/refill activity in BufferedReader/BufferedWriter.
+
 struct BufferStats {
     std::uint64_t read_requests = 0;
     std::uint64_t read_request_bytes = 0;
@@ -44,10 +44,10 @@ struct BufferStats {
     std::uint64_t write_direct_bytes = 0;
 };
 
-// Counts copy_all loop behavior and the reason each copy stopped. The
-// fast/scratch counters split the copy work between the
-// buffered fast path (draining already-buffered bytes via BufferedReadable) and
-// the scratch read path. They are observability hooks, not throughput numbers.
+
+
+
+
 struct CopyStats {
     std::uint64_t copy_calls = 0;
     std::uint64_t copy_loop_iterations = 0;
@@ -57,26 +57,26 @@ struct CopyStats {
     std::uint64_t limit_stops = 0;
     std::uint64_t reader_error_stops = 0;
     std::uint64_t writer_error_stops = 0;
-    // Buffered fast path: incremented each loop iteration that drains bytes from
-    // peek_buffered(); *_bytes is the byte count drained.
+
+
     std::uint64_t buffered_fast_path_calls = 0;
     std::uint64_t buffered_fast_path_bytes = 0;
-    // Scratch path: incremented each loop iteration that issues a read into the
-    // scratch buffer (including an EOF probe that reads 0); *_bytes is the byte
-    // count that was actually written through scratch.
+
+
+
     std::uint64_t scratch_path_calls = 0;
     std::uint64_t scratch_path_bytes = 0;
-    // Strategy selection counters. Exactly one strategy counter
-    // is incremented per top-level copy_all call, recording the SELECTED strategy.
-    // These answer "which strategy was selected?", distinct from the path
-    // counters above which answer "which path moved bytes?".
+
+
+
+
     std::uint64_t strategy_auto_calls = 0;
     std::uint64_t strategy_scratch_calls = 0;
     std::uint64_t strategy_buffered_first_calls = 0;
 };
 
-// Counts explicit sync operations on a SyncableWriter. Opt-in
-// and caller-owned like the other stats structs; null means no counting.
+
+
 struct SyncStats {
     std::uint64_t sync_data_calls = 0;
     std::uint64_t sync_data_errors = 0;
@@ -84,9 +84,9 @@ struct SyncStats {
     std::uint64_t sync_all_errors = 0;
 };
 
-// Counts experimental io_uring activity. Opt-in and
-// caller-owned; null means no counting. Lives in namespace sluice (not
-// experimental) so bench/CSV helpers can treat it like the other stats structs.
+
+
+
 struct UringStats {
     std::uint64_t queue_init_calls = 0;
     std::uint64_t submit_calls = 0;
@@ -96,14 +96,14 @@ struct UringStats {
     std::uint64_t bytes_completed = 0;
 };
 
-// Counts read_vec/write_vec activity. The *_fallback_calls fields distinguish
-// "used the default read_some/write_some loop" (e.g. an ObservedReader around a
-// MemoryReader, or any non-overriding reader) from "used a real vector syscall"
-// (the FileReader/FileWriter readv/writev overrides). That split is the whole
-// point of these stats: it shows how often vector I/O actually reached the
-// kernel as a single gather/scatter syscall vs.
-// degenerated to the per-slice fallback. See docs/reference/sync-io-model.md
-// (Vector I/O semantics).
+
+
+
+
+
+
+
+
 struct VectorStats {
     std::uint64_t read_vec_calls = 0;
     std::uint64_t read_vec_bytes = 0;
@@ -115,29 +115,29 @@ struct VectorStats {
     std::uint64_t write_vec_fallback_calls = 0;
 };
 
-// Async runtime observability. Caller-owned, nullable, never
-// global — same rule as the structs above. Attached to AsyncIoContext via a raw
-// pointer (set_stats); null means no counting. Defined here (not in async/) so
-// it sits with the other Stats types and is visible to both the async core and
-// the bench CSV helpers. See docs/adr/ADR-async-io-model.md §10b.
+
+
+
+
+
 struct AsyncStats {
-    std::uint64_t submit_calls = 0;        // count of submit_* invocations
-    std::uint64_t submitted_ops = 0;       // ops actually recorded outstanding
-    std::uint64_t poll_calls = 0;          // poll() invocations
-    std::uint64_t wait_calls = 0;          // wait_one() invocations
-    std::uint64_t completed_ops = 0;       // Completions marked ready
-    std::uint64_t canceled_ops = 0;        // Completions completed with canceled
-    std::uint64_t completion_errors = 0;   // Completions completed with an error != canceled
-    std::uint64_t short_completions = 0;   // read/write with fewer bytes than requested
-    std::uint64_t max_outstanding = 0;     // high-water mark of in-flight ops
-    // Submit rejected for CAPACITY pressure (would_block) then retried. This is
-    // the canonical queue-full signal (ADR Decision 6/13); a backend MAY also
-    // bump it for its own ring-full backend_error path (Uring does).
+    std::uint64_t submit_calls = 0;
+    std::uint64_t submitted_ops = 0;
+    std::uint64_t poll_calls = 0;
+    std::uint64_t wait_calls = 0;
+    std::uint64_t completed_ops = 0;
+    std::uint64_t canceled_ops = 0;
+    std::uint64_t completion_errors = 0;
+    std::uint64_t short_completions = 0;
+    std::uint64_t max_outstanding = 0;
+
+
+
     std::uint64_t queue_full_retries = 0;
-    // Submit rejected for a CALLER lifecycle violation (invalid_state: non-idle
-    // Completion, admission closed, lifecycle misuse) — NOT capacity pressure.
-    // Counted separately so queue_full_retries never conflates the two.
+
+
+
     std::uint64_t invalid_state_rejections = 0;
 };
 
-} // namespace sluice
+}

@@ -1,8 +1,8 @@
-// Checked conversions shared by POSIX and io_uring I/O backends.
-//
-// These helpers are intentionally internal: public operations continue to use
-// size_t/uint64_t, while each native backend rejects values it cannot represent
-// before issuing a syscall or marking caller-owned completion state.
+
+
+
+
+
 #pragma once
 
 #include <sluice/error.hpp>
@@ -56,11 +56,11 @@ enum class UringSubmitProgress : std::uint8_t {
     complete,
 };
 
-// Classify io_uring_submit() against the number of SQEs that were pending
-// before the call. A short positive return is not an operation failure: the
-// unconsumed SQEs remain in the shared SQ and must be retained for a later
-// submit. Negative and zero-progress results likewise leave caller-owned
-// Completion state outstanding.
+
+
+
+
+
 inline UringSubmitProgress classify_uring_submit(int submit_result,
                                                  unsigned pending_before) noexcept {
     if (submit_result < 0) return UringSubmitProgress::error;
@@ -72,8 +72,8 @@ inline UringSubmitProgress classify_uring_submit(int submit_result,
     return UringSubmitProgress::partial;
 }
 
-// liburing wait functions return negative errno values directly. Retry only
-// -EINTR; other negative results remain available to the caller for mapping.
+
+
 template <class WaitFn>
 int retry_uring_wait_on_eintr(WaitFn&& wait_fn) {
     int result = 0;
@@ -83,4 +83,4 @@ int retry_uring_wait_on_eintr(WaitFn&& wait_fn) {
     return result;
 }
 
-} // namespace sluice::detail
+}

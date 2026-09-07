@@ -1,8 +1,8 @@
-// sluice-grep scanning engine implementation (same Runtime shape as
-// sluice-copy/sluice-hash: one task, TaskResultSlot terminal slot, stop only
-// after the task publishes). The I/O protocol (submit -> await -> result ->
-// reset) and the run-to-result lifecycle are the library's await-style
-// helpers (C7, #135).
+
+
+
+
+
 #include "grep_task.hpp"
 
 #include "matcher.hpp"
@@ -38,15 +38,15 @@ struct GrepTask {
         results.push_back(std::move(r));
     }
 
-    // Scan one file: positional async reads feed the LineMatcher; complete
-    // matching lines go to the sink immediately (streaming output).
+
+
     void scan_one(RuntimeTaskContext& ctx, std::size_t idx) {
         const GrepInput& in = inputs[idx];
         GrepFileResult out;
         out.path = in.path;
 
         LineMatcher matcher(pattern, max_line_bytes);
-        std::vector<MatchEvent> events;  // reused per-chunk scratch
+        std::vector<MatchEvent> events;
 
         Completion<std::size_t> rc;
         std::uint64_t offset = 0;
@@ -67,7 +67,7 @@ struct GrepTask {
             }
             std::size_t n = rr.value();
             if (n == 0) {
-                // EOF: flush the final (unterminated) line.
+
                 events.clear();
                 matcher.finish(events);
                 for (auto& e : events) {
@@ -96,8 +96,8 @@ struct GrepTask {
 
     void operator()(RuntimeTaskContext& ctx,
                     TaskResultSlot<sluice::Result<std::vector<GrepFileResult>>>& slot) {
-        // Exception boundary (same rationale as copy_task/hash_task): every
-        // input gets exactly one result entry on every path.
+
+
         try {
             for (std::size_t i = 0; i < inputs.size(); ++i) {
                 if (ctx.cancel_token().is_requested()) {
@@ -145,7 +145,7 @@ std::vector<GrepFileResult> run_grep_engine(
     const std::string& pattern, std::vector<GrepInput> inputs,
     std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers,
     MatchSink sink, std::unique_ptr<AsyncBackend> backend) {
-    // Argument validation BEFORE any allocation or Runtime build.
+
     if (config_invalid(buffer_size, max_line_bytes, workers) || !backend) {
         return all_error(inputs, IoError{IoError::Code::invalid_state});
     }
@@ -161,10 +161,10 @@ std::vector<GrepFileResult> run_grep_engine(
                   max_line_bytes,   std::move(sink),
                   std::move(buffer), {}};
 
-    // The library bridge runs the full lifecycle (build/start/submit/wait
-    // publish/stop/drain/join + the task exception boundary). A lifecycle
-    // error is reported per input (exactly one result entry per input on
-    // every path — the run_grep_engine contract).
+
+
+
+
     auto result = run_task_to_result<std::vector<GrepFileResult>>(
         workers, std::move(backend), task);
     if (!result.has_value())
@@ -172,7 +172,7 @@ std::vector<GrepFileResult> run_grep_engine(
     return std::move(result.value());
 }
 
-}  // namespace
+}
 
 std::vector<GrepFileResult> grep_files(
     const std::string& pattern, std::vector<GrepInput> inputs,
@@ -192,4 +192,4 @@ std::vector<GrepFileResult> grep_files_with_backend(
                            std::move(backend));
 }
 
-}  // namespace sluice_grep
+}

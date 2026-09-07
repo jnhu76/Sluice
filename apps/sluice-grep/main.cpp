@@ -1,29 +1,29 @@
-// sluice-grep — bounded streaming literal search.
-//
-// CLI:
-//   sluice-grep [options] <pattern> <file>...
-// Options:
-//   -n                      prefix matches with 1-based line numbers
-//   --buffer-size <bytes>   read buffer (default 1 MiB)
-//   --max-line-bytes <n>    retained-line cap (default 1 MiB; longer lines
-//                           are reported to stderr and skipped)
-//   --workers <count>       Runtime worker count (default 1)
-//   --help                  show usage
-//
-// Backend: ThreadPoolBackend (real file I/O). One ApplicationRuntime for the
-// whole batch; files are scanned sequentially in CLI order with ONE reusable
-// read buffer. Matches stream to stdout as they are found (they are never
-// buffered in memory): memory ~= buffer_size + max_line_bytes + O(1).
-//
-// Semantics: byte-oriented literal substring match per line ('\n' is the
-// only line terminator; NUL bytes and invalid UTF-8 pass through; no
-// Unicode/grapheme claims). Empty pattern matches every line. Deterministic
-// output: files in CLI order, lines in file order. With more than one input
-// file each match is prefixed "path:"; -n adds the line number.
-//
-// Exit codes (grep tradition, documented in README): 0 = match found,
-// 1 = no match, 2 = error. Cancellation (not reachable via the CLI in V1)
-// would surface as 2.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include "cli_parse.hpp"
 #include "grep_task.hpp"
 
@@ -52,7 +52,7 @@ struct FdCloser {
     }
 };
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     CliArgs args;
@@ -65,8 +65,8 @@ int main(int argc, char** argv) {
 
     const bool prefix_name = args.files.size() > 1;
 
-    // Open + validate every input up front (regular files only; positional
-    // reads need a seekable source). Failed opens are reported and skipped.
+
+
     struct OpenFailure {
         std::size_t cli_index;
         bool not_regular;
@@ -103,11 +103,11 @@ int main(int argc, char** argv) {
         open_fds.push_back(fd);
     }
 
-    // Sink: print each match with the documented prefix rules. When stdout
-    // is a TTY every line is flushed immediately (interactive use); to a
-    // pipe/file the output is stdio-buffered and flushed once after the
-    // scan (GNU grep's convention — 1M+ write syscalls would dominate a
-    // high-match-density scan).
+
+
+
+
+
     const bool line_flush = ::isatty(STDOUT_FILENO);
     auto sink = [&](const std::string& path, std::uint64_t line_no,
                     std::string_view line) {
@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
                                 args.workers, sink);
     std::fflush(stdout);
 
-    // Report in CLI order (failures + engine results), grep-style.
+
     bool any_error = false;
     bool any_match = false;
     std::size_t fi = 0, gi = 0;

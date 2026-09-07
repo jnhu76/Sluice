@@ -1,9 +1,9 @@
-// sluice fault-injection wrappers + minimal in-memory Reader/Writer sinks.
-//
-// MemoryReader/MemoryWriter are zero-dependency in-process sources/sinks used
-// both by tests and by the fault wrappers' default backing store. FaultReader/
-// FaultWriter wrap any Reader/Writer and deterministically inject short I/O
-// and failures per a FaultPlan. They never mutate data.
+
+
+
+
+
+
 #pragma once
 
 #include <sluice/reader.hpp>
@@ -19,7 +19,7 @@
 
 namespace sluice {
 
-// ---------- In-memory sinks ----------
+
 
 class MemoryWriter final : public Writer {
   public:
@@ -54,18 +54,18 @@ class MemoryReader final : public Reader {
         return MemoryReader({bs.begin(), bs.end()});
     }
 
-    // Convenience factory from a byte span. Mirrors
-    // from_string; COPIES the span into owned storage so the caller's buffer
-    // need not outlive the reader (no dangling reference). Empty span is fine.
+
+
+
     static MemoryReader from_bytes(std::span<const std::byte> bytes) {
         return MemoryReader({bytes.begin(), bytes.end()});
     }
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override {
         std::size_t n = std::min(dst.size(), buf_.size() - pos_);
-        // Guard the memcpy: with n==0 either buf_.data() (empty source) or
-        // dst.data() (empty request) may be null, and passing null to memcpy
-        // is UB even for a zero-length copy.
+
+
+
         if (n != 0) {
             std::memcpy(dst.data(), buf_.data() + pos_, n);
         }
@@ -80,7 +80,7 @@ class MemoryReader final : public Reader {
     std::size_t pos_ = 0;
 };
 
-// ---------- Fault injection ----------
+
 
 struct FaultPlan {
     std::optional<std::uint64_t> fail_after_read_calls;
@@ -96,7 +96,7 @@ class FaultReader final : public Reader {
   public:
     FaultReader(Reader& inner, const FaultPlan& plan) : inner_(inner), plan_(plan) {}
 
-    // Not copyable or movable: holds a reference + mutable counters.
+
     FaultReader(const FaultReader&) = delete;
     FaultReader& operator=(const FaultReader&) = delete;
     FaultReader(FaultReader&&) = delete;
@@ -115,7 +115,7 @@ class FaultWriter final : public Writer {
   public:
     FaultWriter(Writer& inner, const FaultPlan& plan) : inner_(inner), plan_(plan) {}
 
-    // Not copyable or movable: holds a reference + mutable counters.
+
     FaultWriter(const FaultWriter&) = delete;
     FaultWriter& operator=(const FaultWriter&) = delete;
     FaultWriter(FaultWriter&&) = delete;
@@ -131,4 +131,4 @@ class FaultWriter final : public Writer {
     std::uint64_t bytes_seen_ = 0;
 };
 
-} // namespace sluice
+}

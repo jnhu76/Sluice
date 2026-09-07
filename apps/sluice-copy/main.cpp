@@ -1,46 +1,46 @@
-// sluice-copy — reference async file copy application.
-//
-// CLI:
-//   sluice-copy [options] <source> <destination>
-// Options:
-//   --buffer-size <bytes>   per-chunk read/write buffer (default 1 MiB)
-//   --pipeline-depth <n>    read-ahead slots (default 1 = Version A sequential;
-//                           >1 enables the bounded reusable-buffer pipeline,
-//                           Version B, with up to n outstanding reads and an
-//                           ordered single writer)
-//   --workers <count>       Runtime worker count (default 1)
-//   --sync none|data|all    durability policy after copy (default none)
-//   --no-atomic             direct destination write (old Version A/B
-//                           behavior); default is the Version C safe path
-//   --help                  show usage
-//
-// Backend: ThreadPoolBackend (real file I/O). No FakeAsyncBackend in app code.
-//
-// Version C (default): the copy lands in a uniquely-named temp file created in
-// the DESTINATION's directory (see safe_output.hpp), the sync policy applies
-// to that temp fd, and the destination is replaced by one atomic rename. A
-// copy/sync/rename failure never leaves partial content visible at the
-// destination and never destroys an existing destination; the temp file is
-// cleaned up on every failure path. With --sync data|all the parent directory
-// is fsynced after the rename so the replacement itself is crash-durable.
-// With --no-atomic the old direct-write behavior applies (a mid-copy failure
-// may leave a partial destination).
-//
-// Memory upper bound is approximately buffer_size * pipeline_depth, capped by
-// the app-level limits in copy_task.hpp (kMaxBufferSize/kMaxPipelineDepth/
-// kMaxPipelineBytes/kMaxWorkers). The outer call is still blocking (the copy
-// completes before the CLI returns); the pipeline is internal. Not zero-copy;
-// writes are not parallel.
-//
-// Input domain: the source must be a REGULAR file (the pipeline requires a
-// seekable, finite-length source); the destination must be a regular file or
-// not exist (atomic mode creates it via rename). Source == destination and
-// hardlink aliases are rejected by inode identity. With --no-atomic a
-// symlink in the final destination component is rejected at open (ELOOP,
-// never followed); the default atomic mode instead replaces the directory
-// entry — including a symlink entry — via rename (issue #141).
-//
-// Exit codes: 0 = success, 1 = usage error, 2 = I/O error, 3 = canceled.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include "cli_parse.hpp"
 #include "copy_task.hpp"
 #include "file_domain.hpp"
@@ -66,7 +66,7 @@ using sluice_copy::SyncPolicy;
 using sluice_copy::cli::CliArgs;
 using sluice_copy::cli::parse_args;
 
-// App-local RAII file descriptor (brief §21: do NOT promote to core).
+
 struct ScopedFd {
     int fd = -1;
     explicit ScopedFd(int f) : fd(f) {}
@@ -82,7 +82,7 @@ void print_copy_result(const char* prog, const Result<CopyStats>& result) {
                  e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "");
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     CliArgs args;
@@ -94,10 +94,10 @@ int main(int argc, char** argv) {
     }
 
     if (args.atomic) {
-        // ---- Version C: temp file in the destination directory + rename. --
-        // open_atomic_copy validates the input domain (regular source,
-        // non-same-inode destination) BEFORE creating anything; the
-        // destination is never opened for writing and never truncated.
+
+
+
+
         sluice_copy::SafeOpenOutcome oc =
             sluice_copy::open_atomic_copy(args.src, args.dst);
         if (oc.failure != sluice_copy::SafeOpenFailure::none) {
@@ -111,8 +111,8 @@ int main(int argc, char** argv) {
         }
         ScopedFd src_guard(oc.src_fd);
 
-        // Copy into the temp fd. temp_fd ownership stays with the outcome:
-        // commit/discard close it on every path.
+
+
         auto result = sluice_copy::run_pipelined_copy(
             oc.src_fd, oc.temp_fd, args.buffer_size, args.pipeline_depth,
             args.workers, args.sync);
@@ -122,16 +122,16 @@ int main(int argc, char** argv) {
             return (result.error().code == IoError::Code::canceled) ? 3 : 2;
         }
 
-        // Sync already applied to the temp fd by the copy task; now close +
-        // rename + (per policy) fsync the parent directory. The destination
-        // is either fully replaced or fully untouched.
+
+
+
         sluice_copy::SafeCommitStage stage = sluice_copy::SafeCommitStage::none;
         auto commit = sluice_copy::commit_atomic_copy(oc, args.dst, args.sync,
                                                       &stage);
         if (!commit.has_value()) {
             IoError e = commit.error();
-            // Truthful per-stage message: only a directory-fsync failure
-            // occurs AFTER the rename replaced the destination.
+
+
             const char* dst_state =
                 (stage == sluice_copy::SafeCommitStage::dir_sync)
                     ? "destination already replaced; rename durability NOT "
@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // ---- --no-atomic: the original direct-write path (Version A/B). -------
+
     sluice_copy::OpenCopyOutcome oc =
         sluice_copy::open_copy_files(args.src, args.dst);
     if (oc.failure != sluice_copy::OpenCopyFailure::none) {
@@ -178,9 +178,9 @@ int main(int argc, char** argv) {
     ScopedFd src_guard(oc.src_fd);
     ScopedFd dst_guard(oc.dst_fd);
 
-    // Truncate the destination now that we know it is a different, regular
-    // file. On a mid-copy failure the destination may be left partial (this
-    // path does not use temp-file + rename).
+
+
+
     if (::ftruncate(oc.dst_fd, 0) != 0) {
         std::fprintf(stderr, "%s: cannot truncate destination '%s': %s\n",
                      argv[0], args.dst.c_str(), std::strerror(errno));
@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
                                                    args.workers, args.sync);
     if (!result.has_value()) {
         print_copy_result(argv[0], result);
-        // Canceled exit code vs I/O error.
+
         return (result.error().code == IoError::Code::canceled) ? 3 : 2;
     }
 

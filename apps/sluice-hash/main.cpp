@@ -1,27 +1,27 @@
-// sluice-hash — bounded streaming file hashing.
-//
-// CLI:
-//   sluice-hash [options] <file>...
-// Options:
-//   --buffer-size <bytes>   read buffer (default 1 MiB; 4 KiB..64 MiB)
-//   --workers <count>       Runtime worker count (default 1)
-//   --help                  show usage
-//
-// Backend: ThreadPoolBackend (real file I/O). One ApplicationRuntime for the
-// whole batch; files are hashed sequentially in CLI order, one reusable
-// buffer for all of them (memory ~ 1 x buffer_size + O(1) hasher state,
-// independent of file count/size). Algorithm: SHA-256 (app-local FIPS 180-4
-// implementation, NIST-vector-anchored — see sha256.hpp).
-//
-// Input domain: every input must be a REGULAR file (positional reads need a
-// seekable source). An unreadable/non-regular input is reported to stderr and
-// skipped; hashing continues with the remaining files.
-//
-// Output: "<digest>  <filename>" per successful file on stdout (the
-// sha256sum-compatible shape). Diagnostics on stderr only.
-//
-// Exit codes: 0 = all hashed, 1 = usage error, 2 = I/O failure (at least one
-// file), 3 = canceled.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include "cli_parse.hpp"
 #include "hash_task.hpp"
 
@@ -43,10 +43,10 @@ using sluice_hash::HashInput;
 using sluice_hash::cli::CliArgs;
 using sluice_hash::cli::parse_args;
 
-// Batch closer for the fds handed to the hashing engine: hash_files uses the
-// fds but never closes them; this closes everything still open at scope exit
-// (including early error returns). A vector of non-movable RAII guard objects
-// cannot reallocate, so the fd list is plain ints instead.
+
+
+
+
 struct FdCloser {
     std::vector<int>& fds;
     ~FdCloser() {
@@ -57,7 +57,7 @@ struct FdCloser {
 
 const char* errno_msg(int e) { return std::strerror(e); }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
     CliArgs args;
@@ -68,18 +68,18 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // Open + validate every input up front (O_RDONLY, fstat, regular file).
-    // Failed opens are reported here and never enter the hashing engine; the
-    // remaining files still hash (sha256sum-style error isolation).
+
+
+
     struct OpenFailure {
         std::size_t cli_index;
         bool not_regular;
         int os_errno;
     };
     std::vector<OpenFailure> failures;
-    std::vector<std::size_t> input_cli_index;  // results[i] belongs to this file
+    std::vector<std::size_t> input_cli_index;
     std::vector<HashInput> inputs;
-    std::vector<int> open_fds;  // successfully opened, engine-visible fds
+    std::vector<int> open_fds;
     FdCloser closer{open_fds};
     input_cli_index.reserve(args.files.size());
     inputs.reserve(args.files.size());
@@ -111,12 +111,12 @@ int main(int argc, char** argv) {
     auto results = sluice_hash::hash_files(std::move(inputs), args.buffer_size,
                                            args.workers);
 
-    // Report in CLI order: merge engine results and open failures (both were
-    // recorded in CLI order, so two cursors suffice).
+
+
     bool any_error = false;
     bool any_canceled = false;
-    std::size_t fi = 0;   // next open failure
-    std::size_t gi = 0;   // next engine result (input_cli_index[gi] names it)
+    std::size_t fi = 0;
+    std::size_t gi = 0;
     for (std::size_t i = 0; i < args.files.size(); ++i) {
         if (fi < failures.size() && failures[fi].cli_index == i) {
             const auto& f = failures[fi++];

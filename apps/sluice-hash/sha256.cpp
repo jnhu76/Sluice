@@ -1,12 +1,12 @@
-// sluice-hash — app-local SHA-256 implementation (FIPS 180-4 §6.2).
+
 #include "sha256.hpp"
 
 namespace sluice_hash {
 
 namespace {
 
-// Round constants and IV from FIPS 180-4 §4.2.2 / §5.3.3 (not magic numbers
-// of our invention; anchored by the NIST vectors in the tests).
+
+
 constexpr std::uint32_t kK[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
     0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -25,11 +25,11 @@ constexpr std::uint32_t rotr(std::uint32_t x, unsigned n) noexcept {
     return (x >> n) | (x << (32 - n));
 }
 
-}  // namespace
+}
 
 Sha256::Sha256()
     : total_bytes_{0}, buf_len_{0}, finalized_{false} {
-    // IV from FIPS 180-4 §5.3.3 (fractional parts of sqrt of first 8 primes).
+
     h_[0] = 0x6a09e667;
     h_[1] = 0xbb67ae85;
     h_[2] = 0x3c6ef372;
@@ -86,7 +86,7 @@ void Sha256::compress_block(const std::uint8_t* p) noexcept {
 
 void Sha256::update(const std::uint8_t* data, std::size_t len) noexcept {
     total_bytes_ += len;
-    // Fill a partial buffer first.
+
     if (buf_len_ > 0) {
         std::size_t take = kBlockBytes - buf_len_;
         if (take > len) take = len;
@@ -99,24 +99,24 @@ void Sha256::update(const std::uint8_t* data, std::size_t len) noexcept {
             buf_len_ = 0;
         }
     }
-    // Whole blocks straight from the input (no copy).
+
     while (len >= kBlockBytes) {
         compress_block(data);
         data += kBlockBytes;
         len -= kBlockBytes;
     }
-    // Tail into the buffer (only reachable with buf_len_ == 0: a partial
-    // buffer above either filled+compressed to a block boundary or exhausted
-    // the input).
+
+
+
     for (std::size_t i = 0; i < len; ++i) buf_[buf_len_ + i] = data[i];
     buf_len_ += len;
 }
 
 void Sha256::final(std::uint8_t out_digest[32]) noexcept {
-    // Standard padding: 0x80, zeros, 64-bit big-endian BIT length (§5.1.1).
+
     std::uint64_t bit_len = total_bytes_ * 8;
     std::uint8_t one = 0x80;
-    update(&one, 1);  // also counts into total_bytes_, which padding ignores
+    update(&one, 1);
 
     std::uint8_t zero = 0;
     while (buf_len_ != 56) update(&zero, 1);
@@ -124,8 +124,8 @@ void Sha256::final(std::uint8_t out_digest[32]) noexcept {
     std::uint8_t len_be[8];
     for (int i = 0; i < 8; ++i)
         len_be[i] = static_cast<std::uint8_t>(bit_len >> (56 - 8 * i));
-    // Bypass update() (it would recount the length bytes): write directly
-    // through one final compress.
+
+
     for (int i = 0; i < 8; ++i) buf_[56 + i] = len_be[i];
     compress_block(buf_);
     buf_len_ = 0;
@@ -148,4 +148,4 @@ void sha256_hex(const std::uint8_t digest[32], char out[65]) {
     out[64] = '\0';
 }
 
-}  // namespace sluice_hash
+}

@@ -1,9 +1,9 @@
-// UringWriteBatch implementation.
-//
-// Two compile modes:
-//   * SLUICE_HAS_LIBURING defined: real io_uring path via liburing.
-//   * otherwise: unsupported stub (construction ok, write_all -> backend_error).
-// The stub keeps the project buildable with no liburing dependency.
+
+
+
+
+
+
 #include <sluice/experimental/uring_write_batch.hpp>
 
 #include <sluice/detail/io_validation.hpp>
@@ -27,7 +27,7 @@ UringWriteBatch::UringWriteBatch(unsigned queue_depth) : queue_depth_(queue_dept
         ring_ = nullptr;
     }
 #else
-    (void)queue_depth; // stub: no ring to size
+    (void)queue_depth;
 #endif
 }
 
@@ -47,8 +47,8 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
     (void)fd;
     (void)bytes;
     (void)file_offset;
-    // Unsupported stub: the project was built without liburing. Return
-    // backend_error so callers/tests can skip cleanly.
+
+
     return make_unexpected<UringWriteResult>(IoError{IoError::Code::backend_error});
 #else
     UringWriteResult result{};
@@ -65,9 +65,9 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
     while (remaining > 0) {
         io_uring_sqe* sqe = ::io_uring_get_sqe(ring);
         if (sqe == nullptr) {
-            // Submission queue full: flush pending, then retry. Check the flush
-            // submit's return (a failure must not be silently ignored) and count
-            // it as a submit call for stats symmetry with the happy path.
+
+
+
             if (::io_uring_submit(ring) < 0) {
                 ++result.errors;
                 if (stats_)
@@ -123,7 +123,7 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
         if (stats_)
             stats_->bytes_completed += wrote;
         if (wrote == 0) {
-            // Zero progress: stop rather than spin.
+
             ++result.errors;
             return make_unexpected<UringWriteResult>(IoError{IoError::Code::invalid_state});
         }
@@ -140,4 +140,4 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
 #endif
 }
 
-} // namespace sluice::experimental
+}

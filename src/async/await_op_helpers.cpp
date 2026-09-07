@@ -1,5 +1,5 @@
-// sluice::async await-style operation helpers — implementation.
-// See include/sluice/async/await_op_helpers.hpp for the contract.
+
+
 #include <sluice/async/await_op_helpers.hpp>
 
 namespace sluice::async {
@@ -24,7 +24,7 @@ Result<void> await_take(RuntimeTaskContext& ctx, Completion<void>& c) {
 Result<void> await_drain(RuntimeTaskContext& ctx, Completion<std::size_t>& c) {
     auto wr = ctx.await_completion(c);
     if (!wr.has_value()) return make_unexpected<void>(wr.error());
-    (void)c.result();  // consume; secondary terminal outcomes are discarded
+    (void)c.result();
     c.reset();
     return {};
 }
@@ -53,7 +53,7 @@ Result<std::size_t> await_read_fill(RuntimeTaskContext& ctx, int fd,
             ++tally->ops;
             if (rr.value() < dst.size() - filled) ++tally->short_ops;
         }
-        if (rr.value() == 0) return filled;  // EOF: a partial tail is data.
+        if (rr.value() == 0) return filled;
         filled += rr.value();
     }
     return filled;
@@ -81,7 +81,7 @@ Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, int fd,
             if (wrote < remaining) ++tally->short_ops;
         }
         if (wrote == 0) {
-            // Zero progress on a non-empty write: deterministic error.
+
             return make_unexpected<std::size_t>(
                 IoError{IoError::Code::backend_error});
         }
@@ -90,4 +90,4 @@ Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, int fd,
     return written;
 }
 
-}  // namespace sluice::async
+}

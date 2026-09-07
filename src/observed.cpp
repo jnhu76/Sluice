@@ -1,4 +1,4 @@
-// ObservedReader / ObservedWriter implementations: count and delegate.
+
 #include <sluice/observed.hpp>
 
 namespace sluice {
@@ -19,13 +19,13 @@ Result<std::size_t> ObservedReader::read_some(std::span<std::byte> dst) {
 }
 
 Result<std::size_t> ObservedReader::read_vec(std::span<IoSlice> dsts) {
-    // Delegating to inner_.read_vec runs the default fallback for the
-    // non-overriding readers this wrapper is meant to observe (MemoryReader,
-    // FaultReader, ...). We count the call/bytes/iovecs and — by design — a
-    // fallback call, since this layer observes the default-fallback path. The
-    // real (non-fallback) readv path is measured by FileReader's own
-    // VectorStats; do not wrap a FileReader here for vec stats (it carries its
-    // own). See docs/reference/sync-io-model.md (Vector I/O semantics).
+
+
+
+
+
+
+
     auto r = inner_.read_vec(dsts);
     if (vec_stats_) {
         ++vec_stats_->read_vec_calls;
@@ -60,9 +60,9 @@ Result<std::size_t> ObservedWriter::write_some(std::span<const std::byte> src) {
 }
 
 Result<std::size_t> ObservedWriter::write_vec(std::span<const ConstIoSlice> srcs) {
-    // See read_vec above: this wrapper observes the default-fallback path, so
-    // every vector call counts as a fallback. The real writev path is measured
-    // by FileWriter's own VectorStats.
+
+
+
     auto r = inner_.write_vec(srcs);
     if (vec_stats_) {
         ++vec_stats_->write_vec_calls;
@@ -91,4 +91,4 @@ Result<void> ObservedWriter::flush() {
     return {};
 }
 
-} // namespace sluice
+}
