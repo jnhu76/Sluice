@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 #include "hash_task.hpp"
 
 #include "sha256.hpp"
@@ -27,9 +19,7 @@ namespace {
 using namespace sluice::async;
 using sluice::IoError;
 
-
-void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out,
-              IoError err) {
+void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out, IoError err) {
     out.reserve(inputs.size());
     for (auto& in : inputs) {
         FileHash f;
@@ -43,12 +33,7 @@ struct HashTask {
     std::vector<HashInput> inputs;
     std::vector<std::uint8_t> buffer;
 
-
-
-
-
-    void hash_one(RuntimeTaskContext& ctx, const HashInput& in,
-                  std::vector<FileHash>& results) {
+    void hash_one(RuntimeTaskContext& ctx, const HashInput& in, std::vector<FileHash>& results) {
         FileHash out;
         out.path = in.path;
 
@@ -64,8 +49,7 @@ struct HashTask {
             }
             auto rr = await_read_once(
                 ctx, in.fd,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
-                                     buffer.size()),
+                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
                 offset, rc);
             if (!rr.has_value()) {
                 out.error = rr.error();
@@ -73,7 +57,6 @@ struct HashTask {
             }
             std::size_t n = rr.value();
             if (n == 0) {
-
                 hasher.final(digest);
                 char hex[65];
                 sha256_hex(digest, hex);
@@ -96,13 +79,9 @@ struct HashTask {
         std::vector<FileHash> results;
         results.reserve(inputs.size());
 
-
-
         try {
             for (std::size_t i = 0; i < inputs.size(); ++i) {
                 if (ctx.cancel_token().is_requested()) {
-
-
                     FileHash out;
                     out.path = inputs[i].path;
                     out.error = IoError{IoError::Code::canceled};
@@ -125,18 +104,14 @@ struct HashTask {
     }
 };
 
-std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
-                                      std::size_t buffer_size, unsigned workers,
-                                      std::unique_ptr<AsyncBackend> backend) {
-
-    if (buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize ||
-        workers == 0 || workers > kMaxWorkers || !backend) {
+std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs, std::size_t buffer_size,
+                                      unsigned workers, std::unique_ptr<AsyncBackend> backend) {
+    if (buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize || workers == 0 ||
+        workers > kMaxWorkers || !backend) {
         std::vector<FileHash> out;
         fail_all(inputs, out, IoError{IoError::Code::invalid_state});
         return out;
     }
-
-
 
     std::vector<std::uint8_t> buffer;
     try {
@@ -149,13 +124,7 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
 
     HashTask task{std::move(inputs), std::move(buffer)};
 
-
-
-
-
-
-    auto result =
-        run_task_to_result<std::vector<FileHash>>(workers, std::move(backend), task);
+    auto result = run_task_to_result<std::vector<FileHash>>(workers, std::move(backend), task);
     if (!result.has_value()) {
         std::vector<FileHash> out;
         fail_all(task.inputs, out, result.error());
@@ -164,19 +133,18 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
     return std::move(result.value());
 }
 
-}
+} // namespace
 
-std::vector<FileHash> hash_files(std::vector<HashInput> inputs,
-                                 std::size_t buffer_size, unsigned workers) {
+std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size,
+                                 unsigned workers) {
     return run_hash_engine(std::move(inputs), buffer_size, workers,
                            std::make_unique<ThreadPoolBackend>());
 }
 
-std::vector<FileHash> hash_files_with_backend(
-    std::vector<HashInput> inputs, std::size_t buffer_size, unsigned workers,
-    std::unique_ptr<sluice::async::AsyncBackend> backend) {
-    return run_hash_engine(std::move(inputs), buffer_size, workers,
-                           std::move(backend));
+std::vector<FileHash>
+hash_files_with_backend(std::vector<HashInput> inputs, std::size_t buffer_size, unsigned workers,
+                        std::unique_ptr<sluice::async::AsyncBackend> backend) {
+    return run_hash_engine(std::move(inputs), buffer_size, workers, std::move(backend));
 }
 
-}
+} // namespace sluice_hash

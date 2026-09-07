@@ -1,9 +1,3 @@
-
-
-
-
-
-
 #pragma once
 
 #include <sluice/error.hpp>
@@ -11,8 +5,6 @@
 #include <string>
 
 namespace sluice_copy {
-
-
 
 enum class OpenCopyFailure : std::uint8_t {
     none,
@@ -32,31 +24,8 @@ struct OpenCopyOutcome {
     sluice::IoError error{};
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-OpenCopyOutcome open_copy_files(const std::string& src_path,
-                                const std::string& dst_path);
-
+OpenCopyOutcome open_copy_files(const std::string& src_path, const std::string& dst_path);
 
 const char* open_copy_failure_message(OpenCopyFailure f);
 
-}
+} // namespace sluice_copy

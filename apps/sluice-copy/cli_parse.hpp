@@ -1,9 +1,3 @@
-
-
-
-
-
-
 #pragma once
 
 #include "copy_task.hpp"
@@ -26,30 +20,16 @@ struct CliArgs {
     bool help = false;
 };
 
-
 int usage(const char* prog);
 
-
-
-
-
-
-
-
 bool parse_size(const char* s, std::size_t& out);
-
-
-
 
 bool parse_workers(const char* s, unsigned& out);
 
 bool parse_sync(const char* s, SyncPolicy& out);
 
-
-
 int parse_args(int argc, char** argv, CliArgs& args);
-
 
 const char* code_name(sluice::IoError::Code c);
 
-}
+} // namespace sluice_copy::cli

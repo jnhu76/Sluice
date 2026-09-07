@@ -1,17 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #pragma once
 
 #include <cerrno>
@@ -21,9 +7,6 @@
 
 namespace sluice_copy::testing {
 
-
-
-
 class DirFsyncScript {
   public:
     struct Step {
@@ -31,8 +14,7 @@ class DirFsyncScript {
         int err;
     };
 
-    explicit DirFsyncScript(std::vector<Step> steps)
-        : steps_(std::move(steps)), prev_(active()) {
+    explicit DirFsyncScript(std::vector<Step> steps) : steps_(std::move(steps)), prev_(active()) {
         active() = this;
     }
     ~DirFsyncScript() {
@@ -43,19 +25,12 @@ class DirFsyncScript {
     DirFsyncScript(const DirFsyncScript&) = delete;
     DirFsyncScript& operator=(const DirFsyncScript&) = delete;
 
-
-
-
     static DirFsyncScript*& active() {
         static DirFsyncScript* armed = nullptr;
         return armed;
     }
 
-
-
-
-
-    int next(int ) {
+    int next(int) {
         ++calls_;
         if (pos_ >= steps_.size()) {
             errno = EBADF;
@@ -75,4 +50,4 @@ class DirFsyncScript {
     std::size_t calls_ = 0;
 };
 
-}
+} // namespace sluice_copy::testing
