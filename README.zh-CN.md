@@ -26,6 +26,14 @@ Minimum mechanism.
 
 `mission.md` 定义 **Sluice 应该成为什么，以及什么东西不应进入 Sluice**。当前 C++ 与构建定义负责回答“仓库今天实际上做什么”；架构文档只从当前代码描述现状，不能反过来覆盖代码事实，也不能扩大 mission。
 
+## 架构一览
+
+<p align="center">
+  <img src="docs/assets/sluice-architecture.svg" alt="Sluice 架构概览" width="100%">
+</p>
+
+这张图只负责压缩展示当前实现形态，不是新的规范性事实来源；当前行为仍以代码和构建定义为准。
+
 ## 当前仓库
 
 ```text
