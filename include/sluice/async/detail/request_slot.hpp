@@ -56,25 +56,7 @@ class RequestSlot {
   public:
     RequestSlot() = default;
 
-    bool in_use() const noexcept { return state_ != RequestState::free; }
-
-    RequestState state() const noexcept { return state_; }
-    Generation generation() const noexcept { return generation_; }
-    const RequestKey& key() const noexcept { return key_; }
-
     static constexpr std::uint32_t kNotOnReadyRing = static_cast<std::uint32_t>(-1);
-
-    bool enqueue_pin_live() const noexcept { return enqueue_in_flight_pin_; }
-    bool terminal_result_stored() const noexcept { return terminal_.stored; }
-    bool canceled() const noexcept {
-        return terminal_.stored && terminal_.is_error &&
-               terminal_.error.code == IoError::Code::canceled;
-    }
-    OperationKind operation_kind() const noexcept { return op_kind_; }
-    const TerminalResult& terminal() const noexcept { return terminal_; }
-    WaiterRegistration registration() const noexcept { return registration_; }
-    const WaiterToken& waiter_token() const noexcept { return waiter_token_; }
-    const BorrowMetadata& borrow() const noexcept { return borrow_; }
 
   private:
     friend class RequestArena;
