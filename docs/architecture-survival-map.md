@@ -97,3 +97,210 @@ G4  sluice-copy 目录 fsync 脚本缝（safe_output_test_seams.hpp）
 ### 3.5 Test roots
 
 当前树不存在任何 test target（`xmake/helpers.lua` 的 `sluice_one_file_target` 无调用者，见 §7 B01）。Test roots 将由 PR2 按 admission rule 建立；PR1 不预支任何 test root。
+
+## 4. Capability 冻结清单
+
+从 frozen mission（语义内容清单 §1 + 六原则 + ADR-0001）独立定义，不从现有 class 列表反推。状态调查后裁决：
+
+| ID | Capability | 裁决 | 依据 |
+| --- | --- | --- | --- |
+| K01 | 异步位置 I/O：READ / WRITE | REQUIRED | mission"可观察 I/O effect"；四应用主路径 |
+| K02 | durability 操作：SYNC_DATA / SYNC_ALL | REQUIRED | mission"durability"；`sluice-copy --sync*` |
+| K03 | request lifecycle：admission→outstanding→terminalization→publication→reuse | REQUIRED | mission"accepted / terminal publication / reuse 等可观察异步语义" |
+| K04 | resource identity / lifetime（fd、context identity、slot generation） | REQUIRED | mission"resource identity / lifetime" |
+| K05 | buffer participation / lifetime（borrow 活动窗口） | REQUIRED | mission"buffer participation 与 lifetime" |
+| K06 | resource bounds：request capacity、outstanding 记账、backend admission | REQUIRED | mission"资源有界/Named bounds" |
+| K07 | completion：exactly-once publication + reset/reuse | REQUIRED | mission"terminal publication / reuse" |
+| K08 | cancellation：token、completion cancel、waiter cancel | REQUIRED | mission"cancellation"；sluice-tail Ctrl-C 路径 |
+| K09 | wait / wake（park/wake、split-wait、wake handle） | REQUIRED | 调度与后端等待的 correctness 基础 |
+| K10 | deadline / timer（单调时钟、deadline heap、限时等待） | REQUIRED | mission 明文"deadline 等可观察异步语义"；**witness gap 见 GAP-1** |
+| K11 | task execution / scheduling（Fiber、worker 拓扑、run_live） | REQUIRED | 应用任务执行的基础 |
+| K12 | replaceable backend execution（AsyncBackend 契约） | REQUIRED | mission 原则 5"执行可换" |
+| K13 | task result transfer（TaskResultSlot） | REQUIRED | 四应用任务结果搬运 |
+| K14 | task composition：Group | REQUIRED | ApplicationRuntime 根组 |
+| K15 | 同步核心 I/O（Reader/Writer/File/IoContext 阻塞面） | REQUIRED | ADR-0001：sluice_core 是默认库世界，async opt-in 正是为保持阻塞默认面不含异步 |
+| K16 | copy 组合契约（copy_all 家族） | REQUIRED（已赚到） | ADR-0001 §6 Copy 正向结论：合法 transformation boundary |
+| K17 | 同步 buffer participation（BufferedReader/Writer 快路径） | REQUIRED | copy_all 的 buffered fast path 依赖 `BufferedReadable` 探测（`src/copy.cpp:57`） |
+| K18 | durability 同步面（SyncableWriter） | REQUIRED | mission durability；FileWriter 实现 |
+| K19 | 错误模型（IoError/Result） | REQUIRED | 两库与四应用共同错误通道 |
+| K20 | observation / statistics | OPTIONAL | mission 边界类别 HINT/OBSERVATION 被允许但未被要求；当前零读者（GAP-2） |
+| K21 | Future 结果通道 | DERIVED | Group 内部机制，非独立 root |
+| K22 | wait policy（Threaded/Evented） | DERIVED | Group/Future 的等待策略插拔 |
+| K23 | 批量提交（Batch group submission） | NOT_EARNED | mission 明文：generalized Batch control layer 未被证明有价值；零消费者 |
+| K24 | 请求身份查询（RequestHandle/request_state 公共链） | NOT_EARNED | mission 未授予查询授权；全链零调用者（§7 A07） |
+| K25 | select 组合 | NOT_EARNED | mission 未授予该组合契约；零消费者；与 K10 表达交叉（GAP-1） |
+| K26 | 异步同步原语公共面（Semaphore/AsyncMutex/AsyncCondition/AsyncRwLock/AsyncQueue/Event） | NOT_EARNED | mission 未授予；作为独立公共面零消费者；但它们是 K10 的唯一公共表达载体（GAP-1） |
+| K27 | 合成后端（SyncBackend/FakeAsyncBackend） | NOT_EARNED | 零消费者；W1–W3 无任何调用 |
+| K28 | WAL 记录格式 | NOT_EARNED | mission 未命名；零消费者 |
+| K29 | 内存 I/O 面（MemoryIoContext/MemoryReader/MemoryWriter） | NOT_EARNED | 零消费者 |
+| K30 | 故障注入面（FaultPlan/FaultReader/FaultWriter） | NOT_EARNED | 测试机制置于公共面；零消费者；PR2 将用 test-local 机制替代（taskbook §21） |
+| K31 | 同步阻塞线程池（BlockingIoPool/Task\<T\>） | NOT_EARNED | 零消费者；异步域已有独立 ThreadPoolBackend 派发机制 |
+| K32 | 实验性 uring 层（UringIoContext/UringWriteBatch） | OUT_OF_SCOPE | 不属于任何 supported build world（§2） |
+
+## 5. Capability → Semantic API / Authority 映射
+
+仅 REQUIRED 项。格式：capability → 公共 API root / 内部 owner / correctness invariant / resource bound / 执行机制 / 可观察结果。
+
+### K01 异步 READ/WRITE
+
+```text
+Public API root : RuntimeTaskContext::submit_read/submit_write
+                  AsyncIoContext::submit_read/submit_write（ReadOp{fd,dst,len,offset} / WriteOp）
+                  await_op_helpers::await_read_once/await_read_fill/await_write_exact
+Internal owner  : ThreadPoolBackend::submit_size → detail::submit_transaction
+Correctness     : Completion 六态权威（idle→binding→outstanding→publishing→ready→resetting）
+                  + RequestArena 槽位状态机（free→reserved→prepared→pending→enqueued→running→backend_ready→completion_ready）
+Resource bound  : RequestArena capacity（默认 64）→ 超限拒绝 IoError::would_block
+                  ThreadPoolBackend::BoundedDispatchQueue（容量 = request_capacity）
+Execution       : worker 线程阻塞 pread/pwrite（EINTR 重试、64 位 off_t 校验）
+Observable      : Result<size_t>（字节数或 IoError）恰好一次发布进调用方持有的 Completion
+```
+
+### K02 SYNC_DATA/SYNC_ALL
+
+```text
+Public API root : RuntimeTaskContext::submit_sync_data/submit_sync_all；AsyncIoContext 同名
+Internal owner  : ThreadPoolBackend::submit_void → fdatasync/fsync 路径（src/async/threadpool_backend.cpp run_syscall）
+Correctness     : 与 K01 同一 arena/completion 权威；Result<void>
+Resource bound  : 同 K01（共享 arena 容量）
+Observable      : 持久化成功的 Result<void>；sluice-copy --sync-data/--sync-all 消费
+```
+
+### K03 request lifecycle
+
+```text
+Public API root : AsyncIoContext::submit_* + Completion<T>（reset 复用）
+Internal owner  : detail::submit_transaction（reserve→validate→prepare→install_publication_binding
+                  →begin_binding→commit→install_binding→commit_binding→enqueue）
+Correctness     : 提交事务任一阶段失败回滚到 idle 且槽位归还；reuse 经 generation+1 防陈旧认领
+Resource bound  : reserve 失败即拒绝（capacity_rejections 计数）；admission_closed 终止新提交
+Observable      : 每个被接受的请求恰好产生一次 terminal publication；Completion 可 reset 后复用
+```
+
+### K04 resource identity / lifetime
+
+```text
+Public API root : 操作结构体内 fd；FileReader/FileWriter 持有 fd 生命周期（同步面）
+Internal owner  : RequestArena::ContextIdentity + RequestKey{context,slot,generation}
+Correctness     : validate_ 拒绝跨 context / 陈旧 generation 的槽位操作
+Observable      : fd 在请求存续期保持有效是调用方契约；库不复制 fd 语义
+```
+
+### K05 buffer participation / lifetime
+
+```text
+Public API root : ReadOp::dst / WriteOp::src（span 参与窗口 = 提交到 terminal）
+Internal owner  : RequestSlot::BorrowMetadata{fd,address,length,active}
+Correctness     : borrow.active 从 commit 置位、reap 内清零（arena 锁内有序：borrow 结束先于 publish）
+Observable      : terminal 之前调用方不得释放缓冲；越窗使用被 arena 状态机拒绝
+```
+
+### K06 resource bounds
+
+```text
+Public API root : ThreadPoolConfig{request_capacity, worker_count}
+Internal owner  : RequestArena（容量/记账/high_water_mark/capacity_rejections）
+                  + BoundedDispatchQueue（容量/high_water）
+Correctness     : 容量拒绝映射 IoError::would_block；不静默排队
+Observable      : 饱和是可观察失败而非无界内存增长
+```
+
+### K07 completion exactly-once
+
+```text
+Public API root : Completion<size_t>/Completion<void>（ready/result/reset）
+Internal owner  : publish_from_reap 仅接受 outstanding→publishing→ready 单向迁移
+Correctness     : 违规生命周期（binding 析构、outstanding 析构/reset、重复发布）fail-fast 终结
+                  release_completed_binding 归还槽位（generation+1）
+Observable      : 恰好一次结果发布；reset 后槽位可安全复用
+```
+
+### K08 cancellation
+
+```text
+Public API root : CancelToken（request/is_requested/epoch/rearm）；AsyncIoContext::cancel
+                  RuntimeTaskContext::cancel_waiter
+Internal owner  : RequestArena::cancel（pending/enqueued→terminal canceled；running→cancel_intent）
+                  Scheduler::cancel_waiter + WaitRecord cancelled 路由
+Correctness     : cancel 与 terminal 竞争单胜（CancelDisposition）；已 terminal 的 cancel 为 no-op
+Observable      : IoError::canceled；sluice-tail follow 模式 Ctrl-C→request_stop→token
+```
+
+### K09 wait / wake
+
+```text
+Public API root : Scheduler 公共面（await_completion_*、await_wait、wake_wait_one）
+Internal owner  : park_on_wake_source + BackendWaitSource（split-wait：progress/control generation）
+                  + SchedulerWakeHandle（外部唤醒）
+Correctness     : park 前观察后验证（token 比较），唤醒不丢失；WaitRecord delivered 单次投递
+Observable      : 等待中的 Fiber 在完成发布后被重新调度；RuntimeBuilder 校验后端必须提供
+                  wait_source 或 nonblocking wait_one（application_runtime.cpp:101-104）
+```
+
+### K10 deadline / timer
+
+```text
+Public API root : Scheduler 单调时钟（monotonic_now/advance_clock）与限时等待
+                  （sem/mutex/condition/queue/rwlock 的 *_until 变体、await_wait_deadline）
+Internal owner  : deadline heap（heap_push/pop/sift、earliest_active_deadline、pump_deadlines）
+                  + TimerRegistration 生命周期（arm/consume/retire）
+Correctness     : 到期与手动唤醒单胜；earliest deadline 驱动 park 上界
+Observable      : 限时等待超时返回（目前**无任何在树消费者**——GAP-1）
+```
+
+### K11 task execution / scheduling
+
+```text
+Public API root : ApplicationRuntime::start/submit/drain/join/shutdown
+Internal owner  : Scheduler worker 拓扑 + Fiber 状态机 + 汇编上下文切换（fiber_ctx）
+Correctness     : ApplicationRuntime 生命周期状态机
+                  （Constructed→Starting→Running→Stopping/Draining→Stopped/StartFailed/Fatal）
+                  + driver 线程 DriverState；任务经根 Group 以 fiber 运行
+Observable      : 任务恰好执行一次；drain 后 join 干净退出；异常不逃逸任务边界
+```
+
+### K12 replaceable backend execution
+
+```text
+Public API root : AsyncBackend 契约（submit_*/poll/wait_one/cancel/register_waiter/wait_source）
+                  + RuntimeBuilder::backend(unique_ptr<AsyncBackend>)
+Internal owner  : 契约默认实现（不支持的返回 not_supported）；门面只依赖契约
+Correctness     : 后端不得反向定义公共语义（mission 原则 5）；能力探测（split-wait/bounded park）
+                  由门面查询而非类型判断
+Observable      : W3 四应用全部经 RuntimeBuilder 注入 ThreadPoolBackend；UringAsyncBackend
+                  在 G1 world 实现同一契约
+```
+
+### K13 task result transfer
+
+```text
+Public API root : TaskResultSlot<T>（publish/wait_and_take）+ translate_task_exception
+Internal owner  : 互斥 + 条件变量搬运；异常翻译为 IoError
+Correctness     : 恰好一次发布；任务线程到调用线程的所有权转移
+Observable      : 四应用 main 取结果并映射退出码
+```
+
+### K14 Group
+
+```text
+Public API root : Group::async/await/cancel/group_token
+Internal owner  : Scheduler 绑定时 evented 路径（Fiber+EventedWaitPolicy），否则线程路径
+Correctness     : 事件化接纳为事务式（fiber/stack/future 存储先 reserve 后 commit，失败回滚）
+Observable      : await 等待全部完成；cancel 发布 token 后等待
+```
+
+### K15–K19 同步核心（阻塞默认面）
+
+```text
+K15 Reader/Writer/IoContext : read_some/read_exact/read_vec*/stream_to、write_some/write_all/
+                              write_vec*/flush；BlockingIoContext::open_reader/open_writer
+                              产出 FileReader/FileWriter（open 错误延迟报告）
+K16 copy_all                : buffered 快路径（BufferedReadable 探测）与 scratch 路径；
+                              CopyLimit 限量；CopyDecision 观测选择
+K17 BufferedReader/Writer   : 调用方提供缓冲；写侧析构断言无脏数据；peek/consume_buffered
+K18 SyncableWriter          : sync_data/sync_all；FileWriter 实现映射 fdatasync/fsync
+K19 IoError/Result          : 11 Code + os_errno；from_errno_value 映射；两库共享
+Correctness（同步面）        : Result 即时返回；EINTR 重试；64 位 off_t 静态断言；
+                              打开失败延迟报告（open_error()）
+Resource bound（同步面）     : 调用方提供 span/scratch——无隐藏缓冲预算
+```
