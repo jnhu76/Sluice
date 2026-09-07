@@ -6,9 +6,9 @@ Its purpose is to expose only the I/O semantics and resource boundaries callers 
 
 [中文说明](README.zh-CN.md)
 
-## Design doctrine
+## Mission
 
-The project is governed by six long-term principles:
+Sluice is governed by six long-term principles:
 
 ```text
 Minimal semantics.
@@ -19,13 +19,12 @@ Replaceable execution.
 Minimum mechanism.
 ```
 
-The normative design doctrine is documented in [`docs/design-doctrine.md`](docs/design-doctrine.md) (Chinese).
-
-A short Chinese rendering is:
-
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
-The doctrine defines what Sluice is allowed to become. The current C++ implementation and build files define what the repository does today. Descriptive architecture documentation is derived from the code; it does not override the code or expand the doctrine.
+- [`docs/mission.md`](docs/mission.md) — frozen normative mission.
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — rationale, tradeoffs, consequences, and rejected alternatives.
+
+The mission defines what Sluice is allowed to become. Current C++ and build files define what the repository does today. Descriptive architecture documentation is derived from the code; it does not override the code or expand the mission.
 
 ## Repository shape
 
@@ -34,7 +33,7 @@ include/              C++ headers
 src/                  production implementation
 apps/                 real applications
 xmake.lua, xmake/      build configuration
-docs/                 stable design doctrine and code-derived architecture docs
+docs/                 frozen mission, ADRs, and code-derived architecture docs
 research/RESULTS.md    retained research conclusions
 ```
 
@@ -48,7 +47,7 @@ The synchronous side provides `Result<T>` / `IoError`, Reader/Writer-style I/O, 
 
 The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduling/runtime machinery, cancellation, synchronization facilities, and backend execution.
 
-These implementation details remain subject to subtraction: an abstraction, backend, helper, state, or public type survives only when it earns its cost through necessary semantics, correctness, boundedness, real execution needs, real callers, or indispensable verification value.
+These implementation details remain subject to subtraction. An abstraction, backend, helper, state, or public type survives only when it earns its cost through necessary semantics, correctness, boundedness, real execution needs, real callers, or indispensable verification value.
 
 ## Boundary rule
 
