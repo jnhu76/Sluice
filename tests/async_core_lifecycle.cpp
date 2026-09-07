@@ -343,6 +343,51 @@ SLUICE_TEST(C1_cancel_unsupported_backend_is_explicit) {
     CHECK(rv.error().code == IoError::Code::not_supported);
 }
 
+
+// A moved-from context is a legal state; every member reports it the way the
+// originally-guarded members already do: Result members return invalid_state,
+// counters return 0, void members are no-ops. Before the guards, submit/poll/
+// wait_one/cancel dereferenced the null backend (SIGSEGV) while
+// register_waiter/outstanding already returned errors — one legal state, two
+// failure modes.
+SLUICE_TEST(C2_moved_from_context_is_consistently_graceful) {
+    AsyncIoContext ctx{std::make_unique<BareCapabilitiesBackend>()};
+    AsyncIoContext moved{std::move(ctx)};
+
+    CHECK(ctx.outstanding() == 0);
+    CHECK(ctx.poll() == 0);
+    auto w = ctx.wait_one();
+    CHECK(w.has_value() == false);
+    CHECK(w.error().code == IoError::Code::invalid_state);
+
+    Completion<std::size_t> cs;
+    auto s1 = ctx.submit_read(ReadOp{}, cs);
+    CHECK(s1.has_value() == false);
+    CHECK(s1.error().code == IoError::Code::invalid_state);
+    auto s2 = ctx.submit_write(WriteOp{}, cs);
+    CHECK(s2.has_value() == false);
+    CHECK(s2.error().code == IoError::Code::invalid_state);
+    Completion<void> cv;
+    auto s3 = ctx.submit_sync_data(SyncDataOp{}, cv);
+    CHECK(s3.has_value() == false);
+    CHECK(s3.error().code == IoError::Code::invalid_state);
+    auto s4 = ctx.submit_sync_all(SyncAllOp{}, cv);
+    CHECK(s4.has_value() == false);
+    CHECK(s4.error().code == IoError::Code::invalid_state);
+
+    auto r = ctx.register_waiter(cs, detail::WaiterToken{}, detail::RoutingLease{});
+    CHECK(r.has_value() == false);
+    CHECK(r.error().code == IoError::Code::invalid_state);
+    auto c = ctx.cancel(cs);
+    CHECK(c.has_value() == false);
+    CHECK(c.error().code == IoError::Code::invalid_state);
+    auto st = ctx.request_state(RequestHandle{});
+    CHECK(st.has_value() == false);
+    CHECK(st.error().code == IoError::Code::invalid_state);
+
+    ctx.interrupt_backend_waiters();
+}
+
 } // namespace
 
 int main(int argc, char** argv) {

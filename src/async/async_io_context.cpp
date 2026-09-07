@@ -79,6 +79,9 @@ void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     auto r = backend_->submit_read(op, c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
@@ -86,6 +89,9 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     auto r = backend_->submit_write(op, c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
@@ -93,6 +99,9 @@ Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c
 }
 Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     auto r = backend_->submit_sync_data(op, c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
@@ -100,6 +109,9 @@ Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c
 }
 Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     auto r = backend_->submit_sync_all(op, c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
@@ -108,6 +120,9 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
 
 Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_read(op, c);
@@ -119,6 +134,9 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<
 }
 Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_write(op, c);
@@ -130,6 +148,9 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completio
 }
 Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_data(op, c);
@@ -141,6 +162,9 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Co
 }
 Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_all(op, c);
@@ -153,11 +177,17 @@ Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Comp
 
 Result<RequestHandleState> AsyncIoContext::request_state(const RequestHandle& h) const {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<RequestHandleState>(IoError{IoError::Code::invalid_state});
+    }
     return backend_->request_handle_state(h);
 }
 
 std::size_t AsyncIoContext::poll() {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return 0;
+    }
     if (stats_)
         ++stats_->poll_calls;
     std::size_t n = backend_->poll();
@@ -171,6 +201,9 @@ Result<std::size_t> AsyncIoContext::wait_one() {
 }
 
 Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) {
+    if (!backend_) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    }
     BackendWaitSource* ws = backend_ ? backend_->wait_source() : nullptr;
     if (ws == nullptr) {
         (void)max_park;
@@ -291,10 +324,16 @@ void AsyncIoContext::arm_backend_wait_commit() noexcept {
 
 Result<void> AsyncIoContext::cancel(Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     return backend_->cancel(c);
 }
 Result<void> AsyncIoContext::cancel(Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     return backend_->cancel(c);
 }
 
