@@ -2,13 +2,13 @@
 
 > **状态：FROZEN**
 >
-> 本文定义 Sluice 的长期项目宗旨。它不是当前实现说明，不随普通重构、后端变化或阶段性需求修改。
+> 本文只冻结已经由 Sluice 研究结论支持的项目宗旨。它不承担代码风格、测试方法、注释规则、AI/LLM 上下文治理或一般工程规范。
 >
-> 如未来确有证据需要改变宗旨，应通过新的、显式的人类架构决策替代，而不是直接改写本文。
+> 研究证据以 `research/RESULTS.md` 与 Minimal Semantic Surface 研究结论为依据；没有研究支撑的工程偏好不进入本文。
 
 ## 一句话
 
-> **Sluice 是一个显式 I/O 库：只暴露调用者真正必须依赖的 I/O 语义和资源边界，用最小的正确性机制忠实执行这些语义，并让执行机制可替换但不能反过来污染公共语义。**
+> **Sluice 是一个显式 I/O 库：只暴露保持可观察 I/O 语义、正确性与真实资源边界所必需的信息；语义授权必须显式，执行机制与执行策略保持局部、可替换，并且只保留已经证明有价值的机制。**
 
 ## 六条长期原则
 
@@ -25,121 +25,143 @@ Minimum mechanism.
 
 ### 1. 语义最少
 
-公共 API 只暴露调用者为了正确表达 I/O intent 而必须依赖的事实，例如 operation、resource identity、buffer/lifetime boundary、request lifecycle、completion、cancellation、durability 和必要 resource bounds。
+Sluice 只应知道维持以下事实所必需的语义：
 
-如果调用者不知道某个概念，仍能准确、安全地表达 I/O 意图，则该概念通常不应进入公共语义面。
+- 可观察 I/O effect；
+- resource identity / lifetime；
+- buffer participation 与 lifetime；
+- completion / cancellation / deadline 等可观察异步语义；
+- durability；
+- 真实 resource bounds；
+- 明确授予的 composition / transformation contract。
+
+实现细节、后端机制、性能参数或 hint 不因“有用”而自动成为 public semantics。
 
 ### 2. 边界清晰
 
-长期职责必须保持区分：
+以下类别必须保持区分：
 
 ```text
-SEMANTIC SURFACE
-CORRECTNESS KERNEL
-RESOURCE BOUNDS
+SEMANTIC CONTRACT
+CORRECTNESS AUTHORITY
+RESOURCE BOUND
 BACKEND CAPABILITY
 EXECUTION POLICY
-OBSERVATION / HINT
+HINT / OBSERVATION
 ```
 
-Application 不应依赖实现内部件。Backend capability、execution policy、observation 或 hint 不会因为存在就自动升级为 public semantic authority。
+一个事实属于哪一层，必须由它定义的可观察行为、正确性责任、资源边界或合法 transformation 来证明，而不是由当前实现位置决定。
 
 ### 3. 权威显式
 
-关键 correctness invariant 应有清楚、尽量唯一的 authority。
+**信息不等于权限。**
 
-Request acceptance、terminal winner、buffer borrow retirement、Completion publication、cancel/complete precedence、resource accounting 等不能依赖多个对象之间隐含而脆弱的约定共同维持。
+只有额外 semantic contract 真正改变合法 transformation space 时，才承认新的 Semantic Authority。
+
+长期保持：
+
+```text
+resource identity != fixed-resource optimization authority
+operation grouping != fused / atomic admission authority
+backend capability != semantic authority
+hint / information != authority
+```
 
 ### 4. 资源有界
 
-影响正确性、内存占用或调度压力的重要资源必须有明确上界。
+当资源饱和会影响可观察行为或正确性时，边界必须被明确建模，例如 request capacity、in-flight/buffer budget 或 backend admission limit。
 
-Named bound 不等于所有东西都要配置化。配置本身也是复杂度；简单固定上界足够时，不为理论通用性增加 policy。
+不要把不同资源压成一个模糊的 `concurrency=N`，也不要把纯性能参数误当成语义边界。
 
 ### 5. 执行可换
 
-同一套 I/O contract 可以由不同 execution mechanism 实现；更换 mechanism 不应要求应用理解另一套 request/completion/cancellation 生命周期。
+同一 semantic contract 不应绑定某一种 backend mechanism。
 
-但“执行可换”不意味着必须维护多个 backend，也不意味着建设大而全的 backend framework。
+ThreadPool、io_uring 或其它执行机制可以不同，但 backend capability 不能反向定义公共语义；execution policy 默认留在 semantic core 之外。
 
 ### 6. 机制最小
 
-任何 class、interface、backend、wrapper、queue、helper、state、macro、configuration、test seam 或 scheduler layer，都必须回答：
+研究已经多次得到同一个结果：**薄的局部机制可以解决问题时，不应升级成通用 framework。**
 
-> **它现在买来了什么？**
+- Copy 的有效能力可由 thin local branch 表达，generic capability framework 未被证明有价值；
+- Batch 没有获得新的 group-admission authority，新的 generalized Batch control layer 未被证明有价值；
+- 性能研究要求先定位真实热点，再做局部优化，不能从架构故事出发扩张机制。
 
-只有以下价值通常足以支持长期存在：
+因此，新的 abstraction 或机制必须先证明真实语义、正确性、资源或执行价值，再获得长期存在资格。
 
-- 必要 I/O 语义；
-- 关键 correctness invariant；
-- 真实 resource bound；
-- 真实 execution difference；
-- 真实 caller；
-- 不可替代的验证价值。
+## 固定研究护栏
 
-“以后可能有用”“方便未来扩展”“架构更完整”“过去存在过”都不是默认保留理由。
+### 显式信息不会自动产生 generic control
 
-## 固定边界规则
-
-1. Application 不应依赖 `detail/` 或其它实现内部件；出现时视为 boundary leak。
-2. Backend capability != semantic authority。
-3. Execution policy != semantic contract。
-4. Observation / information != authority。
-5. Internal state != public semantics。
-6. Explicit semantics != automatic optimization entitlement。
-
-## 三条证据线彼此独立
+以下链条已经被研究否定为项目级假设：
 
 ```text
-Correctness
-Performance
-Semantic Authority
+more explicit information
+    -> more runtime control
+    -> generic useful specialization / performance
 ```
 
-显式语义不会自动证明 safety、performance 或 specialization；三者必须分别建立证据。
+Correctness、Semantic Authority 与 Performance 必须分别证明。
 
-必要 correctness/resource machinery 必须接受性能审查；性能结果也不能反向扩张公共语义。
+### Backend mechanism 不会自动变成 semantic contract
 
-## 验证原则
+固定文件、registered resource、batch submit 等机制可以真实存在，但机制存在本身不证明新的高层 semantic authority。
 
-测试、property test、fuzz、sanitizer 和形式化验证都只服务于真实 correctness boundary。
+### Execution policy 默认不属于 semantic core
 
-TLA+ 证明模型，不会单独证明 C++。重要模型必须建立 C++ state / transition / authority 的对应证据。
-
-## 固定审查结果
-
-面对任何现存或新增模块，只允许以下架构处置：
+例如：
 
 ```text
-KEEP
-SIMPLIFY
-MERGE
-INTERNALIZE
-DELETE
+queue depth
+worker count
+chunk size
+alignment
+polling mode
+registered resource use
+preferred backend
 ```
 
-默认方向是：
+它们可能显著影响性能，但除非改变调用者必须依赖的可观察 contract，否则不进入 semantic surface。
 
-> **在不损失必要 I/O 语义、正确性和真实执行能力的前提下，删除更多，而不是解释更多。**
+### Benchmark 结果不能直接扩张 API
+
+研究已经看到：alignment 在 microbenchmark 中真实存在，但没有获得生产 copy workload 的控制面；chunk size 是更强的 workload lever，但也没有因此获得自动 public control surface。
+
+性能结果必须先经过应用级证据，再讨论是否需要产品化；更不能由性能收益倒推语义授权。
 
 ## 非目标
 
-Sluice 不以以下目标为项目身份：
+基于现有研究，Sluice 不把以下方向作为项目宗旨：
 
-- 大而全的 async framework；
-- 通用 task / actor / future 生态；
-- 为 backend 数量而建设 multi-backend framework；
-- 自动 batching / autotuning / specialization 平台；
-- 通用 observability / diagnosis framework；
-- 通过增加 abstraction、文档、注释或形式化模型数量证明成熟度。
+- generic Control framework；
+- 因为“信息更多”就构造全局 optimization planner；
+- 因为 backend 有某机制就把机制暴露成 public semantics；
+- 因为 operation 属于一个 group 就默认获得 fused / atomic admission；
+- 为单个有效案例提前建设 generic capability framework；
+- 把 host-local benchmark sweet spot 直接变成 semantic contract。
 
-## 文档职责
+## 对后续架构审计的约束
+
+任何 public/Core 概念都应首先归入一个主要类别：
 
 ```text
-代码 / 构建定义        当前实现事实
-docs/architecture.md  当前代码推导出的架构快照
-docs/mission.md       本文：冻结的项目宗旨
-docs/adr/             宗旨与重大架构决策的理由
-测试 / fuzz / formal   correctness evidence
-research/RESULTS.md    值得长期保留的研究结论
+SEMANTIC_CONTRACT
+CORRECTNESS_AUTHORITY
+RESOURCE_BOUND
+BACKEND_CAPABILITY
+EXECUTION_POLICY
+HINT / OBSERVATION
+LEGACY / UNJUSTIFIED
 ```
+
+然后回答：
+
+1. 它定义了什么可观察行为？
+2. 它拥有哪个 correctness invariant？
+3. 它约束哪个真实资源？
+4. 它授权了哪个原本不合法的 transformation？
+5. 它是否只是 backend mechanism？
+6. 它是否只是 execution policy / hint？
+7. 删除或降级后，真实语义或正确性会失去什么？
+
+如果这些问题无法给出研究与代码都能支持的答案，就不能仅凭“架构完整”保留该概念。
