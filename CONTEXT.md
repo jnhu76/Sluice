@@ -1,76 +1,71 @@
 # Sluice Context
 
-> **Orientation only — not authority.**
->
-> This file is a short stable orientation/vocabulary map for humans and coding
-> agents. It does **not** define architecture, public API, execution order, or
-> any normative rule, and it is not part of the authority chain. If this file
-> conflicts with any authority, the authority wins. Changing execution status
-> belongs to GitHub Issues, never to this file.
->
-> Keep this file short: short statement + pointer, no copied prose.
+This file is a short snapshot of the **current** repository. It intentionally avoids historical phases, campaign names, old Issues, and retired research theses.
 
----
+## Current state
 
-## 1. What Sluice is
+Sluice is a C++20 I/O library/runtime being reduced to a smaller, stable engineering baseline.
 
-Sluice is an experimental C++20 explicit-I/O and control-flow library: a
-bounded, explicit, inspectable I/O execution layer. It exposes only the
-observable I/O semantics and true named resource bounds that callers must
-rely on; centralizes the correctness authorities needed to enforce those
-contracts inside the library; and keeps backend capability and execution
-policy local, replaceable, and pay-for-play unless a caller-facing contract
-independently earns exposure.
-
-## 2. North star (frozen)
-
-> **Minimal semantics. Explicit authority. Named bounds. Replaceable execution.**
-
-The retired thesis `Explicit control, implicit correctness.` (falsified and
-retired by #283) is **not** the project thesis. There is no generic
-Control lane and no project-level obligation that explicit I/O produce generic
-control. SAFETY, PERFORMANCE, and SEMANTIC AUTHORITY are independent proof
-lines.
-
-## 3. Responsibility vocabulary
-
-These six classes are distinct architecture responsibilities. Do not collapse
-them and do not infer one from another:
+The retained implementation lives in:
 
 ```text
-SEMANTIC SURFACE      caller-visible observable contract
-CORRECTNESS KERNEL    internal authority enforcing those semantics
-RESOURCE BOUNDS       real, named finite resources
-BACKEND CAPABILITY    mechanism availability
-EXECUTION POLICY      choice among already-legal mechanisms
-OBSERVATION / HINT    information that grants no authority by itself
+include/   public C++ headers
+src/       production implementation
+apps/      real applications using the library
 ```
 
-Related discipline: information ≠ semantic authority ≠ backend mechanism ≠
-unique incremental value ≠ material performance.
+The repository currently keeps only two documentation families:
 
-## 4. Authority pointers
+```text
+docs/adr/           retained architectural decisions
+docs/architecture/  current architecture descriptions
+```
 
-| Question | Entry point |
-| --- | --- |
-| Durable agent governance + routing | `AGENTS.md` |
-| Developer documentation router | `docs/README.md` |
-| Architecture constitution (AC-N) | `docs/architecture/architecture-constitution.md` |
-| Public contract | `include/sluice/` + `docs/reference/api.md` |
-| Decisions | `docs/adr/README.md` |
-| Verification methods | `docs/verification/README.md` |
-| Failure / assert authority | `docs/architecture/failure-model.md` |
-| Historical evidence | `docs/history/` |
+Past research is reduced to:
 
-## 5. Where changing status lives
+```text
+research/RESULTS.md
+```
 
-What we are doing now, in what order, and where work stops:
+That file records conclusions, not research process.
 
-- `#227` — sole project execution-order roadmap;
-- `#289` — Boundary / Safety research roadmap;
-- `#259` — Performance / data-movement research roadmap;
-- `#225` — architecture constitution (responsibilities and invariants, not
-  execution order).
+## Deliberately absent
 
-Do not copy moving status, phase state, or campaign results into this file.
-Stale statements here are deleted or fixed, not preserved as sediment.
+The previous tests, benchmarks, examples, scripts, CI workflows, formal models, TLA+ specifications, and research campaign scaffolding were intentionally removed from the current tree.
+
+Their absence does not mean correctness or performance no longer matter. It means both will be rebuilt from the retained implementation instead of inherited from historical project structure.
+
+Git history and the pre-reset repository snapshot remain the archive when historical recovery is explicitly needed.
+
+## Current direction
+
+The project is no longer organized around broad research questions.
+
+The working sequence is:
+
+```text
+usable C++
+    -> smaller implementation
+    -> fixed architecture
+    -> new tests from current behavior
+    -> new formal models from current C++
+    -> explicit C++ <-> TLA+ correspondence
+    -> fine-grained measured optimization
+```
+
+Correctness remains mandatory. Formal verification will be rebuilt after the implementation has been reduced and its important state machines are clear.
+
+Performance work will be local and evidence-driven rather than architecture-wide.
+
+## Authority
+
+For current behavior, read the code first:
+
+1. `include/`
+2. `src/`
+3. `apps/`
+
+Use `docs/adr/` and `docs/architecture/` to explain the retained design, not to resurrect deleted historical structure.
+
+Use `AGENTS.md` for AI-agent working rules.
+Use `README.md` for the human-facing project entry point.
