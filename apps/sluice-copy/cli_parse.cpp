@@ -1,4 +1,4 @@
-// sluice-copy CLI argument parsing implementation.
+
 #include "cli_parse.hpp"
 
 #include <cstdio>
@@ -9,25 +9,25 @@ namespace sluice_copy::cli {
 
 namespace {
 
-// Strict unsigned decimal scanner: digits only, explicit overflow check.
-// See parse_size() in cli_parse.hpp for the full rejection contract.
+
+
 bool parse_unsigned_decimal(const char* s, std::size_t& out) {
     if (!s || *s == '\0') return false;
     std::size_t v = 0;
     for (const char* p = s; *p != '\0'; ++p) {
-        // Any non-digit (signs, whitespace, unit suffixes) is rejected: no
-        // strtoull-style "accept a prefix, ignore the tail" behavior.
+
+
         if (*p < '0' || *p > '9') return false;
         unsigned d = static_cast<unsigned>(*p - '0');
         if (v > (std::numeric_limits<std::size_t>::max() - d) / 10) return false;
         v = v * 10 + d;
     }
-    if (v == 0) return false;  // zero is not a valid size/worker count
+    if (v == 0) return false;
     out = v;
     return true;
 }
 
-}  // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -58,10 +58,10 @@ bool parse_size(const char* s, std::size_t& out) {
 bool parse_workers(const char* s, unsigned& out) {
     std::size_t v = 0;
     if (!parse_unsigned_decimal(s, v)) return false;
-    // Explicit narrowing check BEFORE the size_t -> unsigned conversion; the
-    // kMaxWorkers app-level cap is checked afterwards (it is the meaningful
-    // bound for a copy tool — an extreme-but-in-range count would still
-    // exhaust OS resources).
+
+
+
+
     if (v > std::numeric_limits<unsigned>::max()) return false;
     if (v > static_cast<std::size_t>(kMaxWorkers)) return false;
     out = static_cast<unsigned>(v);
@@ -76,7 +76,7 @@ bool parse_sync(const char* s, SyncPolicy& out) {
     return false;
 }
 
-// Returns 0 on success (fills args), or a non-zero exit code on usage error.
+
 int parse_args(int argc, char** argv, CliArgs& args) {
     int positionals = 0;
     for (int i = 1; i < argc; ++i) {
@@ -106,7 +106,7 @@ int parse_args(int argc, char** argv, CliArgs& args) {
         } else if (a == "--no-atomic") {
             args.atomic = false;
         } else if (a == "--atomic") {
-            args.atomic = true;  // explicit no-op: atomic is the default
+            args.atomic = true;
         } else if (a.size() > 2 && a[0] == '-' && a[1] == '-') {
             std::fprintf(stderr, "%s: unknown option %s\n", argv[0], a.c_str());
             return usage(argv[0]);
@@ -133,4 +133,4 @@ const char* code_name(sluice::IoError::Code c) {
     }
 }
 
-}  // namespace sluice_copy::cli
+}

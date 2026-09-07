@@ -1,4 +1,4 @@
-// sluice-grep CLI argument parsing implementation.
+
 #include "cli_parse.hpp"
 
 #include <cstdio>
@@ -23,7 +23,7 @@ bool parse_unsigned_decimal(const char* s, std::size_t& out) {
     return true;
 }
 
-}  // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -43,7 +43,7 @@ int usage(const char* prog) {
         static_cast<std::size_t>(kDefaultMaxLineBytes),
         static_cast<std::size_t>(kMaxMaxLineBytes),
         static_cast<unsigned>(kMaxWorkers));
-    return 2;  // usage errors are errors in grep's traditional contract
+    return 2;
 }
 
 bool parse_size(const char* s, std::size_t& out) {
@@ -86,8 +86,8 @@ int parse_args(int argc, char** argv, CliArgs& args) {
             const char* v = next("--workers");
             if (!v || !parse_workers(v, args.workers)) return usage(argv[0]);
         } else if (a.size() > 1 && a[0] == '-') {
-            // Reject unknown short AND long options (grep-mini has no -i/-E/
-            // -r/-v; silent acceptance would imply semantics we do not have).
+
+
             std::fprintf(stderr, "%s: unknown option %s\n", argv[0], a.c_str());
             return usage(argv[0]);
         } else {
@@ -96,15 +96,15 @@ int parse_args(int argc, char** argv, CliArgs& args) {
             ++positionals;
         }
     }
-    if (positionals < 2) {  // pattern + at least one file
+    if (positionals < 2) {
         std::fprintf(stderr, "%s: missing %s\n", argv[0],
                      positionals == 0 ? "pattern and file operands"
                                       : "file operand");
         return usage(argv[0]);
     }
-    // A pattern containing '\n' can never match a single line (documented
-    // policy): reject up front with a clear message instead of scanning
-    // every input to report nothing.
+
+
+
     if (args.pattern.find('\n') != std::string::npos) {
         std::fprintf(stderr,
                      "%s: pattern contains a newline; multi-line patterns are "
@@ -115,4 +115,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-}  // namespace sluice_grep::cli
+}

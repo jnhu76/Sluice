@@ -1,4 +1,4 @@
-// sluice-copy file open + input-domain validation implementation.
+
 #include "file_domain.hpp"
 
 #include <cerrno>
@@ -13,7 +13,7 @@ namespace {
 
 using sluice::IoError;
 
-// App-local RAII file descriptor (brief §21: do NOT promote to core).
+
 struct ScopedFd {
     int fd = -1;
     explicit ScopedFd(int f) : fd(f) {}
@@ -29,15 +29,15 @@ OpenCopyOutcome fail(OpenCopyFailure f, IoError e) {
     return o;
 }
 
-}  // namespace
+}
 
 OpenCopyOutcome open_copy_files(const std::string& src_path,
                                 const std::string& dst_path) {
-    // 1. Open the source read-only and fstat it IMMEDIATELY. The Version B
-    //    pipeline needs a seekable, finite-length source that reaches EOF;
-    //    FIFOs/sockets/char devices do not fit that domain. The regular-file
-    //    check happens BEFORE the destination is created or opened, so a
-    //    rejected source leaves the destination completely untouched.
+
+
+
+
+
     int src_fd = ::open(src_path.c_str(), O_RDONLY);
     if (src_fd < 0) {
         return fail(OpenCopyFailure::src_open,
@@ -55,18 +55,18 @@ OpenCopyOutcome open_copy_files(const std::string& src_path,
                     IoError{IoError::Code::invalid_state});
     }
 
-    // 2. Open the destination write/create (NO O_TRUNC — truncation happens
-    //    only after the same-file identity check below). O_NOFOLLOW: a
-    //    symlink in the FINAL component is rejected with ELOOP instead of
-    //    being followed (issue #141 / FILEOP-001) — following it would aim
-    //    the caller's ftruncate/pwrite at the link target, because every
-    //    post-open check below (regular file, inode identity) operates on
-    //    the already-followed fd and would pass. Deliberately NO O_EXCL:
-    //    overwriting an existing regular destination is part of the
-    //    documented --no-atomic semantics; create-new policy is a separate
-    //    design. O_CLOEXEC: defense in depth for fd inheritance. Symlinks
-    //    in INTERMEDIATE path components are still followed (documented
-    //    limitation of O_NOFOLLOW).
+
+
+
+
+
+
+
+
+
+
+
+
     int dst_fd = ::open(dst_path.c_str(),
                         O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0644);
     if (dst_fd < 0) {
@@ -85,15 +85,15 @@ OpenCopyOutcome open_copy_files(const std::string& src_path,
                     IoError{IoError::Code::invalid_state});
     }
 
-    // 3. Reject source == destination by filesystem identity (device + inode),
-    //    not path-string equality — this covers hard links and bind mounts.
+
+
     if (src_stat.st_dev == dst_stat.st_dev &&
         src_stat.st_ino == dst_stat.st_ino) {
         return fail(OpenCopyFailure::same_file,
                     IoError{IoError::Code::invalid_state});
     }
 
-    // Success: hand the descriptors to the caller (guards release).
+
     OpenCopyOutcome o;
     o.failure = OpenCopyFailure::none;
     o.src_fd = src_guard.fd;
@@ -119,4 +119,4 @@ const char* open_copy_failure_message(OpenCopyFailure f) {
     return "unknown error";
 }
 
-}  // namespace sluice_copy
+}

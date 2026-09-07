@@ -1,5 +1,5 @@
-// sluice observed wrappers — transparent stats-collecting Reader/Writer.
-// They record counters on the way through but never alter data semantics.
+
+
 #pragma once
 
 #include <sluice/reader.hpp>
@@ -28,14 +28,14 @@ struct WriterStats {
 
 class ObservedReader final : public Reader {
   public:
-    // `vec_stats` is optional: when null, read_vec simply delegates without
-    // counting. When set, read_vec on a non-overriding inner reader counts as a
-    // fallback call (the default read_some loop runs).
+
+
+
     ObservedReader(Reader& inner, ReaderStats& stats, VectorStats* vec_stats = nullptr)
         : inner_(inner), stats_(stats), vec_stats_(vec_stats) {}
 
-    // Not copyable or movable: holds references to the inner reader and the
-    // caller-owned stats struct.
+
+
     ObservedReader(const ObservedReader&) = delete;
     ObservedReader& operator=(const ObservedReader&) = delete;
     ObservedReader(ObservedReader&&) = delete;
@@ -52,13 +52,13 @@ class ObservedReader final : public Reader {
 
 class ObservedWriter final : public Writer {
   public:
-    // `vec_stats` is optional: when null, write_vec simply delegates without
-    // counting. When set, write_vec on a non-overriding inner writer counts as a
-    // fallback call (the default write_some loop runs).
+
+
+
     ObservedWriter(Writer& inner, WriterStats& stats, VectorStats* vec_stats = nullptr)
         : inner_(inner), stats_(stats), vec_stats_(vec_stats) {}
 
-    // Not copyable or movable: holds a reference to the inner writer and stats.
+
     ObservedWriter(const ObservedWriter&) = delete;
     ObservedWriter& operator=(const ObservedWriter&) = delete;
     ObservedWriter(ObservedWriter&&) = delete;
@@ -74,4 +74,4 @@ class ObservedWriter final : public Writer {
     VectorStats* vec_stats_;
 };
 
-} // namespace sluice
+}

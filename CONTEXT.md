@@ -1,76 +1,39 @@
 # Sluice Context
 
-> **Orientation only — not authority.**
->
-> This file is a short stable orientation/vocabulary map for humans and coding
-> agents. It does **not** define architecture, public API, execution order, or
-> any normative rule, and it is not part of the authority chain. If this file
-> conflicts with any authority, the authority wins. Changing execution status
-> belongs to GitHub Issues, never to this file.
->
-> Keep this file short: short statement + pointer, no copied prose.
+Sluice is a C++20 I/O library/runtime being reduced to a small engineering baseline.
 
----
-
-## 1. What Sluice is
-
-Sluice is an experimental C++20 explicit-I/O and control-flow library: a
-bounded, explicit, inspectable I/O execution layer. It exposes only the
-observable I/O semantics and true named resource bounds that callers must
-rely on; centralizes the correctness authorities needed to enforce those
-contracts inside the library; and keeps backend capability and execution
-policy local, replaceable, and pay-for-play unless a caller-facing contract
-independently earns exposure.
-
-## 2. North star (frozen)
-
-> **Minimal semantics. Explicit authority. Named bounds. Replaceable execution.**
-
-The retired thesis `Explicit control, implicit correctness.` (falsified and
-retired by #283) is **not** the project thesis. There is no generic
-Control lane and no project-level obligation that explicit I/O produce generic
-control. SAFETY, PERFORMANCE, and SEMANTIC AUTHORITY are independent proof
-lines.
-
-## 3. Responsibility vocabulary
-
-These six classes are distinct architecture responsibilities. Do not collapse
-them and do not infer one from another:
+## Current repository
 
 ```text
-SEMANTIC SURFACE      caller-visible observable contract
-CORRECTNESS KERNEL    internal authority enforcing those semantics
-RESOURCE BOUNDS       real, named finite resources
-BACKEND CAPABILITY    mechanism availability
-EXECUTION POLICY      choice among already-legal mechanisms
-OBSERVATION / HINT    information that grants no authority by itself
+include/              public C++ headers
+src/                  production implementation
+apps/                 real applications using the public API
+research/RESULTS.md    retained research conclusions only
+xmake.lua, xmake/      build configuration
 ```
 
-Related discipline: information ≠ semantic authority ≠ backend mechanism ≠
-unique incremental value ≠ material performance.
+The implementation under `include/` and `src/` is the primary source of truth.
+`apps/` are retained because they are real users of the library.
 
-## 4. Authority pointers
+## Deliberately absent
 
-| Question | Entry point |
-| --- | --- |
-| Durable agent governance + routing | `AGENTS.md` |
-| Developer documentation router | `docs/README.md` |
-| Architecture constitution (AC-N) | `docs/architecture/architecture-constitution.md` |
-| Public contract | `include/sluice/` + `docs/reference/api.md` |
-| Decisions | `docs/adr/README.md` |
-| Verification methods | `docs/verification/README.md` |
-| Failure / assert authority | `docs/architecture/failure-model.md` |
-| Historical evidence | `docs/history/` |
+The old tests, benchmarks, examples, scripts, CI workflows, documentation, formal models, TLA+ specifications, and research campaign scaffolding were intentionally removed.
 
-## 5. Where changing status lives
+Git history and the pre-reset snapshot remain the archive when historical recovery is explicitly needed.
 
-What we are doing now, in what order, and where work stops:
+## Current direction
 
-- `#227` — sole project execution-order roadmap;
-- `#289` — Boundary / Safety research roadmap;
-- `#259` — Performance / data-movement research roadmap;
-- `#225` — architecture constitution (responsibilities and invariants, not
-  execution order).
+```text
+usable C++
+    -> smaller implementation
+    -> frozen architecture
+    -> new tests from current behavior
+    -> new docs from current code
+    -> new formal models from current C++
+    -> explicit C++ <-> TLA+ correspondence
+    -> fine-grained measured optimization
+```
 
-Do not copy moving status, phase state, or campaign results into this file.
-Stale statements here are deleted or fixed, not preserved as sediment.
+Correctness remains mandatory. Tests, documentation, and formal verification will be rebuilt from the reduced implementation rather than inherited from historical structure.
+
+Use `AGENTS.md` for AI-agent working rules and `README.md` for the human-facing entry point.

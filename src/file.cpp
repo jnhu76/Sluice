@@ -1,4 +1,4 @@
-// FileReader / FileWriter POSIX implementation.
+
 #include <sluice/file.hpp>
 #include <sluice/detail/io_validation.hpp>
 #include <sluice/detail/posix_retry.hpp>
@@ -10,29 +10,29 @@
 #include <fcntl.h>
 #include <sys/types.h>
 
-#include <sys/uio.h> // readv / writev / struct iovec
+#include <sys/uio.h>
 #include <algorithm>
 #include <optional>
 #include <utility>
 #include <vector>
 
 #ifdef SLUICE_FILE_INTERNAL_TESTING
-#include "file_test_seams.hpp" // src/ — non-installed close(2) seam (#143)
+#include "file_test_seams.hpp"
 #endif
 
 #ifdef IOV_MAX
 inline constexpr long kIovMaxConst = IOV_MAX;
 #else
-inline constexpr long kIovMaxConst = 16; // POSIX minimum; overridden by sysconf at runtime
+inline constexpr long kIovMaxConst = 16;
 #endif
 
 namespace sluice {
 
 namespace {
 
-// Wrap a raw ssize_t syscall result into Result<size_t>, mapping errno via the
-// portable from_errno_value helper. The EINTR retry is handled by the caller
-// via detail::retry_on_eintr, so by the time we get here errno is a real error.
+
+
+
 Result<std::size_t> syscall_result(ssize_t n) {
     if (n < 0) {
         return make_unexpected<std::size_t>(from_errno_value(errno));
@@ -40,22 +40,22 @@ Result<std::size_t> syscall_result(ssize_t n) {
     return static_cast<std::size_t>(n);
 }
 
-// The maximum number of iovec entries per readv/writev call. POSIX guarantees
-// at least _XOPEN_IOV_MAX (>=16); Linux also exposes IOV_MAX (1024). We prefer
-// the compile-time IOV_MAX, then query sysconf(_SC_IOV_MAX), then fall back to
-// a conservative 16. Cached once.
-//
-// Thread-safety: this is a C++11 magic static, so the initializer runs exactly
-// once even under concurrent first-call races.
+
+
+
+
+
+
+
 long iov_max() {
     static const long cached = []() -> long {
 #ifdef IOV_MAX
-        // kIovMaxConst derives from the system IOV_MAX macro (POSIX minimum 16,
-        // Linux 1024); it is compile-time positive, so no runtime check needed.
+
+
         return static_cast<long>(kIovMaxConst);
 #else
-        // No compile-time IOV_MAX: query sysconf, fall back to the POSIX minimum
-        // (16) if the query fails or returns a non-positive value.
+
+
         long v = ::sysconf(_SC_IOV_MAX);
         return v > 0 ? v : 16L;
 #endif
@@ -63,20 +63,20 @@ long iov_max() {
     return cached;
 }
 
-// Clamp an iovec chunk count for the int-typed iovcnt parameter of readv/writev.
-// iov_max() is realistically small (Linux IOV_MAX == 1024), but a pathological
-// sysconf value > INT_MAX would turn a naive static_cast<int> negative and cause
-// undefined behavior in the syscall. Clamp defensively.
+
+
+
+
 int iovcnt_clamped(std::size_t chunk) {
     return static_cast<int>(std::min<std::size_t>(chunk, static_cast<std::size_t>(INT_MAX)));
 }
 
-// errno-aware close(2) indirection. close is the one
-// POSIX syscall in this file whose EINTR must NOT go through
-// detail::retry_on_eintr: on EINTR — as on any error return — Linux has
-// already released the descriptor, and a blind retry could close a
-// since-reused fd number. The production form is exactly ::close; the
-// internal-testing build may script it (src/file_test_seams.hpp).
+
+
+
+
+
+
 int close_fd(int fd) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
     if (file_testing::CloseScript* script = file_testing::CloseScript::active()) {
@@ -86,30 +86,30 @@ int close_fd(int fd) {
     return ::close(fd);
 }
 
-} // namespace
+}
 
-// ---------------- FileReader ----------------
+
 
 FileReader::FileReader(const std::string& path, SyscallStats* stats, VectorStats* vec_stats)
     : stats_(stats), vec_stats_(vec_stats) {
     fd_ = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd_ < 0) {
-        // Preserve the real errno so read_some() can report the actual cause
-        // (ENOENT, ENOTDIR, EACCES, EMFILE, ...) rather than a synthetic code.
+
+
         open_error_ = from_errno_value(errno);
     }
 }
 
 Result<void> FileReader::close() noexcept {
     if (fd_ < 0) {
-        // Never opened / already closed / moved-from: idempotent no-op. A
-        // preserved open() failure is NOT re-reported here — close() observes
-        // only the close syscall.
+
+
+
         return {};
     }
-    // Ownership is released unconditionally, before the result is even known:
-    // on Linux close(2) consumes the fd on every return path (including
-    // EINTR/EIO), so a second close attempt could hit a reused fd number.
+
+
+
     const int fd = std::exchange(fd_, -1);
     if (close_fd(fd) != 0) {
         return make_unexpected<void>(from_errno_value(errno));
@@ -118,16 +118,16 @@ Result<void> FileReader::close() noexcept {
 }
 
 FileReader::~FileReader() {
-    // Best-effort, unreportable by design (AGENTS.md §3.8: a destructor must
-    // not invent success and must not throw). Callers that need the close
-    // result call close() explicitly before destruction.
+
+
+
     (void)close();
 }
 
 Result<std::size_t> FileReader::read_some(std::span<std::byte> dst) {
     if (fd_ < 0) {
-        // Surface the real open() failure if we have it; otherwise this is a
-        // default-constructed / moved-from reader.
+
+
         if (stats_) {
             ++stats_->read_syscall_errors;
         }
@@ -151,9 +151,9 @@ Result<std::size_t> FileReader::read_some(std::span<std::byte> dst) {
 }
 
 Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
-    // Build the iovec list once, skipping empty slices (they never cause a
-    // syscall). readv scatters directly into each IoSlice's buffer in place, so
-    // no separate base/length bookkeeping is needed.
+
+
+
     std::vector<iovec> iovs;
     iovs.reserve(dsts.size());
     for (auto& d : dsts) {
@@ -166,16 +166,16 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
     if (vec_stats_) {
         ++vec_stats_->read_vec_calls;
         vec_stats_->read_vec_iovecs += iovs.size();
-        // NOTE: not a fallback — this is the real readv path.
+
     }
 
-    // No non-empty slices: nothing to do, no syscall.
+
     if (iovs.empty()) {
         return std::size_t{0};
     }
 
     if (fd_ < 0) {
-        // Preserve the exact open_error_ behavior of read_some.
+
         if (stats_) {
             ++stats_->read_syscall_errors;
         }
@@ -184,7 +184,7 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
     }
 
     std::size_t total = 0;
-    std::size_t offset = 0; // current iovec index into iovs
+    std::size_t offset = 0;
     while (offset < iovs.size()) {
         std::size_t chunk =
             std::min<std::size_t>(iovs.size() - offset, static_cast<std::size_t>(iov_max()));
@@ -200,26 +200,26 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
             }
         }
         if (!r.has_value()) {
-            // Error propagation mirrors read_vec's contract: errors are returned
-            // immediately, even after partial progress.
+
+
             return make_unexpected<std::size_t>(r.error());
         }
         std::size_t got = r.value();
         total += got;
         if (got == 0) {
-            break; // clean EOF mid-chunk: stop
+            break;
         }
-        // Count how many full iovecs were completely consumed by this readv.
-        // readv scatters directly into each IoSlice's buffer in place, so the
-        // caller's slices already hold the bytes — no per-slice advancement here.
+
+
+
         std::size_t remaining = got;
         while (offset < iovs.size() && remaining >= iovs[offset].iov_len) {
             remaining -= iovs[offset].iov_len;
             ++offset;
         }
         if (remaining > 0) {
-            // Partial fill of iovs[offset]: stop here to honor the
-            // stop-on-short semantics shared with the default fallback.
+
+
             break;
         }
     }
@@ -245,7 +245,7 @@ Result<std::size_t> FileReader::read_at(std::uint64_t offset, std::span<std::byt
     if (!native_offset.has_value()) {
         return make_unexpected<std::size_t>(native_offset.error());
     }
-    // pread does not move the file cursor.
+
     ssize_t n = detail::retry_on_eintr(
         [&] { return ::pread(fd_, dst.data(), dst.size(), native_offset.value()); });
     auto result = syscall_result(n);
@@ -261,7 +261,7 @@ Result<std::size_t> FileReader::read_at(std::uint64_t offset, std::span<std::byt
 }
 
 Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSlice> dsts) {
-    // Build the iovec list once, skipping empty slices (same as read_vec).
+
     std::vector<iovec> iovs;
     iovs.reserve(dsts.size());
     for (auto& d : dsts) {
@@ -288,11 +288,11 @@ Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSl
             open_error_.value_or(IoError{.code = IoError::Code::permission_denied}));
     }
 
-    // preadv advances through the iovecs itself, but each call starts at the
-    // given offset. Across IOV_MAX chunks, advance the offset by bytes already
-    // read so the next chunk continues the logical read.
+
+
+
     std::size_t total = 0;
-    std::size_t idx = 0; // current iovec index
+    std::size_t idx = 0;
     std::uint64_t off = offset;
     while (idx < iovs.size()) {
         auto native_offset = detail::checked_posix_offset(off);
@@ -320,16 +320,16 @@ Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSl
         total += got;
         off += got;
         if (got == 0) {
-            break; // clean EOF mid-chunk: stop
+            break;
         }
-        // Count fully-consumed iovecs (preadv scatters in place).
+
         std::size_t remaining = got;
         while (idx < iovs.size() && remaining >= iovs[idx].iov_len) {
             remaining -= iovs[idx].iov_len;
             ++idx;
         }
         if (remaining > 0) {
-            break; // partial fill: stop-on-short
+            break;
         }
     }
 
@@ -341,7 +341,7 @@ Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSl
 
 Result<void> FileReader::read_at_exact(std::uint64_t offset, std::span<std::byte> dst) {
     if (dst.empty()) {
-        return {}; // immediate success
+        return {};
     }
     std::uint64_t off = offset;
     std::size_t filled = 0;
@@ -352,8 +352,8 @@ Result<void> FileReader::read_at_exact(std::uint64_t offset, std::span<std::byte
         }
         std::size_t got = r.value();
         if (got == 0) {
-            // EOF before dst is full. Matches read_exact: eof whether or not
-            // partial progress was made.
+
+
             return make_unexpected(IoError{.code = IoError::Code::eof});
         }
         filled += got;
@@ -362,7 +362,7 @@ Result<void> FileReader::read_at_exact(std::uint64_t offset, std::span<std::byte
     return {};
 }
 
-// ---------------- FileWriter ----------------
+
 
 FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats* vec_stats,
                        SyncStats* sync_stats)
@@ -375,26 +375,26 @@ FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats
 
 Result<void> FileWriter::close() noexcept {
     if (fd_ < 0) {
-        // Never opened / already closed / moved-from: idempotent no-op. A
-        // preserved open() failure is NOT re-reported here — close() observes
-        // only the close syscall.
+
+
+
         return {};
     }
-    // Ownership is released unconditionally (see FileReader::close): the fd
-    // is consumed on every close return path; never retried.
+
+
     const int fd = std::exchange(fd_, -1);
     if (close_fd(fd) != 0) {
-        // The kernel's last writeback report for this file (EIO/ENOSPC are
-        // real data-integrity failures, not diagnostics).
+
+
         return make_unexpected<void>(from_errno_value(errno));
     }
     return {};
 }
 
 FileWriter::~FileWriter() {
-    // Best-effort, unreportable by design (AGENTS.md §3.8: a destructor must
-    // not invent success and must not throw). Callers that need the close
-    // result call close() explicitly before destruction.
+
+
+
     (void)close();
 }
 
@@ -423,18 +423,18 @@ Result<std::size_t> FileWriter::write_some(std::span<const std::byte> src) {
 }
 
 Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
-    // Build the iovec list once, skipping empty slices (they never cause a
-    // syscall).
+
+
     std::vector<iovec> iovs;
     iovs.reserve(srcs.size());
     for (const auto& s : srcs) {
         if (s.bytes.empty()) {
             continue;
         }
-        // iovec::iov_base is void*; the source is const bytes. writev does not
-        // mutate, so dropping const is safe and standard for writev. The
-        // static_cast<const void*> first widens const std::byte* to const void*
-        // (a different type), which the const_cast then strips.
+
+
+
+
         iovs.push_back(
             iovec{.iov_base = const_cast<void*>(static_cast<const void*>(s.bytes.data())),
                   .iov_len = s.bytes.size()});
@@ -443,10 +443,10 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
     if (vec_stats_) {
         ++vec_stats_->write_vec_calls;
         vec_stats_->write_vec_iovecs += iovs.size();
-        // NOTE: not a fallback — this is the real writev path.
+
     }
 
-    // No non-empty slices: nothing to do, no syscall.
+
     if (iovs.empty()) {
         return std::size_t{0};
     }
@@ -460,7 +460,7 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
     }
 
     std::size_t total = 0;
-    std::size_t offset = 0; // current iovec index into iovs
+    std::size_t offset = 0;
     while (offset < iovs.size()) {
         std::size_t chunk =
             std::min<std::size_t>(iovs.size() - offset, static_cast<std::size_t>(iov_max()));
@@ -476,24 +476,24 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
             }
         }
         if (!r.has_value()) {
-            // Error propagation mirrors write_vec's contract: errors returned
-            // immediately, even after partial progress.
+
+
             return make_unexpected<std::size_t>(r.error());
         }
         std::size_t wrote = r.value();
         total += wrote;
         if (wrote == 0) {
-            break; // zero-progress: stop and report (write_all_vec surfaces invalid_state)
+            break;
         }
-        // Advance offset by the fully-written iovecs. A partial write of the
-        // current iovec stops the loop (write_vec reports the partial total).
+
+
         std::size_t remaining = wrote;
         while (offset < iovs.size() && remaining >= iovs[offset].iov_len) {
             remaining -= iovs[offset].iov_len;
             ++offset;
         }
         if (remaining > 0) {
-            break; // short write into the middle of an iovec: stop
+            break;
         }
     }
 
@@ -518,7 +518,7 @@ Result<std::size_t> FileWriter::write_at(std::uint64_t offset, std::span<const s
     if (!native_offset.has_value()) {
         return make_unexpected<std::size_t>(native_offset.error());
     }
-    // pwrite does not move the file cursor.
+
     ssize_t n = detail::retry_on_eintr(
         [&] { return ::pwrite(fd_, src.data(), src.size(), native_offset.value()); });
     auto result = syscall_result(n);
@@ -535,7 +535,7 @@ Result<std::size_t> FileWriter::write_at(std::uint64_t offset, std::span<const s
 
 Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
                                              std::span<const ConstIoSlice> srcs) {
-    // Build the iovec list once, skipping empty slices (same as write_vec).
+
     std::vector<iovec> iovs;
     iovs.reserve(srcs.size());
     for (const auto& s : srcs) {
@@ -564,8 +564,8 @@ Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
             open_error_.value_or(IoError{.code = IoError::Code::permission_denied}));
     }
 
-    // pwritev advances through iovecs itself; each call starts at `off`. Across
-    // IOV_MAX chunks, advance off by bytes already written.
+
+
     std::size_t total = 0;
     std::size_t idx = 0;
     std::uint64_t off = offset;
@@ -595,7 +595,7 @@ Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
         total += wrote;
         off += wrote;
         if (wrote == 0) {
-            break; // zero-progress: stop
+            break;
         }
         std::size_t remaining = wrote;
         while (idx < iovs.size() && remaining >= iovs[idx].iov_len) {
@@ -603,7 +603,7 @@ Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
             ++idx;
         }
         if (remaining > 0) {
-            break; // short write mid-iovec: stop
+            break;
         }
     }
 
@@ -626,7 +626,7 @@ Result<void> FileWriter::write_at_all(std::uint64_t offset, std::span<const std:
         }
         std::size_t put = r.value();
         if (put == 0) {
-            // Zero progress on non-empty remaining input: backend failure.
+
             return make_unexpected(IoError{.code = IoError::Code::invalid_state});
         }
         written += put;
@@ -637,16 +637,16 @@ Result<void> FileWriter::write_at_all(std::uint64_t offset, std::span<const std:
 
 namespace {
 
-// Shared sync core: runs the given fd-sync callable with EINTR retry and maps
-// errno. Used by both sync_data (fdatasync) and sync_all (fsync).
-// Templated to avoid std::function heap allocation (F.22, Per.3).
+
+
+
 template <class Fn>
 Result<void> do_sync(int fd, const std::optional<IoError>& open_error, const Fn& fn,
                      SyncStats* stats, std::uint64_t SyncStats::* calls,
                      std::uint64_t SyncStats::* errors) {
     if (fd < 0) {
-        // A failed-open file surfaces its preserved errno; a moved-from/empty
-        // writer with no open_error_ reports invalid_state.
+
+
         if (stats) {
             ++(stats->*errors);
         }
@@ -668,7 +668,7 @@ Result<void> do_sync(int fd, const std::optional<IoError>& open_error, const Fn&
     return {};
 }
 
-} // namespace
+}
 
 Result<void> FileWriter::sync_data() {
     return do_sync(
@@ -682,4 +682,4 @@ Result<void> FileWriter::sync_all() {
         &SyncStats::sync_all_calls, &SyncStats::sync_all_errors);
 }
 
-} // namespace sluice
+}

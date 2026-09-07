@@ -1,18 +1,8 @@
--- Production libraries: sluice_core, sluice_async, sluice_async_internal_testing,
--- and sluice_bench_common.
+-- Production libraries: sluice_core, sluice_async.
 
 local R = SLUICE_ROOT
 
 -- Core static library: Reader/Writer abstractions + wrappers.
---
--- The authoritative production source manifest for the core is shared via
--- core_sources() so sluice_core and the fuzz-instrumented sluice_core_fuzz
--- compile the exact same src/*.cpp set from one place (no duplicated manifest
--- drift). Both targets compile the same production code; only their sanitizer
--- instrumentation differs.
--- Shared authoritative core source manifest. Visible to fuzz.lua (and any
--- future instrumented variant) so the production source list lives in exactly
--- one place.
 core_sources = function()
     return { R .. "src/*.cpp" }
 end
@@ -44,67 +34,3 @@ target("sluice_async")
     -- Verified against the official xmake docs (add_cxxflags {tools=...}).
     add_cxxflags("-Wthread-safety", "-Werror=thread-safety",
                  {tools = {"clang", "clang_cl"}})
-
--- ---------------------------------------------------------------------------
--- ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: internal-testing runtime variant.
---
--- The production `sluice_async` (above) is hook-free: it declares no test
--- friends, no test seam state, and exports no test phase/controller symbol.
--- The `sluice_async_internal_testing` variant is compiled from the SAME
--- authoritative async sources (src/async/*.cpp) PLUS the non-installed test
--- controller (tests/async_test_control.cpp), with the private macro
--- SLUICE_ASYNC_INTERNAL_TESTING defined. Only this variant links the
--- controller; only test binaries that need deterministic causal seams depend
--- on it. No binary links both variants.
---
--- Both targets share the same source manifest + TSA configuration via the
--- helper below (one source list, two targets).
--- ---------------------------------------------------------------------------
-local async_sources = function()
-    return { R .. "src/async/*.cpp" }
-end
-
--- TSA flags scoped to the Clang frontends only (W3 corrective). See the note
--- on sluice_async above. Used by sluice_async_internal_testing.
-local async_tsa_flags = function()
-    add_cxxflags("-Wthread-safety", "-Werror=thread-safety",
-                 {tools = {"clang", "clang_cl"}})
-end
-
-target("sluice_async_internal_testing")
-    set_kind("static")
-    set_default(false)
-    set_group("test")
-    -- src/async is PUBLIC here (C4 / issue #135): the non-installed internal-
-    -- testing seam headers (scheduler_test_access.hpp, threadpool_test_seams.hpp,
-    -- ...) live in src/async and are included by the installed production
-    -- headers ONLY under SLUICE_ASYNC_INTERNAL_TESTING, so internal-testing TUs
-    -- (library + dependent test binaries) must resolve them. The production
-    -- sluice_async target does NOT have this include path and never defines the
-    -- macro, so its TUs compile no seam.
-    add_includedirs(R .. "include", R .. "tests", R .. "src/async", {public = true})
-    add_deps("sluice_core")
-    add_files(async_sources())
-    -- The non-installed test controller (defines test_phase + the registry).
-    -- Lives in tests/ so the production src/async/*.cpp glob never sees it.
-    add_files(R .. "tests/async_test_control.cpp")
-    -- PUBLIC: the define must also reach the test TUs that include the
-    -- non-installed async_test_control.hpp (which references Scheduler::
-    -- AsyncTestAccess, a guarded nested struct). Dependents of this variant
-    -- see the macro; the production `sluice_async` target does NOT depend on
-    -- this variant, so production TUs never see it.
-    add_defines("SLUICE_ASYNC_INTERNAL_TESTING", {public = true})
-    async_tsa_flags()
-
--- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
--- Also contains BlockingIoPool (021S), the bounded execution model for the
--- W1-W4 blocking bench matrix (job 022S). Pool source is here so both bench and
--- test targets link it without per-target duplication.
-target("sluice_bench_common")
-    set_kind("static")
-    set_default(false)
-    set_group("bench")
-    add_includedirs(R .. "include", R .. "bench")
-    add_deps("sluice_core")
-    add_files(R .. "bench/bench_common.cpp", R .. "bench/support/blocking_io_pool.cpp",
-              R .. "bench/support/sync_matrix.cpp")

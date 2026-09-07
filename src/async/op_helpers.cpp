@@ -1,6 +1,6 @@
-// Implementation of the async "all" helpers. These block the
-// caller in a poll-loop driving one internal Completion until the full buffer
-// transfers or an error occurs. Mirrors blocking read_exact/write_all.
+
+
+
 #include <sluice/async/op_helpers.hpp>
 
 #include <cassert>
@@ -8,8 +8,8 @@
 namespace sluice::async {
 
 namespace {
-// One step of the loop: submit, poll until ready, return this step's result.
-// Resets the Completion so it can be reused for the next step.
+
+
 Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
                              int fd, std::byte* dst, const std::byte* src,
                              std::size_t len, std::uint64_t offset) {
@@ -19,14 +19,14 @@ Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
         : ctx.submit_read(ReadOp{fd, dst, len, offset}, c);
     if (!sr.has_value()) return make_unexpected<std::size_t>(sr.error());
 
-    // Poll until this Completion is ready (drives the backend).
+
     while (!c.ready()) {
         auto pr = ctx.poll();
         (void)pr;
     }
     return c.result();
 }
-}  // namespace
+}
 
 Result<std::size_t> read_all(AsyncIoContext& ctx, int fd,
                              std::span<std::byte> dst, std::uint64_t offset) {
@@ -37,12 +37,12 @@ Result<std::size_t> read_all(AsyncIoContext& ctx, int fd,
     while (filled < dst.size()) {
         auto r = one_step(ctx, c, fd, dst.data() + filled, nullptr,
                           dst.size() - filled, off);
-        if (!r.has_value()) return r;  // error propagates immediately
+        if (!r.has_value()) return r;
         std::size_t got = r.value();
         if (got == 0) {
-            // EOF before dst full — partial progress or not, it's eof.
-            // Zero bytes on non-empty remaining input is EOF here (backend EOF),
-            // not invalid_state (that's for write_all).
+
+
+
             return make_unexpected<std::size_t>(IoError{IoError::Code::eof});
         }
         filled += got;
@@ -63,12 +63,12 @@ Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
         if (!r.has_value()) return r;
         std::size_t put = r.value();
         if (put == 0) {
-            // Zero progress on non-empty remaining input — invalid_state.
-            // DELIBERATE DIVERGENCE from the await-style write coordinator
-            // (include/sluice/async/await_op_helpers.hpp), which reports
-            // backend_error for the same condition to preserve the audited
-            // applications' observable error codes; see the bilateral note
-            // there.
+
+
+
+
+
+
             return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
         }
         written += put;
@@ -78,10 +78,10 @@ Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
 }
 
 namespace {
-// Drive a sync Completion<void> to ready via a poll-loop (synchronous shape of
-// async durability). The W4 overlap value is realized by submitting the sync
-// op and NOT awaiting it (raw submit_sync_*); this helper is the sync-shaped
-// convenience, mirroring blocking sync_data/sync_all.
+
+
+
+
 Result<void> sync_step(AsyncIoContext& ctx, Completion<void>& c, int fd,
                        bool data_only) {
     c.reset();
@@ -94,16 +94,16 @@ Result<void> sync_step(AsyncIoContext& ctx, Completion<void>& c, int fd,
     }
     return c.result();
 }
-}  // namespace
+}
 
 Result<void> sync_data_all(AsyncIoContext& ctx, int fd) {
     Completion<void> c;
-    return sync_step(ctx, c, fd, /*data_only=*/true);
+    return sync_step(ctx, c, fd, true);
 }
 
 Result<void> sync_all_all(AsyncIoContext& ctx, int fd) {
     Completion<void> c;
-    return sync_step(ctx, c, fd, /*data_only=*/false);
+    return sync_step(ctx, c, fd, false);
 }
 
-}  // namespace sluice::async
+}

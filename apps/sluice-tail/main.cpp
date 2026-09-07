@@ -1,32 +1,32 @@
-// sluice-tail — bounded last-N + follow-mode tail.
-//
-// CLI:
-//   sluice-tail [options] <file>
-// Options:
-//   -n <count>              last N lines (default 10; 0 = none)
-//   -f                      follow (descriptor semantics: the fd is followed,
-//                           not the path — rotation-by-rename is NOT tracked)
-//   --poll-interval <ms>    follow poll cadence (50..5000, default 200)
-//   --buffer-size <bytes>   scan/read buffer (default 64 KiB)
-//   --max-line-bytes <n>    retained-line cap (default 1 MiB)
-//   --workers <count>       Runtime worker count (default 1)
-//   --help                  show usage
-//
-// Backend: ThreadPoolBackend. Last-N is a bounded BACKWARD scan (memory ~
-// buffer + one line carry, independent of file size); follow adds one stat
-// per poll interval — no busy spin, idle CPU ~ 0.
-//
-// Cancellation (follow): SIGINT/SIGTERM are blocked before any thread is
-// created and consumed by a dedicated sigwait thread which calls
-// TailEngine::request_stop() from a REAL thread context (request_stop takes
-// locks — a signal-handler context is not safe for it). The follow task
-// observes the stop request within one poll slice, drains its outstanding
-// Completion, and exits; main then completes the Runtime lifecycle
-// (drain + join) and exits 0 — a signal-ended follow is the documented
-// NORMAL end of tail -f. No std::exit() bypass of the Runtime lifecycle.
-//
-// Exit codes: 0 = success (incl. signal-ended follow), 1 = usage error,
-// 2 = I/O error.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include "cli_parse.hpp"
 #include "tail_task.hpp"
 
@@ -49,8 +49,8 @@ using sluice_tail::TailOptions;
 using sluice_tail::cli::CliArgs;
 using sluice_tail::cli::parse_args;
 
-// Blocks SIGINT/SIGTERM in the calling thread (and, because threads inherit
-// the mask, in every thread created afterwards — call before spawning).
+
+
 bool block_signals() {
     sigset_t set;
     ::sigemptyset(&set);
@@ -59,11 +59,11 @@ bool block_signals() {
     return ::pthread_sigmask(SIG_BLOCK, &set, nullptr) == 0;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
-    // Block the follow-terminating signals FIRST so the sigwait thread (and
-    // no other thread) can consume them deterministically.
+
+
     if (!block_signals()) {
         std::fprintf(stderr, "%s: cannot block signals: %s\n", argv[0],
                      std::strerror(errno));
@@ -108,12 +108,12 @@ int main(int argc, char** argv) {
 
     TailEngine engine(
         fd, options,
-        /*sink=*/[](std::string_view line) {
+[](std::string_view line) {
             std::fwrite(line.data(), 1, line.size(), stdout);
             std::fputc('\n', stdout);
-            std::fflush(stdout);  // line-visible to pipe consumers
+            std::fflush(stdout);
         },
-        /*diag=*/[](std::string_view msg) {
+[](std::string_view msg) {
             std::fwrite(msg.data(), 1, msg.size(), stderr);
         });
 
@@ -124,16 +124,16 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // Follow mode: a dedicated thread consumes the blocked signals and stops
-    // the engine from a real thread context. The Runtime lifecycle is then
-    // closed by wait() (drain + join) — never bypassed with std::exit.
+
+
+
     std::atomic<bool> signal_seen{false};
     pthread_t sig_thread{};
     bool sig_thread_spawned = false;
-    // The trampoline context must outlive the if-block: the waiter thread
-    // dereferences it when the signal arrives, which is AFTER the block
-    // closes (ASan-confirmed stack-use-after-scope in the first version).
-    // It lives until main returns; the thread is joined before that.
+
+
+
+
     struct SigCtx {
         TailEngine* engine;
         std::atomic<bool>* seen;
@@ -166,9 +166,9 @@ int main(int argc, char** argv) {
     auto result = engine.wait();
 
     if (sig_thread_spawned) {
-        // If the task ended WITHOUT a signal (error/EOF-only follow cannot
-        // happen: follow only ends by stop or error; an error end leaves the
-        // waiter blocked), deliver a no-op signal to wake it for the join.
+
+
+
         if (!signal_seen.load(std::memory_order_relaxed))
             ::pthread_kill(sig_thread, SIGINT);
         ::pthread_join(sig_thread, nullptr);
@@ -191,6 +191,6 @@ int main(int argc, char** argv) {
                      r.error->os_errno ? std::strerror(r.error->os_errno) : "");
         return 2;
     }
-    // Signal-ended follow (stopped_by_cancel) is success — GNU-tail behavior.
+
     return 0;
 }

@@ -1,15 +1,15 @@
-// sluice::async::LockGuard — annotated RAII scoped-lock for Clang TSA.
-//
-// CPP-STATIC-1 substrate.  Wraps a Mutex reference with the TSA scoped
-// capability annotation so the compiler understands acquire-on-construct /
-// release-on-destruct.  Delegates to Mutex::lock/unlock; same exclusive
-// non-recursive semantics; no additional runtime state.
-//
-// Non-copyable, non-movable: the lexical scope IS the lock lifetime.
-//
-// Use where the codebase currently uses std::lock_guard<std::mutex>.
-// This is the simplest annotated lock form; TSA's unique_lock / cv patterns
-// require a separate annotated type when needed.
+
+
+
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <sluice/async/mutex.hpp>
@@ -31,4 +31,4 @@ private:
     Mutex& mu_;
 };
 
-}  // namespace sluice::async
+}

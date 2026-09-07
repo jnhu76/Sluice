@@ -1,6 +1,6 @@
-// sluice::IoError — error model for the I/O core.
-// Inspired by Zig std.Io's error set (ReadFailed/WriteFailed/EndOfStream) but
-// flattened to a tagged code plus an OS errno slot for diagnostics.
+
+
+
 #pragma once
 
 #include <cerrno>
@@ -19,13 +19,13 @@ struct IoError {
         permission_denied,
         invalid_state,
         backend_error,
-        // ADR-explicit-io-request-contract (Accepted) Decision 6: the request lifecycle
-        // distinguishes admission rejection, stale-key lookup, and capability refusal from
-        // one another and from configured-capacity would_block, lifecycle invalid_state,
-        // and genuine-init no_space. These three codes name those distinct cases.
-        //   invalid_argument — malformed operation descriptor (prepare-stage rejection)
-        //   not_found        — stale/unknown RequestKey (cancel/reap lookup after release)
-        //   not_supported    — backend/platform does not provide the op or cancel capability
+
+
+
+
+
+
+
         invalid_argument,
         not_found,
         not_supported,
@@ -37,7 +37,7 @@ struct IoError {
     friend bool operator==(const IoError&, const IoError&) noexcept = default;
 };
 
-// Stable string name for a code. Used for diagnostics only, not control flow.
+
 inline constexpr std::string_view to_string(IoError::Code c) {
     switch (c) {
     case IoError::Code::eof:
@@ -66,10 +66,10 @@ inline constexpr std::string_view to_string(IoError::Code c) {
     return "unknown";
 }
 
-// Maps a POSIX errno value to an IoError. Uses portable <cerrno> macros (never
-// hardcoded ints) so behavior is stable across Linux/macOS/BSD. os_errno is
-// always preserved verbatim; errno 0 maps to backend_error since it is never a
-// real error (callers gate on err != 0).
+
+
+
+
 inline IoError from_errno_value(int err) {
     IoError e{};
     e.os_errno = err;
@@ -108,4 +108,4 @@ inline IoError from_errno_value(int err) {
     return e;
 }
 
-} // namespace sluice
+}

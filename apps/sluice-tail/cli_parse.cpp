@@ -1,4 +1,4 @@
-// sluice-tail CLI argument parsing implementation.
+
 #include "cli_parse.hpp"
 
 #include <cstdio>
@@ -18,10 +18,10 @@ bool parse_digits(const char* s, std::size_t& out) {
         v = v * 10 + d;
     }
     out = v;
-    return true;  // zero allowed (-n 0)
+    return true;
 }
 
-}  // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -124,4 +124,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-}  // namespace sluice_tail::cli
+}

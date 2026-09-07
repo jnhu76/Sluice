@@ -1,11 +1,11 @@
-// copy_all implementation. The strategy-aware overload is the source of truth;
-// the CopyLimit / back-compat / convenience overloads delegate to it.
-//
-// The loop tries the buffered fast path first when the strategy allows it:
-// when the reader also implements BufferedReadable, already-buffered unread
-// bytes are drained via peek_buffered/consume_buffered before any scratch read,
-// mirroring Zig std.Io's Reader.stream (Reader.zig:168). Whether the fast path
-// is used is an explicit CopyStrategy choice.
+
+
+
+
+
+
+
+
 #include <sluice/copy.hpp>
 #include <sluice/buffered_readable.hpp>
 
@@ -28,9 +28,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     dec.used_buffered_fast_path = false;
     dec.used_scratch_path = false;
 
-    // Resolve Auto: currently Auto == BufferedFirst (buffered-first is the
-    // default). Documented and tested; may change after measurement. Auto
-    // keeps its own requested value but reports what it ran as.
+
+
+
     bool use_fast_path =
         (options.strategy == CopyStrategy::BufferedFirst || options.strategy == CopyStrategy::Auto);
     if (options.strategy == CopyStrategy::Auto) {
@@ -38,9 +38,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         dec.reason = "auto";
     }
 
-    // One strategy-selection counter per top-level call. The counter records
-    // the SELECTED strategy, so Auto is recorded as Auto even though it
-    // executes as BufferedFirst.
+
+
+
     if (stats) {
         switch (options.strategy) {
         case CopyStrategy::Auto:
@@ -57,7 +57,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
 
     const CopyLimit& limit = options.limit;
 
-    // nothing() (and bytes(0)): succeed immediately without touching endpoints.
+
     if (limit.is_limited() && limit.remaining() == 0) {
         if (stats) {
             ++stats->limit_stops;
@@ -65,16 +65,16 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         return std::uint64_t{0};
     }
 
-    // A non-zero / unlimited copy needs somewhere to stage bytes. An empty
-    // scratch can never make progress (the fast path may fully satisfy a limited
-    // copy, but a non-empty scratch is still required for the fallback), so
-    // reject rather than spin or no-op.
+
+
+
+
     if (scratch.empty()) {
         return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
     }
 
-    // Detect the buffered-readability capability once, but only honor it when
-    // the selected strategy wants the fast path (Scratch forces it off).
+
+
     BufferedReadable* br = use_fast_path ? dynamic_cast<BufferedReadable*>(&reader) : nullptr;
 
     std::uint64_t total = 0;
@@ -83,11 +83,11 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             ++stats->copy_loop_iterations;
         }
 
-        // --- Buffered fast path: drain already-buffered bytes first. ---
+
         if (br != nullptr) {
             auto buffered = br->peek_buffered();
             if (!buffered.empty()) {
-                // Respect the limit: copy at most (remaining - total) bytes.
+
                 std::size_t allowed = buffered.size();
                 if (limit.is_limited()) {
                     std::uint64_t left = limit.remaining() - total;
@@ -95,12 +95,12 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                         static_cast<std::size_t>(std::min<std::uint64_t>(buffered.size(), left));
                 }
                 if (allowed == 0) {
-                    // Limit reached on this iteration; fall through to limit stop.
+
                     break;
                 }
-                // write_all is all-or-error: on failure it does not expose how
-                // many bytes (if any) it wrote. Per the writer-error rule we
-                // therefore consume NOTHING on failure and return the error.
+
+
+
                 auto wr = writer.write_all(buffered.first(allowed));
                 if (!wr.has_value()) {
                     if (stats) {
@@ -110,7 +110,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 }
                 auto cr = br->consume_buffered(allowed);
                 if (!cr.has_value()) {
-                    // Should be impossible: allowed <= buffered.size().
+
                     if (stats) {
                         ++stats->reader_error_stops;
                     }
@@ -124,13 +124,13 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 }
                 dec.used_buffered_fast_path = true;
                 total += allowed;
-                continue; // loop: maybe more buffered bytes, maybe limit done
+                continue;
             }
         }
 
-        // --- Scratch fallback: read into scratch, then write_all. ---
-        // Never ask the reader for more than the remaining limit allows, and
-        // never more than the scratch can hold.
+
+
+
         std::size_t to_read = scratch.size();
         if (limit.is_limited()) {
             std::uint64_t left = limit.remaining() - total;
@@ -139,7 +139,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
 
         auto rr = reader.read_some(scratch.first(to_read));
         if (stats) {
-            ++stats->scratch_path_calls; // counts the attempt (incl. EOF probe)
+            ++stats->scratch_path_calls;
         }
         if (!rr.has_value()) {
             if (stats) {
@@ -152,10 +152,10 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             if (stats) {
                 ++stats->eof_stops;
             }
-            return total; // clean EOF
+            return total;
         }
         if (got > to_read) {
-            // Defensive: a reader returning more than asked is broken.
+
             if (stats) {
                 ++stats->reader_error_stops;
             }
@@ -178,7 +178,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         dec.used_scratch_path = true;
         total += got;
     }
-    // Loop exited because the limit was reached (not EOF/error).
+
     if (stats) {
         ++stats->limit_stops;
     }
@@ -204,4 +204,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer) {
     return copy_all(reader, writer, CopyLimit::unlimited());
 }
 
-} // namespace sluice
+}

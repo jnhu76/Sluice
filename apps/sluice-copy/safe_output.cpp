@@ -1,4 +1,4 @@
-// sluice-copy Version C — safe atomic output implementation.
+
 #include "safe_output.hpp"
 
 #include <sluice/detail/posix_retry.hpp>
@@ -21,7 +21,7 @@ namespace {
 
 using sluice::IoError;
 
-// App-local RAII file descriptor (brief §21: do NOT promote to core).
+
 struct ScopedFd {
     int fd = -1;
     explicit ScopedFd(int f) : fd(f) {}
@@ -37,9 +37,9 @@ SafeOpenOutcome fail(SafeOpenFailure f, IoError e) {
     return o;
 }
 
-// Parent directory of `path` ("/a/b/c" -> "/a/b", "c" -> "."). A trailing
-// slash ("dir/") keeps the last slash as the split point ("dir"), so the
-// destination is the (empty) name after it — which the rename step rejects.
+
+
+
 std::string parent_dir_of(const std::string& path) {
     std::size_t slash = path.find_last_of('/');
     if (slash == std::string::npos) return ".";
@@ -47,10 +47,10 @@ std::string parent_dir_of(const std::string& path) {
     return path.substr(0, slash);
 }
 
-// Directory durability syscall — indirection point for the deterministic
-// EINTR regression seam (#142). In production this is exactly ::fsync; only
-// the internal-testing build can script it, and that build carries no other
-// behavior difference.
+
+
+
+
 int directory_fsync(int fd) {
 #ifdef SLUICE_COPY_INTERNAL_TESTING
     if (testing::DirFsyncScript* script = testing::DirFsyncScript::active()) {
@@ -60,13 +60,13 @@ int directory_fsync(int fd) {
     return ::fsync(fd);
 }
 
-}  // namespace
+}
 
 SafeOpenOutcome open_atomic_copy(const std::string& src_path,
                                  const std::string& dst_path) {
-    // 1. Source: open read-only, fstat, require a regular file (same input
-    //    domain as file_domain.cpp — the Version B pipeline needs a seekable,
-    //    finite-length source). Rejected BEFORE anything is created.
+
+
+
     int src_fd = ::open(src_path.c_str(), O_RDONLY);
     if (src_fd < 0) {
         return fail(SafeOpenFailure::src_open,
@@ -84,12 +84,12 @@ SafeOpenOutcome open_atomic_copy(const std::string& src_path,
                     IoError{IoError::Code::invalid_state});
     }
 
-    // 2. Destination (only if it exists): must be a regular file and must not
-    //    be the same inode as the source. stat() FOLLOWS a symlink: a symlink
-    //    destination is validated against its target (and rejected as
-    //    same_file if the target IS the source), while the later rename
-    //    replaces the LINK itself — documented install-style semantics.
-    //    The destination is never opened for writing and never truncated.
+
+
+
+
+
+
     struct stat dst_stat{};
     if (::stat(dst_path.c_str(), &dst_stat) == 0) {
         if (!S_ISREG(dst_stat.st_mode)) {
@@ -102,20 +102,20 @@ SafeOpenOutcome open_atomic_copy(const std::string& src_path,
                         IoError{IoError::Code::invalid_state});
         }
     } else if (errno != ENOENT && errno != ENOTDIR) {
-        // Exists-but-unstattable (EACCES loop etc.) is an error; ENOENT is
-        // the normal fresh-destination case. ENOTDIR covers a non-directory
-        // prefix ("file/x") — the temp create below will report the precise
-        // errno if it matters.
+
+
+
+
         return fail(SafeOpenFailure::dst_stat,
                     sluice::from_errno_value(errno));
     }
 
-    // 3. Temp file in the DESTINATION's directory: same filesystem, so the
-    //    rename is atomic. mkstemp gives O_CREAT|O_EXCL semantics with a
-    //    unique name (0600); the mode is set explicitly afterwards.
+
+
+
     std::string dir = parent_dir_of(dst_path);
     std::string tmpl = dir + "/.sluice-copy.tmp.XXXXXX";
-    // mkstemp mutates the template in place; copy into a writable buffer.
+
     std::vector<char> buf(tmpl.begin(), tmpl.end());
     buf.push_back('\0');
     int temp_fd = ::mkstemp(buf.data());
@@ -126,10 +126,10 @@ SafeOpenOutcome open_atomic_copy(const std::string& src_path,
     ScopedFd temp_guard(temp_fd);
     std::string temp_path(buf.data());
 
-    // 4. Permission policy: the destination receives the source's rwx bits
-    //    (0777 mask). setuid/setgid/sticky are deliberately dropped (copying
-    //    a setuid binary must not resurrect execute-as-owner); umask is not
-    //    applied (explicit fchmod). Owner/group/timestamps are NOT preserved.
+
+
+
+
     mode_t mode = static_cast<mode_t>(src_stat.st_mode & 0777);
     if (::fchmod(temp_fd, mode) != 0) {
         ::unlink(temp_path.c_str());
@@ -176,8 +176,8 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
                                         SyncPolicy sync,
                                         SafeCommitStage* stage) {
     if (stage) *stage = SafeCommitStage::none;
-    // Close the temp fd on every path (its data was already synced by the
-    // copy task's SyncPolicy; close itself may still report an error).
+
+
     int fd = o.temp_fd;
     o.temp_fd = -1;
     bool closed_ok = (fd < 0) || (::close(fd) == 0);
@@ -190,7 +190,7 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
         return sluice::make_unexpected<void>(e);
     }
 
-    // The atomic replacement. Failure leaves the destination untouched.
+
     if (::rename(o.temp_path.c_str(), dst_path.c_str()) != 0) {
         if (stage) *stage = SafeCommitStage::rename;
         IoError e = sluice::from_errno_value(errno);
@@ -200,10 +200,10 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
     }
     o.temp_path.clear();
 
-    // Directory durability (only when the policy requires it): fsync the
-    // parent directory so the rename itself survives a crash. At this point
-    // the rename already happened; a failure here is reported as missing
-    // durability, not as a lost copy.
+
+
+
+
     if (sync != SyncPolicy::none) {
         int dir_fd = ::open(o.dst_dir.c_str(), O_RDONLY | O_DIRECTORY);
         if (dir_fd < 0) {
@@ -212,11 +212,11 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o,
                 sluice::from_errno_value(errno));
         }
         ScopedFd dir_guard(dir_fd);
-        // EINTR on fsync is retried through the repository retry authority
-        // (T7): an interrupted fsync may have already written data, so
-        // retrying is safe and required — unlike close() — and must never
-        // surface as a durability failure. After the helper returns, errno is
-        // a real error.
+
+
+
+
+
         int rc = sluice::detail::retry_on_eintr(
             [&] { return directory_fsync(dir_fd); });
         if (rc != 0) {
@@ -239,4 +239,4 @@ void discard_atomic_copy(SafeOpenOutcome& o) {
     }
 }
 
-}  // namespace sluice_copy
+}

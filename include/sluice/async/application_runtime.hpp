@@ -1,17 +1,17 @@
-// sluice::async::ApplicationRuntime — application lifecycle layer.
-//
-// A builder-constructed, one-shot, injected-backend Application Runtime driven
-// by a single dedicated driver thread. Owns AsyncIoContext, Scheduler, root
-// Group, root cancellation, and the driver-thread lifecycle. Exposes a unified
-// start / submit / request_stop / drain / join / shutdown contract.
-//
-// ADR: docs/adr/ADR-application-runtime.md (Accepted 2026-07-29).
-// API reference: docs/reference/api.md.
-// Formal: spec/tla/e16_application_runtime/.
-//
-// Non-copyable, non-movable. Constructed on the heap via RuntimeBuilder::build()
-// which returns Result<std::unique_ptr<ApplicationRuntime>> (a stable
-// address anchors driver captures, Fiber-local tag, lifecycle mutex/CV).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -35,24 +35,24 @@
 
 namespace sluice::async {
 
-// Forward declarations.
+
 class Group;
 class Fiber;
 class ApplicationRuntime;
 
-// ---------------------------------------------------------------------------
-// RuntimeTaskContext: restricted, non-owning task execution context.
-// Valid only during one RuntimeTaskFn invocation; delegates I/O to the
-// Runtime-owned AsyncIoContext. No spawn capability.
-//
-// A cooperative Completion wait (await_completion) lets a task suspend
-// until a submitted, caller-owned Completion reaches a terminal result.
-// This is the Runtime I/O wait capability (an application-discovered
-// gap). The capability is backed by the audited Scheduler::
-// await_completion_* primitive (regression-proven against
-// ThreadPoolBackend); the Scheduler* is PRIVATE and set only by
-// ApplicationRuntime (friend), never escaping to task code.
-// ---------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
 class RuntimeTaskContext {
 public:
     CancelToken& cancel_token() noexcept;
@@ -62,72 +62,72 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    // ADR-public-request-handle: identity-returning submit variants.
-    // Delegates to AsyncIoContext::submit_*_request. On success returns the
-    // accepted request's public RequestHandle; on synchronous rejection returns
-    // the error and no handle; not_supported if this backend lacks the identity
-    // contract.
+
+
+
+
+
     Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
     Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
     Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
     Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
 
-    // Cooperatively await a submitted, outstanding Completion. Returns
-    // inline (no suspend) if the Completion is already ready; otherwise
-    // suspends the calling Fiber exactly once and resumes exactly once when
-    // the Completion reaches a terminal result. The result remains in the
-    // Completion — read it via c.result() after this returns, then c.reset()
-    // before reuse (L7/L9 lifecycle).
-    //
-    // The wait is an identity-bearing arena waiter
-    // registration routed through the Scheduler-owned ReadySink. Returns:
-    //   - success       — the Completion is ready (c.result() valid).
-    //   - invalid_state — synchronous rejection: a second waiter is already
-    //                     registered on this Completion, or the
-    //                     Completion is not bound to THIS Runtime's context
-    //                     (cross-context / idle — provenance misuse). The
-    //                     task is NOT suspended.
-    //   - canceled      — the wait was cancelled via cancel_waiter while the
-    //                     task was suspended; the I/O continues and the
-    //                     Completion stays outstanding (wait-cancel !=
-    //                     I/O cancel). Do NOT reset the Completion until the
-    //                     I/O completes and reaps (borrow lifetime).
-    //
-    // Preconditions:
-    //   - `c` is outstanding against THIS Runtime's AsyncIoContext (a prior
-    //     submit_* on this context marked it outstanding). Awaiting an idle
-    //     Completion is a caller contract violation: Debug asserts; Release
-    //     documents. This matches the underlying Scheduler primitive
-    //     precondition and Completion::result() L9 policy.
-    //   - called only from within a Runtime task (the RuntimeTaskContext&
-    //     lifetime is the task invocation). The context is non-owning and
-    //     valid only during that invocation.
-    //
-    // Authority: delegates to the private Scheduler*; the pointer never
-    // escapes. submit-time errors stay synchronous (from submit_*); completion
-    // errors stay terminal results in the Completion.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     Result<void> await_completion(Completion<std::size_t>& c);
     Result<void> await_completion(Completion<void>& c);
 
-    // Waiter cancellation (ADR Decision 10). Removes ONLY this
-    // Runtime's waiter registration for `c` — never the I/O, never the
-    // borrow. The suspended task (if any) resumes exactly once with the
-    // wait-cancelled outcome (its await_completion returns IoError::canceled).
-    // Returns true when this call removed the waiter; false when the reap
-    // delivery already won (the task is or will be resumed with the
-    // Completion ready). not_found / invalid_state when the Completion is not
-    // bound to this Runtime's context.
+
+
+
+
+
+
+
+
     Result<bool> cancel_waiter(Completion<std::size_t>& c);
     Result<bool> cancel_waiter(Completion<void>& c);
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
-    // Suspend the current Fiber until `flag` becomes true. Uses the Scheduler's
-    // level-triggered ready-flag protocol (await_ready_flag). The flag must be
-    // set from another Fiber or external thread to resume this Fiber.
-    //
-    // TEST-ONLY: this capability exists solely to prove Fiber-local identity
-    // survives suspension (C2-T3). It is not part of the public E16 API and is
-    // not available in installed (non-internal-testing) builds.
+
+
+
+
+
+
+
     void suspend(std::atomic<bool>& flag);
 #endif
 
@@ -137,12 +137,12 @@ public:
 private:
     friend class ApplicationRuntime;
 
-    // The Scheduler* is part of the PRODUCTION object layout so the
-    // cooperative Completion wait can delegate to await_completion_*.
-    // Only ApplicationRuntime (friend) constructs the context; the pointer
-    // never escapes and task code cannot retrieve it. Both the production
-    // and internal-testing builds share this layout (sched_ is not
-    // test-only).
+
+
+
+
+
+
     RuntimeTaskContext(AsyncIoContext& ctx, CancelToken& token,
                        Scheduler& sched) noexcept
         : ctx_(&ctx), token_(&token), sched_(&sched) {}
@@ -152,33 +152,33 @@ private:
     Scheduler* sched_;
 };
 
-// The task function signature. Receives a RuntimeTaskContext& for I/O and
-// cancellation observation.
+
+
 using RuntimeTaskFn = std::function<void(RuntimeTaskContext&)>;
 
-// ---------------------------------------------------------------------------
-// RuntimeBuilder: collects configuration; build() validates, constructs on the
-// heap, and returns Result<std::unique_ptr<ApplicationRuntime>>.
-// ---------------------------------------------------------------------------
+
+
+
+
 class RuntimeBuilder {
 public:
     RuntimeBuilder() = default;
 
-    // Inject the backend (required). The Runtime owns the AsyncIoContext which
-    // owns this backend. The backend MUST either expose the split wait
-    // capability (wait_source() != nullptr — ThreadPoolBackend) or guarantee a
-    // non-blocking wait_one (wait_one_is_nonblocking() — SyncBackend /
-    // FakeAsyncBackend): the multi-participant runtime path cannot use a
-    // BLOCKING legacy serialized wait_one (a participant parked
-    // while holding access_mtx_ starves every other poll/reap path and
-    // deadlocks drain). build() rejects anything else with invalid_state.
+
+
+
+
+
+
+
+
     RuntimeBuilder& backend(std::unique_ptr<AsyncBackend> b);
 
-    // Set the worker count for Scheduler::run_live invocations. Default: 1.
+
     RuntimeBuilder& workers(unsigned n);
 
-    // Validate configuration and construct the Runtime on the heap.
-    // Returns invalid_state if no backend is provided.
+
+
     Result<std::unique_ptr<ApplicationRuntime>> build();
 
 private:
@@ -186,19 +186,19 @@ private:
     unsigned workers_ = 1;
 };
 
-// ---------------------------------------------------------------------------
-// ApplicationRuntime: the application lifecycle owner.
-//
-// Lifecycle: Constructed → Starting → Running → Stopping → Draining → Stopped.
-// Failure: StartFailed, Fatal (std::terminate).
-//
-// Thread safety: all public methods are safe to call from any thread except
-// drain()/join()/shutdown() which return invalid_state when called from a task
-// owned by this Runtime (detected via a Fiber-local execution tag stored in the
-// current Fiber's execution_tag_ field). Unlike thread_local, a Fiber-local tag
-// survives Fiber suspend/resume and is correct under multiplexing (one OS
-// worker runs many Fibers; a TLS guard does not follow Fiber context switches).
-// ---------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ApplicationRuntime {
 public:
     ~ApplicationRuntime();
@@ -208,94 +208,94 @@ public:
     ApplicationRuntime(ApplicationRuntime&&) = delete;
     ApplicationRuntime& operator=(ApplicationRuntime&&) = delete;
 
-    // Spawn the driver thread and transition to Running.
-    // Returns canceled if stop was requested before commit.
-    // Returns invalid_state if not in Constructed.
+
+
+
     Result<void> start();
 
-    // Admit a task for execution. Admission-gated: returns invalid_state if
-    // admission is closed (not Running, or stop_requested).
+
+
     Result<void> submit(RuntimeTaskFn task);
 
-    // Request cooperative stop. noexcept, idempotent, worker-safe.
-    // Publishes root cancellation under lifecycle_mutex in Running.
+
+
     void request_stop() noexcept;
 
-    // Wait for all admitted tasks to complete and all outstanding I/O to drain.
-    // Legal only in Stopping or Draining. Returns invalid_state in Running
-    // (caller must request_stop() first) or from a Runtime task.
+
+
+
     Result<void> drain();
 
-    // Post-drain close: join driver, destroy resources, publish Stopped.
-    // Legal only after drain_complete. Returns invalid_state from a Runtime task.
+
+
     Result<void> join();
 
-    // State-dispatched lifecycle operation. Correct in every state.
-    // One close owner elected across all concurrent callers.
+
+
     Result<void> shutdown();
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
-    // Test-only seam: returns a future that becomes ready when the driver
-    // thread reaches the startup barrier (barrier_wait). Used by startup-abort
-    // tests to deterministically observe the Starting phase before injecting
-    // stop/shutdown.
+
+
+
+
     std::future<void> test_driver_barrier_reached() {
         return barrier_promise_.get_future();
     }
 
-    // Test-only seam: enable the commit checkpoint pause. When enabled, the
-    // start owner parks at the commit checkpoint (after the barrier wait,
-    // immediately before checking stop_requested_) until
-    // test_release_start_owner_at_commit_checkpoint() is called. This lets a
-    // test inject stop/shutdown between the barrier-wait wake and the
-    // stop_requested_ check, deterministically forcing the startup-abort path
-    // (start() == canceled). OFF by default so that tests that do not need the
-    // pause (e.g. the suspend/resume identity test) are not blocked.
+
+
+
+
+
+
+
+
     void test_set_pause_at_commit_checkpoint(bool enable) {
         test_pause_at_commit_checkpoint_.store(enable, std::memory_order::release);
     }
 
-    // Test-only seam: returns a future that becomes ready when the start owner
-    // reaches the commit checkpoint (after the barrier wait, immediately before
-    // checking stop_requested_). The test can then call shutdown()/request_stop()
-    // to set stop_requested_ BEFORE the start owner checks it, deterministically
-    // forcing the startup-abort path (start() == canceled). The start owner
-    // blocks on commit_release_flag_ until test_commit_release() is called,
-    // giving the test time to inject stop.
+
+
+
+
+
+
+
     std::future<void> test_start_owner_at_commit_checkpoint() {
         return commit_checkpoint_promise_.get_future();
     }
 
-    // Test-only seam: releases the start owner that is parked at the commit
-    // checkpoint. After this call, the start owner proceeds to check
-    // stop_requested_ and (if stop was injected) takes the abort path.
+
+
+
     void test_release_start_owner_at_commit_checkpoint() {
         commit_release_flag_.store(true, std::memory_order::release);
         runtime_cv_.notify_all();
     }
 
-    // Issue #50 deterministic Scheduler topology regression. The returned
-    // reference remains owned by this Runtime and is valid only before terminal
-    // close. Absent from the installed production build.
+
+
+
     Scheduler& test_scheduler_for_worker_topology() noexcept { return *sched_; }
 
-    // Issue #116 liveness forensics: race-free dump of the Runtime lifecycle /
-    // driver / control-epoch state at a permanent stall, followed by the
-    // Scheduler park-forensics dump. Called by a forensics test's watchdog on
-    // its bounded-timeout path (the run is presumed stalled: the driver is
-    // parked between invocations and workers have exited, so lifecycle_mtx_
-    // and every Scheduler lock are uncontended). Absent from the installed
-    // production build.
+
+
+
+
+
+
+
     void test_dump_forensics(const char* tag);
 
-    // #135 C7 P1 regression seam: arms the ROOT group's next admission so the
-    // next submit() takes its documented rollback-and-rethrow path (P2-02:
-    // Group::async_evented throws std::bad_alloc at a reserve boundary;
-    // submit rolls back the admission reservation and rethrows). Lets a
-    // deterministic test prove the task-result bridge's submit exception
-    // boundary without any allocation pressure. One-shot (the underlying
-    // Group injection is one-shot); method-only seam, no object layout
-    // change; absent from the installed production build.
+
+
+
+
+
+
+
+
     void test_inject_next_submit_throw();
 #endif
 
@@ -303,10 +303,10 @@ private:
     friend class RuntimeBuilder;
     friend class RuntimeTaskContext;
 
-    // Construction via builder only.
+
     ApplicationRuntime(std::unique_ptr<AsyncBackend> backend, unsigned workers);
 
-    // --- Lifecycle state ---
+
     enum class State : std::uint8_t {
         Constructed,
         Starting,
@@ -318,14 +318,14 @@ private:
         Fatal,
     };
 
-    // --- Close ownership ---
+
     enum class CloseState : std::uint8_t {
         Open,
         InProgress,
         Closed,
     };
 
-    // --- Driver state machine ---
+
     enum class DriverState : std::uint8_t {
         not_started,
         barrier_wait,
@@ -336,7 +336,7 @@ private:
         exited,
     };
 
-    // --- Internal helpers ---
+
     void driver_main();
     bool stop_predicate_fn();
     static bool stop_predicate_trampoline(void* ctx);
@@ -344,16 +344,16 @@ private:
     void close_resources();
     bool is_runtime_task() const noexcept;
 
-    // --- Owned components (destroyed at close) ---
+
     std::unique_ptr<AsyncIoContext> io_ctx_;
     std::unique_ptr<Scheduler> sched_;
     std::unique_ptr<Group> root_group_;
     SchedulerWakeHandle wake_handle_;
 
-    // --- Configuration ---
+
     unsigned worker_count_;
 
-    // --- Lifecycle state (under lifecycle_mtx_) ---
+
     mutable std::mutex lifecycle_mtx_;
     std::condition_variable runtime_cv_;
     State state_{State::Constructed};
@@ -370,28 +370,28 @@ private:
     std::size_t admitted_count_{0};
     std::size_t terminal_count_{0};
 
-    // --- Atomic snapshots for stop predicate (lock-free) ---
+
     std::atomic<bool> fatal_snapshot_{false};
     std::atomic<bool> driver_exit_snapshot_{false};
-    std::atomic<bool> task_set_terminal_snapshot_{true};  // Initially true (no tasks).
-    std::atomic<bool> admission_closed_snapshot_{false};  // true when admission closed.
+    std::atomic<bool> task_set_terminal_snapshot_{true};
+    std::atomic<bool> admission_closed_snapshot_{false};
 
-    // --- Driver thread ---
+
     std::thread driver_thread_;
     bool driver_spawned_{false};
 
-    // --- Fiber-local execution identity (worker-call detection) ---
-    // Tag value is `this`; stored in the current Fiber's execution_tag_ field
-    // so it survives Fiber suspend/resume and is correct under multiplexing.
-    // Unlike thread_local, a Fiber-local tag follows the Fiber across context
-    // switches, not the OS thread.
-    //
-    // Access helpers:
+
+
+
+
+
+
+
     static void set_current_fiber_tag(ApplicationRuntime* rt) noexcept;
     static ApplicationRuntime* current_fiber_tag() noexcept;
 
 private:
-    // ... (existing fields below)
+
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
     std::promise<void> barrier_promise_;
@@ -401,4 +401,4 @@ private:
 #endif
 };
 
-}  // namespace sluice::async
+}

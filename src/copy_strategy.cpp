@@ -1,6 +1,6 @@
-// to_string implementations for CopyStrategy.
-// Returns string-literal-backed views (static storage duration), so the
-// returned std::string_view is always valid.
+
+
+
 #include <sluice/copy_strategy.hpp>
 
 namespace sluice {
@@ -17,4 +17,4 @@ std::string_view to_string(CopyStrategy strategy) {
     return "unknown";
 }
 
-} // namespace sluice
+}

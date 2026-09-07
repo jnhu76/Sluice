@@ -1,4 +1,4 @@
-// sluice-hash CLI argument parsing implementation.
+
 #include "cli_parse.hpp"
 
 #include <cstdio>
@@ -8,7 +8,7 @@ namespace sluice_hash::cli {
 
 namespace {
 
-// Strict unsigned decimal scanner (digits only, explicit overflow check).
+
 bool parse_unsigned_decimal(const char* s, std::size_t& out) {
     if (!s || *s == '\0') return false;
     std::size_t v = 0;
@@ -23,7 +23,7 @@ bool parse_unsigned_decimal(const char* s, std::size_t& out) {
     return true;
 }
 
-}  // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -80,4 +80,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-}  // namespace sluice_hash::cli
+}

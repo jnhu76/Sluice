@@ -1,13 +1,13 @@
-// Template + Task<T> implementation for sluice::BlockingIoPool.
-// Included by blocking_io_pool.hpp; not meant to be included directly.
-//
-// Task<T> uses a shared state (mutex + condition_variable + optional<T> +
-// exception_ptr). Pure C++17/20; no C runtime mixing.
+
+
+
+
+
 #pragma once
 
-// NOTE: this file is included at the END of blocking_io_pool.hpp, so the
-// public declarations (BlockingIoPool, Task, PoolStats, etc.) are already
-// visible. Do NOT re-include blocking_io_pool.hpp here (circular dependency).
+
+
+
 
 #include <condition_variable>
 #include <exception>
@@ -25,17 +25,17 @@ class BlockingIoPool;
 
 namespace detail {
 
-// Non-template enqueue core: pushes a type-erased job into the pool's Impl.
-//   block==true  -> backpressure submit (waits for space; invalid_state after
-//                   shutdown).
-//   block==false -> try_submit (would_block when full; invalid_state after
-//                   shutdown).
-// Defined in src/blocking_io_pool.cpp where Impl is complete. stats may be null.
+
+
+
+
+
+
 Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool block);
 
-} // namespace detail
+}
 
-// ---- Task<T>::State (non-void) ---------------------------------------------
+
 template <class T> struct Task<T>::State {
     std::mutex mtx;
     std::condition_variable cv;
@@ -61,8 +61,8 @@ template <class T> struct Task<T>::State {
     }
 };
 
-// Build a type-erased worker job: runs fn, sets value/exception on st, tallies
-// completed/failed on stats. Returns a std::function<void()>.
+
+
 template <class T, class Fn>
 std::function<void()> make_bound_job(Fn fn, std::shared_ptr<typename Task<T>::State> st,
                                      PoolStats* stats) {
@@ -117,7 +117,7 @@ template <class T> T Task<T>::get() {
     return std::move(*state_->value);
 }
 
-// ---- Task<void> specialization ---------------------------------------------
+
 template <> struct Task<void>::State {
     std::mutex mtx;
     std::condition_variable cv;
@@ -152,13 +152,13 @@ template <> inline void Task<void>::get() {
     }
 }
 
-// ---- BlockingIoPool submit templates ---------------------------------------
+
 template <class F>
 inline Result<Task<std::invoke_result_t<F&&>>> BlockingIoPool::try_submit(F&& f) {
     using R = std::invoke_result_t<F&&>;
     auto st = std::make_shared<typename Task<R>::State>();
     auto job = make_bound_job<R>(std::forward<F>(f), st, pool_stats());
-    auto r = detail::enqueue_job(*this, std::move(job), /*block=*/false);
+    auto r = detail::enqueue_job(*this, std::move(job), false);
     if (!r.has_value()) {
         return make_unexpected<Task<R>>(r.error());
     }
@@ -169,11 +169,11 @@ template <class F> inline Result<Task<std::invoke_result_t<F&&>>> BlockingIoPool
     using R = std::invoke_result_t<F&&>;
     auto st = std::make_shared<typename Task<R>::State>();
     auto job = make_bound_job<R>(std::forward<F>(f), st, pool_stats());
-    auto r = detail::enqueue_job(*this, std::move(job), /*block=*/true);
+    auto r = detail::enqueue_job(*this, std::move(job), true);
     if (!r.has_value()) {
         return make_unexpected<Task<R>>(r.error());
     }
     return Task<R>(st);
 }
 
-} // namespace sluice
+}

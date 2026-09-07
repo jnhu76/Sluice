@@ -1,11 +1,11 @@
-// sluice-hash hashing engine implementation.
-//
-// Shape follows sluice-copy's copy_task.cpp (the audited in-repository
-// pattern): one Runtime task drives positional reads through the library's
-// await-style op helpers (C7, #135) and publishes its terminal outcome via
-// TaskResultSlot; the run-task-to-result lifecycle (build/start/submit/wait/
-// stop/drain/join + the task exception boundary) is the library's
-// run_task_to_result.
+
+
+
+
+
+
+
+
 #include "hash_task.hpp"
 
 #include "sha256.hpp"
@@ -27,7 +27,7 @@ namespace {
 using namespace sluice::async;
 using sluice::IoError;
 
-// Fill one result entry per input on every path (run_hash_engine contract).
+
 void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out,
               IoError err) {
     out.reserve(inputs.size());
@@ -43,10 +43,10 @@ struct HashTask {
     std::vector<HashInput> inputs;
     std::vector<std::uint8_t> buffer;
 
-    // Hash one file: positional reads into the shared buffer via
-    // await_read_once, feeding the streaming hasher. Short reads just advance
-    // the offset (any n > 0 is progress); n == 0 is EOF. Writes FileHash into
-    // results.
+
+
+
+
     void hash_one(RuntimeTaskContext& ctx, const HashInput& in,
                   std::vector<FileHash>& results) {
         FileHash out;
@@ -73,7 +73,7 @@ struct HashTask {
             }
             std::size_t n = rr.value();
             if (n == 0) {
-                // EOF: finalize.
+
                 hasher.final(digest);
                 char hex[65];
                 sha256_hex(digest, hex);
@@ -95,14 +95,14 @@ struct HashTask {
                     TaskResultSlot<sluice::Result<std::vector<FileHash>>>& slot) {
         std::vector<FileHash> results;
         results.reserve(inputs.size());
-        // Exception boundary: every input gets exactly one result entry on
-        // every path (remaining files are backfilled with the translation)
-        // before publishing.
+
+
+
         try {
             for (std::size_t i = 0; i < inputs.size(); ++i) {
                 if (ctx.cancel_token().is_requested()) {
-                    // Cancellation stops the WORK: remaining files are marked
-                    // canceled without any I/O.
+
+
                     FileHash out;
                     out.path = inputs[i].path;
                     out.error = IoError{IoError::Code::canceled};
@@ -128,7 +128,7 @@ struct HashTask {
 std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
                                       std::size_t buffer_size, unsigned workers,
                                       std::unique_ptr<AsyncBackend> backend) {
-    // Argument validation BEFORE any allocation or Runtime build.
+
     if (buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize ||
         workers == 0 || workers > kMaxWorkers || !backend) {
         std::vector<FileHash> out;
@@ -136,8 +136,8 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
         return out;
     }
 
-    // Allocate the single reusable buffer BEFORE the Runtime is built so an
-    // allocation failure cannot strand a started Runtime.
+
+
     std::vector<std::uint8_t> buffer;
     try {
         buffer.assign(buffer_size, 0);
@@ -149,11 +149,11 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
 
     HashTask task{std::move(inputs), std::move(buffer)};
 
-    // The library bridge runs the full lifecycle (build/start/submit/wait
-    // publish/stop/drain/join + the task exception boundary). A lifecycle
-    // error (build/start/submit/drain/join) is reported per input — the
-    // run_hash_engine contract: exactly one result entry per input on every
-    // path.
+
+
+
+
+
     auto result =
         run_task_to_result<std::vector<FileHash>>(workers, std::move(backend), task);
     if (!result.has_value()) {
@@ -164,7 +164,7 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs,
     return std::move(result.value());
 }
 
-}  // namespace
+}
 
 std::vector<FileHash> hash_files(std::vector<HashInput> inputs,
                                  std::size_t buffer_size, unsigned workers) {
@@ -179,4 +179,4 @@ std::vector<FileHash> hash_files_with_backend(
                            std::move(backend));
 }
 
-}  // namespace sluice_hash
+}

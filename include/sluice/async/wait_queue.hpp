@@ -1,111 +1,111 @@
-// sluice::async::WaitQueue — one cancellation-safe wait queue.
-//
-// Implements the minimal queue required for one-node-per-wait registration
-// (§5 WaitQueue protocol).
-//
-// Scope (§1): IN — enqueue/register, wake one node, cancel a specific node,
-// safe removal/unlink, empty/destruction invariants. OUT — multi-wait, select,
-// wake-all, timers, priorities, configurable queue discipline.
-//
-// Shape, DERIVED from repository constraints (§5):
-//   - INTRUSIVE doubly-linked list. Reason: a WaitNode is caller-owned and
-//     address-stable while outstanding (mirrors Completion<T> L7); the queue
-//     holds pointers to it, never copies. Node identity = its address.
-//   - FIFO. Reason: matches the existing queue discipline (local_runnable,
-//     pending_spawn_ are FIFO deques). §5 forbids configurable policies and
-//     extra fairness beyond the current queue discipline.
-//
-// THE UNLINK LAW (§7). Queue removal is NOT an independent competing protocol.
-// The terminal transition AND the unlink authority are centralized: every
-// resolver (wake_one, cancel) takes the queue mtx_, performs the canonical
-// resolve_(outcome) CAS on the node, and IF it is the winner (CAS succeeded)
-// unlinks the node from the list in the SAME critical section. A losing
-// resolver's CAS fails; it performs no unlink and no wake.
-//
-//   wake_one_locked():
-//       head = list head
-//       if head && head.resolve_(Woken):   // winner CAS
-//           unlink(head)                    // SAME critical section
-//           return head                     // exactly one winner
-//       return null
-//
-//   cancel_locked(node):
-//       if node.resolve_(Cancelled):        // winner CAS
-//           unlink(node)                    // SAME critical section
-//           return true
-//       return false
-//
-//   expire_locked(node):                    // third resolver
-//       if node.resolve_(Expired):          // winner CAS
-//           unlink(node)                    // SAME critical section
-//           return true
-//       return false
-//
-// Intrusive-link invariants (§5, proven):
-//   - linked-at-most-once: register_() only succeeds from the Detached state,
-//     and sets home_ once. A node already registered is rejected (C8).
-//   - double-unlink impossible: unlink runs only on a winning CAS, exactly
-//     once, under the queue mtx_. A loser's CAS fails -> no unlink.
-//   - terminal node not indefinitely reachable: the winner unlinks it
-//     immediately, in the same critical section as the resolve CAS.
-//   - destroyed node never linked: WaitNode's dtor asserts !is_registered().
-//
-// SYNCHRONIZATION (§9). Two domains:
-//   - STRUCTURAL (next_/prev_/home_, list head/tail): WaitQueue::mtx_.
-//   - WINNER (terminal outcome): WaitNode::state_ atomic CAS (see wait_node.hpp).
-// Every mutating method (_locked variants) requires the caller to hold mtx_.
-// The Scheduler resolves a Scheduler-integrated wait through its OWN seams
-// (Scheduler::wake_wait_one / cancel_wait), which take mtx_ under global_mtx_
-// and perform the canonical route_runnable_locked. Those Scheduler seams call
-// the private _locked resolver variants here.
-//
-// SEALED AUTHORITY. ALL structural operations of a
-// WaitQueue are PRIVATE, with Scheduler the ONLY friend:
-//
-//   - register_wait_locked : the registration integration authority's
-//                            structural half (Scheduler::await_wait wraps it
-//                            with waiting_waitq_count_ accounting + the
-//                            waiting/runnable transition).
-//   - wake_one_locked      : terminal-winner resolution (Woken).
-//   - cancel_locked        : terminal-winner resolution (Cancelled).
-//   - expire_locked        : E11 terminal-winner resolution (Expired) — third
-//                            cause, SAME resolve_ CAS authority.
-//   - unlink_locked        : the one structural-removal seam.
-//   - mtx()                : the structural lock the Scheduler takes UNDER
-//                            global_mtx_ to make register/resolve atomic with
-//                            its own coordination state.
-//
-// A Scheduler-integrated wait (registered via Scheduler::await_wait, which owns
-// waiting_waitq_count_ + the runnable-route obligation) may be terminally
-// resolved ONLY through Scheduler::wake_wait_one / cancel_wait / expire_wait /
-// the primitive cancel seams (Scheduler::cancel_primitive_wait_locked
-// callers), and registered ONLY through Scheduler::await_wait. Calling
-// WaitQueue registration or resolution directly would bypass Scheduler
-// accounting: an arbitrary Fiber* could be injected into a queue that
-// Scheduler resolution later trusts (R2 P1/P2/P5), or a node could be
-// resolved + unlinked WITHOUT decrementing waiting_waitq_count_ and WITHOUT
-// routing the resumed fiber (stranding the fiber and leaving MW
-// classification stale).
-//
-// There is NO test friend and NO publicly nameable access type. A downstream TU
-// cannot reach mtx_, register_wait_locked, wake_one_locked, cancel_locked, or
-// unlink_locked. This closes the unconditional WaitQueueTestHooks friend grant
-// that previously let an arbitrary TU define the granted friend type and call
-// the private seams (R1). Tests observe the protocol through the public
-// Scheduler integration seams (Scheduler::await_wait / wake_wait_one /
-// cancel_wait) and the lock-free WaitNode state queries; production authority
-// is never weakened to make tests convenient.
-//
-// cancel_all REMOVED (E10-CORRECTIVE C3): it had ZERO production callsites, no
-// authoritative E10 shutdown semantic required it, and its header text
-// ("the Scheduler cancels-all on run termination") was an authority/document
-// drift — the Scheduler does NOT auto-resolve waits on run termination (a
-// stranded MW-S3 wait is left for the caller, like the Scheduler's waiting_ready_).
-//
-// Layering: BELOW the Scheduler. WaitQueue knows nothing about fibers,
-// scheduling, or runnable enqueue. It returns the winning node to the caller,
-// which performs the scheduler wake (route_runnable_locked). This keeps the
-// "who makes the fiber runnable" decision in scheduler code (§8).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>
@@ -117,29 +117,29 @@
 
 namespace sluice::async {
 
-class Scheduler;  // forward: friend — the sole registration+resolution authority
+class Scheduler;
 
 class WaitQueue {
 public:
     WaitQueue() noexcept = default;
 
-    // §10 destruction invariant: a queue MUST be empty when destroyed, OR its
-    // owner must have explicitly resolved (cancelled) all registered waiters.
-    // Destroying a queue with linked nodes would orphan them (their home_
-    // points to freed memory; §3 Q8). A non-empty queue at destruction is a
-    // lifetime contract violation that fails fast via
-    // detail::wait_queue_lifetime_fail_fast in BOTH Debug and Release
-    // (ADR-async-primitive-lifetime-failfast; the Debug assert is a
-    // diagnostic tripwire only). The Scheduler does NOT auto-resolve waits
-    // on run termination (E10-CORRECTIVE C3); an unresolved registered wait
-    // is left for the caller, exactly as the park protocol treats a stranded waiting_ready_
-    // flag (MW-S3 returns STALLED in Drain).
+
+
+
+
+
+
+
+
+
+
+
     ~WaitQueue() {
-        // head_ == null iff empty (tail_ maintained in lockstep). A non-empty
-        // queue at destruction is a caller contract violation (§10).
-        // ADR-async-primitive-lifetime-failfast: Debug tripwire + named
-        // fail-fast active in BOTH modes — registered waiters would refer to
-        // freed memory; Release previously passed silently.
+
+
+
+
+
         if (head_ != nullptr) {
             assert(head_ == nullptr &&
                    "WaitQueue destroyed with registered waiters (resolve them first)");
@@ -153,38 +153,38 @@ public:
     WaitQueue& operator=(WaitQueue&&) = delete;
 
 private:
-    friend class Scheduler;  // the sole registration + resolution authority
+    friend class Scheduler;
 
-    // Expose the structural lock so the Scheduler can run register/resolve
-    // atomically with its own coordination state (register + make_waiting under
-    // one critical section; resolve + route under one). Scheduler is the ONLY
-    // consumer of this seam. Private + friended: an external TU cannot acquire
-    // the queue lock and therefore cannot reach the _locked resolvers.
+
+
+
+
+
     Mutex& mtx() noexcept SLUICE_RETURN_CAPABILITY(mtx_) { return mtx_; }
 
-    // Structural query (caller holds mtx_). Used by the Scheduler; private so
-    // external code cannot inspect queue membership.
+
+
     bool empty_locked() const noexcept SLUICE_REQUIRES(mtx_) { return head_ == nullptr; }
 
-    // ---- Registration (single-wait) ----
 
-    // Register `node` (Detached -> Registered) and link it at the FIFO tail.
-    // `resume` is bound on the node as the frontend-neutral ResumeTarget
-    // (FE-1b L2/L11: opaque data; the winner publication tail switches on its
-    // kind). Returns false if `node` is already registered or terminal (C8).
-    // _locked variant: caller holds mtx_.
-    //
-    // PRIVATE: a Scheduler-integrated registration goes
-    // through Scheduler::await_wait, which calls this under global_mtx_ + mtx_,
-    // records waiting_waitq_count_, captures ws->current as the Fiber ResumeTarget,
-    // and performs the waiting transition. An external TU cannot express
-    // register_wait(node, arbitrary_token): that would inject an arbitrary
-    // continuation token into a queue the Scheduler later trusts at resolution
-    // time, outside Scheduler accounting. Scheduler is the only friend; there
-    // is no public wrapper and no test hook.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     bool register_wait_locked(WaitNode& node, const WaitResume& resume = WaitResume::none()) SLUICE_REQUIRES(mtx_) {
-        if (!node.register_(this, resume)) return false;  // already registered/terminal (C8)
-        // FIFO tail-link.
+        if (!node.register_(this, resume)) return false;
+
         node.next_ = nullptr;
         node.prev_ = tail_;
         if (tail_ != nullptr) {
@@ -196,113 +196,113 @@ private:
         return true;
     }
 
-    // ---- Wake one (canonical terminal resolver, Woken outcome) ----
-    //
-    // PRIVATE (C2): the Scheduler resolves a Scheduler-integrated wait via
-    // Scheduler::wake_wait_one, which calls this under global_mtx_ + mtx_ and
-    // routes the winner's fiber through the canonical wake seam. Resolving a
-    // Scheduler-integrated wait directly here would bypass the count/runnable
-    // integration and strand the fiber.
 
-    // Resolve the FIFO head with Woken, unlink the winner, and return it.
-    // Returns nullptr if the queue is empty (no wait to wake) or if the head's
-    // resolve CAS failed (the head was concurrently cancelled — a loser here).
+
+
+
+
+
+
+
+
+
+
     WaitNode* wake_one_locked() SLUICE_REQUIRES(mtx_) {
         if (head_ == nullptr) return nullptr;
         WaitNode* n = head_;
-        if (n->resolve_(WaitOutcome::woken)) {  // winner CAS (§2/§7)
-            unlink_locked(*n);                  // SAME critical section (§7)
-            return n;                           // exactly one winner
+        if (n->resolve_(WaitOutcome::woken)) {
+            unlink_locked(*n);
+            return n;
         }
-        // The head was resolved concurrently (e.g. cancelled between the
-        // caller's empty check and now). It is now terminal; the winner
-        // (canceller) is responsible for unlinking it. Return null: no wake
-        // was delivered by THIS call.
+
+
+
+
         return nullptr;
     }
 
-    // ---- Cancel a specific node (canonical terminal resolver, Cancelled) ----
-    //
-    // PRIVATE (C2): the Scheduler resolves via Scheduler::cancel_wait (generic
-    // seam, caller-guaranteed membership) or via cancel_primitive_wait_locked
-    // (primitive seams, contains_locked-gated), which route the winner. See
-    // wake_one_locked.
 
-    // Resolve `node` with Cancelled and unlink the winner. Returns true iff
-    // this call is the winner (node was Registered and is now Cancelled). A
-    // losing call (node already terminal — C3/C4/C5) returns false and does
-    // nothing. `node` MUST belong to this queue (caller contract).
+
+
+
+
+
+
+
+
+
+
     bool cancel_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
-        // `node` may not belong to this queue (caller contract violation). The
-        // resolve CAS still cannot wrongly succeed: a Registered node has a
-        // single home_ (set under its own state CAS at register time). We do
-        // NOT assert home_==this here to avoid racing a concurrent unregister
-        // in release builds; the CAS is the authority.
-        if (node.resolve_(WaitOutcome::cancelled)) {  // winner CAS (§2/§7)
-            unlink_locked(node);                      // SAME critical section (§7)
+
+
+
+
+
+        if (node.resolve_(WaitOutcome::cancelled)) {
+            unlink_locked(node);
             return true;
         }
-        return false;  // already terminal (loser): C2/C3/C4/C5 no-op
+        return false;
     }
 
-    // ---- Wake a specific node (E12-A admission-time resolver, Woken) ----
-    //
-    // PRIVATE (E12-A): the Event admission path resolves a specific node with
-    // Woken when it observes SET after registration (the admission closure).
-    // Mirrors wake_one_locked's resolve CAS but targets `node` instead of the
-    // FIFO head, exactly like cancel_locked/expire_locked target a specific
-    // node. The winner CAS is the authority; a losing call (node already
-    // terminal) returns false and performs no unlink. `node` MUST belong to
-    // this queue (caller contract — the Event admission seam registers `node`
-    // into THIS queue immediately before calling this).
+
+
+
+
+
+
+
+
+
+
     bool wake_node_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
-        if (node.resolve_(WaitOutcome::woken)) {  // winner CAS (§2/§7)
-            unlink_locked(node);                  // SAME critical section (§7)
+        if (node.resolve_(WaitOutcome::woken)) {
+            unlink_locked(node);
             return true;
         }
-        return false;  // already terminal (loser): concurrent cancel/expire
+        return false;
     }
 
-    // ---- Expire a specific node (E11 third terminal resolver, Expired) ----
-    //
-    // PRIVATE (sealed): the Scheduler resolves a deadline-elapsed
-    // wait ONLY via Scheduler::expire_wait, which calls this under global_mtx_
-    // + mtx_ and routes the winner through the canonical wake seam. Mirrors
-    // wake_one_locked / cancel_locked exactly: the resolve_(Expired) CAS is the
-    // winner authority (§2 Design Law), unlink happens in the SAME critical
-    // section (§7 Unlink Law), and the loser (node already woken/cancelled, or
-    // a concurrent expiry) returns false and performs no unlink/no publication.
-    //
-    // `node` MUST belong to this queue (caller contract — the Scheduler's
-    // expiry seam dereferences the TimerRegistration's bound queue/node, and
-    // the registration was created for a node registered in THIS queue).
+
+
+
+
+
+
+
+
+
+
+
+
+
     bool expire_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
-        if (node.resolve_(WaitOutcome::expired)) {  // winner CAS (§2/§7)
-            unlink_locked(node);                   // SAME critical section (§7)
+        if (node.resolve_(WaitOutcome::expired)) {
+            unlink_locked(node);
             return true;
         }
-        return false;  // already terminal (loser): timer lost to wake/cancel/expiry
+        return false;
     }
 
-    // ---- Queue-membership predicate (E12-A-EVENT-CORRECTIVE-2) ----
-    //
-    // Structural membership test: is `node` currently linked in THIS queue's
-    // intrusive list? Scans head_ -> next_ while the caller holds mtx_.
-    //
-    // PRIVATE + Scheduler-friend-gated. This is the structural authority for
-    // primitive-cancel queue-identity validation: Scheduler's
-    // cancel_primitive_wait_locked — used by the Event / Semaphore / Mutex /
-    // Condition / Queue / RwLock cancel seams — scans the TARGET primitive's
-    // own queue for &node before attempting cancel, so a wrong-object /
-    // detached / terminal node returns false WITHOUT reading a foreign node's
-    // home_ or locking a foreign primitive/Scheduler. O(waiters).
-    //
-    // Introduced as an Event-specific corrective (wrong-Event cancel safety)
-    // and since generalized to the whole primitive family. Generic
-    // Scheduler::cancel_wait does NOT call it (its caller contract already
-    // guarantees the node belongs to the passed queue). The resolve_ CAS
-    // remains the terminal-winner authority; contains_locked is the
-    // membership gate.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     bool contains_locked(const WaitNode& node) const noexcept SLUICE_REQUIRES(mtx_) {
         for (WaitNode* cur = head_; cur != nullptr; cur = cur->next_) {
             if (cur == &node) return true;
@@ -310,14 +310,14 @@ private:
         return false;
     }
 
-    // ---- Unlink (the single structural-removal seam, §7) ----
 
-    // Unlink a node from the list. Called ONLY by a winning resolver
-    // (wake_one_locked / cancel_locked), under mtx_, in the SAME critical
-    // section as its winning resolve CAS. This is the ONE unlink path (§7: no
-    // competing wake-unlink / cancel-unlink / destructor-unlink). Clears home_.
+
+
+
+
+
     void unlink_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
-        // Splice node out of the doubly-linked list.
+
         if (node.prev_ != nullptr) {
             node.prev_->next_ = node.next_;
         } else {
@@ -334,8 +334,8 @@ private:
     }
 
     Mutex mtx_;
-    WaitNode* head_ SLUICE_GUARDED_BY(mtx_){nullptr};  // FIFO head; null iff empty
-    WaitNode* tail_ SLUICE_GUARDED_BY(mtx_){nullptr};  // FIFO tail; maintained in lockstep with head_
+    WaitNode* head_ SLUICE_GUARDED_BY(mtx_){nullptr};
+    WaitNode* tail_ SLUICE_GUARDED_BY(mtx_){nullptr};
 };
 
-}  // namespace sluice::async
+}
