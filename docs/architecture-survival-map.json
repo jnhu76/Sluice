@@ -1,130 +1,822 @@
 {
   "campaign": "SLUICE-ARCH-SURVIVAL-1",
-  "stage": "PR1-architecture-coverage-matrix",
+  "stage": "PR1-architecture-coverage-matrix (corrected after 3-round adversarial review)",
   "status": "FROZEN",
   "base": "baa6c91ce240b0890bfb3e6c12e917ba619be700",
   "method": "clean-room; matrix frozen before reading any historical issue/PR/test; dual-method reachability (rg textual + nm/caller/build-membership)",
   "build_worlds": [
-    {"id": "W1", "activation": "default", "targets": ["sluice_core"], "sources": "src/*.cpp"},
-    {"id": "W2", "activation": "opt-in", "targets": ["sluice_async"], "sources": "src/async/*.cpp", "deps": ["sluice_core"]},
-    {"id": "W3", "activation": "xmake -g apps", "targets": ["sluice-copy", "sluice-hash", "sluice-grep", "sluice-tail"], "deps": ["sluice_core", "sluice_async"]},
-    {"id": "G1", "activation": "no definition point in xmake", "gate": "SLUICE_HAS_LIBURING", "note": "uring_backend.cpp compiles as unavailable degraded implementation"},
-    {"id": "G2", "activation": "no definition point in xmake", "gate": "SLUICE_ASYNC_INTERNAL_TESTING", "note": "seam TUs compiled into library, inactive"},
-    {"id": "G3", "activation": "no definition point in xmake", "gate": "SLUICE_FILE_INTERNAL_TESTING"},
-    {"id": "G4", "activation": "no definition point in xmake", "gate": "SLUICE_COPY_INTERNAL_TESTING"},
-    {"id": "EXCLUDED", "note": "src/experimental/*.cpp covered by no glob; include/sluice/experimental has no build backing"}
+    {
+      "id": "W1",
+      "activation": "default",
+      "targets": [
+        "sluice_core"
+      ],
+      "sources": "src/*.cpp"
+    },
+    {
+      "id": "W2",
+      "activation": "opt-in",
+      "targets": [
+        "sluice_async"
+      ],
+      "sources": "src/async/*.cpp",
+      "deps": [
+        "sluice_core"
+      ]
+    },
+    {
+      "id": "W3",
+      "activation": "xmake -g apps",
+      "targets": [
+        "sluice-copy",
+        "sluice-hash",
+        "sluice-grep",
+        "sluice-tail"
+      ],
+      "deps": [
+        "sluice_core",
+        "sluice_async"
+      ]
+    },
+    {
+      "id": "G1",
+      "activation": "no definition point in xmake",
+      "gate": "SLUICE_HAS_LIBURING",
+      "note": "uring_backend.cpp compiles as unavailable degraded implementation"
+    },
+    {
+      "id": "G2",
+      "activation": "no definition point in xmake",
+      "gate": "SLUICE_ASYNC_INTERNAL_TESTING",
+      "note": "seam TUs compiled into library, inactive"
+    },
+    {
+      "id": "G3",
+      "activation": "no definition point in xmake",
+      "gate": "SLUICE_FILE_INTERNAL_TESTING"
+    },
+    {
+      "id": "G4",
+      "activation": "no definition point in xmake",
+      "gate": "SLUICE_COPY_INTERNAL_TESTING"
+    },
+    {
+      "id": "EXCLUDED",
+      "note": "src/experimental/*.cpp covered by no glob; include/sluice/experimental has no build backing"
+    }
   ],
   "capabilities": [
-    {"id": "K01", "name": "async positional READ/WRITE", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "RuntimeTaskContext::submit_read/write; AsyncIoContext; await_op_helpers", "internal_owner": "ThreadPoolBackend::submit_size + submit_transaction", "correctness_invariant": "Completion six-state authority + RequestSlot state machine", "resource_bound": "arena capacity (default 64) -> would_block; bounded dispatch queue", "execution_path": "apps task -> await_read_once -> submit -> transaction -> worker pread/pwrite -> record_terminal -> reap -> publish -> route -> fiber resume", "consumer": "all four apps", "classification": "live"},
-    {"id": "K02", "name": "durability ops SYNC_DATA/SYNC_ALL", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "RuntimeTaskContext::submit_sync_*; SyncableWriter (sync face)", "internal_owner": "ThreadPoolBackend::submit_void; src/file.cpp", "correctness_invariant": "same arena/completion authority; Result<void>", "resource_bound": "shared arena capacity", "execution_path": "copy_task -> submit_sync_* -> fdatasync/fsync -> publish", "consumer": "sluice-copy --sync-*", "classification": "live"},
-    {"id": "K03", "name": "request lifecycle admission/outstanding/terminalization/publication/reuse", "verdict": "REQUIRED", "category": "CORRECTNESS_AUTHORITY", "public_root": "AsyncIoContext::submit_* + Completion reset", "internal_owner": "detail::submit_transaction; RequestArena", "correctness_invariant": "transactional submit with rollback; generation+1 on reuse", "resource_bound": "reserve rejection on capacity; admission_closed", "consumer": "all four apps (indirect)", "classification": "live"},
-    {"id": "K04", "name": "resource identity/lifetime (fd, context identity, generation)", "verdict": "REQUIRED", "category": "CORRECTNESS_AUTHORITY", "public_root": "op structs fd; FileReader/FileWriter fd ownership", "internal_owner": "ContextIdentity + RequestKey validation", "correctness_invariant": "validate_ rejects cross-context / stale-generation slot ops", "consumer": "internal", "classification": "live"},
-    {"id": "K05", "name": "buffer participation/lifetime", "verdict": "REQUIRED", "category": "CORRECTNESS_AUTHORITY", "public_root": "ReadOp::dst / WriteOp::src spans", "internal_owner": "BorrowMetadata active window", "correctness_invariant": "borrow active commit->terminal; reap clears before publish under arena lock", "consumer": "all four apps", "classification": "live"},
-    {"id": "K06", "name": "resource bounds (request capacity, outstanding accounting, backend admission)", "verdict": "REQUIRED", "category": "RESOURCE_BOUND", "public_root": "ThreadPoolConfig{request_capacity,worker_count}", "internal_owner": "RequestArena counters; BoundedDispatchQueue", "correctness_invariant": "saturation is observable rejection, not unbounded growth", "consumer": "apps via default config", "classification": "live"},
-    {"id": "K07", "name": "completion exactly-once publication + reset/reuse", "verdict": "REQUIRED", "category": "CORRECTNESS_AUTHORITY", "public_root": "Completion<T> ready/result/reset", "internal_owner": "publish_from_reap one-way migration; release_completed_binding", "correctness_invariant": "lifecycle violations fail-fast; single publication", "consumer": "all four apps", "classification": "live"},
-    {"id": "K08", "name": "cancellation (token/completion/waiter)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "CancelToken; AsyncIoContext::cancel; RuntimeTaskContext::cancel_waiter", "internal_owner": "arena cancel dispositions; WaitRecord cancelled routing", "correctness_invariant": "cancel vs terminal single winner", "consumer": "sluice-tail Ctrl-C path", "classification": "live"},
-    {"id": "K09", "name": "wait/wake (park/wake, split-wait, wake handles)", "verdict": "REQUIRED", "category": "CORRECTNESS_AUTHORITY", "public_root": "Scheduler await_*; BackendWaitSource", "internal_owner": "park_on_wake_source; WaitRecord delivery; SchedulerWakeHandle", "correctness_invariant": "observe-verify-recheck; single delivery; builder rejects backends without wait source", "consumer": "runtime + apps", "classification": "live"},
-    {"id": "K10", "name": "deadline/timer (monotonic clock, deadline heap, timed waits)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "Scheduler clock + *_until waits (primitive surface)", "internal_owner": "deadline heap + TimerRegistration lifecycle", "correctness_invariant": "expiry vs manual wake single winner; earliest deadline bounds park", "consumer": "none in tree", "open_question": "GAP-1: only public expression lives on unconsumed primitive/select clusters", "classification": "live-with-gap"},
-    {"id": "K11", "name": "task execution/scheduling", "verdict": "REQUIRED", "category": "CORRECTNESS_AUTHORITY", "public_root": "ApplicationRuntime start/submit/drain/join/shutdown", "internal_owner": "Scheduler workers + Fiber state machine + driver state", "correctness_invariant": "runtime lifecycle state machine; tasks run exactly once", "consumer": "all four apps", "classification": "live"},
-    {"id": "K12", "name": "replaceable backend execution", "verdict": "REQUIRED", "category": "BACKEND_CAPABILITY", "public_root": "AsyncBackend contract; RuntimeBuilder::backend", "internal_owner": "contract defaults (not_supported)", "correctness_invariant": "capability probing via queries, not type checks", "consumer": "apps inject ThreadPoolBackend; G1 implements same contract", "classification": "live"},
-    {"id": "K13", "name": "task result transfer", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "TaskResultSlot publish/wait_and_take; translate_task_exception", "internal_owner": "mutex+cv ownership transfer", "correctness_invariant": "exactly-once publish", "consumer": "all four apps", "classification": "live"},
-    {"id": "K14", "name": "task composition Group", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "Group::async/await/cancel/group_token", "internal_owner": "evented path (fiber+EventedWaitPolicy) or thread path", "correctness_invariant": "transactional evented admission (reserve/commit storage)", "consumer": "ApplicationRuntime root group", "classification": "live"},
-    {"id": "K15", "name": "sync core I/O (Reader/Writer/File/IoContext)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "Reader/Writer/FileReader/FileWriter/IoContext/BlockingIoContext", "internal_owner": "src/{reader,writer,file,io_context}.cpp", "correctness_invariant": "immediate Result; EINTR retry; 64-bit off_t; deferred open error", "resource_bound": "caller-provided spans (no hidden buffer budget)", "consumer": "library-default world W1; no app consumes directly", "classification": "live"},
-    {"id": "K16", "name": "copy composition (copy_all)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "copy_all family + CopyLimit", "internal_owner": "src/copy.cpp buffered fast path / scratch path", "correctness_invariant": "EOF or limit termination; CopyDecision observation", "consumer": "W1 public surface (earned per ADR-0001)", "classification": "live"},
-    {"id": "K17", "name": "sync buffer participation (BufferedReader/Writer)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "BufferedReader/BufferedWriter/BufferedReadable", "internal_owner": "src/buffer.cpp", "correctness_invariant": "writer destructor asserts no dirty data; copy fast path probes BufferedReadable (src/copy.cpp:57)", "classification": "live"},
-    {"id": "K18", "name": "durability sync face (SyncableWriter)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "SyncableWriter sync_data/sync_all", "internal_owner": "FileWriter -> fdatasync/fsync", "classification": "live"},
-    {"id": "K19", "name": "error model (IoError/Result)", "verdict": "REQUIRED", "category": "SEMANTIC_CONTRACT", "public_root": "IoError (11 codes + os_errno); Result<T>", "classification": "live"},
-    {"id": "K20", "name": "observation/statistics", "verdict": "OPTIONAL", "category": "HINT/OBSERVATION", "public_root": "measurement.hpp stats; attach hooks on live APIs", "consumer": "none (zero readers)", "open_question": "GAP-2", "classification": "live-unwitnessed"},
-    {"id": "K21", "name": "Future result channel", "verdict": "DERIVED", "category": "EXECUTION_POLICY", "internal_owner": "Group internals", "classification": "live"},
-    {"id": "K22", "name": "wait policy (Threaded/Evented)", "verdict": "DERIVED", "category": "EXECUTION_POLICY", "internal_owner": "Group/Future wait pluggability", "classification": "live"},
-    {"id": "K23", "name": "batch group submission", "verdict": "NOT_EARNED", "basis": "mission explicitly rejects generalized Batch control layer; zero consumers", "classification": "legacy-candidate"},
-    {"id": "K24", "name": "request identity query (RequestHandle chain)", "verdict": "NOT_EARNED", "basis": "no mission grant; zero callers end-to-end", "classification": "legacy-candidate"},
-    {"id": "K25", "name": "select composition", "verdict": "NOT_EARNED", "basis": "no mission grant; zero callers; K10 expression overlap (GAP-1)", "classification": "legacy-candidate"},
-    {"id": "K26", "name": "async primitives public face (semaphore/mutex/condition/rwlock/queue/event)", "verdict": "NOT_EARNED", "basis": "no mission grant as standalone surface; zero external consumers; sole public carrier of K10 (GAP-1)", "classification": "legacy-candidate"},
-    {"id": "K27", "name": "synthetic backends (Sync/Fake)", "verdict": "NOT_EARNED", "basis": "zero injection points", "classification": "legacy-candidate"},
-    {"id": "K28", "name": "WAL record format", "verdict": "NOT_EARNED", "basis": "not named by mission; zero consumers", "classification": "legacy-candidate"},
-    {"id": "K29", "name": "memory I/O face", "verdict": "NOT_EARNED", "basis": "zero consumers", "classification": "legacy-candidate"},
-    {"id": "K30", "name": "fault injection face", "verdict": "NOT_EARNED", "basis": "test mechanism on public face; zero consumers; PR2 to use test-local mechanisms", "classification": "legacy-candidate"},
-    {"id": "K31", "name": "blocking pool (BlockingIoPool/Task)", "verdict": "NOT_EARNED", "basis": "zero consumers; async domain has own dispatch", "classification": "legacy-candidate"},
-    {"id": "K32", "name": "experimental uring layer", "verdict": "OUT_OF_SCOPE", "basis": "in no supported build world", "classification": "legacy-candidate"}
+    {
+      "id": "K01",
+      "name": "async positional READ/WRITE",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "RuntimeTaskContext::submit_read/write; AsyncIoContext; await_op_helpers",
+      "internal_owner": "ThreadPoolBackend::submit_size + submit_transaction",
+      "correctness_invariant": "Completion six-state authority + RequestSlot state machine",
+      "resource_bound": "arena capacity (default 64) -> would_block; bounded dispatch queue",
+      "execution_path": "apps task -> await_read_once -> submit -> transaction -> worker pread/pwrite -> record_terminal -> reap -> publish -> route -> fiber resume",
+      "consumer": "all four apps",
+      "classification": "live"
+    },
+    {
+      "id": "K02",
+      "name": "durability ops SYNC_DATA/SYNC_ALL",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "RuntimeTaskContext::submit_sync_*; SyncableWriter (sync face)",
+      "internal_owner": "ThreadPoolBackend::submit_void; src/file.cpp",
+      "correctness_invariant": "same arena/completion authority; Result<void>",
+      "resource_bound": "shared arena capacity",
+      "execution_path": "copy_task -> submit_sync_* -> fdatasync/fsync -> publish",
+      "consumer": "sluice-copy --sync-*",
+      "classification": "live"
+    },
+    {
+      "id": "K03",
+      "name": "request lifecycle admission/outstanding/terminalization/publication/reuse",
+      "verdict": "REQUIRED",
+      "category": "CORRECTNESS_AUTHORITY",
+      "public_root": "AsyncIoContext::submit_* + Completion reset",
+      "internal_owner": "detail::submit_transaction; RequestArena",
+      "correctness_invariant": "transactional submit with rollback; generation+1 on reuse",
+      "resource_bound": "reserve rejection on capacity; admission_closed",
+      "consumer": "all four apps (indirect)",
+      "classification": "live"
+    },
+    {
+      "id": "K04",
+      "name": "resource identity/lifetime (fd, context identity, generation)",
+      "verdict": "REQUIRED",
+      "category": "CORRECTNESS_AUTHORITY",
+      "public_root": "op structs fd; FileReader/FileWriter fd ownership",
+      "internal_owner": "ContextIdentity + RequestKey validation",
+      "correctness_invariant": "validate_ rejects cross-context / stale-generation slot ops",
+      "consumer": "internal",
+      "classification": "live"
+    },
+    {
+      "id": "K05",
+      "name": "buffer participation/lifetime",
+      "verdict": "REQUIRED",
+      "category": "CORRECTNESS_AUTHORITY",
+      "public_root": "ReadOp::dst / WriteOp::src spans",
+      "internal_owner": "BorrowMetadata active window",
+      "correctness_invariant": "borrow active commit->terminal; reap clears before publish under arena lock",
+      "consumer": "all four apps",
+      "classification": "live"
+    },
+    {
+      "id": "K06",
+      "name": "resource bounds (request capacity, outstanding accounting, backend admission)",
+      "verdict": "REQUIRED",
+      "category": "RESOURCE_BOUND",
+      "public_root": "ThreadPoolConfig{request_capacity,worker_count}",
+      "internal_owner": "RequestArena counters; BoundedDispatchQueue",
+      "correctness_invariant": "saturation is observable rejection, not unbounded growth",
+      "consumer": "apps via default config",
+      "classification": "live"
+    },
+    {
+      "id": "K07",
+      "name": "completion exactly-once publication + reset/reuse",
+      "verdict": "REQUIRED",
+      "category": "CORRECTNESS_AUTHORITY",
+      "public_root": "Completion<T> ready/result/reset",
+      "internal_owner": "publish_from_reap one-way migration; release_completed_binding",
+      "correctness_invariant": "lifecycle violations fail-fast; single publication",
+      "consumer": "all four apps",
+      "classification": "live"
+    },
+    {
+      "id": "K08",
+      "name": "cancellation (token/completion/waiter)",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "CancelToken; AsyncIoContext::cancel; RuntimeTaskContext::cancel_waiter",
+      "internal_owner": "arena cancel dispositions; WaitRecord cancelled routing",
+      "correctness_invariant": "cancel vs terminal single winner",
+      "consumer": "sluice-tail Ctrl-C path",
+      "classification": "live"
+    },
+    {
+      "id": "K09",
+      "name": "wait/wake (park/wake, split-wait, wake handles)",
+      "verdict": "REQUIRED",
+      "category": "CORRECTNESS_AUTHORITY",
+      "public_root": "Scheduler await_*; BackendWaitSource",
+      "internal_owner": "park_on_wake_source; WaitRecord delivery; SchedulerWakeHandle",
+      "correctness_invariant": "observe-verify-recheck; single delivery; builder rejects backends without wait source",
+      "consumer": "runtime + apps",
+      "classification": "live"
+    },
+    {
+      "id": "K10",
+      "name": "deadline/timer (monotonic clock, deadline heap, timed waits)",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "Scheduler clock + *_until waits (primitive surface)",
+      "internal_owner": "deadline heap + TimerRegistration lifecycle",
+      "correctness_invariant": "expiry vs manual wake single winner; earliest deadline bounds park",
+      "consumer": "none in tree",
+      "open_question": "GAP-1: only public expression lives on unconsumed primitive/select clusters",
+      "classification": "live-with-gap"
+    },
+    {
+      "id": "K11",
+      "name": "task execution/scheduling",
+      "verdict": "REQUIRED",
+      "category": "CORRECTNESS_AUTHORITY",
+      "public_root": "ApplicationRuntime start/submit/drain/join/shutdown",
+      "internal_owner": "Scheduler workers + Fiber state machine + driver state",
+      "correctness_invariant": "runtime lifecycle state machine; tasks run exactly once",
+      "consumer": "all four apps",
+      "classification": "live"
+    },
+    {
+      "id": "K12",
+      "name": "replaceable backend execution",
+      "verdict": "REQUIRED",
+      "category": "BACKEND_CAPABILITY",
+      "public_root": "AsyncBackend contract; RuntimeBuilder::backend",
+      "internal_owner": "contract defaults (not_supported)",
+      "correctness_invariant": "capability probing via queries, not type checks",
+      "consumer": "apps inject ThreadPoolBackend; G1 implements same contract",
+      "classification": "live"
+    },
+    {
+      "id": "K13",
+      "name": "task result transfer",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "TaskResultSlot publish/wait_and_take; translate_task_exception",
+      "internal_owner": "mutex+cv ownership transfer",
+      "correctness_invariant": "exactly-once publish",
+      "consumer": "all four apps",
+      "classification": "live"
+    },
+    {
+      "id": "K14",
+      "name": "task composition Group",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "Group::async/await/cancel/group_token",
+      "internal_owner": "evented path (fiber+EventedWaitPolicy) or thread path",
+      "correctness_invariant": "transactional evented admission (reserve/commit storage)",
+      "consumer": "ApplicationRuntime root group",
+      "classification": "live"
+    },
+    {
+      "id": "K15",
+      "name": "sync core I/O (Reader/Writer/File/IoContext)",
+      "verdict": "OPTIONAL",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "Reader/Writer/FileReader/FileWriter/IoContext/BlockingIoContext",
+      "internal_owner": "src/{reader,writer,file,io_context}.cpp",
+      "correctness_invariant": "immediate Result; EINTR retry; 64-bit off_t; deferred open error",
+      "resource_bound": "caller-provided spans (no hidden buffer budget)",
+      "consumer": "library-default world W1; no app consumes directly",
+      "classification": "live",
+      "disputed": true,
+      "basis": "mission semantic list is face-agnostic; ADR:173 positions threaded blocking as mechanism not contract; sluice_core default build is a build fact not a mission grant; zero app consumers; human decision item 9.3-4"
+    },
+    {
+      "id": "K16",
+      "name": "copy composition (copy_all)",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "copy_all family + CopyLimit",
+      "internal_owner": "src/copy.cpp buffered fast path / scratch path",
+      "correctness_invariant": "EOF or limit termination; CopyDecision observation",
+      "consumer": "W1 public surface (earned per ADR-0001)",
+      "classification": "live"
+    },
+    {
+      "id": "K17",
+      "name": "sync buffer participation (BufferedReader/Writer)",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "BufferedReader/BufferedWriter/BufferedReadable",
+      "internal_owner": "src/buffer.cpp",
+      "correctness_invariant": "writer destructor asserts no dirty data; copy fast path probes BufferedReadable (src/copy.cpp:57)",
+      "classification": "live"
+    },
+    {
+      "id": "K18",
+      "name": "durability sync face (SyncableWriter)",
+      "verdict": "OPTIONAL",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "SyncableWriter sync_data/sync_all",
+      "internal_owner": "FileWriter -> fdatasync/fsync",
+      "classification": "live",
+      "disputed": true,
+      "basis": "durability semantics independently REQUIRED via K02 async carrier; sync-face carrier shares K15 dispute; sole consumer FileWriter is UNKNOWN"
+    },
+    {
+      "id": "K19",
+      "name": "error model (IoError/Result)",
+      "verdict": "REQUIRED",
+      "category": "SEMANTIC_CONTRACT",
+      "public_root": "IoError (11 codes + os_errno); Result<T>",
+      "classification": "live"
+    },
+    {
+      "id": "K20",
+      "name": "observation/statistics",
+      "verdict": "OPTIONAL",
+      "category": "HINT/OBSERVATION",
+      "public_root": "measurement.hpp stats; attach hooks on live APIs",
+      "consumer": "none (zero readers)",
+      "open_question": "GAP-2",
+      "classification": "live-unwitnessed"
+    },
+    {
+      "id": "K21",
+      "name": "Future result channel",
+      "verdict": "DERIVED",
+      "category": "EXECUTION_POLICY",
+      "internal_owner": "Group internals",
+      "classification": "live"
+    },
+    {
+      "id": "K22",
+      "name": "wait policy (Threaded/Evented)",
+      "verdict": "DERIVED",
+      "category": "EXECUTION_POLICY",
+      "internal_owner": "Group/Future wait pluggability",
+      "classification": "live"
+    },
+    {
+      "id": "K23",
+      "name": "batch group submission",
+      "verdict": "NOT_EARNED",
+      "basis": "mission explicitly rejects generalized Batch control layer; zero consumers",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K24",
+      "name": "request identity query (RequestHandle chain)",
+      "verdict": "NOT_EARNED",
+      "basis": "no mission grant; zero callers end-to-end",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K25",
+      "name": "select composition",
+      "verdict": "NOT_EARNED",
+      "basis": "no mission grant; zero callers; K10 expression overlap (GAP-1)",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K26",
+      "name": "async primitives public face (semaphore/mutex/condition/rwlock/queue/event)",
+      "verdict": "NOT_EARNED",
+      "basis": "no mission grant as standalone surface; zero external consumers; sole public carrier of K10 (GAP-1)",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K27",
+      "name": "synthetic backends (Sync/Fake)",
+      "verdict": "NOT_EARNED",
+      "basis": "zero injection points",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K28",
+      "name": "WAL record format",
+      "verdict": "NOT_EARNED",
+      "basis": "not named by mission; zero consumers",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K29",
+      "name": "memory I/O face",
+      "verdict": "NOT_EARNED",
+      "basis": "zero consumers",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K30",
+      "name": "fault injection face",
+      "verdict": "NOT_EARNED",
+      "basis": "test mechanism on public face; zero consumers; PR2 to use test-local mechanisms",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K31",
+      "name": "blocking pool (BlockingIoPool/Task)",
+      "verdict": "NOT_EARNED",
+      "basis": "zero consumers; async domain has own dispatch",
+      "classification": "legacy-candidate"
+    },
+    {
+      "id": "K32",
+      "name": "experimental uring layer",
+      "verdict": "OUT_OF_SCOPE",
+      "basis": "in no supported build world",
+      "classification": "legacy-candidate"
+    }
   ],
   "components": [
-    {"id": "A01", "cluster": "error.hpp/result.hpp", "classification": "LIVE_PUBLIC", "confidence": "high", "evidence": "included by both libs and all apps"},
-    {"id": "A02", "cluster": "op structs + AsyncIoContext submit/poll/wait/cancel/split-wait", "classification": "LIVE_PUBLIC", "confidence": "high", "evidence": "full chain apps->runtime->facade (map 6.1)"},
-    {"id": "A03", "cluster": "Completion<T> six-state authority", "classification": "LIVE_CORRECTNESS", "public": true, "confidence": "high"},
-    {"id": "A04", "cluster": "RequestArena/RequestSlot/RequestKey/submit_transaction", "classification": "LIVE_RESOURCE_BOUND", "also": "correctness owner", "confidence": "high"},
-    {"id": "A05", "cluster": "ready_sink.hpp routing contract", "classification": "LIVE_CORRECTNESS", "confidence": "high"},
-    {"id": "A06", "cluster": "AsyncBackend contract core", "classification": "LIVE_BACKEND", "confidence": "high"},
-    {"id": "A07", "cluster": "RequestHandle + submit_*_request + request_state + identity hooks + runtime forwarding", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "request_state: 0 callers tree-wide; submit_*_request appears only in own forwarding defs (application_runtime.cpp:38-53); public API - compat decision item 9.3-1", "future_owner": "none"},
-    {"id": "A08", "cluster": "BackendWaitSource contract", "classification": "LIVE_BACKEND", "confidence": "high"},
-    {"id": "A09", "cluster": "ReadyWaitSource/ReferenceReadySink", "classification": "LIVE_BACKEND", "confidence": "high"},
-    {"id": "A10", "cluster": "detail::UringWaitSource", "classification": "LIVE_CONFIG_GATED", "gate": "G1", "sole_consumer": "UringAsyncBackend"},
-    {"id": "A11", "cluster": "ThreadPoolBackend", "classification": "LIVE_BACKEND", "confidence": "high", "evidence": "sole backend injected by all four apps"},
-    {"id": "A12", "cluster": "SyncBackend", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: own header only; header-only, no TU; nm libsluice_async.a: 0 symbols"},
-    {"id": "A13", "cluster": "FakeAsyncBackend + fake_test_seams.hpp", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: own header + seam header; nm: 0 symbols; no activating world"},
-    {"id": "A14", "cluster": "UringAsyncBackend + uring_test_seams.hpp", "classification": "LIVE_CONFIG_GATED", "gate": "G1", "confidence": "medium", "evidence": "degraded TU compiled into W2 (nm 23 symbols); mission names io_uring as legitimate mechanism; open question 9.3-2"},
-    {"id": "A15", "cluster": "ApplicationRuntime/RuntimeBuilder/RuntimeTaskContext", "classification": "LIVE_PUBLIC", "confidence": "high"},
-    {"id": "A16", "cluster": "Scheduler core (run/park/wake/await/routing/wake handles)", "classification": "LIVE_RUNTIME", "confidence": "high"},
-    {"id": "A17", "cluster": "Scheduler deadline/timer machinery", "classification": "LIVE_RUNTIME", "confidence": "high", "open_question": "GAP-1: no in-tree consumer"},
-    {"id": "A18", "cluster": "Fiber + fiber_ctx", "classification": "LIVE_RUNTIME", "confidence": "high"},
-    {"id": "A19", "cluster": "wait_node/wait_queue/timer_registration", "classification": "LIVE_RUNTIME", "confidence": "high"},
-    {"id": "A20", "cluster": "mutex.hpp/lock_guard.hpp/thread_annotations.hpp", "classification": "LIVE_RUNTIME", "confidence": "high"},
-    {"id": "A21", "cluster": "Group", "classification": "LIVE_RUNTIME", "confidence": "high", "evidence": "runtime root group"},
-    {"id": "A22", "cluster": "Future<T>", "classification": "LIVE_RUNTIME", "confidence": "high", "evidence": "sole consumer Group"},
-    {"id": "A23", "cluster": "wait_policy/evented_wait_policy", "classification": "LIVE_RUNTIME", "confidence": "high"},
-    {"id": "A24", "cluster": "CancelToken", "classification": "LIVE_PUBLIC", "confidence": "high", "evidence": "sluice-tail + runtime root cancel"},
-    {"id": "A24b", "cluster": "CancelState/CancelGuard/check_cancel", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: cancel.{hpp,cpp} only; nm: 1 compiled symbol, 0 callers"},
-    {"id": "A25", "cluster": "task_result.hpp", "classification": "LIVE_PUBLIC", "confidence": "high"},
-    {"id": "A26", "cluster": "await_op_helpers", "classification": "LIVE_PUBLIC", "confidence": "high", "evidence": "all four apps"},
-    {"id": "A27", "cluster": "op_helpers (async blocking loops)", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external refs; nm: compiled symbols, 0 callers"},
-    {"id": "A28", "cluster": "Batch", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "mission rejects (K23); rg: own files + friend decl; 0 callers"},
-    {"id": "A29", "cluster": "select cluster (select.hpp/fwd/select*.cpp/detail ports + scheduler select machinery)", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "select(): 0 callers; K10 expression overlap blocks deletion until GAP-1 resolved"},
-    {"id": "A30", "cluster": "Semaphore", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external; nm: 0 symbols; GAP-1 overlap"},
-    {"id": "A31", "cluster": "AsyncMutex + AsyncCondition", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "mutual references only; nm: 0 symbols each; GAP-1 overlap"},
-    {"id": "A32", "cluster": "AsyncRwLock", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "scheduler rwlock_* serves its own header only; ExpireCtx scheduler_timer.cpp:155 same cluster; nm: 0 symbols; GAP-1 overlap"},
-    {"id": "A33", "cluster": "AsyncQueue + queue detail + queue TUs + Scheduler::queue_*", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "0 external consumers; nm: 0 symbols for type; GAP-1 overlap"},
-    {"id": "A34", "cluster": "Event", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "sole consumer select cluster; nm: 4 symbols (TU compiled)"},
-    {"id": "A35", "cluster": "async test seams (3 seam TUs + scheduler_test_access + tax0_ablation + gated blocks)", "classification": "LIVE_CONFIG_GATED", "gate": "G2"},
-    {"id": "S01", "cluster": "Reader/Writer/iovec.hpp", "classification": "LIVE_PUBLIC", "confidence": "high"},
-    {"id": "S02", "cluster": "SyncableWriter", "classification": "LIVE_PUBLIC", "confidence": "high"},
-    {"id": "S03", "cluster": "FileReader/FileWriter + src/file.cpp", "classification": "LIVE_PUBLIC", "confidence": "high"},
-    {"id": "S04", "cluster": "IoContext/BlockingIoContext + src/io_context.cpp", "classification": "LIVE_PUBLIC", "confidence": "high", "note": "factory has single implementation (MemoryIoContext unearned, S10)"},
-    {"id": "S05", "cluster": "copy_all family + src/copy.cpp + CopyLimit", "classification": "LIVE_PUBLIC", "confidence": "high"},
-    {"id": "S06", "cluster": "CopyStrategy/CopyOptions/CopyDecision", "classification": "LIVE_PUBLIC", "confidence": "high", "note": "HINT attached to live copy API"},
-    {"id": "S07", "cluster": "BufferedReader/BufferedWriter/BufferedReadable + src/buffer.cpp", "classification": "LIVE_PUBLIC", "confidence": "high", "evidence": "copy fast path load-bearing (src/copy.cpp:57)"},
-    {"id": "S08", "cluster": "measurement.hpp stats structs", "classification": "LIVE_PUBLIC", "confidence": "high", "note": "HINT hooks on live APIs; zero readers (GAP-2)"},
-    {"id": "S09", "cluster": "wal.hpp + src/wal.cpp", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external; nm: 8 symbols compiled, 0 callers"},
-    {"id": "S10", "cluster": "memory_io_context.hpp", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external; nm: 0 symbols"},
-    {"id": "S11", "cluster": "fault.hpp + src/fault.cpp", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external; nm: 8 symbols, 0 callers"},
-    {"id": "S12", "cluster": "observed.hpp + src/observed.cpp (wrappers)", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external; nm: 9 symbols, 0 callers; stats structs (S08) stay"},
-    {"id": "S13", "cluster": "blocking_io_pool.hpp/.cpp + detail/blocking_io_pool_impl.hpp", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "rg: 0 external; nm: 202 symbols, 0 callers"},
-    {"id": "S14", "cluster": "io_validation.hpp posix part", "classification": "LIVE_CORRECTNESS", "confidence": "high"},
-    {"id": "S15a", "cluster": "io_validation.hpp checked_uring_length/retry_uring_wait_on_eintr", "classification": "LIVE_CONFIG_GATED", "gate": "G1", "evidence": "consumed by uring_backend.cpp:286,302,1194,1199"},
-    {"id": "S15b", "cluster": "io_validation.hpp uring_chunk_length/classify_uring_submit", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "sole consumer src/experimental/uring_write_batch.cpp:75 (S18)"},
-    {"id": "S16", "cluster": "detail/posix_retry.hpp", "classification": "LIVE_RUNTIME", "confidence": "high", "evidence": "file.cpp, threadpool_backend, sluice-copy safe_output"},
-    {"id": "S17", "cluster": "src/file_test_seams.hpp", "classification": "LIVE_CONFIG_GATED", "gate": "G3"},
-    {"id": "S18", "cluster": "experimental uring layer (include/sluice/experimental + src/experimental)", "classification": "LEGACY_UNJUSTIFIED", "confidence": "high", "evidence": "no glob covers src/experimental; 0 consumers"},
-    {"id": "B01", "cluster": "xmake/helpers.lua sluice_one_file_target", "classification": "CONFIRMED_DEAD", "confidence": "high", "evidence": "architecture: no test/example/bench targets exist; reachability: 0 calls in all xmake files + target inventory"},
-    {"id": "B02", "cluster": "xmake.lua stale bench_common comment mention", "classification": "HYGIENE_NOTE", "note": "non-code; not counted"},
-    {"id": "P01", "cluster": "apps/sluice-copy", "classification": "APPLICATION_ROOT"},
-    {"id": "P02", "cluster": "apps/sluice-hash", "classification": "APPLICATION_ROOT"},
-    {"id": "P03", "cluster": "apps/sluice-grep", "classification": "APPLICATION_ROOT"},
-    {"id": "P04", "cluster": "apps/sluice-tail", "classification": "APPLICATION_ROOT"}
+    {
+      "id": "A01",
+      "cluster": "error.hpp/result.hpp",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high",
+      "evidence": "included by both libs and all apps"
+    },
+    {
+      "id": "A02",
+      "cluster": "op structs + AsyncIoContext submit/poll/wait/cancel/split-wait",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high",
+      "evidence": "full chain apps->runtime->facade (map 6.1)"
+    },
+    {
+      "id": "A03",
+      "cluster": "Completion<T> six-state authority",
+      "classification": "LIVE_CORRECTNESS",
+      "public": true,
+      "confidence": "high"
+    },
+    {
+      "id": "A04",
+      "cluster": "RequestArena/RequestSlot/RequestKey/submit_transaction",
+      "classification": "LIVE_RESOURCE_BOUND",
+      "also": "correctness owner",
+      "confidence": "high"
+    },
+    {
+      "id": "A05",
+      "cluster": "ready_sink.hpp routing contract",
+      "classification": "LIVE_CORRECTNESS",
+      "confidence": "high"
+    },
+    {
+      "id": "A06",
+      "cluster": "AsyncBackend contract core",
+      "classification": "LIVE_BACKEND",
+      "confidence": "high"
+    },
+    {
+      "id": "A07",
+      "cluster": "RequestHandle + submit_*_request + request_state + identity hooks + runtime forwarding",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "zero callers tree-wide; occurrences confined to cluster files (async_io_context.{hpp,cpp}, application_runtime.{hpp,cpp}, request_handle.cpp identity chain async_io_context.cpp:118-156); deletion must also prune identity hooks kept in async_io_context.hpp:125-136, threadpool_backend.hpp:46-51, uring_backend.hpp:76-81",
+      "future_owner": "none"
+    },
+    {
+      "id": "A08",
+      "cluster": "BackendWaitSource contract",
+      "classification": "LIVE_BACKEND",
+      "confidence": "high"
+    },
+    {
+      "id": "A09",
+      "cluster": "ReadyWaitSource/ReferenceReadySink",
+      "classification": "LIVE_BACKEND",
+      "confidence": "high"
+    },
+    {
+      "id": "A10",
+      "cluster": "detail::UringWaitSource",
+      "classification": "LIVE_CONFIG_GATED",
+      "gate": "G1",
+      "sole_consumer": "UringAsyncBackend"
+    },
+    {
+      "id": "A11",
+      "cluster": "ThreadPoolBackend",
+      "classification": "LIVE_BACKEND",
+      "confidence": "high",
+      "evidence": "sole backend injected by all four apps"
+    },
+    {
+      "id": "A12",
+      "cluster": "SyncBackend",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "unchanged: rg own header only; header-only, no TU; nm libsluice_async.a: 0 symbols"
+    },
+    {
+      "id": "A13",
+      "cluster": "FakeAsyncBackend + fake_test_seams.hpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "own header + own seam header (self-included under G2 gate at fake_backend.hpp:499); nm: 0 symbols; G2 currently un-activatable"
+    },
+    {
+      "id": "A14",
+      "cluster": "UringAsyncBackend + uring_test_seams.hpp",
+      "classification": "LIVE_CONFIG_GATED",
+      "gate": "G1",
+      "confidence": "medium",
+      "evidence": "degraded TU compiled into W2 (nm 23 symbols); mission names io_uring as legitimate mechanism; open question 9.3-2"
+    },
+    {
+      "id": "A15",
+      "cluster": "ApplicationRuntime/RuntimeBuilder/RuntimeTaskContext",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high"
+    },
+    {
+      "id": "A16",
+      "cluster": "Scheduler core (run/park/wake/await/routing/wake handles)",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high"
+    },
+    {
+      "id": "A17",
+      "cluster": "Scheduler deadline/timer machinery",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high",
+      "open_question": "GAP-1: only LEGACY clusters arm deadlines (scheduler_{semaphore:82,mutex:94,condition:31,queue:38,110,rwlock:153,211,event:163}.cpp, select.cpp:691) — heap provably always empty in live tree; DeadlineHeapEntry type defined in A29 header select_registration.hpp:74"
+    },
+    {
+      "id": "A18",
+      "cluster": "Fiber + fiber_ctx",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high"
+    },
+    {
+      "id": "A19",
+      "cluster": "wait_node/wait_queue/timer_registration",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high"
+    },
+    {
+      "id": "A20",
+      "cluster": "mutex.hpp/lock_guard.hpp/thread_annotations.hpp",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high"
+    },
+    {
+      "id": "A21",
+      "cluster": "Group",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high",
+      "evidence": "runtime root group",
+      "dead_half": "default ctor Group() and thread path async_threaded (group.hpp:85-111, group.cpp:60-73,90-103) unreachable — sole construction site is Scheduler-bound"
+    },
+    {
+      "id": "A22",
+      "cluster": "Future<T>",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high",
+      "evidence": "sole consumer Group",
+      "dead_half": "Future::await()/cancel()/cancel_token() zero callers; evented path polls ready() only (group.cpp:30-39); Future<void> carries success only"
+    },
+    {
+      "id": "A23",
+      "cluster": "wait_policy/evented_wait_policy",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high",
+      "dead_half": "WaitPolicy::wait_until_ready executes zero times in live tree; only live dispatch is EventedWaitPolicy::notify_ready; ThreadedWaitPolicy/default_wait_policy referenced only by dead thread path"
+    },
+    {
+      "id": "A24",
+      "cluster": "CancelToken",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high",
+      "evidence": "sluice-tail + runtime root cancel"
+    },
+    {
+      "id": "A24b",
+      "cluster": "CancelState/CancelGuard/check_cancel",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "check_cancel/CancelGuard zero callers; CancelState machinery only called by uncalled check_cancel; COMPILE COUPLING: kept Fiber embeds CancelState cstate_ + accessor (fiber.hpp:3,55,74) — must be excised before deletion"
+    },
+    {
+      "id": "A25",
+      "cluster": "task_result.hpp",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high"
+    },
+    {
+      "id": "A26",
+      "cluster": "await_op_helpers",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high",
+      "evidence": "all four apps"
+    },
+    {
+      "id": "A27",
+      "cluster": "op_helpers (async blocking loops)",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "rg: 0 external refs; nm: compiled symbols, 0 callers"
+    },
+    {
+      "id": "A28",
+      "cluster": "Batch",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "mission rejects (K23); own files + harmless friend decls in completion.hpp:32,215 (hygiene cleanup on deletion); 0 callers"
+    },
+    {
+      "id": "A29",
+      "cluster": "select cluster (select.hpp/fwd/select*.cpp/detail ports + scheduler select machinery)",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "select(): 0 callers; compile couplings: kept scheduler.hpp:8-9 unconditionally includes select_fwd/select_registration; DeadlineHeapEntry (A17 heap entry type) defined in this cluster header select_registration.hpp:74; kept ~Scheduler() fail-fast and park accounting read select state (scheduler.cpp:84-117, scheduler_park_wake.cpp:137,342) — deletion requires carving kept scheduler core"
+    },
+    {
+      "id": "A30",
+      "cluster": "Semaphore + Scheduler::sem_* + scheduler_semaphore.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "Semaphore type 0 external refs, nm 0 symbols; Scheduler::sem_* consumed only by semaphore.hpp; scheduler-side machinery and TU absorbed into cluster"
+    },
+    {
+      "id": "A31",
+      "cluster": "AsyncMutex + AsyncCondition + Scheduler::mutex_*/condition_* + scheduler_mutex.cpp/scheduler_condition.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "mutual refs only (other occurrences are assert message strings); nm 0 symbols each; scheduler-side machinery and TUs absorbed"
+    },
+    {
+      "id": "A32",
+      "cluster": "AsyncRwLock + Scheduler::rwlock_* + scheduler_rwlock.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "type 0 external consumers, nm 0 symbols; compile coupling: kept timer pump hardcodes AsyncRwLock::ExpireCtx dispatch (scheduler_timer.cpp:155-167 ungated; ExpireCtx at async_rwlock.hpp:78,90); all 11 scheduler TUs include async_rwlock.hpp"
+    },
+    {
+      "id": "A33",
+      "cluster": "AsyncQueue + detail::queue_port/queue_item + queue_port.cpp/queue_detail.hpp + Scheduler::queue_* + scheduler_queue.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "AsyncQueue 0 external refs, nm 0 symbols; compile coupling: kept scheduler.hpp:6 unconditionally includes detail/queue_port.hpp"
+    },
+    {
+      "id": "A34",
+      "cluster": "Event + Scheduler::event_* + scheduler_event.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "consumers: select cluster + this cluster own scheduler-side members (scheduler_event.cpp:21,44,88,124) — no user path; nm 4 symbols; deletion requires carving kept scheduler headers/TUs"
+    },
+    {
+      "id": "A35",
+      "cluster": "async test seams (3 seam TUs + scheduler_test_access + tax0_ablation_seams + gated blocks + standalone seam headers async_io_context_test_seams/threadpool_test_seams/uring_test_seams/fake_test_seams)",
+      "classification": "LIVE_CONFIG_GATED",
+      "gate": "G2",
+      "note": "G2 currently UN-ACTIVATABLE: gated include of nonexistent async_test_control_internal.hpp in 11 production TUs; sluice_async_test has no provider; seams consume A29/A32/A33/A34 (scheduler_fe2_test_seam.cpp:5-11,15-307) — frozen pending GAP-1/GAP-3"
+    },
+    {
+      "id": "S01",
+      "cluster": "Reader/Writer/iovec.hpp",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high",
+      "evidence": "carrier contract types of earned copy_all (K16); consumed by buffer/copy implementations; original evidence citing wal/fault/observed implementors retracted (those are LEGACY clusters)"
+    },
+    {
+      "id": "S02",
+      "cluster": "SyncableWriter",
+      "classification": "UNKNOWN",
+      "confidence": "medium",
+      "open_question": "K18 disputed carrier; sole consumer FileWriter is UNKNOWN; zero app consumers"
+    },
+    {
+      "id": "S03",
+      "cluster": "FileReader/FileWriter + src/file.cpp",
+      "classification": "UNKNOWN",
+      "confidence": "medium",
+      "open_question": "K15 dispute: mission silent on sync face, zero app consumers, sole construction site is io_context.cpp factory"
+    },
+    {
+      "id": "S04",
+      "cluster": "IoContext/BlockingIoContext + src/io_context.cpp",
+      "classification": "UNKNOWN",
+      "confidence": "medium",
+      "note": "factory has single implementation (MemoryIoContext unearned, S10)",
+      "open_question": "single-implementation virtual factory (second impl MemoryIoContext ruled LEGACY), zero callers — speculative polymorphism"
+    },
+    {
+      "id": "S05",
+      "cluster": "copy_all family + src/copy.cpp + CopyLimit",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high"
+    },
+    {
+      "id": "S06",
+      "cluster": "CopyStrategy/CopyOptions/CopyDecision",
+      "classification": "UNKNOWN",
+      "confidence": "medium",
+      "note": "HINT attached to live copy API",
+      "open_question": "exceeds thin-local-branch grant: Auto==BufferedFirst behaviorally (copy.cpp:23-28), Scratch is policy knob (ADR section 7 lists cache strategy as policy)"
+    },
+    {
+      "id": "S07",
+      "cluster": "BufferedReader/BufferedWriter/BufferedReadable + src/buffer.cpp",
+      "classification": "LIVE_PUBLIC",
+      "confidence": "high",
+      "evidence": "copy fast path load-bearing (src/copy.cpp:57)"
+    },
+    {
+      "id": "S08",
+      "cluster": "measurement.hpp stats structs + AsyncStats hooks (AsyncIoContext ctor param, attach_stats, backend stats_)",
+      "classification": "UNKNOWN",
+      "confidence": "medium",
+      "note": "HINT hooks on live APIs; zero readers (GAP-2)",
+      "open_question": "K20 OPTIONAL conflicts with LIVE_PUBLIC admission rule; zero readers (GAP-2); AsyncStats permeates AsyncBackend contract (async_io_context.hpp:80,146,184)"
+    },
+    {
+      "id": "S09",
+      "cluster": "wal.hpp + src/wal.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "rg: 0 external; nm: 8 symbols compiled, 0 callers"
+    },
+    {
+      "id": "S10",
+      "cluster": "memory_io_context.hpp (MemoryIoContext; MemoryReader/MemoryWriter actually defined in fault.hpp:16-50)",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "0 external refs; nm 0 symbols; compile cross-link with S11 (memory_io_context.hpp:3 includes fault.hpp) — joint or ordered deletion required"
+    },
+    {
+      "id": "S11",
+      "cluster": "fault.hpp + src/fault.cpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "0 external refs; nm 17 symbols (incl. weak/template instances), 0 callers; contains MemoryReader/MemoryWriter definitions"
+    },
+    {
+      "id": "S12",
+      "cluster": "observed.hpp + src/observed.cpp (wrappers)",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "0 external refs; nm 19 symbols (incl. weak/template instances), 0 callers; S08 stats structs adjudicated separately"
+    },
+    {
+      "id": "S13",
+      "cluster": "blocking_io_pool.hpp/.cpp + detail/blocking_io_pool_impl.hpp",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "rg: 0 external; nm: 202 symbols, 0 callers"
+    },
+    {
+      "id": "S14",
+      "cluster": "io_validation.hpp posix part",
+      "classification": "LIVE_CORRECTNESS",
+      "confidence": "high"
+    },
+    {
+      "id": "S15a",
+      "cluster": "io_validation.hpp checked_uring_length/retry_uring_wait_on_eintr",
+      "classification": "LIVE_CONFIG_GATED",
+      "gate": "G1",
+      "evidence": "consumed by uring_backend.cpp:286,302,1194,1199"
+    },
+    {
+      "id": "S15b",
+      "cluster": "io_validation.hpp uring_chunk_length/classify_uring_submit",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "uring_chunk_length: sole consumer src/experimental/uring_write_batch.cpp:75 (S18); classify_uring_submit: ZERO consumers anywhere (definition-only, io_validation.hpp:49)"
+    },
+    {
+      "id": "S16",
+      "cluster": "detail/posix_retry.hpp",
+      "classification": "LIVE_RUNTIME",
+      "confidence": "high",
+      "evidence": "file.cpp, threadpool_backend, sluice-copy safe_output"
+    },
+    {
+      "id": "S17",
+      "cluster": "src/file_test_seams.hpp",
+      "classification": "LIVE_CONFIG_GATED",
+      "gate": "G3"
+    },
+    {
+      "id": "S18",
+      "cluster": "experimental uring layer (include/sluice/experimental + src/experimental)",
+      "classification": "LEGACY_UNJUSTIFIED",
+      "confidence": "high",
+      "evidence": "no glob covers src/experimental; 0 consumers; A14 has zero references to experimental (verified both directions); S15a stays live via A14"
+    },
+    {
+      "id": "B01",
+      "cluster": "xmake/helpers.lua sluice_one_file_target",
+      "classification": "CONFIRMED_DEAD",
+      "confidence": "high",
+      "evidence": "architecture: no test/example/bench targets exist; reachability: 0 calls in all xmake files + target inventory"
+    },
+    {
+      "id": "B02",
+      "cluster": "xmake.lua stale bench_common comment mention",
+      "classification": "HYGIENE_NOTE",
+      "note": "non-code; not counted"
+    },
+    {
+      "id": "P01",
+      "cluster": "apps/sluice-copy",
+      "classification": "APPLICATION_ROOT"
+    },
+    {
+      "id": "P02",
+      "cluster": "apps/sluice-hash",
+      "classification": "APPLICATION_ROOT"
+    },
+    {
+      "id": "P03",
+      "cluster": "apps/sluice-grep",
+      "classification": "APPLICATION_ROOT"
+    },
+    {
+      "id": "P04",
+      "cluster": "apps/sluice-tail",
+      "classification": "APPLICATION_ROOT"
+    }
   ],
   "gaps": [
-    {"id": "GAP-1", "kind": "architecture-to-path", "summary": "deadline/timer capability (K10, mission-required) has complete machinery (A17) but zero in-tree consumers and its only public expression lives on unconsumed primitive/select clusters (A29-A34); deleting those clusters would remove K10's public expression - deferred to human decision; PR2 may witness a minimal deadline path"},
-    {"id": "GAP-2", "kind": "architecture-to-path", "summary": "observation/statistics hooks attached to live APIs have zero readers (K20 OPTIONAL)"},
-    {"id": "GAP-3", "kind": "architecture-to-path", "summary": "no test world exists at all; PR2 subject"}
+    {
+      "id": "GAP-1",
+      "kind": "architecture-to-path",
+      "summary": "deadline/timer capability (K10, mission-required) has complete machinery (A17) but zero in-tree consumers and its only public expression lives on unconsumed primitive/select clusters (A29-A34); deleting those clusters would remove K10's public expression - deferred to human decision; PR2 may witness a minimal deadline path"
+    },
+    {
+      "id": "GAP-2",
+      "kind": "architecture-to-path",
+      "summary": "observation/statistics hooks attached to live APIs have zero readers (K20 OPTIONAL)"
+    },
+    {
+      "id": "GAP-3",
+      "kind": "architecture-to-path",
+      "summary": "no test world exists at all; PR2 subject"
+    }
   ],
   "summary": {
     "total_capabilities": 32,
-    "required": 19,
+    "required": 17,
     "derived": 2,
-    "optional": 1,
+    "optional": 3,
     "not_earned": 9,
     "out_of_scope": 1,
     "total_component_clusters": 56,
-    "LIVE_PUBLIC": 14,
+    "LIVE_PUBLIC": 9,
     "LIVE_CORRECTNESS": 3,
     "LIVE_RESOURCE_BOUND": 1,
     "LIVE_BACKEND": 4,
@@ -134,8 +826,57 @@
     "LEGACY_UNJUSTIFIED": 19,
     "CONFIRMED_DEAD": 1,
     "DORMANT_FUTURE_EARNED": 0,
-    "UNKNOWN": 0,
+    "UNKNOWN": 5,
     "ARCHITECTURE_GAPS": 3,
-    "application_roots": 4
+    "application_roots": 4,
+    "unknown_ids": [
+      "S02",
+      "S03",
+      "S04",
+      "S06",
+      "S08"
+    ],
+    "optional_capability_ids": [
+      "K15",
+      "K18",
+      "K20"
+    ],
+    "notes": "counts corrected after adversarial review; UNKNOWN != DEAD (PR3 retains all UNKNOWN clusters)"
+  },
+  "adversarial_review": {
+    "rounds": [
+      {
+        "reviewer": "code-review-and-quality",
+        "result": "no P0; 2 P1 evidence-string defects (A24b, G2) + 7 P2 precision repairs, all applied"
+      },
+      {
+        "reviewer": "false-deletion-adversary",
+        "result": "all 20 LEGACY/DEAD clusters re-confirmed no legal path; 4 evidence defects + kept-to-legacy compile couplings + S10/S11 cross-link + 3-surface injection finding, all folded into map"
+      },
+      {
+        "reviewer": "zombie-code-adversary",
+        "result": "K15 ADR attribution refuted (ADR:173 is mechanism mention, not contract); S02/S03/S04/S06/S08 demoted LIVE_PUBLIC->UNKNOWN; scheduler-embedded primitive machinery (~1743 lines / 6 TUs) absorbed into A30-A34; A22/A23 dead halves recorded"
+      }
+    ],
+    "reclassifications": [
+      {
+        "component": "S02/S03/S04",
+        "from": "LIVE_PUBLIC",
+        "to": "UNKNOWN",
+        "reason": "K15 demoted to OPTIONAL-disputed; zero in-tree consumers; mission silent on sync face"
+      },
+      {
+        "component": "S06",
+        "from": "LIVE_PUBLIC",
+        "to": "UNKNOWN",
+        "reason": "exceeds thin-local-branch grant; Auto==BufferedFirst behaviorally (copy.cpp:23-28); Scratch is policy knob"
+      },
+      {
+        "component": "S08",
+        "from": "LIVE_PUBLIC",
+        "to": "UNKNOWN",
+        "reason": "K20 OPTIONAL conflicts with LIVE_PUBLIC admission rule; zero readers; AsyncStats hooks permeate AsyncBackend contract"
+      }
+    ]
   }
 }
