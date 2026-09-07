@@ -392,3 +392,181 @@ W3 四应用 → RuntimeBuilder::backend(std::make_unique<ThreadPoolBackend>(...
 G1 world（未激活）：UringAsyncBackend 实现同一 AsyncBackend 契约
 合成后端（SyncBackend/FakeAsyncBackend）：实现契约但零注入点（§7 A12/A13）
 ```
+
+## 7. 组件簇生存分类
+
+每个重要 abstraction / public symbol / backend / helper cluster 恰好进入一个主状态。证据缩写：`rg`=全树精确文本搜索（含 apps/、xmake、条件编译块），`nm`=构建产物符号表（W1/W2 debug 实测），`caller`=构造点/调用点搜索。详细命令与输出见 §8。
+
+### 7.1 异步运行时（W2）
+
+| ID | 组件簇 | 分类 | 证据要点 |
+| --- | --- | --- | --- |
+| A01 | `error.hpp`/`result.hpp`（IoError/Result） | LIVE_PUBLIC | 两库全部 TU + 四应用 include |
+| A02 | 四操作结构 + `AsyncIoContext` 提交/轮询/等待/取消/split-wait 面 | LIVE_PUBLIC | apps→runtime→facade 全链（§6.1） |
+| A03 | `Completion<T>` 六态权威 | LIVE_CORRECTNESS | 所有提交/发布/复用路径的所有权边界 |
+| A04 | `detail::RequestArena/RequestSlot/RequestKey/submit_transaction` | LIVE_RESOURCE_BOUND + LIVE_CORRECTNESS | threadpool 提交事务与 reap 发布的唯一状态权威 |
+| A05 | `detail::ready_sink.hpp`（SynchronousReadySink/ReadyEvent/WaiterToken/RoutingLease） | LIVE_CORRECTNESS | arena→scheduler 就绪路由契约 |
+| A06 | `AsyncBackend` 契约（submit/poll/wait/cancel/register_waiter/wait_source） | LIVE_BACKEND | 门面唯一依赖；RuntimeBuilder 注入点 |
+| A07 | `RequestHandle` + `submit_*_request` + `request_state` + 契约 identity 钩子（`resolve_identity_state`/`supports_request_identity`/`RequestHandleState`）+ `RuntimeTaskContext::submit_*_request` 转发 | LEGACY_UNJUSTIFIED | `request_state(` 全树零调用者；`submit_*_request` 唯一出现点是自身转发定义（application_runtime.cpp:38-53）；公共 API——source-compat 见 §9 决策项 |
+| A08 | `BackendWaitSource` 契约 | LIVE_BACKEND | split-wait 权威；RuntimeBuilder 构建校验消费 |
+| A09 | `detail::ReadyWaitSource`/`ReferenceReadySink` | LIVE_BACKEND | ThreadPoolBackend 内部件 |
+| A10 | `detail::UringWaitSource` | LIVE_CONFIG_GATED | 唯一消费者 UringAsyncBackend（G1 world） |
+| A11 | `ThreadPoolBackend`（含 BoundedDispatchQueue） | LIVE_BACKEND | 四应用唯一真实执行后端 |
+| A12 | `SyncBackend` | LEGACY_UNJUSTIFIED | rg：仅自身头文件；无 TU（header-only）；nm：libsluice_async.a 0 符号 |
+| A13 | `FakeAsyncBackend` + `src/async/fake_test_seams.hpp` | LEGACY_UNJUSTIFIED | rg：仅自身头 + 其缝头；nm：0 符号；无测试 world 激活 |
+| A14 | `UringAsyncBackend` + `src/async/uring_test_seams.hpp` | LIVE_CONFIG_GATED | G1 world 未激活；降级实现编译进 W2（nm 23 符号）；mission 原则 5 点名 io_uring 为合法机制 |
+| A15 | `ApplicationRuntime`/`RuntimeBuilder`/`RuntimeTaskContext`（存活性部分） | LIVE_PUBLIC | 四应用入口 |
+| A16 | `Scheduler` 核心（run/park/wake/await_completion/waiter 路由/wake handle） | LIVE_RUNTIME | runtime 与 fiber 调度的中央权威 |
+| A17 | `Scheduler` deadline/timer 机制（deadline heap + TimerRegistration） | LIVE_RUNTIME | K10 唯一 owner；在树零消费者（GAP-1） |
+| A18 | `Fiber` + `fiber_ctx`（汇编切换） | LIVE_RUNTIME | Group evented 路径 + worker 执行 |
+| A19 | `wait_node`/`wait_queue`/`timer_registration` | LIVE_RUNTIME | scheduler 等待/定时登记 |
+| A20 | `mutex.hpp`/`lock_guard.hpp`/`thread_annotations.hpp` | LIVE_RUNTIME | scheduler/queue_port 内部锁 + TSA |
+| A21 | `Group` | LIVE_RUNTIME | ApplicationRuntime 根组（application_runtime.cpp:114） |
+| A22 | `Future<T>` | LIVE_RUNTIME | 唯一消费者 Group（K21 DERIVED） |
+| A23 | `wait_policy`/`evented_wait_policy` | LIVE_RUNTIME | Group/Future 等待策略 |
+| A24 | `CancelToken` | LIVE_PUBLIC | sluice-tail 消费；runtime 根取消 |
+| A24b | `CancelState`/`CancelGuard`/`check_cancel` | LEGACY_UNJUSTIFIED | rg：仅 cancel.{hpp,cpp} 自身；nm：check_cancel 1 符号（编译）但零调用者 |
+| A25 | `task_result.hpp`（TaskResultSlot/translate_task_exception） | LIVE_PUBLIC | 四应用 |
+| A26 | `await_op_helpers` | LIVE_PUBLIC | 四应用任务体 |
+| A27 | `op_helpers`（read_all/write_all/sync_data_all/sync_all_all） | LEGACY_UNJUSTIFIED | rg：自身 TU 外零引用；nm：编译符号存在但零调用 |
+| A28 | `Batch` | LEGACY_UNJUSTIFIED | mission 明文否定（K23）；rg：仅 batch.{hpp,cpp} + completion.hpp friend；零消费者 |
+| A29 | select 簇（`select.hpp`/`select_fwd`/`select*.cpp`/`detail::select_port`/`select_registration` + Scheduler 内 select_* 机制） | LEGACY_UNJUSTIFIED | `select(` 自由函数全树零调用者；与 K10 表达交叉（GAP-1 阻断整簇删除） |
+| A30 | `Semaphore` | LEGACY_UNJUSTIFIED | rg：自身头外零引用；nm：0 符号（从未实例化）；K10 交叉（GAP-1） |
+| A31 | `AsyncMutex` + `AsyncCondition` | LEGACY_UNJUSTIFIED | rg：两簇互引，外部零引用；nm：各 0 符号；K10 交叉 |
+| A32 | `AsyncRwLock` | LEGACY_UNJUSTIFIED | rg：scheduler rwlock_* 方法仅服务其自身头；`ExpireCtx` 见 scheduler_timer.cpp:155（同簇）；nm：0 符号；K10 交叉 |
+| A33 | `AsyncQueue` + `detail::queue_port/queue_item` + `queue_port.cpp`/`queue_detail.hpp` + `Scheduler::queue_*` | LEGACY_UNJUSTIFIED | rg：公共类型零外部引用；nm：0 符号；K10 交叉 |
+| A34 | `Event` | LEGACY_UNJUSTIFIED | rg：唯一消费者 select 簇；nm：4 符号（事件 TU 编译） |
+| A35 | async 测试缝（3 个缝 TU + `scheduler_test_access` + `tax0_ablation_seams` + 各头内 G2 门控块） | LIVE_CONFIG_GATED | G2 world；未激活；PR2 决定激活范围 |
+
+### 7.2 同步核心（W1）
+
+| ID | 组件簇 | 分类 | 证据要点 |
+| --- | --- | --- | --- |
+| S01 | `Reader`/`Writer`/`iovec.hpp` | LIVE_PUBLIC | K15 契约面；copy/wal/buffer/fault/observed 实现 |
+| S02 | `SyncableWriter` | LIVE_PUBLIC | K18；FileWriter 实现 |
+| S03 | `FileReader`/`FileWriter` + `src/file.cpp` | LIVE_PUBLIC | 唯一 POSIX 实现；G3 缝门控 |
+| S04 | `IoContext`/`BlockingIoContext` + `src/io_context.cpp` | LIVE_PUBLIC | 同步资源获取工厂；唯一实现产出 S03 |
+| S05 | `copy_all` 家族 + `src/copy.cpp` + `CopyLimit` | LIVE_PUBLIC | K16 已赚到组合契约 |
+| S06 | `CopyStrategy`/`CopyOptions`/`CopyDecision` | LIVE_PUBLIC | 附着于 live API 的观测（HINT 层） |
+| S07 | `BufferedReader`/`BufferedWriter`/`BufferedReadable` + `src/buffer.cpp` | LIVE_PUBLIC | K17；copy 快路径 load-bearing（src/copy.cpp:57） |
+| S08 | `measurement.hpp` 统计结构（SyscallStats/Buffer/Copy/Sync/Vector/Uring/Async） | LIVE_PUBLIC | 附着于 live API 构造参数（HINT 层；GAP-2 零读者） |
+| S09 | `wal.hpp` + `src/wal.cpp` | LEGACY_UNJUSTIFIED | rg：apps/async 零引用；W1 内仅自身 TU |
+| S10 | `memory_io_context.hpp`（MemoryIoContext/MemoryReader/MemoryWriter） | LEGACY_UNJUSTIFIED | rg：零外部引用；nm：0 符号（header-only 从未实例化） |
+| S11 | `fault.hpp` + `src/fault.cpp` | LEGACY_UNJUSTIFIED | rg：零外部引用；测试机制置于公共面 |
+| S12 | `observed.hpp` + `src/observed.cpp`（包装器） | LEGACY_UNJUSTIFIED | rg：零外部引用；S08 统计结构本体保留 |
+| S13 | `blocking_io_pool.hpp` + `src/blocking_io_pool.cpp` + `detail/blocking_io_pool_impl.hpp` | LEGACY_UNJUSTIFIED | rg：零外部引用；异步域有独立派发机制（A11） |
+| S14 | `detail/io_validation.hpp` posix 部分（checked_posix_offset + 64 位断言） | LIVE_CORRECTNESS | file.cpp/threadpool_backend.cpp 消费 |
+| S15 | `detail/io_validation.hpp` uring 部分 | 拆分：`checked_uring_length`/`retry_uring_wait_on_eintr` LIVE_CONFIG_GATED（A14 消费）；`uring_chunk_length`/`classify_uring_submit` LEGACY_UNJUSTIFIED（唯一消费者 S18） | rg 逐符号 |
+| S16 | `detail/posix_retry.hpp` | LIVE_RUNTIME | file.cpp/threadpool_backend.cpp/sluice-copy safe_output 消费 |
+| S17 | `src/file_test_seams.hpp` | LIVE_CONFIG_GATED | G3 world |
+| S18 | 实验性 uring 层（`include/sluice/experimental/*` + `src/experimental/*`） | LEGACY_UNJUSTIFIED | build membership：无 glob 覆盖（§2）；rg：零消费者 |
+
+### 7.3 构建定义与应用
+
+| ID | 组件簇 | 分类 | 证据要点 |
+| --- | --- | --- | --- |
+| B01 | `xmake/helpers.lua::sluice_one_file_target` | CONFIRMED_DEAD | 架构证据：W1–W3 无任何 test/example/bench target；可达性证据：全部 xmake 文件 rg 零调用 + `xmake` 目标清单无该组目标 |
+| B02 | `xmake.lua` 头部注释提及的 `bench_common` | 卫生项（非代码） | libraries.lua 无此 target；文档性失实，随 PR3 清理 |
+| P01–P04 | 四应用 | Application roots（LIVE） | §3.2；smoke 通过 |
+
+## 8. 可达性证据（双方法）
+
+禁止单工具判死。对每个 LEGACY/DEAD 候选至少两种独立方法：
+
+| 候选 | 方法 1（rg 精确文本） | 方法 2 | 结论 |
+| --- | --- | --- | --- |
+| A07 RequestHandle 链 | `request_state(` → 0 调用者；`submit_*_request` → 仅自身转发定义 | caller 搜索（apps+src 全量构造点）→ 0；nm：request_handle.cpp 编译存在（说明链完整但无入口） | 无合法 path（公共 API，需 compat 决策） |
+| A12 SyncBackend | `SyncBackend` → 仅 sync_backend.hpp | nm libsluice_async.a → 0 符号（header-only 无实例化 TU） | 无合法 path |
+| A13 FakeAsyncBackend | `FakeAsyncBackend` → 自身头 + 缝头 | nm → 0 符号；G2 world 无定义点 | 无合法 path |
+| A24b CancelState/Guard/check_cancel | `check_cancel`/`CancelGuard` → 仅 cancel.{hpp,cpp} | nm → check_cancel 1 符号（编译）+ caller 搜索 0 | 无合法 path |
+| A27 op_helpers | `read_all(`/`write_all(`/`sync_data_all(`/`sync_all_all(`（限定 async 命名空间）→ 0 外部引用 | nm → 4 符号编译 + caller 0 | 无合法 path |
+| A28 Batch | `Batch` → batch.{hpp,cpp} + completion.hpp friend 声明 | caller 搜索（`Batch{`/`Batch `构造/`await_one`）→ 0；nm 155 符号（编译进 W2 但无入口） | 无合法 path |
+| A29 select 簇 | `select(`（sluice::async 限定）→ 仅定义 | caller 搜索 → 0；nm select_admit 1 符号（编译） | 无合法 path；GAP-1 交叉阻断删除 |
+| A30–A33 原语簇 | 各类型名 → 自身头/互引/服务自身的 scheduler 方法 | nm → AsyncRwLock/Semaphore/AsyncCondition/AsyncQueue 均 0 符号（header-only 从未实例化） | 无合法 path；GAP-1 交叉 |
+| A34 Event | `Event` → select 簇 + 服务自身的 scheduler event_* | nm → 4 符号（事件 TU 编译）+ caller 0 | 随 select 簇 |
+| S09 WAL | `WalWriter`/`WalReader`/`write_record` → apps/async 0 | nm → 8 符号（编译进 W1）+ caller 0 | 无合法 path |
+| S10 Memory 面 | `MemoryIoContext`/`MemoryReader`/`MemoryWriter` → 0 外部 | nm → 0 符号 | 无合法 path |
+| S11 Fault 面 | `FaultPlan`/`FaultReader`/`FaultWriter` → 0 外部 | nm → 8 符号 + caller 0 | 无合法 path |
+| S12 Observed 包装器 | `ObservedReader`/`ObservedWriter` → 0 外部 | nm → 9 符号 + caller 0 | 无合法 path |
+| S13 BlockingIoPool | `BlockingIoPool`/`Task<` → 0 外部 | nm → 202 符号 + caller 0 | 无合法 path |
+| S18 experimental | build membership：两 glob 均不含 src/experimental | rg → 0 消费者；include 面无实现支撑 | 不在任何 supported world |
+| B01 helpers.lua | xmake 全文件 rg `sluice_one_file_target` → 仅定义 | 目标清单无 test/example/bench 组 | CONFIRMED_DEAD |
+
+工具局限声明：`nm` 对 header-only 模板类型只能证明"未实例化"，不能证明外部源码兼容性；公共头（A07/A12/A13/A27/A28/A29/A30–A34、S09–S13）按 taskbook §28 需在删除前声明 source-compatibility policy（见 §9 决策项）。虚调用/函数指针面（AsyncBackend 契约）不构成上述候选的隐藏路径：注入点唯一经 `RuntimeBuilder::backend`，全树注入仅 `ThreadPoolBackend`（四应用各一处 + 无其他）。
+
+## 9. 两个方向的 Gap
+
+### 9.1 Architecture → no path（required capability 缺完整执行/见证路径）
+
+| ID | Gap | 内容 |
+| --- | --- | --- |
+| GAP-1 | deadline/timer 表达缺口 | K10 为 mission 明文语义，机制完整（A17），但唯一公共表达载体是零消费的原语/select 面（A29–A34）；无任何在树消费者、无 witness。删除整簇将使 K10 失去公共表达——本 campaign 不得擅自裁决，列为 PR3 决策项：要么 PR2 为 K10 建最小 witness 并保留最小载体，要么人工 review 重划 K10 为未暴露。 |
+| GAP-2 | observation/statistics 零读者 | K20 OPTIONAL；统计钩子附着于 live API（S08）但无任何读取者。不阻断，仅记录。 |
+| GAP-3 | 测试世界缺失 | 全树无 test target/无 specification witness。PR2 的任务本体。 |
+
+### 9.2 Implementation → no architecture（存在但无 owner）
+
+§7 中全部 LEGACY_UNJUSTIFIED + CONFIRMED_DEAD 条目：
+
+```text
+A07  RequestHandle 公共查询链
+A12  SyncBackend
+A13  FakeAsyncBackend（+其缝头）
+A24b CancelState/CancelGuard/check_cancel
+A27  op_helpers
+A28  Batch
+A29  select 簇（GAP-1 交叉）
+A30  Semaphore（GAP-1 交叉）
+A31  AsyncMutex+AsyncCondition（GAP-1 交叉）
+A32  AsyncRwLock（GAP-1 交叉）
+A33  AsyncQueue+queue detail（GAP-1 交叉）
+A34  Event（随 select）
+S09  WAL
+S10  Memory I/O 面
+S11  Fault 注入面
+S12  Observed 包装器
+S13  BlockingIoPool
+S15b io_validation 的 experimental-only uring 助手（uring_chunk_length/classify_uring_submit）
+S18  experimental uring 层
+B01  sluice_one_file_target
+```
+
+### 9.3 需人工裁决的决策项（不阻断 PR1 冻结）
+
+1. **Source-compatibility policy**：仓库无外部消费者证据也无兼容承诺文档；master 处于 clean-room reset 后的重建期。本 campaign 按"无外部消费者、重建期内不承诺源兼容"工作，PR3 删除公共面时在 PR body 明示破坏性。
+2. **G1（io_uring）world**：保留（A14 LIVE_CONFIG_GATED）或删除，取决于 mission"执行可换"对未激活机制的表达价值 vs"机制最小"。本 campaign 倾向保留（ADR-0001 明文点名 io_uring 为合法机制示例），PR3 不动。
+3. **GAP-1 deadline 裁决**：见 9.1。
+
+## 10. Closure gate
+
+计数口径：每个组件簇按**主状态单一归属**（JSON 同口径）；`LIVE_*` 细分互斥；A04 同时是 correctness owner，主状态记 LIVE_RESOURCE_BOUND；A03 主状态记 LIVE_CORRECTNESS（公共性记录在字段中）。
+
+```text
+TOTAL CAPABILITIES                 : 32
+  REQUIRED                         : 19（K01–K19；K10 带 witness gap GAP-1）
+  DERIVED                          : 2（K21/K22）
+  OPTIONAL                         : 1（K20）
+  NOT_EARNED                       : 9（K23–K31；K25/K26 与 GAP-1 交叉）
+  OUT_OF_SCOPE                     : 1（K32）
+
+TOTAL COMPONENT/SYMBOL CLUSTERS    : 56（async 36 + sync 19 + build 1；
+                                      另有 4 个 application roots（P01–P04，§3.2）
+                                      与 1 个非代码卫生项 B02 不计入）
+
+  LIVE_PUBLIC                      : 14（A01,A02,A15,A24,A25,A26,S01–S08）
+  LIVE_CORRECTNESS                 : 3（A03,A05,S14）
+  LIVE_RESOURCE_BOUND              : 1（A04）
+  LIVE_BACKEND                     : 4（A06,A08,A09,A11）
+  LIVE_RUNTIME                     : 9（A16–A23,S16）
+  LIVE_CONFIG_GATED                : 5（A10,A14,A35,S15a,S17）
+  LIVE_TEST_ONLY                   : 0（测试世界缺失，GAP-3；缝归入 LIVE_CONFIG_GATED）
+  LEGACY_UNJUSTIFIED               : 19（A07,A12,A13,A24b,A27,A28,A29,A30,A31,A32,A33,A34,
+                                       S09,S10,S11,S12,S13,S15b,S18）
+  CONFIRMED_DEAD                   : 1（B01）
+  DORMANT_FUTURE_EARNED            : 0（无条目满足四证据要求；A14 按配置门控保留而非 dormant）
+  UNKNOWN                          : 0（本轮证据恰好完备；不为凑数强判）
+
+ARCHITECTURE_GAPS                  : 3（GAP-1 deadline 公共表达缺口 / GAP-2 观测零读者 / GAP-3 测试世界缺失）
+```
+
+PR1 不删除任何东西。§9.2 名单即 PR3 候选输入；每簇删除仍需 architecture + reachability + behavioral 三重证明，GAP-1 交叉簇（A29–A34）在裁决前一律保留。
