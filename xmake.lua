@@ -59,3 +59,4 @@ end
 includes("xmake/helpers.lua")
 includes("xmake/libraries.lua")
 includes("xmake/apps.lua")
+includes("xmake/tests.lua")
