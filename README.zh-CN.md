@@ -6,13 +6,11 @@ Sluice 是一个 C++20 显式 I/O library/runtime。
 
 [English](README.md)
 
-## 设计宗旨
+## 项目宗旨
 
 Sluice 的长期原则固定为：
 
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
-
-对应：
 
 ```text
 Minimal semantics.
@@ -23,9 +21,10 @@ Replaceable execution.
 Minimum mechanism.
 ```
 
-规范性设计准则见 [`docs/design-doctrine.md`](docs/design-doctrine.md)。
+- [`docs/mission.md`](docs/mission.md) —— 冻结的规范性项目宗旨。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 解释为什么这样决定、tradeoff、后果和明确拒绝的替代路线。
 
-这份 doctrine 定义 **Sluice 应该成为什么，以及什么东西不应进入 Sluice**。当前 C++ 与构建定义负责回答“仓库今天实际上做什么”；架构文档只从当前代码描述现状，不能反过来覆盖代码事实，也不能扩大 doctrine。
+`mission.md` 定义 **Sluice 应该成为什么，以及什么东西不应进入 Sluice**。当前 C++ 与构建定义负责回答“仓库今天实际上做什么”；架构文档只从当前代码描述现状，不能反过来覆盖代码事实，也不能扩大 mission。
 
 ## 当前仓库
 
@@ -34,7 +33,7 @@ include/              C++ 头文件
 src/                  生产实现
 apps/                 真实应用
 xmake.lua、xmake/      构建配置
-docs/                 稳定设计宗旨与代码推导出的架构文档
+docs/                 冻结宗旨、ADR 与代码推导出的架构文档
 research/RESULTS.md    保留的研究结论
 ```
 
@@ -48,14 +47,7 @@ research/RESULTS.md    保留的研究结论
 
 异步部分包含显式 operation、caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施和 backend execution。
 
-这些实现细节仍然可以继续减肥。任何 abstraction、backend、helper、state 或 public type，只有在它确实买来了以下价值时才有长期生存资格：
-
-- 必要 I/O 语义；
-- 关键 correctness invariant；
-- 真实 resource bound；
-- 真实 execution difference；
-- 真实 caller；
-- 不可替代的验证价值。
+这些实现细节仍然可以继续减肥。任何 abstraction、backend、helper、state 或 public type，只有在它确实买来了必要 I/O 语义、关键 correctness invariant、真实 resource bound、真实 execution difference、真实 caller 或不可替代验证价值时，才有长期生存资格。
 
 “以后可能有用”“架构更完整”“理论上可以有第二个实现”都不是默认保留理由。
 
