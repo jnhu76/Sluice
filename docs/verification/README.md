@@ -135,6 +135,45 @@ bug-free.
 | `scripts/formal/verify-e9-park-wake.sh` | Available now |
 | `scripts/formal/verify-e10-waitnode.sh` | Available now |
 
+## C++ ↔ formal correspondence / drift guard
+
+The correspondence work has two deliberately separate channels. See
+[`formal/cpp-tla-correspondence.md`](formal/cpp-tla-correspondence.md) for the
+stable authority map, current results, and evidence boundaries.
+
+```text
+static formal-impact channel:
+  git diff
+  → Xmake Build Truth
+  → SCIP / anchors / facets
+  → advisory candidate formal scope
+
+semantic execution channel:
+  real deterministic C++ execution
+  → semantic observations
+  → prehistory / refinement mapping
+  → TLC replay against the named model
+  → TRACE_ACCEPT / TRACE_REJECT / TRACE_COVERAGE_GAP
+```
+
+Primary issue records:
+
+| Issue | Role | Current result |
+|---|---|---|
+| #163 | verification doctrine / evidence vocabulary | closed; durable doctrine |
+| #196 | E9 trace-conformance substrate | completed; `TRACE-CONFORMANT (TESTED EXECUTIONS)` |
+| #298 | static formal-drift / impact research owner | Phase C closed: `METHOD_RECALL_NOT_EARNED`; static narrowing not enforcement authority |
+| #305 | historical semantic-trace sensitivity | completed: `TRACE_CHANNEL_PARTIAL` |
+
+Permanent boundaries:
+
+- `UNKNOWN` never silently becomes `NO_FORMAL_IMPACT`;
+- `TRACE_COVERAGE_GAP` never becomes `TRACE_ACCEPT` by absence of evidence;
+- `TRACE_ACCEPT` covers the named tested execution only;
+- trace acceptance does not prove downstream formal-suite freshness;
+- static structural routing may reduce review/search cost only where evidence
+  justifies it; it is not a semantic correctness oracle.
+
 ## Weak-memory model checking
 
 Bounded kernels carrying the exact production atomic ordering, checked
@@ -175,6 +214,7 @@ renaming stable evidence identifiers.
 |-------|----------|
 | Formal models | `spec/tla/` (inventory: `spec/tla/manifest.json`) |
 | Formal model documentation | [`formal-models.md`](formal-models.md), [`formal/`](formal/) |
+| C++ ↔ formal correspondence / drift guard | [`formal/cpp-tla-correspondence.md`](formal/cpp-tla-correspondence.md) |
 | Weak-memory kernel evidence (#197) | [`weak-memory/completion-publication-kernel.md`](weak-memory/completion-publication-kernel.md) |
 | Failure envelope matrix (#198) | [`failure-envelope.md`](failure-envelope.md) (artifact: [`failure-envelope.json`](failure-envelope.json); gate: `scripts/gates/failure-envelope.py`) |
 | SE-1 hazard corpus (#227 Lane A) | [`se1-hazard-corpus.md`](se1-hazard-corpus.md) (artifact: [`../results/safety/se1-hazard-corpus.json`](../results/safety/se1-hazard-corpus.json); gate: `scripts/verify-se1-hazard-corpus.py`) |
