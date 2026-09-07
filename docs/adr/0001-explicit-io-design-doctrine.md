@@ -3,7 +3,6 @@
 - **状态**：Accepted / Frozen
 - **范围**：Sluice 的显式 I/O 研究结论
 - **证据来源**：`research/RESULTS.md` 与 Minimal Semantic Surface 研究结论
-- **不包含**：代码风格、注释规则、AI/LLM 上下文治理、一般测试方法或其它与显式 I/O thesis 无关的工程规范
 
 ## Context
 
@@ -343,5 +342,3 @@ RESEARCH_REQUIRED
 - generalized abstraction 必须由多个真实证据点赚到，而不是预付未来扩展成本；
 - 性能优化优先做局部、可测量机制；
 - architecture subtraction 以删除错误分类和未被证明的层为目标，而不是追求 LOC 数字。
-
-本 ADR 不规定注释风格、测试组织、LLM 上下文治理或其它与显式 I/O thesis 无关的一般工程规则。
