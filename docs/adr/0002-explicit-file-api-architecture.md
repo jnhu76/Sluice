@@ -4,18 +4,18 @@
 - **范围**：Sluice 的文件 I/O 公共语义、API 分层与执行模型
 - **基线**：`master`（本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`）
 - **上位约束**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md)、[`../mission.md`](../mission.md)
-- **实现处置**：Pending architecture-gap audit
+- **实现处置**：Pending master-based architecture-gap audit
 
 ## Context
 
 Sluice 当前实现历史上形成了两个近乎独立的文件 I/O 世界：
 
-1. 同步 core 以 `Reader` / `Writer` / `FileReader` / `FileWriter` / `IoContext` 等抽象表达同步文件与字节流 I/O；
+1. 同步 core 以 `Reader` / `Writer` / `FileReader` / `FileWriter` / `IoContext` 表达同步文件与字节流 I/O；
 2. async runtime 以 `ReadOp` / `WriteOp` / `SyncDataOp` / `SyncAllOp`、`Completion`、`AsyncIoContext` 与 backend 表达异步 operation lifecycle。
 
-这两个世界共享 `Result<T>` / `IoError`，但没有共享统一的 File resource contract。同步侧已经拥有 sequential、positional、vectored 与 durability 能力；异步侧则围绕裸 `fd + buffer + length + offset` 建立了更强的 admission / completion / cancellation / resource-bound machinery。
+两者共享 `Result<T>` / `IoError`，但没有共享统一的 File resource contract。同步侧已经拥有 sequential、positional、vectored 与 durability 能力；异步侧则围绕裸 `fd + buffer + length + offset` 建立 admission / completion / cancellation / bounded-request machinery。
 
-应用层又存在直接 POSIX 文件生命周期与 namespace 操作，因此当前实现更接近：
+应用层仍直接使用部分 POSIX 文件生命周期、metadata 与 namespace 操作，因此当前实现更接近：
 
 ```text
 sync utility surface
@@ -25,7 +25,7 @@ async request runtime
 application POSIX escape
 ```
 
-而不是一棵统一的 Explicit File architecture。
+而不是统一的 Explicit File architecture。
 
 ADR-0001 已经冻结：
 
@@ -37,23 +37,47 @@ ADR-0001 已经冻结：
 - execution 必须可替换；
 - generalized framework 必须由证据赚到。
 
-因此，本 ADR 不扩大 ADR-0001 的宗旨，而是把这些原则落实为一个具体的 File-centric API 架构。
+本 ADR 不扩大这些原则，而是把它们落实为一个明确的 File-centric API architecture。
+
+---
 
 ## Decision
 
-Sluice 的 canonical I/O 架构冻结为：
+Sluice 的 canonical 文件 I/O 架构冻结为：
 
-> **File 是资源与语义的根；read/write/positioned/vector/durability 等是围绕 File 的 canonical operations；Blocking、ThreadPool 与 io_uring 是这些 operation 的可替换 execution，而不是三套不同的 I/O 语义。**
+> **File 是资源与文件语义的根；open/close、observable file state、read/write/positioned/vector/durability 是围绕 File 的 canonical semantics；Blocking、ThreadPool 与 io_uring 是这些语义的可替换 execution，而不是三套不同的 I/O contract。**
 
-同步与异步共享 **resource model 与 operation semantics**，但不强行共享会隐藏阻塞、outstanding lifetime、cancellation 或资源成本的调用形态。
+同步与异步共享：
 
-Sluice 继续坚持：
+```text
+resource model
+operation semantics
+error semantics
+short-I/O / EOF semantics
+durability semantics
+```
+
+但不强行共享会隐藏以下事实的 initiation syntax：
+
+```text
+will this call block the current thread?
+does it create an outstanding request?
+how long must File/buffer stay alive?
+is cancellation meaningful?
+which bounded resource is consumed?
+```
+
+因此固定：
+
+> **共享 operation semantics，不隐藏 execution semantics。**
+
+Sluice 继续遵守：
 
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
 ---
 
-## 1. Canonical architecture
+## 1. Normative architecture
 
 ```mermaid
 flowchart TD
@@ -61,21 +85,22 @@ flowchart TD
 
     subgraph CONTRACT["Explicit File Contract"]
         FILE["File Resource<br/>identity / ownership / lifetime"]
-        STATE["Observable File State<br/>size / metadata / resize"]
+        OPEN["Resource Lifecycle<br/>open / close"]
+        STATE["Observable File State<br/>size / minimal metadata / resize"]
         OP["Canonical File Operations<br/>read / write<br/>read_at / write_at<br/>readv / writev<br/>sync_data / sync_all"]
         COMPOSE["Composed Operations<br/>exact / all / stream / copy"]
     end
 
     subgraph CAPS["Capabilities / Constraints / Hints"]
-        DIRECT["Direct I/O<br/>capability + alignment constraints"]
-        SPACE["Space Reservation<br/>preallocation / reserve"]
+        DIRECT["Direct I/O<br/>capability + validity constraints"]
+        SPACE["Space Reservation<br/>resource guarantee"]
         ADVICE["Access Advice<br/>hint only"]
-        COPYCAP["Transfer Capability<br/>copy_file_range / splice / sendfile"]
+        COPYCAP["Transfer Mechanisms<br/>copy_file_range / splice / sendfile"]
     end
 
     subgraph API["API Levels"]
         COMMON["Common Logical API<br/>operation -> Result"]
-        LOW["Explicit Operation API<br/>Operation / Completion<br/>multiple outstanding / cancellation"]
+        LOW["Explicit Operation API<br/>Operation + Completion<br/>multiple outstanding / cancellation"]
     end
 
     subgraph EXEC["Replaceable Execution"]
@@ -92,6 +117,7 @@ flowchart TD
     end
 
     APP --> FILE
+    FILE --> OPEN
     FILE --> STATE
     FILE --> OP
     OP --> COMPOSE
@@ -115,7 +141,16 @@ flowchart TD
     URING --> POLICY
 ```
 
-该图是 normative architecture。后续实现可以采用不同 C++ 类型名与文件布局，但不得违反图中 responsibility boundary。
+该图是 **normative architecture**。
+
+后续 C++ 类型名、namespace、文件布局与 build target 可以变化，但 responsibility boundary 不得倒置。
+
+特别地：
+
+```text
+build artifact != semantic world
+backend capability != public semantic authority
+```
 
 ---
 
@@ -123,93 +158,158 @@ flowchart TD
 
 Sluice 不再把“同步 File”与“异步 fd”视为两个独立资源模型。
 
-规范性关系是：
+规范关系：
 
 ```text
 File Resource
     -> identity
     -> ownership
     -> lifetime
+    -> access capability
     -> observable state
     -> legal operations
 ```
 
-`File` 的具体 C++ 名称、内部表示、是否拆分轻量 handle/view，以及现有 `FileReader` / `FileWriter` 如何迁移，由后续审计决定；本 ADR 只冻结 semantic owner。
+`File` 的具体 C++ 名称仍可由实现设计决定，但 **semantic owner 已冻结**。
 
-### 2.1 Resource identity
+### 2.1 Naked OS fd 不是 canonical public resource contract
 
-文件 operation 必须有明确 resource identity。
+底层 backend 当然可以使用 native fd。
 
-但：
+但 public/canonical operation 不应只用：
 
 ```text
-resource identity
-    !=
-fixed-file / registered-file optimization authority
+fd + raw pointer + length + offset
 ```
 
-File identity 只授权正确性与 resource/lifetime contract 所需行为；是否注册到 io_uring、是否缓存 native handle、是否使用 fixed-file table 属于 backend capability / execution policy。
+来表达文件资源身份。
 
-### 2.2 Ownership 与 lifetime
+原因不是为了面向对象，而是为了让以下事实拥有明确 owner：
 
-File resource 必须能区分至少以下问题：
+- close authority；
+- move / ownership；
+- outstanding-operation lifetime；
+- access capability；
+- file-state operations；
+- backend lowering。
 
-- 谁负责 close；
-- move 后谁继续拥有 resource；
-- operation outstanding 时 File 与 underlying resource 必须存活多久；
-- borrowed/native handle 是否存在，以及它是否拥有 close authority。
+如果保留 `native_handle()` escape hatch，它是 interop mechanism，不是 canonical File semantic API。
 
-本 ADR 不预先授权 `shared_ptr<FileState>`、global registry、handle manager 或其它通用 lifetime framework。
+### 2.2 Access direction 不等于 resource identity
 
-优先采用能够满足 contract 的最小机制。
+`readable` / `writable` / `read-write` 是 File 打开后的 access contract，不应天然产生两个彼此独立的 resource identity 类型。
 
-### 2.3 Access direction 不等于 resource identity
+因此当前 `FileReader` / `FileWriter` 的能力可以保留，但这两个 class 本身没有自动 survival right。
 
-`readable` / `writable` / `read-write` 是打开后的 capability / access contract，不应天然要求建立两个彼此独立的 resource identity 类型。
+后续审计可以得到：
 
-因此，当前 `FileReader` / `FileWriter` 的存在不自动成为未来 canonical model；它们的能力可能保留，而 representation 可以在审计后收敛。
+```text
+KEEP
+CONVERGE
+REPLACE
+```
+
+但不能因为它们已经存在就预设结论。
 
 ---
 
-## 3. File state 是 observable semantic surface
+## 3. Open / close 是 Resource Lifecycle semantics
 
-只有调用者必须观察或依赖的文件状态才进入 File semantic surface。
+### 3.1 Minimum open contract
 
-第一层 canonical candidates 为：
+Sluice 的最小 File-open 语义必须能够明确表达三个独立轴：
+
+```text
+Access
+    read_only
+    write_only
+    read_write
+
+Existence
+    open_existing
+    create_if_missing
+    create_new
+
+InitialContents
+    preserve
+    truncate
+```
+
+规范约束：
+
+- `create_new`：目标已存在必须失败；
+- `truncate`：是 caller-visible destructive semantic，不能隐藏在“打开 writer”的默认构造语义里；
+- `truncate` 仅对可写 access 合法；
+- 普通 `open_existing` 不应因为调用者想写就自动 truncate；
+- backend 可以用不同 syscall/opcode 实现，但不能改变这些 observable semantics。
+
+本 ADR **不**自动把以下项目纳入 minimum open contract：
+
+```text
+append
+permission/mode surface
+O_NOFOLLOW
+O_SYNC / O_DSYNC
+direct I/O
+filesystem-specific flags
+```
+
+它们等待审计或独立 research evidence。
+
+### 3.2 Close contract
+
+`close` 是显式 resource-release operation，并且可以报告错误。
+
+最低语义：
+
+1. File ownership 只能被释放一次；
+2. `close()` 返回后，该 File object 不再代表一个 open resource——无论底层 close 是否报告错误；
+3. 不允许因为 close 错误而在同一 File object 上重复关闭一个可能已经被 OS 回收/复用的 native handle；
+4. destructor 可以 best-effort close，但无法可靠向 caller 返回 close error；需要观察 close failure 的 caller 必须显式调用 `close()`。
+
+本 ADR 不授权全局 handle registry 或 shared ownership framework。
+
+---
+
+## 4. File state 是 observable semantic surface
+
+最低 File-state semantic surface 冻结为：
 
 ```text
 size
-minimal metadata required for resource/file correctness
 resize
+minimal metadata required for file/resource correctness
 ```
 
-### 3.1 `size`
+### 4.1 `size`
 
-`size` 是 observable resource fact，而不是 optimization hint。
+`size` 是 observable resource fact，不是 optimization hint。
 
-### 3.2 `resize`
+### 4.2 `resize`
 
-`resize` 改变 observable file state，因此属于 semantic mutation，而不是 backend capability。
+`resize(new_size)` 改变 observable file state，因此属于 semantic mutation，而不是 backend capability。
 
-### 3.3 Metadata
+不同 execution 可以分别映射到 blocking syscall、ThreadPool offload、io_uring opcode；机制差异不得改变语义。
 
-不冻结一个“大而全 Metadata 对象”。
+### 4.3 Minimal metadata only
 
-后续只允许按真实需求增加最小 metadata，例如：
+Sluice 不冻结一个大而全的 `Metadata` framework。
 
-- regular-file classification；
-- file identity relation（若用于 same-file correctness）；
-- size。
+允许进入 Core 的 metadata 必须由真实 correctness / File semantics 证明，例如：
 
-permission、timestamps、filesystem-specific metadata 等不得因为 POSIX / Zig / Boost 提供就自动进入 Core。
+```text
+file kind / regular-file classification
+same-file identity relation
+size
+```
+
+permissions、timestamps、owner、filesystem detail 等不得因为 POSIX、Boost、Zig 存在就自动获得 Core 地位。
 
 ---
 
-## 4. Canonical file operations
+## 5. Canonical file operations
 
-Sluice 的 file-data semantic vocabulary 以 operation 而不是 execution backend 为中心。
-
-核心 operation 候选冻结为：
+Sluice 的 file-data semantic vocabulary 冻结为：
 
 ```text
 sequential read
@@ -225,104 +325,106 @@ sync_data
 sync_all
 ```
 
-后续审计必须判断哪些已经由 current master 正确实现，哪些 representation 应收敛，哪些 execution path 缺失。
+### 5.1 Sequential vs positional
 
-### 4.1 Short I/O / EOF
+二者是不同的 observable contract。
 
-Blocking、ThreadPool 与 io_uring 对同一 canonical operation 必须保持同一 observable short-I/O / EOF contract。
+Sequential operation 可以依赖/推进 logical file position；positional operation 的 offset 是 operation semantics 的组成部分，并且不应通过隐藏的 seek+read/write 模拟出错误的 shared-offset behavior。
 
-Backend 不能因机制不同重新定义 semantic result。
+### 5.2 Short I/O / EOF
 
-### 4.2 Positional I/O
+同一 canonical operation 在 Blocking / ThreadPool / io_uring execution 下必须共享同一 short-I/O 与 EOF contract。
 
-Offset 是 positional operation 的语义组成部分，而不是 backend-specific field。
-
-### 4.3 Vectored I/O
-
-Vectored I/O 如果保留，是 canonical operation capability，而不是同步层专属优化。
-
-是否为 async execution 补齐 readv/writev 必须由后续 capability audit 决定，但不得长期以“sync 有 vector、async 只有 scalar”作为两套不同语义体系来解释。
-
-### 4.4 Durability
-
-`sync_data` 与 `sync_all` 是 caller-visible durability contract。
-
-具体使用 `fdatasync`、`fsync`、`IORING_OP_FSYNC` 或 worker offload 属于 execution mechanism。
-
-per-operation durability（例如 `RWF_DSYNC` / `RWF_SYNC`）尚未获得 public semantic authorization，留给研究。
-
----
-
-## 5. Sync 与 async：统一语义，不隐藏 execution
-
-本 ADR 明确拒绝两种极端。
-
-### 5.1 拒绝“两套 I/O 语义”
-
-不再接受：
+Backend 不能重新定义：
 
 ```text
-sync File API
-    与
-async raw-fd API
+what zero bytes means
+whether partial progress is returned
+when EOF is an error for exact/all composition
 ```
 
-长期各自独立演化。
+### 5.3 Vectored I/O
 
-Blocking、ThreadPool、io_uring 必须围绕同一 canonical File operation semantics。
+Vectored I/O 是 canonical operation capability，不是“同步层专属性能 helper”。
 
-### 5.2 拒绝“万能自动执行 API”
+如果后续审计保留 vectored semantics，则 async execution 必须被评价为：
 
-也不接受：
-
-```cpp
-file.read(...); // runtime 隐式猜测 blocking / pool / io_uring
+```text
+SUPPORTED
+MISSING
+OUT_OF_SCOPE
 ```
 
-如果这种 API 会隐藏：
+不能长期把 sync vector 与 async scalar 当成两套独立 semantic worlds。
 
-- 是否可能阻塞调用线程；
-- 是否建立 outstanding request；
-- buffer 必须存活多久；
-- 是否可 cancellation；
-- 是否消耗有限 request capacity；
+### 5.4 Durability
 
-则它违反 Clear boundaries 与 Explicit authority。
+`sync_data` 与 `sync_all` 是 caller-visible durability semantics。
 
-因此：
+实现可以是：
 
-> **共享 operation semantics，不强迫共享 initiation semantics。**
+```text
+fdatasync / fsync
+ThreadPool offload
+io_uring fsync
+```
+
+但机制不得改变 contract。
+
+per-operation durability（例如 `RWF_DSYNC` / `RWF_SYNC`）尚未在本 ADR 中获得 public authorization。
 
 ---
 
 ## 6. Two API levels
 
-Sluice 允许两个不同层次的 API，但两者必须服务于同一 canonical operation contract。
+Sluice 允许两个 API 层次，但两者必须服务于同一 canonical File semantics。
 
 ### 6.1 Common logical API
 
-普通 application 不应被迫直接管理 request state machine、generation 或 Completion。
-
-Common API 的逻辑语义是：
-
-> 发起一个明确的 file operation，并在当前 execution model 下逻辑地等待结果。
-
-概念上：
+普通 application 不应被迫管理：
 
 ```text
-io.read_at(file, offset, buffer)
-    -> Result<size_t>
+RequestArena
+generation
+Completion FSM
+RequestHandle
+backend wait source
 ```
 
-具体 C++ spelling 由后续设计决定。
+Common API 的逻辑 contract 是：
 
-Blocking implementation 可以直接 syscall；evented execution 可以 submit + suspend current task + resume。
+> 发起一个明确 File operation，并在当前 execution model 下逻辑地等待其结果。
 
-因此 common API 不能要求所有调用者承担 async runtime 的固定成本。
+概念示意：
+
+```cpp
+Result<std::size_t> read(File&, Bytes);
+Result<std::size_t> read_at(File&, uint64_t offset, Bytes);
+Result<std::size_t> write(File&, ConstBytes);
+Result<std::size_t> write_at(File&, uint64_t offset, ConstBytes);
+Result<void> sync_data(File&);
+Result<void> sync_all(File&);
+```
+
+这里冻结的是 **semantic shape**，不是最终 C++ spelling。
+
+Blocking execution 可以直接 syscall。
+
+Evented execution 可以：
+
+```text
+submit
+-> suspend current task/fiber
+-> completion
+-> resume
+-> return Result
+```
+
+因此 common logical API 不要求普通 caller 支付 explicit-request API 的概念成本。
 
 ### 6.2 Explicit Operation API
 
-当 caller 确实需要以下能力时，允许下降到低层 explicit-operation surface：
+只有当 caller 真正需要以下 authority 时，才下降到低层 explicit-operation surface：
 
 ```text
 multiple outstanding operations
@@ -331,24 +433,70 @@ explicit completion ownership
 request identity
 cancellation
 pipeline
-backend-visible bounded request lifecycle
+bounded request lifecycle
 ```
 
-此层可以包含 `Operation` / `Completion` 等概念。
+概念示意：
 
-但：
+```cpp
+Completion<std::size_t> c;
+submit(ReadAt{file, offset, buffer}, c);
+```
 
-> 低层 explicit operation 的存在，不授权 generic control framework。
+同样，这不是最终 C++ spelling。
 
-尤其现有 Batch 不因“operations 属于一个 group”而自动获得 fused / atomic admission authority；ADR-0001 的 Batch 限制继续有效。
+低层 operation 的 **canonical resource reference 必须指向 File semantics**；backend 内部可以 lowering 为 native fd，但裸 fd 不再拥有 public semantic authority。
+
+### 6.3 Common API 与 Explicit API 不得互相伪装
+
+禁止：
+
+```cpp
+file.read(...); // runtime 静默猜测 direct blocking / pool / uring
+```
+
+如果这种猜测会改变：
+
+- caller thread 是否 block；
+- 是否建立 outstanding request；
+- cancellation 是否存在；
+- File / buffer lifetime；
+- 是否消耗 bounded request capacity。
+
+则 execution boundary 必须保持显式。
 
 ---
 
-## 7. Replaceable execution
+## 7. Lifetime contract
 
-execution 是 semantic contract 的实现维度。
+### 7.1 Common logical operation
 
-目标模型：
+对于一个逻辑上同步返回 `Result<T>` 的 common operation，File 与 buffer 必须至少存活到该调用返回。
+
+如果 evented implementation 在内部 suspend/resume，这不能把额外手动 lifetime bookkeeping 泄漏给普通 caller。
+
+### 7.2 Explicit outstanding operation
+
+对于低层 explicit submit，在没有额外 pinning contract 之前：
+
+> **caller 必须保证 File resource 与参与 I/O 的 buffer 在该 operation 完成并进入允许复用的状态前保持有效。**
+
+如果未来要让 runtime 自动 pin File/buffer，则必须用独立 correctness / usability evidence 赚到该机制。
+
+不得因为 async lifetime 困难就预先引入：
+
+```text
+shared_ptr<FileState>
+global resource registry
+universal handle manager
+generic capability graph
+```
+
+---
+
+## 8. Replaceable execution
+
+规范模型：
 
 ```text
 canonical file operation
@@ -360,119 +508,198 @@ canonical file operation
         +-- io_uring: native async mechanism
 ```
 
-### 7.1 Blocking 是 first-class execution
+### 8.1 Blocking 是 first-class execution
 
-同步 blocking path 不是 async runtime 的降级版，也不是历史 fallback。
+Blocking 不是 async runtime 的降级版。
 
-只要 workload 不需要 outstanding concurrency，Blocking execution 应允许最短、最低固定成本的合法路径。
+普通 blocking operation 应允许最短合法路径，不要求经过：
 
-因此，Sluice 不要求普通 blocking operation 经过 Completion、RequestArena、Scheduler 或 Fiber。
+```text
+Completion
+RequestArena
+Scheduler
+Fiber
+```
 
-### 7.2 ThreadPool
+这既符合 Minimum mechanism，也避免为低并发 workload 支付固定 async machinery 成本。
 
-ThreadPool 是执行 blocking syscall 的一种 async/offload mechanism。
+### 8.2 ThreadPool
 
-worker count、dispatch strategy、queue depth 等默认属于 resource configuration / execution policy，而不是 File semantics。
+ThreadPool 是执行 blocking syscall 的一种 offload mechanism。
 
-### 7.3 io_uring
+以下默认属于 resource configuration / execution policy：
+
+```text
+worker count
+dispatch strategy
+queue depth
+```
+
+如果某个 capacity 饱和会形成 caller-visible admission result，则该独立 bound 必须被明确命名；但这不把所有性能参数升级成 public File semantics。
+
+### 8.3 io_uring
 
 io_uring 是 execution backend，不是 semantic authority。
 
-Linux 支持某个 opcode，不意味着 Sluice 必须新增对应 public API。
-
-io_uring path 只有在 canonical operation 已被 Sluice 语义授权后，才需要回答 backend support。
-
-### 7.4 Build artifacts != semantic worlds
-
-`sluice_core` 与 `sluice_async` 可以继续作为独立 build targets。
-
-但这种 link/build 拆分不得被解释为：
-
 ```text
-core semantics
-vs
-async semantics
+kernel opcode exists
+    !=
+Sluice public API must exist
 ```
 
-Build modularity 不拥有 semantic authority。
+只有 canonical semantic operation 已经被 Sluice 授权后，才讨论 io_uring 是否实现它。
+
+### 8.4 Build artifacts != semantic worlds
+
+`sluice_core` 与 `sluice_async` 可以继续作为不同 build targets。
+
+但 link/build 模块化不拥有 semantic authority，不能再被解释成长期存在的：
+
+```text
+sync file semantics
+vs
+async file semantics
+```
 
 ---
 
-## 8. Capability / constraint / hint boundaries
+## 9. Async correctness authority remains explicit
 
-以下能力不得混入一个 generic `IoOptions` / capability framework。
+本 ADR 不弱化 async runtime 中真正由 correctness 与 named bounds 赚到的事实。
 
-每项独立获得存在资格。
-
-### 8.1 Direct I/O
-
-Direct I/O 若被采用，归类为：
+如果 operation 以 outstanding async request 形式存在，则以下仍是合法 correctness/resource concerns：
 
 ```text
-BACKEND / FILE CAPABILITY
-+
-RESOURCE / VALIDITY CONSTRAINT
+admission
+request capacity
+request identity / generation
+terminalization
+publication
+cancellation
+deadline
+wait / wake
+buffer lifetime
+reuse
 ```
 
-原因是 direct I/O 会引入 caller-visible alignment / legality constraints。
+特别保持：
 
-它不是普通 performance hint。
+```text
+backend terminalization
+    !=
+public completion publication
+```
 
-若 caller 要求 `direct_required`，implementation 不得静默降级为 buffered I/O。
+但是当前具体 machinery 并没有自动 survival right。
 
-是否公开 direct mode、alignment query、buffer abstraction，由后续 research/audit 决定。
+后续审计要分别判断：
 
-### 8.2 Space reservation / preallocation
+```text
+KEEP
+CONVERGE
+DELETE
+```
 
-空间预留若被采用，归类为：
+---
+
+## 10. Capability / constraint / hint boundaries
+
+不得把以下能力塞进一个 generic `CapabilitySet` / `IoOptions` / planner framework。
+
+每项必须单独赚钱。
+
+### 10.1 Direct I/O
+
+若采用 Direct I/O，它属于：
+
+```text
+FILE / BACKEND CAPABILITY
++
+CALLER-VISIBLE VALIDITY CONSTRAINT
+```
+
+原因是它可能约束：
+
+```text
+buffer alignment
+offset alignment
+length alignment
+```
+
+Direct I/O 因此不是普通 hint。
+
+如果 caller 请求 `direct_required`，实现不得静默回退 buffered I/O。
+
+是否产品化 direct mode 与 alignment-query API，等待独立 audit/research。
+
+### 10.2 Space reservation / preallocation
+
+若采用，归类为：
 
 ```text
 RESOURCE GUARANTEE / RESOURCE BOUND
 ```
 
-而不只是 performance optimization。
+而不只是性能 hint。
 
-Public API 不应直接复制 `fallocate()` flags；只允许从真实 semantic/resource need 推导最小 contract。
+Public API 不应直接复制 `fallocate()` flags；只能从真实 resource contract 推导最小语义。
 
-### 8.3 Access advice
+### 10.3 Access advice
 
-例如 sequential/random/will-need/dont-need 一类建议只能归类为：
+sequential/random/will-need/dont-need 类信息只属于：
 
 ```text
 HINT
 ```
 
-Hint 不得授权重排或改变 observable I/O semantics。
+Hint 不得授权改变 observable I/O semantics。
 
-### 8.4 Registered files / buffers / SQPOLL
+### 10.4 Registered files / buffers / polling
 
-默认归类为：
+默认属于：
 
 ```text
-BACKEND_CAPABILITY / EXECUTION_POLICY
+BACKEND_CAPABILITY
+EXECUTION_POLICY
 ```
 
-不进入 File semantic contract。
+包括：
 
-### 8.5 NOWAIT / HIPRI / per-op durability
+```text
+registered files
+registered buffers
+provided buffers
+SQPOLL / polling mode
+```
 
-这些能力不在本 ADR 中获得 public authorization。
+它们不进入 File semantic contract。
 
-后续必须分别研究其 observable semantic、resource value 与 backend availability，不能合并成 generic flags surface。
+### 10.5 NOWAIT / HIPRI / per-op durability
+
+本 ADR 不授权这些成为 generic flags surface。
+
+每项需要分别证明：
+
+```text
+observable semantic value
+resource value
+backend support
+application evidence
+```
 
 ---
 
-## 9. Composition and transformation boundaries
+## 11. Composition and transformation boundaries
 
 `read_exact` / `write_all` / stream / copy 属于 primitive operations 之上的 composition。
 
-Composition 可以在明确 contract 下获得 transformation authority，但 authority 必须局部、具体。
+Composition 可以获得额外 transformation authority，但必须局部且由 contract 明确授予。
 
-### 9.1 Copy
+### 11.1 Copy
 
-Copy 可以成为合法 transformation boundary。
+Copy 是已经被 ADR-0001 接受的有限正例。
 
-在 contract 允许时，implementation 可以选择：
+当 Copy contract 允许时，implementation 可以局部选择：
 
 ```text
 read/write loop
@@ -483,49 +710,17 @@ splice
 filesystem-specific fast path
 ```
 
-但这些 mechanism 不应分别自动成为高层 File API。
+这些 mechanism 不因此分别成为高层 public File operations。
 
-ADR-0001 的结论继续适用：
+继续保持：
 
-> thin local mechanism 足够时，不构造 generic capability framework。
-
----
-
-## 10. Async correctness authority remains explicit
-
-本 ADR 不弱化 async runtime 已经需要的 correctness responsibilities。
-
-如果 operation 以 outstanding async request 形式存在，则以下事实继续拥有明确 correctness authority：
-
-```text
-admission
-request capacity
-request identity / generation
-terminalization
-publication
-cancellation
-wait / wake
-buffer lifetime
-reuse
-```
-
-这些事实的价值来自正确性与真实 resource bounds，而不是“显式信息越多越好”。
-
-特别保持：
-
-```text
-backend terminalization
-    !=
-public Completion publication
-```
-
-如果审计证明某些当前 mechanism 是实现这一 contract 的最小必要机制，则 KEEP；否则允许 CONVERGE / SIMPLIFY / DELETE。
+> **thin local mechanism 足够时，不构造 generic capability framework。**
 
 ---
 
-## 11. API semantic categories
+## 12. Semantic categories
 
-后续每个 public/Core 概念必须首先归入一个主要类别：
+后续每个 public/Core 概念必须首先归入：
 
 ```text
 SEMANTIC_CONTRACT
@@ -537,38 +732,39 @@ HINT / OBSERVATION
 COMPOSED_TRANSFORMATION
 ```
 
-不得以 class 位置或 namespace 决定类别。
+不得由 class 位置、namespace、build target 或“已经写了很多代码”决定类别。
 
 ---
 
-## 12. What this ADR does NOT decide
+## 13. What this ADR deliberately does NOT decide
 
-本 ADR 冻结 architecture 与 semantic ownership，但**故意不决定当前实现的最终命运**。
+本 ADR 已冻结 File/API/execution architecture，但**故意不决定 master 中现有 abstraction 的最终命运**。
 
-以下问题等待基于 `master` 的 architecture-gap audit：
+以下等待 master-based architecture-gap audit：
 
-- `FileReader` / `FileWriter` 是否保留、合并、重写或替代；
-- `Reader` / `Writer` 是否继续作为 canonical byte-stream abstraction；
-- `IoContext` 当前返回 `unique_ptr<Reader/Writer>` 的能力擦除是否需要重构；
-- `BlockingIoContext` 是否保留；
-- `BlockingIoPool` 是否拥有独立 architecture owner；
-- `Buffered*` 是否有真实 product owner；
-- `MemoryIoContext` / `Fault*` / `Observed*` 是否仅 test/observation 或应删除；
-- `WAL` 是否属于 Core 或 workload/consumer；
-- 当前 Batch / Future / Group 中哪些属于 File I/O architecture；
-- async `ReadOp` / `WriteOp` 是否继续携带 raw fd，或应引用统一 File resource representation；
-- `RequestHandle` / stats / synthetic backend 等现有 surface 的最终处置；
-- direct I/O / preallocation / fadvise / zero-copy copy / NOWAIT 等是否获得产品化证据。
+- `FileReader` / `FileWriter`：KEEP、CONVERGE 还是 REPLACE；
+- `Reader` / `Writer` 是否继续作为 canonical byte-stream composition layer；
+- `IoContext` 当前返回 `unique_ptr<Reader/Writer>` 是否发生 capability erasure；
+- `BlockingIoContext` 是否仍有 owner；
+- `BlockingIoPool` 是否拥有独立 execution owner，还是与 async ThreadPool 重复；
+- `Buffered*` 是否有 product owner；
+- `MemoryIoContext` / `Fault*` / `Observed*` 是 test/observation、public capability 还是无 owner；
+- `WAL` 属于 Core、consumer/workload，还是应移出；
+- `Batch` / `Future` / `Group` 哪些仍与 File I/O architecture 有关；
+- current async `ReadOp` / `WriteOp` 如何从 raw fd representation 收敛到 canonical File resource；
+- `RequestHandle` / stats / synthetic backend 等 surface 的最终处置；
+- direct I/O / preallocation / fadvise / zero-copy / NOWAIT 等是否获得产品化证据；
+- append、permission/mode、directory resource、rename/remove 等是否由真实 app correctness 赚到 Core 地位。
 
-这些问题不得由本 ADR 的 architecture direction 偷偷预判。
+这些问题不能由本 ADR 偷偷预判。
 
 ---
 
-## 13. Audit contract
+## 14. Audit contract
 
-后续 `master` 审计必须从本 ADR 的 capability tree 出发，而不是从现有 class tree 出发。
+后续审计必须从本 ADR 的 capability tree 出发，而不是从现有 class tree 出发。
 
-每个当前 abstraction 最终只能进入：
+最终 verdict 只允许：
 
 ```text
 KEEP
@@ -579,56 +775,71 @@ RESEARCH
 OUT_OF_SCOPE
 ```
 
-其中：
-
 ### KEEP
 
-拥有明确 architecture owner，且当前 mechanism 已足够小。
+拥有明确 architecture owner，且当前 mechanism 已是足够小的实现。
 
 ### CONVERGE
 
-能力正确，但 representation split、semantic duplication、authority duplication 或 layer placement 错误。
+能力正确，但存在：
+
+```text
+representation split
+semantic duplication
+authority duplication
+wrong layer
+```
 
 ### ADD_MINIMAL
 
-架构明确要求而 master 缺失；只能增加满足 contract 的最小机制。
+本 ADR 明确需要但 master 缺失；只能增加满足 contract 的最小机制。
 
 ### DELETE
 
-无 architecture owner、无 correctness/resource responsibility、无合法 product/test/build role，且删除不损失 retained contract。
+必须证明：
+
+```text
+no architecture owner
++
+no correctness/resource authority
++
+no legitimate product/test/build role
++
+removal preserves retained contracts
+```
+
+零 consumer 单独不足以 DELETE。
 
 ### RESEARCH
 
-潜在价值存在，但尚未获得 public/Core survival right。
+可能有价值，但尚未获得 Core/public survival right。
 
 ### OUT_OF_SCOPE
 
-外部库可能拥有，但当前 Sluice mission 不需要。
+即使 Zig / Boost / OS 支持，也不属于当前 Sluice。
 
 禁止使用 `TECHNICAL_DEBT` 作为 architecture verdict。
 
 ---
 
-## 14. Consistency with ADR-0001
+## 15. Consistency with ADR-0001
 
 本 ADR 是 ADR-0001 的具体化，不替代或削弱其约束。
 
-一致关系如下：
-
-| ADR-0001 原则 | ADR-0002 落地 |
+| ADR-0001 | ADR-0002 |
 | --- | --- |
-| Minimal semantics | File contract 只保留 observable state、canonical operations 与必要 lifetime/resource facts |
-| Clear boundaries | File semantics / correctness / bounds / capability / policy / hint 分层 |
-| Explicit authority | File identity、group、hint 不自动授予 transformation authority |
-| Named bounds | async request/admission 等真实有限资源继续显式 |
-| Replaceable execution | Blocking / ThreadPool / io_uring 实现同一 canonical operations |
+| Minimal semantics | File surface 仅冻结 resource lifecycle、observable state、canonical I/O semantics 与必要 async facts |
+| Clear boundaries | semantic / correctness / bound / capability / policy / hint 分层 |
+| Explicit authority | File identity、group、hint 不自动授权 transformation |
+| Named bounds | outstanding request/admission 等真实有限资源继续显式 |
+| Replaceable execution | Blocking / ThreadPool / io_uring 实现同一 canonical File semantics |
 | Minimum mechanism | 不预建 generic capability / lifetime / planner framework |
 
-ADR-0001 中关于 Copy、Batch、fixed-file、benchmark-to-API 的限制全部继续有效。
+ADR-0001 关于 fixed-file、Copy、Batch 与 benchmark-to-API 的结论全部继续有效。
 
 ---
 
-## 15. Consistency with mission.md
+## 16. Consistency with mission.md
 
 `mission.md` 已明确允许 Sluice 表达：
 
@@ -640,9 +851,9 @@ ADR-0001 中关于 Copy、Batch、fixed-file、benchmark-to-API 的限制全部�
 - real resource bounds；
 - explicitly granted composition / transformation contract。
 
-本 ADR 的 File Resource、canonical operations、durability、async correctness 与 composition 均落在这些已冻结范围内。
+ADR-0002 的 File Resource、open/close、canonical operations、durability、async correctness 与 composition 均落在这些已冻结范围内。
 
-本 ADR 同样保持：
+同时继续保持：
 
 ```text
 backend capability != semantic authority
@@ -650,11 +861,11 @@ execution policy != semantic core by default
 hint / information != authority
 ```
 
-因此无需修改 mission。
+因此本 ADR 不要求修改 mission。
 
 ---
 
-## 16. Consistency with README / README.zh-CN
+## 17. Consistency with README / README.zh-CN
 
 README 当前描述：
 
@@ -663,51 +874,49 @@ current codebase contains a synchronous I/O core
 and an opt-in asynchronous runtime
 ```
 
-该表述是 current implementation description，不是 normative semantic split。
+该描述是 current implementation/build shape，不是 normative semantic split。
 
 本 ADR 明确：
 
-> 当前 `sluice_core` / `sluice_async` build 结构可以继续存在，但未来 architecture audit 应以统一 File semantic contract + replaceable execution 来评价它们。
+> `sluice_core` / `sluice_async` 可以继续作为 build modules，但 long-term File semantics 由统一 Explicit File Contract 定义。
 
-因此 README 当前描述与本 ADR 不冲突。
-
-后续若 architecture audit 导致 public API 或 product description 实际变化，再单独更新 README；本 ADR 阶段不提前修改 current-implementation prose。
+README 在本 ADR 分支只增加 ADR-0002 链接并澄清上述区别；不提前把尚未完成的 implementation migration 描述成现状。
 
 ---
 
-## 17. Rejected alternatives
+## 18. Rejected alternatives
 
 ### A. 保持 sync core 与 async runtime 两套长期独立语义
 
 拒绝。
 
-它会导致 File state、vectored I/O、durability、lifetime 等能力重复或漂移，并让 app POSIX escape 成为永久第三套资源语义。
+它会造成 File state、vectored I/O、durability、lifetime 等能力漂移，并把 app POSIX escape 固化为第三套资源语义。
 
-### B. 把所有操作都塞进一个自动选择 backend 的 `File::read()`
-
-拒绝。
-
-如果 execution choice 会改变 blocking、outstanding lifetime、cancellation、buffer lifetime 或 resource consumption，就必须保持调用边界清晰。
-
-### C. 所有用户都直接使用 Completion / RequestHandle
+### B. 一个万能 API 静默选择 blocking / pool / io_uring
 
 拒绝。
 
-低层 explicit lifecycle 只应由需要其 authority 的 caller 支付概念与运行时成本。
+当 execution 选择改变 blocking、outstanding lifetime、cancellation、buffer lifetime 或 bounded-resource consumption 时，boundary 必须显式。
+
+### C. 所有用户直接使用 Completion / RequestHandle
+
+拒绝。
+
+只有需要 explicit outstanding authority 的 caller 才应支付这层概念与机制成本。
 
 ### D. 复制 Zig / Boost 的完整 feature surface
 
 拒绝。
 
-它们是设计证据与反例来源，不是 Sluice 的 parity checklist。
+外部库是设计证据与反例来源，不是 parity checklist。
 
-### E. 用 generic CapabilitySet / IoOptions / Planner 统一所有差异
+### E. generic CapabilitySet / universal IoOptions / optimizer planner
 
 拒绝。
 
-这会提前支付 generalized framework 成本，并混淆 semantic、capability、policy、hint。
+它会提前支付 generalized framework 成本，并混淆 semantic / capability / policy / hint。
 
-### F. 因 io_uring 支持 opcode 就扩充 public API
+### F. 因 io_uring 有 opcode 就扩充 public API
 
 拒绝。
 
@@ -719,16 +928,18 @@ Mechanism availability 不创建 semantic authority。
 
 采用本 ADR 后：
 
-1. Sluice 的 I/O architecture root 从“sync core + async runtime”提升为统一的 **Explicit File Contract**；
-2. Blocking 与 async 不再拥有两套独立 file semantics；
-3. Blocking 保持 first-class cheap execution path；
-4. async correctness / named bounds 继续保留其独立价值；
-5. current classes 失去“因为已经存在所以应该活”的默认资格；
-6. 同样，current async machinery 也失去“因为复杂且已实现所以应该活”的默认资格；
-7. 后续审计应优先发现 `CONVERGE`，而不是追求删除 LOC 或 feature parity；
-8. 新能力必须按 semantic / correctness / resource / capability / policy / hint 单独赚钱；
-9. Direct I/O、preallocation、advice、zero-copy、registered resources 等仍需独立 research evidence；
-10. implementation migration 必须小步、可逆、逐项证明，不能借本 ADR 发起大重构。
+1. Sluice 的文件 I/O architecture root 从“sync core + async runtime”提升为统一 **Explicit File Contract**；
+2. `open/close/size/resize` 与 canonical data/durability operations 获得明确 semantic owner；
+3. Blocking 与 async 不再拥有两套独立 File semantics；
+4. Blocking 保持 first-class cheap execution path；
+5. explicit Operation/Completion 保留为需要 outstanding authority 的低层 API，而不是强迫所有 caller 使用；
+6. async correctness 与 named bounds 继续保留其独立价值；
+7. current classes 与 current async machinery 都失去“因为存在所以必须活”的默认资格；
+8. 后续审计优先寻找 `CONVERGE`，而不是追求删除 LOC 或 Zig/Boost feature parity；
+9. Direct I/O、preallocation、advice、zero-copy、registered resources、polling 等必须继续单独赚钱；
+10. implementation migration 必须小步、可逆、逐项证明。
+
+---
 
 ## Follow-up gate
 
@@ -736,7 +947,7 @@ Mechanism availability 不创建 semantic authority。
 
 > **基于当前 `master` 的 IO architecture-gap audit。**
 
-该审计应回答：
+审计必须回答：
 
 ```text
 符合 ADR-0001 + ADR-0002 的 Sluice 需要哪些最小能力？
