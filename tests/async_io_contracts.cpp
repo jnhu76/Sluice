@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -251,6 +252,43 @@ SLUICE_TEST(backend_close_admission_rejects_new_submissions) {
     ::close(fd);
 }
 
+SLUICE_TEST(backend_rejects_submit_while_request_capacity_is_exhausted) {
+    const std::string content = pattern_bytes(64);
+    sluice_test::TempFile file(content);
+
+    sluice::async::ThreadPoolConfig config;
+    config.request_capacity = 1;
+    config.worker_count = 1;
+    AsyncIoContext context(std::make_unique<ThreadPoolBackend>(config));
+    const int fd = open_file_read_only(file.path());
+
+    std::vector<std::byte> buffer(content.size());
+    Completion<std::size_t> held_completion;
+    auto held_submitted = context.submit_read(
+        ReadOp{fd, buffer.data(), buffer.size(), 0}, held_completion);
+    SLUICE_CHECK(held_submitted.has_value());
+    auto held_result = drive_completion_to_ready(context, held_completion);
+    SLUICE_CHECK(held_result.has_value());
+
+    Completion<std::size_t> rejected_completion;
+    auto rejected = context.submit_read(
+        ReadOp{fd, buffer.data(), buffer.size(), 0}, rejected_completion);
+    SLUICE_CHECK(!rejected.has_value());
+    SLUICE_CHECK(rejected.error().code == sluice::IoError::Code::would_block);
+    SLUICE_CHECK(rejected_completion.idle());
+
+    held_completion.reset();
+
+    auto resubmitted = context.submit_read(
+        ReadOp{fd, buffer.data(), buffer.size(), 0}, rejected_completion);
+    SLUICE_CHECK(resubmitted.has_value());
+    auto resubmit_result = drive_completion_to_ready(context, rejected_completion);
+    SLUICE_CHECK(resubmit_result.has_value());
+    rejected_completion.reset();
+
+    ::close(fd);
+}
+
 class HoldingTestBackend final : public sluice::async::AsyncBackend {
   public:
     Result<void> submit_read(ReadOp, Completion<std::size_t>& completion) override {
@@ -376,6 +414,11 @@ SLUICE_TEST(holding_backend_cancel_publishes_canceled_exactly_once) {
     SLUICE_CHECK(context.outstanding() == 1);
 
     context.cancel(completion);
+
+    auto waited = context.wait_one();
+    SLUICE_CHECK(waited.has_value());
+    SLUICE_CHECK(waited.value() >= 1);
+
     SLUICE_CHECK(completion.ready());
     auto result = completion.result();
     SLUICE_CHECK(!result.has_value());
@@ -388,14 +431,10 @@ SLUICE_TEST(holding_backend_cancel_publishes_canceled_exactly_once) {
     SLUICE_CHECK(!result_after_second_cancel.has_value());
     SLUICE_CHECK(result_after_second_cancel.error().code == sluice::IoError::Code::canceled);
 
-    auto waited = context.wait_one();
-    SLUICE_CHECK(waited.has_value());
-    SLUICE_CHECK(waited.value() >= 1);
-
     completion.reset();
     SLUICE_CHECK(completion.idle());
 }
 
-} // namespace
+}
 
 SLUICE_TEST_MAIN()

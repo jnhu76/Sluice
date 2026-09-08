@@ -61,10 +61,18 @@ SLUICE_TEST(application_runtime_executes_read_task_to_result) {
     builder.workers(2);
     auto build_result = builder.build();
     SLUICE_CHECK(build_result.has_value());
+    if (!build_result.has_value()) {
+        ::close(fd);
+        return;
+    }
     std::unique_ptr<ApplicationRuntime> runtime = std::move(build_result.value());
 
     auto started = runtime->start();
     SLUICE_CHECK(started.has_value());
+    if (!started.has_value()) {
+        ::close(fd);
+        return;
+    }
 
     TaskResultSlot<Result<std::vector<std::byte>>> result_slot;
     Completion<std::size_t> completion;
@@ -81,6 +89,13 @@ SLUICE_TEST(application_runtime_executes_read_task_to_result) {
             result_slot.publish(Result<std::vector<std::byte>>(std::move(buffer)));
         });
     SLUICE_CHECK(submitted.has_value());
+    if (!submitted.has_value()) {
+        runtime->request_stop();
+        (void)runtime->drain();
+        (void)runtime->join();
+        ::close(fd);
+        return;
+    }
 
     Result<std::vector<std::byte>> task_result = result_slot.wait_and_take();
     SLUICE_CHECK(task_result.has_value());
@@ -115,7 +130,7 @@ SLUICE_TEST(translate_task_exception_maps_bad_alloc_to_no_space) {
     SLUICE_CHECK(translated.error().code == sluice::IoError::Code::no_space);
 }
 
-SLUICE_TEST(cancel_token_request_rearm_clear_epoch_cycle) {
+SLUICE_TEST(cancel_token_epoch_survives_rearm_and_clear) {
     CancelToken token;
     SLUICE_CHECK(!token.is_requested());
     SLUICE_CHECK(token.epoch() == 0);
@@ -197,6 +212,6 @@ SLUICE_TEST(scheduler_deadline_expires_unwaited_wait) {
     SLUICE_CHECK(observed_elapsed.load() >= 24);
 }
 
-} // namespace
+}
 
 SLUICE_TEST_MAIN()

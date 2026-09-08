@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -49,6 +50,14 @@ class TempFile {
         while (written < content.size()) {
             ssize_t n = ::write(fd, content.data() + written, content.size() - written);
             if (n < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                ::close(fd);
+                ::unlink(name);
+                std::abort();
+            }
+            if (n == 0) {
                 ::close(fd);
                 ::unlink(name);
                 std::abort();
@@ -69,7 +78,7 @@ class TempFile {
     std::string path_;
 };
 
-} // namespace sluice_test
+}
 
 #define SLUICE_TEST(test_name)                                                                    \
     static void sluice_test_body_##test_name();                                                   \

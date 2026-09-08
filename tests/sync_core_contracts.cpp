@@ -7,6 +7,7 @@
 
 #include "test_harness.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <string>
@@ -158,6 +159,33 @@ SLUICE_TEST(buffered_reader_serves_and_consumes_buffered_bytes) {
     SLUICE_CHECK(std::memcmp(compare.data(), peeked.data(), peeked.size()) == 0);
 }
 
-} // namespace
+SLUICE_TEST(buffered_writer_defers_writes_until_flush_or_full_buffer) {
+    const std::string first_part = sync_pattern_bytes(16);
+    const std::string tail_part = sync_pattern_bytes(1);
+
+    CollectingWriter inner(first_part.size() + tail_part.size());
+    std::vector<std::byte> buffer(16);
+    sluice::BufferedWriter writer(inner, buffer);
+
+    auto first_written = writer.write_some(to_bytes(first_part));
+    SLUICE_CHECK(first_written.has_value());
+    SLUICE_CHECK(first_written.value() == first_part.size());
+    SLUICE_CHECK(inner.collected().empty());
+
+    auto tail_written = writer.write_some(to_bytes(tail_part));
+    SLUICE_CHECK(tail_written.has_value());
+    SLUICE_CHECK(tail_written.value() == tail_part.size());
+    SLUICE_CHECK(inner.collected().size() == first_part.size());
+    SLUICE_CHECK(std::memcmp(inner.collected().data(), first_part.data(), first_part.size()) == 0);
+
+    auto flushed = writer.flush();
+    SLUICE_CHECK(flushed.has_value());
+
+    const std::string expected = first_part + tail_part;
+    SLUICE_CHECK(inner.collected().size() == expected.size());
+    SLUICE_CHECK(std::memcmp(inner.collected().data(), expected.data(), expected.size()) == 0);
+}
+
+}
 
 SLUICE_TEST_MAIN()

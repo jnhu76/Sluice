@@ -1,7 +1,3 @@
--- Specification-witness test targets. Public headers only; no internal test
--- macros, no src/ include path (same discipline as apps.lua). Targets appear
--- only when their source file exists.
-
 local R = SLUICE_ROOT
 
 local function sluice_witness_target(name)
@@ -23,10 +19,13 @@ sluice_witness_target("async_io_contracts")
 sluice_witness_target("runtime_contracts")
 sluice_witness_target("sync_core_contracts")
 
+local witness_workdir = os.tmpdir()
+
 if os.isfile(R .. "apps/sluice-copy/main.cpp") then
     target("sluice-copy")
         add_tests("copy-proc-version",
-                  {runargs = {"/proc/version", "/tmp/sluice-copy-witness-proc-version.out"},
+                  {runargs = {"/proc/version",
+                              path.join(witness_workdir, "sluice-copy-witness-output.out")},
                    run_timeout = 30000})
     target_end()
 end
@@ -44,8 +43,12 @@ if os.isfile(R .. "apps/sluice-grep/main.cpp") then
     target_end()
 end
 
-if os.isfile(R .. "apps/sluice-tail/main.cpp") then
+if os.isfile(R .. "apps/sluice-tail/main.cpp") and os.isfile(R .. "tests/tail_witness_input.txt") then
     target("sluice-tail")
-        add_tests("tail-proc-version", {runargs = {"-n", "1", "/proc/version"}, run_timeout = 30000})
+        add_tests("tail-prints-last-line-of-file",
+                  {runargs = {"-n", "1", R .. "tests/tail_witness_input.txt"},
+                   pass_output = "sluice-tail-witness-last-line",
+                   trim_output = true,
+                   run_timeout = 30000})
     target_end()
 end
