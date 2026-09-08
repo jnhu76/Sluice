@@ -22,7 +22,8 @@ Minimum mechanism.
 ```
 
 - [`docs/mission.md`](docs/mission.md) —— 冻结的规范性项目宗旨。
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 解释这些原则如何由 Sluice 的研究结果得到。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论支持的显式 I/O 设计准则。
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 冻结 File-centric API 语义与可替换 execution 架构；当前实现如何处置等待审计。
 - [`research/RESULTS.md`](research/RESULTS.md) —— 当前保留的研究证据与结论。
 
 ## 架构一览
@@ -31,7 +32,7 @@ Minimum mechanism.
   <img src="docs/assets/sluice-architecture.svg" alt="Sluice 架构概览" width="100%">
 </p>
 
-这张图只负责压缩展示当前实现形态。当前代码“现在是什么”以代码与构建定义为准；项目“应该遵守什么边界”以 mission 与 ADR 为准。
+这张图只负责压缩展示当前实现形态。当前代码“现在是什么”以代码与构建定义为准；项目“应该遵守什么边界”以 mission 与 ADR 为准。特别地，当前 `sluice_core` / `sluice_async` 的 build 拆分不再被解释为两套长期独立的 I/O 语义；ADR-0002 冻结共享的 Explicit File contract，并把 Blocking / ThreadPool / io_uring 定义为可替换 execution。
 
 ## 研究已经冻结的设计护栏
 
@@ -55,6 +56,8 @@ Batch 研究表明，知道 operations 属于同一 Batch 不等于获得 group-
 ## 当前实现
 
 当前代码包含同步 I/O core 和可选异步 runtime。
+
+这只是当前实现与构建形态的描述，不代表长期语义上存在两个独立 I/O 世界。ADR-0002 规定的目标是：File resource/state 与 canonical file-operation semantics 共享，而 Blocking、ThreadPool、io_uring 是可替换 execution；它们不同的阻塞、outstanding lifetime、cancellation 与资源成本仍必须保持显式。
 
 同步部分提供 `Result<T>` / `IoError`、Reader/Writer 风格 I/O、文件与 positional I/O、copy helper、durability 操作及相关工具。
 
@@ -97,7 +100,8 @@ xmake
 ## 文档
 
 - [`docs/mission.md`](docs/mission.md) —— 项目宗旨。
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论对应的设计决策。
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论对应的显式 I/O 设计准则。
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 规范性的 File API 与 execution 架构；实现迁移等待基于 master 的审计。
 - `docs/architecture.md` —— 从当前代码推导出的架构快照。
 - [`research/RESULTS.md`](research/RESULTS.md) —— 保留的研究结论。
 
