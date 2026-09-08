@@ -22,7 +22,8 @@ Minimum mechanism.
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
 - [`docs/mission.md`](docs/mission.md) — frozen normative mission.
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — how the research results support these design decisions.
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — research-backed explicit-I/O design doctrine.
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) — frozen File-centric API semantics and replaceable-execution architecture; current implementation disposition remains pending audit.
 - [`research/RESULTS.md`](research/RESULTS.md) — retained research evidence and conclusions.
 
 ## Architecture at a glance
@@ -31,7 +32,7 @@ Minimum mechanism.
   <img src="docs/assets/sluice-architecture.svg" alt="Sluice architecture overview" width="100%">
 </p>
 
-The diagram summarizes the current implementation shape. Current code and build definitions describe what exists today; the mission and ADR define the research-backed design boundary.
+The diagram summarizes the current implementation shape. Current code and build definitions describe what exists today; the mission and ADRs define the normative design boundary. In particular, the current `sluice_core` / `sluice_async` build split does not define two independent long-term I/O semantics: ADR-0002 defines a shared Explicit File contract with replaceable Blocking / ThreadPool / io_uring execution.
 
 ## Research-backed guardrails
 
@@ -55,6 +56,8 @@ Performance research likewise keeps semantic contracts separate from execution p
 ## Current implementation
 
 The current codebase contains a synchronous I/O core and an opt-in asynchronous runtime.
+
+This is a description of the current implementation and build shape, not the long-term semantic split. ADR-0002 defines the normative direction: File resource/state and canonical file-operation semantics are shared, while Blocking, ThreadPool, and io_uring are replaceable execution forms whose initiation and resource costs remain explicit.
 
 The synchronous side provides `Result<T>` / `IoError`, Reader/Writer-style I/O, file and positional I/O, copy helpers, durability operations, and related utilities.
 
@@ -97,7 +100,8 @@ xmake
 ## Documentation
 
 - [`docs/mission.md`](docs/mission.md) — project mission.
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — research-backed design decision.
+- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — research-backed explicit-I/O doctrine.
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) — normative File API and execution architecture; implementation migration waits for the master-based audit.
 - `docs/architecture.md` — architecture snapshot derived from current code.
 - [`research/RESULTS.md`](research/RESULTS.md) — retained research conclusions.
 
