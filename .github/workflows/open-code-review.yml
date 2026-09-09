@@ -1,0 +1,53 @@
+name: OpenCodeReview
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ocr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Review PR with OpenCodeReview
+        uses: alibaba/open-code-review@04284b5dc19e0f52528ca466a767e4a2c100e5f5
+        with:
+          ocr_version: '1.11.6'
+          llm_url: https://opencode.ai/zen/go/v1/chat/completions
+          llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          llm_model: mimo-v2.5
+          llm_use_anthropic: 'false'
+          llm_extra_body: '{}'
+          language: Chinese
+          effort: high
+          llm_timeout: '300'
+          review_task_timeout: '20'
+          stream_progress: 'true'
+          sticky_summary: 'true'
+          incremental: 'true'
+          checkpoint_range: 'true'
+          route_severity_below: low
+          route_categories: style
+          background: >-
+            Sluice is a C++20 explicit-I/O library/runtime. Review against the
+            project's minimum-semantics doctrine: semantics, correctness
+            authority, resource bounds, backend capability, execution policy,
+            hints, and legacy machinery must remain distinct. Prioritize races,
+            lifetime and ownership bugs, cancellation/timeout edge cases,
+            scheduler wake and wait-queue safety, memory-ordering mistakes,
+            resource leaks or unbounded work, sync/async semantic drift,
+            accidental backend-specific authority, ABI/API regressions, and
+            insufficient tests or formal/executable evidence. Treat accepted
+            ADRs and retained research results as normative where applicable,
+            but reject abstractions or mechanisms that have not earned their
+            complexity through semantics or evidence. Prefer narrow fixes.
