@@ -80,6 +80,7 @@ jobs:
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
           llm_model: mimo-v2.5
           llm_use_anthropic: 'false'
+          llm_extra_headers: 'x-opencode-session=${{ github.repository }}-pr-${{ github.event.pull_request.number || github.event.issue.number }},User-Agent=sluice-open-code-review/1.0'
           llm_extra_body: '{}'
           language: Chinese
           effort: high
