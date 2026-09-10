@@ -479,9 +479,9 @@ or unordered relative to it
     -> outside the minimum guaranteed set
 ```
 
-§5.4.2 对 completion 的定义覆盖经由 Sluice 提交的操作；对不经由 Sluice 发生的 metadata mutation，其 completion 以 caller 可观察的完成为准——例如该外部操作同步返回，或 caller 经自身同步手段观察到该变更已生效。happens-before 关系本身仍按 caller-observable ordering 判定，同一执行内的 program order 即构成该关系。
+§5.4.2 对 completion 的定义覆盖经由 Sluice 提交的操作；对不经由 Sluice 发生的写操作或 metadata mutation，其 completion 均以 caller 可观察的完成为准——例如该外部操作同步返回，或 caller 经自身同步手段观察到其已生效。happens-before 关系本身仍按 caller-observable ordering 判定，同一执行内的 program order 即构成该关系。
 
-对与本次提交不存在明确 happens-before 关系的 metadata 变更——包括来自其他 process、其他 fd 或外部 filesystem actor 的操作——caller 不得依赖 SyncAll 覆盖它们。SyncAll 不提供跨 actor 的全局顺序承诺；底层实际可能顺带同步更多状态，但不进入 canonical minimum guarantee。本规则不改变 §5.4.3 对 bare `resize` durability 地位的不裁决。
+对与本次提交不存在明确 happens-before 关系的 metadata 变更——包括来自其他 process、其他 fd 或外部 filesystem actor 的操作——caller 不得依赖 SyncAll 覆盖它们。SyncAll 不提供跨 actor 的全局顺序承诺；底层实际可能顺带同步更多状态，但不进入 canonical minimum guarantee。不伴随任何已完成写操作的纯状态变更（例如 bare `resize`）不属于本条 broader file-metadata mutation 的覆盖范围；其 durability 地位在 SyncData 与 SyncAll 下均保持不裁决（§5.4.3）。
 
 syscall 名称（fdatasync / fsync）只是 implementation example；二者的差异是 metadata 覆盖范围，不是机制名。
 
