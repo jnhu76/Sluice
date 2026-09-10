@@ -470,8 +470,8 @@ timestamps
 broader metadata 的 coverage 边界与 file data 相同，同样锚定 completion happens-before（§5.4.2）：
 
 ```text
-metadata state/mutations whose completion happens-before
-this SyncAll submission
+broader file-metadata mutations whose completion
+happens-before this SyncAll submission
     -> covered by the minimum guaranteed set
 
 metadata changes concurrent with this SyncAll
@@ -479,7 +479,7 @@ or unordered relative to it
     -> outside the minimum guaranteed set
 ```
 
-对与本次提交不存在明确 happens-before 关系的 metadata 变更——包括来自其他 process、其他 fd 或外部 filesystem actor 的操作——caller 不得依赖 SyncAll 覆盖它们。SyncAll 不提供跨 actor 的全局顺序承诺；底层实际可能顺带同步更多状态，但不进入 canonical minimum guarantee。
+对与本次提交不存在明确 happens-before 关系的 metadata 变更——包括来自其他 process、其他 fd 或外部 filesystem actor 的操作——caller 不得依赖 SyncAll 覆盖它们。SyncAll 不提供跨 actor 的全局顺序承诺；底层实际可能顺带同步更多状态，但不进入 canonical minimum guarantee。本规则不改变 §5.4.3 对 bare `resize` durability 地位的不裁决。
 
 syscall 名称（fdatasync / fsync）只是 implementation example；二者的差异是 metadata 覆盖范围，不是机制名。
 
@@ -508,7 +508,7 @@ Directory resource、directory sync、rename durability 仍由 §13 保持未决
 ```text
 success
     = the selected execution reports that the canonical durability
-      guarantee has been established for the guaranteed write set
+      guarantee has been established for the guaranteed set
 ```
 
 成功不等于 physically proven permanent forever；该承诺仍受底层 storage / filesystem documented durability behavior 的约束。Sluice 不独立证明硬件掉电行为。
