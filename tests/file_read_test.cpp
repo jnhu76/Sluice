@@ -2,6 +2,7 @@
 #include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -61,7 +62,7 @@ bool read_returns_bytes_at_offset() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            slot.publish(read_at(file, ctx, 6, dst, c));
+            slot.publish(await_read_at(file, ctx, 6, dst, c));
         });
 
     ::unlink(path.c_str());
@@ -88,7 +89,7 @@ bool read_past_end_returns_zero() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            slot.publish(read_at(file, ctx, 100, dst, c));
+            slot.publish(await_read_at(file, ctx, 100, dst, c));
         });
 
     ::unlink(path.c_str());
@@ -110,7 +111,7 @@ bool read_empty_buffer_returns_zero_without_operation() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            auto r = read_at(file, ctx, 0, std::span<std::byte>{}, c);
+            auto r = await_read_at(file, ctx, 0, std::span<std::byte>{}, c);
             if (!c.idle()) {
                 slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
                 return;
@@ -141,6 +142,10 @@ bool outstanding_read_resource_valid_until_terminal() {
             auto sr = ctx.submit_read(ReadOp{file.native_handle(), dst.data(), dst.size(), 0}, c);
             if (!sr.has_value()) {
                 slot.publish(make_unexpected<std::size_t>(sr.error()));
+                return;
+            }
+            if (!c.outstanding()) {
+                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
                 return;
             }
             if (!file.is_open()) {
@@ -179,11 +184,14 @@ bool close_releases_once_and_object_stops_representing_resource() {
 
     if (!file.is_open())
         return false;
+    const int handle = file.native_handle();
     if (!file.close().has_value())
         return false;
     if (file.is_open())
         return false;
     if (file.native_handle() >= 0)
+        return false;
+    if (::fcntl(handle, F_GETFD) != -1 || errno != EBADF)
         return false;
     if (!file.close().has_value())
         return false;
@@ -221,7 +229,7 @@ bool moved_file_owns_nothing_and_target_keeps_resource() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            slot.publish(read_at(other, ctx, 0, dst, c));
+            slot.publish(await_read_at(other, ctx, 0, dst, c));
         });
 
     if (!result.has_value())
@@ -307,7 +315,7 @@ bool read_after_close_reports_invalid_state() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            slot.publish(read_at(file, ctx, 0, dst, c));
+            slot.publish(await_read_at(file, ctx, 0, dst, c));
         });
 
     if (result.has_value())
