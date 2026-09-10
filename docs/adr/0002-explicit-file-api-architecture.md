@@ -467,6 +467,20 @@ ownership
 timestamps
 ```
 
+broader metadata 的 coverage 边界与 file data 相同，同样锚定 completion happens-before（§5.4.2）：
+
+```text
+metadata state/mutations whose completion happens-before
+this SyncAll submission
+    -> covered by the minimum guaranteed set
+
+metadata changes concurrent with this SyncAll
+or unordered relative to it
+    -> outside the minimum guaranteed set
+```
+
+对与本次提交不存在明确 happens-before 关系的 metadata 变更——包括来自其他 process、其他 fd 或外部 filesystem actor 的操作——caller 不得依赖 SyncAll 覆盖它们。SyncAll 不提供跨 actor 的全局顺序承诺；底层实际可能顺带同步更多状态，但不进入 canonical minimum guarantee。
+
 syscall 名称（fdatasync / fsync）只是 implementation example；二者的差异是 metadata 覆盖范围，不是机制名。
 
 #### 5.4.5 Directory-entry boundary
