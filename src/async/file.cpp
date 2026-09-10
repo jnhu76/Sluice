@@ -15,4 +15,21 @@ Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std
     return await_read_once(ctx, file.native_handle(), dst, offset, c);
 }
 
+Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, std::uint64_t offset,
+                                   std::span<const std::byte> src, Completion<std::size_t>& c) {
+    if (!file.is_open()) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    }
+    if (file.access() == FileAccess::read_only) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
+    }
+    if (src.empty()) {
+        return std::size_t{0};
+    }
+    auto sr = ctx.submit_write(WriteOp{file.native_handle(), src.data(), src.size(), offset}, c);
+    if (!sr.has_value())
+        return make_unexpected<std::size_t>(sr.error());
+    return await_take(ctx, c);
+}
+
 }

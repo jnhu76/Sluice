@@ -46,10 +46,13 @@ class File {
 
     int native_handle() const noexcept { return fd_; }
 
+    FileAccess access() const noexcept { return access_; }
+
   private:
-    explicit File(int fd) noexcept : fd_(fd) {}
+    explicit File(int fd, FileAccess access) noexcept : fd_(fd), access_(access) {}
 
     int fd_ = -1;
+    FileAccess access_ = FileAccess::read_only;
 };
 
 }
