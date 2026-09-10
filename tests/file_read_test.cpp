@@ -1,6 +1,7 @@
 #include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
+#include <sluice/file_resource.hpp>
 
 #include <cerrno>
 #include <cstdio>
@@ -16,6 +17,11 @@
 namespace {
 
 using namespace sluice::async;
+using sluice::File;
+using sluice::FileAccess;
+using sluice::FileExistence;
+using sluice::FileInitialContents;
+using sluice::FileOpen;
 using sluice::IoError;
 using sluice::Result;
 using sluice::make_unexpected;
@@ -325,7 +331,7 @@ bool read_after_close_reports_invalid_state() {
     return true;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {
