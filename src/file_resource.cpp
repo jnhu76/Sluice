@@ -51,15 +51,17 @@ Result<File> File::open(const std::string& path, FileOpen mode) {
     if (fd < 0) {
         return make_unexpected<File>(from_errno_value(errno));
     }
-    return File{fd};
+    return File{fd, mode.access};
 }
 
-File::File(File&& other) noexcept : fd_(std::exchange(other.fd_, -1)) {}
+File::File(File&& other) noexcept
+    : fd_(std::exchange(other.fd_, -1)), access_(other.access_) {}
 
 File& File::operator=(File&& other) noexcept {
     if (this != &other) {
         (void)close();
         fd_ = std::exchange(other.fd_, -1);
+        access_ = other.access_;
     }
     return *this;
 }
