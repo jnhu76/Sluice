@@ -67,6 +67,8 @@ flowchart TB
         BR["blocking::read_at(File, ...) "]
         BW["blocking::write_at(File, ...) "]
         BS["blocking::sync_data(File, ...) "]
+        BSR["blocking::read(File, ...) "]
+        BSW["blocking::write(File, ...) "]
     end
 
     subgraph ASYNC_API["File-facing async adapters"]
@@ -188,6 +190,8 @@ await_sync_data
 blocking::read_at
 blocking::write_at
 blocking::sync_data
+blocking::read
+blocking::write
 ```
 
 Blocking path 不经过 RuntimeTaskContext、Completion 或 AsyncBackend；它直接对 caller 线程执行 syscall。
@@ -423,7 +427,7 @@ app canonical-resource consumption:
   app_copy_consumption_test
 ```
 
-这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
+这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData 与 sequential Read / Write slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
