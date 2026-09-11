@@ -17,4 +17,8 @@ Result<std::size_t> write_at(const File& file, std::uint64_t offset,
 
 Result<void> sync_data(const File& file);
 
+Result<std::uint64_t> size(const File& file);
+
+Result<void> resize(const File& file, std::uint64_t new_size);
+
 } // namespace sluice::blocking

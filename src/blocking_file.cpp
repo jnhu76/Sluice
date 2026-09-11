@@ -3,6 +3,7 @@
 #include <sluice/detail/posix_retry.hpp>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -66,6 +67,40 @@ Result<void> sync_data(const File& file) {
     }
 
     int rc = detail::retry_on_eintr([&] { return ::fdatasync(file.native_handle()); });
+    if (rc < 0) {
+        return make_unexpected<void>(from_errno_value(errno));
+    }
+    return {};
+}
+
+Result<std::uint64_t> size(const File& file) {
+    if (!file.is_open()) {
+        return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
+    }
+
+    struct ::stat st {};
+    int rc = detail::retry_on_eintr([&] { return ::fstat(file.native_handle(), &st); });
+    if (rc < 0) {
+        return make_unexpected<std::uint64_t>(from_errno_value(errno));
+    }
+    return static_cast<std::uint64_t>(st.st_size);
+}
+
+Result<void> resize(const File& file, std::uint64_t new_size) {
+    if (!file.is_open()) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    if (file.access() == FileAccess::read_only) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    }
+
+    auto native_size = detail::checked_posix_offset(new_size);
+    if (!native_size.has_value()) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    }
+
+    int rc = detail::retry_on_eintr(
+        [&] { return ::ftruncate(file.native_handle(), native_size.value()); });
     if (rc < 0) {
         return make_unexpected<void>(from_errno_value(errno));
     }
