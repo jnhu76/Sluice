@@ -5,6 +5,7 @@
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
 #include <sluice/async/detail/submit_transaction.hpp>
+#include <sluice/detail/io_validation.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -357,7 +358,7 @@ class UringAsyncBackend : public AsyncBackend {
                                     op.fd,
                                     static_cast<const std::byte*>(borrow_of(op).address),
                                     op.len,
-                                    static_cast<unsigned>(op.len),
+                                    sluice::detail::uring_chunk_length(op.len),
                                     op.offset};
             } else {
                 self_.prepared_ops_[h.slot.value] =

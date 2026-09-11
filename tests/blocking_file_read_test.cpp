@@ -1,4 +1,4 @@
-#include <sluice/file_resource.hpp>
+#include <sluice/blocking/file.hpp>
 
 #include <cstdio>
 #include <cstring>

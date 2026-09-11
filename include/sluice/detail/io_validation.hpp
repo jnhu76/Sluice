@@ -26,14 +26,6 @@ inline Result<off_t> checked_posix_offset(std::uint64_t offset) {
     return static_cast<off_t>(offset);
 }
 
-inline Result<unsigned> checked_uring_length(std::size_t length) {
-    constexpr auto native_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
-    if (length > native_max) {
-        return make_unexpected<unsigned>(IoError{.code = IoError::Code::invalid_state});
-    }
-    return static_cast<unsigned>(length);
-}
-
 inline unsigned uring_chunk_length(std::size_t remaining) noexcept {
     constexpr auto native_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
     return static_cast<unsigned>(std::min(remaining, native_max));

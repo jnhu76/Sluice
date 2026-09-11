@@ -282,11 +282,6 @@ Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
-
-    auto nlen = sluice::detail::checked_uring_length(op.len);
-    if (!nlen.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
     return {};
 }
 Result<void> UringAsyncBackend::validate_write(WriteOp op) {
@@ -297,10 +292,6 @@ Result<void> UringAsyncBackend::validate_write(WriteOp op) {
     }
     auto off = sluice::detail::checked_posix_offset(op.offset);
     if (!off.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    auto nlen = sluice::detail::checked_uring_length(op.len);
-    if (!nlen.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
     return {};
