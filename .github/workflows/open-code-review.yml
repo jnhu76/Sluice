@@ -73,6 +73,8 @@ jobs:
             core.setOutput('head_sha', pullRequest.head.sha);
 
       - name: Review PR with OpenCodeReview
+        id: ocr_review
+        continue-on-error: true
         uses: alibaba/open-code-review@04284b5dc19e0f52528ca466a767e4a2c100e5f5
         with:
           ocr_version: '1.11.6'
@@ -107,3 +109,8 @@ jobs:
             ADRs and retained research results as normative where applicable,
             but reject abstractions or mechanisms that have not earned their
             complexity through semantics or evidence. Prefer narrow fixes.
+
+      - name: Report OpenCodeReview failure
+        if: steps.ocr_review.outcome == 'failure'
+        run: >-
+          echo "::warning::OpenCodeReview failed before completing the review; OCR is non-blocking, so this job remains successful."
