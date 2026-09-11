@@ -361,7 +361,7 @@ OUT_OF_SCOPE
 
 `sync_data` 与 `sync_all` 是 caller-visible durability semantics。
 
-实现可以是：
+本节以机制无关语言冻结该语义的**内容**。以下实现方式只是 possible lowerings：
 
 ```text
 fdatasync / fsync
@@ -369,7 +369,212 @@ ThreadPool offload
 io_uring fsync
 ```
 
-但机制不得改变 contract。
+机制不得改变 contract；删除所有机制名后，本节的 normative 内容必须仍然完整成立。
+
+#### 5.4.1 SyncData 的 canonical guarantee
+
+> `sync_data(file)` 成功后，caller 可以相信：对于该文件上所有其**完成**发生在本次 `sync_data` 提交之前、且该完成与该提交之间存在明确 happens-before 关系的写操作，其内容以及取回这些内容所必需的文件状态，已经获得 durability guarantee。
+
+覆盖边界是：
+
+```text
+completed-before-sync boundary
+```
+
+而不是：
+
+```text
+submitted-before-sync boundary
+```
+
+因此：
+
+```text
+Write submitted but still outstanding when SyncData is submitted
+    -> NOT covered by the guaranteed set
+```
+
+实际执行可能顺带 flush 更多数据；canonical minimum guarantee 只承诺上述集合，caller 不得依赖任何超出该集合的落盘事实。
+
+#### 5.4.2 Ordering authority
+
+三种 order 必须区分：
+
+```text
+submission order
+completion order
+durability coverage
+```
+
+冻结：
+
+```text
+durability coverage is anchored by completion happens-before,
+not mere submission order.
+```
+
+这里的 completion 指 caller 可观察的完成发布（§9 的 public completion publication，而非 backend 内部 terminalization）。
+
+普通 caller 的典型合法模式：
+
+```text
+await write
+-> observe successful completion
+-> submit / await SyncData
+```
+
+与提交者之间不存在 happens-before 关系的 concurrent writes 不属于 minimum guaranteed set；底层可能顺带使其 durable，但 caller 不得依赖。
+
+worker count、queue ordering、dispatch FIFO 等属于 execution policy / mechanism（§8.2），不得作为 durability coverage 的定义依据。
+
+Coverage membership 与 final recoverable value 是两个不同问题：
+
+```text
+ordering decides which mutations may be covered;
+supersession decides which exact state still exists to be covered.
+```
+
+SyncData / SyncAll 不提供文件状态 snapshot guarantee。进入 minimum guaranteed set 的 mutation，其产生的具体状态仍可能在 durability operation 建立 guarantee 之前，被后来的冲突 mutation 取代（supersede）。冲突 mutation 指改变 caller 想依赖的同一 observable state 的 mutation，例如重叠的 file-data write、同一 metadata field 的再次变更、影响相关 data state 的 resize。
+
+```text
+covered
+    != immutable
+    != snapshot-preserved
+```
+
+caller 只有在该 durability operation 建立 guarantee 之前、没有任何冲突 mutation 取代目标状态时，才可依赖某个 covered mutation 产生的精确状态（exact bytes、mode、ownership、timestamp 等）：
+
+```text
+concurrent or unordered conflicting mutations
+    -> themselves outside the minimum guaranteed set
+    -> and may supersede the state produced
+       by an earlier covered mutation
+```
+
+这包括来自其他 process、其他 fd 或外部 filesystem actor 的变更；Sluice 对它们不提供任何全局顺序或串行化承诺。caller 若需要 exact recoverable state，必须自行建立 ordering 或 quiescence，使 guarantee 建立前没有冲突 mutation 能取代目标状态；这只是 caller obligation，本 ADR 不因此引入任何 runtime mechanism，也不改变 bare `resize` durability 地位的不裁决（§5.4.3）。
+
+#### 5.4.3 Metadata boundary
+
+SyncData 的保证包含：
+
+```text
+file data
++
+metadata required to retrieve that data
+```
+
+其中至少包括取回已完成写所必需的 file size（`st_size`）。示例：
+
+```text
+size 3
+write_at(offset=5, "Z")
+```
+
+如果 crash 后 file size 丢回 3，即使该 byte 已经写入，也无法通过文件语义取回。因此 file size 属于 retrieval-required state，不是可排除的 unrelated metadata。
+
+不伴随任何已完成写操作的纯状态变更（例如 bare `resize`，见 §4.2）的 durability 地位，本节不裁决。
+
+#### 5.4.4 SyncData 与 SyncAll 的最小差异
+
+```text
+SyncData
+    = file data + metadata required to retrieve that data
+
+SyncAll
+    = SyncData guarantee
+      + broader metadata belonging to the file itself
+```
+
+后者例如：
+
+```text
+permissions
+ownership
+timestamps
+```
+
+broader metadata 的 coverage 边界与 file data 相同，同样锚定 completion happens-before（§5.4.2）：
+
+```text
+broader file-metadata mutations whose completion
+happens-before this SyncAll submission
+    -> covered by the minimum guaranteed set
+
+metadata changes concurrent with this SyncAll
+or unordered relative to it
+    -> outside the minimum guaranteed set
+```
+
+§5.4.2 对 completion 的定义覆盖经由 Sluice 提交的操作；对不经由 Sluice 发生的写操作或 metadata mutation，其 completion 均以 caller 可观察的完成为准——例如该外部操作同步返回，或 caller 经自身同步手段观察到其已生效。happens-before 关系本身仍按 caller-observable ordering 判定，同一执行内的 program order 即构成该关系。
+
+对与本次提交不存在明确 happens-before 关系的 metadata 变更——包括来自其他 process、其他 fd 或外部 filesystem actor 的操作——caller 不得依赖 SyncAll 覆盖它们。SyncAll 不提供跨 actor 的全局顺序承诺；底层实际可能顺带同步更多状态，但不进入 canonical minimum guarantee。不伴随任何已完成写操作的纯状态变更（例如 bare `resize`）不属于本条 broader file-metadata mutation 的覆盖范围；其 durability 地位在 SyncData 与 SyncAll 下均保持不裁决（§5.4.3）。
+
+syscall 名称（fdatasync / fsync）只是 implementation example；二者的差异是 metadata 覆盖范围，不是机制名。
+
+#### 5.4.5 Directory-entry boundary
+
+```text
+SyncData does NOT guarantee directory-entry durability.
+SyncAll does NOT guarantee directory-entry durability.
+```
+
+因此：
+
+```text
+filename
+parent directory entry
+rename result
+new-file name reachability
+```
+
+不属于这两个 file operation 的 guarantee。
+
+Directory resource、directory sync、rename durability 仍由 §13 保持未决；本 ADR 不引入任何 directory API。
+
+#### 5.4.6 Success / failure / cancellation
+
+```text
+success
+    = the selected execution reports that the canonical durability
+      guarantee has been established for the guaranteed set,
+      subject to the supersession rule (§5.4.2)
+```
+
+成功不等于 physically proven permanent forever；该承诺仍受底层 storage / filesystem documented durability behavior 的约束。Sluice 不独立证明硬件掉电行为。
+
+```text
+failure
+    = the requested durability guarantee was not established
+      or cannot be confirmed
+```
+
+禁止推论：
+
+```text
+failure = nothing reached durable storage
+```
+
+部分写回可能已经发生；caller 不能根据 failure 推断所有先前数据都 non-durable。
+
+```text
+canceled
+    = no positive or negative durability fact is granted
+```
+
+cancel 不蕴含 definitely durable，也不蕴含 definitely not durable。waiter cancellation、request cancellation、physical operation completion 是三个不同事实；本节不重新设计 cancel。
+
+#### 5.4.7 Backend conformance
+
+> 任何被视为 canonical SyncData / SyncAll execution 的 backend，都不得在没有建立对应 durability guarantee 的情况下报告 semantic success。
+
+即：
+
+```text
+semantic success must not be fabricated
+by a conforming durability execution
+```
+
+testing / synthetic execution 如何归类，留给 implementation probe；本 ADR 不裁决任何具体 backend 的命运。
 
 per-operation durability（例如 `RWF_DSYNC` / `RWF_SYNC`）尚未在本 ADR 中获得 public authorization。
 
