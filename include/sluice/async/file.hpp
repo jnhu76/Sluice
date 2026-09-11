@@ -16,4 +16,6 @@ Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std
 Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, std::uint64_t offset,
                                    std::span<const std::byte> src, Completion<std::size_t>& c);
 
+Result<void> await_sync_data(const File& file, RuntimeTaskContext& ctx, Completion<void>& c);
+
 }
