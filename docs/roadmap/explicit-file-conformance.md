@@ -190,7 +190,7 @@ flowchart TB
 
 ## 4. Current master conformance ledger
 
-Verified implementation baseline：`a16d2880`（A1 + A2 implementation；下表状态在该 commit 上成立）。
+Verified implementation baseline：`5a62be39`（A1 + A2 implementation；下表状态在该 commit 上成立）。
 
 | Architecture node | Current code reality | Status | Closure direction |
 | --- | --- | --- | --- |
@@ -213,7 +213,7 @@ Verified implementation baseline：`a16d2880`（A1 + A2 implementation；下表�
 | ThreadPool execution | `ThreadPoolBackend` 为 honest execution；blocking syscall 在 worker 上执行，对 caller 是 async/outstanding | `CONFORMING` | 暂不做性能优化 |
 | io_uring execution | `UringAsyncBackend` 有真实 liburing path；不可用构建诚实报错 | `PARTIAL` | 基础架构闭环前不做 activation/optimization campaign |
 | Future execution backend | ADR 允许 replaceable execution，但未授权具体新增 backend | `DEFERRED` | architecture conformant 后再评估 IOCP/SPDK/其他机制 |
-| App canonical-resource consumption | hash/grep/tail 已迁到 canonical `File`（`File::open` 所有权 + `await_read_at`）；copy pipeline 保持 explicit outstanding authority；全部残余 escape 已分类（`docs/roadmap/explicit-file-app-consumer-census.md`：interop / A3·A5·A6 依赖 / namespace work） | `CONFORMING` | 保持分类纪律：`CONFORMING` 不要求 zero `native_handle()`，只要求 zero unclassified bypass；A3/A5/A6 关闭时按 census 行迁移对应 escape |
+| App canonical-resource consumption | hash/grep/tail 已迁到 canonical `File`（`File::open` 所有权 + `await_read_at`）；copy source lifetime 亦为 canonical `File`（outcome 持有，`native_handle()` 只在 fstat 观察与 pipeline 边界读取）；copy pipeline 保持 explicit outstanding authority；全部残余 escape 已分类（`docs/roadmap/explicit-file-app-consumer-census.md`：interop / A3·A5·A6 依赖 / namespace work） | `CONFORMING` | 每个已被 canonical `File` 表达的资源 lifetime 都由 `File` 持有；剩余 raw/native escape 仅因必要的 metadata、explicit-operation、resize/durability 或 namespace authority 位于别处。`CONFORMING` 不要求 zero `native_handle()`，只要求 zero unclassified bypass；A3/A5/A6 关闭时按 census 行迁移对应 escape |
 | Synthetic backend success | repository-provided synthetic `SyncBackend` / `FakeAsyncBackend` 已删除 | `CONFORMING` | semantic success 只来自 honest execution |
 | Runtime ignorance | Scheduler / Completion / RequestArena 不拥有 File semantics；Read/Write/SyncData File slices 均未要求新增 runtime authority | `CONFORMING` | 任何 File feature 若要求 Scheduler 学会 File，应默认视为 shape failure |
 | Performance tuning | queue/worker/polling/registered resources 属 execution policy/capability | `DEFERRED` | architecture closure 后再 benchmark |
@@ -463,7 +463,7 @@ README summaries
 
 ## 10. 当前 checkpoint
 
-在 `a16d2880`（verified implementation baseline）：
+在 `5a62be39`（verified implementation baseline；A2 implementation conforming，非 issue 关闭）：
 
 ```text
 Canonical File resource       CONFORMING
@@ -473,7 +473,9 @@ SyncData                      CONFORMING (File-facing async + canonical Blocking
 Honest ThreadPool execution   CONFORMING
 Runtime ignorance             CONFORMING
 Blocking File convergence     CONFORMING (A1 closed; legacy FileReader/FileWriter retained temporarily)
-App consumption               CONFORMING (A2 closed; residual escapes classified in app-consumer census)
+App consumption               CONFORMING (A2 implementation conforming; every File-expressible
+                              resource lifetime held by canonical File; residual escapes
+                              classified in app-consumer census)
 
 File size / resize            OPEN (A3)
 Sequential canonical surface  OPEN (A4)

@@ -121,7 +121,7 @@ flowchart TB
 
 1. 已经成立的 canonical `File` spine；
 2. 仍未完成收敛的 historical blocking surface；
-3. app 消费的两种现实：hash/grep/tail 走 canonical `File`，copy 仍走已分类的 raw explicit-op path（A6 前保持）。
+3. app 消费的两种现实：hash/grep/tail 走 canonical `File`；copy 的 source lifetime 走 canonical `File`，而其 pipeline 仍走已分类的 raw explicit-op path（A6 前保持，边界经 `native_handle()`）。
 
 它们不能被一张“理想图”掩盖。
 
@@ -356,6 +356,16 @@ await_read_at(File, ...)
 File dtor / close authority
 ```
 
+copy 的 source lifetime 同样由 canonical File 持有（outcome 持有 `sluice::File`，close 归 File authority）：
+
+```text
+File::open
+    ↓
+sluice::File 所有权（OpenCopyOutcome / SafeOpenOutcome 持有）
+    ↓
+native_handle() 只在 fstat 观察与 pipeline 实参边界读取
+```
+
 分类后的残余 escape（详见 [`docs/roadmap/explicit-file-app-consumer-census.md`](roadmap/explicit-file-app-consumer-census.md)）：
 
 ```text
@@ -364,9 +374,12 @@ hash / grep / tail main:
 
 tail task:
     ::fstat(native_handle()) size / truncation 观测    TEMPORARY_CONVERGENCE_GAP → #343 / A3
+
+copy source metadata:
+    ::fstat(File.native_handle()) kind 观测            REQUIRED_INTEROP
 ```
 
-`sluice-copy` 仍以：
+`sluice-copy` 的 explicit pipeline 仍以：
 
 ```text
 src_fd / dst_fd
@@ -376,7 +389,7 @@ ReadOp / WriteOp / SyncDataOp / SyncAllOp
 RuntimeTaskContext
 ```
 
-直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass；其与 atomic-output namespace 操作已逐 concern 分类：pipeline → #346 / A6，SyncAll → #345 / A5，`ftruncate` → #343 / A3，open/same-file/kind 观测 → REQUIRED_INTEROP，mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
+直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass；ownership 与 operation reference 分离：source lifetime 的 authority 是 canonical File，pipeline 在边界处经 `native_handle()` 引用同一资源，raw explicit-op resource reference 归 #346 / A6。其余 atomic-output namespace 操作已逐 concern 分类：destination special open（`O_NOFOLLOW`/mode 无法由 `FileOpen` 无损表达）与 open/same-file/kind 观测 → REQUIRED_INTEROP，SyncAll → #345 / A5，`ftruncate` → #343 / A3，mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
 
 ---
 
