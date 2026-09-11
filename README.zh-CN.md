@@ -23,7 +23,8 @@ Minimum mechanism.
 
 - [`docs/mission.md`](docs/mission.md) —— 冻结的规范性项目宗旨。
 - [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论支持的显式 I/O 设计准则。
-- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 冻结 File-centric API 语义与可替换 execution 架构；当前实现如何处置等待审计。
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 冻结 File-centric 语义、API 责任边界与可替换 execution 架构。
+- [`docs/roadmap/explicit-file-conformance.md`](docs/roadmap/explicit-file-conformance.md) —— 从 ADR-0002 推导的当前 master 符合性台账与架构补齐 roadmap。
 - [`research/RESULTS.md`](research/RESULTS.md) —— 当前保留的研究证据与结论。
 
 ## 架构一览
@@ -32,7 +33,11 @@ Minimum mechanism.
   <img src="docs/assets/sluice-architecture.svg" alt="Sluice 架构概览" width="100%">
 </p>
 
-这张图只负责压缩展示当前实现形态。当前代码“现在是什么”以代码与构建定义为准；项目“应该遵守什么边界”以 mission 与 ADR 为准。特别地，当前 `sluice_core` / `sluice_async` 的 build 拆分不再被解释为两套长期独立的 I/O 语义；ADR-0002 冻结共享的 Explicit File contract，并把 Blocking / ThreadPool / io_uring 定义为可替换 execution。
+SVG 只负责压缩展示实现形态。[`docs/architecture.md`](docs/architecture.md) 描述当前代码现实；mission 与 ADR 定义规范性边界；conformance roadmap 记录当前 master 哪些节点已经符合这些边界、哪些 gap 仍需关闭。
+
+当前 `sluice_core` / `sluice_async` 的 build 拆分不代表两套长期独立 I/O 语义。ADR-0002 冻结一个 canonical `File` resource 与共享 operation semantics，并把 Blocking、ThreadPool、io_uring 定义为显式、可替换 execution。
+
+`File` 本身**不携带** blocking/async mode，也不选择 backend。execution 由调用/API boundary 显式选择，因此 caller 是否阻塞、是否产生 outstanding request、cancellation、lifetime 与 bounded-resource cost 都不会被隐藏。
 
 ## 研究已经冻结的设计护栏
 
@@ -55,27 +60,21 @@ Batch 研究表明，知道 operations 属于同一 Batch 不等于获得 group-
 
 ## 当前实现
 
-当前代码包含同步 I/O core 和可选异步 runtime。
+当前 master 已经拥有 canonical `sluice::File` resource，并显式表达 open/close/access 语义。File-facing async positional Read、positional Write 与 SyncData 已经沿既有 runtime seam 工作，没有把 File semantic authority 交给 Scheduler 或 backend。
 
-这只是当前实现与构建形态的描述，不代表长期语义上存在两个独立 I/O 世界。ADR-0002 规定的目标是：File resource/state 与 canonical file-operation semantics 共享，而 Blocking、ThreadPool、io_uring 是可替换 execution；它们不同的阻塞、outstanding lifetime、cancellation 与资源成本仍必须保持显式。
+仓库仍保留 historical blocking `FileReader` / `FileWriter` 世界，部分应用也仍直接消费 raw-fd explicit operation。这些被记录为 conformance gap，而不是第二套长期 File model。
 
-同步部分提供 `Result<T>` / `IoError`、Reader/Writer 风格 I/O、文件与 positional I/O、copy helper、durability 操作及相关工具。
+异步部分包含 caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施与 honest backend execution。repository-provided synthetic AsyncBackend 已经删除；生产 execution 保留 ThreadPool 与可用时的 io_uring。
 
-异步部分包含显式 operation、caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施和 backend execution。
-
-这些实现细节将在后续架构审计中按以下类别重新判断：
+当前架构工作明确分成三阶段：
 
 ```text
-SEMANTIC_CONTRACT
-CORRECTNESS_AUTHORITY
-RESOURCE_BOUND
-BACKEND_CAPABILITY
-EXECUTION_POLICY
-HINT / OBSERVATION
-LEGACY / UNJUSTIFIED
+Phase A  先让 ADR 架构在代码中真实成立
+Phase B  再证明并比较不同 execution 的优劣
+Phase C  最后优化或增加 execution backend / capability
 ```
 
-一个 abstraction 是否继续存在，取决于它实际定义了什么语义、正确性、资源边界或真实执行价值，而不是“架构完整”。
+Phase A 的进度以 roadmap 为准。
 
 ## 应用
 
@@ -101,8 +100,9 @@ xmake
 
 - [`docs/mission.md`](docs/mission.md) —— 项目宗旨。
 - [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论对应的显式 I/O 设计准则。
-- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 规范性的 File API 与 execution 架构；实现迁移等待基于 master 的审计。
-- `docs/architecture.md` —— 从当前代码推导出的架构快照。
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 规范性的 File API 与 execution 架构。
+- [`docs/roadmap/explicit-file-conformance.md`](docs/roadmap/explicit-file-conformance.md) —— 实现符合性台账与架构补齐 roadmap。
+- [`docs/architecture.md`](docs/architecture.md) —— 从当前 master 推导出的架构快照。
 - [`research/RESULTS.md`](research/RESULTS.md) —— 保留的研究结论。
 
 ## License

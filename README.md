@@ -23,7 +23,8 @@ Minimum mechanism.
 
 - [`docs/mission.md`](docs/mission.md) — frozen normative mission.
 - [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — research-backed explicit-I/O design doctrine.
-- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) — frozen File-centric API semantics and replaceable-execution architecture; current implementation disposition remains pending audit.
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) — frozen File-centric semantics, API responsibility, and replaceable-execution architecture.
+- [`docs/roadmap/explicit-file-conformance.md`](docs/roadmap/explicit-file-conformance.md) — current master conformance ledger and architecture-completion roadmap derived from ADR-0002.
 - [`research/RESULTS.md`](research/RESULTS.md) — retained research evidence and conclusions.
 
 ## Architecture at a glance
@@ -32,7 +33,11 @@ Minimum mechanism.
   <img src="docs/assets/sluice-architecture.svg" alt="Sluice architecture overview" width="100%">
 </p>
 
-The diagram summarizes the current implementation shape. Current code and build definitions describe what exists today; the mission and ADRs define the normative design boundary. In particular, the current `sluice_core` / `sluice_async` build split does not define two independent long-term I/O semantics: ADR-0002 defines a shared Explicit File contract with replaceable Blocking / ThreadPool / io_uring execution.
+The SVG is a compact implementation overview. [`docs/architecture.md`](docs/architecture.md) is the current-code snapshot; the mission and ADRs define normative boundaries; the conformance roadmap records which parts of current master already satisfy those boundaries and which gaps remain.
+
+The `sluice_core` / `sluice_async` build split does not define two independent long-term I/O semantics. ADR-0002 defines one canonical `File` resource and shared operation semantics, with Blocking, ThreadPool, and io_uring as explicit, replaceable execution forms.
+
+A `File` does **not** carry a blocking/async mode or backend choice. Execution is selected by the invocation/API boundary so caller-visible blocking, outstanding-request lifetime, cancellation, and bounded-resource costs remain explicit.
 
 ## Research-backed guardrails
 
@@ -55,27 +60,21 @@ Performance research likewise keeps semantic contracts separate from execution p
 
 ## Current implementation
 
-The current codebase contains a synchronous I/O core and an opt-in asynchronous runtime.
+Current master has a canonical `sluice::File` resource with explicit open/close/access semantics. File-facing async positional Read, positional Write, and SyncData now route through the existing runtime seam without giving the Scheduler or backend File-semantic authority.
 
-This is a description of the current implementation and build shape, not the long-term semantic split. ADR-0002 defines the normative direction: File resource/state and canonical file-operation semantics are shared, while Blocking, ThreadPool, and io_uring are replaceable execution forms whose initiation and resource costs remain explicit.
+The repository still contains a historical blocking `FileReader` / `FileWriter` world, and some applications still consume raw-fd explicit operations directly. These are tracked as conformance gaps rather than treated as a second long-term File model.
 
-The synchronous side provides `Result<T>` / `IoError`, Reader/Writer-style I/O, file and positional I/O, copy helpers, durability operations, and related utilities.
+The asynchronous side contains caller-owned completions, bounded request state, scheduler/runtime machinery, cancellation, synchronization facilities, and honest backend execution. Repository-provided synthetic AsyncBackend implementations have been removed; production execution is ThreadPool plus io_uring when available.
 
-The asynchronous side contains explicit operations, caller-owned completions, bounded request state, scheduler/runtime machinery, cancellation, synchronization facilities, and backend execution.
-
-Future architecture audits classify concepts by their actual role:
+Current architecture work is intentionally split into phases:
 
 ```text
-SEMANTIC_CONTRACT
-CORRECTNESS_AUTHORITY
-RESOURCE_BOUND
-BACKEND_CAPABILITY
-EXECUTION_POLICY
-HINT / OBSERVATION
-LEGACY / UNJUSTIFIED
+Phase A  make the ADR architecture true in code
+Phase B  prove and compare execution quality
+Phase C  optimize or add execution backends/capabilities
 ```
 
-An abstraction survives because it defines real semantics, correctness, resource bounds, or execution value—not because a larger framework would look more complete.
+The roadmap is the source of truth for Phase A progress.
 
 ## Applications
 
@@ -101,8 +100,9 @@ xmake
 
 - [`docs/mission.md`](docs/mission.md) — project mission.
 - [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) — research-backed explicit-I/O doctrine.
-- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) — normative File API and execution architecture; implementation migration waits for the master-based audit.
-- `docs/architecture.md` — architecture snapshot derived from current code.
+- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) — normative File API and execution architecture.
+- [`docs/roadmap/explicit-file-conformance.md`](docs/roadmap/explicit-file-conformance.md) — implementation conformance ledger and architecture-completion roadmap.
+- [`docs/architecture.md`](docs/architecture.md) — current-code architecture snapshot.
 - [`research/RESULTS.md`](research/RESULTS.md) — retained research conclusions.
 
 ## License
