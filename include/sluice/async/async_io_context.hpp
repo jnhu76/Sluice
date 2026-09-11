@@ -4,6 +4,7 @@
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
@@ -16,23 +17,37 @@
 
 namespace sluice::async {
 
-struct ReadOp {
+// Mechanism-level reference to the resource an explicit operation targets.
+// Implicit conversion from a canonical File is the normal spelling; conversion
+// from a raw native handle requires naming the type explicitly (interop
+// resources only). Carries no ownership and no lifetime authority: the handle
+// value is copied at op construction and the caller keeps the resource alive
+// until terminal completion is observed.
+struct NativeFileRef {
+    NativeFileRef() = default;
+    explicit NativeFileRef(int native_fd) : fd(native_fd) {}
+    NativeFileRef(const sluice::File& file) : fd(file.native_handle()) {}
+
     int fd = -1;
+};
+
+struct ReadOp {
+    NativeFileRef file;
     std::byte* dst = nullptr;
     std::size_t len = 0;
     std::uint64_t offset = 0;
 };
 struct WriteOp {
-    int fd = -1;
+    NativeFileRef file;
     const std::byte* src = nullptr;
     std::size_t len = 0;
     std::uint64_t offset = 0;
 };
 struct SyncDataOp {
-    int fd = -1;
+    NativeFileRef file;
 };
 struct SyncAllOp {
-    int fd = -1;
+    NativeFileRef file;
 };
 
 struct BackendWaitToken {

@@ -132,7 +132,7 @@ ThreadPoolBackend::~ThreadPoolBackend() {
 }
 
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
-    if (op.fd < 0)
+    if (op.file.fd < 0)
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     if (op.len > 0 && op.dst == nullptr) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -149,7 +149,7 @@ Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
 }
 
 Result<void> ThreadPoolBackend::validate_write(WriteOp op) {
-    if (op.fd < 0)
+    if (op.file.fd < 0)
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     if (op.len > 0 && op.src == nullptr) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -165,13 +165,13 @@ Result<void> ThreadPoolBackend::validate_write(WriteOp op) {
 }
 
 Result<void> ThreadPoolBackend::validate_sync(SyncDataOp op) {
-    if (op.fd < 0)
+    if (op.file.fd < 0)
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     return {};
 }
 
 Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
-    if (op.fd < 0)
+    if (op.file.fd < 0)
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     return {};
 }

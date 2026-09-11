@@ -99,13 +99,13 @@ bool copy_non_atomic_roundtrip() {
         return false;
     }
 
-    const auto result = sluice_copy::run_pipelined_copy(oc.src_file->native_handle(), oc.dst_fd,
-                                                        kBufferSize, kPipelineDepth, kWorkers,
-                                                        SyncPolicy::none);
+    const auto result =
+        sluice_copy::run_pipelined_copy(*oc.src_file, sluice::async::NativeFileRef{oc.dst_fd},
+                                        kBufferSize, kPipelineDepth, kWorkers, SyncPolicy::none);
     ::close(oc.dst_fd);
     const std::string copied = read_file(dst);
-    const bool ok = result.has_value() && result.value().bytes_copied == content.size() &&
-                    copied == content;
+    const bool ok =
+        result.has_value() && result.value().bytes_copied == content.size() && copied == content;
     ::unlink(src.c_str());
     ::unlink(dst.c_str());
     ::rmdir(dst_dir.c_str());
@@ -134,9 +134,9 @@ bool outcome_move_transfers_source_ownership() {
         return false;
     }
 
-    const auto result = sluice_copy::run_pipelined_copy(moved.src_file->native_handle(),
-                                                        moved.dst_fd, kBufferSize, kPipelineDepth,
-                                                        kWorkers, SyncPolicy::none);
+    const auto result =
+        sluice_copy::run_pipelined_copy(*moved.src_file, sluice::async::NativeFileRef{moved.dst_fd},
+                                        kBufferSize, kPipelineDepth, kWorkers, SyncPolicy::none);
     ::close(moved.dst_fd);
     const std::string copied = read_file(dst);
     const bool ok = result.has_value() && copied == content;
@@ -214,9 +214,9 @@ bool atomic_copy_roundtrip_with_commit() {
         return false;
     }
 
-    const auto result = sluice_copy::run_pipelined_copy(oc.src_file->native_handle(), oc.temp_fd,
-                                                        kBufferSize, kPipelineDepth, kWorkers,
-                                                        SyncPolicy::none);
+    const auto result =
+        sluice_copy::run_pipelined_copy(*oc.src_file, sluice::async::NativeFileRef{oc.temp_fd},
+                                        kBufferSize, kPipelineDepth, kWorkers, SyncPolicy::none);
     if (!result.has_value()) {
         sluice_copy::discard_atomic_copy(oc);
         ::rmdir(dst_dir.c_str());
@@ -280,8 +280,8 @@ bool atomic_same_file_fails_without_temp() {
 
     sluice_copy::SafeOpenOutcome oc = sluice_copy::open_atomic_copy(path, path);
     ::unlink(path.c_str());
-    return oc.failure == SafeOpenFailure::same_file && !oc.src_file.has_value() &&
-           oc.temp_fd < 0 && oc.temp_path.empty();
+    return oc.failure == SafeOpenFailure::same_file && !oc.src_file.has_value() && oc.temp_fd < 0 &&
+           oc.temp_path.empty();
 }
 
 } // namespace
@@ -311,7 +311,6 @@ int main() {
             return 1;
         }
     }
-    std::printf("all %zu app copy consumption tests passed\n",
-                sizeof(tests) / sizeof(tests[0]));
+    std::printf("all %zu app copy consumption tests passed\n", sizeof(tests) / sizeof(tests[0]));
     return 0;
 }

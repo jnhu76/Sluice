@@ -1,12 +1,15 @@
 #pragma once
 
 #include <sluice/async/application_runtime.hpp>
+#include <sluice/async/async_io_context.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 namespace sluice_copy {
@@ -30,20 +33,23 @@ struct CopyStats {
     SyncPolicy sync = SyncPolicy::none;
 };
 
-sluice::Result<CopyStats> run_sequential_copy(int src_fd, int dst_fd, std::size_t buffer_size,
-                                              unsigned workers, SyncPolicy sync);
+sluice::Result<CopyStats> run_sequential_copy(const sluice::File& src_file,
+                                              const sluice::async::NativeFileRef& dst,
+                                              std::size_t buffer_size, unsigned workers,
+                                              SyncPolicy sync);
+
+sluice::Result<CopyStats> run_sequential_copy_with_backend(
+    const sluice::File& src_file, const sluice::async::NativeFileRef& dst, std::size_t buffer_size,
+    unsigned workers, SyncPolicy sync, std::unique_ptr<sluice::async::AsyncBackend> backend);
+
+sluice::Result<CopyStats> run_pipelined_copy(const sluice::File& src_file,
+                                             const sluice::async::NativeFileRef& dst,
+                                             std::size_t buffer_size, std::size_t pipeline_depth,
+                                             unsigned workers, SyncPolicy sync);
 
 sluice::Result<CopyStats>
-run_sequential_copy_with_backend(int src_fd, int dst_fd, std::size_t buffer_size, unsigned workers,
-                                 SyncPolicy sync,
-                                 std::unique_ptr<sluice::async::AsyncBackend> backend);
-
-sluice::Result<CopyStats> run_pipelined_copy(int src_fd, int dst_fd, std::size_t buffer_size,
-                                             std::size_t pipeline_depth, unsigned workers,
-                                             SyncPolicy sync);
-
-sluice::Result<CopyStats>
-run_pipelined_copy_with_backend(int src_fd, int dst_fd, std::size_t buffer_size,
+run_pipelined_copy_with_backend(const sluice::File& src_file,
+                                const sluice::async::NativeFileRef& dst, std::size_t buffer_size,
                                 std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
                                 std::unique_ptr<sluice::async::AsyncBackend> backend);
 

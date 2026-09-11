@@ -15,7 +15,7 @@ Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std
     if (dst.empty()) {
         return std::size_t{0};
     }
-    return await_read_once(ctx, file.native_handle(), dst, offset, c);
+    return await_read_once(ctx, file, dst, offset, c);
 }
 
 Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, std::uint64_t offset,
@@ -29,7 +29,7 @@ Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, st
     if (src.empty()) {
         return std::size_t{0};
     }
-    auto sr = ctx.submit_write(WriteOp{file.native_handle(), src.data(), src.size(), offset}, c);
+    auto sr = ctx.submit_write(WriteOp{file, src.data(), src.size(), offset}, c);
     if (!sr.has_value())
         return make_unexpected<std::size_t>(sr.error());
     return await_take(ctx, c);
@@ -39,7 +39,7 @@ Result<void> await_sync_data(const File& file, RuntimeTaskContext& ctx, Completi
     if (!file.is_open()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
-    auto sr = ctx.submit_sync_data(SyncDataOp{file.native_handle()}, c);
+    auto sr = ctx.submit_sync_data(SyncDataOp{file}, c);
     if (!sr.has_value())
         return make_unexpected<void>(sr.error());
     return await_take(ctx, c);
@@ -49,10 +49,10 @@ Result<void> await_sync_all(const File& file, RuntimeTaskContext& ctx, Completio
     if (!file.is_open()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
-    auto sr = ctx.submit_sync_all(SyncAllOp{file.native_handle()}, c);
+    auto sr = ctx.submit_sync_all(SyncAllOp{file}, c);
     if (!sr.has_value())
         return make_unexpected<void>(sr.error());
     return await_take(ctx, c);
 }
 
-}
+} // namespace sluice::async

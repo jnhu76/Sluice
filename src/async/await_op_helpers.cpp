@@ -29,22 +29,23 @@ Result<void> await_drain(RuntimeTaskContext& ctx, Completion<std::size_t>& c) {
     return {};
 }
 
-Result<std::size_t> await_read_once(RuntimeTaskContext& ctx, int fd, std::span<std::byte> dst,
-                                    std::uint64_t offset, Completion<std::size_t>& c) {
-    auto sr = ctx.submit_read(ReadOp{fd, dst.data(), dst.size(), offset}, c);
+Result<std::size_t> await_read_once(RuntimeTaskContext& ctx, const NativeFileRef& file,
+                                    std::span<std::byte> dst, std::uint64_t offset,
+                                    Completion<std::size_t>& c) {
+    auto sr = ctx.submit_read(ReadOp{file, dst.data(), dst.size(), offset}, c);
     if (!sr.has_value())
         return make_unexpected<std::size_t>(sr.error());
     return await_take(ctx, c);
 }
 
-Result<std::size_t> await_read_fill(RuntimeTaskContext& ctx, int fd, std::span<std::byte> dst,
-                                    std::uint64_t offset, Completion<std::size_t>& c,
-                                    AwaitOpTally* tally) {
+Result<std::size_t> await_read_fill(RuntimeTaskContext& ctx, const NativeFileRef& file,
+                                    std::span<std::byte> dst, std::uint64_t offset,
+                                    Completion<std::size_t>& c, AwaitOpTally* tally) {
     std::size_t filled = 0;
     while (filled < dst.size()) {
-        auto rr =
-            await_read_once(ctx, fd, std::span<std::byte>(dst.data() + filled, dst.size() - filled),
-                            offset + filled, c);
+        auto rr = await_read_once(ctx, file,
+                                  std::span<std::byte>(dst.data() + filled, dst.size() - filled),
+                                  offset + filled, c);
         if (!rr.has_value())
             return rr;
         if (tally) {
@@ -59,14 +60,14 @@ Result<std::size_t> await_read_fill(RuntimeTaskContext& ctx, int fd, std::span<s
     return filled;
 }
 
-Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, int fd,
+Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, const NativeFileRef& file,
                                       std::span<const std::byte> src, std::uint64_t offset,
                                       Completion<std::size_t>& c, AwaitOpTally* tally) {
     std::size_t written = 0;
     while (written < src.size()) {
         std::size_t remaining = src.size() - written;
         auto sr =
-            ctx.submit_write(WriteOp{fd, src.data() + written, remaining, offset + written}, c);
+            ctx.submit_write(WriteOp{file, src.data() + written, remaining, offset + written}, c);
         if (!sr.has_value())
             return make_unexpected<std::size_t>(sr.error());
         auto wr = ctx.await_completion(c);

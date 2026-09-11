@@ -23,8 +23,8 @@ using sluice::FileExistence;
 using sluice::FileInitialContents;
 using sluice::FileOpen;
 using sluice::IoError;
-using sluice::Result;
 using sluice::make_unexpected;
+using sluice::Result;
 
 std::string make_temp_file(const std::string& content) {
     char path[] = "/tmp/sluice_file_read_XXXXXX";
@@ -145,7 +145,7 @@ bool outstanding_read_resource_valid_until_terminal() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            auto sr = ctx.submit_read(ReadOp{file.native_handle(), dst.data(), dst.size(), 0}, c);
+            auto sr = ctx.submit_read(ReadOp{file, dst.data(), dst.size(), 0}, c);
             if (!sr.has_value()) {
                 slot.publish(make_unexpected<std::size_t>(sr.error()));
                 return;
@@ -377,7 +377,7 @@ bool await_read_on_write_only_file_rejected_upfront() {
     return file.close().has_value();
 }
 
-}
+} // namespace
 
 int main() {
     struct NamedTest {
