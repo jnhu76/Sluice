@@ -427,6 +427,32 @@ await write
 
 worker count、queue ordering、dispatch FIFO 等属于 execution policy / mechanism（§8.2），不得作为 durability coverage 的定义依据。
 
+Coverage membership 与 final recoverable value 是两个不同问题：
+
+```text
+ordering decides which mutations may be covered;
+supersession decides which exact state still exists to be covered.
+```
+
+SyncData / SyncAll 不提供文件状态 snapshot guarantee。进入 minimum guaranteed set 的 mutation，其产生的具体状态仍可能在 durability operation 建立 guarantee 之前，被后来的冲突 mutation 取代（supersede）。冲突 mutation 指改变 caller 想依赖的同一 observable state 的 mutation，例如重叠的 file-data write、同一 metadata field 的再次变更、影响相关 data state 的 resize。
+
+```text
+covered
+    != immutable
+    != snapshot-preserved
+```
+
+caller 只有在该 durability operation 建立 guarantee 之前、没有任何冲突 mutation 取代目标状态时，才可依赖某个 covered mutation 产生的精确状态（exact bytes、mode、ownership、timestamp 等）：
+
+```text
+concurrent or unordered conflicting mutations
+    -> themselves outside the minimum guaranteed set
+    -> and may supersede the state produced
+       by an earlier covered mutation
+```
+
+这包括来自其他 process、其他 fd 或外部 filesystem actor 的变更；Sluice 对它们不提供任何全局顺序或串行化承诺。caller 若需要 exact recoverable state，必须自行建立 ordering 或 quiescence，使 guarantee 建立前没有冲突 mutation 能取代目标状态；这只是 caller obligation，本 ADR 不因此引入任何 runtime mechanism，也不改变 bare `resize` durability 地位的不裁决（§5.4.3）。
+
 #### 5.4.3 Metadata boundary
 
 SyncData 的保证包含：
@@ -510,7 +536,8 @@ Directory resource、directory sync、rename durability 仍由 §13 保持未决
 ```text
 success
     = the selected execution reports that the canonical durability
-      guarantee has been established for the guaranteed set
+      guarantee has been established for the guaranteed set,
+      subject to the supersession rule (§5.4.2)
 ```
 
 成功不等于 physically proven permanent forever；该承诺仍受底层 storage / filesystem documented durability behavior 的约束。Sluice 不独立证明硬件掉电行为。
