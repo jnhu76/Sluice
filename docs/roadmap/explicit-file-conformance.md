@@ -1,7 +1,7 @@
 # Explicit File Architecture Conformance Roadmap
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Verified implementation baseline**: `5a62be3994c9c293d800eea15be6b0d021a61596`（该 commit 可 checkout 并验证下文描述的实现状态）
+- **Verified implementation baseline**: `ed260ee027ece695026fcf9d8548db65541fb0b4`（该 commit 可 checkout 并验证下文描述的实现状态）
 - **Purpose**: 记录当前代码对已冻结 Explicit File 架构的符合程度，并把剩余差距拆成可独立关闭的工作项。
 - **Non-authority rule**: 本文不重新定义架构；若本文与 ADR 冲突，以 ADR 为准。
 
@@ -190,7 +190,7 @@ flowchart TB
 
 ## 4. Current master conformance ledger
 
-Verified implementation baseline：`5a62be39`（A1 + A2 implementation；下表状态在该 commit 上成立）。
+Verified implementation baseline：`ed260ee0`（A1 + A2 + A4 implementation；下表状态在该 commit 上成立）。
 
 | Architecture node | Current code reality | Status | Closure direction |
 | --- | --- | --- | --- |
@@ -203,7 +203,7 @@ Verified implementation baseline：`5a62be39`（A1 + A2 implementation；下表�
 | Blocking File resource surface | Canonical `sluice::blocking::read_at/write_at/sync_data` 围绕同一 `File` 落地，未引入第二套 resource identity；`FileReader`/`FileWriter` 作为 legacy surface 暂时保留 | `CONFORMING` | A1 完成（canonical surface）；legacy surface 的删除/收敛留到后续 roadmap 节点 |
 | Common logical API | 当前 canonical `File` 路径主要是显式 async `await_* + Completion`；blocking common File API 尚未收敛 | `GAP` | 先固定 blocking common surface，再判断 evented common surface 的最小 spelling |
 | Explicit outstanding API resource reference | backend operation 仍以 raw fd 表达；File-facing `await_*` 已桥接 canonical File semantics | `PARTIAL` | 单独裁决低层 explicit operation 如何引用 File semantics；不得把 raw fd 提升回 semantic owner |
-| Sequential Read / Write | legacy `FileReader` / `FileWriter` 已有 sequential behavior，但 canonical `File` surface 未收敛 | `CONVERGENCE_GAP` | 在 File + execution boundary 下重新表达；不得隐式共享 seek 语义 |
+| Sequential Read / Write | canonical `blocking::read/write` over `File` 已落地；logical-position owner 是 open file description 的 shared offset（直接 ::read/::write lowering，无 seek+positional 仿真）；positional 操作不触碰 shared offset；evented sequential 形式无 consumer 证据、未实现 | `CONFORMING` | 保持 direct lowering 与 shared-offset 语义；不得加入 File 内 position state 或隐藏 seek；evented 形式须凭 consumer 证据另行裁决 |
 | Vectored Read / Write | ADR-0002 已将 vectored 标记为 evidence-gated operation shape；legacy blocking surface 已存在 vector methods，但 consumer/semantic 证据尚未使其成为 canonical operation | `RESEARCH` | 先做 consumer/semantic census，再决定最小 canonical surface；不因现有 API 自动扩张 |
 | SyncAll | async backend transport 已有 `SyncAllOp`，legacy blocking writer 也有 `sync_all`，但 canonical File-facing operation 尚缺 | `GAP` | 在 SyncData 模式被证明稳定后独立 slice |
 | `size` | ADR 已冻结为 observable File state；canonical `File` 当前未暴露 | `GAP` | 独立 File-state slice |
@@ -463,7 +463,7 @@ README summaries
 
 ## 10. 当前 checkpoint
 
-在 `5a62be39`（verified implementation baseline；A2 implementation conforming，非 issue 关闭）：
+在 `ed260ee0`（verified implementation baseline；A2 与 A4 implementation conforming，非 issue 关闭）：
 
 ```text
 Canonical File resource       CONFORMING
@@ -478,7 +478,7 @@ App consumption               CONFORMING (A2 implementation conforming; every Fi
                               classified in app-consumer census)
 
 File size / resize            OPEN (A3)
-Sequential canonical surface  OPEN (A4)
+Sequential canonical surface  CONFORMING (A4)
 SyncAll File surface          OPEN (A5)
 Explicit low-level File ref   OPEN (A6)
 Vectored decision             OPEN (A7)
