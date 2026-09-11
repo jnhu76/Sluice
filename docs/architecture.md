@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Verified implementation baseline**: `5c87e466f09476a93cda325c5ad54c57fdb744e3`
+- **Verified implementation baseline**: `d7511349990cbb3ef340e158c7816fe3296b0575`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -67,11 +67,11 @@ flowchart TB
         BR["blocking::read_at(File, ...) "]
         BW["blocking::write_at(File, ...) "]
         BS["blocking::sync_data(File, ...) "]
-        BST["blocking::size(File) "]
-        BRS["blocking::resize(File, ...) "]
         BSR["blocking::read(File, ...) "]
         BSW["blocking::write(File, ...) "]
         BSA["blocking::sync_all(File) "]
+        BST["blocking::size(File) "]
+        BRS["blocking::resize(File, ...) "]
     end
 
     subgraph ASYNC_API["File-facing async adapters"]
@@ -120,14 +120,14 @@ flowchart TB
     UR --> OS
     LEGACY --> OS
 
-    COPY -. "known raw-fd explicit-op path" .-> RTC
+    COPY -. "explicit ops reference File / NativeFileRef" .-> RTC
 ```
 
 这张图故意同时画出：
 
 1. 已经成立的 canonical `File` spine；
 2. 仍未完成收敛的 historical blocking surface；
-3. app 消费的两种现实：hash/grep/tail 走 canonical `File`；copy 的 source lifetime 走 canonical `File`，而其 pipeline 仍走已分类的 raw explicit-op path（A6 前保持，边界经 `native_handle()`）。
+3. app 消费的两种现实：hash/grep/tail 走 canonical `File`；copy 的 source lifetime 走 canonical `File`，其 pipeline 的 src 边界直接引用 canonical `File`，dst interop 资源经显式命名的 `NativeFileRef{int}` 引用。
 
 它们不能被一张“理想图”掩盖。
 
@@ -195,11 +195,11 @@ await_sync_all
 blocking::read_at
 blocking::write_at
 blocking::sync_data
-blocking::size
-blocking::resize
 blocking::read
 blocking::write
 blocking::sync_all
+blocking::size
+blocking::resize
 ```
 
 Blocking path 不经过 RuntimeTaskContext、Completion 或 AsyncBackend；它直接对 caller 线程执行 syscall。
@@ -384,21 +384,28 @@ native_handle() 只在 fstat 观察与 pipeline 实参边界读取
 hash / grep / tail main:
     ::fstat(File.native_handle()) regular-file check   REQUIRED_INTEROP
 
+tail task:
+    size / truncation 观测已迁 blocking::size(*file)（A3）
+
 copy source metadata:
     ::fstat(File.native_handle()) kind 观测            REQUIRED_INTEROP
+
+copy dst（interop 资源）:
+    O_NOFOLLOW/mkstemp open 单元 + NativeFileRef{int} 机制引用   REQUIRED_INTEROP
 ```
 
-`sluice-copy` 的 explicit pipeline 仍以：
+`sluice-copy` 的 explicit pipeline 以：
 
 ```text
-src_fd / dst_fd
+src: canonical File → NativeFileRef（隐式转换）
+dst: NativeFileRef{int}（显式命名 interop 引用）
     ↓
 ReadOp / WriteOp / SyncDataOp / SyncAllOp
     ↓
 RuntimeTaskContext
 ```
 
-直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass；ownership 与 operation reference 分离：source lifetime 的 authority 是 canonical File，pipeline 在边界处经 `native_handle()` 引用同一资源，raw explicit-op resource reference 归 #346 / A6。其余 atomic-output namespace 操作已逐 concern 分类：destination special open（`O_NOFOLLOW`/mode 无法由 `FileOpen` 无损表达）与 open/same-file/kind 观测 → REQUIRED_INTEROP，SyncAll pipeline escape → #346 / A6（canonical `sync_all` surface 已落地），`ftruncate` → #346 / A6（dst 是 interop-owned raw fd，`File::resize` 无法表达该资源引用），mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
+直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass。A6 之后 ownership 与 operation reference 对 canonical 资源说同一种语言：pipeline 的 src 边界直接引用 canonical `File`（`NativeFileRef(const File&)` 隐式转换，op 构造时拷贝 handle 值，不拥有任何 authority）；dst 是 interop 资源（`O_NOFOLLOW`/`mkstemp` open 单元，无法由 `FileOpen` 无损表达，REQUIRED_INTEROP），其引用经显式命名的 `NativeFileRef{int}` 表达——bare int 不能构造 op，机制级引用必须拼写出来。`NativeFileRef` 不引入 shared_ptr、registry、pin 或 runtime File knowledge；caller-borne lifetime（File 活到 terminal 被观察）不变，两个 backend 的 lowering 仍消费 `int`。其余 atomic-output namespace 操作已逐 concern 分类：destination special open 与 open/same-file/kind 观测 → REQUIRED_INTEROP，`ftruncate` → REQUIRED_INTEROP（dst 是 interop-owned raw fd，非 canonical File），mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
 
 ---
 
@@ -418,13 +425,15 @@ async File-facing:
   file_sync_data_test
   file_sync_all_test
 
+explicit outstanding ops:
+  explicit_file_ref_test
+
 blocking File-facing:
   blocking_file_read_test
   blocking_file_write_test
   blocking_file_sync_data_test
-  blocking_file_state_test
-  blocking_file_sequential_test
   blocking_file_sync_all_test
+  blocking_file_sequential_test
 
 shared validation helpers:
   io_validation_boundary_test
@@ -436,7 +445,7 @@ app canonical-resource consumption:
   app_copy_consumption_test
 ```
 
-这些测试分别保护 canonical File resource 及其 observable state（size / resize）、已落地的 positional Read / Write / SyncData 与 SyncAll slices（evented 与 blocking 两种 initiation）与 blocking-only 的 sequential Read / Write slice、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
+这些测试分别保护 canonical File resource 及其 observable state（size / resize）、已落地的 positional Read / Write、sequential Read / Write、SyncData 与 SyncAll slices（evented 与 blocking 两种 initiation）、explicit outstanding op 的 canonical File 引用与显式命名 interop 引用（含 multiple-outstanding 与取消路径），跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
@@ -446,10 +455,9 @@ app canonical-resource consumption:
 
 ## 9. 当前 architecture gaps
 
-以 `5c87e466`（A2 + A3 + A4 + A5 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
+以 `d7511349`（A2 + A3 + A4 + A5 + A6 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
-Explicit low-level operation resource reference
 Vectored operation decision / convergence
 ```
 
