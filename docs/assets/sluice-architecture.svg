@@ -64,10 +64,8 @@
   <path d="M690 735 L690 758" class="blue" marker-end="url(#arrow)"/>
   <rect x="80" y="770" rx="14" ry="14" width="1220" height="75" class="panel"/>
   <text x="690" y="800" text-anchor="middle" class="h">Execution Mechanisms</text>
-  <rect x="115" y="811" rx="8" ry="8" width="250" height="24" class="small"/><text x="240" y="828" text-anchor="middle" class="s">ThreadPoolBackend</text>
-  <rect x="385" y="811" rx="8" ry="8" width="220" height="24" class="small"/><text x="495" y="828" text-anchor="middle" class="s">SyncBackend</text>
-  <rect x="625" y="811" rx="8" ry="8" width="220" height="24" class="small"/><text x="735" y="828" text-anchor="middle" class="s">FakeBackend</text>
-  <rect x="865" y="811" rx="8" ry="8" width="300" height="24" class="dash"/><text x="1015" y="828" text-anchor="middle" class="s">UringBackend (optional)</text>
+  <rect x="395" y="811" rx="8" ry="8" width="250" height="24" class="small"/><text x="520" y="828" text-anchor="middle" class="s">ThreadPoolBackend</text>
+  <rect x="685" y="811" rx="8" ry="8" width="300" height="24" class="dash"/><text x="835" y="828" text-anchor="middle" class="s">UringBackend (optional)</text>
 
   <rect x="1330" y="125" rx="14" ry="14" width="240" height="720" class="panel"/>
   <text x="1450" y="160" text-anchor="middle" class="h">Design doctrine</text>

@@ -139,8 +139,6 @@ in V1 (run-to-completion workload); cancellation surfaces as an error (exit
   unterminated);
 - `sluice_grep_cli_parse_test` — strict parsing, caps, usage errors exit 2,
   newline-pattern rejection, empty-pattern acceptance, `-` as operand;
-- `sluice_grep_fault_test` — FakeAsyncBackend read-error/EOF injection,
-  invalid-config rejection;
 - `sluice_grep_integration_test` — real files + real backend: multi-file
   deterministic ordering, 1500-line cross-chunk scanning, boundary cases,
   bad-fd isolation.
