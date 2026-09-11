@@ -107,7 +107,7 @@ Pipeline 拥有 multiple `PipelineSlot`、multiple `Completion`、multiple outst
 | `apps/sluice-copy/file_domain.cpp:16` | `ScopedFd` dtor `::close`（仅 dst guard） | interop dst open 单元的 close authority | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/main.cpp:26` | `ScopedFd` dtor `::close`（仅 dst guard） | interop dst open 单元的 close authority | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/file_domain.cpp:58` | `::fstat(dst_fd)` + `S_ISREG` | regular-file check | REQUIRED_INTEROP | KEEP | — |
-| `apps/sluice-copy/file_domain.cpp:64` | same-file identity（`st_dev`/`st_ino`） | same-file check | REQUIRED_INTEROP | KEEP | — |
+| `apps/sluice-copy/file_domain.cpp:65` | same-file identity（`st_dev`/`st_ino`） | same-file check | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/safe_output.cpp:78`（same-file 比较在 `:81-82`） | `::stat(dst_path)` 预检（kind + same-file） | 目标 namespace 预检 | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/safe_output.cpp:24` | `ScopedFd` dtor `::close`（temp/dir guard） | namespace 协议 fd 生命周期的 close 尾部 | OUT_OF_SCOPE_NAMESPACE_WORK | KEEP | — |
 | `apps/sluice-copy/safe_output.cpp:94` | `::mkstemp` | temp 文件创建 | OUT_OF_SCOPE_NAMESPACE_WORK | KEEP | — |

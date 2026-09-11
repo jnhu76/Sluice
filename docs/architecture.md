@@ -432,7 +432,7 @@ app canonical-resource consumption:
 
 ## 9. 当前 architecture gaps
 
-以 `a16d2880`（A2 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
+以 `5a62be39`（A2 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
 File size

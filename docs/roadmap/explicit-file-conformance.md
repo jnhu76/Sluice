@@ -1,7 +1,7 @@
 # Explicit File Architecture Conformance Roadmap
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Verified implementation baseline**: `a16d2880f1d778d130d98addd6a63c6a63961f05`（该 commit 可 checkout 并验证下文描述的实现状态）
+- **Verified implementation baseline**: `5a62be3994c9c293d800eea15be6b0d021a61596`（该 commit 可 checkout 并验证下文描述的实现状态）
 - **Purpose**: 记录当前代码对已冻结 Explicit File 架构的符合程度，并把剩余差距拆成可独立关闭的工作项。
 - **Non-authority rule**: 本文不重新定义架构；若本文与 ADR 冲突，以 ADR 为准。
 
