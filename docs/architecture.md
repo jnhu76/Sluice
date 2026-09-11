@@ -7,7 +7,7 @@
 Sluice 是一个 C++20 I/O 库，由两个静态库目标与四个应用组成：
 
 - `sluice_core` —— 同步 I/O 核心：`Result<T>`/`IoError` 错误模型、Reader/Writer 字节流抽象、文件与位置 I/O、copy、WAL、缓冲与包装器、阻塞线程池。
-- `sluice_async` —— 可选启用的异步运行时：显式操作提交、调用方持有的完成槽、有界请求状态、Fiber 调度器、同步原语、取消、以及可替换的后端执行（线程池 / 同步 / io_uring / 仿真）。
+- `sluice_async` —— 可选启用的异步运行时：显式操作提交、调用方持有的完成槽、有界请求状态、Fiber 调度器、同步原语、取消、以及可替换的后端执行（线程池 / io_uring）。
 - `apps/` —— 四个命令行应用（copy / hash / grep / tail），是公共 API 的真实消费者；主执行路径消费公共异步面与错误模型，另有一处内部依赖例外：`sluice-copy` 的 `safe_output` 直接使用 `sluice/detail/posix_retry.hpp`（见 §6）。
 
 当前仓库是精简后的工程基线：只保留实现、应用与构建定义。测试、基准、示例、脚本、CI workflow、历史文档与形式化模型不在当前树中。
@@ -239,13 +239,13 @@ sequenceDiagram
 
 - `Result<T>` / `IoError` —— I/O 可报告失败的主要错误通道（两个库共享）；普通 C++ 异常路径仍存在，任务边界存在异常翻译（见 §4.1/§4.2）。
 - `Reader` / `Writer` —— 同步字节流接口，文件/内存/缓冲/包装器都实现它。
-- `AsyncBackend` —— 后端策略接口，四个存留实现（ThreadPool/Sync/Uring/Fake）可替换，`RuntimeBuilder` 注入。
+- `AsyncBackend` —— 后端策略接口，两个存留实现（ThreadPool/Uring）可替换，`RuntimeBuilder` 注入。
 - `Completion<T>` —— 调用方持有的完成槽：六态状态机、所有权与 fail-fast 边界都在这里。
 - `ApplicationRuntime` / `RuntimeTaskContext` —— 应用进入运行时的入口与任务内 API。
 - `Scheduler` / `Fiber` —— 协作式多 worker 调度（汇编上下文切换），等待即 park，完成经"终结化 → reap 发布 → 就绪路由"三阶段唤醒（见 §7）。
 
 **同步能力**（`sluice_core`）：Reader/Writer、文件与位置 I/O、copy、WAL、缓冲、内存/故障/观测包装、阻塞线程池。
-**异步能力**（`sluice_async`）：显式操作 + 调用方完成槽、有界请求状态、Fiber 调度、同步原语与 select、Group/Batch/Future/取消、四个存留后端实现。
+**异步能力**（`sluice_async`）：显式操作 + 调用方完成槽、有界请求状态、Fiber 调度、同步原语与 select、Group/Batch/Future/取消、两个存留后端实现。
 
 **后端实现状态**（按当前构建与调用点事实）：四个真实应用的执行路径全部显式构造 `ThreadPoolBackend`；`UringAsyncBackend` 在默认构建中编译为不可用的降级实现（`SLUICE_HAS_LIBURING` 未定义），降级路径以错误拒绝而非合成成功。生产面不存在合成执行后端。
 

@@ -1,11 +1,8 @@
--- Helper functions shared across test/example/bench target declarations.
+-- Helper functions shared across test target declarations.
 --
--- Two async-test wrappers (sluice_production_async_test /
--- sluice_internal_async_test) make the linked runtime EXPLICIT at every call
--- site. The underlying sluice_one_file_test deliberately has NO runtime
--- default and asserts that deps were supplied, so a future test that forgets
--- to pick a wrapper fails loudly instead of silently linking the test-seam
--- variant (the regression this guard closes).
+-- sluice_one_file_target declares a one-file target only when its source
+-- file exists. Library deps are supplied explicitly by each call site
+-- (see xmake/tests.lua); nothing is linked implicitly.
 
 local unpack = table.unpack or unpack
 local R = SLUICE_ROOT
