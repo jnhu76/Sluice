@@ -1,7 +1,9 @@
 #pragma once
 
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 
+#include <optional>
 #include <string>
 
 namespace sluice_copy {
@@ -18,7 +20,7 @@ enum class OpenCopyFailure : std::uint8_t {
 };
 
 struct OpenCopyOutcome {
-    int src_fd = -1;
+    std::optional<sluice::File> src_file;
     int dst_fd = -1;
     OpenCopyFailure failure = OpenCopyFailure::none;
     sluice::IoError error{};

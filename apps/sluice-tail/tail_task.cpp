@@ -1,6 +1,7 @@
 #include "tail_task.hpp"
 
 #include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
@@ -84,7 +85,7 @@ struct LineAssembler {
 };
 
 struct TailTask {
-    int fd;
+    const sluice::File* file;
     TailOptions options;
     LineSink sink;
     DiagSink diag;
@@ -110,10 +111,9 @@ struct TailTask {
 
     sluice::Result<std::size_t> read_at(RuntimeTaskContext& ctx, Completion<std::size_t>& rc,
                                         std::uint64_t offset) {
-        return await_read_once(
-            ctx, fd,
-            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
-            offset, rc);
+        return await_read_at(
+            *file, ctx, offset,
+            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()), rc);
     }
 
     sluice::Result<std::uint64_t> find_last_lines_offset(RuntimeTaskContext& ctx,
@@ -126,9 +126,9 @@ struct TailTask {
             Completion<std::size_t> rc;
             std::uint8_t last = 0;
 
-            auto rr = await_read_once(ctx, fd,
-                                      std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1),
-                                      size - 1, rc);
+            auto rr = await_read_at(*file, ctx, size - 1,
+                                    std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1),
+                                    rc);
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             skip_final_nl = (last == '\n');
@@ -143,9 +143,9 @@ struct TailTask {
             std::uint64_t lo = (pos > buffer.size()) ? pos - buffer.size() : 0;
 
             std::size_t want = static_cast<std::size_t>(pos - lo);
-            auto rr = await_read_once(
-                ctx, fd, std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), want),
-                lo, rc);
+            auto rr = await_read_at(
+                *file, ctx, lo,
+                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), want), rc);
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             std::size_t got = rr.value();
@@ -181,7 +181,7 @@ struct TailTask {
 
     void run(RuntimeTaskContext& ctx, TailResult& r) {
         struct stat st{};
-        if (::fstat(fd, &st) != 0) {
+        if (::fstat(file->native_handle(), &st) != 0) {
             r.error = sluice::from_errno_value(errno);
             return;
         }
@@ -265,7 +265,7 @@ struct TailTask {
             }
 
             struct stat st2{};
-            if (::fstat(fd, &st2) != 0) {
+            if (::fstat(file->native_handle(), &st2) != 0) {
                 r.error = sluice::from_errno_value(errno);
                 return;
             }
@@ -283,7 +283,9 @@ struct TailTask {
 } // namespace
 
 struct TailEngine::Impl {
-    int fd;
+    explicit Impl(sluice::File f) : file(std::move(f)) {}
+
+    sluice::File file;
     TailOptions options;
     LineSink sink;
     DiagSink diag;
@@ -305,9 +307,8 @@ bool options_valid(const TailOptions& o) {
 
 } // namespace
 
-TailEngine::TailEngine(int fd, TailOptions options, LineSink sink, DiagSink diag)
-    : impl_(std::make_unique<Impl>()) {
-    impl_->fd = fd;
+TailEngine::TailEngine(sluice::File file, TailOptions options, LineSink sink, DiagSink diag)
+    : impl_(std::make_unique<Impl>(std::move(file))) {
     impl_->options = options;
     impl_->sink = std::move(sink);
     impl_->diag = std::move(diag);
@@ -341,8 +342,8 @@ sluice::Result<void> TailEngine::start() {
         return sluice::make_unexpected<void>(IoError{IoError::Code::no_space});
     }
 
-    TailTask task{impl_->fd,   impl_->options,           impl_->sink,
-                  impl_->diag, std::move(impl_->buffer), impl_->slot};
+    TailTask task{&impl_->file, impl_->options, impl_->sink,
+                  impl_->diag,  std::move(impl_->buffer), impl_->slot};
 
     auto sub_r =
         impl_->rt->submit([t = std::move(task)](RuntimeTaskContext& ctx) mutable { t(ctx); });

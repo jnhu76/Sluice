@@ -3,6 +3,7 @@
 #include "matcher.hpp"
 
 #include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
@@ -49,10 +50,10 @@ struct GrepTask {
                 out.error = IoError{IoError::Code::canceled};
                 break;
             }
-            auto rr = await_read_once(
-                ctx, in.fd,
+            auto rr = await_read_at(
+                in.file, ctx, offset,
                 std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
-                offset, rc);
+                rc);
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;

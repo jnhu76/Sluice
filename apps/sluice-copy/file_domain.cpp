@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
 
 namespace sluice_copy {
 
@@ -33,14 +34,14 @@ OpenCopyOutcome fail(OpenCopyFailure f, IoError e) {
 } // namespace
 
 OpenCopyOutcome open_copy_files(const std::string& src_path, const std::string& dst_path) {
-    int src_fd = ::open(src_path.c_str(), O_RDONLY);
-    if (src_fd < 0) {
-        return fail(OpenCopyFailure::src_open, sluice::from_errno_value(errno));
+    auto src_open = sluice::File::open(src_path);
+    if (!src_open.has_value()) {
+        return fail(OpenCopyFailure::src_open, src_open.error());
     }
-    ScopedFd src_guard(src_fd);
+    sluice::File src_file = std::move(src_open).value();
 
     struct stat src_stat{};
-    if (::fstat(src_fd, &src_stat) != 0) {
+    if (::fstat(src_file.native_handle(), &src_stat) != 0) {
         return fail(OpenCopyFailure::src_stat, sluice::from_errno_value(errno));
     }
     if (!S_ISREG(src_stat.st_mode)) {
@@ -67,9 +68,8 @@ OpenCopyOutcome open_copy_files(const std::string& src_path, const std::string& 
 
     OpenCopyOutcome o;
     o.failure = OpenCopyFailure::none;
-    o.src_fd = src_guard.fd;
+    o.src_file = std::move(src_file);
     o.dst_fd = dst_guard.fd;
-    src_guard.fd = -1;
     dst_guard.fd = -1;
     return o;
 }

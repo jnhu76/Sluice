@@ -3,6 +3,7 @@
 #include <sluice/async/application_runtime.hpp>
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -24,7 +25,7 @@ constexpr unsigned kMaxWorkers = 64;
 
 struct GrepInput {
     std::string path;
-    int fd = -1;
+    sluice::File file;
 };
 
 using MatchSink =

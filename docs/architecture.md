@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Verified implementation baseline**: `8cb69b1145712d4028e3a98b7e56c2f4c14e1211`
+- **Verified implementation baseline**: `5a62be3994c9c293d800eea15be6b0d021a61596`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -91,6 +91,7 @@ flowchart TB
 
     APPS --> CORE
     APPS --> RUNTIME
+    APPS --> FILE
 
     FILE --> BR
     FILE --> BW
@@ -120,7 +121,7 @@ flowchart TB
 
 1. 已经成立的 canonical `File` spine；
 2. 仍未完成收敛的 historical blocking surface；
-3. app 中仍存在的 canonical-boundary bypass。
+3. app 消费的两种现实：hash/grep/tail 走 canonical `File`；copy 的 source lifetime 走 canonical `File`，而其 pipeline 仍走已分类的 raw explicit-op path（A6 前保持，边界经 `native_handle()`）。
 
 它们不能被一张“理想图”掩盖。
 
@@ -343,7 +344,42 @@ sluice-grep
 sluice-tail
 ```
 
-当前已知 `sluice-copy` pipeline 仍以：
+A2 之后，hash / grep / tail 已经通过 canonical File surface 消费文件资源：
+
+```text
+File::open
+    ↓
+sluice::File 所有权（HashInput / GrepInput / TailEngine 持有）
+    ↓
+await_read_at(File, ...)
+    ↓
+File dtor / close authority
+```
+
+copy 的 source lifetime 同样由 canonical File 持有（outcome 持有 `sluice::File`，close 归 File authority）：
+
+```text
+File::open
+    ↓
+sluice::File 所有权（OpenCopyOutcome / SafeOpenOutcome 持有）
+    ↓
+native_handle() 只在 fstat 观察与 pipeline 实参边界读取
+```
+
+分类后的残余 escape（详见 [`docs/roadmap/explicit-file-app-consumer-census.md`](roadmap/explicit-file-app-consumer-census.md)）：
+
+```text
+hash / grep / tail main:
+    ::fstat(File.native_handle()) regular-file check   REQUIRED_INTEROP
+
+tail task:
+    ::fstat(native_handle()) size / truncation 观测    TEMPORARY_CONVERGENCE_GAP → #343 / A3
+
+copy source metadata:
+    ::fstat(File.native_handle()) kind 观测            REQUIRED_INTEROP
+```
+
+`sluice-copy` 的 explicit pipeline 仍以：
 
 ```text
 src_fd / dst_fd
@@ -353,19 +389,7 @@ ReadOp / WriteOp / SyncDataOp / SyncAllOp
 RuntimeTaskContext
 ```
 
-直接消费低层 async seam。
-
-这不自动等于 bug：pipeline 可能确实需要 explicit outstanding authority。
-
-但它必须被重新分类：
-
-```text
-required explicit-operation use
-or
-historical canonical-boundary bypass
-```
-
-因此 roadmap 要求先做全 apps consumer census，再逐个收敛，而不是一次性重写四个应用。
+直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass；ownership 与 operation reference 分离：source lifetime 的 authority 是 canonical File，pipeline 在边界处经 `native_handle()` 引用同一资源，raw explicit-op resource reference 归 #346 / A6。其余 atomic-output namespace 操作已逐 concern 分类：destination special open（`O_NOFOLLOW`/mode 无法由 `FileOpen` 无损表达）与 open/same-file/kind 观测 → REQUIRED_INTEROP，SyncAll → #345 / A5，`ftruncate` → #343 / A3，mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
 
 ---
 
@@ -391,9 +415,15 @@ blocking File-facing:
 
 shared validation helpers:
   io_validation_boundary_test
+
+app canonical-resource consumption:
+  app_hash_consumption_test
+  app_grep_consumption_test
+  app_tail_consumption_test
+  app_copy_consumption_test
 ```
 
-这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）以及跨执行共享的 offset/length 边界规则。
+这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
@@ -403,10 +433,9 @@ shared validation helpers:
 
 ## 9. 当前 architecture gaps
 
-以 `8cb69b11`（A1 implementation + corrective）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
+以 `5a62be39`（A2 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
-App canonical-resource convergence
 File size
 File resize
 Sequential canonical operations
