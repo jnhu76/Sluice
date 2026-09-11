@@ -1,7 +1,7 @@
 # Explicit File Architecture Conformance Roadmap
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Baseline**: `master @ 26681e5bf3dd5cbea2fb2393fc8273698e872765`
+- **Verified implementation baseline**: `8cb69b1145712d4028e3a98b7e56c2f4c14e1211`（该 commit 可 checkout 并验证下文描述的实现状态）
 - **Purpose**: 记录当前代码对已冻结 Explicit File 架构的符合程度，并把剩余差距拆成可独立关闭的工作项。
 - **Non-authority rule**: 本文不重新定义架构；若本文与 ADR 冲突，以 ADR 为准。
 
@@ -190,7 +190,7 @@ flowchart TB
 
 ## 4. Current master conformance ledger
 
-基线：`26681e5b`（PR #338 已 merge）。
+Verified implementation baseline：`8cb69b11`（A1 implementation + corrective；下表状态在该 commit 上成立）。
 
 | Architecture node | Current code reality | Status | Closure direction |
 | --- | --- | --- | --- |
@@ -463,7 +463,7 @@ README summaries
 
 ## 10. 当前 checkpoint
 
-在 `d7cb7955`（A1 完成后）：
+在 `8cb69b11`（verified implementation baseline）：
 
 ```text
 Canonical File resource       CONFORMING

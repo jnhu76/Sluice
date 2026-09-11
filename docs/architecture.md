@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Snapshot baseline**: `master @ d7cb795517240bf629fcc7f23e56a3da57b5a171`
+- **Verified implementation baseline**: `8cb69b1145712d4028e3a98b7e56c2f4c14e1211`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -181,7 +181,7 @@ await_sync_data
 
 三者都以 `File` 作为 public semantic resource，再通过既有 `RuntimeTaskContext` 提交到 async execution seam。
 
-`include/sluice/file_resource.hpp` 的 `sluice::blocking` 命名空间现在提供同一语义的显式 Blocking execution：
+`include/sluice/blocking/file.hpp` 的 `sluice::blocking` 命名空间现在提供同一语义的显式 Blocking execution（实现位于 `src/blocking_file.cpp`）：
 
 ```text
 blocking::read_at
@@ -211,7 +211,7 @@ Read / Write / SyncData 的落地没有要求 Scheduler、Completion、RequestAr
 
 ## 4. Blocking surface：canonical Blocking path 已落地，legacy surface 暂时保留
 
-A1 在 `include/sluice/file_resource.hpp` 的 `sluice::blocking` 命名空间下增加了三个 canonical File-facing operation：
+A1 在 `include/sluice/blocking/file.hpp`（实现 `src/blocking_file.cpp`）的 `sluice::blocking` 命名空间下增加了三个 canonical File-facing operation：
 
 ```text
 blocking::read_at(File, uint64_t, span<byte>)       -> Result<size_t>
@@ -373,16 +373,27 @@ historical canonical-boundary bypass
 
 当前仓库已经不是“无测试、无 CI”的旧基线。
 
-`xmake/tests.lua` 当前登记四个 File 相关测试 target：
+`xmake/tests.lua` 当前登记的 canonical File test surface（按职责分类）：
 
 ```text
-file_resource_test
-file_read_test
-file_write_test
-file_sync_data_test
+resource:
+  file_resource_test
+
+async File-facing:
+  file_read_test
+  file_write_test
+  file_sync_data_test
+
+blocking File-facing:
+  blocking_file_read_test
+  blocking_file_write_test
+  blocking_file_sync_data_test
+
+shared validation helpers:
+  io_validation_boundary_test
 ```
 
-这些测试分别保护 canonical File resource 与已经落地的 positional Read / Write / SyncData slices。
+这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）以及跨执行共享的 offset/length 边界规则。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
@@ -392,7 +403,7 @@ file_sync_data_test
 
 ## 9. 当前 architecture gaps
 
-以 `d7cb7955` 为基线（A1 完成后），基础 Explicit File 架构尚未闭环的主要节点是：
+以 `8cb69b11`（A1 implementation + corrective）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
 App canonical-resource convergence
