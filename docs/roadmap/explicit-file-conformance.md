@@ -200,7 +200,7 @@ flowchart TB
 | Positional Read — File-facing async | `await_read_at(File, RuntimeTaskContext, ..., Completion)` | `CONFORMING` | 保持 thin adapter |
 | Positional Write — File-facing async | `await_write_at(File, RuntimeTaskContext, ..., Completion)` | `CONFORMING` | 保持 thin adapter |
 | SyncData — File-facing async | `await_sync_data(File, RuntimeTaskContext, Completion)` | `CONFORMING` | 保持 durability contract 与 execution 解耦 |
-| Blocking File resource surface | `FileReader` / `FileWriter` 仍各自持有 fd，并拥有自己的 open/close/read/write/sync surface | `CONVERGENCE_GAP` | 设计 canonical Blocking surface 围绕 `File`；不要创建第二个 File identity |
+| Blocking File resource surface | Canonical `sluice::blocking::read_at/write_at/sync_data` 围绕同一 `File` 落地，未引入第二套 resource identity；`FileReader`/`FileWriter` 作为 legacy surface 暂时保留 | `CONFORMING` | A1 完成（canonical surface）；legacy surface 的删除/收敛留到后续 roadmap 节点 |
 | Common logical API | 当前 canonical `File` 路径主要是显式 async `await_* + Completion`；blocking common File API 尚未收敛 | `GAP` | 先固定 blocking common surface，再判断 evented common surface 的最小 spelling |
 | Explicit outstanding API resource reference | backend operation 仍以 raw fd 表达；File-facing `await_*` 已桥接 canonical File semantics | `PARTIAL` | 单独裁决低层 explicit operation 如何引用 File semantics；不得把 raw fd 提升回 semantic owner |
 | Sequential Read / Write | legacy `FileReader` / `FileWriter` 已有 sequential behavior，但 canonical `File` surface 未收敛 | `CONVERGENCE_GAP` | 在 File + execution boundary 下重新表达；不得隐式共享 seek 语义 |
@@ -463,17 +463,17 @@ README summaries
 
 ## 10. 当前 checkpoint
 
-在 `26681e5b`：
+在 `d7cb7955`（A1 完成后）：
 
 ```text
 Canonical File resource       CONFORMING
-Positional Read               CONFORMING (File-facing async)
-Positional Write              CONFORMING (File-facing async)
-SyncData                      CONFORMING (File-facing async)
+Positional Read               CONFORMING (File-facing async + canonical Blocking)
+Positional Write              CONFORMING (File-facing async + canonical Blocking)
+SyncData                      CONFORMING (File-facing async + canonical Blocking)
 Honest ThreadPool execution   CONFORMING
 Runtime ignorance             CONFORMING
+Blocking File convergence     CONFORMING (A1 closed; legacy FileReader/FileWriter retained temporarily)
 
-Blocking File convergence     OPEN
 Consumer convergence          OPEN
 File size / resize            OPEN
 Sequential canonical surface  OPEN
