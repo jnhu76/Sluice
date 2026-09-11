@@ -1,9 +1,3 @@
--- Helper functions shared across test target declarations.
---
--- sluice_one_file_target declares a one-file target only when its source
--- file exists. Library deps are supplied explicitly by each call site
--- (see xmake/tests.lua); nothing is linked implicitly.
-
 local unpack = table.unpack or unpack
 local R = SLUICE_ROOT
 
