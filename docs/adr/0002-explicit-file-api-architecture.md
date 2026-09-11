@@ -291,7 +291,7 @@ filesystem-specific flags
 
 本 ADR 不授权全局 handle registry 或 shared ownership framework。
 
-`close()` 不会隐式 drain、cancel 或 pin 任何 outstanding explicit operation。若 File 上仍有未完成的 explicit operation，caller 必须保证其已到达可复用状态（见 §7.3）后再调用 `close()`；在 outstanding operation 尚未公开完成时关闭 File 属于 caller contract violation。本 ADR 不定义该违反行为的可观察结果，只规定 `File` 的 close 不因此获得超出本节的额外序列化或生命周期权威。
+`close()` 不会隐式 drain、cancel 或 pin 任何 outstanding explicit operation。若 File 上仍有未完成的 explicit operation，caller 必须保证其 public terminal completion 已被发布并由 caller 观察到（见 §7.3）后再调用 `close()`；在 outstanding operation 尚未公开完成时关闭 File 属于 caller contract violation。本 ADR 不定义该违反行为的可观察结果，只规定 `File` 的 close 不因此获得超出本节的额外序列化或生命周期权威。
 
 ---
 
@@ -452,7 +452,7 @@ durability coverage is anchored by completion happens-before,
 not mere submission order.
 ```
 
-这里的 completion 指 caller 可观察的完成发布（§9 的 public completion publication，而非 backend 内部 terminalization）。
+这里的 completion 指 caller 可观察的 terminal completion 发布（§9 的 public terminal completion publication，而非 backend 内部 terminalization）。
 
 普通 caller 的典型合法模式：
 
@@ -723,13 +723,13 @@ file.read(...); // runtime 静默猜测 direct blocking / pool / uring
 
 对于低层 explicit submit，在没有额外 pinning contract 之前：
 
-> **caller 必须保证 File resource 与参与 I/O 的 buffer 在该 operation 的 public completion publication 被 caller 观察到之前保持有效。**
+> **caller 必须保证 File resource 与参与 I/O 的 buffer 在该 operation 的 public terminal completion publication 被 caller 观察到之前保持有效。**
 
 如果未来要让 runtime 自动 pin File/buffer，则必须用独立 correctness / usability evidence 赚到该机制。
 
 ### 7.3 Reuse authority
 
-File / buffer 的复用或释放 authority 来自**caller 可观察的 public completion / cancellation publication**，而不是 backend 内部 terminalization、waiter wake 或物理 syscall 完成。
+File / buffer 的复用或释放 authority 只来自 **caller 对该 operation 的 public terminal completion publication 的观察**，而不是 backend 内部 terminalization、waiter wake、cancellation request 或物理 syscall completion。
 
 必须保持以下区别：
 
@@ -737,14 +737,26 @@ File / buffer 的复用或释放 authority 来自**caller 可观察的 public co
 waiter cancellation
     != backend request cancellation
     != physical completion
-    != public completion publication that grants reuse authority
+    != public terminal completion publication
 ```
 
-在 explicit-operation API 中，caller 观察到 public completion publication（例如 `Completion::ready()` 为真、或 `await` 返回结果）后，才获得复用 File / buffer 的 authority；在此之前，resource 必须保持有效。
+对于 explicit-operation API，caller 只有在观察到该 operation 已发布 terminal completion 后，才获得复用或释放 File / buffer 的 authority。
 
-Common logical API 的调用返回 `Result<T>` 本身即构成 public completion publication，因此 caller 在返回后即可复用 resource。
+例如：
 
-违反 §7.2 与 §7.3 的保证属于 caller contract violation；本 ADR 不定义该违反行为的可观察结果，只规定 reuse authority 不来自 waiter wake 或 backend terminalization。
+```text
+Completion::ready() == true
+```
+
+表示 terminal result 已经公开发布，可以据此获得 reuse authority。
+
+如果 cancellation 最终成为该 operation 的 terminal result，也必须等该 canceled terminal result 被公开发布并由 caller 观察到后，才产生 reuse authority。单纯发起 cancellation、waiter 被取消，或者 wait/await 因 wait-layer error / cancellation 返回，都不构成该 authority；如果 Completion 仍然 outstanding，File 与 buffer 仍必须保持有效。
+
+对于能够保证在返回前已经观察并消费 operation terminal result 的 await-style operation，成功或 terminal-operation-error 返回可以结束该 lifetime obligation；如果 await 因 wait-layer error / waiter cancellation 返回而 Completion 仍 outstanding，则 obligation 继续存在。
+
+Common logical API 不向 caller 暴露 outstanding request；其 `Result<T>` 返回意味着该逻辑 operation 已经结束，因此调用返回后 caller 可以复用相关 resource。
+
+违反 §7.2 与 §7.3 的 lifetime obligation 属于 caller contract violation；本 ADR 不定义该违反行为的可观察结果。
 
 不得因为 async lifetime 困难就预先引入：
 
@@ -850,7 +862,7 @@ reuse
 ```text
 backend terminalization
     !=
-public completion publication
+public terminal completion publication
 ```
 
 但是当前具体 machinery 并没有自动 survival right。
