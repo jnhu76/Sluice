@@ -249,7 +249,7 @@ vectored read / write
 sync_data / sync_all
 ```
 
-这些 legacy class 仍构成一套历史平行的 resource surface，但已不再被视为 canonical resource identity；其删除/收敛将在后续 roadmap 节点（A2/A4/A7）单独裁决。A1 不删除它们。
+这些 legacy class 仍构成一套历史平行的 resource surface，但已不再被视为 canonical resource identity；其删除/收敛将在后续 legacy-surface audit 节点单独裁决（vectored 部分的 decision 见 [`explicit-file-vectored-decision.md`](roadmap/explicit-file-vectored-decision.md)：KEEP，待该 audit）。A1 不删除它们。
 
 ---
 
@@ -455,11 +455,7 @@ app canonical-resource consumption:
 
 ## 9. 当前 architecture gaps
 
-以 `d7511349`（A2 + A3 + A4 + A5 + A6 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
-
-```text
-Vectored operation decision / convergence
-```
+以 `d7511349` 起（A2 + A3 + A4 + A5 + A6 implementation + A7 vectored decision）为基线，Phase A 基础架构节点全部关闭；遗留 legacy surface 的处置由 #355 追踪。
 
 详细状态、依赖顺序与 PR gate 见：
 
