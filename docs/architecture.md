@@ -7,7 +7,7 @@
 Sluice 是一个 C++20 I/O 库，由两个静态库目标与四个应用组成：
 
 - `sluice_core` —— 同步 I/O 核心：`Result<T>`/`IoError` 错误模型、Reader/Writer 字节流抽象、文件与位置 I/O、copy、WAL、缓冲与包装器、阻塞线程池。
-- `sluice_async` —— 可选启用的异步运行时：显式操作提交、调用方持有的完成槽、有界请求状态、Fiber 调度器、同步原语、取消、以及可替换的后端执行（线程池 / 同步 / io_uring / 仿真）。
+- `sluice_async` —— 可选启用的异步运行时：显式操作提交、调用方持有的完成槽、有界请求状态、Fiber 调度器、同步原语、取消、以及可替换的后端执行（线程池 / io_uring）。
 - `apps/` —— 四个命令行应用（copy / hash / grep / tail），是公共 API 的真实消费者；主执行路径消费公共异步面与错误模型，另有一处内部依赖例外：`sluice-copy` 的 `safe_output` 直接使用 `sluice/detail/posix_retry.hpp`（见 §6）。
 
 当前仓库是精简后的工程基线：只保留实现、应用与构建定义。测试、基准、示例、脚本、CI workflow、历史文档与形式化模型不在当前树中。
@@ -54,11 +54,9 @@ graph TD
         PRIM["同步原语：AsyncMutex / AsyncRwLock /<br/>Semaphore / AsyncCondition / Event / AsyncQueue"]
         ORG["任务组织：Group / Batch / Future /<br/>TaskResultSlot / CancelToken"]
         CTX["AsyncIoContext / Completion&lt;T&gt; /<br/>RequestHandle（有界请求竞技场）"]
-        subgraph BACKENDS["AsyncBackend 实现（可替换；当前 app 执行路径只用 ThreadPoolBackend）"]
+        subgraph BACKENDS["AsyncBackend 实现（可替换）"]
             TP["ThreadPoolBackend<br/>阻塞 syscall 线程池"]
-            SB["SyncBackend<br/>合成 terminal（无 syscall）"]
             UB["UringAsyncBackend<br/>io_uring（条件编译，默认不可用）"]
-            FB["FakeAsyncBackend<br/>脚本化合成（无 syscall）"]
         end
     end
 
@@ -121,7 +119,7 @@ graph TD
 - **同步原语**（构建在 Scheduler 的 park/wake 之上）：`async_mutex.hpp`、`async_rwlock.hpp`、`semaphore.hpp`、`condition.hpp`、`event.hpp`、`async_queue.hpp`（带 park/超时/关闭语义的并发队列）、`select.hpp` + `select_fwd.hpp`（最多 8 臂，Event/Timer 两类 case）。另有运行时内部使用的 `mutex.hpp`/`lock_guard.hpp`/`thread_annotations.hpp`（std::mutex 薄包装 + Clang TSA 注解）。
 - **任务组织与结果传递**：`group.hpp`（`Group::async`，绑定 Scheduler 时走 Fiber/evented 路径，否则走线程路径；`await`/`cancel`）、`batch.hpp`（`Batch` 多操作批量提交 + `await_one`/`next`）、`future.hpp`（`Future<T>`，等待策略可插拔）、`task_result.hpp`（`TaskResultSlot<T>`：运行时 worker 向调用线程搬运结果；`translate_task_exception` 把异常翻译为 `IoError`）、`cancel.hpp`（`CancelToken`/`CancelState`/`CancelGuard`）、`wait_policy.hpp`/`evented_wait_policy.hpp`。
 - **便捷层**：`op_helpers.hpp`（`read_all`/`write_all`/`sync_*_all`——直接驱动 `AsyncIoContext` 的阻塞式循环）；`await_op_helpers.hpp`（`await_take`/`await_drain`/`await_read_once`/`await_read_fill`/`await_write_exact`——任务体内使用的 await 风格 helper）。
-- **后端**：`threadpool_backend.hpp`（`ThreadPoolBackend`：worker 线程执行阻塞 syscall，内部有界派发队列与就绪等待源）、`sync_backend.hpp`（`SyncBackend`：不执行真实 syscall——提交仅向 `RequestArena` 入队，`poll()`/`wait_one()` 将已入队请求合成为 terminal result（read/write 以完整请求字节数成功，sync 以成功 void），再通过与线程池后端相同的 `RequestArena`/reap 发布路径写入 Completion）、`uring_backend.hpp`（`UringAsyncBackend`，`SLUICE_HAS_LIBURING` 条件编译）、`fake_backend.hpp`（`FakeAsyncBackend`：同为 `RequestArena` 合成实现，`auto_bytes`/`auto_error`/`auto_eof`/`auto_short_then_full` 脚本化每次完成，模拟/测试形态，当前树中无调用者）。
+- **后端**：`threadpool_backend.hpp`（`ThreadPoolBackend`：worker 线程执行阻塞 syscall，内部有界派发队列与就绪等待源）、`uring_backend.hpp`（`UringAsyncBackend`，`SLUICE_HAS_LIBURING` 条件编译；宏未定义时提交一律以错误拒绝（`backend_error`），不伪造执行结果）。
 - **`detail/` 内部件**：`request_arena.hpp`/`request_slot.hpp`/`request_key.hpp`/`submit_transaction.hpp`（有界请求槽位竞技场 + 提交事务）、`ready_sink.hpp`（`SynchronousReadySink` 完成路由接口）、`ready_wait_source.hpp`/`reference_ready_sink.hpp`/`uring_wait_source.hpp`、`queue_item.hpp`/`queue_port.hpp`（AsyncQueue 内部端口）、`select_port.hpp`/`select_registration.hpp`、`fail_fast.hpp`（不可恢复违规的终结点）、`mutex_test_seam.hpp`/`queue_test_seam.hpp`（`SLUICE_ASYNC_INTERNAL_TESTING` 宏门控的测试缝）。
 
 ## 5. 实现层（src）
@@ -241,15 +239,15 @@ sequenceDiagram
 
 - `Result<T>` / `IoError` —— I/O 可报告失败的主要错误通道（两个库共享）；普通 C++ 异常路径仍存在，任务边界存在异常翻译（见 §4.1/§4.2）。
 - `Reader` / `Writer` —— 同步字节流接口，文件/内存/缓冲/包装器都实现它。
-- `AsyncBackend` —— 后端策略接口，四个存留实现（ThreadPool/Sync/Uring/Fake）可替换，`RuntimeBuilder` 注入。
+- `AsyncBackend` —— 后端策略接口，两个存留实现（ThreadPool/Uring）可替换，`RuntimeBuilder` 注入。
 - `Completion<T>` —— 调用方持有的完成槽：六态状态机、所有权与 fail-fast 边界都在这里。
 - `ApplicationRuntime` / `RuntimeTaskContext` —— 应用进入运行时的入口与任务内 API。
 - `Scheduler` / `Fiber` —— 协作式多 worker 调度（汇编上下文切换），等待即 park，完成经"终结化 → reap 发布 → 就绪路由"三阶段唤醒（见 §7）。
 
 **同步能力**（`sluice_core`）：Reader/Writer、文件与位置 I/O、copy、WAL、缓冲、内存/故障/观测包装、阻塞线程池。
-**异步能力**（`sluice_async`）：显式操作 + 调用方完成槽、有界请求状态、Fiber 调度、同步原语与 select、Group/Batch/Future/取消、四个存留后端实现。
+**异步能力**（`sluice_async`）：显式操作 + 调用方完成槽、有界请求状态、Fiber 调度、同步原语与 select、Group/Batch/Future/取消、两个存留后端实现。
 
-**后端实现状态**（按当前构建与调用点事实）：四个真实应用的执行路径全部显式构造 `ThreadPoolBackend`；`UringAsyncBackend` 在默认构建中编译为不可用的降级实现（`SLUICE_HAS_LIBURING` 未定义）；`SyncBackend` 与 `FakeAsyncBackend` 是基于 `RequestArena` 的合成实现，当前树中没有调用者。四者不应被理解为同等地位的 production 后端。
+**后端实现状态**（按当前构建与调用点事实）：四个真实应用的执行路径全部显式构造 `ThreadPoolBackend`；`UringAsyncBackend` 在默认构建中编译为不可用的降级实现（`SLUICE_HAS_LIBURING` 未定义），降级路径以错误拒绝而非合成成功。生产面不存在合成执行后端。
 
 **当前主干与不在当前系统中的部分**：主干是上表中的库与应用。测试、基准、示例、脚本、CI workflow、历史文档、TLA+/形式化模型在当前树中不存在；`.github/` 只保留模板与贡献指南。
 

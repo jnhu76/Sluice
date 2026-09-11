@@ -139,7 +139,5 @@ V1 — cancellation is reachable through the Runtime lifecycle, not Ctrl-C.
 - `sluice_hash_sha256_test` — NIST vectors + million-'a' + chunk-boundary
   invariance;
 - `sluice_hash_cli_parse_test` — strict parsing, overflow, caps, wiring;
-- `sluice_hash_fault_test` — FakeAsyncBackend error/EOF injection,
-  invalid-config rejection without running;
 - `sluice_hash_integration_test` — real files + real backend: known digests,
   multi-buffer streaming, multi-file order, bad-fd isolation.

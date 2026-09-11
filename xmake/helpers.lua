@@ -1,12 +1,3 @@
--- Helper functions shared across test/example/bench target declarations.
---
--- Two async-test wrappers (sluice_production_async_test /
--- sluice_internal_async_test) make the linked runtime EXPLICIT at every call
--- site. The underlying sluice_one_file_test deliberately has NO runtime
--- default and asserts that deps were supplied, so a future test that forgets
--- to pick a wrapper fails loudly instead of silently linking the test-seam
--- variant (the regression this guard closes).
-
 local unpack = table.unpack or unpack
 local R = SLUICE_ROOT
 
