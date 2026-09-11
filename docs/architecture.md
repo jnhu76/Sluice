@@ -119,7 +119,7 @@ graph TD
 - **同步原语**（构建在 Scheduler 的 park/wake 之上）：`async_mutex.hpp`、`async_rwlock.hpp`、`semaphore.hpp`、`condition.hpp`、`event.hpp`、`async_queue.hpp`（带 park/超时/关闭语义的并发队列）、`select.hpp` + `select_fwd.hpp`（最多 8 臂，Event/Timer 两类 case）。另有运行时内部使用的 `mutex.hpp`/`lock_guard.hpp`/`thread_annotations.hpp`（std::mutex 薄包装 + Clang TSA 注解）。
 - **任务组织与结果传递**：`group.hpp`（`Group::async`，绑定 Scheduler 时走 Fiber/evented 路径，否则走线程路径；`await`/`cancel`）、`batch.hpp`（`Batch` 多操作批量提交 + `await_one`/`next`）、`future.hpp`（`Future<T>`，等待策略可插拔）、`task_result.hpp`（`TaskResultSlot<T>`：运行时 worker 向调用线程搬运结果；`translate_task_exception` 把异常翻译为 `IoError`）、`cancel.hpp`（`CancelToken`/`CancelState`/`CancelGuard`）、`wait_policy.hpp`/`evented_wait_policy.hpp`。
 - **便捷层**：`op_helpers.hpp`（`read_all`/`write_all`/`sync_*_all`——直接驱动 `AsyncIoContext` 的阻塞式循环）；`await_op_helpers.hpp`（`await_take`/`await_drain`/`await_read_once`/`await_read_fill`/`await_write_exact`——任务体内使用的 await 风格 helper）。
-- **后端**：`threadpool_backend.hpp`（`ThreadPoolBackend`：worker 线程执行阻塞 syscall，内部有界派发队列与就绪等待源）、`uring_backend.hpp`（`UringAsyncBackend`，`SLUICE_HAS_LIBURING` 条件编译；宏未定义时提交一律返回 `not_supported`，不伪造执行结果）。
+- **后端**：`threadpool_backend.hpp`（`ThreadPoolBackend`：worker 线程执行阻塞 syscall，内部有界派发队列与就绪等待源）、`uring_backend.hpp`（`UringAsyncBackend`，`SLUICE_HAS_LIBURING` 条件编译；宏未定义时提交一律以错误拒绝（`backend_error`），不伪造执行结果）。
 - **`detail/` 内部件**：`request_arena.hpp`/`request_slot.hpp`/`request_key.hpp`/`submit_transaction.hpp`（有界请求槽位竞技场 + 提交事务）、`ready_sink.hpp`（`SynchronousReadySink` 完成路由接口）、`ready_wait_source.hpp`/`reference_ready_sink.hpp`/`uring_wait_source.hpp`、`queue_item.hpp`/`queue_port.hpp`（AsyncQueue 内部端口）、`select_port.hpp`/`select_registration.hpp`、`fail_fast.hpp`（不可恢复违规的终结点）、`mutex_test_seam.hpp`/`queue_test_seam.hpp`（`SLUICE_ASYNC_INTERNAL_TESTING` 宏门控的测试缝）。
 
 ## 5. 实现层（src）
@@ -247,7 +247,7 @@ sequenceDiagram
 **同步能力**（`sluice_core`）：Reader/Writer、文件与位置 I/O、copy、WAL、缓冲、内存/故障/观测包装、阻塞线程池。
 **异步能力**（`sluice_async`）：显式操作 + 调用方完成槽、有界请求状态、Fiber 调度、同步原语与 select、Group/Batch/Future/取消、四个存留后端实现。
 
-**后端实现状态**（按当前构建与调用点事实）：四个真实应用的执行路径全部显式构造 `ThreadPoolBackend`；`UringAsyncBackend` 在默认构建中编译为不可用的降级实现（`SLUICE_HAS_LIBURING` 未定义），降级路径返回 `not_supported` 而非合成成功。生产面不存在合成执行后端。
+**后端实现状态**（按当前构建与调用点事实）：四个真实应用的执行路径全部显式构造 `ThreadPoolBackend`；`UringAsyncBackend` 在默认构建中编译为不可用的降级实现（`SLUICE_HAS_LIBURING` 未定义），降级路径以错误拒绝而非合成成功。生产面不存在合成执行后端。
 
 **当前主干与不在当前系统中的部分**：主干是上表中的库与应用。测试、基准、示例、脚本、CI workflow、历史文档、TLA+/形式化模型在当前树中不存在；`.github/` 只保留模板与贡献指南。
 
