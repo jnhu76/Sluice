@@ -63,10 +63,9 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "\n");
             return (oc.failure == sluice_copy::SafeOpenFailure::same_file) ? 1 : 2;
         }
-        ScopedFd src_guard(oc.src_fd);
-
-        auto result = sluice_copy::run_pipelined_copy(oc.src_fd, oc.temp_fd, args.buffer_size,
-                                                      args.pipeline_depth, args.workers, args.sync);
+        auto result = sluice_copy::run_pipelined_copy(oc.src_file->native_handle(), oc.temp_fd,
+                                                      args.buffer_size, args.pipeline_depth,
+                                                      args.workers, args.sync);
         if (!result.has_value()) {
             sluice_copy::discard_atomic_copy(oc);
             print_copy_result(argv[0], result);
@@ -114,7 +113,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "\n");
         return (oc.failure == sluice_copy::OpenCopyFailure::same_file) ? 1 : 2;
     }
-    ScopedFd src_guard(oc.src_fd);
     ScopedFd dst_guard(oc.dst_fd);
 
     if (::ftruncate(oc.dst_fd, 0) != 0) {
@@ -123,8 +121,9 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    auto result = sluice_copy::run_pipelined_copy(oc.src_fd, oc.dst_fd, args.buffer_size,
-                                                  args.pipeline_depth, args.workers, args.sync);
+    auto result = sluice_copy::run_pipelined_copy(oc.src_file->native_handle(), oc.dst_fd,
+                                                  args.buffer_size, args.pipeline_depth,
+                                                  args.workers, args.sync);
     if (!result.has_value()) {
         print_copy_result(argv[0], result);
 

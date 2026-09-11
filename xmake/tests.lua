@@ -56,3 +56,18 @@ do
             add_tests("app_tail_consumption_test")
     end
 end
+
+do
+    local dir = R .. "apps/sluice-copy"
+    if os.isfile(dir .. "/copy_task.cpp") then
+        target("app_copy_consumption_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", dir)
+            add_files(R .. "tests/app_copy_consumption_test.cpp", dir .. "/copy_task.cpp",
+                      dir .. "/file_domain.cpp", dir .. "/safe_output.cpp")
+            add_tests("app_copy_consumption_test")
+    end
+end

@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <utility>
 #include <vector>
 
 #ifdef SLUICE_COPY_INTERNAL_TESTING
@@ -59,14 +60,14 @@ int directory_fsync(int fd) {
 } // namespace
 
 SafeOpenOutcome open_atomic_copy(const std::string& src_path, const std::string& dst_path) {
-    int src_fd = ::open(src_path.c_str(), O_RDONLY);
-    if (src_fd < 0) {
-        return fail(SafeOpenFailure::src_open, sluice::from_errno_value(errno));
+    auto src_open = sluice::File::open(src_path);
+    if (!src_open.has_value()) {
+        return fail(SafeOpenFailure::src_open, src_open.error());
     }
-    ScopedFd src_guard(src_fd);
+    sluice::File src_file = std::move(src_open).value();
 
     struct stat src_stat{};
-    if (::fstat(src_fd, &src_stat) != 0) {
+    if (::fstat(src_file.native_handle(), &src_stat) != 0) {
         return fail(SafeOpenFailure::src_stat, sluice::from_errno_value(errno));
     }
     if (!S_ISREG(src_stat.st_mode)) {
@@ -105,11 +106,10 @@ SafeOpenOutcome open_atomic_copy(const std::string& src_path, const std::string&
 
     SafeOpenOutcome o;
     o.failure = SafeOpenFailure::none;
-    o.src_fd = src_guard.fd;
+    o.src_file = std::move(src_file);
     o.temp_fd = temp_guard.fd;
     o.temp_path = std::move(temp_path);
     o.dst_dir = std::move(dir);
-    src_guard.fd = -1;
     temp_guard.fd = -1;
     return o;
 }

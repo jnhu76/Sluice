@@ -3,8 +3,10 @@
 #include "copy_task.hpp"
 
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
+#include <optional>
 #include <string>
 
 namespace sluice_copy {
@@ -24,7 +26,7 @@ enum class SafeOpenFailure : std::uint8_t {
 };
 
 struct SafeOpenOutcome {
-    int src_fd = -1;
+    std::optional<sluice::File> src_file;
     int temp_fd = -1;
 
     std::string temp_path;
