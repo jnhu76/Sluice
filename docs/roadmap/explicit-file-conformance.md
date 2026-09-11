@@ -1,7 +1,7 @@
 # Explicit File Architecture Conformance Roadmap
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Verified implementation baseline**: `4f77aed54e0bb2663b926335d5c090c2211d2577`（该 commit 可 checkout 并验证下文描述的实现状态）
+- **Verified implementation baseline**: `5c87e466f09476a93cda325c5ad54c57fdb744e3`（该 commit 可 checkout 并验证下文描述的实现状态）
 - **Purpose**: 记录当前代码对已冻结 Explicit File 架构的符合程度，并把剩余差距拆成可独立关闭的工作项。
 - **Non-authority rule**: 本文不重新定义架构；若本文与 ADR 冲突，以 ADR 为准。
 
@@ -190,7 +190,7 @@ flowchart TB
 
 ## 4. Current master conformance ledger
 
-Verified implementation baseline：`4f77aed5`（A1 + A2 + A3 + A4 implementation；下表状态在该 commit 上成立）。
+Verified implementation baseline：`5c87e466`（A1 + A2 + A3 + A4 + A5 implementation；下表状态在该 commit 上成立）。
 
 | Architecture node | Current code reality | Status | Closure direction |
 | --- | --- | --- | --- |
@@ -205,7 +205,7 @@ Verified implementation baseline：`4f77aed5`（A1 + A2 + A3 + A4 implementation
 | Explicit outstanding API resource reference | backend operation 仍以 raw fd 表达；File-facing `await_*` 已桥接 canonical File semantics | `PARTIAL` | 单独裁决低层 explicit operation 如何引用 File semantics；不得把 raw fd 提升回 semantic owner |
 | Sequential Read / Write | canonical `blocking::read/write` over `File` 已落地；logical-position owner 是 open file description 的 shared offset（直接 ::read/::write lowering，无 seek+positional 仿真）；positional 操作不触碰 shared offset；evented sequential 形式无 consumer 证据、未实现 | `CONFORMING` | 保持 direct lowering 与 shared-offset 语义；不得加入 File 内 position state 或隐藏 seek；evented 形式须凭 consumer 证据另行裁决 |
 | Vectored Read / Write | ADR-0002 已将 vectored 标记为 evidence-gated operation shape；legacy blocking surface 已存在 vector methods，但 consumer/semantic 证据尚未使其成为 canonical operation | `RESEARCH` | 先做 consumer/semantic census，再决定最小 canonical surface；不因现有 API 自动扩张 |
-| SyncAll | async backend transport 已有 `SyncAllOp`，legacy blocking writer 也有 `sync_all`，但 canonical File-facing operation 尚缺 | `GAP` | 在 SyncData 模式被证明稳定后独立 slice |
+| SyncAll | canonical File-facing `blocking::sync_all` 与 `await_sync_all(File, RuntimeTaskContext, Completion)` 已落地，lowering 到既有 honest execution seam（ThreadPool `::fsync` / backend `SyncAllOp`），durability authority 沿用 ADR-0002 §5.4 不变 | `CONFORMING` | 保持 durability contract 与 execution 解耦 |
 | `size` | canonical `blocking::size(const File&)` 已存在（`::fstat` lowering）；closed → invalid_state，任意 access 均合法（含 write_only）；evented 形式未 earned | `CONFORMING` | 保持 File-state 最小面；metadata surface 仍按 correctness need 单项赚取 |
 | `resize` | canonical `blocking::resize(const File&, uint64_t)` 已存在（`::ftruncate` lowering）；access-legality 镜像 `blocking::write_at`（read_only → invalid_argument），overflow → invalid_argument（镜像 read_at/write_at 的 canonical 层重映射）；resize 成功不承诺 durability，evented 形式未 earned | `CONFORMING` | durability 语义仍归 SyncData/SyncAll slice |
 | Minimal metadata | 只允许 correctness 所需字段进入 Core | `RESEARCH` | 按具体 correctness need 单项赚取 |
@@ -213,7 +213,7 @@ Verified implementation baseline：`4f77aed5`（A1 + A2 + A3 + A4 implementation
 | ThreadPool execution | `ThreadPoolBackend` 为 honest execution；blocking syscall 在 worker 上执行，对 caller 是 async/outstanding | `CONFORMING` | 暂不做性能优化 |
 | io_uring execution | `UringAsyncBackend` 有真实 liburing path；不可用构建诚实报错 | `PARTIAL` | 基础架构闭环前不做 activation/optimization campaign |
 | Future execution backend | ADR 允许 replaceable execution，但未授权具体新增 backend | `DEFERRED` | architecture conformant 后再评估 IOCP/SPDK/其他机制 |
-| App canonical-resource consumption | hash/grep/tail 已迁到 canonical `File`（`File::open` 所有权 + `await_read_at`）；copy source lifetime 亦为 canonical `File`（outcome 持有，`native_handle()` 只在 fstat 观察与 pipeline 边界读取）；copy pipeline 保持 explicit outstanding authority；全部残余 escape 已分类（`docs/roadmap/explicit-file-app-consumer-census.md`：interop / A5·A6 依赖 / namespace work） | `CONFORMING` | 每个已被 canonical `File` 表达的资源 lifetime 都由 `File` 持有；剩余 raw/native escape 仅因必要的 metadata、explicit-operation、resize/durability 或 namespace authority 位于别处。`CONFORMING` 不要求 zero `native_handle()`，只要求 zero unclassified bypass；A5/A6 关闭时按 census 行迁移对应 escape |
+| App canonical-resource consumption | hash/grep/tail 已迁到 canonical `File`（`File::open` 所有权 + `await_read_at`）；copy source lifetime 亦为 canonical `File`（outcome 持有，`native_handle()` 只在 fstat 观察与 pipeline 边界读取）；copy pipeline 保持 explicit outstanding authority；全部残余 escape 已分类（`docs/roadmap/explicit-file-app-consumer-census.md`：interop / A6 依赖 / namespace work） | `CONFORMING` | 每个已被 canonical `File` 表达的资源 lifetime 都由 `File` 持有；剩余 raw/native escape 仅因必要的 metadata、explicit-operation、resize/durability 或 namespace authority 位于别处。`CONFORMING` 不要求 zero `native_handle()`，只要求 zero unclassified bypass；A6 关闭时按 census 行迁移对应 escape |
 | Synthetic backend success | repository-provided synthetic `SyncBackend` / `FakeAsyncBackend` 已删除 | `CONFORMING` | semantic success 只来自 honest execution |
 | Runtime ignorance | Scheduler / Completion / RequestArena 不拥有 File semantics；Read/Write/SyncData File slices 均未要求新增 runtime authority | `CONFORMING` | 任何 File feature 若要求 Scheduler 学会 File，应默认视为 shape failure |
 | Performance tuning | queue/worker/polling/registered resources 属 execution policy/capability | `DEFERRED` | architecture closure 后再 benchmark |
@@ -463,7 +463,7 @@ README summaries
 
 ## 10. 当前 checkpoint
 
-在 `4f77aed5`（verified implementation baseline；A3 与 A4 implementation conforming，非 issue 关闭）：
+在 `5c87e466`（verified implementation baseline；A3、A4 与 A5 implementation conforming，非 issue 关闭）：
 
 ```text
 Canonical File resource       CONFORMING
@@ -479,7 +479,7 @@ App consumption               CONFORMING (A2 implementation conforming; every Fi
 
 File size / resize            CONFORMING (A3)
 Sequential canonical surface  CONFORMING (A4)
-SyncAll File surface          OPEN (A5)
+SyncAll File surface          CONFORMING (A5)
 Explicit low-level File ref   OPEN (A6)
 Vectored decision             OPEN (A7)
 ```
