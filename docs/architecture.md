@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Verified implementation baseline**: `cfbbb3158283ed202d4b5064999ac7c52f69cfb2`
+- **Verified implementation baseline**: `4f77aed54e0bb2663b926335d5c090c2211d2577`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -418,6 +418,7 @@ blocking File-facing:
   blocking_file_write_test
   blocking_file_sync_data_test
   blocking_file_state_test
+  blocking_file_sequential_test
 
 shared validation helpers:
   io_validation_boundary_test
@@ -439,10 +440,9 @@ app canonical-resource consumption:
 
 ## 9. 当前 architecture gaps
 
-以 `cfbbb315`（A3 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
+以 `4f77aed5`（A2 + A3 + A4 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
-Sequential canonical operations
 SyncAll File-facing operation
 Explicit low-level operation resource reference
 Vectored operation decision / convergence
