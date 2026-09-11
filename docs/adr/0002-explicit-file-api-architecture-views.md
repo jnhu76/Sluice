@@ -23,8 +23,8 @@ flowchart LR
         FILE["File Resource<br/>identity · ownership · lifetime"]
         OPEN["Resource Lifecycle<br/>open · close"]
         STATE["Observable File State<br/>size · minimal metadata · resize"]
-        OP["Canonical File Operations<br/>read · write · positional · vectored<br/>sync_data · sync_all"]
-        COMPOSE["Composed Operations<br/>exact · all · stream · copy"]
+        OP["Canonical File Operations<br/>read · write · positional<br/>sync_data · sync_all"]
+        COMPOSE["Composed Operations<br/>exact · all · copy"]
 
         FILE --> OPEN
         FILE --> STATE
@@ -100,7 +100,7 @@ This is the diagram to use when explaining what Sluice I/O *is*.
 flowchart LR
     APP["Application"]
     FILE["File Resource<br/>identity · ownership · lifetime"]
-    OPS["Canonical Semantics<br/>open/close · size/resize<br/>read/write · positional · vectored · durability"]
+    OPS["Canonical Semantics<br/>open/close · size/resize<br/>read/write · positional · durability"]
 
     COMMON["Common Logical API<br/>logical wait → Result"]
     EXPLICIT["Explicit Operation API<br/>outstanding request · Completion"]

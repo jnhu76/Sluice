@@ -1,7 +1,7 @@
 # Explicit File Architecture Conformance Roadmap
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Baseline**: `master @ d965abffeb3afbe83d5f1bb1ea896fc9b7e6e9a8`
+- **Baseline**: `master @ 26681e5bf3dd5cbea2fb2393fc8273698e872765`
 - **Purpose**: 记录当前代码对已冻结 Explicit File 架构的符合程度，并把剩余差距拆成可独立关闭的工作项。
 - **Non-authority rule**: 本文不重新定义架构；若本文与 ADR 冲突，以 ADR 为准。
 
@@ -75,7 +75,7 @@ explicit outstanding surface:
 
 ## 2. ADR-0002 的架构投影
 
-下面的 Mermaid 是 ADR-0002 的 roadmap 视图，不是新的 ADR。
+下面的 Mermaid 是 ADR-0002 的 roadmap 视图，不是新的 ADR。图中 `Future Execution Backend`、`Blocking Surface` 与 `Evented Common Surface` 等细分是为了说明执行边界，不增加 ADR-0002 未授权的 normative 节点。
 
 ```mermaid
 flowchart TB
@@ -85,8 +85,8 @@ flowchart TB
         FILE["File Resource<br/>identity / ownership / lifetime / access"]
         LIFE["Resource Lifecycle<br/>open / close"]
         STATE["Observable File State<br/>size / resize / minimal metadata"]
-        OPS["Canonical Operations<br/>sequential read / write<br/>positional read / write<br/>vectored read / write<br/>sync_data / sync_all"]
-        COMPOSE["Composed Operations<br/>exact / all / stream / copy"]
+        OPS["Canonical Operations<br/>sequential read / write<br/>positional read / write<br/>sync_data / sync_all"]
+        COMPOSE["Composed Operations<br/>exact / all / copy"]
     end
 
     subgraph API["Explicit Initiation Boundary"]
@@ -115,6 +115,7 @@ flowchart TB
         SPACE["Space Reservation"]
         ADVICE["Access Advice"]
         TRANSFER["Transfer Mechanisms"]
+        VECTORED["Vectored I/O"]
     end
 
     OS["OS / Kernel"]
@@ -154,6 +155,7 @@ flowchart TB
     FILE -. separately earned .-> DIRECT
     FILE -. separately earned .-> SPACE
     OPS -. separately earned .-> ADVICE
+    OPS -. separately earned .-> VECTORED
     COMPOSE -. separately earned .-> TRANSFER
 ```
 
@@ -182,11 +184,13 @@ flowchart TB
 
 `FROZEN` 不是 implementation 状态；它只描述 ADR authority。
 
+这些状态是 roadmap 对实现覆盖度的跟踪标签，最终审计 verdict 仍必须使用 ADR-0002 §14 的 `KEEP / CONVERGE / ADD_MINIMAL / DELETE / RESEARCH / OUT_OF_SCOPE`。
+
 ---
 
 ## 4. Current master conformance ledger
 
-基线：`d965abff`（PR #336 已 merge）。
+基线：`26681e5b`（PR #338 已 merge）。
 
 | Architecture node | Current code reality | Status | Closure direction |
 | --- | --- | --- | --- |
@@ -200,7 +204,7 @@ flowchart TB
 | Common logical API | 当前 canonical `File` 路径主要是显式 async `await_* + Completion`；blocking common File API 尚未收敛 | `GAP` | 先固定 blocking common surface，再判断 evented common surface 的最小 spelling |
 | Explicit outstanding API resource reference | backend operation 仍以 raw fd 表达；File-facing `await_*` 已桥接 canonical File semantics | `PARTIAL` | 单独裁决低层 explicit operation 如何引用 File semantics；不得把 raw fd 提升回 semantic owner |
 | Sequential Read / Write | legacy `FileReader` / `FileWriter` 已有 sequential behavior，但 canonical `File` surface 未收敛 | `CONVERGENCE_GAP` | 在 File + execution boundary 下重新表达；不得隐式共享 seek 语义 |
-| Vectored Read / Write | legacy blocking surface 已存在 vector methods；canonical File / async parity 尚未完成 | `RESEARCH` | 先做 consumer/semantic census，再决定最小 canonical surface；不因现有 API 自动扩张 |
+| Vectored Read / Write | ADR-0002 已将 vectored 标记为 evidence-gated operation shape；legacy blocking surface 已存在 vector methods，但 consumer/semantic 证据尚未使其成为 canonical operation | `RESEARCH` | 先做 consumer/semantic census，再决定最小 canonical surface；不因现有 API 自动扩张 |
 | SyncAll | async backend transport 已有 `SyncAllOp`，legacy blocking writer 也有 `sync_all`，但 canonical File-facing operation 尚缺 | `GAP` | 在 SyncData 模式被证明稳定后独立 slice |
 | `size` | ADR 已冻结为 observable File state；canonical `File` 当前未暴露 | `GAP` | 独立 File-state slice |
 | `resize` | ADR 已冻结为 observable mutation；canonical `File` 当前未暴露 | `GAP` | 与 durability 边界分开，独立 slice |
@@ -459,7 +463,7 @@ README summaries
 
 ## 10. 当前 checkpoint
 
-在 `d965abff`：
+在 `26681e5b`：
 
 ```text
 Canonical File resource       CONFORMING

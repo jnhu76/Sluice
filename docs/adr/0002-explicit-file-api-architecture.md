@@ -2,9 +2,9 @@
 
 - **状态**：Accepted / Architecture Frozen
 - **范围**：Sluice 的文件 I/O 公共语义、API 分层与执行模型
-- **基线**：`master`（本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`）
+- **基线**：`master`（本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`；当前实现基线以 roadmap 为准）
 - **上位约束**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md)、[`../mission.md`](../mission.md)
-- **实现处置**：Pending master-based architecture-gap audit
+- **实现处置**：见 [`docs/roadmap/explicit-file-conformance.md`](../roadmap/explicit-file-conformance.md) Phase A；最终架构符合性审计为 roadmap A8
 
 ## Context
 
@@ -45,7 +45,7 @@ ADR-0001 已经冻结：
 
 Sluice 的 canonical 文件 I/O 架构冻结为：
 
-> **File 是资源与文件语义的根；open/close、observable file state、read/write/positioned/vector/durability 是围绕 File 的 canonical semantics；Blocking、ThreadPool 与 io_uring 是这些语义的可替换 execution，而不是三套不同的 I/O contract。**
+> **File 是资源与文件语义的根；open/close、observable file state、read/write/positional/durability 是围绕 File 的 canonical semantics；Blocking、ThreadPool 与 io_uring 是这些语义的可替换 execution，而不是三套不同的 I/O contract。**
 
 同步与异步共享：
 
@@ -87,8 +87,8 @@ flowchart TD
         FILE["File Resource<br/>identity / ownership / lifetime"]
         OPEN["Resource Lifecycle<br/>open / close"]
         STATE["Observable File State<br/>size / minimal metadata / resize"]
-        OP["Canonical File Operations<br/>read / write<br/>read_at / write_at<br/>readv / writev<br/>sync_data / sync_all"]
-        COMPOSE["Composed Operations<br/>exact / all / stream / copy"]
+        OP["Canonical File Operations<br/>read / write<br/>read_at / write_at<br/>sync_data / sync_all"]
+        COMPOSE["Composed Operations<br/>exact / all / copy"]
     end
 
     subgraph CAPS["Capabilities / Constraints / Hints"]
@@ -122,10 +122,10 @@ flowchart TD
     FILE --> OP
     OP --> COMPOSE
 
-    FILE --> DIRECT
-    FILE --> SPACE
-    OP --> ADVICE
-    COMPOSE --> COPYCAP
+    FILE -. "capability" .-> DIRECT
+    FILE -. "resource guarantee" .-> SPACE
+    OP -. "hint" .-> ADVICE
+    COMPOSE -. "legal lowering" .-> COPYCAP
 
     OP --> COMMON
     OP --> LOW
@@ -151,6 +151,8 @@ flowchart TD
 build artifact != semantic world
 backend capability != public semantic authority
 ```
+
+图中以虚线连接 `Capabilities / Constraints / Hints` 子图的节点，表示这些能力必须按 §10 独立赚取 authority，不是已经自动进入 canonical File contract 的组成部分。
 
 ---
 
@@ -201,15 +203,7 @@ fd + raw pointer + length + offset
 
 因此当前 `FileReader` / `FileWriter` 的能力可以保留，但这两个 class 本身没有自动 survival right。
 
-后续审计可以得到：
-
-```text
-KEEP
-CONVERGE
-REPLACE
-```
-
-但不能因为它们已经存在就预设结论。
+后续审计 verdict 见 §14。`FileReader` / `FileWriter` 承载的能力可以 `KEEP` 或 `CONVERGE`，但独立的 resource-identity 类型本身没有默认 survival right。
 
 ---
 
@@ -218,6 +212,8 @@ REPLACE
 ### 3.1 Minimum open contract
 
 Sluice 的最小 File-open 语义必须能够明确表达三个独立轴：
+
+> 这些轴基于 caller 可观察的 access contract、existence outcome 与 initial-contents outcome，而不是 POSIX flag 的拼写。
 
 ```text
 Access
@@ -242,6 +238,32 @@ InitialContents
 - `truncate` 仅对可写 access 合法；
 - 普通 `open_existing` 不应因为调用者想写就自动 truncate；
 - backend 可以用不同 syscall/opcode 实现，但不能改变这些 observable semantics。
+
+#### 3.1.1 Open combination legality
+
+三个独立轴的组合按以下规则判定：
+
+| Access | InitialContents | Existence | Verdict | 说明 |
+| --- | --- | --- | --- | --- |
+| `read_only` | `preserve` | `open_existing` | 合法 | 只读打开已有文件 |
+| `read_only` | `preserve` | `create_if_missing` | 合法 | 创建空文件后只读打开 |
+| `read_only` | `preserve` | `create_new` | 合法 | 新建空文件后只读打开 |
+| `read_only` | `truncate` | *任意* | **非法** | `truncate` 要求可写 access |
+| `write_only` / `read_write` | `preserve` | `open_existing` | 合法 | 写打开已有文件，不截断 |
+| `write_only` / `read_write` | `preserve` | `create_if_missing` | 合法 | 文件不存在则创建，已存在则保留内容 |
+| `write_only` / `read_write` | `preserve` | `create_new` | 合法 | 新建空文件后写打开 |
+| `write_only` / `read_write` | `truncate` | `open_existing` | 合法 | 截断已有文件 |
+| `write_only` / `read_write` | `truncate` | `create_if_missing` | 合法 | 文件不存在则创建，已存在则截断 |
+| `write_only` / `read_write` | `truncate` | `create_new` | 合法（冗余） | 新建文件本身为空，`truncate` 不增加语义 |
+
+规则摘要：
+
+```text
+truncate 仅对 write_only / read_write 合法；
+create_new 与 open_existing / create_if_missing 互斥，决定“目标已存在时是否失败”；
+create_new + truncate 合法但冗余；
+read_only + truncate 非法。
+```
 
 本 ADR **不**自动把以下项目纳入 minimum open contract：
 
@@ -268,6 +290,8 @@ filesystem-specific flags
 4. destructor 可以 best-effort close，但无法可靠向 caller 返回 close error；需要观察 close failure 的 caller 必须显式调用 `close()`。
 
 本 ADR 不授权全局 handle registry 或 shared ownership framework。
+
+`close()` 不会隐式 drain、cancel 或 pin 任何 outstanding explicit operation。若 File 上仍有未完成的 explicit operation，caller 必须保证其 public terminal completion 已被发布并由 caller 观察到（见 §7.3）后再调用 `close()`；在 outstanding operation 尚未公开完成时关闭 File 属于 caller contract violation。本 ADR 不定义该违反行为的可观察结果，只规定 `File` 的 close 不因此获得超出本节的额外序列化或生命周期权威。
 
 ---
 
@@ -318,12 +342,11 @@ sequential write
 positional read
 positional write
 
-vectored read
-vectored write
-
 sync_data
 sync_all
 ```
+
+`vectored read` / `vectored write` 目前属于 evidence-gated operation shape（§5.3），不是已自动进入 canonical vocabulary 的语义。
 
 ### 5.1 Sequential vs positional
 
@@ -343,19 +366,35 @@ whether partial progress is returned
 when EOF is an error for exact/all composition
 ```
 
+#### 5.2.1 Read primitives
+
+- **zero-length request**：返回成功，progress 为 `0`；不触发 EOF 语义。
+- **positive partial read**：返回 `0 < n < requested` 的成功结果；对单次 operation 而言这是合法 progress，不是错误。
+- **non-empty request returns 0**：表示当前 offset 已到达文件数据末尾（EOF）；对单次 operation 而言这是成功结果，不是错误。
+- **EOF as error**：仅在 `exact` / `all` 等 composition 中，当非空请求在未填满目标缓冲区前返回 `0` 时，composition 才将 EOF 报告为错误；primitive operation 本身不因此报错。
+- **error vs successful short progress**：只要 operation 返回非负字节数，即为 successful short progress；负向错误报告仍归 `Result` / `IoError` 处理。
+
+#### 5.2.2 Write primitives
+
+- **zero-length request**：返回成功，progress 为 `0`。
+- **positive short write**：返回 `0 < n < requested` 的成功结果；单次 operation 合法结束，但 caller 若需写入全部字节必须自行组合。
+- **non-empty zero-progress outcome**：非空 write 请求返回 `0` 字节且无错误时，视为无法继续写入；`exact` / `all` 等 composition 不得无限重试，必须将该结果作为错误出口，避免 spin forever。
+- **error**：负向错误报告归 `Result` / `IoError` 处理。
+
+#### 5.2.3 Composition rules
+
+`read_exact` / `write_all` 等 composition 的 cross-execution 语义必须一致：
+
+- 持续循环直到目标字节数全部完成、遇到非错误 EOF（read）、遇到 zero-progress write、或遇到错误；
+- 不得在任何 backend 下无限 spin；
+- 不得把 backend 的 partial-fill 行为反向提升为新的 primitive EOF 语义；
+- 本 contract 不强制规定具体 `IoError` 编码，只要求调用者可观察到错误结果。
+
 ### 5.3 Vectored I/O
 
-Vectored I/O 是 canonical operation capability，不是“同步层专属性能 helper”。
+Vectored read / write 是一种 evidence-gated operation shape，不是已自动进入 canonical File vocabulary 的语义（§5）。它当前不享有与 sequential / positional / durability 同等的 architecture authority。
 
-如果后续审计保留 vectored semantics，则 async execution 必须被评价为：
-
-```text
-SUPPORTED
-MISSING
-OUT_OF_SCOPE
-```
-
-不能长期把 sync vector 与 async scalar 当成两套独立 semantic worlds。
+如果后续审计通过真实 consumer / semantic 证据证明 vectored 必须成为 canonical operation，则 async execution 必须与 sync execution 共享同一 vectored semantics，不能长期把 sync vector 与 async scalar 当成两套独立 semantic worlds。在该证据出现之前，vectored 保持为 evidence-gated extension，任何 public surface 的 vectored 形态都需要独立赚取 authority。
 
 ### 5.4 Durability
 
@@ -413,7 +452,7 @@ durability coverage is anchored by completion happens-before,
 not mere submission order.
 ```
 
-这里的 completion 指 caller 可观察的完成发布（§9 的 public completion publication，而非 backend 内部 terminalization）。
+这里的 completion 指 caller 可观察的 terminal completion 发布（§9 的 public terminal completion publication，而非 backend 内部 terminalization）。
 
 普通 caller 的典型合法模式：
 
@@ -684,9 +723,40 @@ file.read(...); // runtime 静默猜测 direct blocking / pool / uring
 
 对于低层 explicit submit，在没有额外 pinning contract 之前：
 
-> **caller 必须保证 File resource 与参与 I/O 的 buffer 在该 operation 完成并进入允许复用的状态前保持有效。**
+> **caller 必须保证 File resource 与参与 I/O 的 buffer 在该 operation 的 public terminal completion publication 被 caller 观察到之前保持有效。**
 
 如果未来要让 runtime 自动 pin File/buffer，则必须用独立 correctness / usability evidence 赚到该机制。
+
+### 7.3 Reuse authority
+
+File / buffer 的复用或释放 authority 只来自 **caller 对该 operation 的 public terminal completion publication 的观察**，而不是 backend 内部 terminalization、waiter wake、cancellation request 或物理 syscall completion。
+
+必须保持以下区别：
+
+```text
+waiter cancellation
+    != backend request cancellation
+    != physical completion
+    != public terminal completion publication
+```
+
+对于 explicit-operation API，caller 只有在观察到该 operation 已发布 terminal completion 后，才获得复用或释放 File / buffer 的 authority。
+
+例如：
+
+```text
+Completion::ready() == true
+```
+
+表示 terminal result 已经公开发布，可以据此获得 reuse authority。
+
+如果 cancellation 最终成为该 operation 的 terminal result，也必须等该 canceled terminal result 被公开发布并由 caller 观察到后，才产生 reuse authority。单纯发起 cancellation、waiter 被取消，或者 wait/await 因 wait-layer error / cancellation 返回，都不构成该 authority；如果 Completion 仍然 outstanding，File 与 buffer 仍必须保持有效。
+
+对于能够保证在返回前已经观察并消费 operation terminal result 的 await-style operation，成功或 terminal-operation-error 返回可以结束该 lifetime obligation；如果 await 因 wait-layer error / waiter cancellation 返回而 Completion 仍 outstanding，则 obligation 继续存在。
+
+Common logical API 不向 caller 暴露 outstanding request；其 `Result<T>` 返回意味着该逻辑 operation 已经结束，因此调用返回后 caller 可以复用相关 resource。
+
+违反 §7.2 与 §7.3 的 lifetime obligation 属于 caller contract violation；本 ADR 不定义该违反行为的可观察结果。
 
 不得因为 async lifetime 困难就预先引入：
 
@@ -792,7 +862,7 @@ reuse
 ```text
 backend terminalization
     !=
-public completion publication
+public terminal completion publication
 ```
 
 但是当前具体 machinery 并没有自动 survival right。
@@ -896,7 +966,7 @@ application evidence
 
 ## 11. Composition and transformation boundaries
 
-`read_exact` / `write_all` / stream / copy 属于 primitive operations 之上的 composition。
+`read_exact` / `write_all` / copy 属于 primitive operations 之上的 composition。
 
 Composition 可以获得额外 transformation authority，但必须局部且由 contract 明确授予。
 
@@ -947,7 +1017,7 @@ COMPOSED_TRANSFORMATION
 
 以下等待 master-based architecture-gap audit：
 
-- `FileReader` / `FileWriter`：KEEP、CONVERGE 还是 REPLACE；
+- `FileReader` / `FileWriter`：KEEP、CONVERGE 还是 DELETE（必要时 ADD_MINIMAL）；
 - `Reader` / `Writer` 是否继续作为 canonical byte-stream composition layer；
 - `IoContext` 当前返回 `unique_ptr<Reader/Writer>` 是否发生 capability erasure；
 - `BlockingIoContext` 是否仍有 owner；
@@ -1148,11 +1218,7 @@ Mechanism availability 不创建 semantic authority。
 
 ## Follow-up gate
 
-下一步只允许执行：
-
-> **基于当前 `master` 的 IO architecture-gap audit。**
-
-审计必须回答：
+具体实现顺序与阶段划分见 [`docs/roadmap/explicit-file-conformance.md`](../roadmap/explicit-file-conformance.md) Phase A。Phase A 的终点是 roadmap A8 的只读架构符合性审计：
 
 ```text
 符合 ADR-0001 + ADR-0002 的 Sluice 需要哪些最小能力？
