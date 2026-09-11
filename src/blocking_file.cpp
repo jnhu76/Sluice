@@ -148,4 +148,16 @@ Result<void> resize(const File& file, std::uint64_t new_size) {
     return {};
 }
 
+Result<void> sync_all(const File& file) {
+    if (!file.is_open()) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+
+    int rc = detail::retry_on_eintr([&] { return ::fsync(file.native_handle()); });
+    if (rc < 0) {
+        return make_unexpected<void>(from_errno_value(errno));
+    }
+    return {};
+}
+
 } // namespace sluice::blocking

@@ -25,4 +25,6 @@ Result<std::uint64_t> size(const File& file);
 
 Result<void> resize(const File& file, std::uint64_t new_size);
 
+Result<void> sync_all(const File& file);
+
 } // namespace sluice::blocking
