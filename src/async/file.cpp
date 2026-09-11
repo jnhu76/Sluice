@@ -32,4 +32,14 @@ Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, st
     return await_take(ctx, c);
 }
 
+Result<void> await_sync_data(const File& file, RuntimeTaskContext& ctx, Completion<void>& c) {
+    if (!file.is_open()) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    auto sr = ctx.submit_sync_data(SyncDataOp{file.native_handle()}, c);
+    if (!sr.has_value())
+        return make_unexpected<void>(sr.error());
+    return await_take(ctx, c);
+}
+
 }
