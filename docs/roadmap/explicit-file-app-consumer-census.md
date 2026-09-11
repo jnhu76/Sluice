@@ -1,7 +1,7 @@
 # Explicit File App Consumer Census
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Verified implementation baseline**: `5a62be3994c9c293d800eea15be6b0d021a61596`（该 commit 可 checkout 并验证下文记录的消费现实）
+- **Verified implementation baseline**: `cfbbb3158283ed202d4b5064999ac7c52f69cfb2`（该 commit 可 checkout 并验证下文记录的消费现实）
 - **Non-authority**: 本文只记录四个应用对 canonical File boundary 的消费现实与 escape 分类；它不创造 File 语义。若本文与 ADR 冲突，以 ADR 为准。
 - **Scope**: `apps/sluice-copy`、`apps/sluice-hash`、`apps/sluice-grep`、`apps/sluice-tail`（roadmap A2 / Issue #342）
 
@@ -77,8 +77,8 @@ Ownership 形状选择（task §8.4 的最小可证明形状）：**main 打开�
 | `apps/sluice-tail/tail_task.hpp:51` | `TailEngine(int fd, ...)` raw fd 资源身份 | resource ownership | CANONICAL_FILE_USE | MIGRATED：`TailEngine(sluice::File, ...)` move-owns | A2 |
 | `apps/sluice-tail/tail_task.cpp:114,129,146` | `await_read_once(ctx, fd, ...)`（主读 + 末字节 + 回扫） | positional read | CANONICAL_FILE_USE | MIGRATED：`await_read_at(*file, ...)` | A2 |
 | `apps/sluice-tail/main.cpp:54` | `::fstat(file.native_handle())` + `S_ISREG` | regular-file check | REQUIRED_INTEROP | KEEP | — |
-| `apps/sluice-tail/tail_task.cpp:184` | `::fstat(file->native_handle())` 取初始 size | size observation | TEMPORARY_CONVERGENCE_GAP | KEEP（经 `native_handle()`） | #343 / A3（`File::size`） |
-| `apps/sluice-tail/tail_task.cpp:268` | `::fstat(file->native_handle())` follow 轮询 size / truncate 检测 | size / truncation observation | TEMPORARY_CONVERGENCE_GAP | KEEP（经 `native_handle()`） | #343 / A3（`File::size`） |
+| `apps/sluice-tail/tail_task.cpp:183` | `::fstat(file->native_handle())` 取初始 size | size observation | CANONICAL_FILE_USE | MIGRATED：`blocking::size(*file)` | #343 / A3 |
+| `apps/sluice-tail/tail_task.cpp:267` | `::fstat(file->native_handle())` follow 轮询 size / truncate 检测 | size / truncation observation | CANONICAL_FILE_USE | MIGRATED：`blocking::size(*file)` | #343 / A3 |
 
 ## 6. sluice-copy（source lifetime 已收敛，逐 concern 分类）
 
@@ -102,7 +102,7 @@ Pipeline 拥有 multiple `PipelineSlot`、multiple `Completion`、multiple outst
 | `apps/sluice-copy/copy_task.cpp:107,137` | `await_read_fill` / `await_write_exact`（raw fd） | fill/exact 组合 | TEMPORARY_CONVERGENCE_GAP | KEEP | #346 / A6 |
 | `apps/sluice-copy/copy_task.cpp:288` | `submit_sync_data(SyncDataOp{dst_fd})` | durability (data) | TEMPORARY_CONVERGENCE_GAP | KEEP | #346 / A6 |
 | `apps/sluice-copy/copy_task.cpp:295` | `submit_sync_all(SyncAllOp{dst_fd})` | durability (all) | TEMPORARY_CONVERGENCE_GAP | KEEP | #345 / A5 |
-| `apps/sluice-copy/main.cpp:118` | `::ftruncate(oc.dst_fd, 0)`（non-atomic 路径） | resize | TEMPORARY_CONVERGENCE_GAP | KEEP | #343 / A3（`File::resize`） |
+| `apps/sluice-copy/main.cpp:118` | `::ftruncate(oc.dst_fd, 0)`（non-atomic 路径） | resize | TEMPORARY_CONVERGENCE_GAP | KEEP（dst 是 interop-owned raw fd（`O_NOFOLLOW` open），非 canonical File，`File::resize` 无法表达该资源引用） | #346 / A6（dst open unit 收敛时一并迁移） |
 | `apps/sluice-copy/file_domain.cpp:51` | `::open(dst, O_WRONLY\|O_CREAT\|O_NOFOLLOW\|O_CLOEXEC, 0644)` | dst 打开 | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/file_domain.cpp:16` | `ScopedFd` dtor `::close`（仅 dst guard） | interop dst open 单元的 close authority | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/main.cpp:26` | `ScopedFd` dtor `::close`（仅 dst guard） | interop dst open 单元的 close authority | REQUIRED_INTEROP | KEEP | — |
@@ -170,7 +170,8 @@ copy（corrective 后）:
 sluice-hash:  raw ::open/::close/fd/await_read_once = 0；残余 = fstat interop（已分类）
 sluice-grep:  raw ::open/::close/fd/await_read_once = 0；残余 = fstat interop（已分类）；
               isatty = census exclusion（§2）
-sluice-tail:  raw ::open/::close/fd/await_read_once = 0；残余 = fstat interop + size/truncation gap（已分类）
+sluice-tail:  raw ::open/::close/fd/await_read_once = 0；残余 = fstat interop（已分类）；
+              size/truncation 观测已迁至 `blocking::size`（#343 / A3）
 sluice-copy:  raw source open/ScopedFd = 0（RAW_MIGRATABLE_SOURCE_OWNERSHIP_COUNT = 0）；
               source lifetime = canonical File；
               残余 = src/dst metadata interop + dst special open（REQUIRED_INTEROP）
