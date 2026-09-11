@@ -2,16 +2,15 @@
 #include "tail_task.hpp"
 
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 
 #include <atomic>
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
-#include <fcntl.h>
 #include <pthread.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 namespace {
 
@@ -45,22 +44,20 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    int fd = ::open(args.file.c_str(), O_RDONLY);
-    if (fd < 0) {
+    auto opened = sluice::File::open(args.file);
+    if (!opened.has_value()) {
         std::fprintf(stderr, "%s: cannot open '%s': %s\n", argv[0], args.file.c_str(),
-                     std::strerror(errno));
+                     std::strerror(opened.error().os_errno));
         return 2;
     }
     struct stat st{};
-    if (::fstat(fd, &st) != 0) {
+    if (::fstat(opened.value().native_handle(), &st) != 0) {
         std::fprintf(stderr, "%s: cannot stat '%s': %s\n", argv[0], args.file.c_str(),
                      std::strerror(errno));
-        ::close(fd);
         return 2;
     }
     if (!S_ISREG(st.st_mode)) {
         std::fprintf(stderr, "%s: %s: not a regular file\n", argv[0], args.file.c_str());
-        ::close(fd);
         return 2;
     }
 
@@ -73,7 +70,7 @@ int main(int argc, char** argv) {
     options.workers = args.workers;
 
     TailEngine engine(
-        fd, options,
+        std::move(opened).value(), options,
         [](std::string_view line) {
             std::fwrite(line.data(), 1, line.size(), stdout);
             std::fputc('\n', stdout);
@@ -84,7 +81,6 @@ int main(int argc, char** argv) {
     auto start_r = engine.start();
     if (!start_r.has_value()) {
         std::fprintf(stderr, "%s: cannot start tail engine\n", argv[0]);
-        ::close(fd);
         return 2;
     }
 
@@ -115,7 +111,6 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "%s: cannot spawn signal waiter\n", argv[0]);
             engine.request_stop();
             (void)engine.wait();
-            ::close(fd);
             return 2;
         }
         sig_thread_spawned = true;
@@ -128,8 +123,6 @@ int main(int argc, char** argv) {
             ::pthread_kill(sig_thread, SIGINT);
         ::pthread_join(sig_thread, nullptr);
     }
-
-    ::close(fd);
 
     if (!result.has_value()) {
         std::fprintf(stderr, "%s: tail failed: %d\n", argv[0],

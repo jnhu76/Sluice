@@ -2,13 +2,12 @@
 #include "hash_task.hpp"
 
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
-#include <fcntl.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include <vector>
 
@@ -18,15 +17,6 @@ using sluice_hash::FileHash;
 using sluice_hash::HashInput;
 using sluice_hash::cli::CliArgs;
 using sluice_hash::cli::parse_args;
-
-struct FdCloser {
-    std::vector<int>& fds;
-    ~FdCloser() {
-        for (int fd : fds)
-            if (fd >= 0)
-                ::close(fd);
-    }
-};
 
 const char* errno_msg(int e) {
     return std::strerror(e);
@@ -52,33 +42,27 @@ int main(int argc, char** argv) {
     std::vector<OpenFailure> failures;
     std::vector<std::size_t> input_cli_index;
     std::vector<HashInput> inputs;
-    std::vector<int> open_fds;
-    FdCloser closer{open_fds};
     input_cli_index.reserve(args.files.size());
     inputs.reserve(args.files.size());
-    open_fds.reserve(args.files.size());
 
     for (std::size_t i = 0; i < args.files.size(); ++i) {
         const std::string& path = args.files[i];
-        int fd = ::open(path.c_str(), O_RDONLY);
-        if (fd < 0) {
-            failures.push_back({i, false, errno});
+        auto opened = sluice::File::open(path);
+        if (!opened.has_value()) {
+            failures.push_back({i, false, opened.error().os_errno});
             continue;
         }
         struct stat st{};
-        if (::fstat(fd, &st) != 0) {
+        if (::fstat(opened.value().native_handle(), &st) != 0) {
             failures.push_back({i, false, errno});
-            ::close(fd);
             continue;
         }
         if (!S_ISREG(st.st_mode)) {
             failures.push_back({i, true, 0});
-            ::close(fd);
             continue;
         }
         input_cli_index.push_back(i);
-        inputs.push_back(HashInput{path, fd});
-        open_fds.push_back(fd);
+        inputs.push_back(HashInput{path, std::move(opened).value()});
     }
 
     auto results = sluice_hash::hash_files(std::move(inputs), args.buffer_size, args.workers);

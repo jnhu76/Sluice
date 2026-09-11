@@ -3,6 +3,7 @@
 #include <sluice/async/application_runtime.hpp>
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -47,7 +48,7 @@ struct TailResult {
 
 class TailEngine {
   public:
-    TailEngine(int fd, TailOptions options, LineSink sink, DiagSink diag = nullptr);
+    TailEngine(sluice::File file, TailOptions options, LineSink sink, DiagSink diag = nullptr);
     ~TailEngine();
 
     TailEngine(const TailEngine&) = delete;
