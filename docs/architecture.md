@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Snapshot baseline**: `master @ d965abffeb3afbe83d5f1bb1ea896fc9b7e6e9a8`
+- **Verified implementation baseline**: `8cb69b1145712d4028e3a98b7e56c2f4c14e1211`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -63,6 +63,12 @@ flowchart TB
         COMPOSE["copy / buffer / WAL / helpers"]
     end
 
+    subgraph BLOCK_API["File-facing blocking adapters"]
+        BR["blocking::read_at(File, ...) "]
+        BW["blocking::write_at(File, ...) "]
+        BS["blocking::sync_data(File, ...) "]
+    end
+
     subgraph ASYNC_API["File-facing async adapters"]
         AR["await_read_at(File, ...) "]
         AW["await_write_at(File, ...) "]
@@ -85,6 +91,10 @@ flowchart TB
 
     APPS --> CORE
     APPS --> RUNTIME
+
+    FILE --> BR
+    FILE --> BW
+    FILE --> BS
 
     FILE --> AR
     FILE --> AW
@@ -171,16 +181,26 @@ await_sync_data
 
 三者都以 `File` 作为 public semantic resource，再通过既有 `RuntimeTaskContext` 提交到 async execution seam。
 
+`include/sluice/blocking/file.hpp` 的 `sluice::blocking` 命名空间现在提供同一语义的显式 Blocking execution（实现位于 `src/blocking_file.cpp`）：
+
+```text
+blocking::read_at
+blocking::write_at
+blocking::sync_data
+```
+
+Blocking path 不经过 RuntimeTaskContext、Completion 或 AsyncBackend；它直接对 caller 线程执行 syscall。
+
 当前成立的 vertical slice：
 
 ```text
 File::open
     ↓
-await_read_at / await_write_at
-    ↓
-caller observes completion
-    ↓
-await_sync_data
+blocking::read_at / blocking::write_at  |  await_read_at / await_write_at
+    ↓                                          ↓
+Result<T> (caller thread blocks)            caller observes completion
+    ↓                                          ↓
+blocking::sync_data  |  await_sync_data
     ↓
 File::close
 ```
@@ -189,16 +209,24 @@ Read / Write / SyncData 的落地没有要求 Scheduler、Completion、RequestAr
 
 ---
 
-## 4. Blocking surface：机制存在，但 canonical convergence 尚未完成
+## 4. Blocking surface：canonical Blocking path 已落地，legacy surface 暂时保留
 
-`include/sluice/file.hpp` 仍存在历史 blocking resource classes：
+A1 在 `include/sluice/blocking/file.hpp`（实现 `src/blocking_file.cpp`）的 `sluice::blocking` 命名空间下增加了三个 canonical File-facing operation：
 
 ```text
-FileReader
-FileWriter
+blocking::read_at(File, uint64_t, span<byte>)       -> Result<size_t>
+blocking::write_at(File, uint64_t, span<byte const>) -> Result<size_t>
+blocking::sync_data(File)                            -> Result<void>
 ```
 
-它们目前各自持有 fd，并直接拥有：
+它们直接对 caller 线程执行 syscall，不经过 async runtime。这满足 ADR-0002 的要求：
+
+```text
+File owns resource semantics
+Blocking invocation owns blocking execution semantics
+```
+
+`include/sluice/file.hpp` 中的历史 blocking resource classes（`FileReader` / `FileWriter`）仍暂时保留，拥有：
 
 ```text
 open / close
@@ -208,18 +236,7 @@ vectored read / write
 sync_data / sync_all
 ```
 
-因此当前 blocking 世界的问题不是“缺少 syscall 能力”，而是：
-
-> 同一批 File semantics 仍由第二套 resource owner 表达。
-
-Roadmap 将其分类为 `CONVERGENCE_GAP`。
-
-目标不是增加 `BlockingFile`，也不是给 `File` 增加 blocking mode；目标是让：
-
-```text
-File owns resource semantics
-Blocking invocation owns blocking execution semantics
-```
+这些 legacy class 仍构成一套历史平行的 resource surface，但已不再被视为 canonical resource identity；其删除/收敛将在后续 roadmap 节点（A2/A4/A7）单独裁决。A1 不删除它们。
 
 ---
 
@@ -356,16 +373,27 @@ historical canonical-boundary bypass
 
 当前仓库已经不是“无测试、无 CI”的旧基线。
 
-`xmake/tests.lua` 当前登记四个 File 相关测试 target：
+`xmake/tests.lua` 当前登记的 canonical File test surface（按职责分类）：
 
 ```text
-file_resource_test
-file_read_test
-file_write_test
-file_sync_data_test
+resource:
+  file_resource_test
+
+async File-facing:
+  file_read_test
+  file_write_test
+  file_sync_data_test
+
+blocking File-facing:
+  blocking_file_read_test
+  blocking_file_write_test
+  blocking_file_sync_data_test
+
+shared validation helpers:
+  io_validation_boundary_test
 ```
 
-这些测试分别保护 canonical File resource 与已经落地的 positional Read / Write / SyncData slices。
+这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）以及跨执行共享的 offset/length 边界规则。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
@@ -375,10 +403,9 @@ file_sync_data_test
 
 ## 9. 当前 architecture gaps
 
-以 `d965abff` 为基线，基础 Explicit File 架构尚未闭环的主要节点是：
+以 `8cb69b11`（A1 implementation + corrective）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
-Blocking File surface convergence
 App canonical-resource convergence
 File size
 File resize
