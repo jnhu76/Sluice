@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Verified implementation baseline**: `a16d2880f1d778d130d98addd6a63c6a63961f05`
+- **Verified implementation baseline**: `5a62be3994c9c293d800eea15be6b0d021a61596`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -420,9 +420,10 @@ app canonical-resource consumption:
   app_hash_consumption_test
   app_grep_consumption_test
   app_tail_consumption_test
+  app_copy_consumption_test
 ```
 
-这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及三个迁移后 app engine 对 canonical File surface 的消费行为。
+这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
