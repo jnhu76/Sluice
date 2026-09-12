@@ -61,6 +61,22 @@ bool raw_size_is(const std::string& path, std::size_t expected) {
     return static_cast<std::size_t>(st.st_size) == expected;
 }
 
+int realized_access_mode(const File& file) {
+    return ::fcntl(file.native_handle(), F_GETFL) & O_ACCMODE;
+}
+
+int expected_access_mode(FileAccess access) {
+    switch (access) {
+    case FileAccess::read_only:
+        return O_RDONLY;
+    case FileAccess::write_only:
+        return O_WRONLY;
+    case FileAccess::read_write:
+        return O_RDWR;
+    }
+    return -1;
+}
+
 struct OpenCase {
     const char* name;
     FileAccess access;
@@ -92,6 +108,12 @@ bool run_case(const OpenCase& c) {
     if (ok && !opened.has_value() && c.expect_invalid_argument &&
         opened.error().code != IoError::Code::invalid_argument)
         ok = false;
+    if (ok && opened.has_value()) {
+        if (opened.value().access() != c.access)
+            ok = false;
+        if (realized_access_mode(opened.value()) != expected_access_mode(c.access))
+            ok = false;
+    }
     if (ok && !raw_exists(path) != !c.expect_exists_after)
         ok = false;
     if (ok && c.expect_exists_after) {
