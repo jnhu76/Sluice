@@ -38,14 +38,17 @@ class ThreadPoolBackend : public AsyncBackend {
     ThreadPoolBackend(const ThreadPoolBackend&) = delete;
     ThreadPoolBackend& operator=(const ThreadPoolBackend&) = delete;
 
+    bool supports_request_identity() const noexcept override { return true; }
+
+  private:
+    // AsyncBackend::submit_* stay private end-to-end: only AsyncIoContext may
+    // enter them, so the access-legality matrix cannot be bypassed by calling
+    // a backend directly.
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override;
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
-    bool supports_request_identity() const noexcept override { return true; }
-
-  private:
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override {
         return arena_.identity_handle_state(detail::SlotIndex{slot}, detail::Generation{gen},
