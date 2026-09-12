@@ -617,6 +617,38 @@ testing / synthetic execution 如何归类，留给 implementation probe；本 A
 
 per-operation durability（例如 `RWF_DSYNC` / `RWF_SYNC`）尚未在本 ADR 中获得 public authorization。
 
+### 5.5 Canonical operation access-legality
+
+File 的 access contract（§2.2）是 canonical **legal-operation authority**：它决定哪些 canonical operation 可以在一个 File 上合法发起。本节以机制无关语言冻结 operation 级 access-legality matrix 与 caller-visible initiation 结果。
+
+| Canonical operation | `read_only` | `write_only` | `read_write` |
+| --- | --- | --- | --- |
+| sequential read / positional read | LEGAL | **ILLEGAL** | LEGAL |
+| sequential write / positional write | **ILLEGAL** | LEGAL | LEGAL |
+| `size` | LEGAL | LEGAL | LEGAL |
+| `resize` | **ILLEGAL** | LEGAL | LEGAL |
+| `sync_data` / `sync_all` | LEGAL | LEGAL | LEGAL |
+
+规范约束：
+
+- **ILLEGAL initiation 的 caller-visible 结果属于 canonical contract**：必须在任何 OS/backend effect 之前被拒绝，错误类别冻结为 `invalid_argument`。不把该结果委托给 OS 错误；"到达 OS/backend 后失败"不是本 contract 的合法 outcome。
+- **同一规则覆盖所有 initiation surface**：blocking common surface、evented File-facing adapter、explicit outstanding submission（File-derived reference）必须表现同一 legality 与同一错误类别。
+- **File-derived explicit operation reference 必须保留 access 事实**（或同等可执行 provenance），使每个 initiation surface 都能执行本 matrix；在 File→operation-reference 转换处抹除 access 事实的 representation 不符合 §6.2（canonical resource reference 必须指向 File semantics）。
+- **Raw native-handle interop reference 是显式声明的非 canonical 边界**：它不声称 canonical File access validation；该例外只允许存在于显式的 interop boundary，不得扩散为 canonical surface 的默认形态。
+- **Backend 不是 access-legality authority**：backend lowering 只接触 native handle，不接触、不解释 access 事实。
+- `size` 是 observable resource fact，不改变资源，因此对三种 access 均 LEGAL；`sync_data` / `sync_all` 的 durability guarantee 覆盖 completion happens-before 的已完成写（§5.4.2），与发起 handle 自身的写能力无关，因此对三种 access 均 LEGAL。
+
+同一 initiation 中多项前置检查同时适用时，caller-visible 结果按以下 precedence 冻结：
+
+```text
+1. closed File                  -> invalid_state
+2. access legality（本节 matrix）-> invalid_argument
+3. zero-length request          -> success，progress 为 0（不发生 I/O）
+4. offset/size 值校验（overflow 等）-> invalid_argument
+```
+
+该 precedence 同时保证：错误 access 上的 zero-length 请求仍然是 `invalid_argument`（legality 先于 I/O 效应的有无）。
+
 ---
 
 ## 6. Two API levels
