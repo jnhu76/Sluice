@@ -11,6 +11,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -184,6 +185,140 @@ bool sync_all_op_through_canonical_file() {
     return file.close().has_value();
 }
 
+// Zero-length outranks offset validation on this backend's lowering: a
+// zero-length request with an unrepresentable offset must complete 0, not
+// fail admission.
+bool zero_length_read_completes_zero_despite_unrepresentable_offset() {
+    const std::string path = make_temp_file("d");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path).value());
+    ::unlink(path.c_str());
+
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<UringAsyncBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            std::byte scratch{std::byte{0}};
+            auto sr = ctx.submit_read(
+                ReadOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()}, c);
+            if (!sr.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
+                return;
+            }
+            auto wr = ctx.await_completion(c);
+            if (!wr.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(wr.error()));
+                return;
+            }
+            slot.publish(c.result());
+        });
+
+    const bool ok = result.has_value() && result.value() == 0;
+    return file.close().has_value() && ok;
+}
+
+bool zero_length_write_completes_zero_despite_unrepresentable_offset() {
+    const std::string path = make_temp_file("");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path, writable_mode()).value());
+    ::unlink(path.c_str());
+
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<UringAsyncBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            const std::byte scratch{std::byte{0}};
+            auto sr = ctx.submit_write(
+                WriteOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()}, c);
+            if (!sr.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
+                return;
+            }
+            auto wr = ctx.await_completion(c);
+            if (!wr.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(wr.error()));
+                return;
+            }
+            slot.publish(c.result());
+        });
+
+    const bool ok = result.has_value() && result.value() == 0;
+    return file.close().has_value() && ok;
+}
+
+// Non-zero requests with an unrepresentable offset are rejected at admission
+// with the frozen error category on the real lowering, never deferred to
+// backend execution.
+bool read_with_unrepresentable_offset_rejected_at_admission() {
+    const std::string path = make_temp_file("d");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path).value());
+    ::unlink(path.c_str());
+
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<UringAsyncBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            std::byte dst{std::byte{0}};
+            auto sr = ctx.submit_read(
+                ReadOp{file, &dst, 1, std::numeric_limits<std::uint64_t>::max()}, c);
+            if (sr.has_value()) {
+                (void)ctx.await_completion(c);
+                c.reset();
+                slot.publish(sluice::make_unexpected<std::size_t>(
+                    sluice::IoError{sluice::IoError::Code::backend_error}));
+                return;
+            }
+            if (!c.idle()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(
+                    sluice::IoError{sluice::IoError::Code::backend_error}));
+                return;
+            }
+            slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
+        });
+
+    const bool ok = !result.has_value() &&
+                    result.error().code == sluice::IoError::Code::invalid_argument;
+    return file.close().has_value() && ok;
+}
+
+bool write_with_unrepresentable_offset_rejected_at_admission() {
+    const std::string path = make_temp_file("");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path, writable_mode()).value());
+    ::unlink(path.c_str());
+
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<UringAsyncBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            const std::byte src{std::byte{0}};
+            auto sr = ctx.submit_write(
+                WriteOp{file, &src, 1, std::numeric_limits<std::uint64_t>::max()}, c);
+            if (sr.has_value()) {
+                (void)ctx.await_completion(c);
+                c.reset();
+                slot.publish(sluice::make_unexpected<std::size_t>(
+                    sluice::IoError{sluice::IoError::Code::backend_error}));
+                return;
+            }
+            if (!c.idle()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(
+                    sluice::IoError{sluice::IoError::Code::backend_error}));
+                return;
+            }
+            slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
+        });
+
+    const bool ok = !result.has_value() &&
+                    result.error().code == sluice::IoError::Code::invalid_argument;
+    return file.close().has_value() && ok;
+}
+
 } // namespace
 
 int main() {
@@ -202,6 +337,14 @@ int main() {
         {"write_op_through_canonical_file", write_op_through_canonical_file},
         {"sync_data_op_through_canonical_file", sync_data_op_through_canonical_file},
         {"sync_all_op_through_canonical_file", sync_all_op_through_canonical_file},
+        {"zero_length_read_completes_zero_despite_unrepresentable_offset",
+         zero_length_read_completes_zero_despite_unrepresentable_offset},
+        {"zero_length_write_completes_zero_despite_unrepresentable_offset",
+         zero_length_write_completes_zero_despite_unrepresentable_offset},
+        {"read_with_unrepresentable_offset_rejected_at_admission",
+         read_with_unrepresentable_offset_rejected_at_admission},
+        {"write_with_unrepresentable_offset_rejected_at_admission",
+         write_with_unrepresentable_offset_rejected_at_admission},
     };
 
     for (const NamedTest& t : tests) {
