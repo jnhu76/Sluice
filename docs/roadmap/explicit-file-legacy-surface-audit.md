@@ -11,9 +11,10 @@ Scope: Post-Phase-A legacy I/O/composition disposition
 
 Tracking: [#355](https://github.com/jnhu76/Sluice/issues/355)
 
-Revision: Corrective-1（人审 REQUEST_CHANGES：3 MAJOR / 1 CORRECTNESS CORRECTIVE / 2 MINOR
-全部闭合；见 §15 corrective 处置记录。盘点从 24 行扩为 30 行；Count 必须变的裁决见 §8/§19
-——不保留 TOTAL=24 的表面一致性。）
+Revision: Corrective-2（第二轮人审 REQUEST_CHANGES：2 MAJOR / 1 MINOR 全部闭合，见 §15
+corrective 处置记录。Corrective-1 的 3 MAJOR / 1 CORRECTNESS / 2 MINOR 闭合记录同节保留。
+I21 Future 经零基础重裁改为 DELETE（§7/§10/§14 Reviewer E），盘点计数变为
+TOTAL=30 / DELETE=29 / CONVERGE=1；每符号唯一归属 ledger 见 §8.1。）
 
 ---
 
@@ -22,20 +23,21 @@ Revision: Corrective-1（人审 REQUEST_CHANGES：3 MAJOR / 1 CORRECTNESS CORREC
 30 个盘点面（I01–I30）在 ff916c37 上逐一重derive，最终 verdict：
 
 ```text
-DELETE    = 28
-CONVERGE  = 2   (I20 Group / I21 Future)
+DELETE    = 29
+CONVERGE  = 1   (I20 Group)
 KEEP      = 0
 ADD_MINIMAL = 0
 RESEARCH  = 0
 OUT_OF_SCOPE（行级）= 0   （非行级 OUT_OF_SCOPE 处置见 §6 checklist 与 §13）
 ```
 
-一句话结论：**Phase A 收敛完成后，legacy 同步 I/O 簇（含本审计新盘点的 Copy/Buffered/
+一句话结论：**Phase A 收敛完成后，legacy 同步 I/O 簇（含本审计盘点的 Copy/Buffered/
 Memory/Fault/SyncableWriter/legacy stats 六个显式责任面）不再承载任何 canonical 之外的
-语义责任；全树唯一活的 legacy 消费链是 `ApplicationRuntime → Group → Future`，其能力合法
-但形状错误，应 CONVERGE 而非 KEEP；且任何收敛实现必须保留一个可执行的终端-生存期见证
-（fiber 完全返回先于 fiber/stack storage 销毁），`terminal_count_` 不被证明授予该权威
-（§10 Group/Future 修正）。其余 28 个表面全部满足 §14 DELETE 四要件。**
+语义责任；全树唯一活的 legacy 消费链是 `ApplicationRuntime → Group → Future`：Group 的
+spawn/token 能力合法但形状错误（CONVERGE），Future 经零基础重裁无独立存活责任（DELETE，
+Corrective-2）；fiber/stack storage 的物理释放权威是 ApplicationRuntime teardown barrier
+（scheduler quiescence + driver join，§10 T 链），`Future::ready` 与 `terminal_count_` 均
+不构成物理释放权威。其余 29 个表面全部满足 §14 DELETE 四要件。**
 
 四个结构性事实支撑本结论（全部在 proof root 上机器验证）：
 
@@ -81,6 +83,11 @@ A7 裁决维持不变，reopen 条件见 vectored-decision §5（其"reopen 语�
   隐式处置"的面补独立 §14 责任判定（I25–I30）；Copy 按 §11.1 正例地位独立裁决（§9 C1–C3）；
   OS 机制属性与 Sluice 语义权威两分（§9 vectored fact corrective）；每个未来删除符号映射到
   恰一个盘点行与恰一个实现 slice（§8 表 traceability 列 + §17 文件枚举）。
+- **Corrective-2 方法补充**：每个计划移除符号的 audit owner 与 implementation slice owner
+  唯一化，以机器可核对的 ledger 固化（§8.1）；Group/Future 终端-生存期权威弃用报告转述、
+  直接从代码重建（§10 T1–T8 链，逐箭头 file:line）；I21 Future 零基础重裁（不预设维持
+  CONVERGE、不保计数）；slice 依赖 DAG 按真实编译依赖重derive（§17）；一个 fresh
+  lifetime adversary 独立复核最早合法释放点（§14 Reviewer E）。
 - 证据类型：符号级 census（含反 false-zero 检查：factory indirection / virtual dispatch /
   template / alias / 继承 / `dynamic_cast` 全部人工排除）、include 图机器验证、xmake 构建
   图验证、compile_commands/目标文件交叉验证、8 个隔离删除探针、git 历史为次要证据。
@@ -201,6 +208,10 @@ C19（Corrective-1）legacy stats structs 消费面：SyscallStats/SyncStats →
     BufferStats → buffer.hpp；CopyStats → copy.hpp/reader.hpp/reader.cpp/copy.cpp；VectorStats →
     file.hpp/io_context.hpp/observed.hpp；UringStats → experimental/ 两头文件；全部为死管线；
     AsyncStats 为唯一 canonical 消费 struct
+C20（Corrective-2）wait-policy 链消费面：WaitPolicy/ThreadedWaitPolicy/default_wait_policy
+    （wait_policy.{hpp,cpp}）消费者 = Future 默认 ctor（唯一）；EventedWaitPolicy
+    （evented_wait_policy.hpp）构造者 = Group ctor（唯一，group.cpp:22）；Future::await 是
+    wait_until_ready 的唯一调用者（死线程路径）。整条链无 Group/Future 之外的消费者
 ```
 
 构建图事实：
@@ -246,10 +257,16 @@ ApplicationRuntime）与 `Task<T>`/`try_submit`（零调用）；factory 只有 
   Batch ──> AsyncIoContext::submit_*（孤立，零消费者；持 Completion 私有 reap_seq 唯一读权 + friend 授权）
   op_helpers(read_all/...) ──> AsyncIoContext + NativeFileRef（孤立，零消费者）
   ApplicationRuntime ──> Group ──> Future / Fiber / CancelToken / Scheduler ──被──> 4 apps
-    终端/生存期程序序（Corrective-1，§10）：
-    task body 返回 → terminal_count_++（仍在 fiber 栈上）→ wrapper 收尾并返回
-      → Group fiber entry: Future::complete_with() → entry 返回 → fiber retire（scheduler 收割）
-      → （随后）close_resources → ~Group：逐一检查 Future::ready() → clear evented_stacks_/fibers_
+    终端/生存期程序序（Corrective-2 从代码重建，§10 T1–T8 逐箭头 file:line）：
+    task body 返回 → terminal_count_++（T1，仍在 fiber 栈上）→ wrapper 收尾并返回
+      → Group fiber entry: Future::complete_with()（T2 发布，仍在 fiber 栈上）→ entry 返回（T3）
+      → Fiber::make_done()（T4）→ context_switch_final 回 scheduler（T5，此后 fiber 栈不再执行）
+      → worker loop 退出（idle 路径）→ run_impl join 全部 worker 线程（T6 quiescence）
+      → driver_state_=exited → driver_thread_.join()（T7）
+      → close_resources → group.reset() → ~Group：ready() 逻辑 fail-fast 扫描 →
+        clear evented_stacks_/evented_fibers_/futures_（T8 storage release）
+    FUTURE_READY ≠ FIBER_QUIESCENT（T2 严格先于 T5）；T8 的物理门是 T6→T7，
+    ready() 扫描是 T7 之后的逻辑误用 fail-fast（§10）
   measurement.hpp：AsyncStats（canonical 边）｜其余 stats structs（仅 SYNC SCC / experimental 边）
 
 [ISLAND — 未编译]
@@ -278,7 +295,7 @@ ApplicationRuntime）与 `Task<T>`/`try_submit`（零调用）；factory 只有 
 | 6 | `Buffered*` 是否有 product owner | A → I26 DELETE（无 product owner，零消费者） | §7 |
 | 7 | MemoryIoContext/Fault*/Observed* 是 test/observation、public capability 还是无 owner | A → I27/I28/I12/I13 DELETE（test-substrate、零使用、无 ADR 义务） | §7 |
 | 8 | WAL 属于 Core、consumer/workload，还是移出 | A → I14 DELETE（非 Core；无 retained 责任；语义澄清见 §9） | §7/§9 |
-| 9 | Batch/Future/Group 哪些仍与 File I/O architecture 有关 | A → I19 DELETE；I20/I21 CONVERGE（含 §10 终端见证不变式） | §7/§10 |
+| 9 | Batch/Future/Group 哪些仍与 File I/O architecture 有关 | A → I19 DELETE；I20 CONVERGE；I21 DELETE（Corrective-2 零基础重裁：无独立存活责任，随 slice O 落地；权威模型见 §10） | §7/§10 |
 | 10 | current async ReadOp/WriteOp 从 raw fd 收敛到 canonical File resource | B OUT_OF_SCOPE —— 已由 Phase A 解决：ops 持 `NativeFileRef{fd, declared access}`（async_io_context.hpp:29-46）；owner = A8 conformance ledger（PR #365 后 CONFORMANT） | 本节 |
 | 11 | RequestHandle / stats / synthetic backend 最终处置 | 拆三：stats → A（I11/I30 DELETE）；synthetic backend → 已不在树（前序 subtraction 删除，本审计无对象）；RequestHandle → B OUT_OF_SCOPE（canonical §7.2 explicit-op authority，活；owner = Phase A conformance） | §7/本节 |
 | 12 | direct I/O / preallocation / fadvise / zero-copy / NOWAIT 产品化 | B OUT_OF_SCOPE —— 树内零代码（grep 实证）；owner = ADR-0002 §10 capability backlog（未来 evidence 流程） | 本节 |
@@ -453,7 +470,9 @@ IMPACT=P7 GREEN（P7 未动 measurement.hpp，文件级修剪由 P8 覆盖）
 VERDICT=DELETE
 RATIONALE=观测责任已由 canonical AsyncStats 拥有；本 struct 只服务死 vec 管线；"statistics sound useful"
 不构成 KEEP 证据。删除指 struct 字段，不指 measurement.hpp 文件。
-F/U=P（struct 删除并入 P；文件级 trim 由 P8 探针覆盖）
+F/U=G（Corrective-2 归属修正：VectorStats struct 的删除 owner 是本行、落地于 slice G；原
+"并入 slice P"与 slice G 文件枚举构成双 owner，废除。编译依赖：file.hpp/io_context.hpp 的
+VectorStats 引用者先删（H、J 先于 G，§17）。P8 探针作为 struct 级终态证据复用，§9。）
 ```
 
 ### I12 ObservedReader
@@ -602,45 +621,69 @@ RESP=任务组：evented spawn（fiber+stack+Future）、组级 CancelToken、�
 CANON=ApplicationRuntime 本身（runtime 已有 admitted/terminal 记账 + drain + lifecycle fail-fast）
 UNIQ=spawn/token 组合（活）；await()/cancel()/size()/group_stop_predicate/线程模式（全零调用者）
 AUTH=任务集生命周期（ADR §9 async correctness 域）；不触碰 File 语义（对抗审 AA-1 确认无 File 权威）
-COST=203 行中约半数死亡：双执行模式（threaded 零实例化）、双终端跟踪（futures_ 扫描 vs runtime 计数）、
+COST=203 行中约半数死亡：双执行模式（threaded 零实例化）、冗余终端记账（futures_ 扫描 vs
+runtime 计数——跟踪不同事实，Corrective-2 措辞）、
 双 fail-fast（group dtor vs runtime lifecycle）、EventedAdmissionFailPoint 测试缝（除 runtime 内联链外
 零测试调用者）
-**终端权威修正（Corrective-1 CORRECTIVE-1）**：futures_ 扫描与 runtime terminal_count_ 不是同一权威。
-futures_ 上的 Future::ready() 见证"fiber entry 已执行到 complete_with（其最后语句）"，而 runtime
-terminal_count_ 在 task wrapper 内部递增——先于 wrapper 返回、先于 Future 发布。两者之间存在
-fiber epilogue 窗口（notify/tag-restore/返回→complete_with→fiber retire）。~Group 恰以
-Future::ready() 为门、先检查后 clear evented_stacks_/evented_fibers_（group.cpp:73-84）——
-这是当前唯一的可执行 storage-release 见证。CONVERGE 判定不变，但收敛不变式升级为硬性验收
-标准（§10/§14 INV-G1/INV-G2）。
+**存储-释放权威修正（Corrective-2，替代 Corrective-1 的"终端权威修正"段落）**：~Group 的
+futures_ 扫描（Future::ready()，group.cpp:78-82）**不是** storage-release 见证。complete_with
+是 fiber entry 的语句（group.hpp:154，在 entry 内、先于 entry 返回），ready 见证的是 §10 的
+T2（发布点），不是 T3（entry 返回）/T4（make_done）/T5（final context switch）——
+FUTURE_READY ≠ FIBER_QUIESCENT。物理释放权威是 ApplicationRuntime teardown barrier：
+join() 等 driver_state_==exited → driver_thread_.join() → close_resources() → group.reset()
+→ ~Group clear（T8；run_impl 返回前 join 全部 worker 线程，T6 ⇒ 每个 fiber 的 T5 已发生，
+§10 逐箭头 file:line）。~Group ready() 扫描的精确分类：**逻辑组完成 fail-fast / pending-task
+误用检测**——它在 T7 之后求值，任务全部到达发布点时恒真；它不证明、也不需要证明栈已停。
 IMPACT=不可直接删除（活根）；P7 未触碰
 VERDICT=CONVERGE
-RATIONALE=§14 CONVERGE 定义逐条命中：能力正确（spawn/token 被唯一合法根消费），但存在 semantic
-duplication（双终端跟踪——Corrective-1 措辞修正：跟踪的事实不同，非"同一事实的重复存储"）、
-authority duplication（双 fail-fast）、wrong layer（公共类 + 死执行模式 + 死公共方法）。
-消费者数不决定本判定——死亡成员的存在决定。
-F/U=O（Group/Future convergence slice；验收含 INV-G1/G2）
+RATIONALE=§14 CONVERGE 定义逐条命中：能力正确（spawn/token 被唯一合法根消费），但存在
+wrong layer（公共类 + 死执行模式 + 死公共方法）与 fail-fast 权威重复（Group dtor 检查 vs
+runtime lifecycle 检查——两个可观察终端概念并存于两层）。Corrective-2 措辞终版：不再使用
+"双终端跟踪"或"终端-生存期见证重复"表述；futures_ 记账与 runtime 计数跟踪的是不同事实，
+重复的是权威面而非事实本身。
+F/U=O（Group/Future convergence slice；验收标准 = §10 INV-O1..O4）
 ```
 
-### I21 Future
+### I21 Future（Corrective-2 零基础重裁：CONVERGE → DELETE）
 
 ```text
-LOC=include/sluice/async/future.hpp   PUB=Y   BLD=Y   DIR=Group（唯一消费者）
-TRANS=四个 app（经 Group/ApplicationRuntime）   TEST=0   APP=Y（传递）
-RESP=caller-completable 结果单元：complete_with/ready（活）+ policy notify（唤醒边）；
-await/cancel/cancel_token/默认 ctor（死：await 仅线程路径，cancel 族零调用者，默认 ctor 仅线程路径）
-CANON=Completion 是 backend-publication 权威（publish_from_reap 私有）；Future 是 caller-publication
-原语——两者语义不同，不重复（对抗审确认）
-UNIQ=树中唯一 caller-completable cell（活）；死亡成员见上
-AUTH=任务终端事实的 publication（§9 域）；File 中立
-**权威修正（Corrective-1）**：complete_with/ready 同时是 fiber 终端-生存期见证的可执行载体
-（§10 fact D）；收敛后必须以某内部机制保留该见证（INV-G1），不得以 terminal_count_ 替代。
-DEAD PUBLIC MEMBER（threaded await/cancel/cancel_token/默认 ctor/default_wait_policy 链）与
-LIVE INTERNAL CORRECTNESS FACT（complete_with/ready 见证链）区分处置：收敛删除前者，
-后者内化为 runtime 私有。
-COST=模板头，但半数成员死亡 + 默认 ctor 拖拽 default_wait_policy 死链
-IMPACT=随 Group 收敛收缩   VERDICT=CONVERGE
-RATIONALE=同 I20：能力活、形状错（死成员 + 经收敛后应成为 runtime 内部信号而非公共 API）。
-对抗审 B 的"unmodified KEEP not defensible"成立。   F/U=O
+LOC=include/sluice/async/future.hpp；死链：include/sluice/async/wait_policy.hpp +
+    src/async/wait_policy.cpp（ThreadedWaitPolicy/default_wait_policy）、
+    include/sluice/async/evented_wait_policy.hpp（EventedWaitPolicy）
+PUB=Y   BLD=Y   DIR=Group（全树唯一消费者；C12/C20）
+TRANS=四个 app（经 Group/ApplicationRuntime，仅 spawn 链）   TEST=0   APP=0（直接）
+RESP 逐成员分解（Corrective-2，全部 file:line 可核）：
+  complete_with（唯一活调用 group.hpp:154）/ ready（唯一活消费 group.cpp:79）——发布+查询对，
+    消费者是 ~Group 的逻辑 fail-fast 扫描（§10：T7 后求值的误用检测，非物理释放门）
+  await（group.cpp:72/102，死线程路径）/ cancel / cancel_token（全树零调用者）/ 默认 ctor
+    （死线程路径）——全死
+  wait-policy notify 链——wait_until_ready 唯一调用者是死 await；notify_ready 在活路径触发
+    （group.hpp:154 完成时）但与 wrapper 的 wake_handle_.notify()（application_runtime.cpp:241）
+    重复，无独立活消费者
+CANON=无单一 canonical 等价物。收敛后运行时真正需要的两个事实 runtime 均已拥有，且都强于
+  Future::ready：（i）逻辑终端记账 terminal_count_（application_runtime.cpp:236）；（ii）物理
+  quiescence barrier（run_impl join 全部 worker + driver join，§10 T6→T7）
+UNIQ=caller-completable cell 形状；收敛后无公共 caller，形状失去主体
+AUTH=任务终端事实的 publication（§9 域）；File 中立（对抗审 AA-1 确认）
+**Corrective-2 零基础重裁（不预设维持 CONVERGE、不保计数）**：
+  问句：死线程 Group/await/cancel 移除、Group 收敛进 ApplicationRuntime 之后，公共 Future
+  还拥有什么 retained 责任？
+  逐项裁决：complete_with/ready 的唯一活消费者是 Group 收敛后即消失的 fail-fast 扫描；
+  逻辑终端事实 runtime 已有（terminal_count_）；物理释放由 quiescence barrier 承担（更强）；
+  通知边与 wrapper wake 重复；线程兼容面全死；caller publication 无 caller。
+  → **无独立存活的 Future 责任**。
+  Corrective-1 的"complete_with/ready 同时是 fiber 终端-生存期见证的可执行载体（§10 fact D），
+  收敛后必须以某内部机制保留该见证（INV-G1）"表述**作废**：ready 见证 T2，不见证
+  T3/T4/T5；INV-G1 由 INV-O1/O2 的 quiescence barrier 取代（更强，且现实现已满足）。
+  Future 区分（Corrective-2 §15 义务）：不是"Future 无用"，是"Future 的每项候选责任
+  （组级完成状态/通知/线程兼容/caller publication）或死、或由 runtime 既有机制以更强形式
+  承担"。
+COST=每 spawn 一次 shared_ptr<Future> 分配 + mutex/cv/WaitPolicy 指针/CancelToken 成员 +
+  wait-policy 死链三个文件
+IMPACT=随 slice O 删除：group 收敛后无消费者；future.hpp、wait_policy.{hpp,cpp}、
+  evented_wait_policy.hpp 从树中消失（C20）
+VERDICT=DELETE
+F/U=O（Group/Future convergence slice 内以删除落地；验收标准 = §10 INV-O1..O4）
 ```
 
 ### I22 include/sluice/experimental/uring_io_context.hpp
@@ -690,7 +733,9 @@ IMPACT=P1 GREEN   VERDICT=DELETE   RATIONALE=I22/I23 的实现体；同 slice �
 ```text
 成员={copy.hpp, copy.cpp, copy_strategy.hpp, copy_strategy.cpp, limit.hpp} ×
      {copy_all ×5 重载, CopyOptions, CopyStrategy(Auto/Scratch/BufferedFirst), CopyDecision,
-      CopyLimit, sluice::CopyStats}
+      CopyLimit}
+     （sluice::CopyStats 不在本行成员集：其删除 owner 是 I30 → slice P；本行仅为支持性
+      引用/依赖，Corrective-2 唯一归属修正）
 PUB=Y   BLD=Y   DIR=0（copy_all 全树消费者 = 0；C14）   TEST=0   APP=0
 RESP（C1 责任判定）：
   a) EOF-driven bounded byte transfer（copy_all 核心循环）——ADR-0001 §6/ADR-0002 §11.1 接受的
@@ -728,7 +773,9 @@ F/U=M（Copy surface slice）
 
 ```text
 成员={buffer.hpp, buffer.cpp, buffered_readable.hpp} × {BufferedReader, BufferedWriter,
-     BufferedReadable, BufferStats}
+     BufferedReadable}
+     （BufferStats 不在本行成员集：其删除 owner 是 I30 → slice P；本行仅为支持性引用，
+      Corrective-2 唯一归属修正）
 PUB=Y   BLD=Y   DIR=BufferedReader/Writer：0（C15）；BufferedReadable：唯一消费者 copy.cpp:57
      dynamic_cast（I25 的 fast path）   TEST=0   APP=0
 RESP=真实缓冲语义：read refill/seek/end 管理 + write 聚合/flush 契约（dtor 断言未 flush 即失败）+
@@ -823,10 +870,14 @@ F/U=N（在 E 与 H 之后）
 ### I30 LEGACY STATS CLUSTER（Corrective-1 新增；§13 item 11 stats 部分）
 
 ```text
-成员={SyscallStats, SyncStats, BufferStats, sluice::CopyStats}（measurement.hpp:7-61）
-     （VectorStats 已为 I11；UringStats 随 I22/I23 头文件删除；ReaderStats/WriterStats 已为 I12/I13）
+成员={SyscallStats(:7-14), BufferStats(:16-33), sluice::CopyStats(:35-54), SyncStats(:56-61),
+     UringStats(:63-70)}（measurement.hpp）
+     （Corrective-2 归属修正：UringStats 的删除 owner 由 slice A 的"顺带"改归本行 → slice P；
+      slice A 只删 4 个 experimental 文件。VectorStats 为 I11 → slice G；ReaderStats/WriterStats
+      为 I12/I13（observed.hpp 内定义）——支持性引用，非本行成员。）
 PUB=Y   BLD=Y   DIR=C19：SyscallStats/SyncStats→file.hpp/io_context.hpp 管线（死）；
-     BufferStats→buffer.hpp（死）；CopyStats→copy.hpp/reader.hpp/copy.cpp（死）   TEST=0   APP=0
+     BufferStats→buffer.hpp（死）；CopyStats→copy.hpp/reader.hpp/reader.cpp/copy.cpp（死）；
+     UringStats→experimental/ 两头文件（死，未编译）；全部为死管线   TEST=0   APP=0
 问句裁决（Corrective-1 §9：逐责任簇，不用"AsyncStats 存在⇒其余重复"的偷懒论证）：
   SyscallStats/SyncStats（read/write syscall 与 durability 计数）：live consumer=0；
     test role=0；perf/research role=0（tax0 census 已由 canonical 侧取代）；observation owner=
@@ -835,14 +886,16 @@ PUB=Y   BLD=Y   DIR=C19：SyscallStats/SyncStats→file.hpp/io_context.hpp 管�
   BufferStats：同上，观察对象 = I26。
   sluice::CopyStats：同上，观察对象 = I25；app 的 sluice_copy::CopyStats 独立存活于 app
     （不随本行删除）。
+  UringStats：同上，观察对象 = I22/I23（set_stats 注入，唯一消费点）。
   区分记录：不同观察可以合法不同——本裁决不否认 syscall 计数与 async 计数是不同观察；
   否定的是"无存活观察对象 + 无 retained 消费者"的 struct 的生存权（§14：hint/observation
   非 authority；零产品/测试角色）。
 AUTH=无   CANON=AsyncStats（唯一 canonical 观测 struct，保留）
-COST=4 struct 55 行 + 它们给 legacy 头提供的存在理由
-IMPACT=P8 GREEN（P7 之上的 measurement.hpp 修剪；文件保留，仅余 AsyncStats）
+COST=5 struct（measurement.hpp:7-70）+ 它们给 legacy/experimental 头提供的存在理由
+IMPACT=P8 GREEN（P7 之上的 measurement.hpp 修剪；文件保留，仅余 AsyncStats——
+     该终态同时覆盖 I11 的 VectorStats 删除，见 §9 证据复用声明）
 VERDICT=DELETE（struct 级；measurement.hpp 文件保留）
-F/U=P（residual stats trim slice，最后执行）
+F/U=P（residual stats trim slice，最后执行；入边 {A,H,J,K,M}，§17）
 ```
 
 ---
@@ -861,7 +914,7 @@ F/U=P（residual stats trim slice，最后执行）
 | I08 | FileWriter write_vec/write_vec_at | WAL（已裁 DELETE） | OS 机制属性 ≠ Sluice 语义权威（§9 两分） | DELETE | P7 | F |
 | I09 | IoSlice | vec 方法族（死） | none | DELETE | P7 | F |
 | I10 | ConstIoSlice | vec 方法族（死） | none | DELETE | P7 | F |
-| I11 | VectorStats | legacy vec 管线（死） | none（canonical=AsyncStats） | DELETE | P7+P8 | P |
+| I11 | VectorStats | legacy vec 管线（死） | none（canonical=AsyncStats） | DELETE | P7+P8 | G |
 | I12 | ObservedReader | none（全树零） | none | DELETE | P7 | G |
 | I13 | ObservedWriter | none（全树零） | none | DELETE | P7 | G |
 | I14 | WAL | none（全树含测试零） | record framing/LSN（无依赖 contract；DELETE 语义澄清见 §9） | DELETE | P5 | E |
@@ -870,24 +923,103 @@ F/U=P（residual stats trim slice，最后执行）
 | I17 | BlockingIoPool | none（全树零） | 通用有界池形状（与 ThreadPool 重复） | DELETE | P4 | D |
 | I18 | op_helpers | none（全树零） | none（await_op_helpers 已收敛该责任） | DELETE | P3 | C |
 | I19 | Batch | none（全树零） | none（无 group-admission authority） | DELETE | P2 | B |
-| I20 | Group | ApplicationRuntime → 4 apps | spawn/token（活）+ 半数死亡成员；终端见证权威 ≠ terminal_count_（§10） | CONVERGE | 活根（探针不适用） | O |
-| I21 | Future | Group（唯一） | caller-publication cell（活）+ fiber 终端见证载体（§10 fact D）+ 死成员 | CONVERGE | 活根（探针不适用） | O |
+| I20 | Group | ApplicationRuntime → 4 apps | spawn/token（活）+ 半数死亡成员；存储释放权威 = teardown barrier（§10），ready() 扫描 = 逻辑 fail-fast | CONVERGE | 活根（探针不适用） | O |
+| I21 | Future | Group（唯一，随收敛消失） | 无独立存活责任（Corrective-2 零基础重裁：逻辑记账/物理屏障 runtime 均已有且更强；wait-policy 死链 C20） | DELETE | 活根（随 slice O 删除；行为等价+INV-O 见证测试，探针不适用） | O |
 | I22 | experimental/uring_io_context.hpp | none（未编译不可链接） | none（raw path 权威 = 边界违反） | DELETE | P1 | A |
 | I23 | experimental/uring_write_batch.hpp | none（未编译不可链接） | none（raw fd + 已否定 batch 机制） | DELETE | P1 | A |
 | I24 | src/experimental/* | none（不在构建图） | none | DELETE | P1 | A |
-| I25 | COPY SURFACE（copy_all 族 + Options/Strategy/Decision/Limit/Stats） | none（C14；app 自实现 canonical copy） | bounded-transfer 责任合法但 app 层已持有；library 面 framework 形状无 owner | DELETE | P7（复用） | M |
-| I26 | BUFFERED SURFACE（BufferedReader/Writer/Readable + BufferStats） | copy.cpp dynamic_cast（唯一，死） | 真实缓冲语义、无 product owner（§13 item 6 答案） | DELETE | P7（复用） | K |
+| I25 | COPY SURFACE（copy_all 族 + Options/Strategy/Decision/Limit） | none（C14；app 自实现 canonical copy） | bounded-transfer 责任合法但 app 层已持有；library 面 framework 形状无 owner | DELETE | P7（复用） | M |
+| I26 | BUFFERED SURFACE（BufferedReader/Writer/Readable） | copy.cpp dynamic_cast（唯一，死） | 真实缓冲语义、无 product owner（§13 item 6 答案） | DELETE | P7（复用） | K |
 | I27 | MEMORY TEST SUBSTRATE（MemoryIoContext/MemoryReader/MemoryWriter） | none（C16） | in-memory 替身；无 ADR 义务（supersede A7 §M） | DELETE | P7（复用） | L |
 | I28 | FAULT INJECTION SUBSTRATE（FaultPlan/FaultReader/FaultWriter） | none（C17） | 注入能力真实、当前要求为零 | DELETE | P7（复用） | L |
 | I29 | SyncableWriter | 实现=FileWriter、消费=WalWriter（均死） | durability side-interface = capability-erasure 修复；权威归 File §5.4 | DELETE | P7（复用，sync.hpp 精确在集内） | N |
-| I30 | LEGACY STATS CLUSTER（SyscallStats/SyncStats/BufferStats/CopyStats） | 死管线观察 struct（C19） | 无存活观察对象、无 retained 消费者（AsyncStats 保留） | DELETE | P8 | P |
+| I30 | LEGACY STATS CLUSTER（SyscallStats/SyncStats/BufferStats/CopyStats/UringStats） | 死管线观察 struct（C19） | 无存活观察对象、无 retained 消费者（AsyncStats 保留） | DELETE | P8 | P |
 
 每行恰好一个 verdict；无缺行；无重复行；每个未来将被删除/收敛的文件与符号恰好映射到一行
-（grouped 行的成员显式枚举于卡片）。计数：**TOTAL=30，DELETE=28，CONVERGE=2，KEEP=0，
+（grouped 行的成员显式枚举于卡片）。计数：**TOTAL=30，DELETE=29，CONVERGE=1，KEEP=0，
 ADD_MINIMAL=0，RESEARCH=0，OUT_OF_SCOPE 行=0**（§13 非行级 OUT_OF_SCOPE 处置 4 项见 §6）。
 
 Traceability 链：AUDIT VERDICT（本表）→ IMPLEMENTATION SLICE（§17，含逐 slice 文件枚举）→
 FILE/SYMBOL DIFF（未来实现 PR 的 diff 须恰好覆盖其所引行的成员枚举）。
+**Corrective-2 唯一归属**：每个计划移除符号有且只有一个 audit owner、一个 implementation
+slice deletion owner；支持性/依赖性行可以引用该符号但不得声称删除它。机器可核对的逐符号
+ledger 见 §8.1；计数器：DUPLICATE_AUDIT_OWNER_COUNT=0、DUPLICATE_SLICE_OWNER_COUNT=0、
+UNAUDITED_PLANNED_REMOVAL_COUNT=0。
+
+### 8.1 Traceability ledger（Corrective-2 强制输出；M1 闭合）
+
+格式：| Symbol / surface | Audit owner | Supporting rows（仅引用，不拥有） | Implementation slice | Deletion owner |
+每个符号的 Audit owner 列与 Implementation slice 列各自全列唯一。
+
+| Symbol / surface | Audit owner | Supporting rows | Implementation slice | Deletion owner |
+| ---------------- | ----------- | --------------- | -------------------- | -------------- |
+| VectorStats（measurement.hpp:72-81） | I11 | I01, I02, I12, I13, I15, I16 | G | slice G |
+| SyscallStats（measurement.hpp:7-14） | I30 | I01, I02, I15, I16 | P | slice P |
+| SyncStats（measurement.hpp:56-61） | I30 | I02, I15, I16 | P | slice P |
+| BufferStats（measurement.hpp:16-33） | I30 | I26 | P | slice P |
+| sluice::CopyStats（measurement.hpp:35-54） | I30 | I25（app 侧 sluice_copy::CopyStats 独立存活） | P | slice P |
+| UringStats（measurement.hpp:63-70） | I30 | I22, I23（set_stats 唯一消费点） | P | slice P |
+| ReaderStats（observed.hpp:11） | I12 | — | G | slice G |
+| WriterStats（observed.hpp:18） | I13 | — | G | slice G |
+| copy_all ×5 重载（copy.hpp:15-26） | I25 | I03（stream_to 两重载调用，随 M 修剪） | M | slice M |
+| CopyOptions（copy_strategy.hpp:16） | I25 | — | M | slice M |
+| CopyStrategy（copy_strategy.hpp:10） | I25 | — | M | slice M |
+| CopyDecision（copy_strategy.hpp:21） | I25 | — | M | slice M |
+| CopyLimit（limit.hpp） | I25 | I03（stream_to 签名引用） | M | slice M |
+| BufferedReader（buffer.hpp:15） | I26 | I25（dynamic_cast fast path） | K | slice K |
+| BufferedWriter（buffer.hpp:42） | I26 | — | K | slice K |
+| BufferedReadable（buffered_readable.hpp:10） | I26 | I25 | K | slice K |
+| FileReader（file.hpp） | I01 | I16（factory 制造）、I29（实现 SyncableWriter） | H | slice H |
+| FileWriter（file.hpp） | I02 | I16、I29 | H | slice H |
+| Reader（reader.hpp） | I03 | I14, I12, I26, I27, I28, I25（实现者/装饰器，全死） | I | slice I |
+| Writer（writer.hpp） | I04 | I14, I13, I26, I25 | I | slice I |
+| Reader::read_vec / read_vec_all（reader.hpp:31-33） | I05 | I12（override） | F | slice F |
+| Writer::write_vec / write_all_vec（writer.hpp:21-23） | I06 | I13（override）、I14（唯一外部调用 wal.cpp:105） | F | slice F |
+| FileReader::read_vec / read_vec_at（file.hpp:50-54） | I07 | — | F | slice F |
+| FileWriter::write_vec / write_vec_at（file.hpp:103-107） | I08 | I14（链根，已裁 DELETE） | F | slice F |
+| IoSlice（iovec.hpp:8） | I09 | I05–I08 | F | slice F |
+| ConstIoSlice（iovec.hpp:12） | I10 | I05–I08 | F | slice F |
+| SyncableWriter（sync.hpp） | I29 | I02（实现者）、I14（消费者） | N | slice N |
+| WalWriter + wal:: record surface（wal.hpp / wal.cpp） | I14 | I29（durability 门注入） | E | slice E |
+| Batch / BatchOp / BatchResult（batch.{hpp,cpp}） | I19 | — | B | slice B |
+| Completion::reap_seq_ 成员 + reap_seq()（completion.hpp:176,180 及第二类 :343 区段） | I19 | — | B | slice B |
+| next_reap_seq()（completion.hpp:25，detail） | I19 | — | B | slice B |
+| friend class Batch ×2（completion.hpp:32,215） | I19 | — | B | slice B |
+| tax0_f02_skip_reap_seq seam（tax0_ablation_seams.hpp:12,25-26） | I19 | — | B | slice B |
+| IoContext 抽象（io_context.hpp:24） | I15 | I27（MemoryIoContext 实现者） | J | slice J |
+| BlockingIoContext（io_context.hpp:35） | I16 | I01, I02（制造对象） | J | slice J |
+| OpenReaderOptions / OpenWriterOptions（io_context.hpp:13,18） | I15 | — | J | slice J |
+| BlockingIoPool / Task<T> / PoolStats / try_submit / wait_idle / shutdown（blocking_io_pool.hpp + detail impl + .cpp） | I17 | — | D | slice D |
+| async::op_helpers read_all / write_all / sync_data_all / sync_all_all（op_helpers.{hpp,cpp}） | I18 | — | C | slice C |
+| MemoryIoContext（memory_io_context.hpp:14） | I27 | — | L | slice L |
+| MemoryReader / MemoryWriter（fault.hpp:39,16） | I27 | — | L | slice L |
+| FaultPlan / FaultReader / FaultWriter（fault.hpp:70,80,98） | I28 | — | L | slice L |
+| ObservedReader（observed.hpp:27） | I12 | — | G | slice G |
+| ObservedWriter（observed.hpp:46） | I13 | — | G | slice G |
+| experimental uring_io_context.hpp（include/sluice/experimental/） | I22 | I30（UringStats 支持性引用） | A | slice A |
+| experimental uring_write_batch.hpp（include/sluice/experimental/） | I23 | I30（UringStats 支持性引用） | A | slice A |
+| experimental src 两 TU（src/experimental/{uring_io_context,uring_write_batch}.cpp） | I24 | — | A | slice A |
+| Group 类型（group.hpp / group.cpp） | I20 | — | O | slice O（CONVERGE：类型随收敛消亡） |
+| Group 死成员：await(:70) / cancel(:72) / size(:77) / group_stop_predicate(:83) / async_threaded(:85) / 线程模式 Group()(:24) / EventedAdmissionFailPoint 缝(:48-55) | I20 | — | O | slice O |
+| Future 类型（future.hpp） | I21 | I20（唯一消费者，收敛即消失） | O | slice O |
+| Future::complete_with(:27) / ready(:58) | I21 | I20（消费点 group.hpp:154 / group.cpp:79） | O | slice O |
+| Future::await(:46) / cancel(:53) / cancel_token(:44) / 默认 ctor(:19) | I21 | — | O | slice O |
+| WaitPolicy / ThreadedWaitPolicy / default_wait_policy（wait_policy.hpp + wait_policy.cpp:5-6） | I21 | I20（evented_policy_ 成员类型引用） | O | slice O |
+| EventedWaitPolicy（evented_wait_policy.hpp） | I21 | I20（构造者，group.cpp:22） | O | slice O |
+
+Ledger 计数（机械核对口径：每行 Audit owner 列引用的盘点行存在且唯一；Implementation slice
+列值 ∈ A–P 且与 §8 表 F/U 列一致；supporting rows 不出现在任何 slice 的删除文件枚举中
+作为 owner）：
+
+```text
+DUPLICATE_AUDIT_OWNER_COUNT      = 0
+DUPLICATE_SLICE_OWNER_COUNT      = 0
+UNAUDITED_PLANNED_REMOVAL_COUNT  = 0
+```
+
+说明两处多行同 slice 的合法形态：I22/I23/I24 同落 slice A（同一 island）；I21 与 I20 同落
+slice O（同一权威变更：任务组责任收敛）。"同 slice"不产生双 owner——owner 是盘点行，
+slice 是实现载体；每个符号仍恰有一个 owner 行与一个 slice。
 
 ---
 
@@ -932,7 +1064,10 @@ I25 Copy：文件集 {copy,copy_strategy,limit}.hpp + {copy,copy_strategy}.cpp �
 I26 Buffered：{buffer,buffered_readable}.hpp + buffer.cpp ⊆ P7 ✓
 I27/I28 Memory/Fault：memory_io_context.hpp + fault.hpp + fault.cpp ⊆ P7 ✓
 I29 SyncableWriter：sync.hpp ⊆ P7 ✓（实现者 FileWriter/消费者 WalWriter 亦在集内）
-I30 stats trim：不在 P7 内（P7 未动 measurement.hpp）→ 由新探针 P8 单独覆盖 ✓
+I11 VectorStats：struct 不在 P7 内（P7 未动 measurement.hpp）→ P8 终态覆盖 ✓（Corrective-2：
+   该 struct 的实现载体是 slice G；P8 证明的是"引用者清零后 struct 可整体删除"这一终态，
+   编译依赖由 §17 的 {H,J}→G 边承载）
+I30 stats trim（5 struct）：不在 P7 内（P7 未动 measurement.hpp）→ 由新探针 P8 单独覆盖 ✓
 ```
 
 ### 单表面 DELETE 包（逐条差异项）
@@ -996,9 +1131,10 @@ DELETE verdict 因此**维持**，但论证替换为语义权威分析：无 own
 
 同源问题记录：`docs/roadmap/explicit-file-vectored-decision.md` §5 的 reopen-condition 括注
 （"readv/writev 本身不提供跨 buffer 原子性"）含同一不准确表述。该文件不在本 corrective 的
-允许文件集内（本审计 docs-only、单文件），不作修改；建议后续独立 docs corrective 将其改写为
-上述两分表述。reopen 条件的运作部分（真实 consumer + scalar-composition 不足证据 + §5.3
-parity 义务）不受影响。
+允许文件集内（本审计 docs-only、单文件），不作修改；已开独立 docs corrective tracking issue
+[#370](https://github.com/jnhu76/Sluice/issues/370)（Corrective-2 §19：范围=该括注改写为
+上述两分表述；不变更 A7 verdict、不推广 canonical vectored；#355 关闭前须完成）。reopen
+条件的运作部分（真实 consumer + scalar-composition 不足证据 + §5.3 parity 义务）不受影响。
 
 ### WAL human-review recheck（Corrective-1 §10）
 
@@ -1038,67 +1174,134 @@ canonical 测试零使用此类替身；Reader/Writer 删除后替身失去基�
 
 ---
 
-## 10. CONVERGE proof packets（Group/Future 终端权威修正）
+## 10. Group/Future 生命周期权威（Corrective-2 从代码全面重建；替代 Corrective-1 版本）
 
-CONVERGE 判定维持（初版与人审 corrective 一致：能力正确、形状错误）。Corrective-1 的工作是
-重建精确权威，使未来 slice O 的验收标准可执行。
+Corrective-2 裁决：**I20 Group = CONVERGE，I21 Future = DELETE**。本节把"fiber/stack storage
+何时可合法销毁"的全部权威从代码逐箭头重建，替代 Corrective-1 基于"Future::ready 是当前
+storage-release 见证"的错误前提（该前提撤销，依据即本节 T 链与 I20/I21 卡片改写）。
 
-### 权威事实表（Corrective-1 §13 强制输出）
-
-| Fact | 内容 | Current owner | Consumer | 可与另一 fact 合并？ |
-| ---- | ---- | ------------- | -------- | -------------------- |
-| A | admission count（`admitted_count_`，提交侧前向计数） | ApplicationRuntime（lifecycle_mtx_ 下，submit:217） | submit 记账、terminal 谓词输入、drain | 不可与 B/C/D/E 合并——前向计数不能见证终止；与 B 合并仅当谓词重定义 |
-| B | logical task terminal count（`terminal_count_++` 于 task wrapper 内） | ApplicationRuntime（application_runtime.cpp:236，**仍在 fiber 栈上**） | drain()/stop 谓词（task_set_terminal_snapshot）、lifecycle fail-fast、(admitted,terminal) 观测（:593-594） | **不可并入 C/D/E**（见下） |
-| C | fiber terminal fact（Group fiber entry 完整返回、fiber 被 scheduler 收割） | Group fiber entry + Future 发布链；完整收割由 scheduler 执行 | D 是 C 的前缀见证；E 依赖 C | C 可由 D 类可执行见证承载；**不可由 B 承载** |
-| D | Future readiness/publication（`complete_with` 为 fiber entry 最后语句；`ready()` acquire 读） | Future（group.hpp:103/154 调用） | group_stop_predicate、Group::await（死路径）、~Group fail-fast + storage 释放门（group.cpp:73-84） | D 是 C 的 witness 形态；合并 C→D 可（保留见证），合并 D→B 不可 |
-| E | stack/fiber storage release authority（`evented_stacks_`/`evented_fibers_` unique_ptr 清理） | Group（await 收尾 + dtor；活路径 = close_resources→group.reset()→~Group） | ApplicationRuntime::close_resources（:558） | 必须保持被 C/D 类见证门控（INV-G1） |
-| F | group cancellation token ownership（`token_`/`group_token()`） | Group | ApplicationRuntime close（group_token().request():278）、每个 spawned fn（token& 参数） | 可迁移（收敛后由 runtime 持有并与 spawn 合并）——与 A–E 正交 |
-| G | scheduler runnable/liveness state（run 队列、park 集、run_live stop 谓词） | Scheduler | drain 驱动、Group::await（死）、runtime lifecycle | 独立执行层事实；不可并入任务记账 |
-
-### 程序序 / happens-before（实测代码路径）
+### T 链：终端/释放的八个事实（逐箭头 file:line，proof root 实测）
 
 ```text
-task(ctx) 返回                                    [B 之前]
-  → { lifecycle_mtx_: terminal_count_++; recompute; control_epoch_++ }   [B：逻辑任务终端]
-  → runtime_cv_/wake_handle_ notify；set_current_fiber_tag(prev_tag)      [wrapper 收尾，仍在 fiber 栈]
-  → wrapper lambda 返回
-  → Group fiber entry 续行：fut->complete_with(Result<void>{})            [D：发布；仍在 fiber 栈]
-  → entry lambda 返回 → fiber trampoline → scheduler 收割 fiber           [C 完成]
-  ……（此后任意时刻）
-  → ApplicationRuntime::close_resources：group = move(root_group_) → group.reset() → ~Group
-      → 逐 future 检查 ready()（D），任一未 ready ⇒ group_lifetime_fail_fast
-      → futures_.clear(); evented_fibers_.clear(); evented_stacks_.clear()  [E：storage 释放]
+T1  logical task terminal
+      src/async/application_runtime.cpp:234-239 —— task wrapper 内 {lifecycle_mtx_;
+      terminal_count_++; recompute; control_epoch_++}。仍在 fiber 栈上执行。
+  ↓ （wrapper 收尾：runtime_cv_/wake_handle_ notify，set_current_fiber_tag(prev_tag)，
+     application_runtime.cpp:240-243；wrapper lambda 返回）
+T2  Future publication/ready
+      include/sluice/async/group.hpp:150-155 —— Group fiber entry lambda 的最后语句
+      fut->complete_with(Result<void>{})；future.hpp:27-42 —— ready_.store(true, release)
+      （:34）+ cv notify + policy notify。仍在 fiber 栈上执行。
+  ↓ （entry lambda 返回，group.hpp:155）
+T3  fiber entry returned
+      src/async/scheduler.cpp:25-33 —— fiber_entry_bridge 在 entry()(*fiber) 返回后续行。
+  ↓
+T4  Fiber::make_done
+      scheduler.cpp:31 —— fiber->make_done()；src/async/fiber.cpp:41-43 ——
+      state_.store(done, release)。
+  ↓
+T5  final context switch back to scheduler
+      scheduler.cpp:33 —— context_switch_final（src/async/fiber_ctx.cpp:161-170，noreturn）；
+      控制回到 worker 的 run_next_on（scheduler.cpp:731-750：running_fiber_count_--，
+      ws->current=nullptr）。此后该 fiber 栈永不再次执行。
+  ↓ （worker 回到 worker_loop；仅经 idle 路径观察 stop 谓词后退出；
+     run_impl 在多 worker 时 join 全部 worker 线程、单 worker 内联返回 —— scheduler.cpp
+     run_impl 出口，:305-309 一段/:266）
+T6  worker/scheduler invocation quiescence
+      application_runtime.cpp:464 —— driver 的 sched_->run_live(worker_count_, ...) 返回。
+  ↓ （driver loop between_invocations → driver_exit_requested_ → exited，
+     application_runtime.cpp:467-472）
+T7  driver thread exited/joined
+      application_runtime.cpp:347 —— join() 等 driver_state_==exited；:351-353 ——
+      driver_thread_.join()。（~ApplicationRuntime :129-131 为后备 join。）
+  ↓
+T8  Group/fiber/stack storage released
+      application_runtime.cpp:355→546-562 —— close_resources()（锁内 move 出
+      root_group_/sched_/io_ctx_，锁外 reset）：group.reset()（:560）→ ~Group（group.cpp:75）
+      → ready() 扫描（:78-82，逻辑 fail-fast）→ futures_/evented_fibers_/evented_stacks_
+      .clear()（:84-86）。
 ```
 
-推论：**B happens-before D happens-before (C 的收割) happens-before E 的执行。** B 不构成
-fiber 生存期的见证：在 B 与 D 之间存在 fiber epilogue 窗口，在 D 与 C 之间存在 trampoline/
-收割窗口。~Group 现以 D（全部 ready()）为门执行 E——这是当前唯一的可执行 storage-release
-见证。初版把 futures_ 扫描与 terminal_count_ 并列为"双终端跟踪"，措辞过度：二者跟踪的是
-不同事实（B=逻辑任务终端；D/C=fiber 终端与生存期），重复的不是事实而是**权威面**
-（两个可观察的终端概念并存于两个层）。CONVERGE 依据修正为：能力活 + 死成员 + 层次错误 +
-fail-fast 权威重复；"双终端跟踪"仅在此修正意义上成立。
+关键推导（T6 ⇒ T5，对每个 admitted fiber）：`running_fiber_count_` 在 context_switch 进入
+fiber 之前递增、在切换回 worker 之后递减（scheduler.cpp run_next_on），覆盖 wrapper 收尾、
+发布、make_done、final switch 的整个 epilogue，期间无暂停点；而 worker loop 的每条退出
+路径都被 classify_locked 以 running_fiber_count_==0 为前置门控——因此每个 fiber 的 T5
+严格先于其 runner 的循环退出，从而先于 run_impl 返回（多 worker：thread join 完成），
+从而先于 T7。**在 T7 之前，不存在任何仍可能执行 fiber 栈的线程。**
 
-### 冻结收敛不变式（Corrective-1 §14；slice O 验收标准）
+### FROZEN DISTINCTION
 
 ```text
-INV-G1  任何收敛实现 MUST 保留一个显式的可执行终端-生存期见证，证明 evented task 的 fiber
-        已完全返回，先于其 fiber/stack storage 被销毁。
-INV-G2  ApplicationRuntime::terminal_count_ 单独不被证明授予该 storage-release 权威（B happens-
-        before fiber 完全返回）；禁止以 terminal_count_ 简单替换 Future ready 见证。
-INV-G3  见证可为（不限于）：收敛后的 runtime 私有 fiber-terminal 记录（等价今日 D+C 链）；
-        但必须可执行、可在 storage 释放点被检查，并有测试见证 epilogue 窗口（如人为拉长
-        wrapper 收尾路径时 dtor 不得提前释放）。
+FUTURE_READY ≠ FIBER_QUIESCENT
+T2 发布点在 fiber entry 内部（group.hpp:154），严格先于 T3 entry 返回、T4 make_done、
+T5 final switch。ready()==true 不证明 fiber 已完全返回、不证明 final switch 已发生、
+不证明 fiber 栈已停止执行。
+LOGICAL TERMINAL ≠ PUBLICATION ≠ FIBER RETURN ≠ SCHEDULER QUIESCENCE ≠ STORAGE RELEASE
+（T1 ≠ T2 ≠ T3/T4/T5 ≠ T6 ≠ T7/T8）
 ```
 
-DEAD PUBLIC MEMBER vs LIVE INTERNAL CORRECTNESS FACT（Corrective-1 §15）：
+### 权威事实表（Corrective-2 修订版）
+
+| Fact | 内容 | Current owner | Consumer / 释放中的角色 | 可与另一 fact 合并？ |
+| ---- | ---- | ------------- | ------------------------ | -------------------- |
+| A | admission count（`admitted_count_`，提交侧前向计数） | ApplicationRuntime（lifecycle_mtx_ 下，submit:217） | submit 记账、terminal 谓词输入、drain | 不可与 B 合并——前向计数不能见证终止 |
+| B | logical task terminal（`terminal_count_++`，T1） | ApplicationRuntime（application_runtime.cpp:236，仍在 fiber 栈上） | drain()/stop 谓词（task_set_terminal_snapshot_）、lifecycle fail-fast、(admitted,terminal) 观测（:593-594） | **仅逻辑权威**：不得用作存储释放门（INV-O3） |
+| C | fiber terminal fact（entry 返回 + make_done + final switch，T3–T5） | fiber_entry_bridge + Fiber state | 由 T6 蕴含（对全部 fiber）；C 类见证若收敛后需要，可由 runtime 私有 retire 记录承载 | 不可由 B 承载；被 T6 蕴含 |
+| D | Future publication/ready（T2） | Future（group.hpp:154 发布；group.cpp:79 唯一活消费） | **逻辑** fail-fast：~Group 扫描在 T7 后求值，检测"任务从未到达发布"的误用；**不门控 E** | 死路径消费者：group_stop_predicate/await；E 的物理安全性不依赖 D |
+| E | stack/fiber storage release（T8） | Group（close_resources → group.reset() → ~Group clear） | **物理门 = T6→T7 teardown barrier**（INV-O1/O2），不是 D | 必须保持被 T6/T7 门控；不得改为被 B 或 D 门控 |
+| F | group cancellation token ownership（`token_`/`group_token()`） | Group | request_stop（application_runtime.cpp:278）、spawned fn（token& 参数） | 可迁移（收敛后由 runtime 持有并与 spawn 合并）——与 A–E 正交 |
+| G | scheduler runnable/liveness state（run 队列、park 集、run_live stop 谓词） | Scheduler | drain 驱动、runtime lifecycle | 独立执行层事实；T6 的载体 |
+| H | driver thread（driver_thread_ / driver_state_） | ApplicationRuntime | T7 的载体：exited 观测 + join（:347/:351-353） | 与 G 配对构成 teardown barrier |
+
+### close_resources 调用路径普查（T8 只在 T7 后接触非空 group）
 
 ```text
-可移除（dead public member，census 支持）：Group 线程模式（Group() 默认 ctor/async_threaded/
-  tasks_/join 路径）、Group::await、Group::cancel、Group::size、group_stop_predicate、
-  Future::await、Future::cancel、Future::cancel_token、Future 默认 ctor + default_wait_policy 链、
-  EventedAdmissionFailPoint 缝（若 runtime 内联链迁移后无消费者）
-必须保留（live internal correctness fact，随收敛内化为 runtime 私有）：
-  Future::complete_with / Future::ready 的发布+查询对（INV-G1 见证链）
+join()（唯一 tasks 可非空的路径）   :347 等 exited → :351 join driver → :355 close_resources
+                                    —— T6/T7 已发生（T 链）。
+start() 两失败路径 / shutdown(Constructed|StartFailed)
+                                    driver 从未执行 run_live（startup-abort 提前 exited）且
+                                    admission_open_ 仅在 :198 置 true、submit() 是唯一 spawn
+                                    入口 → root_group_ 必空 → T8 平凡安全。
+~ApplicationRuntime                 :125-127 fail-fast 除非 state ∈ {Constructed, StartFailed,
+                                    Stopped}；且 close_resources 已 move 走成员——活 runtime 的
+                                    成员 ~Group 不可达。
+Group::await()（死公共路径，全树零调用）:39 run_live(1, group_stop_predicate) 返回后 clear。
+                                    即便此路径，物理安全同样来自 worker-loop 退出（T6 形态），
+                                    不来自 ready() 本身。
+```
+
+### 冻结收敛/删除不变式（Corrective-2；slice O 验收标准，取代 INV-G1/G2/G3）
+
+```text
+INV-O1  任何 fiber/stack storage 不得在 scheduler 执行对该 fiber quiesce 之前销毁。
+        当前载体：run_impl 返回前 join 全部 worker 线程（T6 ⇒ 每个 fiber 的 T5），
+        join() 先等 driver_state_==exited 再 driver_thread_.join()（T7），close_resources
+        只在其后执行（T8）。
+INV-O2  ApplicationRuntime teardown 必须保持 driver/scheduler quiescence 与 Group/task
+        storage 销毁之间的可执行屏障：application_runtime.cpp:347→351-353→355 的顺序
+        不可倒置、不可抽掉任一层。
+INV-O3  terminal_count_ 仅是逻辑任务终端权威（T1，仍在 fiber 栈上递增）：可用于 drain/
+        lifecycle 谓词与逻辑 fail-fast，不得单独授权 fiber storage 销毁。
+INV-O4  Future::ready 不得被当作物理 fiber-quiescence 证明（发布点在 fiber entry 内，
+        T2 严格先于 T5）；除非实现改为在最终 fiber 返回边界之后发布，否则任何收敛/删除
+        方案不得引入该等价假设。
+```
+
+四条均直接由上表代码事实支撑。INV-G1/G2/G3（Corrective-1 冻结）**作废**：其"必须保留
+ready 等价见证"的要求建立在被撤销的前提上；INV-G2 的核心事实（terminal_count_ 不授予
+释放权威）由 INV-O3 承接。独立复核见 §14 Reviewer E（fresh lifetime adversary）。
+
+### slice O 落点（不实现，仅边界）
+
+```text
+可移除（随收敛/删除）：Group 公共类（类型消亡）+ 线程模式 + await/cancel/size/
+  group_stop_predicate + EventedAdmissionFailPoint 缝 + Future 全体成员（complete_with/
+  ready/await/cancel/cancel_token/默认 ctor）+ wait-policy 死链（wait_policy.{hpp,cpp}、
+  evented_wait_policy.hpp；C20：消费者仅 Future/Group）
+必须保留（runtime 既有，非新增机制）：terminal_count_ 逻辑记账（INV-O3 的正确角色）、
+  teardown barrier 顺序（INV-O1/O2）、scheduler quiescence（T6）
+行为等价义务：spawn/token 语义不变；四个 app 消费测试全绿；新增测试见证 epilogue 窗口
+  与屏障顺序（如人为拉长 wrapper 收尾路径时 teardown 不得提前释放存储）。
 ```
 
 ---
@@ -1121,7 +1324,8 @@ DEAD PUBLIC MEMBER vs LIVE INTERNAL CORRECTNESS FACT（Corrective-1 §15）：
 ```text
 Q1（AA-3 派生）read 侧 exact-EOF-as-error 组合是否获得真实 consumer 证据，使 library 级
    exact-read composition 值得 ADD_MINIMAL？（当前：合法缺席）
-Q2（vectored reopen，既有条件不变，机制表述按 §9 两分修正）真实 consumer 是否需要
+Q2（vectored reopen，既有条件不变，机制表述按 §9 两分修正；陈旧括注的改写由
+   tracking issue #370 承载）真实 consumer 是否需要
    multi-buffer canonical I/O 且能证明 scalar composition 不足——即需要 OS 单操作/非交错
    属性（pipe ≤PIPE_BUF 原子组、O_APPEND 整组追加等）作为 correctness 需求，而 scalar
    序列无法表达？reopen 语义与 parity 义务仍按 ADR-0002 §5.3。
@@ -1150,7 +1354,7 @@ direct-I/O/prealloc/fadvise/zero-copy/NOWAIT、append/permission/dir/rename/remo
 
 ## 14. Adversarial review
 
-四个 fresh-context 评审（互不共享结论、未被告知偏好），报告全文要点及裁定：
+五个 fresh-context 评审（互不共享结论、未被告知偏好），报告全文要点及裁定：
 
 ### Reviewer A — KEEP adversary（攻击全部 DELETE）
 
@@ -1209,6 +1413,36 @@ experimental 不在任何构建图（globs/compile DB/objects 三重一致）；
 已按正确编号引用）。
 ```
 
+### Reviewer E — lifetime adversary（Corrective-2 §17 新增；独立于本报告结论，仅给代码与 ADR）
+
+任务：找 fiber/stack storage 最早可合法销毁点，攻击 terminal_count_/Future::ready()/
+~Group 检查/Scheduler run 完成/driver exit-join 各候选见证。结果：
+
+```text
+VERDICT = LIFETIME_AUTHORITY_PASS（无可执行反例）
+最早合法释放点 = run_impl 返回（多 worker 全部 thread join 完成；单 worker 内联返回），
+  经 driver_state_=exited 观测 + driver_thread_.join() 后由 close_resources 执行；
+  首个可物理 free 的代码 = ~Group 的 evented_fibers_/evented_stacks_.clear()。
+逐见证裁决：
+  terminal_count_ → 不授权（在 fiber 栈上递增，仅记账；消费它的 drain/stop 谓词仍须
+    经 run_impl 返回才触及销毁）
+  Future::ready() → 不授权（发布点后 fiber 仍执行 cv notify/notify_ready/lambda 返回/
+    state_ store/final switch；单凭 ready 销毁即 data race；仅经 quiescence 链传递安全）
+  ~Group ready() 扫描 → 逻辑契约 fail-fast（未完成任务 fail-fast 而非 UAF）；
+    非 T7 后不可达非空组的物理证明
+  run_impl/run_live 完成 ⇒ 全部 worker loop 终止：两路径均 PROVEN——
+    running_fiber_count_ 覆盖 epilogue 全窗（无暂停点）且门控一切退出路径
+  driver join → close_resources：无竞争（close_resources 全部调用点或先 join driver
+    或无 driver；start 失败/shutdown(Constructed|StartFailed) 路径 group 必空）
+  Group::await()（死路径，零调用）→ 同一 scheduler 退出协议承载，非 ready 谓词
+对抗性反向核查（quiescence 自身）：run_live 不能在 epilogue 中途返回；coordinated run
+  结束后无任何 make_runnable/route 通路可复活 fiber（done 终态不可转出，恢复冻结
+  context 将 abort）；完整 happens-before 链从 fiber 内 release store 到 ~Group acquire 读。
+```
+
+Reviewer E 的独立结论与本审计 §10 的 T1–T8 链、INV-O1..O4、I20 CONVERGE / I21 DELETE
+重裁完全一致；其 running_fiber_count_ epilogue 门控推导已并入 §10 关键推导。
+
 ---
 
 ## 15. Human-review corrective-1 处置记录
@@ -1234,6 +1468,26 @@ MINOR-2 follow-up slices 过宽（29 文件巨型 slice F）
      文件级枚举 ✅
 ```
 
+### Human-review corrective-2 处置记录（第二轮人审 REQUEST_CHANGES：2 MAJOR / 1 MINOR）
+
+```text
+MAJOR-1（M1）planned-removal traceability 不唯一（CopyStats/BufferStats/VectorStats/UringStats
+  被多行多 slice 声称删除）
+  → §8.1 唯一归属 ledger：每符号恰 1 audit owner + 1 slice deletion owner；I25/I26 的
+    stats 成员移出（支持性引用保留）；UringStats owner 从 slice A"顺带"改归 I30→P；
+    VectorStats owner 从 P 改归 I11→G（I11 卡片 F/U 同步改 G）；三计数器全 0 ✅
+MAJOR-2（M2）Group/Future 终端-生存期权威建模错误（Future::ready 发生在 fiber entry 完整
+  返回之前，不能单独证明 storage 可销毁）
+  → §10 从代码全面重建 T1–T8 链（逐箭头 file:line）；FUTURE_READY ≠ FIBER_QUIESCENT
+    冻结；物理释放权威改判为 ApplicationRuntime teardown barrier（T6→T7）；~Group ready()
+    扫描精确分类为逻辑 fail-fast；INV-G1/G2/G3 作废、INV-O1..O4 冻结；I21 Future 零基础
+    重裁改判 DELETE（I20 CONVERGE 维持、理由重建）；独立 fresh lifetime adversary 复核
+    （§14 Reviewer E）✅
+MINOR（已知 vectored-decision 陈旧括注的追踪义务）
+  → tracking issue [#370](https://github.com/jnhu76/Sluice/issues/370)（docs-only；§9
+    同源记录与 §12 Q2 同步指向）✅
+```
+
 ---
 
 ## 16. Proposed follow-up issue decomposition（Corrective-1 全量重写；MINOR-2）
@@ -1246,7 +1500,8 @@ issue（本审计不开实现 issue）。每 slice 列出精确文件/符号集�
 slice A  DELETE experimental/ island（I22–I24）
          文件：include/sluice/experimental/{uring_io_context,uring_write_batch}.hpp、
                src/experimental/{uring_io_context,uring_write_batch}.cpp
-         顺带：measurement.hpp UringStats struct 删除（唯一消费者即 I22/I23）
+         （Corrective-2：UringStats struct 的删除已移出本 slice、归 slice P——本 slice
+          只删 4 个 island 文件；UringStats 在 A 与 P 之间成为无引用 struct，可编译。）
          证据：P1。可选加固：杜绝递归 glob 静默再武装。
 slice B  DELETE Batch（I19）
          文件：include/sluice/async/batch.hpp、src/async/batch.cpp
@@ -1265,12 +1520,20 @@ slice E  DELETE WAL（I14）
          级联：CHANGELOG "[Unreleased] Removed" 条目；architecture.md WAL 提及清理
          证据：P5。人审重点复核行。
 slice F  DELETE vectored operation family（I05–I10）
-         位置：reader.{hpp,cpp} / writer.{hpp,cpp} / file.{hpp,cpp} 内 vec 方法族 + iovec.hpp
-               （IoSlice/ConstIoSlice 整文件删除）
+         位置：reader.{hpp,cpp} / writer.{hpp,cpp} 内 vec 默认实现 + iovec.hpp
+               （IoSlice/ConstIoSlice 整文件删除）；file.{hpp,cpp} 的 vec 方法族随 slice H
+               的文件删除消失（Corrective-2：FileReader/FileWriter override 者先删，
+               本 slice 的 file 部分为空或与 H 合并执行均可，H 是硬前置，§17）
          证据：P7（文件级含于 P7 集合；方法级 trim 编译等价）。
+         依赖：E（wal.cpp:105 唯一外部调用）、G（Observed* override）、H（FileReader/
+               FileWriter override）先合并。
 slice G  DELETE observed/vector statistics（I11–I13）
-         文件：include/sluice/observed.hpp、src/observed.cpp；measurement.hpp VectorStats struct
-         证据：P7（struct 级 trim 由 P8 覆盖）。
+         文件：include/sluice/observed.hpp、src/observed.cpp（含 ReaderStats/WriterStats
+               structs）；measurement.hpp VectorStats struct（I11 的删除 owner=本 slice，
+               Corrective-2）
+         证据：P7（observed 文件级）+ P8（VectorStats struct 级终态）。
+         依赖：H、J 先合并（file.hpp/io_context.hpp 是 VectorStats 仅余引用者，§17）；
+               本 slice 先于 I（observed.hpp include reader/writer）。
 slice H  DELETE FileReader/FileWriter（I01/I02）
          文件：include/sluice/file.hpp、src/file.cpp、src/file_test_seams.hpp
          证据：P7。
@@ -1281,64 +1544,99 @@ slice J  DELETE IoContext/BlockingIoContext（I15/I16）
          文件：include/sluice/io_context.hpp、src/io_context.cpp
          证据：P6。
 slice K  DELETE Buffered surface（I26）
-         文件：include/sluice/buffer.hpp、src/buffer.cpp、include/sluice/buffered_readable.hpp；
-               measurement.hpp BufferStats struct
-         证据：P7（struct 级由 P8 覆盖）。依赖：M 先合并（copy.cpp 是 BufferedReadable
+         文件：include/sluice/buffer.hpp、src/buffer.cpp、include/sluice/buffered_readable.hpp
+         （Corrective-2：BufferStats struct 删除归 slice P，移出本 slice 枚举。）
+         证据：P7（文件级含于 P7 集合）。依赖：M 先合并（copy.cpp 是 BufferedReadable
                唯一消费者）。
 slice L  DELETE Memory/Fault test substrate（I27/I28）
          文件：include/sluice/memory_io_context.hpp、include/sluice/fault.hpp、src/fault.cpp
          证据：P7。（I27/I28 两行同 slice 落地：物理文件共享；责任仍分行 traceable。）
 slice M  DELETE Copy surface（I25）
          文件：include/sluice/copy.hpp、src/copy.cpp、include/sluice/copy_strategy.hpp、
-               src/copy_strategy.cpp、include/sluice/limit.hpp；measurement.hpp sluice::CopyStats
-               struct；连带修剪 reader.{hpp,cpp} 的 stream_to 两个 CopyLimit 重载与 copy.hpp
-               include（编译边 C14）
+               src/copy_strategy.cpp、include/sluice/limit.hpp；连带修剪 reader.{hpp,cpp} 的
+               stream_to 两个 CopyLimit 重载与 copy.hpp include（编译边 C14）
+         （Corrective-2：sluice::CopyStats struct 删除归 slice P，移出本 slice 枚举。）
          证据：P7。（若 slice I 先合并，则连带修剪为空。）
 slice N  DELETE SyncableWriter / legacy durability interface（I29）
          文件：include/sluice/sync.hpp
          证据：P7（sync.hpp 精确在 P7 集内）。依赖：E（wal.hpp include）与 H（file.hpp 继承）
                先合并。
-slice O  CONVERGE Group/Future（I20/I21）
-         范围：spawn/token 折入 ApplicationRuntime 私有；删除线程模式/await/cancel/size/
-               predicate/EventedAdmissionFailPoint 缝/Future 死成员与默认 ctor 链；
-               保留并内化 complete_with/ready 终端见证链（INV-G1/G2）；async runtime 行为类
-               测试随行重建（含 epilogue 窗口见证测试，INV-G3）
-         证据：活根——行为等价 + 新增见证测试，非删除探针。
-slice P  DELETE residual legacy measurement structs（I30，完成 I11 文件级收敛）
-         文件：measurement.hpp 修剪至仅 AsyncStats（SyscallStats/SyncStats/BufferStats/
-               CopyStats/VectorStats 删除；UringStats 已随 slice A）
-         证据：P8。
+slice O  CONVERGE Group（I20）+ DELETE Future（I21）——单一权威变更：任务组责任收敛
+         范围：spawn/token 折入 ApplicationRuntime 私有；Group 公共类随之消亡（删除线程
+               模式/await/cancel/size/group_stop_predicate/EventedAdmissionFailPoint 缝）；
+               Future 整体删除（I21，Corrective-2：complete_with/ready 的唯一活消费者
+               即 ~Group fail-fast 扫描，随收敛消失；逻辑终端记账 terminal_count_ 与
+               物理 quiescence barrier runtime 均已拥有且更强）；wait-policy 死链一并删除
+               （wait_policy.{hpp,cpp}、evented_wait_policy.hpp；C20）。
+               保留 teardown barrier 顺序（INV-O1/O2）与 terminal_count_ 的逻辑角色
+               （INV-O3）；禁止以 ready 或 terminal_count_ 充当物理释放门（INV-O4）。
+               async runtime 行为类测试随行重建（含 epilogue 窗口与屏障顺序见证测试）。
+         文件：include/sluice/async/group.hpp、src/async/group.cpp、
+               include/sluice/async/future.hpp、include/sluice/async/wait_policy.hpp、
+               src/async/wait_policy.cpp、include/sluice/async/evented_wait_policy.hpp、
+               application_runtime.{hpp,cpp} 收敛性修改
+         证据：活根——行为等价 + 新增 INV-O 见证测试，非删除探针。
+slice P  DELETE residual legacy measurement structs（I30）
+         文件：measurement.hpp 修剪至仅 AsyncStats——删除 SyscallStats/SyncStats/
+               BufferStats/sluice::CopyStats/UringStats（Corrective-2：五 struct 均为本
+               slice 的删除 owner；VectorStats 不在其中，已归 slice G；终态"仅 AsyncStats"
+               = G ∧ P 两 slice 合取）
+         证据：P8。依赖：A（UringStats 引用者）、H+J（SyscallStats/SyncStats 引用者）、
+               K（BufferStats 引用者）、M（CopyStats 引用者）先合并（§17）。
 （无 slice 对应 Q1/Q2/Q3——它们是未来证据问题，非实现 issue。）
 ```
 
 ---
 
-## 17. Implementation dependency DAG（Corrective-1 §23）
+## 17. Implementation dependency DAG（Corrective-2 按 ownership 重derive；替代 Corrective-1 版本）
 
-编译/评审依赖边（"X → Y" = X 必须先于 Y 合并）：
+编译/评审依赖边（"X → Y" = X 必须先于 Y 合并）。Corrective-2 原则：边从 §8.1 的唯一
+ownership 与真实引用集（§4 C19/C20 grep 实证）derive，不为表面连续性保留旧边。
 
 ```text
 E(WAL) → F(vectored family)          WAL 是 write_all_vec 唯一消费者（gate chain）
 E(WAL) → N(SyncableWriter)           wal.hpp include sync.hpp
 H(FileReader/FileWriter) → I(Reader/Writer)      派生类先于基类删除
-H(FileReader/FileWriter) → N         file.hpp 继承 SyncableWriter
+H → N                                file.hpp 继承 SyncableWriter
+H → G(observed)                      file.hpp/file.cpp 引用 VectorStats（G 删该 struct 须先无引用者）[新]
+H → P                                file.hpp 引用 SyscallStats/SyncStats                    [新显式]
 J(IoContext 族) → I                  io_context.hpp include reader/writer
+J → G                                io_context.hpp OpenReader/WriterOptions 引用 VectorStats [新]
+J → P                                io_context.hpp 引用 SyscallStats/SyncStats               [新显式]
 L(Memory/Fault) → I                  fault.hpp include reader/writer
 M(Copy) → K(Buffered)                copy.cpp dynamic_cast<BufferedReadable*> 是唯一消费者
-M(Copy) → I                          reader.{hpp,cpp} 的 stream_to/copy.hpp 编译边（C14）
+M → I                                reader.{hpp,cpp} 的 stream_to/copy.hpp 编译边（C14）
+M → P                                copy.hpp/reader.hpp/reader.cpp/copy.cpp 引用 CopyStats   [新显式]
 K(Buffered) → I                      buffer.hpp include reader/writer
-F(vectored) → H                      file.hpp 方法级 trim 先于文件删除（最小化 churn；软边）
-F(vectored) → G(observed/stats)      VectorStats 与 vec 管线同链（软边）
-{A, G, H, I, J, K, M} → P            measurement.hpp 引用清理完备后才能修剪至 AsyncStats
-O(Group/Future CONVERGE)             独立；仅需测试配套
-A/B/C/D                              独立
+K → P                                buffer.hpp 引用 BufferStats                              [新显式]
+G(observed) → I                      observed.hpp include reader/writer                       [新]
+G → F(vectored)                      ObservedReader/Writer override read_vec/write_vec，      [新]
+                                     虚方法删除前 override 者必须已清（硬边）
+H → F                                FileReader/FileWriter override vec 方法（同上，硬边；    [新]
+                                     旧"F→H 软边"方向作废）
+E → F                                wal.cpp:105 是 write_all_vec 唯一外部调用（E 边并入此）
+A(experimental) → P                  UringStats 引用者清零（owner=I30→P，引用在 A 的头里）    [新显式]
+{A, H, J, K, M} → P                  measurement.hpp 五 struct 修剪的完备引用清零集
+（废除 F→G 旧软边：reader.cpp/writer.cpp 不引用 VectorStats（grep 实证），vec 默认实现
+  不是该 struct 的引用者。）
+O(Group CONVERGE + Future DELETE)    独立；仅需测试配套
+B, C, D                              独立
 ```
+
+slice 入边汇总（编译依赖闭环核对）：F: {E, G, H}；G: {H, J}；I: {H, J, K, L, M, G}；
+N: {E, H}；P: {A, H, J, K, M}。G 与 P 互不依赖（删除集合不相交：VectorStats vs 其余五 struct）。
 
 一个合法拓扑序（非唯一，逐 slice 全树可编译）：
 
 ```text
-A, B, C, D, E, F, G, H, J, L, M, K, I, N, P   （O 任意位置；建议与测试重建同批）
+A, B, C, D, E, H, J, G, F, L, M, K, I, N, P   （O 任意位置；建议与测试重建同批）
 ```
+
+（Corrective-2 顺序变化说明：G 从第 7 位移至 H/J 之后——旧序在 VectorStats 仍被
+file.hpp/io_context.hpp 引用时删除该 struct，不可编译；F 从第 6 位移至 G/H 之后——vec 虚
+方法被 FileReader/FileWriter/ObservedReader/ObservedWriter override（I05/I06 卡片 DIR 实证），
+先删虚方法则 override 者不可编译，旧"F→H/F→G 软边"方向作废；旧 DAG 缺 G→I 边——
+observed.hpp include reader/writer，I 之前必须清零，现已显式。）
 
 禁止：任意字母序执行（初版隐含顺序把 29 文件并入单 slice F 的做法废弃）。
 合并准绳：仅当"两者无法各自编译/评审成完整权威变更"时才并 slice——目前 A–P 无此情形。
@@ -1349,23 +1647,28 @@ A, B, C, D, E, F, G, H, J, L, M, K, I, N, P   （O 任意位置；建议与测�
 
 ```text
 #355                       OPEN（未关闭）
-本报告                     docs-only，单文件（corrective-1），proof root = ff916c37
+本报告                     docs-only，单文件（corrective-2），proof root = ff916c37
 Draft PR                   OPEN（audit/legacy-surface-355）
 production diff            0
 implementation deletion    0（全部删除仅发生于 8 个已清理的隔离探针 worktree：
                              P1–P7 + P8；P8=P7 集 + measurement trim）
 build/test 基线            默认（liburing=n）20/20 GREEN；liburing=y 22/22 GREEN
-                             （均干净 configure+build 实测；含真实 liburing 路径）
+                             （均干净 configure+build 实测；含真实 liburing 路径；
+                             Corrective-2 未改任何生产/测试/构建文件，基线不失效）
+vectored 措辞追踪          issue #370（docs corrective；#355 关闭前须完成）
 worktree                   CLEAN
-状态                       READY_FOR_HUMAN_REVIEW（corrective-1）
+状态                       READY_FOR_THIRD_HUMAN_REVIEW（corrective-2）
 ```
 
 人审裁决要点建议（按风险排序）：
 
 1. **I14 WAL DELETE**（最高风险：唯一真实独有能力的删除；§9 recheck 逐项复核 +
    "Core 不再声称提供 WAL"语义澄清；恢复途径=git）；
-2. **I20/I21 CONVERGE 方向 + INV-G1/G2/G3**（涉及 async runtime 公共面收缩 + 终端见证
-   不变式成为 slice O 验收标准）；
+2. **I20 Group CONVERGE + I21 Future DELETE 的重裁与 INV-O1..O4**（涉及 async runtime
+   公共面收缩、Future 类型消亡、teardown barrier 成为验收标准——§10 T 链与 §14
+   Reviewer E 独立复核一并审）；
 3. **I25 Copy 裁决形状**（RESPONSIBILITY=KEEP / LEGACY SURFACE=DELETE 两分是否成立）；
 4. **I01–I04 公共抽象类删除**（v0.0.1 已发布的类型；§9 AA-3 修正与 A7 supersession 一并复核）；
-5. **I19 Batch 删除范围**（含 canonical 头 completion.hpp 的 friend/reap_seq/f02 seam 处置）。
+5. **I19 Batch 删除范围**（含 canonical 头 completion.hpp 的 friend/reap_seq/f02 seam 处置）；
+6. **§8.1 ledger 与 §17 DAG**（唯一归属与编译依赖序为 Corrective-2 新增机械结构，宜抽查
+   两三个符号走完整链：行 → slice → 文件枚举）。
