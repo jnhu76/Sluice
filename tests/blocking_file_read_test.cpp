@@ -139,6 +139,34 @@ bool read_with_illegal_offset_reports_invalid_argument() {
     return file.close().has_value();
 }
 
+bool read_on_write_only_file_rejected_upfront() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    FileOpen mode;
+    mode.access = FileAccess::write_only;
+    auto opened = File::open(path, mode);
+    if (!opened.has_value())
+        return false;
+    File file = std::move(opened).value();
+    ::unlink(path.c_str());
+
+    std::vector<std::byte> dst(3);
+    auto result = read_at(file, 0, dst);
+
+    if (result.has_value())
+        return false;
+    if (result.error().code != IoError::Code::invalid_argument)
+        return false;
+
+    auto empty_result = read_at(file, 0, std::span<std::byte>{});
+    if (empty_result.has_value())
+        return false;
+    if (empty_result.error().code != IoError::Code::invalid_argument)
+        return false;
+    return file.close().has_value();
+}
+
 }
 
 int main() {
@@ -154,6 +182,7 @@ int main() {
         {"read_after_close_reports_invalid_state", read_after_close_reports_invalid_state},
         {"read_with_illegal_offset_reports_invalid_argument",
          read_with_illegal_offset_reports_invalid_argument},
+        {"read_on_write_only_file_rejected_upfront", read_on_write_only_file_rejected_upfront},
     };
 
     for (const NamedTest& t : tests) {

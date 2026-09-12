@@ -9,6 +9,9 @@ Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std
     if (!file.is_open()) {
         return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
     }
+    if (file.access() == FileAccess::write_only) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
+    }
     if (dst.empty()) {
         return std::size_t{0};
     }
