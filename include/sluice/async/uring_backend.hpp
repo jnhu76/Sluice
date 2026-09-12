@@ -309,7 +309,7 @@ class UringAsyncBackend : public AsyncBackend {
             if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
                 return borrow_of(op);
             } else {
-                return detail::BorrowMetadata{op.fd, nullptr, 0};
+                return detail::BorrowMetadata{op.file.fd, nullptr, 0};
             }
         }
         static std::uint64_t requested_bytes(const Op& op) noexcept {
@@ -353,16 +353,19 @@ class UringAsyncBackend : public AsyncBackend {
         Result<void> validate(const Op& op) const noexcept { return self_.validate_op(op); }
         void write_scratch(detail::SlotHandle h, const Op& op) const noexcept {
             if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                // Zero-length ops never perform data I/O; normalize the offset
+                // so an unrepresentable offset cannot fail the lowering.
+                const std::uint64_t off = op.len == 0 ? 0 : op.offset;
                 self_.prepared_ops_[h.slot.value] =
                     PreparedUringOp{kind_,
-                                    op.fd,
+                                    op.file.fd,
                                     static_cast<const std::byte*>(borrow_of(op).address),
                                     op.len,
                                     sluice::detail::uring_chunk_length(op.len),
-                                    op.offset};
+                                    off};
             } else {
-                self_.prepared_ops_[h.slot.value] =
-                    PreparedUringOp{kind_, op.fd, nullptr, std::size_t{0}, 0u, std::uint64_t{0}};
+                self_.prepared_ops_[h.slot.value] = PreparedUringOp{
+                    kind_, op.file.fd, nullptr, std::size_t{0}, 0u, std::uint64_t{0}};
             }
         }
         void pause_before_commit_binding() noexcept {
@@ -386,9 +389,9 @@ class UringAsyncBackend : public AsyncBackend {
 
     template <class Op> static detail::BorrowMetadata borrow_of(const Op& op) noexcept {
         if constexpr (std::is_same_v<Op, ReadOp>) {
-            return {op.fd, op.dst, op.len};
+            return {op.file.fd, op.dst, op.len};
         } else {
-            return {op.fd, op.src, op.len};
+            return {op.file.fd, op.src, op.len};
         }
     }
 

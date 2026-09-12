@@ -10,6 +10,21 @@
 
 namespace sluice::async {
 
+namespace {
+
+// ADR-0002 §5.5: access-legality is enforced at the initiation boundary for
+// every File-derived reference, before admission; the backend only lowers fd.
+Result<void> access_legality(const NativeFileRef& file, bool write_side) {
+    const bool illegal = write_side ? file.access == FileAccess::read_only
+                                    : file.access == FileAccess::write_only;
+    if (illegal) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    }
+    return {};
+}
+
+} // namespace
+
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
     : backend_(std::move(backend)), stats_(stats) {
     if (backend_)
@@ -78,6 +93,12 @@ void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
 } // namespace
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    if (auto legal = access_legality(op.file, false); !legal.has_value()) {
+        return legal;
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_read(op, c);
     tally_submit(stats_, r);
@@ -85,6 +106,12 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
     return r;
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    if (auto legal = access_legality(op.file, true); !legal.has_value()) {
+        return legal;
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_write(op, c);
     tally_submit(stats_, r);
@@ -92,6 +119,9 @@ Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_data(op, c);
     tally_submit(stats_, r);
@@ -99,6 +129,9 @@ Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_all(op, c);
     tally_submit(stats_, r);
@@ -107,6 +140,12 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
 }
 
 Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
+    if (auto legal = access_legality(op.file, false); !legal.has_value()) {
+        return make_unexpected<RequestHandle>(legal.error());
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
@@ -118,6 +157,12 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
+    if (auto legal = access_legality(op.file, true); !legal.has_value()) {
+        return make_unexpected<RequestHandle>(legal.error());
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
@@ -129,6 +174,9 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completio
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Completion<void>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
@@ -140,6 +188,9 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Co
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Completion<void>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});

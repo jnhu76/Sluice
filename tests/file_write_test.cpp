@@ -24,8 +24,8 @@ using sluice::FileExistence;
 using sluice::FileInitialContents;
 using sluice::FileOpen;
 using sluice::IoError;
-using sluice::Result;
 using sluice::make_unexpected;
+using sluice::Result;
 
 FileOpen writable_mode() {
     FileOpen mode;
@@ -62,7 +62,7 @@ bool file_content_is(const std::string& path, const std::string& expected) {
 }
 
 bool file_size_is(const std::string& path, off_t expected) {
-    struct stat st {};
+    struct stat st{};
     if (::stat(path.c_str(), &st) != 0)
         return false;
     return st.st_size == expected;
@@ -265,8 +265,8 @@ bool write_keeps_resource_and_buffer_valid_until_terminal() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            auto sr = ctx.submit_write(
-                WriteOp{file.native_handle(), as_bytes(src_str).data(), src_str.size(), 2}, c);
+            auto sr =
+                ctx.submit_write(WriteOp{file, as_bytes(src_str).data(), src_str.size(), 2}, c);
             if (!sr.has_value()) {
                 slot.publish(make_unexpected<std::size_t>(sr.error()));
                 return;
@@ -330,7 +330,7 @@ bool file_access_query_reports_open_mode() {
     return closed;
 }
 
-}
+} // namespace
 
 int main() {
     struct NamedTest {

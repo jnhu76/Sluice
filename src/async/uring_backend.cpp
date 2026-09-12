@@ -273,11 +273,13 @@ class UringAsyncBackend::TransportLedger {
 };
 
 Result<void> UringAsyncBackend::validate_read(ReadOp op) {
-    if (op.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    if (op.file.fd < 0)
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     if (op.len > 0 && op.dst == nullptr) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
+    if (op.len == 0)
+        return {};
     auto off = sluice::detail::checked_posix_offset(op.offset);
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -285,11 +287,13 @@ Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     return {};
 }
 Result<void> UringAsyncBackend::validate_write(WriteOp op) {
-    if (op.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    if (op.file.fd < 0)
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     if (op.len > 0 && op.src == nullptr) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
+    if (op.len == 0)
+        return {};
     auto off = sluice::detail::checked_posix_offset(op.offset);
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -297,13 +301,13 @@ Result<void> UringAsyncBackend::validate_write(WriteOp op) {
     return {};
 }
 Result<void> UringAsyncBackend::validate_sync(SyncDataOp op) {
-    if (op.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    if (op.file.fd < 0)
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     return {};
 }
 Result<void> UringAsyncBackend::validate_sync(SyncAllOp op) {
-    if (op.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    if (op.file.fd < 0)
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     return {};
 }
 

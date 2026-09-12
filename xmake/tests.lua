@@ -6,6 +6,8 @@ sluice_one_file_target("binary", "test", "file_open_contract_test", "tests", "sl
 sluice_one_file_target("binary", "test", "file_write_test", "tests", {"sluice_core", "sluice_async"})
 sluice_one_file_target("binary", "test", "file_sync_data_test", "tests", {"sluice_core", "sluice_async"})
 sluice_one_file_target("binary", "test", "file_sync_all_test", "tests", {"sluice_core", "sluice_async"})
+sluice_one_file_target("binary", "test", "explicit_file_ref_test", "tests", {"sluice_core", "sluice_async"})
+sluice_one_file_target("binary", "test", "async_sync_admission_test", "tests", {"sluice_core", "sluice_async"})
 sluice_one_file_target("binary", "test", "blocking_file_read_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "blocking_file_write_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "blocking_file_sync_data_test", "tests", "sluice_core")

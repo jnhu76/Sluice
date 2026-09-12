@@ -16,6 +16,7 @@ namespace sluice_copy {
 namespace {
 
 using namespace sluice::async;
+using sluice::File;
 using sluice::IoError;
 using sluice::Result;
 
@@ -45,8 +46,8 @@ struct PipelineSlot {
 };
 
 struct PipelinedCopyTask {
-    int src_fd;
-    int dst_fd;
+    const sluice::File* src_file;
+    NativeFileRef dst;
     std::size_t buffer_size;
     std::size_t pipeline_depth;
     SyncPolicy sync;
@@ -61,7 +62,7 @@ struct PipelinedCopyTask {
         std::uint64_t off = s.chunk_offset + s.filled;
         std::byte* dst = s.buffer.data() + s.filled;
         std::size_t len = buffer_size - s.filled;
-        auto rsr = ctx.submit_read(ReadOp{src_fd, dst, len, off}, s.read_c);
+        auto rsr = ctx.submit_read(ReadOp{*src_file, dst, len, off}, s.read_c);
         if (!rsr.has_value())
             return rsr;
         s.state = SlotState::reading;
@@ -72,7 +73,7 @@ struct PipelinedCopyTask {
         std::uint64_t off = s.chunk_offset + s.written;
         const std::byte* src = s.buffer.data() + s.written;
         std::size_t len = s.filled - s.written;
-        auto wsr = ctx.submit_write(WriteOp{dst_fd, src, len, off}, s.write_c);
+        auto wsr = ctx.submit_write(WriteOp{dst, src, len, off}, s.write_c);
         if (!wsr.has_value())
             return wsr;
         s.state = SlotState::writing;
@@ -105,7 +106,8 @@ struct PipelinedCopyTask {
         }
 
         auto fr = await_read_fill(
-            ctx, src_fd, std::span<std::byte>(s.buffer.data() + s.filled, buffer_size - s.filled),
+            ctx, *src_file,
+            std::span<std::byte>(s.buffer.data() + s.filled, buffer_size - s.filled),
             s.chunk_offset + s.filled, s.read_c, &tally);
         if (!fr.has_value())
             return make_unexpected<void>(fr.error());
@@ -135,7 +137,7 @@ struct PipelinedCopyTask {
         s.written += first.value();
         if (s.written < s.filled) {
             auto wr = await_write_exact(
-                ctx, dst_fd,
+                ctx, dst,
                 std::span<const std::byte>(s.buffer.data() + s.written, s.filled - s.written),
                 s.chunk_offset + s.written, s.write_c, &tally);
             if (!wr.has_value())
@@ -285,14 +287,14 @@ struct PipelinedCopyTask {
             return make_unexpected<CopyStats>(primary_error.value());
 
         if (sync == SyncPolicy::data) {
-            auto ssr = ctx.submit_sync_data(SyncDataOp{dst_fd}, sync_c);
+            auto ssr = ctx.submit_sync_data(SyncDataOp{dst}, sync_c);
             if (!ssr.has_value())
                 return make_unexpected<CopyStats>(ssr.error());
             auto sr = await_take(ctx, sync_c);
             if (!sr.has_value())
                 return make_unexpected<CopyStats>(sr.error());
         } else if (sync == SyncPolicy::all) {
-            auto ssr = ctx.submit_sync_all(SyncAllOp{dst_fd}, sync_c);
+            auto ssr = ctx.submit_sync_all(SyncAllOp{dst}, sync_c);
             if (!ssr.has_value())
                 return make_unexpected<CopyStats>(ssr.error());
             auto sr = await_take(ctx, sync_c);
@@ -308,19 +310,20 @@ struct PipelinedCopyTask {
 
 } // namespace
 
-Result<CopyStats> run_sequential_copy(int src_fd, int dst_fd, std::size_t buffer_size,
-                                      unsigned workers, SyncPolicy sync) {
-    return run_pipelined_copy(src_fd, dst_fd, buffer_size, 1, workers, sync);
+Result<CopyStats> run_sequential_copy(const File& src_file, const NativeFileRef& dst,
+                                      std::size_t buffer_size, unsigned workers, SyncPolicy sync) {
+    return run_pipelined_copy(src_file, dst, buffer_size, 1, workers, sync);
 }
 
-Result<CopyStats> run_pipelined_copy(int src_fd, int dst_fd, std::size_t buffer_size,
-                                     std::size_t pipeline_depth, unsigned workers,
-                                     SyncPolicy sync) {
-    return run_pipelined_copy_with_backend(src_fd, dst_fd, buffer_size, pipeline_depth, workers,
+Result<CopyStats> run_pipelined_copy(const File& src_file, const NativeFileRef& dst,
+                                     std::size_t buffer_size, std::size_t pipeline_depth,
+                                     unsigned workers, SyncPolicy sync) {
+    return run_pipelined_copy_with_backend(src_file, dst, buffer_size, pipeline_depth, workers,
                                            sync, std::make_unique<ThreadPoolBackend>());
 }
 
-Result<CopyStats> run_pipelined_copy_with_backend(int src_fd, int dst_fd, std::size_t buffer_size,
+Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const NativeFileRef& dst,
+                                                  std::size_t buffer_size,
                                                   std::size_t pipeline_depth, unsigned workers,
                                                   SyncPolicy sync,
                                                   std::unique_ptr<AsyncBackend> backend) {
@@ -350,15 +353,16 @@ Result<CopyStats> run_pipelined_copy_with_backend(int src_fd, int dst_fd, std::s
         return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
     }
 
-    PipelinedCopyTask task{src_fd, dst_fd, buffer_size, pipeline_depth, sync, std::move(slots), {}};
+    PipelinedCopyTask task{&src_file, dst, buffer_size, pipeline_depth, sync, std::move(slots), {}};
 
     return run_task_to_result<CopyStats>(workers, std::move(backend), task);
 }
 
-Result<CopyStats> run_sequential_copy_with_backend(int src_fd, int dst_fd, std::size_t buffer_size,
-                                                   unsigned workers, SyncPolicy sync,
+Result<CopyStats> run_sequential_copy_with_backend(const File& src_file, const NativeFileRef& dst,
+                                                   std::size_t buffer_size, unsigned workers,
+                                                   SyncPolicy sync,
                                                    std::unique_ptr<AsyncBackend> backend) {
-    return run_pipelined_copy_with_backend(src_fd, dst_fd, buffer_size, 1, workers, sync,
+    return run_pipelined_copy_with_backend(src_file, dst, buffer_size, 1, workers, sync,
                                            std::move(backend));
 }
 

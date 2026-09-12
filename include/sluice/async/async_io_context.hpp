@@ -4,6 +4,7 @@
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
@@ -16,23 +17,42 @@
 
 namespace sluice::async {
 
-struct ReadOp {
+// Mechanism-level reference to the resource an explicit operation targets.
+// Implicit conversion from a canonical File carries the File's access
+// contract, so every initiation surface can enforce the ADR-0002 §5.5
+// access-legality matrix before admission. Construction from a raw native
+// handle is the explicit interop boundary: the caller declares the access as
+// a claim, and the interop path does not claim canonical File access
+// validation. Carries no ownership and no lifetime authority: the handle
+// value is copied at op construction and the caller keeps the resource alive
+// until terminal completion is observed.
+struct NativeFileRef {
+    NativeFileRef() = default;
+    NativeFileRef(const sluice::File& file) : fd(file.native_handle()), access(file.access()) {}
+    NativeFileRef(int native_fd, FileAccess declared_access)
+        : fd(native_fd), access(declared_access) {}
+
     int fd = -1;
+    FileAccess access = FileAccess::read_write;
+};
+
+struct ReadOp {
+    NativeFileRef file;
     std::byte* dst = nullptr;
     std::size_t len = 0;
     std::uint64_t offset = 0;
 };
 struct WriteOp {
-    int fd = -1;
+    NativeFileRef file;
     const std::byte* src = nullptr;
     std::size_t len = 0;
     std::uint64_t offset = 0;
 };
 struct SyncDataOp {
-    int fd = -1;
+    NativeFileRef file;
 };
 struct SyncAllOp {
-    int fd = -1;
+    NativeFileRef file;
 };
 
 struct BackendWaitToken {
@@ -104,11 +124,6 @@ class AsyncBackend {
         return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
     }
 
-    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
-    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
-    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
-    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
-
     virtual std::size_t poll() = 0;
 
     virtual Result<std::size_t> wait_one() = 0;
@@ -126,6 +141,13 @@ class AsyncBackend {
 
   private:
     friend class AsyncIoContext;
+
+    // The access-legality matrix (ADR-0002 §5.5) is enforced by
+    // AsyncIoContext before these are reachable; the backend only lowers fd.
+    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
+    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
 
     virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
                                                               std::uint32_t slot,
