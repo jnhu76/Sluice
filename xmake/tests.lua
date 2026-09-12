@@ -30,6 +30,15 @@ if has_config("liburing") then
         add_includedirs(R .. "include")
         add_files(R .. "tests/uring_public_consumer_probe.cpp")
         add_tests("uring_public_consumer_probe")
+
+    target("uring_backend_smoke_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core", "sluice_async")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/uring_backend_smoke_test.cpp")
+        add_tests("uring_backend_smoke_test")
 end
 
 -- A2 app-consumption tests: exercise the app engines through the canonical
