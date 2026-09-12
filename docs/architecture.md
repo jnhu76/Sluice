@@ -127,7 +127,7 @@ flowchart TB
 
 1. 已经成立的 canonical `File` spine；
 2. 仍未完成收敛的 historical blocking surface；
-3. app 消费的两种现实：hash/grep/tail 走 canonical `File`；copy 的 source lifetime 走 canonical `File`，其 pipeline 的 src 边界直接引用 canonical `File`，dst interop 资源经显式命名的 `NativeFileRef{int}` 引用。
+3. app 消费的两种现实：hash/grep/tail 走 canonical `File`；copy 的 source lifetime 走 canonical `File`，其 pipeline 的 src 边界直接引用 canonical `File`，dst interop 资源经显式命名的 `NativeFileRef{int, declared access}` 引用。
 
 它们不能被一张“理想图”掩盖。
 
@@ -391,21 +391,21 @@ copy source metadata:
     ::fstat(File.native_handle()) kind 观测            REQUIRED_INTEROP
 
 copy dst（interop 资源）:
-    O_NOFOLLOW/mkstemp open 单元 + NativeFileRef{int} 机制引用   REQUIRED_INTEROP
+    O_NOFOLLOW/mkstemp open 单元 + NativeFileRef{int, declared access} 机制引用   REQUIRED_INTEROP
 ```
 
 `sluice-copy` 的 explicit pipeline 以：
 
 ```text
 src: canonical File → NativeFileRef（隐式转换）
-dst: NativeFileRef{int}（显式命名 interop 引用）
+dst: NativeFileRef{int, declared access}（显式命名 interop 引用）
     ↓
 ReadOp / WriteOp / SyncDataOp / SyncAllOp
     ↓
 RuntimeTaskContext
 ```
 
-直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass。A6 之后 ownership 与 operation reference 对 canonical 资源说同一种语言：pipeline 的 src 边界直接引用 canonical `File`（`NativeFileRef(const File&)` 隐式转换，op 构造时拷贝 handle 值，不拥有任何 authority）；dst 是 interop 资源（`O_NOFOLLOW`/`mkstemp` open 单元，无法由 `FileOpen` 无损表达，REQUIRED_INTEROP），其引用经显式命名的 `NativeFileRef{int}` 表达——bare int 不能构造 op，机制级引用必须拼写出来。`NativeFileRef` 不引入 shared_ptr、registry、pin 或 runtime File knowledge；caller-borne lifetime（File 活到 terminal 被观察）不变，两个 backend 的 lowering 仍消费 `int`。其余 atomic-output namespace 操作已逐 concern 分类：destination special open 与 open/same-file/kind 观测 → REQUIRED_INTEROP，`ftruncate` → REQUIRED_INTEROP（dst 是 interop-owned raw fd，非 canonical File），mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
+直接消费低层 async seam。这是 explicit outstanding pipeline authority（ADR-0002 §6.2），不属于 style bypass。A6 之后 ownership 与 operation reference 对 canonical 资源说同一种语言：pipeline 的 src 边界直接引用 canonical `File`（`NativeFileRef(const File&)` 隐式转换，op 构造时拷贝 handle 值，不拥有任何 authority）；dst 是 interop 资源（`O_NOFOLLOW`/`mkstemp` open 单元，无法由 `FileOpen` 无损表达，REQUIRED_INTEROP），其引用经显式命名的 `NativeFileRef{int, declared access}` 表达——bare int 不能构造 op，机制级引用必须拼写出来。`NativeFileRef` 不引入 shared_ptr、registry、pin 或 runtime File knowledge；caller-borne lifetime（File 活到 terminal 被观察）不变，两个 backend 的 lowering 仍消费 `int`。其余 atomic-output namespace 操作已逐 concern 分类：destination special open 与 open/same-file/kind 观测 → REQUIRED_INTEROP，`ftruncate` → REQUIRED_INTEROP（dst 是 interop-owned raw fd，非 canonical File），mkstemp/rename/unlink/fchmod/dir fsync → OUT_OF_SCOPE_NAMESPACE_WORK。
 
 ---
 

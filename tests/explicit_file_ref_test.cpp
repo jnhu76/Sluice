@@ -26,9 +26,10 @@ using sluice::IoError;
 using sluice::make_unexpected;
 using sluice::Result;
 
-// Compile-level naming contract: the canonical File path converts implicitly,
-// while a raw native handle must spell NativeFileRef explicitly. A bare int
-// does not construct an operation.
+// Compile-level naming contract: the canonical File path converts implicitly
+// (carrying the File's access contract); a raw native handle must spell the
+// mechanism type and declare the access claim explicitly. A bare int neither
+// converts to nor constructs an operation resource reference.
 template <class Op, class... Args>
 auto brace_init_detects(int) -> decltype(Op{std::declval<Args>()...}, std::true_type{});
 template <class Op, class... Args> auto brace_init_detects(long) -> std::false_type;
@@ -43,8 +44,10 @@ static_assert(!decltype(brace_init_detects<SyncDataOp, int>(0))::value,
               "SyncDataOp must not be constructible from a bare fd");
 static_assert(!decltype(brace_init_detects<SyncAllOp, int>(0))::value,
               "SyncAllOp must not be constructible from a bare fd");
-static_assert(std::is_constructible_v<NativeFileRef, int>,
-              "NativeFileRef{int} is the explicitly-named interop path");
+static_assert(!std::is_convertible_v<int, NativeFileRef>,
+              "a bare int does not silently become an operation resource reference");
+static_assert(std::is_constructible_v<NativeFileRef, int, FileAccess>,
+              "NativeFileRef{int, declared access} is the explicitly-named interop path");
 static_assert(std::is_convertible_v<File&, NativeFileRef>,
               "canonical File converts implicitly to NativeFileRef");
 static_assert(std::is_trivially_copyable_v<NativeFileRef>,
@@ -174,8 +177,10 @@ bool explicit_native_ref_over_raw_fd() {
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
             // The interop resource is referenced by explicitly naming the
-            // mechanism type; the raw fd alone does not construct the op.
-            slot.publish(await_read_once(ctx, NativeFileRef{raw_fd}, dst, 8, c));
+            // mechanism type and declaring the access claim; the raw fd alone
+            // does not construct the op.
+            slot.publish(await_read_once(ctx, NativeFileRef{raw_fd, FileAccess::read_only}, dst,
+                                         8, c));
         });
 
     ::close(raw_fd);
@@ -253,6 +258,99 @@ bool cancel_through_file_referenced_op_reaches_terminal() {
     return file.close().has_value();
 }
 
+bool file_derived_ref_rejected_at_submit_on_wrong_access() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    FileOpen mode;
+    mode.access = FileAccess::write_only;
+    File file = std::move(File::open(path, mode).value());
+    ::unlink(path.c_str());
+
+    std::vector<std::byte> dst(3);
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            auto sr = ctx.submit_read(ReadOp{file, dst.data(), dst.size(), 0}, c);
+            if (sr.has_value() || !c.idle()) {
+                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
+                return;
+            }
+            slot.publish(make_unexpected<std::size_t>(sr.error()));
+        });
+
+    if (result.has_value())
+        return false;
+    if (result.error().code != IoError::Code::invalid_argument)
+        return false;
+    return file.close().has_value();
+}
+
+bool file_derived_write_ref_rejected_at_submit_on_read_only_file() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path).value());
+    ::unlink(path.c_str());
+
+    const std::byte payload{0x21};
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            auto sr = ctx.submit_write(WriteOp{file, &payload, 1, 0}, c);
+            if (sr.has_value() || !c.idle()) {
+                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
+                return;
+            }
+            slot.publish(make_unexpected<std::size_t>(sr.error()));
+        });
+
+    if (result.has_value())
+        return false;
+    if (result.error().code != IoError::Code::invalid_argument)
+        return false;
+    return file.close().has_value();
+}
+
+bool interop_declared_access_is_a_claim_not_validation() {
+    const std::string path = make_temp_file("xyz");
+    if (path.empty())
+        return false;
+    const int raw_fd = ::open(path.c_str(), O_RDONLY);
+    if (raw_fd < 0)
+        return false;
+
+    const std::byte payload{0x7E};
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            // The declared claim admits the op at the initiation boundary;
+            // whatever the OS then reports is the mechanism outcome, not the
+            // canonical access-legality rejection.
+            auto sr = ctx.submit_write(
+                WriteOp{NativeFileRef{raw_fd, FileAccess::read_write}, &payload, 1, 0}, c);
+            if (!sr.has_value()) {
+                slot.publish(c.idle() ? make_unexpected<std::size_t>(sr.error())
+                                      : Result<std::size_t>(std::size_t{0}));
+                return;
+            }
+            (void)ctx.await_completion(c);
+            slot.publish(c.result());
+        });
+
+    ::close(raw_fd);
+    ::unlink(path.c_str());
+
+    if (result.has_value())
+        return false;
+    if (result.error().code == IoError::Code::invalid_argument)
+        return false;
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -266,6 +364,12 @@ int main() {
         {"explicit_native_ref_over_raw_fd", explicit_native_ref_over_raw_fd},
         {"cancel_through_file_referenced_op_reaches_terminal",
          cancel_through_file_referenced_op_reaches_terminal},
+        {"file_derived_ref_rejected_at_submit_on_wrong_access",
+         file_derived_ref_rejected_at_submit_on_wrong_access},
+        {"file_derived_write_ref_rejected_at_submit_on_read_only_file",
+         file_derived_write_ref_rejected_at_submit_on_read_only_file},
+        {"interop_declared_access_is_a_claim_not_validation",
+         interop_declared_access_is_a_claim_not_validation},
     };
 
     for (const NamedTest& t : tests) {

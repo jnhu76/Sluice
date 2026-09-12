@@ -18,17 +18,22 @@
 namespace sluice::async {
 
 // Mechanism-level reference to the resource an explicit operation targets.
-// Implicit conversion from a canonical File is the normal spelling; conversion
-// from a raw native handle requires naming the type explicitly (interop
-// resources only). Carries no ownership and no lifetime authority: the handle
+// Implicit conversion from a canonical File carries the File's access
+// contract, so every initiation surface can enforce the ADR-0002 §5.5
+// access-legality matrix before admission. Construction from a raw native
+// handle is the explicit interop boundary: the caller declares the access as
+// a claim, and the interop path does not claim canonical File access
+// validation. Carries no ownership and no lifetime authority: the handle
 // value is copied at op construction and the caller keeps the resource alive
 // until terminal completion is observed.
 struct NativeFileRef {
     NativeFileRef() = default;
-    explicit NativeFileRef(int native_fd) : fd(native_fd) {}
-    NativeFileRef(const sluice::File& file) : fd(file.native_handle()) {}
+    NativeFileRef(const sluice::File& file) : fd(file.native_handle()), access(file.access()) {}
+    NativeFileRef(int native_fd, FileAccess declared_access)
+        : fd(native_fd), access(declared_access) {}
 
     int fd = -1;
+    FileAccess access = FileAccess::read_write;
 };
 
 struct ReadOp {

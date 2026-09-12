@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
             return (oc.failure == sluice_copy::SafeOpenFailure::same_file) ? 1 : 2;
         }
         auto result = sluice_copy::run_pipelined_copy(
-            *oc.src_file, sluice::async::NativeFileRef{oc.temp_fd}, args.buffer_size,
+            *oc.src_file, sluice::async::NativeFileRef{oc.temp_fd, sluice::FileAccess::read_write}, args.buffer_size,
             args.pipeline_depth, args.workers, args.sync);
         if (!result.has_value()) {
             sluice_copy::discard_atomic_copy(oc);
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
     }
 
     auto result = sluice_copy::run_pipelined_copy(
-        *oc.src_file, sluice::async::NativeFileRef{oc.dst_fd}, args.buffer_size,
+        *oc.src_file, sluice::async::NativeFileRef{oc.dst_fd, sluice::FileAccess::write_only}, args.buffer_size,
         args.pipeline_depth, args.workers, args.sync);
     if (!result.has_value()) {
         print_copy_result(argv[0], result);

@@ -87,7 +87,7 @@ A6 之前的两条责任边界分离已解决：canonical 资源的 ownership �
 ```text
 resource ownership / lifetime    canonical File（A2 已收敛 source）
 explicit outstanding operation   canonical 资源经 implicit NativeFileRef 引用 File（A6 已收敛）；
-                                 interop 资源（dst temp/raw fd）经显式命名 NativeFileRef{int}
+                                 interop 资源（dst temp/raw fd）经显式命名 NativeFileRef{int, declared access}（caller 声明，非 canonical 验证）
 ```
 
 Pipeline 拥有 multiple `PipelineSlot`、multiple `Completion`、multiple outstanding ReadOp/WriteOp、explicit submit/drain/cancellation——这是真实 explicit-outstanding authority（ADR-0002 §6.2），A2 不消除它。
@@ -99,13 +99,13 @@ Pipeline 拥有 multiple `PipelineSlot`、multiple `Completion`、multiple outst
 | `apps/sluice-copy/file_domain.cpp:44` | `::fstat(src_file.native_handle())` + `S_ISREG` | regular-file check | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/safe_output.cpp:70` | `::fstat(src_file.native_handle())` + `S_ISREG` | regular-file check | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/main.cpp:66,124` | `run_pipelined_copy` src 实参 | explicit-op resource reference（pipeline 边界） | CANONICAL_FILE_USE | MIGRATED：传 `*src_file`（canonical File 隐式转换为 `NativeFileRef`） | #346 / A6 |
-| `apps/sluice-copy/main.cpp:66,124` | `NativeFileRef{oc.temp_fd}` / `NativeFileRef{oc.dst_fd}` dst 实参 | explicit-op resource reference（dst interop 资源） | REQUIRED_INTEROP | KEEP：dst 资源由 interop open 单元持有，机制引用经显式命名 `NativeFileRef{int}` | #346 / A6 |
+| `apps/sluice-copy/main.cpp:66,124` | `NativeFileRef{oc.temp_fd, read_write}` / `NativeFileRef{oc.dst_fd, write_only}` dst 实参 | explicit-op resource reference（dst interop 资源） | REQUIRED_INTEROP | KEEP：dst 资源由 interop open 单元持有，机制引用经显式命名 `NativeFileRef{int, declared access}` | #346 / A6 |
 | `apps/sluice-copy/copy_task.cpp:65` | `ReadOp{*src_file, ...}` 经 `ctx.submit_read`；multiple outstanding | explicit outstanding pipeline（src，canonical） | CANONICAL_FILE_USE | MIGRATED：ReadOp 以 canonical File 隐式引用资源，multiple-outstanding authority 不变 | #346 / A6 |
-| `apps/sluice-copy/copy_task.cpp:76` | `WriteOp{dst, ...}`（dst = `NativeFileRef`）经 `ctx.submit_write`；multiple outstanding | explicit outstanding pipeline（dst，interop 资源） | REQUIRED_INTEROP | KEEP：dst 资源本身由 interop open 单元（O_NOFOLLOW/mkstemp）持有，无法无损表达为 canonical File（ADR-0002 §3.1 将 O_NOFOLLOW/mode 保持在 minimum open contract 之外）；机制级引用经显式命名的 `NativeFileRef{int}` 表达，不拥有语义权威 | #346 / A6 |
+| `apps/sluice-copy/copy_task.cpp:76` | `WriteOp{dst, ...}`（dst = `NativeFileRef`）经 `ctx.submit_write`；multiple outstanding | explicit outstanding pipeline（dst，interop 资源） | REQUIRED_INTEROP | KEEP：dst 资源本身由 interop open 单元（O_NOFOLLOW/mkstemp）持有，无法无损表达为 canonical File（ADR-0002 §3.1 将 O_NOFOLLOW/mode 保持在 minimum open contract 之外）；机制级引用经显式命名的 `NativeFileRef{int, declared access}` 表达，不拥有语义权威 | #346 / A6 |
 | `apps/sluice-copy/copy_task.cpp:108` | `await_read_fill`（src） | fill 组合（src，canonical） | CANONICAL_FILE_USE | MIGRATED：`await_read_fill(ctx, *src_file, ...)` | #346 / A6 |
-| `apps/sluice-copy/copy_task.cpp:139` | `await_write_exact`（dst） | exact 组合（dst，interop 资源） | REQUIRED_INTEROP | KEEP：与 dst-side WriteOp 行同法——dst 资源由 interop open 单元持有，引用经显式命名 `NativeFileRef{int}` 表达，不拥有语义权威 | #346 / A6 |
-| `apps/sluice-copy/copy_task.cpp:290` | `submit_sync_data(SyncDataOp{dst})` | durability (data) | REQUIRED_INTEROP | KEEP：dst 资源本身由 interop open 单元（O_NOFOLLOW/mkstemp）持有，无法无损表达为 canonical File（ADR-0002 §3.1 将 O_NOFOLLOW/mode 保持在 minimum open contract 之外）；机制级引用经显式命名的 `NativeFileRef{int}` 表达，不拥有语义权威 | #346 / A6 |
-| `apps/sluice-copy/copy_task.cpp:297` | `submit_sync_all(SyncAllOp{dst})` | durability (all) | REQUIRED_INTEROP | KEEP：与 SyncData 行同法——dst 资源由 interop open 单元持有，机制级引用经显式命名的 `NativeFileRef{int}` 表达（canonical File-facing `await_sync_all` 已存在，适用于 canonical File 资源） | #346 / A6 |
+| `apps/sluice-copy/copy_task.cpp:139` | `await_write_exact`（dst） | exact 组合（dst，interop 资源） | REQUIRED_INTEROP | KEEP：与 dst-side WriteOp 行同法——dst 资源由 interop open 单元持有，引用经显式命名 `NativeFileRef{int, declared access}` 表达，不拥有语义权威 | #346 / A6 |
+| `apps/sluice-copy/copy_task.cpp:290` | `submit_sync_data(SyncDataOp{dst})` | durability (data) | REQUIRED_INTEROP | KEEP：dst 资源本身由 interop open 单元（O_NOFOLLOW/mkstemp）持有，无法无损表达为 canonical File（ADR-0002 §3.1 将 O_NOFOLLOW/mode 保持在 minimum open contract 之外）；机制级引用经显式命名的 `NativeFileRef{int, declared access}` 表达，不拥有语义权威 | #346 / A6 |
+| `apps/sluice-copy/copy_task.cpp:297` | `submit_sync_all(SyncAllOp{dst})` | durability (all) | REQUIRED_INTEROP | KEEP：与 SyncData 行同法——dst 资源由 interop open 单元持有，机制级引用经显式命名的 `NativeFileRef{int, declared access}` 表达（canonical File-facing `await_sync_all` 已存在，适用于 canonical File 资源） | #346 / A6 |
 | `apps/sluice-copy/main.cpp:118` | `::ftruncate(oc.dst_fd, 0)`（non-atomic 路径） | resize | REQUIRED_INTEROP | KEEP：dst 是 interop-owned raw fd（`O_NOFOLLOW` open），非 canonical File，`File::resize` 无法表达该资源引用；dst open unit 收敛属独立裁决，不在 A6 范围 | — |
 | `apps/sluice-copy/file_domain.cpp:51` | `::open(dst, O_WRONLY\|O_CREAT\|O_NOFOLLOW\|O_CLOEXEC, 0644)` | dst 打开 | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/file_domain.cpp:16` | `ScopedFd` dtor `::close`（仅 dst guard） | interop dst open 单元的 close authority | REQUIRED_INTEROP | KEEP | — |
@@ -125,10 +125,10 @@ Pipeline 拥有 multiple `PipelineSlot`、multiple `Completion`、multiple outst
 理由说明：
 
 - **source open/lifetime（CANONICAL_FILE_USE）**：`O_RDONLY | open_existing` 正是 `FileOpen` 默认轴（read_only/open_existing/preserve）的无损表达；`File::open` 与原 raw open 的唯一实现差异是附加 `O_CLOEXEC`，而四个 app 无 exec 行为，不构成 caller-visible 差异。source `ScopedFd` 已删除，outcome 内的 `std::optional<File>` 是 source 的唯一 owner；fstat 观察读取 `native_handle()`，pipeline 直接传 `File` 引用，不发生 fd release/dup。
-- **dst open（REQUIRED_INTEROP）**：ADR-0002 §3.1 明确不把 `O_NOFOLLOW` 与 permission/mode surface 纳入 minimum open contract；canonical `FileOpen`（access/existence/contents 三轴）无法无损表达 `O_NOFOLLOW | O_CREAT | 0644`。强迁会丢失 security/behavior semantics。A6 据此将 dst-side 操作引用按显式命名的 `NativeFileRef{int}`（REQUIRED_INTEROP）收敛，open 单元本身保持 interop 分类。
+- **dst open（REQUIRED_INTEROP）**：ADR-0002 §3.1 明确不把 `O_NOFOLLOW` 与 permission/mode surface 纳入 minimum open contract；canonical `FileOpen`（access/existence/contents 三轴）无法无损表达 `O_NOFOLLOW | O_CREAT | 0644`。强迁会丢失 security/behavior semantics。A6 据此将 dst-side 操作引用按显式命名的 `NativeFileRef{int, declared access}`（REQUIRED_INTEROP）收敛，open 单元本身保持 interop 分类。
 - **source metadata（REQUIRED_INTEROP）**：file kind / regular-file classification / same-file identity 是 ADR-0002 §4.3 允许的 minimal metadata，但 canonical `File` 尚未暴露该 observation，#343–#347 均不拥有 metadata surface；只能经 `native_handle()` 观察。这正是 A2 的目标形状：File 保持 resource authority，native_handle escape 只出现在命名的观察边界。
-- **pipeline operation reference（A6 后）**：src 是 canonical File 资源，ownership 与 operation reference 现在都说 File——`ReadOp{*src_file, ...}` 经 implicit `NativeFileRef` 转换引用 canonical 资源。dst 资源本身由 interop open 单元（`O_NOFOLLOW`/`mkstemp`）持有，无法无损表达为 canonical File，其操作引用经显式命名的 `NativeFileRef{int}` 表达：机制级值拷贝，不拥有所有权、lifetime 或 close authority（caller-borne lifetime 不变，ADR-0002 §7.2/§7.3）。
-- **SyncData/SyncAll（dst interop）**：`await_sync_data(File, ...)` / `await_sync_all(File, ...)` 适用于 canonical File 资源；pipeline 的 durability op 以 dst 的 interop 资源为对象，故按 REQUIRED_INTEROP 经显式命名 `NativeFileRef{int}` 提交。
+- **pipeline operation reference（A6 后）**：src 是 canonical File 资源，ownership 与 operation reference 现在都说 File——`ReadOp{*src_file, ...}` 经 implicit `NativeFileRef` 转换引用 canonical 资源。dst 资源本身由 interop open 单元（`O_NOFOLLOW`/`mkstemp`）持有，无法无损表达为 canonical File，其操作引用经显式命名的 `NativeFileRef{int, declared access}` 表达：机制级值拷贝，不拥有所有权、lifetime 或 close authority（caller-borne lifetime 不变，ADR-0002 §7.2/§7.3）。
+- **SyncData/SyncAll（dst interop）**：`await_sync_data(File, ...)` / `await_sync_all(File, ...)` 适用于 canonical File 资源；pipeline 的 durability op 以 dst 的 interop 资源为对象，故按 REQUIRED_INTEROP 经显式命名 `NativeFileRef{int, declared access}` 提交。
 - **mkstemp/fchmod/rename/unlink/dir fsync（OUT_OF_SCOPE_NAMESPACE_WORK）**：ADR-0002 §5.4.5 明确 directory-entry durability 不属于 SyncData/SyncAll guarantee；§13 将 directory resource、rename/remove 保持未决；§4.3 将 permissions 排除在自动 Core 地位之外。这些是 atomic-replace namespace 协议的一部分，不属于 canonical File-data resource contract。source File 不参与 commit/discard 语义：`commit_atomic_copy`/`discard_atomic_copy` 只触碰 `temp_fd`/`temp_path`/`dst_dir`。
 
 ## 7. File lifetime proof（迁移后）
@@ -183,7 +183,7 @@ sluice-copy:  raw source open/ScopedFd = 0（RAW_MIGRATABLE_SOURCE_OWNERSHIP_COU
               src-side explicit-op reference = canonical File（implicit NativeFileRef，
               PIPELINE_RAW_OP_REFERENCE_COUNT = 0）；
               残余 = src/dst metadata interop + dst special open 与 dst-side 机制级引用
-              （REQUIRED_INTEROP，显式命名 `NativeFileRef{int}`）
+              （REQUIRED_INTEROP，显式命名 `NativeFileRef{int, declared access}`）
               + namespace 协议（OUT_OF_SCOPE_NAMESPACE_WORK）（均已分类）
 ```
 

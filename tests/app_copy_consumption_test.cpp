@@ -100,7 +100,7 @@ bool copy_non_atomic_roundtrip() {
     }
 
     const auto result =
-        sluice_copy::run_pipelined_copy(*oc.src_file, sluice::async::NativeFileRef{oc.dst_fd},
+        sluice_copy::run_pipelined_copy(*oc.src_file, sluice::async::NativeFileRef{oc.dst_fd, sluice::FileAccess::write_only},
                                         kBufferSize, kPipelineDepth, kWorkers, SyncPolicy::none);
     ::close(oc.dst_fd);
     const std::string copied = read_file(dst);
@@ -135,7 +135,7 @@ bool outcome_move_transfers_source_ownership() {
     }
 
     const auto result =
-        sluice_copy::run_pipelined_copy(*moved.src_file, sluice::async::NativeFileRef{moved.dst_fd},
+        sluice_copy::run_pipelined_copy(*moved.src_file, sluice::async::NativeFileRef{moved.dst_fd, sluice::FileAccess::write_only},
                                         kBufferSize, kPipelineDepth, kWorkers, SyncPolicy::none);
     ::close(moved.dst_fd);
     const std::string copied = read_file(dst);
@@ -215,7 +215,7 @@ bool atomic_copy_roundtrip_with_commit() {
     }
 
     const auto result =
-        sluice_copy::run_pipelined_copy(*oc.src_file, sluice::async::NativeFileRef{oc.temp_fd},
+        sluice_copy::run_pipelined_copy(*oc.src_file, sluice::async::NativeFileRef{oc.temp_fd, sluice::FileAccess::read_write},
                                         kBufferSize, kPipelineDepth, kWorkers, SyncPolicy::none);
     if (!result.has_value()) {
         sluice_copy::discard_atomic_copy(oc);
