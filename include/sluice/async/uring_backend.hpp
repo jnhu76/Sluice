@@ -68,12 +68,17 @@ class UringAsyncBackend : public AsyncBackend {
     UringAsyncBackend(const UringAsyncBackend&) = delete;
     UringAsyncBackend& operator=(const UringAsyncBackend&) = delete;
 
+  private:
+    // AsyncBackend::submit_* stay private end-to-end: only AsyncIoContext may
+    // enter them, so the access-legality matrix cannot be bypassed by calling
+    // a backend directly.
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override;
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
 #if defined(SLUICE_HAS_LIBURING)
+  public:
     bool supports_request_identity() const noexcept override { return true; }
 
   private:
