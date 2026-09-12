@@ -1,7 +1,7 @@
 # Explicit File App Consumer Census
 
 - **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
-- **Verified implementation baseline**: `cfbbb3158283ed202d4b5064999ac7c52f69cfb2`（该 commit 可 checkout 并验证下文记录的消费现实）
+- **Verified implementation baseline**: `5c87e466f09476a93cda325c5ad54c57fdb744e3`（该 commit 可 checkout 并验证下文记录的消费现实）
 - **Non-authority**: 本文只记录四个应用对 canonical File boundary 的消费现实与 escape 分类；它不创造 File 语义。若本文与 ADR 冲突，以 ADR 为准。
 - **Scope**: `apps/sluice-copy`、`apps/sluice-hash`、`apps/sluice-grep`、`apps/sluice-tail`（roadmap A2 / Issue #342）
 
@@ -101,7 +101,7 @@ Pipeline 拥有 multiple `PipelineSlot`、multiple `Completion`、multiple outst
 | `apps/sluice-copy/copy_task.cpp:64,75` | `ReadOp{src_fd}` / `WriteOp{dst_fd}` 经 `ctx.submit_read/submit_write`；multiple outstanding | explicit outstanding pipeline | TEMPORARY_CONVERGENCE_GAP | KEEP（不迁；低层 operation 仍以 raw fd 引用资源） | #346 / A6 |
 | `apps/sluice-copy/copy_task.cpp:107,137` | `await_read_fill` / `await_write_exact`（raw fd） | fill/exact 组合 | TEMPORARY_CONVERGENCE_GAP | KEEP | #346 / A6 |
 | `apps/sluice-copy/copy_task.cpp:288` | `submit_sync_data(SyncDataOp{dst_fd})` | durability (data) | TEMPORARY_CONVERGENCE_GAP | KEEP | #346 / A6 |
-| `apps/sluice-copy/copy_task.cpp:295` | `submit_sync_all(SyncAllOp{dst_fd})` | durability (all) | TEMPORARY_CONVERGENCE_GAP | KEEP | #345 / A5 |
+| `apps/sluice-copy/copy_task.cpp:295` | `submit_sync_all(SyncAllOp{dst_fd})` | durability (all) | TEMPORARY_CONVERGENCE_GAP | KEEP（canonical File-facing `sync_all` / `await_sync_all` 已存在；pipeline escape 与 SyncData 行同法，随 explicit-op 资源引用收敛） | #346 / A6 |
 | `apps/sluice-copy/main.cpp:118` | `::ftruncate(oc.dst_fd, 0)`（non-atomic 路径） | resize | TEMPORARY_CONVERGENCE_GAP | KEEP（dst 是 interop-owned raw fd（`O_NOFOLLOW` open），非 canonical File，`File::resize` 无法表达该资源引用） | #346 / A6（dst open unit 收敛时一并迁移） |
 | `apps/sluice-copy/file_domain.cpp:51` | `::open(dst, O_WRONLY\|O_CREAT\|O_NOFOLLOW\|O_CLOEXEC, 0644)` | dst 打开 | REQUIRED_INTEROP | KEEP | — |
 | `apps/sluice-copy/file_domain.cpp:16` | `ScopedFd` dtor `::close`（仅 dst guard） | interop dst open 单元的 close authority | REQUIRED_INTEROP | KEEP | — |

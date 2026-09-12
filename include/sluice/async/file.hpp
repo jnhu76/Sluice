@@ -18,4 +18,6 @@ Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, st
 
 Result<void> await_sync_data(const File& file, RuntimeTaskContext& ctx, Completion<void>& c);
 
+Result<void> await_sync_all(const File& file, RuntimeTaskContext& ctx, Completion<void>& c);
+
 }
