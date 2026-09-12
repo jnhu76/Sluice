@@ -72,7 +72,7 @@ buffer-lifetime surface            每个 op 同时引用多个 caller-owned buf
 ### Case FOR（vectored 应被 earn）
 
 1. WAL 的 scatter-write（header|payload|trailer 单次系统调用）是一个真实存在的 composition shape，不是假想需求。
-2. legacy blocking surface 已承担完整语义负担（跨 buffer 推进、IOV_MAX chunking、VectorStats 观测）——语义设计已存在且经过实现验证。
+2. legacy blocking surface 已实现完整语义负担（跨 buffer 推进、IOV_MAX chunking、VectorStats 观测）——但该 surface 当前 in-tree 零测试覆盖（见 §5，属 legacy audit 的输入事实）。
 3. `Reader`/`Writer` interface 已有 vec methods 且带 default fallback impl——接口形状已经统一，提升为 canonical 表面"成本很低"。
 4. 若 DELETE legacy vec，`write_record_vec` 需要重写为多次 `write_all`（或接受 per-record 拆分系统调用），似乎构成删除阻力。
 
@@ -86,8 +86,9 @@ buffer-lifetime surface            每个 op 同时引用多个 caller-owned buf
 
 ## 5. Legacy surface disposition 与 reopen 条件
 
-- **Disposition**：legacy vectored surface（`FileReader`/`FileWriter` vec methods、`Reader`/`Writer` vec defaults、`IoSlice`/`ConstIoSlice`、`VectorStats`、`Observed*` vec plumbing、`WalWriter::write_record_vec`——经 C2 追踪，根植于 zero-consumer WAL）＝ **KEEP**（interim，非 ADR-0002 §14 终局 verdict），位于 legacy/composition 层，现状不动。
+- **Disposition**：legacy vectored surface（`FileReader`/`FileWriter` vec methods、`Reader`/`Writer` vec defaults、`IoSlice`/`ConstIoSlice`、`VectorStats`（含 `io_context.hpp` factory options 的 `VectorStats*` 观测管线）、`Observed*` vec plumbing、`WalWriter::write_record_vec`——经 C2 追踪，根植于 zero-consumer WAL）＝ **KEEP**（interim，非 ADR-0002 §14 终局 verdict），位于 legacy/composition 层，现状不动。
 - **边界**：该 KEEP 不使 vectored 成为 canonical File semantic surface；`FileReader`/`FileWriter` 整体的最终命运仍由 future legacy-surface audit（ADR-0002 §13 的 master-based architecture-gap audit legacy 部分；节点待开）裁决。
 - **Gate 链**：legacy-surface audit 对 vec surface 的 verdict 必须以自身证据满足 ADR-0002 §14；且该分析被 WAL 自身的命运（同属 ADR-0002 §13 的 open audit）gate——先裁决 WAL，再裁决它的唯一 in-tree 消费链。
+- **遗留事实**：上述 legacy vec surface 当前 in-tree 零测试覆盖（census 复核：tests/ 无任何 vec/IoSlice/VectorStats 引用）；该覆盖状态是 legacy-surface audit 必须采纳的输入事实。
 - **本决策不做的事**：无 canonical File-facing vectored API、无 async parity、无代码删除、无 baseline pin 变更（docs-only）。
-- **Reopen condition**：真实 consumer 需要 multi-buffer canonical I/O，且有证据 scalar composition 不足（指 correctness 需求无法表达为 per-op scalar 序列，如需要单次提交的多 buffer 原子性；单纯的 syscall 计数或性能考量不构成"不足"，性能归 Phase B 实证）→ 开新的 narrow node。届时 async 与 sync 必须共享同一 vectored semantics（ADR-0002 §5.3），不允许长期 sync-vector / async-scalar 两套语义世界。
+- **Reopen condition**：真实 consumer 需要 multi-buffer canonical I/O，且有证据 scalar composition 不足（指 correctness 需求无法表达为 per-op scalar 序列，如 O_APPEND/pipe 场景下多 buffer 记录的 interleaving/contiguity 完整性——注意 readv/writev 本身不提供跨 buffer 原子性；单纯的 syscall 计数或性能考量不构成"不足"，性能归 Phase B 实证）→ 开新的 narrow node。届时 async 与 sync 必须共享同一 vectored semantics（ADR-0002 §5.3），不允许长期 sync-vector / async-scalar 两套语义世界。
