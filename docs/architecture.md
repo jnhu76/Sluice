@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Verified implementation baseline**: `d7511349990cbb3ef340e158c7816fe3296b0575`
+- **Verified implementation baseline**: `253fabe79c425ad5473e1bf4efc30896023762bc`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -187,7 +187,7 @@ await_sync_data
 await_sync_all
 ```
 
-三者都以 `File` 作为 public semantic resource，再通过既有 `RuntimeTaskContext` 提交到 async execution seam。
+四者都以 `File` 作为 public semantic resource，再通过既有 `RuntimeTaskContext` 提交到 async execution seam。
 
 `include/sluice/blocking/file.hpp` 的 `sluice::blocking` 命名空间现在提供同一语义的显式 Blocking execution（实现位于 `src/blocking_file.cpp`）：
 
@@ -413,17 +413,19 @@ RuntimeTaskContext
 
 当前仓库已经不是“无测试、无 CI”的旧基线。
 
-`xmake/tests.lua` 当前登记的 canonical File test surface（按职责分类）：
+在本文 verified baseline 上，`xmake/tests.lua` 默认登记 **20 个** canonical/conformance test targets；`liburing=y` 时额外登记 **2 个** real-uring verification targets。下表按职责分类，并明确列全当前登记：
 
 ```text
-resource:
+resource / open contract:
   file_resource_test
+  file_open_contract_test
 
 async File-facing:
   file_read_test
   file_write_test
   file_sync_data_test
   file_sync_all_test
+  async_sync_admission_test
 
 explicit outstanding ops:
   explicit_file_ref_test
@@ -432,20 +434,26 @@ blocking File-facing:
   blocking_file_read_test
   blocking_file_write_test
   blocking_file_sync_data_test
-  blocking_file_sync_all_test
+  blocking_file_state_test
   blocking_file_sequential_test
+  blocking_file_sync_all_test
 
-shared validation helpers:
+shared validation / admission precedence:
   io_validation_boundary_test
+  file_access_precedence_test
 
 app canonical-resource consumption:
   app_hash_consumption_test
   app_grep_consumption_test
   app_tail_consumption_test
   app_copy_consumption_test
+
+liburing-gated verification (liburing=y):
+  uring_public_consumer_probe
+  uring_backend_smoke_test
 ```
 
-这些测试分别保护 canonical File resource 及其 observable state（size / resize）、已落地的 positional Read / Write、sequential Read / Write、SyncData 与 SyncAll slices（evented 与 blocking 两种 initiation）、explicit outstanding op 的 canonical File 引用与显式命名 interop 引用（含 multiple-outstanding 与取消路径），跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
+这些测试分别保护 canonical File resource/open contract 及其 observable state（`size` / `resize`）、已落地的 positional Read / Write、sequential Read / Write、SyncData 与 SyncAll slices（evented 与 blocking 两种 initiation）、explicit outstanding op 的 canonical File 引用与显式命名 interop 引用（含 multiple-outstanding 与取消路径）、跨执行共享的 offset/length 边界规则、ADR-0002 §5.5 admission precedence，以及各 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。liburing-gated 两项另外钉住 public consumer 的宏/链接传播与真实 io_uring submission path。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
@@ -455,7 +463,7 @@ app canonical-resource consumption:
 
 ## 9. 当前 architecture gaps
 
-以 `d7511349` 起（A2 + A3 + A4 + A5 + A6 implementation + A7 vectored decision）为基线，Phase A 基础架构节点全部关闭；遗留 legacy surface 的处置由 #355 追踪。
+截至 `253fabe79c425ad5473e1bf4efc30896023762bc`，A8 最终审计（#348）已给出 `EXPLICIT_FILE_ARCHITECTURE_CONFORMANT / PHASE_A_CLOSED`，Phase A roadmap（#339）已关闭。遗留 legacy I/O/composition surface 的终局处置由 #355 继续独立追踪；它不构成第二套 canonical File authority。
 
 详细状态、依赖顺序与 PR gate 见：
 
