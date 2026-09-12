@@ -4,12 +4,12 @@
 #include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
+#include <sluice/blocking/file.hpp>
 
 #include <chrono>
 #include <cstring>
 #include <memory>
 #include <span>
-#include <sys/stat.h>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -180,12 +180,12 @@ struct TailTask {
     }
 
     void run(RuntimeTaskContext& ctx, TailResult& r) {
-        struct stat st{};
-        if (::fstat(file->native_handle(), &st) != 0) {
-            r.error = sluice::from_errno_value(errno);
+        auto size_r = sluice::blocking::size(*file);
+        if (!size_r.has_value()) {
+            r.error = size_r.error();
             return;
         }
-        std::uint64_t size = static_cast<std::uint64_t>(st.st_size);
+        std::uint64_t size = size_r.value();
 
         std::uint64_t off = size;
 
@@ -264,12 +264,12 @@ struct TailTask {
                 std::this_thread::sleep_for(slice);
             }
 
-            struct stat st2{};
-            if (::fstat(file->native_handle(), &st2) != 0) {
-                r.error = sluice::from_errno_value(errno);
+            auto cur_r = sluice::blocking::size(*file);
+            if (!cur_r.has_value()) {
+                r.error = cur_r.error();
                 return;
             }
-            std::uint64_t cur = static_cast<std::uint64_t>(st2.st_size);
+            std::uint64_t cur = cur_r.value();
             if (cur < off) {
                 diag_msg("file truncated\n");
                 r.truncation_detected = true;
