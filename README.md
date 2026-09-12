@@ -60,21 +60,21 @@ Performance research likewise keeps semantic contracts separate from execution p
 
 ## Current implementation
 
-Current master has a canonical `sluice::File` resource with explicit open/close/access semantics. File-facing async positional Read, positional Write, and SyncData now route through the existing runtime seam without giving the Scheduler or backend File-semantic authority.
+Current master has one canonical `sluice::File` resource with explicit open/close/access semantics. File-facing Blocking operations cover positional Read/Write, sequential Read/Write, SyncData/SyncAll, and the minimal observable state surface (`size` / `resize`). File-facing evented operations cover positional Read/Write and SyncData/SyncAll through the existing runtime seam, while explicit outstanding operations carry `NativeFileRef` resource references through `AsyncIoContext`. None of these paths gives the Scheduler or backend File-semantic authority.
 
-The repository still contains a historical blocking `FileReader` / `FileWriter` world, and some applications still consume raw-fd explicit operations directly. These are tracked as conformance gaps rather than treated as a second long-term File model.
+The repository still contains the historical blocking `FileReader` / `FileWriter` world; its final disposition is intentionally tracked by legacy-surface audit #355 rather than treated as a second canonical File model. Application File-resource consumption is conforming: hash/grep/tail and copy source lifetime are owned by canonical `File`, while remaining raw/native-handle escapes are classified as required interop or out-of-scope namespace work in the app-consumer census. They are not unclassified conformance gaps.
 
 The asynchronous side contains caller-owned completions, bounded request state, scheduler/runtime machinery, cancellation, synchronization facilities, and honest backend execution. Repository-provided synthetic AsyncBackend implementations have been removed; production execution is ThreadPool plus io_uring when available.
 
 Current architecture work is intentionally split into phases:
 
 ```text
-Phase A  make the ADR architecture true in code
+Phase A  make the ADR architecture true in code       CLOSED / CONFORMANT
 Phase B  prove and compare execution quality
 Phase C  optimize or add execution backends/capabilities
 ```
 
-The roadmap is the source of truth for Phase A progress.
+Phase A was closed by the final conformance audit (#348) and roadmap closure (#339). The conformance roadmap remains the source of truth for the frozen architecture and its verified implementation state; legacy-surface disposition continues separately in #355.
 
 ## Applications
 
