@@ -208,9 +208,9 @@ bool cancel_through_file_referenced_op_reaches_terminal() {
                 return;
             }
             // The read may win the race; both outcomes must reach a terminal.
-            // On this runtime cancel_waiter only wakes the waiter, so the
-            // completion still publishes the op's own result; the drain
-            // branch below is defensive and is not exercised here.
+            // cancel_waiter only wakes the waiter; when it wins the race the
+            // drain branch below takes over, otherwise the completion has
+            // already published the op's own result.
             (void)ctx.cancel_waiter(c);
             auto wr = ctx.await_completion(c);
             if (!wr.has_value()) {
