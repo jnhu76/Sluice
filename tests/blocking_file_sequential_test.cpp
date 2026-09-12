@@ -398,7 +398,7 @@ bool positional_operations_do_not_move_shared_position() {
     return true;
 }
 
-bool sequential_read_on_write_only_file_reports_error() {
+bool sequential_read_on_write_only_file_rejected_upfront() {
     const std::string path = make_temp_file("abc");
     if (path.empty())
         return false;
@@ -413,11 +413,15 @@ bool sequential_read_on_write_only_file_reports_error() {
 
     if (result.has_value())
         return false;
-    if (result.error().code != IoError::Code::backend_error)
+    if (result.error().code != IoError::Code::invalid_argument)
         return false;
-    if (result.error().os_errno != EBADF)
+
+    auto empty_result = read(file, std::span<std::byte>{});
+    if (empty_result.has_value())
         return false;
-    return true;
+    if (empty_result.error().code != IoError::Code::invalid_argument)
+        return false;
+    return file.close().has_value();
 }
 
 bool sequential_zero_length_read_after_close_reports_invalid_state() {
@@ -602,8 +606,8 @@ int main() {
         {"sequential_write_advances_position", sequential_write_advances_position},
         {"positional_operations_do_not_move_shared_position",
          positional_operations_do_not_move_shared_position},
-        {"sequential_read_on_write_only_file_reports_error",
-         sequential_read_on_write_only_file_reports_error},
+        {"sequential_read_on_write_only_file_rejected_upfront",
+         sequential_read_on_write_only_file_rejected_upfront},
         {"sequential_zero_length_read_after_close_reports_invalid_state",
          sequential_zero_length_read_after_close_reports_invalid_state},
         {"sequential_zero_length_write_on_read_only_reports_invalid_argument",
