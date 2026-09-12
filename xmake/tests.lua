@@ -15,6 +15,8 @@ sluice_one_file_target("binary", "test", "blocking_file_state_test", "tests", "s
 sluice_one_file_target("binary", "test", "blocking_file_sequential_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "blocking_file_sync_all_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "io_validation_boundary_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "file_access_precedence_test", "tests",
+                       {"sluice_core", "sluice_async"})
 
 -- Real io_uring verification: registered only when the liburing build switch
 -- is on. Both targets consume sluice_async as ordinary consumers: the macro
