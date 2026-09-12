@@ -12,7 +12,7 @@
 
 - canonical File-facing vectored API 为零：无 `blocking::read_vec/write_vec`，无 `await_*_vec`。
 - 不做 async parity 工作（sync vec 存在不构成 async parity 义务；ADR-0002 §5.3 的 parity 要求仅在 vectored 被证明必须 canonical 之后触发）。
-- legacy / composition 层 vectored surface 暂时 KEEP；其 DELETE 与否归 future legacy-surface audit（即 ADR-0002 §13 所指 master-based architecture-gap audit 的 legacy 部分；该节点尚未开设，开设时须登记）裁决定夺（见 §5）。
+- legacy / composition 层 vectored surface 暂时 KEEP；其 DELETE 与否归 future legacy-surface audit（即 ADR-0002 §13 所指 master-based architecture-gap audit 的 legacy 部分；tracking issue = #355）裁决定夺（见 §5）。
 
 架构满足恰恰以**不携带**一个未被 earn 的 surface 达成：ADR-0002 §5.3 将 vectored 冻结为 evidence-gated extension，本决策即是该 gate 的第一次裁决——extension 保持 gated。
 
@@ -87,7 +87,7 @@ buffer-lifetime surface            每个 op 同时引用多个 caller-owned buf
 ## 5. Legacy surface disposition 与 reopen 条件
 
 - **Disposition**：legacy vectored surface（`FileReader`/`FileWriter` vec methods、`Reader`/`Writer` vec defaults、`IoSlice`/`ConstIoSlice`、`VectorStats`（含 `io_context.hpp` factory options 的 `VectorStats*` 观测管线）、`Observed*` vec plumbing、`WalWriter::write_record_vec`——经 C2 追踪，根植于 zero-consumer WAL）＝ **KEEP**（interim，非 ADR-0002 §14 终局 verdict），位于 legacy/composition 层，现状不动。
-- **边界**：该 KEEP 不使 vectored 成为 canonical File semantic surface；`FileReader`/`FileWriter` 整体的最终命运仍由 future legacy-surface audit（ADR-0002 §13 的 master-based architecture-gap audit legacy 部分；节点待开）裁决。
+- **边界**：该 KEEP 不使 vectored 成为 canonical File semantic surface；`FileReader`/`FileWriter` 整体的最终命运仍由 future legacy-surface audit（ADR-0002 §13 的 master-based architecture-gap audit legacy 部分；tracking issue = #355）裁决。
 - **Gate 链**：legacy-surface audit 对 vec surface 的 verdict 必须以自身证据满足 ADR-0002 §14；且该分析被 WAL 自身的命运（同属 ADR-0002 §13 的 open audit）gate——先裁决 WAL，再裁决它的唯一 in-tree 消费链。
 - **遗留事实**：上述 legacy vec surface 当前 in-tree 零测试覆盖（census 复核：tests/ 无任何 vec/IoSlice/VectorStats 引用）；该覆盖状态是 legacy-surface audit 必须采纳的输入事实。
 - **本决策不做的事**：无 canonical File-facing vectored API、无 async parity、无代码删除、无 baseline pin 变更（docs-only）。
