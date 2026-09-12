@@ -1,6 +1,6 @@
 # Sluice 当前架构快照
 
-- **Verified implementation baseline**: `cfbbb3158283ed202d4b5064999ac7c52f69cfb2`
+- **Verified implementation baseline**: `4f77aed54e0bb2663b926335d5c090c2211d2577`
 - **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
 - **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
 
@@ -69,6 +69,8 @@ flowchart TB
         BS["blocking::sync_data(File, ...) "]
         BST["blocking::size(File) "]
         BRS["blocking::resize(File, ...) "]
+        BSR["blocking::read(File, ...) "]
+        BSW["blocking::write(File, ...) "]
     end
 
     subgraph ASYNC_API["File-facing async adapters"]
@@ -192,6 +194,8 @@ blocking::write_at
 blocking::sync_data
 blocking::size
 blocking::resize
+blocking::read
+blocking::write
 ```
 
 Blocking path 不经过 RuntimeTaskContext、Completion 或 AsyncBackend；它直接对 caller 线程执行 syscall。
@@ -414,6 +418,7 @@ blocking File-facing:
   blocking_file_write_test
   blocking_file_sync_data_test
   blocking_file_state_test
+  blocking_file_sequential_test
 
 shared validation helpers:
   io_validation_boundary_test
@@ -425,7 +430,7 @@ app canonical-resource consumption:
   app_copy_consumption_test
 ```
 
-这些测试分别保护 canonical File resource 及其 observable state（size / resize）、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
+这些测试分别保护 canonical File resource 及其 observable state（size / resize）、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）与 blocking-only 的 sequential Read / Write slice、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
@@ -435,10 +440,9 @@ app canonical-resource consumption:
 
 ## 9. 当前 architecture gaps
 
-以 `cfbbb315`（A3 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
+以 `4f77aed5`（A2 + A3 + A4 implementation）为基线，基础 Explicit File 架构尚未闭环的主要节点是：
 
 ```text
-Sequential canonical operations
 SyncAll File-facing operation
 Explicit low-level operation resource reference
 Vectored operation decision / convergence
