@@ -93,6 +93,9 @@ void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
 } // namespace
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     if (auto legal = access_legality(op.file, false); !legal.has_value()) {
         return legal;
     }
@@ -103,6 +106,9 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
     return r;
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
     if (auto legal = access_legality(op.file, true); !legal.has_value()) {
         return legal;
     }
@@ -128,6 +134,9 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
 }
 
 Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     if (auto legal = access_legality(op.file, false); !legal.has_value()) {
         return make_unexpected<RequestHandle>(legal.error());
     }
@@ -142,6 +151,9 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completion<std::size_t>& c) {
+    if (op.file.fd < 0) {
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    }
     if (auto legal = access_legality(op.file, true); !legal.has_value()) {
         return make_unexpected<RequestHandle>(legal.error());
     }

@@ -124,11 +124,6 @@ class AsyncBackend {
         return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
     }
 
-    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
-    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
-    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
-    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
-
     virtual std::size_t poll() = 0;
 
     virtual Result<std::size_t> wait_one() = 0;
@@ -146,6 +141,13 @@ class AsyncBackend {
 
   private:
     friend class AsyncIoContext;
+
+    // The access-legality matrix (ADR-0002 §5.5) is enforced by
+    // AsyncIoContext before these are reachable; the backend only lowers fd.
+    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
+    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
 
     virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
                                                               std::uint32_t slot,

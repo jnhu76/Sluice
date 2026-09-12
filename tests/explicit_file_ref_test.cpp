@@ -314,6 +314,67 @@ bool file_derived_write_ref_rejected_at_submit_on_read_only_file() {
     return file.close().has_value();
 }
 
+bool closed_file_derived_ref_rejected_as_invalid_state() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path).value());
+    ::unlink(path.c_str());
+    if (!file.close().has_value())
+        return false;
+
+    std::vector<std::byte> dst(3);
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            auto sr = ctx.submit_read(ReadOp{file, dst.data(), dst.size(), 0}, c);
+            if (sr.has_value() || !c.idle()) {
+                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
+                return;
+            }
+            slot.publish(make_unexpected<std::size_t>(sr.error()));
+        });
+
+    if (result.has_value())
+        return false;
+    if (result.error().code != IoError::Code::invalid_state)
+        return false;
+    return true;
+}
+
+bool zero_length_op_succeeds_before_offset_validation() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    File file = std::move(File::open(path).value());
+    ::unlink(path.c_str());
+
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            auto sr = ctx.submit_read(
+                ReadOp{file, nullptr, 0, std::numeric_limits<std::uint64_t>::max()}, c);
+            if (!sr.has_value()) {
+                slot.publish(make_unexpected<std::size_t>(sr.error()));
+                return;
+            }
+            auto wr = ctx.await_completion(c);
+            if (!wr.has_value()) {
+                slot.publish(make_unexpected<std::size_t>(wr.error()));
+                return;
+            }
+            slot.publish(c.result());
+        });
+
+    if (!result.has_value())
+        return false;
+    if (result.value() != 0)
+        return false;
+    return file.close().has_value();
+}
+
 bool interop_declared_access_is_a_claim_not_validation() {
     const std::string path = make_temp_file("xyz");
     if (path.empty())
@@ -370,6 +431,10 @@ int main() {
          file_derived_write_ref_rejected_at_submit_on_read_only_file},
         {"interop_declared_access_is_a_claim_not_validation",
          interop_declared_access_is_a_claim_not_validation},
+        {"closed_file_derived_ref_rejected_as_invalid_state",
+         closed_file_derived_ref_rejected_as_invalid_state},
+        {"zero_length_op_succeeds_before_offset_validation",
+         zero_length_op_succeeds_before_offset_validation},
     };
 
     for (const NamedTest& t : tests) {

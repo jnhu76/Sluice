@@ -353,13 +353,16 @@ class UringAsyncBackend : public AsyncBackend {
         Result<void> validate(const Op& op) const noexcept { return self_.validate_op(op); }
         void write_scratch(detail::SlotHandle h, const Op& op) const noexcept {
             if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
+                // Zero-length ops never perform data I/O; normalize the offset
+                // so an unrepresentable offset cannot fail the lowering.
+                const std::uint64_t off = op.len == 0 ? 0 : op.offset;
                 self_.prepared_ops_[h.slot.value] =
                     PreparedUringOp{kind_,
                                     op.file.fd,
                                     static_cast<const std::byte*>(borrow_of(op).address),
                                     op.len,
                                     sluice::detail::uring_chunk_length(op.len),
-                                    op.offset};
+                                    off};
             } else {
                 self_.prepared_ops_[h.slot.value] = PreparedUringOp{
                     kind_, op.file.fd, nullptr, std::size_t{0}, 0u, std::uint64_t{0}};

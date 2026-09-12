@@ -133,10 +133,12 @@ ThreadPoolBackend::~ThreadPoolBackend() {
 
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
     if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     if (op.len > 0 && op.dst == nullptr) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
+    if (op.len == 0)
+        return {};
     auto off = sluice::detail::checked_posix_offset(op.offset);
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -150,10 +152,12 @@ Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
 
 Result<void> ThreadPoolBackend::validate_write(WriteOp op) {
     if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     if (op.len > 0 && op.src == nullptr) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
+    if (op.len == 0)
+        return {};
     auto off = sluice::detail::checked_posix_offset(op.offset);
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
@@ -166,13 +170,13 @@ Result<void> ThreadPoolBackend::validate_write(WriteOp op) {
 
 Result<void> ThreadPoolBackend::validate_sync(SyncDataOp op) {
     if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     return {};
 }
 
 Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
     if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     return {};
 }
 
