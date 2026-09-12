@@ -60,21 +60,21 @@ Batch 研究表明，知道 operations 属于同一 Batch 不等于获得 group-
 
 ## 当前实现
 
-当前 master 已经拥有 canonical `sluice::File` resource，并显式表达 open/close/access 语义。File-facing async positional Read、positional Write 与 SyncData 已经沿既有 runtime seam 工作，没有把 File semantic authority 交给 Scheduler 或 backend。
+当前 master 已经拥有唯一的 canonical `sluice::File` resource，并显式表达 open/close/access 语义。File-facing Blocking surface 已覆盖 positional Read/Write、sequential Read/Write、SyncData/SyncAll，以及最小 observable state（`size` / `resize`）；File-facing evented surface 通过既有 runtime seam 覆盖 positional Read/Write 与 SyncData/SyncAll；explicit outstanding operations 则通过 `AsyncIoContext` 携带 `NativeFileRef` 资源引用。这些路径都没有把 File semantic authority 交给 Scheduler 或 backend。
 
-仓库仍保留 historical blocking `FileReader` / `FileWriter` 世界，部分应用也仍直接消费 raw-fd explicit operation。这些被记录为 conformance gap，而不是第二套长期 File model。
+仓库仍保留 historical blocking `FileReader` / `FileWriter` 世界；它们的最终去留由 legacy-surface audit #355 单独裁决，而不是作为第二套 canonical File model。应用侧的 File-resource consumption 已经 conforming：hash/grep/tail 与 copy source lifetime 均由 canonical `File` 持有；剩余 raw/native-handle escape 已在 app-consumer census 中分类为 REQUIRED_INTEROP 或 OUT_OF_SCOPE_NAMESPACE_WORK，不再是未分类的 conformance gap。
 
 异步部分包含 caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施与 honest backend execution。repository-provided synthetic AsyncBackend 已经删除；生产 execution 保留 ThreadPool 与可用时的 io_uring。
 
 当前架构工作明确分成三阶段：
 
 ```text
-Phase A  先让 ADR 架构在代码中真实成立
+Phase A  先让 ADR 架构在代码中真实成立       CLOSED / CONFORMANT
 Phase B  再证明并比较不同 execution 的优劣
 Phase C  最后优化或增加 execution backend / capability
 ```
 
-Phase A 的进度以 roadmap 为准。
+Phase A 已由最终符合性审计 #348 与 roadmap #339 正式关闭。conformance roadmap 继续作为冻结架构与已验证实现状态的事实入口；legacy surface 的终局裁决则继续由 #355 独立追踪。
 
 ## 应用
 

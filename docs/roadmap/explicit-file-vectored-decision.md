@@ -31,6 +31,8 @@
 | C9 | uring opcodes | `grep -n 'io_uring_prep' src/async/uring_backend.cpp` | `prep_read`(:589) / `prep_write`(:593) / `prep_fsync`(:597,600) / `prep_cancel64`(:1373)；**无 READV/WRITEV opcode** |
 | C10 | `SLUICE_HAS_LIBURING` 是否进构建 | `grep -rn 'SLUICE_HAS_LIBURING' xmake.lua xmake/` | **0 hits**（仅存在于 src/include 的 `#if` guard）→ uring 在本 repo 构建为 honest stub |
 
+> **Historical scope note**: C1–C10 是 `d9ae9fde0e78bd626ff708533b57f995a7ca984c` 上的 decision-time census。其后 #359 为 `--liburing=y` 构建接入了真实 liburing path；这不改写 C10 的历史事实，也不改变本决策，因为 backend capability 本身不授予 vectored canonical semantic authority。
+
 Composition / legacy 层现存 vectored surface（全部保留现状，本决策不触碰）：
 
 ```text
@@ -65,7 +67,7 @@ buffer-lifetime surface            每个 op 同时引用多个 caller-owned buf
 1. **Zero app demand**：C1 = 0。四个 app 的全部 read 均为单 buffer scalar positional read（copy 为多 slot scalar 流水线，但每个 op 仍是 scalar positional）；没有任何 consumer 需要 multi-buffer canonical I/O。
 2. **ADR-0002 §5.3 gate**：vectored 不享有 sequential / positional / durability 的 architecture authority；public surface 的 vectored 形态必须凭真实 consumer / semantic 证据独立赚取。
 3. **消费链根不成立**：唯一 in-tree 消费链（C2）根植于 `WAL`——它 external consumer 为零（C3/C4），且 WAL 自身命运（Core / consumer / 移出）是 ADR-0002 §13 的 open audit 问题。一个命运未决模块的消费链不能反过来为 canonical surface 作证。
-4. **backend capability ≠ semantic authority**：内核有 readv/writev、uring 有 READV/WRITEV opcode，都不等于 public API 必须表达它（ADR-0001 §3；conformance §2.1 边界 2）。且本 repo 构建中 uring 为 honest stub（C10），连能力都不在场。
+4. **backend capability ≠ semantic authority**：内核有 readv/writev、uring 有 READV/WRITEV opcode，都不等于 public API 必须表达它（ADR-0001 §3；conformance §2.1 边界 2）。在本决策 pinned baseline 中，repo 构建里的 uring 还是 honest stub（C10）；后续 #359 接入 real liburing path 只改变 execution capability，不改变本条 authority 判断。
 5. **sync-API-exists ≠ async-parity-required**：legacy sync vec 的存在不构成 async parity 义务；parity 要求只在 vectored 被证明必须 canonical 之后触发（ADR-0002 §5.3）。
 6. **Minimal mechanism**：canonical blocking 与 async File surface 当前全 scalar 且无 unclassified 漂移（C5–C7）；加 vec 是扩张而非收敛（ADR-0001 §6 minimum mechanism）。
 
