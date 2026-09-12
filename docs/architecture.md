@@ -428,7 +428,7 @@ app canonical-resource consumption:
   app_copy_consumption_test
 ```
 
-这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData 与 sequential Read / Write slices（evented 与 blocking 两种 initiation）、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
+这些测试分别保护 canonical File resource、已落地的 positional Read / Write / SyncData slices（evented 与 blocking 两种 initiation）与 blocking-only 的 sequential Read / Write slice、跨执行共享的 offset/length 边界规则，以及各迁移后 application consumer 对 canonical File resource ownership / File-facing operation boundary 的消费行为。
 
 `.github/workflows/open-code-review.yml` 也已经存在。OpenCodeReview 是 advisory review surface：正常执行时发布 findings；工具自身失败不作为 correctness gate。
 
