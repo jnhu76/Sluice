@@ -331,6 +331,52 @@ bool read_after_close_reports_invalid_state() {
     return true;
 }
 
+bool await_read_on_write_only_file_rejected_upfront() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    FileOpen mode;
+    mode.access = FileAccess::write_only;
+    File file = std::move(File::open(path, mode).value());
+    ::unlink(path.c_str());
+
+    std::vector<std::byte> dst(3);
+    auto result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            auto r = await_read_at(file, ctx, 0, dst, c);
+            if (!c.idle()) {
+                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
+                return;
+            }
+            slot.publish(r);
+        });
+
+    if (result.has_value())
+        return false;
+    if (result.error().code != IoError::Code::invalid_argument)
+        return false;
+
+    auto empty_result = run_task_to_result<std::size_t>(
+        1, std::make_unique<ThreadPoolBackend>(),
+        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
+            Completion<std::size_t> c;
+            auto r = await_read_at(file, ctx, 0, std::span<std::byte>{}, c);
+            if (!c.idle()) {
+                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
+                return;
+            }
+            slot.publish(r);
+        });
+
+    if (empty_result.has_value())
+        return false;
+    if (empty_result.error().code != IoError::Code::invalid_argument)
+        return false;
+    return file.close().has_value();
+}
+
 }
 
 int main() {
@@ -354,6 +400,8 @@ int main() {
         {"truncate_replaces_contents_for_writable_access",
          truncate_replaces_contents_for_writable_access},
         {"read_after_close_reports_invalid_state", read_after_close_reports_invalid_state},
+        {"await_read_on_write_only_file_rejected_upfront",
+         await_read_on_write_only_file_rejected_upfront},
     };
 
     for (const NamedTest& t : tests) {
