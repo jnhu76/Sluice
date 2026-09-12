@@ -50,7 +50,7 @@ jobs:
       # The official Xmake action owns only tool setup and Xmake's content-addressed
       # build cache. Do not cache the project build directory or .xmake state: those
       # contain configuration state whose lifetime is broader than a compiler result.
-      # Keep debug/release cache identities separate because compiler flags differ.
+      # Debug and release use separate cache identities because compiler flags differ.
       - name: Set up Xmake with build cache
         uses: xmake-io/github-action-setup-xmake@v1
         with:
