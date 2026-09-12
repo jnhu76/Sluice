@@ -16,6 +16,22 @@ sluice_one_file_target("binary", "test", "blocking_file_sequential_test", "tests
 sluice_one_file_target("binary", "test", "blocking_file_sync_all_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "io_validation_boundary_test", "tests", "sluice_core")
 
+-- Real io_uring verification: registered only when the liburing build switch
+-- is on. Both targets consume sluice_async as ordinary consumers: the macro
+-- and the liburing link arrive through sluice_async's public usage
+-- requirement and are never hand-copied here. The probe witnesses the
+-- consumer-side definition contract; the smoke drives real submissions.
+if has_config("liburing") then
+    target("uring_public_consumer_probe")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core", "sluice_async")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/uring_public_consumer_probe.cpp")
+        add_tests("uring_public_consumer_probe")
+end
+
 -- A2 app-consumption tests: exercise the app engines through the canonical
 -- File resource they now consume. Each target compiles the app's engine
 -- modules with public headers only, mirroring the app target's dependency

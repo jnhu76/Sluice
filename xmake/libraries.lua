@@ -23,6 +23,16 @@ target("sluice_async")
     add_includedirs(R .. "include", {public = true})
     add_deps("sluice_core")
     add_files(R .. "src/async/*.cpp")
+    -- The uring public class definition (include/sluice/async/uring_backend.hpp)
+    -- is #if-guarded on SLUICE_HAS_LIBURING, so the macro is part of the
+    -- library's public usage requirement: every consumer TU must see the same
+    -- guarded layout the library was compiled with, or the ODR is violated.
+    -- Public define + public link propagate both from this single config
+    -- point; consumers must not hand-copy the macro.
+    if has_config("liburing") then
+        add_defines("SLUICE_HAS_LIBURING", {public = true})
+        add_links("uring", {public = true})
+    end
     -- CPP-STATIC-1: Clang TSA gate.
     -- ASYNC-GCC-TSA-FLAG-ROUTING-CORRECTIVE-1 (W3): the flags are scoped to
     -- the Clang frontends via the `tools` option. {force=true} previously
