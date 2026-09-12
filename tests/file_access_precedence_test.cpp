@@ -80,6 +80,7 @@ class CountingBackend final : public AsyncBackend {
     std::size_t outstanding() const noexcept override { return 0; }
     bool supports_request_identity() const noexcept override { return true; }
 
+  private:
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
         (void)op;
         (void)c;
