@@ -334,7 +334,10 @@ class UringWaitSource final : public BackendWaitSource {
 
     void wake_pollers_() noexcept {
         const std::uint64_t one = 1;
-        (void)::write(control_fd_, &one, sizeof(one));
+        // Control wake is best-effort: pollers may already be awake or about
+        // to observe the epoch directly.
+        if (::write(control_fd_, &one, sizeof(one)) != static_cast<ssize_t>(sizeof(one))) {
+        }
     }
 
     mutable std::mutex mtx_;
