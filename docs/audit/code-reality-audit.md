@@ -9,14 +9,14 @@
 
 ## 1. Executive verdict
 
-The retained C++ implementation is **substantially conformant** to the frozen Explicit File architecture (ADR-0002): the canonical `File` spine, the three-axis open contract, the §5.5 access-legality matrix, the durability operation vocabulary, the two-level API discipline (no execution disguise), blocking-first-class execution, mechanism-only backends, and the explicit async correctness machinery (admission / capacity / identity / terminalization / publication / cancellation / deadline / wait-wake) are all present and behave as the ADR requires at every initiation surface I verified.
+Final architecture verdict (Corrective-1, frozen vocabulary): **`ARCHITECTURE_MATCH_WITH_CORRECTIVES`** — derivation in §41.2. The original audit published the non-frozen term "substantially conformant"; human review (REQUEST_CHANGES, 4 MAJOR / 1 MINOR / 0 P0) rejected that vocabulary and four substantive gaps, repaired in Part II (§35–§43). The retained C++ implementation matches the frozen Explicit File architecture (ADR-0002) at every initiation surface verified: the canonical `File` spine, the three-axis open contract, the §5.5 access-legality matrix, the durability operation vocabulary, the two-level API discipline (no execution disguise), blocking-first-class execution, mechanism-only backends, and the explicit async correctness machinery (admission / capacity / identity / terminalization / publication / cancellation / deadline / wait-wake).
 
-The material findings fall into five clusters:
+The material findings, re-stated under the corrected three-concept framing (CODE REALITY / ARCHITECTURE AUTHORITY / IMPLEMENTATION STATUS, §35):
 
-1. **Three adjudication-pending ambiguities (AMBIGUOUS_AUTHORITY)** where code and ADR text do not collide head-on but the ADR under-specifies the regime the code implements: **DC-13** — at the explicit surface, arena-capacity/admission-closed rejection (`would_block`/`invalid_state`) preempts the frozen precedence outcomes of the zero-length and offset-validation rules, diverging from the blocking/evented surfaces in the saturated regime; **DC-29** — the evented `await_*` surface straddles ADR §6.1 (common API must not force `Completion` FSM management on ordinary callers) and §7.3 (await-style operations), and on wait-layer error leaves the caller holding an outstanding `Completion`; **DC-30** — the two in-tree read-composition families disagree on premature-EOF (error vs partial success), and nothing classifies `fill` against the ADR's exact/all vocabulary.
-2. **Unbacked public surface** — `include/sluice/experimental/*.hpp` are public headers whose only TUs (`src/experimental/*.cpp`) are compiled into **no target**; consuming them cannot link (DC-22, SUS-7).
-3. **Zero-consumer mechanism families** — the entire async sync-primitive family (`Event`, `AsyncMutex`, `Semaphore`, `AsyncCondition`, `AsyncRwLock`, `AsyncQueue`, `select`) plus `Batch`, `op_helpers`, `Scheduler` drain mode are scheduler-supported, public, and have **zero real consumers and zero tests** (SUS-5/6, DC-27/25). The legacy streaming world (`Reader`/`Writer`/`IoContext` family/`wal`/`buffer`/`observed`/`fault`/`BlockingIoPool`) is likewise zero-consumer; its disposition is explicitly tracked by the separate legacy-surface process (#355), so this audit records the fact and does not re-adjudicate.
-4. **No formal assets exist anywhere in the tree** — no `.tla`, no model checker harness, no verification scripts. The concurrency cores that most deserve models (park/wake epoch protocol, request-slot + completion state machines, wait routing, uring cancel deferred-terminal protocol, teardown barrier) are guarded only by fail-fast asserts and hand tests (Phase D triage: 5 model candidates admitted, 4 claims rejected as lower-cost evidence suffices, 1 deferred).
+1. **Two adjudication-pending ambiguities (AMBIGUOUS_AUTHORITY)**: **DC-13** — at the explicit surface, arena-capacity/admission-closed rejection (`would_block`/`invalid_state`) preempts the frozen precedence outcomes of the zero-length and offset-validation rules, diverging from the blocking/evented surfaces in the saturated regime; **DC-30** — the two in-tree read-composition families disagree on premature-EOF (error vs partial success), and nothing classifies `fill` against the ADR's `exact`/`all` vocabulary. The third old ambiguity, DC-29, is dissolved by the corrective split: DC-29A (**MATCH**) — `await_*` is the §7.3 await-style explicit-lifecycle surface; DC-29B (**UNIMPLEMENTED_CONTRACT**) — the §6.1 common logical API has no evented representative at all (§38).
+2. **Unbacked public surface — already adjudicated, not an open decision**: `include/sluice/experimental/*.hpp` are public headers whose only TUs are compiled into **no target** (DC-22, SUS-7). CODE REALITY: exists; ARCHITECTURE AUTHORITY: DELETE (#355 I22–I24, frozen, slice A); IMPLEMENTATION STATUS: pending. Classified UNIMPLEMENTED_CONTRACT of that disposition — execution is #355 slice A's job (PLAN-A1), not a new decision.
+3. **Zero-consumer mechanism families, split by authority status**: the sync-primitive family (`Event`, `AsyncMutex`, `Semaphore`, `AsyncCondition`, `AsyncRwLock`, `AsyncQueue`, `select`) plus `Scheduler` drain mode are public, scheduler-supported, zero-consumer, zero-test, and **not covered by #355** — their §14 disposition round is still genuinely required (PLAN-B1; zero-consumer alone ≠ DELETE evidence). `Batch` and `op_helpers`, by contrast, are already DELETE by #355 I18/I19 — decided, not implemented (PLAN-A2). The legacy streaming world (`Reader`/`Writer`/`IoContext` family/`wal`/`buffer`/`observed`/`fault`/`BlockingIoPool`) is likewise disposed (29 DELETE / 1 CONVERGE, #355, closed): this audit records the fact and re-adjudicates nothing.
+4. **No formal assets exist anywhere in the tree** — no `.tla`, no model checker harness, no verification scripts. The concurrency cores that most deserve models (park/wake epoch protocol, request-slot + completion state machines, wait routing, uring cancel deferred-terminal protocol, teardown barrier) are guarded only by fail-fast asserts and hand tests. The corrective's formal plan now gives every admitted model (MC-1..MC-5) exactly one disposition with an execution landing (§39); the original plan had silently dropped MC-2 and left MC-4 untriaged (review M4).
 5. **Verification blind spots inside live machinery** — park/wake protocol and the teardown residual-wait check have no test or assert coverage (SUS-4, SUS-12, SUS-14).
 
 No P0 correctness defect was found. Adversarial lifetime review constructed no use-after-free interleaving in any supported topology (§33). One caller-contract risk window remains open per ADR §7 territory (not a violation): `NativeFileRef` fd borrow during outstanding operations, whose worst variant is fd **recycling** — silent corruption rather than EBADF (SUS-3, PLAN-6). The originally suspected external-wake `Control{alive}` window (SUS-15) was **re-graded safe by construction** under review (§33, D-2).
@@ -24,7 +24,7 @@ No P0 correctness defect was found. Adversarial lifetime review constructed no u
 ## 2. Scope, method, and proof discipline
 
 - **Phase A (code-only)**: repository census, module table, root object cards, authority matrix, Figures A–I, state/thread/lifetime maps, suspicious facts — all derived from `include/`, `src/`, `apps/`, `tests/`, `xmake*` only. Per the campaign contamination rule, **no** `docs/adr/*`, `docs/roadmap/*`, `docs/architecture.md`, README architecture claims, architecture issues, or historical review reports were read before `CODE_REALITY_FREEZE` was written and hashed.
-- **Phase B (docs)**: after the freeze, `docs/mission.md`, `docs/adr/0001-*`, `docs/adr/0002-*` (+ views companion), `docs/architecture.md` were read in full and reduced to the semantic contract table (§18).
+- **Phase B (docs)**: after the freeze, `docs/mission.md`, `docs/adr/0001-*`, `docs/adr/0002-*` (+ views companion), `docs/architecture.md` were read in full and reduced to the semantic contract table (§18). *(Corrective-1, review M2: this chain was incomplete — it omitted the already-closed #355 §14 disposition and #370, which caused already-decided surfaces to be treated as open. The corrected chain and the reconciliation table are §36.)*
 - **Phase C**: per-contract diff with the fixed verdict vocabulary (§19), gap classes A–E (§20).
 - **Phase D**: formal-method triage, model cards, FORMAL MATRIX, assets census, evidence pyramid (§21–§25).
 - **Corrective plan**: PLAN cards + dependency DAG + **PROPOSED issues only** — no implementation issues were opened (§26–§28).
@@ -39,6 +39,7 @@ The campaign default output path `docs/architecture/code-reality-audit.md` assum
 
 - Frozen artifact: `/tmp/sluice-audit/code-reality-freeze.md` at audit time; embedded **verbatim and unmodified** as §5–§16 below (its internal `FZ-*` numbering is preserved so the hash relationship stays auditable).
 - Freeze protocol: errors in frozen content are corrected only by corrigendum in this section; the frozen text is never edited. Corrigenda COR-2..COR-7 originate from adversarial reviews B/C/D (§31–§33) and COR-8..COR-14 from review A (§30); every load-bearing one was independently re-verified against the code by the auditor before acceptance.
+- **Corrective-1 preservation rule** (binding): the freeze remains byte-for-byte unchanged through human-review Corrective-1. Its role is now explicitly **audit provenance + anti-contamination witness**; the synthesized corrected architecture truth lives in Part II §37 (POST-REVIEW CANONICAL CODE REALITY) and supersedes the freeze only as the final interpreted architecture view — never as a mutation of it.
 
 - **COR-1** (census correction, code-only evidence, discovered post-freeze): the freeze's FZ-1 census line "Test binaries: 17 unconditional + 2 liburing-gated + 4 app-consumption" miscounts. Authoritative count from `xmake/tests.lua`: **16 single-file test targets + 4 app-consumption targets = 20 default-registered binaries, plus 2 liburing-gated targets**. No other FZ-1 fact changes.
 - **COR-2** (ownership correction, from review D / verified): the `RequestArena` is a **member of each backend** (`detail::RequestArena arena_` in `include/sluice/async/threadpool_backend.hpp` / `uring_backend.hpp`), **not** owned by `AsyncIoContext`, whose members are only `backend_` (unique_ptr), `stats_`, `access_mtx_` (`include/sluice/async/async_io_context.hpp:267-271`). RC-3 ("MUTABLE STATE: … RequestArena"), RC-6 ("AsyncIoContext owns arena; backends borrow"), the FZ-2 AsyncIoContext row's state column, and FZ-7's mini-diagram are corrected accordingly. Destruction is safe **by construction**, independent of `close_resources` ordering: each backend's destructor joins its workers in the destructor *body* (`src/async/threadpool_backend.cpp:117-132`) before any member is destroyed, and `arena_` (first-declared member) is destroyed last — arena writers are dead before the arena dies. The "arena borrow" hazard question is void.
@@ -631,38 +632,41 @@ Normative inequalities that govern the diff: `backend capability != semantic aut
 
 Verdict vocabulary (fixed): `MATCH` / `CODE_DRIFT` / `DOC_DRIFT` / `AMBIGUOUS_AUTHORITY` / `UNIMPLEMENTED_CONTRACT` / `EXTRA_MECHANISM` / `CORRECTNESS_RISK` / `FORMAL_GAP` / `OUT_OF_SCOPE`.
 
+Rows marked **(†C1)** were re-adjudicated by human-review Corrective-1 (derivations in Part II §38; corrected counts in §41.1). An auxiliary status **KNOWN_UNIMPLEMENTED_DISPOSITION** ("decided by a closed §14 disposition, not yet executed") is expressed through `UNIMPLEMENTED_CONTRACT` with the note that the contract is the §14 disposition itself — no new top-level verdict was invented.
+
 | ID | CT | Verdict | Evidence (source path :: symbol → call path) |
 |---|---|---|---|
 | DC-01 | CT-01/02 | **MATCH** | `include/sluice/file_resource.hpp` :: `File` — move-only, owns fd + `FileAccess`; all canonical ops take `File`/`const File&`; `native_handle()` used by apps only at classified interop points (fstat, mkstemp dst) |
-| DC-02 | CT-03 | **MATCH** (presence sanctioned as §13/§14-undecided) | `include/sluice/file.hpp` :: `FileReader`/`FileWriter` retained, zero real consumers (only `src/io_context.cpp` factory); disposition tracked by legacy-surface process (#355); zero-consumer fact recorded as SUS-6 |
+| DC-02 | CT-03 | **MATCH** (†C1 status re-pointed: the old "§13/§14-undecided" parenthetical is stale) | `include/sluice/file.hpp` :: `FileReader`/`FileWriter` retained, zero real consumers (only `src/io_context.cpp` factory); ARCHITECTURE AUTHORITY: **DELETE by #355 I01/I02 (slice H)** — decided, not implemented (KNOWN_UNIMPLEMENTED_DISPOSITION, §36.2); the zero-consumer fact stands as SUS-6 |
 | DC-03 | CT-04 | **MATCH** | `src/file_resource.cpp` :: `File::open` — `read_only+truncate` → `invalid_argument` pre-OS; `create_new` → `O_CREAT\|O_EXCL`; axes map 1:1 to `FileOpen` |
 | DC-04 | CT-05 | **MATCH** | `src/file_resource.cpp` :: `close()` — `std::exchange(fd_,-1)` guarantees single release + inert post-close; error → `Result`; dtor `(void)close()` best-effort |
 | DC-05 | CT-06 | **MATCH** | no drain/cancel/pin mechanism on `File::close`; backend destructors fail-fast independently (COR-2: safety is by backend-destructor construction, not close authority) |
 | DC-06 | CT-07 | **MATCH** | `src/blocking_file.cpp` :: `size` (fstat, LEGAL all access — only `is_open` check), `resize` (ftruncate, `read_only` → `invalid_argument`); no metadata framework exists |
 | DC-07 | CT-08 | **MATCH (blocking full; evented positional+sync only)** | blocking: `read`/`write` (::read/::write, kernel shared offset), `read_at`/`write_at` (pread/pwrite), `sync_data` (fdatasync), `sync_all` (fsync); evented: `await_read_at`/`await_write_at`/`await_sync_data`/`await_sync_all` |
-| DC-08 | CT-08/22 | **UNIMPLEMENTED_CONTRACT (low severity)** | evented common-API sequential `read`/`write` absent (`include/sluice/async/file.hpp` has no `await_read`/`await_write`); apps use positional with caller-managed offsets; no consumer demands sequential evented form today |
+| DC-08 | CT-08/22 | **MERGED into DC-29B (†C1)** | the missing evented sequential `read`/`write` (`include/sluice/async/file.hpp` has no `await_read`/`await_write`; apps use positional with caller-managed offsets) is a **sub-case of the missing §6.1 evented common logical API as a whole** (§38.3) — not counted as an independent architectural absence (no double-counting) |
 | DC-09 | CT-09 | **MATCH** | positional via pread/pwrite (op-owned offset); sequential via ::read/::write with explicit comment "the kernel owns and atomically advances the shared offset" (`src/blocking_file.cpp:67`); no hidden seek simulation |
 | DC-10 | CT-10 | **MATCH (observable result), mechanism corrected per review B** | observable zero-length outcome = success 0 with no data I/O on every surface. Mechanism differs by surface: blocking (`src/blocking_file.cpp:23,49`) and evented (`src/async/file.cpp:15,29`) short-circuit pre-I/O; the **explicit** surface does **not** short-circuit — backend validators' `len==0 → {}` (`src/async/threadpool_backend.cpp:140`, `src/async/uring_backend.cpp:281/295`) is a validation *pass*; `submit_transaction.hpp:30-39` reserves the slot first, then validates, then the op executes a real zero-length lowering (`::pread(fd, buf, 0, 0)`; uring SQE with `native_length=0`, offset normalized, `threadpool_backend.hpp:251-258`, `uring_backend.hpp:359-375`). Observable conformance holds (success, progress 0, no EOF semantics, no data transfer), but a zero-length explicit submit **consumes bounded request capacity** and under saturation returns `would_block` — see DC-13 |
 | DC-11 | CT-11..17 | **MATCH** | durability lowerings: fdatasync/fsync (threadpool + blocking), `IORING_FSYNC_DATASYNC` vs plain fsync (`src/async/uring_backend.cpp:601/604`) — exactly the ADR's possible-lowerings list; ordering/supersession are caller-obligation contracts with no contradicting runtime mechanism; honest uring stub refuses without liburing (lines 38-51, no fabricated success); `async_sync_admission_test` = 4 named tests |
 | DC-12 | CT-18/19 | **MATCH** | `src/async/async_io_context.cpp` :: `access_legality(file, write_side)` — read illegal iff `write_only`, write illegal iff `read_only`, sync ungated (LEGAL all) — matrix rows exactly; enforced at **all three** initiation surfaces: blocking (`src/blocking_file.cpp:20,46,72,92`), evented (`src/async/file.cpp:12,26`), explicit submission (`src/async/async_io_context.cpp:99,112`); backends never see access facts (mechanism-only) |
-| DC-13 | CT-20 | **AMBIGUOUS_AUTHORITY (strict reading: CODE_DRIFT)** — capacity/admission-closed preemption at the explicit surface | the four-way relative order holds everywhere (blocking `src/blocking_file.cpp:15-30` exact; evented `src/async/file.cpp:9-17` = 1-2-3 with rule 4 deferred to the backend validator; explicit `src/async/async_io_context.cpp:96-101` = 1-2 with rules 3/4 in the backend validator). But at the explicit surface rules 3/4 execute **after** `arena.reserve()` (`submit_transaction.hpp:30-39`) and after uring `stage0_precheck`; `reserve()` returns `would_block` on saturation and `invalid_state` when admission is closed (`request_arena.hpp:126-134`). Under saturation a zero-length request therefore returns `would_block` (not the frozen success-0) and an unrepresentable-offset request can return `would_block` (not `invalid_argument`), while blocking/evented surfaces return the frozen outcomes unconditionally — a cross-surface divergence precisely in the collision regime §5.5 freezes ("同一规则覆盖所有 initiation surface…同一错误类别"). The ADR never ranks the named capacity bound (§8.2/§9) against the §5.5 precedence list, so this is adjudication-pending rather than outright drift. Tests never exercise the saturated regime (F-6 note) |
+| DC-13 | CT-20 | **AMBIGUOUS_AUTHORITY (strict reading: CODE_DRIFT) — collision made precise (†C1)** | the four-way relative order holds everywhere (blocking `src/blocking_file.cpp:15-30` exact; evented `src/async/file.cpp:9-17` = 1-2-3 with rule 4 deferred to the backend validator; explicit `src/async/async_io_context.cpp:96-101` = 1-2 with rules 3/4 in the backend validator). Precise collision: the explicit path executes `stage0_precheck` (uring) / `arena.reserve()` (`submit_transaction.hpp:30-39`) **before** the rule-3/4 validators; `reserve()` returns `would_block` on saturation and `invalid_state` when admission is closed (`request_arena.hpp:126-134`), so under saturation a zero-length request may observe `would_block` before the frozen success-0 and an unrepresentable-offset request may observe `would_block`/`invalid_state` before the frozen `invalid_argument` — while blocking/evented surfaces return the frozen outcomes unconditionally; a cross-surface divergence precisely in the collision regime §5.5 freezes ("同一规则覆盖所有 initiation surface…同一错误类别"). The ADR never ranks the named capacity bound (§8.2/§9) against the §5.5 precedence list, so this stays adjudication-pending (PLAN-C1); it is not normalized away and no reorder is implemented here. Tests never exercise the saturated regime (F-6 note) |
 | DC-14 | CT-21 | **MATCH** | `NativeFileRef{int fd, FileAccess}` retains the access fact; implicit `NativeFileRef(const File&)` copies handle+access at op construction; bare `int` cannot construct an op — the interop exception is spelled out (`dst: NativeFileRef{int, declared access}` in sluice-copy) |
 | DC-15 | CT-24 | **MATCH** | `blocking::*` = explicit blocking; `await_*` = explicit evented (takes `RuntimeTaskContext`); no execution-guessing universal method exists. (CT-22's caller-cost question is adjudicated separately in DC-29.) |
 | DC-16 | CT-23 | **MATCH** | explicit ops `ReadOp`/`WriteOp`/`SyncDataOp`/`SyncAllOp` + `submit_*` + `Completion<T>`; `AsyncBackend::submit_*` private — only `AsyncIoContext` can enter backends |
-| DC-17 | CT-25/26/27 | **MATCH** | common ops return after logical wait; explicit path documents caller-borne lifetime; the 4-way cancellation distinction is encoded (waiter cancel via `cancel_waiter` lease path; request cancel via backend `cancel_handle_`/`resolve_completion`; physical completion ≠ `Completion` publication — arena ready-ring + `reap_seq` publication ordering separate); await-style obligation end only on observed terminal (`await_take` waits `ready()`; on wait-layer error the Completion stays outstanding and the obligation continues — exactly §7.3's rule) |
+| DC-17 | CT-25/26/27 | **MATCH — scope made explicit (†C1)** | common ops return after logical wait; explicit path documents caller-borne lifetime; the 4-way cancellation distinction is encoded (waiter cancel via `cancel_waiter` lease path; request cancel via backend `cancel_handle_`/`resolve_completion`; physical completion ≠ `Completion` publication — arena ready-ring + `reap_seq` publication ordering separate); await-style obligation end only on observed terminal (`await_take` waits `ready()`; on wait-layer error the Completion stays outstanding and the obligation continues — exactly §7.3's rule). **Scope (†C1): this MATCH applies to the §7.3 explicit/await-style lifecycle semantics; it is NOT evidence that the §6.1 evented common logical API is implemented — that is DC-29B (UNIMPLEMENTED_CONTRACT)** |
 | DC-18 | CT-28 | **MATCH** | blocking path = direct syscalls in `src/blocking_file.cpp`; zero includes of async runtime; shortest legal path confirmed |
 | DC-19 | CT-29 | **MATCH** | `RequestArena(context, request_capacity)` — named bound; `reserve()` failure → `capacity_rejections_` + caller-visible `would_block`/`invalid_state` rejection (`request_arena.hpp:126-160`); worker count/queue depth remain backend policy. Observation: `BoundedDispatchQueue` overflow chooses fail-fast terminate, not admission rejection — an allowed policy choice, not a named-bound violation |
 | DC-20 | CT-30 | **MATCH** | uring backend mechanism-only; `liburing` option default off → honest stub; no public API derived from opcodes |
 | DC-21 | CT-31 | **MATCH** | two build targets persist; canonical File semantics span both (File in core; await layer in async consuming the same File) |
-| DC-22 | CT-35 / repo hygiene | **EXTRA_MECHANISM + CORRECTNESS_RISK** | `src/experimental/uring_io_context.cpp`, `src/experimental/uring_write_batch.cpp` match no target (`xmake/libraries.lua` globs are `src/*.cpp` and `src/async/*.cpp`), yet `include/sluice/experimental/uring_io_context.hpp` + `uring_write_batch.hpp` are public — consuming them cannot link; build/export disagree (SUS-7) |
+| DC-22 | CT-35 / repo hygiene | **UNIMPLEMENTED_CONTRACT (†C1; was EXTRA_MECHANISM + CORRECTNESS_RISK — stale)** | CODE REALITY: `src/experimental/uring_io_context.cpp` + `uring_write_batch.cpp` match no target (`xmake/libraries.lua` globs are `src/*.cpp` and `src/async/*.cpp`), yet `include/sluice/experimental/uring_io_context.hpp` + `uring_write_batch.hpp` are public — consuming them cannot link (SUS-7). ARCHITECTURE AUTHORITY: #355 I22–I24 has already adjudicated them **DELETE** (slice A). CURRENT STATUS: **KNOWN UNIMPLEMENTED §14 DISPOSITION — NOT AN OPEN DESIGN DECISION**; this read-only audit does not decide whether the slice executes now (PLAN-A1) |
 | DC-23 | CT-32 | **MATCH** | all §9 facts present as explicit machinery: admission (`access_mtx_` + capacity), request identity/generation (arena slot FSM + generations), terminalization vs publication split (backend record → arena ready ring → `Completion` publish), cancellation, deadline (timer heap), wait/wake (epoch protocol), buffer lifetime (caller), reuse (ready()-observed) |
 | DC-24 | CT-33 | **MATCH** | no generic capability/options/planner surface exists; direct I/O, advice, registered resources, polling absent from public semantics (backend-local only where at all) |
 | DC-25 | CT-34 | **MATCH** | copy implemented as application-level pipeline (thin local mechanism in `apps/sluice-copy/copy_task.cpp`), no capability framework; `copy.cpp` streaming composition retained only in zero-consumer legacy surface |
-| DC-26 | CT-08 (vectored) | **MATCH (evidence-gated status respected)** | vectored exists only on legacy `FileReader`/`FileWriter` (`read_vec`/`write_vec`, chunked by IOV_MAX); no vectored on canonical File ops; disposition = KEEP pending legacy audit per the separate vectored decision doc referenced by `docs/architecture.md` §4 |
-| DC-27 | doctrine (0001 §6) | **EXTRA_MECHANISM** | async sync-primitive family (`Event`, `AsyncMutex`/`Mutex`, `Semaphore`, `AsyncCondition`, `AsyncRwLock`, `lock_guard`, `AsyncQueue`, `select`) — public, scheduler-integrated, **zero consumers, zero tests** (SUS-5; apparent matches are substrings like `await_op_helpers`); `Batch`, `op_helpers`, `Scheduler::run()`/`run_until_idle()` drain mode same status (SUS-6) |
+| DC-26 | CT-08 (vectored) | **MATCH (evidence-gated status respected; †C1 stale "KEEP pending legacy audit" wording removed)** | CODE REALITY: vectored exists only on the legacy `FileReader`/`FileWriter`/`Reader`/`Writer` world (`read_vec`/`write_vec`, chunked by IOV_MAX); no vectored on canonical File ops. ARCHITECTURE AUTHORITY: canonical vectored promotion = **NOT EARNED** (ADR-0002 §5.3 evidence gate; the gate's first adjudication kept the extension gated, and the #370 corrective rewrote the reopen condition — correctness-dependent single-syscall properties only); legacy vectored surface = **DELETE, frozen by #355** (vec methods + slice types I05–I10 = **slice F**; `VectorStats` I11 rides the stats/observed cluster **slice G** — compile order G before F per the #355 ledger). IMPLEMENTATION STATUS: removal **not yet executed** at PROOF_ROOT. A7 and #355 are not reopened by this audit |
+| DC-27 | doctrine (0001 §6) | **EXTRA_MECHANISM (†C1: scope narrowed)** | sync-primitive family (`Event`, `AsyncMutex`/`Mutex`, `Semaphore`, `AsyncCondition`, `AsyncRwLock`, `lock_guard`, `AsyncQueue`, `select`) + `Scheduler::run()`/`run_until_idle()` drain mode — public, scheduler-integrated, **zero consumers, zero tests** (SUS-5/6; apparent matches are substrings like `await_op_helpers`) and **NOT covered by #355's I01–I30 inventory**: the §14 disposition round is still required (PLAN-B1), with zero-consumer as an input fact, never as sufficient DELETE evidence. `Batch` and `op_helpers` are **removed from this card's open scope** (†C1): already DELETE by #355 I19/I18 (slices B/C) — KNOWN_UNIMPLEMENTED_DISPOSITION, decided, not implemented |
 | DC-28 | CT-14 (metadata difference) | **MATCH** | `sync_data` → fdatasync / `IORING_FSYNC_DATASYNC`; `sync_all` → fsync / plain uring fsync — mechanism difference exactly tracks the metadata-coverage difference |
-| DC-29 | CT-22 | **AMBIGUOUS_AUTHORITY** — which regime does `await_*` belong to? | every evented entry point requires a caller-supplied `Completion<T>&` (`include/sluice/async/file.hpp`); real apps declare per-op Completions (`apps/sluice-hash/hash_task.cpp:43`, `apps/sluice-copy/copy_task.cpp:37-38,55`); on wait-layer error/cancellation `await_take` returns without reset (`src/async/await_op_helpers.cpp:5-12`), leaving the ordinary caller holding an **outstanding** Completion with §7.2/§7.3 obligations — the "Completion FSM" conceptual cost §6.1 says ordinary applications should not be forced to manage. ADR §7.3 sanctions await-style operations, so the design is defensible **if** `await_*` is classified as §7.3 await-style surface rather than the §6.1 common API — but then DC-08's framing shifts (the missing sequential forms are missing from the *common* layer, which has no evented representative at all). The ADR does not force the classification; the code does not declare it. Adjudication-pending |
-| DC-30 | CT-10 (compositions) | **AMBIGUOUS_AUTHORITY** — in-tree composition families disagree on premature EOF | `src/async/op_helpers.cpp` :: `read_all` returns `IoError{eof}` when a non-empty read returns 0 before the buffer is filled (lines 38-40); `src/async/await_op_helpers.cpp` :: `await_read_fill` (41-61; the variant sluice-copy actually uses, `copy_task.cpp:108`) returns the partial `filled` as **success** on the same event; write zero-progress exits use `invalid_state` (`write_all`) vs `backend_error` (`await_write_exact`) — error-code divergence is permitted (§5.2.3 fixes no codes), but ADR §5.2.1 makes premature-EOF-an-error a property of `exact`/`all` compositions specifically, and nothing in code or docs classifies `fill` against that vocabulary. If `fill` is an exact/all composition it contradicts the frozen rule; if it is a distinct composition type, that type is undeclared |
+| DC-29A | CT-27 (§7.3) | **MATCH — await-style classification clarified (†C1; dissolves the old DC-29 AMBIGUOUS_AUTHORITY by the §6.1/§7.3 split)** | every evented entry point requires a caller-supplied `Completion<T>&` (`include/sluice/async/file.hpp`); `await_take` on success reads the result and resets (`src/async/await_op_helpers.cpp:4-21`); on wait-layer error it returns **before** reset, leaving the caller holding an outstanding Completion — not a defect but ADR-0002 §7.3's own two-sided await-style rule (obligation ends on success/terminal-operation-error; obligation continues after wait-layer error/cancellation while the Completion is outstanding). The caller-visible Completion is the §6.3 execution-boundary explicitness, not a §6.1 violation. Classification: `await_*` = **§7.3 await-style explicit-lifecycle surface**. Naming/classification clarification task: PLAN-F1 (derivation §38.1) |
+| DC-29B | CT-22 (§6.1) | **UNIMPLEMENTED_CONTRACT (†C1; absorbs DC-08)** | the §6.1 common logical API has **no evented representative**: no evented surface lets an ordinary caller initiate + logically wait to a `Result` without managing `Completion` FSM state (all evented entries take `Completion<T>&`; real apps declare per-op Completions and reset them — `apps/sluice-hash/hash_task.cpp:43`, `apps/sluice-copy/copy_task.cpp:37-38,55`; the outstanding obligation survives wait-layer error). Blocking execution does implement the §6.1 shape (`blocking::file`); the gap is evented-only (the legacy `op_helpers`/`Batch` Result-returning forms are excluded — they busy-spin, never suspend, and are #355-frozen DELETE; §38.2). Possibly a design gap without immediate consumer demand (all four apps are §6.2-style explicit-need callers today): this audit states the gap only and does **not** propose wrapper APIs — accept vs ADD_MINIMAL is PLAN-C3 (derivation §38.2) |
+| DC-30 | CT-10 (compositions) | **AMBIGUOUS_AUTHORITY (†C1: adjudication question sharpened)** | fact unchanged: `src/async/op_helpers.cpp` :: `read_all` returns `IoError{eof}` when a non-empty read returns 0 before the buffer is filled (lines 38-40); `src/async/await_op_helpers.cpp` :: `await_read_fill` (41-61; the variant sluice-copy actually uses, `copy_task.cpp:108`) returns the partial `filled` as **success** on the same event; write zero-progress exits use `invalid_state` (`write_all`) vs `backend_error` (`await_write_exact`) — error-code divergence is permitted (§5.2.3 fixes no codes). ADR-0002 §5.2.1 assigns premature-EOF-as-error to `exact`/`all` compositions specifically; nothing in the ADR, #355, or #370 classifies `fill`. Adjudication (PLAN-C2, human): **Option A** — `fill` is intentionally a different composition → partial success is legal → needs semantic classification/documentation; **Option B** — `fill` is intended to satisfy exact/all semantics → code contradicts §5.2.1. No code fix is forced by this audit |
 
 ### 19.1 Resolutions of pre-freeze suspicions against the ADR
 
@@ -679,8 +683,8 @@ Additional observation (review B, not an ADR violation — not one of the four f
 | Class | Definition | Items |
 |---|---|---|
 | **A** — documentation-only gap | doc must change, code is right | none found (`docs/architecture.md` code claims verified accurate at PROOF_ROOT) |
-| **B** — local implementation gap | fixable inside one module | B1: unbacked experimental headers/TUs (DC-22); B2: release-build invariant checks for timer-heap/earliest-deadline agreement (SUS-14); B3: `~Scheduler` residual-wait-map asserts (`waiting_size_`/`waiting_void_`/`waiting_ready_`/`waiting_waitq_count_` beside the existing `wait_record_live_count_` check — owner corrected per COR-3) |
-| **C** — cross-module architecture gap | needs coordination or adjudication across modules | C1: dead sync-primitive family disposition (DC-27); C2: legacy zero-consumer world disposition (tracked externally by #355); C3: evented sequential ops absent (DC-08, low); C4: DC-13 capacity-vs-precedence adjudication; C5: DC-29 await-regime classification; C6: DC-30 composition-EOF classification |
+| **B** — local implementation gap | fixable inside one module | B1: unbacked experimental headers/TUs (DC-22) — *(†C1: the disposition is already adjudicated DELETE by #355 slice A, so B1 is execution debt (PLAN-A1), not an open design gap)*; B2: release-build invariant checks for timer-heap/earliest-deadline agreement (SUS-14); B3: `~Scheduler` residual-wait-map asserts (`waiting_size_`/`waiting_void_`/`waiting_ready_`/`waiting_waitq_count_` beside the existing `wait_record_live_count_` check — owner corrected per COR-3) |
+| **C** — cross-module architecture gap | needs coordination or adjudication across modules | C1: sync-primitive family + drain-mode §14 disposition (DC-27, †C1 narrowed — `Batch`/`op_helpers` excluded, already DELETE by #355; PLAN-B1); C2: legacy zero-consumer world disposition — *(†C1: CLOSED by #355 final: 29 DELETE / 1 CONVERGE; remaining work is execution, PLAN-A2)*; C3: *(†C1: merged into C5 — the absent evented sequential forms are a sub-case of DC-29B)*; C4: DC-13 capacity-vs-precedence adjudication (PLAN-C1); C5: evented §6.1 common logical API unimplemented (DC-29B; accept-or-ADD_MINIMAL = PLAN-C3) + DC-29A classification clarification (PLAN-F1); C6: DC-30 composition-EOF classification (PLAN-C2) |
 | **D** — concurrent-correctness gap | concurrency window needing stress/formal evidence | D1: park/wake epoch protocol unverified (SUS-12, COR-5 unbounded variant); D3: fd borrow + fd recycling during outstanding ops (SUS-3, caller-contract; D2 "Control race" resolved safe-by-construction — only a regression test remains, filed under B); D4: wait-routing generation protocol unverified |
 | **E** — formal-model candidate | mechanism whose guarantees merit a model | E1: park/wake epochs incl. backend split-wait domain; E2: request-slot FSM + generations + Completion CAS lifecycle; E3: wait routing; E5: teardown barrier ordering; E6: uring cancel deferred-terminal protocol (see §21–§23) |
 
@@ -719,6 +723,8 @@ Per-claim question: *what is the minimal adequate evidence tool?* A claim is adm
 
 ## 22. Model cards (NO TLA+ EXISTS YET — these are admission records, not models)
 
+*(Corrective-1: these cards are the admission record only; the final per-model dispositions, execution landings, and the MC-4 re-triage are §39 — MC-2 now lands in PLAN-E1, MC-4 in PLAN-E3 as executable-first.)*
+
 | MC | Target | Scope sketch | Model entities | Properties | Refinement anchors (C++) | Vacuity/mutation defense |
 |---|---|---|---|---|---|---|
 | MC-1 (E1) | Scheduler park/wake, **two park domains** | workers ≤2; wake epochs unbounded counter; inbox 0/1; terminate flag; dance epoch; **Scheduler-domain park in two variants: unbounded (no deadline, no bounded backend observation — COR-5) and deadline/backstop-bounded; Backend-domain park with progress/control generations and `interrupt_backend_waiters` as a distinct wake mechanism** | Worker, EpochState, Inbox, BackendWaitGen | **Safety**: no committed park misses a prior wake (epoch monotone); refusal conditions never park with pending progress; backend park not left sleeping after progress generation advance. **Liveness**: wake ⇒ eventually unpark (weakly-fair wake handling), **stated per park variant** — the unbounded variant must satisfy it without any timeout action | `park_on_wake_source` (both variants), `signal_wake_locked`, `commit observed_epoch_`, `consume_committed_wait`/`wait_for_change`, `interrupt_backend_waiters`, `backend_wait_active_` | mutants: drop epoch compare; park before progress check; stale dance epoch accepted; drop interrupt on backend waiters; **adding an always-on backstop to the model (must NOT rescue the dropped-epoch mutant — else the model is vacuous per review C-1)** |
@@ -740,10 +746,12 @@ Fairness assumptions to state explicitly in any future model: worker wake handli
 | driver re-entry decisions observe `control_epoch_`; in-run stop decisions read only atomic snapshots | `stop_predicate_fn` reads atomic snapshots (`application_runtime.cpp:527-532`); epoch governs re-entry/drain-wait (481-525) (corrected per review C-6) |
 | park boundedness is conditional | backstop applies only with deadline or bounded backend observation; otherwise unbounded park (COR-5, `scheduler_park_wake.cpp:258-296`) |
 | memory-ordering discipline | `wake_epoch_`/`observed_epoch` under `wake_mtx_`; `global_terminate_` atomic; inbox under its mutex; predicate inputs are either mutex-guarded or atomic-acquire (`scheduler_park_wake.cpp:212-219`) (added per review C-5) |
-| wake-producer completeness | every work-creating path signals: `route_runnable_locked` always calls `signal_wake_locked` (`scheduler.cpp:935`); `attach_ready_wake` (`scheduler_park_wake.cpp:897`); timer pump `advance_clock` signals (`scheduler_timer.cpp:54`) (added per review C-5) |
+| wake-producer completeness | every work-creating path signals: `route_runnable_locked` always calls `signal_wake_locked` (`scheduler.cpp:934`); `attach_ready_wake` (`scheduler_park_wake.cpp:897`); timer pump `advance_clock` signals (`scheduler_timer.cpp:54`) (added per review C-5) |
 | idle-dance discipline | `dance_epoch_`/`idle_workers_` reset discipline around admission (`scheduler.cpp:906-910`) (added per review C-5) |
 
 ## 23. FORMAL MATRIX
+
+*(Corrective-1: execution landings — F-1/F-2/F-10 → PLAN-E1; F-3/F-11 → PLAN-E2; F-5 → PLAN-E3 executable-first; full consistency check in §39.5.)*
 
 | # | Guarantee | Current evidence level | Target | Minimal adequate tool | Priority |
 |---|---|---|---|---|---|
@@ -751,7 +759,7 @@ Fairness assumptions to state explicitly in any future model: worker wake handli
 | F-2 | Request identity: exactly-once terminal, ABA-safe, publication-safe across lock domains | L1 (explicit_file_ref_test, 31 checks, zero-concurrency) | L4 | TLA+/TLC (MC-2) | **P1** |
 | F-3 | Wait routing stale-drop correctness | L0 | L4 | TLA+/TLC (MC-3) | **P2** |
 | F-4 | Completion reap ordering | L1 (single-threaded tests) | L4 | merged into MC-2 | P2 |
-| F-5 | Teardown barrier + join topology ordering | L0 + asserts | L4 | TLA+/TLC (MC-4) | P3 |
+| F-5 | Teardown barrier + join topology ordering | L0 + asserts | L4 | *(†C1 re-triaged §39.2)* executable lifecycle state-machine oracle + reorder death tests **first** (MC-4, PLAN-E3); TLA+ deferred behind explicit revisit triggers (multi-entry teardown / concurrent `close_resources` / release authority decoupled from join topology) | P3 |
 | F-6 | Access-legality precedence (incl. unsaturated regime) | L1 (file_access_precedence_test, 40 cases) | L1 (adequate) | table tests — **no model**; note: the **saturated regime** (DC-13 capacity preemption) is untested and awaiting ADR adjudication, not modeling | done + adjudication note |
 | F-7 | Durability coverage anchoring | L2 (async_sync_admission_test, 4 tests) + ADR text | L2 | doc + caller-pattern tests — **no model** | done |
 | F-8 | uring poison-and-recover | L0 | L3 | fault-injection stress test | P3 (tooling absent) |
@@ -777,6 +785,8 @@ Fairness assumptions to state explicitly in any future model: worker wake handli
 ---
 
 # Corrective plan (PROPOSED — nothing implemented, no issues opened)
+
+> **†C1 — SUPERSEDED in part by Part II §40.** Human review found PLAN-1/PLAN-2/PLAN-9 stale (they treated already-adjudicated surfaces as open decisions and dropped MC-2/MC-4 from the plan). §40 regenerates the plan with authority reconciliation, per-card provenance fields, and a corrected DAG. The cards below are retained as the review-time record; where they conflict with §40, **§40 governs**.
 
 ## 26. PLAN cards
 
@@ -809,6 +819,8 @@ PLAN-7 (profiling) ────────────────────�
 Ordering rationale: teardown/wake-regression/borrow facts feed model assumptions; disposition (PLAN-2) gates which surfaces deserve rebuilt tests; PLAN-4b shares PLAN-4's toolchain cost; profiling is orthogonal and must not gate anything.
 
 ## 28. PROPOSED issues (NOT created — awaiting human decision)
+
+> **†C1 — re-mapped by Part II §40.** Entry 1 (experimental "decision") is stale: #355 has already adjudicated DELETE — it is execution debt (PLAN-A1), not a decision. Entry 2's scope is narrowed (Batch/op_helpers removed — already DELETE; sync family + drain mode remain, PLAN-B1). Entry 6's DC-29 adjudication is superseded by DC-29A (MATCH, PLAN-F1) + DC-29B (PLAN-C3). No issues were or will be opened before human review (corrective rule §47 of the campaign brief; all entries stay PROPOSED).
 
 1. **[PROPOSED] experimental/ public headers unbacked by any compiled target** — PLAN-1; evidence DC-22/SUS-7; files enumerated.
 2. **[PROPOSED] Sync-primitive family + Batch + op_helpers + drain mode: zero consumers, zero tests — disposition round** — PLAN-2; evidence SUS-5/6/DC-27; must follow ADR §14.
@@ -893,9 +905,9 @@ Safety facts D established and the report now carries: resume-mid-suspend closed
 
 ## 34. Final verdict / stop state
 
-**Verdict: `READY_FOR_HUMAN_REVIEW`.**
+**Verdict: `READY_FOR_HUMAN_REVIEW`.** *(Corrective-1 workflow state: `READY_FOR_HUMAN_REVIEW_CORRECTIVE_1`, §43.)*
 
-Architecture conformance: **SUBSTANTIALLY_CONFORMANT** to ADR-0001/ADR-0002 — 30 DIFF cards of which 24 MATCH, 1 UNIMPLEMENTED_CONTRACT (low), 3 AMBIGUOUS_AUTHORITY awaiting adjudication (DC-13 capacity-vs-precedence, DC-29 await-regime, DC-30 composition-EOF), 2 EXTRA_MECHANISM clusters (DC-22 unbacked experimental surface; DC-27 dead sync-primitive family + kin), 0 CODE_DRIFT upheld, 0 DOC_DRIFT, 0 P0 correctness defects, 0 use-after-free constructible in supported topologies (review D's refutations recorded as safety evidence).
+Architecture conformance: **`ARCHITECTURE_MATCH_WITH_CORRECTIVES`** (frozen vocabulary per Corrective-1 §41.2; the review-time term "SUBSTANTIALLY_CONFORMANT" is withdrawn as non-frozen vocabulary). Corrected counts — 31 cards / 30 counted verdicts: 25 MATCH, 2 UNIMPLEMENTED_CONTRACT (DC-22 = unexecuted §14 disposition; DC-29B = missing evented §6.1 common layer, absorbing DC-08), 2 AMBIGUOUS_AUTHORITY awaiting adjudication (DC-13 capacity-vs-precedence, DC-30 composition-EOF), 1 EXTRA_MECHANISM (DC-27, narrowed to the sync-primitive family + drain mode — Batch/op_helpers reclassified as decided-not-implemented by #355), 0 CODE_DRIFT upheld, 0 DOC_DRIFT, 0 P0 correctness defects, 0 use-after-free constructible in supported topologies (review D's refutations recorded as safety evidence). The old DC-29 AMBIGUOUS_AUTHORITY is dissolved by the DC-29A (MATCH) / DC-29B (UNIMPLEMENTED_CONTRACT) split.
 
 Formal posture: **no formal assets exist** (§24); 5 model candidates admitted with scoped cards and mutation defenses (MC-1..MC-5), 3 claims correctly routed to cheaper evidence; evidence pyramid tops out at L2 with an L3 harness gap.
 
@@ -919,4 +931,680 @@ Stop-condition checklist at commit time:
 | worktree | clean |
 | full report also submitted as | GitHub issue (verbatim, multi-comment if over body limit) |
 
-Human hand-off: the three AMBIGUOUS_AUTHORITY adjudications (PLAN-9), the experimental-surface decision (PLAN-1), and the disposition round (PLAN-2) are the decisions this audit defers to its owner; everything else is execution-ready once accepted.
+Human hand-off: *(†C1 re-pointed — see §40/§43)* the open adjudications are PLAN-C1 (DC-13), PLAN-C2 (DC-30), PLAN-C3 (DC-29B accept-vs-ADD_MINIMAL); the experimental surface is **not** a decision anymore (frozen DELETE, execution = PLAN-A1); the still-open disposition round is PLAN-B1 (sync-primitive family + drain mode only); the decided #355 debt executes as PLAN-A1/A2.
+
+---
+
+# Part II — Human-review Corrective-1
+
+Human review of the original audit returned **REQUEST_CHANGES** (MAJOR = 4, MINOR = 1, P0 code bugs = 0). This part is the narrowly scoped repair it demanded. It is **not** a new architecture audit: the CODE_REALITY_FREEZE (§5–§16) and corrigenda COR-1..COR-14 remain byte-for-byte the audit's provenance record and anti-contamination witness; nothing in Part II mutates them. Part II synthesizes, reconciles authority, and re-adjudicates — it re-runs no broad exploration.
+
+## 35. Corrective scope and the three distinct concepts
+
+The corrective fixes exactly the review findings M1–M4 and m1:
+
+- **M1** — the freeze contained material factual corrections (COR-1..COR-14) but the report lacked a synthesized corrected architecture map → supplied as §37 (POST-REVIEW CANONICAL CODE REALITY).
+- **M2** — the Phase B authority chain omitted the already-closed #355 §14 disposition, causing already-decided surfaces to be treated as open → repaired as §36.
+- **M3** — DC-29 incorrectly stopped at AMBIGUOUS_AUTHORITY; §6.1 and §7.3 must be separated → re-adjudicated as DC-29A/DC-29B (§38), with DC-08/DC-17 reconciled and DC-13/DC-30 sharpened.
+- **M4** — the formal plan admitted MC-1..MC-5 but lost MC-2 and MC-4 in the execution plan → every admitted model now has exactly one disposition (§39).
+- **m1** — the final verdict used non-frozen vocabulary → replaced with the frozen vocabulary (§41).
+
+Everything below is read-only adjudication: PROPOSED entries only, no issues opened, no TLA+ written, no implementation started.
+
+Three concepts are kept separate everywhere in this part — collapsing them is what the original audit got wrong:
+
+```text
+CODE REALITY             what exists in the tree at PROOF_ROOT (7f5a3f59)
+ARCHITECTURE AUTHORITY   what ADR-0001/ADR-0002 + the resolved §14 decisions require
+IMPLEMENTATION STATUS    whether the required corrective has actually landed
+```
+
+Worked example (used repeatedly below):
+
+```text
+experimental/
+    CODE REALITY:           exists (2 public headers, 2 uncompiled TUs)
+    ARCHITECTURE AUTHORITY: DELETE (#355 I22–I24, frozen)
+    IMPLEMENTATION STATUS:  pending (slice A not executed)
+```
+
+## 36. Authority chain (corrected) and reconciliation table
+
+### 36.1 Corrected authority chain
+
+The original Phase B read stopped at the ADRs and thereby treated §14-disposed surfaces as undecided. The corrected chain, binding for every adjudication below:
+
+```text
+mission
+  ↓
+ADR-0001 (explicit I/O design doctrine)
+  ↓
+ADR-0002 (explicit File API architecture)
+  ↓
+Phase-A conformance authority (the #351/#365 access-precedence matrix work and the
+    ADR-0002 §5.5 frozen precedence — as landed on master before PROOF_ROOT)
+  ↓
+#355 final §14 legacy-surface disposition (30 surfaces: 29 DELETE / 1 CONVERGE,
+    finalized at 083109b3, tracking issue CLOSED)
+  ↓
+#370 vectored docs corrective (390f15bd, merged via #371: reopen-condition semantics)
+  ↓
+current code-reality audit (+ this corrective)
+```
+
+The load-bearing distinction the original chain missed:
+
+```text
+ADR defines architecture authority.
+#355 does NOT override the ADR.
+#355 resolves ADR-0002 §13/§14 open disposition questions
+    (which retained surfaces survive) using the ADR's own §14 burden of proof.
+Therefore #355 is binding downstream adjudication evidence:
+    a surface it disposed is CLOSED, whether or not the code has been touched since.
+```
+
+"Code still exists" is never evidence that "design is still undecided" (§37 framing).
+
+### 36.2 Authority reconciliation table
+
+Sources: `docs/roadmap/explicit-file-legacy-surface-audit.md` (final verdict table + §8.1 traceability ledger, at 083109b3), `docs/roadmap/explicit-file-vectored-decision.md` (at 390f15bd). Slice letters are #355's own implementation-slice identifiers.
+
+| Surface / question | ADR authority | #355 / #370 disposition | Code at PROOF_ROOT | Current audit meaning |
+|---|---|---|---|---|
+| `experimental/` (2 public headers + 2 TUs) | ADR-0002 §13 leaves retained abstractions to the §14 audit; §14 fixes the verdict vocabulary | **I22/I23/I24 = DELETE**, frozen (slice A) | headers public, TUs compiled into no target | KNOWN UNIMPLEMENTED §14 DISPOSITION — decided, not implemented. **Not an open design decision.** Carried as DC-22 = UNIMPLEMENTED_CONTRACT of that disposition |
+| `Batch` (+ `BatchOp`/`BatchResult`, reap_seq members, `friend class Batch`) | §13 lists Batch/Future/Group as open questions; §14 burden applies | **I19 = DELETE**, frozen (slice B) | `batch.{hpp,cpp}` exist; zero consumers | Decided, not implemented. Removed from all new disposition rounds |
+| `op_helpers` (`read_all`/`write_all`/… poll-loop family) | same | **I18 = DELETE**, frozen (slice C; `await_op_helpers` already carries the responsibility) | exists; zero consumers | Decided, not implemented. Removed from all new disposition rounds |
+| Legacy vectored chain (`Reader`/`Writer` vec methods, `FileReader`/`FileWriter` vec methods, `IoSlice`, `ConstIoSlice` — I05–I10) | ADR-0002 §5.3: vectored is evidence-gated; promotion to canonical is **NOT EARNED**; the #370 corrective rewrote the reopen condition (correctness-dependent single-syscall properties only) | **DELETE**, frozen — vec methods + slice types in **slice F**; `VectorStats` (I11) belongs to the stats/observed cluster, **slice G** (compile order: G before F, per the #355 §8.1 ledger) | legacy vec surface exists on the legacy world; zero canonical vectored surface | Decided, not implemented. Canonical gate closed; A7 and #355 not reopened by this audit |
+| `Group` | §13 open question | **I20 = CONVERGE** (slice O) | alive; ApplicationRuntime-owned; evented use in all four apps | CONVERGE pending slice O. This audit records the verdict; it does not re-adjudicate |
+| `Future` | §13 open question | **I21 = DELETE** (re-adjudicated by #355 Corrective-2; slice O, dies with Group convergence) | alive as Group's member type | Decided, not implemented (executes with slice O) |
+| Legacy Reader/Writer world (I01–I04, I12–I17, I25–I30: `FileReader/Writer`, `Reader/Writer`, observed/stats, WAL, `IoContext` family, `BlockingIoPool`, copy/buffered/memory/fault/SyncableWriter) | §13 open questions; §14 burden | **DELETE** (inside the 29; slices D/E/G/H/I/J/K/L/M/N/P) | all exist; zero real consumers | Decided, not implemented. This audit records the fact (DC-02, DC-25) and re-adjudicates nothing |
+| Sync-primitive family (`Event`, `AsyncMutex`, `Semaphore`, `AsyncCondition`, `AsyncRwLock`, `lock_guard`, `AsyncQueue`, `select`) + `Scheduler` drain mode (`run()`/`run_until_idle()`) | ADR-0001 §6 doctrine + ADR-0002 §14 burden apply; no §13 row disposes them | **NOT covered by #355** (the I01–I30 inventory contains none of them) | public, scheduler-supported, zero consumers, zero tests (SUS-5/6) | §14 disposition **STILL REQUIRED** (PLAN-B1). Zero-consumer is an input fact, not sufficient DELETE evidence |
+| Vectored canonical promotion | ADR-0002 §5.3 evidence gate; #370 reopen condition | The gate's first adjudication — the original vectored decision — kept the extension gated; **#370 (390f15bd)** then rewrote the reopen condition | no canonical vectored API anywhere | CLOSED — NOT EARNED; only a #370-grade reopen may reopen it |
+
+## 37. POST-REVIEW CANONICAL CODE REALITY
+
+Epistemic status of the three layers, frozen for all downstream work:
+
+```text
+CODE_REALITY_FREEZE   (§5–§16) = immutable first-pass code-only evidence
+                                 (audit provenance + anti-contamination witness)
+COR-1..COR-14         (§4)     = audit correction ledger (verified against code)
+POST-REVIEW CANONICAL
+    CODE REALITY      (this §) = synthesized corrected architecture truth,
+                                 derived from the freeze + verified corrigenda
+```
+
+The canonical maps below do **not** replace or mutate the freeze; they supersede it only as the final interpreted architecture view. Where a frozen diagram/row was factually wrong, the canonical map draws the corrected edge and the CANONICAL FACT TABLE records which frozen claim it supersedes. Every edge shown was either already verified in the freeze/corrigenda or re-verified for this corrective at PROOF_ROOT (`src/async/threadpool_backend.cpp:115-132`, `src/async/scheduler_park_wake.cpp:258-296`, `src/async/scheduler.cpp:294-297`, `src/async/application_runtime.cpp:119-132/347-355/546`, `include/sluice/file_resource.hpp:51-52`, `include/sluice/async/scheduler.hpp:534-539`, `src/async/async_io_context.cpp:94-102`, `src/async/await_op_helpers.cpp:4-21`, `include/sluice/async/group.hpp:85-111/150-155`).
+
+### C-FIG-A — Whole System (canonical)
+
+```
+                Application (apps/: copy hash grep tail)
+                 │ CALL                    │ CALL
+                 v                         v
+   +-------------------------+   +----------------------+
+   |   ApplicationRuntime    |   |   blocking::file     |
+   | State/Close/Driver      |   | (free functions)     |
+   | OWNS: Group, Scheduler, |   | first-class, direct  |
+   |       AsyncIoContext    |   | syscalls (LOWERS)    |
+   +-----+-------------+-----+   +----------------------+
+         │ OWNS       │ OWNS
+         v            v
+   +-----------+  +---------------+  OWNS unique_ptr<AsyncBackend>
+   |  Group    |  | AsyncIoContext|--------------------------+      [CF-1]
+   | (evented; │  | access_mtx_:  |                          |
+   │  fibers)  |  │ serializes    |              +-----------v----------+
+   +-----+-----+  │ backend       |              | AsyncBackend (abs.)  |
+         │        │ interaction   |              +------+--------+------+
+         │        │ ONLY [CF-3]   │   OWNS              │        │ OWNS
+         v        +---------------+         +-----------v----+ +--v----------------+
+   +-----------------------------------+   | ThreadPool-    | | UringAsyncBackend |
+   |        Scheduler (M:N)            |   | Backend        | |                   |
+   | global_mtx_: run queues, wait     |   |  + RequestArena| |  + RequestArena   |
+   | registry, timers, AND the         |   |  | workers     | |  | ring/router/   |
+   | fallback waiting maps [CF-2]      |   |  +─────────────+ |  | ledger/control |
+   | wake_mtx_: wake/observed epochs   |   +--------┬---------+  +---------┬---------+
+   +---------+-------------------------+            │ LOWERS               │ LOWERS
+             │ WAKES fibers              pread/pwrite/          io_uring SQE/CQE
+             │                           fdatasync/fsync        (control cookie cancel)
+             │                                  │ PUBLISHES            │ PUBLISHES
+             └──────────── WAKES ◄──────────────┴────────┐             │
+                                           +-------------v-------------v-+
+                                           | RequestArena ready ring →   |
+                                           | Completion<T> (caller-owned,|
+                                           | exactly-once, reap_seq)     |
+                                           +-----------------------------+
+```
+
+Supersedes FZ-5 Figure A: arena sits **inside each backend**, not under AsyncIoContext [CF-1]; the fallback waiting maps sit under **Scheduler** [CF-2].
+
+### C-FIG-B — File / I/O Authority (canonical)
+
+```
+File::open(path, FileOpen) ──OWNS──> {fd, FileAccess}   (move-only, §5.5 legality root)
+  │
+  │  File(int fd, FileAccess) = PRIVATE implementation detail of File::open;
+  │                             NOT a reachable interop entry        [CF-8]
+  │
+  ├─CALL─> blocking::read/write/read_at/write_at/sync_data/sync_all ─LOWERS─> syscalls
+  │          access legality enforced HERE on read/write/resize (§5.5 matrix, pre-OS;
+  │          sync_data/sync_all check is_open only — LEGAL all access, SUS-2)
+  │
+  └─CALL─> await_read_at/await_write_at/await_sync_data/await_sync_all   (§7.3
+             │ access legality (1st enforcement)                          await-style
+             │ constructs ReadOp/WriteOp{...}: implicit File → NativeFileRef
+             │ conversion happens HERE — at operation construction, i.e. the
+             │ caller boundary, NOT inside AsyncIoContext      [CF-8]
+             v
+           AsyncIoContext::submit_*(op, completion)
+             │ fd<0 → invalid_state        ┐ both BEFORE access_mtx_  [CF-3]
+             │ access_legality (2nd enf.)  ┘ (caller thread, pure function
+             │                               of by-value NativeFileRef)
+             v lock access_mtx_ ── serializes backend interaction ONLY
+             backend_->submit_*(…)
+
+NativeFileRef{int fd, FileAccess} = the sole PUBLIC raw-handle interop exception
+```
+
+Supersedes FZ-6 Figure B: the interop edge is `NativeFileRef(int, FileAccess)` alone; the `File → NativeFileRef` conversion site is op construction [CF-8].
+
+### C-FIG-C — Async Request Lifecycle (canonical, incl. the DC-13 collision)
+
+```
+caller fiber                 AsyncIoContext                 Backend + Arena
+  │ await_read_at(file,...)    │                               │
+  │  ├ legality (pre-lock)     │                               │
+  │  └ submit_read(op, c) ────►│ fd<0 → invalid_state (pre-lock)
+  │                            │ access_legality   (pre-lock)  │
+  │                            │ lock access_mtx_              │
+  │                            │ [uring: stage0_precheck]      │
+  │                            │ arena.reserve ───────────────►│ free→reserved
+  │                            │   saturation    → would_block │
+  │                            │   admission off → invalid_state
+  │                            │   ⚠ under saturation this     │
+  │                            │     PREEMPTS §5.5 rules 3/4   │
+  │                            │     (DC-13 collision)         │
+  │                            │ backend validate ────────────►│ zero-length /
+  │                            │   (§5.5 rules 3/4 live HERE   │ offset checks
+  │                            │    at the explicit surface)   │ →prepared→pending
+  │                            │ backend_->submit_* ──────────►│ →enqueued→running
+  │ fiber suspends (Scheduler) │                               │ syscall / CQE done
+  │                            │◄──────── PUBLISHES ───────────│ →backend_ready
+  │                            │ ready ring + waiter routing   │ →completion_ready
+  │◄──── WAKES ────────────────│                               │
+  │ Completion: outstanding→publishing→ready (exactly-once, reap_seq order)
+  │ await_take: await_completion ok → c.result(); c.reset()
+  │   wait-layer error/cancel → return BEFORE reset: caller keeps an
+  │   OUTSTANDING Completion obligation — §7.3's own rule    [DC-29A]
+  │ reset → slot →free; destroying an outstanding Completion ⇒ fail-fast
+```
+
+### C-FIG-D — Runtime / Task / Fiber Lifecycle (canonical)
+
+```
+ApplicationRuntime::start() ── spawns driver thread
+  driver loop: sched_->run_live(worker_count_, stop_predicate, this)
+ApplicationRuntime::submit(f) ──► Scheduler fiber created (runnable)
+  fiber: entry runs task body
+    │ await op  → commit_suspend_locked + context_switch (fiber leaves stack)
+    │ wake      → resume …
+    ▼
+  entry returns → make_done()
+    → context_switch_final(fiber→scheduler)     [never returns to fiber stack]
+    → workers eventually classify quiescent / stop predicate turns true
+    → run_live returns → run_impl JOINS all worker threads     [CF-5]
+    → driver observes exit → ApplicationRuntime::join() JOINS driver thread
+    → close_resources()
+```
+
+Supersedes FZ-11: worker joining happens in `run_impl`, never in `~Scheduler` [CF-5]; `~Group` (threaded mode, zero-consumer) is not part of the supported runtime topology.
+
+### C-FIG-E — Cancellation / Wait Routing (canonical; unchanged by corrigenda)
+
+```
+CancelToken / RequestHandle.cancel
+  ├─ threadpool: backend.cancel → resolve_completion scan → remove_exact + arena.cancel
+  │     terminal_won? → signal (ready progress)
+  └─ uring: cancel_handle_
+        ├─ terminal_won → publish
+        └─ intent_recorded → issue_running_cancel: prep_cancel64 + CONTROL cookie (bit63)
+              control CQE vs op CQE race → deferred terminal stored/flushed   [MC-5]
+Scheduler-side: cancel_waiter → lease-based WaitRecord free + fiber cancel
+Ready-event routing: ReadyRoutingSink::on_ready (token identity/generation/state
+  validation) → route_runnable_locked → drain_routed_completion_waits_locked
+Distinction enforced in code: waiter cancel ≠ request cancel ≠ physical completion
+  ≠ public terminal publication (ADR-0002 §7.3 four-way split)
+```
+
+### C-FIG-F — Park / Wake (canonical: two Scheduler-domain variants + backend domain)
+
+```
+worker (no work): classify → quiescent → idle dance (dance_epoch_++)
+park_on_wake_source — Scheduler domain, TWO variants [CF-4; load-bearing for MC-1]:
+  A. no deadline ∧ no bounded backend observation:
+       wake_cv_.wait(lk, park_pred)  =  UNBOUNDED park (no timeout action;
+       liveness rests entirely on the wake protocol)
+  B. deadline present ∨ bounded backend observation:
+       bounded wait — backstop ≤ kParkBackstop (2 ms); deadline-delta bound;
+       1 ms kTestParkPoll exists only in test-clock mode behind
+       SLUICE_ASYNC_INTERNAL_TESTING (nothing compiles it today)
+  refusal conditions: unguarded_progress_pending ∨ idle mismatch ∨ dance mismatch
+  commit: observed_epoch_ = wake_epoch_ (under wake_mtx_)
+  park_pred: epoch changed ∨ terminate ∨ inbox non-empty
+backend split-wait domain: BackendWaitToken progress/control generations;
+  interrupt_backend_waiters = distinct wake mechanism when backend_wait_active_
+external producer: SchedulerWakeHandle.notify → Control{alive,scheduler} check+use
+  under Control::mtx (safe by construction, §19.1 D-2) → signal_wake_locked
+  (wake_epoch_++; interrupts backend waiters)
+```
+
+Supersedes FZ-6 Figure F's unconditional "bound: kParkBackstop = 2 ms" [CF-4].
+
+### C-FIG-G — Timer / Deadline (canonical; unchanged by any corrigendum in mechanism)
+
+```
+await_*_deadline → prepare_ordinary_deadline_locked (TimerRegistration: active)
+  → publish (heap insert; earliest_active_deadline_ atomic recompute)
+expiry: pump_deadlines_locked (heap pop → consume claim CAS → expire_wait)
+retire: retire_timer_for_node_locked (linear scan) → active→retired
+consume: active→consumed (exactly-once claim)
+clock: monotonic_now = steady_clock ms, or injected test clock
+⚠ no DYNAMIC invariant check ties the heap minimum to earliest_active_deadline_
+  (only type-trait static_asserts) — COR-14/SUS-14, gap B2
+```
+
+### C-FIG-H — Backend Boundary (canonical: arena ownership + destructor ordering)
+
+```
+AsyncIoContext (only entry; AsyncBackend::submit_* private)
+  │ SUBMITS
+  v
+AsyncBackend (abstract, mechanism-only — no access facts cross this line)
+  ├─ ThreadPoolBackend ──OWNS──> RequestArena arena_ (member)          [CF-1]
+  │    dtor body: quiescence fail-fast → stopping_=true → notify_all
+  │              → JOIN all workers  …then member destruction begins:
+  │              arena_ (first-declared) destroyed LAST ⇒ arena writers
+  │              are dead before the arena dies [CF-1; "arena borrow" hazard void]
+  │    workers: pop bounded dispatch queue (overflow ⇒ terminate)
+  │            → pread/pwrite/fdatasync/fsync → record terminal → signal
+  └─ UringAsyncBackend ──OWNS──> RequestArena arena_ (member)          [CF-1]
+       dispatch_one_locked: get_sqe (transport flush retry) → prep
+         (IORING_FSYNC_DATASYNC for sync_data) → cookie=user_data → router
+         → ledger → mark_running; reap: peek_batch 32 → op vs control CQE
+       bounded wait: eventfd(control) + poll(2)(ring fd)
+       failure: poison_and_recover_locked (Class-A recovery)
+  both: PUBLISH via RequestArena ready ring; destruction fail-fast unless quiescent
+```
+
+### C-FIG-I — Build / Feature Graph (canonical)
+
+```
+xmake root ── modes: debug/release/valgrind; sanitizers asan/tsan/ubsan/asanubsan
+options: hardened; liburing (default FALSE)
+targets:
+  sluice_core  = src/*.cpp        → 13 TUs                    [CF-12]
+  sluice_async = src/async/*.cpp  → 31 TUs incl. 3 test seams [CF-12]; opt-in
+  apps (4)     = core + async; tests = 16 unconditional + 2 liburing-gated
+                 + 4 app-consumption                          [CF-12]
+liburing ON  ⇒ SLUICE_HAS_LIBURING public define + link; OFF ⇒ honest uring stub
+NOT COMPILED ANYWHERE: src/experimental/*.cpp (2 TUs), public headers exist
+  CODE REALITY:           exists
+  ARCHITECTURE AUTHORITY: DELETE (#355 I22–I24, slice A)
+  IMPLEMENTATION STATUS:  pending
+fail-fast catalog: 37 noreturn functions [CF-12]
+```
+
+### C-FIG-J — State Ownership (canonical)
+
+```
+File                : fd + access (immutable post-open; unsynchronized)
+RequestArena        : slot FSM + generations + ready ring — a MEMBER OF EACH BACKEND
+                      (arena mutex)                                     [CF-1]
+Completion<T>       : caller-owned FSM idle→binding→outstanding→publishing→ready
+                      →resetting; exactly-once publish; reap_seq ordering   [CF-11: header-only]
+ThreadPoolBackend   : worker threads + bounded dispatch queue + running set
+UringAsyncBackend   : ring + router + ledger + control SQE state
+AsyncIoContext      : access_mtx_ (serializes backend interaction ONLY —
+                      fd validity + access legality run BEFORE the lock) [CF-3]
+                      + stats_
+                      NOT owner of: RequestArena, fallback waiting maps
+Scheduler           : global_mtx_  → run queues, wait registry, timers, AND
+                      waiting_size_ / waiting_void_ / waiting_ready_ /
+                      waiting_waitq_count_                               [CF-2]
+                      wake_mtx_     → wake/observed epochs, idle dance
+                      wait_registry_mtx_ → WaitRecords
+ApplicationRuntime  : State/CloseState/DriverState, control_epoch, counts
+```
+
+Supersedes FZ-9's "fallback wait maps — AsyncIoContext" row and RC-3's state list [CF-2, CF-3].
+
+### C-FIG-K — Thread / Execution Context (canonical)
+
+```
+Application thread       : driver loop, submit, join(); JOINS driver_thread_
+Scheduler worker threads : created by run_impl; JOINED by run_impl when
+                           run_live returns                                [CF-5]
+                           (~Scheduler joins NO threads)
+single-worker inline     : run_impl with 1 worker on the caller thread
+ThreadPoolBackend workers: created in ctor; JOINED in the dtor BODY       [CF-1]
+uring completion path    : caller/worker via wait_one (submit_and_wait /
+                           poll(2)+eventfd bounded wait)
+Group evented path       : fibers on Scheduler; Group::await runs run_live(1)
+                           on the AWAITING caller's thread                [CF-9]
+Group threaded path      : one std::thread per async(), runs the caller's
+                           function directly — NO scheduler, NO run_live  [CF-9]
+                           (zero-consumer)
+legacy BlockingIoPool    : own cv-driven workers (zero-consumer, #355 slice D)
+```
+
+Supersedes FZ-10's "Group threaded path … own thread run_live(1)" [CF-9].
+
+### C-FIG-L — Lifetime / Teardown Graph (canonical)
+
+```
+Supported ApplicationRuntime topology:
+  fiber entry returns → make_done → context_switch_final
+    → scheduler worker can eventually exit → run_impl JOINS workers   [CF-5]
+    → driver observes/joins (ApplicationRuntime::join)                [CF-5]
+    → close_resources()                                               [CF-7]
+        1. Group: clear futures/fibers/stacks (fail-fast if any non-terminal)
+           operative gate = the RUN-JOIN: Future::complete_with publishes
+           readiness INSIDE the fiber entry BEFORE make_done, so
+           future-ready ≠ fiber quiescence; what closes the window is that
+           Group::await/~Group clear only after run_live returned       [CF-6]
+        2. Scheduler: fail-fast if wait_record_live_count_ ≠ 0
+           (residual waiting-map asserts = gap B3, still open)
+        3. AsyncIoContext: fail-fast if outstanding() ≠ 0
+           → backend_ destroyed → backend dtor body joins workers
+           → members destroyed, arena_ last                             [CF-1]
+close_resources TRIGGERS (verified): join() :355, shutdown() :380 (driver path),
+  start()-failure :144/:169/:193 — ~ApplicationRuntime does NOT call it
+  (it fail-fasts on bad state and joins the driver thread only)        [CF-7]
+Frozen distinctions (do not conflate):
+  Future::ready ≠ fiber quiescence; terminal_count ≠ fiber quiescence;
+  logical terminal ≠ final context switch ≠ worker join ≠ resource release
+```
+
+Supersedes FZ-11's step-2 mechanism and RC-5's destructor claim [CF-5, CF-6, CF-7].
+
+### 37.1 CANONICAL FACT TABLE
+
+Pure count corrections (COR-1, COR-8, COR-14) are grouped into CF-12; every other row changes architecture meaning.
+
+| Fact ID | Correct final fact | Supersedes frozen claim | Evidence |
+|---|---|---|---|
+| CF-1 (COR-2) | `RequestArena` is a member of each backend. ThreadPoolBackend's dtor body joins its workers before member destruction (arena first-declared = destroyed last); UringAsyncBackend has no worker threads — its dtor fail-fasts on non-quiescence and exits the ring. In both backends arena writers are dead / quiescence is established before the arena dies — safe by construction, independent of `close_resources` ordering; the "arena borrow" hazard is void | RC-3/RC-6 "AsyncIoContext owns arena; backends borrow"; FZ-2/FZ-7/FZ-11 arena placement | `threadpool_backend.hpp`/`uring_backend.hpp` members; `async_io_context.hpp:267-271`; `threadpool_backend.cpp:115-132`; `uring_backend.cpp:401-424` |
+| CF-2 (COR-3) | Fallback wait maps `waiting_size_`/`waiting_void_`/`waiting_ready_` (+`waiting_waitq_count_`) are Scheduler members under `global_mtx_`; teardown-assert fix targets `~Scheduler` (gap B3), graded S3 not UAF | FZ-9 row + RC-3 + SUS-4's AsyncIoContext attribution | `scheduler.hpp:534-539` |
+| CF-3 (COR-4) | In `submit_*`, fd validity and `access_legality()` run on the caller thread BEFORE `access_mtx_`; the mutex serializes backend interaction only; legality is a pure function of by-value `NativeFileRef` — sound, no multi-writer window | RC-3/FZ-9 "serializes all submissions + legality checks" | `async_io_context.cpp:94-102` |
+| CF-4 (COR-5) | Scheduler-domain park is UNBOUNDED when no deadline and no bounded backend observation; the 2 ms backstop is conditional; 1 ms figure is test-clock-only behind an uncompiled macro | FZ-6 Figure F "bound: kParkBackstop = 2 ms" (always-on) | `scheduler_park_wake.cpp:258-296` |
+| CF-5 (COR-6) | Worker threads are joined inside `run_impl` when `run_live` returns; the driver thread is joined in `ApplicationRuntime::join()`/destructor BEFORE `close_resources()`; `~Scheduler` joins nothing | FZ-11 step-2 "Scheduler: … join workers" | `scheduler.cpp:294-297`; `application_runtime.cpp:129-131, 347-355` |
+| CF-6 (COR-7) | `Future::complete_with` publishes readiness from inside the fiber entry BEFORE `make_done()`/final switch; future-ready ≠ stack-departed; the operative Group gate is the run-join, not future readiness | RC-9/FZ-11 "clears only when all futures ready" as the safety gate | `group.hpp:150-155`; `scheduler.cpp:25-34` |
+| CF-7 (COR-9) | `close_resources()` (group→sched→io_ctx) is invoked from `join()`, `shutdown()`, and `start()`-failure paths only; `~ApplicationRuntime` fail-fasts on bad state and joins the driver thread; the teardown ORDER as frozen is correct, the TRIGGER was not | RC-5/FZ-11 "dtor → close_resources()" | `application_runtime.cpp:119-132, 144/169/193, 355, 380, 546-570` |
+| CF-8 (COR-10) | `File(int, FileAccess)` is private (internal detail of `File::open`); `NativeFileRef` values are created by callers at op construction (implicit `File` conversion); the sole public raw-fd interop boundary is `NativeFileRef(int, FileAccess)` | RC-1/RC-2/FZ-6 Figure B interop edges | `file_resource.hpp:51-52`; `file.cpp:32`; `copy_task.cpp:65, 76` |
+| CF-9 (COR-11) | Group threaded path (`sched_ == nullptr`) spawns `std::thread`s running caller functions directly — no scheduler, no `run_live`; `run_live(1, …)` is the evented path on the awaiting caller's thread | FZ-10 "Group threaded path … own thread run_live(1)" | `group.hpp:85-111`; `group.cpp:39` |
+| CF-10 (COR-12) | Consumer-column corrections (grouped): `blocking::file` = sluice-tail + 7 test binaries; Scheduler/Group/CancelToken/RequestHandle/WaitPolicy have ZERO direct test consumers (tests reach them only via `ApplicationRuntime`); `AsyncIoContext` consumed by all four apps; no default backend exists (ctor requires one); `detail/io_validation` also consumed by legacy `src/file.cpp` | FZ-2/RC consumer columns as frozen | #355-era `#include` census + symbol sweeps (review A, re-verified) |
+| CF-11 (COR-13) | `Completion<T>`, `Future`, `TaskResult` are header-only (no TU exists) | FZ-2 implementation column TU entries | `completion.hpp`; file census |
+| CF-12 (COR-1/COR-8/COR-14, counts grouped) | 16 unconditional + 4 app-consumption + 2 liburing-gated test binaries; sluice_core = 13 TUs; sluice_async = 31 TUs (incl. 3 seams); scheduler family = 9+1 files; fail-fast catalog = 37 functions; timer-heap/`earliest_active_deadline_` agreement has NO dynamic invariant check (static_asserts only) | FZ-1/FZ-2/SUS-16 counts; SUS-14 "(asserts only)" | `xmake/tests.lua`; `git ls-files` = 46 = 13+31+2; `rg -c` fail_fast.cpp = 37; `scheduler_timer.cpp` |
+
+## 38. Diff-card re-adjudication (M3)
+
+Amended rows carry "(†C1)" in §19; this section records the derivations.
+
+### 38.1 DC-29A — await-style classification (from the old DC-29)
+
+Question: is the current `await_*` surface a §7.3 await-style explicit-lifecycle operation?
+
+Derivation from ADR-0002 §7.3 (read after the freeze, per the corrected chain): §7.3 explicitly defines the await-style regime — an await-style operation that observes and consumes the terminal before returning may end the lifetime obligation on success or terminal-operation-error; **if await returns on wait-layer error / waiter cancellation while the Completion is still outstanding, the obligation continues**. The code implements exactly this two-sided rule: `await_take` waits `await_completion`, and on success reads the result and resets (`src/async/await_op_helpers.cpp:4-21`, both overloads); on wait-layer error it returns before reset, leaving the caller holding the outstanding Completion — not a defect against §7.3 but its literal second clause. The caller-visible `Completion&` parameter is precisely what makes the explicit lifecycle visible (§6.3 discipline), which is the property the old DC-29 failed to separate from §6.1.
+
+**Verdict: MATCH — with a naming/classification clarification** (PLAN-F1): `await_*` belongs to the §7.3 await-style explicit-lifecycle regime; it is not, and does not pretend to be, the §6.1 common logical API. The old AMBIGUOUS_AUTHORITY verdict is dissolved by the split, not by reinterpretation.
+
+### 38.2 DC-29B — evented common logical API (from the old DC-29)
+
+Question: does the code implement the §6.1 common logical API for evented execution — initiate + logical wait returning `Result`, without forcing ordinary callers to manage `Completion` FSM state?
+
+Code fact: every evented entry point requires a caller-supplied `Completion<T>&` (`include/sluice/async/file.hpp`); real apps declare per-op Completions and manage their reset (`apps/sluice-hash/hash_task.cpp:43`, `apps/sluice-copy/copy_task.cpp:37-38,55`); on wait-layer error the outstanding-Completion obligation survives (DC-29A). The §6.1 evented shape — submit → suspend → resume → return `Result` with the bookkeeping hidden — has **no representative in the tree**. (Exclusion note: the legacy `op_helpers` poll-loop family and `Batch::await_one` do return `Result` while hiding a `Completion`, but they are not §6.1 evented representatives — they busy-spin on `poll()` and never suspend a task/fiber, they are zero-consumer, and they are #355-frozen DELETE I18/I19; §36.2.) Blocking execution does implement the §6.1 shape via `blocking::file`; the gap is evented-only.
+
+**Verdict: UNIMPLEMENTED_CONTRACT** — an architecture gap without an owner decision. It may be a design gap with no immediate consumer demand: all four apps are explicit-need callers in the §6.2 sense today. This audit states the gap only; it does **not** propose wrapper APIs. Whether to ADD_MINIMAL an evented common form or to accept await-style as the only evented surface is a human architecture decision (PLAN-C3).
+
+### 38.3 DC-08 — reconciled after the split
+
+The old card ("evented sequential read/write absent") was too narrow: the missing sequential forms are one sub-case of the missing §6.1 evented common layer as a whole (positional and sync forms are likewise absent in a common evented shape).
+
+**Disposition: DC-08 is merged into DC-29B** and is not counted as an independent absence (no double-counting).
+
+### 38.4 DC-17 — scope made explicit
+
+The MATCH verdict survives the split, but its scope is now explicit: DC-17's MATCH (obligation ends only after observed terminal; 4-way cancellation distinction) applies to the **§7.3 explicit/await-style lifecycle semantics**. It is **not** evidence that the §6.1 common logical API is implemented — that question is DC-29B's, and its answer is UNIMPLEMENTED_CONTRACT.
+
+### 38.5 DC-13 — preserved, collision made precise
+
+The fact stands, now stated exactly: the explicit submission path executes `stage0_precheck` (uring) / `arena.reserve` (`submit_transaction.hpp:30-39`) **before** the §5.5 rule-3/4 validators. Under saturation, a zero-length request may observe `would_block` before the frozen success-0, and an unrepresentable-offset request may observe `would_block` (or admission-closed `invalid_state`) before the frozen `invalid_argument` — while blocking and evented surfaces return the frozen outcomes unconditionally. The ADR freezes the §5.5 precedence across all initiation surfaces but never ranks the named capacity bound (§8.2/§9) against rules 3/4.
+
+**Verdict: AMBIGUOUS_AUTHORITY (strict §5.5 reading: CODE_DRIFT) — preserved as adjudication-pending** (PLAN-C1). This corrective does not normalize the ordering away and does not implement a reorder.
+
+### 38.6 DC-30 — fact kept, adjudication question sharpened
+
+The factual basis is unchanged: legacy `read_all` reports premature EOF as `IoError{eof}`; `await_read_fill` (the variant sluice-copy uses) returns the partial `filled` as success on the same event. ADR-0002 §5.2.1 assigns EOF-as-error to `exact`/`all` compositions; §5.2.3 fixes no error codes. Nothing in the ADR, #355, or #370 classifies `fill`.
+
+**Verdict: AMBIGUOUS_AUTHORITY — preserved, human adjudication** (PLAN-C2), now binary:
+
+```text
+Option A: fill is intentionally a different composition
+          → partial success is legal
+          → needs semantic classification/documentation (compositional vocabulary)
+Option B: fill is intended to satisfy exact/all semantics
+          → code contradicts ADR-0002 §5.2.1
+```
+
+No code fix is forced by this audit.
+
+## 39. Formal plan (M4) — every admitted model disposed
+
+### 39.1 FORMAL DISPOSITION TABLE
+
+| Model | Audit admission | Final disposition | Priority | Execution vehicle | Why |
+|---|---|---|---|---|---|
+| MC-1 park/wake (both domains) | ADMIT (E1; two park variants per COR-5) | **IMPLEMENT** (TLA+) | **P1** | PLAN-E1 (first, after FORMAL-BOOTSTRAP) | Concurrency core with zero tests; the unbounded-park variant must satisfy liveness **without any timeout action** — an always-on backstop in the model is forbidden (vacuity defense, review C-1) |
+| MC-2 RequestArena + Completion | ADMIT (E2+E4) | **IMPLEMENT** (TLA+) | **P1** | PLAN-E1 (immediately after MC-1, same toolchain) | Was admitted P1 but had no execution landing (review M4) — now landed. Single model covering slot lifecycle, generation/ABA, terminal winner, Completion CAS lifecycle, publish/reset race. No split: if size ever forces MC-2A(arena)/MC-2B(completion), the split must carry an explicit refinement relation |
+| MC-3 wait routing | ADMIT (E3) | **IMPLEMENT** (TLA+) | P2 | PLAN-E2 | May share MC-1's campaign only for toolchain and routing/wake evidence; its model state stays conceptually separate — no giant scheduler model |
+| MC-4 teardown barrier | ADMIT (E5) | **IMPLEMENT_EXECUTABLE_MODEL_FIRST**; **DEFER_TLA** behind explicit revisit triggers | P3 | PLAN-E3 | Re-triaged per review: teardown safety is mostly structural join ordering (COR-2/6/7/9); a cheaper adequate witness exists (§39.2). TLA+ deferred with triggers, not deleted |
+| MC-5 uring cancel deferred-terminal | ADMIT (E6) | **IMPLEMENT** (TLA+) | P2 | PLAN-E2 | Real-liburing semantics: the model abstracts the kernel as a nondeterministic CQE order; cancellation success is NOT deterministic — both races (op-CQE-first and control-CQE-first) are enumerated states |
+
+Counting: IMPLEMENT = 5 (MC-1, MC-2, MC-3, MC-5 as TLA+; MC-4 as executable-model-first), DEFER = 1 sub-branch (MC-4's TLA+ upgrade), REJECT_AFTER_REVIEW = 0. **ADMITTED_WITHOUT_DISPOSITION = 0.**
+
+### 39.2 MC-4 re-triage record (required comparison)
+
+| Option | Assessment |
+|---|---|
+| A. TLA+ | Full interleaving coverage of the barrier, but the supported-topology barrier is a linear by-construction ordering (fiber return → final switch → run_impl join → driver join → close_resources → backend dtor join → member destruction); TLC cost buys mostly confirmations of construction facts |
+| B. executable lifecycle state-machine oracle | **CHOSEN (first)**: a runtime witness that drives the verified join topology and fails fast on any order violation; deterministic, cheap, reusable as a regression test |
+| C. mutation/death tests around reorderings | **CHOSEN (with B)**: reorder mutants (close group before run-join; free stacks before run-join returns; destroy backend before outstanding==0) must each produce a counterexample — the executable oracle's kill list |
+| D. focused happens-before proof | Absorbed into B/C evidence (already recorded as review-D refutations, §33) |
+
+**DEFER_TLA terms**: WHY — no residual state-space question is known that B+C cannot answer; REQUIRED CHEAPER EVIDENCE — the executable oracle plus reorder death tests must all pass; REVISIT TRIGGERS — TLA+ becomes due if teardown becomes multi-entry, if concurrent `close_resources` becomes supported, or if resource-release authority becomes decoupled from the join topology.
+
+### 39.3 Proposed campaign shape (execution entries stay PROPOSED)
+
+```text
+FORMAL-BOOTSTRAP (toolchain choice + version pinning discipline)
+        ↓
+PLAN-E1:  MC-1 park/wake (P1)  →  MC-2 request/completion (P1)
+        ↓ (shared toolchain only)
+PLAN-E2:  MC-3 wait routing (P2)   |   MC-5 uring cancel (P2)
+PLAN-E3:  MC-4 executable lifecycle witness + reorder death tests (P3)
+          → TLA+ only if a revisit trigger fires
+```
+
+Ordering rationale: MC-1/MC-2 first because they pin the toolchain and the two hardest state machines; MC-3/MC-5 reuse the toolchain without merging model state; MC-4 is independent of legacy deletion and of the other models.
+
+### 39.4 Model→code mapping and vacuity defense (retained requirements)
+
+The refinement anchors in the MC cards (§22) and the ASSUMPTION→WITNESS table stand unweakened; every IMPLEMENT model must ship a negative mutation with an expected failing property:
+
+```text
+MC-1: drop epoch comparison / park before progress recheck / stale dance epoch
+      accepted / drop backend interrupt
+      (and: an always-on backstop must NOT rescue the dropped-epoch mutant)
+MC-2: disable generation check / double-publish / publish before backend_ready /
+      reset during publishing
+MC-3: accept stale token / drop fresh token / double-resume
+MC-4 (executable): full reorder/check mutant list per the §22 MC-4 card —
+      release storage before join / close group before run-join /
+      drop outstanding check / drop wait_record assert —
+      each reorder must create a counterexample
+MC-5: publish on control CQE without checking op terminal / drop deferred
+      terminal / double-publish when both CQEs arrive
+```
+
+The §22 cards remain normative for each model's full mutation and property list; §39.4 restates the kill set for convenience only.
+
+### 39.5 Priority/plan consistency check (required)
+
+P1 admitted → F-1/F-2/F-10 appear in PLAN-E1 ✓. P2 admitted → F-3/F-11 appear in PLAN-E2 ✓ (F-4 rides MC-2 in PLAN-E1, per its "merged into MC-2" row). P3 → F-5 has the explicit executable-first branch (PLAN-E3) ✓; F-8 (REJECTed from modeling) has no in-tree vehicle today — its fault-injection stress harness remains the L3 gap of §25, and this corrective invents no PLAN card for it. No admitted model lacks a landing; no priority mismatch remains.
+
+## 40. Corrected plan (supersedes §26–§28)
+
+Old PLAN-1/PLAN-2/PLAN-9 are withdrawn — their decision framing was stale (M2). Old PLAN-3/5/6/7/8/4/4b survive with re-letters. Every card states: problem, authority, code fact, intended state, already-decided?, implementation needed?, formal gate, test gate, dependencies. Categories are kept separate (A–G); "decided but not implemented" is never mixed with "awaiting architecture decision".
+
+**A. Already-frozen #355 implementation debt (decided; execution pending)**
+
+- **PLAN-A1** — Execute #355 **slice A** (experimental island: I22/I23/I24 DELETE).
+  PROBLEM: public headers unbacked by any compiled target (DC-22/SUS-7). AUTHORITY: #355 §14 verdicts (frozen; not reopenable here). CODE FACT: headers+TUs exist at PROOF_ROOT, compiled nowhere. INTENDED STATE: headers and TUs removed per slice A. ALREADY DECIDED? **YES**. IMPLEMENTATION NEEDED? YES, inside slice A's own gates. FORMAL GATE: none. TEST GATE: slice A's own implementation/review gates. DEPENDENCIES: none — must not wait on any new §14 adjudication.
+- **PLAN-A2** — Remaining #355 slices (B Batch, C op_helpers, D pool, E WAL, F vectored, G stats/observed, H file, I reader/writer, J io_context, K buffered, L memory/fault, M copy, N syncable, P legacy stats, O Group CONVERGE + Future DELETE) proceed in their own slices per the #355 §8.1 traceability ledger.
+  PROBLEM: decided surfaces still in tree. AUTHORITY: #355 (frozen). CODE FACT: all surfaces present, zero real consumers. INTENDED STATE: per-slice deletion/convergence. ALREADY DECIDED? **YES** (29 DELETE / 1 CONVERGE). IMPLEMENTATION NEEDED? YES, per slice. FORMAL GATE: none (slice O's INV-O witnesses are #355's own). TEST GATE: each slice's own gates. DEPENDENCIES: inter-slice dependencies as pinned by the #355 ledger; this audit adds none.
+
+**B. Genuinely unresolved §14 surfaces**
+
+- **PLAN-B1** — §14 disposition round for the scheduler-integrated sync-primitive family (`Event`, `Semaphore`, `AsyncMutex`, `AsyncCondition`, `AsyncRwLock`, `lock_guard`, `AsyncQueue`, `select`) and `Scheduler` drain mode (`run()`/`run_until_idle()`).
+  PROBLEM: public, scheduler-supported, zero consumers, zero tests — and NOT covered by #355's I01–I30 inventory. AUTHORITY: ADR-0002 §14 burden of proof. CODE FACT: SUS-5/SUS-6 consumer/test census. INTENDED STATE: one §14 verdict per surface family. ALREADY DECIDED? **NO**. IMPLEMENTATION NEEDED? Only after the verdict. FORMAL GATE: none. TEST GATE: any test rebuild follows the verdict (PLAN-D4). DEPENDENCIES: none. **Constraint: zero consumer alone is NOT sufficient DELETE evidence.** (Batch and op_helpers are excluded — already DELETE by #355 I18/I19.)
+
+**C. ADR authority adjudications (human decisions)**
+
+- **PLAN-C1** — DC-13: does the named capacity bound legitimately preempt §5.5 rules 3/4 at the explicit surface? AUTHORITY: ADR-0002 §5.5 vs §8.2/§9 (silent). OUTCOME SHAPES: doc clarification, or small code alignment (reorder), or explicit ADR amendment. ALREADY DECIDED? NO.
+- **PLAN-C2** — DC-30: is `fill` a composition outside the `exact`/`all` vocabulary (Option A: document/classify) or an exact/all composition contradicting §5.2.1 (Option B)? AUTHORITY: ADR-0002 §5.2.1/§5.2.3. ALREADY DECIDED? NO.
+- **PLAN-C3** — DC-29B: accept await-style as the only evented surface (classify the §6.1 evented gap as accepted), or ADD_MINIMAL an evented common form later. AUTHORITY: ADR-0002 §6.1/§6.2. This audit states the gap only. ALREADY DECIDED? NO.
+
+**D. Local invariant/test hardening**
+
+- **PLAN-D1** (old PLAN-3) — `~Scheduler` residual assertions: `waiting_size_`/`waiting_void_`/`waiting_ready_` empty and `waiting_waitq_count_ == 0` beside `wait_record_live_count_` (owner per COR-3). ALREADY DECIDED? YES (gap B3). DEPENDENCIES: none.
+- **PLAN-D2** (old PLAN-5) — regression test pinning `Control::mtx` spanning check-and-use in `notify` and the destructor-body clear (SUS-15, safe-by-construction). DEPENDENCIES: none.
+- **PLAN-D3** (old PLAN-6) — caller-contract note at the interop site: fd-borrow obligation incl. the fd-recycling variant and the `waiting_ready_` raw-flag-key obligation. DEPENDENCIES: none.
+- **PLAN-D4** (old PLAN-8) — test rebuild for surfaces surviving PLAN-B1; park/wake protocol tests named first (F-1 gap). DEPENDENCIES: gated by PLAN-B1's outcome (which surfaces survive); the park/wake portion is independent and may start anytime.
+
+**E. Formal verification campaigns** (cards per §39; entries PROPOSED)
+
+- **PLAN-E1** — FORMAL-BOOTSTRAP + MC-1 + MC-2. P1. Mutation kills per §39.4. DEPENDENCIES: PLAN-D1/D2/D3 feed its assumption witnesses (not hard gates).
+- **PLAN-E2** — MC-3 + MC-5. P2. Shares E1's toolchain; models conceptually separate. DEPENDENCIES: PLAN-E1.
+- **PLAN-E3** — MC-4 executable lifecycle oracle + reorder death tests; DEFER_TLA per §39.2. P3. DEPENDENCIES: none (independent of legacy deletion and of E1).
+
+**F. Documentation/contract clarification**
+
+- **PLAN-F1** — Record the DC-29A classification: `await_*` = §7.3 await-style explicit-lifecycle surface; on wait-layer error the caller retains the outstanding-Completion obligation (§7.3's own rule). One clarification where the API contract is documented; no API change. DEPENDENCIES: none.
+
+**G. Measurement-only**
+
+- **PLAN-G1** (old PLAN-7) — profile-first: uring router reverse-linear scan and `RequestArena::resolve_completion` linear scan are suspected hotspots only; no optimization task exists until measured. Gates nothing.
+
+### 40.1 Dependency DAG (regenerated)
+
+```text
+PLAN-A1 (#355 slice A) ──────────────── independent (NO §14 gate; decided debt)
+PLAN-A2 (#355 slices B..P/O) ────────── independent (own #355 ledger gates)
+PLAN-B1 (sync-family §14 round) ──► verdict ──► (possible separate deletion slice)
+PLAN-C1/C2/C3 (adjudications) ────► may gate small doc/code correctives per outcome
+PLAN-D1/D2/D3 (witness facts) ────► PLAN-E1 (FORMAL-BOOTSTRAP + MC-1 + MC-2)
+                                        │
+                                        └──► PLAN-E2 (MC-3 + MC-5; shares E1 toolchain)
+PLAN-E3 (MC-4 executable oracle + reorder death tests) ──── independent root
+                                        (toolchain reuse flows FROM E1 TO E3 once
+                                         E1 exists; no ordering edge, no model merge)
+PLAN-D4 (test rebuild) ◄── gated by PLAN-B1 outcome; park/wake portion independent
+PLAN-G1 (profiling) ─────────────────── independent; gates nothing
+```
+
+DAG rules honored: no #355-frozen DELETE work depends on a new §14 adjudication (PLAN-A1/A2 are root-independent); formal models do not depend on unrelated legacy deletion (PLAN-E3 is a root; E1's only inputs are the D-class witnesses); ADR adjudications may gate code correctives (C-class arrows); MC-2 and MC-4 both appear (E1 and E3).
+
+## 41. Corrected diff counts and final verdict (M3 recount + m1)
+
+### 41.1 Recounted verdicts
+
+Card set after the split: DC-01..DC-28, DC-29A, DC-29B, DC-30 = **31 cards**; DC-08 is merged into DC-29B (§38.3) and not independently counted → **30 counted verdicts**.
+
+| Verdict | Count | Cards |
+|---|---|---|
+| MATCH | **25** | DC-01..07, 09, 10, 11, 12, 14, 15, 16, 17 (scope-narrowed), 18, 19, 20, 21, 23, 24, 25, 26 (status corrected), 28, **29A** |
+| UNIMPLEMENTED_CONTRACT | **2** | DC-22 (reclassified from EXTRA_MECHANISM: the contract is the frozen §14 disposition), **DC-29B** (absorbs DC-08) |
+| AMBIGUOUS_AUTHORITY | **2** | DC-13 (collision made precise), DC-30 (question sharpened) |
+| EXTRA_MECHANISM | **1** | DC-27 (narrowed to sync-primitive family + drain mode; Batch/op_helpers reclassified as decided-not-implemented) |
+| CODE_DRIFT / DOC_DRIFT / CORRECTNESS_RISK / FORMAL_GAP / OUT_OF_SCOPE | **0** | — (the old DC-22 CORRECTNESS_RISK suffix is folded into its disposition status; the SUS-3 fd-recycling window remains recorded as a caller-contract risk, not a DIFF verdict) |
+
+The old "30 total / 24 MATCH" is not preserved for cosmetic continuity; the corrected count is 31 cards / 30 counted verdicts / 25 MATCH.
+
+### 41.2 Final architecture verdict (frozen vocabulary)
+
+```text
+ARCHITECTURE_MATCH_WITH_CORRECTIVES
+```
+
+Derivation (not mechanical): the architecture spine matches the ADR at every verified initiation surface (25/30 MATCH; 0 CODE_DRIFT; 0 DOC_DRIFT; 0 correctness verdicts; no P0; no constructible UAF in supported topologies). What remains is exactly the "match with correctives" profile: frozen §14 dispositions not yet executed (DC-22; Batch/op_helpers; the legacy world), one unimplemented contract (DC-29B evented common layer), two adjudications pending (DC-13, DC-30), and a formal evidence gap with a complete disposition plan (§39). It is not ARCHITECTURE_MATCH (correctives are required), and not ARCHITECTURE_DIVERGED (no upheld drift). Workflow state is separate and unchanged in kind:
+
+```text
+READY_FOR_HUMAN_REVIEW_CORRECTIVE_1
+```
+
+## 42. Fresh reviews (corrective acceptance gate C15)
+
+Four fresh-context reviews were dispatched per the corrective protocol: A (canonical map vs code, no ADR), B (authority chain vs ADR-0001/0002 + #355 + #370), C (common-API/DC-29 classification vs ADR §6.1/§7.1–7.3 + async/file surface), D (formal plan completeness).
+
+Round 1: reviewer A returned FAIL (1×P2 + 3×P3, all inside §37); reviewer B returned FAIL (1×P1 + 1×P2 + 2×P3); reviewer C returned PASS with 2×P3 notes; reviewer D returned FAIL (1×P2 + 4×P3). Every finding was repaired in this report; B, D, and A then re-verified their own repairs against the same authority/code sources with zero residual findings, and C's two P3 notes were repaired as well. All repairs are mechanical text/citation corrections — no verdict changed except as already recorded in §38/§41.
+
+Final verdicts:
+
+```text
+CANONICAL_CODE_REALITY_REVIEW     = PASS
+AUTHORITY_RECONCILIATION_REVIEW   = PASS
+COMMON_API_CLASSIFICATION_REVIEW  = PASS
+FORMAL_PLAN_COMPLETENESS_REVIEW   = PASS
+```
+
+Findings ledger (all repaired, none open):
+
+```text
+B-P1-1  vectored slice letters: I11 VectorStats = slice G (stats/observed), not F
+        → §36.2 + DC-26 corrected per #355 §8/§8.1 (compile order G before F)
+B-P2-1  DC-02 stale "§13/§14-undecided" → re-pointed to #355 I01/I02 DELETE (slice H)
+B-P3-1  lock_guard added to §36.2 sync-family row + PLAN-B1 (matches DC-27)
+B-P3-2  promotion-row citation: original vectored decision vs #370 rewrite separated
+D-P2-1  §40.1 DAG redrawn: PLAN-E3 is an independent root; toolchain reuse flows
+        E1→E3; no edge into E1 except the D-class witnesses
+D-P3-1  §39.5: F-4 lands in PLAN-E1 (via MC-2), not E2
+D-P3-2  §39.5: F-8 = REJECTed, no in-tree vehicle, §25 L3 gap; no PLAN card invented
+D-P3-3  §39.4 kill sets completed to §22's lists + normativity note
+D-P3-4  witness cite scheduler.cpp:935 → 934
+A-P2-1  C-FIG-A: timer heap is global_mtx_-guarded; wake_mtx_ line corrected
+A-P3-1  CF-1 join claim scoped per backend (uring: quiescence fail-fast +
+        io_uring_queue_exit, no worker join) — evidence +uring_backend.cpp:401-424
+A-P3-2  CF-8 cite file.cpp:35 → 32 (the §4 COR-10 historical cite deliberately
+        untouched per the corrigenda preservation rule)
+A-P3-3  C-FIG-B blocking annotation qualified: sync_data/sync_all is_open-gated only
+        (SUS-2, LEGAL all access)
+C-P3-1  §6.1-evented "no representative" claim given its explicit op_helpers/Batch
+        exclusion (busy-spin, zero-consumer, #355 DELETE)
+C-P3-2  await_op_helpers.cpp cite range 4-18 → 4-21 (both await_take overloads)
+```
+
+## 43. Final state
+
+```text
+BRANCH        = audit/code-reality-architecture-1
+OLD_HEAD      = 386a925857e9e8871adb6a67cb725d61f6747432  (original audit)
+NEW_HEAD      = the Corrective-1 commit on this branch (see PR #372; history preserved:
+                386a9258 original audit → <corrective-1>, no squash)
+PROOF_ROOT    = 7f5a3f59515911fabc3c41a3846b0bad3bef1688  (unchanged)
+CURRENT_MASTER= 7f5a3f59515911fabc3c41a3846b0bad3bef1688
+CODE_REALITY_FREEZE_CHANGED = NO (sha256 2c4e43a3… re-verified byte-identical)
+DIFF          = report-only; production/test/build/ADR diff = 0
+PR #372       = OPEN, DRAFT, not merged, no issues opened
+```
+
+All execution entries in Part II remain PROPOSED. Human review comes first: the three adjudications (PLAN-C1/C2/C3), the §14 disposition round (PLAN-B1), and the #355 slice executions (PLAN-A1/A2) all await their owner.
