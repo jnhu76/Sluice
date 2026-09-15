@@ -47,6 +47,10 @@ open Sluice.Formal
 #print axioms Sluice.Formal.echo_not_irreducible
 #print axioms Sluice.Formal.not_reducible_of_separated
 #print axioms Sluice.Formal.obligations_preserved_of_reduction
+#print axioms Sluice.Formal.domPrim_possesses
+#print axioms Sluice.Formal.domEnc_possesses
+#print axioms Sluice.Formal.encLie_overProduces
+#print axioms Sluice.Formal.extIssue_inv
 EOF
 lake env lean .lake/axiom-audit.lean | tee .lake/axiom-audit.out
 rm -f .lake/axiom-audit.lean

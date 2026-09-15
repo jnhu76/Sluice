@@ -2,8 +2,9 @@
 
 Campaign: `FCB1-METHOD-CORRECTIVE-1` (repair of the FORMAL-CAPABILITY-BOUNDARY-1
 stack, PRs #376–#385; charter issue #375)
-Status: **FROZEN (V2)** — the V1 freeze is invalidated per the method-corrective
-review; this document is the single, complete Stage-0-V2 freeze.
+Status: **FROZEN (V2.2)** — the V1 freeze was invalidated by the
+method-corrective review; V2 was amended to V2.2 by BRAKE-1 (execution
+domains, §7.1); this document is the single, complete Stage-0 freeze.
 Toolchain: Lean 4.33.1, pinned in `formal/lean-toolchain`; no mathlib.
 Verification gate: `scripts/verify_formal.sh` — `lake build` + no `sorry`/`admit`
 + axiom audit.
@@ -65,23 +66,32 @@ and remains proved from `nextWaiter` freshness plus per-queue sortedness.
 
 ## 3. Observation model (frozen)
 
-The caller-observable events are API observations `Obs(fiber, call, result)`:
+The caller-observable events are API observations `Obs(caller, call,
+result)` (V2.2):
 
-* an **issue** (`result = none`) — emitted when the dispatched fiber enters the
-  call (fresh dispatch);
+* an **issue** (`result = none`) — emitted when the call enters execution:
+  a fiber call at its fresh dispatch, an external call at its entry;
 * a **completion** (`result = some r`) — emitted at the call's **physical
   return** to its caller.
+
+The **caller** is a `Caller`: a scheduler `Fiber` (`Caller.fiber f`) or an
+external OS thread (`Caller.ext x`).  External threads are never faked as
+fibers — an external call has no legitimate `FiberId`, so the observation
+record carries the caller, not a fiber.
 
 Internal events (registrations, wakes, resolutions, dispatches) are not
 observable.  This mirrors the public headers: callers see call entry and return
 values, never scheduler internals.
 
-**Invocation identity (MAJOR C).**  One fiber has at most one call in flight,
-and a fiber's calls are strictly sequential: its k-th issue is followed by
-exactly its k-th completion.  Invocation identity is therefore per-fiber
-alternation; no invocation counter is surfaced.  The same fiber issues later
-calls after its earlier call returned — modeled by the `retired` record on both
-machines and by the `SeqOK` trace discipline below.
+**Invocation identity (MAJOR C).**  One caller has at most one call in
+flight, and a caller's calls are strictly sequential: its k-th issue is
+followed by exactly its k-th completion.  Invocation identity is therefore
+per-caller alternation; no invocation counter is surfaced.  The same fiber
+issues later calls after its earlier call returned — modeled by the
+`retired` record on both machines and by the `SeqOK` trace discipline
+below.  For an external caller the same alternation is its own thread's
+program order (the `exts` in-flight record enforces one call per external
+caller on both machines).
 
 **Sequential-call discipline (`SeqOK`).**  Both trace languages are restricted
 by the same predicate: per fiber, issues and completions strictly alternate
@@ -135,6 +145,26 @@ worker `worker_loop` (`scheduler.cpp`):
    (`local_runnable` push_back/pop_front); the machines model exactly that
    FIFO.  No global cross-fiber completion order beyond the FIFO dispatch order
    is contractual.
+9. **external calls (V2.2)** — an external-capable call is executed by its
+   calling thread, not by the worker: it never enters the runnable FIFO and
+   never waits for a fiber dispatch.  On the primitive side its whole
+   critical section is the fused `extRun` facet, applied atomically with the
+   issue observation (`extApply`); on the encoding side the external caller
+   executes its program stepwise (`extStart`, `extSubOpStep`,
+   `extSubOpWake`) using only `extOpAllowed` substrate operations.
+   External steps interleave with fiber steps wherever `global_mtx_` is
+   free — including while a fiber is between its critical sections
+   (`cur` does not gate external steps) — and an external call may begin
+   while fibers are queued or running.  C++: `event_set_broadcast`,
+   `event_reset`, `sem_release`, `sem_cancel` take `global_mtx_` only and
+   read no `g_worker`.
+10. **external completion (V2.2)** — an external call's physical return is a
+    separate step (`extDone` / `extComplete`), deliberately unordered with
+    respect to the other steps: holding `global_mtx_` serializes *state
+    effects*, not physical returns.  Another caller's critical section may
+    serialize between this call's effect and its return.  Confusing the two
+    is exactly the V1 completion-shadow defect, so the calculus forbids the
+    fused form by construction.
 
 ### 4.1 Primitive-side LTS shape (`PrimLTS2`)
 
@@ -142,7 +172,9 @@ A primitive under judgment provides: `State`, `init`, `admit` (entry critical
 section, atomic with the issue observation), `run` (the fused inline paths —
 `some (r, s', woken)` completes at physical return with state effect and woken
 fibers in order; `none` goes to park), `park` (suspension state effect),
-`finish` (a resumed parked call's completion at its dispatch), `onTick` (clock
+`finish` (a resumed parked call's completion at its dispatch), `extRun`
+(V2.2 — the external execution of a call: its single fused critical section
+run off the scheduler; `none` marks the call fiber-only), `onTick` (clock
 mirror at idle points), `expire` (environment expiry of one parked deadline).
 These facets are the code's decision points; each stage card maps them to
 `include/`+`src/` line anchors.
@@ -152,7 +184,14 @@ These facets are the code's decision points; each stage card maps them to
 A finite program per call over the substrate operations plus base operations
 (§5), with pure control flow and a pure decoder.  No recursion, no cross-fiber
 shared state, no external persistent state.  Substrate operations are frozen
-(`SubOp`/`SubStep`); the V1 freeze clauses carry over.
+(`SubOp`/`SubStep`); the V1 freeze clauses carry over.  V2.2 adds the
+**call-domain declaration** `extCap`: the calls an external thread can issue
+against this implementation.  An encoding whose `extCap` disagrees with the
+primitive's own domains is refuted by the vacuity gate (`encLie_overProduces`);
+the declaration is therefore part of the adjudicated surface, and §8
+symmetry holds by construction: the primitive's external domains
+(`extRun ≠ none`) and the encoding's (`extCap = true`) face the same
+observation language and the same `SeqOK` discipline.
 
 ## 5. `BASE(P)` composition (frozen — MAJOR B)
 
@@ -254,6 +293,9 @@ vacuity reduction were re-verified by the gate after the amendment.
 | the identity discipline bites | `seqOK_not_shadow` | a trace violating per-fiber alternation is outside both languages |
 | a reducible wrapper proves reducible | `VacuityV2.lean` (`echoPrim`) | `Reducible echoPrim {} []` — the THEOREM-A branch is exercisable |
 | a base re-export must not become THEOREM B | stage 3 (lock_guard vs its declared base) | the first nonempty `BASE(P)` adjudication must certify the re-export THEOREM A |
+| the external domain bypasses the FIFO (primitive side) | `domPrim_possesses` | two fibers queued ahead of an external caller; its issue and completion serialize between the first fiber's return and the second fiber's issue |
+| the external domain is symmetric (encoding side) | `domEnc_possesses` | the same schedule produced by the encoding machine, same observation positions |
+| a lying call-domain declaration over-produces | `encLie_overProduces` | an encoding claiming `extCap` for a fiber-only call is refuted against the primitive's `extRun = none` |
 
 Correct models PASS, mutants FAIL; both branches of the verdict space are
 exercised before any primitive verdict is trusted.
@@ -267,12 +309,16 @@ exercised before any primitive verdict is trusted.
    never absorbed silently.
 3. Stage 8 (`Scheduler::run`) needs a declared substrate extension (driver
    state); adding it is a recorded extension, not a silent change.
+3b. External invocation of `ExtProg.base` operations has no machine rule
+   (V2.2 deferral, §7.1 v2.2).  A stage whose encoding needs an
+   external-capable call implemented over `BASE(P)` must first extend the
+   machine by BRAKE-1 — this is checkable at the stage's PR boundary.
 4. Multi-worker `run` remains outside the serialized single-worker discipline
    above; its adjudication status is a campaign-level question the FINAL
    VERDICT must address explicitly (RESEARCH is acceptable).
 
 ## 10. Gate
 
-`scripts/verify_formal.sh` — **PASS**: build clean, no `sorry`/`admit`, axiom
-audit within `{propext, Quot.sound}` (`Classical.choice` used only where the
-judgment layer's classical helpers require it).
+`scripts/verify_formal.sh` — **PASS (V2.2)**: build clean, no
+`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 13 audited
+theorems including the three V2.2 execution-domain tests.
