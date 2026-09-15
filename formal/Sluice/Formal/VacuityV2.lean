@@ -52,6 +52,7 @@ def echoPrim : PrimLTS2 EchoSig :=
     run := fun s _ _ _ => some (EchoResult.pong, s, [])
     park := fun _ _ _ => none
     finish := fun _ _ _ => none
+    extCap := fun _ => false
     extRun := fun _ _ _ => none
     onTick := fun s _ => s
     expire := fun _ _ _ => none }
@@ -212,9 +213,12 @@ theorem sim_echo_fwd :
           exact absurd hrunP (by simp [echoPrim])
       | finishDone _ _ _ _ _ _ _ _ _ hfin _ _ =>
           exact absurd hfin (by simp [echoPrim])
-      | extApply _ _ _ _ _ _ _ _ _ hrunE _ _ =>
+      | extApply _ _ _ _ hcap _ =>
+          simp [echoPrim] at hcap
+      | extEffect _ _ _ _ _ _ _ _ _ hsplit _ hrunE _ _ =>
+          exfalso
           simp [echoPrim] at hrunE
-      | extDone _ _ _ hsplit =>
+      | extDone _ _ _ _ hsplit _ =>
           exfalso
           rw [hx] at hsplit
           simp at hsplit
@@ -430,14 +434,12 @@ theorem seqOK_lieTrace : SeqOK DomSig lieTrace := by
 
 set_option linter.unusedVariables false in
 /-- Inverting a primitive step that emits an external issue: it is an
-`extApply` of `domPrim`, with the fused critical section's obligations. -/
+`extApply` entry of a call in the primitive's external domain. -/
 theorem extIssue_inv {m1 m2 : PrimCfg DomSig domPrim} {ob : Obs DomSig}
     (hstep : PrimStep2 DomSig domPrim m1 (some ob) m2)
     (hres : ob.result = none) (hcl : ob.caller = Caller.ext 0) :
-    ∃ (x : ExternalId) (c : DomCall) (r : DomResult) (s' : domPrim.State) (wk : List FiberId)
-        (preP postP ps : List (Pnd DomSig)),
-      ob = issueObs DomSig (Caller.ext x) c ∧
-      domPrim.extRun c m1.prim m1.now = some (r, s', wk) := by
+    ∃ (x : ExternalId) (c : DomCall) (preE postE : List (ExtPend DomSig)),
+      ob = issueObs DomSig (Caller.ext x) c ∧ domPrim.extCap c = true := by
   cases hstep with
   | dispatchFresh r0 rest s0 hcur hrq hfr hadm =>
       exact absurd hcl (by simp [issueObs])
@@ -445,26 +447,25 @@ theorem extIssue_inv {m1 m2 : PrimCfg DomSig domPrim} {ob : Obs DomSig}
       exact absurd hcl (by simp [compObs])
   | finishDone d preP postP ps r s' wk hcur hd2 hfin hparked hmap =>
       exact absurd hcl (by simp [compObs])
-  | extApply x c r s' wk preP postP ps _ hrunE _ _ =>
-      exact ⟨x, c, r, s', wk, preP, postP, ps, rfl, hrunE⟩
-  | extDone preE postE e hsplit =>
+  | extApply x c preE postE hcap hx =>
+      exact ⟨x, c, preE, postE, rfl, hcap⟩
+  | extDone preE postE e r hsplit hsome =>
       exact absurd hres (by simp [compObs])
 
-/-- The primitive can never produce the lie: the only step emitting an
-external issue is `extApply`, and `domPrim.extRun` has no external domain
-for `go`. -/
+/-- The primitive can never produce the lie: an external issue of `go`
+would require `domPrim.extCap go = true`. -/
 theorem prim_not_lieTrace : ¬ TracesPrim DomSig domPrim lieTrace := by
   rintro ⟨fin, hrun⟩
   obtain ⟨m1, m2, -, hstep, -⟩ :=
     primRuns_cons hrun (issueObs DomSig (Caller.ext 0) DomCall.go)
       [compObs DomSig (Caller.ext 0) DomCall.go DomResult.done] rfl
-  obtain ⟨x, c, r, s', wk, preP, postP, ps, hob, hrunE⟩ :=
+  obtain ⟨x, c, preE, postE, hob, hcap⟩ :=
     extIssue_inv hstep rfl rfl
-  injection hob with hcaller hcall
+  injection hob with hcaller hcall _
   injection hcaller with hx
-  subst hcall
   subst hx
-  simp [domPrim] at hrunE
+  subst hcall
+  simp [domPrim] at hcap
 
 /-- The lying encoding over-produces: the domain declaration bites. -/
 theorem encLie_overProduces : OverProduces domPrim BaseOpsSig.none encLie :=

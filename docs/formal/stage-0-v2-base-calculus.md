@@ -147,11 +147,23 @@ worker `worker_loop` (`scheduler.cpp`):
    is contractual.
 9. **external calls (V2.2)** — an external-capable call is executed by its
    calling thread, not by the worker: it never enters the runnable FIFO and
-   never waits for a fiber dispatch.  On the primitive side its whole
-   critical section is the fused `extRun` facet, applied atomically with the
-   issue observation (`extApply`); on the encoding side the external caller
-   executes its program stepwise (`extStart`, `extSubOpStep`,
-   `extSubOpWake`) using only `extOpAllowed` substrate operations.
+   never waits for a fiber dispatch.  Both machines model the code's
+   three-phase shape (function entry → critical section → return) as three
+   independent steps:
+   * **entry** — the issue observation is emitted and an in-flight record
+     is registered (`extApply` primitive-side, gated by the primitive's
+     per-call domain declaration `PrimLTS2.extCap`; `extStart`
+     encoding-side, gated by `Encoding.extCap`).  No state effect here:
+     entry precedes `global_mtx_` acquisition in the code, so entry order
+     may differ from critical-section order (two threads may enter
+     `Event::set` in one order and run their sections in the other).
+   * **critical section** — the state effect, silent: the fused `extRun`
+     facet fixes the result and readies woken parked fibers on the
+     primitive side (`extEffect`); the encoding side executes its program
+     stepwise (`extSubOpStep`/`extSubOpWake`) using only `extOpAllowed`
+     substrate operations.
+   * **return** — the completion observation (`extDone`/`extComplete`),
+     unordered with respect to other steps (rule 10).
    External steps interleave with fiber steps wherever `global_mtx_` is
    free — including while a fiber is between its critical sections
    (`cur` does not gate external steps) — and an external call may begin
@@ -172,10 +184,13 @@ A primitive under judgment provides: `State`, `init`, `admit` (entry critical
 section, atomic with the issue observation), `run` (the fused inline paths —
 `some (r, s', woken)` completes at physical return with state effect and woken
 fibers in order; `none` goes to park), `park` (suspension state effect),
-`finish` (a resumed parked call's completion at its dispatch), `extRun`
-(V2.2 — the external execution of a call: its single fused critical section
-run off the scheduler; `none` marks the call fiber-only), `onTick` (clock
-mirror at idle points), `expire` (environment expiry of one parked deadline).
+`finish` (a resumed parked call's completion at its dispatch), `extCap`
+(V2.2 — the per-call external-domain declaration: `extCap c = true` iff `c`
+can be issued by an external thread; it gates `extApply` and must agree
+with `extRun`), `extRun` (V2.2 — the external execution of a call: its
+single fused critical section run off the scheduler; `none` marks the call
+fiber-only), `onTick` (clock mirror at idle points), `expire` (environment
+expiry of one parked deadline).
 These facets are the code's decision points; each stage card maps them to
 `include/`+`src/` line anchors.
 
@@ -188,10 +203,16 @@ shared state, no external persistent state.  Substrate operations are frozen
 **call-domain declaration** `extCap`: the calls an external thread can issue
 against this implementation.  An encoding whose `extCap` disagrees with the
 primitive's own domains is refuted by the vacuity gate (`encLie_overProduces`);
-the declaration is therefore part of the adjudicated surface, and §8
-symmetry holds by construction: the primitive's external domains
-(`extRun ≠ none`) and the encoding's (`extCap = true`) face the same
-observation language and the same `SeqOK` discipline.
+the declaration is therefore part of the adjudicated surface.  Symmetry
+holds by construction: both sides declare their external domains
+(`PrimLTS2.extCap` / `Encoding.extCap`), run the same three-phase external
+sequence, and face the same observation language and the same `SeqOK`
+discipline.  One recorded granularity asymmetry: the encoding-side
+external critical section executes *stepwise*, so fiber steps may interleave
+between its substrate operations, while the primitive-side `extRun` is one
+atomic step — the encoding side is therefore the more permissive of the
+two, which is conservative for reductions (extra encoding freedom can only
+make `bwd` harder, never vacuously easier).
 
 ## 5. `BASE(P)` composition (frozen — MAJOR B)
 
@@ -284,6 +305,35 @@ downstream verdicts existed; the calc-internal certificates
 (`tracesEnc_shadow_false`, `probeEnc_possesses`, `seqOK_not_shadow`) and the
 vacuity reduction were re-verified by the gate after the amendment.
 
+**v2.2 (external-call corrective, before any downstream merge).**  The V2
+calculus treated every API call as a scheduler/fiber submission
+(`submit` → FIFO → dispatch → run).  The production code contradicts this:
+`Event::set`/`Event::reset` (`scheduler_event.cpp`) and Semaphore's
+`release`/`try_acquire`/`cancel` (`scheduler_semaphore.cpp`) enter scheduler
+state under `global_mtx_` with no `g_worker`/`ws->current` read, so an
+external OS thread can issue them while scheduler fibers are queued or
+running — an external `set` between two queued waits is legal production
+behavior the V2 primitive LTS cannot express.  Amendment: `Caller`-
+identified observations (`Obs(caller, ...)`, `SeqOK` per caller), the
+per-call external-domain declarations on both sides (`PrimLTS2.extCap`
+gating entry; `Encoding.extCap` symmetric), the `exts` in-flight records on
+both configurations, and the external step rules on both machines as a
+three-phase sequence — entry (issue observation, `extApply`/`extStart`),
+critical section (silent state effect fixing the result,
+`extEffect`/`extSubOpStep`+`extSubOpWake`), physical return (completion
+observation, `extDone`/`extComplete`) — plus `extOpAllowed` (external
+callers execute only the substrate operations that never register or
+suspend: `attach`/`suspend` live in `await_wait*`, which requires
+`g_worker`).  The issue is deliberately not fused with the state effect:
+entry precedes mutex acquisition in the code, so entry order may differ
+from critical-section order (an initial fused-`extApply` shape was refuted
+in this stage's fresh-context adversarial review and corrected before
+merge).  External invocation of base operations is deferred (no rule; see
+§9.3b).  Downstream invalidation: **the Stage 1V2 Event verdict (PR #377)
+is invalidated** — its countermodel relied on "set/reset must enter the
+scheduler FIFO", which V2.2 removes; the Event stage is re-adjudicated on
+V2.2 before any verdict is reused.
+
 ## 8. Method-level vacuity and negative tests (§9 of the corrective document)
 
 | Test | Artifact | Requirement |
@@ -293,8 +343,8 @@ vacuity reduction were re-verified by the gate after the amendment.
 | the identity discipline bites | `seqOK_not_shadow` | a trace violating per-fiber alternation is outside both languages |
 | a reducible wrapper proves reducible | `VacuityV2.lean` (`echoPrim`) | `Reducible echoPrim {} []` — the THEOREM-A branch is exercisable |
 | a base re-export must not become THEOREM B | stage 3 (lock_guard vs its declared base) | the first nonempty `BASE(P)` adjudication must certify the re-export THEOREM A |
-| the external domain bypasses the FIFO (primitive side) | `domPrim_possesses` | two fibers queued ahead of an external caller; its issue and completion serialize between the first fiber's return and the second fiber's issue |
-| the external domain is symmetric (encoding side) | `domEnc_possesses` | the same schedule produced by the encoding machine, same observation positions |
+| the external domain bypasses the FIFO (primitive side) | `CalcV2.lean` (`domPrim_possesses`) | two fibers queued ahead of an external caller; its issue and completion serialize between the first fiber's return and the second fiber's issue |
+| the external domain is symmetric (encoding side) | `CalcV2.lean` (`domEnc_possesses`) | the same schedule produced by the encoding machine, same observation positions |
 | a lying call-domain declaration over-produces | `encLie_overProduces` | an encoding claiming `extCap` for a fiber-only call is refuted against the primitive's `extRun = none` |
 
 Correct models PASS, mutants FAIL; both branches of the verdict space are
@@ -310,9 +360,15 @@ exercised before any primitive verdict is trusted.
 3. Stage 8 (`Scheduler::run`) needs a declared substrate extension (driver
    state); adding it is a recorded extension, not a silent change.
 3b. External invocation of `ExtProg.base` operations has no machine rule
-   (V2.2 deferral, §7.1 v2.2).  A stage whose encoding needs an
-   external-capable call implemented over `BASE(P)` must first extend the
-   machine by BRAKE-1 — this is checkable at the stage's PR boundary.
+   (V2.2 deferral, §7.1 v2.2), and an external program that steps outside
+   `extOpAllowed` is likewise stuck.  A stage whose encoding needs either
+   must first extend the machine by BRAKE-1 — both are checkable at the
+   stage's PR boundary (a stuck program can only *shrink* the encoding's
+   trace language, so under-production is the failure mode to audit).
+3c. The `sluice_async_test::test_phase` hook inside `event_set_broadcast`
+   is not in the retained tree (its header is gone); it is compiled out of
+   production builds.  When test control is rebuilt, that hook must not
+   read `g_worker` — it sits on an off-fiber path.
 4. Multi-worker `run` remains outside the serialized single-worker discipline
    above; its adjudication status is a campaign-level question the FINAL
    VERDICT must address explicitly (RESEARCH is acceptable).

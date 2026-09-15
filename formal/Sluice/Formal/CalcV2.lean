@@ -41,15 +41,20 @@ correctives it implements:
     observations record the caller, never a faked fiber;
   * fiber-origin calls keep the V2 discipline verbatim (submit / FIFO
     dispatch / run-to-block / physical return);
-  * an external-capable call executes as its single fused critical section
-    (`extRun` on the primitive side; stepwise substrate operations on the
-    encoding side) -- independent of the worker and the runnable FIFO,
-    interleaving with fiber steps wherever the mutex is free;
-  * an external call's physical return is a separate, later step: holding
-    `global_mtx_` serializes state effects, not physical returns.  The V1
-    completion-shadow defect was exactly this confusion, so the completion
-    of an external call is deliberately unordered with respect to other
-    steps.
+  * an external-capable call executes in three phases, mirroring the code's
+    shape (entry → critical section → return): the entry step (`extApply`
+    primitive-side, `extStart` encoding-side) emits the issue observation
+    and registers an in-flight record with no result; the critical section
+    (`extEffect` primitive-side, `extSubOpStep`/`extSubOpWake` encoding-side)
+    applies the state effect silently and fixes the result; the return
+    (`extDone` / `extComplete`) emits the completion.  Entry precedes
+    `global_mtx_` acquisition in the code, so entry order may differ from
+    critical-section order -- the phases are therefore independent steps;
+  * an external call's physical return is unordered with respect to other
+    steps: holding `global_mtx_` serializes state effects, not physical
+    returns.  The V1 completion-shadow defect was exactly this confusion,
+    so the completion of an external call is deliberately unordered, and
+    the issue is deliberately unfused with the effect.
 
 BRAKE-1 ledger (see the freeze document, §7.1):
 
@@ -70,18 +75,22 @@ BRAKE-1 ledger (see the freeze document, §7.1):
   state under `global_mtx_` without any fiber context, so an external OS
   thread can issue them while scheduler fibers are queued or running.
   Amendment: `Caller`-identified observations, `PrimLTS2.extRun` (per-call
-  external domain, fused critical section, issue + state effect in one
-  step, physical return deferred to `extDone`), `Encoding.extCap` (the
-  encoding side declares the same domains), the `exts` in-flight records on
-  both configurations, and the external step rules on both machines
-  (`extApply`/`extDone`, `extStart`/`extSubOpStep`/`extSubOpWake`/
-  `extComplete`).  External callers may execute only substrate operations
-  that never register or suspend (`extOpAllowed`): `attach`/`suspend` live
-  inside `await_wait*`, which requires `g_worker`.  External invocation of
-  base operations is deferred (no rule; see the freeze document's open
-  assumptions).  Downstream invalidation: the Stage 1V2 Event verdict
-  (PR #377) rested on "set/reset must enter the scheduler FIFO", which V2.2
-  removes; the Event stage is re-adjudicated on V2.2.
+  external domain: the call's single fused critical section, run off the
+  scheduler), `Encoding.extCap` (the encoding side declares the same
+  domains), the `exts` in-flight records on both configurations, and the
+  external step rules on both machines -- a three-phase sequence: entry
+  (issue observation, `extApply`/`extStart`), critical section (silent
+  state effect fixing the result, `extEffect`/`extSubOpStep`+`extSubOpWake`),
+  physical return (completion observation, `extDone`/`extComplete`).  Entry
+  precedes mutex acquisition in the code, so the issue is never fused with
+  the effect: two external callers may enter in one order and run their
+  critical sections in the other.  External callers may execute only
+  substrate operations that never register or suspend (`extOpAllowed`);
+  external invocation of base operations is deferred (no rule; see the
+  freeze document's open assumptions).  Downstream invalidation: the
+  Stage 1V2 Event verdict (PR #377) rested on "set/reset must enter the
+  scheduler FIFO", which V2.2 removes; the Event stage is re-adjudicated
+  on V2.2.
 
 Every construct carries a comment naming its C++ counterpart where one exists.
 -/
@@ -810,13 +819,13 @@ structure PReady (A : ApiSig) : Type where
   call : A.Call
   fresh : Bool
 
-/-- An external call in flight against the primitive: entered (the issue
-observation was emitted atomically with the state effect); its result is
-already fixed, its physical return is pending. -/
+/-- An external call in flight against the primitive.  `result = none`:
+entered, its critical section has not run.  `result = some r`: the critical
+section ran and fixed the result; the physical return is pending. -/
 structure ExtPend (A : ApiSig) : Type where
   x : ExternalId
   call : A.Call
-  result : A.Result
+  result : Option A.Result
 
 structure PrimLTS2 (A : ApiSig) : Type 1 where
   /-- The primitive's private state (its C++ members). -/
@@ -833,9 +842,14 @@ structure PrimLTS2 (A : ApiSig) : Type 1 where
   park : State → FiberId → A.Call → Option State
   /-- A resumed parked call completes at its dispatch. -/
   finish : State → FiberId → A.Call → Option (A.Result × State × List FiberId)
+  /-- The external call domains: `extCap c = true` iff `c` can be issued by
+  an external thread (a `global_mtx_`-only entry point with no `g_worker`
+  read).  Must agree with `extRun`: `extRun c = none` whenever
+  `extCap c = false` (the per-stage card records the census). -/
+  extCap : A.Call → Bool
   /-- External synchronous execution of call `c`: the call's single fused
   critical section, run off the scheduler by an external thread.  `none` =
-  the call has no external domain (it is fiber-only). -/
+  the call has no external critical section (it is fiber-only). -/
   extRun : A.Call → State → Tick → Option (A.Result × State × List FiberId)
   /-- Clock-mirror update at idle points. -/
   onTick : State → Tick → State
@@ -950,21 +964,36 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
           retired := if d.1.fiber ∈ cfg.retired then cfg.retired else d.1.fiber :: cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
-  /-- An external caller enters a call and executes its single fused
-  critical section (`extRun`): the issue observation and the state effect
-  in one step, independent of the worker and the runnable FIFO -- the
-  code's external-capable paths take only `global_mtx_` and no `g_worker`,
-  so the call may begin while fibers are queued or while a fiber is between
-  its critical sections.  Woken parked fibers are published runnable
-  exactly as in `runDone`. -/
+  /-- An external caller *enters* a call: the issue observation is emitted
+  at entry and a result-less record is registered.  Entry precedes
+  `global_mtx_` acquisition in the code (`scheduler_event.cpp`: function
+  body, then `LockGuard`), so the step is independent of the worker and the
+  runnable FIFO, and the critical section is a *later*, separate step. -/
   | extApply (cfg : PrimCfg A P) (x : ExternalId) (c : A.Call)
+      (preE postE : List (ExtPend A)) :
+      P.extCap c = true →
+      x ∉ cfg.exts.map (fun e : ExtPend A => e.x) →
+      PrimStep2 A P cfg (some (issueObs A (Caller.ext x) c))
+        { prim := cfg.prim
+          now := cfg.now
+          cur := cfg.cur
+          parked := cfg.parked
+          runq := cfg.runq
+          retired := cfg.retired
+          nextFiber := cfg.nextFiber
+          exts := cfg.exts ++ [{ x := x, call := c, result := none }] }
+  /-- An external call's *critical section* runs: the fused `extRun` facet
+  fixes the result, applies the state effect, and readies the woken parked
+  fibers exactly as in `runDone`.  Silent; the entry must be present and
+  not yet applied. -/
+  | extEffect (cfg : PrimCfg A P) (preE postE : List (ExtPend A)) (e : ExtPend A)
       (r : A.Result) (s' : P.State) (wk : List FiberId)
       (preP postP : List (Pnd A)) (ps : List (Pnd A)) :
-      x ∉ cfg.exts.map (fun e : ExtPend A => e.x) →
-      P.extRun c cfg.prim cfg.now = some (r, s', wk) →
+      cfg.exts = preE ++ e :: postE → e.result = none →
+      P.extRun e.call cfg.prim cfg.now = some (r, s', wk) →
       cfg.parked = preP ++ ps ++ postP →
       ps.map (fun p : Pnd A => p.fiber) = wk →
-      PrimStep2 A P cfg (some (issueObs A (Caller.ext x) c))
+      PrimStep2 A P cfg none
         { prim := s'
           now := cfg.now
           cur := cfg.cur
@@ -972,15 +1001,15 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
           runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
           retired := cfg.retired
           nextFiber := cfg.nextFiber
-          exts := cfg.exts ++ [{ x := x, call := c, result := r }] }
+          exts := preE ++ { e with result := some r } :: postE }
   /-- An external call physically returns: the completion observation.
   Deliberately unordered with respect to the other steps: the caller's
   critical section has ended, and `global_mtx_` serialization is not
   physical-return serialization (another caller's critical section may
   serialize between this call's effect and its return). -/
-  | extDone (cfg : PrimCfg A P) (preE postE : List (ExtPend A)) (e : ExtPend A) :
-      cfg.exts = preE ++ e :: postE →
-      PrimStep2 A P cfg (some (compObs A (Caller.ext e.x) e.call e.result))
+  | extDone (cfg : PrimCfg A P) (preE postE : List (ExtPend A)) (e : ExtPend A) (r : A.Result) :
+      cfg.exts = preE ++ e :: postE → e.result = some r →
+      PrimStep2 A P cfg (some (compObs A (Caller.ext e.x) e.call r))
         { prim := cfg.prim
           now := cfg.now
           cur := cfg.cur
@@ -1309,6 +1338,10 @@ def domPrim : PrimLTS2 DomSig :=
       | DomCall.beep => none
     park := fun _ _ _ => none
     finish := fun _ _ _ => none
+    extCap := fun c =>
+      match c with
+      | DomCall.go => false
+      | DomCall.beep => true
     extRun := fun c s _ =>
       match c with
       | DomCall.go => none
@@ -1355,11 +1388,17 @@ def dp4 : PrimCfg DomSig domPrim :=
     runq := [{ fiber := 1, call := DomCall.go, fresh := true }],
     retired := [0], nextFiber := 2, exts := [] }
 
-def dp5 : PrimCfg DomSig domPrim :=
+def dp5a : PrimCfg DomSig domPrim :=
   { prim := (), now := 0, cur := none, parked := [],
     runq := [{ fiber := 1, call := DomCall.go, fresh := true }],
     retired := [0], nextFiber := 2,
-    exts := [{ x := 0, call := DomCall.beep, result := DomResult.done }] }
+    exts := [{ x := 0, call := DomCall.beep, result := none }] }
+
+def dp5b : PrimCfg DomSig domPrim :=
+  { prim := (), now := 0, cur := none, parked := [],
+    runq := [{ fiber := 1, call := DomCall.go, fresh := true }],
+    retired := [0], nextFiber := 2,
+    exts := [{ x := 0, call := DomCall.beep, result := some DomResult.done }] }
 
 def dp6 : PrimCfg DomSig domPrim :=
   { prim := (), now := 0, cur := none, parked := [],
@@ -1392,13 +1431,18 @@ theorem d4 : PrimStep2 DomSig domPrim dp3
     DomResult.done () [] rfl rfl rfl rfl rfl
 
 theorem d5 : PrimStep2 DomSig domPrim dp4
-    (some (issueObs DomSig (Caller.ext 0) DomCall.beep)) dp5 :=
-  PrimStep2.extApply dp4 0 DomCall.beep DomResult.done () [] [] [] []
-    (by show 0 ∉ ([] : List (ExtPend DomSig)).map (fun e : ExtPend DomSig => e.x); simp) rfl rfl rfl
+    (some (issueObs DomSig (Caller.ext 0) DomCall.beep)) dp5a :=
+  PrimStep2.extApply dp4 0 DomCall.beep [] [] rfl
+    (by show 0 ∉ ([] : List (ExtPend DomSig)).map (fun e : ExtPend DomSig => e.x); simp)
 
-theorem d6 : PrimStep2 DomSig domPrim dp5
+theorem d5b : PrimStep2 DomSig domPrim dp5a none dp5b :=
+  PrimStep2.extEffect dp5a [] [] { x := 0, call := DomCall.beep, result := none }
+    DomResult.done () [] [] [] [] rfl rfl rfl rfl rfl
+
+theorem d6 : PrimStep2 DomSig domPrim dp5b
     (some (compObs DomSig (Caller.ext 0) DomCall.beep DomResult.done)) dp6 :=
-  PrimStep2.extDone dp5 [] [] { x := 0, call := DomCall.beep, result := DomResult.done } rfl
+  PrimStep2.extDone dp5b [] [] { x := 0, call := DomCall.beep, result := some DomResult.done }
+    DomResult.done rfl rfl
 
 theorem d7 : PrimStep2 DomSig domPrim dp6
     (some (issueObs DomSig (Caller.fiber 1) DomCall.go)) dp7 := by
@@ -1425,10 +1469,11 @@ theorem domPrim_possesses : TracesPrim DomSig domPrim domTrace :=
     (PrimRuns2.step dp1 dp2 none _ dp8 d2
       (PrimRuns2.step dp2 dp3 _ _ dp8 d3
         (PrimRuns2.step dp3 dp4 _ _ dp8 d4
-          (PrimRuns2.step dp4 dp5 _ _ dp8 d5
-            (PrimRuns2.step dp5 dp6 _ _ dp8 d6
-              (PrimRuns2.step dp6 dp7 _ _ dp8 d7
-                (PrimRuns2.step dp7 dp8 _ [] dp8 d8 (PrimRuns2.stop dp8))))))))⟩
+          (PrimRuns2.step dp4 dp5a _ _ dp8 d5
+            (PrimRuns2.step dp5a dp5b none _ dp8 d5b
+              (PrimRuns2.step dp5b dp6 _ _ dp8 d6
+                (PrimRuns2.step dp6 dp7 _ _ dp8 d7
+                  (PrimRuns2.step dp7 dp8 _ [] dp8 d8 (PrimRuns2.stop dp8)))))))))⟩
 
 /-! ### The encoding side runs the same external schedule
 
