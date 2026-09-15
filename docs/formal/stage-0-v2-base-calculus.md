@@ -115,10 +115,15 @@ worker `worker_loop` (`scheduler.cpp`):
    running fiber returning, and no step that delays a return arbitrarily: the
    V1 completion-shadow projection is **not** valid under V2, and
    `CalcV2.lean`'s `tracesEnc_shadow_false` proves its failure formally.
-5. **wake publication** — a resolution (wake/cancel/expire) publishes the woken
-   fiber runnable immediately, appending it at the tail of the runnable queue
-   (FIFO).  C++: `publish_wait_winner_locked` → `route_runnable_locked`
-   (push_back under `inbox_mtx`).
+5. **wake publication** — a resolution whose registrant is a parked fiber
+   suspended on the resolved token publishes that fiber runnable immediately,
+   appending it at the tail of the runnable queue (FIFO).  A resolution with
+   no such registrant records the outcome for the token's `WaitNode` and
+   publishes nothing.  C++: `publish_wait_winner_locked` →
+   `route_runnable_locked` (push_back under `inbox_mtx`) for the published
+   case; the one-shot `WaitNode::resolve_` semantics for the recorded case,
+   with the already-set branch of `event_wait_admit_locked` (resolve the
+   caller's own node inline, `resolved_inline`) as the running-fiber instance.
 6. **park** — a suspension moves the fiber out of the running slot (worker
    idle) and applies the suspension state effect.  A resumed call may park
    again (Mesa reacquire, `AsyncCondition::wait`).
@@ -218,6 +223,27 @@ architecture question.
    asymmetry (the shadow route is dead — see §8).
 5. Every stage must keep: negative mutants per artifact, the gate scripts
    green, and a fresh-context adversarial review with corrective commit.
+
+### 7.1 BRAKE-1 ledger
+
+**v2.1 (during Stage 1V2 validation).** `subOpStep`'s original freshness
+premise required a program step to resolve *nothing new*.  Stage 1V2 found
+this unfaithful to the code and hostile to every stateful encoding: the code
+routinely resolves registrations that no parked fiber is suspended on (the
+already-set branch of `event_wait_admit_locked` resolves the caller's own
+node inline and returns `resolved_inline` without suspending; sentinel and
+marker idioms resolve retired registrants' nodes through
+`WaitNode::resolve_`'s one-shot semantics).  Under the original premise the
+encoding machine could not execute such steps at all, so an Event-stage
+verdict would have reflected a machine artifact, not the architecture
+question.  Amendment: `subOpStep` now requires only that no *newly resolved*
+token has a parked registrant (those still go through `subOpWake`, which
+publishes the registrant).  Code anchors: `event_wait_admit_locked`
+(`resolved_inline`), `WaitNode::resolve_` one-shot semantics,
+`scheduler_event.cpp:180-190`.  Downstream invalidation: none — no
+downstream verdicts existed; the calc-internal certificates
+(`tracesEnc_shadow_false`, `probeEnc_possesses`, `seqOK_not_shadow`) and the
+vacuity reduction were re-verified by the gate after the amendment.
 
 ## 8. Method-level vacuity and negative tests (§9 of the corrective document)
 

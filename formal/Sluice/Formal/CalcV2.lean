@@ -30,6 +30,19 @@ correctives it implements:
   `docs/formal/stage-0-v2-base-calculus.md`, is the whole Stage-0-V2 freeze.
   Later stages may not change it without BRAKE-1 and downstream invalidation.
 
+BRAKE-1 ledger (see the freeze document, §7):
+
+  v2.1 -- Stage 1V2 validation found `subOpStep`'s original freshness
+  premise (no new resolutions at all) incapable of executing the code's
+  inline-resolve behavior: a fiber may resolve a registration no parked
+  fiber is suspended on (the already-set branch of
+  `event_wait_admit_locked` resolves the caller's own node and returns
+  without suspending).  The premise now forbids only resolutions that a
+  parked fiber is waiting on; those still go through `subOpWake`.
+  Downstream invalidation: none -- no downstream verdicts existed; the
+  calc-internal certificates and the vacuity reduction were re-verified
+  by the gate.
+
 Every construct carries a comment naming its C++ counterpart where one exists.
 -/
 
@@ -400,13 +413,19 @@ inductive SysStep (O : BaseOpsSig) (A : ApiSig) (enc : Encoding O A)
           runq := rest
           retired := cfg.retired
           nextFiber := cfg.nextFiber }
-  /-- The running fiber performs a non-blocking substrate operation that
-  resolves nothing new. -/
+  /-- The running fiber performs a non-blocking substrate operation.  A
+  step whose operation resolves new waiter tokens is executable here only
+  when no parked fiber is suspended on any newly resolved token (such
+  resolutions record the outcome for the token's own `WaitNode`, exactly
+  like the code's inline-resolve paths, e.g. the already-set branch of
+  `event_wait_admit_locked`); resolving a token a parked fiber is suspended
+  on goes through `subOpWake` and publishes it. -/
   | subOpStep (cfg : SysCfg O A) (t : Running O A) (o : SubOp) (k : SubVal → ExtProg O A)
       (v : SubVal) (st' : SubState) :
       cfg.cur = some t → t.prog = ExtProg.eff o k →
       step t.fiber cfg.st o v st' →
-      (∀ x ∈ st'.resolved, x ∈ cfg.st.resolved) →
+      (∀ x ∈ st'.resolved, x ∈ cfg.st.resolved ∨
+        ∀ p ∈ cfg.parked, ∀ kw, p.site ≠ ParkSite.susp x.1 kw) →
       SysStep O A enc step cfg none
         { st := st'
           bst := cfg.bst
