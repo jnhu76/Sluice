@@ -56,3 +56,6 @@ crash-*
 # Serena (semantic code tools); tool venv lives outside the repo under uv
 .serena/
 .venv/
+
+# Lean formal verification artifacts
+formal/.lake/
