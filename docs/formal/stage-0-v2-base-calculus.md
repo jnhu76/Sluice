@@ -345,7 +345,7 @@ V2.2 before any verdict is reused.
 | a base re-export must not become THEOREM B | stage 3 (lock_guard vs its declared base) | the first nonempty `BASE(P)` adjudication must certify the re-export THEOREM A |
 | the external domain bypasses the FIFO (primitive side) | `CalcV2.lean` (`domPrim_possesses`) | two fibers queued ahead of an external caller; its issue and completion serialize between the first fiber's return and the second fiber's issue |
 | the external domain is symmetric (encoding side) | `CalcV2.lean` (`domEnc_possesses`) | the same schedule produced by the encoding machine, same observation positions |
-| a lying call-domain declaration over-produces | `encLie_overProduces` | an encoding claiming `extCap` for a fiber-only call is refuted against the primitive's `extRun = none` |
+| a lying call-domain declaration over-produces | `encLie_overProduces` | an encoding claiming `extCap` for a fiber-only call is refuted against the primitive's `extCap = false` entry gate |
 
 Correct models PASS, mutants FAIL; both branches of the verdict space are
 exercised before any primitive verdict is trusted.
