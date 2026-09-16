@@ -93,9 +93,11 @@ def semRun (s : SemState) (c : SemCall) : Option (SemResult × SemState × List 
           else some (SemResult.relRet false, s, [])
       | w :: rest => some (SemResult.relRet true, { s with waitq := rest }, [w])
 
-def semPrim : PrimLTS2 SemSig :=
+/-- The counting semaphore parameterized by the C++ constructor's
+`initial_permits` and `max_permits`. -/
+def semPrimOf (initial max : Nat) : PrimLTS2 SemSig :=
   { State := SemState
-    init := { available := 0, max := 1, waitq := [] }
+    init := { available := initial, max := max, waitq := [] }
     admit := fun s _ _ => some s
     run := fun s _ _ c => semRun s c
     park := fun s f c =>
@@ -117,41 +119,46 @@ def semPrim : PrimLTS2 SemSig :=
     onTick := fun s _ => s
     expire := fun _ _ _ => none }
 
+/-- The modeled instance: zero initial permits, ceiling 1. -/
+def semPrim : PrimLTS2 SemSig := semPrimOf 0 1
+
 /-! ## Facet helpers -/
 
-@[simp] theorem semPrim_admit (s : SemState) (f : FiberId) (c : SemCall) :
-    semPrim.admit s f c = some s := rfl
+@[simp] theorem semPrimOf_admit (initial max : Nat) (s : SemState) (f : FiberId) (c : SemCall) :
+    (semPrimOf initial max).admit s f c = some s := rfl
 
-@[simp] theorem semPrim_run (s : SemState) (t : Tick) (f : FiberId) (c : SemCall) :
-    semPrim.run s t f c = semRun s c := rfl
+@[simp] theorem semPrimOf_run (initial max : Nat) (s : SemState) (t : Tick) (f : FiberId)
+    (c : SemCall) : (semPrimOf initial max).run s t f c = semRun s c := rfl
 
-@[simp] theorem semPrim_park_acquire (s : SemState) (f : FiberId) :
-    semPrim.park s f SemCall.acquire = some { s with waitq := s.waitq ++ [f] } := rfl
+@[simp] theorem semPrimOf_park_acquire (initial max : Nat) (s : SemState) (f : FiberId) :
+    (semPrimOf initial max).park s f SemCall.acquire = some { s with waitq := s.waitq ++ [f] } := rfl
 
-@[simp] theorem semPrim_park_release (s : SemState) (f : FiberId) :
-    semPrim.park s f SemCall.release = none := rfl
+@[simp] theorem semPrimOf_park_release (initial max : Nat) (s : SemState) (f : FiberId) :
+    (semPrimOf initial max).park s f SemCall.release = none := rfl
 
-@[simp] theorem semPrim_finish_acquire (s : SemState) (f : FiberId) :
-    semPrim.finish s f SemCall.acquire = some (SemResult.acqDone, s, []) := rfl
+@[simp] theorem semPrimOf_finish_acquire (initial max : Nat) (s : SemState) (f : FiberId) :
+    (semPrimOf initial max).finish s f SemCall.acquire = some (SemResult.acqDone, s, []) := rfl
 
-@[simp] theorem semPrim_finish_release (s : SemState) (f : FiberId) :
-    semPrim.finish s f SemCall.release = none := rfl
+@[simp] theorem semPrimOf_finish_release (initial max : Nat) (s : SemState) (f : FiberId) :
+    (semPrimOf initial max).finish s f SemCall.release = none := rfl
 
-@[simp] theorem semPrim_extCap_acquire : semPrim.extCap SemCall.acquire = false := rfl
+@[simp] theorem semPrimOf_extCap_acquire (initial max : Nat) :
+    (semPrimOf initial max).extCap SemCall.acquire = false := rfl
 
-@[simp] theorem semPrim_extCap_release : semPrim.extCap SemCall.release = true := rfl
+@[simp] theorem semPrimOf_extCap_release (initial max : Nat) :
+    (semPrimOf initial max).extCap SemCall.release = true := rfl
 
-@[simp] theorem semPrim_extRun_acquire (s : SemState) (t : Tick) :
-    semPrim.extRun SemCall.acquire s t = none := rfl
+@[simp] theorem semPrimOf_extRun_acquire (initial max : Nat) (s : SemState) (t : Tick) :
+    (semPrimOf initial max).extRun SemCall.acquire s t = none := rfl
 
-@[simp] theorem semPrim_extRun_release (s : SemState) (t : Tick) :
-    semPrim.extRun SemCall.release s t = semRun s SemCall.release := rfl
+@[simp] theorem semPrimOf_extRun_release (initial max : Nat) (s : SemState) (t : Tick) :
+    (semPrimOf initial max).extRun SemCall.release s t = semRun s SemCall.release := rfl
 
-@[simp] theorem semPrim_onTick (s : SemState) (t : Tick) :
-    semPrim.onTick s t = s := rfl
+@[simp] theorem semPrimOf_onTick (initial max : Nat) (s : SemState) (t : Tick) :
+    (semPrimOf initial max).onTick s t = s := rfl
 
-@[simp] theorem semPrim_expire (s : SemState) (t : Tick) (f : FiberId) :
-    semPrim.expire s t f = none := rfl
+@[simp] theorem semPrimOf_expire (initial max : Nat) (s : SemState) (t : Tick) (f : FiberId) :
+    (semPrimOf initial max).expire s t f = none := rfl
 
 theorem semRun_none {s : SemState} {c : SemCall}
     (h : semRun s c = none) : c = SemCall.acquire := by
@@ -227,27 +234,43 @@ def semRelCount (t : Trace SemSig) : Nat := (t.filter semIsGrant).length
 
 /-! ## Held permits and in-flight release credits -/
 
-/-- Acquire permits held by published (resumed) calls: a queue head
-handed a permit by a release handoff, either still awaiting its dispatch
-(stale runq entry) or already dispatched (resumed `cur`).  Parked
-acquirers hold nothing. -/
-def semCurAq (d : Option (Pnd SemSig × Bool)) : Nat :=
+/-- Acquire permits held by in-flight calls: a queue head handed a permit
+by a release handoff, either still awaiting its dispatch (stale runq
+entry) or already dispatched (resumed `running` slot); plus a returning
+inline acquire whose physical return is pending (V2.3: the permit is
+already consumed, the completion not yet observed).  Parked acquirers
+hold nothing. -/
+def semCurAq (d : Option (FSlot SemSig)) : Nat :=
   match d with
-  | some (p, true) => if p.call = SemCall.acquire then 1 else 0
+  | some (FSlot.running p true) => if p.call = SemCall.acquire then 1 else 0
+  | some (FSlot.returning p rr) =>
+      if p.call = SemCall.acquire ∧ rr = SemResult.acqDone then 1 else 0
   | _ => 0
 
 def semStaleAq (Q : List (PReady SemSig)) : Nat :=
   (Q.filter fun r => decide (r.fresh = false ∧ r.call = SemCall.acquire)).length
 
-def semHeldAq (cfg : PrimCfg SemSig semPrim) : Nat :=
+variable {P : PrimLTS2 SemSig}
+
+def semHeldAq (cfg : PrimCfg SemSig P) : Nat :=
   semCurAq cfg.cur + semStaleAq cfg.runq
 
 @[simp] theorem semCurAq_none : semCurAq none = 0 := rfl
 
-@[simp] theorem semCurAq_false (p : Pnd SemSig) : semCurAq (some (p, false)) = 0 := rfl
+@[simp] theorem semCurAq_running_false (p : Pnd SemSig) :
+    semCurAq (some (FSlot.running p false)) = 0 := rfl
 
-@[simp] theorem semCurAq_true (p : Pnd SemSig) :
-    semCurAq (some (p, true)) = if p.call = SemCall.acquire then 1 else 0 := rfl
+@[simp] theorem semCurAq_running_true (p : Pnd SemSig) :
+    semCurAq (some (FSlot.running p true)) = if p.call = SemCall.acquire then 1 else 0 := rfl
+
+@[simp] theorem semCurAq_returning_acquire (p : Pnd SemSig) :
+    semCurAq (some (FSlot.returning p SemResult.acqDone)) =
+      if p.call = SemCall.acquire then 1 else 0 := by
+    simp [semCurAq]
+
+@[simp] theorem semCurAq_returning_release (p : Pnd SemSig) (b : Bool) :
+    semCurAq (some (FSlot.returning p (SemResult.relRet b))) = 0 := by
+    simp [semCurAq]
 
 theorem semStaleAq_cons_head (r : PReady SemSig) (Q : List (PReady SemSig)) :
     semStaleAq (r :: Q) =
@@ -269,13 +292,14 @@ theorem semStaleAq_append_stale (Q : List (PReady SemSig)) (f : FiberId) (c : Se
   rw [semStaleAq, semStaleAq, List.filter_append, List.length_append]
   cases hc : c <;> simp [hc] <;> omega
 
-/-- Fiber releases in flight between their dispatch and their inline
-completion: the credit for a release issue observed at a fiber
-dispatch. -/
-def semPendRel (cfg : PrimCfg SemSig semPrim) : Nat :=
+/-- Fiber releases in flight between their dispatch and their section:
+the credit for a release issue observed at a fiber dispatch.  The
+`returning` slot carries no credit — the section (and with it the
+discharge) has already run. -/
+def semPendRel (cfg : PrimCfg SemSig P) : Nat :=
   match cfg.cur with
-  | some (p, _) => if p.call = SemCall.release then 1 else 0
-  | none => 0
+  | some (FSlot.running p _) => if p.call = SemCall.release then 1 else 0
+  | _ => 0
 
 /-- External release records entered but not yet effected (`result =
 none`): the credit for a release issue observed at an external
@@ -307,8 +331,10 @@ absorbs the calculus's re-suspending resumed acquire (`runPark` is
 unguarded on the resumed bit), whose held permit leaves the accounted
 pool.  The completing-acquire bound needs exactly this direction. -/
 
-theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
-    (hrun : PrimRuns2 SemSig semPrim cfg t fin)
+theorem semBalance_mirror {initial max : Nat}
+    {cfg fin : PrimCfg SemSig (semPrimOf initial max)}
+    {t : Trace SemSig}
+    (hrun : PrimRuns2 SemSig (semPrimOf initial max) cfg t fin)
     (hstale : ∀ r ∈ cfg.runq, r.fresh = false → r.call = SemCall.acquire)
     (hparked : ∀ p ∈ cfg.parked, p.call = SemCall.acquire)
     (hexts : ∀ e ∈ cfg.exts, e.call = SemCall.release) :
@@ -343,7 +369,8 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           omega
       | dispatchFresh rp rest s' hcurE hrunqE hfreshE hadmit =>
           have hs' : s' = cfg.prim := by
-            rw [show semPrim.admit cfg.prim rp.fiber rp.call = some cfg.prim from rfl] at hadmit
+            rw [show (semPrimOf initial max).admit cfg.prim rp.fiber rp.call
+              = some cfg.prim from rfl] at hadmit
             injection hadmit with heq
             exact heq.symm
           have hstale' : ∀ r ∈ rest, r.fresh = false → r.call = SemCall.acquire :=
@@ -353,7 +380,7 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.cons_append, semHeldAq,
-            semStaleAq_cons_head, semPendRel, semCurAq_none, semCurAq_false,
+            semStaleAq_cons_head, semPendRel, semCurAq_none, semCurAq_running_false,
             hs', hrunqE, hfreshE, hcurE, reduceIte] at hbal ⊢
           cases hcall : rp.call <;> simp [hcall] at hbal ⊢ <;> omega
       | dispatchResumed r rest hcurE hrunqE hfreshE =>
@@ -366,14 +393,12 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.nil_append, semHeldAq,
-            semStaleAq_cons_head, semPendRel, semCurAq_none, semCurAq_true,
+            semStaleAq_cons_head, semPendRel, semCurAq_none, semCurAq_running_true,
             hrunqE, hracq, hcurE, hfreshE, reduceIte] at hbal ⊢
           try simp at hbal ⊢
           omega
-      | runDone d preP postP ps r s' wk hcurE hd2 hrunP hparkedE hmap =>
-          obtain ⟨dp, db⟩ := d
-          have hdb : db = false := hd2
-          rw [hdb] at hcurE
+      | fiberEffect d b preP postP ps r s' wk hcurE hb hrunP hparkedE hmap =>
+          rw [hb] at hcurE
           have hstale' : ∀ x ∈ cfg.runq ++ ps.map
               (fun p : Pnd SemSig => { fiber := p.fiber, call := p.call, fresh := false }),
               x.fresh = false → x.call = SemCall.acquire := by
@@ -398,7 +423,7 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.cons_append, semHeldAq, semPendRel] at hbal ⊢
-          cases hcall : dp.call with
+          cases hcall : d.call with
           | acquire =>
               rw [hcall] at hrunP
               have hrun2 : (if cfg.prim.waitq = [] ∧ cfg.prim.available > 0 then
@@ -407,7 +432,6 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                 else none) = some (r, s', wk) := hrunP
               by_cases hcond : cfg.prim.waitq = [] ∧ cfg.prim.available > 0
               · rw [if_pos hcond] at hrun2
-                obtain ⟨hcq, hcav⟩ := hcond
                 injection hrun2 with h0
                 injection h0 with hrq h1
                 injection h1 with hs'eq hwkeq
@@ -415,9 +439,11 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                 subst hs'eq
                 subst hwkeq
                 have hps : ps = [] := semRun_pndMap_nil hmap
-                simp only [hps, List.append_nil, List.map_nil] at hbal ⊢
-                simp only [hcurE, hcall, reduceIte] at hbal ⊢
-                try simp at hbal ⊢
+                simp only [Option.toList, List.cons_append, hps, List.nil_append,
+                  List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
+                  semCurAq_none,
+                  semCurAq_running_false, semCurAq_returning_acquire,
+                  semCurAq_returning_release] at hbal ⊢
                 omega
               · rw [if_neg hcond] at hrun2
                 simp at hrun2
@@ -444,23 +470,29 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                     injection h3 with h0
                     injection h0 with hrret h1
                     injection h1 with hs'eq hwkeq
+                    subst hrret
                     subst hs'eq
                     subst hwkeq
                     have hps : ps = [] := semRun_pndMap_nil hmap
-                    simp only [hps, List.append_nil, List.map_nil] at hbal ⊢
-                    simp only [hcurE, hdb, hcall, reduceIte] at hbal ⊢
-                    try simp at hbal ⊢
+                    simp only [Option.toList, List.cons_append, hps, List.nil_append,
+                      List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
+                      semCurAq_none,
+                      semCurAq_running_false, semCurAq_returning_acquire,
+                      semCurAq_returning_release] at hbal ⊢
                     omega
                   · rw [if_neg hm] at h3
                     injection h3 with h0
                     injection h0 with hrret h1
                     injection h1 with hs'eq hwkeq
+                    subst hrret
                     subst hs'eq
                     subst hwkeq
                     have hps : ps = [] := semRun_pndMap_nil hmap
-                    simp only [hps, List.append_nil, List.map_nil] at hbal ⊢
-                    simp only [hcurE, hdb, hcall, reduceIte] at hbal ⊢
-                    try simp at hbal ⊢
+                    simp only [Option.toList, List.cons_append, hps, List.nil_append,
+                      List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
+                      semCurAq_none,
+                      semCurAq_running_false, semCurAq_returning_acquire,
+                      semCurAq_returning_release] at hbal ⊢
                     omega
               | cons w rest =>
                   rw [hwq] at hrun2
@@ -469,6 +501,7 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                   injection h3 with h0
                   injection h0 with hrret h1
                   injection h1 with hs'eq hwkeq
+                  subst hrret
                   subst hs'eq
                   subst hwkeq
                   have hpsmap : ps.map (fun p : Pnd SemSig => p.fiber) = [w] := hmap
@@ -478,22 +511,37 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                       cases ps' with
                       | nil =>
                           simp only [List.map_cons, List.map_nil] at hpsmap
-                          simp only [List.cons_append, List.map_cons, List.map_nil,
-                            hcurE, hdb, hcall, reduceIte] at hbal ⊢
+                          simp only [Option.toList, List.nil_append, List.cons_append,
+                            List.map_cons, List.map_nil, hcurE, hcall, reduceIte,
+                            semCurAq_returning_release, semCurAq_none,
+                            semCurAq_running_false] at hbal ⊢
                           cases hu : u.call <;>
                             simp only [hu, semStaleAq_append_stale, reduceIte] at hbal ⊢ <;>
                             try simp at hbal ⊢ <;>
                             omega
                       | cons v ps'' => simp at hpsmap
-      | runPark d' s' hcurE hrunE hparkE =>
-          obtain ⟨dp, db⟩ := d'
-          have hc' : dp.call = SemCall.acquire := semRun_none hrunE
+      | fiberDone d r hcurE =>
+          have hstale' := hstale
+          have hparked' := hparked
+          have hexts' := hexts
+          obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
+          refine ⟨?_, hstaleF, hparkedF, hextsF⟩
+          simp only [Option.toList, List.cons_append, semHeldAq, semPendRel] at hbal ⊢
+          simp only [hcurE] at hbal ⊢
+          cases hcall : d.call <;> cases hr : r <;>
+            simp only [Option.toList, List.nil_append, List.cons_append, hcall,
+              hr, semCurAq_returning_acquire, semCurAq_returning_release,
+              semAcqCount_comp, semRelIssueCount_comp, reduceIte] at hbal ⊢ <;>
+            try simp at hbal ⊢ <;>
+            omega
+      | runPark d b s' hcurE hrunE hparkE =>
+          have hc' : d.call = SemCall.acquire := semRun_none hrunE
           rw [hc'] at hparkE
-          have hpe : (some ({ cfg.prim with waitq := cfg.prim.waitq ++ [dp.fiber] } : SemState))
+          have hpe : (some ({ cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } : SemState))
               = some s' := hparkE
           injection hpe with hs'eq
           subst hs'eq
-          have hparked' : ∀ p ∈ cfg.parked ++ [{ fiber := dp.fiber, call := dp.call }],
+          have hparked' : ∀ p ∈ cfg.parked ++ [{ fiber := d.fiber, call := d.call }],
               p.call = SemCall.acquire := by
             intro p hp
             rcases List.mem_append.mp hp with hm | hm
@@ -506,12 +554,10 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.nil_append, semHeldAq, semPendRel,
-            semCurAq_none, semCurAq_true, hcurE, hc'] at hbal ⊢
-          cases hb : db <;> simp [hb] at hbal ⊢ <;> omega
-      | finishDone d preP postP ps r s' wk hcurE hd2 hfinD hparkedE hmap =>
-          obtain ⟨dp, db⟩ := d
-          have hdb : db = true := hd2
-          rw [hdb] at hcurE
+            semCurAq_none, semCurAq_running_true, hcurE, hc'] at hbal ⊢
+          cases hb : b <;> simp [hb] at hbal ⊢ <;> omega
+      | finishDone d b preP postP ps r s' wk hcurE hb hfinD hparkedE hmap =>
+          rw [hb] at hcurE
           have hstale' : ∀ x ∈ cfg.runq ++ ps.map
               (fun p : Pnd SemSig => { fiber := p.fiber, call := p.call, fresh := false }),
               x.fresh = false → x.call = SemCall.acquire := by
@@ -536,12 +582,12 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.cons_append, semHeldAq, semPendRel] at hbal ⊢
-          cases hcall : dp.call with
+          cases hcall : d.call with
           | acquire =>
               rw [hcall] at hfinD
-              have hfin2 : semPrim.finish cfg.prim dp.fiber SemCall.acquire
+              have hfin2 : (semPrimOf initial max).finish cfg.prim d.fiber SemCall.acquire
                   = some (r, s', wk) := hfinD
-              simp only [semPrim_finish_acquire] at hfin2
+              simp only [semPrimOf_finish_acquire initial max] at hfin2
               injection hfin2 with h0
               injection h0 with hrq h1
               injection h1 with hs'eq hwkeq
@@ -549,8 +595,8 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
               subst hs'eq
               subst hwkeq
               have hps : ps = [] := semRun_pndMap_nil hmap
-              simp only [hps, List.append_nil, List.map_nil, semCurAq_true,
-                hdb, hcall, hcurE, reduceIte] at hbal ⊢
+              simp only [hps, List.append_nil, List.map_nil, semCurAq_running_true,
+                hcurE, hcall, reduceIte] at hbal ⊢
               try simp at hbal ⊢
               omega
           | release =>
@@ -570,7 +616,7 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
               subst hm
               cases hcc : c with
               | acquire =>
-                  rw [hcc, semPrim_extCap_acquire] at hcap
+                  rw [hcc, semPrimOf_extCap_acquire initial max] at hcap
                   exact absurd hcap (by simp)
               | release => rfl
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
@@ -638,7 +684,8 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.nil_append, semHeldAq, semPendRel,
-            semCurAq_none, semCurAq_false] at hbal ⊢
+            semCurAq_none, semCurAq_running_false, semCurAq_running_true,
+            semCurAq_returning_acquire, semCurAq_returning_release] at hbal ⊢
           rw [hsplitE] at ⊢
           rw [semPendExt_cons] at hbal ⊢
           rw [hnone] at ⊢
@@ -660,8 +707,7 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                 subst hs'eq
                 subst hwkeq
                 have hps : ps = [] := semRun_pndMap_nil hmap
-                simp only [hps, List.append_nil, List.map_nil, semCurAq_false,
-                  reduceIte] at hbal ⊢
+                simp only [hps, List.append_nil, List.map_nil, reduceIte] at hbal ⊢
                 omega
               · rw [if_neg hm] at h3
                 injection h3 with h0
@@ -670,8 +716,7 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
                 subst hs'eq
                 subst hwkeq
                 have hps : ps = [] := semRun_pndMap_nil hmap
-                simp only [hps, List.append_nil, List.map_nil, semCurAq_false,
-                  reduceIte] at hbal ⊢
+                simp only [hps, List.append_nil, List.map_nil, reduceIte] at hbal ⊢
                 omega
           | cons w rest =>
               rw [hwq] at hrun2
@@ -716,8 +761,9 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           rw [hsplitE] at ⊢
           rw [semPendExt_cons] at ⊢
           rw [hsome] at ⊢
-          simp only [semHeldAq, semPendRel, semCurAq_none, semCurAq_true,
-            semCurAq_false, hec, reduceIte] at hbal ⊢
+          simp only [semHeldAq, semPendRel, semCurAq_none, semCurAq_running_false,
+            semCurAq_running_true, semCurAq_returning_acquire,
+            semCurAq_returning_release, hec, reduceIte] at hbal ⊢
           try simp at hbal ⊢
           omega
       | envTime tk hcurE hle =>
@@ -728,23 +774,25 @@ theorem semBalance_mirror {cfg fin : PrimCfg SemSig semPrim} {t : Trace SemSig}
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.nil_append, semHeldAq, semPendRel,
             semCurAq] at hbal ⊢
-          have h1 : (semPrim.onTick cfg.prim tk).available = cfg.prim.available := rfl
+          have h1 : ((semPrimOf initial max).onTick cfg.prim tk).available =
+            cfg.prim.available := rfl
           omega
       | envExpire f' s' preP postP p hcurE hexp hparkedE hpf =>
           exfalso
-          simp [semPrim] at hexp
+          simp [semPrimOf] at hexp
 
 /-! ## Run splitting -/
 
 /-- Splitting a run at an arbitrary cut `pre ++ ob :: suf`. -/
-theorem semRuns_split {pc pc' : PrimCfg SemSig semPrim} {t : Trace SemSig}
-    (hrun : PrimRuns2 SemSig semPrim pc t pc') :
+theorem semRuns_split {initial max : Nat} {pc pc' : PrimCfg SemSig (semPrimOf initial max)}
+    {t : Trace SemSig}
+    (hrun : PrimRuns2 SemSig (semPrimOf initial max) pc t pc') :
     ∀ (pre : Trace SemSig) (ob : Obs SemSig) (suf : Trace SemSig),
       t = pre ++ ob :: suf →
-      ∃ ma mb : PrimCfg SemSig semPrim,
-        PrimRuns2 SemSig semPrim pc pre ma ∧
-        PrimStep2 SemSig semPrim ma (some ob) mb ∧
-        PrimRuns2 SemSig semPrim mb suf pc' := by
+      ∃ ma mb : PrimCfg SemSig (semPrimOf initial max),
+        PrimRuns2 SemSig (semPrimOf initial max) pc pre ma ∧
+        PrimStep2 SemSig (semPrimOf initial max) ma (some ob) mb ∧
+        PrimRuns2 SemSig (semPrimOf initial max) mb suf pc' := by
   induction hrun with
   | stop cfg => intro pre ob suf hsplit; simp at hsplit
   | step cfg cfg' o t2 fin hstep hrest ih =>
@@ -774,32 +822,25 @@ theorem semRuns_split {pc pc' : PrimCfg SemSig semPrim} {t : Trace SemSig}
 /-! ## The completing-acquire credit -/
 
 /-- A step that completes an acquire leaves at least one permit's worth
-of accounting behind: an inline take needed a permit available, a resumed
-take holds the permit a handoff delivered. -/
-theorem semStep_take_credit {ma mb : PrimCfg SemSig semPrim} {ob : Obs SemSig}
-    (hstep : PrimStep2 SemSig semPrim ma (some ob) mb)
+of accounting behind: a returning inline acquire still holds the permit it
+consumed, a resumed take holds the permit a handoff delivered. -/
+theorem semStep_take_credit {initial max : Nat}
+    {ma mb : PrimCfg SemSig (semPrimOf initial max)} {ob : Obs SemSig}
+    (hstep : PrimStep2 SemSig (semPrimOf initial max) ma (some ob) mb)
     (hc : ob.call = SemCall.acquire) (hr : ob.result = some SemResult.acqDone)
     (hexts : ∀ e ∈ ma.exts, e.call = SemCall.release) :
     1 ≤ ma.prim.available + semHeldAq ma := by
-  have hnn : 0 ≤ semHeldAq ma := Nat.zero_le _
   cases hstep with
-  | runDone d preP postP ps r s' wk hcurE hd2 hrunP hparkedE hmap =>
-      have hc1 : d.1.call = SemCall.acquire := hc
-      rw [hc1] at hrunP
-      have hrun2 : (if ma.prim.waitq = [] ∧ ma.prim.available > 0 then
-          some (SemResult.acqDone, { ma.prim with available := ma.prim.available - 1 }, [])
-        else none) = some (r, s', wk) := hrunP
-      by_cases hcond : ma.prim.waitq = [] ∧ ma.prim.available > 0
-      · rw [if_pos hcond] at hrun2
-        simp only [semHeldAq, semCurAq_false, hcurE, hd2]
-        omega
-      · rw [if_neg hcond] at hrun2
-        simp at hrun2
-  | finishDone d preP postP ps r s' wk hcurE hd2 hfinD hparkedE hmap =>
-      obtain ⟨dp, db⟩ := d
-      have hdb : db = true := hd2
-      have hc1 : dp.call = SemCall.acquire := hc
-      simp only [semHeldAq, hcurE, hdb, semCurAq_true, hc1, if_pos]
+  | fiberDone d r hcurE =>
+      have hr2 : r = SemResult.acqDone := Option.some.inj hr
+      subst hr2
+      have hc1 : d.call = SemCall.acquire := hc
+      simp only [semHeldAq, hcurE, hc1, semCurAq_returning_acquire, if_pos]
+      omega
+  | finishDone d b preP postP ps r s' wk hcurE hb hfinD hparkedE hmap =>
+      rw [hb] at hcurE
+      have hc1 : d.call = SemCall.acquire := hc
+      simp only [semHeldAq, hcurE, hc1, semCurAq_running_true, if_pos]
       omega
   | extDone preE postE e r hsplitE hsome =>
       have hc1 : e.call = SemCall.acquire := hc
@@ -823,14 +864,19 @@ theorem semStep_take_credit {ma mb : PrimCfg SemSig semPrim} {ob : Obs SemSig}
 /-! ## The permit guarantee -/
 
 /-- Trace form: at every completed acquire, the number of completed takes
-is at most the number of release issues observed so far — every consumed
-permit was minted by a release whose call had already been issued. -/
-def semPermitsHonored (t : Trace SemSig) : Prop :=
+is at most the number of release issues observed so far plus the initial
+permit count — every consumed permit was minted by a release whose call
+had already been issued, or drawn from the constructor's initial stock. -/
+def semPermitsHonoredGen (initial : Nat) (t : Trace SemSig) : Prop :=
   ∀ (pre : Trace SemSig) (g : FiberId) (suf : Trace SemSig),
     t = pre ++ compObs SemSig (Caller.fiber g) SemCall.acquire SemResult.acqDone :: suf →
-    semAcqCount pre ≤ semRelIssueCount pre
+    semAcqCount pre ≤ semRelIssueCount pre + initial
 
-theorem semPrim_guarantees : Guarantees semPrim semPermitsHonored := by
+/-- The modeled instance's guarantee: zero initial permits. -/
+def semPermitsHonored (t : Trace SemSig) : Prop := semPermitsHonoredGen 0 t
+
+theorem semPrimOf_guarantees (initial max : Nat) :
+    Guarantees (semPrimOf initial max) (semPermitsHonoredGen initial) := by
   intro t ht pre g suf hsplit
   obtain ⟨⟨fin, hrun⟩, -⟩ := ht
   obtain ⟨ma, mb, h1, hstep, h2⟩ := semRuns_split hrun pre
@@ -839,26 +885,27 @@ theorem semPrim_guarantees : Guarantees semPrim semPermitsHonored := by
     semBalance_mirror h1 (fun _ hx => by cases hx) (fun _ hx => by cases hx)
       (fun _ hx => by cases hx)
   have hcredit := semStep_take_credit hstep rfl rfl hextsMA
-  have hpr : semPendRel (primInit SemSig semPrim) = 0 := rfl
-  have hpe : semPendExt (primInit SemSig semPrim).exts = 0 := rfl
-  have hh : semHeldAq (primInit SemSig semPrim) = 0 := rfl
-  have hpa : (primInit SemSig semPrim).prim.available = 0 := rfl
+  have hpr : semPendRel (primInit SemSig (semPrimOf initial max)) = 0 := rfl
+  have hpe : semPendExt (primInit SemSig (semPrimOf initial max)).exts = 0 := rfl
+  have hh : semHeldAq (primInit SemSig (semPrimOf initial max)) = 0 := rfl
+  have hpa : (primInit SemSig (semPrimOf initial max)).prim.available = initial := rfl
   simp only [hpr, hpe, hh, hpa] at hbal
   have hpend : 0 ≤ semPendRel ma + semPendExt ma.exts := Nat.zero_le _
   omega
 
-/-! ## The strict completion-count claim is false in the v2.2 window -/
+/-! ## The strict completion-count claim is false in the effect/return window -/
 
-/-- The stricter (pre-V2.2) reading: every completed acquire is preceded
-by strictly more completed grants than completed takes. -/
+/-- The stricter reading: every completed acquire is preceded by strictly
+more completed grants than completed takes. -/
 def semGrantsExceedTakes (t : Trace SemSig) : Prop :=
   ∀ (pre : Trace SemSig) (g : FiberId) (suf : Trace SemSig),
     t = pre ++ compObs SemSig (Caller.fiber g) SemCall.acquire SemResult.acqDone :: suf →
     semAcqCount pre < semRelCount pre
 
-/-- The window witness: an external `release` admits a permit (its
-critical section has run), a fiber `acquire` takes it inline and
-completes, and only then does the external release's completion land. -/
+/-- The external-window witness: an external `release` admits a permit
+(its critical section has run but it has not yet returned), a fiber
+`acquire` takes it inline and returns, and only then does the external
+release's completion land. -/
 def windowTrace : Trace SemSig :=
   [issueObs SemSig (Caller.ext 0) SemCall.release,
    issueObs SemSig (Caller.fiber 0) SemCall.acquire,
@@ -885,7 +932,16 @@ def w3 : PrimCfg SemSig semPrim :=
 
 def w4 : PrimCfg SemSig semPrim :=
   { prim := { available := 1, max := 1, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := SemCall.acquire }, false),
+    cur := some (FSlot.running { fiber := 0, call := SemCall.acquire } false),
+    parked := [], runq := [], retired := [], nextFiber := 1,
+    exts := [{ x := 0, call := SemCall.release, result := some (SemResult.relRet true) }] }
+
+/-- The acquire consumed the permit in its critical section (`fiberEffect`)
+and now sits in the return window; the worker baton is still held, but
+external callers may run whole calls across it. -/
+def w4b : PrimCfg SemSig semPrim :=
+  { prim := { available := 0, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.acquire } SemResult.acqDone),
     parked := [], runq := [], retired := [], nextFiber := 1,
     exts := [{ x := 0, call := SemCall.release, result := some (SemResult.relRet true) }] }
 
@@ -916,11 +972,13 @@ theorem ws4 : PrimStep2 SemSig semPrim w3
   PrimStep2.dispatchFresh w3 { fiber := 0, call := SemCall.acquire, fresh := true } []
     { available := 1, max := 1, waitq := [] } rfl rfl rfl rfl
 
-theorem ws5 : PrimStep2 SemSig semPrim w4
+theorem ws5a : PrimStep2 SemSig semPrim w4 none w4b :=
+  PrimStep2.fiberEffect w4 { fiber := 0, call := SemCall.acquire } false [] [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+
+theorem ws5 : PrimStep2 SemSig semPrim w4b
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) w5 :=
-  PrimStep2.runDone w4 ({ fiber := 0, call := SemCall.acquire }, false) [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl
-    (by rfl) rfl rfl
+  PrimStep2.fiberDone w4b { fiber := 0, call := SemCall.acquire } SemResult.acqDone rfl
 
 theorem ws6 : PrimStep2 SemSig semPrim w5
     (some (compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet true))) w6 :=
@@ -933,8 +991,9 @@ theorem windowRun : PrimRuns2 SemSig semPrim w0 windowTrace w6 :=
     (PrimRuns2.step w1 w2 none _ w6 ws2
       (PrimRuns2.step w2 w3 none _ w6 ws3
         (PrimRuns2.step w3 w4 _ _ w6 ws4
-          (PrimRuns2.step w4 w5 _ _ w6 ws5
-            (PrimRuns2.step w5 w6 _ [] w6 ws6 (PrimRuns2.stop w6))))))
+          (PrimRuns2.step w4 w4b none _ w6 ws5a
+            (PrimRuns2.step w4b w5 _ _ w6 ws5
+              (PrimRuns2.step w5 w6 _ [] w6 ws6 (PrimRuns2.stop w6)))))))
 
 theorem seqOK_window : SeqOK SemSig windowTrace := by
   refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
@@ -953,6 +1012,119 @@ theorem window_not_strict : ¬ semGrantsExceedTakes windowTrace := by
 theorem semPrim_possesses_window :
     Possesses semPrim (fun t => t = windowTrace ∧ ¬ semGrantsExceedTakes t) :=
   ⟨windowTrace, ⟨⟨w6, windowRun⟩, seqOK_window⟩, rfl, window_not_strict⟩
+
+/-! ## The fiber return window battery -/
+
+/-- The fiber-window witness: a fiber `release` stores the last permit in
+its critical section (`fiberEffect`), and an external caller's whole
+`release` — entry, critical section, return — serializes inside the
+fiber's return window: the external entry is refused (the fiber already
+filled the semaphore), the external caller returns `false`, and only then
+does the fiber physically return `true`.  A step relation that fuses a
+fiber's critical section with its physical return cannot emit this trace. -/
+def fiberWindowTrace : Trace SemSig :=
+  [issueObs SemSig (Caller.fiber 0) SemCall.release,
+   issueObs SemSig (Caller.ext 0) SemCall.release,
+   compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet false),
+   compObs SemSig (Caller.fiber 0) SemCall.release (SemResult.relRet true)]
+
+def fw0 : PrimCfg SemSig semPrim := primInit SemSig semPrim
+
+def fw1 : PrimCfg SemSig semPrim :=
+  { prim := { available := 0, max := 1, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [{ fiber := 0, call := SemCall.release, fresh := true }],
+    retired := [], nextFiber := 1, exts := [] }
+
+def fw2 : PrimCfg SemSig semPrim :=
+  { prim := { available := 0, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.running { fiber := 0, call := SemCall.release } false),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def fw3 : PrimCfg SemSig semPrim :=
+  { prim := { available := 1, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.release } (SemResult.relRet true)),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def fw4 : PrimCfg SemSig semPrim :=
+  { prim := { available := 1, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.release } (SemResult.relRet true)),
+    parked := [], runq := [], retired := [], nextFiber := 1,
+    exts := [{ x := 0, call := SemCall.release, result := none }] }
+
+def fw5 : PrimCfg SemSig semPrim :=
+  { prim := { available := 1, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.release } (SemResult.relRet true)),
+    parked := [], runq := [], retired := [], nextFiber := 1,
+    exts := [{ x := 0, call := SemCall.release, result := some (SemResult.relRet false) }] }
+
+def fw6 : PrimCfg SemSig semPrim :=
+  { prim := { available := 1, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.release } (SemResult.relRet true)),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def fw7 : PrimCfg SemSig semPrim :=
+  { prim := { available := 1, max := 1, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [0], nextFiber := 1, exts := [] }
+
+theorem fws1 : PrimStep2 SemSig semPrim fw0 none fw1 :=
+  PrimStep2.submit fw0 0 SemCall.release (Or.inl rfl)
+
+theorem fws2 : PrimStep2 SemSig semPrim fw1
+    (some (issueObs SemSig (Caller.fiber 0) SemCall.release)) fw2 :=
+  PrimStep2.dispatchFresh fw1 { fiber := 0, call := SemCall.release, fresh := true } []
+    { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
+
+theorem fws3 : PrimStep2 SemSig semPrim fw2 none fw3 :=
+  PrimStep2.fiberEffect fw2 { fiber := 0, call := SemCall.release } false [] [] []
+    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+
+theorem fws4 : PrimStep2 SemSig semPrim fw3
+    (some (issueObs SemSig (Caller.ext 0) SemCall.release)) fw4 :=
+  PrimStep2.extApply fw3 0 SemCall.release [] [] rfl (by decide)
+
+theorem fws5 : PrimStep2 SemSig semPrim fw4 none fw5 :=
+  PrimStep2.extEffect fw4 [] []
+    { x := 0, call := SemCall.release, result := none }
+    (SemResult.relRet false) { available := 1, max := 1, waitq := [] } [] [] [] []
+    rfl rfl (by rfl) rfl rfl
+
+theorem fws6 : PrimStep2 SemSig semPrim fw5
+    (some (compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet false))) fw6 :=
+  PrimStep2.extDone fw5 [] []
+    { x := 0, call := SemCall.release, result := some (SemResult.relRet false) }
+    (SemResult.relRet false) rfl rfl
+
+theorem fws7 : PrimStep2 SemSig semPrim fw6
+    (some (compObs SemSig (Caller.fiber 0) SemCall.release (SemResult.relRet true))) fw7 :=
+  PrimStep2.fiberDone fw6 { fiber := 0, call := SemCall.release } (SemResult.relRet true) rfl
+
+theorem fiberWindowRun : PrimRuns2 SemSig semPrim fw0 fiberWindowTrace fw7 :=
+  PrimRuns2.step fw0 fw1 none _ fw7 fws1
+    (PrimRuns2.step fw1 fw2 _ _ fw7 fws2
+      (PrimRuns2.step fw2 fw3 none _ fw7 fws3
+        (PrimRuns2.step fw3 fw4 _ _ fw7 fws4
+          (PrimRuns2.step fw4 fw5 none _ fw7 fws5
+            (PrimRuns2.step fw5 fw6 _ _ fw7 fws6
+              (PrimRuns2.step fw6 fw7 _ [] fw7 fws7 (PrimRuns2.stop fw7)))))))
+
+theorem seqOK_fiberWindow : SeqOK SemSig fiberWindowTrace := by
+  refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  exact SeqOKFrom.nil _
+
+/-- The external caller returns strictly before the fiber whose critical
+section preceded it — the ordering the fused step relation could not
+produce. -/
+theorem fiberWindow_ext_returns_first :
+    fiberWindowTrace = [issueObs SemSig (Caller.fiber 0) SemCall.release,
+      issueObs SemSig (Caller.ext 0) SemCall.release] ++
+      [compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet false),
+       compObs SemSig (Caller.fiber 0) SemCall.release (SemResult.relRet true)] := rfl
+
+theorem semPrim_possesses_fiberWindow : TracesPrim SemSig semPrim fiberWindowTrace :=
+  ⟨fw7, fiberWindowRun⟩
 
 /-! ## Possession batteries -/
 
@@ -1024,7 +1196,7 @@ def h1 : PrimCfg SemSig semPrim :=
 
 def h2 : PrimCfg SemSig semPrim :=
   { prim := { available := 0, max := 1, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := SemCall.acquire }, false),
+    cur := some (FSlot.running { fiber := 0, call := SemCall.acquire } false),
     parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
 
 def h3 : PrimCfg SemSig semPrim :=
@@ -1040,9 +1212,18 @@ def h4 : PrimCfg SemSig semPrim :=
 
 def h5 : PrimCfg SemSig semPrim :=
   { prim := { available := 0, max := 1, waitq := [0] }, now := 0,
-    cur := some ({ fiber := 1, call := SemCall.release }, false),
+    cur := some (FSlot.running { fiber := 1, call := SemCall.release } false),
     parked := [{ fiber := 0, call := SemCall.acquire }], runq := [], retired := [],
     nextFiber := 2, exts := [] }
+
+/-- The release handed its permit to the queue head: the parked acquire
+left the wait queue for a stale runnable entry, and the release sits in
+its return window. -/
+def h5b : PrimCfg SemSig semPrim :=
+  { prim := { available := 0, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 1, call := SemCall.release } (SemResult.relRet true)),
+    parked := [], runq := [{ fiber := 0, call := SemCall.acquire, fresh := false }],
+    retired := [], nextFiber := 2, exts := [] }
 
 def h6 : PrimCfg SemSig semPrim :=
   { prim := { available := 0, max := 1, waitq := [] }, now := 0, cur := none,
@@ -1051,7 +1232,7 @@ def h6 : PrimCfg SemSig semPrim :=
 
 def h7 : PrimCfg SemSig semPrim :=
   { prim := { available := 0, max := 1, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := SemCall.acquire }, true),
+    cur := some (FSlot.running { fiber := 0, call := SemCall.acquire } true),
     parked := [], runq := [], retired := [1], nextFiber := 2, exts := [] }
 
 def h8 : PrimCfg SemSig semPrim :=
@@ -1067,7 +1248,7 @@ theorem hs2 : PrimStep2 SemSig semPrim h1
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
 theorem hs3 : PrimStep2 SemSig semPrim h2 none h3 :=
-  PrimStep2.runPark h2 ({ fiber := 0, call := SemCall.acquire }, false)
+  PrimStep2.runPark h2 { fiber := 0, call := SemCall.acquire } false
     { available := 0, max := 1, waitq := [0] } rfl (by rfl) rfl
 
 theorem hs4 : PrimStep2 SemSig semPrim h3 none h4 :=
@@ -1078,12 +1259,14 @@ theorem hs5 : PrimStep2 SemSig semPrim h4
   PrimStep2.dispatchFresh h4 { fiber := 1, call := SemCall.release, fresh := true } []
     { available := 0, max := 1, waitq := [0] } rfl rfl rfl rfl
 
-theorem hs6 : PrimStep2 SemSig semPrim h5
+theorem hs6a : PrimStep2 SemSig semPrim h5 none h5b :=
+  PrimStep2.fiberEffect h5 { fiber := 1, call := SemCall.release } false [] []
+    [{ fiber := 0, call := SemCall.acquire }] (SemResult.relRet true)
+    { available := 0, max := 1, waitq := [] } [0] rfl rfl (by rfl) rfl rfl
+
+theorem hs6 : PrimStep2 SemSig semPrim h5b
     (some (compObs SemSig (Caller.fiber 1) SemCall.release (SemResult.relRet true))) h6 :=
-  PrimStep2.runDone h5 ({ fiber := 1, call := SemCall.release }, false) [] []
-    [{ fiber := 0, call := SemCall.acquire }]
-    (SemResult.relRet true) { available := 0, max := 1, waitq := [] } [0]
-    rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberDone h5b { fiber := 1, call := SemCall.release } (SemResult.relRet true) rfl
 
 theorem hs7 : PrimStep2 SemSig semPrim h6 none h7 :=
   PrimStep2.dispatchResumed h6 { fiber := 0, call := SemCall.acquire, fresh := false } []
@@ -1091,7 +1274,7 @@ theorem hs7 : PrimStep2 SemSig semPrim h6 none h7 :=
 
 theorem hs8 : PrimStep2 SemSig semPrim h7
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) h8 :=
-  PrimStep2.finishDone h7 ({ fiber := 0, call := SemCall.acquire }, true) [] [] []
+  PrimStep2.finishDone h7 { fiber := 0, call := SemCall.acquire } true [] [] []
     SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl rfl rfl rfl
 
 theorem handoffRun : PrimRuns2 SemSig semPrim h0 handoffTrace h8 :=
@@ -1100,9 +1283,10 @@ theorem handoffRun : PrimRuns2 SemSig semPrim h0 handoffTrace h8 :=
       (PrimRuns2.step h2 h3 none _ h8 hs3
         (PrimRuns2.step h3 h4 none _ h8 hs4
           (PrimRuns2.step h4 h5 _ _ h8 hs5
-            (PrimRuns2.step h5 h6 _ _ h8 hs6
-              (PrimRuns2.step h6 h7 none _ h8 hs7
-                (PrimRuns2.step h7 h8 _ [] h8 hs8 (PrimRuns2.stop h8))))))))
+            (PrimRuns2.step h5 h5b none _ h8 hs6a
+              (PrimRuns2.step h5b h6 _ _ h8 hs6
+                (PrimRuns2.step h6 h7 none _ h8 hs7
+                  (PrimRuns2.step h7 h8 _ [] h8 hs8 (PrimRuns2.stop h8)))))))))
 
 theorem seqOK_handoff : SeqOK SemSig handoffTrace := by
   refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
@@ -1119,6 +1303,206 @@ acquire completion. -/
 theorem handoff_tight :
     semAcqCount handoffTrace = 1 ∧ semRelIssueCount handoffTrace = 1 := by
   simp [handoffTrace, semAcqCount, semRelIssueCount, semIsTake, semIsRelIssue,
+    issueObs, compObs]
+
+/-! ## Parameterized-instance batteries -/
+
+/-- The initial-stock witness (`initial = 1, max = 2`): a fiber acquire
+consumes a constructor permit inline with no release anywhere. -/
+def initialTakeTrace : Trace SemSig :=
+  [issueObs SemSig (Caller.fiber 0) SemCall.acquire,
+   compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone]
+
+def iw0 : PrimCfg SemSig (semPrimOf 1 2) := primInit SemSig (semPrimOf 1 2)
+
+def iw1 : PrimCfg SemSig (semPrimOf 1 2) :=
+  { prim := { available := 1, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [{ fiber := 0, call := SemCall.acquire, fresh := true }],
+    retired := [], nextFiber := 1, exts := [] }
+
+def iw2 : PrimCfg SemSig (semPrimOf 1 2) :=
+  { prim := { available := 1, max := 2, waitq := [] }, now := 0,
+    cur := some (FSlot.running { fiber := 0, call := SemCall.acquire } false),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def iw2b : PrimCfg SemSig (semPrimOf 1 2) :=
+  { prim := { available := 0, max := 2, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.acquire } SemResult.acqDone),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def iw3 : PrimCfg SemSig (semPrimOf 1 2) :=
+  { prim := { available := 0, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [0], nextFiber := 1, exts := [] }
+
+theorem iws1 : PrimStep2 SemSig (semPrimOf 1 2) iw0 none iw1 :=
+  PrimStep2.submit iw0 0 SemCall.acquire (Or.inl rfl)
+
+theorem iws2 : PrimStep2 SemSig (semPrimOf 1 2) iw1
+    (some (issueObs SemSig (Caller.fiber 0) SemCall.acquire)) iw2 :=
+  PrimStep2.dispatchFresh iw1 { fiber := 0, call := SemCall.acquire, fresh := true } []
+    { available := 1, max := 2, waitq := [] } rfl rfl rfl rfl
+
+theorem iws3 : PrimStep2 SemSig (semPrimOf 1 2) iw2 none iw2b :=
+  PrimStep2.fiberEffect iw2 { fiber := 0, call := SemCall.acquire } false [] [] []
+    SemResult.acqDone { available := 0, max := 2, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+
+theorem iws4 : PrimStep2 SemSig (semPrimOf 1 2) iw2b
+    (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) iw3 :=
+  PrimStep2.fiberDone iw2b { fiber := 0, call := SemCall.acquire } SemResult.acqDone rfl
+
+theorem initialTakeRun : PrimRuns2 SemSig (semPrimOf 1 2) iw0 initialTakeTrace iw3 :=
+  PrimRuns2.step iw0 iw1 none _ iw3 iws1
+    (PrimRuns2.step iw1 iw2 _ _ iw3 iws2
+      (PrimRuns2.step iw2 iw2b none _ iw3 iws3
+        (PrimRuns2.step iw2b iw3 _ [] iw3 iws4 (PrimRuns2.stop iw3))))
+
+theorem seqOK_initialTake : SeqOK SemSig initialTakeTrace := by
+  refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  exact SeqOKFrom.nil _
+
+theorem semPrimOf_possesses_initialTake :
+    TracesPrim SemSig (semPrimOf 1 2) initialTakeTrace :=
+  ⟨iw3, initialTakeRun⟩
+
+/-- The take draws only on the constructor stock: one take, zero release
+issues — exactly the slack `semPermitsHonoredGen 1` allows. -/
+theorem initialTake_tight :
+    semAcqCount initialTakeTrace = 1 ∧ semRelIssueCount initialTakeTrace = 0 := by
+  simp [initialTakeTrace, semAcqCount, semRelIssueCount, semIsTake, semIsRelIssue,
+    issueObs, compObs]
+
+/-- The ceiling witness (`initial = 0, max = 2`): two external releases
+store both permits, the third is refused at the ceiling. -/
+def ceilingTrace : Trace SemSig :=
+  [issueObs SemSig (Caller.ext 0) SemCall.release,
+   compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet true),
+   issueObs SemSig (Caller.ext 1) SemCall.release,
+   compObs SemSig (Caller.ext 1) SemCall.release (SemResult.relRet true),
+   issueObs SemSig (Caller.ext 2) SemCall.release,
+   compObs SemSig (Caller.ext 2) SemCall.release (SemResult.relRet false)]
+
+def mw0 : PrimCfg SemSig (semPrimOf 0 2) := primInit SemSig (semPrimOf 0 2)
+
+def mw1 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 0, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0,
+    exts := [{ x := 0, call := SemCall.release, result := none }] }
+
+def mw2 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 1, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0,
+    exts := [{ x := 0, call := SemCall.release, result := some (SemResult.relRet true) }] }
+
+def mw3 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 1, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0, exts := [] }
+
+def mw4 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 1, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0,
+    exts := [{ x := 1, call := SemCall.release, result := none }] }
+
+def mw5 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 2, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0,
+    exts := [{ x := 1, call := SemCall.release, result := some (SemResult.relRet true) }] }
+
+def mw6 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 2, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0, exts := [] }
+
+def mw7 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 2, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0,
+    exts := [{ x := 2, call := SemCall.release, result := none }] }
+
+def mw8 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 2, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0,
+    exts := [{ x := 2, call := SemCall.release, result := some (SemResult.relRet false) }] }
+
+def mw9 : PrimCfg SemSig (semPrimOf 0 2) :=
+  { prim := { available := 2, max := 2, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [], nextFiber := 0, exts := [] }
+
+theorem mws1 : PrimStep2 SemSig (semPrimOf 0 2) mw0
+    (some (issueObs SemSig (Caller.ext 0) SemCall.release)) mw1 :=
+  PrimStep2.extApply mw0 0 SemCall.release [] [] rfl (by decide)
+
+theorem mws2 : PrimStep2 SemSig (semPrimOf 0 2) mw1 none mw2 :=
+  PrimStep2.extEffect mw1 [] []
+    { x := 0, call := SemCall.release, result := none }
+    (SemResult.relRet true) { available := 1, max := 2, waitq := [] } [] [] [] []
+    rfl rfl (by rfl) rfl rfl
+
+theorem mws3 : PrimStep2 SemSig (semPrimOf 0 2) mw2
+    (some (compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet true))) mw3 :=
+  PrimStep2.extDone mw2 [] []
+    { x := 0, call := SemCall.release, result := some (SemResult.relRet true) }
+    (SemResult.relRet true) rfl rfl
+
+theorem mws4 : PrimStep2 SemSig (semPrimOf 0 2) mw3
+    (some (issueObs SemSig (Caller.ext 1) SemCall.release)) mw4 :=
+  PrimStep2.extApply mw3 1 SemCall.release [] [] rfl (by decide)
+
+theorem mws5 : PrimStep2 SemSig (semPrimOf 0 2) mw4 none mw5 :=
+  PrimStep2.extEffect mw4 [] []
+    { x := 1, call := SemCall.release, result := none }
+    (SemResult.relRet true) { available := 2, max := 2, waitq := [] } [] [] [] []
+    rfl rfl (by rfl) rfl rfl
+
+theorem mws6 : PrimStep2 SemSig (semPrimOf 0 2) mw5
+    (some (compObs SemSig (Caller.ext 1) SemCall.release (SemResult.relRet true))) mw6 :=
+  PrimStep2.extDone mw5 [] []
+    { x := 1, call := SemCall.release, result := some (SemResult.relRet true) }
+    (SemResult.relRet true) rfl rfl
+
+theorem mws7 : PrimStep2 SemSig (semPrimOf 0 2) mw6
+    (some (issueObs SemSig (Caller.ext 2) SemCall.release)) mw7 :=
+  PrimStep2.extApply mw6 2 SemCall.release [] [] rfl (by decide)
+
+theorem mws8 : PrimStep2 SemSig (semPrimOf 0 2) mw7 none mw8 :=
+  PrimStep2.extEffect mw7 [] []
+    { x := 2, call := SemCall.release, result := none }
+    (SemResult.relRet false) { available := 2, max := 2, waitq := [] } [] [] [] []
+    rfl rfl (by rfl) rfl rfl
+
+theorem mws9 : PrimStep2 SemSig (semPrimOf 0 2) mw8
+    (some (compObs SemSig (Caller.ext 2) SemCall.release (SemResult.relRet false))) mw9 :=
+  PrimStep2.extDone mw8 [] []
+    { x := 2, call := SemCall.release, result := some (SemResult.relRet false) }
+    (SemResult.relRet false) rfl rfl
+
+theorem ceilingRun : PrimRuns2 SemSig (semPrimOf 0 2) mw0 ceilingTrace mw9 :=
+  PrimRuns2.step mw0 mw1 _ _ mw9 mws1
+    (PrimRuns2.step mw1 mw2 none _ mw9 mws2
+      (PrimRuns2.step mw2 mw3 _ _ mw9 mws3
+        (PrimRuns2.step mw3 mw4 _ _ mw9 mws4
+          (PrimRuns2.step mw4 mw5 none _ mw9 mws5
+            (PrimRuns2.step mw5 mw6 _ _ mw9 mws6
+              (PrimRuns2.step mw6 mw7 _ _ mw9 mws7
+                (PrimRuns2.step mw7 mw8 none _ mw9 mws8
+                  (PrimRuns2.step mw8 mw9 _ [] mw9 mws9 (PrimRuns2.stop mw9)))))))))
+
+theorem seqOK_ceiling : SeqOK SemSig ceilingTrace := by
+  refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  exact SeqOKFrom.nil _
+
+theorem semPrimOf_possesses_ceiling :
+    TracesPrim SemSig (semPrimOf 0 2) ceilingTrace :=
+  ⟨mw9, ceilingRun⟩
+
+/-- Two stored grants, one ceiling refusal: three release issues, two
+granted permits. -/
+theorem ceiling_tight :
+    semRelIssueCount ceilingTrace = 3 ∧ semRelCount ceilingTrace = 2 := by
+  simp [ceilingTrace, semRelIssueCount, semRelCount, semIsRelIssue, semIsGrant,
     issueObs, compObs]
 
 /-! ## The guarantee has teeth -/
@@ -1147,7 +1531,12 @@ def sm1 : PrimCfg SemSig semMutant :=
 
 def sm2 : PrimCfg SemSig semMutant :=
   { prim := { available := 0, max := 1, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := SemCall.acquire }, false),
+    cur := some (FSlot.running { fiber := 0, call := SemCall.acquire } false),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def sm2b : PrimCfg SemSig semMutant :=
+  { prim := { available := 0, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := SemCall.acquire } SemResult.acqDone),
     parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
 
 def sm3 : PrimCfg SemSig semMutant :=
@@ -1161,7 +1550,12 @@ def sm4 : PrimCfg SemSig semMutant :=
 
 def sm5 : PrimCfg SemSig semMutant :=
   { prim := { available := 0, max := 1, waitq := [] }, now := 0,
-    cur := some ({ fiber := 1, call := SemCall.acquire }, false),
+    cur := some (FSlot.running { fiber := 1, call := SemCall.acquire } false),
+    parked := [], runq := [], retired := [0], nextFiber := 2, exts := [] }
+
+def sm5b : PrimCfg SemSig semMutant :=
+  { prim := { available := 0, max := 1, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 1, call := SemCall.acquire } SemResult.acqDone),
     parked := [], runq := [], retired := [0], nextFiber := 2, exts := [] }
 
 def sm6 : PrimCfg SemSig semMutant :=
@@ -1176,10 +1570,13 @@ theorem sms2 : PrimStep2 SemSig semMutant sm1
   PrimStep2.dispatchFresh sm1 { fiber := 0, call := SemCall.acquire, fresh := true } []
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
-theorem sms3 : PrimStep2 SemSig semMutant sm2
+theorem sms3a : PrimStep2 SemSig semMutant sm2 none sm2b :=
+  PrimStep2.fiberEffect sm2 { fiber := 0, call := SemCall.acquire } false [] [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+
+theorem sms3 : PrimStep2 SemSig semMutant sm2b
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) sm3 :=
-  PrimStep2.runDone sm2 ({ fiber := 0, call := SemCall.acquire }, false) [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl rfl rfl rfl
+  PrimStep2.fiberDone sm2b { fiber := 0, call := SemCall.acquire } SemResult.acqDone rfl
 
 theorem sms4 : PrimStep2 SemSig semMutant sm3 none sm4 :=
   PrimStep2.submit sm3 1 SemCall.acquire (Or.inl rfl)
@@ -1189,18 +1586,23 @@ theorem sms5 : PrimStep2 SemSig semMutant sm4
   PrimStep2.dispatchFresh sm4 { fiber := 1, call := SemCall.acquire, fresh := true } []
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
-theorem sms6 : PrimStep2 SemSig semMutant sm5
+theorem sms6a : PrimStep2 SemSig semMutant sm5 none sm5b :=
+  PrimStep2.fiberEffect sm5 { fiber := 1, call := SemCall.acquire } false [] [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+
+theorem sms6 : PrimStep2 SemSig semMutant sm5b
     (some (compObs SemSig (Caller.fiber 1) SemCall.acquire SemResult.acqDone)) sm6 :=
-  PrimStep2.runDone sm5 ({ fiber := 1, call := SemCall.acquire }, false) [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl rfl rfl rfl
+  PrimStep2.fiberDone sm5b { fiber := 1, call := SemCall.acquire } SemResult.acqDone rfl
 
 theorem mutantRun : PrimRuns2 SemSig semMutant sm0 semMutantTrace sm6 :=
   PrimRuns2.step sm0 sm1 none _ sm6 sms1
     (PrimRuns2.step sm1 sm2 _ _ sm6 sms2
-      (PrimRuns2.step sm2 sm3 _ _ sm6 sms3
-        (PrimRuns2.step sm3 sm4 none _ sm6 sms4
-          (PrimRuns2.step sm4 sm5 _ _ sm6 sms5
-            (PrimRuns2.step sm5 sm6 _ [] sm6 sms6 (PrimRuns2.stop sm6))))))
+      (PrimRuns2.step sm2 sm2b none _ sm6 sms3a
+        (PrimRuns2.step sm2b sm3 _ _ sm6 sms3
+          (PrimRuns2.step sm3 sm4 none _ sm6 sms4
+            (PrimRuns2.step sm4 sm5 _ _ sm6 sms5
+              (PrimRuns2.step sm5 sm5b none _ sm6 sms6a
+                (PrimRuns2.step sm5b sm6 _ [] sm6 sms6 (PrimRuns2.stop sm6))))))))
 
 theorem seqOK_mutant : SeqOK SemSig semMutantTrace := by
   refine SeqOKFrom.consIssue _ _ _ _ (by simp) ?_
