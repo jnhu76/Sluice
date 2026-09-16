@@ -173,3 +173,26 @@ to violate `NoWaitBeforeSet`.
 * The THEOREM-A question for the `extCap set = true` Event class is
   recorded as RESEARCH/DEFER on the charter issue (#375); the campaign
   stays OPEN.
+
+## 11. V2.3 replay (BRAKE-1 v2.3)
+
+BRAKE-1 v2.3 (`stage-0-v2-base-calculus.md` §7.1) split the fiber-origin
+call's critical-section effect from its physical return (`runDone` →
+`fiberEffect` + `fiberDone`, with the worker baton held in between).  The
+human review of PR #378 found the seam it fixes: for a fiber caller the
+code's `LockGuard` unlock precedes the physical return, and an external
+caller's whole call serializes in that window.
+
+Replayed on V2.3 (`EventV2.lean`, this branch):
+
+* the guarantee `eventNoWaitBeforeSet` and its issue anchor are unchanged;
+  the carried `EventInv` gains a sixth shape — a `returning`
+  inline-completed `wait`, whose return is pending while an external
+  `reset` may legally clear the latch in the new window;
+* the possession batteries (`drainTrace`, `extWitnessTrace`) and the
+  negative mutant are re-verified step-by-step on the split constructors;
+* the encoding side needed no change (its substrate-operation steps and
+  `complete` were already separate), so the chained-encoding blockade
+  (`encChained_underProduces`), the fiber-only-class under-production, and
+  the THEOREM-A verdict are carried over **RESEARCH/DEFER** unchanged in
+  content, now certified against the V2.3 trace language.

@@ -1,6 +1,7 @@
 /-
-Sluice Event core, Stage 1V2.2 (FCB1-METHOD-CORRECTIVE-1), re-adjudicated
-on the Stage-0-V2.2 execution-domain calculus.
+Sluice Event core, Stage 1V2.3 (FCB1-METHOD-CORRECTIVE-1), re-adjudicated
+on the Stage-0-V2.3 calculus (V2.2 execution domains plus the v2.3 split of
+the fiber call's critical-section effect from its physical return).
 
 The Event primitive (`include/sluice/async/event.hpp`,
 `src/async/scheduler_event.cpp`).  Core surface: `wait` (void, one-shot
@@ -158,15 +159,19 @@ def eventNoWaitBeforeSet (t : Trace EventSig) : Prop :=
 
 /-- The carried invariant, fused: if any state shape that lets a `wait`
 complete is present -- set latch, in-flight external `set`, dispatched
-`set`, published (stale) runnable entry, resumed `wait` in `cur` -- then a
-`set` issue is already present in the prefix `pin` that led to `cfg`; and
-no external `wait` record exists (the entry gate `extCap` forbids it). -/
+`set`, published (stale) runnable entry, resumed `wait` in `cur`, or a
+`returning` inline-completed `wait` (V2.3: its completion is pending while
+an external `reset` may already have cleared the latch) -- then a `set`
+issue is already present in the prefix `pin` that led to `cfg`; and no
+external `wait` record exists (the entry gate `extCap` forbids it). -/
 def EventInv (cfg : PrimCfg EventSig eventPrim) (pin : Trace EventSig) : Prop :=
   (((cfg.prim.flag = true) ∨
       (∃ e ∈ cfg.exts, e.call = EventCall.set) ∨
-      (∃ d : Pnd EventSig × Bool, cfg.cur = some d ∧ d.1.call = EventCall.set ∧ d.2 = false) ∨
+      (∃ d : Pnd EventSig, cfg.cur = some (FSlot.running d false) ∧ d.call = EventCall.set) ∨
       (∃ w ∈ cfg.runq, w.fresh = false) ∨
-      (∃ d : Pnd EventSig × Bool, cfg.cur = some d ∧ d.1.call = EventCall.wait ∧ d.2 = true)) →
+      (∃ d : Pnd EventSig, cfg.cur = some (FSlot.running d true) ∧ d.call = EventCall.wait) ∨
+      (∃ d : Pnd EventSig,
+        cfg.cur = some (FSlot.returning d EventResult.done) ∧ d.call = EventCall.wait)) →
     ∃ o ∈ pin, evIsSetIssue o = true) ∧
   (∀ e ∈ cfg.exts, e.call ≠ EventCall.wait)
 
@@ -198,7 +203,7 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
   cases hstep with
   | submit f c hsub =>
       refine ⟨fun hanton => ?_, hnowait⟩
-      rcases hanton with ha | ha | ha | ha | ha
+      rcases hanton with ha | ha | ha | ha | ha | ha
       · exact EventInv_pin_lift _ (hmain (Or.inl ha))
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inl ha))))
@@ -210,21 +215,24 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
         · simp only [List.mem_singleton] at hw
           cases hw
           simp at hwf
-      · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr ha)))))
+      · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ha))))))
+      · exact EventInv_pin_lift _
+          (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ha))))))
   | dispatchFresh r rest s' hcur hrunq hfresh hadmit =>
       have hs' : s' = cfg.prim := by
         have h1 : some cfg.prim = some s' := hadmit
         injection h1 with h2
         exact h2.symm
       refine ⟨fun hanton => ?_, hnowait⟩
-      rcases hanton with ha | ha | ha | ha | ha
+      rcases hanton with ha | ha | ha | ha | ha | ha
       · rw [hs'] at ha
         exact EventInv_pin_lift _ (hmain (Or.inl ha))
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
       · -- the step's own issue observation witnesses the dispatch
-        obtain ⟨d, hd, hdcall, _⟩ := ha
+        obtain ⟨d, hd, hdcall⟩ := ha
         have h1 := Option.some.inj hd
-        cases h1
+        injection h1 with h2 _
+        subst h2
         have hrc : r.call = EventCall.set := hdcall
         refine ⟨issueObs EventSig (Caller.fiber r.fiber) r.call,
           List.mem_append.mpr (Or.inr (List.Mem.head _)), ?_⟩
@@ -236,19 +244,20 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
           exact List.mem_cons_of_mem _ hw
         exact EventInv_pin_lift _
           (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hold, hwf⟩)))))
-      · obtain ⟨d, hd, _, hd2⟩ := ha
-        have h1 := Option.some.inj hd
-        cases h1
-        simp at hd2
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 := Option.some.inj hd'
+        simp at h1
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 := Option.some.inj hd'
+        simp at h1
   | dispatchResumed r rest hcur hrunq hfresh =>
       refine ⟨fun hanton => ?_, hnowait⟩
-      rcases hanton with ha | ha | ha | ha | ha
+      rcases hanton with ha | ha | ha | ha | ha | ha
       · exact EventInv_pin_lift _ (hmain (Or.inl ha))
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-      · obtain ⟨d, hd, _, hd2⟩ := ha
-        have h1 := Option.some.inj hd
-        cases h1
-        simp at hd2
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 := Option.some.inj hd'
+        simp at h1
       · obtain ⟨w, hw, hwf⟩ := ha
         have hold : w ∈ cfg.runq := by
           rw [hrunq]
@@ -261,10 +270,12 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
           exact List.Mem.head _
         exact EventInv_pin_lift none
           (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨r, hold, hfresh⟩)))))
-  | runDone d preP postP ps r s' wk hcur hd2 hrunP hparkedE hmap =>
-      obtain ⟨pd, pdres⟩ := d
-      cases hd2
-      cases hcall : pd.call with
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 := Option.some.inj hd'
+        simp at h1
+  | fiberEffect d b preP postP ps r s' wk hcur hb hrunP hparkedE hmap =>
+      rw [hb] at hcur
+      cases hcall : d.call with
       | wait =>
           rw [hcall] at hrunP
           have h1 : (if cfg.prim.flag = true then some (EventResult.done, cfg.prim, [])
@@ -281,20 +292,25 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
               | cons p ps' => simp at hmap
             subst hps
             refine ⟨fun hanton => ?_, hnowait⟩
-            rcases hanton with ha | ha | ha | ha | ha
+            obtain ⟨o, hm, h'⟩ := hmain (Or.inl hcf)
+            rcases hanton with ha | ha | ha | ha | ha | ha
             · rw [← hs'eq] at ha
-              exact EventInv_pin_lift _ (hmain (Or.inl ha))
-            · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-            · obtain ⟨d', hd', _, _⟩ := ha
-              simp at hd'
+              exact ⟨o, mem_pin_snoc none hm, h'⟩
+            · exact ⟨o, mem_pin_snoc none hm, h'⟩
+            · obtain ⟨d', hd', _⟩ := ha
+              have h1 := Option.some.inj hd'
+              simp at h1
             · obtain ⟨w, hw, hwf⟩ := ha
               rw [List.mem_append] at hw
               rcases hw with hw | hw
               · exact EventInv_pin_lift _
                   (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hwf⟩)))))
               · simp at hw
-            · obtain ⟨d', hd', _, _⟩ := ha
-              simp at hd'
+            · obtain ⟨d', hd', _⟩ := ha
+              have h1 := Option.some.inj hd'
+              simp at h1
+            · -- the wait's own returning slot satisfies this disjunct
+              exact ⟨o, mem_pin_snoc none hm, h'⟩
           · rw [if_neg hcf] at h1
             simp at h1
       | set =>
@@ -314,43 +330,55 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
               | cons p ps' => simp at hmap
             subst hps
             refine ⟨fun hanton => ?_, hnowait⟩
-            rcases hanton with ha | ha | ha | ha | ha
+            obtain ⟨o, hm, h'⟩ := hmain (Or.inl hcf)
+            rcases hanton with ha | ha | ha | ha | ha | ha
             · rw [← hs'eq] at ha
-              exact EventInv_pin_lift _ (hmain (Or.inl ha))
-            · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-            · obtain ⟨d', hd', _, _⟩ := ha
-              simp at hd'
+              exact ⟨o, mem_pin_snoc none hm, h'⟩
+            · exact ⟨o, mem_pin_snoc none hm, h'⟩
+            · obtain ⟨d', hd', _⟩ := ha
+              have h1 := Option.some.inj hd'
+              simp at h1
             · obtain ⟨w, hw, hwf⟩ := ha
               rw [List.mem_append] at hw
               rcases hw with hw | hw
               · exact EventInv_pin_lift _
                   (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hwf⟩)))))
               · simp at hw
-            · obtain ⟨d', hd', _, _⟩ := ha
-              simp at hd'
+            · obtain ⟨d', hd', _⟩ := ha
+              have h1 := Option.some.inj hd'
+              simp at h1
+            · obtain ⟨d', hd', hdcall'⟩ := ha
+              have h1 := Option.some.inj hd'
+              injection h1 with h2 _
+              subst h2
+              rw [hcall] at hdcall'
+              simp at hdcall'
           · rw [if_neg hcf] at h1
             injection h1 with h0
             injection h0 with _ hrest
             injection hrest with _ hwkeq
             cases hwkeq
             -- the latch is raised by this section; the set issue came from
-            -- this call's dispatch (`hcur` with `d.2 = false`)
+            -- this call's dispatch (`hcur` with the fresh bit `false`)
             have hsrc : ∃ o ∈ pin, evIsSetIssue o = true :=
-              hmain (Or.inr (Or.inr (Or.inl ⟨(pd, false), hcur, hcall, rfl⟩)))
+              hmain (Or.inr (Or.inr (Or.inl ⟨d, hcur, hcall⟩)))
             refine ⟨fun hanton => ?_, hnowait⟩
-            rcases hanton with ha | ha | ha | ha | ha
+            rcases hanton with ha | ha | ha | ha | ha | ha
             · exact EventInv_pin_lift _ hsrc
-            · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-            · obtain ⟨d', hd', _, _⟩ := ha
-              simp at hd'
-            · obtain ⟨w, hw, hwf⟩ := ha
-              rw [List.mem_append] at hw
-              rcases hw with hw | hw
-              · exact EventInv_pin_lift _
-                  (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hwf⟩)))))
-              · exact EventInv_pin_lift _ hsrc
-            · obtain ⟨d', hd', _, _⟩ := ha
-              simp at hd'
+            · exact EventInv_pin_lift _ hsrc
+            · obtain ⟨d', hd', _⟩ := ha
+              have h1 := Option.some.inj hd'
+              simp at h1
+            · exact EventInv_pin_lift _ hsrc
+            · obtain ⟨d', hd', _⟩ := ha
+              have h1 := Option.some.inj hd'
+              simp at h1
+            · obtain ⟨d', hd', hdcall'⟩ := ha
+              have h1 := Option.some.inj hd'
+              injection h1 with h2 _
+              subst h2
+              rw [hcall] at hdcall'
+              simp at hdcall'
       | reset =>
           rw [hcall] at hrunP
           have h1 : some (EventResult.done, { flag := false, waitq := cfg.prim.waitq }, [])
@@ -365,24 +393,45 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
             | cons p ps' => simp at hmap
           subst hps
           refine ⟨fun hanton => ?_, hnowait⟩
-          rcases hanton with ha | ha | ha | ha | ha
+          rcases hanton with ha | ha | ha | ha | ha | ha
           · rw [← hs'eq] at ha
             simp at ha
           · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-          · obtain ⟨d', hd', _, _⟩ := ha
-            simp at hd'
+          · obtain ⟨d', hd', _⟩ := ha
+            have h1 := Option.some.inj hd'
+            simp at h1
           · obtain ⟨w, hw, hwf⟩ := ha
             rw [List.mem_append] at hw
             rcases hw with hw | hw
             · exact EventInv_pin_lift _
                 (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hwf⟩)))))
             · simp at hw
-          · obtain ⟨d', hd', _, _⟩ := ha
-            simp at hd'
-  | runPark d s' hcur hrunE hparkE =>
-      obtain ⟨pd, pdres⟩ := d
-      have hcw : pd.call = EventCall.wait := by
-        cases hcall : pd.call with
+          · obtain ⟨d', hd', _⟩ := ha
+            have h1 := Option.some.inj hd'
+            simp at h1
+          · obtain ⟨d', hd', hdcall'⟩ := ha
+            have h1 := Option.some.inj hd'
+            injection h1 with h2 _
+            subst h2
+            rw [hcall] at hdcall'
+            simp at hdcall'
+  | fiberDone d r hcur =>
+      refine ⟨fun hanton => ?_, hnowait⟩
+      rcases hanton with ha | ha | ha | ha | ha | ha
+      · exact EventInv_pin_lift _ (hmain (Or.inl ha))
+      · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
+      · obtain ⟨d', hd', _⟩ := ha
+        simp at hd'
+      · obtain ⟨w, hw, hwf⟩ := ha
+        exact EventInv_pin_lift _
+          (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hwf⟩)))))
+      · obtain ⟨d', hd', _⟩ := ha
+        simp at hd'
+      · obtain ⟨d', hd', _⟩ := ha
+        simp at hd'
+  | runPark d b s' hcur hrunE hparkE =>
+      have hcw : d.call = EventCall.wait := by
+        cases hcall : d.call with
         | set =>
             rw [hcall] at hparkE
             have h2 : Option.none = some s' := hparkE
@@ -393,25 +442,25 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
             simp at h2
         | wait => rfl
       rw [hcw] at hparkE
-      have h1 : some { cfg.prim with waitq := cfg.prim.waitq ++ [pd.fiber] } = some s' :=
+      have h1 : some { cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } = some s' :=
         hparkE
       injection h1 with h3
-      have hsub : s' = { cfg.prim with waitq := cfg.prim.waitq ++ [pd.fiber] } := h3.symm
+      have hsub : s' = { cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } := h3.symm
       refine ⟨fun hanton => ?_, hnowait⟩
-      rcases hanton with ha | ha | ha | ha | ha
+      rcases hanton with ha | ha | ha | ha | ha | ha
       · rw [hsub] at ha
         exact EventInv_pin_lift _ (hmain (Or.inl ha))
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-      · obtain ⟨d', hd', _, _⟩ := ha
+      · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inl ha)))))
-      · obtain ⟨d', hd', _, _⟩ := ha
+      · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
-  | finishDone d preP postP ps r s' wk hcur hd2 hfinD hparkedE hmap =>
-      obtain ⟨pd, pdres⟩ := d
-      cases hd2
-      have hcw : pd.call = EventCall.wait := by
-        cases hcall : pd.call with
+      · obtain ⟨d', hd', _⟩ := ha
+        simp at hd'
+  | finishDone d b preP postP ps r s' wk hcur hb hfinD hparkedE hmap =>
+      have hcw : d.call = EventCall.wait := by
+        cases hcall : d.call with
         | set =>
             rw [hcall] at hfinD
             have h2 : Option.none = some (r, s', wk) := hfinD
@@ -433,11 +482,11 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
         | cons p ps' => simp at hmap
       subst hps
       refine ⟨fun hanton => ?_, hnowait⟩
-      rcases hanton with ha | ha | ha | ha | ha
+      rcases hanton with ha | ha | ha | ha | ha | ha
       · rw [← hs'eq] at ha
         exact EventInv_pin_lift _ (hmain (Or.inl ha))
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
-      · obtain ⟨d', hd', _, _⟩ := ha
+      · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
       · obtain ⟨w, hw, hwf⟩ := ha
         rw [List.mem_append] at hw
@@ -445,11 +494,13 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
         · exact EventInv_pin_lift _
             (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hwf⟩)))))
         · simp at hw
-      · obtain ⟨d', hd', _, _⟩ := ha
+      · obtain ⟨d', hd', _⟩ := ha
+        simp at hd'
+      · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
   | extApply x c preE postE hcap hxfresh =>
       refine ⟨fun hanton => ?_, ?_⟩
-      · rcases hanton with ha | ha | ha | ha | ha
+      · rcases hanton with ha | ha | ha | ha | ha | ha
         · exact EventInv_pin_lift _ (hmain (Or.inl ha))
         · obtain ⟨e, he, hset⟩ := ha
           rw [List.mem_append] at he
@@ -464,7 +515,9 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
             rfl
         · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inl ha))))
         · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inl ha)))))
-        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr ha)))))
+        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ha))))))
+        · exact EventInv_pin_lift _
+            (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ha))))))
       · intro e' he'
         rw [List.mem_append] at he'
         rcases he' with he' | he'
@@ -485,7 +538,7 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
         have h2 : Option.none = some (r, s', wk) := hrunE
         simp at h2
       refine ⟨fun hanton => ?_, ?_⟩
-      · rcases hanton with ha | ha | ha | ha | ha
+      · rcases hanton with ha | ha | ha | ha | ha | ha
         · -- only the `set` section can raise the latch (`wait` has no
             -- external section; `reset` lowers it)
           have hsetcall : e.call = EventCall.set := by
@@ -543,7 +596,9 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
                   | set => rfl
                 obtain ⟨o, hm, h'⟩ := hmain (Or.inr (Or.inl ⟨e, hemem, hsetcall⟩))
                 exact ⟨o, mem_pin_snoc none hm, h'⟩
-        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr ha)))))
+        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ha))))))
+        · exact EventInv_pin_lift _
+            (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ha))))))
       · intro e' he'
         rw [List.mem_append, List.mem_cons] at he'
         rcases he' with he' | he' | he'
@@ -554,7 +609,7 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
             (by rw [hsplitE]; exact List.mem_append.mpr (Or.inr (List.mem_cons_of_mem _ he')))
   | extDone preE postE e r hsplitE hsome =>
       refine ⟨fun hanton => ?_, ?_⟩
-      · rcases hanton with ha | ha | ha | ha | ha
+      · rcases hanton with ha | ha | ha | ha | ha | ha
         · exact EventInv_pin_lift _ (hmain (Or.inl ha))
         · obtain ⟨e', he', hset⟩ := ha
           refine EventInv_pin_lift (some (compObs EventSig (Caller.ext e.x) e.call r))
@@ -565,7 +620,9 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
           · exact List.mem_append.mpr (Or.inr (List.mem_cons_of_mem _ h))
         · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inl ha))))
         · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inl ha)))))
-        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr ha)))))
+        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ha))))))
+        · exact EventInv_pin_lift _
+            (hmain (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ha))))))
       · intro e' he'
         rcases List.mem_append.mp he' with h | h
         · exact hnowait e' (by rw [hsplitE]; exact List.mem_append.mpr (Or.inl h))
@@ -578,29 +635,31 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
       simp at h2
 
 /-- Inverting a step that completes a `wait`: the source configuration has
-a set latch, or a resumed `wait` in `cur`. -/
+a set latch, a `returning` inline-completed `wait` (V2.3: its return is
+pending, and the latch may since have been cleared by an external `reset`),
+or a resumed `wait` in `cur`. -/
 theorem eventStep_waitComp_inv {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Obs EventSig}
     (hstep : PrimStep2 EventSig eventPrim cfg (some ob) cfg')
     (hc : ob.call = EventCall.wait) (hr : ob.result = some EventResult.done)
     (hext : ∀ e ∈ cfg.exts, e.call ≠ EventCall.wait) :
-    cfg.prim.flag = true ∨ ∃ d : Pnd EventSig × Bool, cfg.cur = some d ∧ d.2 = true ∧ d.1.call = EventCall.wait := by
+    cfg.prim.flag = true ∨
+      (∃ d : Pnd EventSig,
+        cfg.cur = some (FSlot.returning d EventResult.done) ∧ d.call = EventCall.wait) ∨
+      (∃ d : Pnd EventSig,
+        cfg.cur = some (FSlot.running d true) ∧ d.call = EventCall.wait) := by
   cases hstep with
   | dispatchFresh r rest s' hcur hrunq hfresh hadmit =>
       have h1 : Option.none = some EventResult.done := hr
       exact absurd h1 (by simp)
-  | runDone d preP postP ps r s' wk hcur hd2 hrunP hparkedE hmap =>
-      have hc1 : d.1.call = EventCall.wait := hc
-      rw [hc1] at hrunP
-      refine Or.inl ?_
-      by_cases hcf : cfg.prim.flag
-      · exact hcf
-      · have h1 : (if cfg.prim.flag = true then some (EventResult.done, cfg.prim, [])
-            else none) = some (r, s', wk) := hrunP
-        rw [if_neg hcf] at h1
-        simp at h1
-  | finishDone d preP postP ps r s' wk hcur hd2 hfinD hparkedE hmap =>
-      have hc1 : d.1.call = EventCall.wait := hc
-      exact Or.inr ⟨d, hcur, hd2, hc1⟩
+  | fiberDone d r hcur =>
+      have hr2 : r = EventResult.done := Option.some.inj hr
+      subst hr2
+      have hc1 : d.call = EventCall.wait := hc
+      exact Or.inr (Or.inl ⟨d, hcur, hc1⟩)
+  | finishDone d b preP postP ps r s' wk hcur hb hfinD hparkedE hmap =>
+      rw [hb] at hcur
+      have hc1 : d.call = EventCall.wait := hc
+      exact Or.inr (Or.inr ⟨d, hcur, hc1⟩)
   | extApply x c preE postE hcap hxfresh =>
       have h1 : Option.none = some EventResult.done := hr
       exact absurd h1 (by simp)
@@ -641,12 +700,16 @@ theorem eventPrim_guarantees : Guarantees eventPrim eventNoWaitBeforeSet := by
                 injection hsp' with h1 h2
                 cases h1
                 have hcmp := eventStep_waitComp_inv hstep rfl rfl hinv.2
-                rcases hcmp with hflag | hresumed
+                rcases hcmp with hflag | hret | hresumed
                 · obtain ⟨o, hm, h'⟩ := hinv.1 (Or.inl hflag)
                   exact ⟨o, by simpa using hm, h'⟩
-                · obtain ⟨d, hd, hd2, hdc⟩ := hresumed
+                · obtain ⟨d, hd, hdc⟩ := hret
                   obtain ⟨o, hm, h'⟩ :=
-                    hinv.1 (Or.inr (Or.inr (Or.inr (Or.inr ⟨d, hd, hdc, hd2⟩))))
+                    hinv.1 (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨d, hd, hdc⟩)))))
+                  exact ⟨o, by simpa using hm, h'⟩
+                · obtain ⟨d, hd, hdc⟩ := hresumed
+                  obtain ⟨o, hm, h'⟩ :=
+                    hinv.1 (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨d, hd, hdc⟩)))))
                   exact ⟨o, by simpa using hm, h'⟩
             | cons a tl =>
                 have hsp' : ob :: t2 = a :: (tl ++ compObs EventSig cl EventCall.wait
@@ -660,20 +723,23 @@ theorem eventPrim_guarantees : Guarantees eventPrim eventNoWaitBeforeSet := by
                 simpa [List.cons_append] using hm
   have hinv0 : EventInv (primInit EventSig eventPrim) [] := by
     refine ⟨fun hanton => ?_, ?_⟩
-    · rcases hanton with ha | ha | ha | ha | ha
+    · rcases hanton with ha | ha | ha | ha | ha | ha
       · have h1 : (false : Bool) = true := ha
         simp at h1
       · obtain ⟨e, he, _⟩ := ha
         have h1 : (e : ExtPend EventSig) ∈ ([] : List (ExtPend EventSig)) := he
         simp at h1
-      · obtain ⟨d, hd, _, _⟩ := ha
-        have h1 : Option.none = some d := hd
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 : Option.none = some (FSlot.running d' false) := hd'
         simp at h1
       · obtain ⟨w, hw, _⟩ := ha
         have h1 : (w : PReady EventSig) ∈ ([] : List (PReady EventSig)) := hw
         simp at h1
-      · obtain ⟨d, hd, _, _⟩ := ha
-        have h1 : Option.none = some d := hd
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 : Option.none = some (FSlot.running d' true) := hd'
+        simp at h1
+      · obtain ⟨d', hd', _⟩ := ha
+        have h1 : Option.none = some (FSlot.returning d' EventResult.done) := hd'
         simp at h1
     · intro e he
       have h1 : (e : ExtPend EventSig) ∈ ([] : List (ExtPend EventSig)) := he
@@ -707,7 +773,7 @@ def eq1 : PrimCfg EventSig eventPrim :=
 
 def eq2 : PrimCfg EventSig eventPrim :=
   { prim := { flag := false, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := EventCall.wait }, false), parked := [],
+    cur := some (FSlot.running { fiber := 0, call := EventCall.wait } false), parked := [],
     runq := [], retired := [], nextFiber := 1, exts := [] }
 
 def eq3 : PrimCfg EventSig eventPrim :=
@@ -728,7 +794,7 @@ def eq5 : PrimCfg EventSig eventPrim :=
 
 def eq6 : PrimCfg EventSig eventPrim :=
   { prim := { flag := true, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := EventCall.wait }, true), parked := [],
+    cur := some (FSlot.running { fiber := 0, call := EventCall.wait } true), parked := [],
     runq := [], retired := [], nextFiber := 1,
     exts := [{ x := 0, call := EventCall.set, result := some (EventResult.setWoke 1) }] }
 
@@ -751,7 +817,7 @@ theorem ed2 : PrimStep2 EventSig eventPrim eq1
   all_goals rfl
 
 theorem ed3 : PrimStep2 EventSig eventPrim eq2 none eq3 :=
-  PrimStep2.runPark eq2 ({ fiber := 0, call := EventCall.wait }, false)
+  PrimStep2.runPark eq2 { fiber := 0, call := EventCall.wait } false
     { flag := false, waitq := [0] } rfl rfl rfl
 
 theorem ed4 : PrimStep2 EventSig eventPrim eq3
@@ -773,7 +839,7 @@ theorem ed6 : PrimStep2 EventSig eventPrim eq5 none eq6 := by
 
 theorem ed7 : PrimStep2 EventSig eventPrim eq6
     (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) eq7 := by
-  refine PrimStep2.finishDone eq6 ({ fiber := 0, call := EventCall.wait }, true) [] [] []
+  refine PrimStep2.finishDone eq6 { fiber := 0, call := EventCall.wait } true [] [] []
     EventResult.done { flag := true, waitq := [] } [] ?_ ?_ ?_ ?_ ?_
   all_goals rfl
 
@@ -1243,8 +1309,13 @@ def mu1 : PrimCfg EventSig eventMutant :=
 
 def mu2 : PrimCfg EventSig eventMutant :=
   { prim := { flag := false, waitq := [] }, now := 0,
-    cur := some ({ fiber := 0, call := EventCall.wait }, false), parked := [],
+    cur := some (FSlot.running { fiber := 0, call := EventCall.wait } false), parked := [],
     runq := [], retired := [], nextFiber := 1, exts := [] }
+
+def mu2b : PrimCfg EventSig eventMutant :=
+  { prim := { flag := false, waitq := [] }, now := 0,
+    cur := some (FSlot.returning { fiber := 0, call := EventCall.wait } EventResult.done),
+    parked := [], runq := [], retired := [], nextFiber := 1, exts := [] }
 
 def mu3 : PrimCfg EventSig eventMutant :=
   { prim := { flag := false, waitq := [] }, now := 0, cur := none, parked := [],
@@ -1261,13 +1332,16 @@ theorem mud2 : PrimStep2 EventSig eventMutant mu1
     | rfl
     | simp [eventMutant, eventMutantRun]
 
-theorem mud3 : PrimStep2 EventSig eventMutant mu2
-    (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) mu3 := by
-  refine PrimStep2.runDone mu2 ({ fiber := 0, call := EventCall.wait }, false) [] [] []
+theorem mud3 : PrimStep2 EventSig eventMutant mu2 none mu2b := by
+  refine PrimStep2.fiberEffect mu2 { fiber := 0, call := EventCall.wait } false [] [] []
     EventResult.done { flag := false, waitq := [] } [] ?_ ?_ ?_ ?_ ?_
   all_goals first
     | rfl
     | simp [eventMutant, eventMutantRun]
+
+theorem mud4 : PrimStep2 EventSig eventMutant mu2b
+    (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) mu3 :=
+  PrimStep2.fiberDone mu2b { fiber := 0, call := EventCall.wait } EventResult.done rfl
 
 theorem seqOK_mutantTrace : SeqOK EventSig mutantTrace := by
   refine SeqOKFrom.consIssue _ _ _ _ rfl ?_
@@ -1277,7 +1351,8 @@ theorem seqOK_mutantTrace : SeqOK EventSig mutantTrace := by
 theorem eventMutant_possesses : TracesPrim EventSig eventMutant mutantTrace :=
   ⟨mu3, PrimRuns2.step mu0 mu1 none _ mu3 mud1
     (PrimRuns2.step mu1 mu2 _ _ mu3 mud2
-      (PrimRuns2.step mu2 mu3 _ [] mu3 mud3 (PrimRuns2.stop mu3)))⟩
+      (PrimRuns2.step mu2 mu2b none _ mu3 mud3
+        (PrimRuns2.step mu2b mu3 _ [] mu3 mud4 (PrimRuns2.stop mu3))))⟩
 
 theorem eventMutant_not_guarantees : ¬ Guarantees eventMutant eventNoWaitBeforeSet := by
   intro h
