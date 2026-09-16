@@ -92,6 +92,20 @@ BRAKE-1 ledger (see the freeze document, §7.1):
   scheduler FIFO", which V2.2 removes; the Event stage is re-adjudicated
   on V2.2.
 
+  v2.2.1 -- `extSubOpStep`/`extSubOpWake` left the external in-flight
+  record untouched (`exts := cfg.exts`), so an external program's
+  continuation was computed and discarded: any external-capable call whose
+  program contains at least one substrate operation could never reach
+  `pure` and never physically return.  This contradicted the freeze
+  document's rule 9 ("the encoding side executes its program stepwise") --
+  an implementation slip, found during the Stage 1V2.2 Event
+  re-adjudication while proving the natural chained encoding's external
+  blockade.  Amendment: both steps now advance the record
+  (`exts := preE ++ { e with prog := k v } :: postE`).  Downstream
+  invalidation: none -- no merged certificate exercised a multi-step
+  external program (the domain battery and the vacuity lie use `pure`
+  external programs); the calc gate was re-verified in full.
+
 Every construct carries a comment naming its C++ counterpart where one exists.
 -/
 
@@ -692,7 +706,7 @@ inductive SysStep (O : BaseOpsSig) (A : ApiSig) (enc : Encoding O A)
           runq := cfg.runq
           retired := cfg.retired
           nextFiber := cfg.nextFiber
-          exts := cfg.exts }
+          exts := preE ++ { e with prog := k v } :: postE }
   /-- An external caller's operation resolves waiter token `w` to `ores`;
   the parked fiber owning `w` is published runnable with its continuation
   (the drain path of `event_set_broadcast`). -/
@@ -714,7 +728,7 @@ inductive SysStep (O : BaseOpsSig) (A : ApiSig) (enc : Encoding O A)
             [{ fiber := p.fiber, call := p.call, prog := kw (SubVal.outcome ores), fresh := false }]
           retired := cfg.retired
           nextFiber := cfg.nextFiber
-          exts := cfg.exts }
+          exts := preE ++ { e with prog := k v } :: postE }
   /-- An external call physically returns: the completion observation.
   This is deliberately unordered with respect to the other steps -- the
   caller's critical section has ended, and holding `global_mtx_` serializes
