@@ -59,6 +59,8 @@ open Sluice.Formal
 #print axioms Sluice.Formal.semStep_take_credit
 #print axioms Sluice.Formal.semPrim_possesses_window
 #print axioms Sluice.Formal.semPrim_possesses_handoff
+#print axioms Sluice.Formal.semPrim_possesses_extRel
+#print axioms Sluice.Formal.handoff_tight
 #print axioms Sluice.Formal.semMutant_not_guarantees
 #print axioms Sluice.Formal.eventPrim_possesses_drain
 #print axioms Sluice.Formal.eventPrim_possesses_ext

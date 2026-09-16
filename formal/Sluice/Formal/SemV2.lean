@@ -20,10 +20,14 @@ The architecture question: `Scheduler::sem_release` is one atomic
 critical section — hand a permit directly to the queue head, or store one
 permit if the queue is empty and the ceiling allows, or refuse — all
 under the scheduler lock, in the single inline step of the running call.
-Any fiber-wise implementation over the bare substrate must serialize that
-check-then-act section with a baton built from wait-queue cells, so a
-second release's issue can interleave between the first release's issue
-and its completion.  The primitive forbids exactly that.
+For fiber callers the modeled primitive fuses that section's issue,
+effect, and completion into one step, so two fiber releases can never
+interleave.  A fiber-wise encoding over the bare substrate would have to
+serialize the check-then-act with a baton built from wait-queue cells and
+spread the section over several steps; whether any such encoding stays
+coherent is open here (RESEARCH/DEFER).  External callers are different
+even for the primitive: their release separates issue from completion
+(the window below).
 
 The v2.2 window: an external `release` applies its grant at `extEffect`
 but its completion observation lands only at `extDone`, and other steps
@@ -32,11 +36,15 @@ physical-return serialization).  An acquire may therefore complete while
 the release that minted its permit is still in flight, so the strict
 claim "completed takes < completed grants" is false for the primitive
 itself (refuted by the possessed `windowTrace` below).  The honest trace
-guarantee is `completed takes ≤ issued releases`: every consumed permit
-was minted by a release whose call had already been issued.  It is proved
-from a single permit-accounting mirror that credits each release issue at
-its observation (fiber dispatch or external entry) and discharges the
-credit when the release's section takes effect.
+guarantee, for the modeled instance whose initial state holds zero
+permits, is `completed takes ≤ issued releases`: every consumed permit
+was minted by a release whose call had already been issued.  (With the
+C++ constructor's `initial_permits > 0` the bound generalizes to
+`completed takes ≤ issued releases + initial_permits`; the ceiling `max`
+is immaterial to the claim.)  It is proved from a single permit-accounting
+mirror that credits each release issue at its observation (fiber dispatch
+or external entry) and discharges the credit when the release's section
+takes effect.
 -/
 import Sluice.Formal.CalcV2
 import Sluice.Formal.JudgeV2

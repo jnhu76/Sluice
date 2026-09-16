@@ -61,7 +61,11 @@ Consequences, both handled head-on in `SemV2.lean`:
   `semPermitsHonored`: at every completed acquire, the number of
   completed takes is at most the number of release *issues* observed so
   far — every consumed permit was minted by a release whose call had
-  already been issued.
+  already been issued. Scope: the modeled instance starts at zero
+  permits (`semPrim.init = {available := 0, max := 1, waitq := []}`);
+  with the C++ constructor's `initial_permits > 0` the general bound is
+  `completed takes ≤ issued releases + initial_permits` (the ceiling is
+  immaterial to the claim).
 
 ## 4. What is proved (`formal/Sluice/Formal/SemV2.lean`)
 
