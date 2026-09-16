@@ -161,7 +161,8 @@ worker `worker_loop` (`scheduler.cpp`):
      facet fixes the result and readies woken parked fibers on the
      primitive side (`extEffect`); the encoding side executes its program
      stepwise (`extSubOpStep`/`extSubOpWake`) using only `extOpAllowed`
-     substrate operations.
+     substrate operations, advancing the in-flight record's program to the
+     step's continuation (`v2.2.1`, §7.1).
    * **return** — the completion observation (`extDone`/`extComplete`),
      unordered with respect to other steps (rule 10).
    External steps interleave with fiber steps wherever `global_mtx_` is
@@ -333,6 +334,25 @@ merge).  External invocation of base operations is deferred (no rule; see
 is invalidated** — its countermodel relied on "set/reset must enter the
 scheduler FIFO", which V2.2 removes; the Event stage is re-adjudicated on
 V2.2 before any verdict is reused.
+
+**v2.2.1 (external-record advancement repair, Stage 1V2.2).**
+`extSubOpStep`/`extSubOpWake` returned `exts := cfg.exts`: the external
+in-flight record was left untouched and the step's continuation `k v` was
+computed but discarded, so an external-capable call whose program contains
+at least one substrate operation could never reach `pure` and never
+physically return.  This contradicted rule 9's own text ("the encoding side
+executes its program stepwise") and silently inverted §4.2's recorded
+asymmetry (the encoding side would have been the *less* permissive side,
+fabricating separations).  Found during the Stage 1V2.2 Event
+re-adjudication, while proving the natural chained encoding's external
+blockade: the blockade must come from `extOpAllowed` forbidding `attach`,
+not from a machine that cannot advance external programs at all.
+Amendment: both steps advance the record
+(`exts := preE ++ { e with prog := k v } :: postE`).  Downstream
+invalidation: none — no merged certificate exercised a multi-step external
+program (the domain battery's `domEnc` and the vacuity lie both use `pure`
+external programs); the calc gate was re-verified in full after the
+amendment.
 
 ## 8. Method-level vacuity and negative tests (§9 of the corrective document)
 
