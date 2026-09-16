@@ -38,6 +38,7 @@ echo "== axiom audit =="
 cat > .lake/axiom-audit.lean <<'EOF'
 import Sluice.Formal.VacuityV2
 import Sluice.Formal.EventV2
+import Sluice.Formal.SemV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -53,6 +54,12 @@ open Sluice.Formal
 #print axioms Sluice.Formal.encLie_overProduces
 #print axioms Sluice.Formal.extIssue_inv
 #print axioms Sluice.Formal.eventPrim_guarantees
+#print axioms Sluice.Formal.semPrim_guarantees
+#print axioms Sluice.Formal.semBalance_mirror
+#print axioms Sluice.Formal.semStep_take_credit
+#print axioms Sluice.Formal.semPrim_possesses_window
+#print axioms Sluice.Formal.semPrim_possesses_handoff
+#print axioms Sluice.Formal.semMutant_not_guarantees
 #print axioms Sluice.Formal.eventPrim_possesses_drain
 #print axioms Sluice.Formal.eventPrim_possesses_ext
 #print axioms Sluice.Formal.encChained_underProduces
