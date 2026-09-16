@@ -354,6 +354,38 @@ program (the domain battery's `domEnc` and the vacuity lie both use `pure`
 external programs); the calc gate was re-verified in full after the
 amendment.
 
+**v2.3 (fiber effect/return split, human review of PR #378 @ `ed47e468`).**
+The fiber-origin inline call fused its critical-section effect, wake
+publication, and physical return into one step (`runDone`).  The production
+code contradicts this for every fiber-origin call, exactly as v2.2's
+external callers did: the critical section ends when the API's internal
+lock is released — the `LockGuard` destructor at the end of e.g.
+`Scheduler::sem_release` (`scheduler_semaphore.cpp:147-161`) — and the
+fiber still executes its return path afterward, with the worker baton in
+hand.  An external caller's whole call can serialize in that window.
+Concrete witness (semaphore, `available = 0`, `max = 1`): a fiber `release`
+stores the permit and unlocks; an external `release` then enters, sees the
+full ceiling, refuses, and physically returns `false` **before** the fiber
+physically returns `true` — a legal C++ trace `runDone` cannot express,
+since it forces the fiber's completion to coincide with its effect (model
+under-production).  This is the same effect/return confusion the V2 repair
+(completion shadow) and the v2.2 three-phase external split addressed,
+surviving in the last fused fiber step; the encoding side already ran the
+split discipline (substrate-operation steps vs `complete`), so the two
+machines were granularly asymmetric.  Amendment: `PrimCfg.cur` becomes a
+`FSlot` — `running` (the call's inline paths are pending) or `returning`
+(result fixed, state effect applied, wakes published; physical return
+pending) — and `runDone` splits into `fiberEffect` (silent) and
+`fiberDone` (the completion observation; the fiber retires).  Between them
+the worker keeps the baton: dispatch, the park/finish paths, and the
+environment steps stay blocked (`cur ≠ none`), while the external steps
+and the return itself remain legal — precisely "single worker ⇒ no
+fiber/fiber interleaving, single worker ⇏ no external-thread
+interleaving".  Downstream invalidation: the Event (PR #377) and Semaphore
+(PR #378) trace languages, batteries, and carried invariants are
+re-derived on V2.3 and their verdicts re-adjudicated before reuse; the
+echo reduction and the domain batteries were re-verified by the gate.
+
 ## 8. Method-level vacuity and negative tests (§9 of the corrective document)
 
 | Test | Artifact | Requirement |
