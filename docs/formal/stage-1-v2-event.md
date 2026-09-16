@@ -34,7 +34,11 @@ Public surface (`include/sluice/async/event.hpp`): `set()`, `reset()`,
 wrapper and is not part of the public API surface (the model keeps
 `setWoke n` because the per-waiter publication it summarizes is the
 load-bearing behavior).  `wait_until`, `cancel`, and the select integration
-are outside the core model, as in V2.1.
+are outside the core model, as in V2.1.  The core model also covers the
+**initially-clear** event only (`init` flag = false): `Event(Scheduler&,
+bool initially_set = true)` (`include/sluice/async/event.hpp:16-17`) can
+complete a `wait` with no set issue ever, so it is outside the modeled
+domain; no in-tree consumer constructs it.
 
 | Call | Domain | Code anchor |
 | --- | --- | --- |
@@ -87,10 +91,11 @@ so the issue is the observable anchor.)
   completion inverts to a latch or a resumed waiter
   (`eventStep_waitComp_inv`).
 * Possession batteries (the trace language is not vacuous):
-  - `eventPrim_possesses_drain` — the full external drain: a parked waiter
-    is drained by an *external* set and completes **before** the external
-    set's own completion (rule 10) — the very schedule V2.1 could not
-    express;
+  - `eventPrim_possesses_drain` — the full external drain in the rule-10
+    order: a parked waiter is drained by an *external* set and completes
+    **before** the external set's own physical return (the very schedule
+    V2.1 could not express, and the reason the anchor moved to the
+    issue);
   - `eventPrim_possesses_ext` — the two-observation external sequence
     `[issue (ext 0) set, comp (ext 0) set (setWoke 0)]`, the trace the
     V2.1 countermodel rested on.

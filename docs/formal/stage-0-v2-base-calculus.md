@@ -396,5 +396,5 @@ exercised before any primitive verdict is trusted.
 ## 10. Gate
 
 `scripts/verify_formal.sh` — **PASS (V2.2)**: build clean, no
-`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 13 audited
+`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 21 audited
 theorems including the three V2.2 execution-domain tests.

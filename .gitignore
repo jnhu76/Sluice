@@ -59,3 +59,6 @@ crash-*
 
 # Lean formal verification artifacts
 formal/.lake/
+
+# tlc trace dumps
+formal/tla/*_TTrace_*.bin

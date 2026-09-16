@@ -688,14 +688,15 @@ The primitive's trace language is not vacuous: it produces the full
 external drain of a parked waiter, and the two-observation external
 sequence (issue then completion) that the V2.1 countermodel needed. -/
 
-/-- Drain of one parked waiter by an external set: the waiter's completion
-precedes the external set's own completion (rule 10), so the guarantee is
+/-- Drain of one parked waiter by an external set, in the rule-10 order:
+the waiter's completion precedes the external set's own physical return
+(`global_mtx_` serializes state effects, not returns), so the guarantee is
 anchored on the set *issue*. -/
 def drainTrace : Trace EventSig :=
   [issueObs EventSig (Caller.fiber 0) EventCall.wait,
    issueObs EventSig (Caller.ext 0) EventCall.set,
-   compObs EventSig (Caller.ext 0) EventCall.set (EventResult.setWoke 1),
-   compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done]
+   compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done,
+   compObs EventSig (Caller.ext 0) EventCall.set (EventResult.setWoke 1)]
 
 def eq0 : PrimCfg EventSig eventPrim := primInit EventSig eventPrim
 
@@ -726,14 +727,15 @@ def eq5 : PrimCfg EventSig eventPrim :=
     exts := [{ x := 0, call := EventCall.set, result := some (EventResult.setWoke 1) }] }
 
 def eq6 : PrimCfg EventSig eventPrim :=
-  { prim := { flag := true, waitq := [] }, now := 0, cur := none,
-    parked := [], runq := [{ fiber := 0, call := EventCall.wait, fresh := false }],
-    retired := [], nextFiber := 1, exts := [] }
-
-def eq7 : PrimCfg EventSig eventPrim :=
   { prim := { flag := true, waitq := [] }, now := 0,
     cur := some ({ fiber := 0, call := EventCall.wait }, true), parked := [],
-    runq := [], retired := [], nextFiber := 1, exts := [] }
+    runq := [], retired := [], nextFiber := 1,
+    exts := [{ x := 0, call := EventCall.set, result := some (EventResult.setWoke 1) }] }
+
+def eq7 : PrimCfg EventSig eventPrim :=
+  { prim := { flag := true, waitq := [] }, now := 0, cur := none,
+    parked := [], runq := [], retired := [0], nextFiber := 1,
+    exts := [{ x := 0, call := EventCall.set, result := some (EventResult.setWoke 1) }] }
 
 def eq8 : PrimCfg EventSig eventPrim :=
   { prim := { flag := true, waitq := [] }, now := 0, cur := none, parked := [],
@@ -764,28 +766,28 @@ theorem ed5 : PrimStep2 EventSig eventPrim eq4 none eq5 := by
     [{ fiber := 0, call := EventCall.wait }] ?_ ?_ ?_ ?_ ?_
   all_goals rfl
 
-theorem ed6 : PrimStep2 EventSig eventPrim eq5
-    (some (compObs EventSig (Caller.ext 0) EventCall.set (EventResult.setWoke 1))) eq6 :=
-  PrimStep2.extDone eq5 [] []
-    { x := 0, call := EventCall.set, result := some (EventResult.setWoke 1) }
-    (EventResult.setWoke 1) rfl rfl
-
-theorem ed7 : PrimStep2 EventSig eventPrim eq6 none eq7 := by
-  refine PrimStep2.dispatchResumed eq6 { fiber := 0, call := EventCall.wait, fresh := false } []
+theorem ed6 : PrimStep2 EventSig eventPrim eq5 none eq6 := by
+  refine PrimStep2.dispatchResumed eq5 { fiber := 0, call := EventCall.wait, fresh := false } []
     ?_ ?_ ?_
   all_goals rfl
 
-theorem ed8 : PrimStep2 EventSig eventPrim eq7
-    (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) eq8 := by
-  refine PrimStep2.finishDone eq7 ({ fiber := 0, call := EventCall.wait }, true) [] [] []
+theorem ed7 : PrimStep2 EventSig eventPrim eq6
+    (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) eq7 := by
+  refine PrimStep2.finishDone eq6 ({ fiber := 0, call := EventCall.wait }, true) [] [] []
     EventResult.done { flag := true, waitq := [] } [] ?_ ?_ ?_ ?_ ?_
   all_goals rfl
+
+theorem ed8 : PrimStep2 EventSig eventPrim eq7
+    (some (compObs EventSig (Caller.ext 0) EventCall.set (EventResult.setWoke 1))) eq8 :=
+  PrimStep2.extDone eq7 [] []
+    { x := 0, call := EventCall.set, result := some (EventResult.setWoke 1) }
+    (EventResult.setWoke 1) rfl rfl
 
 theorem seqOK_drainTrace : SeqOK EventSig drainTrace := by
   refine SeqOKFrom.consIssue _ _ _ _ rfl ?_
   refine SeqOKFrom.consIssue _ _ _ _ rfl ?_
-  refine SeqOKFrom.consComp _ _ _ _ _ rfl ?_
   refine SeqOKFrom.consComp _ _ _ _ _ (by simp) ?_
+  refine SeqOKFrom.consComp _ _ _ _ _ rfl ?_
   exact SeqOKFrom.nil _
 
 theorem eventPrim_possesses_drain : TracesPrim EventSig eventPrim drainTrace :=
@@ -794,8 +796,8 @@ theorem eventPrim_possesses_drain : TracesPrim EventSig eventPrim drainTrace :=
       (PrimRuns2.step eq2 eq3 none _ eq8 ed3
         (PrimRuns2.step eq3 eq4 _ _ eq8 ed4
           (PrimRuns2.step eq4 eq5 none _ eq8 ed5
-            (PrimRuns2.step eq5 eq6 _ _ eq8 ed6
-              (PrimRuns2.step eq6 eq7 none _ eq8 ed7
+            (PrimRuns2.step eq5 eq6 none _ eq8 ed6
+              (PrimRuns2.step eq6 eq7 _ _ eq8 ed7
                 (PrimRuns2.step eq7 eq8 _ [] eq8 ed8 (PrimRuns2.stop eq8))))))))⟩
 
 /-- The two-observation external sequence: the V2.1 countermodel's trace,
