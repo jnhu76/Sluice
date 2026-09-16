@@ -67,6 +67,12 @@ open Sluice.Formal
 #print axioms Sluice.Formal.handoff_tight
 #print axioms Sluice.Formal.initialTake_tight
 #print axioms Sluice.Formal.ceiling_tight
+#print axioms Sluice.Formal.seqOK_window
+#print axioms Sluice.Formal.seqOK_fiberWindow
+#print axioms Sluice.Formal.seqOK_extRel
+#print axioms Sluice.Formal.seqOK_handoff
+#print axioms Sluice.Formal.seqOK_initialTake
+#print axioms Sluice.Formal.seqOK_ceiling
 #print axioms Sluice.Formal.semMutant_not_guarantees
 #print axioms Sluice.Formal.eventPrim_possesses_drain
 #print axioms Sluice.Formal.eventPrim_possesses_ext

@@ -77,11 +77,14 @@ at the fiber dispatch (`semPendRel`) or at the external entry
 (`semPendExt`, records with `result = none`) — and the credit is
 discharged when the release's section takes effect, whether the outcome
 is a stored permit, a handoff to a parked acquirer, or a refusal that
-discards it. In the V2.3 window the credit lives on the fiber's
-`returning` slot until `fiberDone` retires it together with the take or
-grant it enabled; a resumed acquire may re-suspend (`runPark` is
-unguarded on the resumed bit), so the mirror is an inequality in the safe
-direction.
+discards it. In the V2.3 window that discharge happens at
+`fiberEffect` itself — the section has run — and what rides the
+`returning` slot is a completed inline acquire's held permit, which
+`fiberDone` retires together with its take observation. A resumed
+acquire may re-suspend (`runPark` is unguarded on the resumed bit),
+evaporating its handed-off permit from the accounted pool — an
+over-approximation in the C++'s favor that keeps the mirror an
+inequality in the safe direction.
 
 ## 4. What is proved (`formal/Sluice/Formal/SemV2.lean`)
 

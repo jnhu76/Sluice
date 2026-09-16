@@ -14,7 +14,7 @@ said only for a proved universal non-reducibility, which this stage does
 *not* have.
 Toolchain: Lean 4.33.1 (`formal/lean-toolchain`, no mathlib); TLC2 via a local
 `formal/tla/tla2tools.jar` (gitignored, like the Lean toolchain itself).
-Verification gates: `scripts/verify_formal.sh` (Lean, 21 audited theorems) and
+Verification gates: `scripts/verify_formal.sh` (Lean, 41 audited theorems) and
 `scripts/verify_tla.sh` (TLC, main model + negative mutant).
 Current gate results: PASS / PASS (see §9).
 
@@ -35,10 +35,11 @@ wrapper and is not part of the public API surface (the model keeps
 `setWoke n` because the per-waiter publication it summarizes is the
 load-bearing behavior).  `wait_until`, `cancel`, and the select integration
 are outside the core model, as in V2.1.  The core model also covers the
-**initially-clear** event only (`init` flag = false): `Event(Scheduler&,
-bool initially_set = true)` (`include/sluice/async/event.hpp:16-17`) can
-complete a `wait` with no set issue ever, so it is outside the modeled
-domain; no in-tree consumer constructs it.
+**initially-clear** event only (`init` flag = false): the explicit
+constructor form `Event(s, true)` (default `initially_set = false`,
+`include/sluice/async/event.hpp:16`) can complete a `wait` with no set
+issue ever, so it is outside the modeled domain; no in-tree consumer
+passes `true`.
 
 | Call | Domain | Code anchor |
 | --- | --- | --- |
@@ -85,7 +86,8 @@ so the issue is the observable anchor.)
 * `eventPrim_guarantees` — one induction over the run with a fused carried
   invariant (`EventInv`): if any completion-enabling shape is present (set
   latch, in-flight external `set`, dispatched `set`, stale runnable entry,
-  resumed `wait` in `cur`), then a set issue is already in the prefix;
+  resumed `wait` in `cur`, returning inline-completed `wait`), then a set
+  issue is already in the prefix;
   plus no external `wait` record can exist (`extCap` forbids it).  Every
   `PrimStep2` constructor preserves it (`eventStep_preserved`); a wait
   completion inverts to a latch or a resumed waiter
@@ -160,8 +162,8 @@ to violate `NoWaitBeforeSet`.
 
 | Gate | Result |
 | --- | --- |
-| `scripts/verify_formal.sh` | **PASS** — build clean, no sorry/admit, 21 audited theorems depend only on `{propext, Quot.sound}` |
-| `scripts/verify_tla.sh` | **PASS** — `EventCore` (main model, `MaxFiber=1 MaxExt=1 MaxHistory=5`; covers the full external drain, both domains' set/reset flows, the already-set branch): `TypeOK` + `NoWaitBeforeSet` hold; `EventCoreMutant` (`WaitInlineOnClear=TRUE`): `NoWaitBeforeSet` violated |
+| `scripts/verify_formal.sh` | **PASS** — build clean, no sorry/admit, 41 audited theorems depend only on `{propext, Quot.sound}` |
+| `scripts/verify_tla.sh` | **PASS** — `EventCore` (main model, `MaxFiber=1 MaxExt=1 MaxHistory=5`; covers the full external drain, both domains' set/reset flows, the already-set branch): `TypeOK` + `NoWaitBeforeSet` hold; `EventCoreMutant` (`WaitInlineOnClear=TRUE`): `NoWaitBeforeSet` violated. The TLC model still runs the V2.2 fused action set; the V2.3 fiber return window is kernel-proved in Lean only, and the TLC split + `SemCore.tla` are the pre-merge TLA gate (§11, stage-2 §8) |
 
 ## 10. Downstream obligations
 

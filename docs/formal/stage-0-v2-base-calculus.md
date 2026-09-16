@@ -2,9 +2,11 @@
 
 Campaign: `FCB1-METHOD-CORRECTIVE-1` (repair of the FORMAL-CAPABILITY-BOUNDARY-1
 stack, PRs #376–#385; charter issue #375)
-Status: **FROZEN (V2.2)** — the V1 freeze was invalidated by the
+Status: **FROZEN (V2.3)** — the V1 freeze was invalidated by the
 method-corrective review; V2 was amended to V2.2 by BRAKE-1 (execution
-domains, §7.1); this document is the single, complete Stage-0 freeze.
+domains, §7.1) and to V2.3 by BRAKE-1 v2.3 (fiber critical section split
+from physical return, §7.1); this document is the single, complete
+Stage-0 freeze.
 Toolchain: Lean 4.33.1, pinned in `formal/lean-toolchain`; no mathlib.
 Verification gate: `scripts/verify_formal.sh` — `lake build` + no `sorry`/`admit`
 + axiom audit.
@@ -183,8 +185,10 @@ worker `worker_loop` (`scheduler.cpp`):
 
 A primitive under judgment provides: `State`, `init`, `admit` (entry critical
 section, atomic with the issue observation), `run` (the fused inline paths —
-`some (r, s', woken)` completes at physical return with state effect and woken
-fibers in order; `none` goes to park), `park` (suspension state effect),
+`some (r, s', woken)` ends the call's critical section with the state
+effect and woken fibers in order, the physical return being the later,
+separate `fiberDone` step (V2.3); `none` goes to park), `park`
+(suspension state effect),
 `finish` (a resumed parked call's completion at its dispatch), `extCap`
 (V2.2 — the per-call external-domain declaration: `extCap c = true` iff `c`
 can be issued by an external thread; it gates `extApply` and must agree
@@ -427,6 +431,7 @@ exercised before any primitive verdict is trusted.
 
 ## 10. Gate
 
-`scripts/verify_formal.sh` — **PASS (V2.2)**: build clean, no
-`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 21 audited
-theorems including the three V2.2 execution-domain tests.
+`scripts/verify_formal.sh` — **PASS (V2.3)**: build clean, no
+`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 41 audited
+theorems including the three V2.2 execution-domain tests and the V2.3
+split-window batteries.

@@ -72,8 +72,9 @@ def echoEnc : Encoding BaseOpsSig.none EchoSig :=
 
 In an echo run nothing ever parks and no external call exists, so no
 runnable entry is ever resumed and the only reachable steps are `submit`,
-`dispatchFresh`, the inline completion (`runDone` on the primitive side,
-`complete` on the encoding side) and the idle `envTime`. -/
+`dispatchFresh`, the inline completion (`fiberEffect` + `fiberDone` on
+the primitive side, `complete` on the encoding side) and the idle
+`envTime`. -/
 
 /-- Shape of a primitive echo configuration: nothing parked, no external
 call in flight, every runnable entry is a fresh submission, and every
