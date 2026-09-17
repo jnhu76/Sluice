@@ -11,7 +11,8 @@
 #
 #   Stage 2V2.3 (Semaphore, `formal/tla/SemCore.tla`):
 #     3. Safety: the constructor-domain matrix (initial in {0,1} x
-#        max in {1,2}) must complete cleanly under all 8 safety invariants.
+#        max in {1,2}) must complete cleanly under all nine safety
+#        invariants (TypeOK .. InvCompDiscipline plus InvReleaseResult).
 #     4. Witness: the V2.3 return-window witness (InvWitness) must be
 #        reachable in the correct model -- the check MUST be violated.
 #     5. Coverage: the 13 scenario certificates are negated conjunctions;
