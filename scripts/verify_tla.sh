@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
-# FORMAL-CAPABILITY-BOUNDARY-1 TLA+ verification gate (Stage 1V2.2, Event).
+# FORMAL-CAPABILITY-BOUNDARY-1 TLA+ verification gate.
 #
-#   1. TLC on the Event primitive model (`formal/tla/EventCore.tla`, the
-#      V2.2 execution-domain machine): TypeOK and the issue-anchored
-#      no-wait-before-set safety property must hold.
-#   2. TLC on the negative mutant (wait completing inline on a clear flag,
-#      Lean `eventMutant`): the safety property MUST be violated, proving
-#      the check bites.
+#   Stage 1V2.2 (Event):
+#     1. TLC on the Event primitive model (`formal/tla/EventCore.tla`, the
+#        V2.2 execution-domain machine): TypeOK and the issue-anchored
+#        no-wait-before-set safety property must hold.
+#     2. TLC on the negative mutant (wait completing inline on a clear flag,
+#        Lean `eventMutant`): the safety property MUST be violated, proving
+#        the check bites.
 #
-# `-deadlock` is legitimate here: the fuel bounds (MaxFiber, MaxExt,
-# MaxHistory) create terminal parked states by construction.
+#   Stage 2V2.3 (Semaphore, `formal/tla/SemCore.tla`):
+#     3. Safety: the constructor-domain matrix (initial in {0,1} x
+#        max in {1,2}) must complete cleanly under all 8 safety invariants.
+#     4. Witness: the V2.3 return-window witness (InvWitness) must be
+#        reachable in the correct model -- the check MUST be violated.
+#     5. Coverage: the 13 scenario certificates are negated conjunctions;
+#        each MUST be violated, which certifies the scenario is reachable.
+#     6. Safety mutants: each of the 5 mutant switches must be killed by
+#        its expected invariant (a clean pass, or a failure for any other
+#        reason, fails the gate).
+#     7. Fused-return mutant (FiberEffect and FiberDone fused into one
+#        step, the pre-V2.3 shape): must complete CLEANLY.  The witness
+#        becomes unreachable there -- that unreachability is the
+#        separation certificate for the V2.3 split.
+#
+# Every expected failure is checked against its specific invariant line,
+# never against a bare exit code.
+#
+# `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
+# create terminal parked states by construction.
 #
 # Usage: scripts/verify_tla.sh   (from the repository root)
 set -euo pipefail
@@ -26,36 +45,83 @@ fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-echo "== TLC: EventCore (main model) =="
-java -cp "$jar" tlc2.TLC -deadlock -config "$tla/EventCore.cfg" \
-    -metadir "$work/main" "$tla/EventCore" > "$work/main.log" 2>&1 || {
-    cat "$work/main.log"
-    echo "FAIL: main model check failed" >&2
-    exit 1
+# run_clean <label> <cfg> <module>: TLC must complete with no error.
+run_clean() {
+    local label="$1" cfg="$2" module="$3"
+    echo "== TLC: $label =="
+    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
+        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1 || {
+        cat "$work/$label.log"
+        echo "FAIL: $label did not complete cleanly" >&2
+        exit 1
+    }
+    grep -q "Model checking completed. No error has been found." "$work/$label.log" || {
+        cat "$work/$label.log"
+        echo "FAIL: $label did not report clean completion" >&2
+        exit 1
+    }
+    grep -E "Model checking completed|states generated" "$work/$label.log"
 }
-grep -q "Model checking completed. No error has been found." "$work/main.log" || {
-    cat "$work/main.log"
-    echo "FAIL: main model did not complete cleanly" >&2
-    exit 1
-}
-grep -E "Model checking completed|states generated" "$work/main.log"
 
-echo "== TLC: EventCore (negative mutant must fail) =="
-set +e
-java -cp "$jar" tlc2.TLC -deadlock -config "$tla/EventCoreMutant.cfg" \
-    -metadir "$work/mut" "$tla/EventCore" > "$work/mut.log" 2>&1
-mut=$?
-set -e
-if [[ "$mut" -eq 0 ]]; then
-    cat "$work/mut.log"
-    echo "FAIL: mutant passed -- the invariant check does not bite" >&2
-    exit 1
-fi
-grep -q "Invariant NoWaitBeforeSet is violated" "$work/mut.log" || {
-    cat "$work/mut.log"
-    echo "FAIL: mutant failed for the wrong reason" >&2
-    exit 1
+# run_violate <label> <cfg> <module> <invariant>: TLC must fail with that
+# exact invariant violated -- a pass, or a failure for any other reason,
+# aborts the gate.
+run_violate() {
+    local label="$1" cfg="$2" module="$3" inv="$4"
+    echo "== TLC: $label (must violate $inv) =="
+    set +e
+    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
+        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1
+    local rc=$?
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+        cat "$work/$label.log"
+        echo "FAIL: $label passed -- $inv does not bite" >&2
+        exit 1
+    fi
+    grep -q "Invariant $inv is violated" "$work/$label.log" || {
+        cat "$work/$label.log"
+        echo "FAIL: $label failed for the wrong reason (expected: $inv)" >&2
+        exit 1
+    }
+    grep -E "Invariant $inv is violated|states generated" "$work/$label.log"
 }
-grep -E "Invariant NoWaitBeforeSet is violated|states generated" "$work/mut.log"
+
+echo "== Stage 1V2.2: Event =="
+run_clean event-main EventCore.cfg EventCore
+run_violate event-mutant EventCoreMutant.cfg EventCore NoWaitBeforeSet
+
+echo "== Stage 2V2.3: SemCore safety matrix =="
+for cfg in SemCore SemCoreI1 SemCoreM2 SemCoreI1M2; do
+    run_clean "sem-safety-$cfg" "$cfg.cfg" SemCore
+done
+
+echo "== Stage 2V2.3: V2.3 seam witness (must be reachable) =="
+run_violate sem-witness SemCoreCovWitness.cfg SemCore InvWitness
+
+echo "== Stage 2V2.3: scenario coverage (each must be reachable) =="
+run_violate sem-cov-a1 SemCoreCovA1.cfg SemCore InvCovW1
+run_violate sem-cov-a2 SemCoreCovA2.cfg SemCore InvCovW2
+run_violate sem-cov-a3 SemCoreCovA3.cfg SemCore InvCovQ
+run_violate sem-cov-b1 SemCoreCovB1.cfg SemCore InvCovW1
+run_violate sem-cov-b2 SemCoreCovB2.cfg SemCore InvCovInitial
+run_violate sem-cov-b3 SemCoreCovB3.cfg SemCore InvCovQ
+run_violate sem-cov-c1 SemCoreCovC1.cfg SemCore InvCovMax2
+run_violate sem-cov-c2 SemCoreCovC2.cfg SemCore InvCovW2
+run_violate sem-cov-c3 SemCoreCovC3.cfg SemCore InvCovQ
+run_violate sem-cov-d1 SemCoreCovD1.cfg SemCore InvCovW1
+run_violate sem-cov-d2 SemCoreCovD2.cfg SemCore InvCovInitial
+run_violate sem-cov-d3 SemCoreCovD3.cfg SemCore InvCovMax2State
+run_violate sem-cov-d4 SemCoreCovD4.cfg SemCore InvCovQ1
+
+echo "== Stage 2V2.3: safety mutants (each must die on its expected invariant) =="
+run_violate sem-mut-create-permit SemCoreMutCreatePermit.cfg SemCore InvPermitPool
+run_violate sem-mut-lose-permit SemCoreMutLosePermit.cfg SemCore InvPermitPool
+run_violate sem-mut-double-consume SemCoreMutDoubleConsume.cfg SemCore InvPermitPool
+run_violate sem-mut-fifo-bypass SemCoreMutFifoBypass.cfg SemCore InvFifo
+run_violate sem-mut-wrong-full SemCoreMutWrongFull.cfg SemCore TypeOK
+
+echo "== Stage 2V2.3: fused-return mutant (witness must become unreachable) =="
+run_clean sem-mut-fused-return SemCoreMutFusedReturn.cfg SemCore
 
 echo "VERIFY_TLA: PASS"
