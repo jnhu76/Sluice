@@ -103,6 +103,8 @@ VARIABLES available,   \* stored permits (SemState.available)
                        \* permit (refusals are not grants)
           hit_store,   \* coverage: a stored-permit release section ran
           hit_handoff, \* coverage: a FIFO handoff section ran
+          hit_resume,  \* coverage: a resumed (handoff-published) acquire
+                       \* completed
           lastHead,    \* FIFO ghost: queue head at the last handoff
           lastChosen,  \* FIFO ghost: waiter the last handoff published
           wseq,        \* V2.3 witness ghost: 0..5, the seam state machine
@@ -114,7 +116,7 @@ VARIABLES available,   \* stored permits (SemState.available)
                        \* still in flight toward its physical return
 
 vars == <<available, waitq, cur, runq, exts, history, granted,
-          hit_store, hit_handoff, lastHead, lastChosen,
+          hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
           wseq, wf, wx, wlive>>
 
 NoCur == [fiber |-> "none", call |-> "none", phase |-> "off",
@@ -140,6 +142,7 @@ Init == available = Initial
   /\ granted = 0
   /\ hit_store = FALSE
   /\ hit_handoff = FALSE
+  /\ hit_resume = FALSE
   /\ lastHead = "none"
   /\ lastChosen = "none"
   /\ wseq = 0
@@ -168,7 +171,7 @@ FiberSubmit(f, c) ==
   /\ runq' = Append(runq, [fiber |-> f, call |-> c, fresh |-> TRUE])
   /\ wlive' = IF f = wf /\ wseq >= 1 THEN FALSE ELSE wlive
   /\ UNCHANGED <<available, waitq, cur, exts, history, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen,
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
                  wseq, wf, wx>>
 
 \* PrimStep2.dispatchFresh: emits the issue observation; requires the
@@ -183,7 +186,7 @@ FiberDispatch ==
   /\ history' = Append(history,
       IssueFib(Head(runq).fiber, Head(runq).call))
   /\ UNCHANGED <<available, waitq, exts, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberEffect, acquire fast path (`sem_acquire` :46-54: first
 \* registrant with a permit available): consume inline, result fixed,
@@ -195,7 +198,7 @@ AcqTakeFast ==
   /\ available' = IF MutDoubleConsume THEN available ELSE available - 1
   /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "done"]
   /\ UNCHANGED <<waitq, runq, exts, history, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.runPark, acquire park (:41, :61: register and suspend).
 \* Silent.  Parking has no completion, so fusion does not touch it.
@@ -206,7 +209,7 @@ AcqPark ==
   /\ waitq' = Append(waitq, cur.fiber)
   /\ available' = IF MutCreatePermit THEN available + 1 ELSE available
   /\ UNCHANGED <<runq, exts, history, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberEffect, release with waiters (`sem_release` :151-153:
 \* wake exactly the FIFO head, hand the permit to it, do not store).
@@ -228,7 +231,8 @@ FibRelHandoff ==
         /\ lastHead' = Head(waitq)
         /\ lastChosen' = LetChosen
         /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "t"]
-  /\ UNCHANGED <<available, exts, history, hit_store, wseq, wf, wx, wlive>>
+  /\ UNCHANGED <<available, exts, history, hit_store, hit_resume,
+                 wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberEffect, release storing below the ceiling
 \* (:155-159).  Silent.
@@ -243,7 +247,7 @@ FibRelStore ==
   /\ wseq' = IF wseq = 0 THEN 1 ELSE wseq
   /\ wf' = IF wseq = 0 THEN cur.fiber ELSE wf
   /\ wlive' = IF wseq = 0 THEN TRUE ELSE wlive
-  /\ UNCHANGED <<waitq, runq, exts, history, hit_handoff,
+  /\ UNCHANGED <<waitq, runq, exts, history, hit_handoff, hit_resume,
                  lastHead, lastChosen, wx>>
 
 \* PrimStep2.fiberEffect, release refused at the ceiling (:156-158).
@@ -257,7 +261,7 @@ FibRelRefuse ==
   /\ cur' = [cur EXCEPT !.phase = "ret",
              !.result = IF MutWrongFull THEN "t" ELSE "f"]
   /\ UNCHANGED <<waitq, runq, exts, history,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberDone: the physical return (completion observation).
 \* Frees the baton.  This is the step the V2.2 fusion deleted.
@@ -275,7 +279,7 @@ FiberDone ==
   /\ wlive' = IF WitnessStep5 THEN wlive
                ELSE IF cur.fiber = wf /\ wseq >= 1 THEN FALSE ELSE wlive
   /\ UNCHANGED <<available, waitq, runq, exts, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wf, wx>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wf, wx>>
 
 \* PrimStep2.dispatchResumed: silent dispatch of a handoff-published
 \* acquire; requires the baton free.
@@ -287,7 +291,7 @@ FiberResume ==
              phase |-> "run", resumed |-> TRUE, result |-> "none"]
   /\ runq' = Tail(runq)
   /\ UNCHANGED <<available, waitq, exts, history, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.finishDone: a resumed acquire completes at its dispatch --
 \* the handoff already fixed the outcome, so effect and return do not
@@ -297,6 +301,7 @@ FinishResumed ==
   /\ Len(history) < MaxHistory
   /\ history' = Append(history, CompFib(cur.fiber, "acq", "done"))
   /\ cur' = NoCur
+  /\ hit_resume' = TRUE
   /\ UNCHANGED <<available, waitq, runq, exts, granted,
                  hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
@@ -313,7 +318,7 @@ FusedAcqTake ==
   /\ history' = Append(history, CompFib(cur.fiber, "acq", "done"))
   /\ cur' = NoCur
   /\ UNCHANGED <<waitq, runq, exts, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 FusedRelHandoff ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
@@ -333,7 +338,7 @@ FusedRelHandoff ==
         /\ lastChosen' = LetChosen
         /\ history' = Append(history, CompFib(cur.fiber, "rel", "t"))
         /\ cur' = NoCur
-  /\ UNCHANGED <<available, exts, hit_store, wseq, wf, wx, wlive>>
+  /\ UNCHANGED <<available, exts, hit_store, hit_resume, wseq, wf, wx, wlive>>
 
 FusedRelStore ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
@@ -347,7 +352,7 @@ FusedRelStore ==
   /\ wseq' = IF wseq = 0 THEN 1 ELSE wseq
   /\ wf' = IF wseq = 0 THEN cur.fiber ELSE wf
   /\ wlive' = FALSE
-  /\ UNCHANGED <<waitq, runq, exts, hit_handoff,
+  /\ UNCHANGED <<waitq, runq, exts, hit_handoff, hit_resume,
                  lastHead, lastChosen, wx>>
 
 FusedRelRefuse ==
@@ -360,7 +365,7 @@ FusedRelRefuse ==
       CompFib(cur.fiber, "rel", IF MutWrongFull THEN "t" ELSE "f"))
   /\ cur' = NoCur
   /\ UNCHANGED <<waitq, runq, exts,
-                 hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.extApply: an external caller ENTERS `release`.  The issue
 \* observation is emitted at entry; entry owns no semaphore state and is
@@ -375,7 +380,7 @@ ExtIssue(x) ==
   /\ wseq' = IF wseq = 1 THEN 2 ELSE wseq
   /\ wx' = IF wseq = 1 THEN x ELSE wx
   /\ UNCHANGED <<available, waitq, cur, runq, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen, wf, wlive>>
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wf, wlive>>
 
 \* PrimStep2.extEffect, release with waiters.  Silent; the record's
 \* result is fixed and the caller still owes its physical return.
@@ -398,7 +403,8 @@ ExtRelHandoff(x) ==
                              phase |-> "ent", result |-> "none"]})
                    \union {[x |-> x, call |-> "rel",
                             phase |-> "eff", result |-> "t"]}
-  /\ UNCHANGED <<available, cur, history, hit_store, wseq, wf, wx, wlive>>
+  /\ UNCHANGED <<available, cur, history, hit_store, hit_resume,
+                 wseq, wf, wx, wlive>>
 
 \* PrimStep2.extEffect, release storing below the ceiling.  Silent.
 ExtRelStore(x) ==
@@ -411,7 +417,7 @@ ExtRelStore(x) ==
                        phase |-> "ent", result |-> "none"]})
              \union {[x |-> x, call |-> "rel",
                       phase |-> "eff", result |-> "t"]}
-  /\ UNCHANGED <<waitq, cur, runq, history, hit_handoff,
+  /\ UNCHANGED <<waitq, cur, runq, history, hit_handoff, hit_resume,
                  lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.extEffect, release refused at the ceiling.  Silent.
@@ -427,7 +433,7 @@ ExtRelRefuse(x) ==
   /\ wseq' = IF wseq = 2 /\ x = wx
                 /\ ~MutWrongFull THEN 3 ELSE wseq
   /\ UNCHANGED <<waitq, cur, runq, history,
-                 hit_store, hit_handoff, lastHead, lastChosen,
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
                  wf, wx, wlive>>
 
 \* PrimStep2.extDone: the physical return, deliberately unordered with
@@ -446,7 +452,7 @@ ExtDone(x) ==
         [x |-> x, call |-> "rel", phase |-> "eff", result |-> r] \in exts))
   /\ wseq' = IF wseq = 3 /\ x = wx THEN 4 ELSE wseq
   /\ UNCHANGED <<available, waitq, cur, runq, granted,
-                 hit_store, hit_handoff, lastHead, lastChosen,
+                 hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
                  wf, wx, wlive>>
 
 Next ==
@@ -496,6 +502,7 @@ TypeOK ==
                        r \in {"none", "done", "t", "f"}})
   /\ granted \in Nat
   /\ hit_store \in BOOLEAN /\ hit_handoff \in BOOLEAN
+  /\ hit_resume \in BOOLEAN
   /\ lastHead \in Fibers \cup {"none"}
   /\ lastChosen \in Fibers \cup {"none"}
   /\ wseq \in 0..5
@@ -648,8 +655,10 @@ CovInitialTake ==
     /\ history[i] = CompFib(history[i].id, "acq", "done")
     /\ ~\E j \in 1..(i - 1) : IsRelIssue(history[j])
 
-\* Two externals entered in one order but serialized in the other: the
-\* first entrant refused, the later one granted.
+\* Two externals entered in one order, and the grant landed in the
+\* reverse entry order: the first entrant refused, the later one
+\* granted.  (The silent sections themselves are unordered in the
+\* history; the certificate pins entry order against grant order.)
 CovExtReorder ==
   \E x, y \in Exts, i1, i2 \in 1..Len(history) :
     /\ x # y
@@ -659,9 +668,9 @@ CovExtReorder ==
     /\ \E i3 \in 1..Len(history) : history[i3] = CompExt(x, "f")
     /\ \E i4 \in 1..Len(history) : history[i4] = CompExt(y, "t")
 
-\* A parked acquire completed after a release issue: the FIFO handoff
-\* chain (park -> handoff -> published -> resumed completion).  In an
-\* initial = 0 configuration an acquire can only complete this way.
+\* A take completed after some release issue (the take itself need not
+\* be the resumed one -- a stored permit can complete it too; the
+\* resumed completion is certified separately by hit_resume in CovQ1).
 CovResume ==
   \E f \in Fibers, i, j, k \in 1..Len(history) :
     /\ i < j /\ j < k
@@ -681,28 +690,36 @@ CovMax2 == available = 2
 \*                     external return straddled by a fiber completion
 \*   InvCovW2        - an acquire completion with an external call inside
 \*                     its window
-\*   InvCovQ         - a FIFO handoff, the parked-acquire resumption
-\*                     chain, and two externals entering in one order but
-\*                     serializing in the other
-\*   InvCovQ1        - the FIFO handoff and parked-acquire resumption
-\*                     chain alone (the (1,2) coverage slot)
+\*   InvCovQ         - the FIFO handoff chain (handoff section ran,
+\*                     handoff-published acquire completed), a take
+\*                     after a release issue, and two externals granted
+\*                     in reverse entry order
+\*   InvCovQ1        - the FIFO handoff chain alone (the (1,2) slot)
+\*   InvCovReorder   - the reverse-entry-order external grant alone
+\*                     (the (0,2) slot; full CovQ at (0,2) needs a
+\*                     longer single execution than affordable)
 \*   InvCovInitial   - W2 with the take drawn from constructor stock
 \*   InvCovMax2      - W1 with the ceiling (available = 2) reached
 \*   InvCovMax2State - the ceiling (available = 2) reached at all
 CovW1 ==
   hit_store /\ CovRefuse /\ CovRelReturnWindow /\ CovExtReturnWindow
 CovW2 == CovAcqReturnWindow
-CovQ == hit_handoff /\ CovResume /\ CovExtReorder
 
-\* The handoff-resume component of CovQ alone.  It is the (1,2) slot:
-\* at that constructor domain the full CovQ conjunction needs a longer
-\* single execution than the domain's state space can afford to search.
-CovQ1 == hit_handoff /\ CovResume
+\* The handoff chain, certified so that the resumed acquire's own
+\* completion is required: hit_handoff proves a parked acquirer was
+\* published (a handoff section ran), hit_resume proves a
+\* handoff-published acquire completed (only handoffs mint resumed
+\* dispatches).  CovQ1 is that pair alone; it is the (1,2) slot, where
+\* the full CovQ conjunction needs a longer single execution than the
+\* domain's state space can afford to search.
+CovQ1 == hit_handoff /\ hit_resume
+CovQ == CovQ1 /\ CovResume /\ CovExtReorder
 
 InvCovW1 == ~CovW1
 InvCovW2 == ~CovW2
 InvCovQ == ~CovQ
 InvCovQ1 == ~CovQ1
+InvCovReorder == ~CovExtReorder
 InvCovInitial == ~(CovW2 /\ CovInitialTake)
 InvCovMax2 == ~(CovW1 /\ CovMax2)
 InvCovMax2State == ~CovMax2

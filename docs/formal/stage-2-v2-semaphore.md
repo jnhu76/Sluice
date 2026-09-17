@@ -265,8 +265,9 @@ execution's `MaxHistory` fuel.
 |------------|-------------|-----------|
 | `CovA1`/`B1`/`D1` | `CovW1` = stored release + refusal + release return-window + external return-window | the two interleaving windows on a stored release |
 | `CovA2`/`C2` | `CovW2` = acquire completion inside an external call's window | window A against an acquire |
-| `CovA3`/`B3`/`C3` | `CovQ` = FIFO handoff + resumed-acquire chain + external reorder | the handoff path and external serialization order |
-| `CovD4` | `CovQ1` = FIFO handoff + resumed-acquire chain | the handoff path at `(1,2)`, where the full `CovQ` conjunction needs a longer single execution than that domain's state space can afford to search |
+| `CovA3`/`B3` | `CovQ` = FIFO handoff chain (handoff section ran, handoff-published acquire completed) + a take after a release issue + external grant in reverse entry order | the full handoff-and-reorder path |
+| `CovC3` | `CovExtReorder` = external grant in reverse entry order (first entrant refused, later entrant granted) | the reorder alone at `(0,2)`, where the full `CovQ` conjunction needs a longer single execution than that domain's state space can afford to search |
+| `CovD4` | `CovQ1` = the FIFO handoff chain alone | the handoff path at `(1,2)` on the same fuel grounds as `CovC3` |
 | `CovB2`/`D2` | `CovW2 /\ CovInitialTake` | a take drawn purely from constructor stock |
 | `CovC1` | `CovW1 /\ available = 2` | both windows with the ceiling reached |
 | `CovD3` | `available = 2` | the ceiling state at all |
@@ -275,15 +276,18 @@ execution's `MaxHistory` fuel.
 Configurations: the four safety cfgs are the full constructor matrix;
 every scenario class is certified in at least two domains — `CovW1` at
 `(0,1)`/`(1,1)`/`(1,2)`, `CovW2` in all four (directly, and inside the
-initial-stock conjunction), `CovQ` at `(0,1)`/`(1,1)`/`(0,2)` with its
-handoff component also at `(1,2)`, the initial-stock take at
-`(1,1)`/`(1,2)`, and the ceiling at `(0,2)`/`(1,2)` — so the coverage
-claim holds per constructor domain, not just at one point.
+initial-stock conjunction), the FIFO handoff chain at
+`(0,1)`/`(1,1)`/`(1,2)`, the reverse-entry-order external grant at
+`(0,1)`/`(1,1)`/`(0,2)`, the initial-stock take at `(1,1)`/`(1,2)`, and
+the ceiling at `(0,2)`/`(1,2)` — so the coverage claim holds per
+constructor domain, not just at one point. The witness and coverage
+cfgs also carry the eight safety invariants, so the deeper
+certificates cannot be earned by a run that breaks safety on the way.
 
 ### 7.6 Model-checking results
 
 TLC 2026.09.12.025210, `-deadlock` (terminal parked states exist by the
-fuel bounds), one run per cfg, single worker. Full gate ≈ 10.5 min wall
+fuel bounds), one run per cfg, single worker. Full gate ≈ 11.5 min wall
 clock. "violated" is the required outcome for witness/coverage/mutant
 cfgs (reachability or kill certificate); "clean" for safety and the
 fused mutant.
@@ -292,10 +296,10 @@ Safety matrix — all clean:
 
 | cfg | (initial, max) | fuel | generated | distinct |
 |-----|----------------|------|-----------|----------|
-| `SemCore` | (0, 1) | 6 | 723,911 | 483,337 |
-| `SemCoreI1` | (1, 1) | 6 | 540,319 | 355,715 |
-| `SemCoreM2` | (0, 2) | 6 | 626,699 | 408,823 |
-| `SemCoreI1M2` | (1, 2) | 6 | 615,007 | 399,765 |
+| `SemCore` | (0, 1) | 6 | 725,823 | 487,689 |
+| `SemCoreI1` | (1, 1) | 6 | 540,319 | 355,843 |
+| `SemCoreM2` | (0, 2) | 6 | 628,611 | 412,551 |
+| `SemCoreI1M2` | (1, 2) | 6 | 615,007 | 399,893 |
 
 Witness and coverage — all violated, each on its own invariant:
 
@@ -307,14 +311,14 @@ Witness and coverage — all violated, each on its own invariant:
 | `CovA3` | (0, 1) | 9 | `InvCovQ` | 757,844 | 437,873 |
 | `CovB1` | (1, 1) | 11 | `InvCovW1` | 1,366,792 | 773,211 |
 | `CovB2` | (1, 1) | 7 | `InvCovInitial` | 90,887 | 50,904 |
-| `CovB3` | (1, 1) | 11 | `InvCovQ` | 534,032 | 297,609 |
+| `CovB3` | (1, 1) | 11 | `InvCovQ` | 3,046,870 | 1,717,564 |
 | `CovC1` | (0, 2) | 11 | `InvCovMax2` | 70,300 | 41,661 |
 | `CovC2` | (0, 2) | 7 | `InvCovW2` | 3,128 | 1,862 |
-| `CovC3` | (0, 2) | 9 | `InvCovQ` | 8,526,263 | 5,051,048 |
+| `CovC3` | (0, 2) | 9 | `InvCovReorder` | 16,103 | 9,405 |
 | `CovD1` | (1, 2) | 11 | `InvCovW1` | 81,784 | 46,925 |
 | `CovD2` | (1, 2) | 7 | `InvCovInitial` | 112,866 | 63,422 |
 | `CovD3` | (1, 2) | 5 | `InvCovMax2State` | 33 | 29 |
-| `CovD4` | (1, 2) | 6 | `InvCovQ1` | 19,143 | 10,933 |
+| `CovD4` | (1, 2) | 6 | `InvCovQ1` | 105,411 | 61,680 |
 
 Mutants — the five safety mutants violated, the fused mutant clean:
 
@@ -325,7 +329,7 @@ Mutants — the five safety mutants violated, the fused mutant clean:
 | `MutDoubleConsume` | `InvPermitPool` | 503 | 316 |
 | `MutFifoBypass` | `InvFifo` | 7,321 | 4,387 |
 | `MutWrongFull` | `TypeOK` | 402 | 256 |
-| `MutFusedReturn` | none — clean, `InvWitness` unreachable | 779,987 | 555,381 |
+| `MutFusedReturn` | none — clean, `InvWitness` unreachable | 786,011 | 563,269 |
 
 ### 7.7 Gate wiring
 

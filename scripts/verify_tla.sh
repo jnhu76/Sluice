@@ -108,7 +108,7 @@ run_violate sem-cov-b2 SemCoreCovB2.cfg SemCore InvCovInitial
 run_violate sem-cov-b3 SemCoreCovB3.cfg SemCore InvCovQ
 run_violate sem-cov-c1 SemCoreCovC1.cfg SemCore InvCovMax2
 run_violate sem-cov-c2 SemCoreCovC2.cfg SemCore InvCovW2
-run_violate sem-cov-c3 SemCoreCovC3.cfg SemCore InvCovQ
+run_violate sem-cov-c3 SemCoreCovC3.cfg SemCore InvCovReorder
 run_violate sem-cov-d1 SemCoreCovD1.cfg SemCore InvCovW1
 run_violate sem-cov-d2 SemCoreCovD2.cfg SemCore InvCovInitial
 run_violate sem-cov-d3 SemCoreCovD3.cfg SemCore InvCovMax2State
