@@ -331,6 +331,12 @@ constructor domain, not just at one point. The witness and coverage
 cfgs also carry the nine safety invariants (the eight plus
 `InvReleaseResult`), so the deeper certificates cannot be earned by a
 run that breaks safety — or the release result contract — on the way.
+The cfgs list those nine **before** the negated coverage/witness
+conjunction (the reverse of the result-mutant cfgs, where the kill
+invariant must be reported first): TLC stops at the first violated
+invariant, so a safety or result-contract break at any reached state —
+including the coverage-qualifying state itself — is reported as such
+and fails the gate; the coverage certificate can never mask it.
 
 ### 7.6 Model-checking results
 
@@ -402,7 +408,11 @@ forms of the ceiling check; the two result mutants must fail with
 `InvReleaseResult` and nothing else); the fused-return cfg must complete
 with no error while checking `InvWitness`. Expected failure modes are
 matched textually — a bare non-zero exit or a wrong-invariant failure
-aborts the gate.
+aborts the gate. Invariant order in the cfgs is part of the wiring: the
+result-mutant cfgs list `InvReleaseResult` first so the kill is
+attributed exactly, and every witness/coverage cfg lists the nine
+safety invariants first so a safety break is never reported as (or
+hidden behind) the expected coverage violation.
 
 ## 8. Gates
 
