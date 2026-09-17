@@ -60,5 +60,5 @@ crash-*
 # Lean formal verification artifacts
 formal/.lake/
 
-# tlc trace dumps
-formal/tla/*_TTrace_*.bin
+# tlc trace dumps (TLC writes counterexample dumps into the working directory)
+*_TTrace*.bin

@@ -1,5 +1,5 @@
 /-
-Sluice Stage-0-V2.2 base calculus (FCB1-METHOD-CORRECTIVE-1).
+Sluice Stage-0-V2.3 base calculus (FCB1-METHOD-CORRECTIVE-1).
 
 V2 replaced the Stage-0 calculus after the method-corrective review.  The
 correctives it implements:
@@ -105,6 +105,37 @@ BRAKE-1 ledger (see the freeze document, §7.1):
   invalidation: none -- no merged certificate exercised a multi-step
   external program (the domain battery and the vacuity lie use `pure`
   external programs); the calc gate was re-verified in full.
+
+  v2.3 -- the fiber-origin inline call fused its critical-section effect,
+  wake publication, and physical return into one step (`runDone`).  The
+  production code contradicts this for every fiber-origin call, exactly as
+  v2.2's external callers did: the critical section ends when the API's
+  internal lock (`global_mtx_`) is released -- the `LockGuard` destructor
+  at the end of e.g. `Scheduler::sem_release` -- and the fiber still
+  executes its return path afterward, with the worker baton in hand.  An
+  external caller's whole call can serialize in that window.  Concrete
+  witness (semaphore, `available = 0`, `max = 1`): a fiber `release`
+  stores the permit and unlocks; an external `release` then enters, sees
+  the full ceiling, refuses, and physically returns `false` BEFORE the
+  fiber physically returns `true` -- a legal C++ trace `runDone` cannot
+  express, since it forces the fiber's completion to coincide with its
+  effect (model under-production).  This is the same effect/return
+  confusion the V2 repair (completion shadow) and the v2.2 three-phase
+  external split addressed, surviving in the last fused fiber step.
+  Amendment: `PrimCfg.cur` becomes a `FSlot` -- `running` (the call's
+  inline paths are pending) or `returning` (result fixed, state effect
+  applied, wakes published; physical return pending) -- and `runDone`
+  splits into `fiberEffect` (silent) and `fiberDone` (the completion
+  observation; the fiber retires).  Between them the worker keeps the
+  baton: dispatch, the park/finish paths, and the environment steps stay
+  blocked (`cur ≠ none`), while the external steps and the return itself
+  remain legal.  The encoding side already ran the split discipline
+  (substrate-operation steps vs `complete`), so the two machines are
+  granularly symmetric again.  Downstream invalidation: the Event (PR
+  #377) and Semaphore (PR #378) trace languages, batteries, and carried
+  invariants are re-derived on V2.3 and their verdicts re-adjudicated;
+  the echo reduction and the domain batteries were re-verified by the
+  gate.
 
 Every construct carries a comment naming its C++ counterpart where one exists.
 -/
@@ -408,10 +439,14 @@ Discipline (C++ counterparts):
     call); a resumed dispatch (a woken parked fiber) is silent (the fiber
     continues inside `await_wait*`).
   * the dispatched fiber runs without fiber interleaving until it suspends
-    (`commit_suspend_locked` + `context_switch`) or physically returns (the
-    completion observation).  No other fiber can act in between: the worker
-    is busy.  External callers are not fibers and are not ordered by this
-    baton; their steps interleave wherever `global_mtx_` is free.
+    (`commit_suspend_locked` + `context_switch`), until its critical section
+    ends (the state effect and wake publication; the API's internal lock is
+    released), or until it physically returns (the completion observation).
+    After the critical section ends and before the physical return the
+    fiber holds the worker baton: no other fiber can act (the worker is
+    busy) and the environment does not step; external callers are not
+    fibers and are not ordered by this baton, so their steps interleave in
+    that window, exactly as after their own critical sections.
   * resolutions (wake/cancel/expire) publish the woken fiber runnable
     immediately (`publish_wait_winner_locked`), appending it at the tail of
     the runnable queue (FIFO).
@@ -804,9 +839,11 @@ points:
 
   * `admit` -- the entry critical section of a fiber call, applied atomically
     with the issue observation at fresh dispatch.
-  * `run` -- the fused inline paths of the dispatched call: `some` completes
-    the call at its physical return (state effect + result + fibers woken);
-    `none` sends the machine to `park`.
+  * `run` -- the fused inline paths of the dispatched call: `some (r, s', woken)`
+    ends the call's critical section -- it fixes the result, applies the
+    state effect, and readies `woken` parked fibers (in order); the call's
+    physical return is the later, separate `fiberDone` step.  `none` sends
+    the machine to `park`.
   * `park` -- the suspension point's state effect (register on private
     queues, release a bound mutex, ...).  A resumed call may park again
     (Mesa reacquire in `AsyncCondition::wait`).
@@ -826,6 +863,28 @@ points:
 structure Pnd (A : ApiSig) : Type where
   fiber : FiberId
   call : A.Call
+
+/-- The dispatched fiber call's slot in `cur`.  `running d b`: the call is
+executing its inline paths (`run`/`park`/`finish` still apply); `b = false`
+is a fresh dispatch, `b = true` a resumed parked call.  `returning d r`:
+the call's critical section has ended -- the result `r` is fixed, the state
+effect is applied, and the wakes are published -- but the fiber has not
+physically returned; the worker keeps the baton and only the external steps
+and the return itself remain legal (V2.3: `global_mtx_` serialization is
+not physical-return serialization, for fiber callers too). -/
+inductive FSlot (A : ApiSig) : Type where
+  | running : Pnd A → Bool → FSlot A
+  | returning : Pnd A → A.Result → FSlot A
+
+/-- The fiber of a slot. -/
+def FSlot.fiber {A : ApiSig} : FSlot A → FiberId
+  | FSlot.running d _ => d.fiber
+  | FSlot.returning d _ => d.fiber
+
+/-- The call of a slot. -/
+def FSlot.call {A : ApiSig} : FSlot A → A.Call
+  | FSlot.running d _ => d.call
+  | FSlot.returning d _ => d.call
 
 /-- A runnable primitive call. -/
 structure PReady (A : ApiSig) : Type where
@@ -848,9 +907,10 @@ structure PrimLTS2 (A : ApiSig) : Type 1 where
   /-- Entry critical section at fresh fiber dispatch (atomic with the issue
   observation). -/
   admit : State → FiberId → A.Call → Option State
-  /-- Inline completion of the dispatched fiber call: `some (r, s', woken)`
-  emits the completion, applies the state effect, and readies `woken` parked
-  fibers (in order). -/
+  /-- Inline execution of the dispatched fiber call: `some (r, s', woken)`
+  ends the call's critical section -- fixes the result, applies the state
+  effect, and readies `woken` parked fibers (in order); the physical return
+  is the later `fiberDone` step. -/
   run : State → Tick → FiberId → A.Call → Option (A.Result × State × List FiberId)
   /-- The call suspends instead; state effect of parking. -/
   park : State → FiberId → A.Call → Option State
@@ -873,23 +933,21 @@ structure PrimLTS2 (A : ApiSig) : Type 1 where
 structure PrimCfg (A : ApiSig) (P : PrimLTS2 A) : Type 1 where
   prim : P.State
   now : Tick
-  cur : Option (Pnd A × Bool)
+  cur : Option (FSlot A)
   parked : List (Pnd A)
   runq : List (PReady A)
   retired : List FiberId
   nextFiber : FiberId
   /-- External calls in flight (at most one per external caller). -/
   exts : List (ExtPend A)
-  /-- `cur`'s boolean: `false` = freshly dispatched (inline paths allowed),
-  `true` = resumed parked call (only `finish`/`park` apply).  `retired` is
-  the same persistent-identity record as on the encoding side. -/
 
 def primInit (A : ApiSig) (P : PrimLTS2 A) : PrimCfg A P :=
   ⟨P.init, 0, none, [], [], [], 0, []⟩
 
 /-- Fiber `f` has a call in flight in `cfg`. -/
 def InFlightPrim (A : ApiSig) (P : PrimLTS2 A) (cfg : PrimCfg A P) (f : FiberId) : Prop :=
-  (∃ d : Pnd A × Bool, cfg.cur = some d ∧ d.1.fiber = f) ∨
+  (∃ d b, cfg.cur = some (FSlot.running d b) ∧ d.fiber = f) ∨
+  (∃ d r, cfg.cur = some (FSlot.returning d r) ∧ d.fiber = f) ∨
   (∃ p ∈ cfg.parked, p.fiber = f) ∨
   (∃ r ∈ cfg.runq, r.fiber = f)
 
@@ -912,7 +970,7 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
       PrimStep2 A P cfg (some (issueObs A (Caller.fiber r.fiber) r.call))
         { prim := s'
           now := cfg.now
-          cur := some ({ fiber := r.fiber, call := r.call }, false)
+          cur := some (FSlot.running { fiber := r.fiber, call := r.call } false)
           parked := cfg.parked
           runq := rest
           retired := cfg.retired
@@ -923,59 +981,80 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
       PrimStep2 A P cfg none
         { prim := cfg.prim
           now := cfg.now
-          cur := some ({ fiber := r.fiber, call := r.call }, true)
+          cur := some (FSlot.running { fiber := r.fiber, call := r.call } true)
           parked := cfg.parked
           runq := rest
           retired := cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
-  /-- The dispatched fiber call completes inline: physical return, state
-  effect, and wake publication in one step. -/
-  | runDone (cfg : PrimCfg A P) (d : Pnd A × Bool)
+  /-- The dispatched fiber call's critical section ends: the fused `run`
+  facet fixes the result, applies the state effect, and readies the woken
+  parked fibers.  Silent; the physical return is the later `fiberDone`
+  (V2.3 split: the API's internal lock is released here, but the fiber
+  still owns the worker baton and executes its return path afterward). -/
+  | fiberEffect (cfg : PrimCfg A P) (d : Pnd A) (b : Bool)
       (preP postP : List (Pnd A)) (ps : List (Pnd A))
       (r : A.Result) (s' : P.State) (wk : List FiberId) :
-      cfg.cur = some d → d.2 = false →
-      P.run cfg.prim cfg.now d.1.fiber d.1.call = some (r, s', wk) →
+      cfg.cur = some (FSlot.running d b) → b = false →
+      P.run cfg.prim cfg.now d.fiber d.call = some (r, s', wk) →
       cfg.parked = preP ++ ps ++ postP →
       ps.map (fun p : Pnd A => p.fiber) = wk →
-      PrimStep2 A P cfg (some (compObs A (Caller.fiber d.1.fiber) d.1.call r))
+      PrimStep2 A P cfg none
         { prim := s'
           now := cfg.now
-          cur := none
+          cur := some (FSlot.returning d r)
           parked := preP ++ postP
           runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
-          retired := if d.1.fiber ∈ cfg.retired then cfg.retired else d.1.fiber :: cfg.retired
+          retired := cfg.retired
+          nextFiber := cfg.nextFiber
+          exts := cfg.exts }
+  /-- The returning fiber call physically returns: the completion
+  observation, and the fiber retires until its next call.  Unordered with
+  respect to the external steps -- between the critical section
+  (`fiberEffect`) and the return, an external caller's whole call may
+  serialize, exactly as in the code. -/
+  | fiberDone (cfg : PrimCfg A P) (d : Pnd A) (r : A.Result) :
+      cfg.cur = some (FSlot.returning d r) →
+      PrimStep2 A P cfg (some (compObs A (Caller.fiber d.fiber) d.call r))
+        { prim := cfg.prim
+          now := cfg.now
+          cur := none
+          parked := cfg.parked
+          runq := cfg.runq
+          retired := if d.fiber ∈ cfg.retired then cfg.retired else d.fiber :: cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
   /-- The dispatched fiber call suspends instead: park state effect, silent. -/
-  | runPark (cfg : PrimCfg A P) (d : Pnd A × Bool) (s' : P.State) :
-      cfg.cur = some d →
-      P.run cfg.prim cfg.now d.1.fiber d.1.call = none →
-      P.park cfg.prim d.1.fiber d.1.call = some s' →
+  | runPark (cfg : PrimCfg A P) (d : Pnd A) (b : Bool) (s' : P.State) :
+      cfg.cur = some (FSlot.running d b) →
+      P.run cfg.prim cfg.now d.fiber d.call = none →
+      P.park cfg.prim d.fiber d.call = some s' →
       PrimStep2 A P cfg none
         { prim := s'
           now := cfg.now
           cur := none
-          parked := cfg.parked ++ [{ fiber := d.1.fiber, call := d.1.call }]
+          parked := cfg.parked ++ [{ fiber := d.fiber, call := d.call }]
           runq := cfg.runq
           retired := cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
-  /-- A resumed parked call completes at its dispatch. -/
-  | finishDone (cfg : PrimCfg A P) (d : Pnd A × Bool)
+  /-- A resumed parked call completes at its dispatch (its inline paths are
+  empty: the outcome was fixed and the state effects were applied by the
+  earlier waker step, so effect and return do not come apart here). -/
+  | finishDone (cfg : PrimCfg A P) (d : Pnd A) (b : Bool)
       (preP postP : List (Pnd A)) (ps : List (Pnd A))
       (r : A.Result) (s' : P.State) (wk : List FiberId) :
-      cfg.cur = some d → d.2 = true →
-      P.finish cfg.prim d.1.fiber d.1.call = some (r, s', wk) →
+      cfg.cur = some (FSlot.running d b) → b = true →
+      P.finish cfg.prim d.fiber d.call = some (r, s', wk) →
       cfg.parked = preP ++ ps ++ postP →
       ps.map (fun p : Pnd A => p.fiber) = wk →
-      PrimStep2 A P cfg (some (compObs A (Caller.fiber d.1.fiber) d.1.call r))
+      PrimStep2 A P cfg (some (compObs A (Caller.fiber d.fiber) d.call r))
         { prim := s'
           now := cfg.now
           cur := none
           parked := preP ++ postP
           runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
-          retired := if d.1.fiber ∈ cfg.retired then cfg.retired else d.1.fiber :: cfg.retired
+          retired := if d.fiber ∈ cfg.retired then cfg.retired else d.fiber :: cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
   /-- An external caller *enters* a call: the issue observation is emitted
@@ -998,7 +1077,7 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
           exts := cfg.exts ++ [{ x := x, call := c, result := none }] }
   /-- An external call's *critical section* runs: the fused `extRun` facet
   fixes the result, applies the state effect, and readies the woken parked
-  fibers exactly as in `runDone`.  Silent; the entry must be present and
+  fibers exactly as in `fiberEffect`.  Silent; the entry must be present and
   not yet applied. -/
   | extEffect (cfg : PrimCfg A P) (preE postE : List (ExtPend A)) (e : ExtPend A)
       (r : A.Result) (s' : P.State) (wk : List FiberId)
@@ -1393,7 +1472,12 @@ def dp2 : PrimCfg DomSig domPrim :=
     retired := [], nextFiber := 2, exts := [] }
 
 def dp3 : PrimCfg DomSig domPrim :=
-  { prim := (), now := 0, cur := some ({ fiber := 0, call := DomCall.go }, false),
+  { prim := (), now := 0, cur := some (FSlot.running { fiber := 0, call := DomCall.go } false),
+    parked := [], runq := [{ fiber := 1, call := DomCall.go, fresh := true }],
+    retired := [], nextFiber := 2, exts := [] }
+
+def dp3b : PrimCfg DomSig domPrim :=
+  { prim := (), now := 0, cur := some (FSlot.returning { fiber := 0, call := DomCall.go } DomResult.done),
     parked := [], runq := [{ fiber := 1, call := DomCall.go, fresh := true }],
     retired := [], nextFiber := 2, exts := [] }
 
@@ -1420,7 +1504,11 @@ def dp6 : PrimCfg DomSig domPrim :=
     retired := [0], nextFiber := 2, exts := [] }
 
 def dp7 : PrimCfg DomSig domPrim :=
-  { prim := (), now := 0, cur := some ({ fiber := 1, call := DomCall.go }, false),
+  { prim := (), now := 0, cur := some (FSlot.running { fiber := 1, call := DomCall.go } false),
+    parked := [], runq := [], retired := [0], nextFiber := 2, exts := [] }
+
+def dp7b : PrimCfg DomSig domPrim :=
+  { prim := (), now := 0, cur := some (FSlot.returning { fiber := 1, call := DomCall.go } DomResult.done),
     parked := [], runq := [], retired := [0], nextFiber := 2, exts := [] }
 
 def dp8 : PrimCfg DomSig domPrim :=
@@ -1439,10 +1527,13 @@ theorem d3 : PrimStep2 DomSig domPrim dp2
     [{ fiber := 1, call := DomCall.go, fresh := true }] () ?_ ?_ ?_ ?_
   all_goals rfl
 
-theorem d4 : PrimStep2 DomSig domPrim dp3
-    (some (compObs DomSig (Caller.fiber 0) DomCall.go DomResult.done)) dp4 :=
-  PrimStep2.runDone dp3 ({ fiber := 0, call := DomCall.go }, false) [] [] []
+theorem d4a : PrimStep2 DomSig domPrim dp3 none dp3b :=
+  PrimStep2.fiberEffect dp3 { fiber := 0, call := DomCall.go } false [] [] []
     DomResult.done () [] rfl rfl rfl rfl rfl
+
+theorem d4 : PrimStep2 DomSig domPrim dp3b
+    (some (compObs DomSig (Caller.fiber 0) DomCall.go DomResult.done)) dp4 :=
+  PrimStep2.fiberDone dp3b { fiber := 0, call := DomCall.go } DomResult.done rfl
 
 theorem d5 : PrimStep2 DomSig domPrim dp4
     (some (issueObs DomSig (Caller.ext 0) DomCall.beep)) dp5a :=
@@ -1463,10 +1554,13 @@ theorem d7 : PrimStep2 DomSig domPrim dp6
   refine PrimStep2.dispatchFresh dp6 { fiber := 1, call := DomCall.go, fresh := true } [] () ?_ ?_ ?_ ?_
   all_goals rfl
 
-theorem d8 : PrimStep2 DomSig domPrim dp7
-    (some (compObs DomSig (Caller.fiber 1) DomCall.go DomResult.done)) dp8 :=
-  PrimStep2.runDone dp7 ({ fiber := 1, call := DomCall.go }, false) [] [] []
+theorem d8a : PrimStep2 DomSig domPrim dp7 none dp7b :=
+  PrimStep2.fiberEffect dp7 { fiber := 1, call := DomCall.go } false [] [] []
     DomResult.done () [] rfl rfl rfl rfl rfl
+
+theorem d8 : PrimStep2 DomSig domPrim dp7b
+    (some (compObs DomSig (Caller.fiber 1) DomCall.go DomResult.done)) dp8 :=
+  PrimStep2.fiberDone dp7b { fiber := 1, call := DomCall.go } DomResult.done rfl
 
 theorem seqOK_domTrace : SeqOK DomSig domTrace := by
   refine SeqOKFrom.consIssue _ _ _ _ rfl ?_
@@ -1482,12 +1576,14 @@ theorem domPrim_possesses : TracesPrim DomSig domPrim domTrace :=
   ⟨dp8, PrimRuns2.step dp0 dp1 none _ dp8 d1
     (PrimRuns2.step dp1 dp2 none _ dp8 d2
       (PrimRuns2.step dp2 dp3 _ _ dp8 d3
-        (PrimRuns2.step dp3 dp4 _ _ dp8 d4
-          (PrimRuns2.step dp4 dp5a _ _ dp8 d5
-            (PrimRuns2.step dp5a dp5b none _ dp8 d5b
-              (PrimRuns2.step dp5b dp6 _ _ dp8 d6
-                (PrimRuns2.step dp6 dp7 _ _ dp8 d7
-                  (PrimRuns2.step dp7 dp8 _ [] dp8 d8 (PrimRuns2.stop dp8)))))))))⟩
+        (PrimRuns2.step dp3 dp3b none _ dp8 d4a
+          (PrimRuns2.step dp3b dp4 _ _ dp8 d4
+            (PrimRuns2.step dp4 dp5a _ _ dp8 d5
+              (PrimRuns2.step dp5a dp5b none _ dp8 d5b
+                (PrimRuns2.step dp5b dp6 _ _ dp8 d6
+                  (PrimRuns2.step dp6 dp7 _ _ dp8 d7
+                    (PrimRuns2.step dp7 dp7b none _ dp8 d8a
+                      (PrimRuns2.step dp7b dp8 _ _ dp8 d8 (PrimRuns2.stop dp8)))))))))))⟩
 
 /-! ### The encoding side runs the same external schedule
 

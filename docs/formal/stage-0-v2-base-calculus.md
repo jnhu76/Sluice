@@ -2,9 +2,11 @@
 
 Campaign: `FCB1-METHOD-CORRECTIVE-1` (repair of the FORMAL-CAPABILITY-BOUNDARY-1
 stack, PRs #376–#385; charter issue #375)
-Status: **FROZEN (V2.2)** — the V1 freeze was invalidated by the
+Status: **FROZEN (V2.3)** — the V1 freeze was invalidated by the
 method-corrective review; V2 was amended to V2.2 by BRAKE-1 (execution
-domains, §7.1); this document is the single, complete Stage-0 freeze.
+domains, §7.1) and to V2.3 by BRAKE-1 v2.3 (fiber critical section split
+from physical return, §7.1); this document is the single, complete
+Stage-0 freeze.
 Toolchain: Lean 4.33.1, pinned in `formal/lean-toolchain`; no mathlib.
 Verification gate: `scripts/verify_formal.sh` — `lake build` + no `sorry`/`admit`
 + axiom audit.
@@ -183,8 +185,10 @@ worker `worker_loop` (`scheduler.cpp`):
 
 A primitive under judgment provides: `State`, `init`, `admit` (entry critical
 section, atomic with the issue observation), `run` (the fused inline paths —
-`some (r, s', woken)` completes at physical return with state effect and woken
-fibers in order; `none` goes to park), `park` (suspension state effect),
+`some (r, s', woken)` ends the call's critical section with the state
+effect and woken fibers in order, the physical return being the later,
+separate `fiberDone` step (V2.3); `none` goes to park), `park`
+(suspension state effect),
 `finish` (a resumed parked call's completion at its dispatch), `extCap`
 (V2.2 — the per-call external-domain declaration: `extCap c = true` iff `c`
 can be issued by an external thread; it gates `extApply` and must agree
@@ -354,6 +358,38 @@ program (the domain battery's `domEnc` and the vacuity lie both use `pure`
 external programs); the calc gate was re-verified in full after the
 amendment.
 
+**v2.3 (fiber effect/return split, human review of PR #378 @ `ed47e468`).**
+The fiber-origin inline call fused its critical-section effect, wake
+publication, and physical return into one step (`runDone`).  The production
+code contradicts this for every fiber-origin call, exactly as v2.2's
+external callers did: the critical section ends when the API's internal
+lock is released — the `LockGuard` destructor at the end of e.g.
+`Scheduler::sem_release` (`scheduler_semaphore.cpp:147-161`) — and the
+fiber still executes its return path afterward, with the worker baton in
+hand.  An external caller's whole call can serialize in that window.
+Concrete witness (semaphore, `available = 0`, `max = 1`): a fiber `release`
+stores the permit and unlocks; an external `release` then enters, sees the
+full ceiling, refuses, and physically returns `false` **before** the fiber
+physically returns `true` — a legal C++ trace `runDone` cannot express,
+since it forces the fiber's completion to coincide with its effect (model
+under-production).  This is the same effect/return confusion the V2 repair
+(completion shadow) and the v2.2 three-phase external split addressed,
+surviving in the last fused fiber step; the encoding side already ran the
+split discipline (substrate-operation steps vs `complete`), so the two
+machines were granularly asymmetric.  Amendment: `PrimCfg.cur` becomes a
+`FSlot` — `running` (the call's inline paths are pending) or `returning`
+(result fixed, state effect applied, wakes published; physical return
+pending) — and `runDone` splits into `fiberEffect` (silent) and
+`fiberDone` (the completion observation; the fiber retires).  Between them
+the worker keeps the baton: dispatch, the park/finish paths, and the
+environment steps stay blocked (`cur ≠ none`), while the external steps
+and the return itself remain legal — precisely "single worker ⇒ no
+fiber/fiber interleaving, single worker ⇏ no external-thread
+interleaving".  Downstream invalidation: the Event (PR #377) and Semaphore
+(PR #378) trace languages, batteries, and carried invariants are
+re-derived on V2.3 and their verdicts re-adjudicated before reuse; the
+echo reduction and the domain batteries were re-verified by the gate.
+
 ## 8. Method-level vacuity and negative tests (§9 of the corrective document)
 
 | Test | Artifact | Requirement |
@@ -395,6 +431,7 @@ exercised before any primitive verdict is trusted.
 
 ## 10. Gate
 
-`scripts/verify_formal.sh` — **PASS (V2.2)**: build clean, no
-`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 21 audited
-theorems including the three V2.2 execution-domain tests.
+`scripts/verify_formal.sh` — **PASS (V2.3)**: build clean, no
+`sorry`/`admit`, axiom audit within `{propext, Quot.sound}` — 41 audited
+theorems including the three V2.2 execution-domain tests and the V2.3
+split-window batteries.

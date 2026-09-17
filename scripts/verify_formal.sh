@@ -38,6 +38,7 @@ echo "== axiom audit =="
 cat > .lake/axiom-audit.lean <<'EOF'
 import Sluice.Formal.VacuityV2
 import Sluice.Formal.EventV2
+import Sluice.Formal.SemV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -53,6 +54,26 @@ open Sluice.Formal
 #print axioms Sluice.Formal.encLie_overProduces
 #print axioms Sluice.Formal.extIssue_inv
 #print axioms Sluice.Formal.eventPrim_guarantees
+#print axioms Sluice.Formal.semPrimOf_guarantees
+#print axioms Sluice.Formal.semBalance_mirror
+#print axioms Sluice.Formal.semRuns_split
+#print axioms Sluice.Formal.semStep_take_credit
+#print axioms Sluice.Formal.semPrim_possesses_window
+#print axioms Sluice.Formal.semPrim_possesses_fiberWindow
+#print axioms Sluice.Formal.semPrim_possesses_handoff
+#print axioms Sluice.Formal.semPrim_possesses_extRel
+#print axioms Sluice.Formal.semPrimOf_possesses_initialTake
+#print axioms Sluice.Formal.semPrimOf_possesses_ceiling
+#print axioms Sluice.Formal.handoff_tight
+#print axioms Sluice.Formal.initialTake_tight
+#print axioms Sluice.Formal.ceiling_tight
+#print axioms Sluice.Formal.seqOK_window
+#print axioms Sluice.Formal.seqOK_fiberWindow
+#print axioms Sluice.Formal.seqOK_extRel
+#print axioms Sluice.Formal.seqOK_handoff
+#print axioms Sluice.Formal.seqOK_initialTake
+#print axioms Sluice.Formal.seqOK_ceiling
+#print axioms Sluice.Formal.semMutant_not_guarantees
 #print axioms Sluice.Formal.eventPrim_possesses_drain
 #print axioms Sluice.Formal.eventPrim_possesses_ext
 #print axioms Sluice.Formal.encChained_underProduces

@@ -1,5 +1,5 @@
 /-
-Sluice Stage-0-V2.2 vacuity certificate.
+Sluice Stage-0-V2.3 vacuity certificate.
 
 The stateless echo primitive (`echoPrim`) is observationally equivalent,
 over the disciplined trace languages (`TracesPrimS` / `TracesEncS`), to its
@@ -7,7 +7,11 @@ encoding over the bare substrate (`echoEnc`, `BASE(echo) = {}`).  Both
 sides run under the same call-execution discipline; the equivalence is a
 pair of step-by-step simulations between the configurations reachable in
 echo runs, composed with the initial-configuration agreement of the two
-configuration maps.
+configuration maps.  Under the v2.3 split the primitive's silent
+`fiberEffect` maps to zero encoding steps (the configuration maps erase
+the `running`/`returning` distinction, and echo's section is stateless),
+and the encoding's `complete` maps to the primitive's `fiberEffect` ++
+`fiberDone` pair.
 
 The V2.2 execution-domain tests certify that the external-call machinery
 is semantic, not notational:
@@ -68,13 +72,17 @@ def echoEnc : Encoding BaseOpsSig.none EchoSig :=
 
 In an echo run nothing ever parks and no external call exists, so no
 runnable entry is ever resumed and the only reachable steps are `submit`,
-`dispatchFresh`, the inline completion (`runDone` on the primitive side,
-`complete` on the encoding side) and the idle `envTime`. -/
+`dispatchFresh`, the inline completion (`fiberEffect` + `fiberDone` on
+the primitive side, `complete` on the encoding side) and the idle
+`envTime`. -/
 
 /-- Shape of a primitive echo configuration: nothing parked, no external
-call in flight, and every runnable entry is a fresh submission. -/
+call in flight, every runnable entry is a fresh submission, and every
+returning slot carries the echo result (V2.3: the completion's result is
+fixed by the section, so the shape must carry it across the split). -/
 def PrimShapeEcho (cfg : PrimCfg EchoSig echoPrim) : Prop :=
-  cfg.parked = [] ∧ cfg.exts = [] ∧ ∀ r ∈ cfg.runq, r.fresh = true
+  cfg.parked = [] ∧ cfg.exts = [] ∧ (∀ r ∈ cfg.runq, r.fresh = true) ∧
+  (∀ d rr, cfg.cur = some (FSlot.returning d rr) → rr = EchoResult.pong)
 
 /-- Shape of an encoding echo configuration: nothing parked, no external
 call in flight, and every program (queued or running) is the trivial
@@ -88,18 +96,20 @@ def EncShapeEcho (cfg : SysCfg BaseOpsSig.none EchoSig) : Prop :=
 def echoReady (r : PReady EchoSig) : Ready BaseOpsSig.none EchoSig :=
   { fiber := r.fiber, call := r.call, prog := ExtProg.pure SubVal.unit, fresh := r.fresh }
 
-/-- The in-flight primitive call, as the encoding-side running fiber. -/
-def echoRun (d : Pnd EchoSig × Bool) : Running BaseOpsSig.none EchoSig :=
-  { fiber := d.1.fiber, call := d.1.call, prog := ExtProg.pure SubVal.unit }
+/-- The in-flight primitive call slot, as the encoding-side running fiber;
+the maps erase the `running`/`returning` distinction (echo's section is
+stateless, so the distinction carries no encoding-side content). -/
+def echoRun (sl : FSlot EchoSig) : Running BaseOpsSig.none EchoSig :=
+  { fiber := sl.fiber, call := sl.call, prog := ExtProg.pure SubVal.unit }
 
 /-- An encoding-side runnable entry, as a queued primitive call. -/
 def echoRunqP (r : Ready BaseOpsSig.none EchoSig) : PReady EchoSig :=
   { fiber := r.fiber, call := r.call, fresh := r.fresh }
 
-/-- The encoding-side running fiber, as the in-flight primitive call; the
+/-- The encoding-side running fiber, as the in-flight primitive slot; the
 call is always a freshly dispatched one (echo never resumes). -/
-def echoCur (t : Running BaseOpsSig.none EchoSig) : Pnd EchoSig × Bool :=
-  ({ fiber := t.fiber, call := t.call }, false)
+def echoCur (t : Running BaseOpsSig.none EchoSig) : FSlot EchoSig :=
+  FSlot.running { fiber := t.fiber, call := t.call } false
 
 /-- Map a primitive echo configuration to the encoding side. -/
 def echoToE (cfg : PrimCfg EchoSig echoPrim) : SysCfg BaseOpsSig.none EchoSig :=
@@ -122,6 +132,25 @@ def echoToP (cfg : SysCfg BaseOpsSig.none EchoSig) : PrimCfg EchoSig echoPrim :=
     retired := cfg.retired
     nextFiber := cfg.nextFiber
     exts := [] }
+
+/-- The primitive configuration after echo's `fiberEffect`: its fields are
+written in exactly the shape the `fiberEffect` constructor produces. -/
+def echoMid (cfg : SysCfg BaseOpsSig.none EchoSig) (tR : Running BaseOpsSig.none EchoSig) :
+    PrimCfg EchoSig echoPrim :=
+  { prim := (), now := (echoToP cfg).now,
+    cur := some (FSlot.returning { fiber := tR.fiber, call := tR.call } EchoResult.pong),
+    parked := [] ++ [],
+    runq := (echoToP cfg).runq ++ List.map (fun p : Pnd EchoSig =>
+      { fiber := p.fiber, call := p.call, fresh := false }) [],
+    retired := (echoToP cfg).retired, nextFiber := (echoToP cfg).nextFiber,
+    exts := (echoToP cfg).exts }
+
+/-- The encoding configuration after echo's `complete`. -/
+def echoFin (cfg : SysCfg BaseOpsSig.none EchoSig) (tR : Running BaseOpsSig.none EchoSig) :
+    SysCfg BaseOpsSig.none EchoSig :=
+  { st := cfg.st, bst := cfg.bst, cur := none, parked := cfg.parked, runq := cfg.runq,
+    retired := if tR.fiber ∈ cfg.retired then cfg.retired else tR.fiber :: cfg.retired,
+    nextFiber := cfg.nextFiber, exts := cfg.exts }
 
 /-- Split an append that equals the empty list. -/
 theorem append_eq_nil_split {α : Type u} {as bs : List α} (h : as ++ bs = []) :
@@ -151,7 +180,7 @@ theorem sim_echo_fwd :
   | stop cfg => intro _; exact ⟨echoToE cfg, SysRuns.stop _⟩
   | step cfg cfg' o t2 fin2 hstep hrest ih =>
       intro hshape
-      obtain ⟨hp, hx, hq⟩ := hshape
+      obtain ⟨hp, hx, hq, hcurS⟩ := hshape
       cases hstep with
       | submit f c hsub =>
           rename_i cfg
@@ -162,7 +191,7 @@ theorem sim_echo_fwd :
             · exact hq x hxm
             · simp only [List.mem_singleton] at hxm
               subst hxm
-              rfl⟩
+              rfl, hcurS⟩
           refine ⟨finE, SysRuns.step _ _ _ _ _ (SysStep.submit (echoToE cfg) f c hsub) ?_⟩
           simp only [echoToE, hp, List.map_append] at hrunE ⊢
           exact hrunE
@@ -172,7 +201,8 @@ theorem sim_echo_fwd :
             intro x hxm
             refine hq x ?_
             rw [hrunq]
-            exact List.Mem.tail _ hxm⟩
+            exact List.Mem.tail _ hxm,
+            fun d2 rr2 h2 => absurd (Option.some.inj h2) (by simp)⟩
           refine ⟨finE, SysRuns.step _ _ _ _ _
             (SysStep.dispatchFresh (echoToE cfg) (echoReady r) (rest.map echoReady)
               (by simp [echoToE, hcur])
@@ -185,33 +215,43 @@ theorem sim_echo_fwd :
           have hm : r ∈ cfg.runq := by rw [hrunq]; exact List.Mem.head _
           rw [hq r hm] at hfresh
           exact absurd hfresh (by decide)
-      | runDone d preP postP ps r s' wk hcur hf hrunP hparked hmap =>
+      | fiberEffect d b preP postP ps r s' wk hcur hb hrunP hparked hmap =>
           rename_i cfg
           have hnil : preP ++ ps ++ postP = [] := by rw [← hparked]; exact hp
           obtain ⟨hprePps, hpostP⟩ := append_eq_nil_split hnil
           obtain ⟨hpreP, hps⟩ := append_eq_nil_split hprePps
           subst hpreP; subst hps; subst hpostP
-          have h0 : echoPrim.run cfg.prim cfg.now d.1.fiber d.1.call
+          have h0 : echoPrim.run cfg.prim cfg.now d.fiber d.call
               = some (EchoResult.pong, cfg.prim, []) := rfl
           rw [h0] at hrunP
           obtain ⟨hr, htail⟩ := Prod.mk.inj (Option.some.inj hrunP)
           obtain ⟨hs, hw⟩ := Prod.mk.inj htail
           subst hs; subst hw
-          rw [← hr]
           obtain ⟨finE, hrunE⟩ := ih ⟨rfl, hx, by
             intro x hxm
             rw [List.mem_append] at hxm
             rcases hxm with hxm | hxm
             · exact hq x hxm
-            · exact absurd hxm (by simp)⟩
-          refine ⟨finE, SysRuns.step _ _ _ _ _
-            (SysStep.complete (echoToE cfg) (echoRun d) SubVal.unit EchoResult.pong
-              (by simp [echoToE, hcur]) rfl rfl) ?_⟩
-          simp only [echoToE, List.map_append, List.map_nil, List.append_nil, Option.map_none] at hrunE ⊢
+            · exact absurd hxm (by simp),
+            fun d2 rr2 h2 => by injection Option.some.inj h2 with _ hrr⟩
+          -- the section is silent on the encoding side too: the maps erase
+          -- the running/returning distinction
+          refine ⟨finE, ?_⟩
+          simp [echoToE, echoRun, FSlot.fiber, FSlot.call, hcur] at hrunE ⊢
           exact hrunE
-      | runPark _ _ _ hrunP _ =>
+      | fiberDone d r hcur =>
+          rename_i cfg
+          have hrp := hcurS d r hcur
+          subst hrp
+          obtain ⟨finE, hrunE⟩ := ih ⟨hp, hx, hq, fun d2 rr2 h2 => by simp at h2⟩
+          refine ⟨finE, SysRuns.step _ _ _ _ _
+            (SysStep.complete (echoToE cfg) (echoRun (FSlot.returning d EchoResult.pong))
+              SubVal.unit EchoResult.pong (by simp [echoToE, hcur]) rfl rfl) ?_⟩
+          simp [echoToE, echoRun, FSlot.fiber, FSlot.call] at hrunE ⊢
+          exact hrunE
+      | runPark _ _ _ _ hrunP _ =>
           exact absurd hrunP (by simp [echoPrim])
-      | finishDone _ _ _ _ _ _ _ _ _ hfin _ _ =>
+      | finishDone _ _ _ _ _ _ _ _ _ _ hfin _ _ =>
           exact absurd hfin (by simp [echoPrim])
       | extApply _ _ _ _ hcap _ =>
           simp [echoPrim] at hcap
@@ -224,7 +264,7 @@ theorem sim_echo_fwd :
           simp at hsplit
       | envTime tk hcur hle =>
           rename_i cfg
-          obtain ⟨finE, hrunE⟩ := ih ⟨hp, hx, hq⟩
+          obtain ⟨finE, hrunE⟩ := ih ⟨hp, hx, hq, hcurS⟩
           refine ⟨finE, SysRuns.step _ _ _ _ _ (SysStep.envTime (echoToE cfg) tk
             (by simp [echoToE, hcur]) (by simpa only [echoToE] using hle)) ?_⟩
           simp only [echoToE, hp, hcur] at hrunE ⊢
@@ -324,11 +364,33 @@ theorem sim_echo_bwd :
           obtain ⟨finP, hrunP⟩ := ih ⟨hp, hx, hq, by
             intro tR2 ht2
             exact absurd ht2 (by simp)⟩
-          refine ⟨finP, PrimRuns2.step _ _ _ _ _
-            (PrimStep2.runDone (echoToP cfg) (echoCur tR) [] [] [] EchoResult.pong () []
-              (by simp [echoToP, hcurT]) rfl rfl rfl rfl) ?_⟩
-          simp only [echoToP, List.map_nil, List.append_nil, Option.map_none] at hrunP ⊢
-          exact hrunP
+          refine ⟨finP, ?_⟩
+          have he1 : PrimStep2 EchoSig echoPrim (echoToP cfg) none (echoMid cfg tR) :=
+            PrimStep2.fiberEffect (echoToP cfg) { fiber := tR.fiber, call := tR.call } false
+              [] [] [] EchoResult.pong () []
+              (by simp only [echoToP]; rw [hcurT]; rfl) rfl rfl rfl rfl
+          have he2 : PrimStep2 EchoSig echoPrim (echoMid cfg tR)
+              (some (compObs EchoSig (Caller.fiber tR.fiber) tR.call EchoResult.pong))
+              { prim := (echoMid cfg tR).prim, now := (echoMid cfg tR).now, cur := none,
+                parked := (echoMid cfg tR).parked, runq := (echoMid cfg tR).runq,
+                retired := if tR.fiber ∈
+                    (echoMid cfg tR).retired then (echoMid cfg tR).retired
+                  else tR.fiber :: (echoMid cfg tR).retired,
+                nextFiber := (echoMid cfg tR).nextFiber, exts := (echoMid cfg tR).exts } :=
+            PrimStep2.fiberDone (echoMid cfg tR) { fiber := tR.fiber, call := tR.call }
+              EchoResult.pong rfl
+          have hfin : PrimRuns2 EchoSig echoPrim
+              { prim := (echoMid cfg tR).prim, now := (echoMid cfg tR).now, cur := none,
+                parked := (echoMid cfg tR).parked, runq := (echoMid cfg tR).runq,
+                retired := if tR.fiber ∈
+                    (echoMid cfg tR).retired then (echoMid cfg tR).retired
+                  else tR.fiber :: (echoMid cfg tR).retired,
+                nextFiber := (echoMid cfg tR).nextFiber, exts := (echoMid cfg tR).exts }
+              t2 finP := by
+            simpa [echoMid, echoToP, echoFin] using hrunP
+          exact PrimRuns2.step (echoToP cfg) (echoMid cfg tR) none
+            (compObs EchoSig (Caller.fiber tR.fiber) tR.call EchoResult.pong :: ([] ++ t2)) _
+            he1 (PrimRuns2.step (echoMid cfg tR) _ (some (compObs EchoSig (Caller.fiber tR.fiber) tR.call EchoResult.pong)) _ _ he2 hfin)
       | extStart _ _ hcap _ =>
           simp [echoEnc] at hcap
       | extSubOpStep _ _ _ _ _ _ _ hsplit _ _ _ _ =>
@@ -363,7 +425,12 @@ theorem echoRed : Reduction echoPrim echoEnc where
   fwd := by
     rintro t ⟨⟨fin, hrun⟩, hseq⟩
     obtain ⟨finE, hrunE⟩ :=
-      sim_echo_fwd _ _ _ hrun ⟨rfl, rfl, fun r hr => nomatch hr⟩
+      sim_echo_fwd _ _ _ hrun (by
+        refine ⟨rfl, rfl, ?_, ?_⟩
+        · intro r hr
+          cases hr
+        · intro d rr h
+          contradiction)
     exact ⟨⟨finE, by rw [echoToE_primInit] at hrunE; exact hrunE⟩, hseq⟩
   bwd := by
     rintro t ⟨⟨fin, hrun⟩, hseq⟩
@@ -443,7 +510,7 @@ theorem extIssue_inv {m1 m2 : PrimCfg DomSig domPrim} {ob : Obs DomSig}
   cases hstep with
   | dispatchFresh r0 rest s0 hcur hrq hfr hadm =>
       exact absurd hcl (by simp [issueObs])
-  | runDone d preP postP ps r s' wk hcur hd2 hrun hparked hmap =>
+  | fiberDone d r hcur =>
       exact absurd hcl (by simp [compObs])
   | finishDone d preP postP ps r s' wk hcur hd2 hfin hparked hmap =>
       exact absurd hcl (by simp [compObs])
