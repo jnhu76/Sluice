@@ -198,6 +198,7 @@ takes only with `waitq` empty (`sem_acquire` :46 checks
 | `InvQueueOwnership` | a queued/parked fiber is never the dispatched one; published entries are acquires | `hstale` + slot disjointness |
 | `InvFifo` | ghost pair `lastHead = lastChosen` (updated only by handoff actions) | the :151 wake-the-head shape |
 | `InvCompDiscipline` | every completion has a same-caller same-call prior issue with no intervening completion | no completion before issue, no double completion |
+| `InvReleaseResult` | the public release bool agrees with the effect branch that ran: handoff/store ⇒ `true`, refusal ⇒ `false` — checked on completed observations **and** on effected-but-not-returned calls (fiber return window and external "eff" records) | `semRun`'s structural coupling — see below |
 
 **`InvPermitPool` is an equality by disclosure, not by drift.** The Lean
 calculus over-approximates: `runPark` is unguarded on the resumed bit, so
@@ -209,6 +210,39 @@ because the C++ has it nowhere to occur: after `context_switch`
 directly — there is no re-check loop — and `FinishResumed` never parks.
 The equality is what gives the mutant battery its teeth: permit creation
 and permit loss die on exact conservation, not merely on the loose bound.
+
+**`InvReleaseResult` is the release result-semantics corrective.** The
+public bool a `release()` returns (`relRet`, scheduler_semaphore.cpp:147-161)
+must agree with the effect branch that actually ran: a handoff or a store
+returns `true`, a ceiling refusal returns `false`. The Lean side fixes this
+structurally — `semRun` returns `relRet true` exactly on the handoff and
+store branches and `relRet false` on the refusal branch, so branch and
+result cannot come apart by construction. The TLA side must not take that
+coupling on faith: it now carries an independent effect authority in the
+state and checks the agreement with `InvReleaseResult`. The authority is
+written by each effect action **from its own branch, never from the result
+bool**:
+
+* fiber effects stamp the ghost `fibKind` (`"handoff"`/`"stored"`/
+  `"refused"`) on the fiber's return-window slot;
+* external effects stamp `kind` on the effected external record;
+* completions carry the effect's `kind` on their history comp record (so
+  the fused model, whose release completions are the only release
+  observations, is covered too).
+
+`InvReleaseResult` then requires, in all three places and for every
+release completion in `history`, that `kind = handoff/store` implies
+`result = "t"` and `kind = refused` implies `result = "f"`. Because the
+kind is state-carried, the model now distinguishes executions the old
+state merged (an external "eff" record or a release comp with result `t`
+no longer collapses "stored" and "handoff" origins once the queue has
+moved on) — the reachable-state counts in §7.6 grow by a few percent
+versus the pre-corrective runs, which is this refinement, not a
+behavioral change: every old reachable state is the projection of a new
+one, so nothing previously verified is lost. The new property does not
+reach into any coverage ghost — it depends on `cur`/`fibKind`, the ext
+records, and `history` only — so coverage certificates cannot
+accidentally buy a clean result contract.
 
 ### 7.3 The seam witness and the fusion separation
 
@@ -245,8 +279,21 @@ the checker, not by construction.
 | `MutLosePermit` | a granted release stores nothing | `InvPermitPool` |
 | `MutDoubleConsume` | the fast path skips the decrement | `InvPermitPool` |
 | `MutFifoBypass` | handoff wakes the queue tail | `InvFifo` |
-| `MutWrongFull` | refuse increments and reports `t` | `TypeOK` |
+| `MutOverflowFull` | ceiling refusal overflows: `available++` with `granted++` (accounting stays balanced), result stays `false` | `TypeOK` / `InvCapacity` |
+| `MutWrongFullResult` | ceiling refusal returns `true` — state and accounting unchanged, `effect_kind = refused` | `InvReleaseResult` |
+| `MutWrongGrantResult` | a stored or handoff grant returns `false` — the state effect (and `effect_kind`) run normally | `InvReleaseResult` |
 | `MutFusedReturn` | effect + return fused (the V2.2 shape) | **not a safety violation** — killed by the witness check (§7.3) |
+
+The three result mutants split the old combined `MutWrongFull` so each
+fault class is tested independently: `MutOverflowFull` proves the ceiling
+sensitivity (capacity alone catches overflow even when the returned pair
+is internally consistent), `MutWrongFullResult` proves a refused
+`release()` cannot report `true`, and `MutWrongGrantResult` proves a
+granted `release()` cannot report `false`. Each dies on exactly its
+intended invariant — a `release(true)` at the ceiling does not touch
+capacity, and a grant returning `false` does not touch accounting — so
+the result contract is gated on its own invariant, not borrowed from the
+capacity checks.
 
 The fused mutant is the interesting one: fusion only *skips* states, so
 every safety invariant still holds under it. Its verdict is the
@@ -281,55 +328,68 @@ initial-stock conjunction), the FIFO handoff chain at
 `(0,1)`/`(1,1)`/`(0,2)`, the initial-stock take at `(1,1)`/`(1,2)`, and
 the ceiling at `(0,2)`/`(1,2)` — so the coverage claim holds per
 constructor domain, not just at one point. The witness and coverage
-cfgs also carry the eight safety invariants, so the deeper
-certificates cannot be earned by a run that breaks safety on the way.
+cfgs also carry the nine safety invariants (the eight plus
+`InvReleaseResult`), so the deeper certificates cannot be earned by a
+run that breaks safety — or the release result contract — on the way.
 
 ### 7.6 Model-checking results
 
 TLC 2026.09.12.025210, `-deadlock` (terminal parked states exist by the
-fuel bounds), one run per cfg, single worker. Full gate ≈ 11.5 min wall
-clock. "violated" is the required outcome for witness/coverage/mutant
-cfgs (reachability or kill certificate); "clean" for safety and the
-fused mutant.
+fuel bounds), one run per cfg, single worker. Full gate ≈ 20 min wall
+clock — the full-domain counts below are a few percent higher than the
+pre-corrective runs (§7.2: the effect-authority `kind` field refines the
+state space; the old model merged states whose `stored` vs `handoff`
+origins had diverged once the queue moved on). "violated" is the required
+outcome for witness/coverage/mutant cfgs (reachability or kill
+certificate); "clean" for safety and the fused mutant.
 
-Safety matrix — all clean:
+Safety matrix — all clean, `InvReleaseResult` included:
 
 | cfg | (initial, max) | fuel | generated | distinct |
 |-----|----------------|------|-----------|----------|
-| `SemCore` | (0, 1) | 6 | 725,823 | 487,689 |
-| `SemCoreI1` | (1, 1) | 6 | 540,319 | 355,843 |
-| `SemCoreM2` | (0, 2) | 6 | 628,611 | 412,551 |
-| `SemCoreI1M2` | (1, 2) | 6 | 615,007 | 399,893 |
+| `SemCore` | (0, 1) | 6 | 750,463 | 510,689 |
+| `SemCoreI1` | (1, 1) | 6 | 546,239 | 362,739 |
+| `SemCoreM2` | (0, 2) | 6 | 653,299 | 435,503 |
+| `SemCoreI1M2` | (1, 2) | 6 | 619,007 | 403,653 |
 
 Witness and coverage — all violated, each on its own invariant:
 
 | cfg | (initial, max) | fuel | violated invariant | generated | distinct |
 |-----|----------------|------|--------------------|-----------|----------|
-| `CovWitness` | (0, 1) | 6 | `InvWitness` | 5,112 | 3,212 |
-| `CovA1` | (0, 1) | 9 | `InvCovW1` | 81,912 | 48,473 |
-| `CovA2` | (0, 1) | 7 | `InvCovW2` | 3,261 | 2,028 |
-| `CovA3` | (0, 1) | 9 | `InvCovQ` | 757,844 | 437,873 |
-| `CovB1` | (1, 1) | 11 | `InvCovW1` | 1,366,792 | 773,211 |
-| `CovB2` | (1, 1) | 7 | `InvCovInitial` | 90,887 | 50,904 |
-| `CovB3` | (1, 1) | 11 | `InvCovQ` | 3,046,870 | 1,717,564 |
-| `CovC1` | (0, 2) | 11 | `InvCovMax2` | 70,300 | 41,661 |
-| `CovC2` | (0, 2) | 7 | `InvCovW2` | 3,128 | 1,862 |
-| `CovC3` | (0, 2) | 9 | `InvCovReorder` | 16,103 | 9,405 |
+| `CovWitness` | (0, 1) | 6 | `InvWitness` | 5,112 | 3,224 |
+| `CovA1` | (0, 1) | 9 | `InvCovW1` | 83,232 | 49,493 |
+| `CovA2` | (0, 1) | 7 | `InvCovW2` | 3,261 | 2,030 |
+| `CovA3` | (0, 1) | 9 | `InvCovQ` | 772,238 | 448,355 |
+| `CovB1` | (1, 1) | 11 | `InvCovW1` | 1,370,852 | 776,735 |
+| `CovB2` | (1, 1) | 7 | `InvCovInitial` | 90,887 | 50,906 |
+| `CovB3` | (1, 1) | 11 | `InvCovQ` | 3,057,902 | 1,726,714 |
+| `CovC1` | (0, 2) | 11 | `InvCovMax2` | 71,620 | 42,681 |
+| `CovC2` | (0, 2) | 7 | `InvCovW2` | 3,128 | 1,864 |
+| `CovC3` | (0, 2) | 9 | `InvCovReorder` | 16,163 | 9,501 |
 | `CovD1` | (1, 2) | 11 | `InvCovW1` | 81,784 | 46,925 |
-| `CovD2` | (1, 2) | 7 | `InvCovInitial` | 112,866 | 63,422 |
+| `CovD2` | (1, 2) | 7 | `InvCovInitial` | 112,866 | 63,424 |
 | `CovD3` | (1, 2) | 5 | `InvCovMax2State` | 33 | 29 |
-| `CovD4` | (1, 2) | 6 | `InvCovQ1` | 105,411 | 61,680 |
+| `CovD4` | (1, 2) | 6 | `InvCovQ1` | 105,411 | 61,681 |
 
-Mutants — the five safety mutants violated, the fused mutant clean:
+Mutants — the seven safety mutants violated, each on its intended
+invariant, the fused mutant clean:
 
 | cfg | violated invariant | generated | distinct |
 |-----|--------------------|-----------|----------|
 | `MutCreatePermit` | `InvPermitPool` | 48 | 38 |
 | `MutLosePermit` | `InvPermitPool` | 33 | 29 |
 | `MutDoubleConsume` | `InvPermitPool` | 503 | 316 |
-| `MutFifoBypass` | `InvFifo` | 7,321 | 4,387 |
-| `MutWrongFull` | `TypeOK` | 402 | 256 |
-| `MutFusedReturn` | none — clean, `InvWitness` unreachable | 786,011 | 563,269 |
+| `MutFifoBypass` | `InvFifo` | 7,321 | 4,399 |
+| `MutOverflowFull` | `TypeOK` (ceiling overflow; `InvCapacity` equally bites) | 402 | 256 |
+| `MutWrongFullResult` | `InvReleaseResult` | 402 | 256 |
+| `MutWrongGrantResult` | `InvReleaseResult` | 33 | 29 |
+| `MutFusedReturn` | none — clean, `InvWitness` unreachable | 818,595 | 594,981 |
+
+The `MutWrongFullResult` counterexample is an external release effected
+at the ceiling with `result = "t"`, `effect_kind = "refused"`; the
+`MutWrongGrantResult` counterexample is an external store
+(`effect_kind = "stored"`) returning `"f"` — both killed at the effected
+record, before any completion, by `InvReleaseResult` (§7.2).
 
 ### 7.7 Gate wiring
 
@@ -337,9 +397,12 @@ Mutants — the five safety mutants violated, the fused mutant clean:
 cfgs must complete with no error; the witness cfg must fail with
 `Invariant InvWitness is violated`; each coverage cfg must fail with its
 own invariant; each safety mutant must fail with the invariant named in
-§7.4; the fused-return cfg must complete with no error while checking
-`InvWitness`. Expected failure modes are matched textually — a bare
-non-zero exit or a wrong-invariant failure aborts the gate.
+§7.4 (`MutOverflowFull` accepts either `TypeOK` or `InvCapacity`, the two
+forms of the ceiling check; the two result mutants must fail with
+`InvReleaseResult` and nothing else); the fused-return cfg must complete
+with no error while checking `InvWitness`. Expected failure modes are
+matched textually — a bare non-zero exit or a wrong-invariant failure
+aborts the gate.
 
 ## 8. Gates
 
@@ -347,7 +410,7 @@ non-zero exit or a wrong-invariant failure aborts the gate.
 |------|--------|
 | `lake build` (Lean 4.33.1, formal/Sluice.lean incl. SemV2) | PASS |
 | `./scripts/verify_formal.sh` (build + sorry/admit scan + axiom audit ⊆ {propext, Quot.sound}) | PASS |
-| `./scripts/verify_tla.sh` (Stage 1V2.2 EventCore + mutant; Stage 2V2.3 SemCore: safety matrix, witness, 13 coverage certs, 5 safety mutants, fused-return separation) | PASS |
+| `./scripts/verify_tla.sh` (Stage 1V2.2 EventCore + mutant; Stage 2V2.3 SemCore: safety matrix, witness, 13 coverage certs, 7 safety mutants incl. the release result-semantics battery, fused-return separation) | PASS |
 
 ## 9. Downstream obligations
 

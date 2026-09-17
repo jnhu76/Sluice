@@ -16,11 +16,18 @@
 #        reachable in the correct model -- the check MUST be violated.
 #     5. Coverage: the 13 scenario certificates are negated conjunctions;
 #        each MUST be violated, which certifies the scenario is reachable.
-#     6. Safety mutants: each of the 5 mutant switches must be killed by
-#        its expected invariant (a clean pass, or a failure for any other
-#        reason, fails the gate).
+#     6. Safety mutants: each mutant switch must be killed by its expected
+#        invariant (a clean pass, or a failure for any other reason, fails
+#        the gate).  The release result semantics are gated separately:
+#        MutOverflowFull (ceiling overflow, result/effect consistent) must
+#        die on the capacity invariants, while MutWrongFullResult (ceiling
+#        refusal returns true) and MutWrongGrantResult (grant returns
+#        false) must die exactly on InvReleaseResult -- the independent
+#        binding between the observable release(bool) and the effect
+#        branch that actually ran.
 #     7. Fused-return mutant (FiberEffect and FiberDone fused into one
-#        step, the pre-V2.3 shape): must complete CLEANLY.  The witness
+#        step, the pre-V2.3 shape): must complete CLEANLY -- all nine
+#        safety invariants including InvReleaseResult.  The witness
 #        becomes unreachable there -- that unreachability is the
 #        separation certificate for the V2.3 split.
 #
@@ -87,6 +94,31 @@ run_violate() {
     grep -E "Invariant $inv is violated|states generated" "$work/$label.log"
 }
 
+# run_violate_any <label> <cfg> <module> "<inv1>|<inv2>": TLC must fail with
+# one of the named invariants violated.  Used for MutOverflowFull, whose
+# ceiling breakage is caught by both TypeOK (type domain) and InvCapacity
+# (the ceiling literal); either report is the intended kill.
+run_violate_any() {
+    local label="$1" cfg="$2" module="$3" invs="$4"
+    echo "== TLC: $label (must violate one of: $invs) =="
+    set +e
+    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
+        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1
+    local rc=$?
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+        cat "$work/$label.log"
+        echo "FAIL: $label passed -- none of ($invs) bites" >&2
+        exit 1
+    fi
+    grep -qE "Invariant ($invs) is violated" "$work/$label.log" || {
+        cat "$work/$label.log"
+        echo "FAIL: $label failed for the wrong reason (expected one of: $invs)" >&2
+        exit 1
+    }
+    grep -E "Invariant .* is violated|states generated" "$work/$label.log"
+}
+
 echo "== Stage 1V2.2: Event =="
 run_clean event-main EventCore.cfg EventCore
 run_violate event-mutant EventCoreMutant.cfg EventCore NoWaitBeforeSet
@@ -119,7 +151,11 @@ run_violate sem-mut-create-permit SemCoreMutCreatePermit.cfg SemCore InvPermitPo
 run_violate sem-mut-lose-permit SemCoreMutLosePermit.cfg SemCore InvPermitPool
 run_violate sem-mut-double-consume SemCoreMutDoubleConsume.cfg SemCore InvPermitPool
 run_violate sem-mut-fifo-bypass SemCoreMutFifoBypass.cfg SemCore InvFifo
-run_violate sem-mut-wrong-full SemCoreMutWrongFull.cfg SemCore TypeOK
+
+echo "== Stage 2V2.3: release result-semantics mutants =="
+run_violate_any sem-mut-overflow-full SemCoreMutOverflowFull.cfg SemCore "TypeOK|InvCapacity"
+run_violate sem-mut-wrong-full-result SemCoreMutWrongFullResult.cfg SemCore InvReleaseResult
+run_violate sem-mut-wrong-grant-result SemCoreMutWrongGrantResult.cfg SemCore InvReleaseResult
 
 echo "== Stage 2V2.3: fused-return mutant (witness must become unreachable) =="
 run_clean sem-mut-fused-return SemCoreMutFusedReturn.cfg SemCore

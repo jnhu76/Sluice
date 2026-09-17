@@ -66,13 +66,31 @@
 (*   MutLosePermit     - a granted release stores nothing                  *)
 (*   MutDoubleConsume  - the acquire fast path does not decrement          *)
 (*   MutFifoBypass     - a handoff wakes the queue tail, not the head      *)
-(*   MutWrongFull      - a release at the ceiling increments and reports   *)
-(*                       true                                              *)
+(*   MutOverflowFull   - a release refused at the ceiling overflows:       *)
+(*                       available++ (with granted++, so permit accounting *)
+(*                       stays balanced); the public result stays false.   *)
+(*                       Capacity is the only casualty.                    *)
+(*   MutWrongFullResult- a release refused at the ceiling returns true     *)
+(*                       while effect_kind = refused and the state is      *)
+(*                       unchanged.  Capacity holds; the result contract   *)
+(*                       is the only casualty.                             *)
+(*   MutWrongGrantResult - a stored/handoff grant returns false while the  *)
+(*                       state effect (and effect_kind) run normally.      *)
 (*   MutFusedReturn    - the V2.2 regression: a fresh fiber call's effect  *)
 (*                       and physical return collapse into one transition  *)
 (*                       (FiberEffect* + FiberDone fused).  Safety still   *)
 (*                       holds (it skips states), but the V2.3 witness     *)
 (*                       becomes unreachable.                              *)
+(*                                                                         *)
+(* Release result authority (the result-semantics corrective): the public  *)
+(* bool a release returns must agree with the effect branch that actually  *)
+(* ran: handoff/store => true, refusal => false.  Each effect action       *)
+(* records its branch independently of the result it returns: fiber        *)
+(* effects set the ghost `fibKind` ("handoff"/"stored"/"refused"),         *)
+(* external effects stamp `kind` on the effected record, and completions   *)
+(* carry the branch's `kind` on the history comp record.  InvReleaseResult *)
+(* binds kind to result in all three places; the three result mutants die  *)
+(* on it, and no mutant may evade it by recomputing kind from the result.  *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 
@@ -80,7 +98,8 @@ CONSTANT Initial,        \* constructor permits: 0 <= Initial <= Max
           Max,           \* ceiling: Max > 0
           MaxHistory,    \* fuel: bound on recorded observations
           MutCreatePermit, MutLosePermit, MutDoubleConsume,
-          MutFifoBypass, MutWrongFull, MutFusedReturn
+          MutFifoBypass, MutOverflowFull, MutWrongFullResult,
+          MutWrongGrantResult, MutFusedReturn
 
 ASSUME /\ Max > 0
       /\ 0 <= Initial /\ Initial <= Max
@@ -95,6 +114,12 @@ VARIABLES available,   \* stored permits (SemState.available)
                        \* result]: "run" (critical section not yet run) or
                        \* "ret" (result fixed, physical return pending --
                        \* the baton is still held), or NoCur
+          fibKind,     \* release result authority: the effect class of the
+                       \* fiber release currently in its return window, or
+                       \* "none" when cur is not a returning release.  Set
+                       \* by each release effect action from its own branch
+                       \* (handoff/stored/refused) -- never from the result
+                       \* bool
           runq,        \* runnable entries [fiber, call, fresh]: fresh
                        \* submissions and handoff-published acquirers
           exts,        \* in-flight external records (at most one per x)
@@ -115,7 +140,7 @@ VARIABLES available,   \* stored permits (SemState.available)
           wlive        \* witness ghost: wf's recorded call instance is
                        \* still in flight toward its physical return
 
-vars == <<available, waitq, cur, runq, exts, history, granted,
+vars == <<available, waitq, cur, fibKind, runq, exts, history, granted,
           hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
           wseq, wf, wx, wlive>>
 
@@ -123,19 +148,22 @@ NoCur == [fiber |-> "none", call |-> "none", phase |-> "off",
           resumed |-> FALSE, result |-> "none"]
 
 \* Observations record the caller's execution domain; external callers
-\* are never faked as fibers.  Release completions carry their boolean.
+\* are never faked as fibers.  Release completions carry their boolean and
+\* the effect class of the release that produced them (`kind`); issues
+\* carry `kind = "none"` (no effect has run yet).
 IssueFib(f, c) == [type |-> "issue", src |-> "fib", id |-> f,
-                   call |-> c, result |-> "none"]
+                   call |-> c, result |-> "none", kind |-> "none"]
 IssueExt(x)    == [type |-> "issue", src |-> "ext", id |-> x,
-                   call |-> "rel", result |-> "none"]
-CompFib(f, c, r) == [type |-> "comp", src |-> "fib", id |-> f,
-                     call |-> c, result |-> r]
-CompExt(x, r)  == [type |-> "comp", src |-> "ext", id |-> x,
-                   call |-> "rel", result |-> r]
+                   call |-> "rel", result |-> "none", kind |-> "none"]
+CompFib(f, c, r, k) == [type |-> "comp", src |-> "fib", id |-> f,
+                        call |-> c, result |-> r, kind |-> k]
+CompExt(x, r, k)  == [type |-> "comp", src |-> "ext", id |-> x,
+                      call |-> "rel", result |-> r, kind |-> k]
 
 Init == available = Initial
   /\ waitq = << >>
   /\ cur = NoCur
+  /\ fibKind = "none"
   /\ runq = << >>
   /\ exts = {}
   /\ history = << >>
@@ -170,7 +198,7 @@ FiberSubmit(f, c) ==
   /\ Len(history) < MaxHistory
   /\ runq' = Append(runq, [fiber |-> f, call |-> c, fresh |-> TRUE])
   /\ wlive' = IF f = wf /\ wseq >= 1 THEN FALSE ELSE wlive
-  /\ UNCHANGED <<available, waitq, cur, exts, history, granted,
+  /\ UNCHANGED <<available, waitq, cur, fibKind, exts, history, granted,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
                  wseq, wf, wx>>
 
@@ -185,7 +213,7 @@ FiberDispatch ==
   /\ runq' = Tail(runq)
   /\ history' = Append(history,
       IssueFib(Head(runq).fiber, Head(runq).call))
-  /\ UNCHANGED <<available, waitq, exts, granted,
+  /\ UNCHANGED <<available, waitq, exts, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberEffect, acquire fast path (`sem_acquire` :46-54: first
@@ -197,7 +225,7 @@ AcqTakeFast ==
   /\ ~MutFusedReturn
   /\ available' = IF MutDoubleConsume THEN available ELSE available - 1
   /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "done"]
-  /\ UNCHANGED <<waitq, runq, exts, history, granted,
+  /\ UNCHANGED <<waitq, runq, exts, history, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.runPark, acquire park (:41, :61: register and suspend).
@@ -208,12 +236,14 @@ AcqPark ==
   /\ cur' = NoCur
   /\ waitq' = Append(waitq, cur.fiber)
   /\ available' = IF MutCreatePermit THEN available + 1 ELSE available
-  /\ UNCHANGED <<runq, exts, history, granted,
+  /\ UNCHANGED <<runq, exts, history, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberEffect, release with waiters (`sem_release` :151-153:
 \* wake exactly the FIFO head, hand the permit to it, do not store).
-\* Silent; the release itself enters its return window.
+\* Silent; the release itself enters its return window.  The effect
+\* class "handoff" is recorded from this branch, independently of the
+\* result bool.
 FibRelHandoff ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
   /\ Len(waitq) > 0
@@ -230,12 +260,14 @@ FibRelHandoff ==
         /\ hit_handoff' = TRUE
         /\ lastHead' = Head(waitq)
         /\ lastChosen' = LetChosen
-        /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "t"]
+        /\ cur' = [cur EXCEPT !.phase = "ret",
+                   !.result = IF MutWrongGrantResult THEN "f" ELSE "t"]
+        /\ fibKind' = "handoff"
   /\ UNCHANGED <<available, exts, history, hit_store, hit_resume,
                  wseq, wf, wx, wlive>>
 
 \* PrimStep2.fiberEffect, release storing below the ceiling
-\* (:155-159).  Silent.
+\* (:155-159).  Silent.  Effect class "stored" recorded from the branch.
 FibRelStore ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
   /\ waitq = << >> /\ available < Max
@@ -243,7 +275,9 @@ FibRelStore ==
   /\ available' = IF MutLosePermit THEN available ELSE available + 1
   /\ granted' = granted + 1
   /\ hit_store' = TRUE
-  /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "t"]
+  /\ cur' = [cur EXCEPT !.phase = "ret",
+             !.result = IF MutWrongGrantResult THEN "f" ELSE "t"]
+  /\ fibKind' = "stored"
   /\ wseq' = IF wseq = 0 THEN 1 ELSE wseq
   /\ wf' = IF wseq = 0 THEN cur.fiber ELSE wf
   /\ wlive' = IF wseq = 0 THEN TRUE ELSE wlive
@@ -251,15 +285,20 @@ FibRelStore ==
                  lastHead, lastChosen, wx>>
 
 \* PrimStep2.fiberEffect, release refused at the ceiling (:156-158).
-\* Silent; no state change, no grant.
+\* Silent; no state change, no grant.  Effect class "refused" from the
+\* branch.  MutOverflowFull breaks ONLY the ceiling (state overflows,
+\* grant counter matches so accounting stays balanced, result stays
+\* false); MutWrongFullResult breaks ONLY the result (state unchanged,
+\* returns true).
 FibRelRefuse ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
   /\ waitq = << >> /\ available >= Max
   /\ ~MutFusedReturn
-  /\ available' = IF MutWrongFull THEN available + 1 ELSE available
-  /\ granted' = IF MutWrongFull THEN granted + 1 ELSE granted
+  /\ available' = IF MutOverflowFull THEN available + 1 ELSE available
+  /\ granted' = IF MutOverflowFull THEN granted + 1 ELSE granted
   /\ cur' = [cur EXCEPT !.phase = "ret",
-             !.result = IF MutWrongFull THEN "t" ELSE "f"]
+             !.result = IF MutWrongFullResult THEN "t" ELSE "f"]
+  /\ fibKind' = "refused"
   /\ UNCHANGED <<waitq, runq, exts, history,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
@@ -273,8 +312,11 @@ FiberDone ==
   /\ cur # NoCur /\ Returning(cur)
   /\ ~MutFusedReturn
   /\ Len(history) < MaxHistory
-  /\ history' = Append(history, CompFib(cur.fiber, cur.call, cur.result))
+  /\ history' = Append(history,
+      CompFib(cur.fiber, cur.call, cur.result,
+              IF cur.call = "rel" THEN fibKind ELSE "none"))
   /\ cur' = NoCur
+  /\ fibKind' = "none"
   /\ wseq' = IF WitnessStep5 THEN 5 ELSE wseq
   /\ wlive' = IF WitnessStep5 THEN wlive
                ELSE IF cur.fiber = wf /\ wseq >= 1 THEN FALSE ELSE wlive
@@ -290,7 +332,7 @@ FiberResume ==
   /\ cur' = [fiber |-> Head(runq).fiber, call |-> "acq",
              phase |-> "run", resumed |-> TRUE, result |-> "none"]
   /\ runq' = Tail(runq)
-  /\ UNCHANGED <<available, waitq, exts, history, granted,
+  /\ UNCHANGED <<available, waitq, exts, history, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.finishDone: a resumed acquire completes at its dispatch --
@@ -299,10 +341,10 @@ FiberResume ==
 FinishResumed ==
   /\ cur # NoCur /\ cur.phase = "run" /\ cur.resumed /\ cur.call = "acq"
   /\ Len(history) < MaxHistory
-  /\ history' = Append(history, CompFib(cur.fiber, "acq", "done"))
+  /\ history' = Append(history, CompFib(cur.fiber, "acq", "done", "none"))
   /\ cur' = NoCur
   /\ hit_resume' = TRUE
-  /\ UNCHANGED <<available, waitq, runq, exts, granted,
+  /\ UNCHANGED <<available, waitq, runq, exts, granted, fibKind,
                  hit_store, hit_handoff, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* MutFusedReturn: the V2.2 `runDone` regression -- a fresh fiber call's
@@ -315,9 +357,9 @@ FusedAcqTake ==
   /\ waitq = << >> /\ available > 0
   /\ MutFusedReturn
   /\ available' = IF MutDoubleConsume THEN available ELSE available - 1
-  /\ history' = Append(history, CompFib(cur.fiber, "acq", "done"))
+  /\ history' = Append(history, CompFib(cur.fiber, "acq", "done", "none"))
   /\ cur' = NoCur
-  /\ UNCHANGED <<waitq, runq, exts, granted,
+  /\ UNCHANGED <<waitq, runq, exts, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 FusedRelHandoff ==
@@ -336,9 +378,12 @@ FusedRelHandoff ==
         /\ hit_handoff' = TRUE
         /\ lastHead' = Head(waitq)
         /\ lastChosen' = LetChosen
-        /\ history' = Append(history, CompFib(cur.fiber, "rel", "t"))
+        /\ history' = Append(history,
+            CompFib(cur.fiber, "rel",
+                    IF MutWrongGrantResult THEN "f" ELSE "t", "handoff"))
         /\ cur' = NoCur
-  /\ UNCHANGED <<available, exts, hit_store, hit_resume, wseq, wf, wx, wlive>>
+  /\ UNCHANGED <<available, exts, hit_store, hit_resume, fibKind,
+                 wseq, wf, wx, wlive>>
 
 FusedRelStore ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
@@ -347,24 +392,27 @@ FusedRelStore ==
   /\ available' = IF MutLosePermit THEN available ELSE available + 1
   /\ granted' = granted + 1
   /\ hit_store' = TRUE
-  /\ history' = Append(history, CompFib(cur.fiber, "rel", "t"))
+  /\ history' = Append(history,
+      CompFib(cur.fiber, "rel",
+              IF MutWrongGrantResult THEN "f" ELSE "t", "stored"))
   /\ cur' = NoCur
   /\ wseq' = IF wseq = 0 THEN 1 ELSE wseq
   /\ wf' = IF wseq = 0 THEN cur.fiber ELSE wf
   /\ wlive' = FALSE
-  /\ UNCHANGED <<waitq, runq, exts, hit_handoff, hit_resume,
+  /\ UNCHANGED <<waitq, runq, exts, hit_handoff, hit_resume, fibKind,
                  lastHead, lastChosen, wx>>
 
 FusedRelRefuse ==
   /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "rel"
   /\ waitq = << >> /\ available >= Max
   /\ MutFusedReturn
-  /\ available' = IF MutWrongFull THEN available + 1 ELSE available
-  /\ granted' = IF MutWrongFull THEN granted + 1 ELSE granted
+  /\ available' = IF MutOverflowFull THEN available + 1 ELSE available
+  /\ granted' = IF MutOverflowFull THEN granted + 1 ELSE granted
   /\ history' = Append(history,
-      CompFib(cur.fiber, "rel", IF MutWrongFull THEN "t" ELSE "f"))
+      CompFib(cur.fiber, "rel",
+              IF MutWrongFullResult THEN "t" ELSE "f", "refused"))
   /\ cur' = NoCur
-  /\ UNCHANGED <<waitq, runq, exts,
+  /\ UNCHANGED <<waitq, runq, exts, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wseq, wf, wx, wlive>>
 
 \* PrimStep2.extApply: an external caller ENTERS `release`.  The issue
@@ -375,17 +423,20 @@ ExtIssue(x) ==
   /\ \A e \in exts : e.x # x
   /\ Len(history) < MaxHistory
   /\ exts' = exts \union {[x |-> x, call |-> "rel",
-                          phase |-> "ent", result |-> "none"]}
+                          phase |-> "ent", result |-> "none",
+                          kind |-> "none"]}
   /\ history' = Append(history, IssueExt(x))
   /\ wseq' = IF wseq = 1 THEN 2 ELSE wseq
   /\ wx' = IF wseq = 1 THEN x ELSE wx
-  /\ UNCHANGED <<available, waitq, cur, runq, granted,
+  /\ UNCHANGED <<available, waitq, cur, runq, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen, wf, wlive>>
 
 \* PrimStep2.extEffect, release with waiters.  Silent; the record's
-\* result is fixed and the caller still owes its physical return.
+\* result is fixed (branch class "handoff" recorded from this branch) and
+\* the caller still owes its physical return.
 ExtRelHandoff(x) ==
-  /\ [x |-> x, call |-> "rel", phase |-> "ent", result |-> "none"] \in exts
+  /\ [x |-> x, call |-> "rel", phase |-> "ent", result |-> "none",
+      kind |-> "none"] \in exts
   /\ Len(waitq) > 0
   /\ LET LetChosen == IF MutFifoBypass
                          THEN waitq[Len(waitq)]
@@ -400,39 +451,55 @@ ExtRelHandoff(x) ==
         /\ lastHead' = Head(waitq)
         /\ lastChosen' = LetChosen
         /\ exts' = (exts \ {[x |-> x, call |-> "rel",
-                             phase |-> "ent", result |-> "none"]})
+                             phase |-> "ent", result |-> "none",
+                             kind |-> "none"]})
                    \union {[x |-> x, call |-> "rel",
-                            phase |-> "eff", result |-> "t"]}
-  /\ UNCHANGED <<available, cur, history, hit_store, hit_resume,
+                            phase |-> "eff",
+                            result |-> IF MutWrongGrantResult
+                                         THEN "f" ELSE "t",
+                            kind |-> "handoff"]}
+  /\ UNCHANGED <<available, cur, history, hit_store, hit_resume, fibKind,
                  wseq, wf, wx, wlive>>
 
 \* PrimStep2.extEffect, release storing below the ceiling.  Silent.
+\* Branch class "stored".
 ExtRelStore(x) ==
-  /\ [x |-> x, call |-> "rel", phase |-> "ent", result |-> "none"] \in exts
+  /\ [x |-> x, call |-> "rel", phase |-> "ent", result |-> "none",
+      kind |-> "none"] \in exts
   /\ waitq = << >> /\ available < Max
   /\ available' = IF MutLosePermit THEN available ELSE available + 1
   /\ granted' = granted + 1
   /\ hit_store' = TRUE
   /\ exts' = (exts \ {[x |-> x, call |-> "rel",
-                       phase |-> "ent", result |-> "none"]})
+                       phase |-> "ent", result |-> "none",
+                       kind |-> "none"]})
              \union {[x |-> x, call |-> "rel",
-                      phase |-> "eff", result |-> "t"]}
+                      phase |-> "eff",
+                      result |-> IF MutWrongGrantResult
+                                   THEN "f" ELSE "t",
+                      kind |-> "stored"]}
   /\ UNCHANGED <<waitq, cur, runq, history, hit_handoff, hit_resume,
-                 lastHead, lastChosen, wseq, wf, wx, wlive>>
+                 lastHead, lastChosen, wseq, wf, wx, wlive, fibKind>>
 
 \* PrimStep2.extEffect, release refused at the ceiling.  Silent.
+\* Branch class "refused".  Mutants as on the fiber side: overflow breaks
+\* only the ceiling, wrong-full-result breaks only the result.
 ExtRelRefuse(x) ==
-  /\ [x |-> x, call |-> "rel", phase |-> "ent", result |-> "none"] \in exts
+  /\ [x |-> x, call |-> "rel", phase |-> "ent", result |-> "none",
+      kind |-> "none"] \in exts
   /\ waitq = << >> /\ available >= Max
-  /\ available' = IF MutWrongFull THEN available + 1 ELSE available
-  /\ granted' = IF MutWrongFull THEN granted + 1 ELSE granted
+  /\ available' = IF MutOverflowFull THEN available + 1 ELSE available
+  /\ granted' = IF MutOverflowFull THEN granted + 1 ELSE granted
   /\ exts' = (exts \ {[x |-> x, call |-> "rel",
-                       phase |-> "ent", result |-> "none"]})
+                       phase |-> "ent", result |-> "none",
+                       kind |-> "none"]})
              \union {[x |-> x, call |-> "rel", phase |-> "eff",
-                      result |-> IF MutWrongFull THEN "t" ELSE "f"]}
+                      result |-> IF MutWrongFullResult THEN "t" ELSE "f",
+                      kind |-> "refused"]}
   /\ wseq' = IF wseq = 2 /\ x = wx
-                /\ ~MutWrongFull THEN 3 ELSE wseq
-  /\ UNCHANGED <<waitq, cur, runq, history,
+                /\ ~MutWrongFullResult /\ ~MutOverflowFull
+              THEN 3 ELSE wseq
+  /\ UNCHANGED <<waitq, cur, runq, history, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
                  wf, wx, wlive>>
 
@@ -440,18 +507,13 @@ ExtRelRefuse(x) ==
 \* respect to the other steps -- a fiber may run a whole call between
 \* this caller's section and its return.
 ExtDone(x) ==
-  /\ \E r \in {"t", "f"} :
-       [x |-> x, call |-> "rel", phase |-> "eff", result |-> r] \in exts
+  /\ \E e \in exts : e.x = x /\ e.phase = "eff"
   /\ Len(history) < MaxHistory
-  /\ exts' = exts \ {[x |-> x, call |-> "rel", phase |-> "eff",
-                      result |-> CHOOSE r \in {"t", "f"} :
-                        [x |-> x, call |-> "rel", phase |-> "eff",
-                         result |-> r] \in exts]}
-  /\ history' = Append(history,
-      CompExt(x, CHOOSE r \in {"t", "f"} :
-        [x |-> x, call |-> "rel", phase |-> "eff", result |-> r] \in exts))
+  /\ LET e == CHOOSE e \in exts : e.x = x /\ e.phase = "eff"
+     IN /\ exts' = exts \ {e}
+        /\ history' = Append(history, CompExt(x, e.result, e.kind))
   /\ wseq' = IF wseq = 3 /\ x = wx THEN 4 ELSE wseq
-  /\ UNCHANGED <<available, waitq, cur, runq, granted,
+  /\ UNCHANGED <<available, waitq, cur, runq, granted, fibKind,
                  hit_store, hit_handoff, hit_resume, lastHead, lastChosen,
                  wf, wx, wlive>>
 
@@ -490,16 +552,21 @@ TypeOK ==
           f \in Fibers, c \in Calls,
           p \in {"run", "ret"}, r \in BOOLEAN,
           s \in {"none", "t", "f", "done"}})
+  /\ fibKind \in {"none", "handoff", "stored", "refused"}
   /\ runq \in Seq({[fiber |-> f, call |-> c, fresh |-> fr] :
                     f \in Fibers, c \in Calls, fr \in BOOLEAN})
-  /\ exts \subseteq {[x |-> x, call |-> "rel", phase |-> p, result |-> r] :
-                      x \in Exts, p \in {"ent", "eff"}, r \in {"none", "t", "f"}}
+  /\ exts \subseteq {[x |-> x, call |-> "rel", phase |-> p, result |-> r,
+                      kind |-> k] :
+                      x \in Exts, p \in {"ent", "eff"},
+                      r \in {"none", "t", "f"},
+                      k \in {"none", "handoff", "stored", "refused"}}
   /\ \A e1 \in exts, e2 \in exts : e1.x = e2.x => e1 = e2
   /\ history \in Seq({[type |-> t, src |-> s, id |-> i, call |-> c,
-                       result |-> r] :
+                       result |-> r, kind |-> k] :
                        t \in {"issue", "comp"}, s \in {"fib", "ext"},
                        i \in (Fibers \cup Exts), c \in Calls,
-                       r \in {"none", "done", "t", "f"}})
+                       r \in {"none", "done", "t", "f"},
+                       k \in {"none", "handoff", "stored", "refused"}})
   /\ granted \in Nat
   /\ hit_store \in BOOLEAN /\ hit_handoff \in BOOLEAN
   /\ hit_resume \in BOOLEAN
@@ -587,9 +654,33 @@ InvCompDiscipline ==
         /\ \A k \in (j + 1)..(i - 1) :
              ~SameCaller(history[k], history[i])
 
+\* Release result semantics (the result-semantics corrective): the public
+\* bool a release returns must agree with the effect branch that actually
+\* ran -- handoff/store => true, refusal => false.  The effect class is
+\* carried by three independent authorities, all written by the effect
+\* actions from their own branch, never derived from the result bool:
+\*   - `fibKind` on the fiber slot in its return window,
+\*   - `kind` on the effected external record,
+\*   - `kind` on completed release observations in `history`.
+\* Every release completion must also carry a consistent class, so the
+\* fused model (whose release comps are the only release observations) is
+\* covered as well.
+InvReleaseResult ==
+  /\ \A i \in 1..Len(history) :
+       history[i].type = "comp" /\ history[i].call = "rel" =>
+         \/ history[i].result = "t" /\ history[i].kind \in {"handoff", "stored"}
+         \/ history[i].result = "f" /\ history[i].kind = "refused"
+  /\ Returning(cur) /\ cur.call = "rel" =>
+       \/ cur.result = "t" /\ fibKind \in {"handoff", "stored"}
+       \/ cur.result = "f" /\ fibKind = "refused"
+  /\ \A e \in exts :
+       e.phase = "eff" =>
+         \/ e.result = "t" /\ e.kind \in {"handoff", "stored"}
+         \/ e.result = "f" /\ e.kind = "refused"
+
 SafetyInvariants == <<TypeOK, InvCapacity, InvPermitPool, InvTakeBound,
                       InvQueueNoDup, InvQueueOwnership, InvFifo,
-                      InvCompDiscipline>>
+                      InvCompDiscipline, InvReleaseResult>>
 
 (***************************************************************************)
 (* The V2.3 seam certificate and coverage predicates                       *)
@@ -633,15 +724,18 @@ CovAcqReturnWindow ==
     /\ history[i1] = IssueFib(f, "acq")
     /\ history[i2] = IssueExt(x)
     /\ IsCompExt(history[i3]) /\ history[i3].id = x
-    /\ history[i4] = CompFib(f, "acq", "done")
+    /\ history[i4] = CompFib(f, "acq", "done", "none")
 
+\* A fiber release completion with either granted class, so the window
+\* certificate does not depend on which success branch stored the permit.
 CovRelReturnWindow ==
   \E f \in Fibers, x \in Exts, i1, i2, i3, i4 \in 1..Len(history) :
     /\ i1 < i2 /\ i2 < i3 /\ i3 < i4
     /\ history[i1] = IssueFib(f, "rel")
     /\ history[i2] = IssueExt(x)
     /\ IsCompExt(history[i3]) /\ history[i3].id = x
-    /\ history[i4] = CompFib(f, "rel", "t")
+    /\ \E k \in {"stored", "handoff"} :
+         history[i4] = CompFib(f, "rel", "t", k)
 
 \* A refused release exists (ceiling reached).
 CovRefuse ==
@@ -652,7 +746,7 @@ CovRefuse ==
 \* A take with no release issue ever before it: constructor stock.
 CovInitialTake ==
   \E i \in 1..Len(history) :
-    /\ history[i] = CompFib(history[i].id, "acq", "done")
+    /\ history[i] = CompFib(history[i].id, "acq", "done", "none")
     /\ ~\E j \in 1..(i - 1) : IsRelIssue(history[j])
 
 \* Two externals entered in one order, and the grant landed in the
@@ -665,8 +759,10 @@ CovExtReorder ==
     /\ i1 < i2
     /\ history[i1] = IssueExt(x)
     /\ history[i2] = IssueExt(y)
-    /\ \E i3 \in 1..Len(history) : history[i3] = CompExt(x, "f")
-    /\ \E i4 \in 1..Len(history) : history[i4] = CompExt(y, "t")
+    /\ \E i3 \in 1..Len(history), k3 \in {"handoff", "stored", "refused"} :
+         history[i3] = CompExt(x, "f", k3)
+    /\ \E i4 \in 1..Len(history), k4 \in {"handoff", "stored", "refused"} :
+         history[i4] = CompExt(y, "t", k4)
 
 \* A take completed after some release issue (the take itself need not
 \* be the resumed one -- a stored permit can complete it too; the
@@ -676,7 +772,7 @@ CovResume ==
     /\ i < j /\ j < k
     /\ history[i] = IssueFib(f, "acq")
     /\ IsRelIssue(history[j])
-    /\ history[k] = CompFib(f, "acq", "done")
+    /\ history[k] = CompFib(f, "acq", "done", "none")
 
 CovMax2 == available = 2
 
