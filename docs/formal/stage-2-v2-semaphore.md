@@ -144,27 +144,214 @@ guarantee are restated over the split steps; the fiber-window,
 initial-stock, and ceiling batteries are new. No Stage-3 material (async
 mutex/lock-guard surfaces) is present on this branch.
 
-## 7. Gates
+## 7. The TLA mirror (`formal/tla/SemCore.tla`)
+
+A TLC-executable mirror of the same action set, written from this card's
+census and the V2.3 Lean machine (not copied from any pre-reset model).
+Constants: `Initial`, `Max` under `ASSUME Max > 0 /\ 0 <= Initial <= Max`
+(the constructor domain); fixed caller sets `Fibers = {"f0","f1"}`,
+`Exts = {"e0","e1"}` (Lean's `nextFiber` minting is dropped: a caller
+re-enters once its previous call is no longer in flight — not queued,
+parked, or holding the slot); observation fuel `MaxHistory`. `Spec == Init /\ [][Next]_vars` — **no fairness is assumed
+anywhere**; every claim below is safety.
+
+### 7.1 Action crosswalk (Lean `PrimStep2` ↔ TLA)
+
+| Lean constructor (`CalcV2.lean`) | SemCore.tla action(s) | observable |
+|----------------------------------|------------------------|------------|
+| `submit` | `FiberSubmit(f,c)` | silent |
+| `dispatchFresh` | `FiberDispatch` | fiber issue; requires the baton free |
+| `fiberEffect` (`P.run` fast-path take) | `AcqTakeFast` | silent; `available -= 1`, slot → returning **with the baton** |
+| `fiberEffect` (release: wake head) | `FibRelHandoff` | silent; publishes the queue head to `runq`, slot → returning |
+| `fiberEffect` (release: store) | `FibRelStore` | silent; `available += 1`, slot → returning |
+| `fiberEffect` (release: refuse) | `FibRelRefuse` | silent; result `f`, no grant |
+| `fiberDone` | `FiberDone` | fiber completion; baton freed |
+| `runPark` (`P.run` = none) | `AcqPark` | silent; appends to `waitq`, slot freed with the suspension |
+| `dispatchResumed` | `FiberResume` | silent dispatch of a published acquire |
+| `finishDone` | `FinishResumed` | resumed acquire's completion (effect and return do not come apart) |
+| `extApply` | `ExtIssue(x)` | external issue; legal while a fiber holds the baton |
+| `extEffect` (`semRun` branches) | `ExtRelHandoff(x)` / `ExtRelStore(x)` / `ExtRelRefuse(x)` | silent state effects |
+| `extDone` | `ExtDone(x)` | external completion |
+| `envTime` / `expire` | omitted | the semaphore's `onTick` is the identity and it has no timers |
+
+The worker-slot encoding: Lean `FSlot.running d b` ↔ `cur` with
+`phase = "run"` (`resumed` ↔ `b`); Lean `FSlot.returning d r` ↔ `cur`
+with `phase = "ret"` (`result` ↔ `r`). The critical V2.3 property — a
+returning fiber still holds the baton — is `FiberDispatch` /
+`FiberResume` requiring `cur = NoCur`: **no second fiber dispatches while
+any fiber sits in `phase = "ret"`**, while `ExtIssue`/`ExtEffect`/
+`ExtDone` and `FiberDone` itself are legal in that window. `AcqTakeFast`
+takes only with `waitq` empty (`sem_acquire` :46 checks
+`node.prev_ == nullptr` first); `FibRelHandoff` wakes exactly
+`Head(waitq)` (:151-153); `FibRelStore` stores only under the ceiling
+(:155-159); `FibRelRefuse` is the `cur >= max_permits` branch (:156-158).
+
+### 7.2 Safety invariants
+
+| TLA invariant | content | Lean analogue |
+|---------------|---------|---------------|
+| `TypeOK` | every variable in its state domain | type discipline |
+| `InvCapacity` | `0 <= available <= Max` | `SemState` well-formedness |
+| `InvPermitPool` | `available + Holders + TakesCount(history) = Initial + granted` (exact conservation) | `semBalance_mirror`, strengthened — see below |
+| `InvTakeBound` | completed takes `<=` release issues `+ Initial` | `semPermitsHonoredGen` |
+| `InvQueueNoDup` | no fiber parked twice; no fiber queued twice in `runq` | mirror hygiene |
+| `InvQueueOwnership` | a queued/parked fiber is never the dispatched one; published entries are acquires | `hstale` + slot disjointness |
+| `InvFifo` | ghost pair `lastHead = lastChosen` (updated only by handoff actions) | the :151 wake-the-head shape |
+| `InvCompDiscipline` | every completion has a same-caller same-call prior issue with no intervening completion | no completion before issue, no double completion |
+
+**`InvPermitPool` is an equality by disclosure, not by drift.** The Lean
+calculus over-approximates: `runPark` is unguarded on the resumed bit, so
+a resumed acquire may re-suspend and evaporate its handed-off permit from
+the accounted pool — that is why `semBalance_mirror` is an inequality in
+the safe direction (§3). The TLA machine omits that over-approximation
+because the C++ has it nowhere to occur: after `context_switch`
+(scheduler_semaphore.cpp:67-71) the resumed `sem_acquire` returns
+directly — there is no re-check loop — and `FinishResumed` never parks.
+The equality is what gives the mutant battery its teeth: permit creation
+and permit loss die on exact conservation, not merely on the loose bound.
+
+### 7.3 The seam witness and the fusion separation
+
+`InvWitness == wseq # 5` is the TLA form of `semPrim_possesses_fiberWindow`
+(window B, §3), carried by a four-variable ghost machine (`wseq`, `wf`,
+`wx`, `wlive`) over one call instance:
+
+1. a fiber release's section **stores** the last permit (`FibRelStore`,
+   `wseq 0 → 1`, records `wf`, sets `wlive`);
+2. an external release **enters** after it (`ExtIssue`, `1 → 2`);
+3. the external is **refused** at the ceiling the fiber had just filled
+   (`ExtRelRefuse`, `2 → 3`);
+4. the external **physically returns** (`ExtDone`, `3 → 4`);
+5. only then the fiber itself **physically returns** (`FiberDone` with
+   `WitnessStep5`, `4 → 5`).
+
+`wlive` anchors steps 1 and 5 to the same call instance: `wf`
+re-submitting or physically returning early kills the recording, so a
+later call of the same fiber cannot fake the window across calls. Under
+`MutFusedReturn` the fused store completes the call in one transition
+(`wlive` goes FALSE immediately) and no `FiberDone` of a returning
+release exists, so `wseq = 5` is unreachable. **TLC independently
+rediscovered the V2.3 seam**: the correct model violates `InvWitness`
+(the counterexample is exactly the window-B trace), and the fused model
+satisfies it over its whole reachable state space — the hard criterion
+"the model must distinguish `FiberEffect` from `FiberDone`" is met by
+the checker, not by construction.
+
+### 7.4 Mutant battery
+
+| switch | injected defect | killed by |
+|--------|-----------------|-----------|
+| `MutCreatePermit` | parking mints a permit | `InvPermitPool` |
+| `MutLosePermit` | a granted release stores nothing | `InvPermitPool` |
+| `MutDoubleConsume` | the fast path skips the decrement | `InvPermitPool` |
+| `MutFifoBypass` | handoff wakes the queue tail | `InvFifo` |
+| `MutWrongFull` | refuse increments and reports `t` | `TypeOK` |
+| `MutFusedReturn` | effect + return fused (the V2.2 shape) | **not a safety violation** — killed by the witness check (§7.3) |
+
+The fused mutant is the interesting one: fusion only *skips* states, so
+every safety invariant still holds under it. Its verdict is the
+separation certificate — the gate runs it and requires a clean
+completion *with `InvWitness` among its invariants*, i.e. the witness
+must be unreachable exactly where the split does not exist.
+
+### 7.5 Coverage
+
+Coverage is by violation: each cfg checks one negated conjunction, and
+the violation is the reachability certificate. The conjunctions are
+monotone over `history` plus set-once flags, sized to a single
+execution's `MaxHistory` fuel.
+
+| cfg family | conjunction | certifies |
+|------------|-------------|-----------|
+| `CovA1`/`B1`/`D1` | `CovW1` = stored release + refusal + release return-window + external return-window | the two interleaving windows on a stored release |
+| `CovA2`/`C2` | `CovW2` = acquire completion inside an external call's window | window A against an acquire |
+| `CovA3`/`B3`/`C3` | `CovQ` = FIFO handoff + resumed-acquire chain + external reorder | the handoff path and external serialization order |
+| `CovD4` | `CovQ1` = FIFO handoff + resumed-acquire chain | the handoff path at `(1,2)`, where the full `CovQ` conjunction needs a longer single execution than that domain's state space can afford to search |
+| `CovB2`/`D2` | `CovW2 /\ CovInitialTake` | a take drawn purely from constructor stock |
+| `CovC1` | `CovW1 /\ available = 2` | both windows with the ceiling reached |
+| `CovD3` | `available = 2` | the ceiling state at all |
+| `CovWitness` | `wseq = 5` | **the V2.3 seam witness itself** |
+
+Configurations: the four safety cfgs are the full constructor matrix;
+every scenario class is certified in at least two domains — `CovW1` at
+`(0,1)`/`(1,1)`/`(1,2)`, `CovW2` in all four (directly, and inside the
+initial-stock conjunction), `CovQ` at `(0,1)`/`(1,1)`/`(0,2)` with its
+handoff component also at `(1,2)`, the initial-stock take at
+`(1,1)`/`(1,2)`, and the ceiling at `(0,2)`/`(1,2)` — so the coverage
+claim holds per constructor domain, not just at one point.
+
+### 7.6 Model-checking results
+
+TLC 2026.09.12.025210, `-deadlock` (terminal parked states exist by the
+fuel bounds), one run per cfg, single worker. Full gate ≈ 10.5 min wall
+clock. "violated" is the required outcome for witness/coverage/mutant
+cfgs (reachability or kill certificate); "clean" for safety and the
+fused mutant.
+
+Safety matrix — all clean:
+
+| cfg | (initial, max) | fuel | generated | distinct |
+|-----|----------------|------|-----------|----------|
+| `SemCore` | (0, 1) | 6 | 723,911 | 483,337 |
+| `SemCoreI1` | (1, 1) | 6 | 540,319 | 355,715 |
+| `SemCoreM2` | (0, 2) | 6 | 626,699 | 408,823 |
+| `SemCoreI1M2` | (1, 2) | 6 | 615,007 | 399,765 |
+
+Witness and coverage — all violated, each on its own invariant:
+
+| cfg | (initial, max) | fuel | violated invariant | generated | distinct |
+|-----|----------------|------|--------------------|-----------|----------|
+| `CovWitness` | (0, 1) | 6 | `InvWitness` | 5,112 | 3,212 |
+| `CovA1` | (0, 1) | 9 | `InvCovW1` | 81,912 | 48,473 |
+| `CovA2` | (0, 1) | 7 | `InvCovW2` | 3,261 | 2,028 |
+| `CovA3` | (0, 1) | 9 | `InvCovQ` | 757,844 | 437,873 |
+| `CovB1` | (1, 1) | 11 | `InvCovW1` | 1,366,792 | 773,211 |
+| `CovB2` | (1, 1) | 7 | `InvCovInitial` | 90,887 | 50,904 |
+| `CovB3` | (1, 1) | 11 | `InvCovQ` | 534,032 | 297,609 |
+| `CovC1` | (0, 2) | 11 | `InvCovMax2` | 70,300 | 41,661 |
+| `CovC2` | (0, 2) | 7 | `InvCovW2` | 3,128 | 1,862 |
+| `CovC3` | (0, 2) | 9 | `InvCovQ` | 8,526,263 | 5,051,048 |
+| `CovD1` | (1, 2) | 11 | `InvCovW1` | 81,784 | 46,925 |
+| `CovD2` | (1, 2) | 7 | `InvCovInitial` | 112,866 | 63,422 |
+| `CovD3` | (1, 2) | 5 | `InvCovMax2State` | 33 | 29 |
+| `CovD4` | (1, 2) | 6 | `InvCovQ1` | 19,143 | 10,933 |
+
+Mutants — the five safety mutants violated, the fused mutant clean:
+
+| cfg | violated invariant | generated | distinct |
+|-----|--------------------|-----------|----------|
+| `MutCreatePermit` | `InvPermitPool` | 48 | 38 |
+| `MutLosePermit` | `InvPermitPool` | 33 | 29 |
+| `MutDoubleConsume` | `InvPermitPool` | 503 | 316 |
+| `MutFifoBypass` | `InvFifo` | 7,321 | 4,387 |
+| `MutWrongFull` | `TypeOK` | 402 | 256 |
+| `MutFusedReturn` | none — clean, `InvWitness` unreachable | 779,987 | 555,381 |
+
+### 7.7 Gate wiring
+
+`scripts/verify_tla.sh` runs both stages automatically: the four safety
+cfgs must complete with no error; the witness cfg must fail with
+`Invariant InvWitness is violated`; each coverage cfg must fail with its
+own invariant; each safety mutant must fail with the invariant named in
+§7.4; the fused-return cfg must complete with no error while checking
+`InvWitness`. Expected failure modes are matched textually — a bare
+non-zero exit or a wrong-invariant failure aborts the gate.
+
+## 8. Gates
 
 | gate | result |
 |------|--------|
 | `lake build` (Lean 4.33.1, formal/Sluice.lean incl. SemV2) | PASS |
 | `./scripts/verify_formal.sh` (build + sorry/admit scan + axiom audit ⊆ {propext, Quot.sound}) | PASS |
-| `./scripts/verify_tla.sh` (TLC EventCore + mutant, unchanged from Stage 1) | PASS |
+| `./scripts/verify_tla.sh` (Stage 1V2.2 EventCore + mutant; Stage 2V2.3 SemCore: safety matrix, witness, 13 coverage certs, 5 safety mutants, fused-return separation) | PASS |
 
-## 8. Downstream obligations
+## 9. Downstream obligations
 
-* **`SemCore.tla` is a merge gate for this PR's final merge** (human
-  review decision, #378 verdict): a TLA+ mirror of the semaphore core on
-  the V2.3 action set, with TLC coverage by action class — two fiber
-  callers and two external callers, `initial ∈ {0, 1}`, `max ∈ {1, 2}`,
-  and paths for stored permit, FIFO handoff, full/refused release,
-  external effect-before-return, fiber effect-before-return, and
-  cross-window interleavings — plus mutants for permit creation/loss,
-  double consumption, FIFO bypass, wrong results, and fused
-  effect/return granularity. It is deliberately *after* the V2.3 replay:
-  mirroring the wrong action granularity would have copied the seam into
-  the model.
+* **`SemCore.tla` is delivered on this branch (§7) and remains a merge
+  gate for PR #378's final merge** (human review decision, #378
+  verdict): the V2.3 action set, the constructor matrix, the 13 coverage
+  certificates, the mutant battery, and the fusion-separation witness
+  are all wired into `scripts/verify_tla.sh`.
 * The THEOREM-B question (semaphore reducibility, either direction) is
   recorded RESEARCH/DEFER on #375; a per-encoding counter-evidence
   battery (the semaphore analogue of Stage 1's `encChained` blockade) is
