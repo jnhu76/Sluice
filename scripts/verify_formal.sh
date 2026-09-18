@@ -40,6 +40,7 @@ import Sluice.Formal.VacuityV2
 import Sluice.Formal.EventV2
 import Sluice.Formal.SemV2
 import Sluice.Formal.MutexV2
+import Sluice.Formal.ConditionV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -94,6 +95,28 @@ open Sluice.Formal
 #print axioms Sluice.Formal.mutex_possesses_cancel
 #print axioms Sluice.Formal.mutexMutant_not_guarantees
 #print axioms Sluice.Formal.encoding_class_inhabited
+#print axioms Sluice.Formal.cond_encoding_class_inhabited
+#print axioms Sluice.Formal.cond_silent_prefix
+#print axioms Sluice.Formal.cond_not_waitIssue
+#print axioms Sluice.Formal.cond_over_produces
+#print axioms Sluice.Formal.cond_irreducible
+#print axioms Sluice.Formal.cond_mirror
+#print axioms Sluice.Formal.cond_battery_fast_path
+#print axioms Sluice.Formal.cond_battery_cancel
+#print axioms Sluice.Formal.cond_battery_broadcast
+#print axioms Sluice.Formal.condRun_notifyAll_drains
+#print axioms Sluice.Formal.condExtRun_notifyAll_drains
+#print axioms Sluice.Formal.condWakeBacked
+#print axioms Sluice.Formal.condConsume_mem
+#print axioms Sluice.Formal.condFinish_consumed
+#print axioms Sluice.Formal.condFinish_takes_owner
+#print axioms Sluice.Formal.condPark_frees_slot
+#print axioms Sluice.Formal.condM1_spurious
+#print axioms Sluice.Formal.condM2_drains_refuted
+#print axioms Sluice.Formal.condM2_overclaims
+#print axioms Sluice.Formal.condM3_reacquire_skipped
+#print axioms Sluice.Formal.condM4_keeps_slot
+#print axioms Sluice.Formal.condM4_lost_wakeup
 EOF
 lake env lean .lake/axiom-audit.lean | tee .lake/axiom-audit.out
 rm -f .lake/axiom-audit.lean

@@ -79,7 +79,7 @@ def eventPrim : PrimLTS2 EventSig :=
     run := fun s _ _ c => eventRun s c
     park := fun s f c =>
       match c with
-      | EventCall.wait => some { s with waitq := s.waitq ++ [f] }
+      | EventCall.wait => some ({ s with waitq := s.waitq ++ [f] }, [])
       | _ => none
     finish := fun s f c =>
       match c with
@@ -103,7 +103,8 @@ def eventPrim : PrimLTS2 EventSig :=
     eventPrim.run s t f c = eventRun s c := rfl
 
 @[simp] theorem eventPrim_park_wait (s : EventState) (f : FiberId) :
-    eventPrim.park s f EventCall.wait = some { s with waitq := s.waitq ++ [f] } := rfl
+    eventPrim.park s f EventCall.wait
+      = some ({ s with waitq := s.waitq ++ [f] }, []) := rfl
 
 @[simp] theorem eventPrim_park_set (s : EventState) (f : FiberId) :
     eventPrim.park s f EventCall.set = none := rfl
@@ -273,7 +274,7 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
       · obtain ⟨d', hd', _⟩ := ha
         have h1 := Option.some.inj hd'
         simp at h1
-  | fiberEffect d b preP postP ps r s' wk hcur hb hrunP hparkedE hmap =>
+  | fiberEffect d b ps rest r s' wk hcur hb hrunP hmap hwake =>
       rw [hb] at hcur
       cases hcall : d.call with
       | wait =>
@@ -429,23 +430,30 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
         simp at hd'
       · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
-  | runPark d b s' hcur hrunE hparkE =>
+  | runPark d b ps rest s' wk hcur hrunE hparkE hmap hwake =>
       have hcw : d.call = EventCall.wait := by
         cases hcall : d.call with
         | set =>
             rw [hcall] at hparkE
-            have h2 : Option.none = some s' := hparkE
+            have h2 : Option.none = some (s', wk) := hparkE
             simp at h2
         | reset =>
             rw [hcall] at hparkE
-            have h2 : Option.none = some s' := hparkE
+            have h2 : Option.none = some (s', wk) := hparkE
             simp at h2
         | wait => rfl
       rw [hcw] at hparkE
-      have h1 : some { cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } = some s' :=
+      have h1 : some ({ cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] }, []) = some (s', wk) :=
         hparkE
       injection h1 with h3
-      have hsub : s' = { cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } := h3.symm
+      obtain ⟨h4, hwk⟩ := Prod.mk.inj h3
+      have hsub : s' = { cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } := h4.symm
+      subst hwk
+      have hps : ps = [] := by
+        cases ps with
+        | nil => rfl
+        | cons p ps' => simp at hmap
+      subst hps
       refine ⟨fun hanton => ?_, hnowait⟩
       rcases hanton with ha | ha | ha | ha | ha | ha
       · rw [hsub] at ha
@@ -453,12 +461,16 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
       · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inl ha)))
       · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
-      · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inl ha)))))
+      · obtain ⟨w, hw, hf⟩ := ha
+        rw [List.mem_append] at hw
+        rcases hw with hw | hw
+        · exact EventInv_pin_lift _ (hmain (Or.inr (Or.inr (Or.inr (Or.inl ⟨w, hw, hf⟩)))))
+        · simp at hw
       · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
       · obtain ⟨d', hd', _⟩ := ha
         simp at hd'
-  | finishDone d b preP postP ps r s' wk hcur hb hfinD hparkedE hmap =>
+  | finishDone d b ps rest r s' wk hcur hb hfinD hmap hwake =>
       have hcw : d.call = EventCall.wait := by
         cases hcall : d.call with
         | set =>
@@ -528,7 +540,7 @@ theorem eventStep_preserved {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Option
           have hw' : c = EventCall.wait := hwait
           rw [hw', eventPrim_extCap_wait] at hcap
           exact absurd hcap (by simp)
-  | extEffect preE postE e r s' wk preP postP ps hsplitE hnone hrunE hparkedE hmap =>
+  | extEffect preE postE e ps rest r s' wk hsplitE hnone hrunE hmap hwake =>
       have hemem : e ∈ cfg.exts := by
         rw [hsplitE]
         exact List.mem_append.mpr (Or.inr (List.Mem.head _))
@@ -656,7 +668,7 @@ theorem eventStep_waitComp_inv {cfg cfg' : PrimCfg EventSig eventPrim} {ob : Obs
       subst hr2
       have hc1 : d.call = EventCall.wait := hc
       exact Or.inr (Or.inl ⟨d, hcur, hc1⟩)
-  | finishDone d b preP postP ps r s' wk hcur hb hfinD hparkedE hmap =>
+  | finishDone d b ps rest r s' wk hcur hb hfinD hmap hwake =>
       rw [hb] at hcur
       have hc1 : d.call = EventCall.wait := hc
       exact Or.inr (Or.inr ⟨d, hcur, hc1⟩)
@@ -817,8 +829,8 @@ theorem ed2 : PrimStep2 EventSig eventPrim eq1
   all_goals rfl
 
 theorem ed3 : PrimStep2 EventSig eventPrim eq2 none eq3 :=
-  PrimStep2.runPark eq2 { fiber := 0, call := EventCall.wait } false
-    { flag := false, waitq := [0] } rfl rfl rfl
+  PrimStep2.runPark eq2 { fiber := 0, call := EventCall.wait } false [] []
+    { flag := false, waitq := [0] } [] rfl rfl rfl rfl Wakes.nil
 
 theorem ed4 : PrimStep2 EventSig eventPrim eq3
     (some (issueObs EventSig (Caller.ext 0) EventCall.set)) eq4 :=
@@ -828,9 +840,11 @@ theorem ed4 : PrimStep2 EventSig eventPrim eq3
 
 theorem ed5 : PrimStep2 EventSig eventPrim eq4 none eq5 := by
   refine PrimStep2.extEffect eq4 [] [] { x := 0, call := EventCall.set, result := none }
-    (EventResult.setWoke 1) { flag := true, waitq := [] } [0] [] []
-    [{ fiber := 0, call := EventCall.wait }] ?_ ?_ ?_ ?_ ?_
-  all_goals rfl
+    [{ fiber := 0, call := EventCall.wait }] []
+    (EventResult.setWoke 1) { flag := true, waitq := [] } [0] ?_ ?_ ?_ ?_ ?_
+  all_goals first
+    | rfl
+    | exact Wakes.drop _ Wakes.nil
 
 theorem ed6 : PrimStep2 EventSig eventPrim eq5 none eq6 := by
   refine PrimStep2.dispatchResumed eq5 { fiber := 0, call := EventCall.wait, fresh := false } []
@@ -838,10 +852,9 @@ theorem ed6 : PrimStep2 EventSig eventPrim eq5 none eq6 := by
   all_goals rfl
 
 theorem ed7 : PrimStep2 EventSig eventPrim eq6
-    (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) eq7 := by
-  refine PrimStep2.finishDone eq6 { fiber := 0, call := EventCall.wait } true [] [] []
-    EventResult.done { flag := true, waitq := [] } [] ?_ ?_ ?_ ?_ ?_
-  all_goals rfl
+    (some (compObs EventSig (Caller.fiber 0) EventCall.wait EventResult.done)) eq7 :=
+  PrimStep2.finishDone eq6 { fiber := 0, call := EventCall.wait } true [] []
+    EventResult.done { flag := true, waitq := [] } [] rfl rfl rfl rfl Wakes.nil
 
 theorem ed8 : PrimStep2 EventSig eventPrim eq7
     (some (compObs EventSig (Caller.ext 0) EventCall.set (EventResult.setWoke 1))) eq8 :=
@@ -894,10 +907,9 @@ theorem exs1 : PrimStep2 EventSig eventPrim ex0
     (by show (0 : ExternalId) ∉ ([] : List (ExtPend EventSig)).map (fun e : ExtPend EventSig => e.x)
         simp)
 
-theorem exs2 : PrimStep2 EventSig eventPrim ex1 none ex2 := by
-  refine PrimStep2.extEffect ex1 [] [] { x := 0, call := EventCall.set, result := none }
-    (EventResult.setWoke 0) { flag := true, waitq := [] } [] [] [] [] ?_ ?_ ?_ ?_ ?_
-  all_goals rfl
+theorem exs2 : PrimStep2 EventSig eventPrim ex1 none ex2 :=
+  PrimStep2.extEffect ex1 [] [] { x := 0, call := EventCall.set, result := none } [] []
+    (EventResult.setWoke 0) { flag := true, waitq := [] } [] rfl rfl rfl rfl Wakes.nil
 
 theorem exs3 : PrimStep2 EventSig eventPrim ex2
     (some (compObs EventSig (Caller.ext 0) EventCall.set (EventResult.setWoke 0))) ex3 :=
@@ -1333,8 +1345,8 @@ theorem mud2 : PrimStep2 EventSig eventMutant mu1
     | simp [eventMutant, eventMutantRun]
 
 theorem mud3 : PrimStep2 EventSig eventMutant mu2 none mu2b := by
-  refine PrimStep2.fiberEffect mu2 { fiber := 0, call := EventCall.wait } false [] [] []
-    EventResult.done { flag := false, waitq := [] } [] ?_ ?_ ?_ ?_ ?_
+  refine PrimStep2.fiberEffect mu2 { fiber := 0, call := EventCall.wait } false [] []
+    EventResult.done { flag := false, waitq := [] } [] ?_ ?_ ?_ ?_ Wakes.nil
   all_goals first
     | rfl
     | simp [eventMutant, eventMutantRun]
