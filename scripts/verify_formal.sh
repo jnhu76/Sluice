@@ -41,6 +41,7 @@ import Sluice.Formal.EventV2
 import Sluice.Formal.SemV2
 import Sluice.Formal.MutexV2
 import Sluice.Formal.ConditionV2
+import Sluice.Formal.RwLockV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -96,6 +97,41 @@ open Sluice.Formal
 #print axioms Sluice.Formal.mutexMutant_not_guarantees
 #print axioms Sluice.Formal.encoding_class_inhabited
 #print axioms Sluice.Formal.cond_encoding_class_inhabited
+#print axioms Sluice.Formal.rw_encoding_class_inhabited
+#print axioms Sluice.Formal.rw_irreducible
+#print axioms Sluice.Formal.rw_over_produces
+#print axioms Sluice.Formal.rw_not_wunlockIssue
+#print axioms Sluice.Formal.seqOK_wunlockIssue
+#print axioms Sluice.Formal.rw_silent_prefix
+#print axioms Sluice.Formal.rw_exclusion
+#print axioms Sluice.Formal.rw_exclusion_holds
+#print axioms Sluice.Formal.rwGrantHead_preserves
+#print axioms Sluice.Formal.rwRun_preserves
+#print axioms Sluice.Formal.rwPark_preserves
+#print axioms Sluice.Formal.rwFinish_preserves
+#print axioms Sluice.Formal.rwExtRun_preserves
+#print axioms Sluice.Formal.rwFinish_consumed
+#print axioms Sluice.Formal.rwFinishW_consumed
+#print axioms Sluice.Formal.rwConsume_mem
+#print axioms Sluice.Formal.rwConsume_len
+#print axioms Sluice.Formal.rwGrantHead_claims_head_writer
+#print axioms Sluice.Formal.rwGrantHead_batch_drains
+#print axioms Sluice.Formal.rwGrantHead_batch_stops_at_writer
+#print axioms Sluice.Formal.rwGrantHead_writer_blocked_by_readers
+#print axioms Sluice.Formal.rwGrantHead_blocked_by_writer
+#print axioms Sluice.Formal.rwUnlockRead_pays
+#print axioms Sluice.Formal.rwUnlockRead_zero_gate
+#print axioms Sluice.Formal.rwAdmit_unchanged
+#print axioms Sluice.Formal.rwAdmit_wunlock_owner_gated
+#print axioms Sluice.Formal.rw_battery_inline_read
+#print axioms Sluice.Formal.rw_battery_writer_handoff
+#print axioms Sluice.Formal.rw_battery_batch
+#print axioms Sluice.Formal.rw_battery_cancel
+#print axioms Sluice.Formal.rwM1_exclusion_break
+#print axioms Sluice.Formal.rwM2_unpaid
+#print axioms Sluice.Formal.rwM2_handoff_refuted
+#print axioms Sluice.Formal.rwM3_undergrants
+#print axioms Sluice.Formal.rwM4_nonowner_admitted
 #print axioms Sluice.Formal.cond_silent_prefix
 #print axioms Sluice.Formal.cond_not_waitIssue
 #print axioms Sluice.Formal.cond_over_produces

@@ -52,6 +52,22 @@
 #        (the coverage cfgs certify they ARE reachable in the correct
 #        model).
 #
+#   Stage 5V2.3 (RwLock, `formal/tla/RwCore.tla`):
+#    12. Safety: the boot configurations (primInit-faithful, two queued
+#        readers, held write + queued writer) must complete cleanly
+#        under all eight safety invariants.
+#    13. Coverage: the seven scenario certificates are negated
+#        conjunctions; each MUST be violated (the witness is reachable).
+#    14. Safety mutants: MutGrantWrite (M1, the writer claim ignores the
+#        reader count) must die on InvExclusion; MutNoPay (M2,
+#        unlock_read skips the decrement) on InvLedger; MutOwnerSkip
+#        (M4, the unlock_write owner gate dropped) on InvWriterOwned.
+#    15. Under-production witness separation: MutBatchOne (M3, the
+#        reader batch grants only the head) must complete CLEANLY with
+#        full safety plus NotBatchWitness -- the batch witness is
+#        unreachable there (the coverage cfg certifies it IS reachable
+#        in the correct model).
+#
 # `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
 # create terminal parked states by construction.
 #
@@ -221,5 +237,27 @@ run_violate cond-mut-park-holds-own CondCoreMutParkHoldsOwn.cfg CondCore InvQueu
 echo "== Stage 4V2.3: under-production witness separations (must hold cleanly) =="
 run_clean cond-mut-drain-one CondCoreMutDrainOne.cfg CondCore
 run_clean cond-mut-park-holds CondCoreMutParkHolds.cfg CondCore
+
+echo "== Stage 5V2.3: RwCore safety matrix =="
+for cfg in RwCore RwCoreRq2 RwCoreWq1; do
+    run_clean "rw-safety-$cfg" "$cfg.cfg" RwCore
+done
+
+echo "== Stage 5V2.3: scenario coverage (each must be reachable) =="
+run_violate rw-cov-inline-read RwCoreCovInlineRead.cfg RwCore InvCovInlineRead
+run_violate rw-cov-inline-write RwCoreCovInlineWrite.cfg RwCore InvCovInlineWrite
+run_violate rw-cov-writer-claim RwCoreCovWriterClaim.cfg RwCore InvCovWriterClaim
+run_violate rw-cov-batch RwCoreCovBatch.cfg RwCore InvCovBatch
+run_violate rw-cov-cancel RwCoreCovCancel.cfg RwCore InvCovCancel
+run_violate rw-cov-try-fail RwCoreCovTryFail.cfg RwCore InvCovTryFail
+run_violate rw-cov-cancel-miss RwCoreCovCancelMiss.cfg RwCore InvCovCancelMiss
+
+echo "== Stage 5V2.3: safety mutants (each must die on its expected invariant) =="
+run_violate rw-mut-grant-write RwCoreMutGrantWrite.cfg RwCore InvExclusion
+run_violate rw-mut-no-pay RwCoreMutNoPay.cfg RwCore InvLedger
+run_violate rw-mut-owner-skip RwCoreMutOwnerSkip.cfg RwCore InvWriterOwned
+
+echo "== Stage 5V2.3: under-production witness separation (must hold cleanly) =="
+run_clean rw-mut-batch-one RwCoreMutBatchOne.cfg RwCore
 
 echo "VERIFY_TLA: PASS"

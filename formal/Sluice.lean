@@ -5,3 +5,4 @@ import Sluice.Formal.EventV2
 import Sluice.Formal.SemV2
 import Sluice.Formal.MutexV2
 import Sluice.Formal.ConditionV2
+import Sluice.Formal.RwLockV2
