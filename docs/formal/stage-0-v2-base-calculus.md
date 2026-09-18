@@ -137,8 +137,16 @@ worker `worker_loop` (`scheduler.cpp`):
    with the already-set branch of `event_wait_admit_locked` (resolve the
    caller's own node inline, `resolved_inline`) as the running-fiber instance.
 6. **park** — a suspension moves the fiber out of the running slot (worker
-   idle) and applies the suspension state effect.  A resumed call may park
-   again (Mesa reacquire, `AsyncCondition::wait`).
+   idle) and applies the suspension state effect, and readies the woken
+   parked fibers its pre-suspension section resolved (the
+   `AsyncCondition::wait` shape: the same `global_mtx_` section registers
+   the cond waiter and releases the mutex — handing it to the mutex queue
+   head — before the caller suspends; the woken winner publishes runnable
+   at the park step, exactly as in a `fiberEffect` wake).  The woken
+   fibers form an order-preserving sublist of the parked list (`Wakes`):
+   a condition broadcast drains its waiters while mutex waiters sit
+   between them.  A resumed call may park again (Mesa reacquire,
+   `AsyncCondition::wait`).
 7. **environment** — time advances and deadlines expire only while no fiber is
    dispatched: the single worker services the timer wheel between fibers
    (`worker_loop` idle path, `pump_deadlines_locked`, `scheduler_timer.cpp`).
@@ -188,7 +196,7 @@ section, atomic with the issue observation), `run` (the fused inline paths —
 `some (r, s', woken)` ends the call's critical section with the state
 effect and woken fibers in order, the physical return being the later,
 separate `fiberDone` step (V2.3); `none` goes to park), `park`
-(suspension state effect),
+(suspension state effect plus the wakes the section readied, `Wakes`),
 `finish` (a resumed parked call's completion at its dispatch), `extCap`
 (V2.2 — the per-call external-domain declaration: `extCap c = true` iff `c`
 can be issued by an external thread; it gates `extApply` and must agree

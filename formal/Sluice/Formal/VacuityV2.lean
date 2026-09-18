@@ -215,18 +215,21 @@ theorem sim_echo_fwd :
           have hm : r ∈ cfg.runq := by rw [hrunq]; exact List.Mem.head _
           rw [hq r hm] at hfresh
           exact absurd hfresh (by decide)
-      | fiberEffect d b preP postP ps r s' wk hcur hb hrunP hparked hmap =>
+      | fiberEffect d b ps rest r s' wk hcur hb hrunP hmap hwake =>
           rename_i cfg
-          have hnil : preP ++ ps ++ postP = [] := by rw [← hparked]; exact hp
-          obtain ⟨hprePps, hpostP⟩ := append_eq_nil_split hnil
-          obtain ⟨hpreP, hps⟩ := append_eq_nil_split hprePps
-          subst hpreP; subst hps; subst hpostP
           have h0 : echoPrim.run cfg.prim cfg.now d.fiber d.call
               = some (EchoResult.pong, cfg.prim, []) := rfl
           rw [h0] at hrunP
           obtain ⟨hr, htail⟩ := Prod.mk.inj (Option.some.inj hrunP)
           obtain ⟨hs, hw⟩ := Prod.mk.inj htail
           subst hs; subst hw
+          have hps : ps = [] := by
+            cases ps with
+            | nil => rfl
+            | cons p ps' => simp at hmap
+          subst hps
+          have hrest : rest = [] := by rw [Wakes_nil_eq hwake rfl, hp]
+          subst hrest
           obtain ⟨finE, hrunE⟩ := ih ⟨rfl, hx, by
             intro x hxm
             rw [List.mem_append] at hxm
@@ -249,13 +252,13 @@ theorem sim_echo_fwd :
               SubVal.unit EchoResult.pong (by simp [echoToE, hcur]) rfl rfl) ?_⟩
           simp [echoToE, echoRun, FSlot.fiber, FSlot.call] at hrunE ⊢
           exact hrunE
-      | runPark _ _ _ _ hrunP _ =>
+      | runPark _ _ _ _ _ _ _ hrunP _ _ _ =>
           exact absurd hrunP (by simp [echoPrim])
-      | finishDone _ _ _ _ _ _ _ _ _ _ hfin _ _ =>
+      | finishDone _ _ _ _ _ _ _ _ _ hfin _ _ =>
           exact absurd hfin (by simp [echoPrim])
       | extApply _ _ _ _ hcap _ =>
           simp [echoPrim] at hcap
-      | extEffect _ _ _ _ _ _ _ _ _ hsplit _ hrunE _ _ =>
+      | extEffect _ _ _ _ _ _ _ _ _ _ hrunE _ _ =>
           exfalso
           simp [echoPrim] at hrunE
       | extDone _ _ _ _ hsplit _ =>
@@ -367,8 +370,8 @@ theorem sim_echo_bwd :
           refine ⟨finP, ?_⟩
           have he1 : PrimStep2 EchoSig echoPrim (echoToP cfg) none (echoMid cfg tR) :=
             PrimStep2.fiberEffect (echoToP cfg) { fiber := tR.fiber, call := tR.call } false
-              [] [] [] EchoResult.pong () []
-              (by simp only [echoToP]; rw [hcurT]; rfl) rfl rfl rfl rfl
+              [] [] EchoResult.pong () []
+              (by simp only [echoToP]; rw [hcurT]; rfl) rfl rfl rfl Wakes.nil
           have he2 : PrimStep2 EchoSig echoPrim (echoMid cfg tR)
               (some (compObs EchoSig (Caller.fiber tR.fiber) tR.call EchoResult.pong))
               { prim := (echoMid cfg tR).prim, now := (echoMid cfg tR).now, cur := none,
@@ -512,7 +515,7 @@ theorem extIssue_inv {m1 m2 : PrimCfg DomSig domPrim} {ob : Obs DomSig}
       exact absurd hcl (by simp [issueObs])
   | fiberDone d r hcur =>
       exact absurd hcl (by simp [compObs])
-  | finishDone d preP postP ps r s' wk hcur hd2 hfin hparked hmap =>
+  | finishDone _ _ _ _ _ _ _ _ _ _ _ =>
       exact absurd hcl (by simp [compObs])
   | extApply x c preE postE hcap hx =>
       exact ⟨x, c, preE, postE, rfl, hcap⟩
