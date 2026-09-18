@@ -23,7 +23,9 @@
 (*                 the not-owner cases are caller-precondition aborts,     *)
 (*                 :372-377)                                               *)
 (*   cancel     = external-capable (:384-400; removes the queued node,     *)
-(*                 re-runs the grant pass, publishes the cancelled node)   *)
+(*                 re-runs the grant pass, publishes the cancelled node;    *)
+(*                 the fiber path is out of the modeled call domain -- the *)
+(*                 Lean primitive returns none for it, the MutexCore prec.) *)
 (*   read/write_lock_until, expire = timed extensions, outside the core    *)
 (*                                                                         *)
 (* The grant pass both releases share (`rwlock_grant_from_head_locked`,    *)
@@ -65,6 +67,10 @@ ASSUME Boot \in {"prim", "rh1", "rq2", "rh2w", "wq1"}
 Fibers == {"f0", "f1"}
 Exts == {"e0"}
 Calls == {"rlock", "runlock", "wlock", "wunlock", "rtry", "wtry", "cancel"}
+\* The fiber-bound calls: `cancel` is external-capable only (the Lean
+\* primitive's fiber path returns none for it, the MutexCore precedent),
+\* so a fiber can never submit one.
+FibCalls == {"rlock", "runlock", "wlock", "wunlock", "rtry", "wtry"}
 Results == {"none", "unit", "t", "f"}
 Modes == {"rd", "wr"}
 
@@ -84,7 +90,7 @@ VARIABLES readers,   \* active reader shares (active_readers_)
           hit_inline_read,  \* coverage: a fiber read_lock granted inline
           hit_inline_write, \* coverage: a fiber write_lock granted inline
           hit_wclaim,       \* coverage: a release claimed a queued writer
-          hit_tryfail,      \* coverage: a try was refused
+          hit_tryfail,      \* coverage: a try refused by contention
           hit_cancel_hit,   \* coverage: a cancel of a queued waiter ran
           hit_cancel_miss,  \* coverage: a cancel of a non-waiter ran
           hit_resume,       \* coverage: a resumed waiter completed
@@ -221,8 +227,7 @@ PubEntry(f, c) == [fiber |-> f, call |-> c, w |-> "none", fresh |-> FALSE]
 \* PrimStep2.submit: silent; a between-calls fiber enters the runnable
 \* queue.  `w` is cancel's target ("none" otherwise).
 FiberSubmit(f, c, w) ==
-  /\ f \in Fibers /\ c \in Calls
-  /\ c # "cancel" \/ w \in Fibers
+  /\ f \in Fibers /\ c \in FibCalls
   /\ f # cur.fiber
   /\ ~InRunq(runq, f)
   /\ ~InWaitq(waitq, f)
@@ -512,107 +517,6 @@ TryWrite ==
   /\ UNCHANGED <<exts, history, unlockR, batch_ready, hit_inline_read,
                  hit_inline_write, hit_wclaim, hit_cancel_hit,
                  hit_cancel_miss, hit_resume, wrel_owned, fin_backed>>
-
-\* PrimStep2.fiberEffect, cancel of a queued waiter (:384-400): remove
-\* the node, re-run the grant pass, publish the cancelled node after the
-\* grant pass's publications (the code's order).  The caller's result is
-\* TRUE.  Three cases as the reduced queue's head decides.
-CancelHitNone ==
-  /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "cancel"
-  /\ InWaitq(waitq, cur.w)
-  /\ LET rm == RemoveW(waitq, cur.w)
-     IN /\ rm.found
-        /\ \/ rm.q = << >>
-           \/ writing = TRUE
-           \/ WriterHead(rm.q) /\ readers > 0
-        /\ waitq' = rm.q
-        /\ resolved' = Append(resolved, [f |-> cur.w, b |-> FALSE])
-        /\ runq' = Append(runq,
-             PubEntry(cur.w, IF rm.m = "rd" THEN "rlock" ELSE "wlock"))
-        /\ phase' = [phase EXCEPT ![cur.w] = "fresh"]
-  /\ hit_cancel_hit' = TRUE
-  /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "t"]
-  /\ UNCHANGED <<readers, writing, wowner, exts, history, grantR,
-                 unlockR, batch_ready, hit_inline_read,
-                 hit_inline_write, hit_wclaim, hit_tryfail,
-                 hit_cancel_miss, hit_resume, wrel_owned, fin_backed>>
-
-CancelHitClaim ==
-  /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "cancel"
-  /\ InWaitq(waitq, cur.w)
-  /\ LET rm == RemoveW(waitq, cur.w)
-     IN /\ rm.found
-        /\ rm.q # << >> /\ Head(rm.q).m = "wr" /\ writing = FALSE
-        /\ readers = 0
-        /\ waitq' = Tail(rm.q)
-        /\ writing' = TRUE
-        /\ wowner' = Head(rm.q).f
-        /\ resolved' = Append(Append(resolved,
-             [f |-> Head(rm.q).f, b |-> TRUE]), [f |-> cur.w, b |-> FALSE])
-        /\ runq' = Append(Append(runq, PubEntry(Head(rm.q).f, "wlock")),
-             PubEntry(cur.w, IF rm.m = "rd" THEN "rlock" ELSE "wlock"))
-        /\ phase' = [phase EXCEPT ![Head(rm.q).f] = "fresh",
-                                     ![cur.w] = "fresh"]
-  /\ hit_cancel_hit' = TRUE
-  /\ hit_wclaim' = TRUE
-  /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "t"]
-  /\ UNCHANGED <<readers, exts, history, grantR, unlockR, batch_ready,
-                 hit_inline_read, hit_inline_write, hit_tryfail,
-                 hit_cancel_miss, hit_resume, wrel_owned, fin_backed>>
-
-CancelHitBatch ==
-  /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "cancel"
-  /\ InWaitq(waitq, cur.w)
-  /\ LET rm == RemoveW(waitq, cur.w)
-     IN /\ rm.found
-        /\ rm.q # << >> /\ Head(rm.q).m = "rd" /\ writing = FALSE
-        /\ waitq' = IF MutBatchOne
-                      THEN Tail(rm.q)
-                      ELSE DropN(rm.q, BatchLen(rm.q))
-        /\ readers' = IF MutBatchOne THEN readers + 1
-                      ELSE readers + BatchLen(rm.q)
-        /\ grantR' = grantR + IF MutBatchOne THEN 1 ELSE BatchLen(rm.q)
-        /\ resolved' = IF MutBatchOne
-            THEN Append(Append(resolved,
-                   [f |-> Head(rm.q).f, b |-> TRUE]),
-                   [f |-> cur.w, b |-> FALSE])
-            ELSE Append(resolved \o
-                   [i \in 1..BatchLen(rm.q) |-> [f |-> rm.q[i].f,
-                                                 b |-> TRUE]],
-                   [f |-> cur.w, b |-> FALSE])
-        /\ runq' = IF MutBatchOne
-            THEN Append(Append(runq, PubEntry(Head(rm.q).f, "rlock")),
-                   PubEntry(cur.w, IF rm.m = "rd" THEN "rlock"
-                                    ELSE "wlock"))
-            ELSE Append(runq \o
-                   [i \in 1..BatchLen(rm.q) |-> PubEntry(rm.q[i].f,
-                                                         "rlock")],
-                   PubEntry(cur.w, IF rm.m = "rd" THEN "rlock"
-                                    ELSE "wlock"))
-        /\ batch_ready' = IF MutBatchOne THEN 1 ELSE BatchLen(rm.q)
-        /\ phase' = IF MutBatchOne
-            THEN [phase EXCEPT ![Head(rm.q).f] = "fresh", ![cur.w] = "fresh"]
-            ELSE [g \in Fibers |-> IF g \in QFibSet(rm.q,
-                        BatchLen(rm.q)) \/ g = cur.w THEN "fresh"
-                        ELSE phase[g]]
-  /\ hit_cancel_hit' = TRUE
-  /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "t"]
-  /\ UNCHANGED <<writing, wowner, exts, history, unlockR,
-                 hit_inline_read, hit_inline_write, hit_wclaim,
-                 hit_tryfail, hit_cancel_miss, hit_resume, wrel_owned,
-                 fin_backed>>
-
-\* PrimStep2.fiberEffect, cancel of a non-waiter: plain false.
-CancelMiss ==
-  /\ cur # NoCur /\ Fresh(cur) /\ cur.call = "cancel"
-  /\ ~InWaitq(waitq, cur.w)
-  /\ hit_cancel_miss' = TRUE
-  /\ cur' = [cur EXCEPT !.phase = "ret", !.result = "f"]
-  /\ UNCHANGED <<readers, writing, wowner, waitq, resolved, phase, runq,
-                 exts, history, grantR, unlockR, batch_ready,
-                 hit_inline_read, hit_inline_write, hit_wclaim,
-                 hit_tryfail, hit_cancel_hit, hit_resume, wrel_owned,
-                 fin_backed>>
 
 \* PrimStep2.fiberDone: the physical return (completion observation).
 FiberDone ==
@@ -940,10 +844,6 @@ Next ==
   \/ UnlockWriteNone
   \/ TryRead
   \/ TryWrite
-  \/ CancelHitNone
-  \/ CancelHitClaim
-  \/ CancelHitBatch
-  \/ CancelMiss
   \/ FiberDone
   \/ FiberResume
   \/ WaiterFinish
@@ -976,10 +876,10 @@ TypeOK ==
   /\ cur \in ({NoCur} \union
        {[fiber |-> f, call |-> c, w |-> w, phase |-> p, resumed |-> r,
          result |-> s] :
-          f \in Fibers, c \in Calls, w \in Fibers \cup {"none"},
+          f \in Fibers, c \in FibCalls, w \in Fibers \cup {"none"},
           p \in {"run", "ret"}, r \in BOOLEAN, s \in Results})
   /\ runq \in Seq({[fiber |-> f, call |-> c, w |-> w, fresh |-> fr] :
-                    f \in Fibers, c \in Calls,
+                    f \in Fibers, c \in FibCalls,
                     w \in Fibers \cup {"none"}, fr \in BOOLEAN})
   /\ exts \subseteq {[x |-> x, call |-> c, w |-> w, phase |-> p,
                       result |-> r] :
@@ -1024,9 +924,10 @@ InvQueueNoDup ==
   /\ \A i \in 1..Len(runq), j \in 1..Len(runq) :
        i # j => runq[i].fiber # runq[j].fiber
 
-\* Queue ownership: one registration per fiber; queued and dispatched
-\* are disjoint; the writer slot's owner is never queued; only published
-\* waiters sit stale in the runnable queue.
+\* Queue ownership: a queued fiber is never runnable or dispatched, and
+\* sits in phase "waiting"; only published lock calls sit stale in the
+\* runnable queue.  (A write holder queueing as a reader is reachable --
+\* readers are a count -- so no owner-vs-queue conjunct exists here.)
 InvQueueOwnership ==
   /\ \A i \in 1..Len(waitq) :
        /\ ~InRunq(runq, waitq[i].f)

@@ -37,7 +37,7 @@ Two structural facts shape the model:
 |----------------|----------------------------|-------------|--------------------|-----------------------------------------|
 | `try_read`     | scheduler_rwlock.cpp:135-144 | none (mutex only) | external-capable | `extCap = true`, `extRun = rwExtRun` |
 | `read_lock`    | scheduler_rwlock.cpp:258-288 | the prepare/finish worker pair | fiber-bound | `extCap = false` |
-| `try_write`    | scheduler_rwlock.cpp:290-299 | none (mutex only) | fiber-bound (the result feeds the caller's section) | fiber machine only |
+| `try_write`    | scheduler_rwlock.cpp:290-299 | the worker pair (`assert(ws != nullptr)`) | fiber-bound (the result feeds the caller's section) | fiber machine only |
 | `write_lock`   | scheduler_rwlock.cpp:315-344 | the worker pair | fiber-bound      | `extCap = false`                        |
 | `unlock_read`  | scheduler_rwlock.cpp:346-356 | none (mutex only) | external-capable | `extCap = true`, `extRun = rwExtRun`    |
 | `unlock_write` | scheduler_rwlock.cpp:358-366 | the worker pair (`assert(owner == me)`) | fiber-bound, owner-gated | `extCap = false` |
@@ -158,7 +158,7 @@ Axiom audit (`scripts/verify_formal.sh`): all `rw*` theorems — the
 irreducibility, exclusion, facets, batteries, and mutant kills —
 depend on exactly `[propext, Quot.sound]` (or fewer).
 
-## 6. Model correction recorded by this replay
+## 6. Model corrections recorded by this replay
 
 The TLA mirror's first full run caught an invented invariant: the
 mirror's queue-ownership discipline asserted `wowner ≠ waitq[i].f` (a
@@ -170,6 +170,22 @@ is not served until the writer releases), and a caller-side deadlock
 protocol error at worst. The conjunct was removed: the mirror now
 asserts exactly what the reference implementation enforces. This is the
 stage's standing lesson against strengthening a mirror past its code.
+
+The fresh-context review caught two more divergences, both fixed:
+
+* **The mirror carried a fiber-path cancel the Lean model does not
+  have.** `rwRun` returns `none` for `rcancel` (as at the mutex stage),
+  so a fiber-dispatched cancel is a stuck baton in the calculus, while
+  the mirror gave it full effect actions. The mirror now excludes
+  `cancel` from the fiber call domain entirely (`FibCalls`); the
+  external-capable path models it, as the C++ census records.
+* **`rwExtRun`'s head-cancellation publication order.** The Lean model
+  published the cancelled node *before* the grant pass's publications
+  when it was the queue head; the C++ removes the node, re-runs the
+  grant pass, and publishes the cancelled node *after* it
+  (:384-400). The model now appends unconditionally (`gs ++ [w]`),
+  matching the code and the mirror; proof-neutral (VERIFY_FORMAL: PASS
+  re-run).
 
 ## 7. The TLA mirror (`formal/tla/RwCore.tla`)
 
@@ -184,15 +200,15 @@ first share is the caller side's mutex traffic). Safety matrix:
 `InvCompDiscipline`.
 
 Configurations and outcomes (distinct states at gate exhaustion): safety
-`RwCore` (prim, h4, 1,603,930), `RwCoreRq2` (rq2, h5, 382,000),
-`RwCoreWq1` (wq1, h5, 600,847) — all clean; coverage
+`RwCore` (prim, h4, 1,090,130), `RwCoreRq2` (rq2, h5, 308,128),
+`RwCoreWq1` (wq1, h5, 329,826) — all clean; coverage
 `RwCoreCov{InlineRead,InlineWrite,WriterClaim,Batch,Cancel,TryFail,
 CancelMiss}` — each violated on its negated witness (the witness is
 reachable) under the mix-narrowing `WitConstraint`/`CancelConstraint`
 (shrink-only); kills `RwCoreMutGrantWrite` → `InvExclusion`,
 `RwCoreMutNoPay` → `InvLedger`, `RwCoreMutOwnerSkip` → `InvWriterOwned`;
 separation `RwCoreMutBatchOne` — clean with `NotBatchWitness` asserted
-(955,573 distinct states).
+(744,220 distinct states).
 
 TLC lessons recorded by this mirror (each cost a red run before it was
 understood; they are mirror-implementation facts, not model-vs-C++
@@ -230,6 +246,17 @@ disputes):
 * **Void results.** `read_lock`/`write_lock`/`unlock_read`/
   `unlock_write` complete `runit` — no result semantics to bind, unlike
   Stage 2's `release(bool)`.
+* **Fiber-origin cancel is outside the modeled fiber call domain.**
+  The public `cancel` takes no worker (§2), so the model gives it the
+  external path only; the Lean primitive's fiber path returns `none`
+  for it, and the mirror matches (the MutexCore precedent).
+* **`InvFinishBacked` is carried for matrix symmetry but is vacuous
+  here.** No finish mutant exists at this stage; the backing discipline
+  is enforced structurally by the record-consumption guard
+  (`WaiterFinish` requires a consumable record).
+* **Boot `phase` is loose off the queue.** The instrumented boots mark
+  unqueued fibers `"waiting"`; `phase` is read only in the
+  queued-implies-waiting direction, so nothing keys on the slack.
 * **Boot waiters and boot holders are pre-Init.** The instrumented
   boots start with shares held and waiters parked past their issues;
   their first in-trace completion has no in-trace issue, the same

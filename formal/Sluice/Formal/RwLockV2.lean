@@ -319,9 +319,7 @@ def rwExtRun : RwCall → RwState → Tick →
           | some (s2, gs) =>
               some (RwRes.rbool true,
                 { s2 with resolved := s2.resolved ++ [(w, false)] },
-                match s.waitq with
-                | (g, _) :: _ => if g = w then w :: gs else gs ++ [w]
-                | [] => [w])
+                gs ++ [w])
           | none =>
               some (RwRes.rbool true,
                 { s with waitq := q1, resolved := s.resolved ++ [(w, false)] }, [w])
