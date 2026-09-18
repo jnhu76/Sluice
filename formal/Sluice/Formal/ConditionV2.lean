@@ -12,8 +12,8 @@ amendment), from the current production code:
 Call-domain census (from the code):
 
   `wait`        fiber-bound (`AsyncCondition::wait` reads `g_worker` via
-                `condition_wait_prepare` :91-130; the owner precondition
-                assert at :98); one call: register + release-mutex-with-
+                `condition_wait_prepare` :73-109; the owner precondition
+                assert at :79-80); one call: register + release-mutex-with-
                 handoff + suspend, then reacquire on wake.
   `notify_one`  external-capable (`condition_notify_one` :145-148, only
                 `global_mtx_`); wakes at most the queue head.
@@ -31,14 +31,17 @@ Modeling disclosures (each preserves the reachable trace language):
     inspects after the call returns: `true` = woken (by notify), `false`
     = cancelled.  Without that bit the ownership accounting of the
     reacquire is not statable.
-  * The modeled wait node is per-call: the C++ `resolved_inline_released`
-    corner (`condition_wait_admit_locked` :55-57, a caller-supplied node
-    already terminal when `wait` enters) requires a node shared across
+  * The modeled wait node is per-call: the C++ inline-resolution
+    corners — `resolved_inline_released` (`condition_wait_admit_locked`
+    :67-69, a caller-supplied node already terminal when `wait` enters)
+    and its sibling `rejected_retain` (:34-39, `register_wait_locked`
+    rejecting a non-detached node) — both require a node shared across
     calls, which the one-in-flight-call discipline excludes; the model
     has no such trace and neither can its discipline produce one.
   * The condition's embedded mutex slot (`owner_`) is modeled only for
     the wait-reacquire discipline: the C++ `mutex_.lock(reacquire_node)`
-    at condition.hpp:96-98 re-enters the *mutex* primitive, which has
+    at condition.hpp:75 (`wait`; :91 for `wait_until`) re-enters the
+    *mutex* primitive, which has
     its own Stage-3 model.  Here the owner slot transfers at a
     `wait`-entry release (handoff to a reacquire-blocked waiter, else
     freed — `owner = nullptr` at scheduler_condition.cpp:63-65) and at
@@ -59,7 +62,7 @@ Adjudication:
   * AsyncCondition — THEOREM B (`cond_irreducible`): irreducible to
     `BASE(AsyncCondition) = {Mutex}`.  The separating fact is the
     owner-gated *admission* of `wait` (the `assert(owner == me)` at
-    scheduler_condition.cpp:98): the primitive never issues a `wait`
+    scheduler_condition.cpp:79-80): the primitive never issues a `wait`
     from a non-owner — `condAdmit` refuses the dispatch — while every
     encoding's fiber machine dispatches any submitted call
     unconditionally.  The witness `waitIssueTrace` (a bare `wait` issue

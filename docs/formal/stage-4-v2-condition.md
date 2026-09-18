@@ -23,7 +23,7 @@ at Stages 2–3.
 
 | entry        | code                       | worker read | domain           | model                                  |
 |--------------|----------------------------|-------------|------------------|----------------------------------------|
-| `wait`       | condition.hpp:91-130       | `g_worker` (the prepare/finish pair), the `assert(owner == me)` :98 | fiber-bound, owner-gated | `extCap = false`, `extRun = none` |
+| `wait`       | condition.hpp:63-78 + scheduler_condition.cpp:73-109 | `g_worker` (the prepare/finish pair), the `assert(owner == me)` :79-80 | fiber-bound, owner-gated | `extCap = false`, `extRun = none` |
 | `notify_one` | scheduler_condition.cpp:145-148 | none (`global_mtx_` only) | external-capable | `extCap = true`, `extRun = condExtRun` |
 | `notify_all` | scheduler_condition.cpp:150-162 | none (`global_mtx_` only) | external-capable | `extCap = true`, `extRun = condExtRun` |
 | `cancel`     | scheduler_condition.cpp:164-174 | none (`global_mtx_` + queue mutex) | external-capable | `extCap = true`, `extRun = condExtRun` |
@@ -51,14 +51,19 @@ section and its return).
 
 Window B (the Mesa reacquire, the condition-specific seam): a woken
 waiter's resume is a *second suspension of the same call*. A resumed
-`cwWaiting` waiter whose slot is held re-parks on the mutex queue
+`cwWaiting` waiter whose reacquire blocks re-parks on the mutex queue
 (`condPark`'s `cwWaiting` branch, phase → `cwReacq`); the per-fiber
-phase makes the two park sites distinguishable. The slot comes back to
-it either free (its finish takes it — `condFinish`'s `cwWaiting`
-branch) or handed off by another waiter's release (the `cwReacq`
-finish, which consumes the outcome without a take). The handoff chain
-is witnessed end-to-end by `CovHandoff` (TLA) and by the model-level
-runs in the batteries.
+phase makes the two park sites distinguishable. The model
+over-approximates here: it re-parks regardless of the slot's state,
+where the C++ `mutex_.lock()` over a free slot would take it inline —
+a strict superset of behaviors, safe in both directions (the safety
+invariants hold over the superset; a witness unreachable in it is
+unreachable in the C++-faithful subset). The slot comes back to
+the waiter either free (its finish takes it — `condFinish`'s
+`cwWaiting` branch) or handed off by another waiter's release (the
+`cwReacq` finish, which consumes the outcome without a take). The
+handoff chain is witnessed end-to-end by `CovHandoff` (TLA) and by the
+model-level runs in the batteries.
 
 The guarantee, restated over both windows — this stage's safety split:
 
@@ -109,9 +114,9 @@ facet but readying fewer waiters is killed by the witness separation
 * `cond_irreducible` — THEOREM B, unchanged from the pre-#380
   adjudication and re-verified on the amended base: the owner-gated
   *admission* of `wait` (`assert(owner == me)`,
-  scheduler_condition.cpp:98) means the primitive never issues a `wait`
-  from a non-owner (`condAdmit` refuses the dispatch) while every
-  encoding's fiber machine dispatches any submitted call
+  scheduler_condition.cpp:79-80) means the primitive never issues a
+  `wait` from a non-owner (`condAdmit` refuses the dispatch) while
+  every encoding's fiber machine dispatches any submitted call
   unconditionally. Witness: `waitIssueTrace`, produced by every encoding
   (`cond_over_produces`) and by no run of the primitive
   (`cond_not_waitIssue`).
@@ -166,7 +171,7 @@ facet but readying fewer waiters is killed by the witness separation
 
 Axiom audit (`scripts/verify_formal.sh`): all of the above —
 `cond_irreducible`, `cond_mirror`, `condWakeBacked`, both drains, the
-three batteries, the three disciplines, and all five mutant kills —
+three batteries, the three disciplines, and all six mutant kills —
 depend on exactly `[propext, Quot.sound]` (or fewer).
 
 ## 6. Model correction recorded by this replay
@@ -190,9 +195,11 @@ fast-path witness unreachable under it.
   from instrumented configurations (pinned `cwaitq`/`resolved`); the
   TLA mirror exposes the same freedom as the `Boot` constant
   (`"prim"` | `"own0"` | `"wait3"`).
-* **The wait node is per-call.** The C++ `resolved_inline_released`
-  corner (`condition_wait_admit_locked` :55-57, a caller-supplied node
-  already terminal at entry) requires a node shared across calls, which
+* **The wait node is per-call.** The C++ inline-resolution corners —
+  `resolved_inline_released` (`condition_wait_admit_locked` :67-69, a
+  caller-supplied node already terminal at entry) and its sibling
+  `rejected_retain` (:34-39, `register_wait_locked` rejecting a
+  non-detached node) — both require a node shared across calls, which
   the one-in-flight-call discipline excludes; the model has no such
   trace and neither can its discipline produce one.
 * **Plain lock/unlock traffic is the mutex primitive's business.** The
@@ -217,7 +224,7 @@ A TLC-executable mirror of the same action set. Constants: fixed caller
 sets `Fibers = {"f0","f1"}`, `Exts = {"e0"}` (one external caller: the
 external window is witnessed by fiber-vs-ext ordering; a second caller
 only multiplies the bounded state space); observation fuel `MaxHistory`
-4–7 per cfg (submits are silent, so depth decouples from the
+3–7 per cfg (submits are silent, so depth decouples from the
 observation budget). `Spec == Init /\ [][Next]_vars` — **no fairness is
 assumed anywhere**; every claim below is safety. Four constant mutant
 switches (`MutSpurious`, `MutDrainOne`, `MutNoTake`, `MutParkHolds`),
