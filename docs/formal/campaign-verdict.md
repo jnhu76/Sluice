@@ -13,8 +13,12 @@ the #375 ledger (§28–§35) records each stage's closure.
 
 ## The correction of the campaign
 
-The V1 campaign carried nine THEOREM-B verdicts — every primitive
-irreducible — and one THEOREM-A (lock_guard reducible). The Stage-0
+The V1 campaign carried nine THEOREM-B verdicts and one THEOREM-A
+(lock_guard reducible). The nine THEOREM-B rows were Event, Semaphore,
+AsyncMutex, AsyncCondition, AsyncRwLock, AsyncQueue, select, and
+`Scheduler::run` and `Scheduler::run_until_idle` — the latter two as
+separate rows of the V1 table over one modeled drain instance — so
+every primitive row was adjudicated irreducible. The Stage-0
 V2.3 authority invalidated the device all nine THEOREM-B proofs
 rested on: `tracesEnc_shadow_false` (`CalcV2.lean`) exhibits an
 encoding possessing a completion-shadowed trace, so the

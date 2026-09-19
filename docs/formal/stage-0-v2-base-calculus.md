@@ -2,11 +2,15 @@
 
 Campaign: `FCB1-METHOD-CORRECTIVE-1` (repair of the FORMAL-CAPABILITY-BOUNDARY-1
 stack, PRs #376–#385; charter issue #375)
-Status: **FROZEN (V2.3)** — the V1 freeze was invalidated by the
-method-corrective review; V2 was amended to V2.2 by BRAKE-1 (execution
-domains, §7.1) and to V2.3 by BRAKE-1 v2.3 (fiber critical section split
-from physical return, §7.1); this document is the single, complete
-Stage-0 freeze.
+Status: **FROZEN (V2.3, as amended by the Stage-4 brake)** — the V1
+freeze was invalidated by the method-corrective review; V2 was amended
+to V2.2 by BRAKE-1 (execution domains, §7.1), to V2.3 by BRAKE-1 v2.3
+(fiber critical section split from physical return, §7.1), and — after
+the Stage-4 replay of AsyncCondition motivated it — by the Stage-4
+calculus brake (park publishes the wakes its pre-suspension section
+readied; section-ending wakes are an order-preserving `Wakes` sublist,
+§7.1), with Stages 0–3 replayed on the amended calculus; this document
+is the single, complete Stage-0 freeze.
 Toolchain: Lean 4.33.1, pinned in `formal/lean-toolchain`; no mathlib.
 Verification gate: `scripts/verify_formal.sh` — `lake build` + no `sorry`/`admit`
 + axiom audit.
@@ -252,7 +256,8 @@ exactly the adjudicated base core's own relations.
 * Enlarging `BASE(P)` after a proof gets hard is the BRAKE-2 stop condition;
   silently shrinking it because the framework cannot express it is BRAKE-7.
 
-Stage defaults (subject to per-stage cards, unchanged from the V1 freeze):
+Stage defaults (subject to per-stage cards; a V2 statement — V1 had no
+`BASE(P)` parameterization at all, §0 MAJOR B):
 `BASE(Event) = BASE(Semaphore) = {}`, `BASE(AsyncMutex) = {Semaphore}`,
 `BASE(AsyncCondition) = {AsyncMutex}`, `BASE(AsyncRwLock) = {AsyncMutex}`,
 `BASE(AsyncQueue) = {Semaphore}` (waking substrate only), `BASE(select) = {}`
@@ -397,6 +402,28 @@ interleaving".  Downstream invalidation: the Event (PR #377) and Semaphore
 (PR #378) trace languages, batteries, and carried invariants are
 re-derived on V2.3 and their verdicts re-adjudicated before reuse; the
 echo reduction and the domain batteries were re-verified by the gate.
+
+**Stage-4 brake (park wake publication + order-preserving wakes, Stage-4
+replay of AsyncCondition, PR #380 @ `3eba6fe5`).**  The V2.3 calculus
+could not express `AsyncCondition::wait`: its section registers the cond
+waiter AND releases the mutex (handing it to the mutex queue head) in the
+same `global_mtx_` hold that suspends the caller — but a suspending call
+could publish no wakes (`park` returned a bare state), so the release
+handoff was inexpressible.  Separately, the section-ending steps required
+the woken fibers to be a CONTIGUOUS span of the parked list, while cond
+waiters and mutex waiters interleave in suspension order — `notify_all`
+drains its queue across that interleaving.  Amendment (charter BRAKE
+rule: no post-freeze amendment without replaying the adjudicated
+stages): `PrimLTS2.park` returns the wakes its pre-suspension section
+readied; `runPark` publishes them like `fiberEffect`; the four
+wake-publishing steps (`fiberEffect`, `finishDone`, `extEffect`,
+`runPark`) take the woken parked calls as an order-preserving sublist
+(the `Wakes` relation) with the remainder explicit — contiguity is gone.
+`BaseOpsSig.park` is unchanged; the encoding-side base-op adapter drops
+wakes (irrelevant to every adjudicated judgment so far).  Downstream
+invalidation: Stages 0–3 (the Event, Semaphore, and Mutex artifacts and
+their verdicts) were replayed on the amended calculus before reuse; the
+Stages 5–8 artifacts are native to it.
 
 ## 8. Method-level vacuity and negative tests (§9 of the corrective document)
 

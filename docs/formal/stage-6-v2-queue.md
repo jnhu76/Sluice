@@ -8,7 +8,7 @@ queue replay (#382). **RE-ADJUDICATED ON POST-#378 V2.3 AUTHORITY**: the
 pre-V2.3 stage-6 verdict is retired (§6); this stage's capability verdict
 is RESEARCH/DEFER.
 
-`BASE(AsyncQueue) = {Semaphore}` — the Stage-0 §8 default, unchanged by
+`BASE(AsyncQueue) = {Semaphore}` — the Stage-0 §5 stage default, unchanged by
 this stage. No enlargement, no shrinking, no alternative base.
 
 ## 1. Scope and subject

@@ -8,7 +8,7 @@ Queue (#382) → this select core (#383). **RE-ADJUDICATED ON POST-#378
 V2.3 AUTHORITY**: the pre-V2.3 stage-7 verdict is retired (§6); this
 stage's capability verdict is RESEARCH/DEFER.
 
-`BASE(select) = {}` — the Stage-0 §8 default (the select's sections read
+`BASE(select) = {}` — the Stage-0 §5 stage default (the select's sections read
 no substrate beyond the bare execution frame; the event latch is the
 select's own private state). No base, no enlargement, no alternative.
 

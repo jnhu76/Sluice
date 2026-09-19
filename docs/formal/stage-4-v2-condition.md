@@ -1,6 +1,6 @@
 # Stage 4V2.3 — AsyncCondition core, replayed on the amended calculus
 
-Campaign: FCB1-POST-V23-STACK-379-385 (Issue #375, §29–§31). Calculus:
+Campaign: FCB1-POST-V23-STACK-379-385 (Issue #375, §30–§31). Calculus:
 Stage-0-V2.3 as amended by the Stage-4 brake (`CalcV2.lean`: `park`
 publishes the wakes its pre-suspension section readied, and the
 section-ending steps take those wakes as an order-preserving `Wakes`
