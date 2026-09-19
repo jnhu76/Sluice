@@ -20,8 +20,9 @@ The scheduler driver: `src/async/scheduler.cpp` (the spawn entry
 :131-159, `run_impl` :210-309, `worker_loop` :321-729, `run_next_on`
 :731-745, the drain exit at one worker :642-663,
 `classify_locked_impl` :1013-1039, the retire epilogue :708-714), and
-the task fiber's bridge `src/async/fiber.cpp:25-34` (body, `make_done`,
-final switch). Core surface modeled: **`run(1)` / `run_until_idle` at
+the task fiber's bridge `src/async/scheduler.cpp:25-34`
+(`fiber_entry_bridge`: the body call, `make_done` — fiber.cpp:30-32 —
+and the final switch back). Core surface modeled: **`run(1)` / `run_until_idle` at
 one worker over plain tasks** — the frozen core instance. Outside the
 core surface, recorded as extensions (§9): multi-worker `run`,
 `run_live` (group.cpp:39), the classifier's non-quiescent legs, the
@@ -68,7 +69,8 @@ Four structural facts shape the model:
   step emitting the task's issue observation (Stage-0 rule 2: a fresh
   dispatch emits the issue) — scheduler.cpp:332-347, :731-736.
 * **The task completes through the bridge.** `workDone` is the entry
-  bridge's `make_done` plus the final switch back (fiber.cpp:25-34);
+  bridge's `make_done` plus the final switch back
+  (scheduler.cpp:25-34; `make_done` is fiber.cpp:30-32);
   a plain task's driver-state effect is empty, so the slot goes
   straight from running to retired.
 * **The drain boundary.** Entry issues the run observation, clears the
@@ -84,7 +86,7 @@ Four structural facts shape the model:
 |---------|-----------------------------|-------------|--------|-------|
 | `spawn` | scheduler.cpp:131-159 (entry :131-134; the fused section :141-158) | none (one `global_mtx_` section) | external-capable | `runExtCap spawn = true` |
 | `drain` | scheduler.cpp:210-309 (`run_impl`), :642-663 (the exit) | issued from app threads | external-capable; its execution is the bespoke loop itself | `runExtCap drain = true` |
-| `work`  | fiber.cpp:25-34 (the task body's own call) | the task fiber's own dispatch | fiber-bound (it IS the fiber's call) | `runExtCap work = false` |
+| `work`  | scheduler.cpp:25-34 (the task body's own call, via the entry bridge) | the task fiber's own dispatch | fiber-bound (it IS the fiber's call) | `runExtCap work = false` |
 | fiber-path spawn (a task body spawning) | scheduler spawn entry re-entered from a task | nested blocking call | outside the core surface | not modeled (§9) |
 | `run_live`, multi-worker `run` | group.cpp:39, scheduler.cpp worker pool | the worker pool | outside the frozen core instance | not modeled (§9) |
 
@@ -127,9 +129,11 @@ Explicit `RunRuns` step chains from `runInit` (batteries b3–b5
 interleave the spawn section's silent step between observations — the
 silent-run lemmas above are what make those chains provable):
 
-* `battery_canonical` — from `runInit`: the empty drain (issue, return
-  at quiescence; the terminate flag commits).
-* `battery_fifo` — one drain, two tasks minted mid-run, dispatched and
+* `battery_canonical` — from `runInit`: a pre-run spawn (issue,
+  section, completion), the drain, one dispatched task, and the return
+  at quiescence (the terminate flag commits).
+* `battery_fifo` — one drain over two tasks minted pre-run, left
+  unclaimed (`pending_spawn_`), flushed at drain entry, dispatched and
   completed FIFO, then the quiescent return (the full run cycle).
 * `battery_midDrain` — a spawn issued mid-run: its section lands on
   the backlog tail during the run, the spawn returns, the task runs to
@@ -140,7 +144,8 @@ silent-run lemmas above are what make those chains provable):
 * `battery_seqDrains` — two sequential runs, with a post-terminate
   spawn going unclaimed between them (`pending_spawn_` accumulates
   while the terminate flag stands).
-* `battery_empty` — the bare drain issue (the capability witness, §6).
+* `battery_empty` — the empty drain (issue, `rReturned` return; the
+  capability witness, §6).
 
 ## 5. Mutant battery (five independent fault classes)
 
@@ -353,8 +358,23 @@ model-vs-C++ disputes):
   separation clean, 1 result-binding separation violated on its
   witness).
 * `CalcV2.lean` / `JudgeV2.lean` — unchanged.
-* Fresh-context adversarial review: **PENDING** (this section is
-  updated with the reviewer's verdict before merge; the PR must not
-  merge with PENDING standing).
+* Fresh-context adversarial review: **READY** (no BLOCKING, no
+  findings left standing; one MAJOR and two MINOR findings, all fixed
+  in this card: the task-bridge citation corrected to
+  scheduler.cpp:25-34 — fiber.cpp holds only the `make_waiting`/
+  `make_done` primitives (:24-32), the bridge itself is scheduler.cpp's
+  `fiber_entry_bridge` (:25-34) — and the §4 battery bullets reworded
+  to match the Lean traces (`battery_canonical` carries a pre-run
+  spawn and one dispatched task; `battery_fifo`'s tasks are minted
+  pre-run and flushed at drain entry; `battery_empty` is the empty
+  drain). The reviewer independently re-ran `verify_formal.sh` (PASS;
+  all 41 driver theorems within the allowed set), spot-ran
+  `DriverCore.cfg` clean (26509 distinct states, matching the author's
+  run) and `DriverCoreMutDuplicateDispatch.cfg` byte-identical (4299
+  distinct states), verified all C++ anchors against scheduler.cpp /
+  fiber.cpp (no fact conflict), confirmed the open-boundary wording
+  matches the PR body, the OLD_HEAD commit exists, the declared
+  extension matches Stage-0 §9.3, and the TLA cfg wiring matches the
+  gate script.
 * Verdict: **STAGE8_SEMANTICS_PASS / CAPABILITY_RESEARCH_DEFER /
   READY_FOR_STACK_CONTINUATION.**

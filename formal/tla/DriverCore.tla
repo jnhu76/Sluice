@@ -4,8 +4,8 @@
 (* transition system, mapping `formal/Sluice/Formal/DriverV2.lean`         *)
 (* (`RunStep`, the bespoke driver LTS) one action per constructor, under   *)
 (* the post-#378 Stage-0-V2.3 execution-domain calculus.  Rebuilt from     *)
-(* the production sections of `src/async/scheduler.cpp` and the fiber      *)
-(* bridge in `src/async/fiber.cpp`.                                        *)
+(* the production sections of `src/async/scheduler.cpp`, including the     *)
+(* task bridge `fiber_entry_bridge` (:25-34; `make_done` fiber.cpp:30-32). *)
 (*                                                                         *)
 (* The driver is NOT a `PrimLTS2` (the drain loop fits neither the         *)
 (* run-to-block fiber shape nor the fused external section: external       *)
@@ -42,7 +42,7 @@
 (*                      driver-side unit, scheduler.cpp:332-347,           *)
 (*                      :731-736)                                          *)
 (*   workDone         - the task completes (the entry bridge's `make_done` *)
-(*                      plus the final switch back, fiber.cpp:25-34)       *)
+(*                      plus the final switch back, scheduler.cpp:25-34)   *)
 (*   drainEnter       - the run call's issue observation, the terminate    *)
 (*                      flag cleared, the unclaimed spawns flushed into    *)
 (*                      the backlog (run_impl :229-247)                    *)
@@ -256,8 +256,8 @@ Dispatch ==
                  hit_drain_ret, hit_work_done, hit_effect_in,
                  hit_effect_out, hit_flush, hit_stale, hit_post_term>>
 
-\* RunStep.workDone: the task completes (fiber.cpp:25-34 -- the entry
-\* bridge's `make_done` plus the final switch back).  A plain task's
+\* RunStep.workDone: the task completes (scheduler.cpp:25-34 -- the
+\* entry bridge's `make_done` plus the final switch back).  A plain task's
 \* driver-state effect is empty: the slot goes straight to retired.
 WorkDone ==
   /\ cur # NoCur /\ cur.phase = "run"
