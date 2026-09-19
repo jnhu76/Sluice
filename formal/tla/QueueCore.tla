@@ -77,9 +77,10 @@ Fibers == {"f0", "f1"}
 Exts == {"e0"}
 Calls == {"pushA", "pushB", "pop", "trypushA", "trypushB", "trypop",
           "close"}
-\* The fiber-bound calls: the try calls and close are external-capable
-\* only (their entry points read no `g_worker`), so a fiber can never
-\* submit one.
+\* Scope narrowing (stage card §9): the try calls and close are
+\* modeled as external-only -- the mirror's fiber call domain is
+\* restricted to the fiber-bound push/pop pair even though the C++
+\* entry points carry no fiber assert (the RwLock `cancel` precedent).
 FibCalls == {"pushA", "pushB", "pop"}
 ExtCalls == {"trypushA", "trypushB", "trypop", "close"}
 Results == {"none", "committed", "wouldblock", "closed", "done",

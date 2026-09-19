@@ -15,7 +15,7 @@ this stage. No enlargement, no shrinking, no alternative base.
 
 AsyncQueue: `include/sluice/async/async_queue.hpp`,
 `src/async/scheduler_queue.cpp`, `src/async/queue_port.cpp`. Core surface
-modeled: `push` (void, fiber-bound), `pop` (item, fiber-bound),
+modeled: `push` (result, fiber-bound), `pop` (item, fiber-bound),
 `try_push` (bool-ish result, external-capable), `try_pop` (item or
 refusal, external-capable), `close` (void, external-capable). Outside
 the core surface, exactly as at Stages 2–5: the timed paths
@@ -50,8 +50,8 @@ Two structural facts shape the model:
 
 | entry        | code                        | worker read | domain             | model                                   |
 |--------------|-----------------------------|-------------|--------------------|-----------------------------------------|
-| `push v`     | scheduler_queue.cpp:56-99, :199-279 | the worker pair (`queue_push_admit` asserts a running Fiber, :199-200) | fiber-bound | `extCap = false` |
-| `pop`        | scheduler_queue.cpp:108-172, :243-322 | the worker pair (`queue_pop_admit`, :243-244) | fiber-bound | `extCap = false` |
+| `push v`     | scheduler_queue.cpp:56-99, :197-239 | the worker pair (`queue_push_admit` asserts a running Fiber, :199-200) | fiber-bound | `extCap = false` |
+| `pop`        | scheduler_queue.cpp:108-172, :241-281 | the worker pair (`queue_pop_admit`, :243-244) | fiber-bound | `extCap = false` |
 | `try_push v` | queue_port.cpp:125-164      | none (mutex only) | external-capable; **barges** past suspended producers | `extCap = true`, `extRun = qExtRun` |
 | `try_pop`    | queue_port.cpp:166-198      | none (mutex only) | external-capable | `extCap = true`, `extRun = qExtRun`     |
 | `close`      | queue_port.cpp:200-218      | none (mutex only) | external-capable | `extCap = true`, `extRun = qExtRun`     |
@@ -105,8 +105,10 @@ the commit log frozen and the ring non-growing from a closed state).
 ## 4. Possession batteries (six, one per behavior class)
 
 Explicit `PrimRuns2` step chains (the Stage-5 idiom; batteries B–F
-start from instrumented intermediate configurations, each a reachable,
-safe state):
+start from instrumented intermediate configurations — each a
+constructed state proved safe by `qSafe`, whose shape the TLA mirror
+explores from `primInit` via the `full2`/`emptyc` boots and the
+park-coverage witnesses):
 
 * `q_battery_inline` — from `primInit`: `push a` commits inline and
   returns `committed`; `pop` then delivers `a` in commit order
@@ -114,10 +116,12 @@ safe state):
 * `q_battery_handoff_pc` — ring full with a producer suspended on its
   lease: an external `try_pop` delivers the ring head, the cross-grant
   commits the suspended producer's item, and the resumed producer
-  reports `committed` (the p→c handoff).
+  reports `committed` (the c→p capacity handoff: the slot the consumer
+  freed is handed to the producer).
 * `q_battery_handoff_cp` — a consumer suspended on an empty ring: an
   inline `push` commits and the cross-grant hands the committed item to
-  the suspended consumer (the c→p handoff).
+  the suspended consumer (the p→c handoff: the item flows producer to
+  consumer).
 * `q_battery_close_buffered` — `close` over a buffered item: the bit
   stands, the item stays poppable (the first `pop` still delivers it),
   a further `pop` reads `closed` (6 observations).
@@ -295,6 +299,12 @@ again in new clothing):
   producers by construction (it never registers); the model encodes
   the mechanism, and makes no fairness claim about which suspended
   producer starves.
+* **The external `try_pop` delivery guard is conservative.** The
+  model's delivery branch additionally requires `waitqC = []`
+  (Lean `qRun`, TLA `ExtTryPop`); the C++ fast path has no such
+  check. It fires only on states the model itself proves unreachable
+  (the drained conjunct of `qSafe`: a nonempty consumer queue implies
+  an empty ring), so no reachable behavior is added or removed.
 
 ## 10. Gates and verdict
 
@@ -306,5 +316,22 @@ again in new clothing):
   mutants killed on their exact intended invariants, 2 trace-removal
   separations clean).
 * `CalcV2.lean` / `JudgeV2.lean` — unchanged.
+* Fresh-context adversarial review: **READY** (2026-09-19). All ten
+  protocol questions OK — census/base/production fidelity (no
+  model-vs-code fact conflict), safety validity, battery non-vacuity,
+  mutant discipline, old-verdict retirement, adjudication,
+  mandated wording, gates. Five MINOR wording/hygiene findings, all
+  fixed in this revision: the §4 handoff arrow glosses were swapped
+  (`handoff_pc` is the c→p *capacity* handoff, `handoff_cp` the p→c
+  handoff — the naming tracks the parked/unblocked role); the
+  battery-header "reachable" claim softened to the constructed-shapes
+  claim; the TLA census comment's false justification replaced by the
+  disclosed scope narrowing; two census line ranges tightened
+  (:197-239, :241-281); the conservative external `try_pop` delivery
+  guard added to §9 (plus the §1 `push` result-type gloss). Both
+  gates re-run green after the fixes. A proposed-but-unproved
+  separator candidate (wake-order through a single substrate FIFO) is
+  recorded as a proposal only — per protocol it does not move the
+  verdict.
 * Verdict: **STAGE6_SEMANTICS_PASS / CAPABILITY_RESEARCH_DEFER /
   READY_FOR_STACK_CONTINUATION.**

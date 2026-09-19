@@ -1487,9 +1487,10 @@ theorem q_closed_no_commit {cfg m : PrimCfg QSig qPrim} {t : Trace QSig}
 
 Six batteries, one per externally meaningful behavior class, each an
 explicit step chain (the Stage-5 idiom).  Batteries B–F start from an
-intermediate configuration; each start state is itself a reachable,
-safe state (the building chains are battery A's and each other's
-prefixes, and every step below is a legal `PrimStep2`). -/
+intermediate configuration; each start state is a constructed state
+proved safe by `qSafe`, and its shape is one the TLA mirror explores
+from `primInit` (the boot states `full2`/`emptyc` and the
+park-coverage witnesses). -/
 
 /-- Battery A — the inline cycle: `push a` commits inline and returns
 `committed`; `pop` then delivers `a` in commit order. -/
