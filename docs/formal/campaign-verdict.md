@@ -1,6 +1,8 @@
 # FCB1-POST-V23-STACK-379-385 — campaign verdict
 
-Re-adjudicated on the post-#378 Stage-0-V2.3 authority. This document
+Re-adjudicated on the Stage-0-V2.3 authority — post-#378, as amended
+by the declared Stage-4 calculus brake (provenance in the frozen-core
+summary below). This document
 is the campaign's final synthesis record (PR #385, stacked on #384);
 it replaces the pre-reset verdict document, which carried nine
 THEOREM-B verdicts and one THEOREM-A on the V1 authority. Nothing on
@@ -116,13 +118,28 @@ The disposition is **RESEARCH (deferred)**:
 
 ## What the stack established (frozen-core summary)
 
-* **Stage 0 V2.3** — the calculus (`CalcV2.lean`) and judge
-  (`JudgeV2.lean`), amended through #378 and unchanged since; the
-  completion shadow is not valid under the V2.3 discipline
-  (`tracesEnc_shadow_false`).
-* **The BASE discipline** — `BASE(P) = {}` for every stage default
-  (AsyncMutex's THEOREM B is over its frozen nonempty base
-  `{Semaphore}`); no base enlargement, no alternative.
+* **Stage 0 V2.3** — the completion shadow is not valid under the
+  V2.3 discipline (`tracesEnc_shadow_false`). Calculus provenance:
+  **CalcV2** — Stage-0 V2.3 established through #378; Stage 4 (#380)
+  then fired a declared calculus BRAKE (park publishes wakes from the
+  pre-suspension section; section-ending wakes use the
+  order-preserving `Wakes` relation), and Stages 0–3 were replayed
+  after that amendment — the charter rule that no post-freeze
+  amendment goes without replaying the adjudicated stages.
+  **JudgeV2** — unchanged by the Stage-4 brake and by Stages 5–8.
+  The final authority is therefore post-#378 V2.3 + the declared
+  Stage-4 calculus amendment + the required replay.
+* **The BASE discipline** — each `BASE(P)` was frozen at Stage 0 and
+  neither enlarged nor shrank thereafter; the frozen matrix
+  (stage-0 card §5) is `BASE(Event) = BASE(Semaphore) = {}`,
+  `BASE(AsyncMutex) = {Semaphore}`, `BASE(AsyncCondition) =
+  {AsyncMutex}`, `BASE(AsyncRwLock) = {AsyncMutex}`,
+  `BASE(AsyncQueue) = {Semaphore}`, `BASE(select) = {}`,
+  `BASE(Scheduler::run) = {}`; lock_guard's declared base is the
+  synchronous `Mutex`. Nonempty bases are part of the method, not
+  exceptions: AsyncMutex's THEOREM B is over its frozen `{Semaphore}`
+  base. No stage enlarged or shrank its frozen BASE merely to recover
+  a verdict.
 * **Eight modeled surfaces rebuilt from current C++** — Event,
   Semaphore, Mutex, Condition, RwLock, Queue, Select, and the
   scheduler driver — each with a state discipline preserved per
@@ -140,5 +157,7 @@ The disposition is **RESEARCH (deferred)**:
   configurations: safety boots clean, coverage witnesses violated,
   mutants killed on their exact intended invariants, trace-removal
   separations clean).
-* CalcV2.lean, JudgeV2.lean — unchanged by #379–#385.
+* CalcV2.lean was amended exactly once inside the stack — the
+  declared Stage-4 brake in #380 (commit `3eba6fe5`), after which
+  Stages 0–3 were replayed; JudgeV2.lean is unchanged by #379–#385.
 * No production C++ was changed anywhere in the stack.
