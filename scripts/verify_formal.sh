@@ -43,6 +43,7 @@ import Sluice.Formal.MutexV2
 import Sluice.Formal.ConditionV2
 import Sluice.Formal.RwLockV2
 import Sluice.Formal.QueueV2
+import Sluice.Formal.SelectV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -203,6 +204,46 @@ open Sluice.Formal
 #print axioms Sluice.Formal.qM3_handoff_refuted
 #print axioms Sluice.Formal.qM4_wrong_result
 #print axioms Sluice.Formal.qM5_handoff_refuted
+#print axioms Sluice.Formal.selRun_result_agrees
+#print axioms Sluice.Formal.selExtRun_result_agrees
+#print axioms Sluice.Formal.selFinish_result_agrees
+#print axioms Sluice.Formal.selResolveEv_preserves
+#print axioms Sluice.Formal.selSetSection_preserves
+#print axioms Sluice.Formal.selRun_preserves
+#print axioms Sluice.Formal.selExtRun_preserves
+#print axioms Sluice.Formal.selPark_preserves
+#print axioms Sluice.Formal.selFinish_preserves
+#print axioms Sluice.Formal.selExpire_preserves
+#print axioms Sluice.Formal.sel_safe
+#print axioms Sluice.Formal.sel_safe_holds
+#print axioms Sluice.Formal.sel_battery_inlineEv
+#print axioms Sluice.Formal.sel_battery_inlineTim
+#print axioms Sluice.Formal.sel_battery_handoffEv
+#print axioms Sluice.Formal.sel_battery_handoffTim
+#print axioms Sluice.Formal.sel_battery_prioEv
+#print axioms Sluice.Formal.sel_battery_prioTim
+#print axioms Sluice.Formal.sel_battery_resetBlind
+#print axioms Sluice.Formal.sel_battery_fiberSet
+#print axioms Sluice.Formal.sel_battery_rearm
+#print axioms Sluice.Formal.sel_battery_noSpurious
+#print axioms Sluice.Formal.seqOK_extSel
+#print axioms Sluice.Formal.sel_not_extSel
+#print axioms Sluice.Formal.enc_extSel
+#print axioms Sluice.Formal.sel_over_produces_of_extCap
+#print axioms Sluice.Formal.seqOK_extSet
+#print axioms Sluice.Formal.sel_possesses_extSet
+#print axioms Sluice.Formal.extCap_true_of_extSetIssue
+#print axioms Sluice.Formal.sel_under_produces_of_no_extCap
+#print axioms Sluice.Formal.sel_capability_defer
+#print axioms Sluice.Formal.sel_encoding_class_inhabited
+#print axioms Sluice.Formal.encNoSel_under
+#print axioms Sluice.Formal.encExtSel_over
+#print axioms Sluice.Formal.selSafe_done
+#print axioms Sluice.Formal.selM1_breaks
+#print axioms Sluice.Formal.selM2_wrong_result
+#print axioms Sluice.Formal.selM3_breaks
+#print axioms Sluice.Formal.selM4_removes
+#print axioms Sluice.Formal.selM5_wrong_arm
 EOF
 lake env lean .lake/axiom-audit.lean | tee .lake/axiom-audit.out
 rm -f .lake/axiom-audit.lean
