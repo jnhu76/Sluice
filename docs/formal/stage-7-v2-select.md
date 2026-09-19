@@ -59,7 +59,7 @@ Four structural facts shape the model:
 
 | entry     | code                                   | worker read | domain          | model                          |
 |-----------|----------------------------------------|-------------|-----------------|--------------------------------|
-| `evSet`   | scheduler_event.cpp:21-37 + select_event.cpp (the fiber section body) | none (`global_mtx_` only) | fiber-callable **and** external-capable | `extCap = true`, `extRun = selExtRun` |
+| `evSet`   | scheduler_event.cpp:21-37 (the one set body; select_event.cpp:11-53 is the winner/loser finalize it drives) | none (`global_mtx_` only) | fiber-callable **and** external-capable | `extCap = true`, `extRun = selExtRun` |
 | `evReset` | scheduler_event.cpp:39-42              | none        | fiber-callable **and** external-capable | `extCap = true`, `extRun = selExtRun` |
 | `sel`     | select.hpp:127-134 + select.cpp:538-547, :691-714, :758-759, :775-808 | the worker pair (`select_admit` asserts a running Fiber, :538-547) | fiber-bound | `extCap = false` |
 | `selT`    | the symmetric order                    | the worker pair | fiber-bound  | `extCap = false` |
@@ -270,6 +270,12 @@ again):
 
 ## 9. Modeling disclosures
 
+* **Single event alphabet.** The model's `flag` and the `evSet`/`evReset`
+  calls denote the select arm's own event. In production a `set`/`reset`
+  on any other `Event` instance leaves an armed group alone — resolution
+  runs only through the armed arm's select port (select.cpp:399-411).
+  The discipline facts (armed-quiet, no-spurious) therefore read
+  per-event, and hold per-event in production.
 * **Single group slot.** The production surface holds a list of
   simultaneous groups with a contract-level fail-fast exclusion for
   multi-arm overlap; the model carries one in-flight group and parks
@@ -293,6 +299,11 @@ again):
   QueueCore close precedent does not arise).
 * **Boot groups are pre-Init** — the same prefix-scoped
   `InvCompDiscipline` exception the Stage-4/5/6 cards document.
+* **`order` is mirrored but unread.** The group records its arm order
+  (`order` field) exactly as production stores it, but no guard or
+  invariant reads it — the scan authority is carried structurally by
+  the sel/selT split (§3). Write-only in both the Lean model and the
+  TLA mirror.
 
 ## 10. Gates and verdict
 
@@ -304,8 +315,16 @@ again):
   killed on their exact intended invariants, 1 trace-removal
   separation clean).
 * `CalcV2.lean` / `JudgeV2.lean` — unchanged.
-* Fresh-context adversarial review: pending (this bullet records the
-  verdict, the protocol-question results, and any findings/fixes after
-  the review pass).
+* Fresh-context adversarial review: **READY** (no BLOCKING, no MAJOR;
+  three MINOR findings, all fixed in this card: the single-event
+  alphabet disclosure, the `evSet` census citation phrasing, and the
+  write-only `order` disclosure). The reviewer independently re-ran
+  `verify_formal.sh` (PASS; all 40 select theorems within
+  `[propext, Quot.sound]`), verified the full-gate
+  `VERIFY_TLA: PASS` log (102 runs), reproduced
+  `SelectCoreCovPrioEv` byte-identical (5929 generated / 2854
+  distinct), spot-checked three transition families against
+  select.cpp / scheduler_event.cpp / event.cpp, and confirmed the
+  open-boundary wording matches the PR body verbatim.
 * Verdict: **STAGE7_SEMANTICS_PASS / CAPABILITY_RESEARCH_DEFER /
   READY_FOR_STACK_CONTINUATION.**
