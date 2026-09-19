@@ -42,6 +42,7 @@ import Sluice.Formal.SemV2
 import Sluice.Formal.MutexV2
 import Sluice.Formal.ConditionV2
 import Sluice.Formal.RwLockV2
+import Sluice.Formal.QueueV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -153,6 +154,55 @@ open Sluice.Formal
 #print axioms Sluice.Formal.condM3_reacquire_skipped
 #print axioms Sluice.Formal.condM4_keeps_slot
 #print axioms Sluice.Formal.condM4_lost_wakeup
+#print axioms Sluice.Formal.qDrainC_drop
+#print axioms Sluice.Formal.qLen_commit
+#print axioms Sluice.Formal.qLen_tail
+#print axioms Sluice.Formal.qLedger_push
+#print axioms Sluice.Formal.qLedger_pop
+#print axioms Sluice.Formal.qLedger_pop_grant
+#print axioms Sluice.Formal.qRun_result_agrees
+#print axioms Sluice.Formal.qExtRun_result_agrees
+#print axioms Sluice.Formal.qFinish_result_agrees
+#print axioms Sluice.Formal.qAdmit_unchanged
+#print axioms Sluice.Formal.qGrantConsumer_preserves
+#print axioms Sluice.Formal.qGrantProducer_preserves
+#print axioms Sluice.Formal.qRun_preserves
+#print axioms Sluice.Formal.qPark_preserves
+#print axioms Sluice.Formal.qFinish_preserves
+#print axioms Sluice.Formal.qExtRun_preserves
+#print axioms Sluice.Formal.q_safe
+#print axioms Sluice.Formal.q_safe_holds
+#print axioms Sluice.Formal.q_capacity_holds
+#print axioms Sluice.Formal.q_fifo_holds
+#print axioms Sluice.Formal.q_drained_holds
+#print axioms Sluice.Formal.qRun_closed_inert
+#print axioms Sluice.Formal.qExtRun_closed_inert
+#print axioms Sluice.Formal.qPark_inert
+#print axioms Sluice.Formal.qFinish_inert
+#print axioms Sluice.Formal.q_closed_no_commit
+#print axioms Sluice.Formal.q_battery_inline
+#print axioms Sluice.Formal.q_battery_handoff_pc
+#print axioms Sluice.Formal.q_battery_handoff_cp
+#print axioms Sluice.Formal.q_battery_close_buffered
+#print axioms Sluice.Formal.q_battery_close_consumer
+#print axioms Sluice.Formal.q_battery_close_producer
+#print axioms Sluice.Formal.seqOK_extPush
+#print axioms Sluice.Formal.q_not_extPush
+#print axioms Sluice.Formal.enc_extPush
+#print axioms Sluice.Formal.q_over_produces_of_extCap
+#print axioms Sluice.Formal.seqOK_extTryPush
+#print axioms Sluice.Formal.q_possesses_extTryPush
+#print axioms Sluice.Formal.extCap_true_of_extTryPushIssue
+#print axioms Sluice.Formal.q_under_produces_of_no_extCap
+#print axioms Sluice.Formal.q_capability_defer
+#print axioms Sluice.Formal.q_encoding_class_inhabited
+#print axioms Sluice.Formal.encNoTry_under
+#print axioms Sluice.Formal.encExtPush_over
+#print axioms Sluice.Formal.qM1_breaks
+#print axioms Sluice.Formal.qM2_fifo_break
+#print axioms Sluice.Formal.qM3_handoff_refuted
+#print axioms Sluice.Formal.qM4_wrong_result
+#print axioms Sluice.Formal.qM5_handoff_refuted
 EOF
 lake env lean .lake/axiom-audit.lean | tee .lake/axiom-audit.out
 rm -f .lake/axiom-audit.lean
