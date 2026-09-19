@@ -44,6 +44,7 @@ import Sluice.Formal.ConditionV2
 import Sluice.Formal.RwLockV2
 import Sluice.Formal.QueueV2
 import Sluice.Formal.SelectV2
+import Sluice.Formal.DriverV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -244,6 +245,47 @@ open Sluice.Formal
 #print axioms Sluice.Formal.selM3_breaks
 #print axioms Sluice.Formal.selM4_removes
 #print axioms Sluice.Formal.selM5_wrong_arm
+#print axioms Sluice.Formal.runRuns_cons
+#print axioms Sluice.Formal.run_safe
+#print axioms Sluice.Formal.runSafe_runInit
+#print axioms Sluice.Formal.run_safe_holds
+#print axioms Sluice.Formal.runApply_preserves
+#print axioms Sluice.Formal.runEffectIn_preserves
+#print axioms Sluice.Formal.runEffectOut_preserves
+#print axioms Sluice.Formal.runSpawnDone_preserves
+#print axioms Sluice.Formal.runDispatch_preserves
+#print axioms Sluice.Formal.runWorkDone_preserves
+#print axioms Sluice.Formal.runDrainEnter_preserves
+#print axioms Sluice.Formal.runDrainReturn_preserves
+#print axioms Sluice.Formal.battery_canonical
+#print axioms Sluice.Formal.seqOK_b1
+#print axioms Sluice.Formal.battery_fifo
+#print axioms Sluice.Formal.seqOK_b2
+#print axioms Sluice.Formal.battery_midDrain
+#print axioms Sluice.Formal.seqOK_b3
+#print axioms Sluice.Formal.battery_staleWindow
+#print axioms Sluice.Formal.seqOK_b4
+#print axioms Sluice.Formal.battery_seqDrains
+#print axioms Sluice.Formal.seqOK_b5
+#print axioms Sluice.Formal.battery_empty
+#print axioms Sluice.Formal.seqOK_b6
+#print axioms Sluice.Formal.run_not_extWork
+#print axioms Sluice.Formal.enc_extWork
+#print axioms Sluice.Formal.run_over_produces_of_extCap
+#print axioms Sluice.Formal.drainCap_true_of_drainIssue
+#print axioms Sluice.Formal.run_under_produces_of_no_extCap
+#print axioms Sluice.Formal.run_capability_defer
+#print axioms Sluice.Formal.run_encoding_class_inhabited
+#print axioms Sluice.Formal.encNoDrain_under
+#print axioms Sluice.Formal.encExtWork_over
+#print axioms Sluice.Formal.silent_run_nil
+#print axioms Sluice.Formal.silent_run_some
+#print axioms Sluice.Formal.silent_run_none
+#print axioms Sluice.Formal.runM1_breaks
+#print axioms Sluice.Formal.runM2_breaks
+#print axioms Sluice.Formal.runM3_wrong_result
+#print axioms Sluice.Formal.runM4_removes
+#print axioms Sluice.Formal.runM5_unbacked
 EOF
 lake env lean .lake/axiom-audit.lean | tee .lake/axiom-audit.out
 rm -f .lake/axiom-audit.lean
