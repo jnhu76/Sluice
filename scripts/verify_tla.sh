@@ -89,6 +89,31 @@
 #        (the coverage cfgs certify they ARE reachable in the correct
 #        model); these two are TRACE-REMOVAL kills, not safety kills.
 #
+#   Stage 7V2.3 (Select, `formal/tla/SelectCore.tla`):
+#    19. Safety: the boot configurations (primInit-faithful, the armed
+#        select start, the armed + timer-due start) must complete
+#        cleanly under all seven safety invariants (armed quiet,
+#        phase/winner agreement with source-read ghosts, the one-record
+#        completion window, group ownership, result agreement,
+#        completion discipline).
+#    20. Coverage: the eight scenario certificates (inline event win,
+#        inline timer win, the set-section hand-off, the timer-pump
+#        hand-off, both-ready priority resolved to each arm, reset
+#        blindness, the level-semantics re-arm) are negated
+#        conjunctions; each MUST be violated (the witness is
+#        reachable).
+#    21. Mutants: MutReResolve (the done-group gate dropped from the
+#        set section) must die on InvWindow; MutFinishLie (the resumed
+#        select delivers wonEv regardless of the consumed record) and
+#        MutM5 (the scan order flipped) on InvResultAgree; MutParkReady
+#        (the ready-source gate dropped from the park) on
+#        InvQuietArmed.
+#    22. Trace-removal witness separation: MutNoTimer (the timer pump
+#        omitted) must complete CLEANLY with full safety plus
+#        NotHandoffTim -- the timer-handoff witness is unreachable
+#        there (the coverage cfg certifies it IS reachable in the
+#        correct model); a TRACE-REMOVAL kill, not a safety kill.
+#
 # `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
 # create terminal parked states by construction.
 #
@@ -306,5 +331,29 @@ run_violate queue-mut-wrong-result QueueCoreMutWrongResult.cfg QueueCore InvResu
 echo "== Stage 6V2.3: trace-removal witness separations (must hold cleanly) =="
 run_clean queue-mut-no-consumer-grant QueueCoreMutNoConsumerGrant.cfg QueueCore
 run_clean queue-mut-no-producer-grant QueueCoreMutNoProducerGrant.cfg QueueCore
+
+echo "== Stage 7V2.3: SelectCore safety matrix =="
+for cfg in SelectCore SelectCoreArmed SelectCoreDue; do
+    run_clean "select-safety-$cfg" "$cfg.cfg" SelectCore
+done
+
+echo "== Stage 7V2.3: scenario coverage (each must be reachable) =="
+run_violate select-cov-inline-ev SelectCoreCovInlineEv.cfg SelectCore InvCovInlineEv
+run_violate select-cov-inline-tim SelectCoreCovInlineTim.cfg SelectCore InvCovInlineTim
+run_violate select-cov-handoff-ev SelectCoreCovHandoffEv.cfg SelectCore InvCovHandoffEv
+run_violate select-cov-handoff-tim SelectCoreCovHandoffTim.cfg SelectCore InvCovHandoffTim
+run_violate select-cov-prio-ev SelectCoreCovPrioEv.cfg SelectCore InvCovPrioEv
+run_violate select-cov-prio-tim SelectCoreCovPrioTim.cfg SelectCore InvCovPrioTim
+run_violate select-cov-reset-blind SelectCoreCovResetBlind.cfg SelectCore InvCovResetBlind
+run_violate select-cov-rearm SelectCoreCovRearm.cfg SelectCore InvCovRearm
+
+echo "== Stage 7V2.3: safety + result mutants (each must die on its expected invariant) =="
+run_violate select-mut-reresolve SelectCoreMutReResolve.cfg SelectCore InvWindow
+run_violate select-mut-finish-lie SelectCoreMutFinishLie.cfg SelectCore InvResultAgree
+run_violate select-mut-park-ready SelectCoreMutParkReady.cfg SelectCore InvQuietArmed
+run_violate select-mut-scan-flip SelectCoreMutScanFlip.cfg SelectCore InvResultAgree
+
+echo "== Stage 7V2.3: trace-removal witness separation (must hold cleanly) =="
+run_clean select-mut-no-timer SelectCoreMutNoTimer.cfg SelectCore
 
 echo "VERIFY_TLA: PASS"
