@@ -123,7 +123,7 @@ The disposition is **RESEARCH (deferred)**:
 * **The BASE discipline** — `BASE(P) = {}` for every stage default
   (AsyncMutex's THEOREM B is over its frozen nonempty base
   `{Semaphore}`); no base enlargement, no alternative.
-* **Ten modeled surfaces rebuilt from current C++** — Event,
+* **Eight modeled surfaces rebuilt from current C++** — Event,
   Semaphore, Mutex, Condition, RwLock, Queue, Select, and the
   scheduler driver — each with a state discipline preserved per
   constructor, possession batteries, a mutant battery, a TLA mirror,
