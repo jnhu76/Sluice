@@ -35,6 +35,23 @@
 # Every expected failure is checked against its specific invariant line,
 # never against a bare exit code.
 #
+#   Stage 4V2.3 (Condition, `formal/tla/CondCore.tla`):
+#     8. Safety: the three boot configurations (primInit-faithful, the
+#        slot-holder start, the parked-waiter start) must complete
+#        cleanly under all seven safety invariants.
+#     9. Coverage: the six scenario certificates are negated
+#        conjunctions; each MUST be violated (the witness is reachable).
+#    10. Safety mutants: MutSpurious (M1, the finish ignores the record)
+#        and MutNoTake (M3, the reacquire skips the slot take) must die
+#        on their discipline invariants; MutParkHoldsOwn (M4's release
+#        skipped) must die on InvQueueOwnership (the slot holder parked).
+#    11. Under-production witness separations: MutDrainOne (M2,
+#        notify_all readies only the head) and MutParkHolds (M4) must
+#        complete CLEANLY with the broadcast/fast-path witness
+#        invariants asserted -- the GOOD witnesses are unreachable there
+#        (the coverage cfgs certify they ARE reachable in the correct
+#        model).
+#
 # `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
 # create terminal parked states by construction.
 #
@@ -182,5 +199,27 @@ run_violate mutex-mut-cancel-true MutexCoreMutCancelTrue.cfg MutexCore InvBalanc
 
 echo "== Stage 3V2.3: fused-return mutant (witness must become unreachable) =="
 run_clean mutex-mut-fused-return MutexCoreMutFusedReturn.cfg MutexCore
+
+echo "== Stage 4V2.3: CondCore safety matrix =="
+for cfg in CondCore CondCoreBoot CondCoreBootWait3; do
+    run_clean "cond-safety-$cfg" "$cfg.cfg" CondCore
+done
+
+echo "== Stage 4V2.3: scenario coverage (each must be reachable) =="
+run_violate cond-cov-fastpath CondCoreCovFastPath.cfg CondCore InvCovFastPath
+run_violate cond-cov-broadcast CondCoreCovBroadcast.cfg CondCore InvCovBroadcast
+run_violate cond-cov-cancel CondCoreCovCancel.cfg CondCore InvCovCancel
+run_violate cond-cov-handoff CondCoreCovHandoff.cfg CondCore InvCovHandoff
+run_violate cond-cov-notify-empty CondCoreCovNotifyEmpty.cfg CondCore InvCovNotifyEmpty
+run_violate cond-cov-cancel-miss CondCoreCovCancelMiss.cfg CondCore InvCovCancelMiss
+
+echo "== Stage 4V2.3: safety mutants (each must die on its expected invariant) =="
+run_violate cond-mut-spurious CondCoreMutSpurious.cfg CondCore InvFinishBacked
+run_violate cond-mut-no-take CondCoreMutNoTake.cfg CondCore InvFinishOwned
+run_violate cond-mut-park-holds-own CondCoreMutParkHoldsOwn.cfg CondCore InvQueueOwnership
+
+echo "== Stage 4V2.3: under-production witness separations (must hold cleanly) =="
+run_clean cond-mut-drain-one CondCoreMutDrainOne.cfg CondCore
+run_clean cond-mut-park-holds CondCoreMutParkHolds.cfg CondCore
 
 echo "VERIFY_TLA: PASS"

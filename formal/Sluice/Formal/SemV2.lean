@@ -102,7 +102,7 @@ def semPrimOf (initial max : Nat) : PrimLTS2 SemSig :=
     run := fun s _ _ c => semRun s c
     park := fun s f c =>
       match c with
-      | SemCall.acquire => some { s with waitq := s.waitq ++ [f] }
+      | SemCall.acquire => some ({ s with waitq := s.waitq ++ [f] }, [])
       | SemCall.release => none
     finish := fun s _ c =>
       match c with
@@ -131,7 +131,8 @@ def semPrim : PrimLTS2 SemSig := semPrimOf 0 1
     (c : SemCall) : (semPrimOf initial max).run s t f c = semRun s c := rfl
 
 @[simp] theorem semPrimOf_park_acquire (initial max : Nat) (s : SemState) (f : FiberId) :
-    (semPrimOf initial max).park s f SemCall.acquire = some { s with waitq := s.waitq ++ [f] } := rfl
+    (semPrimOf initial max).park s f SemCall.acquire
+      = some ({ s with waitq := s.waitq ++ [f] }, []) := rfl
 
 @[simp] theorem semPrimOf_park_release (initial max : Nat) (s : SemState) (f : FiberId) :
     (semPrimOf initial max).park s f SemCall.release = none := rfl
@@ -397,7 +398,7 @@ theorem semBalance_mirror {initial max : Nat}
             hrunqE, hracq, hcurE, hfreshE, reduceIte] at hbal ⊢
           try simp at hbal ⊢
           omega
-      | fiberEffect d b preP postP ps r s' wk hcurE hb hrunP hparkedE hmap =>
+      | fiberEffect d b ps rest r s' wk hcurE hb hrunP hmap hwake =>
           rw [hb] at hcurE
           have hstale' : ∀ x ∈ cfg.runq ++ ps.map
               (fun p : Pnd SemSig => { fiber := p.fiber, call := p.call, fresh := false }),
@@ -408,18 +409,10 @@ theorem semBalance_mirror {initial max : Nat}
             · rw [List.mem_map] at hm
               obtain ⟨p, hp, hx2⟩ := hm
               cases hx2
-              have hpm : p ∈ cfg.parked := by
-                rw [hparkedE]
-                exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hp)))
-              exact hparked p hpm
-          have hparked' : ∀ p ∈ preP ++ postP, p.call = SemCall.acquire := by
+              exact hparked p (Wakes.mem_parked hwake p hp)
+          have hparked' : ∀ p ∈ rest, p.call = SemCall.acquire := by
             intro p hp
-            have hpm : p ∈ cfg.parked := by
-              rw [hparkedE]
-              rcases List.mem_append.mp hp with hq | hq
-              · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-              · exact List.mem_append.mpr (Or.inr hq)
-            exact hparked p hpm
+            exact hparked p (Wakes.mem_rest hwake p hp)
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.cons_append, semHeldAq, semPendRel] at hbal ⊢
@@ -438,8 +431,12 @@ theorem semBalance_mirror {initial max : Nat}
                 subst hrq
                 subst hs'eq
                 subst hwkeq
-                have hps : ps = [] := semRun_pndMap_nil hmap
-                simp only [Option.toList, List.cons_append, hps, List.nil_append,
+                have hps : ps = [] := by
+                  cases ps with
+                  | nil => rfl
+                  | cons p ps' => simp at hmap
+                subst hps
+                simp only [Option.toList, List.cons_append, List.nil_append,
                   List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
                   semCurAq_none,
                   semCurAq_running_false, semCurAq_returning_acquire,
@@ -473,12 +470,16 @@ theorem semBalance_mirror {initial max : Nat}
                     subst hrret
                     subst hs'eq
                     subst hwkeq
-                    have hps : ps = [] := semRun_pndMap_nil hmap
-                    simp only [Option.toList, List.cons_append, hps, List.nil_append,
-                      List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
-                      semCurAq_none,
-                      semCurAq_running_false, semCurAq_returning_acquire,
-                      semCurAq_returning_release] at hbal ⊢
+                    have hps : ps = [] := by
+                      cases ps with
+                      | nil => rfl
+                      | cons p ps' => simp at hmap
+                    subst hps
+                    simp only [Option.toList, List.cons_append, List.nil_append,
+                        List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
+                        semCurAq_none,
+                        semCurAq_running_false, semCurAq_returning_acquire,
+                        semCurAq_returning_release] at hbal ⊢
                     omega
                   · rw [if_neg hm] at h3
                     injection h3 with h0
@@ -487,12 +488,16 @@ theorem semBalance_mirror {initial max : Nat}
                     subst hrret
                     subst hs'eq
                     subst hwkeq
-                    have hps : ps = [] := semRun_pndMap_nil hmap
-                    simp only [Option.toList, List.cons_append, hps, List.nil_append,
-                      List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
-                      semCurAq_none,
-                      semCurAq_running_false, semCurAq_returning_acquire,
-                      semCurAq_returning_release] at hbal ⊢
+                    have hps : ps = [] := by
+                      cases ps with
+                      | nil => rfl
+                      | cons p ps' => simp at hmap
+                    subst hps
+                    simp only [Option.toList, List.cons_append, List.nil_append,
+                        List.append_nil, List.map_nil, hcurE, hcall, reduceIte,
+                        semCurAq_none,
+                        semCurAq_running_false, semCurAq_returning_acquire,
+                        semCurAq_returning_release] at hbal ⊢
                     omega
               | cons w rest =>
                   rw [hwq] at hrun2
@@ -517,7 +522,7 @@ theorem semBalance_mirror {initial max : Nat}
                             semCurAq_running_false] at hbal ⊢
                           cases hu : u.call <;>
                             simp only [hu, semStaleAq_append_stale, reduceIte] at hbal ⊢ <;>
-                            try simp at hbal ⊢ <;>
+                              try simp at hbal ⊢ <;>
                             omega
                       | cons v ps'' => simp at hpsmap
       | fiberDone d r hcurE =>
@@ -534,29 +539,41 @@ theorem semBalance_mirror {initial max : Nat}
               semAcqCount_comp, semRelIssueCount_comp, reduceIte] at hbal ⊢ <;>
             try simp at hbal ⊢ <;>
             omega
-      | runPark d b s' hcurE hrunE hparkE =>
+      | runPark d b ps rest s' wk hcurE hrunE hparkE hmap hwake =>
           have hc' : d.call = SemCall.acquire := semRun_none hrunE
           rw [hc'] at hparkE
-          have hpe : (some ({ cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] } : SemState))
-              = some s' := hparkE
+          have hpe : (some ({ cfg.prim with waitq := cfg.prim.waitq ++ [d.fiber] },
+              []) : Option (SemState × List FiberId)) = some (s', wk) := hparkE
           injection hpe with hs'eq
-          subst hs'eq
-          have hparked' : ∀ p ∈ cfg.parked ++ [{ fiber := d.fiber, call := d.call }],
+          obtain ⟨h4, hwk⟩ := Prod.mk.inj hs'eq
+          subst hwk
+          have hps : ps = [] := by
+            cases ps with
+            | nil => rfl
+            | cons p ps' => simp at hmap
+          subst hps
+          subst h4
+          have hparked' : ∀ p ∈ rest ++ [{ fiber := d.fiber, call := d.call }],
               p.call = SemCall.acquire := by
             intro p hp
             rcases List.mem_append.mp hp with hm | hm
-            · exact hparked p hm
+            · exact hparked p (Wakes.mem_rest hwake p hm)
             · simp only [List.mem_singleton] at hm
               subst hm
               exact hc'
-          have hstale' := hstale
+          have hstale' : ∀ x ∈ cfg.runq ++ ([] : List (PReady SemSig)),
+              x.fresh = false → x.call = SemCall.acquire := by
+            intro x hx hfr
+            rcases List.mem_append.mp hx with hm | hm
+            · exact hstale x hm hfr
+            · simp at hm
           have hexts' := hexts
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts'
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
-          simp only [Option.toList, List.nil_append, semHeldAq, semPendRel,
+          simp only [Option.toList, List.nil_append, List.map_nil, semHeldAq, semPendRel,
             semCurAq_none, semCurAq_running_true, hcurE, hc'] at hbal ⊢
           cases hb : b <;> simp [hb] at hbal ⊢ <;> omega
-      | finishDone d b preP postP ps r s' wk hcurE hb hfinD hparkedE hmap =>
+      | finishDone d b ps rest r s' wk hcurE hb hfinD hmap hwake =>
           rw [hb] at hcurE
           have hstale' : ∀ x ∈ cfg.runq ++ ps.map
               (fun p : Pnd SemSig => { fiber := p.fiber, call := p.call, fresh := false }),
@@ -567,18 +584,10 @@ theorem semBalance_mirror {initial max : Nat}
             · rw [List.mem_map] at hm
               obtain ⟨p, hp, hx2⟩ := hm
               cases hx2
-              have hpm : p ∈ cfg.parked := by
-                rw [hparkedE]
-                exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hp)))
-              exact hparked p hpm
-          have hparked' : ∀ p ∈ preP ++ postP, p.call = SemCall.acquire := by
+              exact hparked p (Wakes.mem_parked hwake p hp)
+          have hparked' : ∀ p ∈ rest, p.call = SemCall.acquire := by
             intro p hp
-            have hpm : p ∈ cfg.parked := by
-              rw [hparkedE]
-              rcases List.mem_append.mp hp with hq | hq
-              · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-              · exact List.mem_append.mpr (Or.inr hq)
-            exact hparked p hpm
+            exact hparked p (Wakes.mem_rest hwake p hp)
           obtain ⟨hbal, hstaleF, hparkedF, hextsF⟩ := ih hstale' hparked' hexts
           refine ⟨?_, hstaleF, hparkedF, hextsF⟩
           simp only [Option.toList, List.cons_append, semHeldAq, semPendRel] at hbal ⊢
@@ -594,8 +603,12 @@ theorem semBalance_mirror {initial max : Nat}
               subst hrq
               subst hs'eq
               subst hwkeq
-              have hps : ps = [] := semRun_pndMap_nil hmap
-              simp only [hps, List.append_nil, List.map_nil, semCurAq_running_true,
+              have hps : ps = [] := by
+                cases ps with
+                | nil => rfl
+                | cons p ps' => simp at hmap
+              subst hps
+              simp only [List.append_nil, List.map_nil, semCurAq_running_true,
                 hcurE, hcall, reduceIte] at hbal ⊢
               try simp at hbal ⊢
               omega
@@ -624,7 +637,7 @@ theorem semBalance_mirror {initial max : Nat}
           simp only [Option.toList, List.cons_append, semHeldAq, semPendRel,
             semCurAq, semPendExt_cons] at hbal ⊢
           cases hcall : c <;> simp [hcall] at hbal ⊢ <;> omega
-      | extEffect preE postE e r s' wk preP postP ps hsplitE hnone hrunE hparkedE hmap =>
+      | extEffect preE postE e ps rest r s' wk hsplitE hnone hrunE hmap hwake =>
           have hec : e.call = SemCall.release := by
             cases hEc : e.call with
             | acquire =>
@@ -652,18 +665,10 @@ theorem semBalance_mirror {initial max : Nat}
             · rw [List.mem_map] at hm
               obtain ⟨p, hp, hx2⟩ := hm
               cases hx2
-              have hpm : p ∈ cfg.parked := by
-                rw [hparkedE]
-                exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hp)))
-              exact hparked p hpm
-          have hparked' : ∀ p ∈ preP ++ postP, p.call = SemCall.acquire := by
+              exact hparked p (Wakes.mem_parked hwake p hp)
+          have hparked' : ∀ p ∈ rest, p.call = SemCall.acquire := by
             intro p hp
-            have hpm : p ∈ cfg.parked := by
-              rw [hparkedE]
-              rcases List.mem_append.mp hp with hq | hq
-              · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-              · exact List.mem_append.mpr (Or.inr hq)
-            exact hparked p hpm
+            exact hparked p (Wakes.mem_rest hwake p hp)
           have hexts' : ∀ x ∈ preE ++ { e with result := some r } :: postE,
               x.call = SemCall.release := by
             intro x hx
@@ -706,8 +711,12 @@ theorem semBalance_mirror {initial max : Nat}
                 injection h1 with hs'eq hwkeq
                 subst hs'eq
                 subst hwkeq
-                have hps : ps = [] := semRun_pndMap_nil hmap
-                simp only [hps, List.append_nil, List.map_nil, reduceIte] at hbal ⊢
+                have hps : ps = [] := by
+                  cases ps with
+                  | nil => rfl
+                  | cons p ps' => simp at hmap
+                subst hps
+                simp only [List.append_nil, List.map_nil, reduceIte] at hbal ⊢
                 omega
               · rw [if_neg hm] at h3
                 injection h3 with h0
@@ -715,8 +724,12 @@ theorem semBalance_mirror {initial max : Nat}
                 injection h1 with hs'eq hwkeq
                 subst hs'eq
                 subst hwkeq
-                have hps : ps = [] := semRun_pndMap_nil hmap
-                simp only [hps, List.append_nil, List.map_nil, reduceIte] at hbal ⊢
+                have hps : ps = [] := by
+                  cases ps with
+                  | nil => rfl
+                  | cons p ps' => simp at hmap
+                subst hps
+                simp only [List.append_nil, List.map_nil, reduceIte] at hbal ⊢
                 omega
           | cons w rest =>
               rw [hwq] at hrun2
@@ -738,7 +751,7 @@ theorem semBalance_mirror {initial max : Nat}
                         reduceIte] at hbal ⊢
                       cases hu : u.call <;>
                         simp only [hu, semStaleAq_append_stale, reduceIte] at hbal ⊢ <;>
-                        try simp at hbal ⊢ <;>
+                          try simp at hbal ⊢ <;>
                         omega
                   | cons v ps'' => simp at hpsmap
       | extDone preE postE e r hsplitE hsome =>
@@ -837,7 +850,7 @@ theorem semStep_take_credit {initial max : Nat}
       have hc1 : d.call = SemCall.acquire := hc
       simp only [semHeldAq, hcurE, hc1, semCurAq_returning_acquire, if_pos]
       omega
-  | finishDone d b preP postP ps r s' wk hcurE hb hfinD hparkedE hmap =>
+  | finishDone d b ps rest r s' wk hcurE hb hfinD hmap hwake =>
       rw [hb] at hcurE
       have hc1 : d.call = SemCall.acquire := hc
       simp only [semHeldAq, hcurE, hc1, semCurAq_running_true, if_pos]
@@ -960,9 +973,9 @@ theorem ws1 : PrimStep2 SemSig semPrim w0
 
 theorem ws2 : PrimStep2 SemSig semPrim w1 none w2 :=
   PrimStep2.extEffect w1 [] []
-    { x := 0, call := SemCall.release, result := none }
-    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } [] [] [] []
-    rfl rfl (by rfl) rfl rfl
+    { x := 0, call := SemCall.release, result := none } [] []
+    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } []
+    rfl rfl (by rfl) rfl Wakes.nil
 
 theorem ws3 : PrimStep2 SemSig semPrim w2 none w3 :=
   PrimStep2.submit w2 0 SemCall.acquire (Or.inl rfl)
@@ -973,8 +986,8 @@ theorem ws4 : PrimStep2 SemSig semPrim w3
     { available := 1, max := 1, waitq := [] } rfl rfl rfl rfl
 
 theorem ws5a : PrimStep2 SemSig semPrim w4 none w4b :=
-  PrimStep2.fiberEffect w4 { fiber := 0, call := SemCall.acquire } false [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberEffect w4 { fiber := 0, call := SemCall.acquire } false [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl Wakes.nil
 
 theorem ws5 : PrimStep2 SemSig semPrim w4b
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) w5 :=
@@ -1075,8 +1088,8 @@ theorem fws2 : PrimStep2 SemSig semPrim fw1
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
 theorem fws3 : PrimStep2 SemSig semPrim fw2 none fw3 :=
-  PrimStep2.fiberEffect fw2 { fiber := 0, call := SemCall.release } false [] [] []
-    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberEffect fw2 { fiber := 0, call := SemCall.release } false [] []
+    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl Wakes.nil
 
 theorem fws4 : PrimStep2 SemSig semPrim fw3
     (some (issueObs SemSig (Caller.ext 0) SemCall.release)) fw4 :=
@@ -1084,9 +1097,9 @@ theorem fws4 : PrimStep2 SemSig semPrim fw3
 
 theorem fws5 : PrimStep2 SemSig semPrim fw4 none fw5 :=
   PrimStep2.extEffect fw4 [] []
-    { x := 0, call := SemCall.release, result := none }
-    (SemResult.relRet false) { available := 1, max := 1, waitq := [] } [] [] [] []
-    rfl rfl (by rfl) rfl rfl
+    { x := 0, call := SemCall.release, result := none } [] []
+    (SemResult.relRet false) { available := 1, max := 1, waitq := [] } []
+    rfl rfl (by rfl) rfl Wakes.nil
 
 theorem fws6 : PrimStep2 SemSig semPrim fw5
     (some (compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet false))) fw6 :=
@@ -1156,9 +1169,9 @@ theorem ers1 : PrimStep2 SemSig semPrim er0
 
 theorem ers2 : PrimStep2 SemSig semPrim er1 none er2 :=
   PrimStep2.extEffect er1 [] []
-    { x := 0, call := SemCall.release, result := none }
-    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } [] [] [] []
-    rfl rfl (by rfl) rfl rfl
+    { x := 0, call := SemCall.release, result := none } [] []
+    (SemResult.relRet true) { available := 1, max := 1, waitq := [] } []
+    rfl rfl (by rfl) rfl Wakes.nil
 
 theorem ers3 : PrimStep2 SemSig semPrim er2
     (some (compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet true))) er3 :=
@@ -1248,8 +1261,8 @@ theorem hs2 : PrimStep2 SemSig semPrim h1
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
 theorem hs3 : PrimStep2 SemSig semPrim h2 none h3 :=
-  PrimStep2.runPark h2 { fiber := 0, call := SemCall.acquire } false
-    { available := 0, max := 1, waitq := [0] } rfl (by rfl) rfl
+  PrimStep2.runPark h2 { fiber := 0, call := SemCall.acquire } false [] []
+    { available := 0, max := 1, waitq := [0] } [] rfl (by rfl) rfl rfl Wakes.nil
 
 theorem hs4 : PrimStep2 SemSig semPrim h3 none h4 :=
   PrimStep2.submit h3 1 SemCall.release (Or.inl rfl)
@@ -1260,9 +1273,10 @@ theorem hs5 : PrimStep2 SemSig semPrim h4
     { available := 0, max := 1, waitq := [0] } rfl rfl rfl rfl
 
 theorem hs6a : PrimStep2 SemSig semPrim h5 none h5b :=
-  PrimStep2.fiberEffect h5 { fiber := 1, call := SemCall.release } false [] []
-    [{ fiber := 0, call := SemCall.acquire }] (SemResult.relRet true)
-    { available := 0, max := 1, waitq := [] } [0] rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberEffect h5 { fiber := 1, call := SemCall.release } false
+    [{ fiber := 0, call := SemCall.acquire }] [] (SemResult.relRet true)
+    { available := 0, max := 1, waitq := [] } [0] rfl rfl (by rfl) rfl
+    (Wakes.drop _ Wakes.nil)
 
 theorem hs6 : PrimStep2 SemSig semPrim h5b
     (some (compObs SemSig (Caller.fiber 1) SemCall.release (SemResult.relRet true))) h6 :=
@@ -1274,8 +1288,8 @@ theorem hs7 : PrimStep2 SemSig semPrim h6 none h7 :=
 
 theorem hs8 : PrimStep2 SemSig semPrim h7
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) h8 :=
-  PrimStep2.finishDone h7 { fiber := 0, call := SemCall.acquire } true [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl rfl rfl rfl
+  PrimStep2.finishDone h7 { fiber := 0, call := SemCall.acquire } true [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl rfl rfl Wakes.nil
 
 theorem handoffRun : PrimRuns2 SemSig semPrim h0 handoffTrace h8 :=
   PrimRuns2.step h0 h1 none _ h8 hs1
@@ -1343,8 +1357,8 @@ theorem iws2 : PrimStep2 SemSig (semPrimOf 1 2) iw1
     { available := 1, max := 2, waitq := [] } rfl rfl rfl rfl
 
 theorem iws3 : PrimStep2 SemSig (semPrimOf 1 2) iw2 none iw2b :=
-  PrimStep2.fiberEffect iw2 { fiber := 0, call := SemCall.acquire } false [] [] []
-    SemResult.acqDone { available := 0, max := 2, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberEffect iw2 { fiber := 0, call := SemCall.acquire } false [] []
+    SemResult.acqDone { available := 0, max := 2, waitq := [] } [] rfl rfl (by rfl) rfl Wakes.nil
 
 theorem iws4 : PrimStep2 SemSig (semPrimOf 1 2) iw2b
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) iw3 :=
@@ -1432,9 +1446,9 @@ theorem mws1 : PrimStep2 SemSig (semPrimOf 0 2) mw0
 
 theorem mws2 : PrimStep2 SemSig (semPrimOf 0 2) mw1 none mw2 :=
   PrimStep2.extEffect mw1 [] []
-    { x := 0, call := SemCall.release, result := none }
-    (SemResult.relRet true) { available := 1, max := 2, waitq := [] } [] [] [] []
-    rfl rfl (by rfl) rfl rfl
+    { x := 0, call := SemCall.release, result := none } [] []
+    (SemResult.relRet true) { available := 1, max := 2, waitq := [] } []
+    rfl rfl (by rfl) rfl Wakes.nil
 
 theorem mws3 : PrimStep2 SemSig (semPrimOf 0 2) mw2
     (some (compObs SemSig (Caller.ext 0) SemCall.release (SemResult.relRet true))) mw3 :=
@@ -1448,9 +1462,9 @@ theorem mws4 : PrimStep2 SemSig (semPrimOf 0 2) mw3
 
 theorem mws5 : PrimStep2 SemSig (semPrimOf 0 2) mw4 none mw5 :=
   PrimStep2.extEffect mw4 [] []
-    { x := 1, call := SemCall.release, result := none }
-    (SemResult.relRet true) { available := 2, max := 2, waitq := [] } [] [] [] []
-    rfl rfl (by rfl) rfl rfl
+    { x := 1, call := SemCall.release, result := none } [] []
+    (SemResult.relRet true) { available := 2, max := 2, waitq := [] } []
+    rfl rfl (by rfl) rfl Wakes.nil
 
 theorem mws6 : PrimStep2 SemSig (semPrimOf 0 2) mw5
     (some (compObs SemSig (Caller.ext 1) SemCall.release (SemResult.relRet true))) mw6 :=
@@ -1464,9 +1478,9 @@ theorem mws7 : PrimStep2 SemSig (semPrimOf 0 2) mw6
 
 theorem mws8 : PrimStep2 SemSig (semPrimOf 0 2) mw7 none mw8 :=
   PrimStep2.extEffect mw7 [] []
-    { x := 2, call := SemCall.release, result := none }
-    (SemResult.relRet false) { available := 2, max := 2, waitq := [] } [] [] [] []
-    rfl rfl (by rfl) rfl rfl
+    { x := 2, call := SemCall.release, result := none } [] []
+    (SemResult.relRet false) { available := 2, max := 2, waitq := [] } []
+    rfl rfl (by rfl) rfl Wakes.nil
 
 theorem mws9 : PrimStep2 SemSig (semPrimOf 0 2) mw8
     (some (compObs SemSig (Caller.ext 2) SemCall.release (SemResult.relRet false))) mw9 :=
@@ -1571,8 +1585,8 @@ theorem sms2 : PrimStep2 SemSig semMutant sm1
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
 theorem sms3a : PrimStep2 SemSig semMutant sm2 none sm2b :=
-  PrimStep2.fiberEffect sm2 { fiber := 0, call := SemCall.acquire } false [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberEffect sm2 { fiber := 0, call := SemCall.acquire } false [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl Wakes.nil
 
 theorem sms3 : PrimStep2 SemSig semMutant sm2b
     (some (compObs SemSig (Caller.fiber 0) SemCall.acquire SemResult.acqDone)) sm3 :=
@@ -1587,8 +1601,8 @@ theorem sms5 : PrimStep2 SemSig semMutant sm4
     { available := 0, max := 1, waitq := [] } rfl rfl rfl rfl
 
 theorem sms6a : PrimStep2 SemSig semMutant sm5 none sm5b :=
-  PrimStep2.fiberEffect sm5 { fiber := 1, call := SemCall.acquire } false [] [] []
-    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl rfl
+  PrimStep2.fiberEffect sm5 { fiber := 1, call := SemCall.acquire } false [] []
+    SemResult.acqDone { available := 0, max := 1, waitq := [] } [] rfl rfl (by rfl) rfl Wakes.nil
 
 theorem sms6 : PrimStep2 SemSig semMutant sm5b
     (some (compObs SemSig (Caller.fiber 1) SemCall.acquire SemResult.acqDone)) sm6 :=

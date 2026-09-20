@@ -912,8 +912,12 @@ structure PrimLTS2 (A : ApiSig) : Type 1 where
   effect, and readies `woken` parked fibers (in order); the physical return
   is the later `fiberDone` step. -/
   run : State → Tick → FiberId → A.Call → Option (A.Result × State × List FiberId)
-  /-- The call suspends instead; state effect of parking. -/
-  park : State → FiberId → A.Call → Option State
+  /-- The call suspends instead; state effect of parking, plus the wakes
+  its pre-suspension section readies (the condition-wait shape: the
+  section that registers the waiter releases the mutex, handing it to the
+  mutex queue head, in the same `global_mtx_` hold that suspends the
+  caller). -/
+  park : State → FiberId → A.Call → Option (State × List FiberId)
   /-- A resumed parked call completes at its dispatch. -/
   finish : State → FiberId → A.Call → Option (A.Result × State × List FiberId)
   /-- The external call domains: `extCap c = true` iff `c` can be issued by
@@ -943,6 +947,49 @@ structure PrimCfg (A : ApiSig) (P : PrimLTS2 A) : Type 1 where
 
 def primInit (A : ApiSig) (P : PrimLTS2 A) : PrimCfg A P :=
   ⟨P.init, 0, none, [], [], [], 0, []⟩
+
+/-- `Wakes ps parked rest`: `ps` (the parked calls a section readies) is
+an order-preserving sublist of `parked`, and `rest` is what stays parked.
+This is the wake discipline of the section-ending steps: a resolution
+targets parked fibers individually, in any position — a condition
+broadcast drains its waiters while mutex waiters sit between them, and a
+release handoff wakes the queue head with other parked fibers around it. -/
+inductive Wakes : List (Pnd A) → List (Pnd A) → List (Pnd A) → Prop where
+  | nil : Wakes [] [] []
+  | keep (p : Pnd A) : Wakes ps parked rest → Wakes ps (p :: parked) (p :: rest)
+  | drop (p : Pnd A) : Wakes ps parked rest → Wakes (p :: ps) (p :: parked) rest
+
+theorem Wakes.mem_rest : ∀ {ps parked rest : List (Pnd A)},
+    Wakes ps parked rest → ∀ p ∈ rest, p ∈ parked := by
+  intro ps parked rest h
+  induction h with
+  | nil => intro p hp; exact hp
+  | keep _ _ ih =>
+      intro p hp
+      rcases List.mem_cons.mp hp with rfl | hm
+      · exact List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (ih p hm)
+  | drop _ _ ih => intro p hp; exact List.mem_cons_of_mem _ (ih p hp)
+
+theorem Wakes.mem_parked : ∀ {ps parked rest : List (Pnd A)},
+    Wakes ps parked rest → ∀ p ∈ ps, p ∈ parked := by
+  intro ps parked rest h
+  induction h with
+  | nil => intro p hp; cases hp
+  | keep _ _ ih => intro p hp; exact List.mem_cons_of_mem _ (ih p hp)
+  | drop _ _ ih =>
+      intro p hp
+      rcases List.mem_cons.mp hp with rfl | hm
+      · exact List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (ih p hm)
+
+theorem Wakes_nil_eq : ∀ {ps parked rest : List (Pnd A)},
+    Wakes ps parked rest → ps = [] → rest = parked := by
+  intro ps parked rest h
+  induction h with
+  | nil => intro _; rfl
+  | keep _ _ ih => intro hps; exact congrArg _ (ih hps)
+  | drop _ _ ih => intro hps; exact absurd hps (by simp)
 
 /-- Fiber `f` has a call in flight in `cfg`. -/
 def InFlightPrim (A : ApiSig) (P : PrimLTS2 A) (cfg : PrimCfg A P) (f : FiberId) : Prop :=
@@ -993,17 +1040,16 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
   (V2.3 split: the API's internal lock is released here, but the fiber
   still owns the worker baton and executes its return path afterward). -/
   | fiberEffect (cfg : PrimCfg A P) (d : Pnd A) (b : Bool)
-      (preP postP : List (Pnd A)) (ps : List (Pnd A))
-      (r : A.Result) (s' : P.State) (wk : List FiberId) :
+      (ps rest : List (Pnd A)) (r : A.Result) (s' : P.State) (wk : List FiberId) :
       cfg.cur = some (FSlot.running d b) → b = false →
       P.run cfg.prim cfg.now d.fiber d.call = some (r, s', wk) →
-      cfg.parked = preP ++ ps ++ postP →
       ps.map (fun p : Pnd A => p.fiber) = wk →
+      Wakes ps cfg.parked rest →
       PrimStep2 A P cfg none
         { prim := s'
           now := cfg.now
           cur := some (FSlot.returning d r)
-          parked := preP ++ postP
+          parked := rest
           runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
           retired := cfg.retired
           nextFiber := cfg.nextFiber
@@ -1024,17 +1070,22 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
           retired := if d.fiber ∈ cfg.retired then cfg.retired else d.fiber :: cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
-  /-- The dispatched fiber call suspends instead: park state effect, silent. -/
-  | runPark (cfg : PrimCfg A P) (d : Pnd A) (b : Bool) (s' : P.State) :
+  /-- The dispatched fiber call suspends instead: park state effect, the
+  wakes its pre-suspension section readied (the condition-wait release
+  handoff), silent. -/
+  | runPark (cfg : PrimCfg A P) (d : Pnd A) (b : Bool)
+      (ps rest : List (Pnd A)) (s' : P.State) (wk : List FiberId) :
       cfg.cur = some (FSlot.running d b) →
       P.run cfg.prim cfg.now d.fiber d.call = none →
-      P.park cfg.prim d.fiber d.call = some s' →
+      P.park cfg.prim d.fiber d.call = some (s', wk) →
+      ps.map (fun p : Pnd A => p.fiber) = wk →
+      Wakes ps cfg.parked rest →
       PrimStep2 A P cfg none
         { prim := s'
           now := cfg.now
           cur := none
-          parked := cfg.parked ++ [{ fiber := d.fiber, call := d.call }]
-          runq := cfg.runq
+          parked := rest ++ [{ fiber := d.fiber, call := d.call }]
+          runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
           retired := cfg.retired
           nextFiber := cfg.nextFiber
           exts := cfg.exts }
@@ -1042,17 +1093,16 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
   empty: the outcome was fixed and the state effects were applied by the
   earlier waker step, so effect and return do not come apart here). -/
   | finishDone (cfg : PrimCfg A P) (d : Pnd A) (b : Bool)
-      (preP postP : List (Pnd A)) (ps : List (Pnd A))
-      (r : A.Result) (s' : P.State) (wk : List FiberId) :
+      (ps rest : List (Pnd A)) (r : A.Result) (s' : P.State) (wk : List FiberId) :
       cfg.cur = some (FSlot.running d b) → b = true →
       P.finish cfg.prim d.fiber d.call = some (r, s', wk) →
-      cfg.parked = preP ++ ps ++ postP →
       ps.map (fun p : Pnd A => p.fiber) = wk →
+      Wakes ps cfg.parked rest →
       PrimStep2 A P cfg (some (compObs A (Caller.fiber d.fiber) d.call r))
         { prim := s'
           now := cfg.now
           cur := none
-          parked := preP ++ postP
+          parked := rest
           runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
           retired := if d.fiber ∈ cfg.retired then cfg.retired else d.fiber :: cfg.retired
           nextFiber := cfg.nextFiber
@@ -1080,17 +1130,16 @@ inductive PrimStep2 (A : ApiSig) (P : PrimLTS2 A) :
   fibers exactly as in `fiberEffect`.  Silent; the entry must be present and
   not yet applied. -/
   | extEffect (cfg : PrimCfg A P) (preE postE : List (ExtPend A)) (e : ExtPend A)
-      (r : A.Result) (s' : P.State) (wk : List FiberId)
-      (preP postP : List (Pnd A)) (ps : List (Pnd A)) :
+      (ps rest : List (Pnd A)) (r : A.Result) (s' : P.State) (wk : List FiberId) :
       cfg.exts = preE ++ e :: postE → e.result = none →
       P.extRun e.call cfg.prim cfg.now = some (r, s', wk) →
-      cfg.parked = preP ++ ps ++ postP →
       ps.map (fun p : Pnd A => p.fiber) = wk →
+      Wakes ps cfg.parked rest →
       PrimStep2 A P cfg none
         { prim := s'
           now := cfg.now
           cur := cfg.cur
-          parked := preP ++ postP
+          parked := rest
           runq := cfg.runq ++ ps.map (fun p : Pnd A => { fiber := p.fiber, call := p.call, fresh := false })
           retired := cfg.retired
           nextFiber := cfg.nextFiber
@@ -1528,8 +1577,8 @@ theorem d3 : PrimStep2 DomSig domPrim dp2
   all_goals rfl
 
 theorem d4a : PrimStep2 DomSig domPrim dp3 none dp3b :=
-  PrimStep2.fiberEffect dp3 { fiber := 0, call := DomCall.go } false [] [] []
-    DomResult.done () [] rfl rfl rfl rfl rfl
+  PrimStep2.fiberEffect dp3 { fiber := 0, call := DomCall.go } false [] []
+    DomResult.done () [] rfl rfl rfl rfl Wakes.nil
 
 theorem d4 : PrimStep2 DomSig domPrim dp3b
     (some (compObs DomSig (Caller.fiber 0) DomCall.go DomResult.done)) dp4 :=
@@ -1541,8 +1590,8 @@ theorem d5 : PrimStep2 DomSig domPrim dp4
     (by show 0 ∉ ([] : List (ExtPend DomSig)).map (fun e : ExtPend DomSig => e.x); simp)
 
 theorem d5b : PrimStep2 DomSig domPrim dp5a none dp5b :=
-  PrimStep2.extEffect dp5a [] [] { x := 0, call := DomCall.beep, result := none }
-    DomResult.done () [] [] [] [] rfl rfl rfl rfl rfl
+  PrimStep2.extEffect dp5a [] [] { x := 0, call := DomCall.beep, result := none } [] []
+    DomResult.done () [] rfl rfl rfl rfl Wakes.nil
 
 theorem d6 : PrimStep2 DomSig domPrim dp5b
     (some (compObs DomSig (Caller.ext 0) DomCall.beep DomResult.done)) dp6 :=
@@ -1555,8 +1604,8 @@ theorem d7 : PrimStep2 DomSig domPrim dp6
   all_goals rfl
 
 theorem d8a : PrimStep2 DomSig domPrim dp7 none dp7b :=
-  PrimStep2.fiberEffect dp7 { fiber := 1, call := DomCall.go } false [] [] []
-    DomResult.done () [] rfl rfl rfl rfl rfl
+  PrimStep2.fiberEffect dp7 { fiber := 1, call := DomCall.go } false [] []
+    DomResult.done () [] rfl rfl rfl rfl Wakes.nil
 
 theorem d8 : PrimStep2 DomSig domPrim dp7b
     (some (compObs DomSig (Caller.fiber 1) DomCall.go DomResult.done)) dp8 :=

@@ -57,9 +57,10 @@ Adjudication:
     of the primitive (`mutex_over_produces`, `mutex_not_unlockIssue`).
     The old #379 THEOREM B rested on the V1 completion shadow, which the
     V2 calculus refutes; nothing is inherited.
-  * LockGuard is adjudicated in `GuardV2.lean` (THEOREM A over the
-    synchronous `Mutex`, the freeze's mandated first nonempty-`BASE(P)`
-    re-export test).
+  * LockGuard's THEOREM A over the synchronous `Mutex` (the freeze's
+    mandated first nonempty-`BASE(P)` re-export test) is a charter
+    obligation still open; this stage neither relies on it nor delivers
+    it.
 
 Safety evidence: `mutexPrim_guarantees` proves the mutual-exclusion half
 in Lean — every completed grant completes only when the completed
@@ -164,11 +165,13 @@ def mutexRun : MutexState → Tick → FiberId → MutexCall →
 /-- Only `lock` suspends; parking appends the caller at the queue tail
 (`register_wait_locked` + `commit_suspend_locked`, scheduler_mutex.cpp:46,
 :70).  A fiber already parked is not re-registered (the queue holds one
-node per fiber; see the modeling disclosures). -/
-def mutexPark : MutexState → FiberId → MutexCall → Option MutexState
+node per fiber; see the modeling disclosures).  The mutex has no
+pre-suspension wakes: its handoff happens in the *waker's* section. -/
+def mutexPark : MutexState → FiberId → MutexCall →
+    Option (MutexState × List FiberId)
   | s, f, MutexCall.mlock =>
       if f ∈ s.waitq then none
-      else some { owner := s.owner, waitq := s.waitq ++ [f], resolved := s.resolved }
+      else some ({ owner := s.owner, waitq := s.waitq ++ [f], resolved := s.resolved }, [])
   | _, _, _ => none
 
 /-- A resumed `lock` consumes its recorded outcome (the node's one-shot
@@ -797,7 +800,7 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
         simpa [mstate, recOf, ownerIs] using hbal f
       · rw [hcurE]
         simpa [mstate, recAll, ownerHeld] using hbalA
-  | fiberEffect d b preP postP ps r s' wk hcurE hb hrunE hparE _ =>
+  | fiberEffect d b ps rest r s' wk hcurE hb hrunE hmap hwake =>
       subst hb
       have hstale' : ∀ x ∈ cfg.runq ++ ps.map
           (fun p : Pnd MutexSig => { fiber := p.fiber, call := p.call, fresh := false }),
@@ -808,17 +811,10 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
         · rw [List.mem_map] at hm
           obtain ⟨p, hps, hx2⟩ := hm
           cases hx2
-          have hpm : p ∈ cfg.parked := by
-            rw [hparE]
-            exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hps)))
-          exact hparked p hpm
-      have hparked' : ∀ p ∈ preP ++ postP, p.call = MutexCall.mlock := by
+          exact hparked p (Wakes.mem_parked hwake p hps)
+      have hparked' : ∀ p ∈ rest, p.call = MutexCall.mlock := by
         intro p hp
-        refine hparked p ?_
-        rw [hparE]
-        rcases List.mem_append.mp hp with hq | hq
-        · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-        · exact List.mem_append.mpr (Or.inr hq)
+        exact hparked p (Wakes.mem_rest hwake p hp)
       cases hdcall : d.call with
       | mlock =>
           rw [hdcall] at hrunE
@@ -961,7 +957,7 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
             cases b <;>
               simp [hdcall, isGrant, isRelease, compObs, mstate, recAll, ownerHeld] at hbalA ⊢ <;>
                 omega
-  | runPark d b s' hcurE hrunE hparE =>
+  | runPark d b ps rest s' wk hcurE hrunE hparkE hmap hwake =>
       have hM3n : ∀ d2 : Pnd MutexSig,
           (none : Option (FSlot MutexSig)) = some (FSlot.running d2 false) →
           (d2.call = MutexCall.mlock → cfg.prim.owner ≠ some d2.fiber) ∧
@@ -970,13 +966,13 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
         simp at hd
       cases hdcall : d.call with
       | mlock =>
-          rw [hdcall] at hparE
-          simp only [mutexPrim, mutexPark] at hparE
+          rw [hdcall] at hparkE
+          simp only [mutexPrim, mutexPark] at hparkE
           by_cases hmem : d.fiber ∈ cfg.prim.waitq
-          · rw [if_pos hmem] at hparE
-            exact absurd hparE (by simp)
-          · rw [if_neg hmem] at hparE
-            simp only [Option.some.injEq] at hparE
+          · rw [if_pos hmem] at hparkE
+            exact absurd hparkE (by simp)
+          · rw [if_neg hmem] at hparkE
+            simp only [Option.some.injEq] at hparkE
             rw [hdcall] at hrunE
             simp only [mutexPrim, mutexRun] at hrunE
             by_cases h1 : cfg.prim.owner = none ∧ cfg.prim.waitq = []
@@ -987,7 +983,14 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
               · rw [if_pos h2] at hrunE
                 exact absurd hrunE (by simp)
               · rw [if_neg h2] at hrunE
-                subst hparE
+                obtain ⟨hst', hwk⟩ := Prod.mk.inj hparkE
+                subst hwk
+                subst hst'
+                have hps : ps = [] := by
+                  cases ps with
+                  | nil => rfl
+                  | cons p ps' => simp at hmap
+                subst hps
                 have hnd2 : (cfg.prim.waitq ++ [d.fiber]).Nodup := by
                   rw [List.nodup_append]
                   refine ⟨hnd, by simp [List.Nodup], ?_⟩
@@ -1006,25 +1009,32 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
                   · rw [List.mem_singleton] at hm
                     subst hm
                     exact h2
-                have hparked2 : ∀ p ∈ cfg.parked ++ [d], p.call = MutexCall.mlock := by
+                have hparked2 : ∀ p ∈ rest ++ [d], p.call = MutexCall.mlock := by
                   intro p hp
                   rcases List.mem_append.mp hp with hm | hm
-                  · exact hparked p hm
+                  · exact hparked p (Wakes.mem_rest hwake p hm)
                   · rw [List.mem_singleton] at hm
                     subst hm
                     exact hdcall
+                have hstale2 : ∀ x ∈ cfg.runq ++ (List.map
+                    (fun p : Pnd MutexSig => { fiber := p.fiber, call := p.call, fresh := false }) []),
+                  x.fresh = false → x.call = MutexCall.mlock := by
+                  intro x hx hfr
+                  rcases List.mem_append.mp hx with hm | hm
+                  · exact hstale x hm hfr
+                  · simp at hm
                 obtain ⟨hbal, hbalA, hnd', hown', hM3', hstale', hparked', hext'⟩ :=
-                  ih hnd2 hown2 hM3n hstale hparked2 hext
+                  ih hnd2 hown2 hM3n hstale2 hparked2 hext
                 refine ⟨?_, ?_, hnd', hown', hM3', hstale', hparked', hext'⟩
                 · intro f
                   rw [hcurE]
                   simpa [mstate, recOf, ownerIs] using hbal f
                 · rw [hcurE]
                   simpa [mstate, recAll, ownerHeld] using hbalA
-      | munlock => rw [hdcall] at hparE; simp [mutexPrim, mutexPark, hdcall] at hparE
-      | mtrylock => rw [hdcall] at hparE; simp [mutexPrim, mutexPark, hdcall] at hparE
-      | mcancel _ => rw [hdcall] at hparE; simp [mutexPrim, mutexPark, hdcall] at hparE
-  | finishDone d b preP postP ps r s' wk hcurE hb hfinE hparE hmap =>
+      | munlock => rw [hdcall] at hparkE; simp [mutexPrim, mutexPark, hdcall] at hparkE
+      | mtrylock => rw [hdcall] at hparkE; simp [mutexPrim, mutexPark, hdcall] at hparkE
+      | mcancel _ => rw [hdcall] at hparkE; simp [mutexPrim, mutexPark, hdcall] at hparkE
+  | finishDone d b ps rest r s' wk hcurE hb hfinE hmap hwake =>
       subst hb
       have hstale' : ∀ x ∈ cfg.runq ++ ps.map
           (fun p : Pnd MutexSig => { fiber := p.fiber, call := p.call, fresh := false }),
@@ -1035,17 +1045,10 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
         · rw [List.mem_map] at hm
           obtain ⟨p, hps, hx2⟩ := hm
           cases hx2
-          have hpm : p ∈ cfg.parked := by
-            rw [hparE]
-            exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hps)))
-          exact hparked p hpm
-      have hparked' : ∀ p ∈ preP ++ postP, p.call = MutexCall.mlock := by
+          exact hparked p (Wakes.mem_parked hwake p hps)
+      have hparked' : ∀ p ∈ rest, p.call = MutexCall.mlock := by
         intro p hp
-        refine hparked p ?_
-        rw [hparE]
-        rcases List.mem_append.mp hp with hq | hq
-        · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-        · exact List.mem_append.mpr (Or.inr hq)
+        exact hparked p (Wakes.mem_rest hwake p hp)
       have hM3n : ∀ d2 : Pnd MutexSig,
           (none : Option (FSlot MutexSig)) = some (FSlot.running d2 false) →
           (d2.call = MutexCall.mlock → cfg.prim.owner ≠ some d2.fiber) ∧
@@ -1111,7 +1114,7 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
       · intro f
         simpa [mstate, recOf, ownerIs] using hbal f
       · simpa [mstate, recAll, ownerHeld] using hbalA
-  | extEffect preE postE e r s' wk preP postP ps hextsE hresE hrunE hparE hmap =>
+  | extEffect preE postE e ps rest r s' wk hextsE hresE hrunE hmap hwake =>
       cases hec : e.call with
       | mcancel w =>
           rw [hec] at hrunE
@@ -1129,17 +1132,10 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
               · rw [List.mem_map] at hm
                 obtain ⟨p, hps, hx2⟩ := hm
                 cases hx2
-                have hpm : p ∈ cfg.parked := by
-                  rw [hparE]
-                  exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hps)))
-                exact hparked p hpm
-            have hparked' : ∀ p ∈ preP ++ postP, p.call = MutexCall.mlock := by
+                exact hparked p (Wakes.mem_parked hwake p hps)
+            have hparked' : ∀ p ∈ rest, p.call = MutexCall.mlock := by
               intro p hp
-              refine hparked p ?_
-              rw [hparE]
-              rcases List.mem_append.mp hp with hq | hq
-              · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-              · exact List.mem_append.mpr (Or.inr hq)
+              exact hparked p (Wakes.mem_rest hwake p hp)
             have hnd' : (removeFiber cfg.prim.waitq w).Nodup := nodup_removeFiber hnd
             have hown' : ∀ g ∈ removeFiber cfg.prim.waitq w, cfg.prim.owner ≠ some g :=
               fun g hg => hown g (mem_of_mem_removeFiber hg)
@@ -1175,17 +1171,10 @@ theorem mutex_mirror {cfg fin : PrimCfg MutexSig mutexPrim} {t : Trace MutexSig}
               · rw [List.mem_map] at hm
                 obtain ⟨p, hps, hx2⟩ := hm
                 cases hx2
-                have hpm : p ∈ cfg.parked := by
-                  rw [hparE]
-                  exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inr hps)))
-                exact hparked p hpm
-            have hparked' : ∀ p ∈ preP ++ postP, p.call = MutexCall.mlock := by
+                exact hparked p (Wakes.mem_parked hwake p hps)
+            have hparked' : ∀ p ∈ rest, p.call = MutexCall.mlock := by
               intro p hp
-              refine hparked p ?_
-              rw [hparE]
-              rcases List.mem_append.mp hp with hq | hq
-              · exact List.mem_append.mpr (Or.inl (List.mem_append.mpr (Or.inl hq)))
-              · exact List.mem_append.mpr (Or.inr hq)
+              exact hparked p (Wakes.mem_rest hwake p hp)
             have hext' : ∀ e' ∈ preE ++ { e with result := some (MutexRes.rbool false) } :: postE,
                 e'.result.isSome → ∃ w', e'.call = MutexCall.mcancel w' := by
               intro e' hm his
@@ -1305,7 +1294,7 @@ theorem mutexStep_grant_credit {ma mb : PrimCfg MutexSig mutexPrim} {ob : Obs Mu
       have hr2 : r = MutexRes.rbool true := Option.some.inj hr
       subst hr2
       rcases hc1 with h2 | h2 <;> simp [hcurE, h2] <;> omega
-  | finishDone d b preP postP ps r s' wk hcurE hb hfinE hparE hmap =>
+  | finishDone d b ps rest r s' wk hcurE hb hfinE hmap hwake =>
       have hr2 : r = MutexRes.rbool true := Option.some.inj hr
       subst hr2
       have hcur2 : ma.cur = some (FSlot.running d true) := by
@@ -1390,7 +1379,9 @@ def SemaphoreOps : BaseOpsSig where
   St := SemState
   baseInit := semPrim.init
   run := fun o s t f => semPrim.run s t f o
-  park := fun o s f => semPrim.park s f o
+  -- the base-op park drops wakes: the encoding machine's base invocations
+  -- readies nothing (irrelevant to the over-production separator)
+  park := fun o s f => (semPrim.park s f o).map (fun p => p.1)
   resume := fun o s f => semPrim.finish s f o
 
 /-- Non-vacuity witness for the THEOREM-B universal: the closed encoding
@@ -1463,11 +1454,11 @@ theorem mutex_silent_prefix {cfg m : PrimCfg MutexSig mutexPrim} {t : Trace Mute
                 have hfr := hq rp hhead
                 rw [hfreshE] at hfr
                 simp at hfr
-            | fiberEffect d b preP postP ps r s' wk hcurE hb hrunE hparE hmap =>
+            | fiberEffect d b ps rest r s' wk hcurE hb hrunE hmap hwake =>
                 rw [hcurE] at hcur; simp at hcur
-            | runPark d b s' hcurE hrunE hparE =>
+            | runPark d b ps rest s' wk hcurE hrunE hparkE hmap hwake =>
                 rw [hcurE] at hcur; simp at hcur
-            | extEffect preE postE e r s' wk preP postP ps hextsE hresE hrunE hparE hmap =>
+            | extEffect preE postE e ps rest r s' wk hextsE hresE hrunE hmap hwake =>
                 rw [hextsE] at hexts; simp at hexts
             | envTime t0 hcurE hle =>
                 exact ⟨rfl, by simp [hcurE], by simp [hexts], hq⟩
@@ -1498,7 +1489,7 @@ theorem mutex_not_unlockIssue : ¬ TracesPrim MutexSig mutexPrim unlockIssueTrac
   | fiberDone d r hcurE =>
       injection heq with h3 h4
       simp [issueObs, compObs] at h3
-  | finishDone d b preP postP ps r s' wk hcurE hb hfinE hparE hmap =>
+  | finishDone d b ps rest r s' wk hcurE hb hfinE hmap hwake =>
       injection heq with h3 h4
       simp [issueObs, compObs] at h3
   | extDone preE postE e r hextsE hresE =>
@@ -1591,9 +1582,9 @@ theorem gws2 : PrimStep2 MutexSig mutexPrim gw2
     mutexInit rfl rfl rfl rfl
 
 theorem gws3 : PrimStep2 MutexSig mutexPrim gw3 none gw4 :=
-  PrimStep2.fiberEffect gw3 { fiber := 0, call := MutexCall.mlock } false [] [] []
+  PrimStep2.fiberEffect gw3 { fiber := 0, call := MutexCall.mlock } false [] []
     (MutexRes.rbool true) { owner := some 0, waitq := [], resolved := [] } []
-    rfl rfl rfl rfl rfl
+    rfl rfl rfl rfl Wakes.nil
 
 theorem gws4 : PrimStep2 MutexSig mutexPrim gw4
     (some (compObs MutexSig (Caller.fiber 0) MutexCall.mlock (MutexRes.rbool true))) gw5 :=
@@ -1696,9 +1687,9 @@ theorem cws2 : PrimStep2 MutexSig mutexPrim cw1
     mutexInit rfl rfl rfl rfl
 
 theorem cws3 : PrimStep2 MutexSig mutexPrim cw2 none cw3 :=
-  PrimStep2.fiberEffect cw2 { fiber := 0, call := MutexCall.mlock } false [] [] []
+  PrimStep2.fiberEffect cw2 { fiber := 0, call := MutexCall.mlock } false [] []
     (MutexRes.rbool true) { owner := some 0, waitq := [], resolved := [] } []
-    rfl rfl rfl rfl rfl
+    rfl rfl rfl rfl Wakes.nil
 
 theorem cws4 : PrimStep2 MutexSig mutexPrim cw3
     (some (compObs MutexSig (Caller.fiber 0) MutexCall.mlock (MutexRes.rbool true))) cw4 :=
@@ -1713,9 +1704,9 @@ theorem cws6 : PrimStep2 MutexSig mutexPrim cw5
     { owner := some 0, waitq := [], resolved := [] } rfl rfl rfl rfl
 
 theorem cws7 : PrimStep2 MutexSig mutexPrim cw6 none cw7 :=
-  PrimStep2.runPark cw6 { fiber := 1, call := MutexCall.mlock } false
-    { owner := some 0, waitq := [1], resolved := [] } rfl
-    rfl rfl
+  PrimStep2.runPark cw6 { fiber := 1, call := MutexCall.mlock } false [] []
+    { owner := some 0, waitq := [1], resolved := [] } [] rfl
+    rfl rfl rfl Wakes.nil
 
 theorem cws8 : PrimStep2 MutexSig mutexPrim cw7
     (some (issueObs MutexSig (Caller.ext 0) (MutexCall.mcancel 1))) cw8 :=
@@ -1727,9 +1718,9 @@ theorem cws8 : PrimStep2 MutexSig mutexPrim cw7
 theorem cws9 : PrimStep2 MutexSig mutexPrim cw8 none cw9 :=
   PrimStep2.extEffect cw8 [] []
     { x := 0, call := MutexCall.mcancel 1, result := none }
+    [{ fiber := 1, call := MutexCall.mlock }] []
     (MutexRes.rbool true) { owner := some 0, waitq := [], resolved := [(1, false)] } [1]
-    [] [] [{ fiber := 1, call := MutexCall.mlock }]
-    rfl rfl rfl rfl rfl
+    rfl rfl rfl rfl (Wakes.drop _ Wakes.nil)
 
 theorem cws9b : PrimStep2 MutexSig mutexPrim cw9
     (some (compObs MutexSig (Caller.ext 0) (MutexCall.mcancel 1) (MutexRes.rbool true))) cw9b :=
@@ -1743,9 +1734,9 @@ theorem cws10 : PrimStep2 MutexSig mutexPrim cw9b none cw10 :=
 
 theorem cws11 : PrimStep2 MutexSig mutexPrim cw10
     (some (compObs MutexSig (Caller.fiber 1) MutexCall.mlock (MutexRes.rbool false))) cw11 :=
-  PrimStep2.finishDone cw10 { fiber := 1, call := MutexCall.mlock } true [] [] []
+  PrimStep2.finishDone cw10 { fiber := 1, call := MutexCall.mlock } true [] []
     (MutexRes.rbool false) { owner := some 0, waitq := [], resolved := [] } []
-    rfl rfl rfl rfl rfl
+    rfl rfl rfl rfl Wakes.nil
 
 theorem cancelRun : PrimRuns2 MutexSig mutexPrim cw0 cancelTrace cw11 :=
   PrimRuns2.step cw0 cw1 none _ cw11 cws1
@@ -1845,9 +1836,9 @@ theorem xws2 : PrimStep2 MutexSig mutexMutant xw1
     mutexInit rfl rfl rfl rfl
 
 theorem xws3 : PrimStep2 MutexSig mutexMutant xw2 none xw3 :=
-  PrimStep2.fiberEffect xw2 { fiber := 0, call := MutexCall.mlock } false [] [] []
+  PrimStep2.fiberEffect xw2 { fiber := 0, call := MutexCall.mlock } false [] []
     (MutexRes.rbool true) { owner := some 0, waitq := [], resolved := [] } []
-    rfl rfl rfl rfl rfl
+    rfl rfl rfl rfl Wakes.nil
 
 theorem xws4 : PrimStep2 MutexSig mutexMutant xw3
     (some (compObs MutexSig (Caller.fiber 0) MutexCall.mlock (MutexRes.rbool true))) xw4 :=
@@ -1862,9 +1853,9 @@ theorem xws6 : PrimStep2 MutexSig mutexMutant xw5
     { owner := some 0, waitq := [], resolved := [] } rfl rfl rfl rfl
 
 theorem xws7 : PrimStep2 MutexSig mutexMutant xw6 none xw7 :=
-  PrimStep2.fiberEffect xw6 { fiber := 1, call := MutexCall.mlock } false [] [] []
+  PrimStep2.fiberEffect xw6 { fiber := 1, call := MutexCall.mlock } false [] []
     (MutexRes.rbool true) { owner := some 1, waitq := [], resolved := [] } []
-    rfl rfl rfl rfl rfl
+    rfl rfl rfl rfl Wakes.nil
 
 theorem xws8 : PrimStep2 MutexSig mutexMutant xw7
     (some (compObs MutexSig (Caller.fiber 1) MutexCall.mlock (MutexRes.rbool true))) xw8 :=

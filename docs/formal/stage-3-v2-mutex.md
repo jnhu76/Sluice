@@ -135,8 +135,10 @@ via `irreducible_of_always_over`.
 
 This replaces the old branch's argument entirely: the pre-reset THEOREM B
 rested on a V1 completion shadow, which the V2 calculus refutes; nothing
-is inherited from it. LockGuard remains adjudicated separately in
-`GuardV2.lean` (THEOREM A over the synchronous `Mutex`).
+is inherited from it. LockGuard's THEOREM A over the
+synchronous `Mutex` (the freeze's mandated first nonempty-`BASE(P)`
+re-export test) is a charter obligation still open; this stage neither
+relies on it nor delivers it.
 
 Non-vacuity: the closed encoding class is inhabited —
 `encSemMutex` is the natural binary-semaphore encoding (`lock` →
