@@ -9,6 +9,10 @@ finding motivated).
 Judgment layer: `JudgeV2.lean`. Chain: Stage-0 V2.3 → Event → Semaphore
 (#378) → Mutex (#379) → this condition replay (#380).
 
+`BASE(AsyncCondition) = {AsyncMutex}` — the Stage-0 §5 stage default,
+unchanged by this stage. No enlargement, no shrinking, no alternative
+base.
+
 ## 1. Scope and subject
 
 AsyncCondition: `include/sluice/async/condition.hpp`,

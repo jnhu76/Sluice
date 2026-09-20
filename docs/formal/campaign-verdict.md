@@ -11,6 +11,13 @@ re-derived on the current stack (#378 → #379 → #380 → #381 → #382 →
 #383 → #384), each row's stage card carries the full evidence, and
 the #375 ledger (§28–§35) records each stage's closure.
 
+Naming: the repair campaign over PRs #376–#385 runs under
+FCB1-METHOD-CORRECTIVE-1 (the label the Stage-0/1/2 cards carry);
+the stack re-adjudicating on V2.3 (#379–#385) is
+FCB1-POST-V23-STACK-379-385 (this document's label, and the stage-4
+through stage-8 cards'); the #375 ledger §36 closes the stack under
+FCB1-FINAL-SYNTHESIS-CORRECTIVE-1.
+
 ## The correction of the campaign
 
 The V1 campaign carried nine THEOREM-B verdicts and one THEOREM-A
