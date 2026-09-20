@@ -348,8 +348,10 @@ Scheduler::run   scheduler.hpp:145, impl scheduler.cpp:194. Exactly one
                  drive run_live, not run.
 run_until_idle   scheduler.hpp:151, inline run(1). Zero callers anywhere.
 multi-worker run exists in production via RuntimeBuilder::workers(n) and
-                 ApplicationRuntime driving run_live(worker_count); it is
-                 outside the Stage-8 single-worker modeled core.
+                 ApplicationRuntime driving run_live(worker_count); all
+                 four apps parse `--workers` and plumb it through to the
+                 runtime builder; it is outside the Stage-8 single-worker
+                 modeled core.
 ```
 
 Historical/docs-only references (stage cards, audit, campaign records)
@@ -373,7 +375,7 @@ the mapping above.
 | select | yes | zero (dormant scheduler-side select machinery retained) | 0 | 0 | NOT NAMED | composition helper | RESEARCH/DEFER | OWNER_NO | RESEARCH | none authorized by #375 |
 | Scheduler::run(unsigned) | yes | run_until_idle inline body only | 0 | 0 | NOT NAMED (ADR-0002 §8.1 frames Scheduler/Fiber as machinery — supportive, indirect) | driver entry point / execution policy | RESEARCH/DEFER | OWNER_NO (these entry points; mechanism owned via run_live + ApplicationRuntime) | RESEARCH | none authorized by #375 |
 | Scheduler::run_until_idle() | yes | zero | 0 | 0 | NOT NAMED | driver entry point / execution policy | RESEARCH/DEFER | OWNER_NO | RESEARCH | none authorized by #375 |
-| multi-worker run | via ApplicationRuntime workers(n) | ApplicationRuntime | sluice-tail only (workers knob) | 0 | NOT NAMED as Scheduler public API | execution policy | RESEARCH/DEFER (outside Stage-8 core) | OWNER_NO (not a Scheduler public-API question) | RESEARCH | none authorized by #375 |
+| multi-worker run | via ApplicationRuntime workers(n) | ApplicationRuntime | all four apps (`--workers` → RuntimeBuilder) | 0 | NOT NAMED as Scheduler public API | execution policy | RESEARCH/DEFER (outside Stage-8 core) | OWNER_NO (not a Scheduler public-API question) | RESEARCH | none authorized by #375 |
 
 ## Evidence summary (each row cites code + architecture authority + formal result)
 
@@ -385,8 +387,9 @@ the mapping above.
   names only the Scheduler/Fiber wait/wake/deadline/cancellation mechanism;
   `audit` DC-27 classifies the family EXTRA_MECHANISM pending this round.
   Formal: RESEARCH/DEFER, per-encoding-class conditionals only (stage-1
-  card §7; THEOREM-A question for the `extCap(set)=true` class recorded on
-  #375). Owner: public ownership not required; the only dependent (select)
+  card §6; THEOREM-A question for the `extCap(set)=true` class recorded on
+  #375; carried through the V2.3 replay in §11). Owner: public ownership
+  not required; the only dependent (select)
   is itself an unadjudicated zero-consumer surface and can keep consuming an
   internalized mechanism without changing any retained caller-visible
   contract. Disposition: RESEARCH (capability DEFER × any owner).
@@ -415,9 +418,12 @@ the mapping above.
   against the synchronous `Mutex`; no GuardV2 theorem; the V1 THEOREM A is
   not inherited. Owner: mechanism owner YES, public API owner NO — the
   recorded candidate path is internalization, expressly not implemented
-  here. Disposition: RESEARCH (capability OPEN; §7.4 rule — no
-  already-proved mapping exists that would force another class without
-  pretending the capability is settled).
+  here. Disposition: RESEARCH — with the capability question OPEN, the
+  frozen mapping leaves no non-RESEARCH class available: no proved
+  reduction exists to support DELETE/INTERNALIZE-under-THEOREM-A, and the
+  charter's wording discipline (campaign verdict, lock_guard row; #375
+  §5 matrix) forbids treating the uninherited V1 THEOREM A as if it
+  settled the re-export question.
 * **AsyncCondition** — code: zero includers, zero callers; depends on
   AsyncMutex, nothing depends on it. Authority: NOT NAMED. Formal: THEOREM
   B re-verified on the amended base (owner-gated admission of `wait`,
@@ -456,10 +462,11 @@ the mapping above.
   path. Disposition: RESEARCH (capability DEFER × any owner).
 * **multi-worker run** — code: production reality is
   `RuntimeBuilder::workers(n)` → `ApplicationRuntime` →
-  `run_live(worker_count)`. Authority: execution policy per ADR-0001 §7,
-  not a Scheduler public-API contract. Formal: explicitly outside the
-  Stage-8 single-worker core; RESEARCH (deferred) per the campaign verdict.
-  Disposition: RESEARCH.
+  `run_live(worker_count)`; all four apps parse `--workers` and plumb it
+  through to the runtime builder. Authority: execution policy per
+  ADR-0001 §7, not a Scheduler public-API contract. Formal: explicitly
+  outside the Stage-8 single-worker core; RESEARCH (deferred) per the
+  campaign verdict. Disposition: RESEARCH.
 
 ## Adversarial decision attack (record)
 
@@ -511,7 +518,8 @@ no row changed class during the attack. The decisive outcomes:
 Upgrades considered and rejected during the attack: AsyncMutex OWNER_YES
 via "AsyncCondition depends on it" — rejected (the dependency chain never
 reaches retained product; attack C/F); lock_guard INTERNALIZE now —
-rejected (capability OPEN blocks a non-RESEARCH class; §7.4); Scheduler::
+rejected (with the capability OPEN, the frozen mapping leaves no
+non-RESEARCH class available); Scheduler::
 run DELETE despite OWNER_NO — rejected (DELETE requires proved
 reducibility; the mapping forbids it).
 
@@ -519,9 +527,11 @@ reducibility; the mapping forbids it).
 
 Nothing in this adjudication authorizes production changes. KEEP, CONVERGE,
 INTERNALIZE and DELETE rows: none — consequently no narrow follow-up
-implementation issues are created by #375; per the closure rule the
-RESEARCH boundaries live in this document instead of speculative research
-issues. A future implementation task must re-freeze the census and re-apply
+implementation issues are created by #375: #375's own stop state admits an
+explicit RESEARCH/DEFER with the exact unproved boundary named as a
+terminal condition, so the boundaries are recorded here rather than spun
+into speculative research issues. A future implementation task must
+re-freeze the census and re-apply
 this owner test on then-current authority before moving any surface.
 
 Per-row RESEARCH boundary and the evidence that would allow
@@ -582,9 +592,19 @@ reconsideration:
   configurations, unchanged from the campaign close.
 * Fresh-context architecture review, round 1: REQUEST_CHANGES — BLOCKING 0,
   MAJOR 1 (this gates section pre-recorded an unperformed review verdict
-  as a completed gate — the defect this revision fixes), MINOR 3 (the
-  OWNER_NO rule wording; the select census omitting the retained
-  scheduler-side select machinery; the Event open-boundary citation
-  pointing at the wrong stage-1 section) — all fixed in this revision.
-  The round-2 fresh-review verdict is recorded in the authority PR body
-  and the #375 closure comment.
+  as a completed gate), MINOR 3 (the OWNER_NO rule wording; the select
+  census omitting the retained scheduler-side select machinery; the Event
+  open-boundary citation pointing at the wrong stage-1 section) — all
+  fixed.
+* Fresh-context architecture review, round 2: REQUEST_CHANGES — BLOCKING 0,
+  MAJOR 1 (the authority PR body pre-recorded this round's verdict before
+  the review ran — the same defect class round 1 flagged, relocated),
+  MINOR 4 (the multi-worker consumers cell said sluice-tail only; the
+  lock_guard disposition cited a dangling "§7.4 rule"; the Event
+  evidence-summary repeated the wrong stage-1 §7 pointer; a tooling shell
+  fragment leaked into the PR body) — all fixed in this revision: the
+  consumers cell now names all four apps, the §7.4 references are replaced
+  by self-contained rule statements anchored on the #375 matrix and the
+  campaign verdict, the Event pointer cites stage-1 §6/§11, and the PR
+  body is rewritten. The round-3 fresh-review verdict is recorded in the
+  authority PR body and the #375 closure comment.
