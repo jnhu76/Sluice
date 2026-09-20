@@ -114,6 +114,37 @@
 #        there (the coverage cfg certifies it IS reachable in the
 #        correct model); a TRACE-REMOVAL kill, not a safety kill.
 #
+#   Stage 8V2.3 (Driver, `formal/tla/DriverCore.tla`):
+#    23. Safety: the two boot configurations (runInit-faithful, the
+#        loaded mid-run start with the drain in flight over a queued
+#        task) must complete cleanly under all eight safety invariants
+#        (task conservation, id bounds, worker occupancy, the
+#        idle-backlog shape, terminate quiescence, the spawn-record
+#        shape, completion discipline).
+#    24. Coverage: the seven scenario certificates (the empty drain,
+#        two tasks through the backlog and the worker, the mid-run
+#        spawn section minting onto the backlog, the entry flush, the
+#        stale-classify window, the post-terminate unclaimed spawn, the
+#        task issue) are negated conjunctions; each MUST be violated
+#        (the witness is reachable).
+#    25. Mutants: MutQuiescence (the drain-return quiescence gates
+#        dropped) must die on InvTermQuiet; MutDuplicateDispatch (the
+#        worker-free gate dropped from dispatch) on InvConservation;
+#        MutDrainResult (the drain returns rDone) on InvDrainResult.
+#    26. Trace-removal witness separation: MutSilentDispatch (the
+#        task's issue observation dropped) must complete CLEANLY with
+#        full state safety plus NotWorkIssue -- no step emits a `work`
+#        issue there (the coverage cfg certifies the issue IS reachable
+#        in the correct model); a TRACE-REMOVAL kill, not a safety
+#        kill.  The completion discipline is excluded from that
+#        configuration: the removed issue orphans the completion, and
+#        that break IS the removal.
+#    27. Result-binding separation: MutUnbackedMint (the spawn section
+#        fixes the result without minting the task) must be VIOLATED on
+#        NotUnbacked -- the unbacked four-observation trace becomes
+#        reachable there while the state stays safe; the correct
+#        model's unreachability of that trace is the Lean separation.
+#
 # `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
 # create terminal parked states by construction.
 #
@@ -355,5 +386,30 @@ run_violate select-mut-scan-flip SelectCoreMutScanFlip.cfg SelectCore InvResultA
 
 echo "== Stage 7V2.3: trace-removal witness separation (must hold cleanly) =="
 run_clean select-mut-no-timer SelectCoreMutNoTimer.cfg SelectCore
+
+echo "== Stage 8V2.3: DriverCore safety matrix =="
+for cfg in DriverCore DriverCoreLoaded; do
+    run_clean "driver-safety-$cfg" "$cfg.cfg" DriverCore
+done
+
+echo "== Stage 8V2.3: scenario coverage (each must be reachable) =="
+run_violate driver-cov-empty-drain DriverCoreCovEmptyDrain.cfg DriverCore InvCovEmptyDrain
+run_violate driver-cov-fifo-two DriverCoreCovFifoTwo.cfg DriverCore InvCovFifoTwo
+run_violate driver-cov-effect-in DriverCoreCovEffectIn.cfg DriverCore InvCovEffectIn
+run_violate driver-cov-flush DriverCoreCovFlush.cfg DriverCore InvCovFlush
+run_violate driver-cov-stale DriverCoreCovStale.cfg DriverCore InvCovStale
+run_violate driver-cov-post-term DriverCoreCovPostTerm.cfg DriverCore InvCovPostTerm
+run_violate driver-cov-dispatch DriverCoreCovDispatch.cfg DriverCore InvCovDispatch
+
+echo "== Stage 8V2.3: safety + result mutants (each must die on its expected invariant) =="
+run_violate driver-mut-quiescence DriverCoreMutQuiescence.cfg DriverCore InvTermQuiet
+run_violate driver-mut-duplicate-dispatch DriverCoreMutDuplicateDispatch.cfg DriverCore InvConservation
+run_violate driver-mut-drain-result DriverCoreMutDrainResult.cfg DriverCore InvDrainResult
+
+echo "== Stage 8V2.3: trace-removal witness separation (must hold cleanly) =="
+run_clean driver-mut-silent-dispatch DriverCoreMutSilentDispatch.cfg DriverCore
+
+echo "== Stage 8V2.3: result-binding separation (must be reachable there) =="
+run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore NotUnbacked
 
 echo "VERIFY_TLA: PASS"
