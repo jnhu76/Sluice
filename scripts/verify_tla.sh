@@ -68,6 +68,27 @@
 #        unreachable there (the coverage cfg certifies it IS reachable
 #        in the correct model).
 #
+#   Stage 6V2.3 (Queue, `formal/tla/QueueCore.tla`):
+#    16. Safety: the boot configurations (primInit-faithful, the full
+#        ring with a parked producer, the parked consumer) must complete
+#        cleanly under all nine safety invariants (capacity, the
+#        commit/delivery ledger, drained consumers, no-commit-after-close,
+#        result agreement, queue discipline, completion discipline).
+#    17. Coverage: the ten scenario certificates (inline push, inline
+#        pop, producer blocking, consumer blocking, the p->c and c->p
+#        handoffs, close over a buffered item, close draining a parked
+#        producer, close draining a parked consumer, capacity>1 FIFO)
+#        are negated conjunctions; each MUST be violated (the witness is
+#        reachable).
+#    18. Mutants: MutCloseCommit (the closed gate dropped from push)
+#        must die on InvNoCommitClosed; MutFifo (pop delivers the second
+#        ring item) on InvLog; MutWrongResult (try_pop returns itemA on
+#        an empty closed queue) on InvResultAgree.  MutNoConsumerGrant
+#        and MutNoProducerGrant must complete CLEANLY with NotHandoffCP
+#        / NotHandoffPC -- the handoff witnesses are unreachable there
+#        (the coverage cfgs certify they ARE reachable in the correct
+#        model); these two are TRACE-REMOVAL kills, not safety kills.
+#
 # `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
 # create terminal parked states by construction.
 #
@@ -259,5 +280,31 @@ run_violate rw-mut-owner-skip RwCoreMutOwnerSkip.cfg RwCore InvWriterOwned
 
 echo "== Stage 5V2.3: under-production witness separation (must hold cleanly) =="
 run_clean rw-mut-batch-one RwCoreMutBatchOne.cfg RwCore
+
+echo "== Stage 6V2.3: QueueCore safety matrix =="
+for cfg in QueueCore QueueCoreFull2 QueueCoreEmptyC; do
+    run_clean "queue-safety-$cfg" "$cfg.cfg" QueueCore
+done
+
+echo "== Stage 6V2.3: scenario coverage (each must be reachable) =="
+run_violate queue-cov-inline-push QueueCoreCovInlinePush.cfg QueueCore InvCovInlinePush
+run_violate queue-cov-inline-pop QueueCoreCovInlinePop.cfg QueueCore InvCovInlinePop
+run_violate queue-cov-push-park QueueCoreCovPushPark.cfg QueueCore InvCovPushPark
+run_violate queue-cov-pop-park QueueCoreCovPopPark.cfg QueueCore InvCovPopPark
+run_violate queue-cov-handoff-pc QueueCoreCovHandoffPC.cfg QueueCore InvCovHandoffPC
+run_violate queue-cov-handoff-cp QueueCoreCovHandoffCP.cfg QueueCore InvCovHandoffCP
+run_violate queue-cov-close-buffered QueueCoreCovCloseBuffered.cfg QueueCore InvCovCloseBuffered
+run_violate queue-cov-close-pushpark QueueCoreCovClosePushPark.cfg QueueCore InvCovClosePushPark
+run_violate queue-cov-close-poppark QueueCoreCovClosePopPark.cfg QueueCore InvCovClosePopPark
+run_violate queue-cov-fifo-multi QueueCoreCovFifoMulti.cfg QueueCore InvCovFifoMulti
+
+echo "== Stage 6V2.3: safety mutants (each must die on its expected invariant) =="
+run_violate queue-mut-close-commit QueueCoreMutCloseCommit.cfg QueueCore InvNoCommitClosed
+run_violate queue-mut-fifo QueueCoreMutFifo.cfg QueueCore InvLog
+run_violate queue-mut-wrong-result QueueCoreMutWrongResult.cfg QueueCore InvResultAgree
+
+echo "== Stage 6V2.3: trace-removal witness separations (must hold cleanly) =="
+run_clean queue-mut-no-consumer-grant QueueCoreMutNoConsumerGrant.cfg QueueCore
+run_clean queue-mut-no-producer-grant QueueCoreMutNoProducerGrant.cfg QueueCore
 
 echo "VERIFY_TLA: PASS"
