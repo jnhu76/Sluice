@@ -1,7 +1,11 @@
 # ADR-0002 Visual Companion — Explicit File Architecture Views
 
-- **Status**: Visual companion to [`0002-explicit-file-api-architecture.md`](0002-explicit-file-api-architecture.md)
-- **Authority**: No new decision. If this file ever conflicts with ADR-0002 text, ADR-0002 wins.
+> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
+> Historical visual companion. These diagrams depict the superseded ADR-0002 architecture, not the v1 target.
+> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+
+- **Status**: Historical visual companion to [`0002-explicit-file-api-architecture.md`](0002-explicit-file-api-architecture.md)
+- **Historical source**: ADR-0002 governed this companion at its original baseline. The v1 root now governs all target decisions.
 - **Purpose**: Keep one complete architecture map and add two reduced views that make the same normative structure easier to read on GitHub.
 
 The three diagrams are intentionally redundant:

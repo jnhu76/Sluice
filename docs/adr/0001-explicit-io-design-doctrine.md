@@ -1,6 +1,10 @@
 # ADR-0001：显式 I/O 的最小语义与设计边界
 
-- **状态**：Accepted / Frozen
+> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
+> Historical design rationale; it is no longer a separate normative parent for v1.
+> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+
+- **当前状态**：Historical / Superseded for v1（原状态：Accepted / Frozen）
 - **范围**：Sluice 的显式 I/O 研究结论
 - **证据来源**：`research/RESULTS.md` 与 Minimal Semantic Surface 研究结论
 

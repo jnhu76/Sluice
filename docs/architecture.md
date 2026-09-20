@@ -1,10 +1,10 @@
 # Sluice 当前架构快照
 
 - **Verified implementation baseline**: `253fabe79c425ad5473e1bf4efc30896023762bc`
-- **Authority**: 本文只描述当前代码，不定义规范。规范性边界见 [`ADR-0001`](adr/0001-explicit-io-design-doctrine.md) 与 [`ADR-0002`](adr/0002-explicit-file-api-architecture.md)。
-- **Conformance tracking**: [`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)。
+- **Authority**: 本文是下列基线的历史实现快照，不定义目标规范。[v1 Architecture and Contract Reference](explicit-io-v1-final-decision.md) 是唯一规范根；旧 ADR 表述仅解释该快照的历史背景。
+- **Conformance tracking**: [v1 台账](roadmap/v1-conformance.md)。[旧台账](roadmap/explicit-file-conformance.md) 仅记录旧契约的符合性。
 
-如果本文与代码不一致，以代码为准；如果本文与 ADR 冲突，以 ADR 为准。
+当前行为需核对具体提交的代码；v1 目标以根规范为准。本文以下的 ADR 规范性表述只适用于历史基线，不能作为 v1 实现方向。
 
 ---
 

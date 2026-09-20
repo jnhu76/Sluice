@@ -1,6 +1,10 @@
 # ADR-0002：Explicit File API 与执行架构
 
-- **状态**：Accepted / Architecture Frozen
+> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
+> Superseded v1 architecture. Accepted File semantics are restated in SEM, ERR and LIFE requirements; Completion/API/runtime choices below are historical.
+> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+
+- **当前状态**：Historical / Superseded for v1（原状态：Accepted / Architecture Frozen）
 - **范围**：Sluice 的文件 I/O 公共语义、API 分层与执行模型
 - **基线**：`master`（本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`；当前实现基线以 roadmap 为准）
 - **上位约束**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md)、[`../mission.md`](../mission.md)

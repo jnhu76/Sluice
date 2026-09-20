@@ -1,81 +1,78 @@
 # Sluice Agent Guide
 
-This file contains only the rules an AI coding agent needs for the current repository.
-It is not a history book, research log, roadmap, or architecture specification.
+This file gives repository working rules. Technical target authority is the
+[v1 Architecture and Contract Reference](docs/explicit-io-v1-final-decision.md).
 
-## Current authority
+## Authority and reading order
 
-For current behavior, read the repository in this order:
+1. Read the root specification's relevant requirement IDs and glossary.
+2. Read the [v1 conformance ledger](docs/roadmap/v1-conformance.md) for the affected slice.
+3. Inspect `include/`, `src/`, `apps/`, `xmake.lua` and `xmake/` to establish current behavior.
+4. Inspect the tests/models and exact configurations supporting the affected claim.
 
-1. `include/` — public headers
-2. `src/` — production implementation
-3. `apps/` — real consumers of the public API
-4. `xmake.lua` and `xmake/` — current build structure
+The root specifies what v1 must do. C++ establishes what a particular commit
+currently does. A mismatch is a conformance gap, not permission to rewrite the
+contract from the code. ADRs derive local decisions from root requirement IDs;
+they cannot independently override product scope or public behavior.
 
-The current C++ implementation is the primary source of truth.
-
-Do not use old Issues, PRs, deleted documents, Git history, old tests, old formal models, or pre-reset tags as design authority unless a task explicitly asks for historical investigation.
-
-## Clean-room reset
-
-The repository is intentionally being rebuilt from the retained C++ code.
-
-Old tests, benchmarks, examples, scripts, CI workflows, documentation, research campaigns, and formal models have no inheritance right.
-Their absence is intentional until a current need justifies rebuilding them.
-
-`research/RESULTS.md` keeps conclusions only. Research process and chronology do not belong in the current tree.
+Mission/ADR-0001/ADR-0002, their old conformance roadmap and historical issues
+are rationale or dated evidence under their supersession notices. Their old
+FROZEN/CLOSED labels do not establish v1 conformance. Use Git history or archived
+assets only when a current task needs their evidence, not as automatic authority.
 
 ## Engineering order
 
-Unless a task explicitly says otherwise:
+1. Identify the workload, requirement IDs and current-to-target gap.
+2. If public behavior or responsibility must change beyond the root, amend the
+   root before or together with implementation; record compatibility and evidence.
+3. Add the semantic oracle, deterministic regression or protocol model needed by
+   this slice before or together with changing the code.
+4. Implement one reviewable slice while keeping retained consumers usable.
+5. Verify the affected paths and update the conformance ledger with exact evidence.
+6. Retire replaced mechanisms only after consumer/migration obligations are met.
+7. Optimize measured hotspots while preserving the same contracts.
 
-1. keep the retained implementation usable;
-2. understand the current C++ as written;
-3. remove unnecessary modules and abstractions;
-4. freeze the smaller architecture;
-5. rebuild tests from current behavior;
-6. rebuild documentation from the frozen code;
-7. rebuild formal verification and TLA+ from current C++ state machines;
-8. optimize only measured local hotspots.
-
-Correctness is an engineering requirement, not a separate research campaign.
+Follow MIG-01's dependency order and phase gates. Do not postpone lifetime,
+publication or teardown verification until after a structural rewrite. Tests
+that merely repeat current implementation behavior are not a normative oracle.
 
 ## Architecture discipline
 
-Prefer deletion and direct code over speculative abstraction.
+- Keep direct execution usable without RequestCore or Scheduler/Fiber.
+- Keep File semantics shared across invocation forms and backends.
+- Keep request, observer, progress and host responsibilities distinct.
+- Do not add hidden blocking fallback or abandon accepted borrowed work.
+- Do not preserve a subsystem merely because it existed or was formalized.
+- Do not delete a required obligation merely because it has no current consumer.
+- Prefer the smallest mechanism that satisfies the accepted workload and root.
+- No speculative public framework for hypothetical future users.
 
-- No abstraction for hypothetical future users.
-- No subsystem survives merely because it existed before.
-- `apps/` matter because they are real users of the library.
-- Avoid unrelated redesign while performing cleanup work.
+## Evidence and documentation
+
+Every architecture-changing PR cites affected root IDs, current and target
+behavior, implementation owner, workload, validation and remaining limitations.
+Use the ledger statuses defined by GOV-02. An old model or finite test result is
+not proof of a new production protocol. Formal actions must map to actual C++
+transitions, and safety/liveness assumptions must be separate.
+
+Target requirements live in the root. ADRs hold derived choices and rationale.
+Implementation snapshots identify their baseline. README files summarize and
+link; they must not create another contract. Historical artifacts retain clear
+supersession labels rather than silently regaining authority.
 
 ## C++ comments
 
-Comments must describe the current implementation only.
+Comments describe the current implementation. Keep concise explanations of
+non-obvious why/what/how. Historical rationale, issue/PR chronology and research
+campaign narrative belong in documentation. Put requirement-to-code mappings in
+the ledger/ADR rather than repeating the specification in production comments.
 
-Historical rationale, Issue/PR references, phase names, research terminology, and old formal-model references do not belong in production C++ comments.
+## Performance and repository hygiene
 
-When comments are reintroduced, keep only concise comments that explain a non-obvious **Why**, necessary **What**, or non-obvious **How**.
-Do not comment code that already explains itself.
+Use `profile -> hotspot -> local hypothesis -> isolated change -> benchmark`.
+No measured hotspot means no speculative optimization task.
 
-## Tests, docs, and formal verification
-
-Rebuild all three from the final C++ implementation rather than from deleted artifacts.
-
-Tests should follow current public behavior, lifecycle, state transitions, failure behavior, and real applications.
-Documentation should explain only the current architecture and API.
-Formal models should map explicit C++ transitions to TLA+ actions and be validated against the implementation.
-
-## Performance
-
-Performance work starts from measurement:
-
-`profile -> hotspot -> local hypothesis -> isolated change -> benchmark -> keep or revert`
-
-No measured hotspot means no optimization task.
-
-## Repository hygiene
-
-Keep `xmake.lua` and `xmake/` aligned with files and targets that actually exist.
-Do not recreate CI, scripts, tests, docs, or formal tooling merely because the old repository had them.
-Keep commits narrow and reviewable. Do not merge unless explicitly instructed.
+Keep `xmake.lua` and `xmake/` aligned with actual supported targets. New tests,
+models, scripts or CI must serve a current requirement; historical tooling has
+no automatic inheritance right. Keep commits narrow and reviewable. Do not merge
+unless explicitly instructed.

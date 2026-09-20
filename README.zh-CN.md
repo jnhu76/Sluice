@@ -1,87 +1,57 @@
 # Sluice
 
-Sluice 是一个 C++20 显式 I/O library/runtime。
-
-它的目标是：**只暴露保持可观察 I/O 语义、正确性与真实资源边界所必需的信息；语义授权必须显式，执行机制与执行策略保持局部、可替换，并且只保留已经证明有价值的机制。**
+Sluice 是一个 C++20 显式文件 I/O 库，正向统一 File 契约、显式 direct/request
+execution 和可选 I/O 控制流宿主收敛。
 
 [English](README.md)
 
-## 项目宗旨
+## 规范权威
 
-Sluice 的长期原则来自现有研究结论：
+**[Sluice v1 架构与契约参考](docs/explicit-io-v1-final-decision.md)** 是 v1 目标的
+唯一规范根。它也是后续工作的术语字典与设计支架，规定文件语义、调用方式、请求与
+观察者生命周期、进展、关闭、线程安全、资源预算和验收要求。
 
-> **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
+ADR 根据其中的稳定 requirement ID 细化实现选择；C++ 说明当前行为；测试与模型
+提供有范围的证据。三者都不能独立改变根规范。
 
-```text
-Minimal semantics.
-Clear boundaries.
-Explicit authority.
-Named bounds.
-Replaceable execution.
-Minimum mechanism.
-```
+- [v1 符合性台账](docs/roadmap/v1-conformance.md)：记录实现缺口、阶段门槛与证据；
+  批准目标文档不代表代码已经符合。
+- [AGENTS.md](AGENTS.md)：仓库工作规则。
+- [代码架构快照](docs/architecture.md)：带基线的历史实现视图，不是 v1 目标图。
+- [研究结论](research/RESULTS.md)：保留的论据与证据。
 
-- [`docs/mission.md`](docs/mission.md) —— 冻结的规范性项目宗旨。
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论支持的显式 I/O 设计准则。
-- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 冻结 File-centric 语义、API 责任边界与可替换 execution 架构。
-- [`docs/roadmap/explicit-file-conformance.md`](docs/roadmap/explicit-file-conformance.md) —— 从 ADR-0002 推导的当前 master 符合性台账与架构补齐 roadmap。
-- [`research/RESULTS.md`](research/RESULTS.md) —— 当前保留的研究证据与结论。
+长期原则保持为：**语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
-## 架构一览
+## 目标架构
 
-<p align="center">
-  <img src="docs/assets/sluice-architecture.svg" alt="Sluice 架构概览" width="100%">
-</p>
+canonical `File` 拥有 native resource 与 access 事实。direct completed-return、
+显式 outstanding request、受支持的 host completed-return 共用操作语义。
 
-SVG 只负责压缩展示实现形态。[`docs/architecture.md`](docs/architecture.md) 描述当前代码现实；mission 与 ADR 定义规范性边界；conformance roadmap 记录当前 master 哪些节点已经符合这些边界、哪些 gap 仍需关闭。
+Direct execution 不依赖请求表或 runtime。显式 `IoContext` 拥有有界 RequestCore、
+backend 和 progress source；move-only Request 表达尚待履行的操作责任。
+Scheduler/Fiber 如被支持，应处于核心之上的可选 host 层，backend 不负责 Scheduler
+waiter routing。
 
-当前 `sluice_core` / `sluice_async` 的 build 拆分不代表两套长期独立 I/O 语义。ADR-0002 冻结一个 canonical `File` resource 与共享 operation semantics，并把 Blocking、ThreadPool、io_uring 定义为显式、可替换 execution。
+请求公开完成、消费结果、回收 slot 是不同事件；取消等待不结束 buffer borrow。
+执行资源关闭后仍保留未消费的结果，context 销毁则要求所有 public binding 已释放。
+具体契约与 Linux v1 范围以根规范为准。
 
-`File` 本身**不携带** blocking/async mode，也不选择 backend。execution 由调用/API boundary 显式选择，因此 caller 是否阻塞、是否产生 outstanding request、cancellation、lifetime 与 bounded-resource cost 都不会被隐藏。
+## 当前实现与迁移
 
-## 研究已经冻结的设计护栏
+保留基线已有 canonical File/blocking 操作、caller-owned Completion、AsyncIoContext、
+ThreadPool/io_uring backend 和 runtime。它们的存在不代表新目标已经实现。
+后续迁移按根规范 A–G 阶段推进，在新台账中记录代码位置、配置与验证证据。
 
-现有研究不支持“更多显式信息自然带来更多 generic control / specialization / performance”的项目级假设。
-
-长期保持：
-
-```text
-resource identity != fixed-resource optimization authority
-operation grouping != fused / atomic admission authority
-backend capability != semantic authority
-hint / information != authority
-```
-
-Copy 研究表明，显式 composed operation 可以成为合法 transformation boundary，但一个 thin local branch 已足以表达得到证明的能力，generic capability framework 没有被赚到。
-
-Batch 研究表明，知道 operations 属于同一 Batch 不等于获得 group-admission authority。
-
-性能研究同样要求把 semantic contract 与 execution policy 分开：alignment、chunk size、queue depth、worker count、backend mechanism 等可以显著影响性能，但不能因为 benchmark 结果就自动升级成 public semantics。
-
-## 当前实现
-
-当前 master 已经拥有唯一的 canonical `sluice::File` resource，并显式表达 open/close/access 语义。File-facing Blocking surface 已覆盖 positional Read/Write、sequential Read/Write、SyncData/SyncAll，以及最小 observable state（`size` / `resize`）；File-facing evented surface 通过既有 runtime seam 覆盖 positional Read/Write 与 SyncData/SyncAll；explicit outstanding operations 则通过 `AsyncIoContext` 携带 `NativeFileRef` 资源引用。这些路径都没有把 File semantic authority 交给 Scheduler 或 backend。
-
-仓库仍保留 historical blocking `FileReader` / `FileWriter` 世界；它们的最终去留由 legacy-surface audit #355 单独裁决，而不是作为第二套 canonical File model。应用侧的 File-resource consumption 已经 conforming：hash/grep/tail 与 copy source lifetime 均由 canonical `File` 持有；剩余 raw/native-handle escape 已在 app-consumer census 中分类为 REQUIRED_INTEROP 或 OUT_OF_SCOPE_NAMESPACE_WORK，不再是未分类的 conformance gap。
-
-异步部分包含 caller-owned completion、有界 request state、scheduler/runtime、取消、同步设施与 honest backend execution。repository-provided synthetic AsyncBackend 已经删除；生产 execution 保留 ThreadPool 与可用时的 io_uring。
-
-当前架构工作明确分成三阶段：
-
-```text
-Phase A  先让 ADR 架构在代码中真实成立       CLOSED / CONFORMANT
-Phase B  再证明并比较不同 execution 的优劣
-Phase C  最后优化或增加 execution backend / capability
-```
-
-Phase A 已由最终符合性审计 #348 与 roadmap #339 正式关闭。conformance roadmap 继续作为冻结架构与已验证实现状态的事实入口；legacy surface 的终局裁决则继续由 #355 独立追踪。
+旧 mission、ADR-0001/0002、配套架构图和
+[旧 conformance roadmap](docs/roadmap/explicit-file-conformance.md)
+不再承担 v1 规范权威。其 CLOSED/CONFORMANT 结论只适用于原来审查的基线和契约。
 
 ## 应用
 
-- [`sluice-copy`](apps/sluice-copy/README.md)
-- [`sluice-hash`](apps/sluice-hash/README.md)
-- [`sluice-grep`](apps/sluice-grep/README.md)
-- [`sluice-tail`](apps/sluice-tail/README.md)
+- [sluice-copy](apps/sluice-copy/README.md)
+- [sluice-hash](apps/sluice-hash/README.md)
+- [sluice-grep](apps/sluice-grep/README.md)
+- [sluice-tail](apps/sluice-tail/README.md)
 
 ## 构建
 
@@ -94,17 +64,8 @@ xmake f -m release -y
 xmake
 ```
 
-当前可用 target 以 `xmake.lua` 和 `xmake/` 为准。
+当前 target 以 `xmake.lua` 和 `xmake/` 为准。构建成功不代表全部 v1 目标配置已经实现。
 
-## 文档
+## 许可证
 
-- [`docs/mission.md`](docs/mission.md) —— 项目宗旨。
-- [`docs/adr/0001-explicit-io-design-doctrine.md`](docs/adr/0001-explicit-io-design-doctrine.md) —— 研究结论对应的显式 I/O 设计准则。
-- [`docs/adr/0002-explicit-file-api-architecture.md`](docs/adr/0002-explicit-file-api-architecture.md) —— 规范性的 File API 与 execution 架构。
-- [`docs/roadmap/explicit-file-conformance.md`](docs/roadmap/explicit-file-conformance.md) —— 实现符合性台账与架构补齐 roadmap。
-- [`docs/architecture.md`](docs/architecture.md) —— 从当前 master 推导出的架构快照。
-- [`research/RESULTS.md`](research/RESULTS.md) —— 保留的研究结论。
-
-## License
-
-Sluice 使用 [MIT License](LICENSE)。
+[MIT License](LICENSE)。
