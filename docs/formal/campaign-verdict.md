@@ -308,7 +308,8 @@ lock_guard       include/sluice/async/lock_guard.hpp (LockGuard over the
                  synchronous Mutex, mutex.hpp). Retained internal callers:
                  the scheduler mechanism itself — LockGuard guards
                  global_mtx_ (declared `mutable Mutex`, scheduler.hpp) and
-                 waiter mutexes across 13 src TUs (244 references). The
+                 waiter mutexes across 13 src files (12 translation units
+                 plus one internal test-access header; 244 references). The
                  public surface has zero apps and zero tests.
 AsyncCondition   include/sluice/async/condition.hpp; impl
                  scheduler_condition.cpp. condition.hpp is included
@@ -368,7 +369,7 @@ the mapping above.
 | Event | yes | select machinery only | 0 | 0 | NOT NAMED | runtime mechanism for select / general latch utility | RESEARCH/DEFER | OWNER_NO (public surface) | RESEARCH | none authorized by #375 |
 | Semaphore | yes | zero | 0 | 0 | NOT NAMED | general concurrency utility | RESEARCH/DEFER | OWNER_NO | RESEARCH | none authorized by #375 |
 | AsyncMutex | yes | AsyncCondition only | 0 | 0 | NOT NAMED | general concurrency utility | THEOREM B | OWNER_NO | RESEARCH | none authorized by #375 |
-| lock_guard | yes | scheduler mechanism (244 refs, 13 TUs) | 0 | 0 | NOT NAMED as product surface | runtime implementation mechanism | THEOREM-A question OPEN | OWNER_NO (public surface); mechanism owner YES | RESEARCH | none authorized by #375 |
+| lock_guard | yes | scheduler mechanism (244 refs, 13 src files) | 0 | 0 | NOT NAMED as product surface | runtime implementation mechanism | THEOREM-A question OPEN | OWNER_NO (public surface); mechanism owner YES | RESEARCH | none authorized by #375 |
 | AsyncCondition | yes | zero | 0 | 0 | NOT NAMED | general concurrency utility | THEOREM B | OWNER_NO | RESEARCH | none authorized by #375 |
 | AsyncRwLock | yes | zero (ExpireCtx mechanism coupling only) | 0 | 0 | NOT NAMED | general concurrency utility | THEOREM B | OWNER_NO | RESEARCH | none authorized by #375 |
 | AsyncQueue | yes | zero (QueuePort substrate is separate) | 0 | 0 | NOT NAMED | generic container/sync abstraction | RESEARCH/DEFER | OWNER_NO | RESEARCH | none authorized by #375 |
@@ -412,8 +413,9 @@ the mapping above.
   mutexes through LockGuard/Mutex). Authority: NOT NAMED as product
   surface; the runtime's own thread-safety is a substrate correctness
   requirement, not a public-boundary requirement; scheduler.hpp includes
-  lock_guard.hpp only for its private `Mutex` members (`global_mtx_`,
-  `wait_registry_mtx_`). Formal:
+  lock_guard.hpp for its private `Mutex` members (`global_mtx_`,
+  `wait_registry_mtx_`, `wake_mtx_`) and inline `LockGuard` use within
+  the header (scheduler.hpp:349). Formal:
   THEOREM-A question OPEN — the charter's nonempty-`BASE` re-export test
   against the synchronous `Mutex`; no GuardV2 theorem; the V1 THEOREM A is
   not inherited. Owner: mechanism owner YES, public API owner NO — the
@@ -453,7 +455,9 @@ the mapping above.
 * **Scheduler::run / run_until_idle** — code: run's only caller is
   run_until_idle's inline body; run_until_idle has zero callers; the
   retained driver consumers use run_live through ApplicationRuntime and
-  Group. Authority: §7.1 separation — ADR-0002 §8.1 frames Scheduler/Fiber
+  Group. Authority: the entry-point question is kept separate from
+  scheduler-implementation ownership (separation 1 of the owner test
+  above); ADR-0002 §8.1 frames Scheduler/Fiber
   as machinery that callers must not be forced through; no anchor names
   these two public entry points as product. Formal: RESEARCH/DEFER over the
   bespoke single-worker drain LTS (stage-8 card §6; old THEOREM B retired).
@@ -606,5 +610,15 @@ reconsideration:
   consumers cell now names all four apps, the §7.4 references are replaced
   by self-contained rule statements anchored on the #375 matrix and the
   campaign verdict, the Event pointer cites stage-1 §6/§11, and the PR
-  body is rewritten. The round-3 fresh-review verdict is recorded in the
-  authority PR body and the #375 closure comment.
+  body is rewritten.
+* Fresh-context architecture review, round 3: REQUEST_CHANGES — BLOCKING 0,
+  MAJOR 1 (this section's round-3 pointer previously phrased an intended
+  future record in completed present tense, reading as if that review had
+  already run), MINOR 2 (a dangling "§7.1 separation" pointer in the
+  Scheduler::run evidence row — the same defect class as round 2's "§7.4";
+  the lock_guard census said scheduler.hpp includes lock_guard.hpp "only"
+  for two `Mutex` members while the header also uses `LockGuard` inline
+  and declares a third `Mutex` member) — all fixed in this revision.
+  Procedure for the final round: the last fresh-context review's verdict
+  and its finding resolution are recorded in the #375 closure comment
+  when the authority PR merges.
