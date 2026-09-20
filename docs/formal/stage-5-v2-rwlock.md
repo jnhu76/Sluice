@@ -6,6 +6,10 @@ stage). Judgment layer: `JudgeV2.lean`. Chain: Stage-0 V2.3 → Event →
 Semaphore (#378) → Mutex (#379) → Condition (#380) → this rwlock replay
 (#381).
 
+`BASE(AsyncRwLock) = {AsyncMutex}` — the Stage-0 §5 stage default,
+unchanged by this stage. No enlargement, no shrinking, no alternative
+base.
+
 ## 1. Scope and subject
 
 AsyncRwLock: `include/sluice/async/async_rwlock.hpp`,

@@ -24,14 +24,15 @@ rested on: `tracesEnc_shadow_false` (`CalcV2.lean`) exhibits an
 encoding possessing a completion-shadowed trace, so the
 completion-shadow projection is not a valid separator under V2.3.
 
-Three of the old THEOREM-B rows — AsyncQueue, select,
-Scheduler::run/run_until_idle — had exactly that proof shape and are
+Four of the old THEOREM-B rows — AsyncQueue, select, and the two
+driver rows `Scheduler::run` and `Scheduler::run_until_idle` (one
+modeled stage) — had exactly that proof shape and are
 **retired, not appealed**: their stages were re-adjudicated
 RESEARCH/DEFER on the amended authority, with the old branches
 preserved fetchable as historical evidence, not deleted (the old
 heads are recorded on the stage cards and in the ledger: select at
-`7d03e1f6`, the driver at `6d02a9e3`). The other three THEOREM-B
-rows (AsyncMutex, AsyncCondition, AsyncRwLock) had shadow-shaped V1
+`7d03e1f6`, the driver at `6d02a9e3`). The THEOREM-B rows for
+AsyncMutex, AsyncCondition, and AsyncRwLock had shadow-shaped V1
 proofs as well, but each was **re-proved on V2.3 by a different,
 shadow-free argument** (the owner-gated admission refusal — see the
 table), so their verdicts stand on new premises.
@@ -161,7 +162,8 @@ The disposition is **RESEARCH (deferred)**:
   configurations: safety boots clean, coverage witnesses violated,
   mutants killed on their exact intended invariants, trace-removal
   separations clean).
-* CalcV2.lean was amended exactly once inside the stack — the
-  declared Stage-4 brake in #380 (commit `3eba6fe5`), after which
-  Stages 0–3 were replayed; JudgeV2.lean is unchanged by #379–#385.
+* CalcV2.lean was amended exactly once after the V2.3 authority was
+  established (through #378) — the declared Stage-4 brake in #380
+  (commit `3eba6fe5`), after which Stages 0–3 were replayed;
+  JudgeV2.lean is unchanged by #379–#385.
 * No production C++ was changed anywhere in the stack.

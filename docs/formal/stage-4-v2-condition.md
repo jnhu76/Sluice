@@ -4,7 +4,8 @@ Campaign: FCB1-POST-V23-STACK-379-385 (Issue #375, §30–§31). Calculus:
 Stage-0-V2.3 as amended by the Stage-4 brake (`CalcV2.lean`: `park`
 publishes the wakes its pre-suspension section readied, and the
 section-ending steps take those wakes as an order-preserving `Wakes`
-sublist of the parked set — the amendment that Stage 3's replay motivated).
+sublist of the parked set — the amendment that the Stage-4 replay's
+finding motivated).
 Judgment layer: `JudgeV2.lean`. Chain: Stage-0 V2.3 → Event → Semaphore
 (#378) → Mutex (#379) → this condition replay (#380).
 
