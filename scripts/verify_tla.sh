@@ -161,4 +161,26 @@ run_violate sem-mut-wrong-grant-result SemCoreMutWrongGrantResult.cfg SemCore In
 echo "== Stage 2V2.3: fused-return mutant (witness must become unreachable) =="
 run_clean sem-mut-fused-return SemCoreMutFusedReturn.cfg SemCore
 
+echo "== Stage 3V2.3: MutexCore safety matrix =="
+run_clean mutex-main MutexCore.cfg MutexCore
+
+echo "== Stage 3V2.3: V2.3 seam witness (must be reachable) =="
+run_violate mutex-witness MutexCoreWitness.cfg MutexCore InvWitness
+
+echo "== Stage 3V2.3: scenario coverage (each must be reachable) =="
+run_violate mutex-cov-w1 MutexCoreCovW1.cfg MutexCore InvCovW1
+run_violate mutex-cov-q MutexCoreCovQ.cfg MutexCore InvCovQ
+run_violate mutex-cov-tryboth MutexCoreCovTryBoth.cfg MutexCore InvCovTryBoth
+run_violate mutex-cov-cancelchain MutexCoreCovCancelChain.cfg MutexCore InvCovCancelChain
+run_violate mutex-cov-cancelmiss MutexCoreCovCancelMiss.cfg MutexCore InvCovCancelMiss
+run_violate mutex-cov-extwindow MutexCoreCovExtWindow.cfg MutexCore InvCovExtWindow
+
+echo "== Stage 3V2.3: safety mutants (each must die on its expected invariant) =="
+run_violate mutex-mut-grant-held MutexCoreMutGrantHeld.cfg MutexCore InvBalance
+run_violate mutex-mut-handoff-owner MutexCoreMutHandoffOwner.cfg MutexCore InvRecordOwner
+run_violate mutex-mut-cancel-true MutexCoreMutCancelTrue.cfg MutexCore InvBalance
+
+echo "== Stage 3V2.3: fused-return mutant (witness must become unreachable) =="
+run_clean mutex-mut-fused-return MutexCoreMutFusedReturn.cfg MutexCore
+
 echo "VERIFY_TLA: PASS"

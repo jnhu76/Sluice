@@ -39,6 +39,7 @@ cat > .lake/axiom-audit.lean <<'EOF'
 import Sluice.Formal.VacuityV2
 import Sluice.Formal.EventV2
 import Sluice.Formal.SemV2
+import Sluice.Formal.MutexV2
 open Sluice.Formal
 #print axioms Sluice.Formal.tracesEnc_shadow_false
 #print axioms Sluice.Formal.probeEnc_possesses
@@ -81,6 +82,18 @@ open Sluice.Formal
 #print axioms Sluice.Formal.event_capability_defer
 #print axioms Sluice.Formal.eventMutant_not_guarantees
 #print axioms Sluice.Formal.eventStep_preserved
+#print axioms Sluice.Formal.mutex_mirror
+#print axioms Sluice.Formal.mutexRuns_split
+#print axioms Sluice.Formal.mutexStep_grant_credit
+#print axioms Sluice.Formal.mutexPrim_guarantees
+#print axioms Sluice.Formal.mutex_silent_prefix
+#print axioms Sluice.Formal.mutex_not_unlockIssue
+#print axioms Sluice.Formal.mutex_over_produces
+#print axioms Sluice.Formal.mutex_irreducible
+#print axioms Sluice.Formal.mutex_possesses_grant
+#print axioms Sluice.Formal.mutex_possesses_cancel
+#print axioms Sluice.Formal.mutexMutant_not_guarantees
+#print axioms Sluice.Formal.encoding_class_inhabited
 EOF
 lake env lean .lake/axiom-audit.lean | tee .lake/axiom-audit.out
 rm -f .lake/axiom-audit.lean
