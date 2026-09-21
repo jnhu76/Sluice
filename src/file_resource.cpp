@@ -1,15 +1,22 @@
 #include <sluice/file_resource.hpp>
 
+#include <sluice/detail/file_semantics.hpp>
+
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <cstddef>
+#include <optional>
 #include <utility>
 
 namespace sluice {
 
 namespace {
 
+// POSIX spelling of the oracle's open decision (SEM-02). The frozen platform
+// defaults live here: close-on-exec descriptors and creation mode 0644 filtered
+// by the process umask.
 int open_flags_for(FileOpen mode) noexcept {
     int flags = O_CLOEXEC;
     switch (mode.access) {
@@ -42,9 +49,10 @@ int open_flags_for(FileOpen mode) noexcept {
 }
 
 Result<File> File::open(const std::string& path, FileOpen mode) {
-    if (mode.access == FileAccess::read_only &&
-        mode.contents == FileInitialContents::truncate) {
-        return make_unexpected<File>(IoError{IoError::Code::invalid_argument});
+    if (auto rejection =
+            detail::open_rejection_of(detail::precheck_open(mode, path));
+        rejection.has_value()) {
+        return make_unexpected<File>(*rejection);
     }
 
     const int fd = ::open(path.c_str(), open_flags_for(mode), 0644);

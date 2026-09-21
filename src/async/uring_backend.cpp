@@ -4,7 +4,8 @@
 #include "tax0_ablation_seams.hpp"
 #endif
 
-#include <sluice/detail/io_validation.hpp>
+#include <sluice/detail/file_semantics.hpp>
+#include <sluice/detail/uring_submit.hpp>
 #include <sluice/error.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
@@ -273,42 +274,22 @@ class UringAsyncBackend::TransportLedger {
 };
 
 Result<void> UringAsyncBackend::validate_read(ReadOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    if (op.len > 0 && op.dst == nullptr) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    if (op.len == 0)
-        return {};
-    auto off = sluice::detail::checked_posix_offset(op.offset);
-    if (!off.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    return {};
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len,
+         op.dst != nullptr}));
 }
 Result<void> UringAsyncBackend::validate_write(WriteOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    if (op.len > 0 && op.src == nullptr) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    if (op.len == 0)
-        return {};
-    auto off = sluice::detail::checked_posix_offset(op.offset);
-    if (!off.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    return {};
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset, op.len,
+         op.src != nullptr}));
 }
 Result<void> UringAsyncBackend::validate_sync(SyncDataOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    return {};
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_data));
 }
 Result<void> UringAsyncBackend::validate_sync(SyncAllOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    return {};
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_all));
 }
 
 template <class Op> Result<void> UringAsyncBackend::validate_op(const Op& op) noexcept {

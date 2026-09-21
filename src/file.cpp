@@ -1,5 +1,5 @@
 #include <sluice/file.hpp>
-#include <sluice/detail/io_validation.hpp>
+#include <sluice/detail/file_semantics.hpp>
 #include <sluice/detail/posix_retry.hpp>
 
 #include <cerrno>

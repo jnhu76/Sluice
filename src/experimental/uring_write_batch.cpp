@@ -1,6 +1,6 @@
 #include <sluice/experimental/uring_write_batch.hpp>
 
-#include <sluice/detail/io_validation.hpp>
+#include <sluice/detail/uring_submit.hpp>
 #include <sluice/error.hpp>
 
 #if defined(SLUICE_HAS_LIBURING)
