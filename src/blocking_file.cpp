@@ -46,6 +46,9 @@ Result<std::size_t> read_at(const File& file, std::uint64_t offset,
     }
 
     const auto native_offset = detail::checked_posix_offset(offset);
+    if (!native_offset.has_value()) {
+        return make_unexpected<std::size_t>(native_offset.error());
+    }
     ssize_t n = detail::retry_on_eintr([&] {
         return ::pread(file.native_handle(), dst.data(), dst.size(), native_offset.value());
     });
@@ -66,6 +69,9 @@ Result<std::size_t> write_at(const File& file, std::uint64_t offset,
     }
 
     const auto native_offset = detail::checked_posix_offset(offset);
+    if (!native_offset.has_value()) {
+        return make_unexpected<std::size_t>(native_offset.error());
+    }
     ssize_t n = detail::retry_on_eintr([&] {
         return ::pwrite(file.native_handle(), src.data(), src.size(), native_offset.value());
     });
@@ -151,6 +157,9 @@ Result<void> resize(const File& file, std::uint64_t new_size) {
     }
 
     const auto native_size = detail::checked_posix_offset(new_size);
+    if (!native_size.has_value()) {
+        return make_unexpected<void>(native_size.error());
+    }
     int rc = detail::retry_on_eintr(
         [&] { return ::ftruncate(file.native_handle(), native_size.value()); });
     if (rc < 0) {

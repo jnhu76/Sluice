@@ -24,6 +24,14 @@ using sluice_semantic::Input;
 } // namespace
 
 int main() {
+    if (sluice_semantic::check_oracle_against_table(
+            sluice_semantic::kPrecedenceScenarios,
+            sluice_semantic::kPrecedenceScenarioCount) != 0) {
+        std::fprintf(stderr,
+                     "FAIL: the shared rules disagree with the frozen precedence table\n");
+        return 1;
+    }
+
     sluice_semantic::AccessFixtures fixtures = sluice_semantic::AccessFixtures::create(64);
     if (!fixtures.ok()) {
         std::fprintf(stderr, "FAIL: could not create fixtures\n");
@@ -79,8 +87,11 @@ int main() {
         return 1;
     }
 
-    std::printf("all %zu precedence scenarios passed on direct (%zu not expressible) and "
-                "ThreadPool (%zu not drivable, %zu recorded request-side divergences)\n",
-                sluice_semantic::kPrecedenceScenarioCount, direct_skipped, threadpool_skipped, recorded_threadpool.size());
+    std::printf("%zu precedence scenarios: direct %zu compared, %zu not expressible; ThreadPool "
+                "%zu compared, %zu not drivable; %zu recorded request-side divergences\n",
+                sluice_semantic::kPrecedenceScenarioCount,
+                sluice_semantic::kPrecedenceScenarioCount - direct_skipped, direct_skipped,
+                sluice_semantic::kPrecedenceScenarioCount - threadpool_skipped, threadpool_skipped,
+                recorded_threadpool.size());
     return 0;
 }

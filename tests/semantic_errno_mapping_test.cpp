@@ -67,31 +67,31 @@ bool table_case_holds(const TableCase& c) {
 
 bool table_is_internally_consistent() {
     constexpr std::size_t count =
-        sizeof(sluice::kNativeErrorMappings) / sizeof(sluice::kNativeErrorMappings[0]);
+        sizeof(sluice::detail::kNativeErrorMappings) / sizeof(sluice::detail::kNativeErrorMappings[0]);
     // A native value must not be reachable with two different categories.
     for (std::size_t i = 0; i < count; ++i) {
         for (std::size_t j = i + 1; j < count; ++j) {
-            const auto& a = sluice::kNativeErrorMappings[i];
-            const auto& b = sluice::kNativeErrorMappings[j];
+            const auto& a = sluice::detail::kNativeErrorMappings[i];
+            const auto& b = sluice::detail::kNativeErrorMappings[j];
             if (a.native_errno == b.native_errno && a.canonical != b.canonical)
                 return false;
         }
-        if (sluice::from_errno_value(sluice::kNativeErrorMappings[i].native_errno).code !=
-            sluice::kNativeErrorMappings[i].canonical)
+        if (sluice::from_errno_value(sluice::detail::kNativeErrorMappings[i].native_errno).code !=
+            sluice::detail::kNativeErrorMappings[i].canonical)
             return false;
     }
     return true;
 }
 
 bool canonical_code_is_table_derived() {
-    if (sluice::canonical_error_code(ENOENT) != IoError::Code::not_found)
+    if (sluice::detail::canonical_error_code(ENOENT) != IoError::Code::not_found)
         return false;
-    if (sluice::canonical_error_code(ENOTDIR) != IoError::Code::not_found)
+    if (sluice::detail::canonical_error_code(ENOTDIR) != IoError::Code::not_found)
         return false;
-    if (sluice::canonical_error_code(0) != kBackend)
+    if (sluice::detail::canonical_error_code(0) != kBackend)
         return false;
     return sluice::from_errno_value(EACCES).code ==
-           sluice::canonical_error_code(EACCES);
+           sluice::detail::canonical_error_code(EACCES);
 }
 
 std::string reserve_temp_path() {

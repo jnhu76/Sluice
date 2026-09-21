@@ -182,19 +182,19 @@ void v15_unknown_effect_write_failure() {
               "V15 physical: the failure becomes an unaccounted remainder");
     }
 
-    // The request-side terminal cannot carry that outcome today. This pin passes
-    // while the divergence exists and fails once the request slice closes it, so
-    // the recorded divergence cannot be forgotten.
-    const sluice::async::detail::TerminalResult terminal =
-        sluice::async::detail::TerminalResult::err(IoError{.code = IoError::Code::backend_error,
-                                                           .os_errno = EIO});
-    if (terminal.bytes == 0) {
-        std::printf("RECORDED DIVERGENCE: V15 has no request-side representation; the shared "
-                    "request terminal drops the confirmed prefix on error and has no "
-                    "effect-certainty channel (A1 ledger row, owner #400)\n");
-    } else {
-        check(false, "V15: the recorded request-side divergence is gone; update the ledger row");
-    }
+    // Characterization of the request-side storage today, labelled as such: it
+    // shows what the shared terminal can carry and it fails if the error factory
+    // starts preserving a count. It is NOT a pin on the V15 gap itself, because a
+    // request-side fix could add an effect-certainty channel elsewhere and leave
+    // this shape untouched. V15's request-side evidence is deferred, not claimed.
+    const sluice::async::detail::TerminalResult error_only =
+        sluice::async::detail::TerminalResult::err(
+            IoError{.code = IoError::Code::backend_error, .os_errno = EIO});
+    check(error_only.is_error && error_only.bytes == 0,
+          "V15 characterization: TerminalResult::err records an error with a zero byte count");
+    std::printf("DEFERRED: V15 request-side representation evidence (owner #400); the shared "
+                "request terminal has no effect-certainty channel and its error factory writes a "
+                "zero byte count\n");
 }
 
 // ── V16: a submitted write is not covered by a later sync ──────────────────
@@ -203,7 +203,7 @@ void v16_outstanding_write_is_not_covered() {
     constexpr SyncRecord data_sync{SyncKind::data, true, 10};
     constexpr SyncRecord all_sync{SyncKind::all, true, 10};
     constexpr MutationRecord submitted{MutationKind::write, CompletionState::submitted, 0};
-    constexpr MutationRecord observed{MutationKind::write, CompletionState::observed, 10};
+    constexpr MutationRecord observed{MutationKind::write, CompletionState::observed, 9};
 
     check(!covers(data_sync, submitted) && !covers(all_sync, submitted),
           "V16: a submitted write is not covered by either sync");
@@ -222,7 +222,7 @@ void v16_outstanding_write_is_not_covered() {
 
 void v17_coverage_is_not_preservation() {
     constexpr SyncRecord data_sync{SyncKind::data, true, 4};
-    constexpr MutationRecord covered{MutationKind::write, CompletionState::observed, 4};
+    constexpr MutationRecord covered{MutationKind::write, CompletionState::observed, 3};
     constexpr MutationRecord conflicting{MutationKind::write, CompletionState::observed, 8};
 
     check(covers(data_sync, covered), "V17: the earlier write is covered");
@@ -269,8 +269,8 @@ void v17_coverage_is_not_preservation() {
 void v27_resize_durability() {
     constexpr SyncRecord data_sync{SyncKind::data, true, 6};
     constexpr SyncRecord all_sync{SyncKind::all, true, 6};
-    constexpr MutationRecord shrink{MutationKind::resize_shrink, CompletionState::observed, 6};
-    constexpr MutationRecord grow{MutationKind::resize_grow, CompletionState::observed, 6};
+    constexpr MutationRecord shrink{MutationKind::resize_shrink, CompletionState::observed, 5};
+    constexpr MutationRecord grow{MutationKind::resize_grow, CompletionState::observed, 5};
 
     check(covers(data_sync, shrink) && covers(all_sync, shrink) && covers(data_sync, grow) &&
               covers(all_sync, grow),

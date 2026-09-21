@@ -66,16 +66,20 @@ template <class T> class TaskResultSlot {
     bool done_ = false;
 };
 
+// A task exception reaching the host boundary becomes a terminal error through
+// the same canonical mapping as a native failure, so an ENOENT raised as a
+// std::system_error is not_found here too instead of backend_error.
 template <class T> Result<T> translate_task_exception() noexcept {
     try {
         throw;
     } catch (const std::bad_alloc&) {
+        // Allocation failure has no canonical category; `no_space` is the
+        // closest existing one and no new category is introduced.
         return make_unexpected<T>(IoError{IoError::Code::no_space});
     } catch (const std::system_error& e) {
-        IoError err{IoError::Code::backend_error};
-        if (e.code().value() > 0)
-            err.os_errno = e.code().value();
-        return make_unexpected<T>(err);
+        const int native = e.code().value();
+        return make_unexpected<T>(
+            IoError{.code = sluice::detail::canonical_error_code(native), .os_errno = native});
     } catch (...) {
         return make_unexpected<T>(IoError{IoError::Code::backend_error});
     }

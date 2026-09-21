@@ -114,14 +114,16 @@ class AccessFixtures {
     std::optional<sluice::File> read_write_;
 };
 
+// The direct path reports no no-op observation: nothing outside a direct call
+// reveals whether it made a syscall, and inferring it from the request shape
+// would assert what the harness is supposed to measure.
 inline Observation apply_direct(const sluice::File& file, const Input& input,
-                               std::span<std::byte> dst, std::span<const std::byte> src,
-                               bool zero_length) {
+                               std::span<std::byte> dst, std::span<const std::byte> src) {
     switch (input.operation) {
     case FileOperation::read:
-        return observe_result(sluice::blocking::read_at(file, input.offset, dst), zero_length);
+        return observe_result(sluice::blocking::read_at(file, input.offset, dst));
     case FileOperation::write:
-        return observe_result(sluice::blocking::write_at(file, input.offset, src), zero_length);
+        return observe_result(sluice::blocking::write_at(file, input.offset, src));
     case FileOperation::file_info:
         return observe_result(sluice::blocking::size(file));
     case FileOperation::resize:
@@ -142,7 +144,6 @@ inline Observation direct_attempt(const AccessFixtures& fixtures, const Input& i
     std::vector<std::byte> scratch(input.length, std::byte{0});
     const std::span<std::byte> dst(scratch.data(), input.length);
     const std::span<const std::byte> src(scratch.data(), input.length);
-    const bool zero_length = input.length == 0;
 
     if (input.closed) {
         // A closed canonical File: a fresh handle is opened and closed so the
@@ -155,13 +156,13 @@ inline Observation direct_attempt(const AccessFixtures& fixtures, const Input& i
             return observe_rejection(opened.error());
         sluice::File closed = std::move(opened.value());
         (void)closed.close();
-        return apply_direct(closed, input, dst, src, zero_length);
+        return apply_direct(closed, input, dst, src);
     }
 
     const sluice::File* file = fixtures.for_access(input.access);
     if (file == nullptr)
         return observe_rejection(IoError{.code = sluice::IoError::Code::invalid_state});
-    return apply_direct(*file, input, dst, src, zero_length);
+    return apply_direct(*file, input, dst, src);
 }
 
 // Only the operations a request backend actually exposes can be driven here.
@@ -176,11 +177,12 @@ inline bool request_drivable(const Input& input) {
 // A request execution: submit through a context, then drive it until the
 // operation reaches a terminal so no outstanding work is left behind.
 //
-// `short_circuited` is measured, not asserted: a terminal that is already
+// The no-op observation is measured, not asserted: a terminal that is already
 // `ready()` before any progress call was published at acceptance, which is what
 // SEM-03 requires of a logical no-op. A completion that only becomes ready after
-// `poll()` was produced by a dispatched operation, so a request path that
-// dispatches a zero-length data call is reported as a divergence by measurement.
+// `poll()` was produced by a dispatched operation. The request path therefore
+// reports a real observation for every input, and a zero-length request that is
+// dispatched shows up as a divergence.
 class RequestProbe {
   public:
     explicit RequestProbe(std::unique_ptr<sluice::async::AsyncBackend> backend)

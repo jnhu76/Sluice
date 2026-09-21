@@ -85,12 +85,15 @@ bool v17_coverage_is_not_a_snapshot() {
     return !preserves_exact_state(kDataSync, kConflicting);
 }
 
-// Coverage is ordered per mutation, so a mutation completing exactly at the sync
-// initiation boundary is covered and one completing later is not.
-bool coverage_boundary_is_inclusive_of_the_initiation() {
-    constexpr MutationRecord kAtBoundary{MutationKind::write, CompletionState::observed, 8};
-    constexpr MutationRecord kAfterBoundary{MutationKind::write, CompletionState::observed, 9};
-    return covers(kDataSync, kAtBoundary) && !covers(kDataSync, kAfterBoundary);
+// Coverage is ordered per mutation and the order is strict. A mutation whose
+// sequence equals the sync's initiation is unordered in the model, so no coverage
+// is claimed for it: an unordered pair supports neither a positive nor a negative
+// durability fact.
+bool coverage_requires_a_strict_order() {
+    constexpr MutationRecord kBefore{MutationKind::write, CompletionState::observed, 7};
+    constexpr MutationRecord kEqual{MutationKind::write, CompletionState::observed, 8};
+    constexpr MutationRecord kAfter{MutationKind::write, CompletionState::observed, 9};
+    return covers(kDataSync, kBefore) && !covers(kDataSync, kEqual) && !covers(kDataSync, kAfter);
 }
 
 // Cancellation grants no positive or negative durability fact, and metadata needs
@@ -191,8 +194,7 @@ int main() {
         {"v27_completed_resize_is_covered", v27_completed_resize_is_covered},
         {"v27_resize_alone_grants_no_durability", v27_resize_alone_grants_no_durability},
         {"v17_coverage_is_not_a_snapshot", v17_coverage_is_not_a_snapshot},
-        {"coverage_boundary_is_inclusive_of_the_initiation",
-         coverage_boundary_is_inclusive_of_the_initiation},
+        {"coverage_requires_a_strict_order", coverage_requires_a_strict_order},
         {"failed_sync_covers_nothing_and_metadata_needs_sync_all",
          failed_sync_covers_nothing_and_metadata_needs_sync_all},
         {"direct_resize_then_sync_sequence_succeeds", direct_resize_then_sync_sequence_succeeds},

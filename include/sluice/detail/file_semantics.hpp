@@ -1,10 +1,12 @@
 #pragma once
 
 // Shared File semantic oracle: the single authority for the v1 File rules that
-// direct execution, ThreadPool and io_uring must all obey. Execution paths call
-// these rules instead of re-deriving File legality, validation precedence,
-// range validity or error categories, so one code change moves every path
-// together.
+// direct execution, ThreadPool and io_uring must all obey. The validation rules
+// (open legality, access matrix, precedence, range) and the error mapping are
+// called by every execution path, so one code change moves them together. The
+// composition, effect and durability rules are the reference model those paths
+// are required to conform to; the paths that must publish them are named in the
+// conformance ledger and not all of them consume the rules yet.
 //
 // This header is a pure decision surface. It may answer only:
 //   - is this logical operation legal?
@@ -391,14 +393,17 @@ struct IoOutcome {
     }
 
     // A failure or cancellation whose confirmed prefix is known and whose
-    // remainder is proven unaffected.
+    // remainder is proven unaffected. For a byte operation this is correct only
+    // for a read; a failed write must use `failed_byte_operation` so that an
+    // unaccounted remainder is not reported as an accounted one.
     static constexpr IoOutcome failure(IoError reason,
                                        std::uint64_t confirmed_bytes = 0) noexcept {
         return IoOutcome{false, IoEffect{confirmed_bytes, EffectCertainty::accounted}, reason};
     }
 
     // A failure or cancellation where a possibly-effective portion has no
-    // trustworthy count. `known_prefix` stays a lower bound.
+    // trustworthy count. `known_prefix` stays a lower bound. This is the shape a
+    // failed write needs, per `failed_byte_operation`.
     static constexpr IoOutcome uncertain(IoError reason,
                                          std::uint64_t known_prefix = 0) noexcept {
         return IoOutcome{false, IoEffect{known_prefix, EffectCertainty::unknown}, reason};
@@ -471,6 +476,10 @@ struct MutationRecord {
     std::uint64_t completion_sequence = 0;
 };
 
+// Sequence numbers are strictly ordered: a mutation is ordered before a sync
+// only when its number is strictly smaller. Equal numbers mean the model cannot
+// order the two events, and an unordered pair supports no durability claim.
+
 struct SyncRecord {
     SyncKind kind = SyncKind::data;
     bool succeeded = false;
@@ -486,7 +495,7 @@ constexpr bool covers(const SyncRecord& sync, const MutationRecord& mutation) no
         return false;
     if (mutation.completion != CompletionState::observed)
         return false;
-    if (mutation.completion_sequence > sync.initiation_sequence)
+    if (mutation.completion_sequence >= sync.initiation_sequence)
         return false;
     switch (mutation.kind) {
     case MutationKind::write:
@@ -514,7 +523,7 @@ constexpr bool grants_durability_alone(const MutationRecord&) noexcept {
 // longer the bytes on disk.
 constexpr bool superseded(const SyncRecord& sync, const MutationRecord& mutation) noexcept {
     return sync.succeeded && mutation.completion == CompletionState::observed &&
-           mutation.completion_sequence > sync.initiation_sequence;
+           mutation.completion_sequence >= sync.initiation_sequence;
 }
 
 // The V17 negative rule: a successful sync never guarantees that the exact state

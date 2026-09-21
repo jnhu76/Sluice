@@ -6,12 +6,17 @@
 // as a pure rule; its precedence over the range step is covered by
 // semantic_validation_precedence_test.
 #include <sluice/detail/file_semantics.hpp>
+#include <sluice/file.hpp>
 
 #include <cstdio>
 #include <cstdint>
 #include <limits>
+#include <string>
+#include <vector>
 
+#include <fcntl.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 namespace {
 
@@ -129,6 +134,51 @@ bool native_transfer_limit_is_a_range_rejection() {
     return rejection.has_value() && rejection->code == IoError::Code::invalid_argument;
 }
 
+// The shared range helper is consumed by the legacy reader/writer as well, so the
+// correction it carries is observable there and is pinned here: an
+// unrepresentable offset is invalid_argument on every caller, not invalid_state
+// on one of them.
+bool legacy_positional_io_reports_invalid_argument() {
+    char path[] = "/tmp/sluice_range_legacy_XXXXXX";
+    const int fd = ::mkstemp(path);
+    if (fd < 0)
+        return false;
+    const ssize_t wrote = ::write(fd, "seed", 4);
+    ::close(fd);
+    if (wrote != 4) {
+        ::unlink(path);
+        return false;
+    }
+
+    bool ok = true;
+    std::vector<std::byte> dst(4, std::byte{0});
+    {
+        sluice::FileReader reader(path);
+        if (!reader.opened()) {
+            ::unlink(path);
+            return false;
+        }
+        auto result = reader.read_at(kMaxNativeOffset + 1, std::span<std::byte>(dst));
+        ok = ok && !result.has_value() &&
+             result.error().code == IoError::Code::invalid_argument;
+        (void)reader.close();
+    }
+    {
+        sluice::FileWriter writer(path);
+        if (!writer.opened()) {
+            ::unlink(path);
+            return false;
+        }
+        const std::vector<std::byte> src(4, std::byte{0});
+        auto result = writer.write_at(kMaxNativeOffset + 1, std::span<const std::byte>(src));
+        ok = ok && !result.has_value() &&
+             result.error().code == IoError::Code::invalid_argument;
+        (void)writer.close();
+    }
+    ::unlink(path);
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -143,6 +193,8 @@ int main() {
         {"size_bound_holds", size_bound_holds},
         {"checked_offset_reports_invalid_argument", checked_offset_reports_invalid_argument},
         {"native_transfer_limit_is_a_range_rejection", native_transfer_limit_is_a_range_rejection},
+        {"legacy_positional_io_reports_invalid_argument",
+         legacy_positional_io_reports_invalid_argument},
     };
 
     for (const NamedTest& t : tests) {

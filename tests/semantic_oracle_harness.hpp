@@ -2,16 +2,18 @@
 
 // A1 reference harness: one semantic oracle, several execution paths.
 //
-// An execution path never carries its own expected outcome. The harness derives
-// the requirement from the shared oracle, the path under test reports only what
-// it observed, and the harness compares the two. Adding a backend means adding
-// an adapter — never another expectation table.
+// The expectation for a scenario is written out from the root requirement in the
+// scenario table, not read back from the oracle implementation. Two comparisons
+// then run against that same table:
+//   - `check_oracle_against_table` checks the shared rules themselves, so a rule
+//     regression cannot move both sides of the comparison;
+//   - `run_path` checks one execution path, which reports only what it observed.
 //
-// The comparison is deliberately restricted to what SEM-03 fixes and what every
-// path can observe: whether the operation was rejected, with which canonical
-// error, or was allowed to proceed, or completed as a logical no-op without an
-// OS call. Byte counts and physical traces are the execution's business
-// (BACKEND-01) and are not compared here.
+// The comparison is deliberately restricted to what the root fixes and what every
+// path can observe: whether the operation was rejected and with which canonical
+// error, or was allowed to proceed, or completed as a logical no-op. Byte counts
+// and physical traces are the execution's business (BACKEND-01) and are not
+// compared here.
 
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/error.hpp>
@@ -43,51 +45,40 @@ struct Input {
     bool buffer_present = true;
 };
 
-struct Expectation {
-    DataOpVerdict verdict = DataOpVerdict::execute;
-    std::optional<IoError> rejection_error;
+struct Scenario {
+    const char* name;
+    Input input;
+    // The requirement, written from SEM-03. `expected_rejection_code` is
+    // populated exactly when the verdict is a rejection.
+    DataOpVerdict expected_verdict;
+    std::optional<IoError::Code> expected_rejection_code;
 };
-
-inline Expectation expected_for(const Input& input) {
-    Expectation expectation;
-    expectation.verdict = sluice::detail::precheck_data_op(
-        {input.closed, input.access, input.operation, input.offset, input.length,
-         input.buffer_present});
-    expectation.rejection_error = sluice::detail::rejection_of(expectation.verdict);
-    return expectation;
-}
-
-// file_info / resize / sync_data / sync_all travel the same harness: they have
-// no length, so they can never reach the logical-no-op verdict.
-inline Expectation expected_for_state(const Input& input) {
-    Expectation expectation;
-    expectation.verdict = sluice::detail::precheck_state_op(input.closed, input.access,
-                                                           input.operation);
-    expectation.rejection_error = sluice::detail::rejection_of(expectation.verdict);
-    return expectation;
-}
 
 // Caller-visible outcome of one path attempt.
 struct Observation {
     bool rejected = false;
     IoError error{};
-    // The operation completed without an OS call (direct) or without dispatch
-    // (request). Only a logical no-op is allowed to report this.
-    bool short_circuited = false;
+    // Whether the path completed a logical no-op without an OS call (direct) or
+    // without a data dispatch (request). Left empty by a path that cannot observe
+    // this for the given input; a direct call has nothing outside it that would
+    // reveal whether a syscall happened, so it always reports empty here. Only
+    // consulted for a `complete_empty` expectation.
+    std::optional<bool> no_op_without_dispatch;
 };
 
 inline Observation observe_rejection(IoError error) {
-    return Observation{true, error, false};
+    return Observation{true, error, std::nullopt};
 }
 
-inline Observation observe_accepted(bool short_circuited = false) {
-    return Observation{false, IoError{}, short_circuited};
+inline Observation observe_accepted(std::optional<bool> no_op_without_dispatch = std::nullopt) {
+    return Observation{false, IoError{.code = IoError::Code::backend_error},
+                       no_op_without_dispatch};
 }
 
 inline Observation observe_result(const sluice::Result<std::size_t>& result,
-                                 bool short_circuited = false) {
+                                 std::optional<bool> no_op_without_dispatch = std::nullopt) {
     if (result.has_value())
-        return observe_accepted(short_circuited);
+        return observe_accepted(no_op_without_dispatch);
     return observe_rejection(result.error());
 }
 
@@ -97,28 +88,12 @@ inline Observation observe_result(const sluice::Result<void>& result) {
     return observe_rejection(result.error());
 }
 
-inline bool agree(const Expectation& expected, const Observation& observed) {
-    if (expected.rejection_error.has_value()) {
-        return observed.rejected && observed.error.code == expected.rejection_error->code;
-    }
-    if (observed.rejected) {
-        // `execute` means the operation must reach the execution, not that the
-        // environment must succeed. An operation-result failure carries native
-        // detail; a synthesized validation/admission rejection does not, so the
-        // two are distinguishable and only the second is a precedence defect.
-        return observed.error.os_errno != 0;
-    }
-    if (expected.verdict == DataOpVerdict::complete_empty)
-        return observed.short_circuited;
-    return true;
-}
-
 inline const char* describe(DataOpVerdict verdict) {
     switch (verdict) {
     case DataOpVerdict::execute:
         return "execute";
     case DataOpVerdict::complete_empty:
-        return "complete_empty(no OS call)";
+        return "complete_empty(no-op)";
     case DataOpVerdict::reject_closed:
         return "reject_closed(invalid_state)";
     case DataOpVerdict::reject_access:
@@ -132,40 +107,77 @@ inline const char* describe(DataOpVerdict verdict) {
 inline void describe(const Observation& observed, char* buffer, std::size_t size) {
     if (!observed.rejected) {
         std::snprintf(buffer, size, "%s",
-                      observed.short_circuited ? "accepted(no OS call)" : "accepted");
+                      observed.no_op_without_dispatch.value_or(false) ? "accepted(no-op)"
+                                                                      : "accepted");
         return;
     }
     std::snprintf(buffer, size, "rejected(%s)", sluice::to_string(observed.error.code).data());
 }
 
-struct Scenario {
-    const char* name;
-    Input input;
-};
-
-inline Expectation expected_for_scenario(const Input& input) {
-    if (sluice::detail::is_byte_operation(input.operation))
-        return expected_for(input);
-    return expected_for_state(input);
+// The scenario table is the requirement. A path is compared against it, not
+// against the oracle implementation, and any rejection where the table expects an
+// accepted operation is a mismatch: an accepted operation that the environment
+// refuses does not belong in this table, because a valid range refused by a
+// filesystem is an operation result rather than a precedence statement.
+inline bool agree(const Scenario& scenario, const Observation& observed) {
+    if (scenario.expected_rejection_code.has_value())
+        return observed.rejected && observed.error.code == *scenario.expected_rejection_code;
+    if (observed.rejected)
+        return false;
+    if (scenario.expected_verdict == DataOpVerdict::complete_empty) {
+        if (observed.no_op_without_dispatch.has_value())
+            return *observed.no_op_without_dispatch;
+    }
+    return true;
 }
 
-// Runs every scenario's oracle expectation against one path adapter. The adapter
-// receives the Input and returns what that path observed; it must not consult
-// the expectation. Returns the number of mismatches, prints each one, and
-// optionally appends the mismatched scenario names for gap pinning.
+// Checks the shared rules against the written table, independently of any path.
+// Returns the number of disagreements; a rule regression fails here.
+inline std::size_t check_oracle_against_table(const Scenario* scenarios, std::size_t count) {
+    std::size_t mismatches = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const Input& input = scenarios[i].input;
+        const DataOpVerdict derived =
+            sluice::detail::is_byte_operation(input.operation)
+                ? sluice::detail::precheck_data_op({input.closed, input.access, input.operation,
+                                                   input.offset, input.length, input.buffer_present})
+                : sluice::detail::precheck_state_op(input.closed, input.access, input.operation);
+        const std::optional<IoError> rejection = sluice::detail::rejection_of(derived);
+        bool agrees = derived == scenarios[i].expected_verdict;
+        if (agrees) {
+            if (scenarios[i].expected_rejection_code.has_value()) {
+                agrees = rejection.has_value() &&
+                         rejection->code == *scenarios[i].expected_rejection_code;
+            } else {
+                agrees = !rejection.has_value();
+            }
+        }
+        if (agrees)
+            continue;
+        std::fprintf(stderr, "ORACLE/TABLE MISMATCH %s: table requires %s, the shared rules answer %s\n",
+                     scenarios[i].name, describe(scenarios[i].expected_verdict),
+                     describe(derived));
+        ++mismatches;
+    }
+    return mismatches;
+}
+
+// Runs every scenario against one path adapter. The adapter receives the Input
+// and returns what that path observed; it must not consult the table. Returns the
+// number of mismatches, prints each one, and optionally appends the mismatched
+// scenario names for gap pinning.
 template <class Attempt>
 std::size_t run_path(const char* path_name, const Scenario* scenarios, std::size_t count,
                      Attempt&& attempt, std::vector<const char*>* mismatched_names = nullptr) {
     std::size_t mismatches = 0;
     for (std::size_t i = 0; i < count; ++i) {
-        const Expectation expected = expected_for_scenario(scenarios[i].input);
         const Observation observed = attempt(scenarios[i].input);
-        if (agree(expected, observed))
+        if (agree(scenarios[i], observed))
             continue;
         char observed_text[64];
         describe(observed, observed_text, sizeof(observed_text));
-        std::fprintf(stderr, "MISMATCH [%s] %s: oracle requires %s, path observed %s\n", path_name,
-                     scenarios[i].name, describe(expected.verdict), observed_text);
+        std::fprintf(stderr, "MISMATCH [%s] %s: table requires %s, path observed %s\n", path_name,
+                     scenarios[i].name, describe(scenarios[i].expected_verdict), observed_text);
         if (mismatched_names != nullptr)
             mismatched_names->push_back(scenarios[i].name);
         ++mismatches;
@@ -173,15 +185,16 @@ std::size_t run_path(const char* path_name, const Scenario* scenarios, std::size
     return mismatches;
 }
 
-// Compares a path's observed divergences against the set recorded for it in the
-// ledger. Equality is required in both directions: a divergence that closes, and
-// a new divergence that appears, both fail, so the recorded gap set cannot rot.
 inline bool name_less(const char* a, const char* b) {
     return std::strcmp(a, b) < 0;
 }
 
-inline bool matches_recorded_divergences(const char* path_name,
-                                        std::vector<const char*> observed,
+// Compares a path's observed divergences against the divergence set recorded for
+// it. Equality is required in both directions: a divergence that closes, and a new
+// divergence that appears, both fail, so a recorded gap cannot rot. The recorded
+// set lives beside the scenario table and is cited by the conformance ledger; the
+// two must be updated together.
+inline bool matches_recorded_divergences(const char* path_name, std::vector<const char*> observed,
                                         std::vector<const char*> recorded) {
     std::sort(observed.begin(), observed.end(), name_less);
     std::sort(recorded.begin(), recorded.end(), name_less);
