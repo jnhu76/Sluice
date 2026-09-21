@@ -24,6 +24,9 @@ sluice_one_file_target("binary", "test", "file_access_precedence_test", "tests",
 sluice_one_file_target("binary", "test", "semantic_errno_mapping_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "semantic_open_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "semantic_range_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "semantic_short_io_reference_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "semantic_effect_outcome_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "semantic_durability_reference_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "semantic_validation_precedence_test", "tests",
                        {"sluice_core", "sluice_async"})
 
