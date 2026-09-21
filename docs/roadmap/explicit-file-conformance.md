@@ -1,9 +1,13 @@
 # Explicit File Architecture Conformance Roadmap
 
-- **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
+> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
+> Historical conformance to ADR-0002. CLOSED/CONFORMANT labels below do not certify the new v1 target. Use [the v1 ledger](v1-conformance.md) for current convergence.
+> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+
+- **Original authority (historical only)**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
 - **Verified implementation baseline**: `d7511349990cbb3ef340e158c7816fe3296b0575`（该 commit 可 checkout 并验证下文描述的实现状态）
 - **Purpose**: 记录当前代码对已冻结 Explicit File 架构的符合程度，并把剩余差距拆成可独立关闭的工作项。
-- **Non-authority rule**: 本文不重新定义架构；若本文与 ADR 冲突，以 ADR 为准。
+- **Current status**: 本文仅为历史台账；v1 目标以根规范为准，当前收敛状态见新 v1 台账。
 
 ---
 

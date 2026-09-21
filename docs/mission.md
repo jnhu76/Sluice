@@ -1,6 +1,10 @@
 # Sluice 宗旨
 
-> **状态：FROZEN**
+> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](explicit-io-v1-final-decision.md) is the sole normative root.
+> Historical mission rationale; its retained principles are restated in PROD-01 / ARCH-01.
+> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+
+> **当前状态：HISTORICAL / SUPERSEDED for v1；原状态：FROZEN**
 >
 > 本文只冻结已经由 Sluice 研究结论支持的项目宗旨。证据以 `research/RESULTS.md` 与 Minimal Semantic Surface 研究结论为依据。
 
