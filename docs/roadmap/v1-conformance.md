@@ -24,18 +24,18 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 
 ## Implementation assessment
 
-| Slice | Root requirements | Initial status | Required evidence before closure |
+| Slice | Root requirements | Status | Required evidence before closure |
 |---|---|---|---|
-| Public operation oracle | SEM, ERR | NOT_ASSESSED | Semantic tables; short-I/O/reference-byte properties; V01–V03, V15–V17, V27 |
+| Shared File semantic oracle | SEM-02, SEM-03, SEM-04, ERR-01 | IMPLEMENTED_UNVERIFIED | See the A1 review record: direct execution and the canonical error table carry evidence; request-side ordering and effect reporting do not |
 | Direct invocation | INV, ARCH, W-01 | NOT_ASSESSED | No request/runtime dependency; File lifetime and consumer tests |
 | Admission and slot lifecycle | REQ, BOUND | NOT_ASSESSED | V04–V05, V08–V09, V24, V26; executable model and failure injection |
 | Public Request and result lifetime | HANDLE, LIFE | NOT_ASSESSED | Move/consume/discard, retained results, release-build violation behavior |
 | Observer attachment and retirement | OBS | NOT_ASSESSED | V06–V08; attach/publication and cancel/delivery interleavings |
 | Progress and external integration | PROG, W-03 | NOT_ASSESSED | V10–V12, V23; both backends; no-busy-poll/no-lost-wake evidence |
 | Public threading and memory handoff | THREAD, REQ-04 | NOT_ASSESSED | API concurrency matrix, publication review, deterministic handoff and race instrumentation |
-| Cancel and effect reporting | CANCEL, ERR-02 | NOT_ASSESSED | V13–V15, V19; unsupported/retryable/coalesced control behavior |
-| ThreadPool profile | BACKEND, PROD-02 | NOT_ASSESSED | Full required operation matrix; bounded workers; shared conformance; shutdown |
-| io_uring profile | BACKEND, PROD-02 | NOT_ASSESSED | Shared conformance; partial-submit/control-CQE faults; real-kernel configuration |
+| Cancel and effect reporting | CANCEL, ERR-02 | GAP | V13–V15, V19; unsupported/retryable/coalesced control behavior. A1 added reference rules but no request path represents an unaccounted remainder or preserves a count across a cancel |
+| ThreadPool profile | BACKEND, PROD-02 | GAP | Full required operation matrix; bounded workers; shared conformance; shutdown. A1 recorded zero-length dispatch, precedence ordering and effect reporting as open |
+| io_uring profile | BACKEND, PROD-02 | GAP | Shared conformance; partial-submit/control-CQE faults; real-kernel configuration. A1 recorded the same request-side gaps plus an undisclosed transfer limit and ad-hoc errno classification |
 | Bounded pipeline scope | HOST-02, W-02 | NOT_ASSESSED | V18–V19; early return/exception cleanup and scope capacity |
 | Shutdown and destruction | SHUT | NOT_ASSESSED | V20–V23; poison/retirement; retained-result and host-detachment checks |
 | Core/public build boundary | ARCH, MIG | NOT_ASSESSED | V25; installed headers and standalone core-only consumers |
@@ -47,6 +47,10 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 NOT_ASSESSED does not imply the baseline has no useful implementation or evidence.
 It prevents partial or older evidence from silently becoming certification of
 the new target. The implementing PR records the precise source/evidence.
+
+A row moves off NOT_ASSESSED only through a recorded review below. A GAP row
+means a specific nonconforming behavior was identified with source evidence; it
+does not mean the whole slice is unimplemented.
 
 ## Evidence record template
 
@@ -80,3 +84,63 @@ and observer-reference obligations even though full integration closes later.
 Release evidence must enumerate actual supported configurations and pass W-01,
 W-02, W-03, and W-04 for any supported optional host. This file is intentionally
 not a claim that those gates have already passed.
+
+## A1 review record — Issue #392, shared File semantic oracle
+
+Statuses in this record use the ledger vocabulary above. "CONFORMING" below means
+the named requirement holds on the named path with the cited evidence; it is a
+scope-local statement, not a global VERIFIED claim.
+
+| Field | Content |
+|---|---|
+| Requirement scope | SEM-02 open rules; SEM-03 access matrix and validation precedence steps 1–4; SEM-04 offset/length/range; SEM-05 primitive and composition rules; SEM-06 durability rules; ERR-01 canonical mapping; ERR-02 effect representation. Excludes SEM-01 operation matrix closure, SEM-07 metadata/identity, direct composition helpers, and every request-side responsibility |
+| Implementation | `include/sluice/detail/file_semantics.hpp` is the single semantic authority. `src/file_resource.cpp`, `src/blocking_file.cpp`, `src/async/file.cpp`, `src/async/async_io_context.cpp`, `src/async/threadpool_backend.cpp` and `src/async/uring_backend.cpp` call it; none of them re-derives File legality |
+| Change | `ENOENT`/`ENOTDIR` now map to `not_found` (was `permission_denied`). Embedded NUL is rejected before the native open (was silently truncated). An unrepresentable offset is `invalid_argument` (was `invalid_state` for the legacy reader). The last addressed byte is validated without overflow and a transfer above the native count is an invalid range (io_uring had no such check). `detail/io_validation.hpp` became `detail/uring_submit.hpp` because its remaining content is io_uring mechanism, not File validation |
+| Semantic/regression evidence | `semantic_errno_mapping_test` (14 table cases, table consistency, real `ENOENT`/`ENOTDIR`/`EACCES` failures), `semantic_open_test` (18-combination legality table, oracle-versus-real-open cross-check, NUL rejected pre-open), `semantic_range_test` (13 range cases cross-checked against wide-arithmetic restatement), `semantic_short_io_reference_test`, `semantic_effect_outcome_test`, `semantic_durability_reference_test`, `semantic_validation_precedence_test` (23 scenarios), `semantic_reference_case_test` (V01–V03, V15–V17, V27) |
+| Protocol/model evidence | None claimed. A1 is a table/property slice; the request lifecycle model belongs to Phase B |
+| Publication/thread evidence | None claimed. This slice does not change publication or threading |
+| Backend/kernel evidence | Direct, ThreadPool and real-kernel io_uring (`--liburing=y`, 8-case smoke passing) are compared against the same scenario table. io_uring unavailability is reported NOT RUN, never as a pass. `/dev/full` is a fault-injection device outside the PROD-02 regular-file domain and is used only to produce a deterministic write failure |
+| Status | Shared File semantic oracle: IMPLEMENTED_UNVERIFIED. Direct path: CONFORMING for the scope above. Request paths: GAP, see the map |
+
+### A1 baseline gap map
+
+Rule/scenario | Current path | Observed behavior | v1 expected | Status | Owner
+---|---|---|---|---|---
+Open combination legality, defaults, embedded NUL | `File::open` | `invalid_argument` before the native open; NUL no longer truncates the name | SEM-02 | CONFORMING | —
+Access matrix and precedence steps 1–4 | `sluice::blocking::*` | All 22 drivable scenarios match the oracle | SEM-03, SEM-04 | CONFORMING | —
+Offset/length range, last-byte overflow | canonical File + direct syscalls | Unrepresentable offset, overflowing last byte and above-native transfer are rejected before the syscall | SEM-04 | CONFORMING | —
+Native error classification | `from_errno_value` | Single table; `ENOENT`/`ENOTDIR`→`not_found`, `EACCES`/`EPERM`→`permission_denied`, native detail preserved | ERR-01 | CONFORMING | —
+Primitive EOF / short transfer / zero-length | direct syscalls | Matches `classify_primitive` on real files | SEM-05 | CONFORMING | —
+Exact/all composition | direct | No direct composition surface exists | SEM-05 | OUT_OF_SCOPE | #393
+`file_info` / size / same-file identity | canonical File | Only `size` via `fstat`; no `FileInfo` | SEM-07 | OUT_OF_SCOPE | #393
+Explicit close, destructor, move-assignment error boundary | canonical File | Not audited against SEM-02 close rules | SEM-02 | OUT_OF_SCOPE | #393
+Zero-length request | ThreadPool, io_uring | Accepted, but not published at acceptance: a zero-length data call is dispatched (measured, not inferred) | SEM-03: never dispatches a data syscall | GAP | #400
+Precedence step 4 (range) vs step 7 (capacity) | both request backends | `submit_transaction` reserves a slot before the backend validates, so a full table reports `would_block` for a request with an invalid range | SEM-03 | GAP | #394
+Precedence step 4 (range) vs steps 5–6 (health/support) | both request backends | `stage0_precheck` runs before validation, so admission-closed or a missing ring outranks an invalid range | SEM-03 | GAP | #394
+Partial effect on failure | both request backends | `TerminalResult::err()` writes `bytes = 0` and the terminal has no effect-certainty channel, so an error plus confirmed bytes or an unaccounted remainder is not representable | ERR-02, V15 | GAP | #400
+Cancel racing a completed count | both request backends | `record_canceled` stores `err(canceled)` with no count, so a raced success is erasable | ERR-02, CANCEL-01 | GAP | #400
+Zero-progress write code | `op_helpers`, `await_op_helpers` | Three different codes across composition helpers (`invalid_state`, `backend_error`) and no confirmed-byte reporting | SEM-05 | GAP | #400
+Durability coverage of a completed resize | direct resize + `sync_data`/`sync_all` | Sequence succeeds and the size change is observable; no request-path evidence exists | SEM-06, V27 | IMPLEMENTED_UNVERIFIED | #400
+Submitted-then-sync ordering | request paths | No API reports coverage, so V16 cannot be exercised end to end | SEM-06, V16 | IMPLEMENTED_UNVERIFIED | #400
+EINTR retry | direct syscalls | `retry_on_eintr` exists and shares one helper; no test drives it | SEM-05 | IMPLEMENTED_UNVERIFIED | #393
+Undisclosed transfer limit | io_uring | A request longer than the SQE count is lowered to a short count without disclosing the limit | BACKEND-02 capability disclosure | GAP | #400
+Ad-hoc errno classification outside the table | io_uring submit path, io_uring wait source | `EINTR`/`EAGAIN`/`EBUSY` compared locally next to shared classification | ERR-01 | GAP | #400
+Closed-operation error | legacy `Reader`/`Writer`/`FileReader`/`FileWriter` | Fabricates `permission_denied` (no native detail) where the oracle requires `invalid_state` | SEM-03 step 1 | GAP | #402
+Access legality, composition codes, confirmed bytes | legacy reader/writer | No canonical access check; `read_exact`/`write_all` return no confirmed prefix | SEM-03, SEM-05 | GAP | #402
+Closed descriptor error code, copied open flags | `src/experimental/*` | Returns `permission_denied`; duplicates the writer flag lowering; in no build target | SEM-02, SEM-03 | OUT_OF_SCOPE | #402
+Unused submit-classification helpers | `detail/uring_submit.hpp` | `classify_uring_submit`/`UringSubmitProgress` have no call site | — | OUT_OF_SCOPE | #402
+Code-to-name table for CLI output | `apps/sluice-copy/cli_parse.cpp` | Second presentation table with a `default` fallback; not a semantic authority | — | OUT_OF_SCOPE | App surface
+
+### A1 open items recorded rather than decided
+
+- SEM-05 requires composition to stop with a "no-progress failure" without naming
+  a canonical category. The oracle reuses `invalid_state` as the closest existing
+  category and adds no new category. The root does not specify this mapping, so
+  it is recorded here as an ambiguity rather than treated as settled.
+- The oracle rejects only what is not natively representable. A filesystem may
+  still refuse an accepted offset near the native maximum; that refusal is an
+  operation result with native detail, not a validation rejection.
+- V16 and the request-side half of V15 and V27 need request-path capability
+  (an unobserved write followed by a sync, and a terminal that can carry an
+  unaccounted remainder). Their rules are asserted; their production evidence is
+  owned by #400 and is not claimed here.
