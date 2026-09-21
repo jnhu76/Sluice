@@ -131,16 +131,24 @@ ThreadPoolBackend::~ThreadPoolBackend() {
     }
 }
 
+// This raw-pointer surface fails fast on a null buffer with a nonzero length
+// as its own implementation precondition: SEM-03 treats caller memory validity
+// as not dynamically detectable, so the shared oracle does not answer buffer
+// presence. `execute` implies a nonzero length.
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
-    return sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
-        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len,
-         op.dst != nullptr}));
+    const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});
+    if (verdict == sluice::detail::DataOpVerdict::execute && op.dst == nullptr)
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_argument});
+    return sluice::detail::accept_or_reject(verdict);
 }
 
 Result<void> ThreadPoolBackend::validate_write(WriteOp op) {
-    return sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
-        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset, op.len,
-         op.src != nullptr}));
+    const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset, op.len});
+    if (verdict == sluice::detail::DataOpVerdict::execute && op.src == nullptr)
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_argument});
+    return sluice::detail::accept_or_reject(verdict);
 }
 
 Result<void> ThreadPoolBackend::validate_sync(SyncDataOp op) {

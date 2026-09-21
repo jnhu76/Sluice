@@ -5,13 +5,20 @@
 
 namespace sluice::async {
 
+// This raw-pointer surface fails fast on a null buffer with a nonzero length
+// as its own implementation precondition: SEM-03 treats caller memory validity
+// as not dynamically detectable, so the shared oracle does not answer buffer
+// presence. `execute` implies a nonzero length.
 Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std::uint64_t offset,
                                   std::span<std::byte> dst, Completion<std::size_t>& c) {
-    const auto verdict = sluice::detail::precheck_data_op({!file.is_open(), file.access(),
-                                                  sluice::detail::FileOperation::read, offset, dst.size(),
-                                                  dst.data() != nullptr});
+    const auto verdict = sluice::detail::precheck_data_op(
+        {!file.is_open(), file.access(), sluice::detail::FileOperation::read, offset, dst.size()});
     if (auto rejection = sluice::detail::rejection_of(verdict); rejection.has_value()) {
         return make_unexpected<std::size_t>(*rejection);
+    }
+    if (verdict == sluice::detail::DataOpVerdict::execute && dst.data() == nullptr) {
+        return make_unexpected<std::size_t>(
+            IoError{.code = IoError::Code::invalid_argument});
     }
     if (verdict == sluice::detail::DataOpVerdict::complete_empty) {
         return std::size_t{0};
@@ -22,10 +29,14 @@ Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std
 Result<std::size_t> await_write_at(const File& file, RuntimeTaskContext& ctx, std::uint64_t offset,
                                    std::span<const std::byte> src, Completion<std::size_t>& c) {
     const auto verdict = sluice::detail::precheck_data_op({!file.is_open(), file.access(),
-                                                  sluice::detail::FileOperation::write, offset, src.size(),
-                                                  src.data() != nullptr});
+                                                  sluice::detail::FileOperation::write, offset,
+                                                  src.size()});
     if (auto rejection = sluice::detail::rejection_of(verdict); rejection.has_value()) {
         return make_unexpected<std::size_t>(*rejection);
+    }
+    if (verdict == sluice::detail::DataOpVerdict::execute && src.data() == nullptr) {
+        return make_unexpected<std::size_t>(
+            IoError{.code = IoError::Code::invalid_argument});
     }
     if (verdict == sluice::detail::DataOpVerdict::complete_empty) {
         return std::size_t{0};

@@ -60,8 +60,8 @@ void v01_closed_file_with_zero_buffer_is_invalid_state() {
         return;
     }
 
-    // Direct path: the zero buffer does not save a closed File.
-    const sluice_semantic::Input input{true, FileAccess::read_only, FileOperation::read, 0, 0, true};
+    // Direct path: the closed File is rejected before anything else.
+    const sluice_semantic::Input input{true, FileAccess::read_only, FileOperation::read, 0, 0};
     const sluice_semantic::Observation direct = sluice_semantic::direct_attempt(fixtures, input);
     check(direct.rejected && direct.error.code == IoError::Code::invalid_state,
           "V01 direct: closed + zero buffer is invalid_state");
@@ -83,9 +83,9 @@ void v02_illegal_access_with_zero_buffer_is_invalid_argument() {
     }
 
     const sluice_semantic::Input read_on_write_only{
-        false, FileAccess::write_only, FileOperation::read, 0, 0, true};
+        false, FileAccess::write_only, FileOperation::read, 0, 0};
     const sluice_semantic::Input write_on_read_only{
-        false, FileAccess::read_only, FileOperation::write, 0, 0, true};
+        false, FileAccess::read_only, FileOperation::write, 0, 0};
 
     for (const sluice_semantic::Input& input : {read_on_write_only, write_on_read_only}) {
         const sluice_semantic::Observation direct =

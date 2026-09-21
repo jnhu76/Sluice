@@ -125,8 +125,7 @@ bool native_transfer_limit_is_a_range_rejection() {
                                                sluice::FileAccess::read_only,
                                                sluice::detail::FileOperation::read,
                                                0,
-                                               kMaxNativeTransfer + 1,
-                                               true};
+                                               kMaxNativeTransfer + 1};
     const DataOpVerdict verdict = sluice::detail::precheck_data_op(request);
     if (verdict != DataOpVerdict::reject_range)
         return false;

@@ -27,9 +27,16 @@ struct Precheck {
 };
 
 Precheck precheck(const File& file, FileOperation operation, std::uint64_t offset,
-                  std::size_t length, bool buffer_present) {
+                  std::size_t length, const std::byte* buffer) {
     const DataOpVerdict verdict = detail::precheck_data_op(detail::DataOpRequest{
-        !file.is_open(), file.access(), operation, offset, length, buffer_present});
+        !file.is_open(), file.access(), operation, offset, length});
+    // Implementation precondition of this raw-pointer surface, deliberately not
+    // a shared rule: SEM-03 treats caller memory validity as not dynamically
+    // detectable, so the oracle does not answer buffer presence. This surface
+    // fails fast instead of handing a null pointer with a nonzero length to the
+    // kernel. `execute` implies a nonzero length.
+    if (verdict == DataOpVerdict::execute && buffer == nullptr)
+        return Precheck{IoError{.code = IoError::Code::invalid_argument}, false};
     return Precheck{detail::rejection_of(verdict), verdict == DataOpVerdict::complete_empty};
 }
 

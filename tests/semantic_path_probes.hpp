@@ -5,10 +5,6 @@
 // Each adapter reports only what its execution path observed. None of them
 // inspects an expectation, and none of them owns an expected outcome: the
 // oracle in `semantic_oracle_harness.hpp` is the only source of requirements.
-//
-// The request adapters also expose the cases the direct API cannot express
-// (an absent buffer cannot be handed to a std::span) so the harness can report
-// them as not drivable rather than silently passing.
 
 #include "semantic_oracle_harness.hpp"
 
@@ -34,11 +30,7 @@ namespace sluice_semantic {
 inline constexpr std::size_t kDirectScratchLimit = 64;
 
 inline bool direct_drivable(const Input& input) {
-    if (input.length > kDirectScratchLimit)
-        return false;
-    // A zero-length request has no extent, so an absent buffer is expressible
-    // to the direct API as an empty span.
-    return input.buffer_present || input.length == 0;
+    return input.length <= kDirectScratchLimit;
 }
 
 // One temp file opened with each access mode, so every scenario has the resource
@@ -195,8 +187,8 @@ class RequestProbe {
         if (!input.closed && file == nullptr)
             return observe_rejection(IoError{.code = sluice::IoError::Code::invalid_state});
 
-        std::vector<std::byte> scratch(input.buffer_present ? input.length : 0, std::byte{0});
-        std::byte* buffer = input.buffer_present ? scratch.data() : nullptr;
+        std::vector<std::byte> scratch(input.length, std::byte{0});
+        std::byte* buffer = scratch.data();
 
         sluice::async::NativeFileRef ref =
             input.closed ? sluice::async::NativeFileRef{-1, input.access}

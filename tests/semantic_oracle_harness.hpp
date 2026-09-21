@@ -42,7 +42,6 @@ struct Input {
     FileOperation operation = FileOperation::read;
     std::uint64_t offset = 0;
     std::size_t length = 0;
-    bool buffer_present = true;
 };
 
 struct Scenario {
@@ -140,7 +139,7 @@ inline std::size_t check_oracle_against_table(const Scenario* scenarios, std::si
         const DataOpVerdict derived =
             sluice::detail::is_byte_operation(input.operation)
                 ? sluice::detail::precheck_data_op({input.closed, input.access, input.operation,
-                                                   input.offset, input.length, input.buffer_present})
+                                                   input.offset, input.length})
                 : sluice::detail::precheck_state_op(input.closed, input.access, input.operation);
         const std::optional<IoError> rejection = sluice::detail::rejection_of(derived);
         bool agrees = derived == scenarios[i].expected_verdict;

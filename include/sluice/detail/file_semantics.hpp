@@ -203,10 +203,12 @@ struct DataOpRequest {
     FileOperation operation = FileOperation::read;
     std::uint64_t offset = 0;
     std::size_t length = 0;
-    // The only dynamically detectable buffer precondition: a nonzero length
-    // with no buffer cannot describe a valid extent. A zero-length request
-    // never reaches this check.
-    bool buffer_present = true;
+    // No buffer-presence field on purpose. SEM-03 treats caller preconditions
+    // such as valid memory as not generally dynamically detectable and defines
+    // no buffer-presence step, so buffer presence is not a shared File semantic
+    // rule. A raw-pointer surface may still fail fast on a null buffer with a
+    // nonzero length as its own implementation precondition; that check lives
+    // beside the surface's pointers, not here.
 };
 
 // Steps 1-4 of the canonical precedence for byte operations. Steps 5-7
@@ -219,8 +221,6 @@ constexpr DataOpVerdict precheck_data_op(const DataOpRequest& request) noexcept 
         return DataOpVerdict::reject_access;
     if (request.length == 0)
         return DataOpVerdict::complete_empty;
-    if (!request.buffer_present)
-        return DataOpVerdict::reject_range;
     if (!range_is_valid(request.offset, request.length))
         return DataOpVerdict::reject_range;
     if (request.length > kMaxNativeTransfer)

@@ -38,8 +38,8 @@ int main() {
         return 1;
     }
 
-    // Direct execution: every scenario is expressible except an absent buffer
-    // with a nonzero length, which std::span cannot describe.
+    // Direct execution: every scenario is expressible, because the table states
+    // only what SEM-03 fixes and nothing in it needs a nonexistent buffer.
     std::size_t direct_skipped = 0;
     std::vector<const char*> direct_divergences;
     for (std::size_t i = 0; i < sluice_semantic::kPrecedenceScenarioCount; ++i) {

@@ -273,15 +273,23 @@ class UringAsyncBackend::TransportLedger {
     std::uint32_t last_physical_position_ = 0;
 };
 
+// These raw-pointer surfaces fail fast on a null buffer with a nonzero length
+// as their own implementation precondition: SEM-03 treats caller memory
+// validity as not dynamically detectable, so the shared oracle does not answer
+// buffer presence. `execute` implies a nonzero length.
 Result<void> UringAsyncBackend::validate_read(ReadOp op) {
-    return sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
-        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len,
-         op.dst != nullptr}));
+    const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});
+    if (verdict == sluice::detail::DataOpVerdict::execute && op.dst == nullptr)
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_argument});
+    return sluice::detail::accept_or_reject(verdict);
 }
 Result<void> UringAsyncBackend::validate_write(WriteOp op) {
-    return sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
-        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset, op.len,
-         op.src != nullptr}));
+    const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset, op.len});
+    if (verdict == sluice::detail::DataOpVerdict::execute && op.src == nullptr)
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_argument});
+    return sluice::detail::accept_or_reject(verdict);
 }
 Result<void> UringAsyncBackend::validate_sync(SyncDataOp op) {
     return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
