@@ -1,3 +1,9 @@
+> **HISTORICAL — ARCHIVED.** This record predates or was superseded by the v1
+> convergence target. The [v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md)
+> is the sole normative root; implementation status lives only in the
+> [v1 conformance ledger](../../roadmap/v1-conformance.md). Nothing below
+> establishes v1 conformance, architecture ownership, or current authority.
+
 # Code-First Architecture Reality Audit — SLUICE-CODE-FIRST-ARCHITECTURE-REALITY-AUDIT-1
 
 - **Type**: READ-ONLY CODE AUDIT / DOCS-ONLY OUTPUT. No production code, tests, build files, or ADRs were modified by this audit.

@@ -7,8 +7,16 @@ This file gives repository working rules. Technical target authority is the
 
 1. Read the root specification's relevant requirement IDs and glossary.
 2. Read the [v1 conformance ledger](docs/roadmap/v1-conformance.md) for the affected slice.
-3. Inspect `include/`, `src/`, `apps/`, `xmake.lua` and `xmake/` to establish current behavior.
-4. Inspect the tests/models and exact configurations supporting the affected claim.
+3. Consult the [docs navigation page](docs/README.md) for what each docs record is
+   (active vs archived) before treating any of them as input; execution slices are
+   GitHub #390 → #391–#403.
+4. Inspect `include/`, `src/`, `apps/`, `xmake.lua` and `xmake/` to establish current behavior.
+5. Inspect the tests/models and exact configurations supporting the affected claim.
+
+`docs/archive/**` holds superseded authorities, dated snapshots and research
+campaign reports; `formal/` at the repository root holds Lean/TLA+ sources whose
+v1 disposition is owned by issue #391. Archive content and formal theorems carry
+no authority over the target.
 
 The root specifies what v1 must do. C++ establishes what a particular commit
 currently does. A mismatch is a conformance gap, not permission to rewrite the

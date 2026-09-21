@@ -10,6 +10,8 @@ execution, a bounded host-independent request core, and optional I/O hosts.
   progress, shutdown, threading, evidence and migration gates.
 - [v1 conformance ledger](docs/roadmap/v1-conformance.md) tracks implementation
   and evidence. Adoption of the target does not establish conformance.
+- [docs/README.md](docs/README.md) maps every `docs/` record: active authority,
+  `docs/archive/` superseded material, and `formal/` source evidence.
 - [AGENTS.md](AGENTS.md) gives repository working instructions.
 
 `include/` and `src/` establish current C++ behavior; `apps/` are real consumers;

@@ -1,3 +1,10 @@
+> **HISTORICAL — ARCHIVED.** This record belongs to the FCB1 formal-capability
+> research campaign on the superseded async-primitive architecture. The
+> [v1 Architecture and Contract Reference](../../../explicit-io-v1-final-decision.md)
+> is the sole normative root; formal evidence for v1 is being re-mapped by
+> issue #391, not inherited from this campaign. Nothing below establishes v1
+> conformance, architecture ownership, or current authority.
+
 # Stage 1V2.2 — Event Core: Re-adjudicated on the V2.2 Execution Domains
 
 Campaign: `FCB1-METHOD-CORRECTIVE-1` (repair of the FORMAL-CAPABILITY-BOUNDARY-1

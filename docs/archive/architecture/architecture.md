@@ -1,8 +1,14 @@
+> **HISTORICAL — ARCHIVED.** This record predates or was superseded by the v1
+> convergence target. The [v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md)
+> is the sole normative root; implementation status lives only in the
+> [v1 conformance ledger](../../roadmap/v1-conformance.md). Nothing below
+> establishes v1 conformance, architecture ownership, or current authority.
+
 # Sluice 当前架构快照
 
 - **Verified implementation baseline**: `253fabe79c425ad5473e1bf4efc30896023762bc`
-- **Authority**: 本文是下列基线的历史实现快照，不定义目标规范。[v1 Architecture and Contract Reference](explicit-io-v1-final-decision.md) 是唯一规范根；旧 ADR 表述仅解释该快照的历史背景。
-- **Conformance tracking**: [v1 台账](roadmap/v1-conformance.md)。[旧台账](roadmap/explicit-file-conformance.md) 仅记录旧契约的符合性。
+- **Authority**: 本文是下列基线的历史实现快照，不定义目标规范。[v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md) 是唯一规范根；旧 ADR 表述仅解释该快照的历史背景。
+- **Conformance tracking**: [v1 台账](../../roadmap/v1-conformance.md)。[旧台账](../explicit-file-roadmap/explicit-file-conformance.md) 仅记录旧契约的符合性。
 
 当前行为需核对具体提交的代码；v1 目标以根规范为准。本文以下的 ADR 规范性表述只适用于历史基线，不能作为 v1 实现方向。
 
@@ -249,7 +255,7 @@ vectored read / write
 sync_data / sync_all
 ```
 
-这些 legacy class 仍构成一套历史平行的 resource surface，但已不再被视为 canonical resource identity；其删除/收敛将在后续 legacy-surface audit 节点单独裁决（vectored 部分的 decision 见 [`explicit-file-vectored-decision.md`](roadmap/explicit-file-vectored-decision.md)：KEEP，待该 audit）。A1 不删除它们。
+这些 legacy class 仍构成一套历史平行的 resource surface，但已不再被视为 canonical resource identity；其删除/收敛将在后续 legacy-surface audit 节点单独裁决（vectored 部分的 decision 见 [`explicit-file-vectored-decision.md`](../explicit-file-roadmap/explicit-file-vectored-decision.md)：KEEP，待该 audit）。A1 不删除它们。
 
 ---
 
@@ -378,7 +384,7 @@ sluice::File 所有权（OpenCopyOutcome / SafeOpenOutcome 持有）
 native_handle() 只在 fstat 观察与 pipeline 实参边界读取
 ```
 
-分类后的残余 escape（详见 [`docs/roadmap/explicit-file-app-consumer-census.md`](roadmap/explicit-file-app-consumer-census.md)）：
+分类后的残余 escape（详见 [`docs/roadmap/explicit-file-app-consumer-census.md`](../explicit-file-roadmap/explicit-file-app-consumer-census.md)）：
 
 ```text
 hash / grep / tail main:
@@ -467,7 +473,7 @@ liburing-gated verification (liburing=y):
 
 详细状态、依赖顺序与 PR gate 见：
 
-[`docs/roadmap/explicit-file-conformance.md`](roadmap/explicit-file-conformance.md)
+[`docs/roadmap/explicit-file-conformance.md`](../explicit-file-roadmap/explicit-file-conformance.md)
 
 ---
 

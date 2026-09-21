@@ -7,8 +7,8 @@
 - **当前状态**：Historical / Superseded for v1（原状态：Accepted / Architecture Frozen）
 - **范围**：Sluice 的文件 I/O 公共语义、API 分层与执行模型
 - **基线**：`master`（本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`；当前实现基线以 roadmap 为准）
-- **上位约束**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md)、[`../mission.md`](../mission.md)
-- **实现处置**：见 [`docs/roadmap/explicit-file-conformance.md`](../roadmap/explicit-file-conformance.md) Phase A；最终架构符合性审计为 roadmap A8
+- **上位约束**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md)、[`../mission.md`](../archive/architecture/mission.md)
+- **实现处置**：见 [`docs/roadmap/explicit-file-conformance.md`](../archive/explicit-file-roadmap/explicit-file-conformance.md) Phase A；最终架构符合性审计为 roadmap A8
 
 ## Context
 
@@ -1254,7 +1254,7 @@ Mechanism availability 不创建 semantic authority。
 
 ## Follow-up gate
 
-具体实现顺序与阶段划分见 [`docs/roadmap/explicit-file-conformance.md`](../roadmap/explicit-file-conformance.md) Phase A。Phase A 的终点是 roadmap A8 的只读架构符合性审计：
+具体实现顺序与阶段划分见 [`docs/roadmap/explicit-file-conformance.md`](../archive/explicit-file-roadmap/explicit-file-conformance.md) Phase A。Phase A 的终点是 roadmap A8 的只读架构符合性审计：
 
 ```text
 符合 ADR-0001 + ADR-0002 的 Sluice 需要哪些最小能力？

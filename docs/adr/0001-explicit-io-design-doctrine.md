@@ -59,7 +59,7 @@ Minimum mechanism.
 
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
-规范性简版见 [`../mission.md`](../mission.md)。
+规范性简版见 [`../mission.md`](../archive/architecture/mission.md)。
 
 ## 1. Minimal semantics —— 从“更多 explicit”转向“最小充分语义”
 

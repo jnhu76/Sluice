@@ -18,8 +18,10 @@ changes the target contract.
 
 - [v1 conformance ledger](docs/roadmap/v1-conformance.md) — implementation gaps,
   phase gates and evidence; adopting the specification does not certify the code.
+- [docs/README.md](docs/README.md) — documentation map: active records versus
+  `docs/archive/` historical records.
 - [AGENTS.md](AGENTS.md) — repository working rules.
-- [Current-code architecture snapshot](docs/architecture.md) — dated historical
+- [Current-code architecture snapshot](docs/archive/architecture/architecture.md) — dated historical
   implementation view, not a v1 target diagram.
 - [Retained research conclusions](research/RESULTS.md) — rationale and evidence.
 
@@ -108,7 +110,7 @@ Those existing components do not by themselves satisfy the new target. Migration
 and evidence follow phases A–G in the root and the new conformance ledger.
 
 The previous mission, ADR-0001/0002, visual companion and
-[old conformance roadmap](docs/roadmap/explicit-file-conformance.md) are superseded
+[old conformance roadmap](docs/archive/explicit-file-roadmap/explicit-file-conformance.md) are superseded
 as v1 authorities. Their earlier CLOSED/CONFORMANT claims apply only to the
 baselines and contracts they originally examined.
 

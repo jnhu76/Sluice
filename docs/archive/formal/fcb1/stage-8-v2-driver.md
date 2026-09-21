@@ -1,3 +1,10 @@
+> **HISTORICAL — ARCHIVED.** This record belongs to the FCB1 formal-capability
+> research campaign on the superseded async-primitive architecture. The
+> [v1 Architecture and Contract Reference](../../../explicit-io-v1-final-decision.md)
+> is the sole normative root; formal evidence for v1 is being re-mapped by
+> issue #391, not inherited from this campaign. Nothing below establishes v1
+> conformance, architecture ownership, or current authority.
+
 # Stage 8V2.3 — Scheduler driver, replayed and re-adjudicated on the amended calculus
 
 Campaign: FCB1-POST-V23-STACK-379-385 (Issue #375, §35). Calculus:

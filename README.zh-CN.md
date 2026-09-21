@@ -16,8 +16,9 @@ ADR 根据其中的稳定 requirement ID 细化实现选择；C++ 说明当前�
 
 - [v1 符合性台账](docs/roadmap/v1-conformance.md)：记录实现缺口、阶段门槛与证据；
   批准目标文档不代表代码已经符合。
+- [docs/README.md](docs/README.md)：文档地图——哪些是现行文档，哪些在 `docs/archive/` 归档。
 - [AGENTS.md](AGENTS.md)：仓库工作规则。
-- [代码架构快照](docs/architecture.md)：带基线的历史实现视图，不是 v1 目标图。
+- [代码架构快照](docs/archive/architecture/architecture.md)：带基线的历史实现视图，不是 v1 目标图。
 - [研究结论](research/RESULTS.md)：保留的论据与证据。
 
 长期原则保持为：**语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
@@ -43,7 +44,7 @@ ThreadPool/io_uring backend 和 runtime。它们的存在不代表新目标已�
 后续迁移按根规范 A–G 阶段推进，在新台账中记录代码位置、配置与验证证据。
 
 旧 mission、ADR-0001/0002、配套架构图和
-[旧 conformance roadmap](docs/roadmap/explicit-file-conformance.md)
+[旧 conformance roadmap](docs/archive/explicit-file-roadmap/explicit-file-conformance.md)
 不再承担 v1 规范权威。其 CLOSED/CONFORMANT 结论只适用于原来审查的基线和契约。
 
 ## 应用

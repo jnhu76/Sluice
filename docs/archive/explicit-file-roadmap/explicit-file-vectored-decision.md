@@ -1,6 +1,12 @@
+> **HISTORICAL — ARCHIVED.** This record predates or was superseded by the v1
+> convergence target. The [v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md)
+> is the sole normative root; implementation status lives only in the
+> [v1 conformance ledger](../../roadmap/v1-conformance.md). Nothing below
+> establishes v1 conformance, architecture ownership, or current authority.
+
 # Explicit File Vectored Operation Decision
 
-- **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)（vectored 的 evidence-gated 地位由 ADR-0002 §5.3 冻结）
+- **Authority**: [`docs/mission.md`](../architecture/mission.md) → [`ADR-0001`](../../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../../adr/0002-explicit-file-api-architecture.md)（vectored 的 evidence-gated 地位由 ADR-0002 §5.3 冻结）
 - **Verified against**: `d9ae9fde0e78bd626ff708533b57f995a7ca984c`
 - **Non-authority rule**: 本文记录一个基于 fresh census 的 disposition，不重新定义架构、不新增 canonical API；若本文与 ADR 冲突，以 ADR 为准。verdict 词汇使用 ADR-0002 §14 的 `KEEP / CONVERGE / ADD_MINIMAL / DELETE / RESEARCH / OUT_OF_SCOPE`。
 

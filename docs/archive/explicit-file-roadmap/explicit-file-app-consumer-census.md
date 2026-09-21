@@ -1,6 +1,12 @@
+> **HISTORICAL — ARCHIVED.** This record predates or was superseded by the v1
+> convergence target. The [v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md)
+> is the sole normative root; implementation status lives only in the
+> [v1 conformance ledger](../../roadmap/v1-conformance.md). Nothing below
+> establishes v1 conformance, architecture ownership, or current authority.
+
 # Explicit File App Consumer Census
 
-- **Authority**: [`docs/mission.md`](../mission.md) → [`ADR-0001`](../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../adr/0002-explicit-file-api-architecture.md)
+- **Authority**: [`docs/mission.md`](../architecture/mission.md) → [`ADR-0001`](../../adr/0001-explicit-io-design-doctrine.md) → [`ADR-0002`](../../adr/0002-explicit-file-api-architecture.md)
 - **Verified implementation baseline**: `d7511349990cbb3ef340e158c7816fe3296b0575`（该 commit 可 checkout 并验证下文记录的消费现实）
 - **Non-authority**: 本文只记录四个应用对 canonical File boundary 的消费现实与 escape 分类；它不创造 File 语义。若本文与 ADR 冲突，以 ADR 为准。
 - **Scope**: `apps/sluice-copy`、`apps/sluice-hash`、`apps/sluice-grep`、`apps/sluice-tail`（roadmap A2 / Issue #342）
