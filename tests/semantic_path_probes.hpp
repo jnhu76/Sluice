@@ -158,8 +158,11 @@ inline Observation direct_attempt(const AccessFixtures& fixtures, const Input& i
 }
 
 // Only the operations a request backend actually exposes can be driven here.
-// resize and file_info have no request form in v1, so scenarios using them are
-// reported as not drivable rather than silently passing.
+// resize and file_info have no request form in this commit; SEM-01 does require
+// file_info/size on request paths, so that part of the operation matrix stays
+// with the ThreadPool/io_uring profile GAP rows. Scenarios using an operation
+// no backend exposes yet are reported as not drivable rather than silently
+// passing.
 inline bool request_drivable(const Input& input) {
     return input.operation == FileOperation::read || input.operation == FileOperation::write ||
            input.operation == FileOperation::sync_data ||
