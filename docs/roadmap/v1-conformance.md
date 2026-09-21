@@ -34,10 +34,10 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | Slice | Root requirements | Status | Required evidence before closure |
 |---|---|---|---|
 | Shared File semantic oracle | SEM-02, SEM-03, SEM-04, ERR-01 | IMPLEMENTED_UNVERIFIED | See the A1 review record: direct execution and the canonical error table carry evidence; request-side ordering and effect reporting do not |
-| Direct composition helpers (read_exact / write_all) | SEM-05 | NOT_ASSESSED | Direct completion helpers that report accumulated confirmed bytes separately from the reason; owner #393 |
-| Minimal metadata and same-file identity | SEM-07 | NOT_ASSESSED | Kind, size and explicitly available/unavailable identity; no registry; owner #393 |
-| Explicit close and RAII error boundary | SEM-02, LIFE | NOT_ASSESSED | Close consumes ownership on first attempt including error; destructor has no reporting obligation; owner #393 |
-| Direct invocation | INV, ARCH, W-01 | NOT_ASSESSED | No request/runtime dependency; File lifetime and consumer tests |
+| Direct composition helpers (read_exact / write_all) | SEM-05 | VERIFIED | A2 review record: direct loops consume the shared composition rule; injected short/zero/error counts, confirmed prefix, structured stop reasons |
+| Minimal metadata and same-file identity | SEM-07 | VERIFIED | A2 review record: kind, size and explicitly available/unavailable identity on the direct path, no registry. Request-side file_info/size stays unassessed and owned by #400 |
+| Explicit close and RAII error boundary | SEM-02, LIFE | VERIFIED | A2 review record: close consumes ownership on the first attempt including error; destructor and move-assignment fault injection |
+| Direct invocation | INV, ARCH, W-01 | VERIFIED | A2 review record: W-01 explicit-close and RAII traces as a core-only consumer. Request-side invocation is unchanged and unassessed here |
 | Admission and slot lifecycle | REQ, BOUND | NOT_ASSESSED | V04–V05, V08–V09, V24, V26; executable model and failure injection |
 | Public Request and result lifetime | HANDLE, LIFE | NOT_ASSESSED | Move/consume/discard, retained results, release-build violation behavior |
 | Observer attachment and retirement | OBS | NOT_ASSESSED | V06–V08; attach/publication and cancel/delivery interleavings |
@@ -48,7 +48,8 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | io_uring profile | BACKEND, PROD-02 | GAP | Shared conformance; partial-submit/control-CQE faults; real-kernel configuration. A1 recorded the same request-side gaps plus an undisclosed transfer limit and ad-hoc errno classification |
 | Bounded pipeline scope | HOST-02, W-02 | NOT_ASSESSED | V18–V19; early return/exception cleanup and scope capacity |
 | Shutdown and destruction | SHUT | NOT_ASSESSED | V20–V23; poison/retirement; retained-result and host-detachment checks |
-| Core/public build boundary | ARCH, MIG | NOT_ASSESSED | V25; installed headers and standalone core-only consumers |
+| Core-only consumer build boundary | ARCH, MIG | VERIFIED | A2 review record: a standalone core-only consumer compiles, links and runs; no async definition reachable, no liburing linked |
+| Installed-header / package surface | ARCH, MIG | NOT_ASSESSED | No install or package target exists in this commit, so no installed surface can be audited; the audit belongs to the legacy/retirement slice (#402) |
 | Optional stackful host | HOST-01, HOST-03, W-04 | NOT_ASSESSED | If shipped as supported: task failure/stop/unwind, single-owner driver, bounded resources |
 | Legacy and compatibility retirement | MIG-02 | NOT_ASSESSED | Consumer audit; replacements usable; old Completion/public surfaces explicitly retired |
 | Windows/macOS, multi-worker host, coroutine adapter | PROD-02 | DEFERRED_OUT_OF_SCOPE | Root amendment before supported-v1 claims |
@@ -119,7 +120,7 @@ not assessed yet, the gap map points at its assessment-table row instead.
 | Protocol/model evidence | None claimed. A1 is a table/property slice; the request lifecycle model belongs to Phase B |
 | Publication/thread evidence | None claimed. This slice does not change publication or threading |
 | Backend/kernel evidence | Direct, ThreadPool and real-kernel io_uring (`--liburing=y`, 8-case smoke passing) are compared against the same scenario table. io_uring unavailability is reported NOT RUN, never as a pass. `/dev/full` is a fault-injection device outside the PROD-02 regular-file domain and is used only to produce a deterministic write failure |
-| Status | Shared File semantic oracle: IMPLEMENTED_UNVERIFIED. Validation rules and the error mapping are called by every execution path; the composition, effect and durability rules are a reference model with no production consumer yet, and their tests prove properties of that model rather than of a path. Direct path: CONFORMING for the tested rules and scenarios below, except the zero-op no-OS-call half of SEM-03 step 3, which stays IMPLEMENTED_UNVERIFIED (inspection-only evidence) until #393; the direct scope as a whole is therefore not CONFORMING. Request paths: GAP, see the map |
+| Status | Shared File semantic oracle: IMPLEMENTED_UNVERIFIED. Validation rules and the error mapping are called by every execution path; the composition, effect and durability rules are a reference model with no production consumer yet, and their tests prove properties of that model rather than of a path. Direct path: CONFORMING for the tested rules and scenarios below, except the zero-op no-OS-call half of SEM-03 step 3, which stays IMPLEMENTED_UNVERIFIED (inspection-only evidence) until #393; the direct scope as a whole is therefore not CONFORMING. Request paths: GAP, see the map. **[A2 update, later commit]** the composition rules now have a production consumer and the zero-op no-OS-call half is CONFORMING; see the A2 review record below. The effect and durability rules remain a reference model |
 
 ### A1 baseline gap map
 
@@ -130,11 +131,11 @@ Access matrix and precedence steps 1–4 | `sluice::blocking::*` | All 21 drivab
 Offset/length range, last-byte overflow | canonical File, direct syscalls | Unrepresentable offset and an overflowing last byte are `invalid_argument`; above-native transfer is a pure rule with no drivable buffer | SEM-04 | CONFORMING | —
 Native error classification | `from_errno_value` | Single table; `ENOENT`/`ENOTDIR`→`not_found`, `EACCES`/`EPERM`→`permission_denied`, ECANCELED deliberately unmapped→`backend_error`, native detail preserved | ERR-01 | CONFORMING | —
 Primitive EOF / short transfer / zero-length | direct syscalls | Matches `classify_primitive` on real files | SEM-05 | CONFORMING | —
-Exact/all composition | direct | No direct composition surface exists | SEM-05 | OUT_OF_SCOPE | #393
-`file_info` / size / same-file identity | canonical File | Only `size` via `fstat`; no `FileInfo` | SEM-07 | OUT_OF_SCOPE | #393
-Explicit close, destructor, move-assignment error boundary | canonical File | Not audited against SEM-02 close rules | SEM-02 | OUT_OF_SCOPE | #393
+Exact/all composition | direct | Direct `read_exact`/`write_all` (shared cursor and positional) loop over the shared composition rule and report the confirmed prefix next to a structured stop reason | SEM-05 | CONFORMING (A2) | —
+`file_info` / size / same-file identity | canonical File | `file_info` reports kind, observed size and an explicitly available/unavailable identity; `size` is its projection; comparison is value-level with an explicit unknown | SEM-07 | CONFORMING (direct, A2) | —
+Explicit close, destructor, move-assignment error boundary | canonical File | First native close attempt consumes ownership including on error, no retry after EINTR, destructor is a noexcept single attempt, move assignment best-effort closes the old resource | SEM-02 | CONFORMING (A2) | —
 Zero-length request | ThreadPool, io_uring | Accepted, but not published at acceptance (measured): the terminal is not `ready()` until a progress call, so the zero-length data call is dispatched rather than completed at acceptance. The dispatch itself is inferred from the code path, not observed | SEM-03: never dispatches a data syscall | GAP | #400
-Zero-length direct call | `sluice::blocking::*` | Returns 0 without consulting the range rule, proven by the zero-length-plus-unrepresentable-offset scenario. Whether it makes an OS call is not externally observable and is asserted by inspection only | SEM-03: no OS call | IMPLEMENTED_UNVERIFIED | #393
+Zero-length direct call | `sluice::blocking::*` | Returns 0 with zero intercepted native transfer calls under the test-only seam, on the primitives and on both composition surfaces | SEM-03: no OS call | CONFORMING (A2) | —
 Precedence step 4 (range) vs step 7 (capacity) | both request backends | `submit_transaction` reserves a slot before the backend validates, so a full table reports `would_block` for a request with an invalid range | SEM-03 | GAP | #394
 Precedence step 4 (range) vs steps 5–6 (health/support) | both request backends | `stage0_precheck` runs before validation, so admission-closed or a missing ring outranks an invalid range | SEM-03 | GAP | #394
 Partial effect on failure | both request backends | `TerminalResult::err()` writes `bytes = 0` and the terminal has no effect-certainty channel, so an error plus confirmed bytes or an unaccounted remainder is not representable | ERR-02, V15 | GAP | #400
@@ -142,7 +143,7 @@ Cancel racing a completed count | both request backends | `record_canceled` stor
 Zero-progress write code | `op_helpers`, `await_op_helpers` | Three different codes across composition helpers (`invalid_state`, `backend_error`) and no confirmed-byte reporting | SEM-05 | GAP | #400
 Durability coverage of a completed resize | direct resize + `sync_data`/`sync_all` | Sequence succeeds and the size change is observable; no request-path evidence exists | SEM-06, V27 | IMPLEMENTED_UNVERIFIED | #400
 Submitted-then-sync ordering | request paths | No API reports coverage, so V16 cannot be exercised end to end | SEM-06, V16 | IMPLEMENTED_UNVERIFIED | #400
-EINTR retry | direct syscalls | `retry_on_eintr` exists and shares one helper; no test drives it | SEM-05 | IMPLEMENTED_UNVERIFIED | #393
+EINTR retry | direct syscalls | A scripted `EINTR` attempt is retried once and the following count is returned; `close` is never retried, and its `EINTR` consumes ownership | SEM-05 | CONFORMING (A2) | —
 Undisclosed transfer limit | io_uring | A request longer than the SQE count is lowered to a short count without disclosing the limit | BACKEND-02 capability disclosure | GAP | #400
 Ad-hoc errno classification outside the table | io_uring submit path, io_uring wait source | `EINTR`/`EAGAIN`/`EBUSY` compared locally next to shared classification | ERR-01 | GAP | #400
 Closed-operation error | legacy `Reader`/`Writer`/`FileReader`/`FileWriter` | Fabricates `permission_denied` (no native detail) where the oracle requires `invalid_state` | SEM-03 step 1 | GAP | #402
@@ -176,3 +177,48 @@ Fabricated not-found substitute | `include/sluice/memory_io_context.hpp` | A see
   (an unobserved write followed by a sync, and a terminal that can carry an
   unaccounted remainder). Their rules are asserted; their production evidence is
   owned by #400 and is not claimed here.
+
+## A2 review record — Issue #393, direct File closure and W-01
+
+This record uses the assessment table's status vocabulary for the rows it
+updates, and the A1 gap-map vocabulary for the A1 rows it closes.
+
+| Field | Content |
+|---|---|
+| Requirement scope | SEM-01 direct column (open/close, positional and shared-cursor I/O, sync, file_info/size, resize, read_exact/write_all); SEM-02 close/RAII/ownership; SEM-04 cursor and offset rules; SEM-05 composition; SEM-06 durability as a direct integration sequence; SEM-07 metadata and identity; ERR-02 confirmed progress; INV-01 direct selection; ARCH-02 File ownership; W-01; VERIFY-01 build/public boundary (V25); VERIFY-04 V01–V03 and V27 direct halves. Excludes every request-side responsibility: request `file_info`/`size`/`resize`/composition forms, request effect-certainty representation, backends, RequestCore, observer, progress, cancellation, shutdown |
+| Implementation | `include/sluice/file_resource.hpp` (`FileKind`, `FileIdentity`, `FileInfo`, `IdentityMatch`, `identity_match`, close/RAII contract comments); `include/sluice/blocking/file.hpp` (`file_info`, `CompositionEnd`, `CompositionOutcome`, `read_exact(_at)`, `write_all(_at)`); `src/blocking_file.cpp` (one `fstat` metadata observation with `size` as its projection; the composition loop consuming `detail::compose_progress`/`compose_error`); `src/file_resource.cpp` (`close` routed through the test-only native-call seam); `src/file_test_seams.hpp` (bounded allocation-free native-call script, family- and descriptor-filtered, compiled only under `SLUICE_FILE_INTERNAL_TESTING`); `xmake/tests.lua` (four core-only targets and two seam targets that compile their own copies of the direct TUs and link no other core object) |
+| Change | Direct path gains minimal metadata/identity and the exact/all composition surfaces. `File::close` already consumed ownership on the first attempt before its native call; the change routes that call through the seam so the rule is fault-injectable and unchanged in behavior. No public behavior was removed; the new `size` is the projection of `file_info`, so the previous `size` behavior is preserved. Legacy `Reader`/`Writer`/`FileReader`/`FileWriter` composition codes are untouched and stay with #402 |
+| Semantic/regression evidence | `file_close_semantics_test` (8 cases: unarmed release, success, EINTR, other error, destructor, move assignment, descriptor-reuse, closed no-op), `direct_composition_fault_test` (9 cases: short reads/writes, EOF-before-full prefix, zero-progress stop after one attempt, error-after-prefix with `no_space`/ENOSPC, primitive EINTR retry, zero-length with zero intercepted calls, impossible count, plus the frozen 21-scenario table driven through both composition surfaces: positional 16 compared / 0 divergences, shared cursor 11 compared / 0 divergences, 5 state-operation scenarios not drivable and 5 offset-dependent range scenarios not expressible on the cursor surface), `file_info_identity_test` (7 cases: real fstat kind/size/identity, size projection, same/different file, unavailable-at-value-level unknown, closed invalid_state, other kind, cursor non-interference), `direct_cursor_position_test` (5 cases: positional vs cursor write, native duplication shares the cursor, independent opens, resize does not move the cursor, zero-length no-op), `direct_composition_test` (7 cases: real-file full read/write, real EOF-before-full prefix, positional placement, cursor advancement, empty request, rejection precedence), `direct_w01_consumer_probe` (3 cases: explicit-close W-01 trace, RAII trace, same-file comparison) |
+| Protocol/model evidence | None claimed. This slice has no protocol; the request lifecycle model remains Phase B |
+| Publication/thread evidence | None claimed. THREAD-01's File row (caller serialization, no outstanding borrow) is unchanged and not exercised here; no concurrency claim is added |
+| Backend/kernel evidence | Direct Linux syscalls only (`pread`/`pwrite`, `read`/`write`, `fstat`, `ftruncate`, `fdatasync`/`fsync`). Close and transfer fault injection use the test-only seam at the native-call boundary, so the counts and reasons are deterministic while the production build contains no seam state. Configuration matrix: debug with liburing disabled (34/34), debug with `--liburing=y` (37/37, real-kernel smoke included), release with liburing disabled (34/34), targeted ASan+UBSan over the six new binaries (all pass). The project-wide `asanubsan` mode does not build in this environment: `src/async/fiber_ctx.cpp` fails on a sanitizer attribute directive under `-Werror`, a pre-existing condition in an untouched TU |
+| Build boundary | `direct_w01_consumer_probe` includes only the two direct headers, declares (without including) `sluice::async::{AsyncIoContext, AsyncBackend, Scheduler, Fiber, ApplicationRuntime}` and `detail::RequestArena` and asserts each is incomplete, and links as `g++ … -lsluice_core` with no async or liburing library; `ldd` shows libc/libstdc++/libgcc/libm only. `rg -n 'async|scheduler|fiber|completion|request_arena|request_handle|runtime_task|ApplicationRuntime' include/sluice/file_resource.hpp include/sluice/blocking` returns no match |
+| Status | Direct composition helpers: VERIFIED. Minimal metadata and same-file identity: VERIFIED on the direct path; the request-side forms remain unassessed and owned by #400. Explicit close and RAII error boundary: VERIFIED. Direct invocation / W-01: VERIFIED. Core-only consumer build boundary (V25): VERIFIED. Installed-header surface: NOT_ASSESSED (no install target exists). A1 rows closed by this slice: exact/all composition, `file_info`/size/identity, close/destructor/move-assignment boundary, zero-length no-OS-call, EINTR retry |
+
+### A2 limitations and recorded boundaries
+
+- **No-progress representation.** The direct outcome carries a structured
+  `write_no_progress` stop instead of a fabricated canonical `IoError`, so the
+  A1-recorded SEM-05 ambiguity is not resolved by canonizing `invalid_state` in
+  the public contract. `detail::composition_error` keeps its reference-model
+  choice for consumers that must return an `IoError`; the ambiguity stays
+  recorded rather than settled.
+- **Effect certainty.** `CompositionOutcome` reports only confirmed progress and
+  makes no claim about a possibly-effective remainder of a failed or interrupted
+  attempt. ERR-02's unknown-effect reporting is a request-terminal concern owned
+  by #400 and was deliberately not moved into the direct API.
+- **Cursor-surface range scenarios.** A shared-cursor call supplies no offset, so
+  the offset-range step has no operand there; the two offset-dependent range
+  scenarios are reported as not drivable on that surface. The length half of the
+  range rule is covered on both surfaces.
+- **Durability.** The direct integration sequence (completed write, resize grow
+  and resize shrink, each followed by `sync_data`/`sync_all`) is evidence of the
+  observable half only. It is not a power-loss durability proof, and the
+  request-side half of the V27 row keeps its #400 owner.
+- **Durability coverage of a completed resize (A1 row).** Its direct half is now
+  CONFORMING; the row keeps its `IMPLEMENTED_UNVERIFIED` status for the
+  request-path evidence owned by #400.
+- **Open A1 items untouched.** The `bad_alloc` category (#399), the request-side
+  effect/cancel representation, and the undisclosed io_uring transfer limit
+  remain as recorded; this slice does not change root, error categories or
+  request paths.

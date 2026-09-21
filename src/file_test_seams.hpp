@@ -1,53 +1,111 @@
 #pragma once
 
+// Test-only native-call seams. A test target that defines
+// SLUICE_FILE_INTERNAL_TESTING compiles the canonical direct TUs with these
+// seams enabled; the production build never includes this header, so no seam
+// state, allocation or indirection exists in a shipped path.
+//
+// A script intercepts one native-call family for one descriptor and consumes
+// one step per intercepted call, so a test can drive deterministic short
+// transfers, EOF, zero progress, errors and close failures that a real regular
+// file will not produce on demand. An exhausted script reports EBADF instead of
+// falling through to the real call, so a test cannot silently lose its
+// injection.
+
 #include <cerrno>
 #include <cstddef>
-#include <utility>
-#include <vector>
+#include <cstdint>
+#include <initializer_list>
 
 namespace sluice::file_testing {
 
-class CloseScript {
+enum class NativeCall : std::uint8_t {
+    close,
+    read,
+    pread,
+    write,
+    pwrite,
+};
+
+constexpr std::uint8_t call_bit(NativeCall call) noexcept {
+    return static_cast<std::uint8_t>(1u << static_cast<unsigned>(call));
+}
+
+inline constexpr std::uint8_t kCloseCall = call_bit(NativeCall::close);
+inline constexpr std::uint8_t kTransferCalls = call_bit(NativeCall::read) |
+                                               call_bit(NativeCall::pread) |
+                                               call_bit(NativeCall::write) |
+                                               call_bit(NativeCall::pwrite);
+
+class NativeScript {
   public:
     struct Step {
-        int ret;
+        long ret;
         int err;
     };
 
-    explicit CloseScript(std::vector<Step> steps) : steps_(std::move(steps)), prev_(active()) {
+    static constexpr std::size_t kMaxSteps = 8;
+
+    // `family` selects the intercepted calls; `fd < 0` intercepts every
+    // descriptor of that family. At most one script is active per process: a
+    // call outside the active script's family passes through to the real
+    // native call, so the two seams never need to be armed at once.
+    NativeScript(std::uint8_t family, int fd, std::initializer_list<Step> steps) noexcept
+        : family_(family), fd_(fd), previous_(active()) {
         active() = this;
-    }
-    ~CloseScript() {
-        if (active() == this) {
-            active() = prev_;
+        for (const Step& step : steps) {
+            if (step_count_ == kMaxSteps)
+                break;
+            steps_[step_count_++] = step;
         }
     }
-    CloseScript(const CloseScript&) = delete;
-    CloseScript& operator=(const CloseScript&) = delete;
 
-    static CloseScript*& active() {
-        static CloseScript* armed = nullptr;
-        return armed;
+    ~NativeScript() {
+        if (active() == this)
+            active() = previous_;
     }
 
-    int next(int) {
+    NativeScript(const NativeScript&) = delete;
+    NativeScript& operator=(const NativeScript&) = delete;
+
+    bool intercepts(NativeCall call, int fd) const noexcept {
+        return (family_ & call_bit(call)) != 0 && (fd_ < 0 || fd_ == fd);
+    }
+
+    // The next scripted outcome. Precondition: intercepts(call, fd).
+    long next(NativeCall call, int fd) noexcept {
+        (void)call;
         ++calls_;
-        if (pos_ >= steps_.size()) {
+        last_fd_ = fd;
+        if (position_ >= step_count_) {
             errno = EBADF;
             return -1;
         }
-        Step s = steps_[pos_++];
-        errno = s.err;
-        return s.ret;
+        const Step step = steps_[position_++];
+        errno = step.err;
+        return step.ret;
     }
 
-    std::size_t calls() const { return calls_; }
+    // Intercepted native calls attempted so far, which is the mechanical
+    // "exactly one attempt" / "no retry" / "no call at all" evidence.
+    std::size_t calls() const noexcept { return calls_; }
+
+    int last_fd() const noexcept { return last_fd_; }
+
+    static NativeScript*& active() noexcept {
+        static NativeScript* armed = nullptr;
+        return armed;
+    }
 
   private:
-    std::vector<Step> steps_;
-    CloseScript* prev_ = nullptr;
-    std::size_t pos_ = 0;
+    std::uint8_t family_;
+    int fd_;
+    Step steps_[kMaxSteps] = {};
+    std::size_t step_count_ = 0;
+    std::size_t position_ = 0;
     std::size_t calls_ = 0;
+    int last_fd_ = -1;
+    NativeScript* previous_ = nullptr;
 };
 
 } // namespace sluice::file_testing
