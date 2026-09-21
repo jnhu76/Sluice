@@ -50,9 +50,10 @@ same PR.
 |---|---|
 | `docs/explicit-io-v1-final-decision.md` | Sole normative root (v1-r3) |
 | `docs/roadmap/v1-conformance.md` | Implementation/evidence ledger |
+| `docs/roadmap/v1-formal-evidence-map.md` | Non-normative formal evidence map (issue #391) |
 | `docs/README.md` | This navigation page |
 
-These three are the only current records under `docs/`. Everything else under
+These four are the only current records under `docs/`. Everything else under
 `docs/` is a retained historical record or a retired one kept for provenance.
 
 `research/RESULTS.md` (repository root, outside `docs/`) holds retained research
@@ -101,7 +102,9 @@ Two different things share the word "formal":
 
 - **`docs/archive/formal/fcb1/`** — historical FCB1 campaign reports for the
   superseded async-primitive architecture. Historical evidence only. The
-  current formal evidence map is being rebuilt by issue #391.
+  [v1 formal evidence map](roadmap/v1-formal-evidence-map.md) (issue #391)
+  assigns every existing formal asset its disposition and owns future formal
+  obligations.
 - **`formal/` (repository root)** — Lean and TLA+ sources, `.cfg` instances and
   `scripts/verify_formal.sh` / `scripts/verify_tla.sh`. These remain repository
   formal source evidence; their v1 disposition (REUSE / ADAPT / HISTORICAL /
