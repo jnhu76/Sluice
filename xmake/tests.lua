@@ -18,6 +18,11 @@ sluice_one_file_target("binary", "test", "io_validation_boundary_test", "tests",
 sluice_one_file_target("binary", "test", "file_access_precedence_test", "tests",
                        {"sluice_core", "sluice_async"})
 
+-- A1 shared File semantic oracle: decision tables, property tests and
+-- reference cases. All of them compare execution paths against the one shared
+-- oracle; none carries a backend-specific expected-output file.
+sluice_one_file_target("binary", "test", "semantic_errno_mapping_test", "tests", "sluice_core")
+
 -- Real io_uring verification: registered only when the liburing build switch
 -- is on. Both targets consume sluice_async as ordinary consumers: the macro
 -- and the liburing link arrive through sluice_async's public usage
