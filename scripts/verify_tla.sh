@@ -159,7 +159,7 @@ jar="$tla/tla2tools.jar"
 # the jar is never committed (gitignored); a clean clone bootstraps the exact
 # pinned stable release and verifies its SHA-256 before any model runs.
 # SLUICE_TLA2TOOLS_JAR points at a pre-provisioned jar (CI cache, offline
-# mirror) and bypasses the download but not the file check.
+# mirror); it bypasses the download but still enforces the pinned SHA-256.
 TLA2TOOLS_VERSION="1.7.4"
 TLA2TOOLS_SHA256="936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
 TLA2TOOLS_URL="https://github.com/tlaplus/tlaplus/releases/download/v${TLA2TOOLS_VERSION}/tla2tools.jar"
@@ -173,8 +173,13 @@ if [[ -n "${SLUICE_TLA2TOOLS_JAR:-}" ]]; then
         echo "SLUICE_TLA2TOOLS_JAR=$SLUICE_TLA2TOOLS_JAR not found: cannot verify" >&2
         exit 1
     fi
+    if [[ "$(jar_sha "$SLUICE_TLA2TOOLS_JAR")" != "$TLA2TOOLS_SHA256" ]]; then
+        echo "SLUICE_TLA2TOOLS_JAR=$SLUICE_TLA2TOOLS_JAR SHA-256 mismatch: refusing to verify" >&2
+        echo "expected: $TLA2TOOLS_SHA256" >&2
+        exit 1
+    fi
     jar="$SLUICE_TLA2TOOLS_JAR"
-    echo "== TLC jar (SLUICE_TLA2TOOLS_JAR override): $jar =="
+    echo "== TLC jar (SLUICE_TLA2TOOLS_JAR override, checksum ok): $jar =="
 elif [[ -f "$jar" && "$(jar_sha "$jar")" == "$TLA2TOOLS_SHA256" ]]; then
     echo "== TLC jar (cached, checksum ok): v$TLA2TOOLS_VERSION =="
 elif [[ -f "$jar" ]]; then
