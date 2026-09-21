@@ -1,8 +1,16 @@
 # ADR-0001：显式 I/O 的最小语义与设计边界
 
-> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
-> Historical design rationale; it is no longer a separate normative parent for v1.
-> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+> **Current v1 status: HISTORICAL / SUPERSEDED.**
+>
+> The sole normative authority for Sluice v1 is
+> [`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md).
+>
+> This ADR is retained only as historical design rationale and decision provenance.
+> Terms such as "normative", "frozen", "authority", "must", or "decision" in the
+> historical body below describe the authority this ADR had at the time.
+> They do not govern v1 independently of the root specification.
+> It is not a current normative parent, upper constraint, implementation roadmap,
+> or normative summary of v1.
 
 - **当前状态**：Historical / Superseded for v1（原状态：Accepted / Frozen）
 - **范围**：Sluice 的显式 I/O 研究结论
@@ -59,7 +67,10 @@ Minimum mechanism.
 
 > **语义最少，边界清晰，权威显式，资源有界，执行可换，机制最小。**
 
-规范性简版见 [`../mission.md`](../archive/architecture/mission.md)。
+历史上，本 ADR 的简化使命表述记录在原 `docs/mission.md`
+（[归档副本](../archive/architecture/mission.md)）；该文件现已归档，仅保留为历史
+rationale。当前 v1 的唯一规范定义见
+[`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md)。
 
 ## 1. Minimal semantics —— 从“更多 explicit”转向“最小充分语义”
 
