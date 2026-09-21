@@ -1,6 +1,6 @@
 # Sluice v1 Conformance Ledger
 
-**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r1.
+**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r2.
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 

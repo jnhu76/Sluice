@@ -2,8 +2,9 @@
 
 | Document field | Value |
 |---|---|
-| Revision | v1-r1 |
+| Revision | v1-r2 |
 | Role | Sole normative root for the Sluice v1 convergence target |
+| Canonical source | `jnhu76/Sluice` / `docs/explicit-io-v1-final-decision.md`; adopted repository revision under GOV-05 |
 | Implementation baseline | `c64f005e6e59e791f26a7ab4a594c33954f096dd` |
 | Adoption | Replaces the earlier PR #389 target; merging adopts this revision in the repository |
 | Conformance | Not established by adoption; implementation and evidence belong in the [v1 conformance ledger](roadmap/v1-conformance.md) |
@@ -72,6 +73,28 @@ Historical documents keep their old text for traceability under an explicit supe
 Requirement IDs, such as `SEM-04` or `REQ-06`, are stable within v1 and MUST NOT be reassigned. A substantive change increments the revision and records changed IDs, reason, compatibility impact, migration, and required evidence in section 23. Editorial fixes that do not change an allowed behavior need no new architecture decision.
 
 Every architecture-changing PR identifies: affected IDs; behavior before/after; implementing owner; workload; tests/model/fault evidence; remaining limitations; ledger update. A new ADR lists its parent IDs and delegated choices. Any new public guarantee first enters this root. Evidence references must name a commit/configuration; a green test run alone is not a claim of universal correctness.
+
+## GOV-05 Canonical revisions and portable snapshots
+
+The canonical source is this path in `jnhu76/Sluice`, under repository version control. The revision adopted on `master` governs current repository convergence; a published release remains interpretable against its recorded specification revision. An open PR is a proposed amendment until merged. Work reviewing or implementing a proposed amendment must identify that candidate explicitly rather than describe it as already adopted.
+
+Local exports, uploaded Markdown/PDF files, chat quotations, issue copies and paper material are portable snapshots or derived explanations, not independently maintained authorities. Corrections return through a PR to the canonical file; redistribute a fresh export after adoption. A snapshot does not override a newer adopted revision, and its timestamp or filename alone does not establish provenance.
+
+A distributed snapshot must identify the repository, source path, full source commit SHA, document revision, and whether that commit is adopted, released, or a PR candidate. Prefer a commit-pinned source link. Include an export timestamp when useful, but never substitute it for the commit. Put provenance in the accompanying message/sidecar when preserving exact source bytes; a rendered or annotated edition may put it on its cover. Label annotations and translations as derived material. Do not insert the current commit's own hash into the canonical file, which would create a self-reference problem.
+
+The canonical Markdown is UTF-8. Exports preserve its Unicode text; byte-preserving copies can additionally record the source blob SHA or SHA-256. Apparent preview mojibake must first be checked against the source bytes and the exact committed version. Mis-decoding can produce valid UTF-8 containing wrong characters, so successful decoding alone is insufficient: compare content/digest and the affected text. A corrupted preview or lossy copy must not overwrite the canonical source. If the committed source is actually damaged, repair it in a reviewed change with an explicit before/after comparison.
+
+**Example: portable-context provenance (metadata, not another specification)**
+
+```text
+Kind: non-authoritative snapshot
+Repository: jnhu76/Sluice
+Path: docs/explicit-io-v1-final-decision.md
+Source commit: <full source SHA>
+Document revision: <revision at that SHA>
+Source status: <adopted | released | PR candidate, with PR number>
+Permalink: <commit-pinned source URL>
+```
 
 # 1. Product and release scope
 
@@ -908,5 +931,6 @@ Potential research claims are semantic/backend refinement, host independence, bo
 | Revision | Change | Compatibility / evidence impact |
 |---|---|---|
 | v1-r1, PR #389 authority repair | Establish GOV hierarchy and stable IDs; restate File semantics; separate direct/request execution; close Request/observer/progress/shutdown contracts; add scopes, threading and acceptance cases | Normative target amendment, not production migration. Completion compatibility and existing APIs remain until MIG slices replace them. Old conformance statuses are historical; new ledger starts NOT_ASSESSED. |
+| v1-r2, snapshot provenance clarification | Add GOV-05: canonical repository revision, candidate/adopted distinction, portable-copy provenance and UTF-8 integrity | Distribution/governance clarification only. v1-r1 operation, lifetime and execution contracts unchanged; implementation evidence status unchanged. Check source encoding/content, provenance fields and document links. |
 
 Subsequent entries identify specific changed requirement IDs. The full before/after remains in Git; this table records decision impact without turning the specification into an execution diary.
