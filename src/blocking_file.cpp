@@ -48,21 +48,23 @@ Precheck precheck(const File& file, FileOperation operation, std::uint64_t offse
 // Test-only: the primitive fault seam sits exactly at the native-call boundary,
 // so a scripted outcome drives the same primitive and composition code the
 // production build runs. A call outside the armed script's family passes
-// through.
+// through. The operands are recorded so a test can pin the buffer and offset a
+// composition passed to the native call.
 bool intercepted(file_testing::NativeCall call, int fd) noexcept {
     file_testing::NativeScript* script = file_testing::NativeScript::active();
     return script != nullptr && script->intercepts(call, fd);
 }
 
-long scripted(file_testing::NativeCall call, int fd) noexcept {
-    return file_testing::NativeScript::active()->next(call, fd);
+long scripted(file_testing::NativeCall call, int fd, const void* buffer, std::size_t count,
+              long offset) noexcept {
+    return file_testing::NativeScript::active()->next(call, fd, buffer, count, offset);
 }
 #endif
 
 ssize_t native_read(int fd, void* buf, std::size_t count) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
     if (intercepted(file_testing::NativeCall::read, fd))
-        return static_cast<ssize_t>(scripted(file_testing::NativeCall::read, fd));
+        return static_cast<ssize_t>(scripted(file_testing::NativeCall::read, fd, buf, count, -1));
 #endif
     return ::read(fd, buf, count);
 }
@@ -70,7 +72,8 @@ ssize_t native_read(int fd, void* buf, std::size_t count) {
 ssize_t native_pread(int fd, void* buf, std::size_t count, off_t offset) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
     if (intercepted(file_testing::NativeCall::pread, fd))
-        return static_cast<ssize_t>(scripted(file_testing::NativeCall::pread, fd));
+        return static_cast<ssize_t>(
+            scripted(file_testing::NativeCall::pread, fd, buf, count, static_cast<long>(offset)));
 #endif
     return ::pread(fd, buf, count, offset);
 }
@@ -78,7 +81,7 @@ ssize_t native_pread(int fd, void* buf, std::size_t count, off_t offset) {
 ssize_t native_write(int fd, const void* buf, std::size_t count) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
     if (intercepted(file_testing::NativeCall::write, fd))
-        return static_cast<ssize_t>(scripted(file_testing::NativeCall::write, fd));
+        return static_cast<ssize_t>(scripted(file_testing::NativeCall::write, fd, buf, count, -1));
 #endif
     return ::write(fd, buf, count);
 }
@@ -86,7 +89,8 @@ ssize_t native_write(int fd, const void* buf, std::size_t count) {
 ssize_t native_pwrite(int fd, const void* buf, std::size_t count, off_t offset) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
     if (intercepted(file_testing::NativeCall::pwrite, fd))
-        return static_cast<ssize_t>(scripted(file_testing::NativeCall::pwrite, fd));
+        return static_cast<ssize_t>(
+            scripted(file_testing::NativeCall::pwrite, fd, buf, count, static_cast<long>(offset)));
 #endif
     return ::pwrite(fd, buf, count, offset);
 }
@@ -274,7 +278,10 @@ using detail::CompositionState;
 // outcome, so the direct path consumes the one composition rule instead of
 // restating it. `impossible_count` cannot arise from a primitive that honors
 // its own contract (0 <= n <= requested); it is routed through the reference
-// error rule rather than given public vocabulary of its own.
+// error rule rather than given public vocabulary of its own. A primitive
+// rejection observed after the composition started (a caller racing a close, for
+// instance) travels the same path: it is reported as a primitive error with its
+// own category preserved, not as a fresh semantic rejection.
 CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     CompositionOutcome outcome;
     outcome.confirmed_bytes = state.confirmed_bytes;

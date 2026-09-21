@@ -165,6 +165,55 @@ bool zero_progress_write_stops_after_one_attempt() {
     return ok;
 }
 
+// SEM-05: a composition advances its buffer and offset by the confirmed bytes.
+// The seam records the operands of the last intercepted call, so a loop that
+// restated the count without moving the buffer (or the offset) fails here even
+// though the outcome's numbers look right.
+bool composition_advances_the_buffer_by_confirmed_bytes() {
+    std::string path;
+    std::optional<File> file_holder =
+        opened_with_content("abcdefgh", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+
+    std::vector<std::byte> dst(8, std::byte{0});
+    std::vector<std::byte> src(5, std::byte{0x44});
+
+    bool ok = true;
+    {
+        NativeScript script(kTransferCalls, fd, {{3, 0}, {5, 0}});
+        auto composed = sluice::blocking::read_exact_at(file, 100, dst);
+        ok = ok && composed.has_value() && composed.value().complete();
+        // The second call must address the remainder of the buffer at the
+        // advanced offset, not the start of it again.
+        ok = ok && script.last_call().buffer == dst.data() + 3;
+        ok = ok && script.last_call().count == 5;
+        ok = ok && script.last_call().offset == 103;
+    }
+    {
+        NativeScript script(kTransferCalls, fd, {{2, 0}, {3, 0}});
+        auto composed = sluice::blocking::write_all_at(file, 20, src);
+        ok = ok && composed.has_value() && composed.value().complete();
+        ok = ok && script.last_call().buffer == src.data() + 2;
+        ok = ok && script.last_call().count == 3;
+        ok = ok && script.last_call().offset == 22;
+    }
+    {
+        // The shared-cursor form advances the buffer the same way and reports no
+        // offset, because the kernel owns the cursor.
+        NativeScript script(kTransferCalls, fd, {{2, 0}, {3, 0}});
+        auto composed = sluice::blocking::write_all(file, src);
+        ok = ok && composed.has_value() && composed.value().complete();
+        ok = ok && script.last_call().buffer == src.data() + 2;
+        ok = ok && script.last_call().count == 3;
+        ok = ok && script.last_call().offset == -1;
+    }
+    ::unlink(path.c_str());
+    return ok;
+}
+
 // A primitive error after a confirmed prefix keeps the prefix and reports the
 // primitive's own reason next to it (ERR-02).
 bool error_after_confirmed_prefix_keeps_the_prefix() {
@@ -184,8 +233,8 @@ bool error_after_confirmed_prefix_keeps_the_prefix() {
         const CompositionOutcome& outcome = composed.value();
         ok = ok && outcome.confirmed_bytes == 256;
         ok = ok && outcome.end == CompositionEnd::primitive_error;
-        ok = ok && outcome.error.code == IoError::Code::no_space;
-        ok = ok && outcome.error.os_errno == ENOSPC;
+        ok = ok && outcome.error->code == IoError::Code::no_space;
+        ok = ok && outcome.error->os_errno == ENOSPC;
         ok = ok && script.calls() == 2;
     }
     ::unlink(path.c_str());
@@ -279,7 +328,7 @@ bool impossible_count_stops_immediately() {
         ok = ok && composed.has_value();
         ok = ok && composed.value().end == CompositionEnd::primitive_error;
         ok = ok && composed.value().confirmed_bytes == 0;
-        ok = ok && composed.value().error.code == IoError::Code::invalid_state;
+        ok = ok && composed.value().error->code == IoError::Code::invalid_state;
         ok = ok && script.calls() == 1;
     }
     ::unlink(path.c_str());
@@ -407,9 +456,9 @@ bool composition_surfaces_obey_the_precedence_table() {
         }
         std::printf("composition %s: %zu scenarios compared, %zu not drivable%s, %zu divergences\n",
                     surface.name, count - skipped, skipped,
-                    surface.surface == Surface::cursor ? " (offset-dependent range cases have no "
-                                                         "offset operand on this surface)"
-                                                       : "",
+                    surface.surface == Surface::cursor
+                        ? " (verdicts needing a caller-supplied offset)"
+                        : "",
                     divergences.size());
     }
     return ok;
@@ -435,6 +484,8 @@ int main() {
         {"short_reads_reach_full_progress", short_reads_reach_full_progress},
         {"short_writes_reach_full_progress", short_writes_reach_full_progress},
         {"zero_progress_write_stops_after_one_attempt", zero_progress_write_stops_after_one_attempt},
+        {"composition_advances_the_buffer_by_confirmed_bytes",
+         composition_advances_the_buffer_by_confirmed_bytes},
         {"error_after_confirmed_prefix_keeps_the_prefix",
          error_after_confirmed_prefix_keeps_the_prefix},
         {"primitive_retries_eintr_without_a_completed_count",

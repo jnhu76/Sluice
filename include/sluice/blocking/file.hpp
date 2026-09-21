@@ -61,8 +61,7 @@ enum class CompositionEnd : std::uint8_t {
 
 // The completed outcome of an exact/all composition. A stopped composition
 // reports its accumulated confirmed bytes next to the reason, so a failure
-// never discards the prefix (ERR-02). `error` is meaningful only when `end` is
-// `primitive_error`.
+// never discards the prefix (ERR-02).
 //
 // The count is exactly what completed: an attempt that failed or was interrupted
 // contributes nothing, and the outcome makes no claim about a possibly-effective
@@ -71,7 +70,10 @@ enum class CompositionEnd : std::uint8_t {
 struct CompositionOutcome {
     std::size_t confirmed_bytes = 0;
     CompositionEnd end = CompositionEnd::complete;
-    IoError error{};
+    // Present exactly when `end` is `primitive_error`, which is the primitive's
+    // own reason with its native detail preserved. A successful or no-progress
+    // outcome carries no error, so a consumer cannot read a stale category.
+    std::optional<IoError> error;
 
     constexpr bool complete() const noexcept { return end == CompositionEnd::complete; }
 };
