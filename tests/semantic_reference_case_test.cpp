@@ -33,7 +33,7 @@ using sluice::detail::CompletionState;
 using sluice::detail::covers;
 using sluice::detail::EffectCertainty;
 using sluice::detail::FileOperation;
-using sluice::detail::failed_byte_operation;
+using sluice::detail::failed_dispatched_attempt;
 using sluice::detail::IoOutcome;
 using sluice::detail::MutationKind;
 using sluice::detail::MutationRecord;
@@ -145,13 +145,12 @@ void v03_zero_request_with_full_table_is_admission_rejected() {
 // ── V15: an unknown-effect failure is not a zero-byte claim ────────────────
 
 void v15_unknown_effect_write_failure() {
-    // The rule: a failed write may have modified data with no trustworthy count.
-    const IoOutcome outcome =
-        failed_byte_operation(FileOperation::write, IoError{.code = IoError::Code::backend_error,
-                                                            .os_errno = EIO},
-                              0);
+    // The rule is evidence-driven: a dispatched attempt that failed may have
+    // taken effect with no trustworthy count, whatever its direction.
+    const IoOutcome outcome = failed_dispatched_attempt(
+        IoError{.code = IoError::Code::backend_error, .os_errno = EIO}, 0);
     check(outcome.effect.remaining == EffectCertainty::unknown,
-          "V15 rule: a failed write reports an unaccounted remainder");
+          "V15 rule: a dispatched failed attempt reports an unaccounted remainder");
     check(!prefix_only_terminal_can_carry(outcome),
           "V15 rule: the reference outcome is not representable in a prefix-only terminal");
 
@@ -177,7 +176,7 @@ void v15_unknown_effect_write_failure() {
     auto written = sluice::blocking::write_at(device, 0, src);
     check(!written.has_value(), "V15 physical: the write fails");
     if (!written.has_value()) {
-        const IoOutcome converted = failed_byte_operation(FileOperation::write, written.error());
+        const IoOutcome converted = failed_dispatched_attempt(written.error());
         check(converted.effect.remaining == EffectCertainty::unknown,
               "V15 physical: the failure becomes an unaccounted remainder");
     }

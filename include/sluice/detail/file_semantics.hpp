@@ -392,18 +392,21 @@ struct IoOutcome {
         return IoOutcome{true, IoEffect{confirmed_bytes, EffectCertainty::accounted}, IoError{}};
     }
 
-    // A failure or cancellation whose confirmed prefix is known and whose
-    // remainder is proven unaffected. For a byte operation this is correct only
-    // for a read; a failed write must use `failed_byte_operation` so that an
-    // unaccounted remainder is not reported as an accounted one.
+    // A failure or cancellation whose remainder is *proven* unaffected. That is
+    // an evidence claim, not a default: it needs a positive proof that nothing
+    // beyond `confirmed_bytes` took effect, such as a cancel that won before
+    // dispatch. An operation's direction never provides that proof — a failed
+    // read may already have filled part of the caller's destination buffer,
+    // which LIFE-01 makes part of the operation's borrow.
     static constexpr IoOutcome failure(IoError reason,
                                        std::uint64_t confirmed_bytes = 0) noexcept {
         return IoOutcome{false, IoEffect{confirmed_bytes, EffectCertainty::accounted}, reason};
     }
 
     // A failure or cancellation where a possibly-effective portion has no
-    // trustworthy count. `known_prefix` stays a lower bound. This is the shape a
-    // failed write needs, per `failed_byte_operation`.
+    // trustworthy count. `known_prefix` stays a lower bound from earlier
+    // completed steps. This is the required shape for a dispatched attempt
+    // that failed or was canceled, per `failed_dispatched_attempt`.
     static constexpr IoOutcome uncertain(IoError reason,
                                          std::uint64_t known_prefix = 0) noexcept {
         return IoOutcome{false, IoEffect{known_prefix, EffectCertainty::unknown}, reason};
@@ -425,28 +428,35 @@ constexpr bool prefix_only_terminal_can_carry(const IoOutcome& outcome) noexcept
     return outcome.effect.remaining == EffectCertainty::accounted;
 }
 
-// Conversion rule for a failed or canceled byte operation. A failed write may
-// have modified data without supplying a trustworthy count, so its remainder is
-// unaccounted rather than zero (V15). A failed read leaves the file's data
-// unmodified, so it reports its confirmed prefix with nothing left over.
+// Conversion rule for a failed physical attempt that dispatched. Dispatch
+// evidence, not direction, decides the remainder: the attempt may already have
+// taken effect — reached the file, or filled part of the caller's destination
+// buffer — and supplies no trustworthy count for the possibly-effective
+// portion, so its remainder is unaccounted rather than zero (ERR-02, V15),
+// whatever the operation reads or writes. `known_prefix` stays a lower bound
+// from earlier completed steps.
 //
-// Scope: this covers the file's data. It does not model the shared-cursor
-// position after a failed shared-cursor call, which v1 does not promise.
-constexpr IoOutcome failed_byte_operation(FileOperation operation, IoError reason,
-                                         std::uint64_t confirmed_prefix = 0) noexcept {
-    return operation == FileOperation::read ? IoOutcome::failure(reason, confirmed_prefix)
-                                            : IoOutcome::uncertain(reason, confirmed_prefix);
+// Scope: this covers the operation's effects on the file and on the borrowed
+// buffers. It does not model the shared-cursor position after a failed
+// shared-cursor call, which v1 does not promise.
+constexpr IoOutcome failed_dispatched_attempt(IoError reason,
+                                              std::uint64_t known_prefix = 0) noexcept {
+    return IoOutcome::uncertain(reason, known_prefix);
 }
 
-// CANCEL-01: a cancel that won before execution proved no dispatch and no effect.
-constexpr IoOutcome canceled_before_effect() noexcept {
-    return IoOutcome::failure(IoError{.code = IoError::Code::canceled}, 0);
+// CANCEL-01: a cancel that won before dispatch proved no dispatch and no
+// effect, so the remainder is accounted. `confirmed_prefix` carries earlier
+// completed composition steps; the canceled attempt itself contributed nothing.
+constexpr IoOutcome canceled_before_dispatch(std::uint64_t confirmed_prefix = 0) noexcept {
+    return IoOutcome::failure(IoError{.code = IoError::Code::canceled}, confirmed_prefix);
 }
 
-// CANCEL-01: a cancel racing a completed count keeps that count instead of
-// collapsing it into an unqualified canceled result.
-constexpr IoOutcome canceled_after_progress(std::uint64_t confirmed_bytes) noexcept {
-    return IoOutcome::failure(IoError{.code = IoError::Code::canceled}, confirmed_bytes);
+// CANCEL-01/ERR-02: a cancel racing an in-flight attempt keeps the trusted
+// count instead of collapsing it into an unqualified canceled result, but the
+// attempt's remainder cannot be proven unaffected, so it stays unknown rather
+// than accounted.
+constexpr IoOutcome canceled_racing_in_flight_attempt(std::uint64_t confirmed_bytes) noexcept {
+    return IoOutcome::uncertain(IoError{.code = IoError::Code::canceled}, confirmed_bytes);
 }
 
 // ─── Durability reference rules (SEM-06, Linux regular-file profile) ───────

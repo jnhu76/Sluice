@@ -21,11 +21,10 @@ using sluice::File;
 using sluice::FileAccess;
 using sluice::FileOpen;
 using sluice::IoError;
-using sluice::detail::canceled_after_progress;
-using sluice::detail::canceled_before_effect;
+using sluice::detail::canceled_before_dispatch;
+using sluice::detail::canceled_racing_in_flight_attempt;
 using sluice::detail::EffectCertainty;
-using sluice::detail::failed_byte_operation;
-using sluice::detail::FileOperation;
+using sluice::detail::failed_dispatched_attempt;
 using sluice::detail::IoOutcome;
 using sluice::detail::prefix_only_terminal_can_carry;
 
@@ -47,11 +46,19 @@ bool case_b_confirmed_prefix_survives_an_error() {
            outcome.effect.remaining == EffectCertainty::accounted;
 }
 
-// Case C: N confirmed bytes and cancellation, where the count must not be erased.
+// Case C: cancellation keeps the confirmed count, and the remainder follows the
+// evidence. A cancel that won before dispatch proves the remainder unaffected;
+// a cancel that raced an in-flight attempt proves only the count, so the
+// remainder stays unknown. Neither collapses into an unqualified canceled
+// result.
 bool case_c_canceled_keeps_confirmed_bytes() {
-    const IoOutcome outcome = canceled_after_progress(9);
-    return outcome.is_canceled() && outcome.effect.confirmed_bytes == 9 &&
-           outcome.effect.remaining == EffectCertainty::accounted;
+    const IoOutcome before_dispatch = canceled_before_dispatch(9);
+    if (!(before_dispatch.is_canceled() && before_dispatch.effect.confirmed_bytes == 9 &&
+          before_dispatch.effect.remaining == EffectCertainty::accounted))
+        return false;
+    const IoOutcome raced = canceled_racing_in_flight_attempt(9);
+    return raced.is_canceled() && raced.effect.confirmed_bytes == 9 &&
+           raced.effect.remaining == EffectCertainty::unknown;
 }
 
 // Case D: an error whose remaining effect cannot be proven, reported as unknown
@@ -65,7 +72,7 @@ bool case_d_unknown_remaining_effect() {
 // A pre-execution cancel proved no dispatch and no effect, so it reports a
 // known zero rather than an unknown remainder.
 bool pre_execution_cancel_reports_known_zero() {
-    const IoOutcome outcome = canceled_before_effect();
+    const IoOutcome outcome = canceled_before_dispatch();
     return outcome.is_canceled() && outcome.effect.confirmed_bytes == 0 &&
            outcome.effect.remaining == EffectCertainty::accounted;
 }
@@ -79,16 +86,19 @@ bool success_is_exact_progress() {
            scalar.effect.confirmed_bytes == 0;
 }
 
-// The conversion rule: a failed write may have modified data without a count, a
-// failed read cannot have modified the file's data.
-bool failed_write_is_unknown_and_failed_read_is_accounted() {
-    const IoOutcome write_failure = failed_byte_operation(FileOperation::write, kEio, 2);
-    const IoOutcome read_failure = failed_byte_operation(FileOperation::read, kEio, 2);
+// The conversion rule is evidence-driven: a dispatched attempt that failed
+// cannot exclude its effects whatever its direction. A failed read may have
+// filled part of the caller's destination buffer (a LIFE-01 borrow), a failed
+// write may have reached the file; neither supplies a trustworthy count for the
+// possibly-effective portion.
+bool failed_dispatched_attempt_is_unknown_in_both_directions() {
+    const IoOutcome write_failure = failed_dispatched_attempt(kEio, 2);
     if (write_failure.effect.remaining != EffectCertainty::unknown)
         return false;
     if (write_failure.effect.confirmed_bytes != 2)
         return false;
-    return read_failure.effect.remaining == EffectCertainty::accounted &&
+    const IoOutcome read_failure = failed_dispatched_attempt(kEio, 2);
+    return read_failure.effect.remaining == EffectCertainty::unknown &&
            read_failure.effect.confirmed_bytes == 2;
 }
 
@@ -100,7 +110,9 @@ bool prefix_only_terminal_cannot_carry_v15() {
         return false;
     if (!prefix_only_terminal_can_carry(IoOutcome::failure(kEio, 4)))
         return false;
-    if (!prefix_only_terminal_can_carry(canceled_after_progress(4)))
+    if (!prefix_only_terminal_can_carry(canceled_before_dispatch(4)))
+        return false;
+    if (prefix_only_terminal_can_carry(canceled_racing_in_flight_attempt(4)))
         return false;
     return !prefix_only_terminal_can_carry(IoOutcome::uncertain(kEio, 0));
 }
@@ -136,7 +148,7 @@ bool real_write_failure_reports_unknown_effect(int* attempted) {
     if (written.has_value())
         return false;
 
-    const IoOutcome outcome = failed_byte_operation(FileOperation::write, written.error());
+    const IoOutcome outcome = failed_dispatched_attempt(written.error());
     if (outcome.effect.remaining != EffectCertainty::unknown)
         return false;
     if (prefix_only_terminal_can_carry(outcome))
@@ -159,8 +171,8 @@ int main() {
         {"case_d_unknown_remaining_effect", case_d_unknown_remaining_effect},
         {"pre_execution_cancel_reports_known_zero", pre_execution_cancel_reports_known_zero},
         {"success_is_exact_progress", success_is_exact_progress},
-        {"failed_write_is_unknown_and_failed_read_is_accounted",
-         failed_write_is_unknown_and_failed_read_is_accounted},
+        {"failed_dispatched_attempt_is_unknown_in_both_directions",
+         failed_dispatched_attempt_is_unknown_in_both_directions},
         {"prefix_only_terminal_cannot_carry_v15", prefix_only_terminal_cannot_carry_v15},
     };
 
