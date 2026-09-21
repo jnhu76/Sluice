@@ -338,14 +338,18 @@ bool impossible_count_stops_immediately() {
     return ok;
 }
 
-// The reason a composition stopped is decided once, by `detail::compose_progress`
-// / `compose_error`, and then published twice: the oracle's `composition_error`
-// names a canonical IoError for a stopped composition, while the direct surface
-// reports the reason structurally and carries an error only for a primitive
-// failure. Both mappings are driven here from the same injected primitive
-// sequence, so neither side can rotate without this table naming the change, and
-// the two deliberate divergences stay pinned as contracts instead of reading as
-// an untested difference between two authorities.
+// The canonical composition semantics are the shared state: `CompositionStop`,
+// the accumulated `confirmed_bytes` and the primitive's own error, decided once
+// by `detail::compose_progress`/`compose_error`. Each path chooses a
+// representation of that state, and two of them are compared here from one
+// injected primitive sequence: the direct outcome reports the stop structurally
+// and carries an error only for a primitive failure, while `composition_error` —
+// a reference `IoError` projection with no production consumer — names a
+// category that the root does not assign to the no-progress stop. Driving both
+// from the same sequence pins the canonical stop state on both sides, so a
+// change in either representation shows up here, and records the two
+// representation differences instead of leaving them to read as two competing
+// authorities.
 bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
     using sluice::detail::CompositionKind;
     using sluice::detail::CompositionState;
@@ -377,8 +381,8 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
     }
 
     // eof_before_full: the direct outcome keeps the stop structural and carries no
-    // error, while the oracle's rule names `eof`. The divergence is recorded, not
-    // accidental.
+    // error, while the reference projection names `eof`. A difference of
+    // representation, recorded rather than accidental.
     {
         NativeScript script(kTransferCalls, fd, {{2, 0}, {0, 0}});
         auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
@@ -395,7 +399,7 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
     }
 
     // write_no_progress after a confirmed prefix: the prefix survives the stop on
-    // both sides, and the same recorded divergence applies to the reason.
+    // both sides, and the same representation difference applies to the reason.
     {
         NativeScript script(kTransferCalls, fd, {{2, 0}, {0, 0}});
         auto composed = sluice::blocking::write_all_at(file, 0, src);

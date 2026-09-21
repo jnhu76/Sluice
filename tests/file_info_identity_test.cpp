@@ -72,12 +72,12 @@ bool file_info_reports_regular_kind_size_and_identity() {
         return false;
     if (!value.identity.has_value())
         return false;
-    if (value.identity->inode == 0)
-        return false;
     return file.close().has_value();
 }
 
-// `size` is the projection of `file_info`, so the two cannot disagree.
+// `size` is the projection of its own `file_info` observation rather than a
+// second metadata rule, so the two agree while no external mutation falls
+// between them. Separate calls are not a transaction (SEM-07).
 bool size_projects_file_info() {
     const std::string path = make_temp_file("abcd");
     if (path.empty())

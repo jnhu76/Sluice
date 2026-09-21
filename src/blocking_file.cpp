@@ -223,8 +223,10 @@ Result<FileInfo> file_info(const File& file) {
     return info;
 }
 
-// The size projection of the same observation: one metadata substrate, so
-// `size(file)` and `file_info(file).size` cannot disagree.
+// The size projection of one metadata observation: `size` owns no second
+// metadata rule, so a call reports the length its own observation saw. Separate
+// calls are not a transaction against concurrent external mutation (SEM-07), so
+// two of them may observe different lengths.
 Result<std::uint64_t> size(const File& file) {
     auto info = file_info(file);
     if (!info.has_value()) {
@@ -274,14 +276,15 @@ namespace {
 using detail::CompositionKind;
 using detail::CompositionState;
 
-// Maps the shared reference composition state onto this adapter's public
-// outcome, so the direct path consumes the one composition rule instead of
-// restating it. `impossible_count` cannot arise from a primitive that honors
-// its own contract (0 <= n <= requested); it is routed through the reference
-// error rule rather than given public vocabulary of its own. A primitive
-// rejection observed after the composition started (a caller racing a close, for
-// instance) travels the same path: it is reported as a primitive error with its
-// own category preserved, not as a fresh semantic rejection.
+// Maps the shared composition state onto this adapter's public outcome. The
+// state is the authority for a stop; this function only chooses the public
+// representation of it, so the direct path consumes the one composition rule
+// instead of restating it. `impossible_count` cannot arise from a primitive that
+// honors its own contract (0 <= n <= requested); it is routed through the
+// reference error rule rather than given public vocabulary of its own. A
+// primitive rejection observed after the composition started travels the same
+// path: it is reported as a primitive error with its own category preserved, not
+// as a fresh semantic rejection.
 CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     CompositionOutcome outcome;
     outcome.confirmed_bytes = state.confirmed_bytes;

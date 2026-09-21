@@ -43,7 +43,8 @@ Result<void> sync_all(const File& file);
 
 Result<FileInfo> file_info(const File& file);
 
-// A projection of `file_info`: the same observation, same substrate.
+// The size projection of one metadata observation: no second metadata rule, and
+// no snapshot across separate calls (SEM-07).
 Result<std::uint64_t> size(const File& file);
 
 Result<void> resize(const File& file, std::uint64_t new_size);
@@ -64,10 +65,14 @@ enum class CompositionEnd : std::uint8_t {
 // reports its accumulated confirmed bytes next to the reason, so a failure
 // never discards the prefix (ERR-02).
 //
-// The count is exactly what completed: an attempt that failed or was interrupted
-// contributes nothing, and the outcome makes no claim about a possibly-effective
-// remainder of that attempt. Unknown-effect reporting belongs to the request
-// terminal, not to this value.
+// A failed attempt contributes no confirmed bytes, and on this path the stop's
+// remainder is accounted rather than unknown: a direct Linux regular-file
+// primitive reports an attempt that transferred bytes as a positive short count,
+// so a rejected attempt transferred no bytes — not into the file, and not into
+// the caller's buffer. ERR-02 reserves `unknown` for an attempt that may have
+// taken effect without a trustworthy count, which needs an attempt that can be
+// canceled after dispatch; only the request paths have one. The premise and its
+// boundary are recorded in the A2 review record of the conformance ledger.
 struct CompositionOutcome {
     std::size_t confirmed_bytes = 0;
     CompositionEnd end = CompositionEnd::complete;

@@ -34,7 +34,7 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | Slice | Root requirements | Status | Required evidence before closure |
 |---|---|---|---|
 | Shared File semantic oracle | SEM-02, SEM-03, SEM-04, ERR-01 | IMPLEMENTED_UNVERIFIED | See the A1 review record: direct execution and the canonical error table carry evidence; request-side ordering and effect reporting do not |
-| Direct composition helpers (read_exact / write_all) | SEM-05 | VERIFIED | A2 review record: direct loops consume the shared composition rule; injected short/zero/error counts, confirmed prefix, structured stop reasons |
+| Direct composition helpers (read_exact / write_all) | SEM-05, ERR-02 | VERIFIED | A2 review record: direct loops consume the shared composition rule; injected short/zero/error counts, confirmed prefix, structured stop reasons. The failed-attempt remainder is accounted on this path by the recorded platform refinement, so ERR-02's unknown-effect case is unreachable here; the request-side representation stays owned by #400 |
 | Minimal metadata and same-file identity | SEM-07 | VERIFIED | A2 review record: kind, size and explicitly available/unavailable identity on the direct path, no registry. Request-side file_info/size stays unassessed and owned by #400 |
 | Explicit close and RAII error boundary | SEM-02, LIFE | VERIFIED | A2 review record: close consumes ownership on the first attempt including error; destructor and move-assignment fault injection |
 | Direct invocation | INV, ARCH, W-01 | VERIFIED | A2 review record: W-01 explicit-close and RAII traces as a core-only consumer. Request-side invocation is unchanged and unassessed here |
@@ -132,7 +132,7 @@ Offset/length range, last-byte overflow | canonical File, direct syscalls | Unre
 Native error classification | `from_errno_value` | Single table; `ENOENT`/`ENOTDIR`→`not_found`, `EACCES`/`EPERM`→`permission_denied`, ECANCELED deliberately unmapped→`backend_error`, native detail preserved | ERR-01 | CONFORMING | —
 Primitive EOF / short transfer / zero-length | direct syscalls | Matches `classify_primitive` on real files | SEM-05 | CONFORMING | —
 Exact/all composition | direct | Direct `read_exact`/`write_all` (shared cursor and positional) loop over the shared composition rule and report the confirmed prefix next to a structured stop reason | SEM-05 | CONFORMING (A2) | —
-`file_info` / size / same-file identity | canonical File | `file_info` reports kind, observed size and an explicitly available/unavailable identity; `size` is its projection; comparison is value-level with an explicit unknown | SEM-07 | CONFORMING (direct, A2) | —
+`file_info` / size / same-file identity | canonical File | `file_info` reports kind, observed size and an explicitly available/unavailable identity; `size` is the projection of its own observation rather than a second metadata rule, with no snapshot across separate calls; comparison is value-level with an explicit unknown | SEM-07 | CONFORMING (direct, A2) | —
 Explicit close, destructor, move-assignment error boundary | canonical File | First native close attempt consumes ownership including on error, no retry after EINTR, destructor is a noexcept single attempt, move assignment best-effort closes the old resource | SEM-02 | CONFORMING (A2) | —
 Zero-length request | ThreadPool, io_uring | Accepted, but not published at acceptance (measured): the terminal is not `ready()` until a progress call, so the zero-length data call is dispatched rather than completed at acceptance. The dispatch itself is inferred from the code path, not observed | SEM-03: never dispatches a data syscall | GAP | #400
 Zero-length direct call | `sluice::blocking::*` | Returns 0 with zero intercepted native transfer calls under the test-only seam, on the primitives and on both composition surfaces | SEM-03: no OS call | CONFORMING (A2) | —
@@ -160,6 +160,9 @@ Fabricated not-found substitute | `include/sluice/memory_io_context.hpp` | A see
   a canonical category. The oracle reuses `invalid_state` as the closest existing
   category and adds no new category. The root does not specify this mapping, so
   it is recorded here as an ambiguity rather than treated as settled.
+  **[A2 update, later commit]** that reuse is a projection of the canonical stop
+  state rather than the composition authority; the public direct outcome does not
+  adopt it. See the A2 review record.
 - Buffer presence is not an SEM-03 rule: SEM-03 treats caller memory validity as
   not generally dynamically detectable. Each raw-pointer surface keeps a
   null-buffer-with-nonzero-length fail-fast as its own implementation
@@ -185,37 +188,59 @@ updates, and the A1 gap-map vocabulary for the A1 rows it closes.
 
 | Field | Content |
 |---|---|
-| Requirement scope | SEM-01 direct column (open/close, positional and shared-cursor I/O, sync, file_info/size, resize, read_exact/write_all); SEM-02 close/RAII/ownership; SEM-04 cursor and offset rules; SEM-05 composition; SEM-06 durability as a direct integration sequence; SEM-07 metadata and identity; ERR-02 confirmed progress; INV-01 direct selection; ARCH-02 File ownership; W-01; VERIFY-01 build/public boundary (V25); VERIFY-04 V01–V03 and V27 direct halves. Excludes every request-side responsibility: request `file_info`/`size`/`resize`/composition forms, request effect-certainty representation, backends, RequestCore, observer, progress, cancellation, shutdown |
+| Requirement scope | SEM-01 direct column (open/close, positional and shared-cursor I/O, sync, file_info/size, resize, read_exact/write_all); SEM-02 close/RAII/ownership; SEM-04 cursor and offset rules; SEM-05 composition; SEM-06 durability as a direct integration sequence; SEM-07 metadata and identity; ERR-02 confirmed progress and the direct effect-certainty refinement recorded below; INV-01 direct selection; ARCH-02 File ownership; W-01; VERIFY-01 build/public boundary (V25); VERIFY-04 V01–V03 and V27 direct halves. Excludes every request-side responsibility: request `file_info`/`size`/`resize`/composition forms, request effect-certainty representation, backends, RequestCore, observer, progress, cancellation, shutdown |
 | Implementation | `include/sluice/file_resource.hpp` (`FileKind`, `FileIdentity`, `FileInfo`, `IdentityMatch`, `identity_match`, close/RAII contract comments); `include/sluice/blocking/file.hpp` (`file_info`, `CompositionEnd`, `CompositionOutcome`, `read_exact(_at)`, `write_all(_at)`); `src/blocking_file.cpp` (one `fstat` metadata observation with `size` as its projection; the composition loop consuming `detail::compose_progress`/`compose_error`); `src/file_resource.cpp` (`close` routed through the test-only native-call seam); `src/file_test_seams.hpp` (bounded allocation-free native-call script, family- and descriptor-filtered, compiled only under `SLUICE_FILE_INTERNAL_TESTING`); `xmake/tests.lua` (four core-only targets and two seam targets that compile their own copies of the direct TUs and link no other core object); `src/file.cpp` only follows the seam's new signature at its legacy `FileReader`/`FileWriter` call site, and no target compiles that TU with the macro, so those legacy close paths remain un-fault-injected |
 | Change | Direct path gains minimal metadata/identity and the exact/all composition surfaces. `File::close` already consumed ownership on the first attempt before its native call; the change routes that call through the seam so the rule is fault-injectable and unchanged in behavior. No public behavior was removed; the new `size` is the projection of `file_info`, so the previous `size` behavior is preserved. Legacy `Reader`/`Writer`/`FileReader`/`FileWriter` composition codes are untouched and stay with #402 |
-| Semantic/regression evidence | `file_close_semantics_test` (8 cases: unarmed release, success, EINTR, other error, destructor, move assignment, descriptor-reuse, closed no-op), `direct_composition_fault_test` (11 cases: short reads/writes, EOF-before-full prefix, zero-progress stop after one attempt, error-after-prefix with `no_space`/ENOSPC, primitive EINTR retry, zero-length with zero intercepted calls, impossible count, buffer/offset advance per confirmed bytes recorded at the native-call boundary, and the five stop reasons pinned side by side against `detail::composition_error`, plus the frozen 21-scenario table driven through both composition surfaces: positional 16 compared / 0 divergences, shared cursor 11 compared / 0 divergences, 5 state-operation scenarios not drivable and 5 scenarios whose verdict needs a caller-supplied offset not expressible on the cursor surface), `file_info_identity_test` (7 cases: real fstat kind/size/identity, size projection, same/different file, unavailable-at-value-level unknown, closed invalid_state, other kind, cursor non-interference), `direct_cursor_position_test` (5 cases: positional vs cursor write, native duplication shares the cursor, independent opens, resize does not move the cursor, zero-length no-op), `direct_composition_test` (7 cases: real-file full read/write, real EOF-before-full prefix, positional placement, cursor advancement, empty request, rejection precedence), `direct_w01_consumer_probe` (3 cases: explicit-close W-01 trace, RAII trace, same-file comparison). The composition tests were checked against mutation: dropping the buffer advance (`subspan(confirmed)` → `subspan(0)`), dropping the offset advance (`offset + confirmed` → `offset`), making the direct stop adopt the reference rule's `eof` reason, and dropping the `impossible_count` reason each fail `direct_composition_fault_test` |
+| Semantic/regression evidence | `file_close_semantics_test` (8 cases: unarmed release, success, EINTR, other error, destructor, move assignment, descriptor-reuse, closed no-op), `direct_composition_fault_test` (11 cases: short reads/writes, EOF-before-full prefix, zero-progress stop after one attempt, error-after-prefix with `no_space`/ENOSPC, primitive EINTR retry, zero-length with zero intercepted calls, impossible count, buffer/offset advance per confirmed bytes recorded at the native-call boundary, and the five canonical stop reasons pinned side by side with the reference `IoError` projection (`detail::composition_error`), plus the frozen 21-scenario table driven through both composition surfaces: positional 16 compared / 0 divergences, shared cursor 11 compared / 0 divergences, 5 state-operation scenarios not drivable and 5 scenarios whose verdict needs a caller-supplied offset not expressible on the cursor surface), `file_info_identity_test` (7 cases: real fstat kind/size/identity, per-observation size projection, same/different file, unavailable-at-value-level unknown, closed invalid_state, other kind, cursor non-interference), `direct_cursor_position_test` (5 cases: positional vs cursor write, native duplication shares the cursor, independent opens, resize does not move the cursor, zero-length no-op), `direct_composition_test` (7 cases: real-file full read/write, real EOF-before-full prefix, positional placement, cursor advancement, empty request, rejection precedence), `direct_w01_consumer_probe` (3 cases: explicit-close W-01 trace, RAII trace, same-file comparison). The composition tests were checked against mutation: dropping the buffer advance (`subspan(confirmed)` → `subspan(0)`), dropping the offset advance (`offset + confirmed` → `offset`), making the direct stop adopt the reference rule's `eof` reason, dropping the `impossible_count` reason, and rotating the reference projection's `write_no_progress` category each fail `direct_composition_fault_test` |
 | Protocol/model evidence | None claimed. This slice has no protocol; the request lifecycle model remains Phase B |
-| Publication/thread evidence | None claimed. THREAD-01's File row (caller serialization, no outstanding borrow) is unchanged and not exercised here; no concurrency claim is added. LIFE-01's borrow rule is the reason the direct path adds no reference counting or deferred close: a direct call completes before it returns, so there is no outstanding borrow to track, and enforcement over a borrowed resource belongs to the request path (#394/#395). LIFE-02's `native_handle()` borrow is unchanged |
+| Publication/thread evidence | None claimed. THREAD-01's File row (caller serialization, no outstanding borrow) is unchanged and not exercised here; no concurrency claim is added. A caller that closes or mutates the File while a direct call is in flight violates that row's serialization, so it is outside the contract rather than a defined outcome a call can report. LIFE-01's borrow rule is the reason the direct path adds no reference counting or deferred close: a direct call completes before it returns, so there is no outstanding borrow to track, and enforcement over a borrowed resource belongs to the request path (#394/#395). LIFE-02's `native_handle()` borrow is unchanged |
 | Backend/kernel evidence | Direct Linux syscalls only (`pread`/`pwrite`, `read`/`write`, `fstat`, `ftruncate`, `fdatasync`/`fsync`). Close and transfer fault injection use the test-only seam at the native-call boundary, so the counts and reasons are deterministic while the production build contains no seam state. Configuration matrix: debug with liburing disabled (34/34), debug with `--liburing=y` (37/37, real-kernel smoke included), release with liburing disabled (34/34), targeted ASan+UBSan over the six new binaries (all pass). The project-wide `asanubsan` mode does not build in this environment: `src/async/fiber_ctx.cpp` fails on a sanitizer attribute directive under `-Werror`, a pre-existing condition in an untouched TU |
 | Build boundary | `direct_w01_consumer_probe` includes only the two direct headers, declares (without including) `sluice::async::{AsyncIoContext, AsyncBackend, Scheduler, Fiber, ApplicationRuntime}` and `detail::RequestArena` and asserts each is incomplete, and links as `g++ … -lsluice_core` with no async or liburing library; `ldd` shows libc/libstdc++/libgcc/libm only. `rg -n 'async|scheduler|fiber|completion|request_arena|request_handle|runtime_task|ApplicationRuntime' include/sluice/file_resource.hpp include/sluice/blocking` returns no match |
-| Status | Direct composition helpers: VERIFIED. Minimal metadata and same-file identity: VERIFIED on the direct path; the request-side forms remain unassessed and owned by #400. Explicit close and RAII error boundary: VERIFIED. Direct invocation / W-01: VERIFIED. Core-only consumer build boundary (V25): VERIFIED. Installed-header surface: NOT_ASSESSED (no install target exists). A1 rows closed by this slice: exact/all composition, `file_info`/size/identity, close/destructor/move-assignment boundary, zero-length no-OS-call, EINTR retry |
+| Status | Direct composition helpers: VERIFIED, ERR-02 included — the failed-attempt remainder is accounted on this path by the refinement recorded below, so the unknown-effect case stays a request-side item. Minimal metadata and same-file identity: VERIFIED on the direct path; the request-side forms remain unassessed and owned by #400. Explicit close and RAII error boundary: VERIFIED. Direct invocation / W-01: VERIFIED. Core-only consumer build boundary (V25): VERIFIED. Installed-header surface: NOT_ASSESSED (no install target exists). A1 rows closed by this slice: exact/all composition, `file_info`/size/identity, close/destructor/move-assignment boundary, zero-length no-OS-call, EINTR retry |
 
 ### A2 limitations and recorded boundaries
 
-- **No-progress representation.** The direct outcome carries a structured
-  `write_no_progress` stop instead of a fabricated canonical `IoError`, so the
-  A1-recorded SEM-05 ambiguity is not resolved by canonizing `invalid_state` in
-  the public contract. `detail::composition_error` keeps its reference-model
-  choice for consumers that must return an `IoError`; the ambiguity stays
-  recorded rather than settled. Because that leaves two mappings over one stop
-  reason, they are driven side by side from the same injected primitive sequence
-  by `every_stop_reason_is_pinned_against_the_oracle_error_rule`, which records
-  the exact split: `complete`, `primitive_error` (reason and native detail
-  identical on both sides) and `impossible_count` agree, while `eof_before_full`
-  and `write_no_progress` deliberately differ, the direct side reporting no
-  `IoError` where the reference rule names one.
-- **Effect certainty.** `CompositionOutcome` reports only confirmed progress and
-  makes no claim about a possibly-effective remainder of a failed or interrupted
-  attempt, so the SEM-05 primitive-OS-error row's effect-uncertainty half is not
-  represented on this surface. ERR-02's unknown-effect reporting is a
-  request-terminal concern owned by #400 and was deliberately not moved into the
-  direct API; the SEM-05 assessment row above is therefore scoped to the direct
-  composition behavior the tests exercise.
+- **No-progress representation and the composition authority.** The authority
+  for a stop is the shared state itself — `CompositionStop`, the accumulated
+  `confirmed_bytes` and the primitive's own error — decided once by
+  `detail::compose_progress`/`compose_error` and published by each path as its
+  own representation. `detail::composition_error` is one such representation: a
+  reference `IoError` projection with test consumers and no production consumer,
+  not a second authority. The direct outcome carries a structured
+  `write_no_progress` stop instead of adopting that projection's `invalid_state`,
+  so the A1-recorded SEM-05 ambiguity is not canonized in the public contract.
+  The projection keeps its reference-model choice, and a root decision on the
+  category would move the projection without moving the canonical stop state.
+  Because the two representations differ over two stop reasons, they are driven
+  side by side from the same injected primitive sequence by
+  `every_stop_reason_is_pinned_against_the_oracle_error_rule`, which pins the
+  canonical stop state on both sides and records the split: `complete`,
+  `primitive_error` (reason and native detail identical) and `impossible_count`
+  agree, while `eof_before_full` and `write_no_progress` differ only in
+  representation, the direct side reporting no `IoError` where the reference
+  projection names one.
+- **Effect certainty (ERR-02; SEM-05's OS-error row).** The direct outcome
+  carries no effect-certainty field, because a failed attempt's remainder is
+  accounted on this path rather than unknown. SEM-05 asks the OS-error row to
+  retain the native detail and the effect uncertainty under ERR-02: the native
+  detail is retained in the `IoError`, and the uncertainty is satisfied by the
+  refinement below. The refinement rests on two premises, both already
+  recorded elsewhere: (1) the direct transfer primitives are synchronous,
+  non-cancelable syscalls (`pread`/`pwrite`, `read`/`write`) on a regular file,
+  and Linux reports an attempt that transferred bytes as a positive short count
+  — the SEM-05 primitive table — so a `-1` return means the attempt transferred
+  no bytes, neither file content for a write nor caller-buffer content for a
+  read; `detail::retry_on_eintr` re-issues only an attempt that returned no
+  count, so the retry never replays a completed prefix. (2) Valid caller memory
+  is a caller precondition that SEM-03 does not dynamically detect, so an
+  `EFAULT` raised by a span over invalid memory is a precondition violation
+  rather than a state this path represents; and SEM-04 promises no cross-call
+  ordering, so the shared-cursor position after a failed shared-cursor call is
+  outside the effect model the rule covers. ERR-02's unknown-effect case needs
+  an attempt that can be canceled after dispatch, which only the request paths
+  have; their representation stays owned by #400. This is a platform-semantics
+  refinement recorded as an assumption of the direct path: it is not a root
+  requirement, and no other path inherits it.
 - **Cursor-surface range scenarios.** A shared-cursor call supplies no offset, so
   the offset-range step has no operand there: five scenarios whose verdict
   depends on the caller's offset (two range cases, two closed/access cases and

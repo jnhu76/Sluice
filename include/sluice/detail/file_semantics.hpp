@@ -332,19 +332,27 @@ constexpr CompositionState compose_error(CompositionState state, IoError error) 
     return state;
 }
 
-// The canonical error a stopped composition reports. `primitive_error` keeps the
-// primitive's own error; the two no-progress stops report distinct values so
-// EOF-before-full and write-no-progress stay distinguishable (SEM-05). A
-// complete composition reports nothing.
+// A reference IoError projection of a stopped composition, for a consumer that
+// must return an `IoError`. It is not the canonical composition semantics: the
+// authority is the state itself — `stop`, the accumulated `confirmed_bytes` and
+// the primitive's own error — which `compose_progress`/`compose_error` decide
+// and every path publishes in its own representation.
+//
+// `primitive_error` keeps the primitive's own error; the two no-progress stops
+// report distinct values so EOF-before-full and write-no-progress stay
+// distinguishable (SEM-05). A complete composition reports nothing.
 //
 // The root names a "no-progress failure" without assigning it a canonical
-// category, so the closest existing category is used and no new category is
-// introduced; the ambiguity is recorded in the ledger for the A1 slice.
+// category, so this projection reuses `invalid_state` as the closest existing
+// category and introduces none. That choice is a recorded A1 ambiguity rather
+// than a settled mapping: a root decision on the category would move this
+// projection, not the canonical stop state.
 //
-// The direct surface publishes the same stop reasons structurally instead and
-// carries an `IoError` only for a primitive failure, so it deliberately does not
-// call this rule. The two mappings are pinned side by side, from one injected
-// primitive sequence, by `every_stop_reason_is_pinned_against_the_oracle_error_rule`
+// The direct surface publishes the stop reasons structurally instead and carries
+// an `IoError` only for a primitive failure, so it deliberately does not call
+// this projection. Both representations are pinned side by side, from one
+// injected primitive sequence, by
+// `every_stop_reason_is_pinned_against_the_oracle_error_rule`
 // in `tests/direct_composition_fault_test.cpp`.
 constexpr std::optional<IoError> composition_error(const CompositionState& state) noexcept {
     if (!state.stopped)
