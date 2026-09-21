@@ -1,6 +1,6 @@
 # Sluice v1 Conformance Ledger
 
-**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r2.
+**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r3.
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 
@@ -26,7 +26,7 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 
 | Slice | Root requirements | Initial status | Required evidence before closure |
 |---|---|---|---|
-| Public operation oracle | SEM, ERR | NOT_ASSESSED | Semantic tables; short-I/O/reference-byte properties; V01–V03, V15–V17 |
+| Public operation oracle | SEM, ERR | NOT_ASSESSED | Semantic tables; short-I/O/reference-byte properties; V01–V03, V15–V17, V27 |
 | Direct invocation | INV, ARCH, W-01 | NOT_ASSESSED | No request/runtime dependency; File lifetime and consumer tests |
 | Admission and slot lifecycle | REQ, BOUND | NOT_ASSESSED | V04–V05, V08–V09, V24, V26; executable model and failure injection |
 | Public Request and result lifetime | HANDLE, LIFE | NOT_ASSESSED | Move/consume/discard, retained results, release-build violation behavior |

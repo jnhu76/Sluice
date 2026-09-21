@@ -2,7 +2,7 @@
 
 | Document field | Value |
 |---|---|
-| Revision | v1-r2 |
+| Revision | v1-r3 |
 | Role | Sole normative root for the Sluice v1 convergence target |
 | Canonical source | `jnhu76/Sluice` / `docs/explicit-io-v1-final-decision.md`; adopted repository revision under GOV-05 |
 | Implementation baseline | `c64f005e6e59e791f26a7ab4a594c33954f096dd` |
@@ -184,16 +184,21 @@ flowchart TD
     APP["Application"] --> FILE["File and shared semantics"]
     FILE --> DIRECT["Explicit direct execution"]
     FILE --> IOC["IoContext request execution"]
-    IOC --> CORE["RequestCore"]
-    CORE --> BACKEND["Backend interface"]
+    IOC -->|"owns"| CORE["RequestCore"]
+    IOC -->|"owns"| BACKEND["Backend interface"]
+    IOC -->|"owns"| PROGRESS["ProgressSource"]
+    CORE -->|"request / control"| BACKEND
     BACKEND --> TP["ThreadPool"]
     BACKEND --> UR["io_uring"]
-    BACKEND --> PROGRESS["ProgressSource"]
-    HOST["External or optional task host"] --> IOC
-    HOST --> PROGRESS
+    BACKEND -->|"physical progress signal"| PROGRESS
+    CORE -->|"dispatch / control / reclaim obligation"| PROGRESS
+    HOST["Progress owner / host"] -->|"drive / poll"| IOC
+    HOST -->|"wait"| PROGRESS
     CORE --> OBS["Observer protocol"]
     OBS --> HOST
 ```
+
+The `owns` edges denote IoContext lifetime ownership, consistent with ARCH-02. Backend signals and core dispatch/control/reclaim obligations feed the context-owned ProgressSource; the progress owner drives the context and waits through that source under PROG.
 
 Direct operations share semantic rules but do not traverse RequestCore. Request execution depends on the core and a backend; host adapters attach above this boundary. No backend interface may mention Scheduler, Fiber, WaiterToken, RoutingLease, task-group identity, or host-specific continuation identity.
 
@@ -318,11 +323,11 @@ A primitive does not loop to satisfy an exact/all promise. It may retry EINTR on
 
 `sync_data` success guarantees durability of the confirmed bytes of writes whose successful direct completion or acquired public terminal completion happens-before the sync initiation, plus file state necessary to retrieve those bytes (including necessary file length). It does not guarantee writes merely submitted before sync. For request sync, initiation is its acceptance point; for direct sync, it is the call's operation initiation after validation.
 
-`sync_all` adds the file's broader metadata, such as supported permissions/ownership/timestamps, whose completed mutation happens-before sync initiation. Caller-observed external operations may contribute to this ordering; Sluice creates no global order across processes, descriptors, or filesystems.
+For the Linux regular-file profile, `sync_data` also covers a successfully completed file-size mutation from `resize`/`ftruncate` whose completion happens-before sync initiation, even without a covered write. Both shrinking and extending the file are included. Linux `fdatasync` synchronizes changed file length as metadata required for subsequent data retrieval; see [fsync(2)](https://man7.org/linux/man-pages/man2/fsync.2.html) and [ftruncate(2)](https://man7.org/linux/man-pages/man2/truncate.2.html). Successful resize alone does not establish durability.
+
+`sync_all` includes all `sync_data` coverage, including those completed resize/file-size changes, and adds the file's broader metadata, such as supported permissions/ownership/timestamps, whose completed mutation happens-before sync initiation. Caller-observed external operations may contribute to this ordering; Sluice creates no global order across processes, descriptors, or filesystems.
 
 Coverage is not a snapshot. A later conflicting write, resize, or metadata mutation can supersede an earlier covered state before synchronization establishes durability. Callers needing exact recoverable bytes/state must prevent such supersession. Neither sync operation guarantees directory entries, rename results, or new-file name reachability.
-
-A bare resize without a covered write does not receive a portable durability guarantee in this v1 contract. Applications requiring that guarantee need a separately specified extension; it must not be inferred from `sync_all` spelling. This deliberately retains the earlier contract boundary.
 
 Success relies on documented OS/filesystem/storage guarantees, not independent proof of hardware power-loss behavior. Failure means the requested guarantee was not established or cannot be confirmed; it does not mean nothing reached storage. Cancellation grants no positive or negative durability fact. A backend must never fabricate successful synchronization.
 
@@ -820,7 +825,7 @@ The following are named acceptance scenarios, not claims that tests already exis
 | V14 | Cancel races successful short write | Confirmed count preserved; no invented rollback |
 | V15 | Unknown-effect write failure | Unknown effects exposed; no false zero-byte claim |
 | V16 | Write submitted, then sync submitted before write observed | No guaranteed durability coverage for that outstanding write |
-| V17 | Write observed, then sync, with conflicting mutation | Coverage distinguished from exact-state preservation |
+| V17 | Write or resize observed, then sync, with conflicting mutation | Coverage distinguished from exact-state preservation |
 | V18 | Second pipeline submission fails / throws during surrounding work | Scope settles first request before buffers unwind |
 | V19 | Wait timeout with I/O still running | Outstanding responsibility preserved or cleanup continues before return |
 | V20 | Shutdown with ready unconsumed results | Execution closes; results remain consumable; no consumption deadlock |
@@ -830,6 +835,7 @@ The following are named acceptance scenarios, not claims that tests already exis
 | V24 | Generation/token exhaustion model boundary | No stale alias or sleep lost through unmodeled wrap |
 | V25 | Core-only standalone consumer | No Scheduler/Fiber link or include dependency |
 | V26 | Request handles released but final control pin retires later | Slot reclaim progresses without unrelated new I/O |
+| V27 | Completed direct resize (shrink and grow), no covered write, then successful `sync_data` / `sync_all` without conflicting mutation | File-size change covered on direct and supported request sync paths; resize alone grants no durability |
 
 # 20. Migration sequence and disposition
 
@@ -839,7 +845,7 @@ The sequence fixes dependency order, not one giant refactor. Verification belong
 
 | Phase | Work | Exit evidence |
 |---|---|---|
-| A: semantic oracle | Shared validation/result/durability tables; direct path; FileInfo contract | SEM/ERR cases including V01–V03, V15–V17; explicit baseline gaps classified |
+| A: semantic oracle | Shared validation/result/durability tables; direct path; FileInfo contract | SEM/ERR cases including V01–V03, V15–V17, V27; explicit baseline gaps classified |
 | B: core and handle | Admission transaction, slot results, public binding, Request API | V04–V05, V08–V09, V14, V21, V24, V26; lifecycle executable model; publication review |
 | C: host-neutral progress/observation | Remove backend Scheduler vocabulary; persistent progress seam | V06–V07, V10–V12, V23, V25; no-lost-wake and observer model obligations |
 | D: scopes and optional host | Bounded W-02 ownership; exception cleanup; supported W-04 if shipped | V18–V19; unwind/stop paths; task/observer lifetime evidence |
@@ -932,5 +938,6 @@ Potential research claims are semantic/backend refinement, host independence, bo
 |---|---|---|
 | v1-r1, PR #389 authority repair | Establish GOV hierarchy and stable IDs; restate File semantics; separate direct/request execution; close Request/observer/progress/shutdown contracts; add scopes, threading and acceptance cases | Normative target amendment, not production migration. Completion compatibility and existing APIs remain until MIG slices replace them. Old conformance statuses are historical; new ledger starts NOT_ASSESSED. |
 | v1-r2, snapshot provenance clarification | Add GOV-05: canonical repository revision, candidate/adopted distinction, portable-copy provenance and UTF-8 integrity | Distribution/governance clarification only. v1-r1 operation, lifetime and execution contracts unchanged; implementation evidence status unchanged. Check source encoding/content, provenance fields and document links. |
+| v1-r3, durability and ownership correction | Correct SEM-06 to cover completed Linux resize/file-size changes with `sync_data` and `sync_all`; clarify IoContext ownership of ProgressSource in ARCH-01; extend VERIFY-04 with V17 resize supersession and V27, referenced by MIG-01 | Strengthens the Linux durability target by removing the bare-resize exclusion. Coverage remains distinct from a snapshot; directory persistence remains outside the contract. The diagram matches ARCH-02/PROG; no ownership transfer or new execution capability. Implementation/evidence status remains unassessed; V27 requires subsequent evidence. |
 
 Subsequent entries identify specific changed requirement IDs. The full before/after remains in Git; this table records decision impact without turning the specification into an execution diary.
