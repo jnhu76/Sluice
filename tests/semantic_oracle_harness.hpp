@@ -28,6 +28,7 @@
 
 namespace sluice_semantic {
 
+using sluice::FileAccess;
 using sluice::IoError;
 using sluice::detail::DataOpVerdict;
 using sluice::detail::FileOperation;

@@ -27,6 +27,8 @@ sluice_one_file_target("binary", "test", "semantic_range_test", "tests", "sluice
 sluice_one_file_target("binary", "test", "semantic_short_io_reference_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "semantic_effect_outcome_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "semantic_durability_reference_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "semantic_reference_case_test", "tests",
+                       {"sluice_core", "sluice_async"})
 sluice_one_file_target("binary", "test", "semantic_validation_precedence_test", "tests",
                        {"sluice_core", "sluice_async"})
 
@@ -36,6 +38,17 @@ sluice_one_file_target("binary", "test", "semantic_validation_precedence_test", 
 -- requirement and are never hand-copied here. The probe witnesses the
 -- consumer-side definition contract; the smoke drives real submissions.
 if has_config("liburing") then
+    -- The same precedence scenarios and the same oracle, driven through the real
+    -- io_uring backend. Registered only when the real backend is built.
+    target("semantic_backend_conformance_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core", "sluice_async")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/semantic_backend_conformance_test.cpp")
+        add_tests("semantic_backend_conformance_test")
+
     target("uring_public_consumer_probe")
         set_kind("binary")
         set_default(false)
