@@ -107,21 +107,21 @@ not assessed yet, the gap map points at its assessment-table row instead.
 |---|---|
 | Requirement scope | SEM-02 open rules; SEM-03 access matrix and validation precedence steps 1–4; SEM-04 offset/length/range; SEM-05 primitive and composition rules; SEM-06 durability rules; ERR-01 canonical mapping; ERR-02 effect representation. Excludes SEM-01 operation matrix closure, SEM-07 metadata/identity, direct composition helpers, and every request-side responsibility |
 | Implementation | `include/sluice/detail/file_semantics.hpp` is the single semantic authority. `src/file_resource.cpp`, `src/blocking_file.cpp`, `src/async/file.cpp`, `src/async/async_io_context.cpp`, `src/async/threadpool_backend.cpp` and `src/async/uring_backend.cpp` call the validation rules and the error mapping; none of them re-derives File legality. The composition, effect and durability rules have no production consumer in this commit |
-| Change | `ENOENT`/`ENOTDIR` now map to `not_found` (was `permission_denied`). Embedded NUL is rejected before the native open (was silently truncated). An unrepresentable offset is `invalid_argument` (was `invalid_state` for the legacy reader). The last addressed byte is validated without overflow and a transfer above the native count is an invalid range (io_uring had no such check). `detail/io_validation.hpp` became `detail/uring_submit.hpp` because its remaining content is io_uring mechanism, not File validation |
-| Semantic/regression evidence | `semantic_errno_mapping_test` (14 table cases, table consistency, real `ENOENT`/`ENOTDIR`/`EACCES` failures), `semantic_open_test` (18-combination legality table, oracle-versus-real-open cross-check, NUL rejected pre-open), `semantic_range_test` (13 range cases cross-checked against wide-arithmetic restatement), `semantic_short_io_reference_test`, `semantic_effect_outcome_test`, `semantic_durability_reference_test`, `semantic_validation_precedence_test` (23 scenarios), `semantic_reference_case_test` (V01–V03, V15–V17, V27) |
+| Change | `ENOENT`/`ENOTDIR` now map to `not_found` (was `permission_denied`). Embedded NUL is rejected before the native open (was silently truncated). An unrepresentable offset is `invalid_argument` (was `invalid_state` for the legacy reader). The last addressed byte is validated without overflow and a transfer above the native count is an invalid range (io_uring had no such check). `detail/io_validation.hpp` became `detail/uring_submit.hpp` because its remaining content is io_uring mechanism, not File validation. Review corrections: ECANCELED falls back to `backend_error` per ERR-01, since the root assigns it no canonical category and the semantic `canceled` outcome comes only from CANCEL-01 dispositions; buffer presence is no longer claimed as an SEM-03 rule and each raw-pointer surface keeps its own null-buffer fail-fast; effect certainty is derived from dispatch evidence rather than read/write direction; durability supersession requires strict ordering plus a conflicting mutation |
+| Semantic/regression evidence | `semantic_errno_mapping_test` (14 table cases, table consistency, real `ENOENT`/`ENOTDIR`/`EACCES` failures), `semantic_open_test` (18-combination legality table, oracle-versus-real-open cross-check, NUL rejected pre-open), `semantic_range_test` (13 range cases cross-checked against wide-arithmetic restatement), `semantic_short_io_reference_test`, `semantic_effect_outcome_test`, `semantic_durability_reference_test`, `semantic_validation_precedence_test` (21 scenarios), `semantic_reference_case_test` (V01–V03, V15–V17, V27) |
 | Protocol/model evidence | None claimed. A1 is a table/property slice; the request lifecycle model belongs to Phase B |
 | Publication/thread evidence | None claimed. This slice does not change publication or threading |
 | Backend/kernel evidence | Direct, ThreadPool and real-kernel io_uring (`--liburing=y`, 8-case smoke passing) are compared against the same scenario table. io_uring unavailability is reported NOT RUN, never as a pass. `/dev/full` is a fault-injection device outside the PROD-02 regular-file domain and is used only to produce a deterministic write failure |
-| Status | Shared File semantic oracle: IMPLEMENTED_UNVERIFIED. Validation rules and the error mapping are called by every execution path; the composition, effect and durability rules are a reference model with no production consumer yet, and their tests prove properties of that model rather than of a path. Direct path: CONFORMING for the scope above. Request paths: GAP, see the map |
+| Status | Shared File semantic oracle: IMPLEMENTED_UNVERIFIED. Validation rules and the error mapping are called by every execution path; the composition, effect and durability rules are a reference model with no production consumer yet, and their tests prove properties of that model rather than of a path. Direct path: CONFORMING for the tested rules and scenarios below, except the zero-op no-OS-call half of SEM-03 step 3, which stays IMPLEMENTED_UNVERIFIED (inspection-only evidence) until #393; the direct scope as a whole is therefore not CONFORMING. Request paths: GAP, see the map |
 
 ### A1 baseline gap map
 
 Rule/scenario | Current path | Observed behavior | v1 expected | Status | Owner
 ---|---|---|---|---|---
 Open combination legality, defaults, embedded NUL | `File::open` | `invalid_argument` before the native open; NUL no longer truncates the name | SEM-02 | CONFORMING | —
-Access matrix and precedence steps 1–4 | `sluice::blocking::*` | All 22 drivable scenarios match the oracle | SEM-03, SEM-04 | CONFORMING | —
+Access matrix and precedence steps 1–4 | `sluice::blocking::*` | All 21 drivable scenarios match the oracle | SEM-03, SEM-04 | CONFORMING | —
 Offset/length range, last-byte overflow | canonical File, direct syscalls | Unrepresentable offset and an overflowing last byte are `invalid_argument`; above-native transfer is a pure rule with no drivable buffer | SEM-04 | CONFORMING | —
-Native error classification | `from_errno_value` | Single table; `ENOENT`/`ENOTDIR`→`not_found`, `EACCES`/`EPERM`→`permission_denied`, native detail preserved | ERR-01 | CONFORMING | —
+Native error classification | `from_errno_value` | Single table; `ENOENT`/`ENOTDIR`→`not_found`, `EACCES`/`EPERM`→`permission_denied`, ECANCELED deliberately unmapped→`backend_error`, native detail preserved | ERR-01 | CONFORMING | —
 Primitive EOF / short transfer / zero-length | direct syscalls | Matches `classify_primitive` on real files | SEM-05 | CONFORMING | —
 Exact/all composition | direct | No direct composition surface exists | SEM-05 | OUT_OF_SCOPE | #393
 `file_info` / size / same-file identity | canonical File | Only `size` via `fstat`; no `FileInfo` | SEM-07 | OUT_OF_SCOPE | #393
@@ -152,6 +152,12 @@ Fabricated not-found substitute | `include/sluice/memory_io_context.hpp` | A see
   a canonical category. The oracle reuses `invalid_state` as the closest existing
   category and adds no new category. The root does not specify this mapping, so
   it is recorded here as an ambiguity rather than treated as settled.
+- Buffer presence is not an SEM-03 rule: SEM-03 treats caller memory validity as
+  not generally dynamically detectable. Each raw-pointer surface keeps a
+  null-buffer-with-nonzero-length fail-fast as its own implementation
+  precondition, outside the shared contract; a surface whose interface takes
+  spans does not need one, and native-to-semantic refinement of such cases
+  belongs to #400.
 - An allocation failure (`std::bad_alloc`) reaching the host boundary has no
   canonical category. `no_space` is used as the closest existing one, but ERR-01
   describes `no_space` for the filesystem and no requirement assigns this case,
