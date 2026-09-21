@@ -276,6 +276,14 @@ namespace {
 using detail::CompositionKind;
 using detail::CompositionState;
 
+// The shared rule answers with its own vocabulary; this is the whole of the
+// adapter's contribution to effect certainty, so no certainty decision lives
+// here.
+constexpr EffectCertainty publish_certainty(detail::EffectCertainty certainty) noexcept {
+    return certainty == detail::EffectCertainty::accounted ? EffectCertainty::accounted
+                                                           : EffectCertainty::unknown;
+}
+
 // Maps the shared composition state onto this adapter's public outcome. The
 // state is the authority for a stop; this function only chooses the public
 // representation of it, so the direct path consumes the one composition rule
@@ -284,10 +292,13 @@ using detail::CompositionState;
 // reference error rule rather than given public vocabulary of its own. A
 // primitive rejection observed after the composition started travels the same
 // path: it is reported as a primitive error with its own category preserved, not
-// as a fresh semantic rejection.
+// as a fresh semantic rejection. Effect certainty is not re-derived here either:
+// `detail::composition_effect_certainty` decides it and this mapping publishes
+// the answer.
 CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     CompositionOutcome outcome;
     outcome.confirmed_bytes = state.confirmed_bytes;
+    outcome.remaining = publish_certainty(detail::composition_effect_certainty(state));
     switch (state.stop) {
     case detail::CompositionStop::complete:
         outcome.end = CompositionEnd::complete;

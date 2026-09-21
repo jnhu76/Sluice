@@ -61,21 +61,38 @@ enum class CompositionEnd : std::uint8_t {
     primitive_error,
 };
 
+// Whether a possibly-effective portion of a failed attempt is unaccounted for
+// (ERR-02), published on this surface as `detail::EffectCertainty` models it.
+enum class EffectCertainty : std::uint8_t {
+    // `confirmed_bytes` accounts for the whole operation: every remaining byte is
+    // either confirmed or was reported not to have moved.
+    accounted,
+    // A possibly-effective part of the failed attempt has no trustworthy count.
+    // The caller must treat the unconfirmed remainder as possibly applied; no
+    // error implies rollback.
+    unknown,
+};
+
 // The completed outcome of an exact/all composition. A stopped composition
 // reports its accumulated confirmed bytes next to the reason, so a failure
 // never discards the prefix (ERR-02).
 //
-// A failed attempt contributes no confirmed bytes, and on this path the stop's
-// remainder is accounted rather than unknown: a direct Linux regular-file
-// primitive reports an attempt that transferred bytes as a positive short count,
-// so a rejected attempt transferred no bytes — not into the file, and not into
-// the caller's buffer. ERR-02 reserves `unknown` for an attempt that may have
-// taken effect without a trustworthy count, which needs an attempt that can be
-// canceled after dispatch; only the request paths have one. The premise and its
-// boundary are recorded in the A2 review record of the conformance ledger.
+// A failed attempt contributes no confirmed bytes, and it cannot claim that the
+// rest of the operation was unaffected: on Linux a primitive error return is not
+// a trustworthy count for the attempt's own effect. A write error can be
+// reported for a write that already reached the file (writeback reporting, and
+// the NFS write path in particular), and a read error can already have filled
+// part of the destination buffer. `remaining` therefore reports ERR-02's
+// required distinction instead of leaving the caller to infer it from the
+// direction, and the shared rule that decides it is
+// `detail::composition_effect_certainty`.
 struct CompositionOutcome {
     std::size_t confirmed_bytes = 0;
     CompositionEnd end = CompositionEnd::complete;
+    // Certainty of what is left over after `confirmed_bytes`. A primitive error
+    // and an impossible count report `unknown`; a completed, EOF-before-full or
+    // no-progress stop reports `accounted`.
+    EffectCertainty remaining = EffectCertainty::accounted;
     // Present exactly when `end` is `primitive_error`. That reason is either the
     // primitive's own error with its native detail preserved, or the shared
     // rule's `invalid_state` for a count that cannot come from a primitive

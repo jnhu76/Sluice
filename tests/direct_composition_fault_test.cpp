@@ -35,8 +35,17 @@ using sluice::File;
 using sluice::IoError;
 using sluice::blocking::CompositionEnd;
 using sluice::blocking::CompositionOutcome;
+using sluice::blocking::EffectCertainty;
 using sluice::file_testing::kTransferCalls;
 using sluice::file_testing::NativeScript;
+
+// The published certainty must agree with the shared rule. The two enums are
+// separate publications of one distinction, so this compares the meaning rather
+// than the enumerator layout.
+bool certainty_agrees(EffectCertainty published, sluice::detail::EffectCertainty rule) {
+    return (rule == sluice::detail::EffectCertainty::accounted) ==
+           (published == EffectCertainty::accounted);
+}
 
 std::string make_temp_file(const std::string& content) {
     char path[] = "/tmp/sluice_composition_fault_XXXXXX";
@@ -87,6 +96,7 @@ bool short_reads_report_eof_before_full_with_the_prefix() {
         const CompositionOutcome& outcome = composed.value();
         ok = ok && outcome.confirmed_bytes == 6;
         ok = ok && outcome.end == CompositionEnd::eof_before_full;
+        ok = ok && outcome.remaining == EffectCertainty::accounted;
         ok = ok && !outcome.complete();
         ok = ok && script.calls() == 3;
     }
@@ -158,6 +168,7 @@ bool zero_progress_write_stops_after_one_attempt() {
         ok = ok && composed.has_value();
         ok = ok && composed.value().end == CompositionEnd::write_no_progress;
         ok = ok && composed.value().confirmed_bytes == 0;
+        ok = ok && composed.value().remaining == EffectCertainty::accounted;
         // The remaining scripted steps are untouched: the loop stopped at the
         // first zero-progress primitive instead of retrying it.
         ok = ok && script.calls() == 1;
@@ -234,6 +245,7 @@ bool error_after_confirmed_prefix_keeps_the_prefix() {
         const CompositionOutcome& outcome = composed.value();
         ok = ok && outcome.confirmed_bytes == 256;
         ok = ok && outcome.end == CompositionEnd::primitive_error;
+        ok = ok && outcome.remaining == EffectCertainty::unknown;
         ok = ok && outcome.error.has_value() &&
              outcome.error->code == IoError::Code::no_space &&
              outcome.error->os_errno == ENOSPC;
@@ -330,9 +342,55 @@ bool impossible_count_stops_immediately() {
         ok = ok && composed.has_value();
         ok = ok && composed.value().end == CompositionEnd::primitive_error;
         ok = ok && composed.value().confirmed_bytes == 0;
+        ok = ok && composed.value().remaining == EffectCertainty::unknown;
         ok = ok && composed.value().error.has_value() &&
              composed.value().error->code == IoError::Code::invalid_state;
         ok = ok && script.calls() == 1;
+    }
+    ::unlink(path.c_str());
+    return ok;
+}
+
+// ERR-02: a primitive error leaves the failed attempt's own effect unaccounted
+// for, in both directions. The prefix from the completed steps stays
+// trustworthy, but the outcome says `unknown` rather than letting a caller read
+// the operation's direction as a claim that the failed attempt changed nothing.
+bool a_primitive_error_reports_an_unaccounted_remainder_in_both_directions() {
+    std::string path;
+    std::optional<File> file_holder =
+        opened_with_content("abcdefgh", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+    std::vector<std::byte> dst(8, std::byte{0});
+    const std::vector<std::byte> src(8, std::byte{0x45});
+
+    bool ok = true;
+    {
+        NativeScript script(kTransferCalls, fd, {{3, 0}, {-1, EIO}});
+        auto composed = sluice::blocking::read_exact_at(file, 0, dst);
+        ok = ok && composed.has_value();
+        ok = ok && composed.value().end == CompositionEnd::primitive_error;
+        ok = ok && composed.value().confirmed_bytes == 3;
+        ok = ok && composed.value().remaining == EffectCertainty::unknown;
+        ok = ok && composed.value().error.has_value() && composed.value().error->os_errno == EIO;
+    }
+    {
+        NativeScript script(kTransferCalls, fd, {{3, 0}, {-1, EIO}});
+        auto composed = sluice::blocking::write_all_at(file, 0, src);
+        ok = ok && composed.has_value();
+        ok = ok && composed.value().end == CompositionEnd::primitive_error;
+        ok = ok && composed.value().confirmed_bytes == 3;
+        ok = ok && composed.value().remaining == EffectCertainty::unknown;
+    }
+    {
+        // A successful stop does account for its remainder, so the field is a
+        // decision rather than a constant.
+        NativeScript script(kTransferCalls, fd, {{8, 0}});
+        auto composed = sluice::blocking::read_exact_at(file, 0, dst);
+        ok = ok && composed.has_value() && composed.value().complete();
+        ok = ok && composed.value().remaining == EffectCertainty::accounted;
     }
     ::unlink(path.c_str());
     return ok;
@@ -349,7 +407,8 @@ bool impossible_count_stops_immediately() {
 // from the same sequence pins the canonical stop state on both sides, so a
 // change in either representation shows up here, and records the two
 // representation differences instead of leaving them to read as two competing
-// authorities.
+// authorities. The same table pins effect certainty: at every stop the direct
+// outcome publishes what `detail::composition_effect_certainty` decides.
 bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
     using sluice::detail::CompositionKind;
     using sluice::detail::CompositionState;
@@ -376,8 +435,11 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
         ok = ok && composed.has_value() && composed.value().complete();
         ok = ok && composed.value().confirmed_bytes == 4;
         ok = ok && !composed.value().error.has_value();
+        ok = ok && composed.value().remaining == EffectCertainty::accounted;
         ok = ok && oracle.stop == CompositionStop::complete;
         ok = ok && !sluice::detail::composition_error(oracle).has_value();
+        ok = ok && certainty_agrees(composed.value().remaining,
+                                    sluice::detail::composition_effect_certainty(oracle));
     }
 
     // eof_before_full: the direct outcome keeps the stop structural and carries no
@@ -393,9 +455,12 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
              composed.value().end == CompositionEnd::eof_before_full;
         ok = ok && composed.value().confirmed_bytes == 2;
         ok = ok && !composed.value().error.has_value();
+        ok = ok && composed.value().remaining == EffectCertainty::accounted;
         ok = ok && oracle.stop == CompositionStop::eof_before_full;
         const auto oracle_reason = sluice::detail::composition_error(oracle);
         ok = ok && oracle_reason.has_value() && oracle_reason->code == IoError::Code::eof;
+        ok = ok && certainty_agrees(composed.value().remaining,
+                                    sluice::detail::composition_effect_certainty(oracle));
     }
 
     // write_no_progress after a confirmed prefix: the prefix survives the stop on
@@ -410,10 +475,13 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
              composed.value().end == CompositionEnd::write_no_progress;
         ok = ok && composed.value().confirmed_bytes == 2;
         ok = ok && !composed.value().error.has_value();
+        ok = ok && composed.value().remaining == EffectCertainty::accounted;
         ok = ok && oracle.stop == CompositionStop::write_no_progress;
         const auto oracle_reason = sluice::detail::composition_error(oracle);
         ok = ok && oracle_reason.has_value() &&
              oracle_reason->code == IoError::Code::invalid_state;
+        ok = ok && certainty_agrees(composed.value().remaining,
+                                    sluice::detail::composition_effect_certainty(oracle));
     }
 
     // primitive_error: both sides report the primitive's own reason, native detail
@@ -431,9 +499,12 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
         ok = ok && composed.value().error.has_value() &&
              composed.value().error->code == IoError::Code::no_space &&
              composed.value().error->os_errno == ENOSPC;
+        ok = ok && composed.value().remaining == EffectCertainty::unknown;
         ok = ok && oracle.stop == CompositionStop::primitive_error;
         const auto oracle_reason = sluice::detail::composition_error(oracle);
         ok = ok && oracle_reason.has_value() && *oracle_reason == *composed.value().error;
+        ok = ok && certainty_agrees(composed.value().remaining,
+                                    sluice::detail::composition_effect_certainty(oracle));
     }
 
     // impossible_count: a count above the remaining request cannot come from a
@@ -451,9 +522,12 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
         ok = ok && composed.value().error.has_value() &&
              composed.value().error->code == IoError::Code::invalid_state &&
              composed.value().error->os_errno == 0;
+        ok = ok && composed.value().remaining == EffectCertainty::unknown;
         ok = ok && oracle.stop == CompositionStop::impossible_count;
         const auto oracle_reason = sluice::detail::composition_error(oracle);
         ok = ok && oracle_reason.has_value() && *oracle_reason == *composed.value().error;
+        ok = ok && certainty_agrees(composed.value().remaining,
+                                    sluice::detail::composition_effect_certainty(oracle));
     }
 
     ::unlink(path.c_str());
@@ -617,6 +691,8 @@ int main() {
          primitive_retries_eintr_without_a_completed_count},
         {"zero_length_requests_make_no_native_call", zero_length_requests_make_no_native_call},
         {"impossible_count_stops_immediately", impossible_count_stops_immediately},
+        {"a_primitive_error_reports_an_unaccounted_remainder_in_both_directions",
+         a_primitive_error_reports_an_unaccounted_remainder_in_both_directions},
         {"every_stop_reason_is_pinned_against_the_oracle_error_rule",
          every_stop_reason_is_pinned_against_the_oracle_error_rule},
         {"composition_surfaces_obey_the_precedence_table",

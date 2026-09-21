@@ -25,6 +25,7 @@ using sluice::FileAccess;
 using sluice::FileOpen;
 using sluice::IoError;
 using sluice::blocking::CompositionEnd;
+using sluice::blocking::EffectCertainty;
 
 std::string make_temp_file(const std::string& content) {
     char path[] = "/tmp/sluice_direct_composition_XXXXXX";
@@ -77,8 +78,10 @@ bool read_exact_reads_the_whole_request() {
     auto composed = sluice::blocking::read_exact_at(file, 0, dst);
     ::unlink(path.c_str());
     return composed.has_value() && composed.value().complete() &&
-           composed.value().confirmed_bytes == 8 && dst[0] == std::byte{'a'} &&
-           dst[7] == std::byte{'h'} && file.close().has_value();
+           composed.value().confirmed_bytes == 8 &&
+           composed.value().remaining == EffectCertainty::accounted &&
+           dst[0] == std::byte{'a'} && dst[7] == std::byte{'h'} &&
+           file.close().has_value();
 }
 
 // A real short file produces the EOF-before-full stop with its confirmed prefix.
@@ -95,8 +98,9 @@ bool read_exact_reports_eof_before_full_with_the_prefix() {
     auto composed = sluice::blocking::read_exact_at(file, 2, dst);
     ::unlink(path.c_str());
     return composed.has_value() && composed.value().end == CompositionEnd::eof_before_full &&
-           composed.value().confirmed_bytes == 3 && dst[0] == std::byte{'c'} &&
-           file.close().has_value();
+           composed.value().confirmed_bytes == 3 &&
+           composed.value().remaining == EffectCertainty::accounted &&
+           dst[0] == std::byte{'c'} && file.close().has_value();
 }
 
 bool write_all_writes_the_whole_request() {
@@ -114,6 +118,7 @@ bool write_all_writes_the_whole_request() {
     auto composed = sluice::blocking::write_all(file, src);
     const bool ok = composed.has_value() && composed.value().complete() &&
                     composed.value().confirmed_bytes == payload.size() &&
+                    composed.value().remaining == EffectCertainty::accounted &&
                     file.close().has_value() && file_content_is(path, payload);
     ::unlink(path.c_str());
     return ok;

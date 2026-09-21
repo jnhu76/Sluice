@@ -121,6 +121,9 @@ bool w01_explicit_close_trace() {
     auto wrote_all = sluice::blocking::write_all_at(file, header.size(), body_bytes);
     ok = ok && wrote_at.has_value() && wrote_at.value() == header.size();
     ok = ok && wrote_all.has_value() && wrote_all.value().complete();
+    // A completed composition accounts for its whole request, so a consumer can
+    // read the ERR-02 distinction off the outcome it already receives.
+    ok = ok && wrote_all.value().remaining == sluice::blocking::EffectCertainty::accounted;
 
     // durability of the confirmed bytes
     ok = ok && sluice::blocking::sync_data(file).has_value();

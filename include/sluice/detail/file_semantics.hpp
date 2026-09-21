@@ -353,7 +353,9 @@ constexpr CompositionState compose_error(CompositionState state, IoError error) 
 // this projection. Both representations are pinned side by side, from one
 // injected primitive sequence, by
 // `every_stop_reason_is_pinned_against_the_oracle_error_rule`
-// in `tests/direct_composition_fault_test.cpp`.
+// in `tests/direct_composition_fault_test.cpp`. The certainty half of the same
+// state is `composition_effect_certainty` below, which the direct outcome does
+// publish.
 constexpr std::optional<IoError> composition_error(const CompositionState& state) noexcept {
     if (!state.stopped)
         return std::nullopt;
@@ -471,6 +473,36 @@ constexpr IoOutcome canceled_before_dispatch(std::uint64_t confirmed_prefix = 0)
 // than accounted.
 constexpr IoOutcome canceled_racing_in_flight_attempt(std::uint64_t confirmed_bytes) noexcept {
     return IoOutcome::uncertain(IoError{.code = IoError::Code::canceled}, confirmed_bytes);
+}
+
+// Certainty of a stopped composition's remainder (ERR-02). Only a stop whose
+// primitive reported a *successful* count accounts for its remainder: the
+// accumulated `confirmed_bytes` is then the whole story, because a zero count
+// that the primitive reported as success leaves nothing unaccounted.
+//
+// A primitive error never accounts for its remainder, in either direction. The
+// error return is not a trustworthy count for the possibly-effective portion,
+// and direction does not decide it: a failing read may already have filled part
+// of the caller's borrowed destination buffer (LIFE-01), and a failing write may
+// already have reached the file — Linux reports a write error for a writeback
+// failure, and at least the NFS write path returns a negative result after
+// `generic_perform_write()` accepted bytes. This is the same reason
+// `failed_dispatched_attempt` derives certainty from dispatch evidence rather
+// than from what the operation reads or writes. An impossible count is an
+// untrustworthy report by definition, so it accounts for nothing either.
+constexpr EffectCertainty composition_effect_certainty(const CompositionState& state) noexcept {
+    if (!state.stopped)
+        return EffectCertainty::accounted;
+    switch (state.stop) {
+    case CompositionStop::complete:
+    case CompositionStop::eof_before_full:
+    case CompositionStop::write_no_progress:
+        return EffectCertainty::accounted;
+    case CompositionStop::primitive_error:
+    case CompositionStop::impossible_count:
+        return EffectCertainty::unknown;
+    }
+    return EffectCertainty::accounted;
 }
 
 // ─── Durability reference rules (SEM-06, Linux regular-file profile) ───────
