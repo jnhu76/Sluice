@@ -63,6 +63,10 @@ namespace detail {
 // than re-classifying errno locally, so every execution path reports the same
 // category for the same native cause. A native error the root gives no
 // canonical category keeps `backend_error` and its preserved native detail.
+// ECANCELED is deliberately absent: ERR-01 assigns no canonical category to it,
+// so a native ECANCELED is `backend_error` plus native detail; the semantic
+// `canceled` outcome comes from CANCEL-01 cancellation dispositions, not from
+// an errno.
 //
 // The table is implementation, not public contract: `from_errno_value` is the
 // public mapping and a second classifier outside it is a conformance gap.
@@ -82,9 +86,6 @@ inline constexpr NativeErrorMapping kNativeErrorMappings[] = {
     {EAGAIN, IoError::Code::would_block},
 #if EWOULDBLOCK != EAGAIN
     {EWOULDBLOCK, IoError::Code::would_block},
-#endif
-#ifdef ECANCELED
-    {ECANCELED, IoError::Code::canceled},
 #endif
 };
 

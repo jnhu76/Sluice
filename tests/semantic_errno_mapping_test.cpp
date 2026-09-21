@@ -36,8 +36,10 @@ struct TableCase {
 
 // ERR-01: ENOENT/ENOTDIR map to not_found; EACCES/EPERM to permission_denied;
 // ENOSPC/EDQUOT to no_space; EINTR to interrupted; EAGAIN/EWOULDBLOCK to
-// would_block; ECANCELED to canceled. Any native error without a canonical
-// category keeps backend_error plus native detail.
+// would_block. ECANCELED is deliberately not in ERR-01's mapping, so a native
+// ECANCELED keeps backend_error plus native detail; the semantic canceled
+// outcome comes from CANCEL-01 dispositions, not from an errno. Any other
+// native error without a canonical category behaves the same way.
 const TableCase table_cases[] = {
     {"ENOENT_is_not_found", ENOENT, IoError::Code::not_found},
     {"ENOTDIR_is_not_found", ENOTDIR, IoError::Code::not_found},
@@ -47,9 +49,9 @@ const TableCase table_cases[] = {
     {"EDQUOT_is_no_space", EDQUOT, IoError::Code::no_space},
     {"EINTR_is_interrupted", EINTR, IoError::Code::interrupted},
     {"EAGAIN_is_would_block", EAGAIN, IoError::Code::would_block},
-    {"ECANCELED_is_canceled", ECANCELED, IoError::Code::canceled},
     // No canonical category is specified for these: they must keep the
     // fallback category and preserve the native detail.
+    {"ECANCELED_stays_backend_error", ECANCELED, kBackend},
     {"EIO_stays_backend_error", EIO, kBackend},
     {"EINVAL_stays_backend_error", EINVAL, kBackend},
     {"EBADF_stays_backend_error", EBADF, kBackend},
