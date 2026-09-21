@@ -8,6 +8,13 @@ This ledger starts a new assessment. Previous architecture CLOSED/CONFORMANT
 labels do not transfer. PR #389 changes documentation only; it does not implement
 RequestCore, new Request APIs, progress integration, or shutdown behavior.
 
+Formal evidence is governed by the
+[v1 formal evidence map](v1-formal-evidence-map.md) (issue #391): existing
+Lean/TLA+ assets are HISTORICAL / ADAPT / RETIRE_FROM_V1_EVIDENCE and none of
+them is v1 evidence; future protocol and liveness closures must record their
+evidence in the map's closure format. No row below changes status because an
+old proof exists.
+
 ## Status vocabulary
 
 | Status | Meaning |
