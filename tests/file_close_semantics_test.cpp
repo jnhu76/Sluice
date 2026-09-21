@@ -240,6 +240,10 @@ bool consumed_close_never_retries_a_reused_descriptor() {
         ::close(fd); // stands in for the kernel having released the descriptor
         const int replacement = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
         ok = ok && replacement >= 0;
+        // Linux hands out the lowest free descriptor, so the number is genuinely
+        // reused here. Asserting it keeps the case from passing without ever
+        // creating the situation it names.
+        ok = ok && replacement == fd;
         ok = ok && file.close().has_value(); // no-op: the File owns nothing now
         ok = ok && script.calls() == 1;      // the number was never closed again
         ok = ok && descriptor_is_live(replacement);

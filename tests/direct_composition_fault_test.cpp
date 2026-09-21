@@ -13,6 +13,7 @@
 // seam build can observe the no-OS-call half of the logical-no-op rule.
 
 #include <sluice/blocking/file.hpp>
+#include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
 
 #include "file_test_seams.hpp"
@@ -233,8 +234,9 @@ bool error_after_confirmed_prefix_keeps_the_prefix() {
         const CompositionOutcome& outcome = composed.value();
         ok = ok && outcome.confirmed_bytes == 256;
         ok = ok && outcome.end == CompositionEnd::primitive_error;
-        ok = ok && outcome.error->code == IoError::Code::no_space;
-        ok = ok && outcome.error->os_errno == ENOSPC;
+        ok = ok && outcome.error.has_value() &&
+             outcome.error->code == IoError::Code::no_space &&
+             outcome.error->os_errno == ENOSPC;
         ok = ok && script.calls() == 2;
     }
     ::unlink(path.c_str());
@@ -328,9 +330,128 @@ bool impossible_count_stops_immediately() {
         ok = ok && composed.has_value();
         ok = ok && composed.value().end == CompositionEnd::primitive_error;
         ok = ok && composed.value().confirmed_bytes == 0;
-        ok = ok && composed.value().error->code == IoError::Code::invalid_state;
+        ok = ok && composed.value().error.has_value() &&
+             composed.value().error->code == IoError::Code::invalid_state;
         ok = ok && script.calls() == 1;
     }
+    ::unlink(path.c_str());
+    return ok;
+}
+
+// The reason a composition stopped is decided once, by `detail::compose_progress`
+// / `compose_error`, and then published twice: the oracle's `composition_error`
+// names a canonical IoError for a stopped composition, while the direct surface
+// reports the reason structurally and carries an error only for a primitive
+// failure. Both mappings are driven here from the same injected primitive
+// sequence, so neither side can rotate without this table naming the change, and
+// the two deliberate divergences stay pinned as contracts instead of reading as
+// an untested difference between two authorities.
+bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
+    using sluice::detail::CompositionKind;
+    using sluice::detail::CompositionState;
+    using sluice::detail::CompositionStop;
+
+    std::string path;
+    std::optional<File> file_holder =
+        opened_with_content("abcdefgh", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+    std::vector<std::byte> buffer(4, std::byte{0});
+    const std::vector<std::byte> src(4, std::byte{0x41});
+
+    bool ok = true;
+
+    // complete: neither side names a reason.
+    {
+        NativeScript script(kTransferCalls, fd, {{4, 0}});
+        auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
+        CompositionState oracle;
+        oracle = sluice::detail::compose_progress(CompositionKind::read_exact, 4, oracle, 4);
+        ok = ok && composed.has_value() && composed.value().complete();
+        ok = ok && composed.value().confirmed_bytes == 4;
+        ok = ok && !composed.value().error.has_value();
+        ok = ok && oracle.stop == CompositionStop::complete;
+        ok = ok && !sluice::detail::composition_error(oracle).has_value();
+    }
+
+    // eof_before_full: the direct outcome keeps the stop structural and carries no
+    // error, while the oracle's rule names `eof`. The divergence is recorded, not
+    // accidental.
+    {
+        NativeScript script(kTransferCalls, fd, {{2, 0}, {0, 0}});
+        auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
+        CompositionState oracle;
+        oracle = sluice::detail::compose_progress(CompositionKind::read_exact, 4, oracle, 2);
+        oracle = sluice::detail::compose_progress(CompositionKind::read_exact, 4, oracle, 0);
+        ok = ok && composed.has_value() &&
+             composed.value().end == CompositionEnd::eof_before_full;
+        ok = ok && composed.value().confirmed_bytes == 2;
+        ok = ok && !composed.value().error.has_value();
+        ok = ok && oracle.stop == CompositionStop::eof_before_full;
+        const auto oracle_reason = sluice::detail::composition_error(oracle);
+        ok = ok && oracle_reason.has_value() && oracle_reason->code == IoError::Code::eof;
+    }
+
+    // write_no_progress after a confirmed prefix: the prefix survives the stop on
+    // both sides, and the same recorded divergence applies to the reason.
+    {
+        NativeScript script(kTransferCalls, fd, {{2, 0}, {0, 0}});
+        auto composed = sluice::blocking::write_all_at(file, 0, src);
+        CompositionState oracle;
+        oracle = sluice::detail::compose_progress(CompositionKind::write_all, 4, oracle, 2);
+        oracle = sluice::detail::compose_progress(CompositionKind::write_all, 4, oracle, 0);
+        ok = ok && composed.has_value() &&
+             composed.value().end == CompositionEnd::write_no_progress;
+        ok = ok && composed.value().confirmed_bytes == 2;
+        ok = ok && !composed.value().error.has_value();
+        ok = ok && oracle.stop == CompositionStop::write_no_progress;
+        const auto oracle_reason = sluice::detail::composition_error(oracle);
+        ok = ok && oracle_reason.has_value() &&
+             oracle_reason->code == IoError::Code::invalid_state;
+    }
+
+    // primitive_error: both sides report the primitive's own reason, native detail
+    // included. The oracle state is replayed with the same conversion the
+    // primitive used, so the two reasons must be equal, not merely equal in code.
+    {
+        NativeScript script(kTransferCalls, fd, {{2, 0}, {-1, ENOSPC}});
+        auto composed = sluice::blocking::write_all_at(file, 0, src);
+        CompositionState oracle;
+        oracle = sluice::detail::compose_progress(CompositionKind::write_all, 4, oracle, 2);
+        oracle = sluice::detail::compose_error(oracle, sluice::from_errno_value(ENOSPC));
+        ok = ok && composed.has_value() &&
+             composed.value().end == CompositionEnd::primitive_error;
+        ok = ok && composed.value().confirmed_bytes == 2;
+        ok = ok && composed.value().error.has_value() &&
+             composed.value().error->code == IoError::Code::no_space &&
+             composed.value().error->os_errno == ENOSPC;
+        ok = ok && oracle.stop == CompositionStop::primitive_error;
+        const auto oracle_reason = sluice::detail::composition_error(oracle);
+        ok = ok && oracle_reason.has_value() && *oracle_reason == *composed.value().error;
+    }
+
+    // impossible_count: a count above the remaining request cannot come from a
+    // primitive that honors its own contract, so it is published as a primitive
+    // error whose reason is the shared rule's `invalid_state` with no native
+    // detail, exactly as `composition_error` names it.
+    {
+        NativeScript script(kTransferCalls, fd, {{8, 0}});
+        auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
+        CompositionState oracle;
+        oracle = sluice::detail::compose_progress(CompositionKind::read_exact, 4, oracle, 8);
+        ok = ok && composed.has_value() &&
+             composed.value().end == CompositionEnd::primitive_error;
+        ok = ok && composed.value().confirmed_bytes == 0;
+        ok = ok && composed.value().error.has_value() &&
+             composed.value().error->code == IoError::Code::invalid_state &&
+             composed.value().error->os_errno == 0;
+        ok = ok && oracle.stop == CompositionStop::impossible_count;
+        const auto oracle_reason = sluice::detail::composition_error(oracle);
+        ok = ok && oracle_reason.has_value() && *oracle_reason == *composed.value().error;
+    }
+
     ::unlink(path.c_str());
     return ok;
 }
@@ -492,6 +613,8 @@ int main() {
          primitive_retries_eintr_without_a_completed_count},
         {"zero_length_requests_make_no_native_call", zero_length_requests_make_no_native_call},
         {"impossible_count_stops_immediately", impossible_count_stops_immediately},
+        {"every_stop_reason_is_pinned_against_the_oracle_error_rule",
+         every_stop_reason_is_pinned_against_the_oracle_error_rule},
         {"composition_surfaces_obey_the_precedence_table",
          composition_surfaces_obey_the_precedence_table},
     };

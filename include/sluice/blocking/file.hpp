@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 
 // Direct (completed-return) File operations: each call executes immediately on
@@ -70,9 +71,12 @@ enum class CompositionEnd : std::uint8_t {
 struct CompositionOutcome {
     std::size_t confirmed_bytes = 0;
     CompositionEnd end = CompositionEnd::complete;
-    // Present exactly when `end` is `primitive_error`, which is the primitive's
-    // own reason with its native detail preserved. A successful or no-progress
-    // outcome carries no error, so a consumer cannot read a stale category.
+    // Present exactly when `end` is `primitive_error`. That reason is either the
+    // primitive's own error with its native detail preserved, or the shared
+    // rule's `invalid_state` for a count that cannot come from a primitive
+    // honoring its contract, which carries no native detail. A successful or
+    // no-progress outcome carries no error, so a consumer cannot read a stale
+    // category.
     std::optional<IoError> error;
 
     constexpr bool complete() const noexcept { return end == CompositionEnd::complete; }

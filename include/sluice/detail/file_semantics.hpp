@@ -340,6 +340,12 @@ constexpr CompositionState compose_error(CompositionState state, IoError error) 
 // The root names a "no-progress failure" without assigning it a canonical
 // category, so the closest existing category is used and no new category is
 // introduced; the ambiguity is recorded in the ledger for the A1 slice.
+//
+// The direct surface publishes the same stop reasons structurally instead and
+// carries an `IoError` only for a primitive failure, so it deliberately does not
+// call this rule. The two mappings are pinned side by side, from one injected
+// primitive sequence, by `every_stop_reason_is_pinned_against_the_oracle_error_rule`
+// in `tests/direct_composition_fault_test.cpp`.
 constexpr std::optional<IoError> composition_error(const CompositionState& state) noexcept {
     if (!state.stopped)
         return std::nullopt;
