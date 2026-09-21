@@ -42,18 +42,31 @@ a mismatch with the root is a conformance gap, not a license to change the
 contract. A behavior change to the target must amend the root first, or in the
 same PR.
 
-## Active documents
+## Current documents
 
 | Path | Purpose |
 |---|---|
 | `docs/explicit-io-v1-final-decision.md` | Sole normative root (v1-r3) |
 | `docs/roadmap/v1-conformance.md` | Implementation/evidence ledger |
-| `docs/adr/0001-*, 0002-*` | Historical rationale, kept in place with supersession banners; not current authority |
 | `docs/README.md` | This navigation page |
-| `docs/archive/**` | Archived records (see below) |
+
+These three are the only current records under `docs/`. Everything else under
+`docs/` is either a retained historical record or a retired one kept for
+provenance.
 
 `research/RESULTS.md` (repository root, outside `docs/`) holds retained research
 conclusions; it is evidence and rationale, not an authority.
+
+## Retained historical records
+
+| Path | Purpose |
+|---|---|
+| `docs/adr/0001-*, 0002-*` | Historical rationale, retained in place with supersession banners; not current authority |
+| `docs/archive/**` | Archived provenance and evidence; see the [archive index](archive/README.md) |
+
+Neither is current authority. The ADRs stay in place because the root
+specification and AGENTS.md cite them by path; archived records were moved
+because their location did not carry authority.
 
 ## Archived material
 
@@ -73,11 +86,10 @@ An archived CLOSED/CONFORMANT/PROVED label describes the baseline and contract
 it was written against. It does not transfer to the v1 target and cannot be
 cited as v1 evidence.
 
-Paths named inside the root specification's supersession table (GOV-03), such
-as `docs/mission.md`, `docs/architecture.md` and
-`docs/roadmap/explicit-file-conformance.md`, are historical citations. Their
-current locations are recorded in the archive index's old-path → current-path
-table; the root text itself is intentionally left unchanged.
+The root specification's supersession table (GOV-03) names each superseded
+record at its current archive path and records the former path inline, so the
+root is readable on its own. The archive index additionally carries the full
+old-path → current-path table for every moved record.
 
 ## Formal material: reports vs sources
 
