@@ -29,8 +29,8 @@ using sluice::detail::covers;
 using sluice::detail::grants_durability_alone;
 using sluice::detail::MutationKind;
 using sluice::detail::MutationRecord;
+using sluice::detail::ordered_after_sync;
 using sluice::detail::preserves_exact_state;
-using sluice::detail::superseded;
 using sluice::detail::SyncKind;
 using sluice::detail::SyncRecord;
 
@@ -68,19 +68,20 @@ bool v27_resize_alone_grants_no_durability() {
     return !grants_durability_alone(kObservedMetadata);
 }
 
-// V17: an observed write before the sync is covered, while a conflicting mutation
-// completing after the sync's initiation is not covered and is reported as
-// superseding. Coverage is therefore distinguishable from exact-state
-// preservation.
+// V17: an observed write before the sync is covered, while a conflicting
+// mutation completing after the sync's initiation is not covered. Supersession
+// is derived from the two facts SEM-06 names — the earlier covered state and a
+// conflicting mutation ordered after the sync's initiation — which is why
+// coverage is distinguishable from exact-state preservation.
 bool v17_coverage_is_not_a_snapshot() {
     if (!covers(kDataSync, kObservedWrite))
         return false;
     constexpr MutationRecord kConflicting{MutationKind::write, CompletionState::observed, 12};
     if (covers(kDataSync, kConflicting))
         return false;
-    if (!superseded(kDataSync, kConflicting))
+    if (!ordered_after_sync(kDataSync, kConflicting))
         return false;
-    if (superseded(kDataSync, kObservedWrite))
+    if (ordered_after_sync(kDataSync, kObservedWrite))
         return false;
     return !preserves_exact_state(kDataSync, kConflicting);
 }
@@ -94,6 +95,14 @@ bool coverage_requires_a_strict_order() {
     constexpr MutationRecord kEqual{MutationKind::write, CompletionState::observed, 8};
     constexpr MutationRecord kAfter{MutationKind::write, CompletionState::observed, 9};
     return covers(kDataSync, kBefore) && !covers(kDataSync, kEqual) && !covers(kDataSync, kAfter);
+}
+
+// The unordered half stated for the ordering rule itself: with equal sequence
+// numbers the model can order neither event against the other, so the pair is
+// neither covered nor ordered after, and no supersession follows from it.
+bool unordered_pair_supports_no_durability_fact() {
+    constexpr MutationRecord kEqual{MutationKind::write, CompletionState::observed, 8};
+    return !covers(kDataSync, kEqual) && !ordered_after_sync(kDataSync, kEqual);
 }
 
 // Cancellation grants no positive or negative durability fact, and metadata needs
@@ -195,6 +204,7 @@ int main() {
         {"v27_resize_alone_grants_no_durability", v27_resize_alone_grants_no_durability},
         {"v17_coverage_is_not_a_snapshot", v17_coverage_is_not_a_snapshot},
         {"coverage_requires_a_strict_order", coverage_requires_a_strict_order},
+        {"unordered_pair_supports_no_durability_fact", unordered_pair_supports_no_durability_fact},
         {"failed_sync_covers_nothing_and_metadata_needs_sync_all",
          failed_sync_covers_nothing_and_metadata_needs_sync_all},
         {"direct_resize_then_sync_sequence_succeeds", direct_resize_then_sync_sequence_succeeds},

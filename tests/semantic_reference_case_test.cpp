@@ -37,8 +37,9 @@ using sluice::detail::failed_dispatched_attempt;
 using sluice::detail::IoOutcome;
 using sluice::detail::MutationKind;
 using sluice::detail::MutationRecord;
+using sluice::detail::ordered_after_sync;
 using sluice::detail::prefix_only_terminal_can_carry;
-using sluice::detail::superseded;
+using sluice::detail::preserves_exact_state;
 using sluice::detail::SyncKind;
 using sluice::detail::SyncRecord;
 
@@ -225,8 +226,13 @@ void v17_coverage_is_not_preservation() {
     constexpr MutationRecord conflicting{MutationKind::write, CompletionState::observed, 8};
 
     check(covers(data_sync, covered), "V17: the earlier write is covered");
-    check(!covers(data_sync, conflicting) && superseded(data_sync, conflicting),
-          "V17: a later conflicting mutation is uncovered and supersedes");
+    check(!covers(data_sync, conflicting) && ordered_after_sync(data_sync, conflicting),
+          "V17: a later conflicting mutation is uncovered and ordered after the sync");
+    // Covered earlier state plus a conflicting mutation ordered after the sync's
+    // initiation is the pair SEM-06 names as superseding the covered state, so
+    // no exact-state preservation is claimed.
+    check(!preserves_exact_state(data_sync, conflicting),
+          "V17: the covered state is not preserved");
 
     // Observable half on a real file: after a conflicting write, the bytes on
     // disk are no longer the bytes the earlier sync covered.

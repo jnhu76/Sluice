@@ -527,13 +527,16 @@ constexpr bool grants_durability_alone(const MutationRecord&) noexcept {
     return false;
 }
 
-// A mutation completing after the sync's initiation supersedes the state that
-// sync covered. Coverage stays attached to the earlier mutation; the later one
-// is reported as uncovered so a caller can see that the covered bytes are no
-// longer the bytes on disk.
-constexpr bool superseded(const SyncRecord& sync, const MutationRecord& mutation) noexcept {
-    return sync.succeeded && mutation.completion == CompletionState::observed &&
-           mutation.completion_sequence >= sync.initiation_sequence;
+// An ordering fact only: this mutation is observed strictly after the sync's
+// initiation. It carries no durability claim by itself, and an unordered pair
+// (equal sequence numbers) supports none either. Whether the later mutation
+// actually conflicts with the state the sync covered is not a property of this
+// record, so supersession is derived where both halves are known: the V17
+// reference case pairs an earlier covered mutation with a conflicting one
+// ordered after, which is the pair SEM-06 names as superseding.
+constexpr bool ordered_after_sync(const SyncRecord& sync, const MutationRecord& mutation) noexcept {
+    return mutation.completion == CompletionState::observed &&
+           mutation.completion_sequence > sync.initiation_sequence;
 }
 
 // The V17 negative rule: a successful sync never guarantees that the exact state
