@@ -126,7 +126,7 @@ EINTR retry | direct syscalls | `retry_on_eintr` exists and shares one helper; n
 Undisclosed transfer limit | io_uring | A request longer than the SQE count is lowered to a short count without disclosing the limit | BACKEND-02 capability disclosure | GAP | #400
 Ad-hoc errno classification outside the table | io_uring submit path, io_uring wait source | `EINTR`/`EAGAIN`/`EBUSY` compared locally next to shared classification | ERR-01 | GAP | #400
 Closed-operation error | legacy `Reader`/`Writer`/`FileReader`/`FileWriter` | Fabricates `permission_denied` (no native detail) where the oracle requires `invalid_state` | SEM-03 step 1 | GAP | #402
-Access legality, composition codes, confirmed bytes | legacy reader/writer | No canonical access check; `read_exact`/`write_all` return no confirmed prefix | SEM-03, SEM-05 | GAP | #402
+Access legality, composition codes, confirmed bytes | legacy reader/writer, buffered layer, copy | No canonical access check; `read_exact`/`write_all` return no confirmed prefix and stop with locally chosen codes | SEM-03, SEM-05 | GAP | #402
 Closed descriptor error code, copied open flags | `src/experimental/*` | Returns `permission_denied`; duplicates the writer flag lowering; in no build target | SEM-02, SEM-03 | OUT_OF_SCOPE | #402
 Unused submit-classification helpers | `detail/uring_submit.hpp` | `classify_uring_submit`/`UringSubmitProgress` have no call site | — | OUT_OF_SCOPE | #402
 Code-to-name table for CLI output | `apps/sluice-copy/cli_parse.cpp` | Second presentation table with a `default` fallback; not a semantic authority | — | OUT_OF_SCOPE | App surface
