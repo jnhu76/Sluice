@@ -42,6 +42,64 @@ Wait cancellation does not end a buffer borrow. Execution shutdown retains
 unconsumed results, and context destruction requires public bindings to be gone.
 See the root specification for the complete contracts and Linux v1 scope.
 
+The diagram below is an informative view of the adopted v1-r3 architecture. It
+mirrors `ARCH-01` / `ARCH-02` / `HOST-02` / `PROG`; if wording here ever differs
+from the root specification, the root specification wins.
+
+```mermaid
+flowchart TB
+    APP["Application / 调用方"]
+    FILE["File · 文件资源的 RAII owner"]
+    SEM["Shared File Semantics · 共享文件语义<br/>semantic authority / oracle · 非必须 runtime object"]
+    DIRECT["Direct adapter · 直接完成返回"]
+    REQUEST["Request&lt;T&gt; · 唯一 public result / settlement responsibility"]
+    SCOPE["RequestScope · W-02 owned-driver scope<br/>预分配 tracking · 持有并 settle Requests"]
+    HOST["Progress owner / Host<br/>每个 context 一个 fixed active owner · v1 无 live transfer"]
+    OS["Linux regular-file I/O"]
+
+    subgraph CTX["IoContext · 请求执行域"]
+        direction TB
+        IOC["IoContext · identity / budgets / admission / health"]
+        CORE["RequestCore · acceptance / result / publication / reclaim"]
+        BACKEND["Backend · ThreadPool 或 io_uring"]
+        PROGRESS["ProgressSource · persistent progress notification"]
+        OBS["Observer protocol · attach / delivery / retirement"]
+
+        IOC ==>|"owns"| CORE
+        IOC ==>|"owns"| BACKEND
+        IOC ==>|"owns"| PROGRESS
+
+        CORE -->|"prepared operation / control"| BACKEND
+        BACKEND -->|"physical outcome / retirement facts"| CORE
+
+        CORE -->|"observer metadata / publication notification"| OBS
+        CORE -.->|"dispatch / control / reclaim obligation"| PROGRESS
+        BACKEND -.->|"physical progress signal"| PROGRESS
+    end
+
+    APP -->|"持有"| FILE
+    APP -->|"发起 logical operation"| SEM
+    FILE -->|"resource / access facts"| SEM
+
+    APP -->|"显式选择 direct"| DIRECT
+    APP -->|"显式指定 IoContext"| IOC
+    SEM -.->|"governs direct semantics"| DIRECT
+    SEM -.->|"governs request semantics"| IOC
+    DIRECT -->|"caller thread executes"| OS
+    BACKEND -->|"physical execution"| OS
+
+    IOC -->|"acceptance → owned Request&lt;T&gt;"| REQUEST
+    REQUEST -->|"ready / try / take · release public binding"| CORE
+
+    APP -->|"显式创建 owned-driver scope"| SCOPE
+    SCOPE -->|"reserve tracking before acceptance · submit via context"| IOC
+    SCOPE ==>|"owns accepted Request&lt;T&gt; · settle on every exit"| REQUEST
+
+    HOST -->|"poll / drive shutdown"| IOC
+    HOST -->|"prepare / wait"| PROGRESS
+    OBS -.->|"driver delivers terminal notification"| HOST
+```
+
 ## Current implementation and convergence
 
 The retained baseline contains canonical File/blocking operations, caller-owned
