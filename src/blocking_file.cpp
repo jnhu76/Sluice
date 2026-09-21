@@ -1,5 +1,5 @@
 #include <sluice/blocking/file.hpp>
-#include <sluice/detail/io_validation.hpp>
+#include <sluice/detail/file_semantics.hpp>
 #include <sluice/detail/posix_retry.hpp>
 
 #include <fcntl.h>
@@ -8,27 +8,54 @@
 
 #include <cerrno>
 #include <cstddef>
+#include <optional>
 #include <span>
 
 namespace sluice::blocking {
 
+namespace {
+
+using detail::DataOpVerdict;
+using detail::FileOperation;
+
+// Precedence steps 1-4 are the shared oracle's decision (SEM-03); this adapter
+// only turns the verdict into its own return shape. `execute` and
+// `complete_empty` are the two non-rejection verdicts.
+struct Precheck {
+    std::optional<IoError> rejection;
+    bool complete_empty = false;
+};
+
+Precheck precheck(const File& file, FileOperation operation, std::uint64_t offset,
+                  std::size_t length, const std::byte* buffer) {
+    const DataOpVerdict verdict = detail::precheck_data_op(detail::DataOpRequest{
+        !file.is_open(), file.access(), operation, offset, length});
+    // Implementation precondition of this raw-pointer surface, deliberately not
+    // a shared rule: SEM-03 treats caller memory validity as not dynamically
+    // detectable, so the oracle does not answer buffer presence. This surface
+    // fails fast instead of handing a null pointer with a nonzero length to the
+    // kernel. `execute` implies a nonzero length.
+    if (verdict == DataOpVerdict::execute && buffer == nullptr)
+        return Precheck{IoError{.code = IoError::Code::invalid_argument}, false};
+    return Precheck{detail::rejection_of(verdict), verdict == DataOpVerdict::complete_empty};
+}
+
+} // namespace
+
 Result<std::size_t> read_at(const File& file, std::uint64_t offset,
                             std::span<std::byte> dst) {
-    if (!file.is_open()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    const Precheck pre = precheck(file, FileOperation::read, offset, dst.size(), dst.data());
+    if (pre.rejection.has_value()) {
+        return make_unexpected<std::size_t>(*pre.rejection);
     }
-    if (file.access() == FileAccess::write_only) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
-    }
-    if (dst.empty()) {
+    if (pre.complete_empty) {
         return std::size_t{0};
     }
 
-    auto native_offset = detail::checked_posix_offset(offset);
+    const auto native_offset = detail::checked_posix_offset(offset);
     if (!native_offset.has_value()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<std::size_t>(native_offset.error());
     }
-
     ssize_t n = detail::retry_on_eintr([&] {
         return ::pread(file.native_handle(), dst.data(), dst.size(), native_offset.value());
     });
@@ -40,21 +67,18 @@ Result<std::size_t> read_at(const File& file, std::uint64_t offset,
 
 Result<std::size_t> write_at(const File& file, std::uint64_t offset,
                              std::span<const std::byte> src) {
-    if (!file.is_open()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    const Precheck pre = precheck(file, FileOperation::write, offset, src.size(), src.data());
+    if (pre.rejection.has_value()) {
+        return make_unexpected<std::size_t>(*pre.rejection);
     }
-    if (file.access() == FileAccess::read_only) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
-    }
-    if (src.empty()) {
+    if (pre.complete_empty) {
         return std::size_t{0};
     }
 
-    auto native_offset = detail::checked_posix_offset(offset);
+    const auto native_offset = detail::checked_posix_offset(offset);
     if (!native_offset.has_value()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<std::size_t>(native_offset.error());
     }
-
     ssize_t n = detail::retry_on_eintr([&] {
         return ::pwrite(file.native_handle(), src.data(), src.size(), native_offset.value());
     });
@@ -66,13 +90,11 @@ Result<std::size_t> write_at(const File& file, std::uint64_t offset,
 
 // Direct ::read/::write: the kernel owns and atomically advances the shared offset.
 Result<std::size_t> read(const File& file, std::span<std::byte> dst) {
-    if (!file.is_open()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    const Precheck pre = precheck(file, FileOperation::read, 0, dst.size(), dst.data());
+    if (pre.rejection.has_value()) {
+        return make_unexpected<std::size_t>(*pre.rejection);
     }
-    if (file.access() == FileAccess::write_only) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
-    }
-    if (dst.empty()) {
+    if (pre.complete_empty) {
         return std::size_t{0};
     }
 
@@ -86,13 +108,11 @@ Result<std::size_t> read(const File& file, std::span<std::byte> dst) {
 }
 
 Result<std::size_t> write(const File& file, std::span<const std::byte> src) {
-    if (!file.is_open()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    const Precheck pre = precheck(file, FileOperation::write, 0, src.size(), src.data());
+    if (pre.rejection.has_value()) {
+        return make_unexpected<std::size_t>(*pre.rejection);
     }
-    if (file.access() == FileAccess::read_only) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_argument});
-    }
-    if (src.empty()) {
+    if (pre.complete_empty) {
         return std::size_t{0};
     }
 
@@ -106,8 +126,11 @@ Result<std::size_t> write(const File& file, std::span<const std::byte> src) {
 }
 
 Result<void> sync_data(const File& file) {
-    if (!file.is_open()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    if (auto rejection =
+            detail::rejection_of(detail::precheck_state_op(!file.is_open(), file.access(),
+                                                           FileOperation::sync_data));
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
 
     int rc = detail::retry_on_eintr([&] { return ::fdatasync(file.native_handle()); });
@@ -118,8 +141,11 @@ Result<void> sync_data(const File& file) {
 }
 
 Result<std::uint64_t> size(const File& file) {
-    if (!file.is_open()) {
-        return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
+    if (auto rejection =
+            detail::rejection_of(detail::precheck_state_op(!file.is_open(), file.access(),
+                                                           FileOperation::file_info));
+        rejection.has_value()) {
+        return make_unexpected<std::uint64_t>(*rejection);
     }
 
     struct ::stat st {};
@@ -131,18 +157,16 @@ Result<std::uint64_t> size(const File& file) {
 }
 
 Result<void> resize(const File& file, std::uint64_t new_size) {
-    if (!file.is_open()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (file.access() == FileAccess::read_only) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+    if (auto rejection = detail::rejection_of(
+            detail::precheck_resize(!file.is_open(), file.access(), new_size));
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
 
-    auto native_size = detail::checked_posix_offset(new_size);
+    const auto native_size = detail::checked_posix_offset(new_size);
     if (!native_size.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
+        return make_unexpected<void>(native_size.error());
     }
-
     int rc = detail::retry_on_eintr(
         [&] { return ::ftruncate(file.native_handle(), native_size.value()); });
     if (rc < 0) {
@@ -152,8 +176,11 @@ Result<void> resize(const File& file, std::uint64_t new_size) {
 }
 
 Result<void> sync_all(const File& file) {
-    if (!file.is_open()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    if (auto rejection =
+            detail::rejection_of(detail::precheck_state_op(!file.is_open(), file.access(),
+                                                           FileOperation::sync_all));
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
 
     int rc = detail::retry_on_eintr([&] { return ::fsync(file.native_handle()); });

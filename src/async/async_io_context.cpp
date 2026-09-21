@@ -1,7 +1,9 @@
 #include <sluice/async/async_io_context.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/detail/file_semantics.hpp>
 
+#include <optional>
 #include <utility>
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -12,15 +14,13 @@ namespace sluice::async {
 
 namespace {
 
-// ADR-0002 §5.5: access-legality is enforced at the initiation boundary for
-// every File-derived reference, before admission; the backend only lowers fd.
-Result<void> access_legality(const NativeFileRef& file, bool write_side) {
-    const bool illegal = write_side ? file.access == FileAccess::read_only
-                                    : file.access == FileAccess::write_only;
-    if (illegal) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    return {};
+// SEM-03 steps 1-2 at the initiation boundary, from the shared oracle: a closed
+// File and an illegal access are properties of the resource, so they are
+// rejected before any admission work. Steps 3-4 (logical no-op and range) stay
+// with the execution that owns the acceptance transaction, so the
+// caller-visible precedence is unchanged.
+std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::detail::FileOperation op) {
+    return sluice::detail::rejection_of(sluice::detail::precheck_state_op(file.fd < 0, file.access, op));
 }
 
 } // namespace
@@ -93,11 +93,9 @@ void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
 } // namespace
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (auto legal = access_legality(op.file, false); !legal.has_value()) {
-        return legal;
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_read(op, c);
@@ -106,11 +104,9 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
     return r;
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (auto legal = access_legality(op.file, true); !legal.has_value()) {
-        return legal;
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_write(op, c);
@@ -119,8 +115,9 @@ Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_data(op, c);
@@ -129,8 +126,9 @@ Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c
     return r;
 }
 Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
+        rejection.has_value()) {
+        return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_all(op, c);
@@ -140,11 +138,9 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
 }
 
 Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<std::size_t>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
-    }
-    if (auto legal = access_legality(op.file, false); !legal.has_value()) {
-        return make_unexpected<RequestHandle>(legal.error());
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
+        rejection.has_value()) {
+        return make_unexpected<RequestHandle>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
@@ -157,11 +153,9 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completion<std::size_t>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
-    }
-    if (auto legal = access_legality(op.file, true); !legal.has_value()) {
-        return make_unexpected<RequestHandle>(legal.error());
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
+        rejection.has_value()) {
+        return make_unexpected<RequestHandle>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
@@ -174,8 +168,9 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completio
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Completion<void>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
+        rejection.has_value()) {
+        return make_unexpected<RequestHandle>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
@@ -188,8 +183,9 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Co
     return backend_->identity_of(c);
 }
 Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Completion<void>& c) {
-    if (op.file.fd < 0) {
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::invalid_state});
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
+        rejection.has_value()) {
+        return make_unexpected<RequestHandle>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())

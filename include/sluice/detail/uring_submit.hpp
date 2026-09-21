@@ -1,31 +1,23 @@
 #pragma once
 
-#include <sluice/error.hpp>
-#include <sluice/result.hpp>
+// io_uring submission-path mechanism helpers.
+//
+// This header holds lowering detail that belongs to the io_uring execution
+// mechanism only. File legality, validation precedence, range/offset rules and
+// error categories are NOT decided here; they live in
+// `sluice/detail/file_semantics.hpp` and are shared by every execution path.
 
 #include <algorithm>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <sys/types.h>
 
 namespace sluice::detail {
 
-static_assert(std::numeric_limits<off_t>::is_integer && std::numeric_limits<off_t>::is_signed,
-              "sluice positional I/O requires a signed integral off_t");
-static_assert(std::numeric_limits<off_t>::digits >= 63,
-              "sluice positional I/O requires 64-bit large-file support "
-              "(_FILE_OFFSET_BITS=64 / LFS)");
-
-inline Result<off_t> checked_posix_offset(std::uint64_t offset) {
-    constexpr auto native_max = static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
-    if (offset > native_max) {
-        return make_unexpected<off_t>(IoError{.code = IoError::Code::invalid_state});
-    }
-    return static_cast<off_t>(offset);
-}
-
+// Largest length a single io_uring read/write SQE can carry. This is a
+// transfer limit of one execution, so a longer request yields a short count
+// rather than a File-semantic rejection.
 inline unsigned uring_chunk_length(std::size_t remaining) noexcept {
     constexpr auto native_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
     return static_cast<unsigned>(std::min(remaining, native_max));

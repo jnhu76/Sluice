@@ -56,42 +56,55 @@ inline constexpr std::string_view to_string(IoError::Code c) {
     return "unknown";
 }
 
-inline IoError from_errno_value(int err) {
-    IoError e{};
-    e.os_errno = err;
-    switch (err) {
-    case 0:
-        e.code = IoError::Code::backend_error;
-        break;
-    case EACCES:
-    case EPERM:
-    case ENOENT:
-    case ENOTDIR:
-        e.code = IoError::Code::permission_denied;
-        break;
-    case ENOSPC:
-    case EDQUOT:
-        e.code = IoError::Code::no_space;
-        break;
-    case EINTR:
-        e.code = IoError::Code::interrupted;
-        break;
-    case EAGAIN:
+namespace detail {
+
+// ERR-01 canonical mapping: the single authority translating a native error
+// into a canonical category. Native-error sites route through this table rather
+// than re-classifying errno locally, so every execution path reports the same
+// category for the same native cause. A native error the root gives no
+// canonical category keeps `backend_error` and its preserved native detail.
+// ECANCELED is deliberately absent: ERR-01 assigns no canonical category to it,
+// so a native ECANCELED is `backend_error` plus native detail; the semantic
+// `canceled` outcome comes from CANCEL-01 cancellation dispositions, not from
+// an errno.
+//
+// The table is implementation, not public contract: `from_errno_value` is the
+// public mapping and a second classifier outside it is a conformance gap.
+struct NativeErrorMapping {
+    int native_errno;
+    IoError::Code canonical;
+};
+
+inline constexpr NativeErrorMapping kNativeErrorMappings[] = {
+    {EACCES, IoError::Code::permission_denied},
+    {EPERM, IoError::Code::permission_denied},
+    {ENOENT, IoError::Code::not_found},
+    {ENOTDIR, IoError::Code::not_found},
+    {ENOSPC, IoError::Code::no_space},
+    {EDQUOT, IoError::Code::no_space},
+    {EINTR, IoError::Code::interrupted},
+    {EAGAIN, IoError::Code::would_block},
 #if EWOULDBLOCK != EAGAIN
-    case EWOULDBLOCK:
+    {EWOULDBLOCK, IoError::Code::would_block},
 #endif
-        e.code = IoError::Code::would_block;
-        break;
-#ifdef ECANCELED
-    case ECANCELED:
-        e.code = IoError::Code::canceled;
-        break;
-#endif
-    default:
-        e.code = IoError::Code::backend_error;
-        break;
+};
+
+inline constexpr IoError::Code canonical_error_code(int native_errno) noexcept {
+    // errno == 0 means a call reported failure without setting errno: there is
+    // no native cause to preserve, so no canonical category can be derived.
+    if (native_errno == 0)
+        return IoError::Code::backend_error;
+    for (const NativeErrorMapping& mapping : kNativeErrorMappings) {
+        if (mapping.native_errno == native_errno)
+            return mapping.canonical;
     }
-    return e;
+    return IoError::Code::backend_error;
+}
+
+} // namespace detail
+
+inline IoError from_errno_value(int err) {
+    return IoError{.code = detail::canonical_error_code(err), .os_errno = err};
 }
 
 } // namespace sluice

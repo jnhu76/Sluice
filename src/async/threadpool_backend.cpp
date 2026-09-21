@@ -1,7 +1,7 @@
 #include <sluice/async/threadpool_backend.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
-#include <sluice/detail/io_validation.hpp>
+#include <sluice/detail/file_semantics.hpp>
 #include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
 
@@ -131,53 +131,34 @@ ThreadPoolBackend::~ThreadPoolBackend() {
     }
 }
 
+// This raw-pointer surface fails fast on a null buffer with a nonzero length
+// as its own implementation precondition: SEM-03 treats caller memory validity
+// as not dynamically detectable, so the shared oracle does not answer buffer
+// presence. `execute` implies a nonzero length.
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    if (op.len > 0 && op.dst == nullptr) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    if (op.len == 0)
-        return {};
-    auto off = sluice::detail::checked_posix_offset(op.offset);
-    if (!off.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-
-    if (op.len > static_cast<std::size_t>(std::numeric_limits<ssize_t>::max())) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    return {};
+    const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});
+    if (verdict == sluice::detail::DataOpVerdict::execute && op.dst == nullptr)
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_argument});
+    return sluice::detail::accept_or_reject(verdict);
 }
 
 Result<void> ThreadPoolBackend::validate_write(WriteOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    if (op.len > 0 && op.src == nullptr) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    if (op.len == 0)
-        return {};
-    auto off = sluice::detail::checked_posix_offset(op.offset);
-    if (!off.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    if (op.len > static_cast<std::size_t>(std::numeric_limits<ssize_t>::max())) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
-    }
-    return {};
+    const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
+        {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset, op.len});
+    if (verdict == sluice::detail::DataOpVerdict::execute && op.src == nullptr)
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_argument});
+    return sluice::detail::accept_or_reject(verdict);
 }
 
 Result<void> ThreadPoolBackend::validate_sync(SyncDataOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    return {};
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_data));
 }
 
 Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
-    if (op.file.fd < 0)
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    return {};
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_all));
 }
 
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
