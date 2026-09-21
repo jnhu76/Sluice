@@ -1,12 +1,22 @@
 # ADR-0002 Visual Companion — Explicit File Architecture Views
 
-> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
-> Historical visual companion. These diagrams depict the superseded ADR-0002 architecture, not the v1 target.
-> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+> **Current v1 status: HISTORICAL / SUPERSEDED.**
+>
+> The sole normative authority for Sluice v1 is
+> [`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md).
+>
+> This file is the visual companion of the superseded ADR-0002. All diagrams below
+> are historical ADR-era views. They are **not** the current v1 architecture
+> diagrams. The current v1 target architecture is defined by the root
+> specification; `README.md` contains only an informative mirror of that target.
+>
+> Terms such as "normative", "frozen", "authority", "must", or "decision" in the
+> historical text below describe the authority this companion had at the time.
+> They do not govern v1 independently of the root specification.
 
 - **Status**: Historical visual companion to [`0002-explicit-file-api-architecture.md`](0002-explicit-file-api-architecture.md)
 - **Historical source**: ADR-0002 governed this companion at its original baseline. The v1 root now governs all target decisions.
-- **Purpose**: Keep one complete architecture map and add two reduced views that make the same normative structure easier to read on GitHub.
+- **Purpose**: Keep one complete ADR-era architecture map and add two reduced views that make the same historical structure easier to read on GitHub.
 
 The three diagrams are intentionally redundant:
 

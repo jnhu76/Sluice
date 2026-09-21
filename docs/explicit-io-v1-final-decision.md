@@ -59,10 +59,10 @@ The root does not certify an implementation by describing it. An implementation 
 
 | Earlier source | Status for v1 |
 |---|---|
-| `docs/mission.md` and ADR-0001 | Historical rationale; principles retained in PROD-01 and ARCH-01; no separate higher authority |
+| `docs/archive/architecture/mission.md`<br>(formerly `docs/mission.md`) and ADR-0001 | Historical rationale; principles retained in PROD-01 and ARCH-01; no separate higher authority |
 | ADR-0002 and its visual companion | Superseded as normative architecture; accepted File semantics are restated in sections 6–7 and 12 |
-| `docs/roadmap/explicit-file-conformance.md` | Historical conformance to the previous architecture; its CLOSED/CONFORMANT labels do not establish v1 conformance |
-| `docs/architecture.md` | Dated implementation snapshot, not the target |
+| `docs/archive/explicit-file-roadmap/explicit-file-conformance.md`<br>(formerly `docs/roadmap/explicit-file-conformance.md`) | Historical conformance to the previous architecture; its CLOSED/CONFORMANT labels do not establish v1 conformance |
+| `docs/archive/architecture/architecture.md`<br>(formerly `docs/architecture.md`) | Dated implementation snapshot, not the target |
 | Issues #387 / #388 | Baseline reconstruction / risk evidence respectively; claims require source and scope checks |
 | Earlier revisions of this file | Replaced by the current committed revision; Git preserves decision history |
 

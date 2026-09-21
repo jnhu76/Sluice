@@ -1,6 +1,6 @@
 # Sluice 宗旨
 
-> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](explicit-io-v1-final-decision.md) is the sole normative root.
+> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md) is the sole normative root.
 > Historical mission rationale; its retained principles are restated in PROD-01 / ARCH-01.
 > All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
 

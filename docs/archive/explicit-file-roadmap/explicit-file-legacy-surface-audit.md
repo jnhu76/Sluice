@@ -1,3 +1,9 @@
+> **HISTORICAL — ARCHIVED.** This record predates or was superseded by the v1
+> convergence target. The [v1 Architecture and Contract Reference](../../explicit-io-v1-final-decision.md)
+> is the sole normative root; implementation status lives only in the
+> [v1 conformance ledger](../../roadmap/v1-conformance.md). Nothing below
+> establishes v1 conformance, architecture ownership, or current authority.
+
 # Explicit File Legacy Surface Audit
 
 Proof root: `ff916c37c6bab0f9a2bc7555a19bd8a2080af639`

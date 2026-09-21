@@ -1,14 +1,24 @@
 # ADR-0002：Explicit File API 与执行架构
 
-> **SUPERSEDED AS V1 AUTHORITY.** The [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md) is the sole normative root.
-> Superseded v1 architecture. Accepted File semantics are restated in SEM, ERR and LIFE requirements; Completion/API/runtime choices below are historical.
-> All authority, FROZEN/Accepted and workflow statements in the historical text below are scoped to that earlier decision. They do not override the root or current AGENTS.md.
+> **Current v1 status: HISTORICAL / SUPERSEDED.**
+>
+> The sole normative authority for Sluice v1 is
+> [`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md).
+>
+> This ADR is retained only as historical design rationale and decision provenance.
+> Accepted File semantics are restated in SEM, ERR and LIFE requirements;
+> Completion/API/runtime choices below are historical. Terms such as "normative",
+> "frozen", "authority", "must", or "decision" in the historical body below describe
+> the authority this ADR had at the time. They do not govern v1 independently of the
+> root specification. It is not a current normative parent, upper constraint,
+> implementation roadmap, or normative summary of v1.
 
 - **当前状态**：Historical / Superseded for v1（原状态：Accepted / Architecture Frozen）
 - **范围**：Sluice 的文件 I/O 公共语义、API 分层与执行模型
-- **基线**：`master`（本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`；当前实现基线以 roadmap 为准）
-- **上位约束**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md)、[`../mission.md`](../mission.md)
-- **实现处置**：见 [`docs/roadmap/explicit-file-conformance.md`](../roadmap/explicit-file-conformance.md) Phase A；最终架构符合性审计为 roadmap A8
+- **当前 v1 权威**：[`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md)
+- **基线**：本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`
+- **历史上位约束（当时）**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md) 与原 `docs/mission.md`（[归档副本](../archive/architecture/mission.md)）
+- **历史实现处置（当时）**：原 `docs/roadmap/explicit-file-conformance.md`（[归档副本](../archive/explicit-file-roadmap/explicit-file-conformance.md)）Phase A；最终架构符合性审计为 roadmap A8
 
 ## Context
 
@@ -1254,7 +1264,9 @@ Mechanism availability 不创建 semantic authority。
 
 ## Follow-up gate
 
-具体实现顺序与阶段划分见 [`docs/roadmap/explicit-file-conformance.md`](../roadmap/explicit-file-conformance.md) Phase A。Phase A 的终点是 roadmap A8 的只读架构符合性审计：
+历史上，本 ADR 对应的实现顺序与阶段划分记录于原 `docs/roadmap/explicit-file-conformance.md`（[归档副本](../archive/explicit-file-roadmap/explicit-file-conformance.md)）Phase A。该 roadmap 已归档，不再承担 v1 execution authority；当前执行责任由 #390 → #391–#403 承担。
+
+Phase A 当时的终点是 roadmap A8 的只读架构符合性审计：
 
 ```text
 符合 ADR-0001 + ADR-0002 的 Sluice 需要哪些最小能力？
