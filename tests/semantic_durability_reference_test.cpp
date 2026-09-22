@@ -1,12 +1,3 @@
-// Durability reference rules, with the observable half of the direct
-// resize-then-sync sequence exercised on a real file.
-//
-// The rules are pure functions over a mutation/sync history; the sequence field
-// stands in for happens-before, not for a runtime counter. A real sync cannot
-// be shown to survive power loss from inside a process, so the filesystem cases
-// assert the observable half only: the call sequence succeeds, the file-size
-// change is visible afterwards, and no durability fact is claimed by the
-// resize itself.
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
@@ -36,24 +27,18 @@ constexpr MutationRecord kObservedMetadata{MutationKind::metadata, CompletionSta
 constexpr SyncRecord kDataSync{SyncKind::data, true, 8};
 constexpr SyncRecord kAllSync{SyncKind::all, true, 8};
 
-// V16: a write merely submitted before the sync was initiated is not covered, for
-// either sync kind.
 bool v16_submitted_write_is_not_covered() {
     if (covers(kDataSync, kSubmittedWrite))
         return false;
     return !covers(kAllSync, kSubmittedWrite);
 }
 
-// V27: a completed file-size change is covered without any covered write, in
-// both directions, by both sync kinds.
 bool v27_completed_resize_is_covered() {
     if (!covers(kDataSync, kObservedShrink) || !covers(kAllSync, kObservedShrink))
         return false;
     return covers(kDataSync, kObservedGrow) && covers(kAllSync, kObservedGrow);
 }
 
-// V27 negative rule: a resize on its own establishes no durability, and neither
-// does a completed write or metadata change.
 bool v27_resize_alone_grants_no_durability() {
     if (grants_durability_alone(kObservedShrink) || grants_durability_alone(kObservedGrow))
         return false;
@@ -62,9 +47,6 @@ bool v27_resize_alone_grants_no_durability() {
     return !grants_durability_alone(kObservedMetadata);
 }
 
-// V17: supersession pairs an earlier covered state with a conflicting mutation
-// ordered after the sync's initiation, which is why coverage is distinguishable
-// from exact-state preservation.
 bool v17_coverage_is_not_a_snapshot() {
     if (!covers(kDataSync, kObservedWrite))
         return false;
@@ -78,9 +60,6 @@ bool v17_coverage_is_not_a_snapshot() {
     return !preserves_exact_state(kDataSync, kConflicting);
 }
 
-// The order is strict: a mutation whose sequence equals the sync's initiation
-// is unordered in the model, so an unordered pair supports no durability fact
-// in either direction.
 bool coverage_requires_a_strict_order() {
     constexpr MutationRecord kBefore{MutationKind::write, CompletionState::observed, 7};
     constexpr MutationRecord kEqual{MutationKind::write, CompletionState::observed, 8};
@@ -88,16 +67,11 @@ bool coverage_requires_a_strict_order() {
     return covers(kDataSync, kBefore) && !covers(kDataSync, kEqual) && !covers(kDataSync, kAfter);
 }
 
-// The unordered half stated for the ordering rule itself: with equal sequence
-// numbers the model can order neither event against the other, so the pair is
-// neither covered nor ordered after, and no supersession follows from it.
 bool unordered_pair_supports_no_durability_fact() {
     constexpr MutationRecord kEqual{MutationKind::write, CompletionState::observed, 8};
     return !covers(kDataSync, kEqual) && !ordered_after_sync(kDataSync, kEqual);
 }
 
-// Cancellation grants no positive or negative durability fact, and metadata needs
-// sync_all.
 bool failed_sync_covers_nothing_and_metadata_needs_sync_all() {
     constexpr SyncRecord kFailedDataSync{SyncKind::data, false, 8};
     constexpr SyncRecord kFailedAllSync{SyncKind::all, false, 8};
@@ -109,8 +83,6 @@ bool failed_sync_covers_nothing_and_metadata_needs_sync_all() {
         return false;
     return covers(kAllSync, kObservedMetadata);
 }
-
-// ── Real file: the observable half of V27 on the direct path ───────────────
 
 std::string make_temp_file() {
     char path[] = "/tmp/sluice_durability_XXXXXX";
@@ -127,9 +99,6 @@ sluice::FileOpen read_write_mode() {
     return mode;
 }
 
-// Real-file observable half: grow, shrink, then sync_data and sync_all
-// without any covered write. Both syncs must succeed after a completed size
-// change, and the size change must be observable.
 bool direct_resize_then_sync_sequence_succeeds() {
     const std::string path = make_temp_file();
     if (path.empty())
@@ -160,8 +129,6 @@ bool direct_resize_then_sync_sequence_succeeds() {
     return size.has_value() && size.value() == 1024;
 }
 
-// A sync that fails reports failure rather than fabricating success. The
-// descriptor is valid but is not a synchronizable regular file.
 bool failed_sync_is_reported(int* attempted) {
     *attempted = 0;
     if (::access("/dev/null", W_OK) != 0)
@@ -181,7 +148,7 @@ bool failed_sync_is_reported(int* attempted) {
     return synced.error().os_errno != 0;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

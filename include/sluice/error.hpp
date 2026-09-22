@@ -58,11 +58,6 @@ inline constexpr std::string_view to_string(IoError::Code c) {
 
 namespace detail {
 
-// The single errno-to-category table; native-error sites route through it
-// instead of classifying errno locally. A native error with no row keeps
-// `backend_error` plus its native detail. ECANCELED is deliberately unmapped:
-// the semantic `canceled` outcome comes from cancellation dispositions, not
-// from an errno.
 struct NativeErrorMapping {
     int native_errno;
     IoError::Code canonical;
@@ -83,8 +78,6 @@ inline constexpr NativeErrorMapping kNativeErrorMappings[] = {
 };
 
 inline constexpr IoError::Code canonical_error_code(int native_errno) noexcept {
-    // errno == 0 means a call reported failure without setting errno: there is
-    // no native cause to preserve, so no canonical category can be derived.
     if (native_errno == 0)
         return IoError::Code::backend_error;
     for (const NativeErrorMapping& mapping : kNativeErrorMappings) {
@@ -94,10 +87,10 @@ inline constexpr IoError::Code canonical_error_code(int native_errno) noexcept {
     return IoError::Code::backend_error;
 }
 
-} // namespace detail
+}
 
 inline IoError from_errno_value(int err) {
     return IoError{.code = detail::canonical_error_code(err), .os_errno = err};
 }
 
-} // namespace sluice
+}

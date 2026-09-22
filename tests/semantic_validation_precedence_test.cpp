@@ -1,6 +1,3 @@
-// The frozen validation-precedence decision table, compared across execution
-// paths through the one shared oracle. The table and its rationale live in
-// semantic_scenarios.hpp.
 #include "semantic_path_probes.hpp"
 #include "semantic_scenarios.hpp"
 
@@ -12,7 +9,7 @@ namespace {
 
 using sluice_semantic::Input;
 
-} // namespace
+}
 
 int main() {
     if (sluice_semantic::check_oracle_against_table(
@@ -29,7 +26,6 @@ int main() {
         return 1;
     }
 
-    // Direct execution: every scenario is expressible.
     std::size_t direct_skipped = 0;
     std::vector<const char*> direct_divergences;
     for (std::size_t i = 0; i < sluice_semantic::kPrecedenceScenarioCount; ++i) {
@@ -48,11 +44,8 @@ int main() {
         return 1;
     }
 
-    // ThreadPool request execution. A request that reaches the logical-no-op
-    // verdict is accepted but still dispatches a zero-length data syscall, so
-    // both zero-length scenarios are recorded divergences (see the conformance
-    // ledger). The recorded set is asserted exactly, so the test fails once the
-    // gap closes and must then be updated together with the ledger.
+    // The MISMATCH lines this section prints for the two zero-length scenarios
+    // are the expected, ledger-recorded divergence, asserted on purpose.
     sluice_semantic::RequestProbe threadpool(
         std::make_unique<sluice::async::ThreadPoolBackend>(
             sluice::async::ThreadPoolConfig{8, 2}));

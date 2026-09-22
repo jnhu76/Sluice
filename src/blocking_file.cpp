@@ -22,7 +22,6 @@ namespace {
 using detail::DataOpVerdict;
 using detail::FileOperation;
 
-// The shared oracle decides; this adapter only reshapes the verdict.
 struct Precheck {
     std::optional<IoError> rejection;
     bool complete_empty = false;
@@ -32,20 +31,12 @@ Precheck precheck(const File& file, FileOperation operation, std::uint64_t offse
                   std::size_t length, const std::byte* buffer) {
     const DataOpVerdict verdict = detail::precheck_data_op(detail::DataOpRequest{
         !file.is_open(), file.access(), operation, offset, length});
-    // Own implementation precondition, not a shared rule: caller memory
-    // validity is not dynamically detectable, so a null buffer with a nonzero
-    // length fails fast here. `execute` implies a nonzero length.
     if (verdict == DataOpVerdict::execute && buffer == nullptr)
         return Precheck{IoError{.code = IoError::Code::invalid_argument}, false};
     return Precheck{detail::rejection_of(verdict), verdict == DataOpVerdict::complete_empty};
 }
 
 #ifdef SLUICE_FILE_INTERNAL_TESTING
-// Test-only: the fault seam sits exactly at the native-call boundary, so a
-// scripted outcome drives the same primitive and composition code the
-// production build runs. A call outside the armed script's family passes
-// through. The operands are recorded so a test can pin the buffer and offset a
-// composition passed to the native call.
 bool intercepted(file_testing::NativeCall call, int fd) noexcept {
     file_testing::NativeScript* script = file_testing::NativeScript::active();
     return script != nullptr && script->intercepts(call, fd);
@@ -91,8 +82,7 @@ ssize_t native_pwrite(int fd, const void* buf, std::size_t count, off_t offset) 
     return ::pwrite(fd, buf, count, offset);
 }
 
-} // namespace
-
+}
 Result<std::size_t> read_at(const File& file, std::uint64_t offset,
                             std::span<std::byte> dst) {
     const Precheck pre = precheck(file, FileOperation::read, offset, dst.size(), dst.data());
@@ -139,7 +129,6 @@ Result<std::size_t> write_at(const File& file, std::uint64_t offset,
     return static_cast<std::size_t>(n);
 }
 
-// Direct ::read/::write: the kernel owns and atomically advances the shared offset.
 Result<std::size_t> read(const File& file, std::span<std::byte> dst) {
     const Precheck pre = precheck(file, FileOperation::read, 0, dst.size(), dst.data());
     if (pre.rejection.has_value()) {
@@ -208,15 +197,11 @@ Result<FileInfo> file_info(const File& file) {
     FileInfo info;
     info.kind = S_ISREG(st.st_mode) ? FileKind::regular : FileKind::other;
     info.size = static_cast<std::uint64_t>(st.st_size);
-    // Linux supplies device/inode here unconditionally; the type still carries
-    // the explicit unavailable outcome.
     info.identity = FileIdentity{static_cast<std::uint64_t>(st.st_dev),
                                  static_cast<std::uint64_t>(st.st_ino)};
     return info;
 }
 
-// The projection of one `file_info` observation; separate calls are not a
-// transaction, so two of them may observe different lengths.
 Result<std::uint64_t> size(const File& file) {
     auto info = file_info(file);
     if (!info.has_value()) {
@@ -259,25 +244,16 @@ Result<void> sync_all(const File& file) {
     return {};
 }
 
-// ─── Exact/all composition ─────────────────────────────────────────────────
-
 namespace {
 
 using detail::CompositionKind;
 using detail::CompositionState;
 
-// The shared rule decides; this adapter only republishes its answer.
 constexpr EffectCertainty publish_certainty(detail::EffectCertainty certainty) noexcept {
     return certainty == detail::EffectCertainty::accounted ? EffectCertainty::accounted
                                                            : EffectCertainty::unknown;
 }
 
-// Maps the shared composition state onto this adapter's public outcome; the
-// state is the authority and this only chooses the representation.
-// `impossible_count` cannot arise from a primitive honoring its own contract
-// (0 <= n <= requested), so it is published as a primitive error with the
-// shared rule's `invalid_state`, like any other rejection observed after the
-// composition started.
 CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     CompositionOutcome outcome;
     outcome.confirmed_bytes = state.confirmed_bytes;
@@ -304,11 +280,6 @@ CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     return outcome;
 }
 
-// The one exact/all loop: each step runs a single primitive at the confirmed
-// prefix, and the loop exits on full transfer, a zero-transfer step (EOF for
-// read_exact, no progress for write_all), a primitive error, or a count above
-// the remaining request.
-//
 // `confirmed` never exceeds the validated request, so an advanced offset stays
 // inside the range the precheck accepted and the arithmetic cannot overflow.
 template <class Primitive>
@@ -327,8 +298,7 @@ Result<CompositionOutcome> compose(CompositionKind kind, std::size_t total,
     return direct_outcome(state);
 }
 
-} // namespace
-
+}
 Result<CompositionOutcome> read_exact_at(const File& file, std::uint64_t offset,
                                          std::span<std::byte> dst) {
     const Precheck pre = precheck(file, FileOperation::read, offset, dst.size(), dst.data());
@@ -381,4 +351,4 @@ Result<CompositionOutcome> write_all(const File& file, std::span<const std::byte
                    [&](std::size_t confirmed) { return write(file, src.subspan(confirmed)); });
 }
 
-} // namespace sluice::blocking
+}

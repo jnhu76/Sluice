@@ -30,8 +30,7 @@ namespace {
     std::terminate();
 }
 
-} // namespace
-
+}
 void ThreadPoolBackend::BoundedDispatchQueue::push_back(detail::SlotHandle h) noexcept {
     if (size_ >= capacity_) {
         threadpool_dispatch_queue_invariant_fail_fast();
@@ -131,9 +130,6 @@ ThreadPoolBackend::~ThreadPoolBackend() {
     }
 }
 
-// Own implementation precondition, not a shared rule: caller memory validity
-// is not dynamically detectable, so a null buffer with a nonzero length fails
-// fast here. `execute` implies a nonzero length.
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
     const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
         {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});
@@ -722,4 +718,4 @@ void ThreadPoolBackend::set_injected_worker_spawn_failure_index(std::size_t inde
 }
 #endif
 
-} // namespace sluice::async
+}

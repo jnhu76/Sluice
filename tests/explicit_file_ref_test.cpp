@@ -26,10 +26,6 @@ using sluice::IoError;
 using sluice::make_unexpected;
 using sluice::Result;
 
-// Compile-level naming contract: a canonical File converts implicitly
-// (carrying its access); a raw native handle must spell the mechanism type and
-// declare the access explicitly. A bare int neither converts to nor constructs
-// an operation resource reference.
 template <class Op, class... Args>
 auto brace_init_detects(int) -> decltype(Op{std::declval<Args>()...}, std::true_type{});
 template <class Op, class... Args> auto brace_init_detects(long) -> std::false_type;
@@ -103,8 +99,6 @@ bool multiple_outstanding_ops_on_one_canonical_file() {
             Completion<std::size_t> read_tail;
             Completion<std::size_t> write_patch;
 
-            // All three operations reference the same canonical File object and
-            // are outstanding at the same time.
             auto sr1 = ctx.submit_read(ReadOp{file, head.data(), head.size(), 0}, read_head);
             if (!sr1.has_value()) {
                 slot.publish(make_unexpected<std::size_t>(sr1.error()));
@@ -176,9 +170,6 @@ bool explicit_native_ref_over_raw_fd() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            // The interop resource is referenced by explicitly naming the
-            // mechanism type and declaring the access claim; the raw fd alone
-            // does not construct the op.
             slot.publish(await_read_once(ctx, NativeFileRef{raw_fd, FileAccess::read_only}, dst,
                                          8, c));
         });
@@ -212,10 +203,8 @@ bool cancel_through_file_referenced_op_reaches_terminal() {
                 slot.publish(make_unexpected<std::size_t>(sr.error()));
                 return;
             }
-            // The read may win the race; both outcomes must reach a terminal.
-            // cancel_waiter only wakes the waiter; when it wins the race the
-            // drain branch below takes over, otherwise the completion has
-            // already published the op's own result.
+            // The cancel races the read: either side winning is valid, so both
+            // branches below are expected, not flakiness.
             (void)ctx.cancel_waiter(c);
             auto wr = ctx.await_completion(c);
             if (!wr.has_value()) {
@@ -239,8 +228,6 @@ bool cancel_through_file_referenced_op_reaches_terminal() {
                 }
             }
 
-            // The canonical File reference keeps its authority after the
-            // canceled operation: a follow-up read still works.
             auto follow = await_read_at(file, ctx, 7, dst, c);
             follow_up_read_ok = follow.has_value() && follow.value() == 4 &&
                                 std::memcmp(dst.data(), "targ", 4) == 0;
@@ -388,9 +375,6 @@ bool interop_declared_access_is_a_claim_not_validation() {
         1, std::make_unique<ThreadPoolBackend>(),
         [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
             Completion<std::size_t> c;
-            // The declared claim admits the op at the initiation boundary;
-            // whatever the OS then reports is the mechanism outcome, not the
-            // canonical access-legality rejection.
             auto sr = ctx.submit_write(
                 WriteOp{NativeFileRef{raw_fd, FileAccess::read_write}, &payload, 1, 0}, c);
             if (!sr.has_value()) {
@@ -412,7 +396,7 @@ bool interop_declared_access_is_a_claim_not_validation() {
     return true;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

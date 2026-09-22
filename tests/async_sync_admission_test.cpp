@@ -19,10 +19,6 @@ using sluice::FileOpen;
 using sluice::IoError;
 using sluice::Result;
 
-// Counts every backend sync entry. The closed-resource rejection belongs to
-// the initiation boundary (closed -> invalid_state before any backend
-// effect), so a rejected submission must leave these at zero: any backend
-// entry means the admission boundary was bypassed.
 class CountingBackend final : public AsyncBackend {
   public:
     int sync_data_entries = 0;
@@ -68,8 +64,6 @@ std::string make_temp_path() {
     return path;
 }
 
-// A closed canonical File: the reference it yields carries fd = -1, the
-// shape the initiation boundary must reject before any backend effect.
 File closed_writable_file() {
     const std::string path = make_temp_path();
     FileOpen mode;
@@ -152,7 +146,7 @@ bool submit_sync_all_request_rejects_closed_reference_before_backend() {
     return counts->sync_data_entries == 0 && counts->sync_all_entries == 0;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

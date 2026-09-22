@@ -1,9 +1,3 @@
-// Open semantics: combination legality and the embedded-NUL rule, frozen as a
-// decision table. The table is the oracle; the real open outcome is checked
-// against it in both directions so neither can drift alone.
-//
-// The destructive half of the matrix (which combinations truncate or fail to
-// create) is covered by file_open_contract_test.
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -32,8 +26,6 @@ constexpr FileExistence kExistences[] = {FileExistence::open_existing,
 constexpr FileInitialContents kContents[] = {FileInitialContents::preserve,
                                              FileInitialContents::truncate};
 
-// The only illegal combination is read-only access with truncation, for every
-// existence choice.
 bool legality_table_is_frozen() {
     for (FileAccess access : kAccesses) {
         for (FileExistence existence : kExistences) {
@@ -65,9 +57,6 @@ std::string reserve_temp_path() {
     return path;
 }
 
-// The oracle's legality must equal the real open outcome's legality: an illegal
-// combination returns invalid_argument for any existence, and a legal one never
-// does (it may still fail for a filesystem reason, which is an operation result).
 bool oracle_legality_matches_real_open() {
     const std::string path = reserve_temp_path();
     if (path.empty())
@@ -112,9 +101,6 @@ bool embedded_nul_is_rejected() {
     return e.code == IoError::Code::invalid_argument && e.os_errno == 0;
 }
 
-// The discriminating case for "rejected before native open": the truncated name
-// denotes a real, openable file. If the path were passed to the native open, the
-// name would be cut at the NUL and the open would succeed.
 bool embedded_nul_is_rejected_before_native_open() {
     const std::string path = reserve_temp_path();
     if (path.empty())
@@ -134,8 +120,6 @@ bool embedded_nul_is_rejected_before_native_open() {
     return opened.error().code == IoError::Code::invalid_argument;
 }
 
-// A NUL that follows a valid, existing path must also be rejected rather than
-// opening the prefix, and it must leave the prefix untouched.
 bool embedded_nul_leaves_target_untouched() {
     const std::string path = reserve_temp_path();
     if (path.empty())
@@ -168,7 +152,7 @@ bool embedded_nul_leaves_target_untouched() {
     return read_back == 4 && std::memcmp(buffer, "keep", 4) == 0;
 }
 
-} // namespace
+}
 
 int main() {
     if (!legality_table_is_frozen()) {

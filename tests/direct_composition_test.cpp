@@ -1,7 +1,3 @@
-// Direct exact/all composition as real-file integration: the unscripted full
-// and EOF paths, the placement of a positional composition, and the
-// shared-cursor composition.
-
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -135,10 +131,10 @@ bool positional_composition_places_bytes_and_leaves_the_cursor() {
     const std::span<const std::byte> src(
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     std::vector<std::byte> moved(2, std::byte{0});
-    auto advanced = sluice::blocking::read(file, moved); // cursor -> 2
+    auto advanced = sluice::blocking::read(file, moved);
     auto placed = sluice::blocking::write_all_at(file, 5, src);
     std::vector<std::byte> next(2, std::byte{0});
-    auto read_back = sluice::blocking::read(file, next); // reads at 2
+    auto read_back = sluice::blocking::read(file, next);
 
     const bool ok = advanced.has_value() && advanced.value() == 2 && placed.has_value() &&
                     placed.value().complete() && read_back.has_value() &&

@@ -1,11 +1,5 @@
 #pragma once
 
-// Path adapters for the semantic harness.
-//
-// Each adapter reports only what its execution path observed. None of them
-// inspects an expectation, and none of them owns an expected outcome: the
-// oracle in `semantic_oracle_harness.hpp` is the only source of requirements.
-
 #include "semantic_oracle_harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -25,9 +19,8 @@
 
 namespace sluice_semantic {
 
-// The direct path reports no no-op observation: nothing outside a direct call
-// reveals whether it made a syscall, and inferring it from the request shape
-// would assert what the harness is supposed to measure.
+// The direct path cannot observe no-opness; deriving it from the request shape
+// would fabricate the measurement.
 inline Observation apply_direct(const sluice::File& file, const Input& input,
                                std::span<std::byte> dst, std::span<const std::byte> src) {
     switch (input.operation) {
@@ -47,18 +40,16 @@ inline Observation apply_direct(const sluice::File& file, const Input& input,
     return observe_rejection(IoError{.code = sluice::IoError::Code::invalid_argument});
 }
 
-// Direct execution: sluice::blocking::* on the canonical File.
-//
-// `resize` is only driven for rejected scenarios: an accepted resize would
-// mutate the shared fixture, and the fixtures exist to serve many scenarios.
+// `resize` is driven only for rejected scenarios: an accepted one would mutate
+// the fixture every scenario shares.
 inline Observation direct_attempt(const AccessFixtures& fixtures, const Input& input) {
     std::vector<std::byte> scratch(input.length, std::byte{0});
     const std::span<std::byte> dst(scratch.data(), input.length);
     const std::span<const std::byte> src(scratch.data(), input.length);
 
     if (input.closed) {
-        // A closed canonical File: a fresh handle is opened and closed so the
-        // operation sees the state a caller would, without disturbing fixtures.
+        // A fresh handle is closed rather than a fixture, which later
+        // scenarios still need.
         sluice::FileOpen mode;
         mode.existence = sluice::FileExistence::open_existing;
         mode.access = sluice::FileAccess::read_write;
@@ -76,22 +67,14 @@ inline Observation direct_attempt(const AccessFixtures& fixtures, const Input& i
     return apply_direct(*file, input, dst, src);
 }
 
-// Only the operations a request backend actually exposes are drivable here.
-// resize and file_info have no request form; scenarios using an operation no
-// backend exposes are reported as not drivable rather than silently passing.
 inline bool request_drivable(const Input& input) {
     return input.operation == FileOperation::read || input.operation == FileOperation::write ||
            input.operation == FileOperation::sync_data ||
            input.operation == FileOperation::sync_all;
 }
 
-// A request execution: submit through a context, then drive it until the
-// operation reaches a terminal so no outstanding work is left behind.
-//
-// The no-op observation is measured, not asserted: a terminal already `ready()`
-// before any progress call was published at acceptance; one that becomes ready
-// only after `poll()` was dispatched. A dispatched zero-length request
-// therefore shows up as a divergence.
+// `ready()` captured before any poll() is the no-op measurement: published at
+// acceptance versus dispatched, which is the zero-length divergence signal.
 class RequestProbe {
   public:
     explicit RequestProbe(std::unique_ptr<sluice::async::AsyncBackend> backend)
@@ -151,4 +134,4 @@ class RequestProbe {
     sluice::async::AsyncIoContext ctx_;
 };
 
-} // namespace sluice_semantic
+}

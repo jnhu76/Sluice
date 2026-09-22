@@ -1,11 +1,5 @@
-// Native-error mapping. The expected category per native errno is written
-// here as a decision table, not read back from the production switch, so a
-// change in the mapping fails this test instead of redefining it.
-//
-// Two evidence classes are kept separate:
-//   - table cases: pure, always run, exhaustive over the mapping table;
-//   - filesystem cases: prove that real failures actually reach the table.
-// A filesystem case that cannot run is reported as NOT RUN, never as a pass.
+// The expected categories are written out by hand, never generated from the
+// production mapping, or the comparison would be tautological.
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -33,9 +27,8 @@ struct TableCase {
     IoError::Code expected;
 };
 
-// The mapped errno values; anything without a row keeps backend_error plus its
-// native detail, and ECANCELED is deliberately unmapped: the semantic `canceled`
-// outcome comes from cancellation dispositions, not from an errno.
+// ECANCELED is deliberately unmapped: the canceled outcome comes from
+// cancellation dispositions, not an errno.
 const TableCase table_cases[] = {
     {"ENOENT_is_not_found", ENOENT, IoError::Code::not_found},
     {"ENOTDIR_is_not_found", ENOTDIR, IoError::Code::not_found},
@@ -45,8 +38,6 @@ const TableCase table_cases[] = {
     {"EDQUOT_is_no_space", EDQUOT, IoError::Code::no_space},
     {"EINTR_is_interrupted", EINTR, IoError::Code::interrupted},
     {"EAGAIN_is_would_block", EAGAIN, IoError::Code::would_block},
-    // No canonical category is specified for these: they must keep the
-    // fallback category and preserve the native detail.
     {"ECANCELED_stays_backend_error", ECANCELED, kBackend},
     {"EIO_stays_backend_error", EIO, kBackend},
     {"EINVAL_stays_backend_error", EINVAL, kBackend},
@@ -65,7 +56,6 @@ bool table_case_holds(const TableCase& c) {
 bool table_is_internally_consistent() {
     constexpr std::size_t count =
         sizeof(sluice::detail::kNativeErrorMappings) / sizeof(sluice::detail::kNativeErrorMappings[0]);
-    // A native value must not be reachable with two different categories.
     for (std::size_t i = 0; i < count; ++i) {
         for (std::size_t j = i + 1; j < count; ++j) {
             const auto& a = sluice::detail::kNativeErrorMappings[i];
@@ -101,7 +91,6 @@ std::string reserve_temp_path() {
     return path;
 }
 
-// Real-filesystem case: an absent path must reach the table as not_found.
 bool missing_path_maps_to_not_found() {
     const std::string path = reserve_temp_path();
     if (path.empty())
@@ -113,8 +102,6 @@ bool missing_path_maps_to_not_found() {
     return e.code == IoError::Code::not_found && e.os_errno == ENOENT;
 }
 
-// A path whose parent component is a regular file yields ENOTDIR, which the
-// root maps to not_found rather than permission_denied.
 bool non_directory_component_maps_to_not_found() {
     const std::string parent = reserve_temp_path();
     if (parent.empty())
@@ -132,8 +119,6 @@ bool non_directory_component_maps_to_not_found() {
     return e.code == IoError::Code::not_found && e.os_errno == ENOTDIR;
 }
 
-// ENOSPC cannot be produced deterministically without a bounded filesystem, so
-// it stays a table case; the same holds for EDQUOT. Recorded in the ledger.
 bool permission_denied_reaches_the_table(int* attempted) {
     *attempted = 0;
     if (::geteuid() == 0)
@@ -163,7 +148,7 @@ bool permission_denied_reaches_the_table(int* attempted) {
     return e.code == IoError::Code::permission_denied && e.os_errno == EACCES;
 }
 
-} // namespace
+}
 
 int main() {
     for (const TableCase& c : table_cases) {

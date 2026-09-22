@@ -1,11 +1,3 @@
-// W-01 ordinary utility as a core-only consumer. This TU includes nothing but
-// the two canonical direct headers and links only `sluice_core`, so it is the
-// build-boundary evidence: open, metadata, read/write, positional I/O,
-// composition, resize, durability and close must work without a Scheduler,
-// Fiber, ApplicationRuntime, AsyncBackend, Completion, RequestArena or
-// liburing. The static assertions fail the build if a direct header ever
-// pulls an async definition into this translation unit.
-
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -21,8 +13,8 @@
 #include <unistd.h>
 
 namespace sluice::async {
-// Declared here, not included: if any direct header had transitively included
-// include/sluice/async/**, these types would be complete in this TU.
+// Only forward-declared: completeness here would mean a direct header
+// transitively included the async surface.
 class AsyncBackend;
 class AsyncIoContext;
 class ApplicationRuntime;
@@ -85,7 +77,6 @@ bool file_content_is(const std::string& path, const std::string& expected) {
            std::string(buffer.data(), expected.size()) == expected;
 }
 
-// W-01 explicit-close trace.
 bool w01_explicit_close_trace() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -98,12 +89,10 @@ bool w01_explicit_close_trace() {
 
     bool ok = true;
 
-    // metadata
     auto info = sluice::blocking::file_info(file);
     ok = ok && info.has_value() && info.value().kind == FileKind::regular;
     ok = ok && info.value().size == 0 && info.value().identity.has_value();
 
-    // positional write, then a positional composition that appends to it
     const std::string header = "header:";
     const std::string body = "body";
     const std::span<const std::byte> header_bytes(
@@ -116,10 +105,8 @@ bool w01_explicit_close_trace() {
     ok = ok && wrote_all.has_value() && wrote_all.value().complete();
     ok = ok && wrote_all.value().remaining == sluice::blocking::EffectCertainty::accounted;
 
-    // durability of the confirmed bytes
     ok = ok && sluice::blocking::sync_data(file).has_value();
 
-    // shared-cursor exact read of the whole payload, then a shared-cursor write
     std::vector<std::byte> whole(header.size() + body.size(), std::byte{0});
     auto read_all = sluice::blocking::read_exact(file, whole);
     ok = ok && read_all.has_value() && read_all.value().complete();
@@ -131,14 +118,12 @@ bool w01_explicit_close_trace() {
     auto appended = sluice::blocking::write(file, bang_bytes);
     ok = ok && appended.has_value() && appended.value() == bang.size();
 
-    // a positional composition reads the same bytes back without the cursor
     std::vector<std::byte> all(header.size() + body.size() + bang.size(), std::byte{0});
     auto read_again = sluice::blocking::read_exact_at(file, 0, all);
     ok = ok && read_again.has_value() && read_again.value().complete();
     ok = ok && std::string(reinterpret_cast<const char*>(all.data()), all.size()) ==
                    header + body + bang;
 
-    // resize grow, synchronize the size change, resize shrink, synchronize again
     auto grown = sluice::blocking::resize(file, 64);
     ok = ok && grown.has_value() && sluice::blocking::sync_data(file).has_value();
     auto grown_size = sluice::blocking::size(file);
@@ -148,7 +133,6 @@ bool w01_explicit_close_trace() {
     auto shrunk_size = sluice::blocking::size(file);
     ok = ok && shrunk_size.has_value() && shrunk_size.value() == 4;
 
-    // the explicit close is the observable close-error channel
     auto closed = file.close();
     ok = ok && closed.has_value() && !file.is_open();
     ok = ok && file_content_is(path, "head");
@@ -156,7 +140,6 @@ bool w01_explicit_close_trace() {
     return ok;
 }
 
-// The RAII trace: scope exit is the deterministic cleanup.
 bool w01_raii_trace() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -177,7 +160,7 @@ bool w01_raii_trace() {
             return false;
         if (!sluice::blocking::sync_data(file).has_value())
             return false;
-    } // scope exit: one best-effort native close
+    }
 
     const bool released = ::fcntl(fd, F_GETFD) < 0;
     const bool content_ok = file_content_is(path, "raii");

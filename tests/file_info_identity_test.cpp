@@ -1,7 +1,3 @@
-// Minimal metadata and same-file identity on the direct path: one real
-// `fstat` integration, the `size` projection of the same observation, and the
-// value-level availability rules that Linux cannot produce on demand.
-
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -75,8 +71,6 @@ bool file_info_reports_regular_kind_size_and_identity() {
     return file.close().has_value();
 }
 
-// The two observations agree while nothing falls between them; separate calls
-// are not a transaction.
 bool size_projects_file_info() {
     const std::string path = make_temp_file("abcd");
     if (path.empty())
@@ -136,8 +130,6 @@ bool identity_of_two_opens_matches_and_different_files_differ() {
     return ok;
 }
 
-// Linux always supplies device/inode, so the unavailable outcome is exercised
-// on the representation rather than by faking a kernel result.
 bool identity_match_reports_unknown_when_a_side_is_unavailable() {
     FileInfo known;
     known.kind = FileKind::regular;
@@ -155,8 +147,6 @@ bool identity_match_reports_unknown_when_a_side_is_unavailable() {
            sluice::identity_match(unavailable, unavailable_too) == IdentityMatch::unknown;
 }
 
-// file_info is a state operation: a closed File is invalid_state, and the access
-// mode does not matter.
 bool file_info_on_closed_file_is_invalid_state() {
     const std::string path = make_temp_file("closed");
     if (path.empty())
@@ -175,7 +165,6 @@ bool file_info_on_closed_file_is_invalid_state() {
            !sz.has_value() && sz.error().code == IoError::Code::invalid_state;
 }
 
-// Reported, not refused: no data-I/O promise attaches to `other`.
 bool file_info_reports_other_kinds_without_promising_data_io() {
     std::optional<File> dir_holder;
     if (!open_path("/tmp", FileAccess::read_only, dir_holder))
@@ -210,7 +199,6 @@ bool metadata_and_positional_io_do_not_move_the_shared_cursor() {
     const bool ok = first.has_value() && first.value() == 2 && info.has_value() &&
                     sz.has_value() && positioned.has_value() && positioned.value() == 2 &&
                     second.has_value() && second.value() == 2 &&
-                    // The cursor stayed at 2: the bytes read are "cd", not "gh".
                     next[0] == std::byte{'c'} && next[1] == std::byte{'d'} &&
                     file.close().has_value();
     return ok;
