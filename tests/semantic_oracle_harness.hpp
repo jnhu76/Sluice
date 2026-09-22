@@ -1,20 +1,5 @@
 #pragma once
 
-// A1 reference harness: one semantic oracle, several execution paths.
-//
-// The expectation for a scenario is written out from the root requirement in the
-// scenario table, not read back from the oracle implementation. Two comparisons
-// then run against that same table:
-//   - `check_oracle_against_table` checks the shared rules themselves, so a rule
-//     regression cannot move both sides of the comparison;
-//   - `run_path` checks one execution path, which reports only what it observed.
-//
-// The comparison is deliberately restricted to what the root fixes and what every
-// path can observe: whether the operation was rejected and with which canonical
-// error, or was allowed to proceed, or completed as a logical no-op. Byte counts
-// and physical traces are the execution's business (BACKEND-01) and are not
-// compared here.
-
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
@@ -39,7 +24,6 @@ using sluice::IoError;
 using sluice::detail::DataOpVerdict;
 using sluice::detail::FileOperation;
 
-// A backend-neutral description of one logical operation.
 struct Input {
     bool closed = false;
     sluice::FileAccess access = sluice::FileAccess::read_only;
@@ -51,24 +35,18 @@ struct Input {
 struct Scenario {
     const char* name;
     Input input;
-    // The requirement, written from SEM-03. `expected_rejection_code` is
-    // populated exactly when the verdict is a rejection.
+    // Written out by hand, never derived from the oracle, or the comparison
+    // becomes tautological.
     DataOpVerdict expected_verdict;
     std::optional<IoError::Code> expected_rejection_code;
 };
 
-// Largest scenario length a direct probe may allocate. Scenarios that need a
-// bigger span are reported as not drivable on the direct path.
 inline constexpr std::size_t kDirectScratchLimit = 64;
 
 inline bool direct_drivable(const Input& input) {
     return input.length <= kDirectScratchLimit;
 }
 
-// One temp file opened with each access mode, so every scenario has the resource
-// it describes without the probe inventing an access claim. It lives in the
-// async-free harness so a direct-only target can drive the same scenarios
-// without linking a request path.
 class AccessFixtures {
   public:
     static AccessFixtures create(std::size_t content_size) {
@@ -140,15 +118,11 @@ class AccessFixtures {
     std::optional<sluice::File> read_write_;
 };
 
-// Caller-visible outcome of one path attempt.
 struct Observation {
     bool rejected = false;
     IoError error{};
-    // Whether the path completed a logical no-op without an OS call (direct) or
-    // without a data dispatch (request). Left empty by a path that cannot observe
-    // this for the given input; a direct call has nothing outside it that would
-    // reveal whether a syscall happened, so it always reports empty here. Only
-    // consulted for a `complete_empty` expectation.
+    // nullopt means the path cannot observe the no-op for this input;
+    // consulted only for a `complete_empty` expectation.
     std::optional<bool> no_op_without_dispatch;
 };
 
@@ -200,11 +174,6 @@ inline void describe(const Observation& observed, char* buffer, std::size_t size
     std::snprintf(buffer, size, "rejected(%s)", sluice::to_string(observed.error.code).data());
 }
 
-// The scenario table is the requirement. A path is compared against it, not
-// against the oracle implementation, and any rejection where the table expects an
-// accepted operation is a mismatch: an accepted operation that the environment
-// refuses does not belong in this table, because a valid range refused by a
-// filesystem is an operation result rather than a precedence statement.
 inline bool agree(const Scenario& scenario, const Observation& observed) {
     if (scenario.expected_rejection_code.has_value())
         return observed.rejected && observed.error.code == *scenario.expected_rejection_code;
@@ -217,8 +186,6 @@ inline bool agree(const Scenario& scenario, const Observation& observed) {
     return true;
 }
 
-// Checks the shared rules against the written table, independently of any path.
-// Returns the number of disagreements; a rule regression fails here.
 inline std::size_t check_oracle_against_table(const Scenario* scenarios, std::size_t count) {
     std::size_t mismatches = 0;
     for (std::size_t i = 0; i < count; ++i) {
@@ -248,10 +215,8 @@ inline std::size_t check_oracle_against_table(const Scenario* scenarios, std::si
     return mismatches;
 }
 
-// Runs every scenario against one path adapter. The adapter receives the Input
-// and returns what that path observed; it must not consult the table. Returns the
-// number of mismatches, prints each one, and optionally appends the mismatched
-// scenario names for gap pinning.
+// The adapter must report only what its path observed and never consult the
+// table.
 template <class Attempt>
 std::size_t run_path(const char* path_name, const Scenario* scenarios, std::size_t count,
                      Attempt&& attempt, std::vector<const char*>* mismatched_names = nullptr) {
@@ -275,11 +240,6 @@ inline bool name_less(const char* a, const char* b) {
     return std::strcmp(a, b) < 0;
 }
 
-// Compares a path's observed divergences against the divergence set recorded for
-// it. Equality is required in both directions: a divergence that closes, and a new
-// divergence that appears, both fail, so a recorded gap cannot rot. The recorded
-// set lives beside the scenario table and is cited by the conformance ledger; the
-// two must be updated together.
 inline bool matches_recorded_divergences(const char* path_name, std::vector<const char*> observed,
                                         std::vector<const char*> recorded) {
     std::sort(observed.begin(), observed.end(), name_less);
@@ -295,4 +255,4 @@ inline bool matches_recorded_divergences(const char* path_name, std::vector<cons
     return false;
 }
 
-} // namespace sluice_semantic
+}

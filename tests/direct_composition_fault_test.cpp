@@ -1,17 +1,3 @@
-// Direct exact/all composition (SEM-05, ERR-02) under deterministic primitive
-// injection.
-//
-// A real regular file will not produce short writes, a zero-progress write or an
-// error after a confirmed prefix on demand, so these cases are driven through
-// the test-only native-call seam at the primitive boundary. The seam fixes the
-// primitive counts; whether bytes physically landed is not observable for a
-// scripted call, and the unscripted integration cases live in
-// direct_composition_test.
-//
-// The same frozen SEM-03 precedence table that the primitives are compared
-// against is also driven through the composition surfaces here, because only a
-// seam build can observe the no-OS-call half of the logical-no-op rule.
-
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
@@ -39,9 +25,6 @@ using sluice::blocking::EffectCertainty;
 using sluice::file_testing::kTransferCalls;
 using sluice::file_testing::NativeScript;
 
-// The published certainty must agree with the shared rule. The two enums are
-// separate publications of one distinction, so this compares the meaning rather
-// than the enumerator layout.
 bool certainty_agrees(EffectCertainty published, sluice::detail::EffectCertainty rule) {
     return (rule == sluice::detail::EffectCertainty::accounted) ==
            (published == EffectCertainty::accounted);
@@ -77,8 +60,6 @@ std::optional<File> opened_with_content(const std::string& content, std::string&
     return std::optional<File>(std::move(opened).value());
 }
 
-// Short reads accumulate the confirmed prefix and end as EOF-before-full, not as
-// an operation error.
 bool short_reads_report_eof_before_full_with_the_prefix() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("abcdef", path);
@@ -104,7 +85,6 @@ bool short_reads_report_eof_before_full_with_the_prefix() {
     return ok;
 }
 
-// Short reads keep advancing until the request is satisfied.
 bool short_reads_reach_full_progress() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("abcdefgh", path);
@@ -127,7 +107,6 @@ bool short_reads_reach_full_progress() {
     return ok;
 }
 
-// Short writes advance by the confirmed count until every byte is written.
 bool short_writes_reach_full_progress() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("", path, sluice::FileAccess::read_write);
@@ -150,8 +129,6 @@ bool short_writes_reach_full_progress() {
     return ok;
 }
 
-// A nonempty write that transfers nothing stops the composition after one
-// attempt: zero progress must terminate, never spin.
 bool zero_progress_write_stops_after_one_attempt() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("", path, sluice::FileAccess::read_write);
@@ -169,18 +146,12 @@ bool zero_progress_write_stops_after_one_attempt() {
         ok = ok && composed.value().end == CompositionEnd::write_no_progress;
         ok = ok && composed.value().confirmed_bytes == 0;
         ok = ok && composed.value().remaining == EffectCertainty::accounted;
-        // The remaining scripted steps are untouched: the loop stopped at the
-        // first zero-progress primitive instead of retrying it.
         ok = ok && script.calls() == 1;
     }
     ::unlink(path.c_str());
     return ok;
 }
 
-// SEM-05: a composition advances its buffer and offset by the confirmed bytes.
-// The seam records the operands of the last intercepted call, so a loop that
-// restated the count without moving the buffer (or the offset) fails here even
-// though the outcome's numbers look right.
 bool composition_advances_the_buffer_by_confirmed_bytes() {
     std::string path;
     std::optional<File> file_holder =
@@ -198,8 +169,6 @@ bool composition_advances_the_buffer_by_confirmed_bytes() {
         NativeScript script(kTransferCalls, fd, {{3, 0}, {5, 0}});
         auto composed = sluice::blocking::read_exact_at(file, 100, dst);
         ok = ok && composed.has_value() && composed.value().complete();
-        // The second call must address the remainder of the buffer at the
-        // advanced offset, not the start of it again.
         ok = ok && script.last_call().buffer == dst.data() + 3;
         ok = ok && script.last_call().count == 5;
         ok = ok && script.last_call().offset == 103;
@@ -213,8 +182,7 @@ bool composition_advances_the_buffer_by_confirmed_bytes() {
         ok = ok && script.last_call().offset == 22;
     }
     {
-        // The shared-cursor form advances the buffer the same way and reports no
-        // offset, because the kernel owns the cursor.
+        // The shared-cursor form supplies no offset; the seam reports that as -1.
         NativeScript script(kTransferCalls, fd, {{2, 0}, {3, 0}});
         auto composed = sluice::blocking::write_all(file, src);
         ok = ok && composed.has_value() && composed.value().complete();
@@ -226,8 +194,6 @@ bool composition_advances_the_buffer_by_confirmed_bytes() {
     return ok;
 }
 
-// A primitive error after a confirmed prefix keeps the prefix and reports the
-// primitive's own reason next to it (ERR-02).
 bool error_after_confirmed_prefix_keeps_the_prefix() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("", path, sluice::FileAccess::read_write);
@@ -255,8 +221,6 @@ bool error_after_confirmed_prefix_keeps_the_prefix() {
     return ok;
 }
 
-// SEM-05: a primitive may retry an interrupted attempt that reported no
-// successful count, and the composition sees only the completed counts.
 bool primitive_retries_eintr_without_a_completed_count() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("abcdefgh", path);
@@ -285,9 +249,8 @@ bool primitive_retries_eintr_without_a_completed_count() {
     return ok;
 }
 
-// A logical no-op is completed without a native call. The armed script fails
-// every intercepted transfer call, so "success 0 with zero intercepted calls" is
-// the mechanical no-OS-call evidence for the direct path.
+// The script is armed to fail every intercepted call, so zero intercepted calls
+// is the no-OS-call evidence.
 bool zero_length_requests_make_no_native_call() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("abcdefgh", path, sluice::FileAccess::read_write);
@@ -324,8 +287,6 @@ bool zero_length_requests_make_no_native_call() {
     return ok;
 }
 
-// A primitive that claims more than the remaining request is an invariant
-// violation: the loop stops immediately instead of advancing past the buffer.
 bool impossible_count_stops_immediately() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("abcdefgh", path);
@@ -351,10 +312,6 @@ bool impossible_count_stops_immediately() {
     return ok;
 }
 
-// ERR-02: a primitive error leaves the failed attempt's own effect unaccounted
-// for, in both directions. The prefix from the completed steps stays
-// trustworthy, but the outcome says `unknown` rather than letting a caller read
-// the operation's direction as a claim that the failed attempt changed nothing.
 bool a_primitive_error_reports_an_unaccounted_remainder_in_both_directions() {
     std::string path;
     std::optional<File> file_holder =
@@ -385,8 +342,6 @@ bool a_primitive_error_reports_an_unaccounted_remainder_in_both_directions() {
         ok = ok && composed.value().remaining == EffectCertainty::unknown;
     }
     {
-        // A successful stop does account for its remainder, so the field is a
-        // decision rather than a constant.
         NativeScript script(kTransferCalls, fd, {{8, 0}});
         auto composed = sluice::blocking::read_exact_at(file, 0, dst);
         ok = ok && composed.has_value() && composed.value().complete();
@@ -396,19 +351,6 @@ bool a_primitive_error_reports_an_unaccounted_remainder_in_both_directions() {
     return ok;
 }
 
-// The canonical composition semantics are the shared state: `CompositionStop`,
-// the accumulated `confirmed_bytes` and the primitive's own error, decided once
-// by `detail::compose_progress`/`compose_error`. Each path chooses a
-// representation of that state, and two of them are compared here from one
-// injected primitive sequence: the direct outcome reports the stop structurally
-// and carries an error only for a primitive failure, while `composition_error` —
-// a reference `IoError` projection with no production consumer — names a
-// category that the root does not assign to the no-progress stop. Driving both
-// from the same sequence pins the canonical stop state on both sides, so a
-// change in either representation shows up here, and records the two
-// representation differences instead of leaving them to read as two competing
-// authorities. The same table pins effect certainty: at every stop the direct
-// outcome publishes what `detail::composition_effect_certainty` decides.
 bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
     using sluice::detail::CompositionKind;
     using sluice::detail::CompositionState;
@@ -426,7 +368,6 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
 
     bool ok = true;
 
-    // complete: neither side names a reason.
     {
         NativeScript script(kTransferCalls, fd, {{4, 0}});
         auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
@@ -442,9 +383,6 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
                                     sluice::detail::composition_effect_certainty(oracle));
     }
 
-    // eof_before_full: the direct outcome keeps the stop structural and carries no
-    // error, while the reference projection names `eof`. A difference of
-    // representation, recorded rather than accidental.
     {
         NativeScript script(kTransferCalls, fd, {{2, 0}, {0, 0}});
         auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
@@ -463,8 +401,6 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
                                     sluice::detail::composition_effect_certainty(oracle));
     }
 
-    // write_no_progress after a confirmed prefix: the prefix survives the stop on
-    // both sides, and the same representation difference applies to the reason.
     {
         NativeScript script(kTransferCalls, fd, {{2, 0}, {0, 0}});
         auto composed = sluice::blocking::write_all_at(file, 0, src);
@@ -484,9 +420,6 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
                                     sluice::detail::composition_effect_certainty(oracle));
     }
 
-    // primitive_error: both sides report the primitive's own reason, native detail
-    // included. The oracle state is replayed with the same conversion the
-    // primitive used, so the two reasons must be equal, not merely equal in code.
     {
         NativeScript script(kTransferCalls, fd, {{2, 0}, {-1, ENOSPC}});
         auto composed = sluice::blocking::write_all_at(file, 0, src);
@@ -507,10 +440,6 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
                                     sluice::detail::composition_effect_certainty(oracle));
     }
 
-    // impossible_count: a count above the remaining request cannot come from a
-    // primitive that honors its own contract, so it is published as a primitive
-    // error whose reason is the shared rule's `invalid_state` with no native
-    // detail, exactly as `composition_error` names it.
     {
         NativeScript script(kTransferCalls, fd, {{8, 0}});
         auto composed = sluice::blocking::read_exact_at(file, 0, buffer);
@@ -533,8 +462,6 @@ bool every_stop_reason_is_pinned_against_the_oracle_error_rule() {
     ::unlink(path.c_str());
     return ok;
 }
-
-// ── The frozen SEM-03 table, driven through the composition surfaces ───────
 
 enum class Surface { positional, cursor };
 
@@ -560,16 +487,9 @@ sluice_semantic::Observation apply_composition(const File& file, const sluice_se
     default:
         break;
     }
-    // Unreachable: the driver filters to byte operations. `not_supported` is not
-    // an expectation anywhere in the table, so a leak here fails loudly.
     return sluice_semantic::observe_rejection(IoError{.code = IoError::Code::not_supported});
 }
 
-// A shared-cursor call supplies no offset, so the offset-range step has no
-// operand to check there: scenarios whose verdict depends on the caller's offset
-// are not expressible on that surface. They are reported as not drivable rather
-// than counted as divergences, and the length half of the range rule (which both
-// surfaces do take) stays covered.
 bool offset_dependent(const sluice_semantic::Input& input) {
     return input.length != 0 && input.offset != 0;
 }
@@ -588,9 +508,8 @@ sluice_semantic::Observation composition_attempt(const sluice_semantic::AccessFi
     const std::span<std::byte> dst(scratch.data(), input.length);
     const std::span<const std::byte> src(scratch.data(), input.length);
 
-    // Every intercepted transfer call fails, and every descriptor is
-    // intercepted: a request that completes without a native call shows up as
-    // zero intercepted calls.
+    // fd -1 intercepts every descriptor and each intercepted call fails, so
+    // zero calls proves no native call was made.
     NativeScript script(kTransferCalls, -1, {{-1, EIO}});
     const std::size_t before = script.calls();
 

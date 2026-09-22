@@ -1,8 +1,3 @@
-// Direct exact/all composition (SEM-05) as real-file integration: the same
-// surfaces the fault test drives with injected counts, here against a real
-// regular file, including the unscripted full and EOF paths, the placement of a
-// positional composition, and the shared-cursor composition.
-
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -84,7 +79,6 @@ bool read_exact_reads_the_whole_request() {
            file.close().has_value();
 }
 
-// A real short file produces the EOF-before-full stop with its confirmed prefix.
 bool read_exact_reports_eof_before_full_with_the_prefix() {
     const std::string path = make_temp_file("abcde");
     if (path.empty())
@@ -124,8 +118,6 @@ bool write_all_writes_the_whole_request() {
     return ok;
 }
 
-// A positional composition places bytes at the offset and leaves the shared
-// cursor alone, so the following shared-cursor read observes the cursor.
 bool positional_composition_places_bytes_and_leaves_the_cursor() {
     const std::string path = make_temp_file("0123456789");
     if (path.empty())
@@ -139,10 +131,10 @@ bool positional_composition_places_bytes_and_leaves_the_cursor() {
     const std::span<const std::byte> src(
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     std::vector<std::byte> moved(2, std::byte{0});
-    auto advanced = sluice::blocking::read(file, moved); // cursor -> 2
+    auto advanced = sluice::blocking::read(file, moved);
     auto placed = sluice::blocking::write_all_at(file, 5, src);
     std::vector<std::byte> next(2, std::byte{0});
-    auto read_back = sluice::blocking::read(file, next); // reads at 2
+    auto read_back = sluice::blocking::read(file, next);
 
     const bool ok = advanced.has_value() && advanced.value() == 2 && placed.has_value() &&
                     placed.value().complete() && read_back.has_value() &&
@@ -152,7 +144,6 @@ bool positional_composition_places_bytes_and_leaves_the_cursor() {
     return ok;
 }
 
-// A shared-cursor composition advances the native cursor by the confirmed bytes.
 bool shared_cursor_composition_advances_the_cursor() {
     const std::string path = make_temp_file("abcdefgh");
     if (path.empty())
@@ -192,8 +183,6 @@ bool empty_request_completes_without_io() {
            write.has_value() && write.value().complete() && file.close().has_value();
 }
 
-// A zero-length composition is still subject to the precedence: a closed File
-// outranks the logical no-op.
 bool composition_rejections_follow_the_shared_precedence() {
     const std::string path = make_temp_file("abc");
     if (path.empty())

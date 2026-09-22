@@ -1,7 +1,3 @@
-// Minimal metadata and same-file identity (SEM-07) on the direct path: one real
-// `fstat` integration, the `size` projection of the same observation, and the
-// value-level availability rules that Linux cannot produce on demand.
-
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -75,9 +71,6 @@ bool file_info_reports_regular_kind_size_and_identity() {
     return file.close().has_value();
 }
 
-// `size` is the projection of its own `file_info` observation rather than a
-// second metadata rule, so the two agree while no external mutation falls
-// between them. Separate calls are not a transaction (SEM-07).
 bool size_projects_file_info() {
     const std::string path = make_temp_file("abcd");
     if (path.empty())
@@ -98,14 +91,12 @@ bool size_projects_file_info() {
     ok = ok && grown_info.has_value() && grown_size.has_value();
     ok = ok && grown_size.value() == grown_info.value().size;
     ok = ok && grown_size.value() == 9;
-    // A resize changes the observed size but not the identity.
     ok = ok && grown_info.value().identity == info.value().identity;
     ::unlink(path.c_str());
     ok = ok && file.close().has_value();
     return ok;
 }
 
-// Two independent opens of one file are the same file; different files are not.
 bool identity_of_two_opens_matches_and_different_files_differ() {
     const std::string path_a = make_temp_file("same");
     const std::string path_b = make_temp_file("other");
@@ -139,9 +130,6 @@ bool identity_of_two_opens_matches_and_different_files_differ() {
     return ok;
 }
 
-// Availability is a value-level rule: Linux always supplies device/inode, so the
-// unavailable outcome is exercised on the representation rather than by faking a
-// kernel result.
 bool identity_match_reports_unknown_when_a_side_is_unavailable() {
     FileInfo known;
     known.kind = FileKind::regular;
@@ -159,8 +147,6 @@ bool identity_match_reports_unknown_when_a_side_is_unavailable() {
            sluice::identity_match(unavailable, unavailable_too) == IdentityMatch::unknown;
 }
 
-// file_info is a state operation: a closed File is invalid_state, and the access
-// mode does not matter.
 bool file_info_on_closed_file_is_invalid_state() {
     const std::string path = make_temp_file("closed");
     if (path.empty())
@@ -179,8 +165,6 @@ bool file_info_on_closed_file_is_invalid_state() {
            !sz.has_value() && sz.error().code == IoError::Code::invalid_state;
 }
 
-// A kind outside the ordinary-file domain is reported, not refused: v1 promises
-// no data-I/O semantics for it, and this test only observes the report.
 bool file_info_reports_other_kinds_without_promising_data_io() {
     std::optional<File> dir_holder;
     if (!open_path("/tmp", FileAccess::read_only, dir_holder))
@@ -193,7 +177,6 @@ bool file_info_reports_other_kinds_without_promising_data_io() {
     return ok;
 }
 
-// SEM-07: neither file_info nor positional I/O moves the shared cursor.
 bool metadata_and_positional_io_do_not_move_the_shared_cursor() {
     const std::string path = make_temp_file("abcdefgh");
     if (path.empty())
@@ -216,7 +199,6 @@ bool metadata_and_positional_io_do_not_move_the_shared_cursor() {
     const bool ok = first.has_value() && first.value() == 2 && info.has_value() &&
                     sz.has_value() && positioned.has_value() && positioned.value() == 2 &&
                     second.has_value() && second.value() == 2 &&
-                    // The cursor stayed at 2: the bytes read are "cd", not "gh".
                     next[0] == std::byte{'c'} && next[1] == std::byte{'d'} &&
                     file.close().has_value();
     return ok;

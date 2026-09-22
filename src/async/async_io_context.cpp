@@ -14,16 +14,11 @@ namespace sluice::async {
 
 namespace {
 
-// SEM-03 steps 1-2 at the initiation boundary, from the shared oracle: a closed
-// File and an illegal access are properties of the resource, so they are
-// rejected before any admission work. Steps 3-4 (logical no-op and range) stay
-// with the execution that owns the acceptance transaction, so the
-// caller-visible precedence is unchanged.
 std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::detail::FileOperation op) {
     return sluice::detail::rejection_of(sluice::detail::precheck_state_op(file.fd < 0, file.access, op));
 }
 
-} // namespace
+}
 
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
     : backend_(std::move(backend)), stats_(stats) {
@@ -90,7 +85,7 @@ void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
     update_max_outstanding(s, b.outstanding());
 }
 #endif
-} // namespace
+}
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
     if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
@@ -399,4 +394,4 @@ void AsyncIoContext::pause_after_wait_source_progress_() noexcept {
 }
 #endif
 
-} // namespace sluice::async
+}

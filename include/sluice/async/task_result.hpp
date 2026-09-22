@@ -25,7 +25,7 @@ inline bool task_result_test_inject_next_submit_throw() noexcept {
     task_result_submit_throw_armed = false;
     return true;
 }
-} // namespace detail
+}
 #endif
 
 template <class T> class TaskResultSlot {
@@ -66,15 +66,10 @@ template <class T> class TaskResultSlot {
     bool done_ = false;
 };
 
-// A task exception reaching the host boundary becomes a terminal error through
-// the same canonical mapping as a native failure, so an ENOENT raised as a
-// std::system_error is not_found here too instead of backend_error.
 template <class T> Result<T> translate_task_exception() noexcept {
     try {
         throw;
     } catch (const std::bad_alloc&) {
-        // Allocation failure has no canonical category; `no_space` is the
-        // closest existing one and no new category is introduced.
         return make_unexpected<T>(IoError{IoError::Code::no_space});
     } catch (const std::system_error& e) {
         const int native = e.code().value();
@@ -160,4 +155,4 @@ Result<T> run_task_to_result(unsigned workers, std::unique_ptr<AsyncBackend> bac
     return result;
 }
 
-} // namespace sluice::async
+}

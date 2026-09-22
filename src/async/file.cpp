@@ -5,10 +5,6 @@
 
 namespace sluice::async {
 
-// This raw-pointer surface fails fast on a null buffer with a nonzero length
-// as its own implementation precondition: SEM-03 treats caller memory validity
-// as not dynamically detectable, so the shared oracle does not answer buffer
-// presence. `execute` implies a nonzero length.
 Result<std::size_t> await_read_at(const File& file, RuntimeTaskContext& ctx, std::uint64_t offset,
                                   std::span<std::byte> dst, Completion<std::size_t>& c) {
     const auto verdict = sluice::detail::precheck_data_op(
@@ -71,4 +67,4 @@ Result<void> await_sync_all(const File& file, RuntimeTaskContext& ctx, Completio
     return await_take(ctx, c);
 }
 
-} // namespace sluice::async
+}

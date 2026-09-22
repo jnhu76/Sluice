@@ -1,10 +1,3 @@
-// SEM-05 primitive and composition reference rules, checked against real
-// filesystem behaviour where the platform can express the case.
-//
-// The reference fold is the oracle: a path that composes exact/all operations
-// must reach the same accumulation and the same stop reason. The real cases below
-// pin the primitive half (EOF, short transfer, zero-length) against the kernel,
-// so the reference model cannot drift away from what Linux actually returns.
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
@@ -32,8 +25,6 @@ using sluice::detail::compose_progress;
 using sluice::detail::composition_error;
 using sluice::detail::FileOperation;
 using sluice::detail::PrimitiveOutcome;
-
-// ── Primitive classification ───────────────────────────────────────────────
 
 struct PrimitiveCase {
     const char* name;
@@ -65,8 +56,6 @@ bool primitive_table_holds() {
     return true;
 }
 
-// ── Composition fold ──────────────────────────────────────────────────────
-
 bool read_exact_accumulates_a_short_prefix_then_reports_eof() {
     CompositionState state;
     state = compose_progress(CompositionKind::read_exact, 10, state, 4);
@@ -80,7 +69,6 @@ bool read_exact_accumulates_a_short_prefix_then_reports_eof() {
         return false;
     if (state.stop != CompositionStop::eof_before_full)
         return false;
-    // The confirmed prefix survives the stop.
     if (state.confirmed_bytes != 7)
         return false;
     const auto reason = composition_error(state);
@@ -95,14 +83,11 @@ bool write_all_zero_progress_stops_and_keeps_its_prefix() {
         return false;
     if (state.confirmed_bytes != 6)
         return false;
-    // Distinguishable from EOF-before-full, which is the point of the split.
     const auto reason = composition_error(state);
     return reason.has_value() && reason->code != IoError::Code::eof;
 }
 
 bool composition_never_spins_on_zero_progress() {
-    // The fold is a pure step function: it can only stop, so a caller cannot
-    // build a loop that keeps transferring nothing.
     CompositionState state;
     state = compose_progress(CompositionKind::write_all, 1, state, 0);
     if (!state.stopped)
@@ -142,8 +127,6 @@ bool composition_keeps_the_primitive_error() {
     return reason.has_value() && reason->code == IoError::Code::no_space && reason->os_errno == 28;
 }
 
-// ── Real filesystem primitive evidence ────────────────────────────────────
-
 std::string make_temp_file(const std::string& content) {
     char path[] = "/tmp/sluice_short_io_XXXXXX";
     const int fd = ::mkstemp(path);
@@ -164,9 +147,6 @@ FileOpen readable_mode() {
     return mode;
 }
 
-// A real short read: the file is smaller than the request, so the primitive
-// returns 0 < n < requested and must be classified as allowed progress, not as
-// an error.
 bool real_short_read_is_short_progress() {
     const std::string path = make_temp_file("0123456789");
     if (path.empty())
@@ -185,14 +165,12 @@ bool real_short_read_is_short_progress() {
     if (classify_primitive(FileOperation::read, 20, got) != PrimitiveOutcome::short_progress)
         return false;
 
-    // Reading at the end of the file observes EOF as a primitive success.
     auto at_end = sluice::blocking::read_at(file, 10, std::span<std::byte>(dst));
     if (!at_end.has_value() || at_end.value() != 0)
         return false;
     if (classify_primitive(FileOperation::read, 20, at_end.value()) != PrimitiveOutcome::eof)
         return false;
 
-    // An empty request is success 0 and observes no EOF.
     auto empty = sluice::blocking::read_at(file, 0, std::span<std::byte>());
     if (!empty.has_value() || empty.value() != 0)
         return false;
@@ -200,8 +178,6 @@ bool real_short_read_is_short_progress() {
            PrimitiveOutcome::empty_request;
 }
 
-// A full write followed by reading the bytes back is the reference composition
-// result: accumulated confirmed bytes equal the requested length.
 bool real_write_all_reaches_full_progress() {
     const std::string path = make_temp_file("");
     if (path.empty())
@@ -237,7 +213,7 @@ bool real_write_all_reaches_full_progress() {
     return std::memcmp(readback.data(), src.data(), src.size()) == 0;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

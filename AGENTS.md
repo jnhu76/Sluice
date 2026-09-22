@@ -62,10 +62,27 @@ supersession labels rather than silently regaining authority.
 
 ## C++ comments
 
-Comments describe the current implementation. Keep concise explanations of
-non-obvious why/what/how. Historical rationale, issue/PR chronology and research
-campaign narrative belong in documentation. Put requirement-to-code mappings in
-the ledger/ADR rather than repeating the specification in production comments.
+Default to no explanatory comment. C++ comments are exceptional and exist only
+when removing the comment would make a maintainer materially more likely to
+introduce a local implementation mistake.
+
+Keep only short notes for non-obvious local hazards, invariants or mechanism
+constraints that the code cannot make clear by naming or structure alone. Typical
+examples are an unsafe syscall retry, a subtle arithmetic invariant, or a test
+seam behavior whose misuse would invalidate the test.
+
+Do not use comments to narrate semantics, restate the root specification, cite
+requirement IDs, declare an authority/contract, record issue or PR history,
+explain review conclusions, map requirements to code, or preserve research and
+platform arguments. Those belong in the root, conformance ledger, ADRs, tests or
+other documentation as appropriate.
+
+Apply the same rule to public headers and tests. Prefer descriptive names, types,
+control flow and assertions over comments. If a comment merely paraphrases nearby
+code or a test name, delete it. If a semantic explanation must remain traceable,
+keep the explanation in the authoritative documentation and remove it from C++.
+When in doubt, delete rather than compress a semantic narrative into a shorter
+pseudo-contract.
 
 ## Performance and repository hygiene
 

@@ -18,14 +18,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-// Pins the frozen initiation precedence of ADR-0002 §5.5 for collisions where
-// two or more admission conditions hold at once:
-//   closed -> invalid_state
-//   access legality -> invalid_argument
-//   zero-length -> success 0
-//   offset/size validation -> invalid_argument
-// A guard reorder that changes any caller-visible outcome below must fail.
-
 namespace {
 
 using namespace sluice::async;
@@ -65,9 +57,6 @@ std::string make_temp_file(const std::string& content) {
     return path;
 }
 
-// Counts every backend read/write entry. A rejected admission must leave
-// these at zero: any backend entry means the initiation boundary let an
-// illegal operation reach lowering.
 class CountingBackend final : public AsyncBackend {
   public:
     int read_entries = 0;
@@ -113,8 +102,6 @@ template <class T> bool reports_invalid_argument(const Result<T>& r) {
     return !r.has_value() && r.error().code == IoError::Code::invalid_argument;
 }
 
-// --- blocking: closed + zero-length -> invalid_state, never success 0 ---
-
 bool blocking_read_closed_with_empty_buffer_reports_invalid_state() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -159,8 +146,6 @@ bool blocking_write_at_closed_with_empty_buffer_reports_invalid_state() {
     return reports_invalid_state(write_at(file, 0, std::span<const std::byte>{}));
 }
 
-// --- blocking: illegal access + zero-length -> invalid_argument, never 0 ---
-
 bool blocking_read_on_write_only_with_empty_buffer_reports_invalid_argument() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -200,8 +185,6 @@ bool blocking_write_at_on_read_only_with_empty_buffer_reports_invalid_argument()
     const bool ok = reports_invalid_argument(write_at(file, 0, std::span<const std::byte>{}));
     return file.close().has_value() && ok;
 }
-
-// --- blocking: closed + illegal access -> invalid_state ---
 
 bool blocking_read_on_closed_write_only_reports_invalid_state() {
     const std::string path = make_temp_file("x");
@@ -251,8 +234,6 @@ bool blocking_write_at_on_closed_read_only_reports_invalid_state() {
     return reports_invalid_state(write_at(file, 0, std::span<const std::byte>(&src, 1)));
 }
 
-// --- blocking: zero-length outranks offset validation ---
-
 bool blocking_read_at_empty_buffer_ignores_unrepresentable_offset() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -296,8 +277,6 @@ bool blocking_resize_on_closed_file_with_unrepresentable_size_reports_invalid_st
         return false;
     return reports_invalid_state(resize(file, unrepresentable_offset));
 }
-
-// --- await: closed + zero-length -> invalid_state, completion stays idle ---
 
 bool await_read_at_closed_with_empty_buffer_reports_invalid_state() {
     const std::string path = make_temp_file("x");
@@ -349,8 +328,6 @@ bool await_write_at_closed_with_empty_buffer_reports_invalid_state() {
     return !result.has_value() && result.error().code == IoError::Code::invalid_state;
 }
 
-// --- await: illegal access + zero-length -> invalid_argument ---
-
 bool await_read_at_on_write_only_with_empty_buffer_reports_invalid_argument() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -401,8 +378,6 @@ bool await_write_at_on_read_only_with_empty_buffer_reports_invalid_argument() {
     return file.close().has_value() && ok;
 }
 
-// --- await: closed + illegal access -> invalid_state ---
-
 bool await_read_at_on_closed_write_only_reports_invalid_state() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -442,8 +417,6 @@ bool await_write_at_on_closed_read_only_reports_invalid_state() {
 
     return !result.has_value() && result.error().code == IoError::Code::invalid_state;
 }
-
-// --- await: zero-length outranks offset validation ---
 
 bool await_read_at_empty_buffer_ignores_unrepresentable_offset() {
     const std::string path = make_temp_file("x");
@@ -493,8 +466,6 @@ bool await_write_at_empty_buffer_ignores_unrepresentable_offset() {
     const bool ok = result.has_value() && result.value() == 0;
     return file.close().has_value() && ok;
 }
-
-// --- explicit submission: rejected admission never enters the backend ---
 
 bool submit_read_rejects_closed_empty_reference_before_backend() {
     const std::string path = make_temp_file("x");
@@ -622,9 +593,6 @@ bool submit_write_rejects_closed_illegal_access_as_invalid_state() {
     return counts->read_entries == 0 && counts->write_entries == 0;
 }
 
-// Access legality is decided before the backend can apply its own offset
-// validation: an illegal-access op with an unrepresentable offset must be
-// rejected at the boundary with zero backend entries.
 bool submit_read_rejects_illegal_access_before_offset_validation() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -665,7 +633,6 @@ bool submit_write_rejects_illegal_access_before_offset_validation() {
            counts->write_entries == 0;
 }
 
-// Identity-bearing submission variants share the same admission boundary.
 bool submit_read_request_rejects_illegal_access_with_empty_buffer_before_backend() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -706,9 +673,6 @@ bool submit_write_request_rejects_illegal_access_with_empty_buffer_before_backen
            counts->write_entries == 0;
 }
 
-// Closed outranks access legality on the identity-bearing variants too: a
-// closed reference whose access would be illegal must surface invalid_state
-// with zero backend entries.
 bool submit_read_request_rejects_closed_illegal_access_as_invalid_state() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -752,8 +716,6 @@ bool submit_write_request_rejects_closed_illegal_access_as_invalid_state() {
         return false;
     return counts->read_entries == 0 && counts->write_entries == 0;
 }
-
-// --- explicit submission: zero-length completes 0, offset never validated ---
 
 bool submit_zero_length_read_completes_zero_despite_unrepresentable_offset() {
     const std::string path = make_temp_file("x");
@@ -799,8 +761,6 @@ bool submit_zero_length_write_completes_zero_despite_unrepresentable_offset() {
     return file.close().has_value() && ok;
 }
 
-// Non-zero requests with an unrepresentable offset are rejected at admission
-// with the frozen error category, never deferred to backend execution.
 bool submit_read_with_unrepresentable_offset_rejected_at_admission() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -849,7 +809,7 @@ bool submit_write_with_unrepresentable_offset_rejected_at_admission() {
     return file.close().has_value() && rejected;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

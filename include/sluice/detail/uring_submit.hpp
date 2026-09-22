@@ -1,12 +1,5 @@
 #pragma once
 
-// io_uring submission-path mechanism helpers.
-//
-// This header holds lowering detail that belongs to the io_uring execution
-// mechanism only. File legality, validation precedence, range/offset rules and
-// error categories are NOT decided here; they live in
-// `sluice/detail/file_semantics.hpp` and are shared by every execution path.
-
 #include <algorithm>
 #include <cerrno>
 #include <cstddef>
@@ -15,9 +8,6 @@
 
 namespace sluice::detail {
 
-// Largest length a single io_uring read/write SQE can carry. This is a
-// transfer limit of one execution, so a longer request yields a short count
-// rather than a File-semantic rejection.
 inline unsigned uring_chunk_length(std::size_t remaining) noexcept {
     constexpr auto native_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
     return static_cast<unsigned>(std::min(remaining, native_max));
@@ -50,4 +40,4 @@ template <class WaitFn> int retry_uring_wait_on_eintr(WaitFn&& wait_fn) {
     return result;
 }
 
-} // namespace sluice::detail
+}

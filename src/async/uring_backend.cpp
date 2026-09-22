@@ -38,8 +38,7 @@ namespace {
 Result<void> unsupported_stub() {
     return make_unexpected<void>(IoError{IoError::Code::backend_error});
 }
-} // namespace
-
+}
 Result<void> UringAsyncBackend::submit_read(ReadOp, Completion<std::size_t>&) {
     return unsupported_stub();
 }
@@ -115,8 +114,7 @@ inline void bump(sluice::AsyncStats* s, std::uint64_t sluice::AsyncStats::* fiel
         ++(s->*field);
 }
 
-} // namespace
-
+}
 class UringAsyncBackend::BoundedDispatchQueue {
   public:
     explicit BoundedDispatchQueue(std::size_t capacity) : storage_(capacity), capacity_(capacity) {}
@@ -273,10 +271,6 @@ class UringAsyncBackend::TransportLedger {
     std::uint32_t last_physical_position_ = 0;
 };
 
-// These raw-pointer surfaces fail fast on a null buffer with a nonzero length
-// as their own implementation precondition: SEM-03 treats caller memory
-// validity as not dynamically detectable, so the shared oracle does not answer
-// buffer presence. `execute` implies a nonzero length.
 Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
         {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});
@@ -1410,4 +1404,4 @@ bool UringAsyncBackend::available() const noexcept {
 
 #endif
 
-} // namespace sluice::async
+}

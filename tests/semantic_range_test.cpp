@@ -1,10 +1,3 @@
-// SEM-04 range and offset rules, as properties of the shared oracle.
-//
-// The property exercised throughout is that the oracle rejects exactly what is
-// mathematically unrepresentable, and that it does so without overflowing while
-// it computes the last addressed byte. Zero-length interaction is covered here
-// as a pure rule; its precedence over the range step is covered by
-// semantic_validation_precedence_test.
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file.hpp>
 
@@ -34,9 +27,8 @@ struct RangeCase {
     bool expected_valid;
 };
 
-// Restatement of the rule in wide arithmetic, so the cross-check cannot share
-// the implementation's overflow behaviour: the last addressed byte must be
-// representable.
+// Wide arithmetic on purpose, so the cross-check cannot share the
+// implementation's overflow behaviour.
 bool rule_by_definition(std::uint64_t offset, std::size_t length) {
     if (length == 0)
         return true;
@@ -77,16 +69,11 @@ bool range_table_holds() {
     return true;
 }
 
-// The last addressed byte is offset + length - 1. A length at the very top of
-// the range must not be able to wrap that computation.
 bool no_wrap_at_the_top_of_the_range() {
-    // Last addressed byte is kMaxNativeOffset: accepted.
     if (!range_is_valid(kMaxNativeOffset - 7, 8))
         return false;
-    // One byte beyond it: rejected, not wrapped.
     if (range_is_valid(kMaxNativeOffset - 7, 9))
         return false;
-    // A length whose own addition would overflow must be rejected too.
     return !range_is_valid(kMaxNativeOffset, std::numeric_limits<std::size_t>::max());
 }
 
@@ -114,10 +101,6 @@ bool checked_offset_reports_invalid_argument() {
     return rejected.error().code == IoError::Code::invalid_argument;
 }
 
-// SEM-04 requires the declared execution limit to be applied before the
-// operation is submitted, so a transfer larger than the native count is an
-// invalid range. No real buffer can carry it, which is why it is checked here
-// rather than through a path.
 bool native_transfer_limit_is_a_range_rejection() {
     if (kMaxNativeTransfer == 0)
         return false;
@@ -133,10 +116,6 @@ bool native_transfer_limit_is_a_range_rejection() {
     return rejection.has_value() && rejection->code == IoError::Code::invalid_argument;
 }
 
-// The shared range helper is consumed by the legacy reader/writer as well, so the
-// correction it carries is observable there and is pinned here: an
-// unrepresentable offset is invalid_argument on every caller, not invalid_state
-// on one of them.
 bool legacy_positional_io_reports_invalid_argument() {
     char path[] = "/tmp/sluice_range_legacy_XXXXXX";
     const int fd = ::mkstemp(path);
@@ -178,7 +157,7 @@ bool legacy_positional_io_reports_invalid_argument() {
     return ok;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

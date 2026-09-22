@@ -1,14 +1,3 @@
-// Canonical File close semantics (SEM-02) under deterministic close fault
-// injection.
-//
-// The test-only native close seam sits at the syscall boundary, so these cases
-// drive the same code the production build runs and observe what the contract
-// actually requires: the first native close attempt consumes ownership, a failed
-// close leaves no owner behind, the descriptor is never retried (including after
-// EINTR, whose retry is unsafe on Linux), the destructor is a noexcept single
-// best-effort attempt, and move assignment transfers ownership without leaking
-// or double-closing the destination's old resource.
-
 #include <sluice/file_resource.hpp>
 
 #include "file_test_seams.hpp"
@@ -48,8 +37,6 @@ FileOpen read_write_mode() {
 
 bool descriptor_is_live(int fd) { return ::fcntl(fd, F_GETFD) >= 0; }
 
-// The unarmed control: a real close releases the descriptor, and closing the
-// already closed File afterwards is a successful no-op.
 bool unarmed_close_releases_the_descriptor() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -69,7 +56,6 @@ bool unarmed_close_releases_the_descriptor() {
     return ok;
 }
 
-// Case 1: a successful close consumes ownership on the first attempt.
 bool close_success_consumes_ownership() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -87,15 +73,14 @@ bool close_success_consumes_ownership() {
         ok = ok && script.calls() == 1;
         ok = ok && script.last_fd() == fd;
         ok = ok && !file.is_open();
-        ok = ok && file.close().has_value(); // a closed File closes as a no-op
-        ok = ok && script.calls() == 1;      // ...without a second native call
+        ok = ok && file.close().has_value();
+        ok = ok && script.calls() == 1;
     }
     ::close(fd); // the scripted close never reached the kernel
     ::unlink(path.c_str());
     return ok;
 }
 
-// Case 2: EINTR consumes ownership and is never retried.
 bool close_eintr_consumes_ownership_without_retry() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -113,8 +98,8 @@ bool close_eintr_consumes_ownership_without_retry() {
         ok = ok && !closed.has_value();
         ok = ok && closed.error().code == IoError::Code::interrupted;
         ok = ok && closed.error().os_errno == EINTR;
-        ok = ok && script.calls() == 1; // exactly one attempt: no retry loop
-        ok = ok && !file.is_open();     // ownership consumed despite the error
+        ok = ok && script.calls() == 1;
+        ok = ok && !file.is_open();
         ok = ok && file.close().has_value();
         ok = ok && script.calls() == 1;
     }
@@ -123,8 +108,6 @@ bool close_eintr_consumes_ownership_without_retry() {
     return ok;
 }
 
-// Case 3: another close error is observable from the explicit close, and the
-// File still stops owning the descriptor.
 bool close_error_is_observable_and_consumes_ownership() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -140,8 +123,6 @@ bool close_error_is_observable_and_consumes_ownership() {
         NativeScript script(kCloseCall, fd, {{-1, EIO}});
         auto closed = file.close();
         ok = ok && !closed.has_value();
-        // EIO has no canonical category in ERR-01, so it keeps backend_error
-        // plus the preserved native detail.
         ok = ok && closed.error().code == IoError::Code::backend_error;
         ok = ok && closed.error().os_errno == EIO;
         ok = ok && script.calls() == 1;
@@ -154,8 +135,6 @@ bool close_error_is_observable_and_consumes_ownership() {
     return ok;
 }
 
-// Case 4: destructor close failure is noexcept, makes exactly one attempt, and
-// has nowhere to report the error.
 bool destructor_close_failure_is_noexcept_single_attempt() {
     static_assert(std::is_nothrow_destructible_v<File>,
                   "destruction is deterministic cleanup and cannot throw");
@@ -173,7 +152,7 @@ bool destructor_close_failure_is_noexcept_single_attempt() {
         {
             File doomed = std::move(opened).value();
             (void)doomed;
-        } // destructor: one best-effort attempt, error discarded, no throw
+        }
         attempts = script.calls();
     }
     ::close(fd);
@@ -181,9 +160,6 @@ bool destructor_close_failure_is_noexcept_single_attempt() {
     return attempts == 1;
 }
 
-// Move assignment over an owned destination: the old resource gets exactly one
-// best-effort attempt whose error cannot be returned, and the source resource is
-// transferred without a second owner appearing.
 bool move_assignment_best_effort_closes_the_old_resource() {
     static_assert(std::is_nothrow_move_assignable_v<File>,
                   "move assignment is a noexcept resource transfer");
@@ -202,8 +178,6 @@ bool move_assignment_best_effort_closes_the_old_resource() {
 
     bool ok = fd_a != fd_b;
     {
-        // Only the destination's old descriptor is scripted; its best-effort
-        // close fails and the assignment must still complete.
         NativeScript script(kCloseCall, fd_a, {{-1, EIO}});
         dst = std::move(src);
         ok = ok && script.calls() == 1;
@@ -212,16 +186,15 @@ bool move_assignment_best_effort_closes_the_old_resource() {
     ok = ok && dst.native_handle() == fd_b;
     ok = ok && !src.is_open();
     ok = ok && descriptor_is_live(fd_b);
-    ok = ok && dst.close().has_value(); // the transferred resource is really owned
-    ::close(fd_a);                      // cleanup for the scripted close
+    ok = ok && dst.close().has_value();
+    ::close(fd_a); // the scripted close never reached the kernel
     ::unlink(path_a.c_str());
     ::unlink(path_b.c_str());
     return ok;
 }
 
-// The safety reason behind "no retry": once the first attempt consumed the
-// resource, the numeric descriptor may already belong to another owner, so a
-// second close of that number would close someone else's resource.
+// A retried close could close a descriptor number the kernel has already
+// handed to another owner.
 bool consumed_close_never_retries_a_reused_descriptor() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -240,12 +213,11 @@ bool consumed_close_never_retries_a_reused_descriptor() {
         ::close(fd); // stands in for the kernel having released the descriptor
         const int replacement = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
         ok = ok && replacement >= 0;
-        // Linux hands out the lowest free descriptor, so the number is genuinely
-        // reused here. Asserting it keeps the case from passing without ever
-        // creating the situation it names.
+        // Linux hands out the lowest free descriptor; asserting the reuse keeps
+        // this case from passing without ever creating it.
         ok = ok && replacement == fd;
-        ok = ok && file.close().has_value(); // no-op: the File owns nothing now
-        ok = ok && script.calls() == 1;      // the number was never closed again
+        ok = ok && file.close().has_value();
+        ok = ok && script.calls() == 1;
         ok = ok && descriptor_is_live(replacement);
         if (replacement >= 0)
             ::close(replacement);
@@ -254,7 +226,6 @@ bool consumed_close_never_retries_a_reused_descriptor() {
     return ok;
 }
 
-// A closed File is a rejection, not a native call.
 bool close_on_closed_file_is_not_a_native_call() {
     const std::string path = make_temp_path();
     if (path.empty())

@@ -41,9 +41,6 @@ class ThreadPoolBackend : public AsyncBackend {
     bool supports_request_identity() const noexcept override { return true; }
 
   private:
-    // AsyncBackend::submit_* stay private end-to-end: only AsyncIoContext may
-    // enter them, so the access-legality matrix cannot be bypassed by calling
-    // a backend directly.
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override;
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
@@ -250,8 +247,8 @@ class ThreadPoolBackend : public AsyncBackend {
         Result<void> validate(const Op& op) const noexcept { return self_.validate_op(op); }
         void write_scratch(detail::SlotHandle h, const Op& op) const noexcept {
             if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
-                // Zero-length ops never perform data I/O; normalize the offset
-                // so an unrepresentable offset cannot fail the lowering.
+                // Zero-length ops normalize the offset so an unrepresentable
+                // offset cannot fail the lowering.
                 const std::uint64_t off = op.len == 0 ? 0 : op.offset;
                 self_.prepared_ops_[h.slot.value] = PreparedBlockingOp{
                     kind_, op.file.fd, static_cast<const std::byte*>(borrow_of(op).address), op.len,
@@ -366,7 +363,7 @@ class ThreadPoolBackend : public AsyncBackend {
 #endif
 };
 
-} // namespace sluice::async
+}
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

@@ -1,15 +1,3 @@
-// SEM-03 validation precedence, frozen as a decision table and compared across
-// execution paths through the one shared oracle.
-//
-// The table states the required order, not the current code's order:
-//   1 closed -> invalid_state
-//   2 access -> invalid_argument
-//   3 logical no-op -> success 0 with no OS call
-//   4 range -> invalid_argument
-// The discriminating scenarios are the ones where two steps disagree
-// (closed + zero length, illegal access + zero length, illegal access +
-// impossible offset, zero length + impossible offset). A path that checks the
-// steps in another order fails exactly one of them.
 #include "semantic_path_probes.hpp"
 #include "semantic_scenarios.hpp"
 
@@ -21,7 +9,7 @@ namespace {
 
 using sluice_semantic::Input;
 
-} // namespace
+}
 
 int main() {
     if (sluice_semantic::check_oracle_against_table(
@@ -38,8 +26,6 @@ int main() {
         return 1;
     }
 
-    // Direct execution: every scenario is expressible, because the table states
-    // only what SEM-03 fixes and nothing in it needs a nonexistent buffer.
     std::size_t direct_skipped = 0;
     std::vector<const char*> direct_divergences;
     for (std::size_t i = 0; i < sluice_semantic::kPrecedenceScenarioCount; ++i) {
@@ -58,12 +44,8 @@ int main() {
         return 1;
     }
 
-    // ThreadPool request execution. A request that reaches the logical-no-op
-    // verdict is accepted but still dispatches a zero-length data syscall, which
-    // SEM-03 forbids; both zero-length scenarios are therefore recorded
-    // divergences (see docs/roadmap/v1-conformance.md, ERR/SEM A1 gap row). The
-    // recorded set is asserted exactly, so the test fails once the gap closes
-    // and must then be updated together with the ledger.
+    // The MISMATCH lines this section prints for the two zero-length scenarios
+    // are expected and asserted explicitly.
     sluice_semantic::RequestProbe threadpool(
         std::make_unique<sluice::async::ThreadPoolBackend>(
             sluice::async::ThreadPoolConfig{8, 2}));

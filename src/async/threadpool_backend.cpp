@@ -30,8 +30,7 @@ namespace {
     std::terminate();
 }
 
-} // namespace
-
+}
 void ThreadPoolBackend::BoundedDispatchQueue::push_back(detail::SlotHandle h) noexcept {
     if (size_ >= capacity_) {
         threadpool_dispatch_queue_invariant_fail_fast();
@@ -131,10 +130,6 @@ ThreadPoolBackend::~ThreadPoolBackend() {
     }
 }
 
-// This raw-pointer surface fails fast on a null buffer with a nonzero length
-// as its own implementation precondition: SEM-03 treats caller memory validity
-// as not dynamically detectable, so the shared oracle does not answer buffer
-// presence. `execute` implies a nonzero length.
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
     const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
         {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});
@@ -723,4 +718,4 @@ void ThreadPoolBackend::set_injected_worker_spawn_failure_index(std::size_t inde
 }
 #endif
 
-} // namespace sluice::async
+}
