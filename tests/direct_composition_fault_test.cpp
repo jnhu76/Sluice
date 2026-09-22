@@ -249,6 +249,56 @@ bool primitive_retries_eintr_without_a_completed_count() {
     return ok;
 }
 
+bool primitive_short_write_returns_without_retry_to_full() {
+    std::string path;
+    std::optional<File> file_holder = opened_with_content("", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+    const std::vector<std::byte> src(5, std::byte{0x41});
+
+    bool ok = true;
+    {
+        // A primitive that retried the remainder would consume the second step
+        // and report the full count instead.
+        NativeScript script(kTransferCalls, fd, {{2, 0}, {3, 0}});
+        auto written = sluice::blocking::write_at(file, 0, src);
+        ok = ok && written.has_value() && written.value() == 2;
+        ok = ok && script.calls() == 1;
+        ok = ok && script.last_call().buffer == src.data();
+        ok = ok && script.last_call().count == src.size();
+        ok = ok && script.last_call().offset == 0;
+    }
+    ::unlink(path.c_str());
+    return ok;
+}
+
+bool primitive_write_retries_eintr_then_stops_at_the_first_count() {
+    std::string path;
+    std::optional<File> file_holder = opened_with_content("", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+    const std::vector<std::byte> src(5, std::byte{0x41});
+
+    bool ok = true;
+    {
+        // The third step stays unconsumed: only the interrupted attempt, which
+        // has no byte count to replay, is repeated.
+        NativeScript script(kTransferCalls, fd, {{-1, EINTR}, {2, 0}, {3, 0}});
+        auto written = sluice::blocking::write_at(file, 0, src);
+        ok = ok && written.has_value() && written.value() == 2;
+        ok = ok && script.calls() == 2;
+        ok = ok && script.last_call().buffer == src.data();
+        ok = ok && script.last_call().count == src.size();
+        ok = ok && script.last_call().offset == 0;
+    }
+    ::unlink(path.c_str());
+    return ok;
+}
+
 // The script is armed to fail every intercepted call, so zero intercepted calls
 // is the no-OS-call evidence.
 bool zero_length_requests_make_no_native_call() {
@@ -608,6 +658,10 @@ int main() {
          error_after_confirmed_prefix_keeps_the_prefix},
         {"primitive_retries_eintr_without_a_completed_count",
          primitive_retries_eintr_without_a_completed_count},
+        {"primitive_short_write_returns_without_retry_to_full",
+         primitive_short_write_returns_without_retry_to_full},
+        {"primitive_write_retries_eintr_then_stops_at_the_first_count",
+         primitive_write_retries_eintr_then_stops_at_the_first_count},
         {"zero_length_requests_make_no_native_call", zero_length_requests_make_no_native_call},
         {"impossible_count_stops_immediately", impossible_count_stops_immediately},
         {"a_primitive_error_reports_an_unaccounted_remainder_in_both_directions",

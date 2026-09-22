@@ -222,7 +222,7 @@ bool write_result_reports_bytes_written() {
     return file.close().has_value();
 }
 
-bool write_primitive_has_no_retry_loop() {
+bool write_primitive_result_does_not_exceed_request() {
     const std::string path = make_temp_file("abc");
     if (path.empty())
         return false;
@@ -238,7 +238,6 @@ bool write_primitive_has_no_retry_loop() {
 
     if (!result.has_value())
         return false;
-    // Primitive contract: at most the requested size, no guarantee of full.
     if (result.value() > src_str.size())
         return false;
     return file.close().has_value();
@@ -280,7 +279,8 @@ int main() {
         {"write_after_close_reports_invalid_state", write_after_close_reports_invalid_state},
         {"write_with_read_only_access_fails", write_with_read_only_access_fails},
         {"write_result_reports_bytes_written", write_result_reports_bytes_written},
-        {"write_primitive_has_no_retry_loop", write_primitive_has_no_retry_loop},
+        {"write_primitive_result_does_not_exceed_request",
+         write_primitive_result_does_not_exceed_request},
         {"write_with_illegal_offset_reports_invalid_argument",
          write_with_illegal_offset_reports_invalid_argument},
     };
