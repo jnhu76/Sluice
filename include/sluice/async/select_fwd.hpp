@@ -22,4 +22,4 @@ template <class... Cases>
              (SelectCaseType<Cases> && ...))
 SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
-} // namespace sluice::async
+}

@@ -223,9 +223,6 @@ bool write_result_reports_bytes_written() {
 }
 
 bool write_primitive_has_no_retry_loop() {
-    // Structural evidence: write_at returns the raw pwrite result.
-    // Regular files on this platform typically return the full count,
-    // but the contract is 0 <= n <= input_size and a single syscall.
     const std::string path = make_temp_file("abc");
     if (path.empty())
         return false;

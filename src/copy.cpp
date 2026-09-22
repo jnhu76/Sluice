@@ -173,4 +173,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer) {
     return copy_all(reader, writer, CopyLimit::unlimited());
 }
 
-} // namespace sluice
+}

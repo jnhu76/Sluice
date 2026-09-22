@@ -10,7 +10,7 @@ namespace sluice::async {
 
 class AsyncRwLock;
 struct RwWaitCtx;
-} // namespace sluice::async
+}
 
 namespace sluice::async {
 
@@ -543,6 +543,6 @@ struct Scheduler::AsyncTestAccess {
                                               deadline_t deadline, bool& released);
 };
 
-} // namespace sluice::async
+}
 
 #endif

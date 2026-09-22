@@ -53,4 +53,4 @@ run_pipelined_copy_with_backend(const sluice::File& src_file,
                                 std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
                                 std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-} // namespace sluice_copy
+}

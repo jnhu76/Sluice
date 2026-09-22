@@ -19,4 +19,4 @@ class SLUICE_SCOPED_CAPABILITY LockGuard {
     Mutex& mu_;
 };
 
-} // namespace sluice::async
+}

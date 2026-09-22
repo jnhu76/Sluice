@@ -134,7 +134,7 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs, std::size_t
     return std::move(result.value());
 }
 
-} // namespace
+}
 
 std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size,
                                  unsigned workers) {
@@ -148,4 +148,4 @@ hash_files_with_backend(std::vector<HashInput> inputs, std::size_t buffer_size, 
     return run_hash_engine(std::move(inputs), buffer_size, workers, std::move(backend));
 }
 
-} // namespace sluice_hash
+}

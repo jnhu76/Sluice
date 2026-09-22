@@ -21,7 +21,7 @@ std::size_t read_chunk_size(std::size_t remaining) noexcept {
     return std::min(remaining, kReadChunkBytes);
 }
 
-} // namespace detail
+}
 
 namespace {
 
@@ -47,7 +47,7 @@ std::uint32_t checksum_of(std::span<const std::byte> payload) {
     return static_cast<std::uint32_t>(sum & 0xFFFFFFFFU);
 }
 
-} // namespace
+}
 
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload) {
     auto len_res = detail::checked_u32_len(payload.size());
@@ -203,4 +203,4 @@ Result<void> WalWriter::sync() {
     return {};
 }
 
-} // namespace sluice::wal
+}

@@ -127,4 +127,4 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
 #endif
 }
 
-} // namespace sluice::experimental
+}

@@ -26,7 +26,7 @@ bool parse_unsigned_decimal(const char* s, std::size_t& out) {
     return true;
 }
 
-} // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -157,4 +157,4 @@ const char* code_name(sluice::IoError::Code c) {
     }
 }
 
-} // namespace sluice_copy::cli
+}

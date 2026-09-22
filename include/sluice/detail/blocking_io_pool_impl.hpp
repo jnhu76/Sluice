@@ -156,4 +156,4 @@ template <class F> inline Result<Task<std::invoke_result_t<F&&>>> BlockingIoPool
     return Task<R>(st);
 }
 
-} // namespace sluice
+}

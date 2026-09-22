@@ -9,7 +9,7 @@ namespace {
 
 constexpr std::uint64_t kPendingBit = 1;
 constexpr std::uint64_t kEpochInc = 2;
-} // namespace
+}
 
 void CancelToken::request() noexcept {
     auto cur = state_.load(std::memory_order::relaxed);
@@ -85,4 +85,4 @@ Result<void> check_cancel(const CancelToken& token, CancelState& state) noexcept
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
-} // namespace sluice::async
+}

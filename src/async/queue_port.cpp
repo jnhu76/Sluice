@@ -360,4 +360,4 @@ QueueTeardownSession::~QueueTeardownSession() noexcept {
     }
 }
 
-} // namespace sluice::async::detail
+}

@@ -33,14 +33,14 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
     fiber_ctx::context_switch_final(fiber->ctx, g_worker->sched_ctx);
 }
 
-} // namespace
+}
 
 namespace {
 std::uint64_t next_scheduler_identity() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     return ++counter;
 }
-} // namespace
+}
 
 Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
     : ctx_(ctx), wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity),
@@ -1110,7 +1110,7 @@ struct ForgedRwWaitCtx {
     enum class Mode : std::uint8_t { read, write };
     Mode mode;
 };
-} // namespace
+}
 void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_head_mode(Scheduler& s,
                                                                       AsyncRwLock& rw) {
     struct BadCtx {
@@ -1336,7 +1336,7 @@ namespace detail {
 void set_evented_admission_override_impl(bool supported) noexcept;
 void clear_evented_admission_override_impl() noexcept;
 bool get_evented_admission_override_impl() noexcept;
-} // namespace detail
+}
 
 void Scheduler::AsyncTestAccess::set_evented_admission_override(bool supported) noexcept {
     detail::set_evented_admission_override_impl(supported);
@@ -1347,4 +1347,4 @@ bool Scheduler::AsyncTestAccess::evented_admission_override() noexcept {
 }
 #endif
 
-} // namespace sluice::async
+}

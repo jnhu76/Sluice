@@ -27,7 +27,7 @@ bool block_signals() {
     return ::pthread_sigmask(SIG_BLOCK, &set, nullptr) == 0;
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     if (!block_signals()) {

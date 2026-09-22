@@ -330,7 +330,7 @@ bool file_access_query_reports_open_mode() {
     return closed;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

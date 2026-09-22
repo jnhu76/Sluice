@@ -35,4 +35,4 @@ class ReferenceReadySink final : public SynchronousReadySink {
 #endif
 };
 
-} // namespace sluice::async::detail
+}

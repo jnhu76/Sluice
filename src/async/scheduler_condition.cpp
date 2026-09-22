@@ -173,4 +173,4 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     return true;
 }
 
-} // namespace sluice::async
+}

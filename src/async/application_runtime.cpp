@@ -617,4 +617,4 @@ void ApplicationRuntime::test_inject_next_submit_throw() {
 }
 #endif
 
-} // namespace sluice::async
+}

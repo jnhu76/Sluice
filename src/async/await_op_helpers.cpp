@@ -91,4 +91,4 @@ Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, const NativeFileR
     return written;
 }
 
-} // namespace sluice::async
+}

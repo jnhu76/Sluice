@@ -292,7 +292,7 @@ inline void publish_max_(std::atomic<std::uint64_t>& a, std::uint64_t v) noexcep
            !a.compare_exchange_weak(cur, v, std::memory_order_release, std::memory_order_relaxed)) {
     }
 }
-} // namespace dequeue_gate_detail
+}
 
 inline void arm_dequeue_gate_generation(ThreadPoolBackend::BeforeWorkerDequeuePauseGate& gate,
                                         std::uint64_t generation) noexcept {
@@ -323,6 +323,6 @@ inline void wait_dequeue_gate_ack(ThreadPoolBackend::BeforeWorkerDequeuePauseGat
     }
 }
 
-} // namespace sluice::async
+}
 
 #endif

@@ -84,7 +84,6 @@ bool sequential_write_then_read_roundtrip() {
         return false;
     }
 
-    // The write advanced the shared offset to 5, so a sequential read is EOF.
     std::vector<std::byte> eof_dst(5);
     auto rd = read(file, eof_dst);
     if (!rd.has_value() || rd.value() != 0) {
@@ -92,7 +91,6 @@ bool sequential_write_then_read_roundtrip() {
         return false;
     }
 
-    // The written bytes are recoverable positionally at offset 0.
     std::vector<std::byte> dst(5);
     auto back = read_at(file, 0, dst);
 
@@ -274,10 +272,6 @@ bool sequential_write_advances_position() {
 }
 
 bool positional_operations_do_not_move_shared_position() {
-    // A positional write must not advance the shared offset: after write_at(100)
-    // on an empty file, a sequential write has to land at offset 0. A positional
-    // read must not move it either: the read_at probe below observes offset 0,
-    // and the sequential write right after it still has to land at offset 3.
     {
         const std::string path = make_temp_file("");
         if (path.empty())
@@ -350,9 +344,6 @@ bool positional_operations_do_not_move_shared_position() {
             return false;
     }
 
-    // A positional write must not move the shared offset either: after writing
-    // "abcdef" sequentially (position 6), write_at(0) leaves the position at 6,
-    // so the next sequential read is EOF at the 6-byte end of file.
     {
         const std::string path = make_temp_file("");
         if (path.empty())

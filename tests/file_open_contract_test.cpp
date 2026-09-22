@@ -129,7 +129,6 @@ bool run_case(const OpenCase& c) {
 }
 
 const OpenCase cases[] = {
-    // read_only + preserve
     {"read_only_preserve_open_existing", FileAccess::read_only, FileExistence::open_existing,
      FileInitialContents::preserve, true, true, false, true, "keep"},
     {"read_only_preserve_open_existing_missing", FileAccess::read_only,
@@ -144,7 +143,6 @@ const OpenCase cases[] = {
      FileInitialContents::preserve, true, false, false, true, "keep"},
     {"read_only_preserve_create_new_missing", FileAccess::read_only, FileExistence::create_new,
      FileInitialContents::preserve, false, true, false, true, ""},
-    // read_only + truncate: ILLEGAL for every existence, no destructive side effect
     {"read_only_truncate_open_existing", FileAccess::read_only, FileExistence::open_existing,
      FileInitialContents::truncate, true, false, true, true, "keep"},
     {"read_only_truncate_open_existing_missing", FileAccess::read_only,
@@ -159,7 +157,6 @@ const OpenCase cases[] = {
      FileInitialContents::truncate, true, false, true, true, "keep"},
     {"read_only_truncate_create_new_missing", FileAccess::read_only, FileExistence::create_new,
      FileInitialContents::truncate, false, false, true, false, ""},
-    // write_only + preserve
     {"write_only_preserve_open_existing", FileAccess::write_only, FileExistence::open_existing,
      FileInitialContents::preserve, true, true, false, true, "keep"},
     {"write_only_preserve_open_existing_missing", FileAccess::write_only,
@@ -174,7 +171,6 @@ const OpenCase cases[] = {
      FileInitialContents::preserve, true, false, false, true, "keep"},
     {"write_only_preserve_create_new_missing", FileAccess::write_only, FileExistence::create_new,
      FileInitialContents::preserve, false, true, false, true, ""},
-    // write_only + truncate
     {"write_only_truncate_open_existing", FileAccess::write_only, FileExistence::open_existing,
      FileInitialContents::truncate, true, true, false, true, ""},
     {"write_only_truncate_open_existing_missing", FileAccess::write_only,
@@ -188,7 +184,6 @@ const OpenCase cases[] = {
      FileInitialContents::truncate, true, false, false, true, "keep"},
     {"write_only_truncate_create_new_missing", FileAccess::write_only, FileExistence::create_new,
      FileInitialContents::truncate, false, true, false, true, ""},
-    // read_write + preserve
     {"read_write_preserve_open_existing", FileAccess::read_write, FileExistence::open_existing,
      FileInitialContents::preserve, true, true, false, true, "keep"},
     {"read_write_preserve_open_existing_missing", FileAccess::read_write,
@@ -203,7 +198,6 @@ const OpenCase cases[] = {
      FileInitialContents::preserve, true, false, false, true, "keep"},
     {"read_write_preserve_create_new_missing", FileAccess::read_write, FileExistence::create_new,
      FileInitialContents::preserve, false, true, false, true, ""},
-    // read_write + truncate
     {"read_write_truncate_open_existing", FileAccess::read_write, FileExistence::open_existing,
      FileInitialContents::truncate, true, true, false, true, ""},
     {"read_write_truncate_open_existing_missing", FileAccess::read_write,
@@ -219,7 +213,7 @@ const OpenCase cases[] = {
      FileInitialContents::truncate, false, true, false, true, ""},
 };
 
-} // namespace
+}
 
 int main() {
     for (const OpenCase& c : cases) {

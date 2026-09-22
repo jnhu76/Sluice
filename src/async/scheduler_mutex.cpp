@@ -196,4 +196,4 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
     owner = nullptr;
 }
 
-} // namespace sluice::async
+}

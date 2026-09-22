@@ -114,4 +114,4 @@ class FaultWriter final : public Writer {
     std::uint64_t bytes_seen_ = 0;
 };
 
-} // namespace sluice
+}

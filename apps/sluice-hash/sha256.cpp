@@ -19,7 +19,7 @@ constexpr std::uint32_t rotr(std::uint32_t x, unsigned n) noexcept {
     return (x >> n) | (x << (32 - n));
 }
 
-} // namespace
+}
 
 Sha256::Sha256() : total_bytes_{0}, buf_len_{0}, finalized_{false} {
     h_[0] = 0x6a09e667;
@@ -139,4 +139,4 @@ void sha256_hex(const std::uint8_t digest[32], char out[65]) {
     out[64] = '\0';
 }
 
-} // namespace sluice_hash
+}

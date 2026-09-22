@@ -446,4 +446,4 @@ bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
     return true;
 }
 
-} // namespace sluice::async
+}

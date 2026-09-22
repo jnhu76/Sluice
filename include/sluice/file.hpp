@@ -122,4 +122,4 @@ class FileWriter final : public Writer, public SyncableWriter {
     SyncStats* sync_stats_ = nullptr;
 };
 
-} // namespace sluice
+}

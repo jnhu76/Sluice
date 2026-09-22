@@ -25,4 +25,4 @@ AsyncBackend::request_handle_state(const RequestHandle& h) const noexcept {
     return resolve_identity_state(h.context_, h.slot_, h.generation_);
 }
 
-} // namespace sluice::async
+}

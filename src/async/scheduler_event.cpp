@@ -265,4 +265,4 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>&
     (void)fiber_ctx::context_switch(&s);
 }
 
-} // namespace sluice::async
+}

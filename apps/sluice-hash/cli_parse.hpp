@@ -23,4 +23,4 @@ bool parse_workers(const char* s, unsigned& out);
 
 int parse_args(int argc, char** argv, CliArgs& args);
 
-} // namespace sluice_hash::cli
+}

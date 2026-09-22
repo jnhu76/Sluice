@@ -40,4 +40,4 @@ class CopyLimit {
     std::uint64_t remaining_ = 0;
 };
 
-} // namespace sluice
+}

@@ -280,7 +280,7 @@ struct TailTask {
     }
 };
 
-} // namespace
+}
 
 struct TailEngine::Impl {
     explicit Impl(sluice::File f) : file(std::move(f)) {}
@@ -305,7 +305,7 @@ bool options_valid(const TailOptions& o) {
            o.poll_interval_ms >= kMinPollMs && o.poll_interval_ms <= kMaxPollMs;
 }
 
-} // namespace
+}
 
 TailEngine::TailEngine(sluice::File file, TailOptions options, LineSink sink, DiagSink diag)
     : impl_(std::make_unique<Impl>(std::move(file))) {
@@ -376,4 +376,4 @@ sluice::Result<TailResult> TailEngine::wait() {
     return std::move(out);
 }
 
-} // namespace sluice_tail
+}

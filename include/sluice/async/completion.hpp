@@ -26,7 +26,7 @@ inline std::uint64_t next_reap_seq() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     return ++counter;
 }
-} // namespace detail
+}
 
 template <class T> class Completion {
     friend class Batch;
@@ -358,4 +358,4 @@ template <> class Completion<void> {
     detail::SlotHandle bound_slot_{};
 };
 
-} // namespace sluice::async
+}

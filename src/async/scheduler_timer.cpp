@@ -398,4 +398,4 @@ void Scheduler::heap_sift_down_locked(std::size_t i) {
     }
 }
 
-} // namespace sluice::async
+}

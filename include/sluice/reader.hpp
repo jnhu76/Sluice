@@ -33,4 +33,4 @@ class Reader {
     Result<void> read_vec_all(std::span<IoSlice> dsts);
 };
 
-} // namespace sluice
+}

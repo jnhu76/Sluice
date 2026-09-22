@@ -377,7 +377,7 @@ bool await_read_on_write_only_file_rejected_upfront() {
     return file.close().has_value();
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

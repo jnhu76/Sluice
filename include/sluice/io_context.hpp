@@ -41,4 +41,4 @@ class BlockingIoContext final : public IoContext {
                                                 OpenWriterOptions options = {}) override;
 };
 
-} // namespace sluice
+}

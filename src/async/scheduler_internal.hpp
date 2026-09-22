@@ -29,6 +29,6 @@ struct SchedulerWakeHandle::Control {
 #endif
 };
 
-} // namespace sluice::async
+}
 
 #endif

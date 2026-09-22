@@ -80,4 +80,4 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void uring_non_quiescent_destruction_fail_fast() noexcept;
 
-} // namespace sluice::async::detail
+}

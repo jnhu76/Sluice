@@ -30,4 +30,4 @@ struct RequestKey {
     friend bool operator==(const RequestKey&, const RequestKey&) noexcept = default;
 };
 
-} // namespace sluice::async::detail
+}

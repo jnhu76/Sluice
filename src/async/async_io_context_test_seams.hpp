@@ -28,6 +28,6 @@ inline void AsyncIoContext::resume_wait_source_progress_gate_for_test(
     gate.resume.notify_all();
 }
 
-} // namespace sluice::async
+}
 
 #endif

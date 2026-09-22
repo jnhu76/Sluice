@@ -7,4 +7,4 @@ WaitPolicy& default_wait_policy() noexcept {
     return *p;
 }
 
-} // namespace sluice::async
+}

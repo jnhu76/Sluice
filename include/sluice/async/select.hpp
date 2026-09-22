@@ -122,7 +122,7 @@ class SelectCaseDescriptor {
     select_deadline_t deadline_{0};
 };
 
-} // namespace detail
+}
 
 template <class... Cases>
     requires(sizeof...(Cases) >= 1 && sizeof...(Cases) <= kSelectMaxArms &&
@@ -133,4 +133,4 @@ SelectResult select(Scheduler& scheduler, Cases&&... cases) {
     return scheduler.select_admit(descs.data(), sizeof...(Cases));
 }
 
-} // namespace sluice::async
+}

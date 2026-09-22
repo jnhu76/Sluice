@@ -224,7 +224,7 @@ bool tail_engine_follow_detects_truncation() {
     return saw_reborn;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

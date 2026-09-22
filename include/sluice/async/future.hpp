@@ -67,4 +67,4 @@ template <class T> class Future {
     CancelToken token_;
 };
 
-} // namespace sluice::async
+}

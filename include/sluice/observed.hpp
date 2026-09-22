@@ -63,4 +63,4 @@ class ObservedWriter final : public Writer {
     VectorStats* vec_stats_;
 };
 
-} // namespace sluice
+}

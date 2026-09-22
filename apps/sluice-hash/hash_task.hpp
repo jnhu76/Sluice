@@ -38,4 +38,4 @@ std::vector<FileHash> hash_files_with_backend(std::vector<HashInput> inputs,
                                               std::size_t buffer_size, unsigned workers,
                                               std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-} // namespace sluice_hash
+}

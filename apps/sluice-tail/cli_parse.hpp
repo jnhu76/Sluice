@@ -27,4 +27,4 @@ bool parse_poll_ms(const char* s, unsigned& out);
 
 int parse_args(int argc, char** argv, CliArgs& args);
 
-} // namespace sluice_tail::cli
+}

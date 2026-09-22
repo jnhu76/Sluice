@@ -18,7 +18,7 @@ using sluice_grep::GrepInput;
 using sluice_grep::cli::CliArgs;
 using sluice_grep::cli::parse_args;
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     CliArgs args;

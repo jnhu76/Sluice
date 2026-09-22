@@ -307,6 +307,6 @@ bool Scheduler::AsyncTestAccess::condition_wait_deferred_core_(
     }
 }
 
-} // namespace sluice::async
+}
 
 #endif

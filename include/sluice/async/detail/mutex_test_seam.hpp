@@ -19,8 +19,8 @@ void arm_next_try_lock_fail() noexcept;
 
 void disarm() noexcept;
 
-} // namespace test_hooks
+}
 
 #endif
 
-} // namespace sluice::async::detail
+}

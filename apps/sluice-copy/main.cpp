@@ -40,7 +40,7 @@ void print_copy_result(const char* prog, const Result<CopyStats>& result) {
                  e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "");
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     CliArgs args;

@@ -898,4 +898,4 @@ void Scheduler::attach_ready_wake(const std::atomic<bool>& ready, SchedulerWakeH
     }
 }
 
-} // namespace sluice::async
+}

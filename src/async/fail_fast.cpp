@@ -178,4 +178,4 @@ bool evented_admission_check() noexcept {
 }
 #endif
 
-} // namespace sluice::async::detail
+}

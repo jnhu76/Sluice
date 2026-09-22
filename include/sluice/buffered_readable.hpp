@@ -16,4 +16,4 @@ class BufferedReadable {
     virtual Result<void> consume_buffered(std::size_t n) = 0;
 };
 
-} // namespace sluice
+}

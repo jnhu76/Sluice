@@ -23,7 +23,7 @@ using sluice::async::UringConfig;
 static_assert(std::is_constructible_v<UringAsyncBackend, UringConfig>,
               "consumer TU must see the guarded public class definition");
 
-} // namespace
+}
 
 int main() {
     {

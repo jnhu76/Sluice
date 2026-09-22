@@ -726,4 +726,4 @@ class RequestArena {
     std::size_t ready_count_ = 0;
 };
 
-} // namespace sluice::async::detail
+}

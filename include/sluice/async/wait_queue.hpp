@@ -116,4 +116,4 @@ class WaitQueue {
     WaitNode* tail_ SLUICE_GUARDED_BY(mtx_){nullptr};
 };
 
-} // namespace sluice::async
+}

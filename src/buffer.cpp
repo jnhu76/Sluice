@@ -185,4 +185,4 @@ Result<void> BufferedWriter::flush() {
     return inner_.flush();
 }
 
-} // namespace sluice
+}

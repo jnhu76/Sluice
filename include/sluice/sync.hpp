@@ -13,4 +13,4 @@ class SyncableWriter {
     virtual Result<void> sync_all() = 0;
 };
 
-} // namespace sluice
+}
