@@ -60,6 +60,30 @@ class RejectTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0][1], "requirement-id")
 
+    def test_comment_after_custom_delimited_raw_string_is_scanned(self):
+        source = ('const char* j = R"json({"a":1})json";\n'
+                  "// SEM-01 marker\n")
+        findings = checker.scan_source(source)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0][1], "requirement-id")
+
+    def test_comment_after_unterminated_apostrophe_in_preprocessor_is_scanned(self):
+        source = "#error can't compile\n// SEM-01 marker\n// ERR-02 marker\n"
+        findings = checker.scan_source(source)
+        self.assertEqual([f[0] for f in findings], [2, 3])
+
+    def test_comment_after_unbalanced_quote_in_disabled_block_is_scanned(self):
+        source = '#if 0\n  odd " quote prose\n#endif\n// SEM-01 marker\n'
+        findings = checker.scan_source(source)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0][1], "requirement-id")
+
+    def test_comment_after_continued_string_literal_is_scanned(self):
+        source = 'const char* s = "first \\\nsecond"; // SEM-01 marker\n'
+        findings = checker.scan_source(source)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0][1], "requirement-id")
+
 
 class AcceptTests(unittest.TestCase):
     def assert_clean(self, source):

@@ -9,8 +9,9 @@ compression, and locally false but regex-clean comments.
 There are no comment-count thresholds. Adding comments is never flagged by
 itself; only the high-confidence patterns below are.
 
-Excluded paths are build or generated outputs only (.git, build, .xmake,
-.lake, node_modules); no maintained source directory is excluded.
+Scanned extensions: .h .hpp .hh .c .cpp .cc. Excluded paths are build or
+generated outputs only (.git, build, .xmake, .lake, node_modules); no
+maintained source directory is excluded.
 """
 
 import argparse
@@ -79,6 +80,7 @@ def comments(text):
             # C++14 digit separator (1'000), not a character literal
             i += 1
         elif c == '"' or c == "'":
+            line0, closed = line, False
             j = i + 1
             while j < n:
                 if text[j] == "\\" and j + 1 < n:
@@ -86,23 +88,30 @@ def comments(text):
                         line += 1
                     j += 2
                 elif text[j] == "\n":
-                    line += 1
-                    j += 1
+                    break
                 elif text[j] == c:
                     j += 1
+                    closed = True
                     break
                 else:
                     j += 1
-            i = j
+            if closed:
+                i = j
+            else:
+                # Not a literal (e.g. an apostrophe in preprocessor prose):
+                # treat the quote as plain text instead of skipping to EOF.
+                line = line0
+                i += 1
         elif c == "R" and i + 1 < n and text[i + 1] == '"':
             delim_end = text.find("(", i + 2)
-            closer = ')"'
+            delim = text[i + 2:delim_end] if delim_end != -1 else ""
+            closer = ")" + delim + '"'
             j = delim_end + 1 if delim_end != -1 else i + 2
-            while j < n and text[j:j + 2] != closer:
+            while j < n and not text.startswith(closer, j):
                 if text[j] == "\n":
                     line += 1
                 j += 1
-            i = j + 2 if j < n else n
+            i = j + len(closer) if j < n else n
         else:
             i += 1
 
