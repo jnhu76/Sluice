@@ -32,6 +32,37 @@ sluice_one_file_target("binary", "test", "semantic_reference_case_test", "tests"
 sluice_one_file_target("binary", "test", "semantic_validation_precedence_test", "tests",
                        {"sluice_core", "sluice_async"})
 
+-- A2 direct closure: canonical File close/RAII semantics, minimal metadata and
+-- identity, the direct cursor/positional distinction, and the exact/all
+-- composition surfaces. `direct_w01_consumer_probe` is the core-only consumer:
+-- it links `sluice_core` alone, so it proves the W-01 trace needs no async
+-- runtime and no liburing.
+sluice_one_file_target("binary", "test", "file_info_identity_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "direct_cursor_position_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "direct_composition_test", "tests", "sluice_core")
+sluice_one_file_target("binary", "test", "direct_w01_consumer_probe", "tests", "sluice_core")
+
+-- Fault-injection targets: the canonical direct TUs compiled with the test-only
+-- native-call seam (SLUICE_FILE_INTERNAL_TESTING). Each target compiles its own
+-- copy of those TUs and links no other core object, so the seam build and the
+-- production build never meet in one binary.
+do
+    local function direct_seam_target(name, test_source)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_includedirs(R .. "include", R .. "src")
+            add_defines("SLUICE_FILE_INTERNAL_TESTING")
+            add_files(test_source, R .. "src/file_resource.cpp", R .. "src/blocking_file.cpp")
+            add_tests(name)
+    end
+
+    direct_seam_target("file_close_semantics_test", R .. "tests/file_close_semantics_test.cpp")
+    direct_seam_target("direct_composition_fault_test",
+                       R .. "tests/direct_composition_fault_test.cpp")
+end
+
 -- Real io_uring verification: registered only when the liburing build switch
 -- is on. Both targets consume sluice_async as ordinary consumers: the macro
 -- and the liburing link arrive through sluice_async's public usage

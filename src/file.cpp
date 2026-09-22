@@ -54,8 +54,9 @@ int iovcnt_clamped(std::size_t chunk) {
 
 int close_fd(int fd) {
 #ifdef SLUICE_FILE_INTERNAL_TESTING
-    if (file_testing::CloseScript* script = file_testing::CloseScript::active()) {
-        return script->next(fd);
+    if (file_testing::NativeScript* script = file_testing::NativeScript::active();
+        script != nullptr && script->intercepts(file_testing::NativeCall::close, fd)) {
+        return static_cast<int>(script->next(file_testing::NativeCall::close, fd));
     }
 #endif
     return ::close(fd);
