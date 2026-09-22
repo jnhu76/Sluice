@@ -161,3 +161,32 @@ do
             add_tests("app_copy_consumption_test")
     end
 end
+
+-- RequestCore substrate tests: each target compiles the substrate TU directly
+-- and links only sluice_core, so the protocol suite never links the async
+-- runtime, backends or liburing. The protocol/publication targets enable the
+-- internal-testing observation seam; the consumer probe consumes the public
+-- surface only, proving the substrate stands alone without Scheduler, Fiber,
+-- waiter/routing vocabulary or a production backend.
+do
+    local function request_core_target(name, test_source, with_seam)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include")
+            if with_seam then
+                add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            end
+            add_files(test_source, R .. "src/async/detail/request_core.cpp")
+            add_tests(name)
+    end
+
+    request_core_target("request_core_protocol_test",
+                        R .. "tests/request_core_protocol_test.cpp", true)
+    request_core_target("request_core_publication_test",
+                        R .. "tests/request_core_publication_test.cpp", true)
+    request_core_target("request_core_consumer_probe",
+                        R .. "tests/request_core_consumer_probe.cpp", false)
+end
