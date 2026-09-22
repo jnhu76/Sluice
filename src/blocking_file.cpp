@@ -22,9 +22,7 @@ namespace {
 using detail::DataOpVerdict;
 using detail::FileOperation;
 
-// Precedence steps 1-4 are the shared oracle's decision (SEM-03); this adapter
-// only turns the verdict into its own return shape. `execute` and
-// `complete_empty` are the two non-rejection verdicts.
+// The shared oracle decides; this adapter only reshapes the verdict.
 struct Precheck {
     std::optional<IoError> rejection;
     bool complete_empty = false;
@@ -34,19 +32,17 @@ Precheck precheck(const File& file, FileOperation operation, std::uint64_t offse
                   std::size_t length, const std::byte* buffer) {
     const DataOpVerdict verdict = detail::precheck_data_op(detail::DataOpRequest{
         !file.is_open(), file.access(), operation, offset, length});
-    // Implementation precondition of this raw-pointer surface, deliberately not
-    // a shared rule: SEM-03 treats caller memory validity as not dynamically
-    // detectable, so the oracle does not answer buffer presence. This surface
-    // fails fast instead of handing a null pointer with a nonzero length to the
-    // kernel. `execute` implies a nonzero length.
+    // Own implementation precondition, not a shared rule: caller memory
+    // validity is not dynamically detectable, so a null buffer with a nonzero
+    // length fails fast here. `execute` implies a nonzero length.
     if (verdict == DataOpVerdict::execute && buffer == nullptr)
         return Precheck{IoError{.code = IoError::Code::invalid_argument}, false};
     return Precheck{detail::rejection_of(verdict), verdict == DataOpVerdict::complete_empty};
 }
 
 #ifdef SLUICE_FILE_INTERNAL_TESTING
-// Test-only: the primitive fault seam sits exactly at the native-call boundary,
-// so a scripted outcome drives the same primitive and composition code the
+// Test-only: the fault seam sits exactly at the native-call boundary, so a
+// scripted outcome drives the same primitive and composition code the
 // production build runs. A call outside the armed script's family passes
 // through. The operands are recorded so a test can pin the buffer and offset a
 // composition passed to the native call.
@@ -210,23 +206,17 @@ Result<FileInfo> file_info(const File& file) {
     }
 
     FileInfo info;
-    // SEM-07: `regular` is the supported data-I/O kind, and every other native
-    // kind is reported as `other` without an ordinary-file promise. The kind set
-    // is a v1 decision, not a stat-mode mirror.
     info.kind = S_ISREG(st.st_mode) ? FileKind::regular : FileKind::other;
     info.size = static_cast<std::uint64_t>(st.st_size);
     // Linux supplies device/inode here unconditionally; the type still carries
-    // the explicit unavailable outcome, which is what keeps the public contract
-    // from depending on that.
+    // the explicit unavailable outcome.
     info.identity = FileIdentity{static_cast<std::uint64_t>(st.st_dev),
                                  static_cast<std::uint64_t>(st.st_ino)};
     return info;
 }
 
-// The size projection of one metadata observation: `size` owns no second
-// metadata rule, so a call reports the length its own observation saw. Separate
-// calls are not a transaction against concurrent external mutation (SEM-07), so
-// two of them may observe different lengths.
+// The projection of one `file_info` observation; separate calls are not a
+// transaction, so two of them may observe different lengths.
 Result<std::uint64_t> size(const File& file) {
     auto info = file_info(file);
     if (!info.has_value()) {
@@ -269,32 +259,25 @@ Result<void> sync_all(const File& file) {
     return {};
 }
 
-// ─── Exact/all composition (SEM-05, ERR-02) ────────────────────────────────
+// ─── Exact/all composition ─────────────────────────────────────────────────
 
 namespace {
 
 using detail::CompositionKind;
 using detail::CompositionState;
 
-// The shared rule answers with its own vocabulary; this is the whole of the
-// adapter's contribution to effect certainty, so no certainty decision lives
-// here.
+// The shared rule decides; this adapter only republishes its answer.
 constexpr EffectCertainty publish_certainty(detail::EffectCertainty certainty) noexcept {
     return certainty == detail::EffectCertainty::accounted ? EffectCertainty::accounted
                                                            : EffectCertainty::unknown;
 }
 
-// Maps the shared composition state onto this adapter's public outcome. The
-// state is the authority for a stop; this function only chooses the public
-// representation of it, so the direct path consumes the one composition rule
-// instead of restating it. `impossible_count` cannot arise from a primitive that
-// honors its own contract (0 <= n <= requested); it is routed through the
-// reference error rule rather than given public vocabulary of its own. A
-// primitive rejection observed after the composition started travels the same
-// path: it is reported as a primitive error with its own category preserved, not
-// as a fresh semantic rejection. Effect certainty is not re-derived here either:
-// `detail::composition_effect_certainty` decides it and this mapping publishes
-// the answer.
+// Maps the shared composition state onto this adapter's public outcome; the
+// state is the authority and this only chooses the representation.
+// `impossible_count` cannot arise from a primitive honoring its own contract
+// (0 <= n <= requested), so it is published as a primitive error with the
+// shared rule's `invalid_state`, like any other rejection observed after the
+// composition started.
 CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     CompositionOutcome outcome;
     outcome.confirmed_bytes = state.confirmed_bytes;
@@ -321,13 +304,10 @@ CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
     return outcome;
 }
 
-// The one exact/all loop. `primitive(confirmed)` performs a single primitive
-// step at the confirmed prefix, so the positional and shared-cursor forms differ
-// only in which primitive they name. Every path terminates without re-entering
-// the primitive: a full transfer, a zero-transfer step (EOF for read_exact, no
-// progress for write_all), a primitive error, or a count above the remaining
-// request. `stopped` in the shared state means "stopped short", so reaching the
-// requested total is the loop's own exit condition.
+// The one exact/all loop: each step runs a single primitive at the confirmed
+// prefix, and the loop exits on full transfer, a zero-transfer step (EOF for
+// read_exact, no progress for write_all), a primitive error, or a count above
+// the remaining request.
 //
 // `confirmed` never exceeds the validated request, so an advanced offset stays
 // inside the range the precheck accepted and the arithmetic cannot overflow.

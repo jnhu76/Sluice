@@ -67,8 +67,7 @@ template <class T> class TaskResultSlot {
 };
 
 // A task exception reaching the host boundary becomes a terminal error through
-// the same canonical mapping as a native failure, so an ENOENT raised as a
-// std::system_error is not_found here too instead of backend_error.
+// the same canonical mapping as a native failure.
 template <class T> Result<T> translate_task_exception() noexcept {
     try {
         throw;

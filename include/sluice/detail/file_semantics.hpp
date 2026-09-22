@@ -1,26 +1,12 @@
 #pragma once
 
-// Shared File semantic oracle: the single authority for the v1 File rules that
-// direct execution, ThreadPool and io_uring must all obey. The validation rules
-// (open legality, access matrix, precedence, range) and the error mapping are
-// called by every execution path, so one code change moves them together. The
-// composition, effect and durability rules are the reference model those paths
-// are required to conform to; the paths that must publish them are named in the
-// conformance ledger and not all of them consume the rules yet.
-//
-// This header is a pure decision surface. It may answer only:
-//   - is this logical operation legal?
-//   - which semantic result/error category follows?
-//   - what effect information must be representable?
-//   - which durability relation is allowed?
-// It must never answer which backend/worker/ring/request slot/observer runs the
-// operation, when to poll, or whether capacity exists, and it owns no File,
-// backend, context, request, buffer or thread. A logical layer is an authority
-// boundary, not a requirement for another class or vtable.
-//
-// Platform-lowering detail stays with the platform: this header decides that a
-// combination is legal, while `src/file_resource.cpp` owns the POSIX flag
-// spelling of that decision.
+// Shared File decision rules called by every execution path: open legality,
+// the access matrix, validation precedence, range checks, the native error
+// mapping, and the composition/effect/durability reference rules. This is a
+// pure decision surface — it answers whether an operation is legal and which
+// result follows, never which backend, worker, ring or slot runs it, and it
+// owns no File, buffer or thread. Platform lowering (POSIX flag spelling)
+// stays with the platform code.
 
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
@@ -36,7 +22,7 @@
 
 namespace sluice::detail {
 
-// ─── Range and offset (SEM-04) ──────────────────────────────────────────────
+// ─── Range and offset ───────────────────────────────────────────────────────
 
 static_assert(std::numeric_limits<off_t>::is_integer && std::numeric_limits<off_t>::is_signed,
               "sluice positional I/O requires a signed integral off_t");
@@ -49,15 +35,15 @@ static_assert(std::numeric_limits<ssize_t>::is_integer && std::numeric_limits<ss
 inline constexpr std::uint64_t kMaxNativeOffset =
     static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
 
-// Largest transfer a single positional or shared-cursor call may request.
-// A larger count is not representable in the native interface, so it is an
-// invalid range rather than a limit of any particular execution.
+// Largest transfer a single positional or shared-cursor call may request: a
+// larger count is not natively representable, so it is an invalid range rather
+// than a limit of any particular execution.
 inline constexpr std::size_t kMaxNativeTransfer =
     static_cast<std::size_t>(std::numeric_limits<ssize_t>::max());
 
-// A zero-length request addresses no byte, so it has no range to validate.
-// The operation precheck below relies on this: precedence puts the logical
-// no-op ahead of the range step.
+// A zero-length request addresses no byte, so it has no range to validate; the
+// operation precheck below relies on this to put the logical no-op ahead of
+// the range step.
 constexpr bool range_is_valid(std::uint64_t offset, std::size_t length) noexcept {
     if (length == 0)
         return true;
@@ -67,7 +53,6 @@ constexpr bool range_is_valid(std::uint64_t offset, std::size_t length) noexcept
     return length - 1 <= kMaxNativeOffset - offset;
 }
 
-// Resize takes a size, not a range: there is no length to combine it with.
 constexpr bool size_is_representable(std::uint64_t size) noexcept {
     return size <= kMaxNativeOffset;
 }
@@ -78,7 +63,7 @@ inline Result<off_t> checked_posix_offset(std::uint64_t offset) {
     return static_cast<off_t>(offset);
 }
 
-// ─── Operation kinds and access legality (SEM-03) ───────────────────────────
+// ─── Operation kinds and access legality ────────────────────────────────────
 
 enum class FileOperation : std::uint8_t {
     read,
@@ -89,8 +74,8 @@ enum class FileOperation : std::uint8_t {
     sync_all,
 };
 
-// The access matrix is a property of the operation, not of the execution path:
-// a File that is illegal to read from is illegal to read from everywhere.
+// Access legality is a property of the operation, shared by every execution
+// path.
 constexpr bool access_allows(FileAccess access, FileOperation operation) noexcept {
     switch (operation) {
     case FileOperation::read:
@@ -111,7 +96,7 @@ constexpr bool is_byte_operation(FileOperation operation) noexcept {
     return operation == FileOperation::read || operation == FileOperation::write;
 }
 
-// ─── Open legality (SEM-02) ────────────────────────────────────────────────
+// ─── Open legality ─────────────────────────────────────────────────────────
 
 enum class OpenVerdict : std::uint8_t {
     legal,
@@ -120,10 +105,8 @@ enum class OpenVerdict : std::uint8_t {
 };
 
 // Both rejections are `invalid_argument` with no OS or namespace effect, so
-// their relative order is not caller-observable. The path is checked first
-// because a malformed path does not denote a resource at all. The caller must
-// run this before the native open: an embedded NUL would otherwise silently
-// truncate the name, and a rejected combination must not have touched the file.
+// their relative order is not caller-observable. This must run before the
+// native open: an embedded NUL would otherwise silently truncate the name.
 constexpr OpenVerdict precheck_open(FileOpen mode, std::string_view path) noexcept {
     if (path.find('\0') != std::string_view::npos)
         return OpenVerdict::reject_path_has_embedded_nul;
@@ -145,7 +128,7 @@ constexpr std::optional<IoError> open_rejection_of(OpenVerdict verdict) noexcept
     return std::nullopt;
 }
 
-// ─── Validation precedence (SEM-03) ────────────────────────────────────────
+// ─── Validation precedence ─────────────────────────────────────────────────
 
 enum class DataOpVerdict : std::uint8_t {
     execute,        // steps 1-4 passed; the caller proceeds to context/admission/execution
@@ -175,16 +158,12 @@ constexpr IoError rejection_error(DataOpVerdict verdict) noexcept {
     return IoError{.code = IoError::Code::invalid_state};
 }
 
-// Convenience for call sites: nullopt when the operation may proceed, the
-// canonical rejection otherwise.
 constexpr std::optional<IoError> rejection_of(DataOpVerdict verdict) noexcept {
     if (!is_rejection(verdict))
         return std::nullopt;
     return rejection_error(verdict);
 }
 
-// Validation entry points share this conversion: a rejection becomes an error,
-// while `execute` and `complete_empty` both mean the operation may proceed.
 inline Result<void> accept_or_reject(DataOpVerdict verdict) {
     if (auto rejection = rejection_of(verdict); rejection.has_value())
         return make_unexpected<void>(*rejection);
@@ -203,17 +182,15 @@ struct DataOpRequest {
     FileOperation operation = FileOperation::read;
     std::uint64_t offset = 0;
     std::size_t length = 0;
-    // No buffer-presence field on purpose. SEM-03 treats caller preconditions
-    // such as valid memory as not generally dynamically detectable and defines
-    // no buffer-presence step, so buffer presence is not a shared File semantic
-    // rule. A raw-pointer surface may still fail fast on a null buffer with a
-    // nonzero length as its own implementation precondition; that check lives
-    // beside the surface's pointers, not here.
+    // No buffer-presence field on purpose: caller memory validity is not
+    // dynamically detectable, so buffer presence is not a shared rule. A
+    // raw-pointer surface keeps its own null-buffer fail-fast beside its
+    // pointers.
 };
 
-// Steps 1-4 of the canonical precedence for byte operations. Steps 5-7
-// (context health/compatibility, execution support, capacity/acceptance) belong
-// to the request path and are deliberately not answered here.
+// Byte-operation validation: closed, access, logical no-op, then range.
+// Context health/compatibility, execution support and capacity belong to the
+// request path, not here.
 constexpr DataOpVerdict precheck_data_op(const DataOpRequest& request) noexcept {
     if (request.closed)
         return DataOpVerdict::reject_closed;
@@ -228,8 +205,8 @@ constexpr DataOpVerdict precheck_data_op(const DataOpRequest& request) noexcept 
     return DataOpVerdict::execute;
 }
 
-// file_info / resize / sync_data / sync_all: no length, so the zero-length
-// no-op step does not apply and the operation moves from step 2 to step 4.
+// file_info / resize / sync_data / sync_all: no length operand, so the
+// zero-length no-op step does not apply.
 constexpr DataOpVerdict precheck_state_op(bool closed, FileAccess access,
                                           FileOperation operation) noexcept {
     if (closed)
@@ -249,10 +226,10 @@ constexpr DataOpVerdict precheck_resize(bool closed, FileAccess access,
     return DataOpVerdict::execute;
 }
 
-// ─── Primitive outcome and composition (SEM-05) ─────────────────────────────
+// ─── Primitive outcome and composition ──────────────────────────────────────
 
-// Classification of a *successful* primitive byte transfer. An OS error is a
-// separate outcome: it is never turned into a byte count here.
+// Classification of a successful primitive transfer; an OS error is a separate
+// outcome, never turned into a byte count here.
 enum class PrimitiveOutcome : std::uint8_t {
     empty_request,       // success 0; the request observed no EOF
     eof,                 // a nonempty read observed 0 at its position; primitive success
@@ -287,8 +264,7 @@ enum class CompositionStop : std::uint8_t {
 };
 
 // Reference state of an exact/all composition. Confirmed bytes accumulate over
-// successful steps and are never discarded by a later stop, so a failure reports
-// its prefix separately from its reason (ERR-02).
+// successful steps; a stop never discards the prefix.
 struct CompositionState {
     std::size_t confirmed_bytes = 0;
     bool stopped = false;
@@ -333,29 +309,14 @@ constexpr CompositionState compose_error(CompositionState state, IoError error) 
 }
 
 // A reference IoError projection of a stopped composition, for a consumer that
-// must return an `IoError`. It is not the canonical composition semantics: the
-// authority is the state itself — `stop`, the accumulated `confirmed_bytes` and
-// the primitive's own error — which `compose_progress`/`compose_error` decide
-// and every path publishes in its own representation.
-//
-// `primitive_error` keeps the primitive's own error; the two no-progress stops
-// report distinct values so EOF-before-full and write-no-progress stay
-// distinguishable (SEM-05). A complete composition reports nothing.
-//
-// The root names a "no-progress failure" without assigning it a canonical
-// category, so this projection reuses `invalid_state` as the closest existing
-// category and introduces none. That choice is a recorded A1 ambiguity rather
-// than a settled mapping: a root decision on the category would move this
-// projection, not the canonical stop state.
-//
-// The direct surface publishes the stop reasons structurally instead and carries
-// an `IoError` only for a primitive failure, so it deliberately does not call
-// this projection. Both representations are pinned side by side, from one
-// injected primitive sequence, by
-// `every_stop_reason_is_pinned_against_the_oracle_error_rule`
-// in `tests/direct_composition_fault_test.cpp`. The certainty half of the same
-// state is `composition_effect_certainty` below, which the direct outcome does
-// publish.
+// must return an `IoError`. The composition authority is the state itself —
+// `stop`, the accumulated `confirmed_bytes` and the primitive's own error —
+// which `compose_progress`/`compose_error` decide; this is one representation
+// of it, not a second rule. `primitive_error` keeps the primitive's own error;
+// the two no-progress stops report distinct values so they stay
+// distinguishable. The no-progress write stop reuses `invalid_state` because no
+// canonical category exists for it. The direct surface publishes stop reasons
+// structurally and does not call this projection.
 constexpr std::optional<IoError> composition_error(const CompositionState& state) noexcept {
     if (!state.stopped)
         return std::nullopt;
@@ -373,15 +334,14 @@ constexpr std::optional<IoError> composition_error(const CompositionState& state
     return std::nullopt;
 }
 
-// ─── Effects and partial progress (ERR-02) ─────────────────────────────────
+// ─── Effects and partial progress ───────────────────────────────────────────
 
 // Whether a possibly-effective portion of the operation is unaccounted for.
 enum class EffectCertainty : std::uint8_t {
-    // `confirmed_bytes` accounts for the whole operation: every remaining byte
-    // is either confirmed or proven unaffected.
+    // `confirmed_bytes` accounts for the whole operation.
     accounted,
-    // A possibly-effective portion has no trustworthy count and must be treated
-    // as possibly applied. No error implies rollback.
+    // A possibly-effective portion has no trustworthy count and must be
+    // treated as possibly applied. No error implies rollback.
     unknown,
 };
 
@@ -392,37 +352,27 @@ struct IoEffect {
     friend bool operator==(const IoEffect&, const IoEffect&) noexcept = default;
 };
 
-// Bounded terminal outcome of one logical operation. It carries the three
-// required reports at once: a confirmed progress count, a terminal reason, and
-// the certainty of what is left over. Cancellation travels through the same
-// failure channel as an error, so a confirmed count racing a cancel is never
-// erased into an unqualified canceled result.
+// Bounded terminal outcome of one logical operation: confirmed progress, a
+// terminal reason, and the certainty of what is left over, reported together.
 struct IoOutcome {
     bool succeeded = false;
     IoEffect effect{};
     IoError error{};
 
-    // A successful primitive count is exact progress; a scalar or void operation
-    // reports success without inventing a byte count.
     static constexpr IoOutcome success(std::uint64_t confirmed_bytes = 0) noexcept {
         return IoOutcome{true, IoEffect{confirmed_bytes, EffectCertainty::accounted}, IoError{}};
     }
 
-    // A failure or cancellation whose remainder is *proven* unaffected. That is
-    // an evidence claim, not a default: it needs a positive proof that nothing
-    // beyond `confirmed_bytes` took effect, such as a cancel that won before
-    // dispatch. An operation's direction never provides that proof — a failed
-    // read may already have filled part of the caller's destination buffer,
-    // which LIFE-01 makes part of the operation's borrow.
+    // `accounted` on a failure is an evidence claim: it needs positive proof
+    // that nothing beyond `confirmed_bytes` took effect, such as a cancel that
+    // won before dispatch. The operation's direction never provides that proof.
     static constexpr IoOutcome failure(IoError reason,
                                        std::uint64_t confirmed_bytes = 0) noexcept {
         return IoOutcome{false, IoEffect{confirmed_bytes, EffectCertainty::accounted}, reason};
     }
 
-    // A failure or cancellation where a possibly-effective portion has no
-    // trustworthy count. `known_prefix` stays a lower bound from earlier
-    // completed steps. This is the required shape for a dispatched attempt
-    // that failed or was canceled, per `failed_dispatched_attempt`.
+    // A failure whose possibly-effective portion has no trustworthy count;
+    // `known_prefix` stays a lower bound from earlier completed steps.
     static constexpr IoOutcome uncertain(IoError reason,
                                          std::uint64_t known_prefix = 0) noexcept {
         return IoOutcome{false, IoEffect{known_prefix, EffectCertainty::unknown}, reason};
@@ -435,61 +385,42 @@ struct IoOutcome {
     friend bool operator==(const IoOutcome&, const IoOutcome&) noexcept = default;
 };
 
-// ERR-02 requires the reason, the confirmed prefix and the unaccounted remainder
-// to be reportable together. A terminal shaped only as
-// {is_error, error, confirmed_bytes} has no field for effect certainty, so this
-// predicate names exactly which outcomes that shape cannot carry; the A1 ledger
-// records the request-path storage that still has the narrower shape.
+// Names the terminal shapes that cannot carry an unaccounted remainder: a
+// terminal shaped only as {is_error, error, confirmed_bytes} has no field for
+// effect certainty.
 constexpr bool prefix_only_terminal_can_carry(const IoOutcome& outcome) noexcept {
     return outcome.effect.remaining == EffectCertainty::accounted;
 }
 
-// Conversion rule for a failed physical attempt that dispatched. Dispatch
-// evidence, not direction, decides the remainder: the attempt may already have
-// taken effect — reached the file, or filled part of the caller's destination
-// buffer — and supplies no trustworthy count for the possibly-effective
-// portion, so its remainder is unaccounted rather than zero (ERR-02, V15),
-// whatever the operation reads or writes. `known_prefix` stays a lower bound
-// from earlier completed steps.
-//
-// Scope: this covers the operation's effects on the file and on the borrowed
-// buffers. It does not model the shared-cursor position after a failed
-// shared-cursor call, which v1 does not promise.
+// A failed attempt that dispatched may already have taken effect — reached the
+// file, or filled part of the caller's destination buffer — and supplies no
+// trustworthy count for the possibly-effective portion, so its remainder is
+// unknown whatever the operation reads or writes. Scope: file and
+// borrowed-buffer effects; the cursor position after a failed shared-cursor
+// call is not modeled.
 constexpr IoOutcome failed_dispatched_attempt(IoError reason,
                                               std::uint64_t known_prefix = 0) noexcept {
     return IoOutcome::uncertain(reason, known_prefix);
 }
 
-// CANCEL-01: a cancel that won before dispatch proved no dispatch and no
-// effect, so the remainder is accounted. `confirmed_prefix` carries earlier
-// completed composition steps; the canceled attempt itself contributed nothing.
+// A cancel that won before dispatch proved no dispatch and no effect, so the
+// remainder is accounted; `confirmed_prefix` carries earlier completed steps.
 constexpr IoOutcome canceled_before_dispatch(std::uint64_t confirmed_prefix = 0) noexcept {
     return IoOutcome::failure(IoError{.code = IoError::Code::canceled}, confirmed_prefix);
 }
 
-// CANCEL-01/ERR-02: a cancel racing an in-flight attempt keeps the trusted
-// count instead of collapsing it into an unqualified canceled result, but the
-// attempt's remainder cannot be proven unaffected, so it stays unknown rather
-// than accounted.
+// A cancel racing an in-flight attempt keeps the trusted count instead of
+// collapsing into an unqualified canceled result; the attempt's own remainder
+// stays unknown.
 constexpr IoOutcome canceled_racing_in_flight_attempt(std::uint64_t confirmed_bytes) noexcept {
     return IoOutcome::uncertain(IoError{.code = IoError::Code::canceled}, confirmed_bytes);
 }
 
-// Certainty of a stopped composition's remainder (ERR-02). Only a stop whose
-// primitive reported a *successful* count accounts for its remainder: the
-// accumulated `confirmed_bytes` is then the whole story, because a zero count
-// that the primitive reported as success leaves nothing unaccounted.
-//
-// A primitive error never accounts for its remainder, in either direction. The
-// error return is not a trustworthy count for the possibly-effective portion,
-// and direction does not decide it: a failing read may already have filled part
-// of the caller's borrowed destination buffer (LIFE-01), and a failing write may
-// already have reached the file — Linux reports a write error for a writeback
-// failure, and at least the NFS write path returns a negative result after
-// `generic_perform_write()` accepted bytes. This is the same reason
-// `failed_dispatched_attempt` derives certainty from dispatch evidence rather
-// than from what the operation reads or writes. An impossible count is an
-// untrustworthy report by definition, so it accounts for nothing either.
+// Certainty of a stopped composition's remainder. Only a stop whose primitive
+// reported a successful count accounts for it: a primitive error is not a
+// trustworthy count for the attempt's own effect — a failing read may already
+// have filled part of the destination buffer, a failing write may already have
+// reached the file — and an impossible count is untrustworthy by definition.
 constexpr EffectCertainty composition_effect_certainty(const CompositionState& state) noexcept {
     if (!state.stopped)
         return EffectCertainty::accounted;
@@ -505,7 +436,7 @@ constexpr EffectCertainty composition_effect_certainty(const CompositionState& s
     return EffectCertainty::accounted;
 }
 
-// ─── Durability reference rules (SEM-06, Linux regular-file profile) ───────
+// ─── Durability reference rules (Linux regular-file profile) ───────────────
 
 enum class MutationKind : std::uint8_t {
     write,
@@ -533,19 +464,17 @@ struct MutationRecord {
 };
 
 // Sequence numbers are strictly ordered: a mutation is ordered before a sync
-// only when its number is strictly smaller. Equal numbers mean the model cannot
-// order the two events, and an unordered pair supports no durability claim.
+// only when its number is strictly smaller. Equal numbers are unordered and
+// support no durability claim in either direction.
 
 struct SyncRecord {
     SyncKind kind = SyncKind::data;
     bool succeeded = false;
-    // For a request sync this is the acceptance point; for a direct sync it is
-    // the call's operation initiation after validation.
+    // Acceptance point for a request sync; operation initiation after
+    // validation for a direct sync.
     std::uint64_t initiation_sequence = 0;
 };
 
-// Coverage is per mutation and per completion: a mutation only submitted before
-// the sync was initiated is not covered, which is the V16 rule.
 constexpr bool covers(const SyncRecord& sync, const MutationRecord& mutation) noexcept {
     if (!sync.succeeded)
         return false;
@@ -558,8 +487,8 @@ constexpr bool covers(const SyncRecord& sync, const MutationRecord& mutation) no
         return true;
     case MutationKind::resize_shrink:
     case MutationKind::resize_grow:
-        // v1-r3 Linux regular-file profile: a completed file-size mutation is
-        // covered even without a covered write, in both directions.
+        // A completed file-size mutation is covered without a covered write
+        // (Linux fdatasync covers the length metadata), in both directions.
         return true;
     case MutationKind::metadata:
         return sync.kind == SyncKind::all;
@@ -567,26 +496,21 @@ constexpr bool covers(const SyncRecord& sync, const MutationRecord& mutation) no
     return false;
 }
 
-// A mutation is never durable on its own: only a successful sync that covers it
-// establishes durability. A completed resize in particular grants none.
+// Named negative rule: no mutation, a completed resize included, is durable
+// without a covering sync.
 constexpr bool grants_durability_alone(const MutationRecord&) noexcept {
     return false;
 }
 
-// An ordering fact only: this mutation is observed strictly after the sync's
-// initiation. It carries no durability claim by itself, and an unordered pair
-// (equal sequence numbers) supports none either. Whether the later mutation
-// actually conflicts with the state the sync covered is not a property of this
-// record, so supersession is derived where both halves are known: the V17
-// reference case pairs an earlier covered mutation with a conflicting one
-// ordered after, which is the pair SEM-06 names as superseding.
+// Ordering fact only: observed strictly after the sync's initiation. No
+// durability claim follows by itself.
 constexpr bool ordered_after_sync(const SyncRecord& sync, const MutationRecord& mutation) noexcept {
     return mutation.completion == CompletionState::observed &&
            mutation.completion_sequence > sync.initiation_sequence;
 }
 
-// The V17 negative rule: a successful sync never guarantees that the exact state
-// it covered survives a later conflicting mutation.
+// Negative rule: a successful sync never guarantees that the exact state it
+// covered survives a later conflicting mutation.
 constexpr bool preserves_exact_state(const SyncRecord&, const MutationRecord&) noexcept {
     return false;
 }

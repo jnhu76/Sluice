@@ -273,10 +273,9 @@ class UringAsyncBackend::TransportLedger {
     std::uint32_t last_physical_position_ = 0;
 };
 
-// These raw-pointer surfaces fail fast on a null buffer with a nonzero length
-// as their own implementation precondition: SEM-03 treats caller memory
-// validity as not dynamically detectable, so the shared oracle does not answer
-// buffer presence. `execute` implies a nonzero length.
+// Own implementation precondition, not a shared rule: caller memory validity
+// is not dynamically detectable, so a null buffer with a nonzero length fails
+// fast here. `execute` implies a nonzero length.
 Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
         {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});

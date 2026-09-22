@@ -1,4 +1,4 @@
-// SEM-04 range and offset rules, as properties of the shared oracle.
+// Range and offset rules as properties of the shared oracle.
 //
 // The property exercised throughout is that the oracle rejects exactly what is
 // mathematically unrepresentable, and that it does so without overflowing while
@@ -114,10 +114,8 @@ bool checked_offset_reports_invalid_argument() {
     return rejected.error().code == IoError::Code::invalid_argument;
 }
 
-// SEM-04 requires the declared execution limit to be applied before the
-// operation is submitted, so a transfer larger than the native count is an
-// invalid range. No real buffer can carry it, which is why it is checked here
-// rather than through a path.
+// A transfer larger than the native count is an invalid range before
+// acceptance. No real buffer can carry it, so it is checked as a pure rule.
 bool native_transfer_limit_is_a_range_rejection() {
     if (kMaxNativeTransfer == 0)
         return false;
@@ -133,10 +131,8 @@ bool native_transfer_limit_is_a_range_rejection() {
     return rejection.has_value() && rejection->code == IoError::Code::invalid_argument;
 }
 
-// The shared range helper is consumed by the legacy reader/writer as well, so the
-// correction it carries is observable there and is pinned here: an
-// unrepresentable offset is invalid_argument on every caller, not invalid_state
-// on one of them.
+// The shared range helper also serves the legacy reader/writer: an
+// unrepresentable offset is invalid_argument on every caller.
 bool legacy_positional_io_reports_invalid_argument() {
     char path[] = "/tmp/sluice_range_legacy_XXXXXX";
     const int fd = ::mkstemp(path);

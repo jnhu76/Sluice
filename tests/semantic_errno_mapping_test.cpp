@@ -1,7 +1,6 @@
-// ERR-01 canonical native-error mapping. The root specification is the oracle:
-// the expected category per native errno is written here as a decision table,
-// not read back from the production switch, so a change in the mapping fails
-// this test instead of redefining it.
+// Native-error mapping. The expected category per native errno is written
+// here as a decision table, not read back from the production switch, so a
+// change in the mapping fails this test instead of redefining it.
 //
 // Two evidence classes are kept separate:
 //   - table cases: pure, always run, exhaustive over the mapping table;
@@ -34,12 +33,9 @@ struct TableCase {
     IoError::Code expected;
 };
 
-// ERR-01: ENOENT/ENOTDIR map to not_found; EACCES/EPERM to permission_denied;
-// ENOSPC/EDQUOT to no_space; EINTR to interrupted; EAGAIN/EWOULDBLOCK to
-// would_block. ECANCELED is deliberately not in ERR-01's mapping, so a native
-// ECANCELED keeps backend_error plus native detail; the semantic canceled
-// outcome comes from CANCEL-01 dispositions, not from an errno. Any other
-// native error without a canonical category behaves the same way.
+// The mapped errno values; anything without a row keeps backend_error plus its
+// native detail, and ECANCELED is deliberately unmapped: the semantic `canceled`
+// outcome comes from cancellation dispositions, not from an errno.
 const TableCase table_cases[] = {
     {"ENOENT_is_not_found", ENOENT, IoError::Code::not_found},
     {"ENOTDIR_is_not_found", ENOTDIR, IoError::Code::not_found},
@@ -63,7 +59,6 @@ bool table_case_holds(const TableCase& c) {
     const IoError e = sluice::from_errno_value(c.native_errno);
     if (e.code != c.expected)
         return false;
-    // The native detail is preserved for every case, including the fallback.
     return e.os_errno == c.native_errno;
 }
 

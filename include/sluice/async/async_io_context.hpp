@@ -18,14 +18,11 @@
 namespace sluice::async {
 
 // Mechanism-level reference to the resource an explicit operation targets.
-// Implicit conversion from a canonical File carries the File's access
-// contract, so every initiation surface can enforce the ADR-0002 §5.5
-// access-legality matrix before admission. Construction from a raw native
-// handle is the explicit interop boundary: the caller declares the access as
-// a claim, and the interop path does not claim canonical File access
-// validation. Carries no ownership and no lifetime authority: the handle
-// value is copied at op construction and the caller keeps the resource alive
-// until terminal completion is observed.
+// Implicit conversion from a canonical File carries its access, so initiation
+// can enforce access legality before admission; construction from a raw
+// native handle is the explicit interop boundary, and the caller declares the
+// access as a claim. No ownership: the value is copied at op construction and
+// the caller keeps the resource alive until terminal completion is observed.
 struct NativeFileRef {
     NativeFileRef() = default;
     NativeFileRef(const sluice::File& file) : fd(file.native_handle()), access(file.access()) {}
@@ -142,8 +139,8 @@ class AsyncBackend {
   private:
     friend class AsyncIoContext;
 
-    // The access-legality matrix (ADR-0002 §5.5) is enforced by
-    // AsyncIoContext before these are reachable; the backend only lowers fd.
+    // Access legality is enforced by AsyncIoContext before these are
+    // reachable; the backend only lowers fd.
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;

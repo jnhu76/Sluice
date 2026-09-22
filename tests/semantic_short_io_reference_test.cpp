@@ -1,10 +1,10 @@
-// SEM-05 primitive and composition reference rules, checked against real
-// filesystem behaviour where the platform can express the case.
+// Primitive and composition reference rules, checked against real filesystem
+// behaviour where the platform can express the case.
 //
 // The reference fold is the oracle: a path that composes exact/all operations
-// must reach the same accumulation and the same stop reason. The real cases below
-// pin the primitive half (EOF, short transfer, zero-length) against the kernel,
-// so the reference model cannot drift away from what Linux actually returns.
+// must reach the same accumulation and the same stop reason. The real cases
+// below pin the primitive half (EOF, short transfer, zero-length) against the
+// kernel, so the reference model cannot drift away from what Linux returns.
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
@@ -164,9 +164,7 @@ FileOpen readable_mode() {
     return mode;
 }
 
-// A real short read: the file is smaller than the request, so the primitive
-// returns 0 < n < requested and must be classified as allowed progress, not as
-// an error.
+// A real short read must classify as allowed progress, not an error.
 bool real_short_read_is_short_progress() {
     const std::string path = make_temp_file("0123456789");
     if (path.empty())
@@ -200,8 +198,6 @@ bool real_short_read_is_short_progress() {
            PrimitiveOutcome::empty_request;
 }
 
-// A full write followed by reading the bytes back is the reference composition
-// result: accumulated confirmed bytes equal the requested length.
 bool real_write_all_reaches_full_progress() {
     const std::string path = make_temp_file("");
     if (path.empty())

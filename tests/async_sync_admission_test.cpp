@@ -20,9 +20,9 @@ using sluice::IoError;
 using sluice::Result;
 
 // Counts every backend sync entry. The closed-resource rejection belongs to
-// the initiation boundary (ADR-0002 §5.5 precedence: closed -> invalid_state
-// before any backend effect), so a rejected submission must leave these at
-// zero: any backend entry means the canonical admission was bypassed.
+// the initiation boundary (closed -> invalid_state before any backend
+// effect), so a rejected submission must leave these at zero: any backend
+// entry means the admission boundary was bypassed.
 class CountingBackend final : public AsyncBackend {
   public:
     int sync_data_entries = 0;

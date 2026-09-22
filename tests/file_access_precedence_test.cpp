@@ -18,8 +18,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-// Pins the frozen initiation precedence of ADR-0002 §5.5 for collisions where
-// two or more admission conditions hold at once:
+// Pins the frozen initiation precedence for collisions where two or more
+// admission conditions hold at once:
 //   closed -> invalid_state
 //   access legality -> invalid_argument
 //   zero-length -> success 0

@@ -1,6 +1,6 @@
 #pragma once
 
-// Path adapters for the A1 reference harness.
+// Path adapters for the semantic harness.
 //
 // Each adapter reports only what its execution path observed. None of them
 // inspects an expectation, and none of them owns an expected outcome: the
@@ -76,12 +76,9 @@ inline Observation direct_attempt(const AccessFixtures& fixtures, const Input& i
     return apply_direct(*file, input, dst, src);
 }
 
-// Only the operations a request backend actually exposes can be driven here.
-// resize and file_info have no request form in this commit; SEM-01 does require
-// file_info/size on request paths, so that part of the operation matrix stays
-// with the ThreadPool/io_uring profile GAP rows. Scenarios using an operation
-// no backend exposes yet are reported as not drivable rather than silently
-// passing.
+// Only the operations a request backend actually exposes are drivable here.
+// resize and file_info have no request form; scenarios using an operation no
+// backend exposes are reported as not drivable rather than silently passing.
 inline bool request_drivable(const Input& input) {
     return input.operation == FileOperation::read || input.operation == FileOperation::write ||
            input.operation == FileOperation::sync_data ||
@@ -91,12 +88,10 @@ inline bool request_drivable(const Input& input) {
 // A request execution: submit through a context, then drive it until the
 // operation reaches a terminal so no outstanding work is left behind.
 //
-// The no-op observation is measured, not asserted: a terminal that is already
-// `ready()` before any progress call was published at acceptance, which is what
-// SEM-03 requires of a logical no-op. A completion that only becomes ready after
-// `poll()` was produced by a dispatched operation. The request path therefore
-// reports a real observation for every input, and a zero-length request that is
-// dispatched shows up as a divergence.
+// The no-op observation is measured, not asserted: a terminal already `ready()`
+// before any progress call was published at acceptance; one that becomes ready
+// only after `poll()` was dispatched. A dispatched zero-length request
+// therefore shows up as a divergence.
 class RequestProbe {
   public:
     explicit RequestProbe(std::unique_ptr<sluice::async::AsyncBackend> backend)

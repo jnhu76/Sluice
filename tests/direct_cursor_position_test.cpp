@@ -1,6 +1,5 @@
-// The shared-cursor / positional distinction (SEM-04, SEM-07) as kernel
-// integration: the shared cursor is the native open-file-description offset,
-// positional I/O and metadata leave it alone, and a native duplication shares it.
+// Shared-cursor vs positional as kernel integration: the cursor is the native
+// open-file-description offset, and positional I/O and metadata leave it alone.
 
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
@@ -47,8 +46,6 @@ bool open_path(const std::string& path, FileAccess access, std::optional<File>& 
     return true;
 }
 
-// A shared-cursor write lands where the cursor is and advances it; a positional
-// write neither observes nor changes it.
 bool shared_cursor_write_advances_and_positional_write_does_not() {
     const std::string path = make_temp_file("0123456789");
     if (path.empty())
@@ -75,8 +72,7 @@ bool shared_cursor_write_advances_and_positional_write_does_not() {
            file.close().has_value();
 }
 
-// Reading through a native duplication of the descriptor observes the same
-// offset: the cursor is the open file description, not a Sluice-side counter.
+// The cursor is the open file description, not a Sluice-side counter.
 bool shared_cursor_is_shared_through_native_duplication() {
     const std::string path = make_temp_file("abcdefgh");
     if (path.empty())
@@ -102,7 +98,6 @@ bool shared_cursor_is_shared_through_native_duplication() {
            file.close().has_value();
 }
 
-// Two opens of one path are two open file descriptions with independent cursors.
 bool independent_opens_have_independent_cursors() {
     const std::string path = make_temp_file("abcdefgh");
     if (path.empty())
@@ -126,7 +121,6 @@ bool independent_opens_have_independent_cursors() {
            second.close().has_value();
 }
 
-// SEM-07: resize does not set the shared cursor.
 bool resize_does_not_move_the_shared_cursor() {
     const std::string path = make_temp_file("abcdefgh");
     if (path.empty())
@@ -149,8 +143,6 @@ bool resize_does_not_move_the_shared_cursor() {
            next[1] == std::byte{'e'} && file.close().has_value();
 }
 
-// A zero-length shared-cursor call is a logical no-op: it neither transfers
-// bytes nor moves the cursor.
 bool zero_length_shared_cursor_call_leaves_the_cursor() {
     const std::string path = make_temp_file("abcdefgh");
     if (path.empty())

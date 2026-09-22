@@ -26,10 +26,10 @@ using sluice::IoError;
 using sluice::make_unexpected;
 using sluice::Result;
 
-// Compile-level naming contract: the canonical File path converts implicitly
-// (carrying the File's access contract); a raw native handle must spell the
-// mechanism type and declare the access claim explicitly. A bare int neither
-// converts to nor constructs an operation resource reference.
+// Compile-level naming contract: a canonical File converts implicitly
+// (carrying its access); a raw native handle must spell the mechanism type and
+// declare the access explicitly. A bare int neither converts to nor constructs
+// an operation resource reference.
 template <class Op, class... Args>
 auto brace_init_detects(int) -> decltype(Op{std::declval<Args>()...}, std::true_type{});
 template <class Op, class... Args> auto brace_init_detects(long) -> std::false_type;

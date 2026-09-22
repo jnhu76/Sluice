@@ -1,18 +1,12 @@
-// SEM-06 durability reference rules, with the observable half of V27 exercised
-// on a real file.
+// Durability reference rules, with the observable half of the direct
+// resize-then-sync sequence exercised on a real file.
 //
 // The rules are pure functions over a mutation/sync history; the sequence field
-// stands in for happens-before, not for a runtime counter. V16 and V17 are
-// request-path schedules that the direct path cannot express (a direct operation
-// has completed before the call returns and before any later call is initiated),
-// so their production evidence belongs to the request slice; the rules
-// themselves are asserted here, and the ledger records which half has which
-// evidence.
-//
-// A real sync cannot be shown to survive power loss from inside a process. The
-// filesystem cases below therefore assert the observable half only: the call
-// sequence succeeds, the file-size change is visible afterwards, and no
-// durability fact is claimed by the resize itself.
+// stands in for happens-before, not for a runtime counter. A real sync cannot
+// be shown to survive power loss from inside a process, so the filesystem cases
+// assert the observable half only: the call sequence succeeds, the file-size
+// change is visible afterwards, and no durability fact is claimed by the
+// resize itself.
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
@@ -68,11 +62,9 @@ bool v27_resize_alone_grants_no_durability() {
     return !grants_durability_alone(kObservedMetadata);
 }
 
-// V17: an observed write before the sync is covered, while a conflicting
-// mutation completing after the sync's initiation is not covered. Supersession
-// is derived from the two facts SEM-06 names — the earlier covered state and a
-// conflicting mutation ordered after the sync's initiation — which is why
-// coverage is distinguishable from exact-state preservation.
+// V17: supersession pairs an earlier covered state with a conflicting mutation
+// ordered after the sync's initiation, which is why coverage is distinguishable
+// from exact-state preservation.
 bool v17_coverage_is_not_a_snapshot() {
     if (!covers(kDataSync, kObservedWrite))
         return false;
@@ -86,10 +78,9 @@ bool v17_coverage_is_not_a_snapshot() {
     return !preserves_exact_state(kDataSync, kConflicting);
 }
 
-// Coverage is ordered per mutation and the order is strict. A mutation whose
-// sequence equals the sync's initiation is unordered in the model, so no coverage
-// is claimed for it: an unordered pair supports neither a positive nor a negative
-// durability fact.
+// The order is strict: a mutation whose sequence equals the sync's initiation
+// is unordered in the model, so an unordered pair supports no durability fact
+// in either direction.
 bool coverage_requires_a_strict_order() {
     constexpr MutationRecord kBefore{MutationKind::write, CompletionState::observed, 7};
     constexpr MutationRecord kEqual{MutationKind::write, CompletionState::observed, 8};
@@ -136,8 +127,8 @@ sluice::FileOpen read_write_mode() {
     return mode;
 }
 
-// Direct V27: grow, shrink, then sync_data and sync_all without any covered
-// write. Both syncs must succeed on a regular file after a completed size
+// Real-file observable half: grow, shrink, then sync_data and sync_all
+// without any covered write. Both syncs must succeed after a completed size
 // change, and the size change must be observable.
 bool direct_resize_then_sync_sequence_succeeds() {
     const std::string path = make_temp_file();
@@ -187,7 +178,6 @@ bool failed_sync_is_reported(int* attempted) {
     auto synced = sluice::blocking::sync_all(file);
     if (synced.has_value())
         return false;
-    // The failure carries native detail and is not a fabricated success.
     return synced.error().os_errno != 0;
 }
 

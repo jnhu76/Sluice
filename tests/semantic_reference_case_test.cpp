@@ -1,12 +1,10 @@
-// The named VERIFY-04 reference cases that the A1 slice can express, run through
-// the shared oracle rather than through per-path expectations.
+// The named reference cases this slice can express, run through the shared
+// oracle rather than through per-path expectations.
 //
-// V01-V03 are precedence cases and are fully observable on the direct path and
-// on a request path. V15-V17 are effect and durability cases: their rules are
-// asserted here, and the parts that need request-path capability (an unobserved
-// write followed by a sync, or a request terminal that can carry an unaccounted
-// remainder) are pinned as recorded divergences pointing at the request slice
-// rather than claimed as covered.
+// V01-V03 are precedence cases, fully observable on the direct path and on a
+// request path. V15-V17 are effect and durability cases: their rules are
+// asserted here, and the parts that need request-path capability are pinned
+// as recorded divergences rather than claimed as covered.
 #include "semantic_path_probes.hpp"
 
 #include <sluice/async/detail/request_slot.hpp>
@@ -146,8 +144,8 @@ void v03_zero_request_with_full_table_is_admission_rejected() {
 // ── V15: an unknown-effect failure is not a zero-byte claim ────────────────
 
 void v15_unknown_effect_write_failure() {
-    // The rule is evidence-driven: a dispatched attempt that failed may have
-    // taken effect with no trustworthy count, whatever its direction.
+    // Evidence-driven rule: a dispatched attempt that failed may have taken
+    // effect with no trustworthy count, whatever its direction.
     const IoOutcome outcome = failed_dispatched_attempt(
         IoError{.code = IoError::Code::backend_error, .os_errno = EIO}, 0);
     check(outcome.effect.remaining == EffectCertainty::unknown,
@@ -183,10 +181,9 @@ void v15_unknown_effect_write_failure() {
     }
 
     // Characterization of the request-side storage today, labelled as such: it
-    // shows what the shared terminal can carry and it fails if the error factory
-    // starts preserving a count. It is NOT a pin on the V15 gap itself, because a
-    // request-side fix could add an effect-certainty channel elsewhere and leave
-    // this shape untouched. V15's request-side evidence is deferred, not claimed.
+    // fails if the error factory starts preserving a count, but it is not a pin
+    // on the V15 gap itself — a request-side fix could add an effect-certainty
+    // channel elsewhere and leave this shape untouched.
     const sluice::async::detail::TerminalResult error_only =
         sluice::async::detail::TerminalResult::err(
             IoError{.code = IoError::Code::backend_error, .os_errno = EIO});
@@ -207,8 +204,8 @@ void v16_outstanding_write_is_not_covered() {
 
     check(!covers(data_sync, submitted) && !covers(all_sync, submitted),
           "V16: a submitted write is not covered by either sync");
-    // Positive control: the same write is covered once its completion is observed
-    // before the sync initiation, which is what makes V16 about ordering.
+    // Positive control: the same write is covered once its completion is
+    // observed before the sync initiation.
     check(covers(data_sync, observed) && covers(all_sync, observed),
           "V16 positive control: an observed write is covered");
 
@@ -228,9 +225,8 @@ void v17_coverage_is_not_preservation() {
     check(covers(data_sync, covered), "V17: the earlier write is covered");
     check(!covers(data_sync, conflicting) && ordered_after_sync(data_sync, conflicting),
           "V17: a later conflicting mutation is uncovered and ordered after the sync");
-    // Covered earlier state plus a conflicting mutation ordered after the sync's
-    // initiation is the pair SEM-06 names as superseding the covered state, so
-    // no exact-state preservation is claimed.
+    // Covered earlier state plus a conflicting mutation ordered after the
+    // sync's initiation: the superseding pair.
     check(!preserves_exact_state(data_sync, conflicting),
           "V17: the covered state is not preserved");
 

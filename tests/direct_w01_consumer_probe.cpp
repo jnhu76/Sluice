@@ -1,16 +1,10 @@
-// W-01 ordinary utility, run as an external-style consumer of the direct
-// surface only.
-//
-// This TU includes nothing but the two canonical direct headers and links only
-// `sluice_core` (never `sluice_async`), so it is the build-boundary evidence:
-// open, metadata, read/write, positional I/O, composition, resize, durability
-// and close must work without a Scheduler, Fiber, ApplicationRuntime,
-// AsyncBackend, Completion, RequestArena or liburing. The static assertions fail
-// the build if a direct header ever starts pulling an async definition into this
-// translation unit.
-//
-// Two traces run below: an explicit-close trace that reports the close error
-// channel, and an RAII trace whose scope exit is the deterministic cleanup.
+// W-01 ordinary utility as a core-only consumer. This TU includes nothing but
+// the two canonical direct headers and links only `sluice_core`, so it is the
+// build-boundary evidence: open, metadata, read/write, positional I/O,
+// composition, resize, durability and close must work without a Scheduler,
+// Fiber, ApplicationRuntime, AsyncBackend, Completion, RequestArena or
+// liburing. The static assertions fail the build if a direct header ever
+// pulls an async definition into this translation unit.
 
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
@@ -91,8 +85,7 @@ bool file_content_is(const std::string& path, const std::string& expected) {
            std::string(buffer.data(), expected.size()) == expected;
 }
 
-// W-01: open, inspect metadata, write and read, positionally and through the
-// shared cursor, resize, synchronize, and report close errors explicitly.
+// W-01 explicit-close trace.
 bool w01_explicit_close_trace() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -121,8 +114,6 @@ bool w01_explicit_close_trace() {
     auto wrote_all = sluice::blocking::write_all_at(file, header.size(), body_bytes);
     ok = ok && wrote_at.has_value() && wrote_at.value() == header.size();
     ok = ok && wrote_all.has_value() && wrote_all.value().complete();
-    // A completed composition accounts for its whole request, so a consumer can
-    // read the ERR-02 distinction off the outcome it already receives.
     ok = ok && wrote_all.value().remaining == sluice::blocking::EffectCertainty::accounted;
 
     // durability of the confirmed bytes
@@ -165,8 +156,7 @@ bool w01_explicit_close_trace() {
     return ok;
 }
 
-// W-01's RAII half: scope exit releases the resource deterministically, with no
-// runtime, context or registry involved.
+// The RAII trace: scope exit is the deterministic cleanup.
 bool w01_raii_trace() {
     const std::string path = make_temp_path();
     if (path.empty())
@@ -195,8 +185,6 @@ bool w01_raii_trace() {
     return released && content_ok;
 }
 
-// The same-file comparison a consumer would use to notice two paths are one
-// file, with the unknown outcome when identity is unavailable.
 bool same_file_comparison_is_usable() {
     const std::string path = make_temp_path();
     if (path.empty())

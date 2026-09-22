@@ -1,10 +1,9 @@
-// SEM-02 open semantics: combination legality and the embedded-NUL rule, frozen
-// as a decision table. The table is the oracle; the real open outcome is checked
+// Open semantics: combination legality and the embedded-NUL rule, frozen as a
+// decision table. The table is the oracle; the real open outcome is checked
 // against it in both directions so neither can drift alone.
 //
-// The destructive half of the SEM-02 matrix (which combinations truncate or fail
-// to create) is covered by the existing file_open_contract_test, which already
-// runs all 36 existence x contents x access cases against real files.
+// The destructive half of the matrix (which combinations truncate or fail to
+// create) is covered by file_open_contract_test.
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -33,8 +32,8 @@ constexpr FileExistence kExistences[] = {FileExistence::open_existing,
 constexpr FileInitialContents kContents[] = {FileInitialContents::preserve,
                                              FileInitialContents::truncate};
 
-// SEM-02: the only illegal combination is read-only access combined with
-// truncation, and it is illegal for every existence choice.
+// The only illegal combination is read-only access with truncation, for every
+// existence choice.
 bool legality_table_is_frozen() {
     for (FileAccess access : kAccesses) {
         for (FileExistence existence : kExistences) {

@@ -1,29 +1,26 @@
 #pragma once
 
-// The SEM-03 precedence decision table, shared by every path under test so no
-// path can be compared against a table of its own.
+// The validation-precedence decision table, shared by every path under test so
+// no path can be compared against a table of its own.
 //
-// The expectations in this table are written out from the root requirement, not
-// read back from `file_semantics.hpp`. The required order is:
+// The expectations are written out from the root requirement, not read back
+// from `file_semantics.hpp`. The required order is:
 //   1 closed -> invalid_state
 //   2 access -> invalid_argument
 //   3 logical no-op -> success 0, without an OS call
 //   4 range -> invalid_argument
 // The discriminating scenarios are the ones where two steps disagree
 // (closed + zero length, illegal access + zero length, illegal access +
-// impossible offset, zero length + impossible offset). A path that checks the
-// steps in another order fails exactly one of them.
+// impossible offset, zero length + impossible offset), so a path that checks
+// the steps in another order fails exactly one of them.
 //
-// Buffer presence is deliberately not a scenario here: SEM-03 treats caller
-// preconditions such as valid memory as not generally dynamically detectable
-// and defines no buffer-presence step, so a null buffer is not a shared
-// semantic expectation. A raw-pointer surface may still fail fast on one as its
-// own implementation precondition, beside its pointers.
-//
-// The native representability boundary (last addressed byte == off_t max) is
-// deliberately absent here: a filesystem may refuse an extreme but representable
-// range, which is an operation result rather than a precedence statement. That
-// boundary is covered as a pure property in semantic_range_test.
+// Buffer presence is deliberately not a scenario here (caller memory validity
+// is not generally dynamically detectable); a raw-pointer surface may still
+// fail fast on one as its own implementation precondition. The native
+// representability boundary is deliberately absent too: a filesystem may
+// refuse an extreme but representable range, which is an operation result
+// rather than a precedence statement. That boundary is covered as a pure
+// property in semantic_range_test.
 
 #include "semantic_oracle_harness.hpp"
 
@@ -116,10 +113,10 @@ inline constexpr Scenario kPrecedenceScenarios[] = {
 inline constexpr std::size_t kPrecedenceScenarioCount =
     sizeof(kPrecedenceScenarios) / sizeof(kPrecedenceScenarios[0]);
 
-// Divergences recorded for a request path, cited by
-// docs/roadmap/v1-conformance.md. A request path accepts a logical no-op but does
-// not publish it at acceptance, so a zero-length data call is dispatched, which
-// SEM-03 forbids. Both request backends are asserted against this exact set.
+// Divergences recorded for a request path, cited by the conformance ledger: a
+// request path accepts a logical no-op but does not publish it at acceptance,
+// so a zero-length data call is dispatched. Both request backends are asserted
+// against this exact set.
 inline constexpr const char* kRequestZeroLengthDivergences[] = {
     "zero_length_legal_offset",
     "zero_length_unrepresentable_offset",

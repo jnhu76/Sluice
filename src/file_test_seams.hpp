@@ -6,19 +6,16 @@
 // state, allocation or indirection exists in a shipped path.
 //
 // A script intercepts one native-call family for one descriptor and consumes
-// one step per intercepted call, so a test can drive deterministic short
-// transfers, EOF, zero progress, errors and close failures that a real regular
-// file will not produce on demand. An exhausted script reports EBADF instead of
-// falling through to the real call, so a test cannot silently lose its
-// injection.
+// one step per intercepted call, driving deterministic short transfers, EOF,
+// zero progress, errors and close failures a real regular file will not
+// produce on demand. An exhausted script reports EBADF instead of falling
+// through, so a test cannot silently lose its injection. The operands of the
+// last intercepted call are recorded, which is how a test pins that a
+// composition advanced its buffer and offset by the confirmed count.
 //
-// A script also records the operands of the last intercepted call, which is how
-// a test pins that a composition advanced its buffer and offset by the confirmed
-// count rather than restating a count alone.
-//
-// At most one script is active per thread, and scripts must be destroyed in
-// reverse order of construction: arming a second script suspends the first for
-// the duration of the inner scope.
+// At most one script is active per thread; arming a second script suspends
+// the first for the duration of the inner scope, and scripts must be
+// destroyed in reverse order of construction.
 
 #include <cerrno>
 #include <cstddef>

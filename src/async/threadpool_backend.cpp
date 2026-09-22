@@ -131,10 +131,9 @@ ThreadPoolBackend::~ThreadPoolBackend() {
     }
 }
 
-// This raw-pointer surface fails fast on a null buffer with a nonzero length
-// as its own implementation precondition: SEM-03 treats caller memory validity
-// as not dynamically detectable, so the shared oracle does not answer buffer
-// presence. `execute` implies a nonzero length.
+// Own implementation precondition, not a shared rule: caller memory validity
+// is not dynamically detectable, so a null buffer with a nonzero length fails
+// fast here. `execute` implies a nonzero length.
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
     const sluice::detail::DataOpVerdict verdict = sluice::detail::precheck_data_op(
         {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset, op.len});

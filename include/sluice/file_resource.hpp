@@ -32,22 +32,19 @@ struct FileOpen {
     FileInitialContents contents = FileInitialContents::preserve;
 };
 
-// ─── Minimal metadata and same-file identity (SEM-07) ──────────────────────
+// ─── Minimal metadata and same-file identity ───────────────────────────────
 
-// The v1 file kinds. `regular` is the PROD-02 ordinary-file data-I/O domain;
-// `other` is a kind `file_info` can report without promising that ordinary-file
-// data operations work on it. This is deliberately not a stat-mode mirror: a
-// kind only enters this enum through a v1 requirement.
+// `regular` is the ordinary-file data-I/O domain; `other` covers kinds
+// `file_info` can report without promising data operations on them. Not a
+// stat-mode mirror: a kind enters only when a requirement names it.
 enum class FileKind : std::uint8_t {
     regular,
     other,
 };
 
-// A bounded same-file identity value. Linux device/inode is the permitted
-// representation (SEM-07); identity is a comparison value, never a registry
-// key. It is valid for concurrently live resources within the platform domain:
-// a retained value does not prove identity after every handle closes and the
-// identifiers can be reused.
+// A bounded same-file identity value: a comparison value, not a registry key.
+// A retained value proves nothing once the handles close and the identifiers
+// can be reused.
 struct FileIdentity {
     std::uint64_t device = 0;
     std::uint64_t inode = 0;
@@ -57,19 +54,18 @@ struct FileIdentity {
 
 struct FileInfo {
     FileKind kind = FileKind::other;
-    // Size observed by this call: the regular-file length in bytes when kind is
-    // `regular`. Not a reservation and not an immutable snapshot.
+    // Size observed by this call when kind is `regular`; not a snapshot
+    // across calls.
     std::uint64_t size = 0;
-    // `nullopt` is the explicit identity-unavailable outcome. A provider that
-    // cannot supply identity reports it here instead of fabricating one.
+    // `nullopt` reports identity-unavailable instead of fabricating one.
     std::optional<FileIdentity> identity;
 };
 
 enum class IdentityMatch : std::uint8_t {
     same,
     different,
-    // At least one side has no identity. Unknown is never reported as `different`:
-    // an unavailable identity supports no same/different answer.
+    // At least one side has no identity: unknown is never reported as
+    // `different`.
     unknown,
 };
 
@@ -86,8 +82,8 @@ class File {
     File(File&& other) noexcept;
     // Move assignment is a noexcept resource transfer: the destination's old
     // resource gets exactly one best-effort close attempt whose error is
-    // unobservable (RAII boundary). A caller that needs the old close error must
-    // call `close()` explicitly first.
+    // unobservable. A caller that needs the old close error must call `close()`
+    // explicitly first.
     File& operator=(File&& other) noexcept;
 
     // Deterministic resource cleanup: noexcept, best effort, and unable to
@@ -95,9 +91,9 @@ class File {
     ~File();
 
     // The observable close-error channel. The first native close attempt
-    // consumes ownership even when it fails, so a failed close leaves the File
-    // closed and the same native descriptor is never retried (SEM-02). Closing
-    // an already closed or moved-from File succeeds as a no-op.
+    // consumes ownership even when it fails: a failed close leaves the File
+    // closed and the descriptor is never retried (an EINTR retry is unsafe on
+    // Linux). Closing an already closed or moved-from File is a no-op.
     Result<void> close() noexcept;
 
     bool is_open() const noexcept { return fd_ >= 0; }

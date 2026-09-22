@@ -69,9 +69,8 @@ class UringAsyncBackend : public AsyncBackend {
     UringAsyncBackend& operator=(const UringAsyncBackend&) = delete;
 
   private:
-    // AsyncBackend::submit_* stay private end-to-end: only AsyncIoContext may
-    // enter them, so the access-legality matrix cannot be bypassed by calling
-    // a backend directly.
+    // Private end to end: only AsyncIoContext enters these, so access
+    // legality cannot be bypassed by calling the backend directly.
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override;
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;

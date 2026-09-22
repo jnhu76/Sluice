@@ -18,8 +18,8 @@ namespace sluice {
 
 namespace {
 
-// Test-only: the close fault seam sits exactly at the native-call boundary, so
-// every path that closes a canonical File (explicit close, destructor, move
+// Test-only: the close seam sits exactly at the native-call boundary, so every
+// path that closes a canonical File (explicit close, destructor, move
 // assignment) is driven by the same script. The production build calls the
 // native close directly.
 int close_native(int fd) noexcept {
@@ -32,9 +32,9 @@ int close_native(int fd) noexcept {
     return ::close(fd);
 }
 
-// POSIX spelling of the oracle's open decision (SEM-02). The frozen platform
-// defaults live here: close-on-exec descriptors and creation mode 0644 filtered
-// by the process umask.
+// POSIX spelling of the oracle's open decision. The frozen platform defaults
+// live here: close-on-exec descriptors and creation mode 0644 filtered by the
+// process umask.
 int open_flags_for(FileOpen mode) noexcept {
     int flags = O_CLOEXEC;
     switch (mode.access) {
@@ -100,10 +100,10 @@ Result<void> File::close() noexcept {
     if (fd_ < 0) {
         return {};
     }
-    // Ownership is consumed before the attempt: SEM-02 makes the first native
-    // close attempt terminal for this File, so a failed close must not leave an
-    // owning File behind, and the descriptor is never closed a second time
-    // (including after EINTR, whose retry is unsafe on Linux).
+    // Ownership is consumed before the attempt: the first native close is
+    // terminal for this File, so a failed close leaves no owning File behind
+    // and the descriptor is never closed a second time (an EINTR retry is
+    // unsafe on Linux).
     const int fd = std::exchange(fd_, -1);
     if (close_native(fd) != 0) {
         return make_unexpected<void>(from_errno_value(errno));

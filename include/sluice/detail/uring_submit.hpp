@@ -1,11 +1,8 @@
 #pragma once
 
-// io_uring submission-path mechanism helpers.
-//
-// This header holds lowering detail that belongs to the io_uring execution
-// mechanism only. File legality, validation precedence, range/offset rules and
-// error categories are NOT decided here; they live in
-// `sluice/detail/file_semantics.hpp` and are shared by every execution path.
+// io_uring submission-path lowering detail. File legality, validation
+// precedence and error categories are not decided here; they live in
+// `sluice/detail/file_semantics.hpp`.
 
 #include <algorithm>
 #include <cerrno>

@@ -58,18 +58,11 @@ inline constexpr std::string_view to_string(IoError::Code c) {
 
 namespace detail {
 
-// ERR-01 canonical mapping: the single authority translating a native error
-// into a canonical category. Native-error sites route through this table rather
-// than re-classifying errno locally, so every execution path reports the same
-// category for the same native cause. A native error the root gives no
-// canonical category keeps `backend_error` and its preserved native detail.
-// ECANCELED is deliberately absent: ERR-01 assigns no canonical category to it,
-// so a native ECANCELED is `backend_error` plus native detail; the semantic
-// `canceled` outcome comes from CANCEL-01 cancellation dispositions, not from
-// an errno.
-//
-// The table is implementation, not public contract: `from_errno_value` is the
-// public mapping and a second classifier outside it is a conformance gap.
+// The single errno-to-category table; native-error sites route through it
+// instead of classifying errno locally. A native error with no row keeps
+// `backend_error` plus its native detail. ECANCELED is deliberately unmapped:
+// the semantic `canceled` outcome comes from cancellation dispositions, not
+// from an errno.
 struct NativeErrorMapping {
     int native_errno;
     IoError::Code canonical;

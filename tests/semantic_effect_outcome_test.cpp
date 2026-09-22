@@ -1,10 +1,7 @@
-// ERR-02 partial-effect and progress reporting, as properties of the shared
-// outcome representation.
-//
-// The four cases the root requires to be expressible are asserted directly, and
-// the representation's own limitation is asserted too: a terminal shaped only as
-// {is_error, error, confirmed_bytes} cannot carry an unaccounted remainder. That
-// assertion is what records V15 as a production gap rather than a passing claim.
+// Partial-effect and progress reporting as properties of the shared outcome
+// representation. The four required cases are asserted directly, and the
+// representation's own limitation is asserted too: a terminal shaped only as
+// {is_error, error, confirmed_bytes} cannot carry an unaccounted remainder.
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/file_resource.hpp>
@@ -46,11 +43,9 @@ bool case_b_confirmed_prefix_survives_an_error() {
            outcome.effect.remaining == EffectCertainty::accounted;
 }
 
-// Case C: cancellation keeps the confirmed count, and the remainder follows the
-// evidence. A cancel that won before dispatch proves the remainder unaffected;
-// a cancel that raced an in-flight attempt proves only the count, so the
-// remainder stays unknown. Neither collapses into an unqualified canceled
-// result.
+// Case C: cancellation keeps the confirmed count. A cancel that won before
+// dispatch proves the remainder unaffected; a cancel that raced an in-flight
+// attempt proves only the count.
 bool case_c_canceled_keeps_confirmed_bytes() {
     const IoOutcome before_dispatch = canceled_before_dispatch(9);
     if (!(before_dispatch.is_canceled() && before_dispatch.effect.confirmed_bytes == 9 &&
@@ -61,8 +56,7 @@ bool case_c_canceled_keeps_confirmed_bytes() {
            raced.effect.remaining == EffectCertainty::unknown;
 }
 
-// Case D: an error whose remaining effect cannot be proven, reported as unknown
-// rather than as zero bytes.
+// Case D: an error whose remaining effect cannot be proven.
 bool case_d_unknown_remaining_effect() {
     const IoOutcome outcome = IoOutcome::uncertain(kEio, 3);
     return !outcome.succeeded && outcome.effect.confirmed_bytes == 3 &&
@@ -86,11 +80,8 @@ bool success_is_exact_progress() {
            scalar.effect.confirmed_bytes == 0;
 }
 
-// The conversion rule is evidence-driven: a dispatched attempt that failed
-// cannot exclude its effects whatever its direction. A failed read may have
-// filled part of the caller's destination buffer (a LIFE-01 borrow), a failed
-// write may have reached the file; neither supplies a trustworthy count for the
-// possibly-effective portion.
+// The conversion is evidence-driven: a failed dispatched attempt cannot
+// exclude its effects, whatever its direction.
 bool failed_dispatched_attempt_is_unknown_in_both_directions() {
     const IoOutcome write_failure = failed_dispatched_attempt(kEio, 2);
     if (write_failure.effect.remaining != EffectCertainty::unknown)
@@ -102,9 +93,8 @@ bool failed_dispatched_attempt_is_unknown_in_both_directions() {
            read_failure.effect.confirmed_bytes == 2;
 }
 
-// V15 stated against the representation rather than against any one path: the
-// {is_error, error, confirmed_bytes} terminal shape cannot report an unaccounted
-// remainder, so an unknown-effect failure is not representable in it.
+// The {is_error, error, confirmed_bytes} shape cannot report an unaccounted
+// remainder.
 bool prefix_only_terminal_cannot_carry_v15() {
     if (!prefix_only_terminal_can_carry(IoOutcome::success(4)))
         return false;
@@ -117,14 +107,10 @@ bool prefix_only_terminal_cannot_carry_v15() {
     return !prefix_only_terminal_can_carry(IoOutcome::uncertain(kEio, 0));
 }
 
-// Deterministic physical write failure without waiting for a full disk: /dev/full
-// rejects every write with ENOSPC. The library cannot know whether the attempt
-// landed, so the outcome must report an unaccounted remainder instead of a
-// zero-byte claim. Reported as NOT RUN when the device is absent.
-//
-// /dev/full is a character device, which PROD-02 excludes from the regular-file
-// guarantees. It is used here only as a fault-injection device for the error and
-// effect conversion path, not as evidence about regular-file behaviour.
+// Deterministic physical write failure without waiting for a full disk:
+// /dev/full rejects every write with ENOSPC. Reported as NOT RUN when the
+// device is absent. It is a character device outside the regular-file domain,
+// used only as a fault-injection device.
 bool real_write_failure_reports_unknown_effect(int* attempted) {
     *attempted = 0;
     const int fd = ::open("/dev/full", O_WRONLY);
