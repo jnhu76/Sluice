@@ -45,7 +45,7 @@ int main() {
     }
 
     // The MISMATCH lines this section prints for the two zero-length scenarios
-    // are the expected, ledger-recorded divergence, asserted on purpose.
+    // are expected and asserted explicitly.
     sluice_semantic::RequestProbe threadpool(
         std::make_unique<sluice::async::ThreadPoolBackend>(
             sluice::async::ThreadPoolConfig{8, 2}));

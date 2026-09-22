@@ -27,8 +27,7 @@ struct TableCase {
     IoError::Code expected;
 };
 
-// ECANCELED is deliberately unmapped: the canceled outcome comes from
-// cancellation dispositions, not an errno.
+// ECANCELED is deliberately absent from the native-error mapping.
 const TableCase table_cases[] = {
     {"ENOENT_is_not_found", ENOENT, IoError::Code::not_found},
     {"ENOTDIR_is_not_found", ENOTDIR, IoError::Code::not_found},
