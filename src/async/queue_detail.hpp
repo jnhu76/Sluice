@@ -15,4 +15,4 @@ struct QueueWaitCtx {
     detail::QueueItemLease* cons_out;
 };
 
-} // namespace sluice::async
+}

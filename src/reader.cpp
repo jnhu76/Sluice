@@ -102,4 +102,4 @@ Result<void> Reader::read_vec_all(std::span<IoSlice> dsts) {
     return {};
 }
 
-} // namespace sluice
+}

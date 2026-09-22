@@ -130,7 +130,7 @@ class Group {
     std::vector<std::unique_ptr<std::byte[]>> evented_stacks_;
 };
 
-} // namespace sluice::async
+}
 
 #include <sluice/async/evented_wait_policy.hpp>
 #include <sluice/async/scheduler.hpp>
@@ -200,4 +200,4 @@ template <class Fn> void Group::async_evented(Fn fn) {
     sched_->spawn(*spawn_target);
 }
 
-} // namespace sluice::async
+}

@@ -27,4 +27,4 @@ class Sha256 {
 
 void sha256_hex(const std::uint8_t digest[32], char out[65]);
 
-} // namespace sluice_hash
+}

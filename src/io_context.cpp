@@ -29,4 +29,4 @@ Result<std::unique_ptr<Writer>> BlockingIoContext::open_writer(std::string_view 
     return std::unique_ptr<Writer>(std::move(writer));
 }
 
-} // namespace sluice
+}

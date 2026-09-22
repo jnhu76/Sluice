@@ -29,6 +29,6 @@ inline bool tax0_f07_skip_extent_reprobes() noexcept {
     return g_tax0_ablation_modes.f07_skip_extent_reprobes;
 }
 
-} // namespace sluice::async::detail
+}
 
 #endif

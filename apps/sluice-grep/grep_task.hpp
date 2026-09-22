@@ -48,4 +48,4 @@ grep_files_with_backend(const std::string& pattern, std::vector<GrepInput> input
                         std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers,
                         MatchSink sink, std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-} // namespace sluice_grep
+}

@@ -39,4 +39,4 @@ class MemoryIoContext final : public IoContext {
     std::unordered_map<std::string, std::vector<std::byte>> store_;
 };
 
-} // namespace sluice
+}

@@ -308,7 +308,7 @@ struct PipelinedCopyTask {
     }
 };
 
-} // namespace
+}
 
 Result<CopyStats> run_sequential_copy(const File& src_file, const NativeFileRef& dst,
                                       std::size_t buffer_size, unsigned workers, SyncPolicy sync) {
@@ -366,4 +366,4 @@ Result<CopyStats> run_sequential_copy_with_backend(const File& src_file, const N
                                            std::move(backend));
 }
 
-} // namespace sluice_copy
+}

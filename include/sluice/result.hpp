@@ -104,7 +104,7 @@ template <> struct result_storage<void> {
     friend bool operator==(const result_storage&, const result_storage&) = default;
 };
 
-} // namespace detail
+}
 
 template <class T> Result<T> make_unexpected(IoError e) {
     return Result<T>(typename detail::error_tag{}, e);
@@ -165,4 +165,4 @@ inline Result<void> make_unexpected(IoError e) {
     return make_unexpected_void(e);
 }
 
-} // namespace sluice
+}

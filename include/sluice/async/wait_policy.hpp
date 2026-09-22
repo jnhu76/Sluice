@@ -32,4 +32,4 @@ class ThreadedWaitPolicy : public WaitPolicy {
 
 WaitPolicy& default_wait_policy() noexcept;
 
-} // namespace sluice::async
+}

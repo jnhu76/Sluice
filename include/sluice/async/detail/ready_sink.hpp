@@ -89,4 +89,4 @@ class SynchronousReadySink {
     virtual void on_ready(ReadyEvent event) noexcept = 0;
 };
 
-} // namespace sluice::async::detail
+}

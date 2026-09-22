@@ -78,4 +78,4 @@ class TimerRegistration {
     void* owner_ctx_{nullptr};
 };
 
-} // namespace sluice::async
+}

@@ -26,4 +26,4 @@ class EventedWaitPolicy final : public WaitPolicy {
     SchedulerWakeHandle wake_handle_;
 };
 
-} // namespace sluice::async
+}

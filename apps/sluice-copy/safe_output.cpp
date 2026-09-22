@@ -57,7 +57,7 @@ int directory_fsync(int fd) {
     return ::fsync(fd);
 }
 
-} // namespace
+}
 
 SafeOpenOutcome open_atomic_copy(const std::string& src_path, const std::string& dst_path) {
     auto src_open = sluice::File::open(src_path);
@@ -198,4 +198,4 @@ void discard_atomic_copy(SafeOpenOutcome& o) {
     }
 }
 
-} // namespace sluice_copy
+}

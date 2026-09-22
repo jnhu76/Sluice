@@ -81,4 +81,4 @@ class [[nodiscard]] CancelGuard {
 
 Result<void> check_cancel(const CancelToken& token, CancelState& state) noexcept;
 
-} // namespace sluice::async
+}

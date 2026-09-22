@@ -53,4 +53,4 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o, const std::string& d
 
 void discard_atomic_copy(SafeOpenOutcome& o);
 
-} // namespace sluice_copy
+}

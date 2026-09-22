@@ -21,4 +21,4 @@ Result<void> sync_data_all(AsyncIoContext& ctx, const NativeFileRef& file);
 
 Result<void> sync_all_all(AsyncIoContext& ctx, const NativeFileRef& file);
 
-} // namespace sluice::async
+}

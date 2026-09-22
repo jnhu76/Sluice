@@ -71,4 +71,4 @@ class Batch {
     std::size_t popped_ = 0;
 };
 
-} // namespace sluice::async
+}

@@ -446,6 +446,6 @@ inline std::size_t UringAsyncBackend::router_table_bytes_for_test() const noexce
     return cookie_table_for_test_ ? cookie_table_for_test_->fixed_bytes() : 0;
 }
 
-} // namespace sluice::async
+}
 
 #endif

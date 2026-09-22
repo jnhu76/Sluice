@@ -183,7 +183,7 @@ bool grep_files_reports_error_for_closed_file() {
     return matches.empty();
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

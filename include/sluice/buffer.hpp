@@ -69,4 +69,4 @@ class BufferedWriter final : public Writer {
     BufferStats* stats_ = nullptr;
 };
 
-} // namespace sluice
+}

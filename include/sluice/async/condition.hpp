@@ -104,4 +104,4 @@ inline void AsyncCondition::notify_all() {
     scheduler_.condition_notify_all(waiters_);
 }
 
-} // namespace sluice::async
+}

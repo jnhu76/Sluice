@@ -45,4 +45,4 @@ class SLUICE_CAPABILITY("mutex") Mutex {
     std::mutex impl_;
 };
 
-} // namespace sluice::async
+}

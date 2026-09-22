@@ -154,7 +154,7 @@ std::vector<GrepFileResult> run_grep_engine(const std::string& pattern,
     return std::move(result.value());
 }
 
-} // namespace
+}
 
 std::vector<GrepFileResult> grep_files(const std::string& pattern, std::vector<GrepInput> inputs,
                                        std::size_t buffer_size, std::size_t max_line_bytes,
@@ -171,4 +171,4 @@ grep_files_with_backend(const std::string& pattern, std::vector<GrepInput> input
                            std::move(sink), std::move(backend));
 }
 
-} // namespace sluice_grep
+}

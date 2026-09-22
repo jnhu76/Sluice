@@ -25,4 +25,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, CopyLimit limit);
 
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer);
 
-} // namespace sluice
+}

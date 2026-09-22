@@ -30,4 +30,4 @@ OpenCopyOutcome open_copy_files(const std::string& src_path, const std::string& 
 
 const char* open_copy_failure_message(OpenCopyFailure f);
 
-} // namespace sluice_copy
+}

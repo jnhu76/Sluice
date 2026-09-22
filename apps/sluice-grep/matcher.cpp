@@ -140,7 +140,7 @@ std::size_t fast_find(std::string_view hay, std::size_t pos, std::string_view pa
     return std::string_view::npos;
 }
 
-} // namespace
+}
 
 bool line_contains(std::string_view line, std::string_view pattern) {
     if (pattern.empty())
@@ -330,4 +330,4 @@ void LineMatcher::scan_complete_region(const char* p, std::size_t i, std::size_t
     line_no_ += frontier_nl + count_newlines(p + frontier, end - frontier);
 }
 
-} // namespace sluice_grep
+}

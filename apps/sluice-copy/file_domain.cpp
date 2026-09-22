@@ -31,7 +31,7 @@ OpenCopyOutcome fail(OpenCopyFailure f, IoError e) {
     return o;
 }
 
-} // namespace
+}
 
 OpenCopyOutcome open_copy_files(const std::string& src_path, const std::string& dst_path) {
     auto src_open = sluice::File::open(src_path);
@@ -96,4 +96,4 @@ const char* open_copy_failure_message(OpenCopyFailure f) {
     return "unknown error";
 }
 
-} // namespace sluice_copy
+}

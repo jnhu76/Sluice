@@ -31,4 +31,4 @@ void Fiber::make_done() noexcept {
     state_.store(FiberState::done, std::memory_order::release);
 }
 
-} // namespace sluice::async
+}

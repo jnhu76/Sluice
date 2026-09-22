@@ -365,4 +365,4 @@ class UringWaitSource final : public BackendWaitSource {
 #endif
 };
 
-} // namespace sluice::async::detail
+}

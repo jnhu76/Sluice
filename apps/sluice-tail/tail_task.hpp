@@ -65,4 +65,4 @@ class TailEngine {
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace sluice_tail
+}

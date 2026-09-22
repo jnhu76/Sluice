@@ -209,4 +209,4 @@ template <class T> class AsyncQueue final {
     detail::QueuePort port_;
 };
 
-} // namespace sluice::async
+}

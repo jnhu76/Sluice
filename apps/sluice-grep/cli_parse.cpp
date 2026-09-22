@@ -26,7 +26,7 @@ bool parse_unsigned_decimal(const char* s, std::size_t& out) {
     return true;
 }
 
-} // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -119,4 +119,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-} // namespace sluice_grep::cli
+}

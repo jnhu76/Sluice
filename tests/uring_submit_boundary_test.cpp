@@ -1,7 +1,3 @@
-// io_uring submission-path mechanism boundaries. These are transfer limits of
-// the io_uring execution, not File semantics: a chunk length clamps the SQE
-// length, and the resulting short count is the ordinary allowed short transfer.
-// File range/offset rules are covered by semantic_range_test.
 #include <sluice/detail/uring_submit.hpp>
 
 #include <cstdio>
@@ -33,7 +29,7 @@ bool chunk_length_clamps_above_native_max() {
     return uring_chunk_length(std::numeric_limits<std::size_t>::max()) == native_max;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

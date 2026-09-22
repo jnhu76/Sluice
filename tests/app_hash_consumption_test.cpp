@@ -172,7 +172,7 @@ bool hash_files_preserves_input_order() {
     return results[0].hex == digest_hex("abc") && results[1].hex == digest_hex("def");
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

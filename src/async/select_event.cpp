@@ -52,4 +52,4 @@ void Scheduler::select_finalize_event_loser_locked(detail::SelectGroup& group,
     (void)group;
 }
 
-} // namespace sluice::async
+}

@@ -189,5 +189,5 @@ class SelectPort {
     SelectArmSlot* head_{nullptr};
 };
 
-} // namespace detail
-} // namespace sluice::async
+}
+}

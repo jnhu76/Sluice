@@ -194,4 +194,4 @@ void Scheduler::select_finalize_timer_loser_locked(detail::SelectGroup& group,
     (void)group;
 }
 
-} // namespace sluice::async
+}

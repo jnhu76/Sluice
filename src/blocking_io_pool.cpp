@@ -33,7 +33,7 @@ BlockingIoPoolOptions validate_options_or_throw(BlockingIoPoolOptions opts) {
     }
     return opts;
 }
-} // namespace
+}
 
 struct BlockingIoPool::Impl {
     BlockingIoPoolOptions opts;
@@ -178,7 +178,7 @@ Result<void> enqueue_job(BlockingIoPool& pool, std::function<void()> job, bool b
     return {};
 }
 
-} // namespace detail
+}
 
 PoolStats* BlockingIoPool::pool_stats() noexcept {
     return impl_->stats;
@@ -221,4 +221,4 @@ Result<std::unique_ptr<BlockingIoPool>> make_blocking_io_pool(BlockingIoPoolOpti
     return std::make_unique<BlockingIoPool>(opts, stats);
 }
 
-} // namespace sluice
+}

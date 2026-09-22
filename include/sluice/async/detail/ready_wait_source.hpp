@@ -135,4 +135,4 @@ class ReadyWaitSource final : public BackendWaitSource {
 #endif
 };
 
-} // namespace sluice::async::detail
+}

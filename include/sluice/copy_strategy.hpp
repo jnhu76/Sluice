@@ -28,4 +28,4 @@ struct CopyDecision {
 
 std::string_view to_string(CopyStrategy strategy);
 
-} // namespace sluice
+}

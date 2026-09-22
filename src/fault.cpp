@@ -70,4 +70,4 @@ Result<void> FaultWriter::flush() {
     return inner_.flush();
 }
 
-} // namespace sluice
+}

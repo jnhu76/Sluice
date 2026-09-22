@@ -87,4 +87,4 @@ Result<SlotHandle> submit_transaction(RequestArena& arena, typename Policy::comp
     return h;
 }
 
-} // namespace sluice::async::detail
+}

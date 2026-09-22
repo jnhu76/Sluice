@@ -55,4 +55,4 @@ class Event {
     detail::SelectPort select_port_;
 };
 
-} // namespace sluice::async
+}

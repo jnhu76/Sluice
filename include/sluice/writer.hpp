@@ -23,4 +23,4 @@ class Writer {
     Result<void> write_all_vec(std::span<const ConstIoSlice> srcs);
 };
 
-} // namespace sluice
+}

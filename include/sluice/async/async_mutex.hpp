@@ -46,4 +46,4 @@ class AsyncMutex {
     WaitQueue waiters_;
 };
 
-} // namespace sluice::async
+}

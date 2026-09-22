@@ -485,4 +485,4 @@ void Scheduler::rwlock_timer_expire_reconcile(void* owner_ctx, bool timer_won) n
     (void)timer_won;
 }
 
-} // namespace sluice::async
+}

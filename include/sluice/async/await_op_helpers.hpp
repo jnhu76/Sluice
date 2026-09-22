@@ -34,4 +34,4 @@ Result<std::size_t> await_write_exact(RuntimeTaskContext& ctx, const NativeFileR
                                       std::span<const std::byte> src, std::uint64_t offset,
                                       Completion<std::size_t>& c, AwaitOpTally* tally = nullptr);
 
-} // namespace sluice::async
+}

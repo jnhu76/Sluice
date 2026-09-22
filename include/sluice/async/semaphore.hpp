@@ -54,4 +54,4 @@ class Semaphore {
     WaitQueue waiters_;
 };
 
-} // namespace sluice::async
+}

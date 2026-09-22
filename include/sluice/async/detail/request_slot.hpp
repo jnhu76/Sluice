@@ -105,4 +105,4 @@ class RequestSlot {
     bool cancel_intent_ = false;
 };
 
-} // namespace sluice::async::detail
+}

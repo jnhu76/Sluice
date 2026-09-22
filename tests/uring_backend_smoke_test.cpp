@@ -1,8 +1,3 @@
-// Real-path smoke for the io_uring backend on the canonical operation
-// representation: File-referencing ops, access-admission semantics at the
-// initiation boundary, and real liburing lowering. Registered only under
-// --liburing=y; the macro and link arrive through sluice_async's public
-// usage requirement.
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
@@ -185,9 +180,6 @@ bool sync_all_op_through_canonical_file() {
     return file.close().has_value();
 }
 
-// Zero-length outranks offset validation on this backend's lowering: a
-// zero-length request with an unrepresentable offset must complete 0, not
-// fail admission.
 bool zero_length_read_completes_zero_despite_unrepresentable_offset() {
     const std::string path = make_temp_file("d");
     if (path.empty())
@@ -248,9 +240,6 @@ bool zero_length_write_completes_zero_despite_unrepresentable_offset() {
     return file.close().has_value() && ok;
 }
 
-// Non-zero requests with an unrepresentable offset are rejected at admission
-// with the frozen error category on the real lowering, never deferred to
-// backend execution.
 bool read_with_unrepresentable_offset_rejected_at_admission() {
     const std::string path = make_temp_file("d");
     if (path.empty())
@@ -319,7 +308,7 @@ bool write_with_unrepresentable_offset_rejected_at_admission() {
     return file.close().has_value() && ok;
 }
 
-} // namespace
+}
 
 int main() {
     if (!uring_backend_available()) {

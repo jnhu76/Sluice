@@ -91,6 +91,6 @@ class BlockingIoPool {
 Result<std::unique_ptr<BlockingIoPool>> make_blocking_io_pool(BlockingIoPoolOptions opts,
                                                               PoolStats* stats = nullptr);
 
-} // namespace sluice
+}
 
 #include <sluice/detail/blocking_io_pool_impl.hpp>

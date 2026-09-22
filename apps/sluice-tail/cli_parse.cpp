@@ -23,7 +23,7 @@ bool parse_digits(const char* s, std::size_t& out) {
     return true;
 }
 
-} // namespace
+}
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -128,4 +128,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-} // namespace sluice_tail::cli
+}

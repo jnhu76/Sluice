@@ -33,7 +33,7 @@ void release_sanitizer_fiber(Context& ctx) noexcept {
     ctx.owns_sanitizer_fiber = false;
 }
 
-} // namespace
+}
 
 Context::~Context() noexcept {
     release_sanitizer_fiber(*this);
@@ -137,7 +137,7 @@ void prepare_tsan_switch(Switch* s) noexcept {
 #endif
 }
 
-} // namespace
+}
 
 #if SLUICE_FIBER_TSAN_ENABLED
 __attribute__((no_sanitize("thread")))
@@ -215,4 +215,4 @@ extern "C" void fiber_entry_trampoline() {}
 
 #endif
 
-} // namespace sluice::async::fiber_ctx
+}

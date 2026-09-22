@@ -303,4 +303,4 @@ class QueuePort final {
     friend class ::sluice::async::Scheduler;
 };
 
-} // namespace sluice::async::detail
+}

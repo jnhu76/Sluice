@@ -108,5 +108,5 @@ inline bool heap_less_entry(const DeadlineHeapEntry& a, const DeadlineHeapEntry&
     return a.deadline < b.deadline;
 }
 
-} // namespace detail
-} // namespace sluice::async
+}
+}

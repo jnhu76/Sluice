@@ -138,4 +138,4 @@ std::optional<BatchResult> Batch::next() noexcept {
     return r;
 }
 
-} // namespace sluice::async
+}

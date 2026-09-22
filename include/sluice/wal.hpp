@@ -52,6 +52,6 @@ Result<std::uint32_t> checked_u32_len(std::size_t len);
 
 std::size_t read_chunk_size(std::size_t remaining) noexcept;
 
-} // namespace detail
+}
 
-} // namespace sluice::wal
+}

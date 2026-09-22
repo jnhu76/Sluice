@@ -284,7 +284,7 @@ bool atomic_same_file_fails_without_temp() {
            oc.temp_path.empty();
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {

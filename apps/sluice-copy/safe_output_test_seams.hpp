@@ -50,4 +50,4 @@ class DirFsyncScript {
     std::size_t calls_ = 0;
 };
 
-} // namespace sluice_copy::testing
+}

@@ -160,4 +160,4 @@ bool Scheduler::sem_release(WaitQueue& waiters, std::atomic<std::uint32_t>& avai
     return true;
 }
 
-} // namespace sluice::async
+}

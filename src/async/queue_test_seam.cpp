@@ -47,8 +47,8 @@ void disarm_queue_snapshot_pause() noexcept {
     g_queue_snapshot_pause_gate.store(nullptr, std::memory_order_release);
 }
 
-} // namespace test_hooks
+}
 
-} // namespace sluice::async::detail
+}
 
 #endif

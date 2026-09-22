@@ -97,4 +97,4 @@ Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
     return {};
 }
 
-} // namespace sluice
+}

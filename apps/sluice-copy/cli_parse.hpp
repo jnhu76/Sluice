@@ -32,4 +32,4 @@ int parse_args(int argc, char** argv, CliArgs& args);
 
 const char* code_name(sluice::IoError::Code c);
 
-} // namespace sluice_copy::cli
+}

@@ -23,8 +23,8 @@ void release_queue_snapshot_pause(QueueSnapshotPauseGate& gate) noexcept;
 
 void disarm_queue_snapshot_pause() noexcept;
 
-} // namespace test_hooks
+}
 
 #endif
 
-} // namespace sluice::async::detail
+}

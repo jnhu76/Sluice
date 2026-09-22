@@ -102,4 +102,4 @@ Group::~Group() {
         (void)f->await();
 }
 
-} // namespace sluice::async
+}

@@ -100,4 +100,4 @@ class QueueItemLease final {
     friend class ::sluice::async::Scheduler;
 };
 
-} // namespace sluice::async::detail
+}

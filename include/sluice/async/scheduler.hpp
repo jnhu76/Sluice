@@ -43,7 +43,7 @@ class SelectPort;
 struct SelectArmSlot;
 enum class ArmState : std::uint8_t;
 class SelectCaseDescriptor;
-} // namespace detail
+}
 
 class SchedulerWakeHandle {
   public:
@@ -772,7 +772,7 @@ class Scheduler {
 #endif
 };
 
-} // namespace sluice::async
+}
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

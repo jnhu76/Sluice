@@ -96,4 +96,4 @@ struct AsyncStats {
     std::uint64_t invalid_state_rejections = 0;
 };
 
-} // namespace sluice
+}

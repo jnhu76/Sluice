@@ -24,7 +24,7 @@ constexpr std::size_t kPreflightMaxArms = 8;
 static_assert(kPreflightMaxArms >= 1, "Select must permit at least one arm");
 static_assert(kPreflightMaxArms == kSelectMaxArms,
               "kPreflightMaxArms must match the public kSelectMaxArms gate");
-} // namespace
+}
 
 void Scheduler::select_preflight_shape_locked(detail::SelectGroup& group,
                                               std::uint32_t candidate_index) const {
@@ -983,4 +983,4 @@ void Scheduler::select_rollback_registration_locked(detail::SelectGroup& group,
     select_finish_rollback_locked(group, arms, arm_count, registered_count);
 }
 
-} // namespace sluice::async
+}

@@ -41,4 +41,4 @@ class LineMatcher {
 
 bool line_contains(std::string_view line, std::string_view pattern);
 
-} // namespace sluice_grep
+}

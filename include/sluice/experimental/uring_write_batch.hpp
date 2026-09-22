@@ -41,4 +41,4 @@ class UringWriteBatch {
     UringStats* stats_ = nullptr;
 };
 
-} // namespace sluice::experimental
+}

@@ -92,4 +92,4 @@ bool init_context(Context& ctx, Entry entry, void* user_data, std::byte* stack_b
 
 void reset_context(Context& ctx) noexcept;
 
-} // namespace sluice::async::fiber_ctx
+}

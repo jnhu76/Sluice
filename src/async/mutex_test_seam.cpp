@@ -13,7 +13,7 @@ namespace {
 std::atomic<unsigned> g_lock_countdown{0};
 std::atomic<bool> g_fail_next_try_lock{false};
 
-} // namespace
+}
 
 void maybe_inject_mutex_failure(MutexTestOperation op) {
     if (op == MutexTestOperation::lock) {
@@ -52,8 +52,8 @@ void disarm() noexcept {
     g_fail_next_try_lock.store(false, std::memory_order_relaxed);
 }
 
-} // namespace test_hooks
+}
 
-} // namespace sluice::async::detail
+}
 
 #endif

@@ -80,4 +80,4 @@ Result<void> ObservedWriter::flush() {
     return {};
 }
 
-} // namespace sluice
+}

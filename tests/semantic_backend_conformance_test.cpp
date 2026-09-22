@@ -1,9 +1,3 @@
-// SEM-03 precedence, compared on the real io_uring execution path.
-//
-// The scenarios and the oracle expectations are the same objects the direct and
-// ThreadPool comparison uses, so this file adds a mechanism, not a contract. It
-// is registered only under --liburing=y; when the kernel refuses io_uring setup
-// the run is reported NOT RUN rather than passed.
 #include "semantic_path_probes.hpp"
 #include "semantic_scenarios.hpp"
 
@@ -21,8 +15,10 @@ namespace {
 
 using sluice::async::UringAsyncBackend;
 
-} // namespace
+}
 
+
+// A kernel that refuses io_uring setup must produce NOT RUN, never a vacuous pass.
 int main() {
     if (!UringAsyncBackend().available()) {
         std::printf("NOT RUN: io_uring unavailable on this host (kernel/policy blocked)\n");

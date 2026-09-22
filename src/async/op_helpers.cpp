@@ -21,7 +21,7 @@ Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
     }
     return c.result();
 }
-} // namespace
+}
 
 Result<std::size_t> read_all(AsyncIoContext& ctx, const NativeFileRef& file,
                              std::span<std::byte> dst, std::uint64_t offset) {
@@ -79,7 +79,7 @@ Result<void> sync_step(AsyncIoContext& ctx, Completion<void>& c, const NativeFil
     }
     return c.result();
 }
-} // namespace
+}
 
 Result<void> sync_data_all(AsyncIoContext& ctx, const NativeFileRef& file) {
     Completion<void> c;
@@ -91,4 +91,4 @@ Result<void> sync_all_all(AsyncIoContext& ctx, const NativeFileRef& file) {
     return sync_step(ctx, c, file, false);
 }
 
-} // namespace sluice::async
+}

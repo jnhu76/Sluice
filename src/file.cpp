@@ -62,7 +62,7 @@ int close_fd(int fd) {
     return ::close(fd);
 }
 
-} // namespace
+}
 
 FileReader::FileReader(const std::string& path, SyscallStats* stats, VectorStats* vec_stats)
     : stats_(stats), vec_stats_(vec_stats) {
@@ -582,7 +582,7 @@ Result<void> do_sync(int fd, const std::optional<IoError>& open_error, const Fn&
     return {};
 }
 
-} // namespace
+}
 
 Result<void> FileWriter::sync_data() {
     return do_sync(
@@ -596,4 +596,4 @@ Result<void> FileWriter::sync_all() {
         &SyncStats::sync_all_calls, &SyncStats::sync_all_errors);
 }
 
-} // namespace sluice
+}
