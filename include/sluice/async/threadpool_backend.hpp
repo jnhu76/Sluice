@@ -52,6 +52,11 @@ class ThreadPoolBackend : public AsyncBackend {
                                             detail::ContextIdentity{ctx});
     }
 
+    std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept override {
+        arena_.adopt_context_identity(identity);
+        return arena_.capacity();
+    }
+
   public:
     std::size_t poll() override;
     Result<std::size_t> wait_one() override;
@@ -73,6 +78,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void close_admission();
 
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
+    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
     std::size_t configured_worker_count() const noexcept { return workers_.size(); }
@@ -185,11 +191,6 @@ class ThreadPoolBackend : public AsyncBackend {
         std::size_t high_water_ = 0;
         std::size_t capacity_;
     };
-
-    static std::uint64_t next_backend_id() noexcept {
-        static std::atomic<std::uint64_t> id{0x54500000u};
-        return ++id;
-    }
 
     static Result<void> validate_read(ReadOp op);
     static Result<void> validate_write(WriteOp op);

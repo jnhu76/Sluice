@@ -85,6 +85,11 @@ class UringAsyncBackend : public AsyncBackend {
                                             detail::ContextIdentity{ctx});
     }
 
+    std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept override {
+        arena_.adopt_context_identity(identity);
+        return arena_.capacity();
+    }
+
   public:
 #endif
 
@@ -114,6 +119,7 @@ class UringAsyncBackend : public AsyncBackend {
     }
 
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
+    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_accepted_outstanding() const noexcept {
         return arena_.accepted_outstanding();
@@ -282,11 +288,6 @@ class UringAsyncBackend : public AsyncBackend {
     class BoundedDispatchQueue;
 
     class TransportLedger;
-
-    static std::uint64_t next_backend_id() noexcept {
-        static std::atomic<std::uint64_t> id{0x55720000u};
-        return ++id;
-    }
 
     static Result<void> validate_read(ReadOp op);
     static Result<void> validate_write(WriteOp op);

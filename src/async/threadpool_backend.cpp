@@ -79,8 +79,8 @@ bool ThreadPoolBackend::BoundedDispatchQueue::remove_exact(detail::SlotHandle h)
 }
 
 ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
-    : arena_(detail::ContextIdentity::for_testing(next_backend_id()), config.request_capacity),
-      prepared_ops_(config.request_capacity), dispatch_(config.request_capacity) {
+    : arena_(config.request_capacity), prepared_ops_(config.request_capacity),
+      dispatch_(config.request_capacity) {
     if (config.request_capacity == 0 || config.worker_count == 0) {
         throw std::invalid_argument("ThreadPoolConfig fields must be > 0");
     }

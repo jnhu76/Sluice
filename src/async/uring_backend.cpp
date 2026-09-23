@@ -345,10 +345,10 @@ UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
 }
 
 UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
-    : arena_(detail::ContextIdentity::for_testing(next_backend_id()), config.request_capacity),
-      prepared_ops_(config.request_capacity), router_(config.request_capacity),
-      cancel_scratch_(config.request_capacity), cookie_free_list_(config.request_capacity),
-      queue_depth_(config.queue_depth), ring_state_(std::make_unique<UringRingState>()) {
+    : arena_(config.request_capacity), prepared_ops_(config.request_capacity),
+      router_(config.request_capacity), cancel_scratch_(config.request_capacity),
+      cookie_free_list_(config.request_capacity), queue_depth_(config.queue_depth),
+      ring_state_(std::make_unique<UringRingState>()) {
     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
         cookie_free_list_[i] = detail::SlotIndex{i};
     }

@@ -62,6 +62,10 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void context_identity_exhausted_fail_fast() noexcept {
+    std::terminate();
+}
+
 [[noreturn]] void scheduler_invalid_runnable_ticket_fail_fast() noexcept {
     std::terminate();
 }
