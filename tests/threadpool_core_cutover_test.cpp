@@ -245,6 +245,8 @@ bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t)
     rearm_threadpool_gate(gate);
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
+    while (raw->dispatch_size_for_test() != 0)
+        std::this_thread::yield();
     while (!c.ready())
         (void)ctx.poll();
     t.check(!c.result().has_value() && c.result().error().code == IoError::Code::canceled,
@@ -373,6 +375,8 @@ bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
     rearm_threadpool_gate(gate);
     raw->set_worker_outcome_pre_terminal_pause_gate(nullptr);
 
+    while (raw->publication_pending_size_for_test() == 0)
+        std::this_thread::yield();
     t.check(raw->publication_pending_size_for_test() == 1,
             "terminal selection and ref retirement queue the publication");
     while (!c.ready())
@@ -476,6 +480,75 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
 
     c.reset();
     t.check(core.snapshot().accepted_live == 0, "the zero-op slot reclaims after release");
+    return true;
+}
+
+bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1b deferred pin\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{1, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+
+    Completion<std::size_t> c;
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset}, c);
+    t.check(submitted.has_value(), "the zero-op occupies the only slot and is accepted");
+    t.check(c.ready() && c.result().has_value() && c.result().value() == 0,
+            "the zero-op is published at acceptance");
+    const auto key = raw->request_key_for_test(c);
+    t.check(key.has_value(), "the completion carries the zero-op request key");
+    const auto published_live = core.observe_slot(SlotIndex{0});
+    t.check(published_live.has_value() && published_live->published &&
+                published_live->binding_live && published_live->control_refs == 1,
+            "the deferred delivery obligation pins the core slot");
+    t.check(raw->event_owed_for_test(0), "the ready event is owed");
+
+    c.reset();
+    const auto pinned = core.observe_slot(SlotIndex{0});
+    t.check(pinned.has_value() && pinned->phase == RequestCore::SlotPhase::accepted &&
+                pinned->published && !pinned->binding_live && pinned->control_refs == 1,
+            "resetting before the poll releases the binding but cannot reclaim the slot");
+    t.check(raw->event_owed_for_test(0), "the delivery obligation survives the release");
+    t.check(core.lookup(*key) == PublicLookup::not_found,
+            "the released identity stops resolving while the event is still owed");
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    Completion<std::size_t> next;
+    auto refused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, next);
+    t.check(!refused.has_value() && refused.error().code == IoError::Code::would_block,
+            "the pinned slot cannot be reused before the owed event is delivered");
+    t.check(raw->event_owed_for_test(0) && next.idle(),
+            "the refused submission leaves the owed record untouched");
+
+    const std::size_t events = ctx.poll();
+    t.check(events == 1, "the poll delivers exactly the owed event");
+    t.check(!raw->event_owed_for_test(0), "the owed event is discharged");
+    t.check(raw->sink_deliveries() == 1, "the ready event is delivered exactly once");
+    t.check(raw->sink_last_key() == *key, "the delivered event carries the old request key");
+
+    const auto after = core.observe_slot(SlotIndex{0});
+    t.check(after.has_value() && after->phase == RequestCore::SlotPhase::free &&
+                after->generation.value == pinned->generation.value + 1 &&
+                core.snapshot().accepted_live == 0,
+            "the final pin retirement reclaims synchronously");
+    t.check(raw->syscall_count_for_test() == syscalls_before,
+            "the reclaim needed no unrelated new I/O");
+
+    auto reused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, next);
+    t.check(reused.has_value(), "the reclaimed slot serves a new request");
+    while (!next.ready())
+        (void)ctx.poll();
+    t.check(next.result().has_value() && next.result().value() == 4,
+            "the new request completes normally");
+    next.reset();
+    t.check(core.snapshot().accepted_live == 0 && core.snapshot().free_slots == core.capacity(),
+            "the context drains fully afterwards");
     return true;
 }
 
@@ -665,6 +738,8 @@ int main() {
          release_racing_the_publication_epilogue_reclaims_without_new_io},
         {"zero_op_publishes_at_acceptance_without_dispatch",
          zero_op_publishes_at_acceptance_without_dispatch},
+        {"zero_op_delivery_pins_the_slot_until_the_event_is_delivered",
+         zero_op_delivery_pins_the_slot_until_the_event_is_delivered},
         {"admission_close_between_reserve_and_accept_refuses_and_rolls_back",
          admission_close_between_reserve_and_accept_refuses_and_rolls_back},
         {"waiter_registration_and_delivery_ride_the_publication",

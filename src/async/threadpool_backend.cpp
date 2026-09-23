@@ -327,6 +327,9 @@ void ThreadPoolBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
 }
 
 void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept {
+    if (!core_->acquire_control(id)) {
+        detail::threadpool_core_handoff_fail_fast();
+    }
     detail::PublicationPayload payload;
     if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
         detail::threadpool_core_handoff_fail_fast();
@@ -516,7 +519,12 @@ std::size_t ThreadPoolBackend::poll() {
         if (!record.event_owed)
             continue;
         record.event_owed = false;
-        deliver_event(record.owed_key, record.kind);
+        const detail::RequestKey owed = record.owed_key;
+        record.owed_key = {};
+        deliver_event(owed, record.kind);
+        if (core_->release_control(owed) != detail::ControlRelease::released) {
+            detail::threadpool_core_handoff_fail_fast();
+        }
         ++published;
     }
     return published;

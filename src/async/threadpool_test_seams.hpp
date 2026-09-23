@@ -213,6 +213,9 @@ inline void ThreadPoolBackend::set_submit_stage_failure_injection(
 inline std::size_t ThreadPoolBackend::sink_deliveries() const noexcept {
     return sink_.deliveries();
 }
+inline detail::RequestKey ThreadPoolBackend::sink_last_key() const noexcept {
+    return sink_.last_key();
+}
 inline bool ThreadPoolBackend::sink_last_has_waiter() const noexcept {
     return sink_.last_has_waiter();
 }

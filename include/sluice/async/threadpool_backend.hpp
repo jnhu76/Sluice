@@ -146,6 +146,7 @@ class ThreadPoolBackend : public AsyncBackend {
     std::optional<WaiterObservation> waiter_of_slot_for_test(std::uint32_t slot) const;
 
     std::size_t sink_deliveries() const noexcept;
+    detail::RequestKey sink_last_key() const noexcept;
     bool sink_last_has_waiter() const noexcept;
     detail::WaiterToken sink_last_token() const noexcept;
     std::uint64_t sink_last_lease_id() const noexcept;
@@ -172,6 +173,8 @@ class ThreadPoolBackend : public AsyncBackend {
         detail::WaiterToken waiter_token{};
         detail::RoutingLease waiter_lease{};
         bool waiter_delivery_present = false;
+        // event_owed pairs with one core control ref on owed_key: the ref is
+        // acquired before this flag is set and released after delivery.
         bool event_owed = false;
         detail::RequestKey owed_key{};
     };
