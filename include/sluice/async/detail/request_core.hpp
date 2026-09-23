@@ -95,6 +95,7 @@ enum class ExecutionRelease : std::uint8_t {
     borrow_touch_fully_retired,
     stale,
     underflow_rejected,
+    premature_rejected,
 };
 
 enum class ControlRelease : std::uint8_t {

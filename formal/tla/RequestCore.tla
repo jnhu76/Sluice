@@ -39,10 +39,26 @@
 (*   - a physical outcome is admissible only while accepted and unchosen;  *)
 (*   - duplicate and stale-generation candidates change nothing.           *)
 (*                                                                         *)
+(* Execution responsibility (class E) is a frozen capability chain:        *)
+(*   - acceptance installs the first E (the pending-dispatch lease);       *)
+(*   - a handoff may acquire a new E only while no terminal is chosen;     *)
+(*   - the last E may retire only after a terminal holds the outcome       *)
+(*     (accepted-and-unchosen keeps E > 0, InvExecHeldUntilTerminal);      *)
+(*   - once a terminal is chosen no new E may be acquired                  *)
+(*     (InvNoExecRevival).                                                 *)
+(*                                                                         *)
+(* Admission health: a health failure is a fact next to the closed bit;    *)
+(*   both Reserve and Accept refuse under it, and no acceptance commits    *)
+(*   after it (InvNoAcceptAfterHealth).                                    *)
+(*                                                                         *)
 (* Reclaim requires the slot published, binding released, exec and ctl     *)
 (* retired.  Control refs cannot be acquired on an already fully-released  *)
-(* slot: new bookkeeping on settled work is outside the protocol, and      *)
-(* keeping the predicate monotone is what makes L5 honest.                 *)
+(*   slot: new bookkeeping on settled work is outside the protocol, and    *)
+(* keeping the predicate monotone is what makes L5 honest.  The C++        *)
+(*   acquire_control carries the same settled-work guard explicitly: the   *)
+(*   synchronous zero-gap reclaim closes only the C = 0 window; a live     *)
+(*   C pin defers reclaim and re-opens the window, so the guard is part    *)
+(*   of the API contract, not an optimization.                             *)
 (*                                                                         *)
 (* This is the repository's first liveness-carrying model: FairSpec adds   *)
 (* weak fairness on the driver/physical/retirement/publication/reclaim     *)
@@ -54,6 +70,7 @@
 (* Mutant switches (all FALSE in the reference cfg); each Mut* cfg must    *)
 (* be killed by its expected invariant or property:                        *)
 (*   MutIgnoreClose        accept ignores admission close                  *)
+(*   MutIgnoreHealth       accept ignores the health failure               *)
 (*   MutRollbackResidue    rollback enabled from accepted, leaves facts    *)
 (*   MutTerminalOverwrite  a second candidate overwrites the winner        *)
 (*   MutCancelAsPhysical   cancel wins even after the execution claim      *)
@@ -62,15 +79,23 @@
 (*   MutGenWrap            release does not advance the generation         *)
 (*   MutReclaimIgnoresPub  reclaim drops the published requirement         *)
 (*   MutReclaimIgnoresCtl  reclaim drops the control-pin requirement       *)
-(*   MutReadyBeforePayload publication may begin with no terminal chosen   *)
+(*   MutRetireLastExec     the last exec retires with no terminal chosen   *)
+(*   MutExecAfterTerminal  a new exec is acquired after a chosen terminal  *)
+(*   MutStaleEvent         a stale-generation outcome hits a reused slot   *)
 (*   MutStrandPostAccept   a recorded intent blocks the physical outcome   *)
 (*   MutLazyReclaim        reclaim requires an unrelated submit wake       *)
+(*   MutCtlAfterSettled    control may be re-acquired on settled work      *)
 (*   MutDoubleDecrement    retirement decrements the same ref twice        *)
-(*   MutStaleEvent         a stale-generation outcome hits a reused slot   *)
+(*   MutReadyBeforePayload publication may begin with no terminal chosen;  *)
+(*                         subsumed by the E-chain guard since Corrective-1 *)
+(*                         (exec = 0 with no terminal is unreachable), so  *)
+(*                         its cfg must now complete CLEANLY as the        *)
+(*                         separation witness for that subsumption         *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 
 CONSTANT MutIgnoreClose,
+          MutIgnoreHealth,
           MutRollbackResidue,
           MutTerminalOverwrite,
           MutCancelAsPhysical,
@@ -79,11 +104,14 @@ CONSTANT MutIgnoreClose,
           MutGenWrap,
           MutReclaimIgnoresPub,
           MutReclaimIgnoresCtl,
-          MutReadyBeforePayload,
+          MutRetireLastExec,
+          MutExecAfterTerminal,
+          MutStaleEvent,
           MutStrandPostAccept,
           MutLazyReclaim,
+          MutCtlAfterSettled,
           MutDoubleDecrement,
-          MutStaleEvent
+          MutReadyBeforePayload
 
 Slots == {"s0", "s1"}
 GenMax == 2
@@ -100,12 +128,12 @@ ReclaimRecords == [id: Ids, exec: 0..MaxExec, ctl: 0..MaxCtl,
                    bind: BOOLEAN, pub: Pubs]
 
 VARIABLES phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
-          closed, wake, acceptsAfterClose,
-          stage, acceptCount, chosenIds, reclaimLog
+          closed, health, wake, acceptsAfterClose, acceptsAfterHealth,
+          stage, acceptCount, chosenIds, reclaimLog, execRevived
 
 vars == <<phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
-          closed, wake, acceptsAfterClose,
-          stage, acceptCount, chosenIds, reclaimLog>>
+          closed, health, wake, acceptsAfterClose, acceptsAfterHealth,
+          stage, acceptCount, chosenIds, reclaimLog, execRevived>>
 
 Identity(s) == [slot |-> s, gen |-> gen[s]]
 
@@ -138,12 +166,15 @@ Init ==
   /\ intent = [s \in Slots |-> FALSE]
   /\ choices = [s \in Slots |-> << >>]
   /\ closed = FALSE
+  /\ health = FALSE
   /\ wake = FALSE
   /\ acceptsAfterClose = 0
+  /\ acceptsAfterHealth = 0
   /\ stage = [i \in Ids |-> 0]
   /\ acceptCount = [i \in Ids |-> 0]
   /\ chosenIds = {}
   /\ reclaimLog = << >>
+  /\ execRevived = [s \in Slots |-> FALSE]
 
 ReleasePhase(s) ==
   IF gen[s] = GenMax
@@ -170,11 +201,12 @@ RetireSlot(s) ==
 Reserve(s) ==
   /\ phase[s] = "free"
   /\ ~closed
+  /\ ~health \/ MutIgnoreHealth
   /\ phase' = [phase EXCEPT ![s] = "reserved"]
   /\ wake' = IF MutLazyReclaim THEN TRUE ELSE wake
   /\ UNCHANGED <<gen, bind, term, exec, ctl, pub, claimed, intent, choices,
-                 closed, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 Rollback(s) ==
   /\ phase[s] = "reserved" \/ (MutRollbackResidue /\ phase[s] = "accepted")
@@ -183,19 +215,27 @@ Rollback(s) ==
             /\ gen' = AdvanceGen(s)
             /\ UNCHANGED <<bind, term, exec, ctl, pub, claimed, intent, choices>>
        ELSE RetireSlot(s)
-  /\ UNCHANGED <<closed, wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+  /\ UNCHANGED <<closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 CloseAdmission ==
   /\ ~closed
   /\ closed' = TRUE
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
-                 wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
+
+NoteHealth ==
+  /\ ~health
+  /\ health' = TRUE
+  /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
+                 closed, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 Accept(s) ==
   /\ phase[s] = "reserved"
   /\ ~closed \/ MutIgnoreClose
+  /\ ~health \/ MutIgnoreHealth
   /\ phase' = [phase EXCEPT ![s] = "accepted"]
   /\ bind' = [bind EXCEPT ![s] = TRUE]
   /\ exec' = [exec EXCEPT ![s] = 1]
@@ -207,7 +247,9 @@ Accept(s) ==
                        acceptCount[Identity(s)] + 1]
   /\ stage' = [stage EXCEPT ![Identity(s)] = 1]
   /\ acceptsAfterClose' = IF closed THEN 1 ELSE acceptsAfterClose
-  /\ UNCHANGED <<gen, ctl, choices, closed, wake, chosenIds, reclaimLog>>
+  /\ acceptsAfterHealth' = IF health THEN 1 ELSE acceptsAfterHealth
+  /\ UNCHANGED <<gen, ctl, choices, closed, health, wake, chosenIds, reclaimLog,
+                 execRevived>>
 
 ClaimExec(s) ==
   /\ phase[s] = "accepted"
@@ -215,8 +257,8 @@ ClaimExec(s) ==
   /\ term[s] = "none"
   /\ claimed' = [claimed EXCEPT ![s] = TRUE]
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, pub, intent, choices,
-                 closed, wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 PhysicalOutcome(s) ==
   /\ phase[s] = "accepted"
@@ -231,8 +273,8 @@ PhysicalOutcome(s) ==
   /\ chosenIds' = chosenIds \cup {Identity(s)}
   /\ intent' = [intent EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, bind, exec, ctl, pub, claimed,
-                 closed, wake, acceptsAfterClose, stage, acceptCount,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, reclaimLog>>
 
 StaleTerminal(s, g) ==
   /\ MutStaleEvent
@@ -245,8 +287,8 @@ StaleTerminal(s, g) ==
                    Append(choices[s], [gen |-> g, claimed |-> claimed[s],
                                        kind |-> "phys"])]
   /\ UNCHANGED <<phase, gen, bind, exec, ctl, pub, claimed, intent,
-                 closed, wake, acceptsAfterClose, stage, acceptCount,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, reclaimLog>>
 
 CancelRequest(s) ==
   /\ phase[s] = "accepted"
@@ -263,33 +305,44 @@ CancelRequest(s) ==
                                                  kind |-> "cancelwin"])]
             /\ intent' = [intent EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, bind, exec, ctl, pub, claimed,
-                 closed, wake, acceptsAfterClose, stage, acceptCount,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, reclaimLog>>
 
 RetireExec(s) ==
   /\ phase[s] = "accepted"
   /\ exec[s] > 0
+  /\ MutRetireLastExec \/ ~(exec[s] = 1 /\ term[s] = "none")
   /\ exec' = [exec EXCEPT ![s] = IF MutDoubleDecrement THEN exec[s] - 2 ELSE exec[s] - 1]
   /\ UNCHANGED <<phase, gen, bind, term, ctl, pub, claimed, intent, choices,
-                 closed, wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
+
+AcquireExec(s) ==
+  /\ phase[s] = "accepted"
+  /\ term[s] = "none" \/ MutExecAfterTerminal
+  /\ exec[s] < MaxExec
+  /\ exec' = [exec EXCEPT ![s] = exec[s] + 1]
+  /\ execRevived' = [execRevived EXCEPT ![s] = execRevived[s] \/ (term[s] # "none")]
+  /\ UNCHANGED <<phase, gen, bind, term, ctl, pub, claimed, intent, choices,
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 AcquireCtl(s) ==
   /\ phase[s] = "accepted"
-  /\ ~(pub[s] = "done" /\ ~bind[s] /\ exec[s] = 0)
+  /\ MutCtlAfterSettled \/ ~(pub[s] = "done" /\ ~bind[s] /\ exec[s] = 0)
   /\ ctl[s] < MaxCtl
   /\ ctl' = [ctl EXCEPT ![s] = ctl[s] + 1]
   /\ UNCHANGED <<phase, gen, bind, term, exec, pub, claimed, intent, choices,
-                 closed, wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 RetireCtl(s) ==
   /\ phase[s] = "accepted"
   /\ ctl[s] > 0
   /\ ctl' = [ctl EXCEPT ![s] = IF MutDoubleDecrement THEN ctl[s] - 2 ELSE ctl[s] - 1]
   /\ UNCHANGED <<phase, gen, bind, term, exec, pub, claimed, intent, choices,
-                 closed, wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 BeginPublish(s) ==
   /\ phase[s] = "accepted"
@@ -299,8 +352,8 @@ BeginPublish(s) ==
   /\ term[s] # "none" \/ MutReadyBeforePayload
   /\ pub' = [pub EXCEPT ![s] = "inflight"]
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, claimed, intent, choices,
-                 closed, wake, acceptsAfterClose, stage, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 stage, acceptCount, chosenIds, reclaimLog>>
 
 CompletePublish(s) ==
   /\ pub[s] = "inflight"
@@ -308,8 +361,8 @@ CompletePublish(s) ==
   /\ stage' = [stage EXCEPT ![Identity(s)] =
                  IF stage[Identity(s)] < 2 THEN 2 ELSE stage[Identity(s)]]
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, claimed, intent, choices,
-                 closed, wake, acceptsAfterClose, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 acceptCount, chosenIds, reclaimLog>>
 
 ReleaseBind(s) ==
   /\ phase[s] = "accepted"
@@ -323,8 +376,8 @@ ReleaseBind(s) ==
        THEN UNCHANGED bind
        ELSE bind' = [bind EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
-                 closed, wake, acceptsAfterClose, acceptCount, chosenIds,
-                 reclaimLog>>
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 acceptCount, chosenIds, reclaimLog>>
 
 Reclaim(s) ==
   /\ phase[s] = "accepted"
@@ -339,7 +392,8 @@ Reclaim(s) ==
   /\ stage' = [stage EXCEPT ![Identity(s)] = 4]
   /\ RetireSlot(s)
   /\ IF MutLazyReclaim THEN wake' = FALSE ELSE UNCHANGED wake
-  /\ UNCHANGED <<closed, acceptsAfterClose, acceptCount, chosenIds>>
+  /\ UNCHANGED <<closed, health, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 acceptCount, chosenIds>>
 
 SlotAction(s) ==
   \/ Reserve(s)
@@ -349,6 +403,7 @@ SlotAction(s) ==
   \/ PhysicalOutcome(s)
   \/ CancelRequest(s)
   \/ RetireExec(s)
+  \/ AcquireExec(s)
   \/ AcquireCtl(s)
   \/ RetireCtl(s)
   \/ BeginPublish(s)
@@ -359,6 +414,7 @@ SlotAction(s) ==
 
 Next ==
   \/ CloseAdmission
+  \/ NoteHealth
   \/ \E s \in Slots : SlotAction(s)
 
 Spec == Init /\ [][Next]_vars
@@ -395,11 +451,14 @@ TypeOK ==
   /\ claimed \in [Slots -> BOOLEAN]
   /\ intent \in [Slots -> BOOLEAN]
   /\ closed \in BOOLEAN
+  /\ health \in BOOLEAN
   /\ wake \in BOOLEAN
   /\ acceptsAfterClose \in {0, 1}
+  /\ acceptsAfterHealth \in {0, 1}
   /\ stage \in [Ids -> Stages]
   /\ acceptCount \in [Ids -> 0..2]
   /\ chosenIds \subseteq Ids
+  /\ execRevived \in [Slots -> BOOLEAN]
   /\ Len(reclaimLog) =< 8
   /\ \A i \in 1..Len(reclaimLog) : reclaimLog[i] \in ReclaimRecords
   /\ \A s \in Slots : Len(choices[s]) =< 4
@@ -459,6 +518,16 @@ InvReclaimConditions ==
 
 InvNoAcceptAfterClose ==
   acceptsAfterClose = 0
+
+InvNoAcceptAfterHealth ==
+  acceptsAfterHealth = 0
+
+InvExecHeldUntilTerminal ==
+  \A s \in Slots :
+    (phase[s] = "accepted" /\ term[s] = "none") => exec[s] > 0
+
+InvNoExecRevival ==
+  \A s \in Slots : ~execRevived[s]
 
 (*******************************************************************)
 (* Conditional liveness, by full request identity                  *)

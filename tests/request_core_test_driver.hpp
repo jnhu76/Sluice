@@ -33,22 +33,30 @@ using sluice::async::detail::TerminalCandidate;
 using sluice::async::detail::TerminalCandidateKind;
 using sluice::async::detail::TerminalVerdict;
 
+enum class PublishOrder : std::uint8_t { seal_before_ready, ready_before_seal };
+
 class PublicationTarget {
   public:
+    explicit PublicationTarget(PublishOrder order = PublishOrder::seal_before_ready) noexcept
+        : order_(order) {}
+
     void store(const PublicationPayload& payload) {
-        if (sealed_.load(std::memory_order::relaxed)) {
-            publisher_touched_after_ready_ = true;
-        }
+        note_publisher_access_();
         payload_ = payload;
     }
 
     void publish_ready() noexcept {
-        if (sealed_.load(std::memory_order::relaxed)) {
-            publisher_touched_after_ready_ = true;
+        note_publisher_access_();
+        if (order_ == PublishOrder::ready_before_seal) {
+            ready_.store(true, std::memory_order::release);
+            seal_();
+            return;
         }
+        seal_();
         ready_.store(true, std::memory_order::release);
-        sealed_.store(true, std::memory_order::relaxed);
     }
+
+    void destroy() noexcept { destroyed_ = true; }
 
     bool acquire_ready() const noexcept { return ready_.load(std::memory_order::acquire); }
 
@@ -56,11 +64,33 @@ class PublicationTarget {
 
     bool publisher_touched_after_ready() const noexcept { return publisher_touched_after_ready_; }
 
+    bool seal_followed_ready() const noexcept { return seal_followed_ready_; }
+
+    bool used_after_destroy() const noexcept { return used_after_destroy_; }
+
   private:
+    void note_publisher_access_() noexcept {
+        if (destroyed_) {
+            used_after_destroy_ = true;
+        }
+        if (sealed_.load(std::memory_order::relaxed)) {
+            publisher_touched_after_ready_ = true;
+        }
+    }
+
+    void seal_() noexcept {
+        seal_followed_ready_ = seal_followed_ready_ || ready_.load(std::memory_order::relaxed);
+        sealed_.store(true, std::memory_order::relaxed);
+    }
+
+    PublishOrder order_;
     PublicationPayload payload_{};
     std::atomic<bool> ready_{false};
     std::atomic<bool> sealed_{false};
+    bool destroyed_ = false;
     bool publisher_touched_after_ready_ = false;
+    bool seal_followed_ready_ = false;
+    bool used_after_destroy_ = false;
 };
 
 class FakePhysicalDriver {

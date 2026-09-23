@@ -19,6 +19,7 @@ using sluice_request_core_test::PublicationPayload;
 using sluice_request_core_test::PublicationTarget;
 using sluice_request_core_test::PublicCancel;
 using sluice_request_core_test::PublicLookup;
+using sluice_request_core_test::PublishOrder;
 using sluice_request_core_test::RequestCore;
 using sluice_request_core_test::RequestKey;
 using sluice_request_core_test::RequestOp;
@@ -67,7 +68,7 @@ bool happy_path_publication_is_ordered(Tracker& t) {
     t.check(driver.lookup(accepted.id) == PublicLookup::published,
             "published lookup after epilogue");
     t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
-    t.check(!target.publisher_touched_after_ready(),
+    t.check(!target.publisher_touched_after_ready() && !target.seal_followed_ready(),
             "publisher never touches the caller target after the ready store");
     t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
             "slot reclaimed");
@@ -227,16 +228,18 @@ bool release_racing_publication_epilogue_is_safe(Tracker& t) {
         PublicationTarget target;
         target.store(payload);
         target.publish_ready();
-        publisher_clean = !target.publisher_touched_after_ready();
+        publisher_clean = !target.publisher_touched_after_ready() && !target.seal_followed_ready();
         t.check(target.acquire_ready(), "consumer acquires ready");
         t.check(target.acquired_payload().outcome.is_canceled(), "canceled result delivered");
+        target.destroy();
         released_during_epilogue =
             driver.release_public_binding(accepted.id) == BindingRelease::released;
         lookup_invalidated = driver.lookup(accepted.id) == PublicLookup::not_found;
         slot_pinned_during_window =
             core.observe_slot(accepted.id.slot)->publication_inflight &&
             core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::accepted;
-        publisher_clean = publisher_clean && !target.publisher_touched_after_ready();
+        publisher_clean = publisher_clean && !target.publisher_touched_after_ready() &&
+                          !target.used_after_destroy();
     }
     t.check(publisher_clean, "ready store was the publisher's last target access");
     t.check(released_during_epilogue, "release during epilogue accepted");
@@ -248,6 +251,43 @@ bool release_racing_publication_epilogue_is_safe(Tracker& t) {
     t.check(core.snapshot().accepted_live == 0,
             "reclaim driven by the epilogue without touching the destroyed target");
     driver.settle_all();
+    return t.failures == 0;
+}
+
+bool ready_store_is_the_last_publisher_access_audited(Tracker& t) {
+    PublicationPayload payload;
+    {
+        PublicationTarget target;
+        target.store(payload);
+        target.publish_ready();
+        t.check(target.acquire_ready(), "the ordered publication becomes ready");
+        t.check(!target.seal_followed_ready(), "seal bookkeeping precedes the ready store");
+        target.destroy();
+        t.check(!target.used_after_destroy(), "no publisher access after consumer destroy");
+    }
+    {
+        PublicationTarget target{PublishOrder::ready_before_seal};
+        target.store(payload);
+        target.publish_ready();
+        t.check(target.acquire_ready(), "the misordered variant still becomes ready");
+        t.check(target.seal_followed_ready(),
+                "the order audit catches publisher bookkeeping after the ready store");
+    }
+    {
+        PublicationTarget target;
+        target.publish_ready();
+        target.store(payload);
+        t.check(target.publisher_touched_after_ready(), "a post-ready store is flagged");
+    }
+    {
+        PublicationTarget target;
+        target.publish_ready();
+        t.check(target.acquire_ready(), "ready");
+        target.destroy();
+        target.store(payload);
+        t.check(target.used_after_destroy(),
+                "a publisher touch after consumer destroy is flagged");
+    }
     return t.failures == 0;
 }
 
@@ -368,6 +408,8 @@ int main() {
          public_release_before_publication_is_refused},
         {"release_racing_publication_epilogue_is_safe",
          release_racing_publication_epilogue_is_safe},
+        {"ready_store_is_the_last_publisher_access_audited",
+         ready_store_is_the_last_publisher_access_audited},
         {"final_blocking_release_drives_each_reclaim_variant",
          final_blocking_release_drives_each_reclaim_variant},
         {"post_accept_dispatch_failure_publishes_through_terminal",

@@ -88,7 +88,7 @@ const RequestCore::Slot* RequestCore::resolve_public_(RequestKey id) const noexc
 
 ReserveAttempt RequestCore::reserve() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!admission_open_) {
+    if (!admission_open_ || health_failed_) {
         return ReserveAttempt{ReserveStatus::admission_closed, {}};
     }
     if (free_slots_.empty()) {
@@ -126,7 +126,7 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
     if (slot == nullptr) {
         return AcceptAttempt{AcceptStatus::bad_reservation, {}};
     }
-    if (!admission_open_) {
+    if (!admission_open_ || health_failed_) {
         return AcceptAttempt{AcceptStatus::admission_closed, {}};
     }
     slot->phase = SlotPhase::accepted;
@@ -258,7 +258,7 @@ bool RequestCore::acquire_execution(RequestKey id) noexcept {
     if (slot == nullptr) {
         return false;
     }
-    if (slot->published) {
+    if (slot->terminal_chosen || slot->published) {
         return false;
     }
     ++slot->execution_refs;
@@ -274,6 +274,9 @@ ExecutionRelease RequestCore::release_execution(RequestKey id) noexcept {
     if (slot->execution_refs == 0) {
         return ExecutionRelease::underflow_rejected;
     }
+    if (slot->execution_refs == 1 && !slot->terminal_chosen) {
+        return ExecutionRelease::premature_rejected;
+    }
     --slot->execution_refs;
     const bool fully_retired = slot->execution_refs == 0 && slot->terminal_chosen;
     try_reclaim_(*slot, id.slot.value);
@@ -284,6 +287,9 @@ bool RequestCore::acquire_control(RequestKey id) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     Slot* slot = resolve_internal_(id);
     if (slot == nullptr) {
+        return false;
+    }
+    if (slot->published && !slot->binding_live && slot->execution_refs == 0) {
         return false;
     }
     ++slot->control_refs;

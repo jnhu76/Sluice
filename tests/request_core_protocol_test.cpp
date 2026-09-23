@@ -221,6 +221,35 @@ bool wrong_generation_is_rejected(Tracker& t) {
     return t.failures == 0;
 }
 
+bool settled_work_admits_no_new_control_pin(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 16);
+    t.check(driver.acquire_control(accepted.id), "control pin acquired before settlement");
+    t.check(driver.claim_execution(accepted.id) == ExecutionClaim::claimed, "claim");
+    t.check(driver.offer_physical_success(accepted.id, 16) == TerminalVerdict::chosen, "terminal");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "execution retired");
+    PublicationTarget& target = driver.make_target();
+    t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted, "published");
+    t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
+    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released,
+            "binding released while the control pin lives");
+    t.check(!driver.acquire_control(accepted.id),
+            "settled work admits no new control bookkeeping");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::accepted,
+            "the existing pin still holds the slot");
+    t.check(driver.retire_control(accepted.id) == sluice::async::detail::ControlRelease::released,
+            "the existing control pin retires");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
+            "the final control release reclaims in the same call");
+    t.check(!driver.acquire_control(accepted.id),
+            "a reclaimed identity admits no control bookkeeping either");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
 bool released_identity_stays_invalid_while_control_pin_lives(Tracker& t) {
     RequestCore core = make_core();
     FakePhysicalDriver driver(core);
@@ -442,6 +471,40 @@ bool health_failure_alone_never_terminalizes(Tracker& t) {
     return t.failures == 0;
 }
 
+bool health_failure_closes_new_acceptance_from_reserve(Tracker& t) {
+    RequestCore core = make_core(2);
+    FakePhysicalDriver driver(core);
+    driver.note_health_failure();
+    ReserveAttempt attempt = driver.reserve();
+    t.check(attempt.status == ReserveStatus::admission_closed,
+            "failed health refuses new reservation");
+    CoreSnapshot snap = core.snapshot();
+    t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.health_failed,
+            "no reservation residue under failed health");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool health_between_reserve_and_accept_refuses_commit(Tracker& t) {
+    RequestCore core = make_core(2);
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    t.check(attempt.ok(), "reserve before the health failure");
+    driver.note_health_failure();
+    AcceptAttempt refused = driver.accept(attempt.reservation, 0, 8);
+    t.check(refused.status == sluice::async::detail::AcceptStatus::admission_closed,
+            "accept re-checks health under the same authority");
+    t.check(driver.lookup(key_of(core, attempt.reservation)) == PublicLookup::not_found,
+            "the refused reservation mints no public identity");
+    t.check(driver.rollback(attempt.reservation), "the refused reservation rolls back");
+    t.check(core.snapshot().accepted_live == 0, "no acceptance residue after the health refusal");
+    ReserveAttempt fresh = driver.reserve();
+    t.check(fresh.status == ReserveStatus::admission_closed,
+            "admission stays closed while health is failed");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
 bool execution_refs_block_publication(Tracker& t) {
     RequestCore core = make_core();
     FakePhysicalDriver driver(core);
@@ -484,6 +547,62 @@ bool execution_responsibility_chain_has_no_gap(Tracker& t) {
             "final retirement ends the chain");
     observation = core.observe_slot(accepted.id.slot);
     t.check(observation->execution_refs == 0, "chain ends only at retirement");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool last_execution_release_requires_a_terminal(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::premature_rejected,
+            "the final execution reference cannot retire before a terminal exists");
+    auto observation = core.observe_slot(accepted.id.slot);
+    t.check(observation->execution_refs == 1 && !observation->terminal_chosen,
+            "the rejected release leaves the obligation intact");
+    t.check(driver.claim_execution(accepted.id) == ExecutionClaim::claimed,
+            "the claim handoff remains available");
+    t.check(driver.acquire_execution(accepted.id), "the executor handoff acquisition remains available");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::released,
+            "a non-final retirement is unaffected");
+    t.check(driver.offer_physical_error(
+                accepted.id, IoError{.code = IoError::Code::backend_error}) ==
+                TerminalVerdict::chosen,
+            "the terminal remains formable while the chain is live");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "the final retirement is accepted once the terminal holds the outcome");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool terminal_choice_freezes_execution_capability(Tracker& t) {
+    RequestCore core = make_core(3);
+    FakePhysicalDriver driver(core);
+    ReserveAttempt canceled_attempt = driver.reserve();
+    AcceptAttempt canceled = driver.accept(canceled_attempt.reservation, 0, 8);
+    t.check(driver.cancel(canceled.id) == PublicCancel::won_before_execution,
+            "pre-claim cancel wins");
+    t.check(!driver.acquire_execution(canceled.id),
+            "no execution authority is granted after a zero-effect cancel win");
+    t.check(driver.claim_execution(canceled.id) == ExecutionClaim::late,
+            "no execution claim after a zero-effect cancel win");
+    t.check(driver.retire_execution(canceled.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "the pending dispatch obligation still retires");
+
+    ReserveAttempt finished_attempt = driver.reserve();
+    AcceptAttempt finished = driver.accept(finished_attempt.reservation, 0, 8);
+    t.check(driver.claim_execution(finished.id) == ExecutionClaim::claimed, "claim");
+    t.check(driver.offer_physical_success(finished.id, 8) == TerminalVerdict::chosen, "terminal");
+    t.check(!driver.acquire_execution(finished.id),
+            "no new execution reference after a chosen terminal");
+    t.check(driver.retire_execution(finished.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "the reporting reference retires");
+
+    ReserveAttempt zero_attempt = driver.reserve();
+    AcceptAttempt zero = driver.accept(zero_attempt.reservation, 0, 0, true);
+    t.check(zero.ok(), "zero-op accepted");
+    t.check(!driver.acquire_execution(zero.id), "no execution authority on a zero-op terminal");
     driver.settle_all();
     return t.failures == 0;
 }
@@ -754,8 +873,16 @@ int main() {
         {"pre_execution_cancel_wins_only_without_claim",
          pre_execution_cancel_wins_only_without_claim},
         {"health_failure_alone_never_terminalizes", health_failure_alone_never_terminalizes},
+        {"health_failure_closes_new_acceptance_from_reserve",
+         health_failure_closes_new_acceptance_from_reserve},
+        {"health_between_reserve_and_accept_refuses_commit",
+         health_between_reserve_and_accept_refuses_commit},
+        {"settled_work_admits_no_new_control_pin", settled_work_admits_no_new_control_pin},
         {"execution_refs_block_publication", execution_refs_block_publication},
         {"execution_responsibility_chain_has_no_gap", execution_responsibility_chain_has_no_gap},
+        {"last_execution_release_requires_a_terminal", last_execution_release_requires_a_terminal},
+        {"terminal_choice_freezes_execution_capability",
+         terminal_choice_freezes_execution_capability},
         {"publication_states_are_distinguishable", publication_states_are_distinguishable},
         {"duplicate_publisher_rejected", duplicate_publisher_rejected},
         {"terminal_without_publication_does_not_reclaim",

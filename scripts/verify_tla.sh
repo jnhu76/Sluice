@@ -505,7 +505,8 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #    28. Safety: the full fact set (admission close race, single acceptance,
 #        single admissible winner, generation matching, cancel-admissibility,
 #        publication gated on exec retirement, release invalidation, the
-#        four-pin reclaim predicate) must complete cleanly.
+#        four-pin reclaim predicate, health-gated acceptance, the E-chain
+#        capability rules) must complete cleanly.
 #    29. Liveness: PROPERTY L1 (accepted ~> published) and L5 (reclaimable ~>
 #        reclaimed) under the declared WF_ fairness conjuncts, by full
 #        request identity.
@@ -513,10 +514,20 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #        MutGenWrap dies first on InvAcceptedRepresented (the wrapped slot
 #        strands the accepted identity); InvSingleAcceptance kills the same
 #        mutant when checked alone (recorded in the B1-1 evidence note).
+#        MutExecAfterTerminal may present as either InvNoExecRevival or
+#        InvNoPubWhileExec depending on which violating state BFS reaches
+#        first, so both kills are the intended one.
 #    31. Liveness mutants: MutStrandPostAccept must violate L1 (a recorded
 #        intent swallowing the physical outcome strands the request);
 #        MutLazyReclaim must violate L5 (reclaim gated on an unrelated
-#        submit wake).
+#        submit wake); MutCtlAfterSettled must violate L5 (re-acquiring
+#        control on settled work keeps Reclaimable non-monotone and starves
+#        the reclaim service through intermittent enabling).
+#    32. Separation witness: MutReadyBeforePayload (publication may begin
+#        with no terminal chosen) must complete CLEANLY since the B1-1
+#        Corrective-1 E-chain rule: exec = 0 with no terminal is now
+#        unreachable, so the fault is subsumed one layer earlier and the
+#        mutant's unkillability is that subsumption's certificate.
 echo "== Stage B1-1: RequestCore safety =="
 run_clean rcore-safety RequestCore.cfg RequestCore
 
@@ -525,6 +536,7 @@ run_live_clean rcore-live RequestCoreLive.cfg RequestCore
 
 echo "== Stage B1-1: RequestCore safety mutants =="
 run_violate rcore-mut-ignore-close RequestCoreMutIgnoreClose.cfg RequestCore InvNoAcceptAfterClose
+run_violate rcore-mut-ignore-health RequestCoreMutIgnoreHealth.cfg RequestCore InvNoAcceptAfterHealth
 run_violate rcore-mut-rollback-residue RequestCoreMutRollbackResidue.cfg RequestCore InvUnoccupiedClean
 run_violate rcore-mut-terminal-overwrite RequestCoreMutTerminalOverwrite.cfg RequestCore InvSingleWinner
 run_violate rcore-mut-cancel-as-physical RequestCoreMutCancelAsPhysical.cfg RequestCore InvCancelWinRequiresUnclaimed
@@ -533,12 +545,17 @@ run_violate rcore-mut-release-resolvable RequestCoreMutReleaseResolvable.cfg Req
 run_violate rcore-mut-gen-wrap RequestCoreMutGenWrap.cfg RequestCore InvAcceptedRepresented
 run_violate rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg RequestCore InvReclaimConditions
 run_violate rcore-mut-reclaim-ignores-ctl RequestCoreMutReclaimIgnoresCtl.cfg RequestCore InvReclaimConditions
-run_violate rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore InvPublishedBacked
+run_violate rcore-mut-retire-last-exec RequestCoreMutRetireLastExec.cfg RequestCore InvExecHeldUntilTerminal
+run_violate_any rcore-mut-exec-after-terminal RequestCoreMutExecAfterTerminal.cfg RequestCore "InvNoExecRevival|InvNoPubWhileExec"
 run_violate rcore-mut-stale-event RequestCoreMutStaleEvent.cfg RequestCore InvTerminalMatchesGeneration
 run_violate rcore-mut-double-decrement RequestCoreMutDoubleDecrement.cfg RequestCore TypeOK
 
 echo "== Stage B1-1: RequestCore liveness mutants =="
 run_temporal_violate rcore-mut-strand-post-accept RequestCoreMutStrandPostAccept.cfg RequestCore
 run_temporal_violate rcore-mut-lazy-reclaim RequestCoreMutLazyReclaim.cfg RequestCore
+run_temporal_violate rcore-mut-ctl-after-settled RequestCoreMutCtlAfterSettled.cfg RequestCore
+
+echo "== Stage B1-1: E-chain subsumption witness (must hold cleanly) =="
+run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore
 
 echo "VERIFY_TLA: PASS"
