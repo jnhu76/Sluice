@@ -2,6 +2,7 @@
 
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/request_arena.hpp>
+#include <sluice/async/detail/request_core.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -14,6 +15,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <type_traits>
 
 namespace sluice::async {
@@ -60,8 +62,8 @@ template <class T> class Completion {
         if (s == State::outstanding || s == State::publishing || s == State::resetting) {
             detail::completion_authority_fail_fast();
         }
-        if (s == State::ready && release_arena_ != nullptr) {
-            release_arena_->release_completed_binding(bound_slot_);
+        if (s == State::ready) {
+            release_binding_();
         }
     }
 
@@ -103,9 +105,7 @@ template <class T> class Completion {
             detail::completion_authority_fail_fast();
         }
 
-        if (release_arena_ != nullptr) {
-            release_arena_->release_completed_binding(bound_slot_);
-        }
+        release_binding_();
         clear_binding_for_backend();
         storage_ = Storage{};
         reap_seq_ = 0;
@@ -145,9 +145,34 @@ template <class T> class Completion {
         release_arena_ = arena;
         bound_slot_ = h;
     }
+    void install_core_binding_for_backend(detail::RequestCore* core,
+                                          detail::RequestKey key) noexcept {
+        release_core_ = core;
+        core_key_ = key;
+    }
+    std::optional<detail::RequestKey> core_binding_for_backend() const noexcept {
+        if (release_core_ == nullptr)
+            return std::nullopt;
+        return core_key_;
+    }
     void clear_binding_for_backend() noexcept {
         release_arena_ = nullptr;
         bound_slot_ = {};
+        release_core_ = nullptr;
+        core_key_ = {};
+    }
+
+    void release_binding_() noexcept {
+        if (release_core_ != nullptr) {
+            if (release_core_->release_public_binding(core_key_) !=
+                detail::BindingRelease::released) {
+                detail::completion_authority_fail_fast();
+            }
+            return;
+        }
+        if (release_arena_ != nullptr) {
+            release_arena_->release_completed_binding(bound_slot_);
+        }
     }
 
     void rollback_claim_before_accept() noexcept {
@@ -181,6 +206,8 @@ template <class T> class Completion {
 
     detail::RequestArena* release_arena_ = nullptr;
     detail::SlotHandle bound_slot_{};
+    detail::RequestCore* release_core_ = nullptr;
+    detail::RequestKey core_key_{};
 
     struct Storage;
     Storage storage_;
@@ -228,8 +255,8 @@ template <> class Completion<void> {
         if (s == State::outstanding || s == State::publishing || s == State::resetting) {
             detail::completion_authority_fail_fast();
         }
-        if (s == State::ready && release_arena_ != nullptr) {
-            release_arena_->release_completed_binding(bound_slot_);
+        if (s == State::ready) {
+            release_binding_();
         }
     }
 
@@ -272,9 +299,7 @@ template <> class Completion<void> {
             detail::completion_authority_fail_fast();
         }
 
-        if (release_arena_ != nullptr) {
-            release_arena_->release_completed_binding(bound_slot_);
-        }
+        release_binding_();
         clear_binding_for_backend();
         has_error_ = false;
         reap_seq_ = 0;
@@ -313,9 +338,34 @@ template <> class Completion<void> {
         release_arena_ = arena;
         bound_slot_ = h;
     }
+    void install_core_binding_for_backend(detail::RequestCore* core,
+                                          detail::RequestKey key) noexcept {
+        release_core_ = core;
+        core_key_ = key;
+    }
+    std::optional<detail::RequestKey> core_binding_for_backend() const noexcept {
+        if (release_core_ == nullptr)
+            return std::nullopt;
+        return core_key_;
+    }
     void clear_binding_for_backend() noexcept {
         release_arena_ = nullptr;
         bound_slot_ = {};
+        release_core_ = nullptr;
+        core_key_ = {};
+    }
+
+    void release_binding_() noexcept {
+        if (release_core_ != nullptr) {
+            if (release_core_->release_public_binding(core_key_) !=
+                detail::BindingRelease::released) {
+                detail::completion_authority_fail_fast();
+            }
+            return;
+        }
+        if (release_arena_ != nullptr) {
+            release_arena_->release_completed_binding(bound_slot_);
+        }
     }
 
     void rollback_claim_before_accept() noexcept {
@@ -356,6 +406,8 @@ template <> class Completion<void> {
 
     detail::RequestArena* release_arena_ = nullptr;
     detail::SlotHandle bound_slot_{};
+    detail::RequestCore* release_core_ = nullptr;
+    detail::RequestKey core_key_{};
 };
 
 }

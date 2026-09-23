@@ -22,6 +22,8 @@ std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::d
 
 }
 
+bool AsyncBackend::adopt_request_core(detail::RequestCore*) noexcept { return false; }
+
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
     : backend_(std::move(backend)), stats_(stats) {
     if (backend_)
@@ -29,12 +31,18 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
     const detail::ContextIdentity identity = detail::allocate_context_identity();
     const std::size_t slot_capacity = backend_ ? backend_->adopt_context_identity(identity) : 0;
     core_ = std::make_unique<detail::RequestCore>(identity, slot_capacity);
+    if (backend_) {
+        (void)backend_->adopt_request_core(core_.get());
+    }
 }
 
 AsyncIoContext::~AsyncIoContext() {
     if (backend_ && backend_->outstanding() != 0) {
         detail::async_context_outstanding_fail_fast();
     }
+    // Workers of a core-governed backend call into the core, so the backend
+    // must retire before the core storage disappears.
+    backend_.reset();
 }
 
 AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept

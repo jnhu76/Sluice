@@ -1,6 +1,7 @@
 #include <sluice/async/threadpool_backend.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
@@ -30,8 +31,16 @@ namespace {
     std::terminate();
 }
 
+[[noreturn]] void threadpool_publication_invariant_fail_fast() noexcept {
+    std::fprintf(stderr, "sluice::async::ThreadPoolBackend: publication handoff reached a "
+                         "protocol-unreachable state (invariant violation)\n");
+    std::fflush(stderr);
+    std::terminate();
 }
-void ThreadPoolBackend::BoundedDispatchQueue::push_back(detail::SlotHandle h) noexcept {
+
+}
+
+void ThreadPoolBackend::BoundedHandleRing::push_back(detail::SlotHandle h) noexcept {
     if (size_ >= capacity_) {
         threadpool_dispatch_queue_invariant_fail_fast();
     }
@@ -44,7 +53,7 @@ void ThreadPoolBackend::BoundedDispatchQueue::push_back(detail::SlotHandle h) no
         high_water_ = size_;
 }
 
-bool ThreadPoolBackend::BoundedDispatchQueue::pop_front(detail::SlotHandle& out) noexcept {
+bool ThreadPoolBackend::BoundedHandleRing::pop_front(detail::SlotHandle& out) noexcept {
     if (size_ == 0)
         return false;
     out = storage_[head_];
@@ -53,7 +62,7 @@ bool ThreadPoolBackend::BoundedDispatchQueue::pop_front(detail::SlotHandle& out)
     return true;
 }
 
-bool ThreadPoolBackend::BoundedDispatchQueue::remove_exact(detail::SlotHandle h) noexcept {
+bool ThreadPoolBackend::BoundedHandleRing::remove_exact(detail::SlotHandle h) noexcept {
     if (size_ == 0)
         return false;
     for (std::size_t i = 0; i < size_; ++i) {
@@ -79,8 +88,9 @@ bool ThreadPoolBackend::BoundedDispatchQueue::remove_exact(detail::SlotHandle h)
 }
 
 ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
-    : arena_(config.request_capacity), prepared_ops_(config.request_capacity),
-      dispatch_(config.request_capacity) {
+    : capacity_(config.request_capacity), prepared_ops_(config.request_capacity),
+      delivery_(config.request_capacity), dispatch_(config.request_capacity),
+      publication_pending_(config.request_capacity) {
     if (config.request_capacity == 0 || config.worker_count == 0) {
         throw std::invalid_argument("ThreadPoolConfig fields must be > 0");
     }
@@ -116,9 +126,10 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
 ThreadPoolBackend::~ThreadPoolBackend() {
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
-        auto q = arena_.quiescence_snapshot();
-        if (!dispatch_.empty() || active_workers_ != 0 || q.slot_in_use != 0 ||
-            q.accepted_outstanding != 0 || q.backend_ready != 0) {
+        const detail::CoreOccupancy occupancy =
+            core_ != nullptr ? core_->occupancy() : detail::CoreOccupancy{};
+        if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
+            occupancy.accepted_live != 0) {
             detail::threadpool_non_quiescent_destruction_fail_fast();
         }
         stopping_ = true;
@@ -157,19 +168,19 @@ Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
 }
 
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    return submit_size(op, c, detail::OperationKind::read);
+    return submit_request(op, c, detail::OperationKind::read, detail::RequestOp::read);
 }
 
 Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    return submit_size(op, c, detail::OperationKind::write);
+    return submit_request(op, c, detail::OperationKind::write, detail::RequestOp::write);
 }
 
 Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    return submit_void(op, c, detail::OperationKind::sync_data);
+    return submit_request(op, c, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
 }
 
 Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    return submit_void(op, c, detail::OperationKind::sync_all);
+    return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
 template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) noexcept {
@@ -184,122 +195,198 @@ template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) no
     }
 }
 
-template <class Op>
-Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
-                                            detail::OperationKind kind) {
+template <class Op, class Comp>
+Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::OperationKind kind,
+                                               detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    wait_before_admission_lock_pause_();
+    wait_submit_entry_pause_();
+#endif
+    if (auto v = validate_op(op); !v.has_value()) {
+        return make_unexpected<void>(v.error());
+    }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    if (auto inj = injected_precommit_stage_failure_(SubmitStage::reserve); inj.has_value()) {
+        return make_unexpected<void>(*inj);
+    }
 #endif
 
-    detail::SlotHandle h{};
-    {
-        std::lock_guard<std::mutex> admission_lk(admission_mtx_);
-        SubmitPolicy<Op, Completion<std::size_t>> policy{*this, kind};
-        auto r = detail::submit_transaction(arena_, c, op, policy);
-        if (!r.has_value()) {
-            return make_unexpected<void>(r.error());
-        }
-        h = r.value();
+    const auto reservation = core_->reserve();
+    if (!reservation.ok()) {
+        const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed
+                                       ? IoError::Code::invalid_state
+                                       : IoError::Code::would_block;
+        return make_unexpected<void>(IoError{code});
+    }
+    const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    if (auto inj = injected_precommit_stage_failure_(SubmitStage::prepare); inj.has_value()) {
+        (void)core_->rollback(reservation.reservation);
+        return make_unexpected<void>(*inj);
+    }
+#endif
+
+    std::uint64_t length = 0;
+    std::uint64_t offset = 0;
+    bool zero_op = false;
+    if constexpr (std::is_same_v<Op, ReadOp> || std::is_same_v<Op, WriteOp>) {
+        length = op.len;
+        offset = op.len == 0 ? std::uint64_t{0} : op.offset;
+        zero_op = op.len == 0;
+    }
+    prepared_ops_[h.slot.value] =
+        PreparedBlockingOp{kind, op.file.fd, buffer_of(op), static_cast<std::size_t>(length),
+                           offset};
+
+    DeliveryRecord& record = delivery_[h.slot.value];
+    record.completion = &c;
+    record.publish = publish_thunk<Comp>();
+    record.kind = kind;
+    record.registration = detail::WaiterRegistration::open_no_waiter;
+    record.waiter_token = {};
+    record.waiter_lease = {};
+    record.waiter_delivery_present = false;
+    record.event_owed = false;
+    record.owed_key = {};
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    if (auto inj = injected_precommit_stage_failure_(SubmitStage::commit); inj.has_value()) {
+        (void)core_->rollback(reservation.reservation);
+        return make_unexpected<void>(*inj);
     }
 
-    enqueue_after_commit(h);
+    wait_pre_accept_commit_pause_();
+#endif
+
+    if (!begin_binding(c)) {
+        (void)core_->rollback(reservation.reservation);
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
+    }
+
+    const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
+    const detail::BorrowFacts borrow{op.file.fd, buffer_of(op), length};
+    const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
+    if (!accepted.ok()) {
+        rollback_binding_before_accept(c);
+        (void)core_->rollback(reservation.reservation);
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
+    }
+
+    install_core_binding(c, core_, accepted.id);
+    commit_binding(c);
+
+    if (descriptor.zero_op) {
+        publish_zero_op_inline(accepted.id, h);
+    } else {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+        wait_accepted_pre_dispatch_pause_();
+#endif
+        dispatch_after_accept(h);
+    }
     return {};
 }
 
-template <class Op>
-Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
-                                            detail::OperationKind kind) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    wait_before_admission_lock_pause_();
-#endif
-    detail::SlotHandle h{};
-    {
-        std::lock_guard<std::mutex> admission_lk(admission_mtx_);
-        SubmitPolicy<Op, Completion<void>> policy{*this, kind};
-        auto r = detail::submit_transaction(arena_, c, op, policy);
-        if (!r.has_value()) {
-            return make_unexpected<void>(r.error());
-        }
-        h = r.value();
-    }
-    enqueue_after_commit(h);
-    return {};
-}
-
-void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
-    detail::EnqueueOutcome outcome;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+void ThreadPoolBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
     bool injected_dispatch_failure = false;
-
-    wait_before_enqueue_lock_pause_();
-#endif
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
-        outcome = arena_.enqueue(h);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        if (outcome == detail::EnqueueOutcome::enqueued) {
-            wait_after_enqueue_before_push_pause_(true);
 
-            auto* inj = dispatch_failure_injection_.load(std::memory_order_acquire);
-            if (inj != nullptr && inj->armed.load(std::memory_order_acquire)) {
-                inj->fired.fetch_add(1, std::memory_order_relaxed);
-                (void)arena_.record_terminal(
-                    h, detail::TerminalResult::err(IoError{IoError::Code::backend_error}));
-                injected_dispatch_failure = true;
+        auto* inj = dispatch_failure_injection_.load(std::memory_order_acquire);
+        if (inj != nullptr && inj->armed.load(std::memory_order_acquire)) {
+            inj->fired.fetch_add(1, std::memory_order_relaxed);
+            const detail::RequestKey key{core_->context(), h.slot, h.generation};
+            detail::TerminalCandidate candidate;
+            candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+            candidate.outcome = sluice::detail::IoOutcome::failure(
+                IoError{IoError::Code::backend_error});
+            if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
+                detail::threadpool_core_handoff_fail_fast();
             }
-        }
-#endif
-        if (outcome == detail::EnqueueOutcome::enqueued) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            if (!injected_dispatch_failure)
-#endif
-            {
-                dispatch_.push_back(h);
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                {
-                    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
-                    if (g != nullptr) {
-                        g->dispatch_push_completed.store(true, std::memory_order_release);
-                    }
-                }
-#endif
+            if (core_->release_execution(key) != detail::ExecutionRelease::borrow_touch_fully_retired) {
+                detail::threadpool_core_handoff_fail_fast();
             }
+            publication_pending_.push_back(h);
+            injected_dispatch_failure = true;
+        } else
+#endif
+        {
+            dispatch_.push_back(h);
         }
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     if (injected_dispatch_failure) {
         signal_ready_progress();
-    } else
-#endif
-        if (outcome == detail::EnqueueOutcome::enqueued) {
-        work_cv_.notify_one();
     } else {
-        signal_ready_progress();
+        work_cv_.notify_one();
     }
+}
+
+void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept {
+    detail::PublicationPayload payload;
+    if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
+        detail::threadpool_core_handoff_fail_fast();
+    }
+    DeliveryRecord& record = delivery_[h.slot.value];
+    record.publish(record.completion, payload.outcome);
+    if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
+        detail::threadpool_core_handoff_fail_fast();
+    }
+    record.event_owed = true;
+    record.owed_key = id;
+    signal_ready_progress();
+}
+
+void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
+    const detail::RequestKey key{core_->context(), h.slot, h.generation};
+    detail::PublicationPayload payload;
+    if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
+        threadpool_publication_invariant_fail_fast();
+    }
+    DeliveryRecord& record = delivery_[h.slot.value];
+    record.publish(record.completion, payload.outcome);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    wait_publication_epilogue_pause_();
+#endif
+    if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
+        threadpool_publication_invariant_fail_fast();
+    }
+    deliver_event(payload.id, record.kind);
+}
+
+void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
+    DeliveryRecord& record = delivery_[key.slot.value];
+    detail::OptionalWaiterDelivery waiter = detail::OptionalWaiterDelivery::none();
+    if (record.waiter_delivery_present) {
+        waiter =
+            detail::OptionalWaiterDelivery::of(record.waiter_token, std::move(record.waiter_lease));
+        record.waiter_token = {};
+        record.waiter_delivery_present = false;
+    }
+    record.registration = detail::WaiterRegistration::closed;
+    (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind, std::move(waiter)});
 }
 
 void ThreadPoolBackend::publish_size_ready(void* completion,
-                                           const detail::TerminalResult& t) noexcept {
-    AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion), terminal_to_size(t));
+                                           const sluice::detail::IoOutcome& outcome) noexcept {
+    Result<std::size_t> result = outcome.succeeded
+                                     ? Result<std::size_t>{static_cast<std::size_t>(
+                                           outcome.effect.confirmed_bytes)}
+                                     : make_unexpected<std::size_t>(outcome.error);
+    AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion), std::move(result));
 }
 
 void ThreadPoolBackend::publish_void_ready(void* completion,
-                                           const detail::TerminalResult& t) noexcept {
-    AsyncBackend::publish(*static_cast<Completion<void>*>(completion), terminal_to_void(t));
-}
-
-Result<std::size_t> ThreadPoolBackend::terminal_to_size(const detail::TerminalResult& t) noexcept {
-    if (t.stored && t.is_error)
-        return make_unexpected<std::size_t>(t.error);
-    return Result<std::size_t>{static_cast<std::size_t>(t.bytes)};
-}
-
-Result<void> ThreadPoolBackend::terminal_to_void(const detail::TerminalResult& t) noexcept {
-    if (t.stored && t.is_error)
-        return make_unexpected<void>(t.error);
-    return {};
+                                           const sluice::detail::IoOutcome& outcome) noexcept {
+    Result<void> result = outcome.succeeded
+                              ? Result<void>{}
+                              : make_unexpected<void>(outcome.error);
+    AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
 }
 
 void ThreadPoolBackend::worker_loop() {
@@ -314,43 +401,27 @@ void ThreadPoolBackend::worker_loop() {
                 if (stopping_ && dispatch_.empty())
                     return;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                std::uint64_t dequeue_gate_generation = 0;
-                if (before_dequeue_gate_.load(std::memory_order_acquire) != nullptr) {
-                    lk.unlock();
 
-                    dequeue_gate_generation = wait_before_dequeue_pause_();
-
-                    wait_post_resume_pre_pop_hold_();
-                    lk.lock();
-                    if (stopping_ && dispatch_.empty()) {
-                        ack_dequeue_gate_generation_(dequeue_gate_generation);
-                        return;
-                    }
-                }
-
-                const bool popped = dispatch_.pop_front(h);
-                ack_dequeue_gate_generation_(dequeue_gate_generation);
-                if (!popped)
-                    continue;
-#else
+                wait_before_dequeue_pause_();
+#endif
                 if (!dispatch_.pop_front(h))
                     continue;
-#endif
 
-                bool owns = arena_.mark_running(h);
-                if (!owns)
+                const detail::RequestKey key{core_->context(), h.slot, h.generation};
+                if (core_->claim_execution(key) != detail::ExecutionClaim::claimed) {
                     continue;
+                }
                 op = prepared_ops_[h.slot.value];
                 ++active_workers_;
                 have_op = true;
             }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            if (have_op)
-                wait_running_pause_();
-#endif
             if (have_op) {
-                detail::TerminalResult terminal = run_syscall(op);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+                wait_worker_claimed_pause_();
+#endif
+                const sluice::detail::IoOutcome outcome = run_syscall(op);
 
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
                 {
@@ -359,10 +430,24 @@ void ThreadPoolBackend::worker_loop() {
                 }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-                wait_terminal_publication_pause_();
+                wait_worker_outcome_pre_terminal_pause_();
 #endif
 
-                (void)arena_.record_terminal(h, terminal);
+                const detail::RequestKey key{core_->context(), h.slot, h.generation};
+                detail::TerminalCandidate candidate;
+                candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+                candidate.outcome = outcome;
+                if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
+                    detail::threadpool_core_handoff_fail_fast();
+                }
+                if (core_->release_execution(key) !=
+                    detail::ExecutionRelease::borrow_touch_fully_retired) {
+                    detail::threadpool_core_handoff_fail_fast();
+                }
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                    publication_pending_.push_back(h);
+                }
 
                 signal_ready_progress();
             }
@@ -375,7 +460,7 @@ void ThreadPoolBackend::worker_loop() {
     }
 }
 
-detail::TerminalResult ThreadPoolBackend::run_syscall(const PreparedBlockingOp& p) noexcept {
+sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingOp& p) noexcept {
     errno = 0;
     switch (p.kind) {
     case detail::OperationKind::read: {
@@ -384,8 +469,8 @@ detail::TerminalResult ThreadPoolBackend::run_syscall(const PreparedBlockingOp& 
                            static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
-            return detail::TerminalResult::err(sluice::from_errno_value(errno));
-        return detail::TerminalResult::ok_bytes(static_cast<std::uint64_t>(n));
+            return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+        return sluice::detail::IoOutcome::success(static_cast<std::uint64_t>(n));
     }
     case detail::OperationKind::write: {
         ssize_t n = sluice::detail::retry_on_eintr([&] {
@@ -393,33 +478,54 @@ detail::TerminalResult ThreadPoolBackend::run_syscall(const PreparedBlockingOp& 
                             static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
-            return detail::TerminalResult::err(sluice::from_errno_value(errno));
-        return detail::TerminalResult::ok_bytes(static_cast<std::uint64_t>(n));
+            return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+        return sluice::detail::IoOutcome::success(static_cast<std::uint64_t>(n));
     }
     case detail::OperationKind::sync_data: {
         int rc = sluice::detail::retry_on_eintr([&] { return ::fdatasync(p.fd); });
         if (rc < 0)
-            return detail::TerminalResult::err(sluice::from_errno_value(errno));
-        return detail::TerminalResult::ok_void();
+            return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+        return sluice::detail::IoOutcome::success();
     }
     case detail::OperationKind::sync_all: {
         int rc = sluice::detail::retry_on_eintr([&] { return ::fsync(p.fd); });
         if (rc < 0)
-            return detail::TerminalResult::err(sluice::from_errno_value(errno));
-        return detail::TerminalResult::ok_void();
+            return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+        return sluice::detail::IoOutcome::success();
     }
     }
-    return detail::TerminalResult::err(IoError{IoError::Code::backend_error});
+    return sluice::detail::IoOutcome::failure(IoError{IoError::Code::backend_error});
 }
 
 std::size_t ThreadPoolBackend::poll() {
-    return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
+    std::size_t published = 0;
+    for (;;) {
+        detail::SlotHandle h{};
+        bool have = false;
+        {
+            std::lock_guard<std::mutex> lk(work_mtx_);
+            have = publication_pending_.pop_front(h);
+        }
+        if (!have)
+            break;
+        publish_one(h);
+        ++published;
+    }
+    for (std::uint32_t i = 0; i < capacity_; ++i) {
+        DeliveryRecord& record = delivery_[i];
+        if (!record.event_owed)
+            continue;
+        record.event_owed = false;
+        deliver_event(record.owed_key, record.kind);
+        ++published;
+    }
+    return published;
 }
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {
     for (;;) {
         BackendWaitToken token = ready_wait_.snapshot();
-        std::size_t n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
+        std::size_t n = poll();
         if (n > 0)
             return n;
         if (ready_wait_.wait_for_change(token) == BackendWakeReason::interrupted) {
@@ -428,7 +534,7 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
             wait_control_wake_final_reap_pause_();
 #endif
 
-            n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
+            n = poll();
             if (n > 0)
                 return n;
             return std::size_t{0};
@@ -442,77 +548,100 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(bool inside_work_mtx) noexcept {
-    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
+void ThreadPoolBackend::wait_submit_entry_pause_() noexcept {
+    auto* g = submit_entry_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);
-    g->work_domain_held.store(inside_work_mtx, std::memory_order_release);
-    g->dispatch_push_completed.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
+    g->paused.notify_all();
     g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
+    g->exited.notify_all();
 }
 
-std::uint64_t ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
-    auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
+void ThreadPoolBackend::wait_pre_accept_commit_pause_() noexcept {
+    auto* g = pre_accept_commit_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
-        return 0;
-    const std::uint64_t generation = g->armed.load(std::memory_order_acquire);
-    if (generation == 0) {
-        g->exited.store(false, std::memory_order_release);
-        g->paused.store(true, std::memory_order_release);
-        g->paused.notify_one();
-        g->resume.wait(false, std::memory_order_acquire);
-        g->exited.store(true, std::memory_order_release);
-        g->exited.notify_one();
-        return 0;
-    }
-
-    dequeue_gate_detail::publish_max_(g->paused_at, generation);
-    g->paused_at.notify_all();
-    std::uint64_t seen = g->resumed_at.load(std::memory_order_acquire);
-    while (seen < generation) {
-        g->resumed_at.wait(seen, std::memory_order_acquire);
-        seen = g->resumed_at.load(std::memory_order_acquire);
-    }
-    return generation;
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
 }
 
-void ThreadPoolBackend::ack_dequeue_gate_generation_(std::uint64_t generation) noexcept {
-    if (generation == 0)
+void ThreadPoolBackend::wait_accepted_pre_dispatch_pause_() noexcept {
+    auto* g = accepted_pre_dispatch_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
         return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
     auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
-    dequeue_gate_detail::publish_max_(g->acked_at, generation);
-    g->acked_at.notify_all();
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
 }
 
-void ThreadPoolBackend::wait_post_resume_pre_pop_hold_() noexcept {
-    auto* g = post_resume_pre_pop_hold_gate_.load(std::memory_order_acquire);
+void ThreadPoolBackend::wait_worker_claimed_pause_() noexcept {
+    auto* g = worker_claimed_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
+    g->paused.notify_all();
     g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
+    g->exited.notify_all();
 }
 
-void ThreadPoolBackend::wait_before_enqueue_lock_pause_() noexcept {
-    auto* g = before_enqueue_lock_gate_.load(std::memory_order_acquire);
+void ThreadPoolBackend::wait_worker_outcome_pre_terminal_pause_() noexcept {
+    auto* g = worker_outcome_pre_terminal_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
+    g->paused.notify_all();
     g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_publication_epilogue_pause_() noexcept {
+    auto* g = publication_epilogue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
+    auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
 }
 
 std::optional<IoError>
@@ -543,140 +672,119 @@ ThreadPoolBackend::injected_precommit_stage_failure_(SubmitStage stage) noexcept
     }
     return std::nullopt;
 }
-
-void ThreadPoolBackend::wait_running_pause_() noexcept {
-    auto* g = running_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
-}
-
-void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
-    auto* g = terminal_publication_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
-}
-
-void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
-    auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
-}
-
-void ThreadPoolBackend::wait_before_admission_lock_pause_() noexcept {
-    auto* g = before_admission_lock_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
-}
-
-void ThreadPoolBackend::wait_before_commit_binding_pause_() noexcept {
-    auto* g = before_commit_binding_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_one();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_one();
-}
 #endif
 
-void ThreadPoolBackend::cancel(Completion<std::size_t>& c) {
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value())
-        return;
-    detail::SlotHandle handle = *h;
-    detail::CancelDisposition disp;
+detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
+    detail::PublicCancel disposition;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
 
-        (void)dispatch_.remove_exact(handle);
-        disp = arena_.cancel(handle);
+        (void)dispatch_.remove_exact(detail::SlotHandle{key.slot, key.generation});
+        disposition = core_->cancel(key);
+        if (disposition == detail::PublicCancel::won_before_execution) {
+            if (core_->release_execution(key) !=
+                detail::ExecutionRelease::borrow_touch_fully_retired) {
+                detail::threadpool_core_handoff_fail_fast();
+            }
+            publication_pending_.push_back(detail::SlotHandle{key.slot, key.generation});
+        }
     }
-    if (disp == detail::CancelDisposition::terminal_won) {
+    if (disposition == detail::PublicCancel::won_before_execution) {
         tally_canceled();
         signal_ready_progress();
     }
+    return disposition;
+}
+
+void ThreadPoolBackend::cancel(Completion<std::size_t>& c) {
+    auto key = core_binding(c);
+    if (!key.has_value())
+        return;
+    (void)cancel_key(*key);
 }
 
 void ThreadPoolBackend::cancel(Completion<void>& c) {
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value())
+    auto key = core_binding(c);
+    if (!key.has_value())
         return;
-    detail::SlotHandle handle = *h;
-    detail::CancelDisposition disp;
-    {
-        std::lock_guard<std::mutex> lk(work_mtx_);
-        (void)dispatch_.remove_exact(handle);
-        disp = arena_.cancel(handle);
-    }
-    if (disp == detail::CancelDisposition::terminal_won) {
-        tally_canceled();
-        signal_ready_progress();
-    }
+    (void)cancel_key(*key);
 }
 
 Result<void> ThreadPoolBackend::register_waiter(Completion<std::size_t>& c,
                                                 detail::WaiterToken token,
                                                 detail::RoutingLease lease) {
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value()) {
+    auto key = core_binding(c);
+    if (!key.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
-    return arena_.register_waiter(*h, token, std::move(lease));
+    if (core_->lookup(*key) != detail::PublicLookup::outstanding) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    DeliveryRecord& record = delivery_[key->slot.value];
+    if (record.registration == detail::WaiterRegistration::open_registered) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    record.registration = detail::WaiterRegistration::open_registered;
+    record.waiter_token = token;
+    record.waiter_lease = std::move(lease);
+    record.waiter_delivery_present = true;
+    return {};
 }
 
 Result<void> ThreadPoolBackend::register_waiter(Completion<void>& c, detail::WaiterToken token,
                                                 detail::RoutingLease lease) {
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value()) {
+    auto key = core_binding(c);
+    if (!key.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
-    return arena_.register_waiter(*h, token, std::move(lease));
+    if (core_->lookup(*key) != detail::PublicLookup::outstanding) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    DeliveryRecord& record = delivery_[key->slot.value];
+    if (record.registration == detail::WaiterRegistration::open_registered) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    record.registration = detail::WaiterRegistration::open_registered;
+    record.waiter_token = token;
+    record.waiter_lease = std::move(lease);
+    record.waiter_delivery_present = true;
+    return {};
 }
 
 Result<detail::RoutingLease> ThreadPoolBackend::cancel_waiter(Completion<std::size_t>& c) {
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value()) {
+    auto key = core_binding(c);
+    if (!key.has_value()) {
         return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
     }
-    return arena_.cancel_waiter(*h);
+    DeliveryRecord& record = delivery_[key->slot.value];
+    if (record.registration != detail::WaiterRegistration::open_registered) {
+        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
+    }
+    detail::RoutingLease lease = std::move(record.waiter_lease);
+    record.waiter_token = {};
+    record.registration = detail::WaiterRegistration::open_no_waiter;
+    record.waiter_delivery_present = false;
+    return lease;
 }
 
 Result<detail::RoutingLease> ThreadPoolBackend::cancel_waiter(Completion<void>& c) {
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value()) {
+    auto key = core_binding(c);
+    if (!key.has_value()) {
         return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
     }
-    return arena_.cancel_waiter(*h);
+    DeliveryRecord& record = delivery_[key->slot.value];
+    if (record.registration != detail::WaiterRegistration::open_registered) {
+        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
+    }
+    detail::RoutingLease lease = std::move(record.waiter_lease);
+    record.waiter_token = {};
+    record.registration = detail::WaiterRegistration::open_no_waiter;
+    record.waiter_delivery_present = false;
+    return lease;
 }
 
 std::size_t ThreadPoolBackend::outstanding() const noexcept {
-    return arena_.accepted_outstanding();
+    return core_ != nullptr ? core_->occupancy().outstanding : 0;
 }
 
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {
@@ -694,10 +802,36 @@ std::size_t ThreadPoolBackend::active_workers() const {
     return active_workers_;
 }
 
+Result<RequestHandleState> ThreadPoolBackend::resolve_identity_state(
+    std::uint64_t ctx, std::uint32_t slot, std::uint64_t gen) const {
+    if (core_ == nullptr) {
+        return RequestHandleState::not_found;
+    }
+    const detail::RequestKey key{detail::ContextIdentity{ctx}, detail::SlotIndex{slot},
+                                 detail::Generation{gen}};
+    switch (core_->lookup(key)) {
+    case detail::PublicLookup::outstanding:
+        return RequestHandleState::outstanding;
+    case detail::PublicLookup::published:
+        return RequestHandleState::completion_ready;
+    case detail::PublicLookup::not_found:
+        return RequestHandleState::not_found;
+    }
+    return RequestHandleState::not_found;
+}
+
+std::size_t ThreadPoolBackend::adopt_context_identity(detail::ContextIdentity) noexcept {
+    return capacity_;
+}
+
+bool ThreadPoolBackend::adopt_request_core(detail::RequestCore* core) noexcept {
+    core_ = core;
+    return true;
+}
+
 void ThreadPoolBackend::close_admission() {
-    {
-        std::lock_guard<std::mutex> lk(admission_mtx_);
-        arena_.close_admission();
+    if (core_ != nullptr) {
+        core_->close_admission();
     }
     ready_wait_.interrupt_all();
 }
