@@ -167,7 +167,7 @@ bool move_transfers_the_same_core(Tracker& t) {
         return false;
     const ContextIdentity identity = core->context();
     t.check(identity.value != 0, "the context identity is a domain value");
-    t.check(core->capacity() == raw->arena_capacity(),
+    t.check(core->capacity() == raw->slot_capacity(),
             "the core slot budget is the backend slot table capacity");
 
     auto reservation = core->reserve();
@@ -213,7 +213,8 @@ bool move_transfers_the_same_core(Tracker& t) {
 bool backend_slot_table_carries_the_context_identity(Tracker& t) {
     auto first_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     auto second_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
-    t.check(first_backend->arena_context_identity() == second_backend->arena_context_identity(),
+    t.check(first_backend->adopted_core_for_test() == nullptr &&
+                second_backend->adopted_core_for_test() == nullptr,
             "backend construction mints no per-backend context identity");
 
     ThreadPoolBackend* first_raw = first_backend.get();
@@ -223,13 +224,15 @@ bool backend_slot_table_carries_the_context_identity(Tracker& t) {
 
     const ContextIdentity first_identity = first.context_core_for_test()->context();
     const ContextIdentity second_identity = second.context_core_for_test()->context();
-    t.check(first_raw->arena_context_identity() == first_identity,
-            "the first slot table carries its context identity");
-    t.check(second_raw->arena_context_identity() == second_identity,
-            "the second slot table carries its context identity");
+    t.check(first_raw->adopted_core_for_test() == first.context_core_for_test(),
+            "the first backend adopted its context's core");
+    t.check(second_raw->adopted_core_for_test() == second.context_core_for_test(),
+            "the second backend adopted its context's core");
+    t.check(first_raw->adopted_core_for_test()->context() == first_identity,
+            "the first adopted core carries its context identity");
+    t.check(second_raw->adopted_core_for_test()->context() == second_identity,
+            "the second adopted core carries its context identity");
     t.check(first_identity != second_identity, "distinct contexts hold distinct identities");
-    t.check(first_raw->arena_context_identity() != second_raw->arena_context_identity(),
-            "distinct slot tables claim disjoint identity domains");
     return true;
 }
 
@@ -239,7 +242,6 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
         return false;
 
     auto first_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
-    ThreadPoolBackend* first_raw = first_backend.get();
     AsyncIoContext first(std::move(first_backend));
     AsyncIoContext foreign(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
 
@@ -267,16 +269,17 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
     while (!c.ready()) {
         (void)moved.poll();
     }
-    t.check(c.result().has_value(), "the request completed on the backend authority");
+    t.check(c.result().has_value(), "the request completed on the core authority");
     c.reset();
-    t.check(first_raw->arena_slot_in_use() == 0, "consuming the result released the slot");
+    t.check(moved.context_core_for_test()->occupancy().accepted_live == 0,
+            "consuming the result released the core slot");
     t.check(resolves_as(moved.request_state(handle), RequestHandleState::not_found),
             "a released identity stops resolving");
     return true;
 }
 
-bool production_request_is_not_request_core_owned(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1a not migrated\n");
+bool production_request_is_request_core_owned(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1b core owned\n");
     if (!file.has_value())
         return false;
 
@@ -284,7 +287,7 @@ bool production_request_is_not_request_core_owned(Tracker& t) {
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore* core = ctx.context_core_for_test();
-    CoreCaseCleanup cleanup{core};
+    t.check(core == raw->adopted_core_for_test(), "the backend drives the context-owned core");
     t.check(core_is_idle(core->snapshot()), "the context core starts idle");
 
     std::vector<std::byte> scratch(8);
@@ -295,19 +298,23 @@ bool production_request_is_not_request_core_owned(Tracker& t) {
     if (!submitted.has_value())
         return false;
     const RequestHandle handle = submitted.value();
-    t.check(raw->arena_slot_in_use() == 1, "the request occupies a backend slot");
-    t.check(core_is_idle(core->snapshot()), "no core slot mirrors the production request");
 
     while (!c.ready()) {
+        t.check(core->occupancy().accepted_live == 1,
+                "the live production request occupies a core slot");
+        t.check(resolves_as(ctx.request_state(handle), RequestHandleState::outstanding),
+                "the public identity resolves through the core");
         (void)ctx.poll();
     }
+    const CoreSnapshot settled = core->snapshot();
+    t.check(settled.published_live == 1 && settled.public_bindings == 1,
+            "the core terminal, publication and binding own the production request");
     t.check(resolves_as(ctx.request_state(handle), RequestHandleState::completion_ready),
-            "the backend authority holds the terminal result");
-    t.check(core_is_idle(core->snapshot()),
-            "no core terminal, publication or binding mirrors the production request");
-    t.check(core->admission_open(), "the core admission gate is untouched");
+            "the core authority holds the terminal result");
     c.reset();
-    t.check(core_is_idle(core->snapshot()), "reclaiming the backend slot leaves the core idle");
+    t.check(core_is_idle(core->snapshot()), "releasing the binding reclaims the core slot");
+    t.check(resolves_as(ctx.request_state(handle), RequestHandleState::not_found),
+            "the released identity stops resolving");
     return true;
 }
 
@@ -447,9 +454,9 @@ bool move_assignment_transfers_the_same_core(Tracker& t) {
         return false;
     t.check(assigned_core->context() == identity,
             "the move-assigned destination carries the source identity");
-    t.check(source_raw->arena_context_identity() == assigned_core->context(),
-            "the slot table and the core moved into the destination together");
-    t.check(assigned_core->capacity() == source_raw->arena_capacity(),
+    t.check(source_raw->adopted_core_for_test() == assigned_core,
+            "the backend and the core moved into the destination together");
+    t.check(assigned_core->capacity() == source_raw->slot_capacity(),
             "the core slot budget is the moved-in slot table capacity");
     t.check(assigned_core->snapshot().accepted_live == 1,
             "the accepted set survived the move assignment");
@@ -531,8 +538,7 @@ struct NamedTest {
 
 int main() {
     const NamedTest tests[] = {
-        {"production_request_is_not_request_core_owned",
-         production_request_is_not_request_core_owned},
+        {"production_request_is_request_core_owned", production_request_is_request_core_owned},
         {"move_transfers_the_same_core", move_transfers_the_same_core},
         {"move_assignment_transfers_the_same_core", move_assignment_transfers_the_same_core},
         {"backend_slot_table_carries_the_context_identity",

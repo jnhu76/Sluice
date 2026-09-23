@@ -230,3 +230,25 @@ do
         context_ownership_target("request_core_ownership_uring_test", true)
     end
 end
+
+-- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault
+-- injections are macro-guarded backend surface, so this target compiles its
+-- own copies of the async TUs and links neither sluice_async nor the other
+-- seam builds, mirroring the ownership target's shape.
+do
+    target("threadpool_core_cutover_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core")
+        add_includedirs(R .. "include", R .. "src/async")
+        add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+        add_files(R .. "tests/threadpool_core_cutover_test.cpp",
+                  R .. "src/async/async_io_context.cpp",
+                  R .. "src/async/threadpool_backend.cpp",
+                  R .. "src/async/request_handle.cpp",
+                  R .. "src/async/fail_fast.cpp",
+                  R .. "src/async/detail/context_identity.cpp",
+                  R .. "src/async/detail/request_core.cpp")
+        add_tests("threadpool_core_cutover_test")
+end
