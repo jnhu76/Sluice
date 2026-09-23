@@ -1,6 +1,8 @@
 #include <sluice/async/async_io_context.hpp>
 
+#include <sluice/async/detail/context_identity.hpp>
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/file_semantics.hpp>
 
 #include <optional>
@@ -24,6 +26,9 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
     : backend_(std::move(backend)), stats_(stats) {
     if (backend_)
         backend_->attach_stats(stats_);
+    const detail::ContextIdentity identity = detail::allocate_context_identity();
+    const std::size_t slot_capacity = backend_ ? backend_->adopt_context_identity(identity) : 0;
+    core_ = std::make_unique<detail::RequestCore>(identity, slot_capacity);
 }
 
 AsyncIoContext::~AsyncIoContext() {
@@ -33,7 +38,7 @@ AsyncIoContext::~AsyncIoContext() {
 }
 
 AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept
-    : backend_(std::move(other.backend_)), stats_(other.stats_) {}
+    : backend_(std::move(other.backend_)), core_(std::move(other.core_)), stats_(other.stats_) {}
 
 AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     if (this != &other) {
@@ -41,6 +46,7 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
             detail::async_context_outstanding_fail_fast();
         }
         backend_ = std::move(other.backend_);
+        core_ = std::move(other.core_);
         stats_ = other.stats_;
     }
     return *this;

@@ -75,6 +75,15 @@ class UringAsyncBackend : public AsyncBackend {
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
 #if defined(SLUICE_HAS_LIBURING)
+    std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept override {
+        arena_.adopt_context_identity(identity);
+        return arena_.capacity();
+    }
+#else
+    std::size_t adopt_context_identity(detail::ContextIdentity) noexcept override { return 0; }
+#endif
+
+#if defined(SLUICE_HAS_LIBURING)
   public:
     bool supports_request_identity() const noexcept override { return true; }
 
@@ -126,6 +135,7 @@ class UringAsyncBackend : public AsyncBackend {
 
     std::uint64_t submit_flushes_for_test() const noexcept;
     std::size_t live_cookies_for_test() const noexcept;
+    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
     void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept;
     std::uint64_t peek_next_cookie_for_test() const noexcept;
     std::optional<std::uint64_t>
@@ -282,11 +292,6 @@ class UringAsyncBackend : public AsyncBackend {
     class BoundedDispatchQueue;
 
     class TransportLedger;
-
-    static std::uint64_t next_backend_id() noexcept {
-        static std::atomic<std::uint64_t> id{0x55720000u};
-        return ++id;
-    }
 
     static Result<void> validate_read(ReadOp op);
     static Result<void> validate_write(WriteOp op);

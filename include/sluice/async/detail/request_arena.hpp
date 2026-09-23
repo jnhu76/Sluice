@@ -37,8 +37,8 @@ enum class EnqueueOutcome {
 
 class RequestArena {
   public:
-    RequestArena(ContextIdentity context, std::size_t request_capacity)
-        : context_(context), capacity_(request_capacity), slots_(request_capacity) {
+    explicit RequestArena(std::size_t request_capacity)
+        : capacity_(request_capacity), slots_(request_capacity) {
         free_slots_.reserve(request_capacity);
         for (std::size_t i = request_capacity; i > 0; --i) {
             free_slots_.push_back(static_cast<std::uint32_t>(i - 1));
@@ -52,6 +52,7 @@ class RequestArena {
     }
 
     std::size_t capacity() const noexcept { return capacity_; }
+    void adopt_context_identity(ContextIdentity context) noexcept { context_ = context; }
     ContextIdentity context() const noexcept { return context_; }
 
     RequestHandleState identity_handle_state(SlotIndex slot, Generation gen,
@@ -706,7 +707,7 @@ class RequestArena {
         free_slots_.push_back(idx);
     }
 
-    ContextIdentity context_;
+    ContextIdentity context_{};
     std::size_t capacity_;
     std::vector<RequestSlot> slots_;
     std::vector<std::uint32_t> free_slots_;

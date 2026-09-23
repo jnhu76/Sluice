@@ -2,6 +2,7 @@
 
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
+#include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
@@ -16,6 +17,10 @@
 #include <mutex>
 
 namespace sluice::async {
+
+namespace detail {
+class RequestCore;
+}
 
 struct NativeFileRef {
     NativeFileRef() = default;
@@ -147,6 +152,10 @@ class AsyncBackend {
         return make_unexpected<RequestHandleState>(IoError{IoError::Code::not_supported});
     }
 
+    // Returns the capacity of the slot table now carrying that identity, or 0
+    // when the backend has no slot table.
+    virtual std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept = 0;
+
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;
 
@@ -245,6 +254,8 @@ class AsyncIoContext {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
+    detail::RequestCore* context_core_for_test() noexcept { return core_.get(); }
+
     BackendWaitToken backend_wait_token_for_test() const noexcept;
 
     struct WaitSourceProgressPauseGate;
@@ -255,6 +266,7 @@ class AsyncIoContext {
 
   private:
     std::unique_ptr<AsyncBackend> backend_;
+    std::unique_ptr<detail::RequestCore> core_;
     AsyncStats* stats_;
 
     mutable std::mutex access_mtx_;

@@ -23,6 +23,11 @@ target("sluice_async")
     add_includedirs(R .. "include", {public = true})
     add_deps("sluice_core")
     add_files(R .. "src/async/*.cpp")
+    -- The non-recursive glob above misses src/async/detail/. The context
+    -- identity domain and the RequestCore substrate that the context owns are
+    -- production now, so they are listed explicitly.
+    add_files(R .. "src/async/detail/context_identity.cpp",
+              R .. "src/async/detail/request_core.cpp")
     -- The uring public class definition (include/sluice/async/uring_backend.hpp)
     -- is #if-guarded on SLUICE_HAS_LIBURING, so the macro is part of the
     -- library's public usage requirement: every consumer TU must see the same
