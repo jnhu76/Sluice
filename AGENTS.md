@@ -47,6 +47,44 @@ that merely repeat current implementation behavior are not a normative oracle.
 - Prefer the smallest mechanism that satisfies the accepted workload and root.
 - No speculative public framework for hypothetical future users.
 
+## Mechanism justification
+
+For v1 convergence work, apply the Mechanism Justification Gate recorded by the
+roadmap (#390); issue #419 is the supporting audit/contraction inventory, not a
+semantic authority.
+
+For every new runtime state, flag, counter, token, lease, capability probe or
+defensive guard, answer:
+
+1. What fact or invariant does it represent, summarize or check, and which
+   authority owns that fact?
+2. What requirement, legal interleaving, external failure, physical/lifetime
+   obligation, or concrete performance/evidence need justifies it?
+3. Can it be derived from an existing authority?
+4. If derived, why must it be materialized?
+5. Classify it as authority, derived summary, compatibility state, physical
+   obligation, or test-only evidence.
+6. Which existing mechanism, if any, does it replace? `None` is valid when the
+   mechanism is not a replacement.
+7. If it replaces a mechanism, what migration and evidence conditions permit
+   removal? Otherwise, this is not applicable.
+
+Do not add runtime mechanism merely as defensive insurance for an unreachable
+state. This does not waive root-required contract diagnostics. Derived summaries
+and justified diagnostic/test instrumentation need not introduce an independent
+semantic fact. Complexity is not evidence of redundancy: do not collapse a
+mechanism that represents an independent physical/lifetime obligation merely
+because another state correlates with it. Derived does not imply delete; cached
+summaries may remain useful but must stay non-authoritative semantic sources of
+truth.
+
+Every migration slice must include an authority-contraction audit: identify which
+legacy states, guards, tokens, leases, counters or capability representations
+became redundant after authority moved, and which apparently redundant mechanisms
+must remain because they protect a real legal interleaving or physical obligation.
+A slice that moves no production authority may record that no existing mechanism
+is yet eligible for removal.
+
 ## Evidence and documentation
 
 Every architecture-changing PR cites affected root IDs, current and target
