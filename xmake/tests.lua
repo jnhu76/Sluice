@@ -196,8 +196,8 @@ end
 -- macro-guarded internal-testing surface, so this target compiles its own
 -- copies of the async TUs it observes and links neither sluice_async nor the
 -- other seam builds: the seam build and the production build never meet in one
--- binary. `src` and `src/async` are on the include path because the async
--- internal headers are included relative to their own directory.
+-- binary. `src/async` is on the include path because `src/async/*.cpp` includes
+-- its internal headers relative to their own directory.
 do
     local function context_ownership_target(name, with_liburing)
         target(name)
@@ -205,7 +205,7 @@ do
             set_default(false)
             set_group("test")
             add_deps("sluice_core")
-            add_includedirs(R .. "include", R .. "src", R .. "src/async")
+            add_includedirs(R .. "include", R .. "src/async")
             add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
             local files = {
                 R .. "tests/request_core_ownership_test.cpp",
