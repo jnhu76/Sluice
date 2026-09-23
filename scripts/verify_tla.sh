@@ -272,6 +272,53 @@ run_violate_any() {
     grep -E "Invariant .* is violated|states generated" "$work/$label.log"
 }
 
+# run_live_clean <label> <cfg> <module>: TLC must complete cleanly with the
+# temporal PROPERTYs of the cfg checked (liveness-carrying spec).
+run_live_clean() {
+    local label="$1" cfg="$2" module="$3"
+    echo "== TLC: $label (temporal properties) =="
+    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
+        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1 || {
+        cat "$work/$label.log"
+        echo "FAIL: $label did not complete cleanly" >&2
+        exit 1
+    }
+    grep -q "Model checking completed. No error has been found." "$work/$label.log" || {
+        cat "$work/$label.log"
+        echo "FAIL: $label did not report clean completion" >&2
+        exit 1
+    }
+    grep -q "Finished checking temporal properties" "$work/$label.log" || {
+        cat "$work/$label.log"
+        echo "FAIL: $label never checked its temporal properties" >&2
+        exit 1
+    }
+    grep -E "Model checking completed|states generated" "$work/$label.log"
+}
+
+# run_temporal_violate <label> <cfg> <module>: TLC must fail because a
+# temporal property (liveness obligation) is violated.
+run_temporal_violate() {
+    local label="$1" cfg="$2" module="$3"
+    echo "== TLC: $label (must violate a temporal property) =="
+    set +e
+    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
+        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1
+    local rc=$?
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+        cat "$work/$label.log"
+        echo "FAIL: $label passed -- the liveness obligation does not bite" >&2
+        exit 1
+    fi
+    grep -q "Temporal properties were violated" "$work/$label.log" || {
+        cat "$work/$label.log"
+        echo "FAIL: $label failed for the wrong reason (expected: temporal violation)" >&2
+        exit 1
+    }
+    grep -E "Temporal properties were violated|states generated" "$work/$label.log"
+}
+
 echo "== Stage 1V2.2: Event =="
 run_clean event-main EventCore.cfg EventCore
 run_violate event-mutant EventCoreMutant.cfg EventCore NoWaitBeforeSet
@@ -453,5 +500,62 @@ run_clean driver-mut-silent-dispatch DriverCoreMutSilentDispatch.cfg DriverCore
 
 echo "== Stage 8V2.3: result-binding separation (must be reachable there) =="
 run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore NotUnbacked
+
+#   Stage B1-1 (#394): RequestCore, the first liveness-carrying model.
+#    28. Safety: the full fact set (admission close race, single acceptance,
+#        single admissible winner, generation matching, cancel-admissibility,
+#        publication gated on exec retirement, release invalidation, the
+#        four-pin reclaim predicate, health-gated acceptance, the E-chain
+#        capability rules) must complete cleanly.
+#    29. Liveness: PROPERTY L1 (accepted ~> published) and L5 (reclaimable ~>
+#        reclaimed) under the declared WF_ fairness conjuncts, by full
+#        request identity.
+#    30. Safety mutants: each switch must die on its named invariant.
+#        MutGenWrap dies first on InvAcceptedRepresented (the wrapped slot
+#        strands the accepted identity); InvSingleAcceptance kills the same
+#        mutant when checked alone (recorded in the B1-1 evidence note).
+#        MutExecAfterTerminal may present as either InvNoExecRevival or
+#        InvNoPubWhileExec depending on which violating state BFS reaches
+#        first, so both kills are the intended one.
+#    31. Liveness mutants: MutStrandPostAccept must violate L1 (a recorded
+#        intent swallowing the physical outcome strands the request);
+#        MutLazyReclaim must violate L5 (reclaim gated on an unrelated
+#        submit wake); MutCtlAfterSettled must violate L5 (re-acquiring
+#        control on settled work keeps Reclaimable non-monotone and starves
+#        the reclaim service through intermittent enabling).
+#    32. Separation witness: MutReadyBeforePayload (publication may begin
+#        with no terminal chosen) must complete CLEANLY since the B1-1
+#        Corrective-1 E-chain rule: exec = 0 with no terminal is now
+#        unreachable, so the fault is subsumed one layer earlier and the
+#        mutant's unkillability is that subsumption's certificate.
+echo "== Stage B1-1: RequestCore safety =="
+run_clean rcore-safety RequestCore.cfg RequestCore
+
+echo "== Stage B1-1: RequestCore conditional liveness =="
+run_live_clean rcore-live RequestCoreLive.cfg RequestCore
+
+echo "== Stage B1-1: RequestCore safety mutants (ACTIVE MUTATION: each must violate its named property) =="
+run_violate rcore-mut-ignore-close RequestCoreMutIgnoreClose.cfg RequestCore InvNoAcceptAfterClose
+run_violate rcore-mut-ignore-health RequestCoreMutIgnoreHealth.cfg RequestCore InvNoAcceptAfterHealth
+run_violate rcore-mut-rollback-residue RequestCoreMutRollbackResidue.cfg RequestCore InvUnoccupiedClean
+run_violate rcore-mut-terminal-overwrite RequestCoreMutTerminalOverwrite.cfg RequestCore InvSingleWinner
+run_violate rcore-mut-cancel-as-physical RequestCoreMutCancelAsPhysical.cfg RequestCore InvCancelWinRequiresUnclaimed
+run_violate rcore-mut-publish-while-e RequestCoreMutPublishWhileE.cfg RequestCore InvNoPubWhileExec
+run_violate rcore-mut-release-resolvable RequestCoreMutReleaseResolvable.cfg RequestCore InvReleasedNotLive
+run_violate rcore-mut-gen-wrap RequestCoreMutGenWrap.cfg RequestCore InvAcceptedRepresented
+run_violate rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg RequestCore InvReclaimConditions
+run_violate rcore-mut-reclaim-ignores-ctl RequestCoreMutReclaimIgnoresCtl.cfg RequestCore InvReclaimConditions
+run_violate rcore-mut-retire-last-exec RequestCoreMutRetireLastExec.cfg RequestCore InvExecHeldUntilTerminal
+run_violate_any rcore-mut-exec-after-terminal RequestCoreMutExecAfterTerminal.cfg RequestCore "InvNoExecRevival|InvNoPubWhileExec"
+run_violate rcore-mut-stale-event RequestCoreMutStaleEvent.cfg RequestCore InvTerminalMatchesGeneration
+run_violate rcore-mut-double-decrement RequestCoreMutDoubleDecrement.cfg RequestCore TypeOK
+
+echo "== Stage B1-1: RequestCore liveness mutants (ACTIVE MUTATION: each must violate a temporal property) =="
+run_temporal_violate rcore-mut-strand-post-accept RequestCoreMutStrandPostAccept.cfg RequestCore
+run_temporal_violate rcore-mut-lazy-reclaim RequestCoreMutLazyReclaim.cfg RequestCore
+run_temporal_violate rcore-mut-ctl-after-settled RequestCoreMutCtlAfterSettled.cfg RequestCore
+
+echo "== Stage B1-1: SUBSUMPTION WITNESS MutReadyBeforePayload (enabling state made unreachable; must remain clean) =="
+run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore
 
 echo "VERIFY_TLA: PASS"
