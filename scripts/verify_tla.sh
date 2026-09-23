@@ -534,7 +534,7 @@ run_clean rcore-safety RequestCore.cfg RequestCore
 echo "== Stage B1-1: RequestCore conditional liveness =="
 run_live_clean rcore-live RequestCoreLive.cfg RequestCore
 
-echo "== Stage B1-1: RequestCore safety mutants =="
+echo "== Stage B1-1: RequestCore safety mutants (ACTIVE MUTATION: each must violate its named property) =="
 run_violate rcore-mut-ignore-close RequestCoreMutIgnoreClose.cfg RequestCore InvNoAcceptAfterClose
 run_violate rcore-mut-ignore-health RequestCoreMutIgnoreHealth.cfg RequestCore InvNoAcceptAfterHealth
 run_violate rcore-mut-rollback-residue RequestCoreMutRollbackResidue.cfg RequestCore InvUnoccupiedClean
@@ -550,12 +550,12 @@ run_violate_any rcore-mut-exec-after-terminal RequestCoreMutExecAfterTerminal.cf
 run_violate rcore-mut-stale-event RequestCoreMutStaleEvent.cfg RequestCore InvTerminalMatchesGeneration
 run_violate rcore-mut-double-decrement RequestCoreMutDoubleDecrement.cfg RequestCore TypeOK
 
-echo "== Stage B1-1: RequestCore liveness mutants =="
+echo "== Stage B1-1: RequestCore liveness mutants (ACTIVE MUTATION: each must violate a temporal property) =="
 run_temporal_violate rcore-mut-strand-post-accept RequestCoreMutStrandPostAccept.cfg RequestCore
 run_temporal_violate rcore-mut-lazy-reclaim RequestCoreMutLazyReclaim.cfg RequestCore
 run_temporal_violate rcore-mut-ctl-after-settled RequestCoreMutCtlAfterSettled.cfg RequestCore
 
-echo "== Stage B1-1: E-chain subsumption witness (must hold cleanly) =="
+echo "== Stage B1-1: SUBSUMPTION WITNESS MutReadyBeforePayload (enabling state made unreachable; must remain clean) =="
 run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore
 
 echo "VERIFY_TLA: PASS"

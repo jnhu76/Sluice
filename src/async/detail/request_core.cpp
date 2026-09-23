@@ -88,7 +88,7 @@ const RequestCore::Slot* RequestCore::resolve_public_(RequestKey id) const noexc
 
 ReserveAttempt RequestCore::reserve() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!admission_open_ || health_failed_) {
+    if (!admission_open_) {
         return ReserveAttempt{ReserveStatus::admission_closed, {}};
     }
     if (free_slots_.empty()) {
@@ -126,7 +126,7 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
     if (slot == nullptr) {
         return AcceptAttempt{AcceptStatus::bad_reservation, {}};
     }
-    if (!admission_open_ || health_failed_) {
+    if (!admission_open_) {
         return AcceptAttempt{AcceptStatus::admission_closed, {}};
     }
     slot->phase = SlotPhase::accepted;
@@ -170,6 +170,7 @@ bool RequestCore::admission_open() const noexcept {
 void RequestCore::note_health_failure() noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     health_failed_ = true;
+    admission_open_ = false;
 }
 
 bool RequestCore::health_failed() const noexcept {

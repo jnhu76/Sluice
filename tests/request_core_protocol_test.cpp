@@ -479,8 +479,9 @@ bool health_failure_closes_new_acceptance_from_reserve(Tracker& t) {
     t.check(attempt.status == ReserveStatus::admission_closed,
             "failed health refuses new reservation");
     CoreSnapshot snap = core.snapshot();
-    t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.health_failed,
-            "no reservation residue under failed health");
+    t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.health_failed &&
+                !snap.admission_open,
+            "no reservation residue and the admission gate is closed under failed health");
     driver.settle_all();
     return t.failures == 0;
 }

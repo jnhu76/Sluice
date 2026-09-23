@@ -38,9 +38,9 @@ branch) fixes exactly those four and nothing else:
 3. **Health had no acceptance effect.** `note_health_failure` only set a flag
    that no admission path read, contradicting the frozen acceptance
    transaction (accept must re-check admission/health under the same
-   authority). Health now refuses new `reserve` and re-refuses `accept` at
-   the commit point; it still selects no terminal and does not widen the
-   public error vocabulary.
+   authority). Health now closes the admission gate: `reserve` refuses and
+   `accept` re-refuses at the commit point; it still selects no terminal and
+   does not widen the public error vocabulary.
 4. **E-chain unconstrained.** `release_execution` allowed the last E to
    retire before any terminal existed (a window in which no one can ever form
    an outcome again), and `acquire_execution` granted new borrow-touching
@@ -54,6 +54,17 @@ C++ corrections (sections 3, 7–10); the two falsified claims of the previous
 note revision — "the ready release-store is the publisher's last access (as
 written)" and "C++ needs no settled-control acquisition guard" — are
 retracted and replaced.
+
+**Finalization alignment (health observation).** The review left two
+acceptable encodings for the health fact. Corrective-1 shipped the raw-flag
+shape but left `admission_open()`'s raw administrative-switch meaning
+unpinned by any test, and the consumer probe's health usage read as if a
+health failure closed the gate. The finalized encoding folds the fact into
+the gate it governs: `note_health_failure` also clears `admission_open_`,
+`reserve`/`accept` check that single gate, `admission_open()` reports the
+effective gate, and `health_failed()` remains the health fact. The TLA+
+`Reserve`/`Accept` guards (`~closed ∧ ~health`) state the same predicate and
+are unchanged.
 
 ## 1. Scope
 
@@ -74,9 +85,10 @@ protocol:
   health flag alone never terminalizes; a zero-effect cancel wins only before
   any execution claim; the first admissible candidate wins and the terminal is
   immutable thereafter;
-- a health failure is an admission fact next to `close_admission()`: it
-  refuses new reservations and re-refuses acceptance at the commit point, and
-  it never terminalizes existing accepted work;
+- a health failure closes the same admission gate as `close_admission()`:
+  it refuses new reservations, re-refuses acceptance at the commit point,
+  never terminalizes existing accepted work, and `admission_open()` reports
+  the effective gate while `health_failed()` reports the health fact;
 - pin classes: **B** public binding, **E** borrow-touching execution
   responsibility (a frozen capability chain from acceptance: acceptance
   installs the first E, the last E retires only once a terminal holds the
@@ -122,8 +134,8 @@ production protocol exists and is connected (B1-2 onward).
 | `tests/request_core_publication_test.cpp` | 11 publication tests (ordering, races, epilogue safety, last-access audits, reclaim variants) |
 | `tests/request_core_consumer_probe.cpp` | 2 host-neutrality probes (incomplete-type static asserts + a full lifecycle on the public surface) |
 | `xmake/tests.lua` | Three additive test targets; each compiles the substrate TU directly and links only `sluice_core`; the protocol/publication targets define `SLUICE_ASYNC_INTERNAL_TESTING`, the probe does not |
-| `formal/tla/RequestCore.tla` + 20 cfgs | Safety model, liveness cfg (`PROPERTY L1 L5`), 15 safety-mutant cfgs, 3 temporal-mutant cfgs, 1 subsumption-witness cfg |
-| `scripts/verify_tla.sh` | Stage B1-1 gate: clean safety, clean liveness, 14 invariant kills, 3 temporal kills, 1 clean separation witness |
+| `formal/tla/RequestCore.tla` + 20 cfgs | Safety model, liveness cfg (`PROPERTY L1 L5`), 14 safety-mutant cfgs, 3 temporal-mutant cfgs, 1 subsumption-witness cfg |
+| `scripts/verify_tla.sh` | Stage B1-1 gate: clean safety, clean liveness, 17 active mutant kills (14 invariant + 3 temporal), 1 clean subsumption witness |
 
 ## 3. Protocol facts and pin classes
 
@@ -134,21 +146,21 @@ The slot carries orthogonal lifecycle facts, not one enum: phase
 eligibility and reclaimability are derived predicates, never stored states:
 
 - `begin_publication` requires `terminal_chosen ∧ execution_refs = 0 ∧
-  binding_live ∧ ¬(inflight ∨ published)` (`request_core.cpp:322`);
+  binding_live ∧ ¬(inflight ∨ published)` (`request_core.cpp:323`);
 - `release_public_binding` requires `terminal_chosen ∧ execution_refs = 0 ∧
-  (publication_inflight ∨ published)` (`request_core.cpp:213`);
+  (publication_inflight ∨ published)` (`request_core.cpp:214`);
 - `reclaimable_` requires `accepted ∧ published ∧ ¬binding_live ∧
   execution_refs = 0 ∧ control_refs = 0 ∧ ¬publication_inflight`
-  (`request_core.cpp:351`).
+  (`request_core.cpp:352`).
 
 Acceptance installs the first E pin (the pending-dispatch obligation). The E
 chain is a frozen capability discipline, not an unstructured count:
 
 - `release_execution` refuses the *last* E while no terminal holds the
-  outcome (`premature_rejected`, `request_core.cpp:277`), so an accepted,
+  outcome (`premature_rejected`, `request_core.cpp:278`), so an accepted,
   unchosen request always keeps `E > 0` and there is never a state in which
   no one can form the outcome;
-- `acquire_execution` refuses once a terminal is chosen (`request_core.cpp:261`),
+- `acquire_execution` refuses once a terminal is chosen (`request_core.cpp:262`),
   so a zero-effect cancel win — whose content is that execution never
   escaped — can never be followed by new borrow-touching execution authority,
   and no execution ref can appear after the outcome is fixed;
@@ -158,17 +170,21 @@ chain is a frozen capability discipline, not an unstructured count:
   terminal-chosen reason.
 
 `acquire_control` refuses on settled work
-(`published ∧ ¬binding_live ∧ E = 0`, `request_core.cpp:292`): once the
+(`published ∧ ¬binding_live ∧ E = 0`, `request_core.cpp:293`): once the
 public terminal is published, the binding is released and E has retired, no
 new control responsibility may be created. This is a protocol rule, not an
 optimization — see section 5's reclaim closure.
 
-Admission health: `reserve` refuses when `health_failed_`
-(`request_core.cpp:91`), and `accept` re-checks it at the commit point under
-the same lock (`request_core.cpp:129`), so a failure between a reservation
-and its acceptance refuses the commit (`admission_closed`); the reservation
-rolls back without residue. Health never terminalizes accepted work and
-never widens the public error vocabulary.
+Admission health: a health failure closes `admission_open_`
+(`request_core.cpp:172-173`), the same gate `close_admission()` clears
+(`request_core.cpp:162`); `admission_open()` reports that effective gate
+(`request_core.cpp:165-168`) and `health_failed()` the underlying health
+fact (`request_core.cpp:176-179`). `reserve` refuses when the gate is
+closed (`request_core.cpp:91`), and `accept` re-checks it at the commit
+point under the same lock (`request_core.cpp:129`), so a failure between a
+reservation and its acceptance refuses the commit (`admission_closed`); the
+reservation rolls back without residue. Health never terminalizes accepted
+work and never widens the public error vocabulary.
 
 Generation exhaustion (`UINT64_MAX`) permanently retires the slot on release;
 capacity then becomes `exhausted` (permanent) as opposed to `capacity`
@@ -223,13 +239,13 @@ The publication chain, link by link (names per evidence map section 11):
 
 1. **Producer → core canonical storage.** The executor reports the outcome via
    `offer_terminal`, which writes `slot->outcome` under the core mutex
-   (`request_core.cpp:237`). Mutual exclusion orders this write before every
+   (`request_core.cpp:238`). Mutual exclusion orders this write before every
    later lock-protected read of the same slot.
 2. **Core → publisher handoff.** `begin_publication` copies the canonical
    outcome into the caller's `PublicationPayload` under the same mutex
-   (`request_core.cpp:325`). The mutex release/acquire pair between the two
-   critical sections makes the copy happen-after the canonical write, on any
-   thread pair.
+   (`request_core.cpp:326-332`). The mutex release/acquire pair between the
+   two critical sections makes the copy happen-after the canonical write, on
+   any thread pair.
 3. **Publisher → caller target.** The publisher writes the target's payload
    (`store`), performs its local seal bookkeeping, and *then* performs the
    ready release-store (`publish_ready`, `ready_.store(release)`),
@@ -282,7 +298,7 @@ for the `C = 0` case: no interleaving window exists in which an
 not cover the `C > 0` case — a live control pin defers reclaim and re-opens
 a window in which settled work is `published ∧ ¬binding_live ∧ E = 0` while
 `reclaimable_` is still false — so the API itself forbids acquisition in
-that state (`request_core.cpp:292`), matching the model's `AcquireCtl` guard
+that state (`request_core.cpp:293`), matching the model's `AcquireCtl` guard
 explicitly (section 9). The zero-gap argument covers the window it can close;
 the guard closes the one it cannot.
 
@@ -336,7 +352,8 @@ Load-bearing cases (names as registered by the binaries):
   `health_failure_alone_never_terminalizes`.
 - **Health-gated admission (Corrective-1):**
   `health_failure_closes_new_acceptance_from_reserve` (failed health refuses
-  new reservations),
+  new reservations and closes the admission gate — `admission_open()` reads
+  false under health alone),
   `health_between_reserve_and_accept_refuses_commit` (accept re-checks
   health at the commit point; the refused reservation rolls back without
   residue).
@@ -501,7 +518,7 @@ a new `acquire_control` in that window is exactly the non-monotone
 re-acquisition the guard forbids — the first review demonstrated the
 sequence (`C=1`, publish, release binding, re-acquire, `C=2 → 3 → …`).
 `acquire_control` therefore carries the guard explicitly
-(`request_core.cpp:292`), model and C++ now state the same rule, and the
+(`request_core.cpp:293`), model and C++ now state the same rule, and the
 temporal mutant `MutCtlAfterSettled` (guard removed) violates L5 — the
 formal reproduction of the review's blocker. `MutLazyReclaim` (reclaim gated
 on an unrelated submit wake) still violates L5 as before.
@@ -524,10 +541,19 @@ liveness checking evaluates the behavior graph over it, expanding to
 
 ## 10. Mutation matrix
 
-Every mutant is a `Mut*` constant defaulting to `FALSE`, enabled in exactly
-one cfg, and killed by its named invariant or property — never a bare exit
-code (`run_violate` greps the exact `Invariant … is violated` line,
-`run_temporal_violate` greps `Temporal properties were violated`).
+Every `Mut*` constant defaults to `FALSE` and is enabled in exactly one cfg.
+The campaign splits into two explicit categories, labeled in the gate
+script's stage headers:
+
+- **Active negative mutants (17).** Still-expressible bad transitions; each
+  must be killed by its named invariant or property — never a bare exit code
+  (`run_violate` greps the exact `Invariant … is violated` line,
+  `run_temporal_violate` greps `Temporal properties were violated`). 14 are
+  invariant-killed, 3 temporal-killed.
+- **Subsumption witnesses (1).** Historical fault shapes whose enabling
+  state the corrected protocol has made unreachable; the witness cfg must
+  complete cleanly, and a violation would mean the stronger invariant had
+  been weakened. This campaign has exactly one: `MutReadyBeforePayload`.
 
 | Mutant | Mechanism | Expected violation | Observed |
 |---|---|---|---|
@@ -548,7 +574,7 @@ code (`run_violate` greps the exact `Invariant … is violated` line,
 | `MutStrandPostAccept` | a recorded intent blocks the physical outcome | temporal | `Temporal properties were violated` (L1: accepted, never published) |
 | `MutLazyReclaim` | reclaim requires an unrelated submit wake | temporal | `Temporal properties were violated` (L5: reclaimable, never reclaimed) |
 | `MutCtlAfterSettled` | control may be re-acquired on settled work | temporal | `Temporal properties were violated` (L5: `Reclaimable` non-monotone, `WF_vars(ReclaimAny)` starved through intermittent enabling) |
-| `MutReadyBeforePayload` | publication may begin with no terminal chosen | (subsumed — must hold clean) | `Model checking completed. No error has been found.` — since the Corrective-1 E-chain rule, `exec = 0` with no terminal is unreachable, so the fault can no longer be expressed at `BeginPublish`; the mutant's clean run is the separation certificate for that subsumption (previously killed on `InvPublishedBacked`) |
+| `MutReadyBeforePayload` | publication may begin with no terminal chosen | (subsumed — must hold clean) | **Classification: `SUBSUMED_BY_STRONGER_INVARIANT`.** Historical fault shape: publication before the canonical terminal/payload, enabled by `terminal = none ∧ exec = 0`. Corrective: `InvExecHeldUntilTerminal` makes that enabling state unreachable, so the fault can no longer be expressed at `BeginPublish`. Gate expectation: the witness model remains clean. Observed: `Model checking completed. No error has been found.` (previously killed on `InvPublishedBacked`) |
 
 The C++ side is pinned by the deterministic tests of section 6 rather than
 compile-time mutants: each mutant's mechanism corresponds to a named failing
@@ -572,78 +598,88 @@ State authority for every mapped variable is `RequestCore` itself
 ```text
 MODEL VARIABLE phase:
 C++ AUTHORITY:            RequestCore::Slot::phase (H:140, H:201)
-WRITE SITES:              C:103 (reserve), C:132 (accept), C:364/C:379
+WRITE SITES:              C:103 (reserve), C:132 (accept), C:365/C:380
                           (release_slot_: free / retired)
 READ/OBSERVATION SITES:   C:38, C:51, C:62, C:68 (resolvers),
-                          C:352 (reclaimable_), C:423-431 (snapshot)
+                          C:353 (reclaimable_), C:424-432 (snapshot)
 LIFETIME:                 constructed free; vector storage sized once (C:15)
 SYNCHRONIZATION:          core mutex on every access
 
 MODEL VARIABLE gen:
-WRITE SITES:              C:378-383 (advance or retire), C:452 (test seam)
+WRITE SITES:              C:379-384 (advance or retire), C:453 (test seam)
 READ/OBSERVATION SITES:   C:40, C:53 (resolvers), C:146 (identity mint)
 SYNCHRONIZATION:          core mutex; advance is inside release_slot_'s
                           single critical section
 
 MODEL VARIABLE bind:
-WRITE SITES:              C:134 (accept), C:218 (release_public_binding),
-                          C:366 (release_slot_)
-READ/OBSERVATION SITES:   C:75, C:84 (resolve_public_), C:213-216, C:322,
-                          C:352, C:434
+WRITE SITES:              C:134 (accept), C:219 (release_public_binding),
+                          C:367 (release_slot_)
+READ/OBSERVATION SITES:   C:75, C:84 (resolve_public_), C:214-217, C:323,
+                          C:353, C:435
 SYNCHRONIZATION:          core mutex
 
 MODEL VARIABLE term (terminal_chosen + outcome):
-WRITE SITES:              C:141-144 (zero-op acceptance), C:202-203
-                          (zero-effect cancel win), C:236-237 (offer_terminal)
-READ/OBSERVATION SITES:   C:195, C:230, C:233, C:248, C:261, C:277, C:322,
-                          C:331 (publication payload copy)
+WRITE SITES:              C:141-144 (zero-op acceptance), C:203-204
+                          (zero-effect cancel win), C:237-238 (offer_terminal)
+READ/OBSERVATION SITES:   C:196, C:231, C:234, C:249, C:262, C:278, C:323,
+                          C:332 (publication payload copy)
 SYNCHRONIZATION:          core mutex; immutable after choice
 
 MODEL VARIABLE exec:
 WRITE SITES:              C:139/C:144 (acceptance installs 1, zero-op 0),
-                          C:264 (acquire_execution, refused after a chosen
-                          terminal at C:261), C:280 (release_execution,
-                          last-ref guard at C:277), C:373 (release_slot_)
-READ/OBSERVATION SITES:   C:213, C:278, C:292, C:322, C:353
+                          C:265 (acquire_execution, refused after a chosen
+                          terminal at C:262), C:281 (release_execution,
+                          last-ref guard at C:278), C:374 (release_slot_)
+READ/OBSERVATION SITES:   C:214, C:279, C:293, C:323, C:354
 SYNCHRONIZATION:          core mutex
 
 MODEL VARIABLE ctl:
-WRITE SITES:              C:292/C:295 (settled-work guard, acquire),
-                          C:308 (retire), C:374 (release_slot_)
-READ/OBSERVATION SITES:   C:353
+WRITE SITES:              C:293/C:296 (settled-work guard, acquire),
+                          C:309 (retire), C:375 (release_slot_)
+READ/OBSERVATION SITES:   C:354
 SYNCHRONIZATION:          core mutex
 
 MODEL VARIABLE pub (publication_inflight / published):
-WRITE SITES:              C:325 (begin), C:345-346 (complete), C:369-370
-READ/OBSERVATION SITES:   C:186 (lookup), C:213-214, C:319, C:322, C:342,
-                          C:351-353, C:431-437
+WRITE SITES:              C:326 (begin), C:346-347 (complete), C:370-371
+READ/OBSERVATION SITES:   C:187 (lookup), C:214-215, C:320, C:323, C:343,
+                          C:352-354, C:432-438
 SYNCHRONIZATION:          core mutex for the flags; the caller-target half
                           of publication is section 5's release/acquire pair
 
 MODEL VARIABLE claimed / intent:
-WRITE SITES:              C:135/C:251 (claim), C:199 (intent set),
-                          C:238 (intent cleared on win), C:370-371 (reset)
-READ/OBSERVATION SITES:   C:195-202 (cancel arbitration), C:233
-                          (zero-effect admissibility), C:248 (late claim)
+WRITE SITES:              C:135/C:252 (claim), C:200 (intent set),
+                          C:239 (intent cleared on win), C:371-372 (reset)
+READ/OBSERVATION SITES:   C:196-203 (cancel arbitration), C:234
+                          (zero-effect admissibility), C:249 (late claim)
 SYNCHRONIZATION:          core mutex
 
 MODEL VARIABLE closed:
-WRITE SITES:              C:162
-READ/OBSERVATION SITES:   C:91 (reserve), C:129 (accept)
+WRITE SITES:              C:162 (close_admission clears the gate)
+READ/OBSERVATION SITES:   C:91 (reserve), C:129 (accept), both via the
+                          folded gate below
 SYNCHRONIZATION:          core mutex; single acceptance/close linearization
 
 MODEL VARIABLE health:
-WRITE SITES:              C:172
-READ/OBSERVATION SITES:   C:91 (reserve), C:129 (accept), C:177 (observer)
+WRITE SITES:              C:172; the same call also clears the admission
+                          gate (C:173)
+READ/OBSERVATION SITES:   C:91 (reserve), C:129 (accept), both via the
+                          folded gate below; C:178 (health_failed()),
+                          C:422 (snapshot)
 SYNCHRONIZATION:          core mutex; single acceptance/health linearization
+
+ADMISSION GATE mapping: C++ keeps the two facts but one gate —
+note_health_failure also clears admission_open_ (C:172-173), so
+admission_open() (C:165-168) reports closed ∨ health and reserve/accept
+check only that gate (C:91, C:129). The model's Reserve/Accept guards
+(~closed ∧ ~health) are the same predicate.
 
 MODEL ACTIONS Reserve/Rollback/Accept/CloseAdmission/NoteHealth/ClaimExec/
               PhysicalOutcome/CancelRequest/RetireExec/AcquireExec/
               AcquireCtl/RetireCtl/BeginPublish/CompletePublish/ReleaseBind/
               Reclaim:
 C++ AUTHORITY:            the same-named RequestCore member
-                          (H:150-172; C:89-349), Reclaim realized as
-                          try_reclaim_/release_slot_ (C:356-385) invoked
+                          (H:150-172; C:89-350), Reclaim realized as
+                          try_reclaim_/release_slot_ (C:357-386) invoked
                           synchronously from the releasing calls
 STALE EVENT correspondence: resolve rejections by phase/generation/context
                           (C:34-87) map to the *_stale verdicts;
@@ -678,8 +714,11 @@ after the observations are gone.
   action; its `BeginPublish` reaches eligibility only through outcome +
   retirement. The zero-op path is deterministic and test-pinned.
 - **Health is modeled since Corrective-1** (`NoteHealth` + the Reserve/Accept
-  guards + `InvNoAcceptAfterHealth` + `MutIgnoreHealth`); health is a fact
-  next to the model's `closed` bit and never terminalizes accepted work
+  guards + `InvNoAcceptAfterHealth` + `MutIgnoreHealth`); the model keeps
+  `closed` and `health` as separate facts while C++ folds both into one
+  admission gate — `admission_open()` reports the effective gate
+  (`closed ∨ health`) and `health_failed()` the health fact (section 11's
+  gate mapping). Health never terminalizes accepted work
   (`health_failure_alone_never_terminalizes`).
 - **PublicationTarget is a test stand-in** for the public completion surface.
   The production publication target (public `Request`/result surface) is
