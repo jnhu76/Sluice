@@ -47,6 +47,36 @@ that merely repeat current implementation behavior are not a normative oracle.
 - Prefer the smallest mechanism that satisfies the accepted workload and root.
 - No speculative public framework for hypothetical future users.
 
+## Mechanism justification
+
+For v1 convergence work, apply the Mechanism Justification Gate recorded by the
+roadmap (#390); issue #419 is the supporting audit/contraction inventory, not a
+semantic authority.
+
+For every new runtime state, flag, counter, token, lease, capability probe or
+defensive guard, answer:
+
+1. What independent semantic fact does it represent?
+2. Which legal interleaving, external failure, or physical/lifetime obligation
+   requires it?
+3. Can it be derived from an existing authority?
+4. If derived, why must it be materialized?
+5. Classify it as authority, derived summary, compatibility state, physical
+   obligation, or test-only evidence.
+6. What existing mechanism does it replace?
+7. When can the replaced mechanism be removed?
+
+Do not add runtime mechanism merely as defensive insurance for an unreachable
+state. Complexity is not evidence of redundancy: do not collapse a mechanism
+that represents an independent physical/lifetime obligation merely because
+another state correlates with it. Derived does not imply delete; cached summaries
+may remain useful but must stay non-authoritative.
+
+Every migration slice must include an authority-contraction audit: identify which
+legacy states, guards, tokens, leases, counters or capability representations
+became redundant after authority moved, and which apparently redundant mechanisms
+must remain because they protect a real legal interleaving or physical obligation.
+
 ## Evidence and documentation
 
 Every architecture-changing PR cites affected root IDs, current and target
