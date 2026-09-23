@@ -152,11 +152,9 @@ class AsyncBackend {
         return make_unexpected<RequestHandleState>(IoError{IoError::Code::not_supported});
     }
 
-    // Returns the capacity of the slot table now carrying that identity.
-    virtual std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept {
-        (void)identity;
-        return 0;
-    }
+    // Returns the capacity of the slot table now carrying that identity, or 0
+    // when the backend has no slot table.
+    virtual std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept = 0;
 
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;

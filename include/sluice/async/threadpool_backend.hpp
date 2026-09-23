@@ -78,7 +78,6 @@ class ThreadPoolBackend : public AsyncBackend {
     void close_admission();
 
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
-    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
     std::size_t configured_worker_count() const noexcept { return workers_.size(); }
@@ -110,6 +109,7 @@ class ThreadPoolBackend : public AsyncBackend {
     std::optional<detail::RequestArena::RequestObservation>
     observe_for_test(detail::SlotHandle h) const noexcept;
     detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept;
+    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
 
     struct AfterArenaEnqueueBeforeDispatchPushPauseGate;
     struct BeforeWorkerDequeuePauseGate;

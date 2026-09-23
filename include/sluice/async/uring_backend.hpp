@@ -75,6 +75,15 @@ class UringAsyncBackend : public AsyncBackend {
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
 #if defined(SLUICE_HAS_LIBURING)
+    std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept override {
+        arena_.adopt_context_identity(identity);
+        return arena_.capacity();
+    }
+#else
+    std::size_t adopt_context_identity(detail::ContextIdentity) noexcept override { return 0; }
+#endif
+
+#if defined(SLUICE_HAS_LIBURING)
   public:
     bool supports_request_identity() const noexcept override { return true; }
 
@@ -83,11 +92,6 @@ class UringAsyncBackend : public AsyncBackend {
                                                       std::uint64_t gen) const override {
         return arena_.identity_handle_state(detail::SlotIndex{slot}, detail::Generation{gen},
                                             detail::ContextIdentity{ctx});
-    }
-
-    std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept override {
-        arena_.adopt_context_identity(identity);
-        return arena_.capacity();
     }
 
   public:
@@ -119,7 +123,6 @@ class UringAsyncBackend : public AsyncBackend {
     }
 
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
-    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_accepted_outstanding() const noexcept {
         return arena_.accepted_outstanding();
@@ -132,6 +135,7 @@ class UringAsyncBackend : public AsyncBackend {
 
     std::uint64_t submit_flushes_for_test() const noexcept;
     std::size_t live_cookies_for_test() const noexcept;
+    detail::ContextIdentity arena_context_identity() const noexcept { return arena_.context(); }
     void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept;
     std::uint64_t peek_next_cookie_for_test() const noexcept;
     std::optional<std::uint64_t>
