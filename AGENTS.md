@@ -51,13 +51,15 @@ reproduce its private representation, state layout or call sequence. A regressio
 test added after finding and fixing a real defect is valid when it independently
 reproduces the failure rather than being derived from the repaired implementation.
 
-Prefer the highest-level deterministic test that exercises the real contract
-through its actual public path when that test can distinguish success from failure
-without hiding the mechanism being investigated. End-to-end testing is not the
-sole evidence mechanism: protocol transitions, rare interleavings, lifetime
-boundaries, publication ordering, cancellation, teardown, fault injection and
-backend-independent semantics may require deterministic regressions, controlled
-concurrency tests, semantic oracles or formal models.
+Prefer the lowest sufficient deterministic test level that directly
+distinguishes the relevant contract or failure mode. Exercise the actual
+public path when the claim concerns that path or cross-layer composition;
+add lower-level controlled evidence when it is needed to expose the mechanism.
+End-to-end testing is not the sole evidence mechanism: protocol transitions,
+rare interleavings, lifetime boundaries, publication ordering, cancellation,
+teardown, fault injection and backend-independent semantics may require
+deterministic regressions, controlled concurrency tests, semantic oracles or
+formal models.
 
 An isolated test must earn its existence by naming the invariant or failure mode
 it distinguishes. Before implementing the mechanism under test, state what can go
