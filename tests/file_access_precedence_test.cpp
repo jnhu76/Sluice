@@ -733,8 +733,9 @@ bool submit_zero_length_read_completes_zero_despite_unrepresentable_offset() {
     auto sr = ctx.submit_read(ReadOp{file, &scratch, 0, unrepresentable_offset}, c);
     if (!sr.has_value())
         return false;
-    while (!c.ready())
+    do {
         (void)ctx.poll();
+    } while (!c.ready());
     auto rr = c.result();
     const bool ok = rr.has_value() && rr.value() == 0;
     return file.close().has_value() && ok;
@@ -755,8 +756,9 @@ bool submit_zero_length_write_completes_zero_despite_unrepresentable_offset() {
     auto sr = ctx.submit_write(WriteOp{file, &scratch, 0, unrepresentable_offset}, c);
     if (!sr.has_value())
         return false;
-    while (!c.ready())
+    do {
         (void)ctx.poll();
+    } while (!c.ready());
     auto rr = c.result();
     const bool ok = rr.has_value() && rr.value() == 0;
     return file.close().has_value() && ok;

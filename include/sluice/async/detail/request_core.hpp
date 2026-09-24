@@ -136,6 +136,11 @@ struct CoreSnapshot {
     bool health_failed = false;
 };
 
+struct CoreOccupancy {
+    std::size_t accepted_live = 0;
+    std::size_t outstanding = 0;
+};
+
 class RequestCore {
   public:
     enum class SlotPhase : std::uint8_t { free, reserved, accepted, retired };
@@ -147,6 +152,8 @@ class RequestCore {
 
     std::size_t capacity() const noexcept;
     ContextIdentity context() const noexcept;
+
+    CoreOccupancy occupancy() const noexcept;
 
     ReserveAttempt reserve();
     AcceptAttempt accept(RequestReservation reservation, const RequestDescriptor& descriptor,

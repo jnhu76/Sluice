@@ -149,6 +149,10 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void threadpool_core_handoff_fail_fast() noexcept {
+    std::terminate();
+}
+
 [[noreturn]] void uring_non_quiescent_destruction_fail_fast() noexcept {
     std::terminate();
 }

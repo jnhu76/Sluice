@@ -31,6 +31,21 @@ std::size_t RequestCore::capacity() const noexcept { return capacity_; }
 
 ContextIdentity RequestCore::context() const noexcept { return context_; }
 
+CoreOccupancy RequestCore::occupancy() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    CoreOccupancy occupancy;
+    for (const Slot& slot : slots_) {
+        if (slot.phase != SlotPhase::accepted) {
+            continue;
+        }
+        ++occupancy.accepted_live;
+        if (!slot.published) {
+            ++occupancy.outstanding;
+        }
+    }
+    return occupancy;
+}
+
 RequestCore::Slot* RequestCore::resolve_reserved_(RequestReservation reservation) noexcept {
     if (reservation.slot.value >= capacity_)
         return nullptr;

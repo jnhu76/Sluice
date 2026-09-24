@@ -1,10 +1,14 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request_handle.hpp>
 #include <sluice/async/detail/request_arena.hpp>
+#include <sluice/async/detail/request_core.hpp>
 
 namespace sluice::async {
 
 RequestHandle AsyncBackend::identity_of(Completion<std::size_t>& c) const noexcept {
+    if (auto key = core_binding(c)) {
+        return RequestHandle{key->context.value, key->slot.value, key->generation.value};
+    }
     if (c.release_arena_ == nullptr)
         return {};
     return RequestHandle{c.release_arena_->context().value, c.bound_slot_.slot.value,
@@ -12,6 +16,9 @@ RequestHandle AsyncBackend::identity_of(Completion<std::size_t>& c) const noexce
 }
 
 RequestHandle AsyncBackend::identity_of(Completion<void>& c) const noexcept {
+    if (auto key = core_binding(c)) {
+        return RequestHandle{key->context.value, key->slot.value, key->generation.value};
+    }
     if (c.release_arena_ == nullptr)
         return {};
     return RequestHandle{c.release_arena_->context().value, c.bound_slot_.slot.value,

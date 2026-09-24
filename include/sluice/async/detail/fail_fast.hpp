@@ -67,6 +67,8 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept;
 
+[[noreturn]] void threadpool_core_handoff_fail_fast() noexcept;
+
 [[noreturn]] void async_mutex_lifetime_fail_fast() noexcept;
 [[noreturn]] void async_rwlock_lifetime_fail_fast() noexcept;
 [[noreturn]] void async_condition_lifetime_fail_fast() noexcept;

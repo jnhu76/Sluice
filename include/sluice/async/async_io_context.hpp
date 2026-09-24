@@ -15,13 +15,13 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 
 namespace sluice::async {
 
 namespace detail {
 class RequestCore;
 }
-
 struct NativeFileRef {
     NativeFileRef() = default;
     NativeFileRef(const sluice::File& file) : fd(file.native_handle()), access(file.access()) {}
@@ -156,6 +156,12 @@ class AsyncBackend {
     // when the backend has no slot table.
     virtual std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept = 0;
 
+    // A backend whose request lifecycle is governed by the context-owned
+    // RequestCore returns true and stores the core for the context's lifetime.
+    // Returning false keeps the backend on its own lifecycle authority until
+    // its own migration slice.
+    virtual bool adopt_request_core(detail::RequestCore* core) noexcept;
+
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;
 
@@ -185,6 +191,15 @@ class AsyncBackend {
     static void install_binding(Completion<T>& c, detail::RequestArena* arena,
                                 detail::SlotHandle h) noexcept {
         c.install_binding_for_backend(arena, h);
+    }
+    template <class T>
+    static void install_core_binding(Completion<T>& c, detail::RequestCore* core,
+                                     detail::RequestKey key) noexcept {
+        c.install_core_binding_for_backend(core, key);
+    }
+    template <class T>
+    static std::optional<detail::RequestKey> core_binding(const Completion<T>& c) noexcept {
+        return c.core_binding_for_backend();
     }
     template <class T> static void clear_binding(Completion<T>& c) noexcept {
         c.clear_binding_for_backend();

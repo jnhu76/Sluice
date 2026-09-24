@@ -44,8 +44,8 @@ int main() {
         return 1;
     }
 
-    // The MISMATCH lines this section prints for the two zero-length scenarios
-    // are expected and asserted explicitly.
+    // The MISMATCH lines this section prints are expected and asserted
+    // explicitly for the unmigrated request path (io_uring, B1-C).
     sluice_semantic::RequestProbe threadpool(
         std::make_unique<sluice::async::ThreadPoolBackend>(
             sluice::async::ThreadPoolConfig{8, 2}));
@@ -61,19 +61,18 @@ int main() {
             [&](const Input& input) { return threadpool.attempt(fixtures, input); },
             &threadpool_divergences);
     }
-    const std::vector<const char*> recorded_threadpool =
-        sluice_semantic::request_zero_length_divergence_set();
-    if (!sluice_semantic::matches_recorded_divergences("threadpool", threadpool_divergences,
-                                                       recorded_threadpool)) {
-        std::fprintf(stderr, "FAIL: ThreadPool divergence set changed; update the ledger row\n");
+    if (!sluice_semantic::matches_recorded_divergences("threadpool", threadpool_divergences, {})) {
+        std::fprintf(stderr,
+                     "FAIL: ThreadPool diverges from the oracle; the B1-B cutover regressed it\n");
         return 1;
     }
+    const std::size_t recorded_threadpool = 0;
 
     std::printf("%zu precedence scenarios: direct %zu compared, %zu not expressible; ThreadPool "
                 "%zu compared, %zu not drivable; %zu recorded request-side divergences\n",
                 sluice_semantic::kPrecedenceScenarioCount,
                 sluice_semantic::kPrecedenceScenarioCount - direct_skipped, direct_skipped,
                 sluice_semantic::kPrecedenceScenarioCount - threadpool_skipped, threadpool_skipped,
-                recorded_threadpool.size());
+                recorded_threadpool);
     return 0;
 }
