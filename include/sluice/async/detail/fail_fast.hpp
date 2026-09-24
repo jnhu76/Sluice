@@ -84,4 +84,6 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void uring_non_quiescent_destruction_fail_fast() noexcept;
 
+[[noreturn]] void uring_core_handoff_fail_fast() noexcept;
+
 }

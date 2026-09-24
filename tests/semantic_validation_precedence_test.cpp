@@ -1,3 +1,7 @@
+#if defined(SLUICE_HAS_LIBURING)
+#include <sluice/async/uring_backend.hpp>
+#endif
+
 #include "semantic_path_probes.hpp"
 #include "semantic_scenarios.hpp"
 
@@ -45,7 +49,7 @@ int main() {
     }
 
     // The MISMATCH lines this section prints are expected and asserted
-    // explicitly for the unmigrated request path (io_uring, B1-C).
+    // explicitly; an empty recorded set is the acceptance condition.
     sluice_semantic::RequestProbe threadpool(
         std::make_unique<sluice::async::ThreadPoolBackend>(
             sluice::async::ThreadPoolConfig{8, 2}));
@@ -68,11 +72,45 @@ int main() {
     }
     const std::size_t recorded_threadpool = 0;
 
+    std::size_t uring_compared = 0;
+    std::size_t uring_skipped = 0;
+#if defined(SLUICE_HAS_LIBURING)
+    sluice::async::UringAsyncBackend availability_probe(sluice::async::UringConfig{8, 8});
+    if (!availability_probe.available()) {
+        std::fprintf(stderr, "NOT RUN: io_uring unavailable on this host (kernel/policy "
+                             "blocked); the precedence oracle ran without the uring half\n");
+    } else {
+        sluice_semantic::RequestProbe uring_probe(
+            std::make_unique<sluice::async::UringAsyncBackend>(sluice::async::UringConfig{8, 8}));
+        std::vector<const char*> uring_divergences;
+        for (std::size_t i = 0; i < sluice_semantic::kPrecedenceScenarioCount; ++i) {
+            if (!sluice_semantic::request_drivable(sluice_semantic::kPrecedenceScenarios[i].input)) {
+                ++uring_skipped;
+                continue;
+            }
+            (void)sluice_semantic::run_path(
+                "uring", &sluice_semantic::kPrecedenceScenarios[i], 1,
+                [&](const Input& input) { return uring_probe.attempt(fixtures, input); },
+                &uring_divergences);
+        }
+        if (!sluice_semantic::matches_recorded_divergences("uring", uring_divergences, {})) {
+            std::fprintf(stderr,
+                         "FAIL: io_uring diverges from the oracle; the B1-C cutover regressed "
+                         "it\n");
+            return 1;
+        }
+        uring_compared = sluice_semantic::kPrecedenceScenarioCount - uring_skipped;
+    }
+#endif
+    const std::size_t recorded_uring = 0;
+
     std::printf("%zu precedence scenarios: direct %zu compared, %zu not expressible; ThreadPool "
-                "%zu compared, %zu not drivable; %zu recorded request-side divergences\n",
+                "%zu compared, %zu not drivable; io_uring %zu compared, %zu not drivable; %zu "
+                "recorded request-side divergences\n",
                 sluice_semantic::kPrecedenceScenarioCount,
                 sluice_semantic::kPrecedenceScenarioCount - direct_skipped, direct_skipped,
                 sluice_semantic::kPrecedenceScenarioCount - threadpool_skipped, threadpool_skipped,
-                recorded_threadpool);
+                uring_compared, uring_skipped,
+                recorded_threadpool + recorded_uring);
     return 0;
 }
