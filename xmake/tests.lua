@@ -252,3 +252,54 @@ do
                   R .. "src/async/detail/request_core.cpp")
         add_tests("threadpool_core_cutover_test")
 end
+
+-- B1-C io_uring cutover evidence. Same self-contained seam-build shape as the
+-- ThreadPool cutover target, plus the real liburing backend TU. The
+-- deterministic ordering cases inject CQEs through the seam; the real-kernel
+-- cases exercise the live ring. Requires the liburing build switch.
+if has_config("liburing") then
+    local function uring_cutover_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_HAS_LIBURING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            add_links("uring")
+            add_files(R .. "tests/uring_core_cutover_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/request_handle.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    uring_cutover_target("uring_core_cutover_test", nil)
+
+    -- B1-C named mutation builds. Each flips one load-bearing mechanism and
+    -- must be killed by the named failing assertion of the same suite; they
+    -- are executed and recorded manually, never run as regular tests.
+    uring_cutover_target("uring_cutover_mut_cookie_reuse", "SLUICE_B1C_MUTANT_COOKIE_REUSE")
+    uring_cutover_target("uring_cutover_mut_cancel_cqe_terminal",
+                         "SLUICE_B1C_MUTANT_CANCEL_CQE_AS_ORIGINAL_TERMINAL")
+    uring_cutover_target("uring_cutover_mut_publish_before_retire",
+                         "SLUICE_B1C_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT")
+    uring_cutover_target("uring_cutover_mut_drop_outcome",
+                         "SLUICE_B1C_MUTANT_DROP_ORIGINAL_OUTCOME")
+    uring_cutover_target("uring_cutover_mut_remove_control_pin",
+                         "SLUICE_B1C_MUTANT_REMOVE_CONTROL_PIN")
+    uring_cutover_target("uring_cutover_mut_reclaim_before_control",
+                         "SLUICE_B1C_MUTANT_RECLAIM_BEFORE_CONTROL_RETIREMENT")
+    uring_cutover_target("uring_cutover_mut_strand_poison",
+                         "SLUICE_B1C_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE")
+    uring_cutover_target("uring_cutover_mut_zero_op_dispatch",
+                         "SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
+end

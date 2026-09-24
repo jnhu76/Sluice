@@ -39,6 +39,7 @@ using sluice::async::detail::RequestCore;
 using sluice::async::detail::RequestDescriptor;
 using sluice::async::detail::RequestKey;
 using sluice::async::detail::RequestOp;
+using sluice::async::detail::SlotIndex;
 
 struct Tracker {
     const char* name;
@@ -495,12 +496,10 @@ bool uring_context_carries_the_context_identity(Tracker& t) {
     AsyncIoContext ctx(std::move(backend));
     RequestCore* core = ctx.context_core_for_test();
     CoreCaseCleanup cleanup{core};
-    t.check(core->capacity() == raw->arena_capacity(),
+    t.check(core->capacity() == raw->slot_capacity(),
             "the core slot budget is the backend slot table capacity");
-    t.check(raw->arena_context_identity() == core->context(),
-            "the io_uring slot table carries its context identity");
 
-    auto file = open_temp_file(t, "sluice b1a uring ownership\n");
+    auto file = open_temp_file(t, "sluice b1c uring ownership\n");
     if (!file.has_value())
         return false;
 
@@ -512,18 +511,19 @@ bool uring_context_carries_the_context_identity(Tracker& t) {
     if (!submitted.has_value())
         return false;
     const RequestHandle handle = submitted.value();
-    t.check(raw->arena_slot_in_use() == 1, "the request occupies a backend slot");
-    t.check(core_is_idle(core->snapshot()), "no core slot mirrors the io_uring request");
+    const auto slot0 = core->observe_slot(SlotIndex{0});
+    t.check(slot0.has_value() && slot0->accepted && slot0->binding_live,
+            "the accepted io_uring request is owned by the context core");
 
     while (!c.ready()) {
         (void)ctx.poll();
     }
+    t.check(c.result().has_value() && c.result().value() == 8,
+            "the io_uring request completes through the core publication");
     t.check(resolves_as(ctx.request_state(handle), RequestHandleState::completion_ready),
-            "the io_uring authority holds the terminal result");
-    t.check(core_is_idle(core->snapshot()),
-            "no core terminal, publication or binding mirrors the io_uring request");
+            "the core-owned identity resolves as published");
     c.reset();
-    t.check(core_is_idle(core->snapshot()), "reclaiming the backend slot leaves the core idle");
+    t.check(core_is_idle(core->snapshot()), "the slot reclaims through the core after release");
     return true;
 }
 

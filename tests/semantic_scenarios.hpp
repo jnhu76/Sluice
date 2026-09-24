@@ -85,13 +85,8 @@ inline constexpr Scenario kPrecedenceScenarios[] = {
 inline constexpr std::size_t kPrecedenceScenarioCount =
     sizeof(kPrecedenceScenarios) / sizeof(kPrecedenceScenarios[0]);
 
-inline constexpr const char* kRequestZeroLengthDivergences[] = {
-    "zero_length_legal_offset",
-    "zero_length_unrepresentable_offset",
-};
-
 inline std::vector<const char*> request_zero_length_divergence_set() {
-    return {std::begin(kRequestZeroLengthDivergences), std::end(kRequestZeroLengthDivergences)};
+    return {};
 }
 
 }

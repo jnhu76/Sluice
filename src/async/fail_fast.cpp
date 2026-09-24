@@ -3,6 +3,7 @@
 #include <sluice/async/fiber_ctx.hpp>
 
 #include <atomic>
+#include <cstdio>
 #include <exception>
 
 namespace sluice::async::detail {
@@ -154,6 +155,13 @@ namespace sluice::async::detail {
 }
 
 [[noreturn]] void uring_non_quiescent_destruction_fail_fast() noexcept {
+    std::terminate();
+}
+
+[[noreturn]] void uring_core_handoff_fail_fast() noexcept {
+    std::fprintf(stderr, "sluice::async::UringAsyncBackend: core handoff reached a "
+                         "protocol-unreachable state (invariant violation)\n");
+    std::fflush(stderr);
     std::terminate();
 }
 
