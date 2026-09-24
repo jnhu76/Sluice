@@ -75,15 +75,6 @@ class UringAsyncBackend : public AsyncBackend {
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
 #if defined(SLUICE_HAS_LIBURING)
-    std::size_t adopt_context_identity(detail::ContextIdentity) noexcept override {
-        return capacity_;
-    }
-
-    bool adopt_request_core(detail::RequestCore* core) noexcept override {
-        core_ = core;
-        return true;
-    }
-
   public:
     bool supports_request_identity() const noexcept override { return true; }
 
@@ -119,7 +110,7 @@ class UringAsyncBackend : public AsyncBackend {
         return have_ring_ ? wait_source_.get() : nullptr;
     }
 
-    std::size_t slot_capacity() const noexcept { return capacity_; }
+    std::size_t slot_capacity() const noexcept override { return capacity_; }
 #endif
 
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -317,14 +308,12 @@ class UringAsyncBackend : public AsyncBackend {
         }
     }
 
-    detail::RequestCore* core_ = nullptr;
     std::size_t capacity_ = 0;
     std::vector<PreparedUringOp> prepared_ops_;
     std::vector<DeliveryRecord> delivery_;
     std::vector<RouterEntry> router_;
     std::vector<detail::SlotIndex> cookie_free_list_;
     std::uint64_t next_cookie_ = 1;
-    unsigned queue_depth_ = 64;
 
     detail::ReferenceReadySink sink_;
 

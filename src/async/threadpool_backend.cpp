@@ -828,15 +828,6 @@ Result<RequestHandleState> ThreadPoolBackend::resolve_identity_state(
     return RequestHandleState::not_found;
 }
 
-std::size_t ThreadPoolBackend::adopt_context_identity(detail::ContextIdentity) noexcept {
-    return capacity_;
-}
-
-bool ThreadPoolBackend::adopt_request_core(detail::RequestCore* core) noexcept {
-    core_ = core;
-    return true;
-}
-
 void ThreadPoolBackend::close_admission() {
     if (core_ != nullptr) {
         core_->close_admission();
