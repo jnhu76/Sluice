@@ -3,6 +3,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
@@ -137,11 +138,14 @@ class AsyncBackend {
 
   private:
     friend class AsyncIoContext;
+    template <class T> friend class Request;
 
-    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
-    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
-    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
-    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
+    // A null completion destination publishes through the core only; the
+    // returned key is the accepted request identity in every accepting case.
+    virtual Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) = 0;
+    virtual Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) = 0;
+    virtual Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) = 0;
+    virtual Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) = 0;
 
     virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
                                                               std::uint32_t slot,
@@ -155,6 +159,8 @@ class AsyncBackend {
     // The capacity of the request slot table this backend serves; the
     // context-owned core is sized by it.
     virtual std::size_t slot_capacity() const noexcept = 0;
+
+    virtual detail::PublicCancel cancel_identity(detail::RequestKey key) = 0;
 
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;
@@ -229,10 +235,19 @@ class AsyncIoContext {
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
+    Result<Request<std::size_t>> submit_read(ReadOp op);
+    Result<Request<std::size_t>> submit_write(WriteOp op);
+    Result<Request<void>> submit_sync_data(SyncDataOp op);
+    Result<Request<void>> submit_sync_all(SyncAllOp op);
+
     Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
     Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
     Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
     Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
+
+    Result<CancelDisposition> cancel(const RequestId& id);
+
+    RequestReadiness lookup(const RequestId& id) const;
 
     Result<RequestHandleState> request_state(const RequestHandle& h) const;
 
@@ -290,6 +305,23 @@ class AsyncIoContext {
     void pause_after_wait_source_progress_() noexcept;
 #endif
 };
+
+template <class T> Result<CancelDisposition> Request<T>::cancel() {
+    if (backend_ == nullptr) {
+        return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
+    }
+    switch (backend_->cancel_identity(key_)) {
+    case detail::PublicCancel::won_before_execution:
+        return CancelDisposition::won_before_execution;
+    case detail::PublicCancel::requested:
+        return CancelDisposition::requested;
+    case detail::PublicCancel::already_terminal:
+        return CancelDisposition::already_terminal;
+    case detail::PublicCancel::not_found:
+        return CancelDisposition::not_found;
+    }
+    return CancelDisposition::not_found;
+}
 
 }
 

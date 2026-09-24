@@ -35,6 +35,9 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
 }
 
 AsyncIoContext::~AsyncIoContext() {
+    if (core_ && core_->occupancy().public_bindings != 0) {
+        detail::async_context_outstanding_fail_fast();
+    }
     if (backend_ && backend_->outstanding() != 0) {
         detail::async_context_outstanding_fail_fast();
     }
@@ -48,6 +51,9 @@ AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept
 
 AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     if (this != &other) {
+        if (core_ && core_->occupancy().public_bindings != 0) {
+            detail::async_context_outstanding_fail_fast();
+        }
         if (backend_ && backend_->outstanding() != 0) {
             detail::async_context_outstanding_fail_fast();
         }
@@ -65,7 +71,8 @@ using detail::tax0_f01_gate_outstanding_eval;
 
 namespace {
 
-void tally_submit(AsyncStats* s, const Result<void>& r) {
+template <class T>
+void tally_submit(AsyncStats* s, const Result<T>& r) {
     if (!s)
         return;
     ++s->submit_calls;
@@ -105,10 +112,12 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
         return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_read(op, c);
+    auto r = backend_->submit_read(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
-    return r;
+    if (!r.has_value())
+        return make_unexpected<void>(r.error());
+    return {};
 }
 Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
     if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
@@ -116,10 +125,12 @@ Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c
         return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_write(op, c);
+    auto r = backend_->submit_write(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
-    return r;
+    if (!r.has_value())
+        return make_unexpected<void>(r.error());
+    return {};
 }
 Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
@@ -127,10 +138,12 @@ Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c
         return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_sync_data(op, c);
+    auto r = backend_->submit_sync_data(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
-    return r;
+    if (!r.has_value())
+        return make_unexpected<void>(r.error());
+    return {};
 }
 Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
     if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
@@ -138,10 +151,76 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
         return make_unexpected<void>(*rejection);
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_sync_all(op, c);
+    auto r = backend_->submit_sync_all(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
-    return r;
+    if (!r.has_value())
+        return make_unexpected<void>(r.error());
+    return {};
+}
+
+Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
+        rejection.has_value()) {
+        return make_unexpected<Request<std::size_t>>(*rejection);
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_)
+        return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
+    auto r = backend_->submit_read(op, nullptr);
+    tally_submit(stats_, r);
+    tax0_f01_update_max_outstanding(stats_, *backend_);
+    if (!r.has_value())
+        return make_unexpected<Request<std::size_t>>(r.error());
+    return Request<std::size_t>{core_.get(), backend_.get(), r.value()};
+}
+
+Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
+        rejection.has_value()) {
+        return make_unexpected<Request<std::size_t>>(*rejection);
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_)
+        return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
+    auto r = backend_->submit_write(op, nullptr);
+    tally_submit(stats_, r);
+    tax0_f01_update_max_outstanding(stats_, *backend_);
+    if (!r.has_value())
+        return make_unexpected<Request<std::size_t>>(r.error());
+    return Request<std::size_t>{core_.get(), backend_.get(), r.value()};
+}
+
+Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
+        rejection.has_value()) {
+        return make_unexpected<Request<void>>(*rejection);
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_)
+        return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
+    auto r = backend_->submit_sync_data(op, nullptr);
+    tally_submit(stats_, r);
+    tax0_f01_update_max_outstanding(stats_, *backend_);
+    if (!r.has_value())
+        return make_unexpected<Request<void>>(r.error());
+    return Request<void>{core_.get(), backend_.get(), r.value()};
+}
+
+Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
+        rejection.has_value()) {
+        return make_unexpected<Request<void>>(*rejection);
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_)
+        return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
+    auto r = backend_->submit_sync_all(op, nullptr);
+    tally_submit(stats_, r);
+    tax0_f01_update_max_outstanding(stats_, *backend_);
+    if (!r.has_value())
+        return make_unexpected<Request<void>>(r.error());
+    return Request<void>{core_.get(), backend_.get(), r.value()};
 }
 
 Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<std::size_t>& c) {
@@ -152,7 +231,7 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_read(op, c);
+    auto r = backend_->submit_read(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value())
@@ -167,7 +246,7 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completio
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_write(op, c);
+    auto r = backend_->submit_write(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value())
@@ -182,7 +261,7 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Co
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_sync_data(op, c);
+    auto r = backend_->submit_sync_data(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value())
@@ -197,12 +276,58 @@ Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Comp
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_->supports_request_identity())
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_sync_all(op, c);
+    auto r = backend_->submit_sync_all(op, &c);
     tally_submit(stats_, r);
     tax0_f01_update_max_outstanding(stats_, *backend_);
     if (!r.has_value())
         return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
+}
+
+Result<CancelDisposition> AsyncIoContext::cancel(const RequestId& id) {
+    if (!id.valid()) {
+        return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
+    }
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
+    switch (backend_->cancel_identity(key)) {
+    case detail::PublicCancel::won_before_execution:
+        return CancelDisposition::won_before_execution;
+    case detail::PublicCancel::requested:
+        return CancelDisposition::requested;
+    case detail::PublicCancel::already_terminal:
+        return CancelDisposition::already_terminal;
+    case detail::PublicCancel::not_found:
+        return CancelDisposition::not_found;
+    }
+    return CancelDisposition::not_found;
+}
+
+RequestReadiness AsyncIoContext::lookup(const RequestId& id) const {
+    if (!id.valid()) {
+        return RequestReadiness::empty;
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!core_) {
+        return RequestReadiness::empty;
+    }
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
+    switch (core_->lookup(key)) {
+    case detail::PublicLookup::outstanding:
+        return RequestReadiness::pending;
+    case detail::PublicLookup::published:
+        return RequestReadiness::ready;
+    case detail::PublicLookup::not_found:
+        return RequestReadiness::empty;
+    }
+    return RequestReadiness::empty;
 }
 
 Result<RequestHandleState> AsyncIoContext::request_state(const RequestHandle& h) const {

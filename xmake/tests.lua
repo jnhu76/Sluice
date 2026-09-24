@@ -231,6 +231,72 @@ do
     end
 end
 
+-- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as
+-- the ownership target: the target compiles its own copies of the async TUs it
+-- observes and links neither sluice_async nor the other seam builds.
+do
+    local function public_request_target(name, test_source, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                test_source,
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/request_handle.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING", "SLUICE_PUBLIC_REQUEST_URING")
+                add_links("uring")
+                table.insert(files, R .. "src/async/uring_backend.cpp")
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    public_request_target("public_request_test", R .. "tests/public_request_test.cpp", false)
+    if has_config("liburing") then
+        public_request_target("public_request_uring_test",
+                              R .. "tests/public_request_test.cpp", true)
+        public_request_target("public_request_release_violation_uring_test",
+                              R .. "tests/public_request_release_violation_test.cpp", true)
+    end
+    public_request_target("public_request_release_violation_test",
+                          R .. "tests/public_request_release_violation_test.cpp", false)
+
+    -- B2 named mutation builds. Each flips one load-bearing mechanism of the
+    -- public-result surface and must be killed by the named failing assertion
+    -- of the killer suite; they are executed and recorded manually, never run
+    -- as regular tests.
+    public_request_target("public_request_mut_consume_keeps_binding",
+                          R .. "tests/public_request_test.cpp", false,
+                          "SLUICE_B2_MUTANT_CONSUME_KEEPS_BINDING")
+    public_request_target("public_request_mut_observe_ignores_publication",
+                          R .. "tests/public_request_test.cpp", false,
+                          "SLUICE_B2_MUTANT_OBSERVE_IGNORES_PUBLICATION")
+    public_request_target("public_request_mut_observe_consumes",
+                          R .. "tests/public_request_test.cpp", false,
+                          "SLUICE_B2_MUTANT_OBSERVE_CONSUMES")
+    public_request_target("public_request_mut_release_forgets_binding",
+                          R .. "tests/public_request_test.cpp", false,
+                          "SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING")
+    public_request_target("public_request_mut_nonterminal_release_detaches",
+                          R .. "tests/public_request_release_violation_test.cpp", false,
+                          "SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES")
+end
+
 -- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault
 -- injections are macro-guarded backend surface, so this target compiles its
 -- own copies of the async TUs and links neither sluice_async nor the other

@@ -98,6 +98,20 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void request_nonterminal_release_fail_fast() noexcept {
+    std::fprintf(stderr, "sluice::async::Request: destroying or overwriting a nonterminal "
+                         "request responsibility is a contract violation\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
+[[noreturn]] void request_binding_invariant_fail_fast() noexcept {
+    std::fprintf(stderr, "sluice::async::Request: public binding reached a protocol-"
+                         "unreachable state (invariant violation)\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept {
     std::terminate();
 }

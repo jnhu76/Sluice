@@ -167,19 +167,19 @@ Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
         op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_all));
 }
 
-Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
+Result<detail::RequestKey> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>* c) {
     return submit_request(op, c, detail::OperationKind::read, detail::RequestOp::read);
 }
 
-Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
+Result<detail::RequestKey> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>* c) {
     return submit_request(op, c, detail::OperationKind::write, detail::RequestOp::write);
 }
 
-Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
+Result<detail::RequestKey> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>* c) {
     return submit_request(op, c, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
 }
 
-Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
+Result<detail::RequestKey> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>* c) {
     return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
@@ -196,19 +196,20 @@ template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) no
 }
 
 template <class Op, class Comp>
-Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::OperationKind kind,
-                                               detail::RequestOp core_op) {
+Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
+                                                             detail::OperationKind kind,
+                                                             detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_submit_entry_pause_();
 #endif
     if (auto v = validate_op(op); !v.has_value()) {
-        return make_unexpected<void>(v.error());
+        return make_unexpected<detail::RequestKey>(v.error());
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::reserve); inj.has_value()) {
-        return make_unexpected<void>(*inj);
+        return make_unexpected<detail::RequestKey>(*inj);
     }
 #endif
 
@@ -217,7 +218,7 @@ Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::Operation
         const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed
                                        ? IoError::Code::invalid_state
                                        : IoError::Code::would_block;
-        return make_unexpected<void>(IoError{code});
+        return make_unexpected<detail::RequestKey>(IoError{code});
     }
     const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
 
@@ -225,7 +226,7 @@ Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::Operation
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::prepare); inj.has_value()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(*inj);
+        return make_unexpected<detail::RequestKey>(*inj);
     }
 #endif
 
@@ -242,8 +243,9 @@ Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::Operation
                            offset};
 
     DeliveryRecord& record = delivery_[h.slot.value];
-    record.completion = &c;
-    record.publish = publish_thunk<Comp>();
+    record.completion = c;
+    record.publish = c != nullptr ? publish_thunk<Comp>()
+                                  : &ThreadPoolBackend::publish_request_ready;
     record.kind = kind;
     record.registration = detail::WaiterRegistration::open_no_waiter;
     record.waiter_token = {};
@@ -256,28 +258,32 @@ Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::Operation
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::commit); inj.has_value()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(*inj);
+        return make_unexpected<detail::RequestKey>(*inj);
     }
 
     wait_pre_accept_commit_pause_();
 #endif
 
-    if (!begin_binding(c)) {
+    if (c != nullptr && !begin_binding(*c)) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
+        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
     }
 
     const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
     const detail::BorrowFacts borrow{op.file.fd, buffer_of(op), length};
     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
     if (!accepted.ok()) {
-        rollback_binding_before_accept(c);
+        if (c != nullptr) {
+            rollback_binding_before_accept(*c);
+        }
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
+        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
     }
 
-    install_core_binding(c, core_, accepted.id);
-    commit_binding(c);
+    if (c != nullptr) {
+        install_core_binding(*c, core_, accepted.id);
+        commit_binding(*c);
+    }
 
     if (descriptor.zero_op) {
         publish_zero_op_inline(accepted.id, h);
@@ -288,7 +294,7 @@ Result<void> ThreadPoolBackend::submit_request(Op op, Comp& c, detail::Operation
 #endif
         dispatch_after_accept(h);
     }
-    return {};
+    return accepted.id;
 }
 
 void ThreadPoolBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
@@ -390,6 +396,12 @@ void ThreadPoolBackend::publish_void_ready(void* completion,
                               ? Result<void>{}
                               : make_unexpected<void>(outcome.error);
     AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
+}
+
+void ThreadPoolBackend::publish_request_ready(void* completion,
+                                              const sluice::detail::IoOutcome& outcome) noexcept {
+    (void)completion;
+    (void)outcome;
 }
 
 void ThreadPoolBackend::worker_loop() {
@@ -716,6 +728,10 @@ void ThreadPoolBackend::cancel(Completion<void>& c) {
     if (!key.has_value())
         return;
     (void)cancel_key(*key);
+}
+
+detail::PublicCancel ThreadPoolBackend::cancel_identity(detail::RequestKey key) {
+    return cancel_key(key);
 }
 
 Result<void> ThreadPoolBackend::register_waiter(Completion<std::size_t>& c,

@@ -69,10 +69,10 @@ class UringAsyncBackend : public AsyncBackend {
     UringAsyncBackend& operator=(const UringAsyncBackend&) = delete;
 
   private:
-    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
-    Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override;
-    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
-    Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
+    Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) override;
+    Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override;
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) override;
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) override;
 
 #if defined(SLUICE_HAS_LIBURING)
   public:
@@ -81,6 +81,8 @@ class UringAsyncBackend : public AsyncBackend {
   private:
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override;
+
+    detail::PublicCancel cancel_identity(detail::RequestKey key) override;
 
   public:
 #endif
@@ -251,13 +253,15 @@ class UringAsyncBackend : public AsyncBackend {
     }
 
     template <class Op, class Comp>
-    Result<void> submit_request(Op op, Comp& c, detail::OperationKind kind,
-                                detail::RequestOp core_op);
+    Result<detail::RequestKey> submit_request(Op op, Comp* c, detail::OperationKind kind,
+                                              detail::RequestOp core_op);
 
     static void publish_size_ready(void* completion,
                                    const sluice::detail::IoOutcome& outcome) noexcept;
     static void publish_void_ready(void* completion,
                                    const sluice::detail::IoOutcome& outcome) noexcept;
+    static void publish_request_ready(void* completion,
+                                      const sluice::detail::IoOutcome& outcome) noexcept;
 
     void dispatch_after_accept(detail::SlotHandle h) noexcept;
     void publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept;
