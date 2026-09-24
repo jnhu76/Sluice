@@ -345,7 +345,7 @@ UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
 UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     : capacity_(config.request_capacity), prepared_ops_(config.request_capacity),
       delivery_(config.request_capacity), router_(config.request_capacity),
-      cookie_free_list_(config.request_capacity), queue_depth_(config.queue_depth),
+      cookie_free_list_(config.request_capacity),
       ring_state_(std::make_unique<UringRingState>()) {
     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
         cookie_free_list_[i] = detail::SlotIndex{i};

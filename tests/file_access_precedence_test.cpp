@@ -70,7 +70,7 @@ class CountingBackend final : public AsyncBackend {
     bool supports_request_identity() const noexcept override { return true; }
 
   private:
-    std::size_t adopt_context_identity(detail::ContextIdentity) noexcept override { return 0; }
+    std::size_t slot_capacity() const noexcept override { return 0; }
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
         (void)op;
         (void)c;

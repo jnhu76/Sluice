@@ -55,10 +55,6 @@ class ThreadPoolBackend : public AsyncBackend {
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override;
 
-    std::size_t adopt_context_identity(detail::ContextIdentity) noexcept override;
-
-    bool adopt_request_core(detail::RequestCore* core) noexcept override;
-
   public:
     std::size_t poll() override;
     Result<std::size_t> wait_one() override;
@@ -79,7 +75,7 @@ class ThreadPoolBackend : public AsyncBackend {
 
     void close_admission();
 
-    std::size_t slot_capacity() const noexcept { return capacity_; }
+    std::size_t slot_capacity() const noexcept override { return capacity_; }
     std::size_t configured_worker_count() const noexcept { return workers_.size(); }
 
     std::size_t dispatch_occupancy() const;
@@ -101,7 +97,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<std::size_t>& c) const;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<void>& c) const;
-    detail::RequestCore* adopted_core_for_test() const noexcept { return core_; }
+    detail::RequestCore* request_core_for_test() const noexcept { return core_; }
     std::size_t publication_pending_size_for_test() const;
     bool event_owed_for_test(std::uint32_t slot) const;
 
@@ -270,7 +266,6 @@ class ThreadPoolBackend : public AsyncBackend {
             ++stats_->canceled_ops;
     }
 
-    detail::RequestCore* core_ = nullptr;
     std::size_t capacity_ = 0;
     std::vector<PreparedBlockingOp> prepared_ops_;
     std::vector<DeliveryRecord> delivery_;

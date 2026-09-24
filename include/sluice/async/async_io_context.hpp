@@ -152,15 +152,9 @@ class AsyncBackend {
         return make_unexpected<RequestHandleState>(IoError{IoError::Code::not_supported});
     }
 
-    // Returns the capacity of the slot table now carrying that identity, or 0
-    // when the backend has no slot table.
-    virtual std::size_t adopt_context_identity(detail::ContextIdentity identity) noexcept = 0;
-
-    // A backend whose request lifecycle is governed by the context-owned
-    // RequestCore returns true and stores the core for the context's lifetime.
-    // Returning false keeps the backend on its own lifecycle authority until
-    // its own migration slice.
-    virtual bool adopt_request_core(detail::RequestCore* core) noexcept;
+    // The capacity of the request slot table this backend serves; the
+    // context-owned core is sized by it.
+    virtual std::size_t slot_capacity() const noexcept = 0;
 
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;
@@ -172,6 +166,10 @@ class AsyncBackend {
     AsyncStats* stats_ = nullptr;
 
     detail::SynchronousReadySink* routing_sink_ = nullptr;
+
+    // Installed only by the AsyncIoContext constructor; backends never set
+    // or clear it, and the backend retires before the core storage does.
+    detail::RequestCore* core_ = nullptr;
 
     template <class T> static bool try_claim(Completion<T>& c) noexcept {
         return c.try_claim_for_backend();

@@ -20,7 +20,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -214,9 +213,9 @@ bool move_transfers_the_same_core(Tracker& t) {
 bool backend_slot_table_carries_the_context_identity(Tracker& t) {
     auto first_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     auto second_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
-    t.check(first_backend->adopted_core_for_test() == nullptr &&
-                second_backend->adopted_core_for_test() == nullptr,
-            "backend construction mints no per-backend context identity");
+    t.check(first_backend->request_core_for_test() == nullptr &&
+                second_backend->request_core_for_test() == nullptr,
+            "backend construction holds no context core");
 
     ThreadPoolBackend* first_raw = first_backend.get();
     ThreadPoolBackend* second_raw = second_backend.get();
@@ -225,14 +224,14 @@ bool backend_slot_table_carries_the_context_identity(Tracker& t) {
 
     const ContextIdentity first_identity = first.context_core_for_test()->context();
     const ContextIdentity second_identity = second.context_core_for_test()->context();
-    t.check(first_raw->adopted_core_for_test() == first.context_core_for_test(),
-            "the first backend adopted its context's core");
-    t.check(second_raw->adopted_core_for_test() == second.context_core_for_test(),
-            "the second backend adopted its context's core");
-    t.check(first_raw->adopted_core_for_test()->context() == first_identity,
-            "the first adopted core carries its context identity");
-    t.check(second_raw->adopted_core_for_test()->context() == second_identity,
-            "the second adopted core carries its context identity");
+    t.check(first_raw->request_core_for_test() == first.context_core_for_test(),
+            "the first backend drives its context's core");
+    t.check(second_raw->request_core_for_test() == second.context_core_for_test(),
+            "the second backend drives its context's core");
+    t.check(first_raw->request_core_for_test()->context() == first_identity,
+            "the first driven core carries its context identity");
+    t.check(second_raw->request_core_for_test()->context() == second_identity,
+            "the second driven core carries its context identity");
     t.check(first_identity != second_identity, "distinct contexts hold distinct identities");
     return true;
 }
@@ -288,7 +287,7 @@ bool production_request_is_request_core_owned(Tracker& t) {
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore* core = ctx.context_core_for_test();
-    t.check(core == raw->adopted_core_for_test(), "the backend drives the context-owned core");
+    t.check(core == raw->request_core_for_test(), "the backend drives the context-owned core");
     t.check(core_is_idle(core->snapshot()), "the context core starts idle");
 
     std::vector<std::byte> scratch(8);
@@ -322,12 +321,10 @@ bool production_request_is_request_core_owned(Tracker& t) {
 class RecordingBackend final : public AsyncBackend {
   public:
     std::size_t reported_capacity = 3;
-    std::size_t adoptions = 0;
-    ContextIdentity adopted{};
+    mutable std::size_t capacity_queries = 0;
 
-    std::size_t adopt_context_identity(ContextIdentity identity) noexcept override {
-        ++adoptions;
-        adopted = identity;
+    std::size_t slot_capacity() const noexcept override {
+        ++capacity_queries;
         return reported_capacity;
     }
 
@@ -352,32 +349,26 @@ class RecordingBackend final : public AsyncBackend {
     }
 };
 
-static_assert(
-    std::is_same_v<decltype(std::declval<RecordingBackend&>().adopt_context_identity(
-                       std::declval<ContextIdentity>())),
-                   std::size_t>,
-    "the context-to-backend seam carries an identity and reports a slot capacity only");
-
-bool adoption_seam_carries_no_lifecycle_authority(Tracker& t) {
+bool capacity_handshake_happens_once_at_context_construction(Tracker& t) {
     auto backend = std::make_unique<RecordingBackend>();
     backend->reported_capacity = 3;
     RecordingBackend* raw = backend.get();
-    t.check(raw->adoptions == 0, "constructing a backend adopts no identity");
+    t.check(raw->capacity_queries == 0, "constructing a backend serves no context");
 
     AsyncIoContext ctx(std::move(backend));
-    t.check(raw->adoptions == 1, "the context adopts its identity once");
-    t.check(raw->adopted.value != 0, "the adopted identity is a domain value");
+    t.check(raw->capacity_queries == 1, "the context reads the slot capacity once");
     RequestCore* core = ctx.context_core_for_test();
-    t.check(core->context() == raw->adopted, "the core carries the identity the backend received");
+    t.check(core != nullptr, "the context owns a core");
+    if (core == nullptr)
+        return false;
     t.check(core->capacity() == 3, "the core slot budget is the capacity the backend reported");
+    t.check(core->context().value != 0, "the core identity is a domain value");
 
-    const CoreSnapshot adopted = core->snapshot();
+    const CoreSnapshot handshake = core->snapshot();
     AsyncIoContext moved(std::move(ctx));
-    t.check(raw->adoptions == 1, "the context move adopts nothing again");
-    t.check(moved.context_core_for_test()->context() == raw->adopted,
-            "the identity the backend received survives the move");
-    t.check(same_core_facts(moved.context_core_for_test()->snapshot(), adopted),
-            "adoption and the move change no canonical core fact");
+    t.check(raw->capacity_queries == 1, "the context move reads no capacity");
+    t.check(same_core_facts(moved.context_core_for_test()->snapshot(), handshake),
+            "the capacity handshake and the move change no canonical core fact");
     return true;
 }
 
@@ -455,7 +446,7 @@ bool move_assignment_transfers_the_same_core(Tracker& t) {
         return false;
     t.check(assigned_core->context() == identity,
             "the move-assigned destination carries the source identity");
-    t.check(source_raw->adopted_core_for_test() == assigned_core,
+    t.check(source_raw->request_core_for_test() == assigned_core,
             "the backend and the core moved into the destination together");
     t.check(assigned_core->capacity() == source_raw->slot_capacity(),
             "the core slot budget is the moved-in slot table capacity");
@@ -545,8 +536,8 @@ int main() {
          backend_slot_table_carries_the_context_identity},
         {"foreign_and_released_identities_do_not_resolve",
          foreign_and_released_identities_do_not_resolve},
-        {"adoption_seam_carries_no_lifecycle_authority",
-         adoption_seam_carries_no_lifecycle_authority},
+        {"capacity_handshake_happens_once_at_context_construction",
+         capacity_handshake_happens_once_at_context_construction},
         {"domain_identities_are_not_reused_across_contexts",
          domain_identities_are_not_reused_across_contexts},
         {"identity_domain_terminates_at_exhaustion", identity_domain_terminates_at_exhaustion},
