@@ -36,6 +36,53 @@ Follow MIG-01's dependency order and phase gates. Do not postpone lifetime,
 publication or teardown verification until after a structural rewrite. Tests
 that merely repeat current implementation behavior are not a normative oracle.
 
+## Testing discipline
+
+Tests are evidence for a behavior, invariant, legal interleaving or failure mode;
+they are not post-hoc mirrors of an implementation.
+
+Before changing behavior or protocol whose intended semantics are already known,
+identify the relevant oracle, invariants, failure modes and legal interleavings.
+Establish the required deterministic regression, semantic-oracle test or protocol
+model before or together with the production change.
+
+Do not finish a mechanism and then invent unit tests whose assertions merely
+reproduce its private representation, state layout or call sequence. A regression
+test added after finding and fixing a real defect is valid when it independently
+reproduces the failure rather than being derived from the repaired implementation.
+
+Prefer the lowest sufficient deterministic test level that directly
+distinguishes the relevant contract or failure mode. Exercise the actual
+public path when the claim concerns that path or cross-layer composition;
+add lower-level controlled evidence when it is needed to expose the mechanism.
+End-to-end testing is not the sole evidence mechanism: protocol transitions,
+rare interleavings, lifetime boundaries, publication ordering, cancellation,
+teardown, fault injection and backend-independent semantics may require
+deterministic regressions, controlled concurrency tests, semantic oracles or
+formal models.
+
+An isolated test must earn its existence by naming the invariant or failure mode
+it distinguishes. Before implementing the mechanism under test, state what can go
+wrong and what independent observation demonstrates that it did not.
+
+Formal/model evidence and production tests have different roles. A bounded model
+result does not prove an implementation unless modeled actions, assumptions and
+relevant C++ transitions are explicitly mapped. A passing production test likewise
+does not establish protocol completeness outside the exercised executions.
+
+Where a validation claim is externally observable, produce repeatable evidence
+when practical, for example captured program output, a kernel/backend trace,
+deterministic execution trace, model-check result with bounds, fault-injection
+record or benchmark raw result. Record enough configuration and command information
+for another reviewer to reproduce the claim.
+
+During implementation run the smallest relevant deterministic test set needed for
+fast feedback. At a slice/phase boundary and before merge authorization, run the
+complete configuration matrix required by the affected conformance claim. Do not
+repeatedly run an expensive full matrix after changes that cannot affect it, and
+do not turn a failing protocol test green through sleeps, retry inflation or
+weakened assertions.
+
 ## Architecture discipline
 
 - Keep direct execution usable without RequestCore or Scheduler/Fiber.
