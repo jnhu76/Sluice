@@ -11,10 +11,12 @@
 #include <sluice/async/uring_backend.hpp>
 #endif
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -158,6 +160,49 @@ void destroy_context_with_live_public_binding() {
     std::_Exit(0);
 }
 
+template <class Gate> void wait_gate_paused(Gate& gate) noexcept {
+    std::atomic<bool>& paused = gate.paused;
+    bool seen = paused.load(std::memory_order_acquire);
+    while (!seen) {
+        paused.wait(seen, std::memory_order_acquire);
+        seen = paused.load(std::memory_order_acquire);
+    }
+}
+
+void discard_request_during_publication_inflight() {
+    auto file_path = make_temp_file("sluice b2 inflight discard\n");
+    auto opened = File::open(file_path);
+    ::unlink(file_path.c_str());
+    if (!opened.has_value())
+        std::_Exit(2);
+    File file = std::move(opened.value());
+
+    auto backend = make_backend();
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+
+    Backend::PublicationEpiloguePauseGate gate;
+    raw->set_publication_epilogue_pause_gate(&gate);
+
+    std::vector<std::byte> buffer(8, std::byte{0});
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), buffer.size(), 0});
+    if (!submitted.has_value())
+        std::_Exit(2);
+    Request<std::size_t> request = std::move(submitted).value();
+
+    std::atomic<bool> stop_driver{false};
+    std::thread driver([&] {
+        while (!stop_driver.load(std::memory_order_acquire))
+            (void)ctx.poll();
+    });
+    wait_gate_paused(gate);
+    if (request.ready())
+        std::_Exit(3);
+    request.discard();
+    std::_Exit(0);
+}
+
 struct NamedScenario {
     const char* name;
     void (*violation)();
@@ -179,6 +224,7 @@ int main() {
         {"destroy_nonterminal_request", destroy_nonterminal_request},
         {"move_assign_over_nonterminal_request", move_assign_over_nonterminal_request},
         {"destroy_context_with_live_public_binding", destroy_context_with_live_public_binding},
+        {"discard_request_during_publication_inflight", discard_request_during_publication_inflight},
     };
     for (const NamedScenario& scenario : scenarios) {
         if (!child_dies_running(scenario.violation)) {

@@ -295,6 +295,9 @@ do
     public_request_target("public_request_mut_nonterminal_release_detaches",
                           R .. "tests/public_request_release_violation_test.cpp", false,
                           "SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES")
+    public_request_target("public_request_mut_discard_accepts_inflight",
+                          R .. "tests/public_request_release_violation_test.cpp", false,
+                          "SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
 -- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault

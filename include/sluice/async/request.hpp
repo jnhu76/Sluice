@@ -142,7 +142,7 @@ template <class T> class Request {
         if (core_ == nullptr) {
             return;
         }
-        const detail::BindingRelease released = core_->release_public_binding(key_);
+        const detail::BindingRelease released = core_->discard_public_result(key_);
 #if defined(SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES)
         if (released == detail::BindingRelease::stale) {
 #else

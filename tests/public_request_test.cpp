@@ -554,6 +554,67 @@ bool discard_releases_the_published_binding(Tracker& t) {
     return true;
 }
 
+bool publication_inflight_window_keeps_the_request_nonterminal(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b2 inflight window\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    Backend::PublicationEpiloguePauseGate gate;
+    raw->set_publication_epilogue_pause_gate(&gate);
+    GateGuard<Backend::PublicationEpiloguePauseGate> guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+    t.check(submitted.has_value(), "the request is accepted");
+    if (!submitted.has_value())
+        return false;
+    Request<std::size_t> request = std::move(submitted).value();
+
+    std::atomic<bool> stop_driver{false};
+    std::thread driver([&] {
+        while (!stop_driver.load(std::memory_order_acquire))
+            (void)ctx.poll();
+    });
+    wait_gate_paused(gate);
+
+    const auto inflight = core.observe_slot(SlotIndex{0});
+    t.check(inflight.has_value() && inflight->publication_inflight && !inflight->published &&
+                inflight->binding_live,
+            "the publisher holds the publication pin between write and completion");
+    t.check(!request.ready(),
+            "the public terminal is not established while publication is inflight");
+    t.check(request.try_result().readiness == RequestReadiness::pending,
+            "try_result reports pending during the publication window");
+    const RequestKey window_key{core.context(), SlotIndex{0}, inflight->generation};
+    t.check(core.lookup(window_key) == detail::PublicLookup::outstanding,
+            "the core identity lookup reports outstanding during the publication window");
+
+    gate.resume.store(true, std::memory_order_release);
+    gate.resume.notify_all();
+    while (!gate.exited.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    guard.rearmed = true;
+    raw->set_publication_epilogue_pause_gate(nullptr);
+    stop_driver.store(true, std::memory_order_release);
+    driver.join();
+
+    t.check(request.ready(), "publication completion establishes the public terminal");
+    auto consumed = request.take_result();
+    t.check(consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
+                consumed.result.value() == buffer.size(),
+            "the request consumes normally after the window");
+    for (int i = 0; i < 64 && !core_is_idle(core.snapshot()); ++i)
+        (void)ctx.poll();
+    t.check(core_is_idle(core.snapshot()), "the consumed request reclaims after the window");
+    return true;
+}
+
 bool move_transfers_responsibility_without_duplicating_it(Tracker& t) {
     auto file = open_temp_file(t, "sluice b2 move\n");
     if (!file.has_value())
@@ -719,6 +780,8 @@ int main() {
         {"retained_published_result_pins_capacity_while_execution_is_quiescent",
          retained_published_result_pins_capacity_while_execution_is_quiescent},
         {"discard_releases_the_published_binding", discard_releases_the_published_binding},
+        {"publication_inflight_window_keeps_the_request_nonterminal",
+         publication_inflight_window_keeps_the_request_nonterminal},
         {"move_transfers_responsibility_without_duplicating_it",
          move_transfers_responsibility_without_duplicating_it},
         {"context_move_preserves_bound_requests", context_move_preserves_bound_requests},

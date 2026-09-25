@@ -173,6 +173,7 @@ class RequestCore {
     PublicLookup lookup(RequestKey id) const noexcept;
     PublicCancel cancel(RequestKey id) noexcept;
     BindingRelease release_public_binding(RequestKey id) noexcept;
+    BindingRelease discard_public_result(RequestKey id) noexcept;
     PublicObservation observe_public_result(RequestKey id, IoOutcome* out) const noexcept;
     PublicConsumption consume_public_result(RequestKey id, IoOutcome* out) noexcept;
 
