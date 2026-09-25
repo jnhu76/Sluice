@@ -534,7 +534,12 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #        publication completes) must die on InvConsumeAfterPublish -- the
 #        per-identity pubDoneIds fact is what makes "was published"
 #        expressible, because consume promotes stage past 2 in the same
-#        step it records consumption.
+#        step it records consumption.  MutDiscardInflight (public
+#        discard/destruction accepts an inflight publication) must die on
+#        InvDiscardAfterPublish -- the per-identity discarded[] fact is
+#        what makes "was publicly discarded" expressible, because discard
+#        promotes stage past 2 in the same step; ReleaseBind stays
+#        deliberately inflight-tolerant as the compatibility flavor.
 echo "== Stage B1-1: RequestCore safety =="
 run_clean rcore-safety RequestCore.cfg RequestCore
 
@@ -568,5 +573,6 @@ run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg Re
 echo "== Stage B2: RequestCore public consumption mutants (ACTIVE MUTATION: each must violate its named invariant) =="
 run_violate rcore-mut-consume-keeps-bind RequestCoreMutConsumeKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-consume-unpublished RequestCoreMutConsumeUnpublished.cfg RequestCore InvConsumeAfterPublish
+run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg RequestCore InvDiscardAfterPublish
 
 echo "VERIFY_TLA: PASS"

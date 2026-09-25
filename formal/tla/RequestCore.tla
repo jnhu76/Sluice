@@ -104,6 +104,21 @@
 (*                          pubDoneIds makes "was published" a per-identity *)
 (*                          fact stage cannot express, because consume     *)
 (*                          promotes stage past 2 in the same step         *)
+(*                                                                         *)
+(* B2 (#395) public-result discard:                                        *)
+(*   DiscardPublic models Request::discard/destructor/move-assign-over:    *)
+(*   the owner gives up the binding without consuming, and the public      *)
+(*   terminal must ALREADY be established (pub = "done"); an inflight      *)
+(*   publication is not a public terminal, so an early discard is the      *)
+(*   same nonterminal-release violation the always-on diagnostics guard.   *)
+(*   ReleaseBind remains the compatibility release flavor, which may fire  *)
+(*   from "inflight" (a ready Completion's own release edge predates the   *)
+(*   core's publication completion).                                       *)
+(*   MutDiscardInflight     public discard accepts an inflight publication; *)
+(*                          discarded[] makes "was publicly discarded" a   *)
+(*                          per-identity fact stage cannot express,        *)
+(*                          because discard promotes stage past 2 in the   *)
+(*                          same step                                      *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 
@@ -126,7 +141,8 @@ CONSTANT MutIgnoreClose,
           MutDoubleDecrement,
           MutReadyBeforePayload,
           MutConsumeKeepsBind,
-          MutConsumeUnpublished
+          MutConsumeUnpublished,
+          MutDiscardInflight
 
 Slots == {"s0", "s1"}
 GenMax == 2
@@ -145,12 +161,12 @@ ReclaimRecords == [id: Ids, exec: 0..MaxExec, ctl: 0..MaxCtl,
 VARIABLES phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
           closed, health, wake, acceptsAfterClose, acceptsAfterHealth,
           stage, acceptCount, chosenIds, reclaimLog, execRevived,
-          consumed, pubDoneIds
+          consumed, discarded, pubDoneIds
 
 vars == <<phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
           closed, health, wake, acceptsAfterClose, acceptsAfterHealth,
           stage, acceptCount, chosenIds, reclaimLog, execRevived,
-          consumed, pubDoneIds>>
+          consumed, discarded, pubDoneIds>>
 
 Identity(s) == [slot |-> s, gen |-> gen[s]]
 
@@ -193,6 +209,7 @@ Init ==
   /\ reclaimLog = << >>
   /\ execRevived = [s \in Slots |-> FALSE]
   /\ consumed = [i \in Ids |-> FALSE]
+  /\ discarded = [i \in Ids |-> FALSE]
   /\ pubDoneIds = {}
 
 ReleasePhase(s) ==
@@ -225,7 +242,7 @@ Reserve(s) ==
   /\ wake' = IF MutLazyReclaim THEN TRUE ELSE wake
   /\ UNCHANGED <<gen, bind, term, exec, ctl, pub, claimed, intent, choices,
                  closed, health, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 Rollback(s) ==
   /\ phase[s] = "reserved" \/ (MutRollbackResidue /\ phase[s] = "accepted")
@@ -235,21 +252,21 @@ Rollback(s) ==
             /\ UNCHANGED <<bind, term, exec, ctl, pub, claimed, intent, choices>>
        ELSE RetireSlot(s)
   /\ UNCHANGED <<closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 CloseAdmission ==
   /\ ~closed
   /\ closed' = TRUE
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
                  health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 NoteHealth ==
   /\ ~health
   /\ health' = TRUE
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, pub, claimed, intent, choices,
                  closed, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 Accept(s) ==
   /\ phase[s] = "reserved"
@@ -268,7 +285,7 @@ Accept(s) ==
   /\ acceptsAfterClose' = IF closed THEN 1 ELSE acceptsAfterClose
   /\ acceptsAfterHealth' = IF health THEN 1 ELSE acceptsAfterHealth
   /\ UNCHANGED <<gen, ctl, choices, closed, health, wake, chosenIds, reclaimLog,
-                 execRevived, consumed, pubDoneIds>>
+                 execRevived, consumed, discarded, pubDoneIds>>
 
 ClaimExec(s) ==
   /\ phase[s] = "accepted"
@@ -277,7 +294,7 @@ ClaimExec(s) ==
   /\ claimed' = [claimed EXCEPT ![s] = TRUE]
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, pub, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 PhysicalOutcome(s) ==
   /\ phase[s] = "accepted"
@@ -293,7 +310,7 @@ PhysicalOutcome(s) ==
   /\ intent' = [intent EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, bind, exec, ctl, pub, claimed,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, reclaimLog, consumed, discarded, pubDoneIds>>
 
 StaleTerminal(s, g) ==
   /\ MutStaleEvent
@@ -307,7 +324,7 @@ StaleTerminal(s, g) ==
                                        kind |-> "phys"])]
   /\ UNCHANGED <<phase, gen, bind, exec, ctl, pub, claimed, intent,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, reclaimLog, consumed, discarded, pubDoneIds>>
 
 CancelRequest(s) ==
   /\ phase[s] = "accepted"
@@ -325,7 +342,7 @@ CancelRequest(s) ==
             /\ intent' = [intent EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, bind, exec, ctl, pub, claimed,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, reclaimLog, consumed, discarded, pubDoneIds>>
 
 RetireExec(s) ==
   /\ phase[s] = "accepted"
@@ -334,7 +351,7 @@ RetireExec(s) ==
   /\ exec' = [exec EXCEPT ![s] = IF MutDoubleDecrement THEN exec[s] - 2 ELSE exec[s] - 1]
   /\ UNCHANGED <<phase, gen, bind, term, ctl, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 AcquireExec(s) ==
   /\ phase[s] = "accepted"
@@ -344,7 +361,7 @@ AcquireExec(s) ==
   /\ execRevived' = [execRevived EXCEPT ![s] = execRevived[s] \/ (term[s] # "none")]
   /\ UNCHANGED <<phase, gen, bind, term, ctl, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 AcquireCtl(s) ==
   /\ phase[s] = "accepted"
@@ -353,7 +370,7 @@ AcquireCtl(s) ==
   /\ ctl' = [ctl EXCEPT ![s] = ctl[s] + 1]
   /\ UNCHANGED <<phase, gen, bind, term, exec, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 RetireCtl(s) ==
   /\ phase[s] = "accepted"
@@ -361,7 +378,7 @@ RetireCtl(s) ==
   /\ ctl' = [ctl EXCEPT ![s] = IF MutDoubleDecrement THEN ctl[s] - 2 ELSE ctl[s] - 1]
   /\ UNCHANGED <<phase, gen, bind, term, exec, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 BeginPublish(s) ==
   /\ phase[s] = "accepted"
@@ -372,7 +389,7 @@ BeginPublish(s) ==
   /\ pub' = [pub EXCEPT ![s] = "inflight"]
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 stage, acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 stage, acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 CompletePublish(s) ==
   /\ pub[s] = "inflight"
@@ -382,7 +399,7 @@ CompletePublish(s) ==
                  IF stage[Identity(s)] < 2 THEN 2 ELSE stage[Identity(s)]]
   /\ UNCHANGED <<phase, gen, bind, term, exec, ctl, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 acceptCount, chosenIds, reclaimLog, consumed>>
+                 acceptCount, chosenIds, reclaimLog, consumed, discarded>>
 
 Consume(s) ==
   /\ phase[s] = "accepted"
@@ -397,7 +414,20 @@ Consume(s) ==
        ELSE bind' = [bind EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 acceptCount, chosenIds, reclaimLog, pubDoneIds>>
+                 acceptCount, chosenIds, reclaimLog, discarded, pubDoneIds>>
+
+DiscardPublic(s) ==
+  /\ phase[s] = "accepted"
+  /\ bind[s]
+  /\ term[s] # "none"
+  /\ (IF MutDiscardInflight THEN pub[s] # "none" ELSE pub[s] = "done")
+  /\ discarded' = [discarded EXCEPT ![Identity(s)] = TRUE]
+  /\ stage' = [stage EXCEPT ![Identity(s)] =
+                 IF stage[Identity(s)] < 3 THEN 3 ELSE stage[Identity(s)]]
+  /\ bind' = [bind EXCEPT ![s] = FALSE]
+  /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
+                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
+                 acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
 
 ReleaseBind(s) ==
   /\ phase[s] = "accepted"
@@ -412,7 +442,7 @@ ReleaseBind(s) ==
        ELSE bind' = [bind EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
+                 acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
 
 Reclaim(s) ==
   /\ phase[s] = "accepted"
@@ -428,7 +458,7 @@ Reclaim(s) ==
   /\ RetireSlot(s)
   /\ IF MutLazyReclaim THEN wake' = FALSE ELSE UNCHANGED wake
   /\ UNCHANGED <<closed, health, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 acceptCount, chosenIds, consumed, pubDoneIds>>
+                 acceptCount, chosenIds, consumed, discarded, pubDoneIds>>
 
 SlotAction(s) ==
   \/ Reserve(s)
@@ -444,6 +474,7 @@ SlotAction(s) ==
   \/ BeginPublish(s)
   \/ CompletePublish(s)
   \/ Consume(s)
+  \/ DiscardPublic(s)
   \/ ReleaseBind(s)
   \/ Reclaim(s)
   \/ \E g \in 0..(gen[s] - 1) : StaleTerminal(s, g)
@@ -496,6 +527,7 @@ TypeOK ==
   /\ chosenIds \subseteq Ids
   /\ execRevived \in [Slots -> BOOLEAN]
   /\ consumed \in [Ids -> BOOLEAN]
+  /\ discarded \in [Ids -> BOOLEAN]
   /\ pubDoneIds \subseteq Ids
   /\ Len(reclaimLog) =< 8
   /\ \A i \in 1..Len(reclaimLog) : reclaimLog[i] \in ReclaimRecords
@@ -572,6 +604,9 @@ InvConsumeAfterPublish ==
 
 InvConsumedReleased ==
   \A i \in Ids : consumed[i] => stage[i] >= 3
+
+InvDiscardAfterPublish ==
+  \A i \in Ids : discarded[i] => i \in pubDoneIds
 
 (*******************************************************************)
 (* Conditional liveness, by full request identity                  *)
