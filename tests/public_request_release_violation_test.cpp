@@ -119,9 +119,11 @@ void move_assign_over_nonterminal_request() {
     auto ready_backend = make_backend();
     AsyncIoContext ready_ctx(std::move(ready_backend));
 
+    std::vector<std::byte> pending_buffer(8, std::byte{0});
     std::vector<std::byte> buffer(8, std::byte{0});
     auto pending_submit =
-        pending_ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), buffer.size(), 0});
+        pending_ctx.submit_read(ReadOp{NativeFileRef{file}, pending_buffer.data(),
+                                       pending_buffer.size(), 0});
     auto ready_submit =
         ready_ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), buffer.size(), 0});
     if (!pending_submit.has_value() || !ready_submit.has_value())
