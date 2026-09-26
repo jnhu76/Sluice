@@ -651,3 +651,71 @@ exists nowhere). Not claimed: ProgressSource alignment (#432), TLA+
 | Backend/kernel evidence | Both backend configurations build (the no-liburing stub and the liburing-gated TU set are unchanged by this slice) |
 | Authority-contraction audit | Removed with zero migration obligations: the arena waiter storage/API (superseded by the core's `ObserverPhase` machine at C1-A/C1-C; the last delivery consumer went with C1-A's `ReadyEvent` contraction), the scheduler fallback maps and scans (superseded by the observer adapter at C1-A; unreachable since), the legacy forensics/test-access counters that observed them. Retained because their obligations stand: the arena's slot lifecycle (compatibility `Completion` binding, #402), `wait_capacity_`/the wait-record pool (host wake-queue bound, now the only waiter registry), `AsyncIoContext`'s by-key `cancel_observer` (host cleanup of failed resource acquisition), `Scheduler::cancel_waiter` (the app-facing RuntimeTaskContext surface) |
 | Status | C1-E (#431) complete at this commit: no backend observer semantic ownership, no duplicate observer state machine, no waiter/host-identity vocabulary outside the host adapter's private registry remain. Open: Armed→Queued/ProgressSource alignment (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-F review record — Issue #432, Observer/ProgressSource alignment
+
+This record resolves #432's open decision and states it as implementation
+fact. **Where Armed→Queued happens: publication-coupled queueing.** The
+transition is executed inside `RequestCore::complete_publication` under
+the core mutex by whichever thread completes a publication — it is a
+state transition coupled to the publication event itself, not something a
+driver discovers or a signal implies. The complementary edge —
+Queued→Delivering — is driver-owned: the progress owner claims it through
+`claim_observer_delivery` in `deliver_event` immediately before emitting
+the host-neutral ready event. This split is exactly the root's OBS-02
+diagram ("Armed → Queued: terminal published", "Queued → Delivering:
+driver claims delivery") and it fixes the L3 delivery-proof boundary: the
+proof obligation on the observer side is only "publication completed ⇒
+the registration is queued in persistent core state"; everything after
+that is the progress owner's existing no-lost-wake discipline.
+
+No lost wake: an armed registration is persistent core state, not a
+transient notification, so attachment cannot race a signal out of
+existence — the queueing edge fires at the publication the observer is
+entitled to, whenever that publication completes (C1-B's
+window/terminal-choice cases pin both directions). The physical side is
+carried by the backend progress signal: every path that queues
+publication work (`signal_ready_progress`) bumps the wait-source epoch
+the parked owner snapshotted, so the owner wakes, polls, completes the
+publication (queueing the observer) and claims the delivery. The new
+deterministic case `armed_delivery_survives_a_parked_progress_owner`
+pins this end-to-end: the only progress owner is verified parked (prepark
+counter seam) while the observer arms; the gated worker's completion
+wakes it; the driven publication queues, claims and delivers the armed
+observer's key, and the protocol retires.
+
+L3 assumptions, declared (they are the C++ mapping of OBS-03's liveness
+bullets, and the assumptions any later TLA+ L3 proof must carry): (1)
+progress-owner service — the owner of `poll`/`wait_one` continues
+service: after each progress-signal epoch change it eventually runs
+another poll (the current BackendWaitSource token/epoch discipline gives
+this under OS scheduler fairness; #397's context-owned ProgressSource
+will own this contract without changing the observer boundary); (2)
+backend eventual signal — every accepted request eventually completes
+or is documentably retired per REQ-06, and every queued publication work
+is signalled; (3) hook termination — the host sink hook is bounded and
+terminates (the scheduler's on_ready is; the host retains its callback
+state until it acquires retirement); (4) not assumed — any bound on
+kernel operations on stalled filesystems (REQ-06's carve-out).
+
+ProgressSource independence: the progress mechanism
+(`BackendWaitSource`/`ReadyWaitSource`, `BackendWaitToken`,
+`signal_progress`) carries no observer, waiter or host-identity
+vocabulary (verified by search), and the observer protocol consumes
+exactly two things — publication completion (core mutex) and "a driver
+eventually runs". #397 may replace the backend-owned wait source with a
+context-owned ProgressSource without touching the observer state machine;
+conversely nothing in this slice preemptes #397's PROG-* scope. Not
+claimed: the ProgressSource implementation itself (#397), TLA+ (#433),
+external-host W-03 integration.
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-02's Armed→Queued/Queued→Delivering edges with their ownership made explicit; OBS-03's delivery-progress liveness bullets with declared assumptions (the L3 basis); REQ-06's publication liveness as consumed; PROG boundary hygiene (no observer vocabulary in the progress mechanism; no progress vocabulary in the observer protocol). Excludes the ProgressSource contract itself (#397), TLA+ (#433) |
+| Implementation | No production change: the ownership this record states has been the implemented reality since C1-C (`complete_publication` queues; `deliver_event` claims). The slice's code artifact is the no-lost-wake oracle case |
+| Change | One deterministic cutover case (`armed_delivery_survives_a_parked_progress_owner`, 17th in the threadpool suite) using the wait-source prepark seam to prove the owner is parked before the attach |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 42/42 registered tests, the new case green across repeated runs (3× recorded; it is fully gate-deterministic — the park is verified before the attach and no unsignalled wake exists while the worker is gated). Existing direction coverage: C1-B's `attach_during_publication_window_arms_for_that_publication` and `attach_on_terminal_choice_before_publication_still_arms` (queueing cannot be missed by attachment order), C1-C's `delivery_claim_is_exclusive_and_at_most_once` (the queueing edge fires exactly at publication completion) and `attach_after_terminal_choice_rides_the_pending_publication` (attach after signal, before drive) |
+| Publication/thread evidence | The queueing edge runs under the core mutex inside `complete_publication`; the claim runs in the driver's access-mutex window before the sink hook; the split-wait discipline (`access_mtx_` per poll iteration, released before park) is what makes attach-while-parked legal — the new case exercises that interleaving through the public context API |
+| Backend/kernel evidence | ThreadPool seam build; the identical one-line claim exists in the uring driver (liburing-gated source) |
+| Authority-contraction audit | No new runtime mechanism and nothing removed; this slice fixes ownership statements and evidence. The prepark/wait-phase flags are pre-existing test-only seams of the wait source |
+| Status | C1-F (#432) complete at this commit: the Armed→Queued ownership is explicit and pinned (publication-coupled in the core; driver-owned claim), the no-lost-wake chain carries deterministic evidence across the park boundary, the L3 assumptions are declared, and the ProgressSource contract remains independent. Remaining outside this series: #397 ProgressSource, #433 TLA+ (explicitly not claimed), #402 Completion/arena retirement. The OBS assessment row stays NOT_ASSESSED pending the formal work |

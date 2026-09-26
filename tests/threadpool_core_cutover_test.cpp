@@ -704,6 +704,61 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
     return true;
 }
 
+bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
+    auto file = open_temp_file(t, "sluice c1f parked owner\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::atomic<int> prepark{0};
+    raw->set_wait_prepark_counter_for_test(&prepark);
+
+    std::vector<std::byte> buffer(9, std::byte{0});
+    Completion<std::size_t> c;
+    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 9, 0}, c);
+    wait_threadpool_gate_paused(gate);
+
+    std::thread driver([&] { (void)ctx.wait_one(); });
+
+    for (int i = 0; i < 500000 && prepark.load(std::memory_order_acquire) < 1; ++i)
+        std::this_thread::yield();
+    t.check(prepark.load(std::memory_order_acquire) >= 1,
+            "the progress owner committed its park with nothing to drive");
+
+    const auto attached = ctx.attach_observer(c);
+    t.check(attached.armed(),
+            "an observer arms while the only progress owner is parked");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+    raw->set_wait_prepark_counter_for_test(nullptr);
+
+    driver.join();
+    t.check(c.ready(), "the progress signal woke the parked owner and drove the publication");
+    t.check(raw->sink_last_key() == attached.key,
+            "the driven publication delivered the armed observer's key");
+    t.check(core.observe_slot(attached.key.slot)->observer_phase ==
+                sluice::async::detail::ObserverPhase::delivering,
+            "the wake chain queued and claimed the delivery");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement completes the protocol");
+    c.reset();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after delivery retirement and release");
+    return true;
+}
+
 bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
     auto file = open_temp_file(t, "sluice b1b stale identity\n");
     if (!file.has_value())
@@ -807,6 +862,8 @@ int main() {
          observer_registration_and_delivery_ride_the_publication},
         {"attach_after_terminal_choice_rides_the_pending_publication",
          attach_after_terminal_choice_rides_the_pending_publication},
+        {"armed_delivery_survives_a_parked_progress_owner",
+         armed_delivery_survives_a_parked_progress_owner},
         {"stale_identity_does_not_resolve_after_slot_reuse",
          stale_identity_does_not_resolve_after_slot_reuse},
         {"bounded_workers_execute_the_syscalls_not_the_submitter",
