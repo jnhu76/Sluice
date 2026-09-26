@@ -169,7 +169,7 @@ end
 -- surface only, proving the substrate stands alone without Scheduler, Fiber,
 -- waiter/routing vocabulary or a production backend.
 do
-    local function request_core_target(name, test_source, with_seam)
+    local function request_core_target(name, test_source, with_seam, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -179,8 +179,13 @@ do
             if with_seam then
                 add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
             end
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
             add_files(test_source, R .. "src/async/detail/request_core.cpp")
-            add_tests(name)
+            if extra_define == nil then
+                add_tests(name)
+            end
     end
 
     request_core_target("request_core_protocol_test",
@@ -189,6 +194,17 @@ do
                         R .. "tests/request_core_publication_test.cpp", true)
     request_core_target("request_core_consumer_probe",
                         R .. "tests/request_core_consumer_probe.cpp", false)
+
+    -- C1-B (#428) named mutation builds. Each flips one load-bearing arm of
+    -- the attach/publication resolution and must be killed by the named
+    -- failing assertion of the killer suite; they are executed and recorded
+    -- manually, never run as regular tests.
+    request_core_target("request_core_mut_attach_ignores_publication",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION")
+    request_core_target("request_core_mut_attach_treats_terminal_as_published",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED")
 end
 
 -- B1-A context ownership/identity evidence. The observed surface (the

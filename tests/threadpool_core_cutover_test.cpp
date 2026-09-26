@@ -649,6 +649,55 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
     return true;
 }
 
+bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1b observer terminal\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    Completion<std::size_t> c;
+    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    wait_threadpool_gate_paused(gate);
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    for (int i = 0; i < 1000 && raw->publication_pending_size_for_test() == 0; ++i)
+        std::this_thread::yield();
+    t.check(raw->publication_pending_size_for_test() == 1,
+            "the terminal is chosen with its publication still pending");
+
+    const auto attached = ctx.attach_observer(c);
+    t.check(attached.armed(),
+            "attach after terminal choice but before the driven publication arms");
+    t.check(!c.ready(), "the publication has not run yet");
+
+    while (!c.ready())
+        (void)ctx.poll();
+    t.check(raw->sink_last_key() == attached.key,
+            "the pending publication delivers to the armed observer");
+    t.check(core.observe_slot(attached.key.slot)->observer_registered,
+            "the delivered registration stays pinned until retirement");
+    t.check(ctx.retire_observer(attached.key), "retirement acquires the registration fact");
+    c.reset();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after retirement and release");
+    return true;
+}
+
 bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
     auto file = open_temp_file(t, "sluice b1b stale identity\n");
     if (!file.has_value())
@@ -750,6 +799,8 @@ int main() {
          admission_close_between_reserve_and_accept_refuses_and_rolls_back},
         {"observer_registration_and_delivery_ride_the_publication",
          observer_registration_and_delivery_ride_the_publication},
+        {"attach_after_terminal_choice_rides_the_pending_publication",
+         attach_after_terminal_choice_rides_the_pending_publication},
         {"stale_identity_does_not_resolve_after_slot_reuse",
          stale_identity_does_not_resolve_after_slot_reuse},
         {"bounded_workers_execute_the_syscalls_not_the_submitter",

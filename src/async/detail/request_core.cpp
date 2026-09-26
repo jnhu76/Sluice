@@ -438,7 +438,14 @@ ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
     if (slot->observer_registered) {
         return ObserverRegistration::duplicate;
     }
-    if (slot->published) {
+#if defined(SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION)
+    const bool publication_visible = false;
+#elif defined(SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED)
+    const bool publication_visible = slot->terminal_chosen;
+#else
+    const bool publication_visible = slot->published;
+#endif
+    if (publication_visible) {
         return ObserverRegistration::already_terminal;
     }
     slot->observer_registered = true;

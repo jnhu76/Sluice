@@ -828,6 +828,96 @@ bool observer_retirement_reports_unregistered_distinctly(Tracker& t) {
     return t.failures == 0;
 }
 
+bool attach_during_publication_window_arms_for_that_publication(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.claim_execution(accepted.id) == ExecutionClaim::claimed, "claim");
+    t.check(driver.offer_physical_success(accepted.id, 8) == TerminalVerdict::chosen, "terminal");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "execution retired");
+    PublicationPayload payload{};
+    t.check(driver.begin_publication(accepted.id, &payload) == PublicationGrant::granted,
+            "publication begins (window open)");
+    auto mid_window = core.observe_slot(accepted.id.slot);
+    t.check(mid_window->publication_inflight && !mid_window->published,
+            "the window is terminal-visible but not published");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::armed,
+            "attach inside the publication window arms rather than reporting already-terminal");
+    t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
+    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released,
+            "the binding may release");
+    t.check(core.observe_slot(accepted.id.slot)->observer_registered,
+            "the armed registration survives its own publication as a pending delivery");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::accepted,
+            "the pending delivery pins the slot past binding release");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::retired,
+            "retirement releases the pending delivery");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
+            "reclaim follows retirement");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool attach_on_terminal_choice_before_publication_still_arms(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.claim_execution(accepted.id) == ExecutionClaim::claimed, "claim");
+    t.check(driver.offer_physical_success(accepted.id, 8) == TerminalVerdict::chosen, "terminal");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "execution retired");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::armed,
+            "attach after terminal choice but before publication arms for the pending delivery");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::duplicate,
+            "the pending-delivery registration still enforces the occupied disposition");
+    PublicationTarget& target = driver.make_target();
+    t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted, "published");
+    t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
+    t.check(core.observe_slot(accepted.id.slot)->observer_registered,
+            "the registration rides the publication as the one owed delivery");
+    t.check(target.acquire_ready(), "polling the publication stays valid with an observer live");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::retired, "retired");
+    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
+            "the slot reclaims once the delivery retires and the binding releases");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool registration_failure_preserves_accepted_ownership(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    RequestKey stale{accepted.id.context, accepted.id.slot,
+                     Generation{accepted.id.generation.value + 1}};
+    t.check(driver.register_observer(stale) == ObserverRegistration::not_found,
+            "a stale identity fails registration");
+    RequestKey foreign{sluice::async::detail::ContextIdentity::for_testing(78), accepted.id.slot,
+                       accepted.id.generation};
+    t.check(driver.register_observer(foreign) == ObserverRegistration::not_found,
+            "a foreign context identity fails registration");
+    t.check(!core.observe_slot(accepted.id.slot)->observer_registered,
+            "failed registrations install no state");
+    t.check(driver.lookup(accepted.id) == PublicLookup::outstanding,
+            "the accepted request stays owned and observable after registration failure");
+    t.check(driver.cancel(accepted.id) == PublicCancel::won_before_execution,
+            "the accepted request stays cancelable after registration failure");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "the won cancel retires the dispatch obligation");
+    PublicationTarget& target = driver.make_target();
+    t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted, "published");
+    t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
+    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
+            "settlement needs no observer participation");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
 bool slot_reuse_clears_canonical_result(Tracker& t) {
     RequestCore core = make_core(1);
     FakePhysicalDriver driver(core);
@@ -1004,6 +1094,12 @@ int main() {
          observer_registration_pins_reclaim_until_retirement},
         {"observer_retirement_reports_unregistered_distinctly",
          observer_retirement_reports_unregistered_distinctly},
+        {"attach_during_publication_window_arms_for_that_publication",
+         attach_during_publication_window_arms_for_that_publication},
+        {"attach_on_terminal_choice_before_publication_still_arms",
+         attach_on_terminal_choice_before_publication_still_arms},
+        {"registration_failure_preserves_accepted_ownership",
+         registration_failure_preserves_accepted_ownership},
         {"slot_reuse_clears_canonical_result", slot_reuse_clears_canonical_result},
         {"close_prevents_future_acceptance", close_prevents_future_acceptance},
         {"accepted_set_remains_finite_and_observable", accepted_set_remains_finite_and_observable},
