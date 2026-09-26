@@ -154,6 +154,11 @@ class Scheduler {
     Result<void> await_completion_void(Completion<void>& c);
     void await_ready_flag(const std::atomic<bool>& ready);
 
+  private:
+    template <class T> Result<void> await_completion_impl(Completion<T>& c);
+
+  public:
+
     Result<bool> cancel_waiter(Completion<std::size_t>& c);
     Result<bool> cancel_waiter(Completion<void>& c);
 
@@ -454,10 +459,11 @@ class Scheduler {
 
     template <class T> Result<bool> cancel_waiter_impl(Completion<T>& c);
 
-    WaitRecord* acquire_wait_record_locked(Fiber* fiber, WorkerState* owner, const void* completion,
-                                           const detail::RequestKey& request_key)
+    WaitRecord* reserve_wait_record_locked() SLUICE_REQUIRES(global_mtx_);
+    void release_reserved_wait_record_locked(WaitRecord* record) SLUICE_REQUIRES(global_mtx_);
+    void arm_wait_record_locked(WaitRecord* record, Fiber* fiber, WorkerState* owner,
+                                const void* completion, const detail::RequestKey& request_key)
         SLUICE_REQUIRES(global_mtx_);
-    void retire_wait_record_locked(WaitRecord* record) SLUICE_REQUIRES(global_mtx_);
     std::size_t wait_record_live_count_locked() const SLUICE_REQUIRES(global_mtx_);
 
     enum class MwState {

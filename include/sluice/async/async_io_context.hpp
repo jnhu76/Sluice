@@ -267,7 +267,6 @@ class AsyncIoContext {
     ObserverAttachment attach_observer(Completion<void>& c);
     ObserverCancelResult cancel_observer(Completion<std::size_t>& c);
     ObserverCancelResult cancel_observer(Completion<void>& c);
-    bool cancel_observer(detail::RequestKey key);
     bool retire_delivery(detail::RequestKey key);
 
     std::size_t outstanding() const noexcept;

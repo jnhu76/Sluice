@@ -379,41 +379,34 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
 }
 #endif
 
-Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(Fiber* fiber, WorkerState* owner,
-                                                             const void* completion,
-                                                             const detail::RequestKey& request_key) {
+Scheduler::WaitRecord* Scheduler::reserve_wait_record_locked() {
     LockGuard rlk(wait_registry_mtx_);
     WaitRecord* r = wait_record_free_head_;
-    if (r != nullptr) {
-        wait_record_free_head_ = r->next_free;
-        r->next_free = nullptr;
-    } else {
+    if (r == nullptr) {
         return nullptr;
     }
-    r->state = WaitRecordState::registered;
-    r->fiber = fiber;
-    r->owner = owner;
-    r->completion = completion;
-    r->request_key = request_key;
-    wait_by_request_slot_[request_key.slot.value] = r;
-    ++wait_record_live_count_;
+    wait_record_free_head_ = r->next_free;
+    r->next_free = nullptr;
     return r;
 }
 
-void Scheduler::retire_wait_record_locked(WaitRecord* record) {
+void Scheduler::release_reserved_wait_record_locked(WaitRecord* record) {
     LockGuard rlk(wait_registry_mtx_);
-    if (record->state != WaitRecordState::registered) {
-        detail::scheduler_wait_registry_invariant_fail_fast();
-    }
-    record->state = WaitRecordState::free;
-    record->fiber = nullptr;
-    record->owner = nullptr;
-    record->completion = nullptr;
-    wait_by_request_slot_.erase(record->request_key.slot.value);
-    record->request_key = {};
     record->next_free = wait_record_free_head_;
     wait_record_free_head_ = record;
-    --wait_record_live_count_;
+}
+
+void Scheduler::arm_wait_record_locked(WaitRecord* record, Fiber* fiber, WorkerState* owner,
+                                       const void* completion,
+                                       const detail::RequestKey& request_key) {
+    LockGuard rlk(wait_registry_mtx_);
+    record->state = WaitRecordState::registered;
+    record->fiber = fiber;
+    record->owner = owner;
+    record->completion = completion;
+    record->request_key = request_key;
+    wait_by_request_slot_[request_key.slot.value] = record;
+    ++wait_record_live_count_;
 }
 
 std::size_t Scheduler::wait_record_live_count_locked() const {
@@ -421,24 +414,26 @@ std::size_t Scheduler::wait_record_live_count_locked() const {
     return wait_record_live_count_;
 }
 
-Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
+template <class T>
+Result<void> Scheduler::await_completion_impl(Completion<T>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
 
     {
         LockGuard lk(global_mtx_);
+        WaitRecord* rec = reserve_wait_record_locked();
+        if (rec == nullptr) {
+            return make_unexpected<void>(IoError{IoError::Code::no_space});
+        }
         const auto attach = ctx_.attach_observer(c);
         if (!attach.armed()) {
+            release_reserved_wait_record_locked(rec);
             if (c.ready()) {
                 return Result<void>{};
             }
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, attach.key);
-        if (rec == nullptr) {
-            (void)ctx_.cancel_observer(attach.key);
-            return make_unexpected<void>(IoError{IoError::Code::no_space});
-        }
+        arm_wait_record_locked(rec, me, ws, &c, attach.key);
 
         commit_suspend_locked(ws, me);
     }
@@ -453,35 +448,12 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
+Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
+    return await_completion_impl(c);
+}
+
 Result<void> Scheduler::await_completion_void(Completion<void>& c) {
-    WorkerState* ws = g_worker;
-    Fiber* me = ws->current;
-
-    {
-        LockGuard lk(global_mtx_);
-        const auto attach = ctx_.attach_observer(c);
-        if (!attach.armed()) {
-            if (c.ready()) {
-                return Result<void>{};
-            }
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, attach.key);
-        if (rec == nullptr) {
-            (void)ctx_.cancel_observer(attach.key);
-            return make_unexpected<void>(IoError{IoError::Code::no_space});
-        }
-
-        commit_suspend_locked(ws, me);
-    }
-    fiber_ctx::Switch s;
-    s.old = &me->ctx;
-    s.new_ = &ws->sched_ctx;
-    (void)fiber_ctx::context_switch(&s);
-
-    if (me->completion_wait_outcome() == CompletionWaitOutcome::completed)
-        return Result<void>{};
-    return make_unexpected<void>(IoError{IoError::Code::canceled});
+    return await_completion_impl(c);
 }
 
 template <class T>

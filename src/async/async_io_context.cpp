@@ -543,11 +543,6 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<
     return {core_->cancel_observer(key), key};
 }
 
-bool AsyncIoContext::cancel_observer(detail::RequestKey key) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    return core_->cancel_observer(key) == detail::ObserverCancellation::retired;
-}
-
 bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     return core_->retire_observer_delivery(key) == detail::ObserverDeliveryRetirement::retired;
