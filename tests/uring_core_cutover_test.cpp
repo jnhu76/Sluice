@@ -1085,7 +1085,8 @@ bool observer_registration_rides_publication(Tracker& t) {
     t.check(ctx.attach_observer(c).status == detail::ObserverRegistration::duplicate,
             "a second registration on the same request returns the occupied disposition");
     const auto observed = core.observe_slot(SlotIndex{0});
-    t.check(observed.has_value() && observed->observer_registered,
+    t.check(observed.has_value() &&
+                observed->observer_phase == detail::ObserverPhase::armed,
             "the core owns the registration existence");
 
     fake_complete(made, 0, 4);
@@ -1094,7 +1095,9 @@ bool observer_registration_rides_publication(Tracker& t) {
 
     t.check(raw->sink_deliveries() == 1 && raw->sink_last_key() == attached.key,
             "the ready event rides the publication as a host-neutral keyed event");
-    t.check(ctx.retire_observer(attached.key), "retirement acquires the registration fact");
+    t.check(core.observe_slot(SlotIndex{0})->observer_phase == detail::ObserverPhase::delivering,
+            "the delivery is claimed before the event");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
     c.reset();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();

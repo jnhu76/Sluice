@@ -189,7 +189,9 @@ class RequestCore {
     PublicationCompletion complete_publication(RequestKey id) noexcept;
 
     ObserverRegistration register_observer(RequestKey id) noexcept;
-    ObserverRetirement retire_observer(RequestKey id) noexcept;
+    ObserverDeliveryClaim claim_observer_delivery(RequestKey id) noexcept;
+    ObserverCancellation cancel_observer(RequestKey id) noexcept;
+    ObserverDeliveryRetirement retire_observer_delivery(RequestKey id) noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -203,7 +205,7 @@ class RequestCore {
         bool publication_inflight = false;
         bool execution_claimed = false;
         bool cancel_intent = false;
-        bool observer_registered = false;
+        ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;
         RequestOp op = RequestOp::read;
@@ -230,7 +232,7 @@ class RequestCore {
         bool execution_claimed = false;
         bool cancel_intent = false;
         bool zero_op = false;
-        bool observer_registered = false;
+        ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;
         RequestDescriptor descriptor{};

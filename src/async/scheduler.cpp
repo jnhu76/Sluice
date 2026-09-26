@@ -779,7 +779,7 @@ bool Scheduler::drain_routed_completion_waits_locked() {
             wait_by_request_slot_.erase(delivered_key.slot.value);
         }
 
-        (void)ctx_.retire_observer(delivered_key);
+        (void)ctx_.retire_delivery(delivered_key);
 
         f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
         if (f->make_runnable()) {

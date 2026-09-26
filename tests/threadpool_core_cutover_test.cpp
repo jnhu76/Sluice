@@ -617,7 +617,8 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
     t.check(ctx.attach_observer(c).status == sluice::async::detail::ObserverRegistration::duplicate,
             "a second registration on the same request returns the occupied disposition");
     const auto registered_slot = core.observe_slot(SlotIndex{0});
-    t.check(registered_slot.has_value() && registered_slot->observer_registered,
+    t.check(registered_slot.has_value() &&
+                registered_slot->observer_phase == sluice::async::detail::ObserverPhase::armed,
             "the core owns the registration existence");
 
     resume_threadpool_gate(gate);
@@ -632,11 +633,15 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
             "the publication delivers a host-neutral ready event keyed by the request");
 
     const auto pinned_slot = core.observe_slot(SlotIndex{0});
-    t.check(pinned_slot.has_value() && pinned_slot->observer_registered,
-            "the registration pin holds the slot past the publication");
-    t.check(ctx.retire_observer(attached.key), "retirement acquires the registration fact");
-    t.check(!ctx.retire_observer(attached.key),
-            "retirement of an unregistered request reports no live registration");
+    t.check(pinned_slot.has_value() &&
+                pinned_slot->observer_phase == sluice::async::detail::ObserverPhase::delivering,
+            "the publication queued and claimed the delivery before the event");
+    const auto mid_cancel = ctx.cancel_observer(c);
+    t.check(mid_cancel.in_progress(),
+            "cancelling while the delivery is claimed reports in-progress, not retired");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
+    t.check(!ctx.retire_delivery(attached.key),
+            "delivery retirement of an unclaimed request reports no live delivery");
 
     t.check(c.ready(), "an attach after publication observes the published result");
     t.check(ctx.attach_observer(c).status ==
@@ -688,9 +693,10 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
         (void)ctx.poll();
     t.check(raw->sink_last_key() == attached.key,
             "the pending publication delivers to the armed observer");
-    t.check(core.observe_slot(attached.key.slot)->observer_registered,
-            "the delivered registration stays pinned until retirement");
-    t.check(ctx.retire_observer(attached.key), "retirement acquires the registration fact");
+    t.check(core.observe_slot(attached.key.slot)->observer_phase ==
+                sluice::async::detail::ObserverPhase::delivering,
+            "the delivered registration stays claimed until delivery retirement");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
     c.reset();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),

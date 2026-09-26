@@ -540,7 +540,7 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
         }
         WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, attach.key);
         if (rec == nullptr) {
-            (void)ctx_.retire_observer(attach.key);
+            (void)ctx_.cancel_observer(attach.key);
             return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
 
@@ -576,7 +576,7 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
         }
         WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, attach.key);
         if (rec == nullptr) {
-            (void)ctx_.retire_observer(attach.key);
+            (void)ctx_.cancel_observer(attach.key);
             return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
 

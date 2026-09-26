@@ -513,7 +513,7 @@ AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<vo
     return {core_->register_observer(key), key};
 }
 
-AsyncIoContext::ObserverCancellation AsyncIoContext::cancel_observer(Completion<std::size_t>& c) {
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
         return {};
@@ -525,10 +525,10 @@ AsyncIoContext::ObserverCancellation AsyncIoContext::cancel_observer(Completion<
     const detail::RequestKey key{detail::ContextIdentity{identity.context_},
                                  detail::SlotIndex{identity.slot_},
                                  detail::Generation{identity.generation_}};
-    return {core_->retire_observer(key), key};
+    return {core_->cancel_observer(key), key};
 }
 
-AsyncIoContext::ObserverCancellation AsyncIoContext::cancel_observer(Completion<void>& c) {
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
         return {};
@@ -540,12 +540,17 @@ AsyncIoContext::ObserverCancellation AsyncIoContext::cancel_observer(Completion<
     const detail::RequestKey key{detail::ContextIdentity{identity.context_},
                                  detail::SlotIndex{identity.slot_},
                                  detail::Generation{identity.generation_}};
-    return {core_->retire_observer(key), key};
+    return {core_->cancel_observer(key), key};
 }
 
-bool AsyncIoContext::retire_observer(detail::RequestKey key) {
+bool AsyncIoContext::cancel_observer(detail::RequestKey key) {
     std::lock_guard<std::mutex> lk(access_mtx_);
-    return core_->retire_observer(key) == detail::ObserverRetirement::retired;
+    return core_->cancel_observer(key) == detail::ObserverCancellation::retired;
+}
+
+bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    return core_->retire_observer_delivery(key) == detail::ObserverDeliveryRetirement::retired;
 }
 
 std::size_t AsyncIoContext::outstanding() const noexcept {

@@ -205,6 +205,17 @@ do
     request_core_target("request_core_mut_attach_treats_terminal_as_published",
                         R .. "tests/request_core_protocol_test.cpp", true,
                         "SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED")
+
+    -- C1-C (#429) named mutation builds over the delivery state machine.
+    request_core_target("request_core_mut_delivery_claim_unbounded",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_DELIVERY_CLAIM_UNBOUNDED")
+    request_core_target("request_core_mut_cancel_during_delivery_returns",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_CANCEL_DURING_DELIVERY_RETURNS")
+    request_core_target("request_core_mut_publication_skips_queue",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_PUBLICATION_SKIPS_QUEUE")
 end
 
 -- B1-A context ownership/identity evidence. The observed surface (the

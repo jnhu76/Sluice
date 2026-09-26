@@ -254,17 +254,21 @@ class AsyncIoContext {
         bool armed() const noexcept { return status == detail::ObserverRegistration::armed; }
     };
 
-    struct ObserverCancellation {
-        detail::ObserverRetirement status = detail::ObserverRetirement::not_found;
+    struct ObserverCancelResult {
+        detail::ObserverCancellation status = detail::ObserverCancellation::not_found;
         detail::RequestKey key{};
-        bool retired() const noexcept { return status == detail::ObserverRetirement::retired; }
+        bool retired() const noexcept { return status == detail::ObserverCancellation::retired; }
+        bool in_progress() const noexcept {
+            return status == detail::ObserverCancellation::delivery_in_progress;
+        }
     };
 
     ObserverAttachment attach_observer(Completion<std::size_t>& c);
     ObserverAttachment attach_observer(Completion<void>& c);
-    ObserverCancellation cancel_observer(Completion<std::size_t>& c);
-    ObserverCancellation cancel_observer(Completion<void>& c);
-    bool retire_observer(detail::RequestKey key);
+    ObserverCancelResult cancel_observer(Completion<std::size_t>& c);
+    ObserverCancelResult cancel_observer(Completion<void>& c);
+    bool cancel_observer(detail::RequestKey key);
+    bool retire_delivery(detail::RequestKey key);
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }

@@ -127,7 +127,7 @@ ReserveAttempt RequestCore::reserve() {
     slot.execution_claimed = false;
     slot.cancel_intent = false;
     slot.zero_op = false;
-    slot.observer_registered = false;
+    slot.observer_phase = ObserverPhase::unattached;
     slot.execution_refs = 0;
     slot.control_refs = 0;
     slot.descriptor = {};
@@ -425,6 +425,14 @@ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept 
     }
     slot->publication_inflight = false;
     slot->published = true;
+#if defined(SLUICE_C1_MUTANT_PUBLICATION_SKIPS_QUEUE)
+    const bool queue_armed_observer = false;
+#else
+    const bool queue_armed_observer = slot->observer_phase == ObserverPhase::armed;
+#endif
+    if (queue_armed_observer) {
+        slot->observer_phase = ObserverPhase::queued;
+    }
     try_reclaim_(*slot, id.slot.value);
     return PublicationCompletion::completed;
 }
@@ -435,7 +443,8 @@ ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
     if (slot == nullptr) {
         return ObserverRegistration::not_found;
     }
-    if (slot->observer_registered) {
+    if (slot->observer_phase != ObserverPhase::unattached &&
+        slot->observer_phase != ObserverPhase::retired) {
         return ObserverRegistration::duplicate;
     }
 #if defined(SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION)
@@ -448,28 +457,76 @@ ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
     if (publication_visible) {
         return ObserverRegistration::already_terminal;
     }
-    slot->observer_registered = true;
+    slot->observer_phase = ObserverPhase::armed;
     return ObserverRegistration::armed;
 }
 
-ObserverRetirement RequestCore::retire_observer(RequestKey id) noexcept {
+ObserverDeliveryClaim RequestCore::claim_observer_delivery(RequestKey id) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     Slot* slot = resolve_internal_(id);
     if (slot == nullptr) {
-        return ObserverRetirement::not_found;
+        return ObserverDeliveryClaim::none;
     }
-    if (!slot->observer_registered) {
-        return ObserverRetirement::not_registered;
+#if defined(SLUICE_C1_MUTANT_DELIVERY_CLAIM_UNBOUNDED)
+    const bool claimable = slot->observer_phase == ObserverPhase::armed ||
+                           slot->observer_phase == ObserverPhase::queued ||
+                           slot->observer_phase == ObserverPhase::delivering;
+#else
+    const bool claimable = slot->observer_phase == ObserverPhase::queued;
+#endif
+    if (!claimable) {
+        return ObserverDeliveryClaim::none;
     }
-    slot->observer_registered = false;
+    slot->observer_phase = ObserverPhase::delivering;
+    return ObserverDeliveryClaim::claimed;
+}
+
+ObserverCancellation RequestCore::cancel_observer(RequestKey id) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_internal_(id);
+    if (slot == nullptr) {
+        return ObserverCancellation::not_found;
+    }
+    switch (slot->observer_phase) {
+    case ObserverPhase::armed:
+    case ObserverPhase::queued:
+        slot->observer_phase = ObserverPhase::retired;
+        try_reclaim_(*slot, id.slot.value);
+        return ObserverCancellation::retired;
+    case ObserverPhase::delivering:
+#if defined(SLUICE_C1_MUTANT_CANCEL_DURING_DELIVERY_RETURNS)
+        slot->observer_phase = ObserverPhase::retired;
+        try_reclaim_(*slot, id.slot.value);
+        return ObserverCancellation::retired;
+#else
+        return ObserverCancellation::delivery_in_progress;
+#endif
+    case ObserverPhase::unattached:
+    case ObserverPhase::retired:
+        return ObserverCancellation::not_registered;
+    }
+    return ObserverCancellation::not_registered;
+}
+
+ObserverDeliveryRetirement RequestCore::retire_observer_delivery(RequestKey id) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_internal_(id);
+    if (slot == nullptr) {
+        return ObserverDeliveryRetirement::not_found;
+    }
+    if (slot->observer_phase != ObserverPhase::delivering) {
+        return ObserverDeliveryRetirement::not_registered;
+    }
+    slot->observer_phase = ObserverPhase::retired;
     try_reclaim_(*slot, id.slot.value);
-    return ObserverRetirement::retired;
+    return ObserverDeliveryRetirement::retired;
 }
 
 bool RequestCore::reclaimable_(const Slot& slot) const noexcept {
     return slot.phase == SlotPhase::accepted && slot.published && !slot.binding_live &&
            slot.execution_refs == 0 && slot.control_refs == 0 && !slot.publication_inflight &&
-           !slot.observer_registered;
+           (slot.observer_phase == ObserverPhase::unattached ||
+            slot.observer_phase == ObserverPhase::retired);
 }
 
 void RequestCore::try_reclaim_(Slot& slot, std::size_t index) noexcept {
@@ -489,7 +546,7 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.execution_claimed = false;
     slot.cancel_intent = false;
     slot.zero_op = false;
-    slot.observer_registered = false;
+    slot.observer_phase = ObserverPhase::unattached;
     slot.execution_refs = 0;
     slot.control_refs = 0;
     slot.descriptor = {};
@@ -522,7 +579,7 @@ std::optional<RequestCore::SlotObservation> RequestCore::observe_slot(SlotIndex 
     observation.publication_inflight = s.publication_inflight;
     observation.execution_claimed = s.execution_claimed;
     observation.cancel_intent = s.cancel_intent;
-    observation.observer_registered = s.observer_registered;
+    observation.observer_phase = s.observer_phase;
     observation.execution_refs = s.execution_refs;
     observation.control_refs = s.control_refs;
     observation.op = s.descriptor.op;

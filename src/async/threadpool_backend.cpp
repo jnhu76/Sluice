@@ -365,6 +365,7 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
 }
 
 void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
+    (void)core_->claim_observer_delivery(key);
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
 }
 
