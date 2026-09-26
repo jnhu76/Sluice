@@ -655,38 +655,6 @@ bool Scheduler::drain_routed_completion_waits_locked() {
         }
     }
 
-    for (auto it = waiting_size_.begin(); it != waiting_size_.end();) {
-        auto* c = static_cast<Completion<std::size_t>*>(it->first);
-        if (c->ready()) {
-            Fiber* f = it->second.fiber;
-            WorkerState* owner = it->second.owner;
-            it = waiting_size_.erase(it);
-
-            f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
-            if (f->make_runnable()) {
-                route_runnable_locked(f, owner);
-                woken = true;
-            }
-        } else {
-            ++it;
-        }
-    }
-    for (auto it = waiting_void_.begin(); it != waiting_void_.end();) {
-        auto* c = static_cast<Completion<void>*>(it->first);
-        if (c->ready()) {
-            Fiber* f = it->second.fiber;
-            WorkerState* owner = it->second.owner;
-            it = waiting_void_.erase(it);
-
-            f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
-            if (f->make_runnable()) {
-                route_runnable_locked(f, owner);
-                woken = true;
-            }
-        } else {
-            ++it;
-        }
-    }
     return woken;
 }
 
@@ -869,8 +837,7 @@ Scheduler::MwState Scheduler::classify_locked_impl(const WorkerSnapshot& run_wor
     if (any_outstanding)
         return MwState::mw_s2;
 
-    const bool any_wait = !waiting_size_.empty() || !waiting_void_.empty() ||
-                          !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
+    const bool any_wait = !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
                           waiting_select_count_ > 0;
     if (any_wait)
         return MwState::mw_s3_unresolved;

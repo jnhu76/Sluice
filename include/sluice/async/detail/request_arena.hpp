@@ -141,10 +141,6 @@ class RequestArena {
         slot.op_kind_ = OperationKind::read;
         slot.enqueue_in_flight_pin_ = false;
         slot.terminal_ = {};
-        slot.registration_ = WaiterRegistration::open_no_waiter;
-        slot.waiter_token_ = {};
-        slot.waiter_lease_ = {};
-        slot.waiter_delivery_present_ = false;
         slot.publication_binding_ = {};
         slot.borrow_ = {};
         slot.ready_next_ = RequestSlot::kNotOnReadyRing;
@@ -270,7 +266,6 @@ class RequestArena {
                 pop_ready_front_locked_();
                 s.ready_next_ = RequestSlot::kNotOnReadyRing;
 
-                s.registration_ = WaiterRegistration::closed;
                 event = ReadyEvent{s.key_, s.op_kind_};
 
                 s.borrow_.active = false;
@@ -320,41 +315,6 @@ class RequestArena {
 
     bool record_canceled(SlotHandle h) noexcept {
         return record_terminal(h, TerminalResult::err(IoError{IoError::Code::canceled}));
-    }
-
-    Result<void> register_waiter(SlotHandle h, WaiterToken token, RoutingLease lease) {
-        std::lock_guard<std::mutex> lk(mutex_);
-        RequestSlot* s = validate_(h);
-        if (!s)
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued &&
-            s->state_ != RequestState::running && s->state_ != RequestState::backend_ready) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        if (s->registration_ == WaiterRegistration::open_registered) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        s->registration_ = WaiterRegistration::open_registered;
-        s->waiter_token_ = token;
-        s->waiter_lease_ = std::move(lease);
-        s->waiter_delivery_present_ = true;
-        return {};
-    }
-
-    Result<RoutingLease> cancel_waiter(SlotHandle h) {
-        std::lock_guard<std::mutex> lk(mutex_);
-        RequestSlot* s = validate_(h);
-        if (!s)
-            return make_unexpected<RoutingLease>(IoError{IoError::Code::not_found});
-        if (s->registration_ != WaiterRegistration::open_registered) {
-            return make_unexpected<RoutingLease>(IoError{IoError::Code::not_found});
-        }
-
-        RoutingLease lease = std::move(s->waiter_lease_);
-        s->waiter_token_ = {};
-        s->registration_ = WaiterRegistration::open_no_waiter;
-        s->waiter_delivery_present_ = false;
-        return lease;
     }
 
     CancelDisposition cancel(SlotHandle h) noexcept {
@@ -410,9 +370,6 @@ class RequestArena {
         if (!s)
             request_slot_release_invariant_fail_fast();
         if (s->enqueue_in_flight_pin_) {
-            request_slot_release_invariant_fail_fast();
-        }
-        if (s->registration_ == WaiterRegistration::open_registered) {
             request_slot_release_invariant_fail_fast();
         }
         if (s->state_ != RequestState::completion_ready) {
@@ -473,11 +430,6 @@ class RequestArena {
         if (!s)
             return std::nullopt;
         return s->terminal_.stored;
-    }
-    WaiterRegistration registration_of(SlotIndex slot) const noexcept {
-        check_slot_in_range_(slot);
-        std::lock_guard<std::mutex> lk(mutex_);
-        return slots_[slot.value].registration_;
     }
     bool borrow_active(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
@@ -571,27 +523,6 @@ class RequestArena {
         if (s.key_.context != context_)
             return std::nullopt;
         return BorrowSnapshot{s.borrow_.fd, s.borrow_.address, s.borrow_.length, s.borrow_.active};
-    }
-
-    struct WaiterObservation {
-        WaiterRegistration registration;
-        bool delivery_present;
-        WaiterToken token;
-        std::uint64_t lease_id;
-    };
-    std::optional<WaiterObservation> waiter_for_test(SlotHandle h) const noexcept {
-        std::lock_guard<std::mutex> lk(mutex_);
-        if (h.slot.value >= capacity_)
-            return std::nullopt;
-        const RequestSlot& s = slots_[h.slot.value];
-        if (s.state_ == RequestState::free)
-            return std::nullopt;
-        if (s.generation_ != h.generation)
-            return std::nullopt;
-        if (s.key_.context != context_)
-            return std::nullopt;
-        return WaiterObservation{s.registration_, s.waiter_delivery_present_, s.waiter_token_,
-                                 s.waiter_lease_.id()};
     }
 
     struct PublicationOrder {
@@ -688,10 +619,6 @@ class RequestArena {
         s->op_kind_ = OperationKind::read;
         s->enqueue_in_flight_pin_ = false;
         s->terminal_ = {};
-        s->registration_ = WaiterRegistration::open_no_waiter;
-        s->waiter_token_ = {};
-        s->waiter_lease_ = {};
-        s->waiter_delivery_present_ = false;
         s->publication_binding_ = {};
         s->borrow_ = {};
         s->ready_next_ = RequestSlot::kNotOnReadyRing;

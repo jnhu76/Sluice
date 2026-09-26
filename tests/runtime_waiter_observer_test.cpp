@@ -144,8 +144,6 @@ bool completion_wake_rides_the_observer_adapter(Tracker& t) {
     wait_gate_paused(gate);
     t.check(wait_registry_live_becomes(sched, 1) == 1,
             "the suspended fiber holds exactly one host wait record");
-    t.check(SchedulerTestAccess::legacy_completion_wait_count(sched) == 0,
-            "no fallback waiter map is in use");
 
     resume_gate(gate);
     wait_gate_exited(gate);

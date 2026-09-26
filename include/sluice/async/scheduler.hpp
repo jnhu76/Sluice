@@ -347,8 +347,7 @@ class Scheduler {
         LockGuard lk(global_mtx_);
 
         LockGuard rlk(wait_registry_mtx_);
-        return wait_record_live_count_ + waiting_size_.size() + waiting_void_.size() +
-               waiting_ready_.size() + waiting_waitq_count_;
+        return wait_record_live_count_ + waiting_ready_.size() + waiting_waitq_count_;
     }
     std::size_t waiting_ready_count() const {
         LockGuard lk(global_mtx_);
@@ -532,8 +531,6 @@ class Scheduler {
 
     mutable Mutex global_mtx_;
 
-    std::unordered_map<void*, WaitReg> waiting_size_ SLUICE_GUARDED_BY(global_mtx_){};
-    std::unordered_map<void*, WaitReg> waiting_void_ SLUICE_GUARDED_BY(global_mtx_){};
     std::unordered_map<const std::atomic<bool>*, WaitReg>
         waiting_ready_ SLUICE_GUARDED_BY(global_mtx_){};
 

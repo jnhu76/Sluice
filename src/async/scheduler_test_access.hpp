@@ -88,10 +88,6 @@ struct Scheduler::AsyncTestAccess {
     static std::size_t ready_sink_cancel_lost(const Scheduler& s) noexcept {
         return s.ready_sink_.cancel_lost();
     }
-    static std::size_t legacy_completion_wait_count(Scheduler& s) {
-        LockGuard lk(s.global_mtx_);
-        return s.waiting_size_.size() + s.waiting_void_.size();
-    }
     static std::size_t wait_registry_live_count(Scheduler& s) {
         LockGuard rlk(s.wait_registry_mtx_);
         return s.wait_record_live_count_;

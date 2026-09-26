@@ -621,3 +621,33 @@ arena waiter storage stay), ProgressSource alignment (#432), TLA+ (#433).
 | Backend/kernel evidence | ThreadPool seam gates drive the determinism; the real syscalls run on the threadpool worker |
 | Authority-contraction audit | Removed: the dead `sluice_async_test` seam layer in production TUs (its authority — historical E9/DST trace capture — was deleted from the repository in the legacy cleanup; the guards had zero reachable consumers and blocked every seam build), the `e9t_record_*` arms, the `scheduler_identity` accessor. Kept: the park ledger (self-contained forensics with its store restored), `scheduler_test_access.hpp` (the host observation seam this slice's evidence consumes), `scheduler_fe2_test_seam.cpp` (self-contained). No new runtime mechanism; the test target is evidence-only. The fallback maps (`waiting_size_`/`waiting_void_`) and arena waiter storage remain untouched pending #431 |
 | Status | C1-D (#430) complete at this commit: the RuntimeTaskContext waiter path runs through the host-neutral observer adapter with deterministic wake/cancel/already-terminal evidence, scheduler mechanisms are host-private by construction, and the scheduler seam builds again. Open: legacy waiter mechanism removal (#431), Armed→Queued/ProgressSource alignment (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-E review record — Issue #431, legacy backend waiter mechanism removal
+
+This record removes the compatibility waiter mechanisms #396 names, now
+that the migration evidence exists (C1-A through C1-D): the legacy
+`RequestArena` waiter ownership (`register_waiter`/`cancel_waiter`, the
+`WaiterRegistration`/`WaiterToken`/`RoutingLease`/`OptionalWaiterDelivery`
+storage and vocabulary, the waiter observation seam, and the
+release-invariant registration check) and the Scheduler's fallback waiter
+path (`waiting_size_`/`waiting_void_` and their drain/classify/forensics
+scans — unreachable since C1-A removed the last inserter). The remaining
+`RequestArena` surface (slot lifecycle for the compatibility
+`Completion` binding flavor) is untouched and stays #402's retirement.
+After this slice exactly one observer registration state machine exists
+in the tree — `RequestCore`'s `ObserverPhase` — and no waiter/host
+identity vocabulary remains under `include/` or `src/` (the consumer
+probe's incompleteness assertions now hold vacuously of a type that
+exists nowhere). Not claimed: ProgressSource alignment (#432), TLA+
+(#433), Completion/arena binding retirement (#402).
+
+| Field | Content |
+|---|---|
+| Requirement scope | #396's required-removals list (backend waiter registration ownership, backend WaiterToken/RoutingLease storage, duplicated backend registration state machines, scheduler fallback waiter paths bypassing the neutral protocol), BACKEND-01 (backend owns physical execution only — the arena's waiter surface was the last non-physical residue), OBS-01 host-neutrality now total. Excludes the arena's non-waiter compatibility surface (#402), progress (#432) |
+| Implementation | Deletions only: `request_slot.hpp` loses the three waiter types and `RequestSlot`'s registration/token/lease/delivery fields and accessors; `request_arena.hpp` loses `register_waiter`/`cancel_waiter`, `registration_of`, the `WaiterObservation` seam, the `reap` registration close, and the waiter resets in `reserve`/`free_slot_locked_`/`release_completed_binding`; `Scheduler` loses the two fallback maps, their two drain scans, their `classify` disjuncts, and the forensics fields/prints; `AsyncTestAccess::legacy_completion_wait_count` and its one consuming assertion go with them. No behavior change: every removed mechanism had zero reachable producers or consumers |
+| Change | Pure removal; the physical execution mechanisms (dispatch rings, prepared ops, workers, publication worklists, event-owed control pairing, progress signal) are all retained; 42/42 registered tests and the seam suite green unchanged |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 42/42 registered tests (45 protocol, 15 cutover, 3 runtime-waiter adapter, and the prior matrix), the C1-B/C1-C mutation binaries unaffected (their guards live in `request_core.cpp`); a tree-wide search finds zero occurrences of `WaiterToken`, `RoutingLease`, `OptionalWaiterDelivery`, `WaiterRegistration`, `register_waiter` or `scheduler_identity` under `include/`+`src/`, and `ObserverPhase` exists only in `observer_protocol.hpp` and `request_core.*` — the no-duplicate-state-machine verification #431 demands |
+| Publication/thread evidence | None new; removals only touch unreachable paths and test-only counters |
+| Backend/kernel evidence | Both backend configurations build (the no-liburing stub and the liburing-gated TU set are unchanged by this slice) |
+| Authority-contraction audit | Removed with zero migration obligations: the arena waiter storage/API (superseded by the core's `ObserverPhase` machine at C1-A/C1-C; the last delivery consumer went with C1-A's `ReadyEvent` contraction), the scheduler fallback maps and scans (superseded by the observer adapter at C1-A; unreachable since), the legacy forensics/test-access counters that observed them. Retained because their obligations stand: the arena's slot lifecycle (compatibility `Completion` binding, #402), `wait_capacity_`/the wait-record pool (host wake-queue bound, now the only waiter registry), `AsyncIoContext`'s by-key `cancel_observer` (host cleanup of failed resource acquisition), `Scheduler::cancel_waiter` (the app-facing RuntimeTaskContext surface) |
+| Status | C1-E (#431) complete at this commit: no backend observer semantic ownership, no duplicate observer state machine, no waiter/host-identity vocabulary outside the host adapter's private registry remain. Open: Armed→Queued/ProgressSource alignment (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |

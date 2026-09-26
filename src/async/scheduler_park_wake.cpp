@@ -116,8 +116,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
     if (park_forensics_enabled_.load(std::memory_order_acquire)) {
         {
             LockGuard glk(global_mtx_);
-            forensics_rec.waiting_registered = waiting_size_.size() + waiting_void_.size() +
-                                               waiting_ready_.size() +
+            forensics_rec.waiting_registered = waiting_ready_.size() +
                                                static_cast<std::size_t>(waiting_waitq_count_) +
                                                static_cast<std::size_t>(waiting_select_count_);
             forensics_rec.external_wake_possible = external_wake_possible_locked();
@@ -217,7 +216,7 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
 
     std::vector<WorkerState*> worker_ptrs;
     const char* admission = "none";
-    std::size_t w_size = 0, w_void = 0, w_ready = 0, w_waitq = 0, w_select = 0;
+    std::size_t w_ready = 0, w_waitq = 0, w_select = 0;
     std::size_t pending_spawn = 0;
 
     unsigned active_workers = 0, live_loop = 0, idle_now = 0;
@@ -234,8 +233,6 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
         } else if (admission_ == AdmissionState::committed) {
             admission = "committed";
         }
-        w_size = waiting_size_.size();
-        w_void = waiting_void_.size();
         w_ready = waiting_ready_.size();
         w_waitq = waiting_waitq_count_;
         w_select = waiting_select_count_;
@@ -284,9 +281,9 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
                  global_terminate_.load(std::memory_order_acquire) ? 1 : 0,
                  backend_wait_active_.load(std::memory_order_acquire) ? 1 : 0);
     std::fprintf(stderr,
-                 "[park-forensics] waiting: size=%zu void=%zu ready=%zu waitq=%zu "
+                 "[park-forensics] waiting: ready=%zu waitq=%zu "
                  "select=%zu running_fibers=%ld pending_spawn=%zu\n",
-                 w_size, w_void, w_ready, w_waitq, w_select,
+                 w_ready, w_waitq, w_select,
                  static_cast<long>(running_fiber_count_.load(std::memory_order_acquire)),
                  pending_spawn);
 
