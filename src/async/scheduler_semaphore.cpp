@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 bool Scheduler::sem_try_acquire(WaitQueue& waiters, std::atomic<std::uint32_t>& available) {
@@ -60,10 +57,6 @@ void Scheduler::sem_acquire(WaitQueue& waiters, std::atomic<std::uint32_t>& avai
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -121,10 +114,6 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters, std::atomic<std::uint32_t>
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;

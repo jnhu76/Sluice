@@ -14,9 +14,6 @@
 #include <cstdlib>
 #include <new>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -35,26 +32,15 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
 
 }
 
-namespace {
-std::uint64_t next_scheduler_identity() noexcept {
-    static std::atomic<std::uint64_t> counter{0};
-    return ++counter;
-}
-}
-
 Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
-    : ctx_(ctx), wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity),
-      scheduler_identity_(next_scheduler_identity()) {
+    : ctx_(ctx), wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity) {
     detail::require_evented_supported(detail::evented_admission_check());
 
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
 
     wait_records_.reserve(wait_capacity_);
     for (std::size_t i = 0; i < wait_capacity_; ++i) {
-        auto rec = std::make_unique<WaitRecord>();
-        rec->index = static_cast<std::uint32_t>(i);
-
-        wait_records_.push_back(std::move(rec));
+        wait_records_.push_back(std::make_unique<WaitRecord>());
     }
 
     WaitRecord** tail = &wait_record_free_head_;
@@ -132,10 +118,6 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
     if (!fiber.make_runnable())
         return;
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::worker_topology_reader_attempt);
-#endif
     LockGuard lk(global_mtx_);
     const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
     if (participant_count != 0 && !global_terminate_.load(std::memory_order_acquire)) {
@@ -147,11 +129,6 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
             fiber_owner_[&fiber] = workers_[target].get();
         }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::runnable_route,
-                                                static_cast<unsigned>(-1));
-#endif
         signal_wake_locked();
     } else {
         pending_spawn_.push_back(&fiber);
@@ -161,10 +138,6 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
 void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
     if (!fiber.make_runnable())
         return;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::worker_topology_reader_attempt);
-#endif
     LockGuard lk(global_mtx_);
     const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
     if (participant_count == 0 || global_terminate_.load(std::memory_order_acquire) ||
@@ -179,11 +152,6 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
         fiber_owner_[&fiber] = tgt;
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::runnable_route,
-                                            static_cast<unsigned>(-1));
-#endif
     signal_wake_locked();
 }
 
@@ -216,9 +184,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     run_workers.reserve(worker_count);
     {
         LockGuard lk(global_mtx_);
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::worker_topology_mutation);
-#endif
         ensure_workers_locked(worker_count, run_workers);
 
         for (WorkerState* worker : run_workers) {
@@ -246,10 +211,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         live_loop_workers_ = worker_count;
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::worker_topology_ready_before_start);
-#endif
 
     if (worker_count == 1) {
         WorkerState* worker = run_workers[0];
@@ -273,12 +234,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
             threads.emplace_back([this, worker, &run_workers] {
                 g_worker = worker;
                 worker->owner_scheduler = this;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                sluice_async_test::test_phase_worker(
-                    *this, sluice_async_test::PhaseTag::worker_startup_before_publication,
-                    worker->id);
-#endif
                 worker->active.store(true, std::memory_order_release);
                 worker->idle_dance_contributed_.store(0, std::memory_order_release);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -297,10 +252,6 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         }
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::worker_topology_joined_before_unpublish);
-#endif
     {
         LockGuard lk(global_mtx_);
         in_coordinated_run_ = false;
@@ -323,12 +274,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         ws->idle_dance_contributed_.store(0, std::memory_order_release);
 
         Fiber* f = nullptr;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        if (sluice_async_test::schedule_script_active(*this)) {
-            f = sluice_async_test::schedule_script_pick(*this, ws);
-        }
-#endif
         if (!f) {
             std::lock_guard<std::mutex> lk(ws->inbox_mtx);
             if (!ws->local_runnable.empty()) {
@@ -353,11 +298,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         }
 
         if (f) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            sluice_async_test::test_phase_worker(
-                *this, sluice_async_test::PhaseTag::worker_ticket_popped, ws->id);
-#endif
 
             {
                 const unsigned erased = idle_workers_.exchange(0, std::memory_order_acq_rel);
@@ -365,36 +305,18 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     dance_epoch_.fetch_add(1, std::memory_order_acq_rel);
                 }
             }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            sluice_async_test::test_phase_worker(
-                *this, sluice_async_test::PhaseTag::worker_ticket_erase_done, ws->id);
-#endif
             run_next_on(ws, f);
             continue;
         }
 
         MwState state;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        bool tv1_routed = false;
-#endif
         {
             LockGuard lk(global_mtx_);
             (void)drain_routed_completion_waits_locked();
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            tv1_routed = wake_ready_flags_locked();
-#else
             (void)wake_ready_flags_locked();
-#endif
             (void)pump_deadlines_locked();
             state = classify_locked(run_workers, ws);
         }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        if (tv1_routed) {
-            sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::tv1_wake_scan_routed);
-        }
-#endif
 
         if (state == MwState::mw_s1) {
             {
@@ -433,10 +355,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             }
 
             if (elected) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                sluice_async_test::test_phase(*this,
-                                              sluice_async_test::PhaseTag::mw_admission_phase_b);
-#endif
 
                 bool phase_b_committed = false;
 
@@ -501,11 +419,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     }
 
                     ws->park_domain = WorkerState::ParkDomain::Backend;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                    sluice_async_test::test_phase(
-                        *this, sluice_async_test::PhaseTag::mw_s2_committed_before_wait_one);
-#endif
 
                     auto max_park = std::chrono::nanoseconds::max();
                     {
@@ -564,19 +477,8 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 
                         global_terminate_.store(true, std::memory_order_release);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                        sluice_async_test::set_trace_wake_cause(
-                            *this, sluice_async_test::WakeCause::terminate,
-                            static_cast<unsigned>(-1));
-#endif
                         signal_wake_locked();
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                        sluice_async_test::release_all_phases(*this);
-                        ws->loop_exit_reason =
-                            WorkerState::LoopExitReason::mw_s2_no_progress_terminate;
-#endif
                         break;
                     }
                     idle_workers_.store(0, std::memory_order_release);
@@ -609,30 +511,13 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             MwState still = classify_locked(run_workers, ws);
                             if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                                 global_terminate_.store(true, std::memory_order_release);
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                                sluice_async_test::set_trace_wake_cause(
-                                    *this, sluice_async_test::WakeCause::terminate,
-                                    static_cast<unsigned>(-1));
-#endif
                                 signal_wake_locked();
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                                sluice_async_test::release_all_phases(*this);
-                                ws->loop_exit_reason =
-                                    WorkerState::LoopExitReason::e14f1_last_idle_terminate;
-#endif
                                 break;
                             }
                             idle_workers_.store(0, std::memory_order_release);
 
                             continue;
                         } else {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                            sluice_async_test::set_trace_wake_cause(
-                                *this, sluice_async_test::WakeCause::idle_dance,
-                                static_cast<unsigned>(-1));
-#endif
                             signal_wake_locked();
                         }
                     } else {
@@ -648,30 +533,14 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                             global_terminate_.store(true, std::memory_order_release);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                            sluice_async_test::set_trace_wake_cause(
-                                *this, sluice_async_test::WakeCause::terminate,
-                                static_cast<unsigned>(-1));
-#endif
                             signal_wake_locked();
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                            sluice_async_test::release_all_phases(*this);
-                            ws->loop_exit_reason = WorkerState::LoopExitReason::last_idle_terminate;
-#endif
                             break;
                         }
                         idle_workers_.store(0, std::memory_order_release);
 
                         continue;
                     } else {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                        sluice_async_test::set_trace_wake_cause(
-                            *this, sluice_async_test::WakeCause::idle_dance,
-                            static_cast<unsigned>(-1));
-#endif
                         signal_wake_locked();
                     }
                 }
@@ -685,17 +554,9 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             break;
         }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase_worker(
-            *this, sluice_async_test::PhaseTag::scheduler_park_candidate, ws->id);
-#endif
 
         park_on_wake_source(ws, ready_flag_observation);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::worker_park_returned);
-#endif
     }
 
     {
@@ -714,11 +575,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             }
         }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        sluice_async_test::set_trace_wake_cause(
-            *this, sluice_async_test::WakeCause::retire_epilogue, ws->id);
-#endif
         signal_wake_locked();
     }
 
@@ -776,16 +632,21 @@ bool Scheduler::drain_routed_completion_waits_locked() {
 
         Fiber* f = r->fiber;
         WorkerState* owner = r->owner;
+        const detail::RequestKey delivered_key = r->request_key;
         {
             LockGuard rlk(wait_registry_mtx_);
             r->state = WaitRecordState::free;
             r->fiber = nullptr;
             r->owner = nullptr;
             r->completion = nullptr;
+            r->request_key = {};
             r->next_free = wait_record_free_head_;
             wait_record_free_head_ = r;
             --wait_record_live_count_;
+            wait_by_request_slot_.erase(delivered_key.slot.value);
         }
+
+        (void)ctx_.retire_delivery(delivered_key);
 
         f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
         if (f->make_runnable()) {
@@ -794,38 +655,6 @@ bool Scheduler::drain_routed_completion_waits_locked() {
         }
     }
 
-    for (auto it = waiting_size_.begin(); it != waiting_size_.end();) {
-        auto* c = static_cast<Completion<std::size_t>*>(it->first);
-        if (c->ready()) {
-            Fiber* f = it->second.fiber;
-            WorkerState* owner = it->second.owner;
-            it = waiting_size_.erase(it);
-
-            f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
-            if (f->make_runnable()) {
-                route_runnable_locked(f, owner);
-                woken = true;
-            }
-        } else {
-            ++it;
-        }
-    }
-    for (auto it = waiting_void_.begin(); it != waiting_void_.end();) {
-        auto* c = static_cast<Completion<void>*>(it->first);
-        if (c->ready()) {
-            Fiber* f = it->second.fiber;
-            WorkerState* owner = it->second.owner;
-            it = waiting_void_.erase(it);
-
-            f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
-            if (f->make_runnable()) {
-                route_runnable_locked(f, owner);
-                woken = true;
-            }
-        } else {
-            ++it;
-        }
-    }
     return woken;
 }
 
@@ -833,46 +662,36 @@ void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
     Scheduler* s = scheduler_;
     if (s == nullptr)
         return;
-    if (!event.waiter.has_waiter) {
-        return;
+    const detail::RequestKey& key = event.key;
+    WaitRecord* r = nullptr;
+    {
+        LockGuard rlk(s->wait_registry_mtx_);
+        auto it = s->wait_by_request_slot_.find(key.slot.value);
+        if (it == s->wait_by_request_slot_.end()) {
+            return;
+        }
+        r = it->second;
+        if (r->request_key.generation != key.generation ||
+            r->request_key.context != key.context) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            ++stale_dropped_;
+#endif
+            return;
+        }
+        if (r->state != WaitRecordState::registered) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            ++cancel_lost_;
+#endif
+            return;
+        }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++deliveries_;
+        ++routed_;
+#endif
+        r->state = WaitRecordState::delivered;
+        r->next_delivered = s->wait_delivered_head_;
+        s->wait_delivered_head_ = r;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    ++deliveries_;
-#endif
-    const detail::WaiterToken& t = event.waiter.token;
-    LockGuard rlk(s->wait_registry_mtx_);
-
-    if (t.scheduler_identity != s->scheduler_identity_) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++stale_dropped_;
-#endif
-        return;
-    }
-    if (t.registration_slot >= s->wait_records_.size()) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++stale_dropped_;
-#endif
-        return;
-    }
-    WaitRecord* r = s->wait_records_[t.registration_slot].get();
-    if (r->generation != t.registration_generation) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++stale_dropped_;
-#endif
-        return;
-    }
-    if (r->state != WaitRecordState::registered) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++cancel_lost_;
-#endif
-        return;
-    }
-    r->state = WaitRecordState::delivered;
-    r->next_delivered = s->wait_delivered_head_;
-    s->wait_delivered_head_ = r;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    ++routed_;
-#endif
 }
 
 bool Scheduler::wake_ready_flags_locked() {
@@ -927,11 +746,6 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
         target->local_runnable.push_back(f);
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::runnable_route,
-                                            static_cast<unsigned>(-1));
-#endif
     signal_wake_locked();
 }
 
@@ -968,12 +782,6 @@ void Scheduler::publish_wait_winner_locked(WaitNode& won) {
 
 void Scheduler::defer_publication_locked(void* delivery_record) noexcept {
     try {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        if (sluice_async_test::deferred_publication_alloc_should_fail(*this)) {
-            throw std::bad_alloc();
-        }
-#endif
         deferred_publications_.push_back(delivery_record);
     } catch (...) {
         detail::scheduler_deferred_publication_stranded_fail_fast();
@@ -1029,8 +837,7 @@ Scheduler::MwState Scheduler::classify_locked_impl(const WorkerSnapshot& run_wor
     if (any_outstanding)
         return MwState::mw_s2;
 
-    const bool any_wait = !waiting_size_.empty() || !waiting_void_.empty() ||
-                          !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
+    const bool any_wait = !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
                           waiting_select_count_ > 0;
     if (any_wait)
         return MwState::mw_s3_unresolved;

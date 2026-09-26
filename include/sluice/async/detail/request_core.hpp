@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sluice/async/detail/observer_protocol.hpp>
 #include <sluice/async/detail/request_key.hpp>
 #include <sluice/detail/file_semantics.hpp>
 
@@ -187,6 +188,11 @@ class RequestCore {
     PublicationGrant begin_publication(RequestKey id, PublicationPayload* out) noexcept;
     PublicationCompletion complete_publication(RequestKey id) noexcept;
 
+    ObserverRegistration register_observer(RequestKey id) noexcept;
+    ObserverDeliveryClaim claim_observer_delivery(RequestKey id) noexcept;
+    ObserverCancellation cancel_observer(RequestKey id) noexcept;
+    ObserverDeliveryRetirement retire_observer_delivery(RequestKey id) noexcept;
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     struct SlotObservation {
@@ -199,6 +205,7 @@ class RequestCore {
         bool publication_inflight = false;
         bool execution_claimed = false;
         bool cancel_intent = false;
+        ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;
         RequestOp op = RequestOp::read;
@@ -225,6 +232,7 @@ class RequestCore {
         bool execution_claimed = false;
         bool cancel_intent = false;
         bool zero_op = false;
+        ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;
         RequestDescriptor descriptor{};

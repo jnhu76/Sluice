@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 bool Scheduler::mutex_try_lock(WaitQueue& waiters, Fiber*& owner) {
@@ -63,16 +60,8 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
             return;
         }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::mutex_waiter_registered_before_grant);
-#endif
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -132,10 +121,6 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner, WaitNode& no
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -165,11 +150,6 @@ WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner)
                            "(internal invariant failure, NOT empty queue)");
 
     owner = f;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::mutex_handoff_before_publication);
-#endif
     retire_timer_for_node_locked(*won);
     if (waiting_waitq_count_ > 0)
         --waiting_waitq_count_;

@@ -154,6 +154,11 @@ class Scheduler {
     Result<void> await_completion_void(Completion<void>& c);
     void await_ready_flag(const std::atomic<bool>& ready);
 
+  private:
+    template <class T> Result<void> await_completion_impl(Completion<T>& c);
+
+  public:
+
     Result<bool> cancel_waiter(Completion<std::size_t>& c);
     Result<bool> cancel_waiter(Completion<void>& c);
 
@@ -347,8 +352,7 @@ class Scheduler {
         LockGuard lk(global_mtx_);
 
         LockGuard rlk(wait_registry_mtx_);
-        return wait_record_live_count_ + waiting_size_.size() + waiting_void_.size() +
-               waiting_ready_.size() + waiting_waitq_count_;
+        return wait_record_live_count_ + waiting_ready_.size() + waiting_waitq_count_;
     }
     std::size_t waiting_ready_count() const {
         LockGuard lk(global_mtx_);
@@ -419,8 +423,7 @@ class Scheduler {
     };
 
     struct WaitRecord {
-        std::uint32_t index = 0;
-        std::uint32_t generation = 0;
+        detail::RequestKey request_key{};
         WaitRecordState state = WaitRecordState::free;
         Fiber* fiber = nullptr;
         WorkerState* owner = nullptr;
@@ -454,10 +457,13 @@ class Scheduler {
 
     bool drain_routed_completion_waits_locked() SLUICE_REQUIRES(global_mtx_);
 
-    WaitRecord* acquire_wait_record_locked(Fiber* fiber, WorkerState* owner, const void* completion,
-                                           std::uint64_t& lease_id_out)
+    template <class T> Result<bool> cancel_waiter_impl(Completion<T>& c);
+
+    WaitRecord* reserve_wait_record_locked() SLUICE_REQUIRES(global_mtx_);
+    void release_reserved_wait_record_locked(WaitRecord* record) SLUICE_REQUIRES(global_mtx_);
+    void arm_wait_record_locked(WaitRecord* record, Fiber* fiber, WorkerState* owner,
+                                const void* completion, const detail::RequestKey& request_key)
         SLUICE_REQUIRES(global_mtx_);
-    void retire_wait_record_locked(std::uint32_t index) SLUICE_REQUIRES(global_mtx_);
     std::size_t wait_record_live_count_locked() const SLUICE_REQUIRES(global_mtx_);
 
     enum class MwState {
@@ -531,8 +537,6 @@ class Scheduler {
 
     mutable Mutex global_mtx_;
 
-    std::unordered_map<void*, WaitReg> waiting_size_ SLUICE_GUARDED_BY(global_mtx_){};
-    std::unordered_map<void*, WaitReg> waiting_void_ SLUICE_GUARDED_BY(global_mtx_){};
     std::unordered_map<const std::atomic<bool>*, WaitReg>
         waiting_ready_ SLUICE_GUARDED_BY(global_mtx_){};
 
@@ -542,15 +546,13 @@ class Scheduler {
 
     const std::size_t wait_capacity_ SLUICE_GUARDED_BY(wait_registry_mtx_){0};
     std::vector<std::unique_ptr<WaitRecord>> wait_records_ SLUICE_GUARDED_BY(wait_registry_mtx_);
+    std::unordered_map<std::uint32_t, WaitRecord*> wait_by_request_slot_
+        SLUICE_GUARDED_BY(wait_registry_mtx_){};
 
     WaitRecord* wait_record_free_head_ SLUICE_GUARDED_BY(wait_registry_mtx_) = nullptr;
     WaitRecord* wait_delivered_head_ SLUICE_GUARDED_BY(wait_registry_mtx_) = nullptr;
 
     std::size_t wait_record_live_count_ SLUICE_GUARDED_BY(wait_registry_mtx_){0};
-
-    std::uint64_t wait_lease_serial_ SLUICE_GUARDED_BY(wait_registry_mtx_){1};
-
-    const std::uint64_t scheduler_identity_;
 
     ReadyRoutingSink ready_sink_{this};
 

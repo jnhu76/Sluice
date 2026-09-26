@@ -93,13 +93,6 @@ class UringAsyncBackend : public AsyncBackend {
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
 
-    Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
-                                 detail::RoutingLease lease) override;
-    Result<void> register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                 detail::RoutingLease lease) override;
-    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override;
-    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override;
-
     std::size_t outstanding() const noexcept override;
 
     bool available() const noexcept;
@@ -138,9 +131,7 @@ class UringAsyncBackend : public AsyncBackend {
     }
 
     std::size_t sink_deliveries() const noexcept;
-    bool sink_last_has_waiter() const noexcept;
-    detail::WaiterToken sink_last_token() const noexcept;
-    std::uint64_t sink_last_lease_id() const noexcept;
+    detail::RequestKey sink_last_key() const noexcept;
 
     struct SubmitEntryPauseGate;
     struct PreAcceptCommitPauseGate;
@@ -158,16 +149,7 @@ class UringAsyncBackend : public AsyncBackend {
     void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept;
     void set_submit_stage_failure_injection(SubmitStageFailureInjection* injection) noexcept;
 
-    struct WaiterObservation {
-        detail::WaiterRegistration registration;
-        bool delivery_present;
-        detail::WaiterToken token;
-        std::uint64_t lease_id;
-    };
-    std::optional<WaiterObservation> waiter_of_slot_for_test(std::uint32_t slot) const noexcept;
-
-    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept;
-    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
+    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept;    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
     void set_wait_control_wake_final_reap_pause_gate(
         detail::UringWaitSource::ControlWakeFinalReapPauseGate* gate) noexcept;
     void set_wait_before_physical_poll_pause_gate(
@@ -207,17 +189,12 @@ class UringAsyncBackend : public AsyncBackend {
     };
 
     // Access to a delivery record is serialized by the owning context's
-    // access mutex: submit, waiter registration and the publication driver
-    // all enter through public context entry points, and CQE reaping holds
-    // the same access lock.
+    // access mutex: submit and the publication driver both enter through
+    // public context entry points, and CQE reaping holds the same access lock.
     struct DeliveryRecord {
         void* completion = nullptr;
         void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;
         detail::OperationKind kind = detail::OperationKind::read;
-        detail::WaiterRegistration registration = detail::WaiterRegistration::open_no_waiter;
-        detail::WaiterToken waiter_token{};
-        detail::RoutingLease waiter_lease{};
-        bool waiter_delivery_present = false;
         // event_owed pairs with one core control ref on owed_key: the ref is
         // acquired before this flag is set and released after delivery.
         bool event_owed = false;

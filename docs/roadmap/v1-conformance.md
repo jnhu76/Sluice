@@ -484,3 +484,293 @@ Every new runtime mechanism of this slice, against the gate's questions.
 | `SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING` | `Request::release_responsibility_` nulls the handle without releasing the binding | `public_request_test` `discard_releases_the_published_binding`: "discarding released the binding and reclaimed", "the discarded slot admits new work" |
 | `SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES` | The nonterminal release arm loses its fail-fast (treats `not_visible_yet` as released) | `public_request_release_violation_test` `destroy_nonterminal_request`: "the always-on diagnostic did not terminate" |
 | `SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT` | `discard_public_result` treats `publication_inflight` as published (the exact defect the review-fix round closes) | `public_request_release_violation_test` `discard_request_during_publication_inflight` (both backend builds carry the scenario; the mutant build is the ThreadPool seam configuration): "the always-on diagnostic did not terminate" — the scenario's `ready() == false` assertion under the epilogue pause gate proves the window is entered, and the strict gate SIGABRTs where the mutant releases silently |
+
+## C1-A review record — Issue #427, observer state ownership migration out of the backend
+
+This record implements the first #396 slice under the frozen boundary: the
+observer registration authority moves from backend `DeliveryRecord` waiter
+fields into the request domain. `RequestCore` now owns the registration
+existence, the single active registration constraint (OBS-01 occupied
+disposition), the already-terminal attach disposition and the
+reclaim-visible observer pin (the REQ-05 "no queued/executing observer
+delivery" conjunct, represented by the live registration itself). The
+`AsyncBackend` interface and the shared `ReadyEvent` carry no host identity
+vocabulary: `WaiterToken`/`RoutingLease` leave the backend-facing headers
+(they survive only inside the legacy `RequestArena` compatibility unit) and
+the ready event is keyed by request identity only. The Scheduler — the host
+adapter — routes wakes through its own request-key-indexed registry and
+retires the registration after routing the wake or cancelling the wait; the
+`not_supported` fallback waiter branch is unreachable because every
+context-owned core accepts registration. Physical submit/completion paths are
+unchanged. Not claimed here: the attach/publication race oracle (#428), the
+explicit Unattached→Armed→Queued→Delivering→Retired machine and the
+retirement handshake (#429), external-host adapter migration (#430), legacy
+mechanism removal (#431), ProgressSource alignment (#432), and the TLA+
+update (#433).
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-01 substrate halves this slice installs (at most one active registration per request with an explicit occupied disposition; registration existence as a core-owned fact; registration resource failure — the record-pool exhaustion path — retires the just-armed registration and leaves the accepted request owned; a host-neutral registration that never exposes Scheduler identity to a backend), REQ-05's observer-delivery conjunct materialized as the core's `observer_registered` pin (a published, binding-released, ref-free slot stays unreclaimable while a registration is live; retirement itself drives reclaim), OBS-03's "releasing a terminal Request binding is legal while a delivery remains pinned" (the pin outlives `binding_live`, so `retire_observer` resolves through the internal identity), ARCH-02/BACKEND-01 (backend owns physical execution only; no observer registration lifecycle in either backend). Excludes the full attach/terminal race oracle (#428), delivery state machine and retirement-suppression distinctions (#429), adapter migration evidence (#430), mechanism removal (#431) and ProgressSource (#432) |
+| Implementation | New `include/sluice/async/detail/observer_protocol.hpp` (dispositions `ObserverRegistration{armed,duplicate,already_terminal,not_found}`, `ObserverRetirement{retired,not_registered,not_found}`). `RequestCore::Slot` gains `observer_registered`; `register_observer` (resolve public; occupied→duplicate; published→already_terminal without arming; otherwise arm) and `retire_observer` (resolve internal — the pin guarantees the slot stays accepted past binding release; clear + try-reclaim) run under the core mutex, so attachment resolves atomically with publication; `reclaimable_`/`release_slot_`/`reserve` reset and `SlotObservation` carry the fact. `AsyncIoContext` replaces `register_waiter`/`cancel_waiter` with `attach_observer(Completion&)`→`{status,key}`, `cancel_observer(Completion&)`→`{status,key}` and `retire_observer(RequestKey)`, resolving the identity through `AsyncBackend::identity_of` under the access mutex (`RequestHandle` befriends the context); the empty-compatible error mapping (`already_terminal`/`duplicate` + not-ready → `invalid_state`) preserves the previous external behavior. Both backends lose their `register_waiter`/`cancel_waiter` overrides, test seams and the four waiter fields of `DeliveryRecord`; `deliver_event` emits the host-neutral `ReadyEvent{key, kind}` with the `event_owed` control-ref pairing unchanged. `ready_sink.hpp` keeps only `OperationKind`/`ReadyEvent{key,kind}`/`SynchronousReadySink`; `WaiterToken`/`RoutingLease`/`OptionalWaiterDelivery` move to `request_slot.hpp` as legacy `RequestArena` vocabulary, and the arena's dead `reap` waiter-delivery emission is deleted. The Scheduler's `WaitRecord` carries the request key; `wait_by_request_slot_` (host-private wake index under `wait_registry_mtx_`) replaces token/lease routing; `on_ready` validates by key (generation/context/registered-state) and stages the delivered list; `drain_routed_completion_waits_locked` frees the routed record, retires the observer delivery, and only then makes the fiber runnable; `cancel_waiter` retires through `ctx_.cancel_observer` and wakes canceled only for a still-registered record (delivery already routed ⇒ the wait completes normally). `scheduler_identity_`, `wait_lease_serial_` and the token/lease construction are deleted; the `waiting_size_`/`waiting_void_` fallback maps lose their last inserters (removal is #431) |
+| Change | Interface contraction plus authority move; the physical completion path (dispatch, terminal offer, publication worklist, event-owed pairing, progress signal) is byte-for-byte the same control flow. Observable behavior preserved: attach on a published request previously surfaced as `invalid_state` unless the completion was ready — the same mapping now derives from the explicit `already_terminal` disposition; a cancel during the delivery window previously reported `false` because the backend registration was already closed — the core pin now spans that window (publish→deliver→drain-retire), and `cancel_observer` may retire it, but the waiter completes normally because the host record is already delivered, so `cancel_waiter` still reports `false` |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 41/41 registered tests, including the four new core-level oracle cases in `request_core_protocol_test` — `observer_registration_arms_once_and_reports_occupied` (arm/duplicate/stale-not_found/retire), `attach_after_publication_returns_already_terminal` (published→already_terminal installs no pin; released binding→not_found; slot reclaims), `observer_registration_pins_reclaim_until_retirement` (binding may release while the delivery stays pinned; retirement itself drives reclaim; reuse clears residue), `observer_retirement_reports_unregistered_distinctly` (`not_registered` vs `not_found` dispositions) — and the rewritten deterministic interleaving case `threadpool_core_cutover_test` `observer_registration_and_delivery_ride_the_publication` (pause gate between accept and worker claim: arm/duplicate under the gate, delivery carries the request key, pin holds past publication, retirement releases, fresh attach returns already_terminal, final reclaim) plus `uring_core_cutover_test` `observer_registration_rides_publication` (fake-CQE driver; liburing-gated, source-maintained for that configuration). The migrated RuntimeTaskContext waiter path is exercised end-to-end by `explicit_file_ref_test` (await/cancel-wait races through the Scheduler on the ThreadPool backend) and the app consumption suites. `request_core_consumer_probe` still proves the substrate compiles standalone without waiter vocabulary. No new mutants this slice; the machine and race oracle it would discriminate belong to #428/#429 |
+| Publication/thread evidence | `register_observer`/`retire_observer` are leaf operations under the core mutex; the already-terminal disposition's visibility is the core-mutex acquire that serializes with `complete_publication`. Scheduler lock order is unchanged and extended only at the leaf: global → access → core (attach/cancel/retire and poll nest exactly as `register_waiter` did); `on_ready` takes only `wait_registry_mtx_` and is invoked from the driver's poll under the access mutex, so no hook runs under a core/backend lock; retirement is deferred to the drain (after `ctx_.poll()` returns) rather than taken inside `on_ready`, keeping `retire_observer` off the poll call stack |
+| Backend/kernel evidence | ThreadPool: full cutover suite green on the seam build. io_uring: the deterministic suite is source-maintained for the liburing configuration (not installable on this host; the seam file and the rewritten case compile under the target's include set and are executed by the liburing CI matrix). The no-liburing stub builds |
+| Authority-contraction audit | Removed with the migration: both backends' `DeliveryRecord` waiter ownership (`registration`, `waiter_token`, `waiter_lease`, `waiter_delivery_present` — the duplicated backend registration state machines #396 names), the `AsyncBackend::register_waiter`/`cancel_waiter` virtuals and their `AsyncIoContext` pass-throughs, the `WaiterToken`/`RoutingLease`/`OptionalWaiterDelivery` definitions and waiter-carrying `ReadyEvent` from the shared backend interface header, the backend waiter test seams (`register_waiter_key_for_test`, `cancel_waiter_key_for_test`, `waiter_of_slot_for_test`, `sink_last_has_waiter/token/lease_id`), the Scheduler's `scheduler_identity_`, `wait_lease_serial_`, token/lease construction and the `not_supported` fallback branch (unreachable: every context core accepts registration). Newly materialized host-side: `WaitRecord::request_key` + `wait_by_request_slot_` — the #396 host-adapter wake routing index (scheduler/fiber identity and stale wake validation are now host-private by construction; keyed by the public request identity the event already carries; bounded by the record pool and the core's single-registration constraint). Core-side: `Slot::observer_registered` — the registration-existence authority fact OBS-01 requires, not derivable (the pin and occupied disposition are its projections). Compatibility residue with zero new consumers, removal owned by later slices: the legacy `RequestArena` waiter storage/API (its `reap` delivery emission deleted here; #431 removes the storage), the `waiting_size_`/`waiting_void_` fallback maps and their wake scans (unreachable since this slice; #431) |
+| Status | C1-A (#427) implementation complete at this commit: backend interfaces are host-neutral, the core owns registration existence/constraint/pin/retirement, and the physical completion path is unchanged, all under the recorded deterministic evidence. Open and explicitly not claimed: attach/publication race oracle and duplicate/registration-failure determinism coverage (#428), the explicit five-state delivery machine with claim/retirement distinctions (#429), external-host adapter obligations (#430), legacy mechanism removal including the arena waiter storage and scheduler fallback maps (#431), ProgressSource/Armed→Queued alignment (#432), and the TLA+ model update (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-B review record — Issue #428, observer registration ordering protocol
+
+This record pins the OBS-01 attach/publication resolution semantics that the
+C1-A authority move installed: attachment resolves atomically with
+publication under the core mutex — either it returns `already_terminal`
+(the publication is visible; no registration is installed) or it arms a
+registration entitled to exactly one future terminal delivery, and it can
+miss publication neither between checking readiness and registering nor by
+treating a chosen-but-unpublished terminal as published. Terminal-before-
+attach no longer surfaces as an `invalid_state` error anywhere: the core
+returns the disposition, the completion's ready edge carries the acquire
+visibility, and the host's already-terminal path proceeds on that edge.
+Duplicate registration keeps the explicit occupied disposition;
+registration failure (stale/foreign identity) installs no state and leaves
+the accepted request owned, observable and cancelable; polling stays valid
+with and without observers. Not claimed here: the explicit delivery state
+machine and retirement handshake (#429), external-host adapter migration
+(#430), mechanism removal (#431), ProgressSource alignment (#432), TLA+
+(#433).
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-01 whole (single active registration with explicit occupied disposition; registration generation/pinning basis; attachment atomically resolving with publication in both directions; already-terminal with acquire visibility; registration resource failure leaves the request owned; polling without observers; host-neutrality already delivered by C1-A), OBS-03's registration-failure arm (no operation cancel, no borrow end), REQ-04's visibility half for the already-terminal disposition (core-mutex serialization with `complete_publication` is the acquire edge the host's `Completion::ready()` pair publishes into). Excludes delivery claim/retirement discipline (#429), adapters (#430), removal (#431), progress (#432) |
+| Implementation | No production semantic change against C1-A's head: this slice's production delta is the mutation seams only — `register_observer`'s publication-visibility arm is guarded by `SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION` (arms even on a published slot) and `SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED` (reports already-terminal on terminal-chosen-but-unpublished), plus their registered manual-mutation targets. The ordering oracle itself is the deliverable |
+| Change | Tests and mutation builds only in behavior-affecting surface; `xmake/tests.lua` extends the `request_core_target` helper with an optional extra define (mirroring the B2 `public_request_target` shape) |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 41/41 registered tests. New deterministic core-level cases in `request_core_protocol_test` (41 total): `attach_during_publication_window_arms_for_that_publication` (arms strictly inside the begin/complete publication window; the registration survives its own publication as the pending delivery and pins past binding release), `attach_on_terminal_choice_before_publication_still_arms` (terminal chosen, publication not begun: arms, duplicate still occupied, the registration rides the publication, polling concurrently valid), `registration_failure_preserves_accepted_ownership` (stale/foreign identities install nothing; the request stays outstanding, cancelable and settleable without observer participation). New cutover case `threadpool_core_cutover_test` `attach_after_terminal_choice_rides_the_pending_publication` (16th case; the worker's terminal is chosen with the publication queued but undriven — observed via the bounded pending-worklist wait — attach through the context API arms, the driven publication delivers the keyed event, the registration stays pinned until retirement, then reclaim). Mutation kills, executed and recorded: `request_core_mut_attach_ignores_publication` → killed by `attach_after_publication_returns_already_terminal` "attach after publication returns the already-terminal disposition" (3 failing assertions incl. the no-pin reclaim check); `request_core_mut_attach_treats_terminal_as_published` → killed by `attach_during_publication_window_arms_for_that_publication` "attach inside the publication window arms rather than reporting already-terminal" and `attach_on_terminal_choice_before_publication_still_arms` (the lost-observer direction: refusing to arm on a chosen-but-unpublished terminal would strand a waiting host) |
+| Publication/thread evidence | Unchanged from C1-A: the resolution runs under the core mutex serialized with `begin/complete_publication`; the already-terminal acquire visibility is the mutex edge; the host mapping (non-armed + ready edge → proceed; else `invalid_state`) preserves the pre-C1 external behavior while the disposition itself is now protocol vocabulary |
+| Backend/kernel evidence | The cutover case runs on the ThreadPool seam build; the uring deterministic suite is source-maintained for the liburing configuration (not installable on this host) |
+| Authority-contraction audit | No new runtime mechanism; this slice moves no production authority. The two mutant defines are test-only evidence seams classified with the B2 mutation precedent (never compiled into registered test or production targets). Nothing became redundant: C1-A's mechanisms all keep their obligations |
+| Status | C1-B (#428) complete at this commit: both OBS-01 ordering directions carry deterministic oracle cases with named mutation kills, duplicate/failure dispositions are pinned, and polling-without-observer validity is asserted. Open: delivery state machine, at-most-once claim and retirement distinctions (#429), RuntimeTaskContext adapter evidence (#430), legacy mechanism removal (#431), Armed→Queued/ProgressSource ownership (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-C review record — Issue #429, observer delivery claim and retirement protocol
+
+This record implements the OBS-02 transition discipline as core-owned slot
+state: `Unattached → Armed → Queued → Delivering → Retired`, with the
+publication-coupled queueing edge (Armed→Queued at `complete_publication`),
+the driver's exclusive delivery claim (Queued→Delivering in
+`claim_observer_delivery`, invoked by both backends' `deliver_event` on the
+progress driver before the ready event), cancellation edges
+(`cancel_observer`: Armed→Retired wins, Queued→Retired suppresses the
+delivery, Delivering reports `delivery_in_progress` and changes nothing),
+and the delivery-retirement edge (`retire_observer_delivery`:
+Delivering→Retired, taken by the host after its delivery hook). Delivery is
+at most once per registration generation because the claim is the single
+Queued→Delivering edge and publication itself is once per slot generation.
+Observer cancellation never cancels the operation: the cancel arms touch
+only the observer phase; execution, terminal arbitration, publication and
+result visibility are untouched. Retirement is distinguishable from
+delivery-in-progress both by phase and by the `delivery_in_progress`
+disposition, and the REQ-05 pin is exactly the live registration
+(unattached/retired are the only reclaimable phases). The boundary holds:
+the core owns the retirement fact and the reclaim-visible pin; the host
+owns its wait record (callback state) and wake routing until it acquires
+retirement — the scheduler now retires deliveries through
+`retire_delivery` at the drain, cancels through `cancel_observer`, and
+never runs a hook under a core/backend lock. Not claimed: external-host
+adapter obligations (#430), mechanism removal (#431), ProgressSource
+alignment (#432), TLA+ (#433).
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-02 whole (five-phase discipline with the root diagram's exact edges; exclusive bounded nonthrowing delivery claimed by the driver after publication and outside core/backend locks — the ready-event sink hook; at-most-once per registration generation; cancellation distinguishing retired from delivery-in-progress; the host owning the queued wake's lifetime and stale validation once delivery is copied into its queue), OBS-03's cancellation/timeout arms (registration retirement never cancels the operation or ends the borrow; releasing a terminal binding legal while a delivery stays pinned — `cancel/retire` resolve through the internal identity because the pin keeps the slot accepted), REQ-05's observer conjunct re-expressed as the phase predicate. Excludes adapters (#430), removal (#431), progress (#432) |
+| Implementation | `observer_protocol.hpp` gains `ObserverPhase` and the operation vocabularies (`ObserverDeliveryClaim{claimed,none}`, `ObserverCancellation{retired,delivery_in_progress,not_registered,not_found}`, `ObserverDeliveryRetirement{retired,not_registered,not_found}`; the C1-A `ObserverRetirement` is superseded). `RequestCore::Slot::observer_registered` becomes `observer_phase`; `register_observer` treats retired as re-attachable and everything live as the occupied disposition; `complete_publication` queues an armed registration; `claim_observer_delivery` claims exclusively from queued; `cancel_observer` and `retire_observer_delivery` implement the two retirement edges with `try_reclaim_` on release; `reclaimable_` admits only unattached/retired. Both backends' `deliver_event` claim before emitting the host-neutral event (the compat progress event stays unconditional; the claim gates the protocol transition, not the physical reporting). `AsyncIoContext` splits its surface: `cancel_observer(Completion&)`/`cancel_observer(RequestKey)` wrap the cancel op (the key form serves host cleanup of its own failed resource acquisition, e.g. the wait-record exhaustion path — a consumer obligation C1-G later removes with the reserve-before-arm ordering), `retire_delivery(RequestKey)` wraps the delivery retirement (drain path); the C1-A `retire_observer` is superseded. The scheduler drain frees the routed record and retires the delivery before making the fiber runnable; `cancel_waiter` maps `retired`→canceled wake/true, `delivery_in_progress`/`not_registered`→false (the wait completes normally) — externally identical to the C1-A mapping, now derived from protocol dispositions |
+| Change | Representation refinement of the C1-A fact plus two new core operations and the claim site in the drivers; the physical completion path gains exactly one core call (`claim_observer_delivery`) executed under the same access-mutex window the event already ran in. The C1-A/C1-B oracle cases were re-expressed in the phase vocabulary (their intent unchanged) and extended with the claim/retire edges |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 41/41 registered tests; `request_core_protocol_test` now 45 cases including the four new ones — `delivery_claim_is_exclusive_and_at_most_once` (no claim from armed/unpublished; publication queues; first claim wins; second claim refused; none after retirement; reclaim after retire+release), `observer_cancellation_never_cancels_the_operation` (cancel retires armed; the request stays outstanding, executes, terminalizes, publishes with visible result, owes no delivery, reclaims), `queued_cancellation_suppresses_the_delivery` (cancel after queueing retires, claim impossible twice over, publication visibility unaffected, reclaim normal), `cancel_during_delivery_is_distinguishable_and_delivery_completes` (in-progress disposition, phase untouched, repeated cancels stay in-progress, the retained delivery then retires, post-retirement cancel reports not_registered). The ThreadPool cutover observer case now asserts the queued→claimed sequence around the driven publication and that `cancel_observer` during the claimed delivery reports in-progress; the uring case asserts the delivering phase before delivery retirement (liburing-gated source). Mutation kills, executed and recorded: `request_core_mut_delivery_claim_unbounded` → killed by `delivery_claim_is_exclusive_and_at_most_once` ("an armed-but-unpublished registration owes no claimable delivery yet"/"a second claim is refused"); `request_core_mut_cancel_during_delivery_returns` → killed by `cancel_during_delivery_is_distinguishable_and_delivery_completes` ("cancellation during delivery reports in-progress, not retired"); `request_core_mut_publication_skips_queue` → killed by `observer_registration_pins_reclaim_until_retirement` ("the pin is the queued registration itself") and `delivery_claim_is_exclusive_and_at_most_once` ("publication moved the registration to queued"); the C1-B attach mutants re-killed unchanged after the vocabulary change. The RuntimeTaskContext waiter path remains green end-to-end (`explicit_file_ref_test` await/cancel races, app consumption suites) |
+| Publication/thread evidence | All phase edges run under the core mutex; the claim runs inside the driver's access-mutex window immediately before the sink hook, so claim/cancel are serialized with each other and with publication by the existing lock order (global → access → core; no hook under any of them). The delivery hook remains the sink call after `complete_publication`, invoked only from the progress driver (`poll`/`wait_one`), never inline by submission or a worker; the host's record lifetime spans claim→drain-retirement exactly as OBS-02's retained-state rule requires |
+| Backend/kernel evidence | ThreadPool seam build: cutover suite green with the claim in place; the uring driver mirrors the identical one-line claim; the no-liburing stub builds |
+| Authority-contraction audit | Replaced: the C1-A boolean `observer_registered` and its `retire_observer` operation — superseded by the phase machine with two retirement edges whose preconditions the boolean could not distinguish (this is the #396-mandated split, not a second authority: one field, one mutex, five values). New mechanisms: `claim_observer_delivery` (the exclusive at-most-once edge — the protocol fact OBS-02 requires, not derivable) and the three-value cancellation disposition (the in-progress arm is the distinguishability #396 decision 1 demands; not derivable from retired/not_registered alone). No host mechanism moved into the core: the wait record, wake queue and stale-key validation remain scheduler-private; the core saw only request identities. Nothing else became redundant — the reclaim conjunct is a projection of the same phase fact |
+| Status | C1-C (#429) complete at this commit: the five-phase machine, exclusive claim, at-most-once delivery, cancellation-vs-operation separation and the in-progress/retired distinction all carry deterministic oracle cases with three named mutation kills. Open: RuntimeTaskContext adapter migration evidence and external-host obligations (#430), legacy mechanism removal (#431), Armed→Queued/ProgressSource contract alignment (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-D review record — Issue #430, RuntimeTaskContext waiter migration through the host adapter
+
+This record delivers the RuntimeTaskContext waiter-path migration evidence
+the frozen boundary demands. The structural migration happened with C1-A
+(the interface contraction left no other route): `await_completion` arms
+the core-owned registration, the fiber suspends on the host-private
+wait-record registry keyed by request identity, the publication-driven
+ready event routes the wake through the scheduler's sink, and the drain
+retires the host record and the delivery before the fiber is made
+runnable. That order is the shipped behavior of every C1 slice: the
+drain first returns the wait record to the free pool (the host record is
+retired before anything can reuse it), then establishes the observer
+retirement fact through `retire_delivery` (the REQ-05 pin releases while
+the delivery's request is still identified), and only afterward performs
+the runnable transition — the wake is published last, so the resumed
+fiber observes a fully retired registration and a reclaimable slot
+rather than a live one. This slice adds the
+dedicated deterministic adapter oracle and removes the dead historical
+seam layer that had made any internal-testing build of the scheduler
+uncompilable: the eleven scheduler/select TUs' `sluice_async_test` blocks
+referenced a test-control framework whose implementation was deleted from
+the repository in the legacy cleanup (its `async_test_control_internal.hpp`
+no longer exists anywhere), so those guards were unreachable dead code;
+they are stripped (including the two `e9t_record_*` park arms, collapsed
+to their production `#else` bodies) while the self-contained seams (park
+ledger, scheduler test access, the fe2 seam TU) are kept. The dead
+`scheduler_identity` accessor is removed with the field C1-A deleted. Not
+claimed: legacy waiter mechanism removal (#431 — the fallback maps and
+arena waiter storage stay), ProgressSource alignment (#432), TLA+ (#433).
+
+| Field | Content |
+|---|---|
+| Requirement scope | #396's host-adapter boundary as OBS-02/OBS-03 see it: at least one RuntimeTaskContext waiter path through the neutral protocol with scheduler/fiber identity, wake routing, wake queue lifetime and stale wake validation host-private; wake correctness for completion, cancellation and already-terminal attachment; OBS-04's resource-failure shape (wait-record exhaustion retires the just-armed registration via the key-form cancel and reports `no_space` without hiding accepted work — carried from C1-A, unchanged at this slice; superseded by C1-G's reserve-before-arm ordering, which fails before observer acceptance and retires the key-form cancel with its last consumer). Excludes external event-loop hosts (#397 W-03), mechanism removal (#431), progress contract (#432) |
+| Implementation | No production semantic change: the await/cancel/drain flow is C1-A/C1-C's. New test target `runtime_waiter_observer_test` (self-contained seam build compiling the full `src/async` set plus the core detail TUs with `SLUICE_ASYNC_INTERNAL_TESTING`, never linked with `sluice_async`). Production cleanup: 81 dead `sluice_async_test` blocks and their include guards stripped from eleven TUs; the two e9t park arms collapsed to the production wait calls; the park-forensics ledger store restored as self-contained (it had shared a block with dead trace calls); the `tv1_routed` seam variable collapsed; `Scheduler::AsyncTestAccess::scheduler_identity` removed (field deleted in C1-A — the accessor was dead code that no target compiled) |
+| Change | Production TUs lose only `#if defined(SLUICE_ASYNC_INTERNAL_TESTING)`-guarded code that referenced the deleted framework; the non-seam build is byte-identical in behavior (full matrix green). The seam build of the scheduler becomes compilable again |
+| Semantic/regression evidence | New deterministic suite `runtime_waiter_observer_test` (3 cases, run 5× green, debug `--liburing=n`): `completion_wake_rides_the_observer_adapter` (worker-claim pause gate holds the physical op; the suspended fiber holds exactly one host wait record with the legacy fallback maps empty; gate release drives publication→claim→event→wake; the fiber resumes with the payload; the record retires with the delivery; nothing survives the runtime), `observer_cancel_wakes_the_fiber_and_the_operation_still_completes` (cancel through the scheduler while armed wakes the fiber with the canceled disposition; `await_drain` then re-attaches — a fresh registration generation — and the operation still completes with the published bytes; no record survives), `already_terminal_await_returns_without_suspending` (a zero-length op publishes at submit; the await returns through the ready edge and suspends no fiber). Full matrix: 42/42 registered tests after the strip (all prior suites unchanged, including the RuntimeTaskContext-driven explicit-file-ref and app consumption paths) |
+| Publication/thread evidence | The adapter's lock order is C1-A/C1-C's (global → access → core; the sink hook under no core/backend lock); the cancel in the second case is issued from a non-scheduler thread through `Scheduler::cancel_waiter` under the global mutex, exercising the same serialization the fiber path uses |
+| Backend/kernel evidence | ThreadPool seam gates drive the determinism; the real syscalls run on the threadpool worker |
+| Authority-contraction audit | Removed: the dead `sluice_async_test` seam layer in production TUs (its authority — historical E9/DST trace capture — was deleted from the repository in the legacy cleanup; the guards had zero reachable consumers and blocked every seam build), the `e9t_record_*` arms, the `scheduler_identity` accessor. Kept: the park ledger (self-contained forensics with its store restored), `scheduler_test_access.hpp` (the host observation seam this slice's evidence consumes), `scheduler_fe2_test_seam.cpp` (self-contained). No new runtime mechanism; the test target is evidence-only. The fallback maps (`waiting_size_`/`waiting_void_`) and arena waiter storage remain untouched pending #431 |
+| Status | C1-D (#430) complete at this commit: the RuntimeTaskContext waiter path runs through the host-neutral observer adapter with deterministic wake/cancel/already-terminal evidence, scheduler mechanisms are host-private by construction, and the scheduler seam builds again. Open: legacy waiter mechanism removal (#431), Armed→Queued/ProgressSource alignment (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-E review record — Issue #431, legacy backend waiter mechanism removal
+
+This record removes the compatibility waiter mechanisms #396 names, now
+that the migration evidence exists (C1-A through C1-D): the legacy
+`RequestArena` waiter ownership (`register_waiter`/`cancel_waiter`, the
+`WaiterRegistration`/`WaiterToken`/`RoutingLease`/`OptionalWaiterDelivery`
+storage and vocabulary, the waiter observation seam, and the
+release-invariant registration check) and the Scheduler's fallback waiter
+path (`waiting_size_`/`waiting_void_` and their drain/classify/forensics
+scans — unreachable since C1-A removed the last inserter). The remaining
+`RequestArena` surface (slot lifecycle for the compatibility
+`Completion` binding flavor) is untouched and stays #402's retirement.
+After this slice exactly one observer registration state machine exists
+in the tree — `RequestCore`'s `ObserverPhase` — and no waiter/host
+identity vocabulary remains under `include/` or `src/` (the consumer
+probe's incompleteness assertions now hold vacuously of a type that
+exists nowhere). Not claimed: ProgressSource alignment (#432), TLA+
+(#433), Completion/arena binding retirement (#402).
+
+| Field | Content |
+|---|---|
+| Requirement scope | #396's required-removals list (backend waiter registration ownership, backend WaiterToken/RoutingLease storage, duplicated backend registration state machines, scheduler fallback waiter paths bypassing the neutral protocol), BACKEND-01 (backend owns physical execution only — the arena's waiter surface was the last non-physical residue), OBS-01 host-neutrality now total. Excludes the arena's non-waiter compatibility surface (#402), progress (#432) |
+| Implementation | Deletions only: `request_slot.hpp` loses the three waiter types and `RequestSlot`'s registration/token/lease/delivery fields and accessors; `request_arena.hpp` loses `register_waiter`/`cancel_waiter`, `registration_of`, the `WaiterObservation` seam, the `reap` registration close, and the waiter resets in `reserve`/`free_slot_locked_`/`release_completed_binding`; `Scheduler` loses the two fallback maps, their two drain scans, their `classify` disjuncts, and the forensics fields/prints; `AsyncTestAccess::legacy_completion_wait_count` and its one consuming assertion go with them. No behavior change: every removed mechanism had zero reachable producers or consumers |
+| Change | Pure removal; the physical execution mechanisms (dispatch rings, prepared ops, workers, publication worklists, event-owed control pairing, progress signal) are all retained; 42/42 registered tests and the seam suite green unchanged |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 42/42 registered tests (45 protocol, 15 cutover, 3 runtime-waiter adapter, and the prior matrix), the C1-B/C1-C mutation binaries unaffected (their guards live in `request_core.cpp`); a tree-wide search finds zero occurrences of `WaiterToken`, `RoutingLease`, `OptionalWaiterDelivery`, `WaiterRegistration`, `register_waiter` or `scheduler_identity` under `include/`+`src/`, and `ObserverPhase` exists only in `observer_protocol.hpp` and `request_core.*` — the no-duplicate-state-machine verification #431 demands |
+| Publication/thread evidence | None new; removals only touch unreachable paths and test-only counters |
+| Backend/kernel evidence | Both backend configurations build (the no-liburing stub and the liburing-gated TU set are unchanged by this slice) |
+| Authority-contraction audit | Removed with zero migration obligations: the arena waiter storage/API (superseded by the core's `ObserverPhase` machine at C1-A/C1-C; the last delivery consumer went with C1-A's `ReadyEvent` contraction), the scheduler fallback maps and scans (superseded by the observer adapter at C1-A; unreachable since), the legacy forensics/test-access counters that observed them. Retained because their obligations stand: the arena's slot lifecycle (compatibility `Completion` binding, #402), `wait_capacity_`/the wait-record pool (host wake-queue bound, now the only waiter registry), `AsyncIoContext`'s by-key `cancel_observer` (host cleanup of failed resource acquisition), `Scheduler::cancel_waiter` (the app-facing RuntimeTaskContext surface) |
+| Status | C1-E (#431) complete at this commit: no backend observer semantic ownership, no duplicate observer state machine, no waiter/host-identity vocabulary outside the host adapter's private registry remain. Open: Armed→Queued/ProgressSource alignment (#432), TLA+ (#433). The OBS assessment row stays NOT_ASSESSED |
+
+## C1-F review record — Issue #432, Observer/ProgressSource alignment
+
+This record resolves #432's open decision and states it as implementation
+fact. **Where Armed→Queued happens: publication-coupled queueing.** The
+transition is executed inside `RequestCore::complete_publication` under
+the core mutex by whichever thread completes a publication — it is a
+state transition coupled to the publication event itself, not something a
+driver discovers or a signal implies. The complementary edge —
+Queued→Delivering — is driver-owned: the progress owner claims it through
+`claim_observer_delivery` in `deliver_event` immediately before emitting
+the host-neutral ready event. This split is exactly the root's OBS-02
+diagram ("Armed → Queued: terminal published", "Queued → Delivering:
+driver claims delivery") and it fixes the L3 delivery-proof boundary: the
+proof obligation on the observer side is only "publication completed ⇒
+the registration is queued in persistent core state"; everything after
+that is the progress owner's existing no-lost-wake discipline.
+
+No lost wake: an armed registration is persistent core state, not a
+transient notification, so attachment cannot race a signal out of
+existence — the queueing edge fires at the publication the observer is
+entitled to, whenever that publication completes (C1-B's
+window/terminal-choice cases pin both directions). The physical side is
+carried by the backend progress signal: every path that queues
+publication work (`signal_ready_progress`) bumps the wait-source epoch
+the parked owner snapshotted, so the owner wakes, polls, completes the
+publication (queueing the observer) and claims the delivery. The new
+deterministic case `armed_delivery_survives_a_parked_progress_owner`
+pins this end-to-end: the only progress owner is verified parked (prepark
+counter seam) while the observer arms; the gated worker's completion
+wakes it; the driven publication queues, claims and delivers the armed
+observer's key, and the protocol retires.
+
+L3 assumptions, declared (they are the C++ mapping of OBS-03's liveness
+bullets, and the assumptions any later TLA+ L3 proof must carry): (1)
+progress-owner service — the owner of `poll`/`wait_one` continues
+service: after each progress-signal epoch change it eventually runs
+another poll (the current BackendWaitSource token/epoch discipline gives
+this under OS scheduler fairness; #397's context-owned ProgressSource
+will own this contract without changing the observer boundary); (2)
+backend eventual signal — every accepted request eventually completes
+or is documentably retired per REQ-06, and every queued publication work
+is signalled; (3) hook termination — the host sink hook is bounded and
+terminates (the scheduler's on_ready is; the host retains its callback
+state until it acquires retirement); (4) not assumed — any bound on
+kernel operations on stalled filesystems (REQ-06's carve-out).
+
+ProgressSource independence: the progress mechanism
+(`BackendWaitSource`/`ReadyWaitSource`, `BackendWaitToken`,
+`signal_progress`) carries no observer, waiter or host-identity
+vocabulary (verified by search), and the observer protocol consumes
+exactly two things — publication completion (core mutex) and "a driver
+eventually runs". #397 may replace the backend-owned wait source with a
+context-owned ProgressSource without touching the observer state machine;
+conversely nothing in this slice preemptes #397's PROG-* scope. Not
+claimed: the ProgressSource implementation itself (#397), TLA+ (#433),
+external-host W-03 integration.
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-02's Armed→Queued/Queued→Delivering edges with their ownership made explicit; OBS-03's delivery-progress liveness bullets with declared assumptions (the L3 basis); REQ-06's publication liveness as consumed; PROG boundary hygiene (no observer vocabulary in the progress mechanism; no progress vocabulary in the observer protocol). Excludes the ProgressSource contract itself (#397), TLA+ (#433) |
+| Implementation | No production change: the ownership this record states has been the implemented reality since C1-C (`complete_publication` queues; `deliver_event` claims). The slice's code artifact is the no-lost-wake oracle case |
+| Change | One deterministic cutover case (`armed_delivery_survives_a_parked_progress_owner`, 14th of the threadpool suite's 16 executed cases) using the wait-source prepark seam to prove the owner is parked before the attach |
+| Semantic/regression evidence | gcc debug `--liburing=n`: 42/42 registered tests, the new case green across repeated runs (3× recorded; it is fully gate-deterministic — the park is verified before the attach and no unsignalled wake exists while the worker is gated). Existing direction coverage: C1-B's `attach_during_publication_window_arms_for_that_publication` and `attach_on_terminal_choice_before_publication_still_arms` (queueing cannot be missed by attachment order), C1-C's `delivery_claim_is_exclusive_and_at_most_once` (the queueing edge fires exactly at publication completion) and `attach_after_terminal_choice_rides_the_pending_publication` (attach after signal, before drive) |
+| Publication/thread evidence | The queueing edge runs under the core mutex inside `complete_publication`; the claim runs in the driver's access-mutex window before the sink hook; the split-wait discipline (`access_mtx_` per poll iteration, released before park) is what makes attach-while-parked legal — the new case exercises that interleaving through the public context API |
+| Backend/kernel evidence | ThreadPool seam build; the identical one-line claim exists in the uring driver (liburing-gated source) |
+| Authority-contraction audit | No new runtime mechanism and nothing removed; this slice fixes ownership statements and evidence. The prepark/wait-phase flags are pre-existing test-only seams of the wait source |
+| Status | C1-F (#432) complete at this commit: the Armed→Queued ownership is explicit and pinned (publication-coupled in the core; driver-owned claim), the no-lost-wake chain carries deterministic evidence across the park boundary, the L3 assumptions are declared, and the ProgressSource contract remains independent. Remaining outside this series: #397 ProgressSource, #433 TLA+ (explicitly not claimed), #402 Completion/arena retirement. The OBS assessment row stays NOT_ASSESSED pending the formal work |
+
+## C1-G review record — Issue #434 review fixes: OBS-04 host adapter failure path
+
+This record closes the #434 review findings before merge. The #396
+semantic boundary is unchanged: no observer state machine, backend
+interface, RequestCore ownership or TLA+ surface moves (formal/ is
+untouched; #433 owns it).
+
+Finding P1-1 (OBS-04 host adapter failure path): the adapter armed the
+observer before acquiring its wait record, so wait-record exhaustion
+cleaned up through `cancel_observer` and discarded the retirement
+disposition. The discarded `delivery_in_progress` arm was not a
+reachable-behavior claim but an implicit cross-layer assumption
+(delivery cannot have been claimed between the arm and the failed
+acquisition); if it ever stopped holding, the registration would stay
+in the delivering phase with no retire path — `retire_delivery` runs
+only for records routed into the delivered list — pinning the slot
+against the REQ-05 reclaim predicate forever. The fix inverts the
+ordering (the review's Option A): the adapter reserves the wait record
+from the host free pool before attaching the observer; exhaustion now
+fails with `no_space` before any observer acceptance, so a failed setup
+leaves the request outstanding and untouched, no registration exists to
+strand, no disposition is discarded, and the slot can never be pinned by
+the failure path. A non-arming attach releases the reserved record and
+returns through the existing ready/invalid_state edges; the registry arm
+and suspend commit stay in the same global-lock window as before.
+
+Finding P1-2 (evidence corrections): the C1-F count claim "17th in the
+threadpool suite" is corrected to the executed reality — the case is
+14th of the suite's 16 executed cases. The C1-A/C1-C/C1-D drain-order
+wording ("retires … after … waking the fiber" / "after the fiber is
+made runnable") is corrected to the shipped behavior of every C1 slice:
+the drain frees the routed record, retires the delivery, and only then
+makes the fiber runnable (host record retired before reuse; observer
+retirement fact established; runnable transition last, so the resumed
+fiber observes a fully retired registration and a reclaimable slot).
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-04's host resource-failure shape at the RuntimeTaskContext adapter: a failed host setup keeps the request valid and settleable, triggers no operation cancellation, strands no observer registration, and leaves no permanent slot pin. OBS-02/OBS-03 state machine, backend neutrality, RequestCore ownership and the five-phase edges are untouched by construction |
+| Implementation | `Scheduler::await_completion_impl` (the size/void bodies collapse onto one template) reserves the wait record (`reserve_wait_record_locked`) before `attach_observer`; a non-arming attach releases it (`release_reserved_wait_record_locked`); the armed path binds it (`arm_wait_record_locked`) under the same global-lock window. Test-only seams: `RuntimeBuilder::test_wait_capacity`, `ApplicationRuntime::test_io_context`, ThreadPoolBackend `DeliveryClaimedPauseGate` |
+| Change | Before: exhaustion armed then cancelled an observer and discarded the disposition; a `delivery_in_progress` answer would strand the delivering registration permanently. After: exhaustion fails before acceptance — there is no observer to cancel, so no disposition exists to handle or discard |
+| Semantic/regression evidence | `runtime_waiter_observer_test` grows to 5 cases, green across 25 recorded runs (gcc release `--liburing=n`). New `wait_record_exhaustion_fails_the_await_before_observer_attachment` (verified failing against the pre-fix adapter, which leaves the refused request's slot in the retired observer phase; green after) and `cancel_during_the_staged_delivery_window_completes_normally` (the recommended P2 coverage: cancel during the staged delivery window is deterministically ordered into the delivering phase — the canceler holds the global lock, so the drain cannot retire first — and must be refused while the wait completes through the normal delivery path with no reclaim leak). The C1-C core-level mutant kills stand unchanged; the host-level P2 case adds the interleaving coverage, not a new kill |
+| Publication/thread evidence | Reserve/release/arm run under global → wait-registry lock order, identical to the replaced acquire; the failure path holds no observer state, so no cross-layer assumption about delivery timing remains. The P2 case's staging is lock-derived (global-lock ownership probes), not timing-derived |
+| Backend/kernel evidence | ThreadPool seam build (worker-claim and new delivery-claimed gates); no backend source changes beyond the macro-guarded seam |
+| Authority-contraction audit | Removed: `AsyncIoContext::cancel_observer(RequestKey)` (its only callers were the replaced exhaustion cleanup; the Completion& form keeps `cancel_waiter`) and the dead `Scheduler::retire_wait_record_locked` (the drain and cancel paths inline their retirement). No new runtime state, flag, counter or capability: the reservation is the existing free-list authority, split from registration to make resource failure precede observer acceptance |
+| Status | Review findings closed: P1-1 fixed with deterministic discrimination evidence, P1-2 corrected in place, P2 coverage added. The OBS assessment row stays NOT_ASSESSED pending #433 |

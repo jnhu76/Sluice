@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -93,11 +90,6 @@ SchedulerWakeHandle Scheduler::make_wake_handle() noexcept {
 }
 
 void Scheduler::notify_external_wake() noexcept {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::external_notify,
-                                            static_cast<unsigned>(-1));
-#endif
     signal_wake_locked();
 }
 
@@ -105,10 +97,6 @@ void Scheduler::signal_wake_locked() {
     {
         LockGuard lk(wake_mtx_);
         ++wake_epoch_;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        sluice_async_test::record_trace_wake(*this, wake_epoch_);
-#endif
     }
     wake_cv_.notify_all();
 
@@ -121,9 +109,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
     SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     ws->park_domain = WorkerState::ParkDomain::Scheduler;
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::scheduler_park_commit);
-#endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -131,8 +116,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
     if (park_forensics_enabled_.load(std::memory_order_acquire)) {
         {
             LockGuard glk(global_mtx_);
-            forensics_rec.waiting_registered = waiting_size_.size() + waiting_void_.size() +
-                                               waiting_ready_.size() +
+            forensics_rec.waiting_registered = waiting_ready_.size() +
                                                static_cast<std::size_t>(waiting_waitq_count_) +
                                                static_cast<std::size_t>(waiting_select_count_);
             forensics_rec.external_wake_possible = external_wake_possible_locked();
@@ -161,16 +145,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
             (own_dance != 0 &&
              dance_epoch_.load(std::memory_order_acquire) !=
                  ws->dance_epoch_at_contribution_.load(std::memory_order_acquire))) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            sluice_async_test::TraceEvent refuse_ev{};
-            refuse_ev.kind =
-                static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_refused);
-            refuse_ev.worker = static_cast<unsigned char>(ws->id);
-            sluice_async_test::record_trace_event(*this, refuse_ev);
-            sluice_async_test::set_trace_wake_cause(
-                *this, sluice_async_test::WakeCause::park_refuse, static_cast<unsigned>(-1));
-#endif
             signal_wake_locked();
             ws->park_domain = WorkerState::ParkDomain::None;
             return;
@@ -178,16 +152,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         LockGuard wlk(wake_mtx_);
         ws->observed_epoch = wake_epoch_;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        {
-            sluice_async_test::TraceEvent commit_ev{};
-            commit_ev.kind =
-                static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_committed);
-            commit_ev.worker = static_cast<unsigned char>(ws->id);
-            commit_ev.armed = bounded_backend_observation ? 1 : 0;
-            commit_ev.epoch = wake_epoch_;
-            sluice_async_test::record_trace_event(*this, commit_ev);
-        }
 
         forensics_rec.epoch_at_commit = wake_epoch_;
         if (park_forensics_enabled_.load(std::memory_order_acquire)) {
@@ -202,11 +166,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         }
 #endif
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::scheduler_park_baseline_recorded);
-#endif
     std::unique_lock<Mutex> lk(wake_mtx_);
 
     auto park_pred = [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
@@ -217,60 +176,13 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
         return !ws->local_runnable.empty();
     };
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    const auto e9t_record_entered = [this, ws]() {
-        sluice_async_test::TraceEvent ev{};
-        ev.kind = static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_entered);
-        ev.worker = static_cast<unsigned char>(ws->id);
-        sluice_async_test::record_trace_event(*this, ev);
-    };
-    const auto e9t_record_returned = [this, ws](bool immediate,
-                                                bool timed_out) SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-        sluice_async_test::TraceEvent ev{};
-        ev.kind = static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_returned);
-        ev.worker = static_cast<unsigned char>(ws->id);
-        ev.immediate = immediate ? 1 : 0;
-        if (timed_out) {
-            ev.return_causes = sluice_async_test::kReturnCauseTimeout;
-        } else {
-            std::uint16_t causes = 0;
-            if (wake_epoch_ != ws->observed_epoch) {
-                causes |= sluice_async_test::kReturnCauseEpoch;
-            }
-            if (global_terminate_.load(std::memory_order_acquire)) {
-                causes |= sluice_async_test::kReturnCauseTerminate;
-            }
-            {
-                std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
-                if (!ws->local_runnable.empty()) {
-                    causes |= sluice_async_test::kReturnCauseRunnable;
-                }
-            }
-            ev.return_causes = causes;
-        }
-        sluice_async_test::record_trace_event(*this, ev);
-    };
-#endif
 
     static constexpr auto kParkBackstop = std::chrono::milliseconds(2);
     static constexpr auto kTestParkPoll = std::chrono::milliseconds(1);
     deadline_t earliest = earliest_active_deadline_.load(std::memory_order::acquire);
 
     if (earliest == kNoDeadline && !bounded_backend_observation) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        e9t_record_entered();
-        if (park_pred()) {
-            e9t_record_returned(true, false);
-            ws->park_domain = WorkerState::ParkDomain::None;
-            return;
-        }
         wake_cv_.wait(lk, park_pred);
-        e9t_record_returned(false, false);
-#else
-        wake_cv_.wait(lk, park_pred);
-#endif
         ws->park_domain = WorkerState::ParkDomain::None;
         return;
     }
@@ -294,21 +206,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
     } else {
         wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    e9t_record_entered();
-    if (park_pred()) {
-        e9t_record_returned(true, false);
-        ws->park_domain = WorkerState::ParkDomain::None;
-        return;
-    }
-    {
-        const bool satisfied = wake_cv_.wait_until(lk, wake_deadline, park_pred);
-        e9t_record_returned(false, !satisfied);
-    }
-#else
     wake_cv_.wait_until(lk, wake_deadline, park_pred);
-#endif
     ws->park_domain = WorkerState::ParkDomain::None;
 }
 
@@ -318,7 +216,7 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
 
     std::vector<WorkerState*> worker_ptrs;
     const char* admission = "none";
-    std::size_t w_size = 0, w_void = 0, w_ready = 0, w_waitq = 0, w_select = 0;
+    std::size_t w_ready = 0, w_waitq = 0, w_select = 0;
     std::size_t pending_spawn = 0;
 
     unsigned active_workers = 0, live_loop = 0, idle_now = 0;
@@ -335,8 +233,6 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
         } else if (admission_ == AdmissionState::committed) {
             admission = "committed";
         }
-        w_size = waiting_size_.size();
-        w_void = waiting_void_.size();
         w_ready = waiting_ready_.size();
         w_waitq = waiting_waitq_count_;
         w_select = waiting_select_count_;
@@ -385,9 +281,9 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
                  global_terminate_.load(std::memory_order_acquire) ? 1 : 0,
                  backend_wait_active_.load(std::memory_order_acquire) ? 1 : 0);
     std::fprintf(stderr,
-                 "[park-forensics] waiting: size=%zu void=%zu ready=%zu waitq=%zu "
+                 "[park-forensics] waiting: ready=%zu waitq=%zu "
                  "select=%zu running_fibers=%ld pending_spawn=%zu\n",
-                 w_size, w_void, w_ready, w_waitq, w_select,
+                 w_ready, w_waitq, w_select,
                  static_cast<long>(running_fiber_count_.load(std::memory_order_acquire)),
                  pending_spawn);
 
@@ -483,44 +379,34 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
 }
 #endif
 
-Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(Fiber* fiber, WorkerState* owner,
-                                                             const void* completion,
-                                                             std::uint64_t& lease_id_out) {
+Scheduler::WaitRecord* Scheduler::reserve_wait_record_locked() {
     LockGuard rlk(wait_registry_mtx_);
     WaitRecord* r = wait_record_free_head_;
-    if (r != nullptr) {
-        wait_record_free_head_ = r->next_free;
-        r->next_free = nullptr;
-
-        ++r->generation;
-    } else {
+    if (r == nullptr) {
         return nullptr;
     }
-    r->state = WaitRecordState::registered;
-    r->fiber = fiber;
-    r->owner = owner;
-    r->completion = completion;
-    ++wait_record_live_count_;
-    lease_id_out = wait_lease_serial_++;
+    wait_record_free_head_ = r->next_free;
+    r->next_free = nullptr;
     return r;
 }
 
-void Scheduler::retire_wait_record_locked(std::uint32_t index) {
+void Scheduler::release_reserved_wait_record_locked(WaitRecord* record) {
     LockGuard rlk(wait_registry_mtx_);
-    if (index >= wait_records_.size()) {
-        detail::scheduler_wait_registry_invariant_fail_fast();
-    }
-    WaitRecord* r = wait_records_[index].get();
-    if (r->state != WaitRecordState::registered) {
-        detail::scheduler_wait_registry_invariant_fail_fast();
-    }
-    r->state = WaitRecordState::free;
-    r->fiber = nullptr;
-    r->owner = nullptr;
-    r->completion = nullptr;
-    r->next_free = wait_record_free_head_;
-    wait_record_free_head_ = r;
-    --wait_record_live_count_;
+    record->next_free = wait_record_free_head_;
+    wait_record_free_head_ = record;
+}
+
+void Scheduler::arm_wait_record_locked(WaitRecord* record, Fiber* fiber, WorkerState* owner,
+                                       const void* completion,
+                                       const detail::RequestKey& request_key) {
+    LockGuard rlk(wait_registry_mtx_);
+    record->state = WaitRecordState::registered;
+    record->fiber = fiber;
+    record->owner = owner;
+    record->completion = completion;
+    record->request_key = request_key;
+    wait_by_request_slot_[request_key.slot.value] = record;
+    ++wait_record_live_count_;
 }
 
 std::size_t Scheduler::wait_record_live_count_locked() const {
@@ -528,49 +414,30 @@ std::size_t Scheduler::wait_record_live_count_locked() const {
     return wait_record_live_count_;
 }
 
-Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
+template <class T>
+Result<void> Scheduler::await_completion_impl(Completion<T>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
 
     {
         LockGuard lk(global_mtx_);
-        std::uint64_t lease_id = 0;
-        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, lease_id);
+        WaitRecord* rec = reserve_wait_record_locked();
         if (rec == nullptr) {
             return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
-        const detail::WaiterToken token{scheduler_identity_, rec->index, rec->generation};
-        detail::RoutingLease lease =
-            detail::RoutingLease::pinning(lease_id, rec->index, rec->generation);
-
-        auto reg = ctx_.register_waiter(c, token, std::move(lease));
-        if (!reg.has_value()) {
-            const IoError e = reg.error();
-            if (e.code == IoError::Code::not_supported) {
-                retire_wait_record_locked(rec->index);
-                waiting_size_[static_cast<void*>(&c)] = {me, ws};
-                if (c.ready()) {
-                    waiting_size_.erase(static_cast<void*>(&c));
-                    return Result<void>{};
-                }
-                commit_suspend_locked(ws, me);
-            } else {
-                retire_wait_record_locked(rec->index);
-                if (c.ready()) {
-                    return Result<void>{};
-                }
-
-                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        const auto attach = ctx_.attach_observer(c);
+        if (!attach.armed()) {
+            release_reserved_wait_record_locked(rec);
+            if (c.ready()) {
+                return Result<void>{};
             }
-        } else {
-            commit_suspend_locked(ws, me);
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+        arm_wait_record_locked(rec, me, ws, &c, attach.key);
+
+        commit_suspend_locked(ws, me);
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -579,174 +446,65 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     if (me->completion_wait_outcome() == CompletionWaitOutcome::completed)
         return Result<void>{};
     return make_unexpected<void>(IoError{IoError::Code::canceled});
+}
+
+Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
+    return await_completion_impl(c);
 }
 
 Result<void> Scheduler::await_completion_void(Completion<void>& c) {
-    WorkerState* ws = g_worker;
-    Fiber* me = ws->current;
+    return await_completion_impl(c);
+}
 
+template <class T>
+Result<bool> Scheduler::cancel_waiter_impl(Completion<T>& c) {
+    LockGuard lk(global_mtx_);
+    const auto cancel = ctx_.cancel_observer(c);
+    if (!cancel.retired()) {
+        return Result<bool>{false};
+    }
+
+    Fiber* f = nullptr;
+    WorkerState* owner = nullptr;
     {
-        LockGuard lk(global_mtx_);
-        std::uint64_t lease_id = 0;
-        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, lease_id);
-        if (rec == nullptr) {
-            return make_unexpected<void>(IoError{IoError::Code::no_space});
-        }
-        const detail::WaiterToken token{scheduler_identity_, rec->index, rec->generation};
-        detail::RoutingLease lease =
-            detail::RoutingLease::pinning(lease_id, rec->index, rec->generation);
-        auto reg = ctx_.register_waiter(c, token, std::move(lease));
-        if (!reg.has_value()) {
-            const IoError e = reg.error();
-            if (e.code == IoError::Code::not_supported) {
-                retire_wait_record_locked(rec->index);
-                waiting_void_[static_cast<void*>(&c)] = {me, ws};
-                if (c.ready()) {
-                    waiting_void_.erase(static_cast<void*>(&c));
-                    return Result<void>{};
-                }
-                commit_suspend_locked(ws, me);
-            } else {
-                retire_wait_record_locked(rec->index);
-                if (c.ready())
-                    return Result<void>{};
-                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        LockGuard rlk(wait_registry_mtx_);
+        auto it = wait_by_request_slot_.find(cancel.key.slot.value);
+        if (it != wait_by_request_slot_.end()) {
+            WaitRecord* r = it->second;
+            if (r->state == WaitRecordState::registered &&
+                r->request_key.generation == cancel.key.generation &&
+                r->request_key.context == cancel.key.context) {
+                r->state = WaitRecordState::cancelled;
+                f = r->fiber;
+                owner = r->owner;
+                r->state = WaitRecordState::free;
+                r->fiber = nullptr;
+                r->owner = nullptr;
+                r->completion = nullptr;
+                r->request_key = {};
+                r->next_free = wait_record_free_head_;
+                wait_record_free_head_ = r;
+                --wait_record_live_count_;
+                wait_by_request_slot_.erase(it);
             }
-        } else {
-            commit_suspend_locked(ws, me);
         }
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
-    fiber_ctx::Switch s;
-    s.old = &me->ctx;
-    s.new_ = &ws->sched_ctx;
-    (void)fiber_ctx::context_switch(&s);
-
-    if (me->completion_wait_outcome() == CompletionWaitOutcome::completed)
-        return Result<void>{};
-    return make_unexpected<void>(IoError{IoError::Code::canceled});
+    if (f != nullptr) {
+        f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
+        if (f->make_runnable()) {
+            route_runnable_locked(f, owner);
+        }
+        return Result<bool>{true};
+    }
+    return Result<bool>{false};
 }
 
 Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
-    LockGuard lk(global_mtx_);
-    auto rl = ctx_.cancel_waiter(c);
-    if (!rl.has_value()) {
-        const IoError e = rl.error();
-        if (e.code == IoError::Code::not_found) {
-            return Result<bool>{false};
-        }
-
-        if (e.code == IoError::Code::not_supported) {
-            auto it = waiting_size_.find(static_cast<void*>(&c));
-            if (it != waiting_size_.end()) {
-                Fiber* f = it->second.fiber;
-                WorkerState* owner = it->second.owner;
-                waiting_size_.erase(it);
-                if (f != nullptr) {
-                    f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-                    if (f->make_runnable()) {
-                        route_runnable_locked(f, owner);
-                    }
-                }
-                return Result<bool>{true};
-            }
-            return Result<bool>{false};
-        }
-        return make_unexpected<bool>(e);
-    }
-
-    detail::RoutingLease lease = std::move(rl.value());
-    Fiber* f = nullptr;
-    WorkerState* owner = nullptr;
-    {
-        LockGuard rlk(wait_registry_mtx_);
-        const std::uint32_t idx = lease.record_index();
-        const std::uint32_t gen = lease.record_generation();
-        if (idx < wait_records_.size()) {
-            WaitRecord* r = wait_records_[idx].get();
-            if (r->generation == gen && r->state == WaitRecordState::registered) {
-                r->state = WaitRecordState::cancelled;
-                f = r->fiber;
-                owner = r->owner;
-                r->state = WaitRecordState::free;
-                r->fiber = nullptr;
-                r->owner = nullptr;
-                r->completion = nullptr;
-                r->next_free = wait_record_free_head_;
-                wait_record_free_head_ = r;
-                --wait_record_live_count_;
-            }
-        }
-    }
-    if (f != nullptr) {
-        f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-        if (f->make_runnable()) {
-            route_runnable_locked(f, owner);
-        }
-    }
-    return Result<bool>{true};
+    return cancel_waiter_impl(c);
 }
 
 Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
-    LockGuard lk(global_mtx_);
-    auto rl = ctx_.cancel_waiter(c);
-    if (!rl.has_value()) {
-        const IoError e = rl.error();
-        if (e.code == IoError::Code::not_found) {
-            return Result<bool>{false};
-        }
-
-        if (e.code == IoError::Code::not_supported) {
-            auto it = waiting_void_.find(static_cast<void*>(&c));
-            if (it != waiting_void_.end()) {
-                Fiber* f = it->second.fiber;
-                WorkerState* owner = it->second.owner;
-                waiting_void_.erase(it);
-                if (f != nullptr) {
-                    f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-                    if (f->make_runnable()) {
-                        route_runnable_locked(f, owner);
-                    }
-                }
-                return Result<bool>{true};
-            }
-            return Result<bool>{false};
-        }
-        return make_unexpected<bool>(e);
-    }
-    detail::RoutingLease lease = std::move(rl.value());
-    Fiber* f = nullptr;
-    WorkerState* owner = nullptr;
-    {
-        LockGuard rlk(wait_registry_mtx_);
-        const std::uint32_t idx = lease.record_index();
-        const std::uint32_t gen = lease.record_generation();
-        if (idx < wait_records_.size()) {
-            WaitRecord* r = wait_records_[idx].get();
-            if (r->generation == gen && r->state == WaitRecordState::registered) {
-                r->state = WaitRecordState::cancelled;
-                f = r->fiber;
-                owner = r->owner;
-                r->state = WaitRecordState::free;
-                r->fiber = nullptr;
-                r->owner = nullptr;
-                r->completion = nullptr;
-                r->next_free = wait_record_free_head_;
-                wait_record_free_head_ = r;
-                --wait_record_live_count_;
-            }
-        }
-    }
-    if (f != nullptr) {
-        f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-        if (f->make_runnable()) {
-            route_runnable_locked(f, owner);
-        }
-    }
-    return Result<bool>{true};
+    return cancel_waiter_impl(c);
 }
 
 void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
@@ -765,10 +523,6 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
         waiting_ready_.erase(&ready);
         return;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::tv1_c001_registered_presuspend);
-#endif
     me->make_waiting();
     fiber_ctx::Switch s;
     s.old = &me->ctx;
@@ -785,10 +539,6 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -815,10 +565,6 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;

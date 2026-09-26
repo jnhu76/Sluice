@@ -98,21 +98,8 @@ UringAsyncBackend::request_key_for_test(const Completion<void>& c) const noexcep
 inline std::size_t UringAsyncBackend::sink_deliveries() const noexcept {
     return sink_.deliveries();
 }
-inline bool UringAsyncBackend::sink_last_has_waiter() const noexcept {
-    return sink_.last_has_waiter();
-}
-inline detail::WaiterToken UringAsyncBackend::sink_last_token() const noexcept {
-    return sink_.last_token();
-}
-inline std::uint64_t UringAsyncBackend::sink_last_lease_id() const noexcept {
-    return sink_.last_lease_id();
-}
-
-inline std::optional<UringAsyncBackend::WaiterObservation>
-UringAsyncBackend::waiter_of_slot_for_test(std::uint32_t slot) const noexcept {
-    const DeliveryRecord& record = delivery_[slot];
-    return WaiterObservation{record.registration, record.waiter_delivery_present,
-                             record.waiter_token, record.waiter_lease.id()};
+inline detail::RequestKey UringAsyncBackend::sink_last_key() const noexcept {
+    return sink_.last_key();
 }
 
 inline void UringAsyncBackend::set_submit_entry_pause_gate(SubmitEntryPauseGate* gate) noexcept {

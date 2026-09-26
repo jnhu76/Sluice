@@ -57,20 +57,6 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
 void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
 void UringAsyncBackend::cancel(Completion<void>&) {}
 
-Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>&, detail::WaiterToken,
-                                                detail::RoutingLease) {
-    return make_unexpected<void>(IoError{IoError::Code::not_supported});
-}
-Result<void> UringAsyncBackend::register_waiter(Completion<void>&, detail::WaiterToken,
-                                                detail::RoutingLease) {
-    return make_unexpected<void>(IoError{IoError::Code::not_supported});
-}
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<std::size_t>&) {
-    return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
-}
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<void>&) {
-    return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
-}
 void UringAsyncBackend::close_admission() {}
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
@@ -479,10 +465,6 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
     record.completion = c;
     record.publish = c != nullptr ? publish_thunk<Comp>() : &UringAsyncBackend::publish_request_ready;
     record.kind = kind;
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_token = {};
-    record.waiter_lease = {};
-    record.waiter_delivery_present = false;
     record.event_owed = false;
     record.owed_key = {};
 
@@ -1074,17 +1056,8 @@ void UringAsyncBackend::publish_one(detail::SlotHandle h) {
 }
 
 void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
-    DeliveryRecord& record = delivery_[key.slot.value];
-    detail::OptionalWaiterDelivery waiter = detail::OptionalWaiterDelivery::none();
-    if (record.waiter_delivery_present) {
-        waiter =
-            detail::OptionalWaiterDelivery::of(record.waiter_token, std::move(record.waiter_lease));
-        record.waiter_token = {};
-        record.waiter_delivery_present = false;
-    }
-    record.registration = detail::WaiterRegistration::closed;
-    (routing_sink_ ? *routing_sink_ : sink_)
-        .on_ready(detail::ReadyEvent{key, kind, std::move(waiter)});
+    (void)core_->claim_observer_delivery(key);
+    (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
 }
 
 std::size_t UringAsyncBackend::poll() {
@@ -1384,79 +1357,6 @@ void UringAsyncBackend::cancel(Completion<void>& c) {
 
 detail::PublicCancel UringAsyncBackend::cancel_identity(detail::RequestKey key) {
     return cancel_key(key);
-}
-
-Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>& c,
-                                                detail::WaiterToken token,
-                                                detail::RoutingLease lease) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (core_->lookup(*key) != detail::PublicLookup::outstanding) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration == detail::WaiterRegistration::open_registered) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    record.registration = detail::WaiterRegistration::open_registered;
-    record.waiter_token = token;
-    record.waiter_lease = std::move(lease);
-    record.waiter_delivery_present = true;
-    return {};
-}
-
-Result<void> UringAsyncBackend::register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                                detail::RoutingLease lease) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (core_->lookup(*key) != detail::PublicLookup::outstanding) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration == detail::WaiterRegistration::open_registered) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    record.registration = detail::WaiterRegistration::open_registered;
-    record.waiter_token = token;
-    record.waiter_lease = std::move(lease);
-    record.waiter_delivery_present = true;
-    return {};
-}
-
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<std::size_t>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration != detail::WaiterRegistration::open_registered) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    detail::RoutingLease lease = std::move(record.waiter_lease);
-    record.waiter_token = {};
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_delivery_present = false;
-    return lease;
-}
-
-Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<void>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration != detail::WaiterRegistration::open_registered) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    detail::RoutingLease lease = std::move(record.waiter_lease);
-    record.waiter_token = {};
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_delivery_present = false;
-    return lease;
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

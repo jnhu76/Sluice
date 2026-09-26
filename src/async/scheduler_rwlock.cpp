@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -275,10 +272,6 @@ void Scheduler::rwlock_read_lock(WaitQueue& waiters, std::size_t& active_readers
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -332,10 +325,6 @@ void Scheduler::rwlock_write_lock(WaitQueue& waiters, std::size_t& active_reader
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -437,10 +426,6 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters, std::size_t& active_r
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -469,10 +454,6 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters, std::size_t& active_
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;

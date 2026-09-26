@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 std::size_t Scheduler::event_set_broadcast(Event& event) {
@@ -24,9 +21,6 @@ std::size_t Scheduler::event_set_broadcast(Event& event) {
     if (previous) {
         return 0;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::event_set_store_before_drain);
-#endif
     std::size_t woken = 0;
     while (wake_wait_one_locked(event.waiters_) != nullptr) {
         ++woken;
@@ -172,10 +166,6 @@ Scheduler::event_wait_admit_locked(WaitQueue& q, const std::atomic<bool>& set_fl
         publish_ordinary_deadline_locked(reg);
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::event_admission_before_final_check);
-#endif
 
     if (set_flag.load(std::memory_order::acquire)) {
         if (q.wake_node_locked(node)) {
@@ -217,10 +207,6 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::event_admission_attempt_before_global_lock);
-#endif
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
@@ -231,10 +217,6 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -255,10 +237,6 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>&
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;

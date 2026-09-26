@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -55,10 +52,6 @@ Scheduler::condition_wait_admit_locked(WaitQueue& cond_waiters, WaitNode& cond_n
         }
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::condition_register_before_handoff);
-#endif
 
     if (mutex_handoff_one_locked(mutex_waiters, owner) == nullptr) {
         owner = nullptr;
@@ -96,10 +89,6 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters, WaitNode&
         commit_suspend_locked(ws, me);
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -131,10 +120,6 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters, Wai
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -151,10 +136,6 @@ std::size_t Scheduler::condition_notify_all(WaitQueue& cond_waiters) {
     std::size_t woken = 0;
     LockGuard lk(global_mtx_);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::condition_notify_before_drain);
-#endif
     while (wake_wait_one_locked(cond_waiters) != nullptr) {
         ++woken;
     }

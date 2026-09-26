@@ -247,10 +247,6 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
     record.publish = c != nullptr ? publish_thunk<Comp>()
                                   : &ThreadPoolBackend::publish_request_ready;
     record.kind = kind;
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_token = {};
-    record.waiter_lease = {};
-    record.waiter_delivery_present = false;
     record.event_owed = false;
     record.owed_key = {};
 
@@ -369,16 +365,12 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
 }
 
 void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
-    DeliveryRecord& record = delivery_[key.slot.value];
-    detail::OptionalWaiterDelivery waiter = detail::OptionalWaiterDelivery::none();
-    if (record.waiter_delivery_present) {
-        waiter =
-            detail::OptionalWaiterDelivery::of(record.waiter_token, std::move(record.waiter_lease));
-        record.waiter_token = {};
-        record.waiter_delivery_present = false;
-    }
-    record.registration = detail::WaiterRegistration::closed;
-    (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind, std::move(waiter)});
+    (void)core_->claim_observer_delivery(key);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    wait_delivery_claimed_pause_();
+#endif
+    (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
 }
 
 void ThreadPoolBackend::publish_size_ready(void* completion,
@@ -652,6 +644,18 @@ void ThreadPoolBackend::wait_publication_epilogue_pause_() noexcept {
     g->exited.notify_all();
 }
 
+void ThreadPoolBackend::wait_delivery_claimed_pause_() noexcept {
+    auto* g = delivery_claimed_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
 void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
     auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
@@ -732,79 +736,6 @@ void ThreadPoolBackend::cancel(Completion<void>& c) {
 
 detail::PublicCancel ThreadPoolBackend::cancel_identity(detail::RequestKey key) {
     return cancel_key(key);
-}
-
-Result<void> ThreadPoolBackend::register_waiter(Completion<std::size_t>& c,
-                                                detail::WaiterToken token,
-                                                detail::RoutingLease lease) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (core_->lookup(*key) != detail::PublicLookup::outstanding) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration == detail::WaiterRegistration::open_registered) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    record.registration = detail::WaiterRegistration::open_registered;
-    record.waiter_token = token;
-    record.waiter_lease = std::move(lease);
-    record.waiter_delivery_present = true;
-    return {};
-}
-
-Result<void> ThreadPoolBackend::register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                                detail::RoutingLease lease) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    if (core_->lookup(*key) != detail::PublicLookup::outstanding) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration == detail::WaiterRegistration::open_registered) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    record.registration = detail::WaiterRegistration::open_registered;
-    record.waiter_token = token;
-    record.waiter_lease = std::move(lease);
-    record.waiter_delivery_present = true;
-    return {};
-}
-
-Result<detail::RoutingLease> ThreadPoolBackend::cancel_waiter(Completion<std::size_t>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration != detail::WaiterRegistration::open_registered) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    detail::RoutingLease lease = std::move(record.waiter_lease);
-    record.waiter_token = {};
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_delivery_present = false;
-    return lease;
-}
-
-Result<detail::RoutingLease> ThreadPoolBackend::cancel_waiter(Completion<void>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value()) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    DeliveryRecord& record = delivery_[key->slot.value];
-    if (record.registration != detail::WaiterRegistration::open_registered) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    detail::RoutingLease lease = std::move(record.waiter_lease);
-    record.waiter_token = {};
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_delivery_present = false;
-    return lease;
 }
 
 std::size_t ThreadPoolBackend::outstanding() const noexcept {

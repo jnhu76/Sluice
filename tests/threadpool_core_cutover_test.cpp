@@ -593,14 +593,15 @@ bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& 
     return true;
 }
 
-bool waiter_registration_and_delivery_ride_the_publication(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b waiter\n");
+bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1b observer\n");
     if (!file.has_value())
         return false;
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -611,16 +612,14 @@ bool waiter_registration_and_delivery_ride_the_publication(Tracker& t) {
     (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
     wait_threadpool_gate_paused(gate);
 
-    const auto key = raw->request_key_for_test(c);
-    t.check(key.has_value(), "the request key resolves for waiter registration");
-    const sluice::async::detail::WaiterToken token{7, 1, 1};
-    auto registered = raw->register_waiter_key_for_test(
-        *key, token, sluice::async::detail::RoutingLease::pinning(11, 0, 0));
-    t.check(registered.has_value(), "the waiter registers on the outstanding request");
-    t.check(!raw->register_waiter_key_for_test(
-                *key, token, sluice::async::detail::RoutingLease::pinning(12, 0, 0))
-                 .has_value(),
-            "a second registration on the same request is refused");
+    const auto attached = ctx.attach_observer(c);
+    t.check(attached.armed(), "the observer arms on the outstanding request");
+    t.check(ctx.attach_observer(c).status == sluice::async::detail::ObserverRegistration::duplicate,
+            "a second registration on the same request returns the occupied disposition");
+    const auto registered_slot = core.observe_slot(SlotIndex{0});
+    t.check(registered_slot.has_value() &&
+                registered_slot->observer_phase == sluice::async::detail::ObserverPhase::armed,
+            "the core owns the registration existence");
 
     resume_threadpool_gate(gate);
     wait_threadpool_gate_exited(gate);
@@ -630,16 +629,133 @@ bool waiter_registration_and_delivery_ride_the_publication(Tracker& t) {
 
     while (!c.ready())
         (void)ctx.poll();
-    t.check(raw->sink_deliveries() >= 1 && raw->sink_last_has_waiter(),
-            "the publication delivers a ready event carrying the waiter");
-    t.check(raw->sink_last_token() == token, "the delivered event carries the registered token");
-    t.check(raw->sink_last_lease_id() == 11, "the delivered event carries the routing lease");
-    const auto waiter = raw->waiter_of_slot_for_test(0);
-    t.check(waiter.has_value() &&
-                waiter->registration == sluice::async::detail::WaiterRegistration::closed &&
-                !waiter->delivery_present,
-            "the registration closes at delivery");
+    t.check(raw->sink_deliveries() >= 1 && raw->sink_last_key() == attached.key,
+            "the publication delivers a host-neutral ready event keyed by the request");
+
+    const auto pinned_slot = core.observe_slot(SlotIndex{0});
+    t.check(pinned_slot.has_value() &&
+                pinned_slot->observer_phase == sluice::async::detail::ObserverPhase::delivering,
+            "the publication queued and claimed the delivery before the event");
+    const auto mid_cancel = ctx.cancel_observer(c);
+    t.check(mid_cancel.in_progress(),
+            "cancelling while the delivery is claimed reports in-progress, not retired");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
+    t.check(!ctx.retire_delivery(attached.key),
+            "delivery retirement of an unclaimed request reports no live delivery");
+
+    t.check(c.ready(), "an attach after publication observes the published result");
+    t.check(ctx.attach_observer(c).status ==
+                sluice::async::detail::ObserverRegistration::already_terminal,
+            "a fresh attach after publication returns the already-terminal disposition");
     c.reset();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims once no registration is pinned");
+    return true;
+}
+
+bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1b observer terminal\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    Completion<std::size_t> c;
+    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    wait_threadpool_gate_paused(gate);
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    for (int i = 0; i < 1000 && raw->publication_pending_size_for_test() == 0; ++i)
+        std::this_thread::yield();
+    t.check(raw->publication_pending_size_for_test() == 1,
+            "the terminal is chosen with its publication still pending");
+
+    const auto attached = ctx.attach_observer(c);
+    t.check(attached.armed(),
+            "attach after terminal choice but before the driven publication arms");
+    t.check(!c.ready(), "the publication has not run yet");
+
+    while (!c.ready())
+        (void)ctx.poll();
+    t.check(raw->sink_last_key() == attached.key,
+            "the pending publication delivers to the armed observer");
+    t.check(core.observe_slot(attached.key.slot)->observer_phase ==
+                sluice::async::detail::ObserverPhase::delivering,
+            "the delivered registration stays claimed until delivery retirement");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
+    c.reset();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after retirement and release");
+    return true;
+}
+
+bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
+    auto file = open_temp_file(t, "sluice c1f parked owner\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::atomic<int> prepark{0};
+    raw->set_wait_prepark_counter_for_test(&prepark);
+
+    std::vector<std::byte> buffer(9, std::byte{0});
+    Completion<std::size_t> c;
+    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 9, 0}, c);
+    wait_threadpool_gate_paused(gate);
+
+    std::thread driver([&] { (void)ctx.wait_one(); });
+
+    for (int i = 0; i < 500000 && prepark.load(std::memory_order_acquire) < 1; ++i)
+        std::this_thread::yield();
+    t.check(prepark.load(std::memory_order_acquire) >= 1,
+            "the progress owner committed its park with nothing to drive");
+
+    const auto attached = ctx.attach_observer(c);
+    t.check(attached.armed(),
+            "an observer arms while the only progress owner is parked");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+    raw->set_wait_prepark_counter_for_test(nullptr);
+
+    driver.join();
+    t.check(c.ready(), "the progress signal woke the parked owner and drove the publication");
+    t.check(raw->sink_last_key() == attached.key,
+            "the driven publication delivered the armed observer's key");
+    t.check(core.observe_slot(attached.key.slot)->observer_phase ==
+                sluice::async::detail::ObserverPhase::delivering,
+            "the wake chain queued and claimed the delivery");
+    t.check(ctx.retire_delivery(attached.key), "delivery retirement completes the protocol");
+    c.reset();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after delivery retirement and release");
     return true;
 }
 
@@ -742,8 +858,12 @@ int main() {
          zero_op_delivery_pins_the_slot_until_the_event_is_delivered},
         {"admission_close_between_reserve_and_accept_refuses_and_rolls_back",
          admission_close_between_reserve_and_accept_refuses_and_rolls_back},
-        {"waiter_registration_and_delivery_ride_the_publication",
-         waiter_registration_and_delivery_ride_the_publication},
+        {"observer_registration_and_delivery_ride_the_publication",
+         observer_registration_and_delivery_ride_the_publication},
+        {"attach_after_terminal_choice_rides_the_pending_publication",
+         attach_after_terminal_choice_rides_the_pending_publication},
+        {"armed_delivery_survives_a_parked_progress_owner",
+         armed_delivery_survives_a_parked_progress_owner},
         {"stale_identity_does_not_resolve_after_slot_reuse",
          stale_identity_does_not_resolve_after_slot_reuse},
         {"bounded_workers_execute_the_syscalls_not_the_submitter",

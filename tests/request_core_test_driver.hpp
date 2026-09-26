@@ -17,7 +17,13 @@ using sluice::async::detail::BorrowFacts;
 using sluice::async::detail::ControlRelease;
 using sluice::async::detail::ExecutionClaim;
 using sluice::async::detail::ExecutionRelease;
+using sluice::async::detail::Generation;
 using sluice::async::detail::IoOutcome;
+using sluice::async::detail::ObserverCancellation;
+using sluice::async::detail::ObserverDeliveryClaim;
+using sluice::async::detail::ObserverDeliveryRetirement;
+using sluice::async::detail::ObserverPhase;
+using sluice::async::detail::ObserverRegistration;
 using sluice::async::detail::PublicationCompletion;
 using sluice::async::detail::PublicationGrant;
 using sluice::async::detail::PublicationPayload;
@@ -201,6 +207,20 @@ class FakePhysicalDriver {
     bool acquire_control(RequestKey id) { return core_.acquire_control(id); }
 
     ControlRelease retire_control(RequestKey id) { return core_.release_control(id); }
+
+    ObserverRegistration register_observer(RequestKey id) {
+        return core_.register_observer(id);
+    }
+
+    ObserverDeliveryClaim claim_observer_delivery(RequestKey id) {
+        return core_.claim_observer_delivery(id);
+    }
+
+    ObserverCancellation cancel_observer(RequestKey id) { return core_.cancel_observer(id); }
+
+    ObserverDeliveryRetirement retire_observer_delivery(RequestKey id) {
+        return core_.retire_observer_delivery(id);
+    }
 
     PublicationTarget& make_target() {
         targets_.emplace_back();

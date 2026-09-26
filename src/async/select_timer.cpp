@@ -7,9 +7,6 @@
 #include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/detail/select_registration.hpp>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -39,17 +36,9 @@ bool Scheduler::select_timer_pump_entry_locked(detail::SelectTimerRegistration& 
     auto state = reg.state();
 
     if (state != detail::SelectTimerRegistration::State::active) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_timer_pump_skip);
-#endif
         return true;
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_timer_pump_active);
-    ++select_timer_arm_load_count_;
-#endif
     (void)select_resolve_timer_locked(reg);
     return false;
 }
@@ -175,11 +164,6 @@ void Scheduler::select_finalize_timer_loser_locked(detail::SelectGroup& group,
         detail::select_invariant_fail_fast();
 
     arm.state = detail::ArmState::retired;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::select_timer_loser_arm_classified);
-#endif
 
     assert(reg->is_active() && "select_finalize_timer_loser_locked: registration not ACTIVE at "
                                "retire (arm classified but registration already terminal — "

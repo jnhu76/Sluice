@@ -31,12 +31,6 @@ struct TerminalResult {
     static TerminalResult err(IoError e) noexcept { return {true, true, 0, e}; }
 };
 
-enum class WaiterRegistration : std::uint8_t {
-    open_no_waiter,
-    open_registered,
-    closed,
-};
-
 struct BorrowMetadata {
     int fd = -1;
     const void* address = nullptr;
@@ -72,8 +66,6 @@ class RequestSlot {
     }
     OperationKind operation_kind() const noexcept { return op_kind_; }
     const TerminalResult& terminal() const noexcept { return terminal_; }
-    WaiterRegistration registration() const noexcept { return registration_; }
-    const WaiterToken& waiter_token() const noexcept { return waiter_token_; }
     const BorrowMetadata& borrow() const noexcept { return borrow_; }
 
   private:
@@ -89,12 +81,6 @@ class RequestSlot {
     bool enqueue_in_flight_pin_ = false;
 
     TerminalResult terminal_{};
-
-    WaiterRegistration registration_ = WaiterRegistration::open_no_waiter;
-    WaiterToken waiter_token_{};
-    RoutingLease waiter_lease_{};
-
-    bool waiter_delivery_present_ = false;
 
     CompletionBinding publication_binding_{};
 

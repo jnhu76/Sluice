@@ -23,6 +23,7 @@ class RequestHandle {
 
   private:
     friend class AsyncBackend;
+    friend class AsyncIoContext;
     constexpr RequestHandle(std::uint64_t context, std::uint32_t slot,
                             std::uint64_t generation) noexcept
         : context_(context), slot_(slot), generation_(generation), valid_(true) {}

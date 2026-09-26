@@ -88,18 +88,11 @@ struct Scheduler::AsyncTestAccess {
     static std::size_t ready_sink_cancel_lost(const Scheduler& s) noexcept {
         return s.ready_sink_.cancel_lost();
     }
-    static std::size_t legacy_completion_wait_count(Scheduler& s) {
-        LockGuard lk(s.global_mtx_);
-        return s.waiting_size_.size() + s.waiting_void_.size();
-    }
     static std::size_t wait_registry_live_count(Scheduler& s) {
         LockGuard rlk(s.wait_registry_mtx_);
         return s.wait_record_live_count_;
     }
     static detail::SynchronousReadySink& ready_sink(Scheduler& s) noexcept { return s.ready_sink_; }
-    static std::uint64_t scheduler_identity(const Scheduler& s) noexcept {
-        return s.scheduler_identity_;
-    }
 
     static std::size_t configured_wait_capacity(const Scheduler& s) {
         LockGuard rlk(s.wait_registry_mtx_);

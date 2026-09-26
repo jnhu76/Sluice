@@ -169,7 +169,7 @@ end
 -- surface only, proving the substrate stands alone without Scheduler, Fiber,
 -- waiter/routing vocabulary or a production backend.
 do
-    local function request_core_target(name, test_source, with_seam)
+    local function request_core_target(name, test_source, with_seam, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -179,8 +179,13 @@ do
             if with_seam then
                 add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
             end
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
             add_files(test_source, R .. "src/async/detail/request_core.cpp")
-            add_tests(name)
+            if extra_define == nil then
+                add_tests(name)
+            end
     end
 
     request_core_target("request_core_protocol_test",
@@ -189,6 +194,28 @@ do
                         R .. "tests/request_core_publication_test.cpp", true)
     request_core_target("request_core_consumer_probe",
                         R .. "tests/request_core_consumer_probe.cpp", false)
+
+    -- C1-B (#428) named mutation builds. Each flips one load-bearing arm of
+    -- the attach/publication resolution and must be killed by the named
+    -- failing assertion of the killer suite; they are executed and recorded
+    -- manually, never run as regular tests.
+    request_core_target("request_core_mut_attach_ignores_publication",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION")
+    request_core_target("request_core_mut_attach_treats_terminal_as_published",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED")
+
+    -- C1-C (#429) named mutation builds over the delivery state machine.
+    request_core_target("request_core_mut_delivery_claim_unbounded",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_DELIVERY_CLAIM_UNBOUNDED")
+    request_core_target("request_core_mut_cancel_during_delivery_returns",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_CANCEL_DURING_DELIVERY_RETURNS")
+    request_core_target("request_core_mut_publication_skips_queue",
+                        R .. "tests/request_core_protocol_test.cpp", true,
+                        "SLUICE_C1_MUTANT_PUBLICATION_SKIPS_QUEUE")
 end
 
 -- B1-A context ownership/identity evidence. The observed surface (the
@@ -371,4 +398,30 @@ if has_config("liburing") then
                          "SLUICE_B1C_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE")
     uring_cutover_target("uring_cutover_mut_zero_op_dispatch",
                          "SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
+end
+
+-- C1-D (#430) RuntimeTaskContext waiter-adapter evidence. The scheduler and
+-- runtime seams are macro-guarded internal-testing surface, so this target
+-- compiles its own copy of the async TUs the runtime needs (the full
+-- src/async set plus the core detail TUs) and links neither sluice_async nor
+-- the other seam builds: the seam build and the production build never meet
+-- in one binary. `src/async` is on the include path for the internal headers
+-- the seams include relative to their own directory.
+do
+    target("runtime_waiter_observer_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core")
+        add_includedirs(R .. "include", R .. "src/async")
+        add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+        if has_config("liburing") then
+            add_defines("SLUICE_HAS_LIBURING")
+            add_links("uring")
+        end
+        add_files(R .. "tests/runtime_waiter_observer_test.cpp",
+                  R .. "src/async/*.cpp",
+                  R .. "src/async/detail/context_identity.cpp",
+                  R .. "src/async/detail/request_core.cpp")
+        add_tests("runtime_waiter_observer_test")
 end
