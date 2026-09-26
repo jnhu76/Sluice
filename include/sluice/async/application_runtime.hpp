@@ -76,9 +76,18 @@ class RuntimeBuilder {
 
     Result<std::unique_ptr<ApplicationRuntime>> build();
 
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+
+    RuntimeBuilder& test_wait_capacity(std::size_t n);
+#endif
+
   private:
     std::unique_ptr<AsyncBackend> backend_;
     unsigned workers_ = 1;
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+
+    std::size_t test_wait_capacity_ = 256;
+#endif
 };
 
 class ApplicationRuntime {
@@ -121,6 +130,8 @@ class ApplicationRuntime {
 
     Scheduler& test_scheduler_for_worker_topology() noexcept { return *sched_; }
 
+    AsyncIoContext& test_io_context() noexcept { return *io_ctx_; }
+
     void test_dump_forensics(const char* tag);
 
     void test_inject_next_submit_throw();
@@ -130,7 +141,8 @@ class ApplicationRuntime {
     friend class RuntimeBuilder;
     friend class RuntimeTaskContext;
 
-    ApplicationRuntime(std::unique_ptr<AsyncBackend> backend, unsigned workers);
+    ApplicationRuntime(std::unique_ptr<AsyncBackend> backend, unsigned workers,
+                       std::size_t wait_capacity = 256);
 
     enum class State : std::uint8_t {
         Constructed,

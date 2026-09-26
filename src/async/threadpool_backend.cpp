@@ -366,6 +366,10 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
 
 void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
     (void)core_->claim_observer_delivery(key);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    wait_delivery_claimed_pause_();
+#endif
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
 }
 
@@ -630,6 +634,18 @@ void ThreadPoolBackend::wait_worker_outcome_pre_terminal_pause_() noexcept {
 
 void ThreadPoolBackend::wait_publication_epilogue_pause_() noexcept {
     auto* g = publication_epilogue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_delivery_claimed_pause_() noexcept {
+    auto* g = delivery_claimed_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);

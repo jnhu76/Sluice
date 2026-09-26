@@ -89,6 +89,13 @@ RuntimeBuilder& RuntimeBuilder::workers(unsigned n) {
     return *this;
 }
 
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+RuntimeBuilder& RuntimeBuilder::test_wait_capacity(std::size_t n) {
+    test_wait_capacity_ = n == 0 ? 1 : n;
+    return *this;
+}
+#endif
+
 Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
     if (!backend_) {
         return make_unexpected<std::unique_ptr<ApplicationRuntime>>(
@@ -103,13 +110,22 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
             IoError{IoError::Code::invalid_state});
     }
 
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+
+    std::unique_ptr<ApplicationRuntime> rt(
+        new ApplicationRuntime(std::move(backend_), workers_, test_wait_capacity_));
+#else
+
     std::unique_ptr<ApplicationRuntime> rt(new ApplicationRuntime(std::move(backend_), workers_));
+#endif
+
     return std::move(rt);
 }
 
-ApplicationRuntime::ApplicationRuntime(std::unique_ptr<AsyncBackend> backend, unsigned workers)
+ApplicationRuntime::ApplicationRuntime(std::unique_ptr<AsyncBackend> backend, unsigned workers,
+                                       std::size_t wait_capacity)
     : io_ctx_(std::make_unique<AsyncIoContext>(std::move(backend))), worker_count_(workers) {
-    sched_ = std::make_unique<Scheduler>(*io_ctx_);
+    sched_ = std::make_unique<Scheduler>(*io_ctx_, wait_capacity);
 
     root_group_ = std::make_unique<Group>(*sched_);
 
