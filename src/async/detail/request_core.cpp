@@ -127,6 +127,7 @@ ReserveAttempt RequestCore::reserve() {
     slot.execution_claimed = false;
     slot.cancel_intent = false;
     slot.zero_op = false;
+    slot.observer_registered = false;
     slot.execution_refs = 0;
     slot.control_refs = 0;
     slot.descriptor = {};
@@ -428,9 +429,40 @@ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept 
     return PublicationCompletion::completed;
 }
 
+ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_public_(id);
+    if (slot == nullptr) {
+        return ObserverRegistration::not_found;
+    }
+    if (slot->observer_registered) {
+        return ObserverRegistration::duplicate;
+    }
+    if (slot->published) {
+        return ObserverRegistration::already_terminal;
+    }
+    slot->observer_registered = true;
+    return ObserverRegistration::armed;
+}
+
+ObserverRetirement RequestCore::retire_observer(RequestKey id) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_internal_(id);
+    if (slot == nullptr) {
+        return ObserverRetirement::not_found;
+    }
+    if (!slot->observer_registered) {
+        return ObserverRetirement::not_registered;
+    }
+    slot->observer_registered = false;
+    try_reclaim_(*slot, id.slot.value);
+    return ObserverRetirement::retired;
+}
+
 bool RequestCore::reclaimable_(const Slot& slot) const noexcept {
     return slot.phase == SlotPhase::accepted && slot.published && !slot.binding_live &&
-           slot.execution_refs == 0 && slot.control_refs == 0 && !slot.publication_inflight;
+           slot.execution_refs == 0 && slot.control_refs == 0 && !slot.publication_inflight &&
+           !slot.observer_registered;
 }
 
 void RequestCore::try_reclaim_(Slot& slot, std::size_t index) noexcept {
@@ -450,6 +482,7 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.execution_claimed = false;
     slot.cancel_intent = false;
     slot.zero_op = false;
+    slot.observer_registered = false;
     slot.execution_refs = 0;
     slot.control_refs = 0;
     slot.descriptor = {};
@@ -482,6 +515,7 @@ std::optional<RequestCore::SlotObservation> RequestCore::observe_slot(SlotIndex 
     observation.publication_inflight = s.publication_inflight;
     observation.execution_claimed = s.execution_claimed;
     observation.cancel_intent = s.cancel_intent;
+    observation.observer_registered = s.observer_registered;
     observation.execution_refs = s.execution_refs;
     observation.control_refs = s.control_refs;
     observation.op = s.descriptor.op;

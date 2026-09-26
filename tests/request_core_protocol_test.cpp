@@ -15,6 +15,9 @@ using sluice_request_core_test::BindingRelease;
 using sluice_request_core_test::ExecutionClaim;
 using sluice_request_core_test::ExecutionRelease;
 using sluice_request_core_test::FakePhysicalDriver;
+using sluice_request_core_test::Generation;
+using sluice_request_core_test::ObserverRegistration;
+using sluice_request_core_test::ObserverRetirement;
 using sluice_request_core_test::IoOutcome;
 using sluice_request_core_test::PublicationCompletion;
 using sluice_request_core_test::PublicationGrant;
@@ -724,6 +727,107 @@ bool binding_release_with_pins_live_does_not_reclaim(Tracker& t) {
     return t.failures == 0;
 }
 
+bool observer_registration_arms_once_and_reports_occupied(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::armed,
+            "the first registration arms");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::duplicate,
+            "a second registration reports the occupied disposition");
+    auto observation = core.observe_slot(accepted.id.slot);
+    t.check(observation.has_value() && observation->observer_registered,
+            "the registration existence is core-owned state");
+    RequestKey stale{accepted.id.context, accepted.id.slot, Generation{accepted.id.generation.value + 1}};
+    t.check(driver.register_observer(stale) == ObserverRegistration::not_found,
+            "a stale identity cannot register");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::retired,
+            "retirement acquires the registration fact");
+    t.check(!core.observe_slot(accepted.id.slot)->observer_registered,
+            "no registration residue after retirement");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool attach_after_publication_returns_already_terminal(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.cancel(accepted.id) == PublicCancel::won_before_execution, "cancel wins");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "won cancel retires the pending dispatch obligation");
+    PublicationTarget& target = driver.make_target();
+    t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted, "published");
+    t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::already_terminal,
+            "attach after publication returns the already-terminal disposition");
+    t.check(!core.observe_slot(accepted.id.slot)->observer_registered,
+            "an already-terminal attach installs no registration");
+    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::not_found,
+            "attach on a released binding cannot register");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
+            "the slot reclaims with no observer pin installed");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool observer_registration_pins_reclaim_until_retirement(Tracker& t) {
+    RequestCore core = make_core(1);
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::armed,
+            "the observer arms before terminal");
+    t.check(driver.claim_execution(accepted.id) == ExecutionClaim::claimed, "claim");
+    t.check(driver.offer_physical_success(accepted.id, 8) == TerminalVerdict::chosen, "terminal");
+    t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
+            "execution retired");
+    PublicationTarget& target = driver.make_target();
+    t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted, "published");
+    t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
+    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released,
+            "the public binding may release while the delivery stays pinned");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::accepted,
+            "the observer pin defers reclaim past binding release");
+    t.check(core.observe_slot(accepted.id.slot)->observer_registered,
+            "the pin is the live registration itself");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::retired,
+            "retirement releases the registration");
+    t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
+            "retirement itself drives reclaim");
+    ReserveAttempt reused = driver.reserve();
+    t.check(reused.ok(), "the retired slot is reusable");
+    t.check(!core.observe_slot(reused.reservation.slot)->observer_registered,
+            "reuse installs no registration residue");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::not_found,
+            "the retired identity cannot retire again after reuse");
+    t.check(driver.rollback(reused.reservation), "reuse probe rolled back");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
+bool observer_retirement_reports_unregistered_distinctly(Tracker& t) {
+    RequestCore core = make_core();
+    FakePhysicalDriver driver(core);
+    ReserveAttempt attempt = driver.reserve();
+    AcceptAttempt accepted = driver.accept(attempt.reservation, 0, 8);
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::not_registered,
+            "retiring an unattached request reports not_registered");
+    t.check(driver.register_observer(accepted.id) == ObserverRegistration::armed, "armed");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::retired, "retired");
+    t.check(driver.retire_observer(accepted.id) == ObserverRetirement::not_registered,
+            "double retirement reports not_registered, not not_found");
+    RequestKey foreign{sluice::async::detail::ContextIdentity::for_testing(78),
+                       accepted.id.slot, accepted.id.generation};
+    t.check(driver.retire_observer(foreign) == ObserverRetirement::not_found,
+            "a foreign context identity reports not_found");
+    driver.settle_all();
+    return t.failures == 0;
+}
+
 bool slot_reuse_clears_canonical_result(Tracker& t) {
     RequestCore core = make_core(1);
     FakePhysicalDriver driver(core);
@@ -892,6 +996,14 @@ int main() {
          publication_without_binding_release_does_not_reclaim},
         {"binding_release_with_pins_live_does_not_reclaim",
          binding_release_with_pins_live_does_not_reclaim},
+        {"observer_registration_arms_once_and_reports_occupied",
+         observer_registration_arms_once_and_reports_occupied},
+        {"attach_after_publication_returns_already_terminal",
+         attach_after_publication_returns_already_terminal},
+        {"observer_registration_pins_reclaim_until_retirement",
+         observer_registration_pins_reclaim_until_retirement},
+        {"observer_retirement_reports_unregistered_distinctly",
+         observer_retirement_reports_unregistered_distinctly},
         {"slot_reuse_clears_canonical_result", slot_reuse_clears_canonical_result},
         {"close_prevents_future_acceptance", close_prevents_future_acceptance},
         {"accepted_set_remains_finite_and_observable", accepted_set_remains_finite_and_observable},

@@ -130,45 +130,8 @@ ThreadPoolBackend::request_key_for_test(const Completion<void>& c) const {
     return core_binding(c);
 }
 
-inline Result<void> ThreadPoolBackend::register_waiter_key_for_test(detail::RequestKey key,
-                                                                    detail::WaiterToken token,
-                                                                    detail::RoutingLease lease) {
-    if (core_->lookup(key) != detail::PublicLookup::outstanding) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    DeliveryRecord& record = delivery_[key.slot.value];
-    if (record.registration == detail::WaiterRegistration::open_registered) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    record.registration = detail::WaiterRegistration::open_registered;
-    record.waiter_token = token;
-    record.waiter_lease = std::move(lease);
-    record.waiter_delivery_present = true;
-    return {};
-}
-
-inline Result<detail::RoutingLease>
-ThreadPoolBackend::cancel_waiter_key_for_test(detail::RequestKey key) {
-    DeliveryRecord& record = delivery_[key.slot.value];
-    if (record.registration != detail::WaiterRegistration::open_registered) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_found});
-    }
-    detail::RoutingLease lease = std::move(record.waiter_lease);
-    record.waiter_token = {};
-    record.registration = detail::WaiterRegistration::open_no_waiter;
-    record.waiter_delivery_present = false;
-    return lease;
-}
-
 inline detail::PublicCancel ThreadPoolBackend::cancel_key_for_test(detail::RequestKey key) {
     return cancel_key(key);
-}
-
-inline std::optional<ThreadPoolBackend::WaiterObservation>
-ThreadPoolBackend::waiter_of_slot_for_test(std::uint32_t slot) const {
-    const DeliveryRecord& record = delivery_[slot];
-    return WaiterObservation{record.registration, record.waiter_delivery_present,
-                             record.waiter_token, record.waiter_lease.id()};
 }
 
 inline void ThreadPoolBackend::set_submit_entry_pause_gate(SubmitEntryPauseGate* gate) noexcept {
@@ -215,15 +178,6 @@ inline std::size_t ThreadPoolBackend::sink_deliveries() const noexcept {
 }
 inline detail::RequestKey ThreadPoolBackend::sink_last_key() const noexcept {
     return sink_.last_key();
-}
-inline bool ThreadPoolBackend::sink_last_has_waiter() const noexcept {
-    return sink_.last_has_waiter();
-}
-inline detail::WaiterToken ThreadPoolBackend::sink_last_token() const noexcept {
-    return sink_.last_token();
-}
-inline std::uint64_t ThreadPoolBackend::sink_last_lease_id() const noexcept {
-    return sink_.last_lease_id();
 }
 
 template <class Gate> void resume_threadpool_gate(Gate& gate) noexcept {

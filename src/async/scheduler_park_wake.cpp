@@ -485,14 +485,12 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
 
 Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(Fiber* fiber, WorkerState* owner,
                                                              const void* completion,
-                                                             std::uint64_t& lease_id_out) {
+                                                             const detail::RequestKey& request_key) {
     LockGuard rlk(wait_registry_mtx_);
     WaitRecord* r = wait_record_free_head_;
     if (r != nullptr) {
         wait_record_free_head_ = r->next_free;
         r->next_free = nullptr;
-
-        ++r->generation;
     } else {
         return nullptr;
     }
@@ -500,26 +498,25 @@ Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(Fiber* fiber, Worke
     r->fiber = fiber;
     r->owner = owner;
     r->completion = completion;
+    r->request_key = request_key;
+    wait_by_request_slot_[request_key.slot.value] = r;
     ++wait_record_live_count_;
-    lease_id_out = wait_lease_serial_++;
     return r;
 }
 
-void Scheduler::retire_wait_record_locked(std::uint32_t index) {
+void Scheduler::retire_wait_record_locked(WaitRecord* record) {
     LockGuard rlk(wait_registry_mtx_);
-    if (index >= wait_records_.size()) {
+    if (record->state != WaitRecordState::registered) {
         detail::scheduler_wait_registry_invariant_fail_fast();
     }
-    WaitRecord* r = wait_records_[index].get();
-    if (r->state != WaitRecordState::registered) {
-        detail::scheduler_wait_registry_invariant_fail_fast();
-    }
-    r->state = WaitRecordState::free;
-    r->fiber = nullptr;
-    r->owner = nullptr;
-    r->completion = nullptr;
-    r->next_free = wait_record_free_head_;
-    wait_record_free_head_ = r;
+    record->state = WaitRecordState::free;
+    record->fiber = nullptr;
+    record->owner = nullptr;
+    record->completion = nullptr;
+    wait_by_request_slot_.erase(record->request_key.slot.value);
+    record->request_key = {};
+    record->next_free = wait_record_free_head_;
+    wait_record_free_head_ = record;
     --wait_record_live_count_;
 }
 
@@ -534,37 +531,20 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
 
     {
         LockGuard lk(global_mtx_);
-        std::uint64_t lease_id = 0;
-        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, lease_id);
+        const auto attach = ctx_.attach_observer(c);
+        if (!attach.armed()) {
+            if (c.ready()) {
+                return Result<void>{};
+            }
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, attach.key);
         if (rec == nullptr) {
+            (void)ctx_.retire_observer(attach.key);
             return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
-        const detail::WaiterToken token{scheduler_identity_, rec->index, rec->generation};
-        detail::RoutingLease lease =
-            detail::RoutingLease::pinning(lease_id, rec->index, rec->generation);
 
-        auto reg = ctx_.register_waiter(c, token, std::move(lease));
-        if (!reg.has_value()) {
-            const IoError e = reg.error();
-            if (e.code == IoError::Code::not_supported) {
-                retire_wait_record_locked(rec->index);
-                waiting_size_[static_cast<void*>(&c)] = {me, ws};
-                if (c.ready()) {
-                    waiting_size_.erase(static_cast<void*>(&c));
-                    return Result<void>{};
-                }
-                commit_suspend_locked(ws, me);
-            } else {
-                retire_wait_record_locked(rec->index);
-                if (c.ready()) {
-                    return Result<void>{};
-                }
-
-                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-            }
-        } else {
-            commit_suspend_locked(ws, me);
-        }
+        commit_suspend_locked(ws, me);
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -587,34 +567,20 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
 
     {
         LockGuard lk(global_mtx_);
-        std::uint64_t lease_id = 0;
-        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, lease_id);
+        const auto attach = ctx_.attach_observer(c);
+        if (!attach.armed()) {
+            if (c.ready()) {
+                return Result<void>{};
+            }
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, attach.key);
         if (rec == nullptr) {
+            (void)ctx_.retire_observer(attach.key);
             return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
-        const detail::WaiterToken token{scheduler_identity_, rec->index, rec->generation};
-        detail::RoutingLease lease =
-            detail::RoutingLease::pinning(lease_id, rec->index, rec->generation);
-        auto reg = ctx_.register_waiter(c, token, std::move(lease));
-        if (!reg.has_value()) {
-            const IoError e = reg.error();
-            if (e.code == IoError::Code::not_supported) {
-                retire_wait_record_locked(rec->index);
-                waiting_void_[static_cast<void*>(&c)] = {me, ws};
-                if (c.ready()) {
-                    waiting_void_.erase(static_cast<void*>(&c));
-                    return Result<void>{};
-                }
-                commit_suspend_locked(ws, me);
-            } else {
-                retire_wait_record_locked(rec->index);
-                if (c.ready())
-                    return Result<void>{};
-                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-            }
-        } else {
-            commit_suspend_locked(ws, me);
-        }
+
+        commit_suspend_locked(ws, me);
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(
@@ -630,44 +596,24 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
-Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
+template <class T>
+Result<bool> Scheduler::cancel_waiter_impl(Completion<T>& c) {
     LockGuard lk(global_mtx_);
-    auto rl = ctx_.cancel_waiter(c);
-    if (!rl.has_value()) {
-        const IoError e = rl.error();
-        if (e.code == IoError::Code::not_found) {
-            return Result<bool>{false};
-        }
-
-        if (e.code == IoError::Code::not_supported) {
-            auto it = waiting_size_.find(static_cast<void*>(&c));
-            if (it != waiting_size_.end()) {
-                Fiber* f = it->second.fiber;
-                WorkerState* owner = it->second.owner;
-                waiting_size_.erase(it);
-                if (f != nullptr) {
-                    f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-                    if (f->make_runnable()) {
-                        route_runnable_locked(f, owner);
-                    }
-                }
-                return Result<bool>{true};
-            }
-            return Result<bool>{false};
-        }
-        return make_unexpected<bool>(e);
+    const auto cancel = ctx_.cancel_observer(c);
+    if (!cancel.retired()) {
+        return Result<bool>{false};
     }
 
-    detail::RoutingLease lease = std::move(rl.value());
     Fiber* f = nullptr;
     WorkerState* owner = nullptr;
     {
         LockGuard rlk(wait_registry_mtx_);
-        const std::uint32_t idx = lease.record_index();
-        const std::uint32_t gen = lease.record_generation();
-        if (idx < wait_records_.size()) {
-            WaitRecord* r = wait_records_[idx].get();
-            if (r->generation == gen && r->state == WaitRecordState::registered) {
+        auto it = wait_by_request_slot_.find(cancel.key.slot.value);
+        if (it != wait_by_request_slot_.end()) {
+            WaitRecord* r = it->second;
+            if (r->state == WaitRecordState::registered &&
+                r->request_key.generation == cancel.key.generation &&
+                r->request_key.context == cancel.key.context) {
                 r->state = WaitRecordState::cancelled;
                 f = r->fiber;
                 owner = r->owner;
@@ -675,9 +621,11 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
                 r->fiber = nullptr;
                 r->owner = nullptr;
                 r->completion = nullptr;
+                r->request_key = {};
                 r->next_free = wait_record_free_head_;
                 wait_record_free_head_ = r;
                 --wait_record_live_count_;
+                wait_by_request_slot_.erase(it);
             }
         }
     }
@@ -686,67 +634,17 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
         if (f->make_runnable()) {
             route_runnable_locked(f, owner);
         }
+        return Result<bool>{true};
     }
-    return Result<bool>{true};
+    return Result<bool>{false};
+}
+
+Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
+    return cancel_waiter_impl(c);
 }
 
 Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
-    LockGuard lk(global_mtx_);
-    auto rl = ctx_.cancel_waiter(c);
-    if (!rl.has_value()) {
-        const IoError e = rl.error();
-        if (e.code == IoError::Code::not_found) {
-            return Result<bool>{false};
-        }
-
-        if (e.code == IoError::Code::not_supported) {
-            auto it = waiting_void_.find(static_cast<void*>(&c));
-            if (it != waiting_void_.end()) {
-                Fiber* f = it->second.fiber;
-                WorkerState* owner = it->second.owner;
-                waiting_void_.erase(it);
-                if (f != nullptr) {
-                    f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-                    if (f->make_runnable()) {
-                        route_runnable_locked(f, owner);
-                    }
-                }
-                return Result<bool>{true};
-            }
-            return Result<bool>{false};
-        }
-        return make_unexpected<bool>(e);
-    }
-    detail::RoutingLease lease = std::move(rl.value());
-    Fiber* f = nullptr;
-    WorkerState* owner = nullptr;
-    {
-        LockGuard rlk(wait_registry_mtx_);
-        const std::uint32_t idx = lease.record_index();
-        const std::uint32_t gen = lease.record_generation();
-        if (idx < wait_records_.size()) {
-            WaitRecord* r = wait_records_[idx].get();
-            if (r->generation == gen && r->state == WaitRecordState::registered) {
-                r->state = WaitRecordState::cancelled;
-                f = r->fiber;
-                owner = r->owner;
-                r->state = WaitRecordState::free;
-                r->fiber = nullptr;
-                r->owner = nullptr;
-                r->completion = nullptr;
-                r->next_free = wait_record_free_head_;
-                wait_record_free_head_ = r;
-                --wait_record_live_count_;
-            }
-        }
-    }
-    if (f != nullptr) {
-        f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
-        if (f->make_runnable()) {
-            route_runnable_locked(f, owner);
-        }
-    }
-    return Result<bool>{true};
+    return cancel_waiter_impl(c);
 }
 
 void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {

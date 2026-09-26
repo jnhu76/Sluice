@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/observer_protocol.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/request.hpp>
@@ -97,29 +98,6 @@ class AsyncBackend {
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
     void attach_ready_sink(detail::SynchronousReadySink* sink) noexcept { routing_sink_ = sink; }
-
-    virtual Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
-                                         detail::RoutingLease lease) {
-        (void)c;
-        (void)token;
-        (void)lease;
-        return make_unexpected<void>(IoError{IoError::Code::not_supported});
-    }
-    virtual Result<void> register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                         detail::RoutingLease lease) {
-        (void)c;
-        (void)token;
-        (void)lease;
-        return make_unexpected<void>(IoError{IoError::Code::not_supported});
-    }
-    virtual Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) {
-        (void)c;
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
-    }
-    virtual Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) {
-        (void)c;
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::not_supported});
-    }
 
     virtual std::size_t poll() = 0;
 
@@ -270,12 +248,23 @@ class AsyncIoContext {
 
     void set_ready_sink(detail::SynchronousReadySink* sink);
 
-    Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
-                                 detail::RoutingLease lease);
-    Result<void> register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                 detail::RoutingLease lease);
-    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c);
-    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c);
+    struct ObserverAttachment {
+        detail::ObserverRegistration status = detail::ObserverRegistration::not_found;
+        detail::RequestKey key{};
+        bool armed() const noexcept { return status == detail::ObserverRegistration::armed; }
+    };
+
+    struct ObserverCancellation {
+        detail::ObserverRetirement status = detail::ObserverRetirement::not_found;
+        detail::RequestKey key{};
+        bool retired() const noexcept { return status == detail::ObserverRetirement::retired; }
+    };
+
+    ObserverAttachment attach_observer(Completion<std::size_t>& c);
+    ObserverAttachment attach_observer(Completion<void>& c);
+    ObserverCancellation cancel_observer(Completion<std::size_t>& c);
+    ObserverCancellation cancel_observer(Completion<void>& c);
+    bool retire_observer(detail::RequestKey key);
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }

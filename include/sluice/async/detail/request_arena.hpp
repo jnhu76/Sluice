@@ -271,13 +271,7 @@ class RequestArena {
                 s.ready_next_ = RequestSlot::kNotOnReadyRing;
 
                 s.registration_ = WaiterRegistration::closed;
-                event = ReadyEvent{s.key_, s.op_kind_, OptionalWaiterDelivery::none()};
-                if (s.waiter_delivery_present_) {
-                    event.waiter =
-                        OptionalWaiterDelivery::of(s.waiter_token_, std::move(s.waiter_lease_));
-                    s.waiter_token_ = {};
-                    s.waiter_delivery_present_ = false;
-                }
+                event = ReadyEvent{s.key_, s.op_kind_};
 
                 s.borrow_.active = false;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

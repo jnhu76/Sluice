@@ -64,13 +64,6 @@ class ThreadPoolBackend : public AsyncBackend {
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
 
-    Result<void> register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
-                                 detail::RoutingLease lease) override;
-    Result<void> register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                 detail::RoutingLease lease) override;
-    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override;
-    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override;
-
     std::size_t outstanding() const noexcept override;
 
     BackendWaitSource* wait_source() noexcept override { return &ready_wait_; }
@@ -130,26 +123,11 @@ class ThreadPoolBackend : public AsyncBackend {
     static void set_injected_worker_spawn_failure_index(std::size_t index) noexcept;
     static std::size_t injected_worker_spawn_failure_index() noexcept;
 
-    Result<void> register_waiter_key_for_test(detail::RequestKey key, detail::WaiterToken token,
-                                              detail::RoutingLease lease);
-    Result<detail::RoutingLease> cancel_waiter_key_for_test(detail::RequestKey key);
     detail::PublicCancel cancel_key_for_test(detail::RequestKey key);
-
-    struct WaiterObservation {
-        detail::WaiterRegistration registration;
-        bool delivery_present;
-        detail::WaiterToken token;
-        std::uint64_t lease_id;
-    };
-    std::optional<WaiterObservation> waiter_of_slot_for_test(std::uint32_t slot) const;
 
     std::size_t sink_deliveries() const noexcept;
     detail::RequestKey sink_last_key() const noexcept;
-    bool sink_last_has_waiter() const noexcept;
-    detail::WaiterToken sink_last_token() const noexcept;
-    std::uint64_t sink_last_lease_id() const noexcept;
 #endif
-
   private:
     struct PreparedBlockingOp {
         detail::OperationKind kind = detail::OperationKind::read;
@@ -160,17 +138,12 @@ class ThreadPoolBackend : public AsyncBackend {
     };
 
     // Access to a delivery record is serialized by the owning context's
-    // access mutex: submit, register/cancel waiter and the publication driver
-    // all enter through public context entry points, and workers never touch
-    // delivery records.
+    // access mutex: submit and the publication driver both enter through
+    // public context entry points, and workers never touch delivery records.
     struct DeliveryRecord {
         void* completion = nullptr;
         void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;
         detail::OperationKind kind = detail::OperationKind::read;
-        detail::WaiterRegistration registration = detail::WaiterRegistration::open_no_waiter;
-        detail::WaiterToken waiter_token{};
-        detail::RoutingLease waiter_lease{};
-        bool waiter_delivery_present = false;
         // event_owed pairs with one core control ref on owed_key: the ref is
         // acquired before this flag is set and released after delivery.
         bool event_owed = false;

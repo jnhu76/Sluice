@@ -35,26 +35,15 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
 
 }
 
-namespace {
-std::uint64_t next_scheduler_identity() noexcept {
-    static std::atomic<std::uint64_t> counter{0};
-    return ++counter;
-}
-}
-
 Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
-    : ctx_(ctx), wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity),
-      scheduler_identity_(next_scheduler_identity()) {
+    : ctx_(ctx), wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity) {
     detail::require_evented_supported(detail::evented_admission_check());
 
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
 
     wait_records_.reserve(wait_capacity_);
     for (std::size_t i = 0; i < wait_capacity_; ++i) {
-        auto rec = std::make_unique<WaitRecord>();
-        rec->index = static_cast<std::uint32_t>(i);
-
-        wait_records_.push_back(std::move(rec));
+        wait_records_.push_back(std::make_unique<WaitRecord>());
     }
 
     WaitRecord** tail = &wait_record_free_head_;
@@ -776,16 +765,21 @@ bool Scheduler::drain_routed_completion_waits_locked() {
 
         Fiber* f = r->fiber;
         WorkerState* owner = r->owner;
+        const detail::RequestKey delivered_key = r->request_key;
         {
             LockGuard rlk(wait_registry_mtx_);
             r->state = WaitRecordState::free;
             r->fiber = nullptr;
             r->owner = nullptr;
             r->completion = nullptr;
+            r->request_key = {};
             r->next_free = wait_record_free_head_;
             wait_record_free_head_ = r;
             --wait_record_live_count_;
+            wait_by_request_slot_.erase(delivered_key.slot.value);
         }
+
+        (void)ctx_.retire_observer(delivered_key);
 
         f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
         if (f->make_runnable()) {
@@ -833,46 +827,36 @@ void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
     Scheduler* s = scheduler_;
     if (s == nullptr)
         return;
-    if (!event.waiter.has_waiter) {
-        return;
+    const detail::RequestKey& key = event.key;
+    WaitRecord* r = nullptr;
+    {
+        LockGuard rlk(s->wait_registry_mtx_);
+        auto it = s->wait_by_request_slot_.find(key.slot.value);
+        if (it == s->wait_by_request_slot_.end()) {
+            return;
+        }
+        r = it->second;
+        if (r->request_key.generation != key.generation ||
+            r->request_key.context != key.context) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            ++stale_dropped_;
+#endif
+            return;
+        }
+        if (r->state != WaitRecordState::registered) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            ++cancel_lost_;
+#endif
+            return;
+        }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++deliveries_;
+        ++routed_;
+#endif
+        r->state = WaitRecordState::delivered;
+        r->next_delivered = s->wait_delivered_head_;
+        s->wait_delivered_head_ = r;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    ++deliveries_;
-#endif
-    const detail::WaiterToken& t = event.waiter.token;
-    LockGuard rlk(s->wait_registry_mtx_);
-
-    if (t.scheduler_identity != s->scheduler_identity_) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++stale_dropped_;
-#endif
-        return;
-    }
-    if (t.registration_slot >= s->wait_records_.size()) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++stale_dropped_;
-#endif
-        return;
-    }
-    WaitRecord* r = s->wait_records_[t.registration_slot].get();
-    if (r->generation != t.registration_generation) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++stale_dropped_;
-#endif
-        return;
-    }
-    if (r->state != WaitRecordState::registered) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        ++cancel_lost_;
-#endif
-        return;
-    }
-    r->state = WaitRecordState::delivered;
-    r->next_delivered = s->wait_delivered_head_;
-    s->wait_delivered_head_ = r;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    ++routed_;
-#endif
 }
 
 bool Scheduler::wake_ready_flags_locked() {

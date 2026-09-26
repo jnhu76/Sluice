@@ -17,7 +17,10 @@ using sluice::async::detail::BorrowFacts;
 using sluice::async::detail::ControlRelease;
 using sluice::async::detail::ExecutionClaim;
 using sluice::async::detail::ExecutionRelease;
+using sluice::async::detail::Generation;
 using sluice::async::detail::IoOutcome;
+using sluice::async::detail::ObserverRegistration;
+using sluice::async::detail::ObserverRetirement;
 using sluice::async::detail::PublicationCompletion;
 using sluice::async::detail::PublicationGrant;
 using sluice::async::detail::PublicationPayload;
@@ -201,6 +204,12 @@ class FakePhysicalDriver {
     bool acquire_control(RequestKey id) { return core_.acquire_control(id); }
 
     ControlRelease retire_control(RequestKey id) { return core_.release_control(id); }
+
+    ObserverRegistration register_observer(RequestKey id) {
+        return core_.register_observer(id);
+    }
+
+    ObserverRetirement retire_observer(RequestKey id) { return core_.retire_observer(id); }
 
     PublicationTarget& make_target() {
         targets_.emplace_back();

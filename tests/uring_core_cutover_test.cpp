@@ -1061,8 +1061,8 @@ bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
     return true;
 }
 
-bool waiter_registration_rides_publication(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c waiter\n");
+bool observer_registration_rides_publication(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1c observer\n");
     if (!file.has_value())
         return false;
 
@@ -1080,27 +1080,26 @@ bool waiter_registration_rides_publication(Tracker& t) {
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
     t.check(submitted.has_value(), "the read is accepted");
 
-    const detail::WaiterToken token{77, 0, 0};
-    auto registered = ctx.register_waiter(c, token, detail::RoutingLease{42});
-    t.check(registered.has_value(), "the waiter registers on the outstanding request");
-    const auto observed = raw->waiter_of_slot_for_test(0);
-    t.check(observed.has_value() &&
-                observed->registration == detail::WaiterRegistration::open_registered &&
-                observed->token.scheduler_identity == 77 && observed->lease_id == 42,
-            "the delivery record carries the token and lease");
+    const auto attached = ctx.attach_observer(c);
+    t.check(attached.armed(), "the observer arms on the outstanding request");
+    t.check(ctx.attach_observer(c).status == detail::ObserverRegistration::duplicate,
+            "a second registration on the same request returns the occupied disposition");
+    const auto observed = core.observe_slot(SlotIndex{0});
+    t.check(observed.has_value() && observed->observer_registered,
+            "the core owns the registration existence");
 
     fake_complete(made, 0, 4);
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
+
+    t.check(raw->sink_deliveries() == 1 && raw->sink_last_key() == attached.key,
+            "the ready event rides the publication as a host-neutral keyed event");
+    t.check(ctx.retire_observer(attached.key), "retirement acquires the registration fact");
     c.reset();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
 
-    t.check(raw->sink_deliveries() == 1 && raw->sink_last_has_waiter() &&
-                raw->sink_last_token().scheduler_identity == 77 &&
-                raw->sink_last_lease_id() == 42,
-            "the ready event rides the publication with the registered waiter");
-    t.check(idle_and_whole(core.snapshot(), core), "the waiter request reclaims");
+    t.check(idle_and_whole(core.snapshot(), core), "the observed request reclaims");
     return true;
 }
 
@@ -1301,7 +1300,7 @@ int main() {
          poison_with_running_cancel_keeps_the_real_completion},
         {"publication_epilogue_release_race_pins_the_slot",
          publication_epilogue_release_race_pins_the_slot},
-        {"waiter_registration_rides_publication", waiter_registration_rides_publication},
+        {"observer_registration_rides_publication", observer_registration_rides_publication},
         {"concurrent_submissions_all_publish_and_reclaim",
          concurrent_submissions_all_publish_and_reclaim},
         {"real_kernel_normal_completion_and_cancel", real_kernel_normal_completion_and_cancel},

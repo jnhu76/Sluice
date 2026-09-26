@@ -483,35 +483,69 @@ void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {
         backend_->attach_ready_sink(sink);
 }
 
-Result<void> AsyncIoContext::register_waiter(Completion<std::size_t>& c, detail::WaiterToken token,
-                                             detail::RoutingLease lease) {
+AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        return {};
     }
-    return backend_->register_waiter(c, token, std::move(lease));
+    const RequestHandle identity = backend_->identity_of(c);
+    if (!identity.valid()) {
+        return {};
+    }
+    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
+                                 detail::SlotIndex{identity.slot_},
+                                 detail::Generation{identity.generation_}};
+    return {core_->register_observer(key), key};
 }
-Result<void> AsyncIoContext::register_waiter(Completion<void>& c, detail::WaiterToken token,
-                                             detail::RoutingLease lease) {
+
+AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        return {};
     }
-    return backend_->register_waiter(c, token, std::move(lease));
+    const RequestHandle identity = backend_->identity_of(c);
+    if (!identity.valid()) {
+        return {};
+    }
+    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
+                                 detail::SlotIndex{identity.slot_},
+                                 detail::Generation{identity.generation_}};
+    return {core_->register_observer(key), key};
 }
-Result<detail::RoutingLease> AsyncIoContext::cancel_waiter(Completion<std::size_t>& c) {
+
+AsyncIoContext::ObserverCancellation AsyncIoContext::cancel_observer(Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::invalid_state});
+        return {};
     }
-    return backend_->cancel_waiter(c);
+    const RequestHandle identity = backend_->identity_of(c);
+    if (!identity.valid()) {
+        return {};
+    }
+    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
+                                 detail::SlotIndex{identity.slot_},
+                                 detail::Generation{identity.generation_}};
+    return {core_->retire_observer(key), key};
 }
-Result<detail::RoutingLease> AsyncIoContext::cancel_waiter(Completion<void>& c) {
+
+AsyncIoContext::ObserverCancellation AsyncIoContext::cancel_observer(Completion<void>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
-        return make_unexpected<detail::RoutingLease>(IoError{IoError::Code::invalid_state});
+        return {};
     }
-    return backend_->cancel_waiter(c);
+    const RequestHandle identity = backend_->identity_of(c);
+    if (!identity.valid()) {
+        return {};
+    }
+    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
+                                 detail::SlotIndex{identity.slot_},
+                                 detail::Generation{identity.generation_}};
+    return {core_->retire_observer(key), key};
+}
+
+bool AsyncIoContext::retire_observer(detail::RequestKey key) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    return core_->retire_observer(key) == detail::ObserverRetirement::retired;
 }
 
 std::size_t AsyncIoContext::outstanding() const noexcept {
