@@ -97,9 +97,6 @@ struct Scheduler::AsyncTestAccess {
         return s.wait_record_live_count_;
     }
     static detail::SynchronousReadySink& ready_sink(Scheduler& s) noexcept { return s.ready_sink_; }
-    static std::uint64_t scheduler_identity(const Scheduler& s) noexcept {
-        return s.scheduler_identity_;
-    }
 
     static std::size_t configured_wait_capacity(const Scheduler& s) {
         LockGuard rlk(s.wait_registry_mtx_);

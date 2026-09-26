@@ -12,9 +12,6 @@
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/select.hpp>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -160,9 +157,6 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
         return false;
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_admission_claimed);
-#endif
     select_commit_winner_locked(group, candidate_index);
     for (std::uint32_t i = 0; i < group.arm_count_; ++i) {
         if (i == candidate_index)
@@ -284,28 +278,6 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
         }
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    {
-        sluice_async_test::PublicationSnapshot snap{};
-        snap.phase = group.phase();
-        snap.completion_mode = group.completion_mode_;
-        snap.winner = group.winner();
-        snap.arm_count = group.arm_count_;
-        snap.result_has_winner = group.result_.has_winner();
-        snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
-        snap.result_kind = group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
-        snap.all_authority_closed = select_all_authority_closed_locked(group);
-        snap.caller_state = group.caller_ ? group.caller_->state() : FiberState::created;
-        snap.caller_owner_id = group.caller_owner_ ? group.caller_owner_->id : 0;
-        snap.waiting_select_count = waiting_select_count_;
-        snap.result_publication_count = sluice_async_test::result_publication_count(*this);
-        snap.runnable_publication_count = sluice_async_test::runnable_publication_count(*this);
-        sluice_async_test::capture_publication_snapshot(
-            *this, sluice_async_test::PhaseTag::select_publish_entry, snap);
-    }
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_publish_entry);
-#endif
 
     SelectResult result;
     if (winner_arm.kind == detail::ArmKind::event) {
@@ -331,59 +303,10 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
 
         route_runnable_locked(group.caller_, group.caller_owner_);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::increment_result_publication(*this);
-        sluice_async_test::increment_runnable_publication(*this);
-
-        {
-            sluice_async_test::PublicationSnapshot snap{};
-            snap.phase = group.phase();
-            snap.completion_mode = group.completion_mode_;
-            snap.winner = group.winner();
-            snap.arm_count = group.arm_count_;
-            snap.result_has_winner = group.result_.has_winner();
-            snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
-            snap.result_kind =
-                group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
-            snap.all_authority_closed = select_all_authority_closed_locked(group);
-            snap.caller_state = group.caller_->state();
-            snap.caller_owner_id = group.caller_owner_->id;
-            snap.waiting_select_count = waiting_select_count_;
-            snap.result_publication_count = sluice_async_test::result_publication_count(*this);
-            snap.runnable_publication_count = sluice_async_test::runnable_publication_count(*this);
-            sluice_async_test::capture_publication_snapshot(
-                *this, sluice_async_test::PhaseTag::select_publish_done, snap);
-        }
-        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_publish_done);
-#endif
     } else {
         group.completion_mode_ = detail::CompletionMode::inline_;
         group.set_phase(detail::GroupPhase::completed);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        sluice_async_test::increment_result_publication(*this);
-
-        {
-            sluice_async_test::PublicationSnapshot snap{};
-            snap.phase = group.phase();
-            snap.completion_mode = group.completion_mode_;
-            snap.winner = group.winner();
-            snap.arm_count = group.arm_count_;
-            snap.result_has_winner = group.result_.has_winner();
-            snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
-            snap.result_kind =
-                group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
-            snap.all_authority_closed = select_all_authority_closed_locked(group);
-            snap.caller_state = group.caller_ ? group.caller_->state() : FiberState::running;
-            snap.caller_owner_id = group.caller_owner_ ? group.caller_owner_->id : 0;
-            snap.waiting_select_count = waiting_select_count_;
-            snap.result_publication_count = sluice_async_test::result_publication_count(*this);
-            snap.runnable_publication_count = sluice_async_test::runnable_publication_count(*this);
-            sluice_async_test::capture_publication_snapshot(
-                *this, sluice_async_test::PhaseTag::select_publish_done, snap);
-        }
-        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_publish_done);
-#endif
     }
 }
 
@@ -623,12 +546,6 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs, std::s
             for (std::size_t i = 0; i < count; ++i) {
                 detail::SelectArmSlot& arm = arms[i];
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-                if (sluice_async_test::rollback_should_inject_after(*this, registered_count)) {
-                    throw sluice_async_test::SelectRegistrationFailure{};
-                }
-#endif
                 if (arm.kind == detail::ArmKind::event) {
                     select_event_link_locked(*descs[i].event_, arm);
                 } else {
@@ -644,49 +561,13 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs, std::s
                 ++registered_count;
             }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            if (sluice_async_test::rollback_should_inject_after(*this, registered_count)) {
-                throw sluice_async_test::SelectRegistrationFailure{};
-            }
-#endif
 
             group.set_phase(detail::GroupPhase::selecting);
         } catch (...) {
             select_rollback_registration_locked(group, arms.data(), count, registered_count);
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            sluice_async_test::test_phase(*this,
-                                          sluice_async_test::PhaseTag::select_rollback_aborted);
-#endif
             throw;
         }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        {
-            sluice_async_test::AdmissionSnapshot snap{};
-            snap.phase = group.phase();
-            snap.completion_mode = group.completion_mode_;
-            snap.winner = group.winner();
-            snap.arm_count = group.arm_count_;
-            snap.all_authority_closed = false;
-            for (std::size_t si = 0; si < group.arm_count_; ++si) {
-                snap.arm_states[si] = arms[si].state;
-                snap.arm_kinds[si] = arms[si].kind;
-                snap.event_linked[si] = (arms[si].home_ != nullptr);
-                if (arms[si].kind == detail::ArmKind::timer) {
-                    snap.timer_states[si] = arms[si].timer.stable_reg_
-                                                ? arms[si].timer.stable_reg_->state()
-                                                : detail::SelectTimerRegistration::State::consumed;
-                } else {
-                    snap.timer_states[si] = detail::SelectTimerRegistration::State::consumed;
-                }
-            }
-            sluice_async_test::capture_admission_snapshot(
-                *this, sluice_async_test::PhaseTag::select_admission_armed, snap);
-        }
-        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_admission_armed);
-#endif
 
         const deadline_t captured_now = monotonic_now();
         std::uint32_t lowest_ready = static_cast<std::uint32_t>(-1);
@@ -721,33 +602,6 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs, std::s
 
             select_publish_locked(group);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            {
-                sluice_async_test::AdmissionSnapshot snap{};
-                snap.phase = group.phase();
-                snap.completion_mode = group.completion_mode_;
-                snap.winner = group.winner();
-                snap.arm_count = group.arm_count_;
-                snap.all_authority_closed = select_all_authority_closed_locked(group);
-                for (std::size_t si = 0; si < group.arm_count_; ++si) {
-                    snap.arm_states[si] = arms[si].state;
-                    snap.arm_kinds[si] = arms[si].kind;
-                    snap.event_linked[si] = (arms[si].home_ != nullptr);
-                    if (arms[si].kind == detail::ArmKind::timer) {
-                        snap.timer_states[si] =
-                            arms[si].timer.stable_reg_
-                                ? arms[si].timer.stable_reg_->state()
-                                : detail::SelectTimerRegistration::State::consumed;
-                    } else {
-                        snap.timer_states[si] = detail::SelectTimerRegistration::State::consumed;
-                    }
-                }
-                sluice_async_test::capture_admission_snapshot(
-                    *this, sluice_async_test::PhaseTag::select_admission_consumed, snap);
-            }
-            sluice_async_test::test_phase(*this,
-                                          sluice_async_test::PhaseTag::select_admission_consumed);
-#endif
 
             SelectResult return_value = group.result_;
             group.set_phase(detail::GroupPhase::consumed);
@@ -760,9 +614,6 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs, std::s
         ++waiting_select_count_;
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::select_suspend_before_switch);
-#endif
 
     fiber_ctx::Switch s;
     s.old = &caller->ctx;
@@ -779,29 +630,6 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs, std::s
             detail::select_invariant_fail_fast();
         }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        {
-            sluice_async_test::PublicationSnapshot snap{};
-            snap.phase = group.phase();
-            snap.completion_mode = group.completion_mode_;
-            snap.winner = group.winner();
-            snap.arm_count = group.arm_count_;
-            snap.result_has_winner = group.result_.has_winner();
-            snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
-            snap.result_kind =
-                group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
-            snap.all_authority_closed = false;
-            snap.caller_state = caller->state();
-            snap.caller_owner_id = caller_owner->id;
-            snap.waiting_select_count = waiting_select_count_;
-            snap.result_publication_count = sluice_async_test::result_publication_count(*this);
-            snap.runnable_publication_count = sluice_async_test::runnable_publication_count(*this);
-            sluice_async_test::capture_publication_snapshot(
-                *this, sluice_async_test::PhaseTag::select_suspended_before_consume, snap);
-        }
-        sluice_async_test::test_phase(*this,
-                                      sluice_async_test::PhaseTag::select_suspended_before_consume);
-#endif
 
         SelectResult return_value = group.result_;
         group.set_phase(detail::GroupPhase::consumed);
@@ -856,13 +684,6 @@ void Scheduler::select_rollback_arm_locked(detail::SelectGroup& group,
         detail::select_invariant_fail_fast();
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    const bool ev_linked_before = (arm.kind == detail::ArmKind::event) && (arm.home_ != nullptr);
-    sluice_async_test::rollback_record_arm(
-        *this, static_cast<std::uint32_t>(static_cast<std::size_t>(&arm - group.arms_)),
-        static_cast<std::uint8_t>(arm.kind), ev_linked_before);
-#endif
 
     if (arm.kind == detail::ArmKind::event) {
         assert(arm.state == detail::ArmState::registered &&
@@ -946,9 +767,6 @@ void Scheduler::select_finish_rollback_locked(detail::SelectGroup& group,
 
     group.set_phase(detail::GroupPhase::aborted);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::rollback_record_finish(*this);
-#endif
 }
 
 void Scheduler::select_rollback_registration_locked(detail::SelectGroup& group,
@@ -965,9 +783,6 @@ void Scheduler::select_rollback_registration_locked(detail::SelectGroup& group,
 
     select_begin_rollback_locked(group);
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::rollback_record_begin(*this, registered_count);
-#endif
 
     for (std::size_t idx = registered_count; idx > 0; --idx) {
         select_rollback_arm_locked(group, arms[idx - 1]);

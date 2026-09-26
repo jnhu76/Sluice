@@ -16,9 +16,6 @@
 #include <stdexcept>
 #include <type_traits>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 Scheduler::deadline_t Scheduler::monotonic_now() const noexcept {
@@ -91,10 +88,6 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -207,12 +200,6 @@ static_assert(std::is_nothrow_swappable_v<detail::DeadlineHeapEntry>,
 
 TimerRegistration* Scheduler::prepare_ordinary_deadline_locked(WaitNode* node, WaitQueue* q,
                                                                deadline_t deadline) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    if (sluice_async_test::ordinary_deadline_alloc_should_fail(*this)) {
-        throw std::bad_alloc();
-    }
-#endif
 
     if (deadline_heap_.size() == deadline_heap_.capacity()) {
         const std::size_t cap = deadline_heap_.capacity();

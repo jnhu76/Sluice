@@ -13,9 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "async_test_control_internal.hpp"
-#endif
 
 namespace sluice::async {
 
@@ -93,11 +90,6 @@ SchedulerWakeHandle Scheduler::make_wake_handle() noexcept {
 }
 
 void Scheduler::notify_external_wake() noexcept {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::set_trace_wake_cause(*this, sluice_async_test::WakeCause::external_notify,
-                                            static_cast<unsigned>(-1));
-#endif
     signal_wake_locked();
 }
 
@@ -105,10 +97,6 @@ void Scheduler::signal_wake_locked() {
     {
         LockGuard lk(wake_mtx_);
         ++wake_epoch_;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        sluice_async_test::record_trace_wake(*this, wake_epoch_);
-#endif
     }
     wake_cv_.notify_all();
 
@@ -121,9 +109,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
     SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     ws->park_domain = WorkerState::ParkDomain::Scheduler;
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::scheduler_park_commit);
-#endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -161,16 +146,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
             (own_dance != 0 &&
              dance_epoch_.load(std::memory_order_acquire) !=
                  ws->dance_epoch_at_contribution_.load(std::memory_order_acquire))) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            sluice_async_test::TraceEvent refuse_ev{};
-            refuse_ev.kind =
-                static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_refused);
-            refuse_ev.worker = static_cast<unsigned char>(ws->id);
-            sluice_async_test::record_trace_event(*this, refuse_ev);
-            sluice_async_test::set_trace_wake_cause(
-                *this, sluice_async_test::WakeCause::park_refuse, static_cast<unsigned>(-1));
-#endif
             signal_wake_locked();
             ws->park_domain = WorkerState::ParkDomain::None;
             return;
@@ -178,16 +153,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         LockGuard wlk(wake_mtx_);
         ws->observed_epoch = wake_epoch_;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        {
-            sluice_async_test::TraceEvent commit_ev{};
-            commit_ev.kind =
-                static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_committed);
-            commit_ev.worker = static_cast<unsigned char>(ws->id);
-            commit_ev.armed = bounded_backend_observation ? 1 : 0;
-            commit_ev.epoch = wake_epoch_;
-            sluice_async_test::record_trace_event(*this, commit_ev);
-        }
 
         forensics_rec.epoch_at_commit = wake_epoch_;
         if (park_forensics_enabled_.load(std::memory_order_acquire)) {
@@ -202,11 +167,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         }
 #endif
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::scheduler_park_baseline_recorded);
-#endif
     std::unique_lock<Mutex> lk(wake_mtx_);
 
     auto park_pred = [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
@@ -217,60 +177,13 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
         return !ws->local_runnable.empty();
     };
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    const auto e9t_record_entered = [this, ws]() {
-        sluice_async_test::TraceEvent ev{};
-        ev.kind = static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_entered);
-        ev.worker = static_cast<unsigned char>(ws->id);
-        sluice_async_test::record_trace_event(*this, ev);
-    };
-    const auto e9t_record_returned = [this, ws](bool immediate,
-                                                bool timed_out) SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-        sluice_async_test::TraceEvent ev{};
-        ev.kind = static_cast<unsigned char>(sluice_async_test::TraceEventKind::park_returned);
-        ev.worker = static_cast<unsigned char>(ws->id);
-        ev.immediate = immediate ? 1 : 0;
-        if (timed_out) {
-            ev.return_causes = sluice_async_test::kReturnCauseTimeout;
-        } else {
-            std::uint16_t causes = 0;
-            if (wake_epoch_ != ws->observed_epoch) {
-                causes |= sluice_async_test::kReturnCauseEpoch;
-            }
-            if (global_terminate_.load(std::memory_order_acquire)) {
-                causes |= sluice_async_test::kReturnCauseTerminate;
-            }
-            {
-                std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
-                if (!ws->local_runnable.empty()) {
-                    causes |= sluice_async_test::kReturnCauseRunnable;
-                }
-            }
-            ev.return_causes = causes;
-        }
-        sluice_async_test::record_trace_event(*this, ev);
-    };
-#endif
 
     static constexpr auto kParkBackstop = std::chrono::milliseconds(2);
     static constexpr auto kTestParkPoll = std::chrono::milliseconds(1);
     deadline_t earliest = earliest_active_deadline_.load(std::memory_order::acquire);
 
     if (earliest == kNoDeadline && !bounded_backend_observation) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        e9t_record_entered();
-        if (park_pred()) {
-            e9t_record_returned(true, false);
-            ws->park_domain = WorkerState::ParkDomain::None;
-            return;
-        }
         wake_cv_.wait(lk, park_pred);
-        e9t_record_returned(false, false);
-#else
-        wake_cv_.wait(lk, park_pred);
-#endif
         ws->park_domain = WorkerState::ParkDomain::None;
         return;
     }
@@ -294,21 +207,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
     } else {
         wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    e9t_record_entered();
-    if (park_pred()) {
-        e9t_record_returned(true, false);
-        ws->park_domain = WorkerState::ParkDomain::None;
-        return;
-    }
-    {
-        const bool satisfied = wake_cv_.wait_until(lk, wake_deadline, park_pred);
-        e9t_record_returned(false, !satisfied);
-    }
-#else
     wake_cv_.wait_until(lk, wake_deadline, park_pred);
-#endif
     ws->park_domain = WorkerState::ParkDomain::None;
 }
 
@@ -547,10 +446,6 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
         commit_suspend_locked(ws, me);
     }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -582,10 +477,6 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
 
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -663,10 +554,6 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
         waiting_ready_.erase(&ready);
         return;
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(*this,
-                                  sluice_async_test::PhaseTag::tv1_c001_registered_presuspend);
-#endif
     me->make_waiting();
     fiber_ctx::Switch s;
     s.old = &me->ctx;
@@ -683,10 +570,6 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -713,10 +596,6 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
         }
         commit_suspend_locked(ws, me);
     }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
-#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
