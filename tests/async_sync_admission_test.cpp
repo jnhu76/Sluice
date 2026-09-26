@@ -33,27 +33,41 @@ class CountingBackend final : public AsyncBackend {
 
     std::size_t slot_capacity() const noexcept override { return 0; }
 
-    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
+    Result<sluice::async::detail::RequestKey> submit_read(ReadOp op,
+                                                          Completion<std::size_t>* c) override {
         (void)op;
         (void)c;
-        return sluice::make_unexpected<void>(IoError{IoError::Code::not_supported});
+        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
+            IoError{IoError::Code::not_supported});
     }
-    Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override {
+    Result<sluice::async::detail::RequestKey> submit_write(WriteOp op,
+                                                           Completion<std::size_t>* c) override {
         (void)op;
         (void)c;
-        return sluice::make_unexpected<void>(IoError{IoError::Code::not_supported});
+        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
+            IoError{IoError::Code::not_supported});
     }
-    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override {
+    Result<sluice::async::detail::RequestKey> submit_sync_data(SyncDataOp op,
+                                                               Completion<void>* c) override {
         (void)op;
         (void)c;
         ++sync_data_entries;
-        return sluice::make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
+            IoError{IoError::Code::invalid_state});
     }
-    Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override {
+    Result<sluice::async::detail::RequestKey> submit_sync_all(SyncAllOp op,
+                                                              Completion<void>* c) override {
         (void)op;
         (void)c;
         ++sync_all_entries;
-        return sluice::make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
+            IoError{IoError::Code::invalid_state});
+    }
+
+    sluice::async::detail::PublicCancel cancel_identity(
+        sluice::async::detail::RequestKey key) override {
+        (void)key;
+        return sluice::async::detail::PublicCancel::not_found;
     }
 };
 

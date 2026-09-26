@@ -291,30 +291,48 @@ bool production_request_is_request_core_owned(Tracker& t) {
     t.check(core_is_idle(core->snapshot()), "the context core starts idle");
 
     std::vector<std::byte> scratch(8);
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read_request(
-        ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0}, c);
-    t.check(submitted.has_value(), "the production request is accepted");
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0});
+    t.check(submitted.has_value(), "the accepted production request returns an owned Request");
     if (!submitted.has_value())
         return false;
-    const RequestHandle handle = submitted.value();
+    Request<std::size_t> request = std::move(submitted).value();
+    const RequestId id = request.id();
+    t.check(request.valid() && id.valid(),
+            "the returned Request holds the public responsibility and a copied id");
+    t.check(ctx.lookup(id) == RequestReadiness::pending,
+            "the copied id resolves through the core while pending");
+    t.check(!request.ready() && request.try_result().readiness == RequestReadiness::pending,
+            "the pending request is not published");
 
-    while (!c.ready()) {
+    while (!request.ready()) {
         t.check(core->occupancy().accepted_live == 1,
                 "the live production request occupies a core slot");
-        t.check(resolves_as(ctx.request_state(handle), RequestHandleState::outstanding),
-                "the public identity resolves through the core");
         (void)ctx.poll();
     }
     const CoreSnapshot settled = core->snapshot();
     t.check(settled.published_live == 1 && settled.public_bindings == 1,
             "the core terminal, publication and binding own the production request");
-    t.check(resolves_as(ctx.request_state(handle), RequestHandleState::completion_ready),
-            "the core authority holds the terminal result");
-    c.reset();
+    t.check(ctx.lookup(id) == RequestReadiness::ready,
+            "the published identity resolves through the core");
+    auto observed = request.try_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 8,
+            "try_result observes the canonical terminal without consuming it");
+    auto again = request.try_result();
+    t.check(again.readiness == RequestReadiness::ready && again.result.has_value() &&
+                again.result.value() == observed.result.value(),
+            "try_result is non-consuming and immutable");
+    auto consumed = request.take_result();
+    t.check(consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
+                consumed.result.value() == 8,
+            "take_result moves the canonical outcome out exactly once");
+    t.check(!request.valid(), "consuming empties the Request");
     t.check(core_is_idle(core->snapshot()), "releasing the binding reclaims the core slot");
-    t.check(resolves_as(ctx.request_state(handle), RequestHandleState::not_found),
-            "the released identity stops resolving");
+    t.check(ctx.lookup(id) == RequestReadiness::empty, "the released identity stops resolving");
+    auto stale_cancel = ctx.cancel(id);
+    t.check(stale_cancel.has_value() && stale_cancel.value() == CancelDisposition::not_found,
+            "cancel by the released id reports not_found");
     return true;
 }
 
@@ -335,17 +353,20 @@ class RecordingBackend final : public AsyncBackend {
     std::size_t outstanding() const noexcept override { return 0; }
 
   private:
-    Result<void> submit_read(ReadOp, Completion<std::size_t>&) override {
-        return sluice::make_unexpected<void>(IoError{IoError::Code::not_supported});
+    Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+        return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<void> submit_write(WriteOp, Completion<std::size_t>&) override {
-        return sluice::make_unexpected<void>(IoError{IoError::Code::not_supported});
+    Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+        return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<void> submit_sync_data(SyncDataOp, Completion<void>&) override {
-        return sluice::make_unexpected<void>(IoError{IoError::Code::not_supported});
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+        return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<void> submit_sync_all(SyncAllOp, Completion<void>&) override {
-        return sluice::make_unexpected<void>(IoError{IoError::Code::not_supported});
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+        return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
+    }
+    detail::PublicCancel cancel_identity(detail::RequestKey) override {
+        return detail::PublicCancel::not_found;
     }
 };
 
@@ -495,25 +516,25 @@ bool uring_context_carries_the_context_identity(Tracker& t) {
         return false;
 
     std::vector<std::byte> scratch(8);
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read_request(
-        ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0}, c);
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0});
     t.check(submitted.has_value(), "the io_uring request is accepted");
     if (!submitted.has_value())
         return false;
-    const RequestHandle handle = submitted.value();
+    Request<std::size_t> request = std::move(submitted).value();
     const auto slot0 = core->observe_slot(SlotIndex{0});
     t.check(slot0.has_value() && slot0->accepted && slot0->binding_live,
             "the accepted io_uring request is owned by the context core");
 
-    while (!c.ready()) {
+    while (!request.ready()) {
         (void)ctx.poll();
     }
-    t.check(c.result().has_value() && c.result().value() == 8,
-            "the io_uring request completes through the core publication");
-    t.check(resolves_as(ctx.request_state(handle), RequestHandleState::completion_ready),
+    t.check(ctx.lookup(request.id()) == RequestReadiness::ready,
             "the core-owned identity resolves as published");
-    c.reset();
+    auto consumed = request.take_result();
+    t.check(consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
+                consumed.result.value() == 8,
+            "the io_uring request completes through the core publication");
     t.check(core_is_idle(core->snapshot()), "the slot reclaims through the core after release");
     return true;
 }

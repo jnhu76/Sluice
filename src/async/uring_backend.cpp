@@ -35,22 +35,17 @@ UringAsyncBackend::UringAsyncBackend(unsigned queue_depth) : available_(false) {
 
 UringAsyncBackend::~UringAsyncBackend() = default;
 
-namespace {
-Result<void> unsupported_stub() {
-    return make_unexpected<void>(IoError{IoError::Code::backend_error});
+Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp, Completion<std::size_t>*) {
+    return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
+Result<detail::RequestKey> UringAsyncBackend::submit_write(WriteOp, Completion<std::size_t>*) {
+    return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<void> UringAsyncBackend::submit_read(ReadOp, Completion<std::size_t>&) {
-    return unsupported_stub();
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp, Completion<void>*) {
+    return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<void> UringAsyncBackend::submit_write(WriteOp, Completion<std::size_t>&) {
-    return unsupported_stub();
-}
-Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp, Completion<void>&) {
-    return unsupported_stub();
-}
-Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp, Completion<void>&) {
-    return unsupported_stub();
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp, Completion<void>*) {
+    return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
 
 std::size_t UringAsyncBackend::poll() {
@@ -324,6 +319,12 @@ void UringAsyncBackend::publish_void_ready(void* completion,
     AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
 }
 
+void UringAsyncBackend::publish_request_ready(void* completion,
+                                              const sluice::detail::IoOutcome& outcome) noexcept {
+    (void)completion;
+    (void)outcome;
+}
+
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
     : UringAsyncBackend(UringConfig{static_cast<std::size_t>(queue_depth > 0 ? queue_depth : 64),
                                     queue_depth > 0 ? queue_depth : 64}) {}
@@ -417,26 +418,27 @@ std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
 #endif
 
 template <class Op, class Comp>
-Result<void> UringAsyncBackend::submit_request(Op op, Comp& c, detail::OperationKind kind,
-                                               detail::RequestOp core_op) {
+Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
+                                                             detail::OperationKind kind,
+                                                             detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_submit_entry_pause_();
 #endif
     if (auto v = validate_op(op); !v.has_value()) {
-        return make_unexpected<void>(v.error());
+        return make_unexpected<detail::RequestKey>(v.error());
     }
     if (!have_ring_) {
-        return make_unexpected<void>(IoError{IoError::Code::backend_error});
+        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
     }
     if (fatal_error_.has_value()) {
-        return make_unexpected<void>(*fatal_error_);
+        return make_unexpected<detail::RequestKey>(*fatal_error_);
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::reserve); inj.has_value()) {
-        return make_unexpected<void>(*inj);
+        return make_unexpected<detail::RequestKey>(*inj);
     }
 #endif
 
@@ -445,7 +447,7 @@ Result<void> UringAsyncBackend::submit_request(Op op, Comp& c, detail::Operation
         const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed
                                        ? IoError::Code::invalid_state
                                        : IoError::Code::would_block;
-        return make_unexpected<void>(IoError{code});
+        return make_unexpected<detail::RequestKey>(IoError{code});
     }
     const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
 
@@ -453,7 +455,7 @@ Result<void> UringAsyncBackend::submit_request(Op op, Comp& c, detail::Operation
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::prepare); inj.has_value()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(*inj);
+        return make_unexpected<detail::RequestKey>(*inj);
     }
 #endif
 
@@ -474,8 +476,8 @@ Result<void> UringAsyncBackend::submit_request(Op op, Comp& c, detail::Operation
                         offset};
 
     DeliveryRecord& record = delivery_[h.slot.value];
-    record.completion = &c;
-    record.publish = publish_thunk<Comp>();
+    record.completion = c;
+    record.publish = c != nullptr ? publish_thunk<Comp>() : &UringAsyncBackend::publish_request_ready;
     record.kind = kind;
     record.registration = detail::WaiterRegistration::open_no_waiter;
     record.waiter_token = {};
@@ -488,28 +490,32 @@ Result<void> UringAsyncBackend::submit_request(Op op, Comp& c, detail::Operation
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::commit); inj.has_value()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(*inj);
+        return make_unexpected<detail::RequestKey>(*inj);
     }
 
     wait_pre_accept_commit_pause_();
 #endif
 
-    if (!begin_binding(c)) {
+    if (c != nullptr && !begin_binding(*c)) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
+        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
     }
 
     const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
     const detail::BorrowFacts borrow{op.file.fd, buffer_of(op), length};
     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
     if (!accepted.ok()) {
-        rollback_binding_before_accept(c);
+        if (c != nullptr) {
+            rollback_binding_before_accept(*c);
+        }
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
+        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
     }
 
-    install_core_binding(c, core_, accepted.id);
-    commit_binding(c);
+    if (c != nullptr) {
+        install_core_binding(*c, core_, accepted.id);
+        commit_binding(*c);
+    }
 
     if (descriptor.zero_op) {
         publish_zero_op_inline(accepted.id, h);
@@ -520,19 +526,19 @@ Result<void> UringAsyncBackend::submit_request(Op op, Comp& c, detail::Operation
 #endif
         dispatch_after_accept(h);
     }
-    return {};
+    return accepted.id;
 }
 
-Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
+Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>* c) {
     return submit_request(op, c, detail::OperationKind::read, detail::RequestOp::read);
 }
-Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
+Result<detail::RequestKey> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>* c) {
     return submit_request(op, c, detail::OperationKind::write, detail::RequestOp::write);
 }
-Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>* c) {
     return submit_request(op, c, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
 }
-Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>* c) {
     return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
@@ -1374,6 +1380,10 @@ void UringAsyncBackend::cancel(Completion<void>& c) {
     if (!key.has_value())
         return;
     (void)cancel_key(*key);
+}
+
+detail::PublicCancel UringAsyncBackend::cancel_identity(detail::RequestKey key) {
+    return cancel_key(key);
 }
 
 Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>& c,

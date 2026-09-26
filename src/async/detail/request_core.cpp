@@ -39,6 +39,9 @@ CoreOccupancy RequestCore::occupancy() const noexcept {
             continue;
         }
         ++occupancy.accepted_live;
+        if (slot.binding_live) {
+            ++occupancy.public_bindings;
+        }
         if (!slot.published) {
             ++occupancy.outstanding;
         }
@@ -234,6 +237,67 @@ BindingRelease RequestCore::release_public_binding(RequestKey id) noexcept {
     slot->binding_live = false;
     try_reclaim_(*slot, id.slot.value);
     return BindingRelease::released;
+}
+
+BindingRelease RequestCore::discard_public_result(RequestKey id) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_public_(id);
+    if (slot == nullptr) {
+        return BindingRelease::stale;
+    }
+#if defined(SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT)
+    const bool published = slot->publication_inflight || slot->published;
+#else
+    const bool published = slot->published;
+#endif
+    if (!published) {
+        return BindingRelease::not_visible_yet;
+    }
+    slot->binding_live = false;
+    try_reclaim_(*slot, id.slot.value);
+    return BindingRelease::released;
+}
+
+PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* out) const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const Slot* slot = resolve_public_(id);
+    if (slot == nullptr) {
+        return PublicObservation::stale;
+    }
+#if defined(SLUICE_B2_MUTANT_OBSERVE_IGNORES_PUBLICATION)
+    const bool published = true;
+#else
+    const bool published = slot->published;
+#endif
+    if (!published) {
+        return PublicObservation::pending;
+    }
+    if (out != nullptr) {
+        *out = slot->outcome;
+    }
+#if defined(SLUICE_B2_MUTANT_OBSERVE_CONSUMES)
+    const_cast<Slot*>(slot)->binding_live = false;
+#endif
+    return PublicObservation::ready;
+}
+
+PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* out) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_public_(id);
+    if (slot == nullptr) {
+        return PublicConsumption::stale;
+    }
+    if (!slot->published) {
+        return PublicConsumption::pending;
+    }
+    if (out != nullptr) {
+        *out = slot->outcome;
+    }
+#if !defined(SLUICE_B2_MUTANT_CONSUME_KEEPS_BINDING)
+    slot->binding_live = false;
+    try_reclaim_(*slot, id.slot.value);
+#endif
+    return PublicConsumption::consumed;
 }
 
 TerminalVerdict RequestCore::offer_terminal(RequestKey id,

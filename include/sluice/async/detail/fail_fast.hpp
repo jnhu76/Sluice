@@ -41,6 +41,10 @@ bool evented_admission_check() noexcept;
 [[noreturn]] void completion_binding_destruction_fail_fast() noexcept;
 [[noreturn]] void completion_binding_reset_fail_fast() noexcept;
 
+[[noreturn]] void request_nonterminal_release_fail_fast() noexcept;
+
+[[noreturn]] void request_binding_invariant_fail_fast() noexcept;
+
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
 
 [[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept;

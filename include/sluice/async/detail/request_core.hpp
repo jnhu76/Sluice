@@ -71,6 +71,10 @@ enum class PublicCancel : std::uint8_t {
 
 enum class BindingRelease : std::uint8_t { released, not_visible_yet, stale };
 
+enum class PublicObservation : std::uint8_t { ready, pending, stale };
+
+enum class PublicConsumption : std::uint8_t { consumed, pending, stale };
+
 enum class TerminalCandidateKind : std::uint8_t {
     physical_outcome,
     zero_effect_cancel,
@@ -139,6 +143,7 @@ struct CoreSnapshot {
 struct CoreOccupancy {
     std::size_t accepted_live = 0;
     std::size_t outstanding = 0;
+    std::size_t public_bindings = 0;
 };
 
 class RequestCore {
@@ -168,6 +173,9 @@ class RequestCore {
     PublicLookup lookup(RequestKey id) const noexcept;
     PublicCancel cancel(RequestKey id) noexcept;
     BindingRelease release_public_binding(RequestKey id) noexcept;
+    BindingRelease discard_public_result(RequestKey id) noexcept;
+    PublicObservation observe_public_result(RequestKey id, IoOutcome* out) const noexcept;
+    PublicConsumption consume_public_result(RequestKey id, IoOutcome* out) noexcept;
 
     TerminalVerdict offer_terminal(RequestKey id, const TerminalCandidate& candidate) noexcept;
     ExecutionClaim claim_execution(RequestKey id) noexcept;

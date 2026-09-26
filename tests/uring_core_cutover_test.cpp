@@ -72,13 +72,14 @@ std::string make_temp_file(const std::string& content) {
     return path;
 }
 
-std::optional<File> open_temp_file(Tracker& t, const std::string& content) {
+std::optional<File> open_temp_file(Tracker& t, const std::string& content,
+                                   sluice::FileOpen mode = {}) {
     const std::string path = make_temp_file(content);
     if (path.empty()) {
         t.check(false, "the temporary fixture file is created");
         return std::nullopt;
     }
-    auto opened = File::open(path, sluice::FileOpen{});
+    auto opened = File::open(path, mode);
     ::unlink(path.c_str());
     if (!opened.has_value()) {
         t.check(false, "the temporary fixture file opens");
@@ -558,6 +559,54 @@ bool cancel_racing_completion_keeps_the_confirmed_count(Tracker& t) {
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "the raced request reclaims fully");
+    return true;
+}
+
+bool cancel_racing_short_write_keeps_confirmed_count(Tracker& t) {
+    sluice::FileOpen writable;
+    writable.access = sluice::FileAccess::read_write;
+    auto file = open_temp_file(t, "sluice b1c race\n", writable);
+    if (!file.has_value())
+        return false;
+
+    FakeSubmitBackend made = FakeSubmitBackend::create(2, fake_submit_no_kernel, nullptr);
+    if (!made.ready()) {
+        t.skip("io_uring is unavailable on this host");
+        return true;
+    }
+    AsyncIoContext& ctx = *made.ctx;
+    RequestCore& core = *made.core;
+    UringAsyncBackend* raw = made.raw();
+
+    const std::vector<std::byte> payload(6, std::byte{0});
+    Completion<std::size_t> c;
+    auto submitted =
+        ctx.submit_write(WriteOp{NativeFileRef(*file), payload.data(), payload.size(), 0}, c);
+    t.check(submitted.has_value(), "the write is accepted");
+    (void)ctx.poll();
+    const auto key = raw->request_key_for_test(c);
+    const auto cookie = live_cookie(made, 0);
+    if (!key.has_value() || !cookie.has_value())
+        return false;
+
+    t.check(raw->cancel_key_for_test(*key) == PublicCancel::requested,
+            "cancel records intent on the running write");
+    (void)ctx.poll();
+    inject_completion(made, *cookie, 3);
+    const auto after_original = core.observe_slot(SlotIndex{0});
+    t.check(after_original.has_value() && after_original->terminal_chosen &&
+                after_original->outcome.succeeded &&
+                after_original->outcome.effect.confirmed_bytes == 3,
+            "the physical short write outranks the racing cancel intent");
+    for (int i = 0; i < 64 && !c.ready(); ++i)
+        (void)ctx.poll();
+    t.check(c.ready() && c.result().has_value() && c.result().value() == 3,
+            "the publication carries the confirmed 3/6 write, never a canceled terminal");
+    c.reset();
+    inject_completion(made, kControlTag | *cookie, 0);
+    for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
+        (void)ctx.poll();
+    t.check(idle_and_whole(core.snapshot(), core), "the raced write reclaims fully");
     return true;
 }
 
@@ -1235,6 +1284,8 @@ int main() {
          cancel_cqe_first_never_becomes_the_terminal},
         {"cancel_racing_completion_keeps_the_confirmed_count",
          cancel_racing_completion_keeps_the_confirmed_count},
+        {"cancel_racing_short_write_keeps_confirmed_count",
+         cancel_racing_short_write_keeps_confirmed_count},
         {"stale_cookie_cannot_reach_a_reused_slot", stale_cookie_cannot_reach_a_reused_slot},
         {"stale_identity_does_not_resolve_after_reuse",
          stale_identity_does_not_resolve_after_reuse},
