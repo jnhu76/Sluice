@@ -863,8 +863,56 @@ binding release (199, OBS-03), and registration renewal after cancellation
 | Requirement scope | OBS-02/OBS-03 protocol-safety and conditional-liveness obligations in executable form (at-most-once delivery per registration generation; claim exclusivity; cancellation-vs-operation separation; cancellation-vs-delivery ordering with the retired/in-progress distinction; attach/publication resolution in both directions; the slot pin until retirement; release-while-pinned legality), OBS-01's single-active-registration occupied disposition and registration-failure preservation, OBS-04's reserve-before-arm failure ordering (the `no_space` refusal precedes observer acceptance), VERIFY-01/V06–V08 protocol halves. Excludes by evidence class (map sections 7/11): CPP_MEMORY_MODEL visibility (publication happens-before remains the C1-B core-mutex serialization argument, not a TLC result), REQ/PROG/SHUT families, #397's PROG-02 |
 | Implementation | `formal/tla/ObserverCore.tla` (818 lines) plus 19 cfgs (safety matrix, liveness, 8 mutant kills, 9 coverage certificates); `scripts/verify_tla.sh` gains the Stage C1 gate (clean/violate/temporal helpers, exact-invariant kill checks). No production change |
 | Change | Formal evidence only; no C++ file touched |
-| Semantic/regression evidence | TLC v1.7.4 (pinned, SHA-256 verified), OpenJDK 17.0.20.1, Linux x86_64 (WSL2), 2026-09-27: `ObserverCore.cfg` clean (5,123/1,734/depth 16); `ObserverCoreLive.cfg` clean with L0/L1/L2/L4 checked (12 temporal branches); 6 safety mutants killed on their named invariants; 2 liveness mutants killed on temporal properties; 9 coverage witnesses violated as required. Stage C1 gate exit 0 (20 checks) |
+| Semantic/regression evidence | TLC v1.7.4 (pinned, SHA-256 verified), OpenJDK 17.0.20.1, Linux x86_64 (WSL2), 2026-09-27: `ObserverCore.cfg` clean (5,123/1,734/depth 16); `ObserverCoreLive.cfg` clean with L0/L1/L2/L4 checked (12 temporal branches); 6 safety mutants killed on their named invariants; 2 liveness mutants killed on temporal properties; 9 coverage witnesses violated as required. Stage C1 gate exit 0 (19 TLC invocations; count corrected by the C1-I reproduction record below) |
 | Publication/thread evidence | Atomic-section granularity only: each action is one mutex-protected core operation or one adapter step, which is exactly the C++ serialization; memory visibility below that granularity is out of scope by evidence class |
 | Backend/kernel evidence | None needed: io_uring and ThreadPool appear only through their shared `deliver_event` shape (claim then ready event), which the model's ClaimDelivery + RouteDelivery reproduce identically |
 | Authority-contraction audit | No runtime mechanism added or removed; the model's ghost ledgers (episode staging, claim/retire counts, per-identity publication and cancel facts) are test-only evidence, classified per the map's evidence classes. Nothing in the implementation became redundant |
 | Status | C1-H (#433) complete at this commit: the formal gap of #396's post-merge audit (CONDITIONAL_PASS, "formal proof evidence missing") is closed — the merged protocol satisfies its frozen contract under TLC for the modeled scope. The OBS assessment row moves to VERIFIED with the two standing evidence-class limits recorded (C++ memory-model visibility argued by core-mutex serialization evidence, not formal proof; external-host W-03 integration remains #397's scope). #396's dependency on #397 is corrected to coordination: the Observer mechanism does not depend on ProgressSource |
+
+## C1-I final closure verification record — #396 formal gate, independent reproduction
+
+This record is the final-formal-verification gate for #396: an independent
+reproduction of the Stage C1 ObserverCore matrix at the merge commit of the
+model PR, closing the loop between the #433 evidence (recorded by its own
+branch run) and the state of master that #396 closes against. No C++, model
+or cfg file was touched.
+
+Scope decision (AGENTS.md: run the complete matrix required by the affected
+conformance claim, not the whole-corpus campaign repeatedly): the affected
+claim is the OBS row, whose gate is the 19 Stage C1 invocations of
+`scripts/verify_tla.sh`. Since the recorded full-corpus run (map section 16,
+2026-09-22) and the B1-1/C1-H extensions, no commit touched the other
+modules' `.tla`/`.cfg` files, so the earlier stages' recorded evidence is
+unaffected. The Stage C1 helpers (`run_clean`/`run_violate`/
+`run_live_clean`/`run_temporal_violate`, same java flags, same
+exact-invariant grep checks) were executed verbatim with logs retained.
+
+Environment: tla2tools v1.7.4 (pinned SHA-256
+`936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88`, verified
+before the run), TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802),
+OpenJDK 17.0.20.1, Linux x86_64 (WSL2, 6.18.33.2-microsoft-standard),
+1 TLC worker, commit `b4bf90d63c06ff9153df4f27c3c8d25acbf12995`.
+
+Result: exit 0 — 19 invocations, every expected reason exact, and every
+state count identical to the C1-H record (deterministic reproduction):
+safety 5,123 generated / 1,734 distinct / depth 16, liveness clean over 12
+temporal branches (L0/L1/L2/L4); mutant kills 83 / 12 / 79 / 428
+(invariant) and 2,066 / 3,741 (temporal); coverage witnesses 86 / 83 / 12 /
+428 / 205 / 809 / 31 / 199 / 77. The C1-H table's "20 checks" was an
+off-by-one against this run's 19 invocations and is corrected above.
+
+Deterministic-test confirmation at the same commit:
+`runtime_waiter_observer_test` 5/5 (the RuntimeTaskContext adapter path)
+and `request_core_protocol_test` 45/45 (the core-side ordering oracles),
+both via `xmake build`/`xmake run`.
+
+| Field | Content |
+|---|---|
+| Requirement scope | #396 closure checklist verification only: the C1-H formal evidence reproduced at master, the deterministic suites re-run, no semantic change |
+| Implementation | None (documentation-only) |
+| Change | This record; the C1-H evidence-field count correction |
+| Semantic/regression evidence | This record's reproduction run (logs retained at the closure comment on #396: command sequence, environment, per-invocation state counts) |
+| Publication/thread evidence | Unchanged from C1-H (atomic-section granularity; core-mutex serialization argument for visibility) |
+| Backend/kernel evidence | Unchanged from C1-H |
+| Authority-contraction audit | No mechanism added or removed; verification-only slice, nothing became redundant |
+| Status | #396 formal gate closed: implementation (PR #434, C1-A..C1-G), deterministic evidence and the independently reproduced TLC gate all PASS at master; #397 is coordination, not a prerequisite. #396 is ready to close with the two standing evidence-class limits carried on the OBS row (C++ memory-model visibility by core-mutex serialization evidence, not formal proof; external-host W-03 integration remains #397's scope) |

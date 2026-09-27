@@ -566,3 +566,10 @@ recorded in the C1-H review record of
 "0 cfgs contain PROPERTY" statement above is superseded for the tree by
 the section 1 inventory (7 liveness-carrying cfgs since B1-1/C1-H); it
 remains true of the frozen baseline-8 corpus it describes.
+
+Independently reproduced at the model PR merge commit
+`b4bf90d63c06ff9153df4f27c3c8d25acbf12995` (2026-09-27, same toolchain:
+tla2tools v1.7.4 checksum-verified, TLC2 2.19, OpenJDK 17.0.20.1, WSL2):
+all 19 Stage C1 invocations completed with their exact expected reasons and
+state counts identical to the C1-H record (the #396 final closure gate —
+C1-I record in the conformance ledger).
