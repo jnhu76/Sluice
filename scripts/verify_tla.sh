@@ -575,4 +575,63 @@ run_violate rcore-mut-consume-keeps-bind RequestCoreMutConsumeKeepsBind.cfg Requ
 run_violate rcore-mut-consume-unpublished RequestCoreMutConsumeUnpublished.cfg RequestCore InvConsumeAfterPublish
 run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg RequestCore InvDiscardAfterPublish
 
+#   Stage C1 (#396/#433): ObserverCore, the host-neutral observer delivery
+#   protocol model derived from the merged implementation.
+#    34. Safety: the full fact set (reset discipline, observer-cancel
+#        isolation, attach/publishation atomicity in both directions, the
+#        phase/delivery agreement, retired-finality, at-most-once claim and
+#        retirement per registration episode, claim-behind-publication,
+#        cancel-ack != delivery retirement, the episode-ledger observer
+#        pin, host wait-record retention) must complete cleanly.
+#    35. Liveness: PROPERTY L0 (accepted ~> published -- settlement needs
+#        no observer), L1 (armed + publication ~> retired), L2 (waiting +
+#        publication ~> woken) and L4 (refused attach ~> published) under
+#        the declared WF_ driver/host service conjuncts.
+#    36. C++ mutation-seam mirrors (the SLUICE_C1_MUTANT_* defines):
+#        MutAttachIgnoresPublication dies on InvArmedRequiresUnpublished;
+#        MutAttachTreatsTerminalAsPublished on
+#        InvAlreadyTerminalRequiresPublication; MutDeliveryClaimUnbounded
+#        on InvAtMostOnceDelivery; MutCancelDuringDeliveryReturns on
+#        InvRetireOwnership; MutPublicationSkipsQueue on the temporal
+#        properties (armed + published never retires/wakes).
+#    37. Model-only floor mutants: MutObsCancelCancelsOp dies on
+#        InvCancelIsolation (S1); MutReclaimIgnoresObserver on
+#        InvObserverPin (the episode pin); MutNoDeliveryWake on the
+#        temporal properties (the routed delivery is never drained).
+#    38. Race/scenario coverage: the nine InvCov* witness certificates
+#        are negated conjunctions; each MUST be violated, certifying the
+#        scenario is reachable -- attach-vs-publication both directions,
+#        terminal-window attach, cancel-vs-claim both directions,
+#        retirement-after-delivery, observer-free settlement (S4), the
+#        delivery pin past binding release (OBS-03), and registration
+#        renewal after cancellation.
+echo "== Stage C1: ObserverCore safety =="
+run_clean obs-safety ObserverCore.cfg ObserverCore
+
+echo "== Stage C1: ObserverCore conditional liveness =="
+run_live_clean obs-live ObserverCoreLive.cfg ObserverCore
+
+echo "== Stage C1: ObserverCore C++ mutation-seam mirrors (each must violate its named invariant) =="
+run_violate obs-mut-attach-ignores-pub ObserverCoreMutAttachIgnoresPublication.cfg ObserverCore InvArmedRequiresUnpublished
+run_violate obs-mut-attach-terminal-as-pub ObserverCoreMutAttachTreatsTerminalAsPublished.cfg ObserverCore InvAlreadyTerminalRequiresPublication
+run_violate obs-mut-claim-unbounded ObserverCoreMutDeliveryClaimUnbounded.cfg ObserverCore InvAtMostOnceDelivery
+run_violate obs-mut-cancel-during-delivery ObserverCoreMutCancelDuringDeliveryReturns.cfg ObserverCore InvRetireOwnership
+run_temporal_violate obs-mut-publication-skips-queue ObserverCoreMutPublicationSkipsQueue.cfg ObserverCore
+
+echo "== Stage C1: ObserverCore floor mutants (each must violate its named invariant or property) =="
+run_violate obs-mut-obs-cancel-cancels-op ObserverCoreMutObsCancelCancelsOp.cfg ObserverCore InvCancelIsolation
+run_violate obs-mut-reclaim-ignores-observer ObserverCoreMutReclaimIgnoresObserver.cfg ObserverCore InvObserverPin
+run_temporal_violate obs-mut-no-delivery-wake ObserverCoreMutNoDeliveryWake.cfg ObserverCore
+
+echo "== Stage C1: race/scenario coverage (each witness must be reachable) =="
+run_violate obs-cov-attach-rode-pub ObserverCoreCovAttachRodePublication.cfg ObserverCore InvCovAttachRodePublication
+run_violate obs-cov-already-terminal ObserverCoreCovAlreadyTerminalFastPath.cfg ObserverCore InvCovAlreadyTerminalFastPath
+run_violate obs-cov-window-attach ObserverCoreCovWindowAttach.cfg ObserverCore InvCovWindowAttach
+run_violate obs-cov-cancel-lost-to-claim ObserverCoreCovCancelLostToClaim.cfg ObserverCore InvCovCancelLostToClaim
+run_violate obs-cov-queued-suppression ObserverCoreCovQueuedSuppression.cfg ObserverCore InvCovQueuedSuppression
+run_violate obs-cov-delivery-retired ObserverCoreCovDeliveryRetired.cfg ObserverCore InvCovDeliveryRetired
+run_violate obs-cov-no-observer-settlement ObserverCoreCovNoObserverSettlement.cfg ObserverCore InvCovNoObserverSettlement
+run_violate obs-cov-pinned-past-release ObserverCoreCovPinnedPastRelease.cfg ObserverCore InvCovPinnedPastRelease
+run_violate obs-cov-rearm ObserverCoreCovReArm.cfg ObserverCore InvCovReArm
+
 echo "VERIFY_TLA: PASS"
