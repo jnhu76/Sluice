@@ -52,8 +52,8 @@ the number of `#print axioms` entries in `scripts/verify_formal.sh`).
 | Lean modules (`formal/**/*.lean`) | 12 | 11 logical modules + `Sluice.lean` (import hub, no content) |
 | Lean lines | 16,851 | largest: `QueueV2` (2,368), `SelectV2` (2,031), `ConditionV2` (1,927) |
 | Lean theorem declarations | 633 | includes step/facet lemmas; 240 exported theorems are axiom-audited by `verify_formal.sh` |
-| TLA+ modules (`formal/tla/*.tla`) | 8 | 5,680 lines; largest: `RwCore` (1,024), `QueueCore` (908) |
-| TLC configurations (`formal/tla/*.cfg`) | 116 | each defines `SPECIFICATION Spec` + `INVARIANT` entries (safety matrices, must-violate coverage certificates, must-die mutants); 0 contain `PROPERTY`/`TEMPORAL` |
+| TLA+ modules (`formal/tla/*.tla`) | 10 | baseline 8 (5,680 lines; largest `RwCore` 1,024, `QueueCore` 908) + `RequestCore.tla` (B1-1, #394: first liveness-carrying model) + `ObserverCore.tla` (C1-H, #433/#396: the observer delivery protocol, 818 lines, liveness-carrying) |
+| TLC configurations (`formal/tla/*.cfg`) | 158 | baseline 116 (safety matrices, must-violate coverage certificates, must-die mutants; safety-only) + the B1-1 RequestCore set and the C1-H ObserverCore set; 7 cfgs now carry `PROPERTY` (liveness and liveness-mutant runs: `RequestCoreLive`, 3 RequestCore liveness mutants, `ObserverCoreLive`, 2 ObserverCore liveness mutants) |
 | Verification scripts | 2 | `scripts/verify_formal.sh` (Lean), `scripts/verify_tla.sh` (TLC) |
 | Toolchain/config files | 3 | `formal/lean-toolchain` (leanprover/lean4:v4.33.1), `lakefile.toml`, `lake-manifest.json` |
 
@@ -242,7 +242,7 @@ its owning ticket with source correspondence (section 13).
 |---|---|---|---|---|
 | SEM / ERR | Decision tables + pure properties + reference/property tests against the shared oracle; real File/kernel evidence where drivable | Lean only for stable pure mathematics (checked arithmetic, finite relations); TLA+ is not a SEM/ERR default | Re-formalizing enums/tables in Lean "to have Lean"; a second semantic authority | #392 done (ledger: IMPLEMENTED_UNVERIFIED where production closure is incomplete); #393, #400 |
 | REQ / HANDLE / LIFE | Protocol-safety TLA+ lifecycle model + deterministic C++ interleavings + publication happens-before (CPP_MEMORY_MODEL class) + fault/mutation tests | Future model state vocabulary must cover: `Reserved / Accepted / Executing / Chosen / Published / Reclaimable / Free`; public binding; backend/control pins; observer pins; generation; stale identity. V24 is **split**: `V24-request-id` (context/slot/generation exhaustion, stale alias — #394) is a distinct obligation from `V24-progress-token` (#397). The public-binding and consumption vocabulary now exists (B2: `Consume` and the published-only `DiscardPublic`, the consumed/discarded per-identity ghosts, `InvConsumeAfterPublish`/`InvConsumedReleased`/`InvDiscardAfterPublish`; `ReleaseBind` is the compatibility release flavor) | Deriving memory visibility from TLA+; assuming "the request eventually finishes"; one merged generation proof for both V24 halves | #394, #395 |
-| OBS | Protocol-safety + conditional-liveness TLA+ observer model + deterministic attach×terminal and cancel×delivery race tests + reference-retirement tests | Safety floor: terminal-before-attach and attach-before-terminal each yield a unique delivery; at-most-once per registration generation; registration failure preserves the Request; observer cancel ≠ operation cancel ≠ borrow end; lifetime pin until delivery retirement. Liveness: section 9 (L3) | A general callback framework; letting observer cancellation settle the operation; Scheduler identity in the protocol | #396 |
+| OBS | Protocol-safety + conditional-liveness TLA+ observer model + deterministic attach×terminal and cancel×delivery race tests + reference-retirement tests | Safety floor: terminal-before-attach and attach-before-terminal each yield a unique delivery; at-most-once per registration generation; registration failure preserves the Request; observer cancel ≠ operation cancel ≠ borrow end; lifetime pin until delivery retirement. Liveness: section 9 (L3). Delivered: `formal/tla/ObserverCore.tla` with the C1-H record (#433) — the floor above plus L0/L1/L2/L4 hold, the five C++ mutation seams are mirrored and killed, and the nine InvCov* certificates cover the race matrix | A general callback framework; letting observer cancellation settle the operation; Scheduler identity in the protocol | #396 |
 | PROG | No-lost-wake safety model + real Linux pollable-notification integration + fairness-explicit progress liveness | Safety floor must cover: arm; acknowledge stale readiness; snapshot/token; bounded poll; final recheck; park/wait; wake race; epoch/token exhaustion (`V24-progress-token`). Liveness assumptions recorded explicitly (section 9): fixed progress-owner scheduling, backend eventual signal, persistent readiness, OS poll/eventfd behavior, control wake | "Thread eventually wakes" without a named fairness assumption; periodic busy polling masking a protocol defect; a condition-variable-only wait source satisfying W-03 | #397 |
 | CANCEL / BACKEND | Abstract protocol-safety model (cancel intent, terminal arbitration, control-record retirement, confirmed-progress preservation, bounded/coalesced control state) + fault injection + real-kernel io_uring evidence + ThreadPool evidence | TLA+ may prove only the abstract arbitration/boundedness protocol | TLA+ standing in for io_uring CQE semantics, kernel cancel behavior, partial submit, eventfd, errno, or physical reference retirement | #400 |
 | SHUT | Protocol-safety TLA+ state-space model + teardown fault injection + real teardown/lifetime tests | Future model state vocabulary: `Open / AdmissionClosed / Settling / ExecutionClosed / Destroyable` with `ExecutionClosed ≠ Destroyable`; variables must separate `external_binding_count`, `internal_backend_refs`, `internal_control_refs`, observer/delivery refs, public result binding, execution resources. Two distinct predicates, never merged: ready-but-unconsumed Request ⇒ external-precondition violation on destruction; only-delayed-internal-control-pin ⇒ destructor/internal retirement responsibility | Proving "all physical refs vanish" from "shutdown requested"; collapsing caller preconditions into internal retirement or vice versa | #401 |
@@ -267,8 +267,8 @@ is the shared premise of L3/L5/shutdown liveness.
 |---|---|---|---|
 | L1 acceptance → publication | accepted request ~> eventual public publication | #394 core; #395 public-`Request<T>` correspondence | TLA+ liveness with declared fairness + C++ correspondence + mutation (below). The #395 public-Request correspondence is recorded in the B2 review record: acceptance linearizes at the context submit's `core_->accept`, terminal selection at `offer_terminal`, publication at `begin/complete_publication` under the core mutex, consumption at the new `consume_public_result` (modeled as `Consume`, consumer-driven, no fairness obligation), public discard at `discard_public_result` (modeled as `DiscardPublic`, published-only; the compatibility Completion release stays `ReleaseBind`, deliberately inflight-tolerant), with the completion-free publication path carrying the same core-mutex HB chain |
 | L2 owner observes actionable event | actionable work/control exists ~> owner observes it | #397 | no-lost-wake safety + fairness on owner scheduling and signal source |
-| L3 observer delivery | armed + terminal published + driver continues ~> eventual delivery | #396 | TLA+ liveness + observer integration tests |
-| L3 observer retirement | canceled/in-progress registration ~> eventual retirement | #396 | TLA+ liveness + reference-retirement tests |
+| L3 observer delivery | armed + terminal published + driver continues ~> eventual delivery | #396 | TLA+ liveness + observer integration tests. Closed: ObserverCore L1/L2 under the declared WF conjuncts (C1-H, #433) |
+| L3 observer retirement | canceled/in-progress registration ~> eventual retirement | #396 | TLA+ liveness + reference-retirement tests. Closed: ObserverCore L1's retirement consequent covers the in-progress window (C1-H, #433) |
 | L5 core reclaim | released terminal slot + all pins retired ~> eventual reclaim | #394 | TLA+ safety of the reclaim predicate + liveness of reclaim progression |
 | L5 progress-driven reclaim | released slot with only a delayed control/reclaim obligation ~> reclaim without unrelated new I/O | #397 (with #394) | ProgressSource model + integration evidence |
 | no-lost-wake (safety) | a completed poll/arm/wait cycle cannot sleep past an unadvertised obligation (S9) | #397 | TLA+ safety + real wait-source evidence |
@@ -550,3 +550,19 @@ delete or rewrite retired formal sources; or turn the historical corpus into
 v1 evidence. New formal gaps discovered later map onto the existing owner
 tickets (#394/#395/#396/#397/#400/#401) rather than new issues, unless the
 root itself must change first (GOV-04).
+
+### Section 16 amendment — C1-H (#433) gate extension run record
+
+`scripts/verify_tla.sh` gained the Stage C1 ObserverCore gate (2026-09-27):
+2 must-complete-cleanly runs (safety matrix; liveness with L0/L1/L2/L4
+under `FairSpec`), 6 exact-invariant safety mutant kills, 2 temporal
+mutant kills and 9 must-violate coverage certificates — 19 TLC invocations,
+exit 0. Run environment: tla2tools v1.7.4 (pinned, SHA-256 verified
+against the value above), OpenJDK 17.0.20.1, Linux x86_64 (WSL2), 1 TLC
+worker; the C1 stage completes in under one minute wall time. Evidence
+detail (state counts, counter-example shapes, per-mutant named kills) is
+recorded in the C1-H review record of
+[docs/roadmap/v1-conformance.md](v1-conformance.md). The baseline
+"0 cfgs contain PROPERTY" statement above is superseded for the tree by
+the section 1 inventory (7 liveness-carrying cfgs since B1-1/C1-H); it
+remains true of the frozen baseline-8 corpus it describes.
