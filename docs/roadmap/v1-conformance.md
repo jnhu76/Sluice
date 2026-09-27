@@ -40,7 +40,7 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | Direct invocation | INV, ARCH, W-01 | VERIFIED | A2 review record: W-01 explicit-close and RAII traces as a core-only consumer. Request-side invocation is unchanged and unassessed here |
 | Admission and slot lifecycle | REQ, BOUND | NOT_ASSESSED | V04–V05, V08–V09, V24, V26; executable model and failure injection. Substrate half: see the B1-1 review record (standalone protocol substrate with model+test evidence; production request paths unchanged). Context-ownership half: see the B1-A review record (context-owned core, one context identity domain with an executed exhaustion boundary; production request paths still unmigrated). Production ThreadPool half: see the B1-B review record (ThreadPool acceptance/identity/terminal/publication/release/reclaim governed by the context-owned RequestCore); production io_uring half: see the B1-C review record (the same authority for io_uring); the adoption seam collapsed into the backend interface contract at B1-D (see the B1-D review record). Public-acceptance half: see the B2 review record (the accepted identity flows to a returned public Request on both backends; pre-accept failure returns no Request, post-accept failure keeps it owned) |
 | Public Request and result lifetime | HANDLE, LIFE | NOT_ASSESSED | Move/consume/discard, retained results, release-build violation behavior. See the B2 review record for the public `Request<T>`/`RequestId` surface: consumption atomic with binding release, non-consuming observation, the empty/pending/published/consumed model, always-on destructor and context-lifetime diagnostics (release-build death evidence), retained-result capacity pinning, model consumption extension with killed mutants. Observer/progress/shutdown halves stay with #396/#397/#401; whole-row verdicts wait for independent final review |
-| Observer attachment and retirement | OBS | NOT_ASSESSED | V06–V08; attach/publication and cancel/delivery interleavings |
+| Observer attachment and retirement | OBS | VERIFIED | V06–V08; attach/publication and cancel/delivery interleavings. Implemented and evidenced across C1-A..C1-G (backend-neutral core ownership, ordering oracles with named mutation kills, the five-phase delivery machine, the RuntimeTaskContext adapter with reserve-before-arm failure ordering, legacy-mechanism removal, declared L3 assumptions) and formally closed by the C1-H record (#433): the TLA+ `ObserverCore` model derived from the merged implementation proves the safety floor (at-most-once delivery per registration generation, cancel isolation, attach/publish atomicity, retirement finality, the episode pin) and conditional liveness L0/L1/L2/L4 under declared WF assumptions, with the five C++ mutation seams mirrored and killed. Standing limits by evidence class: publication happens-before visibility is argued by core-mutex serialization evidence (C1-B), not formal proof; external-host W-03 integration is #397's scope |
 | Progress and external integration | PROG, W-03 | NOT_ASSESSED | V10–V12, V23; both backends; no-busy-poll/no-lost-wake evidence |
 | Public threading and memory handoff | THREAD, REQ-04 | NOT_ASSESSED | API concurrency matrix, publication review, deterministic handoff and race instrumentation |
 | Cancel and effect reporting | CANCEL, ERR-02 | GAP | V13–V15, V19; unsupported/retryable/coalesced control behavior. A1 added reference rules but no request path represents an unaccounted remainder or preserves a count across a cancel |
@@ -774,3 +774,97 @@ fiber observes a fully retired registration and a reclaimable slot).
 | Backend/kernel evidence | ThreadPool seam build (worker-claim and new delivery-claimed gates); no backend source changes beyond the macro-guarded seam |
 | Authority-contraction audit | Removed: `AsyncIoContext::cancel_observer(RequestKey)` (its only callers were the replaced exhaustion cleanup; the Completion& form keeps `cancel_waiter`) and the dead `Scheduler::retire_wait_record_locked` (the drain and cancel paths inline their retirement). No new runtime state, flag, counter or capability: the reservation is the existing free-list authority, split from registration to make resource failure precede observer acceptance |
 | Status | Review findings closed: P1-1 fixed with deterministic discrimination evidence, P1-2 corrected in place, P2 coverage added. The OBS assessment row stays NOT_ASSESSED pending #433 |
+
+## C1-H review record — Issue #433, Observer formal model (TLA+)
+
+This record closes #396's last open evidence item: the formal proof of the
+merged Observer protocol against its frozen semantic contract. The model is
+`formal/tla/ObserverCore.tla`, derived action-by-action from the C1-A..C1-G
+implementation (one model action per core operation or adapter step, each
+guard the guard of the C++ operation it names; every action is one
+core-mutex critical section or one marked adapter step outside the core).
+No C++ semantics were changed and no new semantics were introduced: the
+model's state machine is exactly `ObserverPhase` with the root OBS-02
+diagram's edges, including the two documented representation decisions the
+implementation made — the `already_terminal` disposition installs no phase
+transition (the registration stays unattached; the host fast-path returns
+without waiting), and the root diagram's Unattached→Retired
+"already terminal or rejected" edge is that disposition, not a slot-state
+edge; and cancel-then-re-arm is a NEW registration generation (episodes are
+numbered and at-most-once delivery is proved per episode, OBS-02 "per
+registration generation").
+
+ProgressSource is absent by construction: publication enters the model only
+as the `CompletePublish` action (publication event → observer delivery
+protocol is the only edge), no variable or action names a backend,
+scheduler/fiber identity or progress fact, and nothing in the liveness
+assumptions needs more than "publication completed" and "a driver eventually
+runs" — the model therefore also demonstrates S5's backend-neutrality
+boundary structurally. The #397 relationship is coordination, not
+dependency: C1-F verified by search that the progress mechanism carries no
+observer vocabulary and that the observer protocol consumes exactly the two
+facts above.
+
+Safety (TLC, `ObserverCore.cfg`, 5,123 states generated / 1,734 distinct /
+depth 16, no error): fourteen invariants hold — reset discipline
+(`InvUnoccupiedClean`), observer-cancel isolation (`InvCancelIsolation`:
+a retired registration with no independent operation cancel never coexists
+with a canceled terminal), attach/publishation atomicity in both directions
+(`InvArmedRequiresUnpublished`, `InvAlreadyTerminalRequiresPublication`),
+the phase/delivery agreement (`InvPhaseDeliveryAgreement` — a retired
+registration owes and holds no delivery), retired finality
+(`InvRetiredStaysRetired`), at-most-once claim and retirement per
+registration episode (`InvAtMostOnceDelivery`, `InvSingleRetirement`), one
+delivery window per identity (`InvSingleOwedEpisode`), claims only behind
+publication (`InvDeliveryAfterPublication`), cancel-acknowledgment ≠
+delivery retirement (`InvRetireOwnership`), the episode-ledger observer pin
+(`InvObserverPin`: a live episode implies its identity is still the occupied
+one — the C++ `release_slot_` resets the phase and advances the generation,
+so the pin is only expressible on the ledger), and host wait-record
+retention (`InvWaiterBacking`).
+
+Conditional liveness (TLC, `ObserverCoreLive.cfg`, FairSpec, 12 temporal
+branches, no error): L0 (accepted ~> published — settlement with no observer
+participation, S4's temporal half), L1 (armed + publication ~> retired),
+L2 (waiting + publication ~> woken) and L4 (refused attach ~> published —
+registration failure preserves the request). Assumptions are exactly the
+declared WF conjuncts on the driver service chain
+(SettleTerminal/BeginPublish/CompletePublish/ClaimDelivery/RouteDelivery/
+ProcessDelivery) and the core reclaim service; Accept, WaiterArrive,
+WaiterRefused, CancelRegistration, CancelRequest and ReleaseBinding carry no
+fairness (attachment, cancellation and binding release are host/owner
+choices), and no instant-scheduling, bounded-execution or infinite-CPU
+assumption exists. These are the C1-F C++ assumptions made checkable; the
+hook-termination assumption is ProcessDelivery's atomicity.
+
+Discrimination (the checks bite): the five C++ mutation seams are mirrored
+one-for-one as model switches and each dies on its named invariant or
+property — `MutAttachIgnoresPublication` (83 states) on
+`InvArmedRequiresUnpublished`, `MutAttachTreatsTerminalAsPublished` (12) on
+`InvAlreadyTerminalRequiresPublication`, `MutDeliveryClaimUnbounded` (79) on
+`InvAtMostOnceDelivery`, `MutCancelDuringDeliveryReturns` (428) on
+`InvRetireOwnership`, `MutPublicationSkipsQueue` on the temporal properties
+(the counter-example is armed ∧ published stuttering — never queued, never
+retired, never woken). Three model-only switches prove the remaining floor
+is load-bearing: `MutObsCancelCancelsOp` (24) dies on `InvCancelIsolation`
+(S1), `MutReclaimIgnoresObserver` (426) on `InvObserverPin`, and
+`MutNoDeliveryWake` on the temporal properties. Nine negated
+`InvCov*` witness certificates are each VIOLATED (reachable), covering the
+required race matrix: attach-vs-publication in both directions (attach rode
+the publication, 86; already-terminal fast path, 83), terminal-window attach
+(12), cancel-vs-claim in both directions (claim won / `delivery_in_progress`
+seen, 428; cancel suppressed the queued delivery, 205), retirement after
+delivery (809), observer-free settlement (31, S4), the delivery pin past
+binding release (199, OBS-03), and registration renewal after cancellation
+(77).
+
+| Field | Content |
+|---|---|
+| Requirement scope | OBS-02/OBS-03 protocol-safety and conditional-liveness obligations in executable form (at-most-once delivery per registration generation; claim exclusivity; cancellation-vs-operation separation; cancellation-vs-delivery ordering with the retired/in-progress distinction; attach/publication resolution in both directions; the slot pin until retirement; release-while-pinned legality), OBS-01's single-active-registration occupied disposition and registration-failure preservation, OBS-04's reserve-before-arm failure ordering (the `no_space` refusal precedes observer acceptance), VERIFY-01/V06–V08 protocol halves. Excludes by evidence class (map sections 7/11): CPP_MEMORY_MODEL visibility (publication happens-before remains the C1-B core-mutex serialization argument, not a TLC result), REQ/PROG/SHUT families, #397's PROG-02 |
+| Implementation | `formal/tla/ObserverCore.tla` (818 lines) plus 19 cfgs (safety matrix, liveness, 8 mutant kills, 9 coverage certificates); `scripts/verify_tla.sh` gains the Stage C1 gate (clean/violate/temporal helpers, exact-invariant kill checks). No production change |
+| Change | Formal evidence only; no C++ file touched |
+| Semantic/regression evidence | TLC v1.7.4 (pinned, SHA-256 verified), OpenJDK 17.0.20.1, Linux x86_64 (WSL2), 2026-09-27: `ObserverCore.cfg` clean (5,123/1,734/depth 16); `ObserverCoreLive.cfg` clean with L0/L1/L2/L4 checked (12 temporal branches); 6 safety mutants killed on their named invariants; 2 liveness mutants killed on temporal properties; 9 coverage witnesses violated as required. Stage C1 gate exit 0 (20 checks) |
+| Publication/thread evidence | Atomic-section granularity only: each action is one mutex-protected core operation or one adapter step, which is exactly the C++ serialization; memory visibility below that granularity is out of scope by evidence class |
+| Backend/kernel evidence | None needed: io_uring and ThreadPool appear only through their shared `deliver_event` shape (claim then ready event), which the model's ClaimDelivery + RouteDelivery reproduce identically |
+| Authority-contraction audit | No runtime mechanism added or removed; the model's ghost ledgers (episode staging, claim/retire counts, per-identity publication and cancel facts) are test-only evidence, classified per the map's evidence classes. Nothing in the implementation became redundant |
+| Status | C1-H (#433) complete at this commit: the formal gap of #396's post-merge audit (CONDITIONAL_PASS, "formal proof evidence missing") is closed — the merged protocol satisfies its frozen contract under TLC for the modeled scope. The OBS assessment row moves to VERIFIED with the two standing evidence-class limits recorded (C++ memory-model visibility argued by core-mutex serialization evidence, not formal proof; external-host W-03 integration remains #397's scope). #396's dependency on #397 is corrected to coordination: the Observer mechanism does not depend on ProgressSource |
