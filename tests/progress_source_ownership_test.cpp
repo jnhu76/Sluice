@@ -9,7 +9,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -17,6 +20,9 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
+
+#include <csignal>
+#include <sys/wait.h>
 
 namespace {
 
@@ -29,7 +35,8 @@ using sluice::Result;
 
 // Negative structural evidence: the backend-facing capability exposes no
 // waiting, acknowledgement, arming, or owner-control operation, the backend no
-// longer hosts a wait-source seam, and the legacy wait-source types are gone.
+// longer hosts a wait-source seam, and the backend wait surface is gone — the
+// context refuses to wait rather than delegating.
 template <class Port>
 concept port_has_no_wait_api =
     !requires(Port p, detail::ProgressSource::Token t) {
@@ -46,6 +53,26 @@ static_assert(port_has_no_wait_api<detail::BackendProgressPort>);
 template <class B>
 concept backend_has_no_wait_source_member = !requires { &B::wait_source; };
 static_assert(backend_has_no_wait_source_member<AsyncBackend>);
+
+template <class B>
+concept backend_has_no_wait_member =
+    !requires(B b) { b.wait_one(); } && !requires { &B::wait_one_is_nonblocking; };
+static_assert(backend_has_no_wait_member<AsyncBackend>);
+
+bool child_dies_running(void (*scenario)()) {
+    const pid_t pid = ::fork();
+    if (pid < 0)
+        return false;
+    if (pid == 0) {
+        ::alarm(30);
+        scenario();
+        std::_Exit(0);
+    }
+    int status = 0;
+    if (::waitpid(pid, &status, 0) != pid)
+        return false;
+    return WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT;
+}
 
 bool notification_fd_readable(int fd) {
     if (fd < 0)
@@ -115,9 +142,6 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
     class NullBackend final : public AsyncBackend {
       public:
         std::size_t poll() override { return 0; }
-        Result<std::size_t> wait_one() override {
-            return sluice::make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
-        }
         std::size_t outstanding() const noexcept override { return 0; }
         std::size_t slot_capacity() const noexcept override { return 0; }
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
@@ -315,6 +339,119 @@ bool backend_destructor_runs_while_progress_source_lives() {
     return signaled_in_destruction.load(std::memory_order_acquire);
 }
 
+bool constructor_unwind_destroys_backend_before_progress_source() {
+    class UnwindSignalBackend final : public AsyncBackend {
+      public:
+        explicit UnwindSignalBackend(std::atomic<bool>* signaled) noexcept
+            : signaled_(signaled) {}
+
+        ~UnwindSignalBackend() override {
+            progress_port_.signal();
+            signaled_->store(true, std::memory_order_release);
+        }
+
+        std::size_t slot_capacity() const noexcept override {
+            // A capacity the core storage can never satisfy: RequestCore
+            // construction throws length_error before any allocation, after
+            // the port is already attached.
+            return std::numeric_limits<std::size_t>::max();
+        }
+
+      private:
+        std::size_t poll() override { return 0; }
+        std::size_t outstanding() const noexcept override { return 0; }
+        detail::PublicCancel cancel_identity(detail::RequestKey) override {
+            return detail::PublicCancel::not_found;
+        }
+        Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+
+        std::atomic<bool>* signaled_;
+    };
+
+    std::atomic<bool> signaled{false};
+    try {
+        AsyncIoContext ctx(std::make_unique<UnwindSignalBackend>(&signaled));
+        (void)ctx;
+        return false;
+    } catch (const std::length_error&) {
+        // Under sanitizers, unwinding in the wrong member order aborts inside
+        // the backend destructor's port signal on the freed source.
+        return signaled.load(std::memory_order_acquire);
+    } catch (const std::bad_alloc&) {
+        return signaled.load(std::memory_order_acquire);
+    }
+}
+
+bool unattached_backend_control_ops_are_absent() {
+    auto threadpool = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    threadpool->close_admission();
+#if defined(SLUICE_HAS_LIBURING)
+    auto uring = std::make_unique<UringAsyncBackend>();
+    uring->close_admission();
+#endif
+    return true;
+}
+
+void bind_physical_readiness_twice_scenario() {
+    class DoubleBindBackend final : public AsyncBackend {
+      public:
+        void progress_port_attached() noexcept override {
+            fd_ = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+            progress_port_.bind_physical_readiness(fd_);
+            progress_port_.bind_physical_readiness(fd_);
+        }
+
+      private:
+        std::size_t poll() override { return 0; }
+        std::size_t outstanding() const noexcept override { return 0; }
+        std::size_t slot_capacity() const noexcept override { return 0; }
+        detail::PublicCancel cancel_identity(detail::RequestKey) override {
+            return detail::PublicCancel::not_found;
+        }
+        Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+
+        int fd_ = -1;
+    };
+
+    auto backend = std::make_unique<DoubleBindBackend>();
+    AsyncIoContext ctx(std::move(backend));
+    (void)ctx;
+}
+
+bool readiness_binding_is_one_shot() {
+    return child_dies_running(bind_physical_readiness_twice_scenario);
+}
+
 #if defined(SLUICE_HAS_LIBURING)
 bool uring_available() {
     UringAsyncBackend backend;
@@ -403,6 +540,10 @@ int main() {
         {"moved_from_context_is_inert", moved_from_context_is_inert},
         {"backend_destructor_runs_while_progress_source_lives",
          backend_destructor_runs_while_progress_source_lives},
+        {"constructor_unwind_destroys_backend_before_progress_source",
+         constructor_unwind_destroys_backend_before_progress_source},
+        {"unattached_backend_control_ops_are_absent", unattached_backend_control_ops_are_absent},
+        {"readiness_binding_is_one_shot", readiness_binding_is_one_shot},
         {"uring_zero_op_signals_context_notification",
          uring_zero_op_signals_context_notification},
         {"uring_completion_wakes_parked_driver", uring_completion_wakes_parked_driver},

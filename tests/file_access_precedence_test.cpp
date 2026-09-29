@@ -63,9 +63,6 @@ class CountingBackend final : public AsyncBackend {
     int write_entries = 0;
 
     std::size_t poll() override { return 0; }
-    Result<std::size_t> wait_one() override {
-        return sluice::make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
-    }
     std::size_t outstanding() const noexcept override { return 0; }
     bool supports_request_identity() const noexcept override { return true; }
 

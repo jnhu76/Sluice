@@ -85,7 +85,6 @@ class UringAsyncBackend : public AsyncBackend {
 #endif
 
     std::size_t poll() override;
-    Result<std::size_t> wait_one() override;
 
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;

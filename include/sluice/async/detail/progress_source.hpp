@@ -143,12 +143,7 @@ class ProgressSource {
                 std::lock_guard<std::mutex> lk(mtx_);
                 if (rc < 0) {
                     if (errno != EINTR) {
-                        std::fprintf(stderr,
-                                     "sluice::async::detail::ProgressSource: poll(2) failed with "
-                                     "errno=%d (wait-domain failure)\n",
-                                     errno);
-                        std::fflush(stderr);
-                        std::terminate();
+                        wait_domain_fail_fast_("poll(2)", errno);
                     }
                 } else {
                     if ((pfds[0].revents & POLLNVAL) != 0 ||
@@ -202,6 +197,9 @@ class ProgressSource {
 
     void bind_physical_readiness(int fd) noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
+        if (bound_readiness_fd_ != -1) {
+            wait_domain_fail_fast_("bind_physical_readiness", EEXIST);
+        }
         bound_readiness_fd_ = fd;
     }
 
@@ -212,18 +210,52 @@ class ProgressSource {
 #endif
 
   private:
+    [[noreturn]] static void wait_domain_fail_fast_(const char* op, int err) noexcept {
+        std::fprintf(stderr,
+                     "sluice::async::detail::ProgressSource: %s failed with errno=%d "
+                     "(wait-domain failure)\n",
+                     op, err);
+        std::fflush(stderr);
+        std::terminate();
+    }
+
     void drain_notification_nolock_() noexcept {
         std::uint64_t value = 0;
-        while (::read(notification_fd_, &value, sizeof(value)) == sizeof(value)) {
+        for (;;) {
+            errno = 0;
+            const ssize_t n = ::read(notification_fd_, &value, sizeof(value));
+            if (n == static_cast<ssize_t>(sizeof(value))) {
+                continue;
+            }
+            if (n < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                if (errno == EAGAIN) {
+                    return;
+                }
+            }
+            wait_domain_fail_fast_("read", errno);
         }
     }
 
     void wake_notification_() noexcept {
         const std::uint64_t one = 1;
-        // Saturation/coalescing keeps readiness asserted; the epoch bump under
-        // the lock already guarantees the next parked recheck observes the
-        // transition, so a failed write is not a lost wake.
-        if (::write(notification_fd_, &one, sizeof(one)) != static_cast<ssize_t>(sizeof(one))) {
+        for (;;) {
+            errno = 0;
+            const ssize_t n = ::write(notification_fd_, &one, sizeof(one));
+            if (n == static_cast<ssize_t>(sizeof(one))) {
+                return;
+            }
+            if (n < 0 && errno == EINTR) {
+                continue;
+            }
+            // Saturation leaves read-readiness asserted, so EAGAIN is an
+            // already-pending wake rather than a lost one.
+            if (n < 0 && errno == EAGAIN) {
+                return;
+            }
+            wait_domain_fail_fast_("write", errno);
         }
     }
 
@@ -247,12 +279,18 @@ class ProgressSource {
 // owner-control operation, and it never lends the context notification fd.
 class BackendProgressPort {
   public:
+    // An unattached port has no waiter domain: both operations are absent
+    // until the context installs the source.
     void signal() noexcept {
-        source_->signal();
+        if (source_ != nullptr) {
+            source_->signal();
+        }
     }
 
     void bind_physical_readiness(int fd) noexcept {
-        source_->bind_physical_readiness(fd);
+        if (source_ != nullptr) {
+            source_->bind_physical_readiness(fd);
+        }
     }
 
   private:

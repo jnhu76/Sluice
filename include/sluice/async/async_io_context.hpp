@@ -73,20 +73,15 @@ class AsyncBackend {
 
     virtual std::size_t poll() = 0;
 
-    virtual Result<std::size_t> wait_one() {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
-    }
-
     virtual void cancel(Completion<std::size_t>& c) { (void)c; }
     virtual void cancel(Completion<void>& c) { (void)c; }
 
     virtual std::size_t outstanding() const noexcept = 0;
 
-    virtual bool wait_one_is_nonblocking() const noexcept { return false; }
-
     // Whether the backend produces physical progress signals, so a driver can
     // park productively on the context progress source. Backends that answer
-    // false never enter the context wait protocol.
+    // false are not v1 request backends: the context refuses to wait on them,
+    // and ApplicationRuntime rejects them at build time.
     virtual bool signals_physical_progress() const noexcept { return false; }
 
     virtual bool supports_request_identity() const noexcept { return false; }
@@ -274,9 +269,12 @@ class AsyncIoContext {
 #endif
 
   private:
-    std::unique_ptr<AsyncBackend> backend_;
+    // Declaration order is teardown order on every exit path, constructor
+    // unwind included: the backend retires before the progress source its
+    // port borrows and before the core its workers call into.
     std::unique_ptr<detail::RequestCore> core_;
     std::unique_ptr<detail::ProgressSource> progress_;
+    std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
 
     mutable std::mutex access_mtx_;

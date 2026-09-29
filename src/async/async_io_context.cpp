@@ -19,8 +19,8 @@ std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::d
 }
 
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
-    : backend_(std::move(backend)),
-      progress_(std::make_unique<detail::ProgressSource>()), stats_(stats) {
+    : progress_(std::make_unique<detail::ProgressSource>()), backend_(std::move(backend)),
+      stats_(stats) {
     if (backend_) {
         backend_->attach_stats(stats_);
         backend_->attach_progress_port(detail::BackendProgressPort{progress_.get()});
@@ -40,15 +40,11 @@ AsyncIoContext::~AsyncIoContext() {
     if (backend_ && backend_->outstanding() != 0) {
         detail::async_context_outstanding_fail_fast();
     }
-    // Workers of a core-governed backend call into the core and signal the
-    // progress port, so the backend must retire before the core and progress
-    // storage disappear.
-    backend_.reset();
 }
 
 AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept
-    : backend_(std::move(other.backend_)), core_(std::move(other.core_)),
-      progress_(std::move(other.progress_)), stats_(other.stats_) {}
+    : core_(std::move(other.core_)), progress_(std::move(other.progress_)),
+      backend_(std::move(other.backend_)), stats_(other.stats_) {}
 
 AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     if (this != &other) {
@@ -355,15 +351,8 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
     if (backend_ == nullptr) {
         return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
     }
-
     if (!backend_->signals_physical_progress()) {
-        std::lock_guard<std::mutex> lk(access_mtx_);
-        if (stats_)
-            ++stats_->wait_calls;
-        auto r = backend_->wait_one();
-        if (r.has_value() && stats_)
-            stats_->completed_ops += r.value();
-        return r;
+        return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
     }
 
     {

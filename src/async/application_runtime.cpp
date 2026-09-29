@@ -105,7 +105,7 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
         workers_ = 1;
     }
 
-    if (!backend_->signals_physical_progress() && !backend_->wait_one_is_nonblocking()) {
+    if (!backend_->signals_physical_progress()) {
         return make_unexpected<std::unique_ptr<ApplicationRuntime>>(
             IoError{IoError::Code::invalid_state});
     }

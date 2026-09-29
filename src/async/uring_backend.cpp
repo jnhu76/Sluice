@@ -51,9 +51,6 @@ Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp, Complet
 std::size_t UringAsyncBackend::poll() {
     return 0;
 }
-Result<std::size_t> UringAsyncBackend::wait_one() {
-    return std::size_t{0};
-}
 void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
 void UringAsyncBackend::cancel(Completion<void>&) {}
 
@@ -1112,12 +1109,6 @@ std::size_t UringAsyncBackend::poll() {
     return published;
 }
 
-Result<std::size_t> UringAsyncBackend::wait_one() {
-    if (!have_ring_)
-        return Result<std::size_t>{std::size_t{0}};
-    return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
-}
-
 detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexcept {
     detail::PublicCancel disposition;
     {
@@ -1193,7 +1184,9 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexc
 void UringAsyncBackend::close_admission() {
     if (!have_ring_)
         return;
-    core_->close_admission();
+    if (core_ != nullptr) {
+        core_->close_admission();
+    }
     signal_ready_progress();
 }
 
