@@ -534,28 +534,8 @@ std::size_t ThreadPoolBackend::poll() {
     return published;
 }
 
-Result<std::size_t> ThreadPoolBackend::wait_one() {
-    for (;;) {
-        BackendWaitToken token = ready_wait_.snapshot();
-        std::size_t n = poll();
-        if (n > 0)
-            return n;
-        if (ready_wait_.wait_for_change(token) == BackendWakeReason::interrupted) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            wait_control_wake_final_reap_pause_();
-#endif
-
-            n = poll();
-            if (n > 0)
-                return n;
-            return std::size_t{0};
-        }
-    }
-}
-
 void ThreadPoolBackend::signal_ready_progress() noexcept {
-    ready_wait_.signal_progress();
+    progress_port_.signal();
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -646,18 +626,6 @@ void ThreadPoolBackend::wait_publication_epilogue_pause_() noexcept {
 
 void ThreadPoolBackend::wait_delivery_claimed_pause_() noexcept {
     auto* g = delivery_claimed_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
-    auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);
@@ -779,7 +747,7 @@ void ThreadPoolBackend::close_admission() {
     if (core_ != nullptr) {
         core_->close_admission();
     }
-    ready_wait_.interrupt_all();
+    signal_ready_progress();
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

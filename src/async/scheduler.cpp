@@ -394,7 +394,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                                                  : WorkerState::ParkDomain::Scheduler);
 
                     if (ws->park_domain == WorkerState::ParkDomain::Backend) {
-                        ctx_.arm_backend_wait_commit();
+                        ctx_.arm_progress_wait_commit();
                         backend_wait_active_.store(true, std::memory_order_release);
                     }
                 }

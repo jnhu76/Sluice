@@ -347,9 +347,6 @@ class RecordingBackend final : public AsyncBackend {
     }
 
     std::size_t poll() override { return 0; }
-    Result<std::size_t> wait_one() override {
-        return sluice::make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
-    }
     std::size_t outstanding() const noexcept override { return 0; }
 
   private:

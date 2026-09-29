@@ -101,7 +101,7 @@ void Scheduler::signal_wake_locked() {
     wake_cv_.notify_all();
 
     if (backend_wait_active_.load(std::memory_order_acquire)) {
-        ctx_.interrupt_backend_waiters();
+        ctx_.interrupt_progress_waiters();
     }
 }
 
@@ -121,9 +121,9 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
                                                static_cast<std::size_t>(waiting_select_count_);
             forensics_rec.external_wake_possible = external_wake_possible_locked();
         }
-        const BackendWaitToken forensics_tok = ctx_.backend_wait_token_for_test();
-        forensics_rec.ready_generation = forensics_tok.progress_generation;
-        forensics_rec.control_generation = forensics_tok.control_generation;
+        const detail::ProgressSource::Token forensics_tok = ctx_.progress_token_for_test();
+        forensics_rec.ready_generation = forensics_tok.progress;
+        forensics_rec.control_generation = forensics_tok.control;
         forensics_rec.backend_outstanding = ctx_.outstanding();
     }
     forensics_rec.worker_id = ws->id;
@@ -267,7 +267,7 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
         wake_epoch_now = wake_epoch_;
     }
 
-    const BackendWaitToken tok = ctx_.backend_wait_token_for_test();
+    const detail::ProgressSource::Token tok = ctx_.progress_token_for_test();
     const std::size_t outstanding = ctx_.outstanding();
 
     std::fprintf(stderr,
@@ -275,8 +275,8 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
                  "outstanding=%zu admission=%s idle_workers=%u terminate=%d "
                  "backend_wait_active=%d\n",
                  static_cast<unsigned long long>(wake_epoch_now),
-                 static_cast<unsigned long long>(tok.progress_generation),
-                 static_cast<unsigned long long>(tok.control_generation), outstanding, admission,
+                 static_cast<unsigned long long>(tok.progress),
+                 static_cast<unsigned long long>(tok.control), outstanding, admission,
                  idle_workers_.load(std::memory_order_acquire),
                  global_terminate_.load(std::memory_order_acquire) ? 1 : 0,
                  backend_wait_active_.load(std::memory_order_acquire) ? 1 : 0);

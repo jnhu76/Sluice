@@ -127,59 +127,6 @@ inline void UringAsyncBackend::set_submit_stage_failure_injection(
     submit_stage_failure_injection_.store(injection, std::memory_order_release);
 }
 
-inline void UringAsyncBackend::set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept {
-    if (wait_source_) {
-        wait_source_->set_wait_phase_flag(flag);
-    }
-}
-
-inline void
-UringAsyncBackend::set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
-    if (wait_source_) {
-        wait_source_->set_wait_prepark_counter(counter);
-    }
-}
-
-inline void UringAsyncBackend::set_wait_control_wake_final_reap_pause_gate(
-    detail::UringWaitSource::ControlWakeFinalReapPauseGate* gate) noexcept {
-    if (wait_source_) {
-        wait_source_->set_control_wake_final_reap_pause_gate(gate);
-    }
-}
-
-inline void UringAsyncBackend::set_wait_before_physical_poll_pause_gate(
-    detail::UringWaitSource::BeforePhysicalPollPauseGate* gate) noexcept {
-    if (wait_source_) {
-        wait_source_->set_before_physical_poll_pause_gate(gate);
-    }
-}
-
-inline void UringAsyncBackend::set_wait_poll_ring_fd_override_for_test(int fd) noexcept {
-    if (wait_source_) {
-        wait_source_->set_poll_ring_fd_override_for_test(fd);
-    }
-}
-
-inline void UringAsyncBackend::set_wait_poll_fn_for_test(detail::UringWaitSource::PollFn fn,
-                                                         void* ctx) noexcept {
-    if (wait_source_) {
-        wait_source_->set_poll_fn_for_test(fn, ctx);
-    }
-}
-
-inline bool UringAsyncBackend::wait_epoch_changed_for_test(BackendWaitToken observed) noexcept {
-    if (!wait_source_)
-        return false;
-    wait_source_->wait_epoch_changed(observed);
-    return true;
-}
-
-inline std::optional<BackendWaitToken> UringAsyncBackend::try_wait_token_for_test() const noexcept {
-    if (!wait_source_)
-        return std::nullopt;
-    return wait_source_->try_snapshot();
-}
-
 }
 
 #endif

@@ -41,7 +41,7 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | Admission and slot lifecycle | REQ, BOUND | NOT_ASSESSED | V04–V05, V08–V09, V24, V26; executable model and failure injection. Substrate half: see the B1-1 review record (standalone protocol substrate with model+test evidence; production request paths unchanged). Context-ownership half: see the B1-A review record (context-owned core, one context identity domain with an executed exhaustion boundary; production request paths still unmigrated). Production ThreadPool half: see the B1-B review record (ThreadPool acceptance/identity/terminal/publication/release/reclaim governed by the context-owned RequestCore); production io_uring half: see the B1-C review record (the same authority for io_uring); the adoption seam collapsed into the backend interface contract at B1-D (see the B1-D review record). Public-acceptance half: see the B2 review record (the accepted identity flows to a returned public Request on both backends; pre-accept failure returns no Request, post-accept failure keeps it owned) |
 | Public Request and result lifetime | HANDLE, LIFE | NOT_ASSESSED | Move/consume/discard, retained results, release-build violation behavior. See the B2 review record for the public `Request<T>`/`RequestId` surface: consumption atomic with binding release, non-consuming observation, the empty/pending/published/consumed model, always-on destructor and context-lifetime diagnostics (release-build death evidence), retained-result capacity pinning, model consumption extension with killed mutants. Observer/progress/shutdown halves stay with #396/#397/#401; whole-row verdicts wait for independent final review |
 | Observer attachment and retirement | OBS | VERIFIED | V06–V08; attach/publication and cancel/delivery interleavings. Implemented and evidenced across C1-A..C1-G (backend-neutral core ownership, ordering oracles with named mutation kills, the five-phase delivery machine, the RuntimeTaskContext adapter with reserve-before-arm failure ordering, legacy-mechanism removal, declared L3 assumptions) and formally closed by the C1-H record (#433): the TLA+ `ObserverCore` model derived from the merged implementation proves the safety floor (at-most-once delivery per registration generation, cancel isolation, attach/publish atomicity, retirement finality, the episode pin) and conditional liveness L0/L1/L2/L4 under declared WF assumptions, with the five C++ mutation seams mirrored and killed. Standing limits by evidence class: publication happens-before visibility is argued by core-mutex serialization evidence (C1-B), not formal proof; external-host W-03 integration is #397's scope |
-| Progress and external integration | PROG, W-03 | NOT_ASSESSED | V10–V12, V23; both backends; no-busy-poll/no-lost-wake evidence |
+| Progress and external integration | PROG, W-03 | NOT_ASSESSED | V10–V12, V23; both backends; no-busy-poll/no-lost-wake evidence. Authority cutover only: see the C2-A review record (#397 stage C2-A, status C2_A_IMPLEMENTED_PENDING_REVIEW) — IoContext owns the ProgressSource and backends hold only the narrow physical signaling/binding capability; no PROG/W-03 behavior claim is closed by it. ThreadPool no-lost-wake is C2-B, io_uring convergence C2-C, owner/outcomes/external-host lifetime C2-D, formal closure C2-E |
 | Public threading and memory handoff | THREAD, REQ-04 | NOT_ASSESSED | API concurrency matrix, publication review, deterministic handoff and race instrumentation |
 | Cancel and effect reporting | CANCEL, ERR-02 | GAP | V13–V15, V19; unsupported/retryable/coalesced control behavior. A1 added reference rules but no request path represents an unaccounted remainder or preserves a count across a cancel |
 | ThreadPool profile | BACKEND, PROD-02 | GAP | Full required operation matrix; bounded workers; shared conformance; shutdown. A1 recorded zero-length dispatch, precedence ordering and effect reporting as open |
@@ -916,3 +916,151 @@ both via `xmake build`/`xmake run`.
 | Backend/kernel evidence | Unchanged from C1-H |
 | Authority-contraction audit | No mechanism added or removed; verification-only slice, nothing became redundant |
 | Status | #396 formal gate closed: implementation (PR #434, C1-A..C1-G), deterministic evidence and the independently reproduced TLC gate all PASS at master; #397 is coordination, not a prerequisite. #396 is ready to close with the two standing evidence-class limits carried on the OBS row (C++ memory-model visibility by core-mutex serialization evidence, not formal proof; external-host W-03 integration remains #397's scope) |
+
+## C2-A review record — Issue #397, ProgressSource authority cutover
+
+Stage-local status: `C2_A_IMPLEMENTED_PENDING_REVIEW`. This record claims the
+C2-A exit gate only (IoContext owns ProgressSource authority; backends own no
+host-facing wait semantics; ThreadPool/io_uring can proceed onto one shared
+progress contract; no Scheduler/Fiber/Observer identity in the new seam). It
+closes no PROG or W-03 requirement.
+
+| Field | Content |
+|---|---|
+| Requirement scope | #397 stage C2-A only, under ARCH-01 (IoContext owns ProgressSource; backend → physical progress signal edge), PROG-01/02/03 structural direction, THREAD-01/02 constraints, W-03 boundary. Explicitly excluded: full no-lost-wake campaign (C2-B), io_uring CQ convergence and saturation proof (C2-C), owner enforcement/outcome taxonomy/external-host lifetime (C2-D), TLA+ and V10/V11/V12/V23/V24/V25 evidence (C2-E). RequestCore (#394) and Observer (#396) semantics untouched |
+| Implementation | Base `3d79cf380734a6b4bb78751e357bf143fc480521` (live master at start; equals the expected #396-closure baseline; no intervening commits). Implementation commits `4d3a53aacd3ca141346c89c3c98bbc978fefc400` (authority cutover) and `6b9008f821fe906a8bb944b84eb4e4c8a40c2ddf` (review-fix round) on branch `feat/397-c2-a-progress-source-ownership`; the live head may be ahead of the last cited commit by docs-only evidence commits (the PR carries it). New `include/sluice/async/detail/progress_source.hpp` (context-owned `ProgressSource` + `BackendProgressPort`); `AsyncIoContext` owns the source, routes `wait_one`/interrupt/committed-wait through it, and exposes the host borrow/ack pair (`progress_notification_fd()`, `acknowledge_progress_notification()`); `AsyncBackend::wait_source()` deleted, replaced by `attach_progress_port` (context-only install, `progress_port_attached()` notification hook) + `signals_physical_progress()` capability probe; ThreadPool `ReadyWaitSource` and io_uring `UringWaitSource` deleted; io_uring lends its ring fd read-only to context parks and loses its blocking `wait_one` |
+| Change | Before: the host wait contract (`BackendWaitSource`/`BackendWaitToken`/`BackendWakeReason`, `wait_for_change`, `interrupt_all`, arm/consume) lived in backend-owned `ReadyWaitSource`/`UringWaitSource` objects handed out through `AsyncBackend::wait_source()`; the io_uring object also polled a backend-owned control eventfd and the ring fd. After: the context owns the notification primitive (eventfd `EFD_NONBLOCK\|EFD_CLOEXEC`), the notification epochs, the committed-wait handshake state, the interrupt epoch, and the drain/ack operation; backends signal progress through the port and (io_uring) lend their ring fd for poll-only inclusion in context parks. Observable behavior of existing public paths is preserved: same `wait_one` outcomes and scheduler park protocol; `ApplicationRuntime` build probe and stop wake re-pointed; moved-from `wait_one` now returns `invalid_state` instead of dereferencing null. Review-fix commit `6b9008f8`: (1) `AsyncIoContext` member declaration order is the teardown order on every exit path — constructor unwind included — so `backend lifetime <= ProgressSource lifetime` no longer depends on the destructor body; (2) the context wake write and drain retry `EINTR`, treat eventfd saturation (`EAGAIN`) as already-asserted readiness, and fail fast on any other result — a failed wake can no longer be silently swallowed after the owner parked; (3) `AsyncBackend::wait_one()` and `wait_one_is_nonblocking()` are deleted — the context refuses (`not_supported`) to wait on a backend that does not signal physical progress, and `ApplicationRuntime::build()` rejects such backends; the backend no longer has any host-facing wait authority; (4) `BackendProgressPort` operations on a backend never attached to a context are absent operations, and uring `close_admission()` guards the unattached core like threadpool; (5) `bind_physical_readiness` enforces the one-shot lend (second lend fails fast) |
+| Semantic/regression evidence | New `progress_source_ownership_test`(+`_uring`): 12/12 each at the review-fix commit — the 9 cutover cases plus constructor-unwind teardown-order fault injection (deterministic `RequestCore` capacity failure with a destructor-signal backend; a restored wrong-order member layout is killed by ASan with heap-use-after-free at backend teardown, exit 1), unattached-backend control ops (bare `close_admission` on both backends), and fork-isolated one-shot readiness-binding enforcement (second lend aborts with the bind fail-fast) — ownership (context owns one source, non-progress backend stays out of the wait protocol), route (backend completion makes the context notification fd readable; ack drains it), move construction/assignment continuity (parked driver on the moved context wakes; fd continuity asserted), moved-from inertness, backend-dtor-before-source with sanitizer discrimination, real-ring zero-op signal route and parked-driver wake. Existing suites re-run green at head (release, liburing=y): threadpool_core_cutover 16/16 (incl. the parked-owner no-lost-wake regression with the migrated prepark seam), uring_core_cutover 21/21, request_core protocol/publication/consumer 45+11+2, request_core_ownership 8/8 (+uring 9/9), public_request 13/13 (+uring, release-violation 4/4 both), uring_backend_smoke 8/8 real ring, uring_public_consumer_probe, semantic_backend_conformance 0 recorded divergences, runtime_waiter_observer 5/5, async_sync_admission 4/4, W-01/file/semantic suites, app consumption suites, C1 named-mutation builds still killed |
+| Protocol/model evidence | None claimed (C2-E owns formal work; no model touched). Compile-time negative structural evidence instead: the test's `static_assert`s prove the backend port exposes no wait/snapshot/interrupt/arm/consume/ack/notification-fd member and `AsyncBackend` has no `wait_source` member |
+| Publication/thread evidence | Lock-order audit at head: the ProgressSource mutex is a leaf (acquires nothing). Paths introduced/changed: worker `work_mtx_` release → `port.signal()` (leaf); uring `dispatch_mtx_` → `signal()` under poison recovery (leaf); context `access_mtx_` → `backend->poll()` → signal (leaf); no reverse edge exists, so no inversion. `signal()`/`interrupt()` never touch `access_mtx_`, so worker-thread signaling needs no external serialization. The parked-wait race discipline: epoch check and notification drain happen under one lock hold; signalers bump the epoch under the same lock before writing the fd, so a park either observes the epoch change or is woken by the write (saturation/coalescing tolerated; readiness persists; the write retries `EINTR`, treats saturation as already-asserted readiness, and fails fast on any other error rather than relying on the epoch claim alone) — the same argument class the deleted `UringWaitSource` used, minus its parked/pending counters, which the single-fd epoch-return design does not need |
+| Backend/kernel evidence | Linux WSL2 kernel 6.18.33.2, gcc 15 release/debug, clang 21 asanubsan; real io_uring exercised (`available()==1`) in the uring cutover, smoke, conformance and progress suites; liburing disabled build is the honest stub (uring test targets absent, ThreadPool suites green). Matrix: release+uring full group; release no-uring (targeted); debug±uring (targeted); clang ASan+UBSan targeted (progress suites both variants, cutover, public request, ownership — all pass); TSan targeted (progress suites both variants + threadpool cutover — no reports). Limits: kernel-eventfd CQ registration was evaluated and deferred to C2-C (registration without the ack-before-recheck park discipline could strand a CQE drained blind; the level-triggered ring-fd park preserves real-ring behavior without claiming convergence). Review-fix matrix: progress suites 12/12 and threadpool/uring cutover, public_request, request ownership rerun green at release±uring, debug, clang ASan+UBSan and TSan; the restored wrong-order member-layout mutation is killed by ASan. Pre-existing failures not introduced here, reproduced identical on master: `runtime_waiter_observer_test` reads the freed Scheduler after `join()` under ASan (test-code defect), and its TSan build breaks on the pre-existing `disable_sanitizer_instrumentation` attribute warning in `fiber_ctx.cpp` |
+| Authority-contraction audit | Removed as backend authority: `BackendWaitSource`, `BackendWaitToken`, `BackendWakeReason`, `AsyncBackend::wait_source()`, `ReadyWaitSource`, `UringWaitSource`, the backend-owned control eventfd, the io_uring blocking `wait_one`/`wait_cqe_without_submit`, and the unused wait test seams (phase flag, prepark-at-backend, control-wake/before-poll gates, poll overrides, `WaitSourceProgressPauseGate`; `set_wait_prepark_counter_for_test` re-homed to the context seam, `backend_wait_token_for_test` renamed `progress_token_for_test`). Retained with owner and removal stage: ThreadPool `work_cv_` (internal worker coordination, not a W-03 contract; retained indefinitely as backend-physical), io_uring ring fd + `dispatch_mtx_` (backend-physical, permanent), the readiness-fd lend (binding mechanism; C2-C may replace it with kernel eventfd registration without moving authority), admission-close wake expressed as a progress signal (control-outcome taxonomy lands in C2-D). Removed at the review-fix commit: `AsyncBackend::wait_one()` (the base-class backend wait delegate; the context now refuses `not_supported` on non-progress backends instead of delegating) and the `wait_one_is_nonblocking` capability probe (`ApplicationRuntime::build()` admits only progress-signaling backends — a non-progress backend is not a v1 request backend). No new mechanism failed the justification gate; the six C2-A decisions and the per-mechanism table are recorded below |
+| Status | C2_A_IMPLEMENTED_PENDING_REVIEW — the C2-A exit gate holds at the review-fix commit (`6b9008f8`), which closes the first review round (P1-1 teardown-order lifetime incl. constructor unwind, P1-2 eventfd lost-wake retry/fail-fast, P1-3 elimination of the backend wait delegate, P2-1 unattached-port safety, P2-2 enforced one-shot readiness bind, P3 head/evidence correction). Explicitly not claimed: ThreadPool no-lost-wake arm/ack/snapshot/recheck/park campaign (C2-B), real-ring CQ convergence/saturation proof (C2-C), owner exclusivity enforcement, sticky control, deadline/health outcomes, external-host stop/settle/detach lifecycle (C2-D), TLA+ model and V10/V11/V12/V23(progress)/V25 closure (C2-E) |
+
+### C2-A six decisions
+
+D1 — minimum persistent ProgressSource state: (1) the owned notification fd
+(the pollable primitive itself); (2) `progress_epoch_` — the actionable-progress
+notification epoch (epoch, not outstanding-count; written by signal/interrupt
+under the leaf lock; read by the driver wait protocol; the comparison basis of
+the no-lost-wake handshake); (3) `control_epoch_` — the control-request epoch
+(writer: interrupt; reader: wait reason); (4) `armed_` + `armed_control_epoch_`
+— the committed-wait handshake consumed by the scheduler admission protocol
+(driver-only under THREAD-01); (5) `bound_readiness_fd_` — the backend-lent
+poll-only physical readiness fd. No health state, no deadline state, no owner
+token (D6), no wake counters (derived away), no request counts. Epoch wrap has
+no reset path in C2-A; the exhaustion boundary model is C2-E/V24.
+
+D2 — Linux pollable primitive: one context-owned eventfd created in
+`AsyncIoContext` construction and closed by the source's destructor.
+Construction failure (eventfd(2) failing) propagates out of context
+construction as an explicit error; there is no CV-only degraded fallback. The
+host may borrow the fd via `progress_notification_fd()` for event-loop
+registration only; draining/rearming is owned by
+`ProgressSource::acknowledge_notification()` (D5). The W-03 host example is
+C2-B scope.
+
+D3 — backend seam: `BackendProgressPort` = `signal()` (actionable progress may
+exist) + `bind_physical_readiness(int fd)` (backend lends its own fd for
+poll-only park inclusion; context never reads/writes/closes it). The port
+cannot wait, snapshot, arm, consume, acknowledge, interrupt, or reach the
+context notification fd (compile-time enforced in the evidence test). It is
+installed exactly once by the context constructor before any work can exist;
+there is no rebind path — a second readiness lend fails fast (enforced since
+the review-fix commit, previously conventional). Rationale per method: signal is required by the 11
+live backend transition sites (ThreadPool 5, io_uring 6) and derivable nowhere else; the readiness lend
+is required because ring CQ readiness is kernel-side state the backend alone
+knows; neither leaks host-wait or owner-control semantics, and neither allows
+the backend to drain host readiness.
+
+D4 — io_uring binding boundary: the notification fd is context-owned; the ring
+fd remains entirely backend-private (created/closed by the backend's ring
+state); host code never learns the ring fd (no API carries it across the
+context boundary); the C2-A binding capability is the poll-only lend. Kernel
+eventfd registration (`io_uring_register_eventfd`) was investigated: it binds
+CQ notifications to the context fd, but a parked wait that drains the fd blind
+can strand a CQE that arrived before the drain, so convergence is only correct
+with the ack-before-recheck park discipline — C2-C owns that campaign. The port
+seam is frozen so C2-C can swap the internal park mechanism (registered eventfd
+instead of lent ring fd) without moving authority again.
+
+D5 — stale readiness acknowledgement: draining/rearming the context
+notification fd belongs exclusively to the context-owned ProgressSource —
+internally before each park (drain-under-check-lock) and publicly through
+`acknowledge_progress_notification()`. The backend has no drain capability, and
+the lent readiness fd is poll-only, so no second authority exists after the
+cutover (the backend-owned control eventfd is deleted).
+
+D6 — progress-owner representation: no owner runtime state is added in C2-A.
+One-active-owner/no-recursive-drive remains THREAD-01 caller discipline
+expressed through the context's wait/poll entry points; no C2-A mechanism
+consumes owner identity, so an ownership token would be speculative state.
+C2-D owns enforcement and the sticky control/outcome machinery.
+
+### C2-A mechanism justification
+
+| Mechanism | Fact represented | Owning authority | Why required | Derivable? | Bound/lifetime | Replaces | Removal condition |
+|---|---|---|---|---|---|---|---|
+| `ProgressSource` storage (context member) | The context's persistent progress notification authority | AsyncIoContext | ARCH-01 ownership edge; the driver and future external host need one stable wait/notification object | No — it is the authority | Lives and dies with the context; heap object, stable address across context move | `ReadyWaitSource` + `UringWaitSource` as host contracts | Never (it is the target authority) |
+| Notification eventfd | The Linux pollable notification primitive (W-03 direction) | ProgressSource (RAII create/close) | PROG-03 requires a pollable handle per usable backend; CV-only is insufficient | No | One fd per context; saturation tolerates EAGAIN with readiness persisting | The backend-owned control eventfd in `UringWaitSource` | C2-C may change the internal park mechanism; the fd stays |
+| `progress_epoch_` / `control_epoch_` | Notification epochs for progress and control transitions | ProgressSource | PROG-02 wait-handshake comparison basis; wake-reason distinction | No — persistent comparison state, not derivable from queues | u64, monotonic, no reset in C2-A | The per-source epochs of both deleted sources | Never (authority state) |
+| `armed_` + `armed_control_epoch_` | Committed-wait handshake state | ProgressSource (driver-only) | The scheduler admission protocol (arm → wait_one) already depends on it; losing it would break the existing no-lost-wake parking | No | Single-owner driver state, no bound issue in C2-A | Same fields in both deleted sources | Subsumed/refined by the C2-B handshake campaign |
+| `BackendProgressPort` (signal + readiness lend) | The minimum backend→context physical signaling capability | AsyncBackend holds it; AsyncIoContext installs it | Backends must report physical progress and (uring) physical readiness without host/owner semantics | No — kernel-side readiness is not derivable by the context | Value object; source pointer valid for backend lifetime ≤ source lifetime | `AsyncBackend::wait_source()` + full `BackendWaitSource` interface | Never in v1; C2-C may add the registration capability alongside |
+| `bound_readiness_fd_` (poll-only lend) | Backend physical readiness included in context parks | Context borrows; backend owns the fd | Ring CQ readiness must wake a parked owner before C2-C convergence lands | No — kernel CQ state is invisible to user epochs until reaped | Borrow only; valid while the backend is attached (backend retires first; no wait can be in flight during teardown per THREAD-01) | `UringWaitSource`'s ring-fd polling inside a backend object | C2-C kernel eventfd registration, if adopted |
+| `signals_physical_progress()` probe | Whether the backend produces physical progress at all | AsyncBackend (context re-exposes via `has_split_wait_capability`) | Preserves the existing scheduler park decisions; the ApplicationRuntime build gate and the context wait refusal admit only progress-signaling backends | No — the context cannot know whether a backend will ever signal | Static capability | `wait_source() != nullptr` probe | C2-B may fold it into the progress-contract capability set |
+| Admission-close wake as progress signal | "Owner should re-check; shutdown policy may apply" | Backend emits via port; context owns meaning | Root requires `close_admission()` to wake a potentially sleeping owner | No | Transient signal; sticky control taxonomy is C2-D | `interrupt_all()` called by backends | C2-D control outcomes |
+
+### C2-A signal-source audit
+
+| Transition | Classification |
+|---|---|
+| ThreadPool worker physical completion → publication → signal | SIGNAL_ROUTE_MIGRATED (port signal) |
+| ThreadPool/uring zero-op publication → signal | SIGNAL_ROUTE_MIGRATED |
+| ThreadPool dispatch-failure injection → signal (test-only path) | SIGNAL_ROUTE_MIGRATED |
+| ThreadPool cancel `won_before_execution` → signal | SIGNAL_ROUTE_MIGRATED |
+| uring physical completion reaped by any driver → signal | SIGNAL_ROUTE_MIGRATED |
+| uring CQ arrival while a driver is parked | PRESERVED via level-triggered ring-fd lend; kernel-notification convergence NEEDS_C2_C |
+| uring poison/recover and newly-poisoned dispatch → signal | SIGNAL_ROUTE_MIGRATED |
+| uring cancel `won_before_execution` / running-cancel CQE | SIGNAL_ROUTE_MIGRATED (running cancel wakes through ring readiness) |
+| uring internal `wait_one` self-signals (2 sites) | DEAD with the deleted backend blocking wait |
+| ThreadPool/uring `close_admission` owner wake | SIGNAL_ROUTE_MIGRATED as a progress wake; distinguishable control outcome NEEDS_C2_D |
+| ThreadPool normal dispatch → `work_cv_` only | NOT_A_PROGRESS_OBLIGATION (worker coordination; the driver obligation materializes at publication) |
+| Core dispatch/control/reclaim obligations waking the source directly | NEEDS_C2_B (core-obligation signaling campaign; today they surface through the publication paths above) |
+| Observer delivery | ALREADY_SIGNALLED_CORRECTLY (rides the publication chain) |
+| Stop/admission wake at context level (`interrupt_progress_waiters`) | SIGNAL_ROUTE_MIGRATED (context-owned interrupt epoch); sticky/acknowledged semantics NEEDS_C2_D |
+
+### C2-A discrimination evidence
+
+M1 — backend reroutes signals to private state: killed by
+`context_owns_one_progress_source`/`uring_zero_op_signals_context_notification`
+(a private sink leaves the context notification fd unreadable and the parked
+wake never fires). M2 — move leaves the backend bound to a stale source:
+killed by the move continuity tests (a source replaced instead of moved loses
+the fd continuity assertion and the parked driver never wakes; the port has no
+rebind path, so the stale binding cannot even be repaired). M3 — backend gains
+broad ProgressSource authority: compile-time killed (`port_has_no_wait_api`
+concept; `backend_has_no_wait_source_member`). M4 — destruction order
+invalid: the DtorSignalBackend test signals from the backend destructor; a
+source-destruction-first mutant is a use-after-free under the ASan+UBSan
+configuration (both variants pass there), and the explicit `backend_.reset()`
+encodes the order.
+
+### C2-A review-gate answers
+
+1. Without backend-specific names, a host can wait on the context through
+`wait_one`/`progress_notification_fd()` — yes (the io_uring ring fd never
+crosses the context boundary). 2. The backend cannot decide host waiting
+semantics — it can only signal and lend a poll-only fd; park policy lives in
+the context. 3. The ProgressSource is genuinely context-owned storage, not a
+pointer pass-through. 4. The port exposes no wait/ack/arm/control operation
+(compile-time proof). 5. A context move keeps the same heap source, so no
+stale binding is possible (no rebind API exists). 6. Backend teardown cannot
+race source destruction: the destructor retires the backend first and
+destruction is exclusive under THREAD-01. 7. No Scheduler/Fiber/Observer
+identity appears in `progress_source.hpp` (no such symbol is includable
+there). 8. No arm/ack campaign, kernel registration, owner enforcement,
+deadline/health API, or host lifecycle was implemented. 9. Every retained
+mechanism carries an owner and a removal/refinement stage (table above).
+10. Every new mechanism is in the justification table; the wake counters of
+the deleted uring source were judged redundant under the epoch-return design
+and removed rather than migrated.

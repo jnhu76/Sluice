@@ -719,7 +719,7 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
     GateGuard guard{gate};
 
     std::atomic<int> prepark{0};
-    raw->set_wait_prepark_counter_for_test(&prepark);
+    ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::vector<std::byte> buffer(9, std::byte{0});
     Completion<std::size_t> c;
@@ -742,7 +742,7 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
     guard.rearmed = true;
     rearm_threadpool_gate(gate);
     raw->set_worker_claimed_pause_gate(nullptr);
-    raw->set_wait_prepark_counter_for_test(nullptr);
+    ctx.set_progress_prepark_counter_for_test(nullptr);
 
     driver.join();
     t.check(c.ready(), "the progress signal woke the parked owner and drove the publication");

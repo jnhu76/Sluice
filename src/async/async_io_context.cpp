@@ -8,10 +8,6 @@
 #include <optional>
 #include <utility>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include <thread>
-#endif
-
 namespace sluice::async {
 
 namespace {
@@ -23,9 +19,12 @@ std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::d
 }
 
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
-    : backend_(std::move(backend)), stats_(stats) {
-    if (backend_)
+    : progress_(std::make_unique<detail::ProgressSource>()), backend_(std::move(backend)),
+      stats_(stats) {
+    if (backend_) {
         backend_->attach_stats(stats_);
+        backend_->attach_progress_port(detail::BackendProgressPort{progress_.get()});
+    }
     const detail::ContextIdentity identity = detail::allocate_context_identity();
     const std::size_t slot_capacity = backend_ ? backend_->slot_capacity() : 0;
     core_ = std::make_unique<detail::RequestCore>(identity, slot_capacity);
@@ -41,13 +40,11 @@ AsyncIoContext::~AsyncIoContext() {
     if (backend_ && backend_->outstanding() != 0) {
         detail::async_context_outstanding_fail_fast();
     }
-    // Workers of a core-governed backend call into the core, so the backend
-    // must retire before the core storage disappears.
-    backend_.reset();
 }
 
 AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept
-    : backend_(std::move(other.backend_)), core_(std::move(other.core_)), stats_(other.stats_) {}
+    : core_(std::move(other.core_)), progress_(std::move(other.progress_)),
+      backend_(std::move(other.backend_)), stats_(other.stats_) {}
 
 AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     if (this != &other) {
@@ -59,6 +56,7 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
         }
         backend_ = std::move(other.backend_);
         core_ = std::move(other.core_);
+        progress_ = std::move(other.progress_);
         stats_ = other.stats_;
     }
     return *this;
@@ -350,19 +348,10 @@ Result<std::size_t> AsyncIoContext::wait_one() {
 }
 
 Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) {
-    BackendWaitSource* ws = backend_ ? backend_->wait_source() : nullptr;
-    if (ws == nullptr) {
-        (void)max_park;
-        std::lock_guard<std::mutex> lk(access_mtx_);
-        if (stats_)
-            ++stats_->wait_calls;
-        auto r = backend_->wait_one();
-        if (r.has_value() && stats_)
-            stats_->completed_ops += r.value();
-        return r;
+    if (backend_ == nullptr) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
     }
-
-    if (max_park != std::chrono::nanoseconds::max() && !ws->supports_bounded_wait()) {
+    if (!backend_->signals_physical_progress()) {
         return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
     }
 
@@ -372,16 +361,16 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             ++stats_->wait_calls;
     }
 
-    const BackendWaitToken invocation_start = ws->consume_committed_wait();
-    const std::uint64_t control_baseline = invocation_start.control_generation;
+    const detail::ProgressSource::Token invocation_start = progress_->consume_committed_wait();
+    const std::uint64_t control_baseline = invocation_start.control;
 
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
     const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
                                             : std::chrono::steady_clock::time_point{};
     for (;;) {
-        BackendWaitToken token = ws->snapshot();
+        detail::ProgressSource::Token token = progress_->snapshot();
 
-        token.control_generation = control_baseline;
+        token.control = control_baseline;
         std::size_t n = 0;
         std::size_t outstanding_now = 0;
         {
@@ -399,22 +388,18 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             return Result<std::size_t>{0};
         }
 
-        BackendWakeReason reason;
+        detail::ProgressSource::WakeReason reason;
         if (bounded_park) {
             auto remaining = park_deadline - std::chrono::steady_clock::now();
             if (remaining <= std::chrono::nanoseconds::zero()) {
-                reason = BackendWakeReason::interrupted;
+                reason = detail::ProgressSource::WakeReason::interrupted;
             } else {
-                reason = ws->wait_for_change(token, remaining);
+                reason = progress_->wait_for_change(token, remaining);
             }
         } else {
-            reason = ws->wait_for_change(token);
+            reason = progress_->wait_for_change(token);
         }
-        if (reason == BackendWakeReason::progress) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-            pause_after_wait_source_progress_();
-#endif
+        if (reason == detail::ProgressSource::WakeReason::progress) {
             continue;
         }
 
@@ -432,39 +417,48 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
     }
 }
 
-void AsyncIoContext::interrupt_backend_waiters() noexcept {
-    if (backend_) {
-        if (auto* ws = backend_->wait_source()) {
-            ws->interrupt_all();
-        }
+void AsyncIoContext::interrupt_progress_waiters() noexcept {
+    if (progress_) {
+        progress_->interrupt();
     }
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-BackendWaitToken AsyncIoContext::backend_wait_token_for_test() const noexcept {
-    if (backend_ != nullptr) {
-        if (BackendWaitSource* ws = backend_->wait_source()) {
-            return ws->snapshot();
-        }
+detail::ProgressSource::Token AsyncIoContext::progress_token_for_test() const noexcept {
+    if (progress_ != nullptr) {
+        return progress_->snapshot();
     }
-    return BackendWaitToken{};
+    return detail::ProgressSource::Token{};
+}
+
+void AsyncIoContext::set_progress_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_prepark_counter_for_test(counter);
+    }
 }
 #endif
 
 bool AsyncIoContext::has_split_wait_capability() const noexcept {
-    return backend_ && backend_->wait_source() != nullptr;
+    return backend_ && backend_->signals_physical_progress();
 }
 
 bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
-    return backend_ && backend_->wait_source() != nullptr &&
-           backend_->wait_source()->supports_bounded_wait();
+    return has_split_wait_capability();
 }
 
-void AsyncIoContext::arm_backend_wait_commit() noexcept {
-    if (backend_) {
-        if (auto* ws = backend_->wait_source()) {
-            (void)ws->arm_committed_wait();
-        }
+void AsyncIoContext::arm_progress_wait_commit() noexcept {
+    if (progress_) {
+        (void)progress_->arm_committed_wait();
+    }
+}
+
+int AsyncIoContext::progress_notification_fd() const noexcept {
+    return progress_ ? progress_->notification_fd() : -1;
+}
+
+void AsyncIoContext::acknowledge_progress_notification() noexcept {
+    if (progress_) {
+        progress_->acknowledge_notification();
     }
 }
 
@@ -552,17 +546,5 @@ std::size_t AsyncIoContext::outstanding() const noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
     return backend_ ? backend_->outstanding() : 0;
 }
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-void AsyncIoContext::pause_after_wait_source_progress_() noexcept {
-    if (auto* g = wait_source_progress_gate_.load(std::memory_order_acquire)) {
-        g->exited.store(false, std::memory_order_release);
-        g->paused.store(true, std::memory_order_release);
-        g->paused.notify_all();
-        g->resume.wait(false, std::memory_order_acquire);
-        g->exited.store(true, std::memory_order_release);
-    }
-}
-#endif
 
 }

@@ -59,12 +59,6 @@ struct ThreadPoolBackend::DeliveryClaimedPauseGate {
     std::atomic<bool> exited{true};
 };
 
-struct ThreadPoolBackend::ControlWakeFinalReapPauseGate {
-    std::atomic<bool> paused{false};
-    std::atomic<bool> resume{false};
-    std::atomic<bool> exited{true};
-};
-
 struct ThreadPoolBackend::DispatchFailureInjection {
     std::atomic<bool> armed{false};
     std::atomic<std::size_t> fired{0};
@@ -101,29 +95,13 @@ inline std::uint64_t ThreadPoolBackend::syscall_count_for_test() const noexcept 
     return syscall_count_.load();
 }
 
-inline std::optional<BackendWaitToken> ThreadPoolBackend::try_wait_token_for_test() const noexcept {
-    return ready_wait_.try_snapshot();
-}
-
 inline std::size_t ThreadPoolBackend::publication_pending_size_for_test() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return publication_pending_.size();
 }
 
-inline bool ThreadPoolBackend::event_owed_for_test(std::uint32_t slot) const {
+inline bool ThreadPoolBackend::event_owed_for_test(std::uint32_t slot) const noexcept {
     return delivery_[slot].event_owed;
-}
-
-inline void ThreadPoolBackend::set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept {
-    ready_wait_.set_wait_phase_flag(flag);
-}
-
-inline void ThreadPoolBackend::set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
-    ready_wait_.set_wait_prepark_counter(counter);
-}
-
-inline void ThreadPoolBackend::wait_epoch_changed_for_test(BackendWaitToken observed) noexcept {
-    ready_wait_.wait_epoch_changed(observed);
 }
 
 inline std::optional<detail::RequestKey>
@@ -169,10 +147,6 @@ inline void ThreadPoolBackend::set_publication_epilogue_pause_gate(
 inline void
 ThreadPoolBackend::set_delivery_claimed_pause_gate(DeliveryClaimedPauseGate* gate) noexcept {
     delivery_claimed_gate_.store(gate, std::memory_order_release);
-}
-inline void ThreadPoolBackend::set_control_wake_final_reap_pause_gate(
-    ControlWakeFinalReapPauseGate* gate) noexcept {
-    control_wake_final_reap_gate_.store(gate, std::memory_order_release);
 }
 inline void
 ThreadPoolBackend::set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept {
