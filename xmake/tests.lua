@@ -321,6 +321,8 @@ do
 
     c2b_progress_target("threadpool_progress_race_test",
                         R .. "tests/threadpool_progress_race_test.cpp")
+    c2b_progress_target("threadpool_external_loop_test",
+                        R .. "tests/threadpool_external_loop_test.cpp")
 end
 
 -- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as
