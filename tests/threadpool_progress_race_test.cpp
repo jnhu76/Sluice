@@ -517,7 +517,7 @@ bool r12_control_wake_racing_park_boundary() {
            (read.completion.reset(), true);
 }
 
-// R13 / the #394 L5 progress half: terminal+published work whose public
+// R13: terminal+published work whose public
 // binding is already released leaves only a delayed control/reclaim
 // obligation; the parked owner is woken by its signal and services it with no
 // new I/O.

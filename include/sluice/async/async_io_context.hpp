@@ -228,8 +228,8 @@ class AsyncIoContext {
 
     // One bounded nonblocking progress pass with an authoritative post-pass
     // state report; the documented drive operation for external event-loop
-    // hosts (W-03): acknowledge notification, then poll_progress until
-    // neither completed work nor immediate work remains.
+    // hosts: acknowledge notification, then poll_progress until neither
+    // completed work nor immediate work remains.
     using ProgressPass = AsyncBackend::ProgressPass;
     ProgressPass poll_progress();
 
@@ -317,7 +317,7 @@ class AsyncIoContext {
     void close_admission_on_progress_exhaustion_() noexcept;
 
     mutable std::mutex access_mtx_;
-  };
+};
 
 template <class T> Result<CancelDisposition> Request<T>::cancel() {
     if (backend_ == nullptr) {

@@ -22,11 +22,10 @@ namespace {
 using namespace sluice::async;
 using sluice::FileAccess;
 
-// A W-03 host loop: the application owns the event loop, the request
-// lifetime, and the buffers. Registration uses the context notification fd
-// with real poll(2); a readable fd is acknowledged through the documented
-// context operation and followed by bounded progress passes until the pass
-// reports no remaining immediate work.
+// An application-owned event loop: registration uses the context
+// notification fd with real poll(2); a readable fd is acknowledged through
+// the documented context operation and followed by bounded progress passes
+// until the pass reports no remaining immediate work.
 class ExternalLoopHost {
   public:
     explicit ExternalLoopHost(AsyncIoContext& ctx) : ctx_(ctx) {
@@ -398,6 +397,11 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
         }
     }
     signaler.join();
+
+    // Every exit path must leave no delayed zero-op obligation behind: the
+    // drain-wins interleaving can observe the completion before any pass ran.
+    for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+    }
 
     const bool ok = settled && racing.ready() && wakes <= 2;
     racing.reset();
