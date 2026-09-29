@@ -296,6 +296,33 @@ do
     end
 end
 
+-- C2-B (#397) ThreadPool no-lost-wake race campaign and external-loop W-03
+-- evidence. Same self-contained seam-build shape, observing the ThreadPool
+-- backend only; shared ProgressSource changes must still compile in the
+-- liburing-enabled progress/cutover targets.
+do
+    local function c2b_progress_target(name, test_source)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            add_files(test_source,
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/threadpool_backend.cpp",
+                      R .. "src/async/request_handle.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            add_tests(name, {run_timeout = 180})
+    end
+
+    c2b_progress_target("threadpool_progress_race_test",
+                        R .. "tests/threadpool_progress_race_test.cpp")
+end
+
 -- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as
 -- the ownership target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
