@@ -298,6 +298,8 @@ class AsyncIoContext {
 
     void set_progress_epoch_for_test(std::uint64_t epoch) noexcept;
 
+    void set_control_epoch_for_test(std::uint64_t epoch) noexcept;
+
     void saturate_progress_notification_for_test() noexcept;
 
     bool progress_exhausted_for_test() const noexcept;

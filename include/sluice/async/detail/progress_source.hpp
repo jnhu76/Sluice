@@ -23,12 +23,16 @@ namespace sluice::async::detail {
 
 // Context-owned progress notification authority. A token is a notification
 // epoch pair, not an outstanding-request count; notifications may coalesce or
-// be spurious. Waking a waiter never means a request completed.
+// be spurious. Waking a waiter never means a request completed. Each epoch
+// saturates instead of wrapping, and its exhaustion sequence carries freshness
+// for signals that can no longer move the epoch.
 class ProgressSource {
   public:
     struct Token {
         std::uint64_t progress = 0;
         std::uint64_t control = 0;
+        std::uint64_t progress_exhaustion = 0;
+        std::uint64_t control_exhaustion = 0;
     };
 
     enum class WakeReason : std::uint8_t { progress, interrupted };
@@ -52,23 +56,24 @@ class ProgressSource {
 
     Token snapshot() const noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
-        return Token{progress_epoch_, control_epoch_};
+        return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
     }
 
     Token arm_committed_wait() noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
         armed_control_epoch_ = control_epoch_;
         armed_ = true;
-        return Token{progress_epoch_, control_epoch_};
+        return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
     }
 
     Token consume_committed_wait() noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
         if (armed_) {
             armed_ = false;
-            return Token{progress_epoch_, armed_control_epoch_};
+            return Token{progress_epoch_, armed_control_epoch_, progress_exhaustion_,
+                         control_exhaustion_};
         }
-        return Token{progress_epoch_, control_epoch_};
+        return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
     }
 
     // Conditional park: sleeps only if no progress/control transition occurred
@@ -115,10 +120,12 @@ class ProgressSource {
             {
                 std::lock_guard<std::mutex> lk(mtx_);
                 readiness_fd = bound_readiness_fd_;
-                if (control_epoch_ != observed.control) {
+                if (control_epoch_ != observed.control ||
+                    control_exhaustion_ != observed.control_exhaustion) {
                     return WakeReason::interrupted;
                 }
-                if (progress_epoch_ != observed.progress) {
+                if (progress_epoch_ != observed.progress ||
+                    progress_exhaustion_ != observed.progress_exhaustion) {
                     return WakeReason::progress;
                 }
                 if (expired) {
@@ -166,11 +173,9 @@ class ProgressSource {
                     }
                     if ((pfds[0].revents & POLLIN) != 0 ||
                         (nfds > 1 && (pfds[1].revents & POLLIN) != 0)) {
-                        if (control_epoch_ != observed.control) {
+                        if (control_epoch_ != observed.control ||
+                            control_exhaustion_ != observed.control_exhaustion) {
                             return WakeReason::interrupted;
-                        }
-                        if (progress_epoch_ != observed.progress) {
-                            return WakeReason::progress;
                         }
                         return WakeReason::progress;
                     }
@@ -182,7 +187,14 @@ class ProgressSource {
     void interrupt() noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            ++control_epoch_;
+            // Same saturation discipline as signal(): a frozen control epoch
+            // must stay sticky and let the exhaustion sequence distinguish a
+            // fresh interrupt from the observed token.
+            if (control_epoch_ == std::numeric_limits<std::uint64_t>::max()) {
+                ++control_exhaustion_;
+            } else {
+                ++control_epoch_;
+            }
         }
         wake_notification_();
     }
@@ -191,10 +203,11 @@ class ProgressSource {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             // Saturation, not wrap: an active token must never alias a later
-            // epoch. The notification write below still fires, so an owner
-            // parked on the saturated epoch wakes.
+            // epoch. Once frozen, the exhaustion sequence carries freshness;
+            // a saturated signal that skipped it would be revalidated as
+            // stale and its notification drained from a parked owner.
             if (progress_epoch_ == std::numeric_limits<std::uint64_t>::max()) {
-                exhausted_ = true;
+                ++progress_exhaustion_;
             } else {
                 ++progress_epoch_;
             }
@@ -204,7 +217,7 @@ class ProgressSource {
 
     bool exhausted() const noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
-        return exhausted_;
+        return progress_exhaustion_ != 0;
     }
 
     // The documented stale-readiness acknowledgement operation. Contexts and
@@ -250,6 +263,11 @@ class ProgressSource {
     void set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
         progress_epoch_ = epoch;
+    }
+
+    void set_control_epoch_for_test(std::uint64_t epoch) noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        control_epoch_ = epoch;
     }
 
     // Fills the eventfd counter in one write so the next signal observes the
@@ -338,7 +356,8 @@ class ProgressSource {
     mutable std::mutex mtx_;
     std::uint64_t progress_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
-    bool exhausted_ = false;
+    std::uint64_t progress_exhaustion_ = 0;
+    std::uint64_t control_exhaustion_ = 0;
 
     std::uint64_t armed_control_epoch_ = 0;
     bool armed_ = false;

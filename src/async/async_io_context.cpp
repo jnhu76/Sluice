@@ -383,7 +383,6 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
                                             : std::chrono::steady_clock::time_point{};
     for (;;) {
         const detail::ProgressSource::Token token = progress_->snapshot();
-        const std::uint64_t observed_progress = token.progress;
 
         const AsyncBackend::ProgressPass pass = poll_progress();
         if (pass.completed > 0) {
@@ -400,14 +399,12 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             if (remaining <= std::chrono::nanoseconds::zero()) {
                 reason = detail::ProgressSource::WakeReason::interrupted;
             } else {
-                detail::ProgressSource::Token observed{};
-                observed.progress = observed_progress;
+                detail::ProgressSource::Token observed = token;
                 observed.control = control_baseline;
                 reason = progress_->wait_if_unchanged(observed, remaining);
             }
         } else {
-            detail::ProgressSource::Token observed{};
-            observed.progress = observed_progress;
+            detail::ProgressSource::Token observed = token;
             observed.control = control_baseline;
             reason = progress_->wait_if_unchanged(observed);
         }
@@ -460,6 +457,12 @@ void AsyncIoContext::set_progress_prepark_pause_gate_for_test(
 void AsyncIoContext::set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
     if (progress_ != nullptr) {
         progress_->set_progress_epoch_for_test(epoch);
+    }
+}
+
+void AsyncIoContext::set_control_epoch_for_test(std::uint64_t epoch) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_control_epoch_for_test(epoch);
     }
 }
 

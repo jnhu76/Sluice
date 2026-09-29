@@ -316,7 +316,7 @@ do
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
-            add_tests(name, {run_timeout = 180})
+            add_tests(name, {run_timeout = 120000})
     end
 
     c2b_progress_target("threadpool_progress_race_test",

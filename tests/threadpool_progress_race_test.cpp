@@ -577,6 +577,83 @@ bool r13_delayed_reclaim_obligation_is_serviced_without_new_io() {
            (read.completion.reset(), true);
 }
 
+// R15: with the progress epoch saturated, a fresh signal cannot move the
+// token's epoch, so a handshake that treated token equality as stale would
+// drain the worker's notification and sleep past actionable work. The
+// exhaustion sequence must carry the freshness instead.
+bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
+    ThreadPoolBackend* raw = nullptr;
+    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    GatedWorkerRead read;
+    if (!read.arm(ctx, raw))
+        return false;
+
+    constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+    ctx.set_progress_epoch_for_test(kMax);
+
+    PauseGate gate;
+    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    std::atomic<int> prepark{0};
+    ctx.set_progress_prepark_counter_for_test(&prepark);
+
+    std::optional<std::size_t> result;
+    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    wait_gate_paused(gate);
+    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+
+    read.release();
+    if (!notification_fd_readable(ctx.progress_notification_fd()))
+        return false;
+    resume_gate(gate);
+    driver.join();
+    ctx.set_progress_prepark_counter_for_test(nullptr);
+
+    const bool ok = result.has_value() && result.value() == 1 && prepark.load() == 0 &&
+                    read.completion.ready() && ctx.progress_exhausted_for_test();
+    read.completion.reset();
+    return ok;
+}
+
+// Control-domain exhaustion: a saturated control epoch stays sticky and its
+// exhaustion sequence carries the interrupt; the parked owner wakes as
+// interrupted and never revalidates the fresh interrupt as stale readiness.
+bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
+    ThreadPoolBackend* raw = nullptr;
+    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    GatedWorkerRead read;
+    if (!read.arm(ctx, raw))
+        return false;
+
+    constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+    ctx.set_control_epoch_for_test(kMax);
+
+    PauseGate gate;
+    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    std::atomic<int> prepark{0};
+    ctx.set_progress_prepark_counter_for_test(&prepark);
+
+    std::optional<std::size_t> result;
+    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    wait_gate_paused(gate);
+    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+
+    ctx.interrupt_progress_waiters();
+    const auto token = ctx.progress_token_for_test();
+    const bool no_wrap = token.control == kMax && token.control_exhaustion == 1;
+
+    resume_gate(gate);
+    driver.join();
+    ctx.set_progress_prepark_counter_for_test(nullptr);
+
+    const bool ok = no_wrap && result.has_value() && result.value() == 0 && prepark.load() == 0 &&
+                    !read.completion.ready();
+
+    read.release();
+    const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+    return ok && final_r.has_value() && final_r.value() == 1 && read.completion.ready() &&
+           (read.completion.reset(), true);
+}
+
 // Token exhaustion: saturation, not wrap. The observed token can never alias a
 // later epoch and exhaustion closes admission at the owner's next pass.
 bool token_exhaustion_saturates_without_alias_and_closes_admission() {
@@ -748,6 +825,10 @@ int main() {
         {"r12_control_wake_racing_park_boundary", r12_control_wake_racing_park_boundary},
         {"r13_delayed_reclaim_obligation_is_serviced_without_new_io",
          r13_delayed_reclaim_obligation_is_serviced_without_new_io},
+        {"r15_saturated_signal_between_pass_and_revalidation_is_not_drained",
+         r15_saturated_signal_between_pass_and_revalidation_is_not_drained},
+        {"control_exhaustion_saturates_without_alias_and_wakes_interrupted",
+         control_exhaustion_saturates_without_alias_and_wakes_interrupted},
         {"token_exhaustion_saturates_without_alias_and_closes_admission",
          token_exhaustion_saturates_without_alias_and_closes_admission},
         {"owner_parked_at_saturated_epoch_wakes_and_reparks",
