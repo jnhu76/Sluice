@@ -343,8 +343,6 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
         try {
             transport_ledger_ =
                 std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
-            wait_source_ = std::make_unique<detail::UringWaitSource>();
-            wait_source_->set_ring_fd(ring_state_->ring.ring_fd);
         } catch (...) {
             ::io_uring_queue_exit(&ring_state_->ring);
             throw;
@@ -353,6 +351,17 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
         available_ = true;
     }
 }
+
+#if defined(SLUICE_HAS_LIBURING)
+void UringAsyncBackend::progress_port_attached() noexcept {
+    if (have_ring_) {
+        // CQ readiness stays a backend-physical fact: the context park polls
+        // the lent ring fd read-only. Kernel eventfd registration convergence
+        // is C2-C.
+        progress_port_.bind_physical_readiness(ring_state_->ring.ring_fd);
+    }
+}
+#endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 UringAsyncBackend::UringAsyncBackend(UringConfig config, UringBackendSubmitTestHooks hooks)
@@ -1008,16 +1017,6 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
     return non_control_observed;
 }
 
-int UringAsyncBackend::wait_cqe_without_submit() noexcept {
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    if (ring_state_->test_hooks.before_poison_wait != nullptr)
-        ring_state_->test_hooks.before_poison_wait(ring_state_->test_hooks.context);
-#endif
-    return ::io_uring_enter(static_cast<unsigned>(ring_state_->ring.ring_fd), 0, 1,
-                            IORING_ENTER_GETEVENTS, nullptr);
-}
-
 void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
                                                detail::SlotHandle h) noexcept {
     if (!core_->acquire_control(id)) {
@@ -1115,123 +1114,8 @@ std::size_t UringAsyncBackend::poll() {
 
 Result<std::size_t> UringAsyncBackend::wait_one() {
     if (!have_ring_)
-        return std::size_t{0};
-
-    {
-        std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        if (!fatal_error_.has_value()) {
-            while (!dispatch_->empty()) {
-                detail::SlotHandle h = dispatch_->front();
-                if (!dispatch_one_locked(h))
-                    break;
-            }
-            if (!fatal_error_.has_value())
-                (void)submit_transport_locked();
-        }
-    }
-    (void)reap_cqes();
-    std::size_t n = 0;
-    {
-        detail::SlotHandle h{};
-        bool have = false;
-        {
-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
-            have = publication_pending_->pop_front(h);
-        }
-        if (have) {
-            publish_one(h);
-            n = 1;
-        }
-    }
-    for (std::uint32_t i = 0; i < capacity_ && n == 0; ++i) {
-        DeliveryRecord& record = delivery_[i];
-        if (!record.event_owed)
-            continue;
-        record.event_owed = false;
-        const detail::RequestKey owed = record.owed_key;
-        record.owed_key = {};
-        deliver_event(owed, record.kind);
-        if (core_->release_control(owed) != detail::ControlRelease::released) {
-            detail::uring_core_handoff_fail_fast();
-        }
-        n = 1;
-    }
-    if (n > 0) {
-        signal_ready_progress();
-        return n;
-    }
-    if (core_->occupancy().outstanding == 0 &&
-        live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
-        (fatal_error_.has_value() || transport_ledger_->empty()))
-        return std::size_t{0};
-
-    auto submit_and_wait_once = [&]() noexcept {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        if (ring_state_->test_hooks.submit_and_wait != nullptr) {
-            return ring_state_->test_hooks.submit_and_wait(ring_state_->test_hooks.context,
-                                                           &ring_state_->ring, 1);
-        }
-#endif
-        return ::io_uring_submit_and_wait(&ring_state_->ring, 1);
-    };
-
-    for (;;) {
-        int rc = 0;
-        bool poisoned_wait = false;
-        {
-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
-            poisoned_wait = fatal_error_.has_value();
-            if (!poisoned_wait) {
-                const bool had_pending_transport = !transport_ledger_->empty();
-                rc = sluice::detail::retry_uring_wait_on_eintr(submit_and_wait_once);
-                account_transport_result_locked(rc, had_pending_transport);
-            }
-        }
-        if (poisoned_wait) {
-            rc = sluice::detail::retry_uring_wait_on_eintr(
-                [&]() noexcept { return wait_cqe_without_submit(); });
-        } else if (fatal_error_.has_value()) {
-            rc = 0;
-        }
-
-        if (rc < 0 && rc != -EAGAIN && rc != -EBUSY) {
-            return make_unexpected<std::size_t>(sluice::from_errno_value(-rc));
-        }
-        (void)reap_cqes();
-        {
-            detail::SlotHandle h{};
-            bool have = false;
-            {
-                std::lock_guard<std::mutex> lk(dispatch_mtx_);
-                have = publication_pending_->pop_front(h);
-            }
-            if (have) {
-                publish_one(h);
-                n = 1;
-            }
-        }
-        for (std::uint32_t i = 0; i < capacity_ && n == 0; ++i) {
-            DeliveryRecord& record = delivery_[i];
-            if (!record.event_owed)
-                continue;
-            record.event_owed = false;
-            const detail::RequestKey owed = record.owed_key;
-            record.owed_key = {};
-            deliver_event(owed, record.kind);
-            if (core_->release_control(owed) != detail::ControlRelease::released) {
-                detail::uring_core_handoff_fail_fast();
-            }
-            n = 1;
-        }
-        if (n > 0) {
-            signal_ready_progress();
-            return n;
-        }
-        if (core_->occupancy().outstanding == 0 &&
-            live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
-            (fatal_error_.has_value() || transport_ledger_->empty()))
-            return std::size_t{0};
-    }
+        return Result<std::size_t>{std::size_t{0}};
+    return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
 }
 
 detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexcept {
@@ -1310,9 +1194,7 @@ void UringAsyncBackend::close_admission() {
     if (!have_ring_)
         return;
     core_->close_admission();
-    if (wait_source_) {
-        wait_source_->interrupt_all();
-    }
+    signal_ready_progress();
 }
 
 std::size_t UringAsyncBackend::outstanding() const noexcept {

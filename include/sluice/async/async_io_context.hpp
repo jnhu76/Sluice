@@ -2,6 +2,7 @@
 
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/observer_protocol.hpp>
+#include <sluice/async/detail/progress_source.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/request.hpp>
@@ -53,42 +54,6 @@ struct SyncAllOp {
     NativeFileRef file;
 };
 
-struct BackendWaitToken {
-    std::uint64_t progress_generation = 0;
-    std::uint64_t control_generation = 0;
-};
-
-enum class BackendWakeReason {
-    progress,
-    interrupted,
-};
-
-class BackendWaitSource {
-  public:
-    BackendWaitSource() = default;
-    virtual ~BackendWaitSource() = default;
-    BackendWaitSource(const BackendWaitSource&) = delete;
-    BackendWaitSource& operator=(const BackendWaitSource&) = delete;
-
-    virtual BackendWaitToken snapshot() const noexcept = 0;
-
-    virtual BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept = 0;
-
-    virtual BackendWakeReason wait_for_change(BackendWaitToken observed,
-                                              std::chrono::nanoseconds max_park) noexcept {
-        (void)max_park;
-        return wait_for_change(observed);
-    }
-
-    virtual bool supports_bounded_wait() const noexcept { return false; }
-
-    virtual void interrupt_all() noexcept = 0;
-
-    virtual BackendWaitToken arm_committed_wait() noexcept { return snapshot(); }
-
-    virtual BackendWaitToken consume_committed_wait() noexcept { return snapshot(); }
-};
-
 class AsyncBackend {
   public:
     virtual ~AsyncBackend() = default;
@@ -99,18 +64,30 @@ class AsyncBackend {
 
     void attach_ready_sink(detail::SynchronousReadySink* sink) noexcept { routing_sink_ = sink; }
 
+    // Installed exactly once by the AsyncIoContext constructor before the
+    // backend can produce any work. There is no rebind path.
+    void attach_progress_port(detail::BackendProgressPort port) noexcept {
+        progress_port_ = port;
+        progress_port_attached();
+    }
+
     virtual std::size_t poll() = 0;
 
-    virtual Result<std::size_t> wait_one() = 0;
+    virtual Result<std::size_t> wait_one() {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
+    }
 
     virtual void cancel(Completion<std::size_t>& c) { (void)c; }
     virtual void cancel(Completion<void>& c) { (void)c; }
 
     virtual std::size_t outstanding() const noexcept = 0;
 
-    virtual BackendWaitSource* wait_source() noexcept { return nullptr; }
-
     virtual bool wait_one_is_nonblocking() const noexcept { return false; }
+
+    // Whether the backend produces physical progress signals, so a driver can
+    // park productively on the context progress source. Backends that answer
+    // false never enter the context wait protocol.
+    virtual bool signals_physical_progress() const noexcept { return false; }
 
     virtual bool supports_request_identity() const noexcept { return false; }
 
@@ -150,6 +127,13 @@ class AsyncBackend {
     AsyncStats* stats_ = nullptr;
 
     detail::SynchronousReadySink* routing_sink_ = nullptr;
+
+    detail::BackendProgressPort progress_port_{};
+
+    // Runs once after the context installs the progress port, before any work
+    // can exist. Backends may lend poll-only physical readiness here; they
+    // cannot replace, query, or unbind the port.
+    virtual void progress_port_attached() noexcept {}
 
     // Installed only by the AsyncIoContext constructor; backends never set
     // or clear it, and the backend retires before the core storage does.
@@ -239,9 +223,17 @@ class AsyncIoContext {
 
     bool has_bounded_split_wait_capability() const noexcept;
 
-    void interrupt_backend_waiters() noexcept;
+    void interrupt_progress_waiters() noexcept;
 
-    void arm_backend_wait_commit() noexcept;
+    void arm_progress_wait_commit() noexcept;
+
+    // Borrows the context notification fd for external event-loop
+    // registration. The host must not close, independently drain, or
+    // repurpose it; acknowledgement runs through
+    // acknowledge_progress_notification().
+    int progress_notification_fd() const noexcept;
+
+    void acknowledge_progress_notification() noexcept;
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
@@ -276,26 +268,18 @@ class AsyncIoContext {
 
     detail::RequestCore* context_core_for_test() noexcept { return core_.get(); }
 
-    BackendWaitToken backend_wait_token_for_test() const noexcept;
+    detail::ProgressSource::Token progress_token_for_test() const noexcept;
 
-    struct WaitSourceProgressPauseGate;
-    void set_wait_source_progress_pause_gate_for_test(WaitSourceProgressPauseGate* gate) noexcept;
-    static void
-    resume_wait_source_progress_gate_for_test(WaitSourceProgressPauseGate& gate) noexcept;
+    void set_progress_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
 #endif
 
   private:
     std::unique_ptr<AsyncBackend> backend_;
     std::unique_ptr<detail::RequestCore> core_;
+    std::unique_ptr<detail::ProgressSource> progress_;
     AsyncStats* stats_;
 
     mutable std::mutex access_mtx_;
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    std::atomic<WaitSourceProgressPauseGate*> wait_source_progress_gate_{nullptr};
-    void pause_after_wait_source_progress_() noexcept;
-#endif
 };
 
 template <class T> Result<CancelDisposition> Request<T>::cancel() {
@@ -316,8 +300,3 @@ template <class T> Result<CancelDisposition> Request<T>::cancel() {
 }
 
 }
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-#include "async_io_context_test_seams.hpp"
-#endif

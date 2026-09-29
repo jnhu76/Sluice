@@ -8,11 +8,6 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
-#if defined(SLUICE_HAS_LIBURING)
-
-#include <sluice/async/detail/uring_wait_source.hpp>
-#endif
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 #include <sluice/async/detail/submit_transaction.hpp>
@@ -78,6 +73,8 @@ class UringAsyncBackend : public AsyncBackend {
   public:
     bool supports_request_identity() const noexcept override { return true; }
 
+    bool signals_physical_progress() const noexcept override { return have_ring_; }
+
   private:
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override;
@@ -100,10 +97,6 @@ class UringAsyncBackend : public AsyncBackend {
     void close_admission();
 
 #if defined(SLUICE_HAS_LIBURING)
-
-    BackendWaitSource* wait_source() noexcept override {
-        return have_ring_ ? wait_source_.get() : nullptr;
-    }
 
     std::size_t slot_capacity() const noexcept override { return capacity_; }
 #endif
@@ -148,17 +141,6 @@ class UringAsyncBackend : public AsyncBackend {
 
     void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept;
     void set_submit_stage_failure_injection(SubmitStageFailureInjection* injection) noexcept;
-
-    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept;    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
-    void set_wait_control_wake_final_reap_pause_gate(
-        detail::UringWaitSource::ControlWakeFinalReapPauseGate* gate) noexcept;
-    void set_wait_before_physical_poll_pause_gate(
-        detail::UringWaitSource::BeforePhysicalPollPauseGate* gate) noexcept;
-    void set_wait_poll_ring_fd_override_for_test(int fd) noexcept;
-    void set_wait_poll_fn_for_test(detail::UringWaitSource::PollFn fn, void* ctx) noexcept;
-
-    bool wait_epoch_changed_for_test(BackendWaitToken observed) noexcept;
-    std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept;
 #endif
 
   private:
@@ -175,6 +157,8 @@ class UringAsyncBackend : public AsyncBackend {
         unsigned native_length = 0;
         std::uint64_t offset = 0;
     };
+
+    void progress_port_attached() noexcept override;
 
     struct RouterEntry {
         enum class ControlState : std::uint8_t { none, prepared, submitted };
@@ -254,8 +238,6 @@ class UringAsyncBackend : public AsyncBackend {
 
     void poison_and_recover_locked(IoError error) noexcept;
 
-    int wait_cqe_without_submit() noexcept;
-
     std::size_t reap_cqes() noexcept;
 
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
@@ -284,9 +266,7 @@ class UringAsyncBackend : public AsyncBackend {
 #endif
 
     void signal_ready_progress() noexcept {
-        if (wait_source_) {
-            wait_source_->signal_progress();
-        }
+        progress_port_.signal();
     }
 
     std::size_t capacity_ = 0;
@@ -301,7 +281,6 @@ class UringAsyncBackend : public AsyncBackend {
     std::unique_ptr<UringRingState> ring_state_;
     std::unique_ptr<TransportLedger> transport_ledger_;
 
-    std::unique_ptr<detail::UringWaitSource> wait_source_;
     bool have_ring_ = false;
     std::optional<IoError> fatal_error_;
 

@@ -105,7 +105,7 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
         workers_ = 1;
     }
 
-    if (backend_->wait_source() == nullptr && !backend_->wait_one_is_nonblocking()) {
+    if (!backend_->signals_physical_progress() && !backend_->wait_one_is_nonblocking()) {
         return make_unexpected<std::unique_ptr<ApplicationRuntime>>(
             IoError{IoError::Code::invalid_state});
     }
@@ -304,7 +304,7 @@ void ApplicationRuntime::request_stop() noexcept {
     }
 
     if (io_ctx_)
-        io_ctx_->interrupt_backend_waiters();
+        io_ctx_->interrupt_progress_waiters();
 
     runtime_cv_.notify_all();
     wake_handle_.notify();

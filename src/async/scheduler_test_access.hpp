@@ -29,8 +29,8 @@ struct Scheduler::AsyncTestAccess {
         s.park_forensics_enabled_.store(enabled, std::memory_order_release);
     }
 
-    static BackendWaitToken backend_wait_token(const Scheduler& s) noexcept {
-        return s.ctx_.backend_wait_token_for_test();
+    static detail::ProgressSource::Token progress_wait_token(const Scheduler& s) noexcept {
+        return s.ctx_.progress_token_for_test();
     }
 
     static bool worker_loop_exited(const Scheduler& s, unsigned worker_id) noexcept {

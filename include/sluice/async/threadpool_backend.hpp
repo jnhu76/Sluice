@@ -2,7 +2,6 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
-#include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/detail/request_slot.hpp>
@@ -46,6 +45,8 @@ class ThreadPoolBackend : public AsyncBackend {
 
     bool supports_request_identity() const noexcept override { return true; }
 
+    bool signals_physical_progress() const noexcept override { return true; }
+
   private:
     Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) override;
     Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override;
@@ -59,14 +60,11 @@ class ThreadPoolBackend : public AsyncBackend {
 
   public:
     std::size_t poll() override;
-    Result<std::size_t> wait_one() override;
 
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
 
     std::size_t outstanding() const noexcept override;
-
-    BackendWaitSource* wait_source() noexcept override { return &ready_wait_; }
 
     void close_admission();
 
@@ -86,15 +84,11 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t dispatch_size_for_test() const;
     std::size_t dispatch_high_water_for_test() const;
     std::uint64_t syscall_count_for_test() const noexcept;
-    std::optional<BackendWaitToken> try_wait_token_for_test() const noexcept;
-    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept;
-    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
-    void wait_epoch_changed_for_test(BackendWaitToken observed) noexcept;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<std::size_t>& c) const;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<void>& c) const;
     detail::RequestCore* request_core_for_test() const noexcept { return core_; }
     std::size_t publication_pending_size_for_test() const;
-    bool event_owed_for_test(std::uint32_t slot) const;
+    bool event_owed_for_test(std::uint32_t slot) const noexcept;
 
     struct SubmitEntryPauseGate;
     struct PreAcceptCommitPauseGate;
@@ -104,7 +98,6 @@ class ThreadPoolBackend : public AsyncBackend {
     struct WorkerOutcomePreTerminalPauseGate;
     struct PublicationEpiloguePauseGate;
     struct DeliveryClaimedPauseGate;
-    struct ControlWakeFinalReapPauseGate;
 
     struct DispatchFailureInjection;
     struct SubmitStageFailureInjection;
@@ -118,7 +111,6 @@ class ThreadPoolBackend : public AsyncBackend {
         WorkerOutcomePreTerminalPauseGate* gate) noexcept;
     void set_publication_epilogue_pause_gate(PublicationEpiloguePauseGate* gate) noexcept;
     void set_delivery_claimed_pause_gate(DeliveryClaimedPauseGate* gate) noexcept;
-    void set_control_wake_final_reap_pause_gate(ControlWakeFinalReapPauseGate* gate) noexcept;
     void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept;
     void set_submit_stage_failure_injection(SubmitStageFailureInjection* injection) noexcept;
 
@@ -234,7 +226,6 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_worker_outcome_pre_terminal_pause_() noexcept;
     void wait_publication_epilogue_pause_() noexcept;
     void wait_delivery_claimed_pause_() noexcept;
-    void wait_control_wake_final_reap_pause_() noexcept;
 
     using SubmitStage = detail::SubmitStage;
 
@@ -258,8 +249,6 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t active_workers_ = 0;
     bool stopping_ = false;
 
-    detail::ReadyWaitSource ready_wait_;
-
     std::vector<std::thread> workers_;
 
     std::atomic<std::uint64_t> syscall_count_{0};
@@ -274,7 +263,6 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<WorkerOutcomePreTerminalPauseGate*> worker_outcome_pre_terminal_gate_{nullptr};
     std::atomic<PublicationEpiloguePauseGate*> publication_epilogue_gate_{nullptr};
     std::atomic<DeliveryClaimedPauseGate*> delivery_claimed_gate_{nullptr};
-    std::atomic<ControlWakeFinalReapPauseGate*> control_wake_final_reap_gate_{nullptr};
 
     std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
 
