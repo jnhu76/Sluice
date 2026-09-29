@@ -6,6 +6,7 @@
 #include <climits>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 
@@ -70,11 +71,15 @@ class ProgressSource {
         return Token{progress_epoch_, control_epoch_};
     }
 
-    WakeReason wait_for_change(Token observed) noexcept {
-        return wait_for_change(observed, std::chrono::nanoseconds::max());
+    // Conditional park: sleeps only if no progress/control transition occurred
+    // since `observed`. The epoch revalidation and the stale-readiness drain
+    // share one mutex hold, so a signal racing after the check always leaves
+    // kernel readiness that wakes the poll below.
+    WakeReason wait_if_unchanged(Token observed) noexcept {
+        return wait_if_unchanged(observed, std::chrono::nanoseconds::max());
     }
 
-    WakeReason wait_for_change(Token observed, std::chrono::nanoseconds max_park) noexcept {
+    WakeReason wait_if_unchanged(Token observed, std::chrono::nanoseconds max_park) noexcept {
         const bool bounded_park = max_park != std::chrono::nanoseconds::max();
         const auto park_deadline = bounded_park
                                        ? std::chrono::steady_clock::now() + max_park
@@ -103,6 +108,10 @@ class ProgressSource {
                 }
             }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            pause_at_gate_(prerevalidate_pause_gate_);
+#endif
+
             {
                 std::lock_guard<std::mutex> lk(mtx_);
                 readiness_fd = bound_readiness_fd_;
@@ -123,6 +132,7 @@ class ProgressSource {
                 c->fetch_add(1, std::memory_order_relaxed);
                 c->notify_all();
             }
+            pause_at_gate_(prepark_pause_gate_);
 #endif
 
             struct pollfd pfds[2];
@@ -180,9 +190,21 @@ class ProgressSource {
     void signal() noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            ++progress_epoch_;
+            // Saturation, not wrap: an active token must never alias a later
+            // epoch. The notification write below still fires, so an owner
+            // parked on the saturated epoch wakes.
+            if (progress_epoch_ == std::numeric_limits<std::uint64_t>::max()) {
+                exhausted_ = true;
+            } else {
+                ++progress_epoch_;
+            }
         }
         wake_notification_();
+    }
+
+    bool exhausted() const noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return exhausted_;
     }
 
     // The documented stale-readiness acknowledgement operation. Contexts and
@@ -207,6 +229,45 @@ class ProgressSource {
     void set_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
         prepark_counter_.store(counter, std::memory_order_release);
     }
+
+    // Deterministic pause points inside the park handshake. The prerevalidate
+    // gate holds before the epoch revalidation; the prepark gate holds after
+    // it and after the stale-readiness drain, immediately before poll(2).
+    struct PauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
+
+    void set_prerevalidate_pause_gate_for_test(PauseGate* gate) noexcept {
+        prerevalidate_pause_gate_.store(gate, std::memory_order_release);
+    }
+
+    void set_prepark_pause_gate_for_test(PauseGate* gate) noexcept {
+        prepark_pause_gate_.store(gate, std::memory_order_release);
+    }
+
+    void set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        progress_epoch_ = epoch;
+    }
+
+    // Fills the eventfd counter in one write so the next signal observes the
+    // EAGAIN (already-readable) branch deterministically.
+    void saturate_notification_for_test() noexcept {
+        const std::uint64_t max_counter = std::numeric_limits<std::uint64_t>::max() - 1;
+        for (;;) {
+            errno = 0;
+            const ssize_t n = ::write(notification_fd_, &max_counter, sizeof(max_counter));
+            if (n == static_cast<ssize_t>(sizeof(max_counter))) {
+                return;
+            }
+            if (n < 0 && errno == EINTR) {
+                continue;
+            }
+            wait_domain_fail_fast_("saturate_notification_for_test", errno);
+        }
+    }
 #endif
 
   private:
@@ -218,6 +279,21 @@ class ProgressSource {
         std::fflush(stderr);
         std::terminate();
     }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    static void pause_at_gate_(std::atomic<PauseGate*>& gate) noexcept {
+        PauseGate* g = gate.load(std::memory_order_acquire);
+        if (g == nullptr) {
+            return;
+        }
+        g->exited.store(false, std::memory_order_release);
+        g->paused.store(true, std::memory_order_release);
+        g->paused.notify_all();
+        g->resume.wait(false, std::memory_order_acquire);
+        g->exited.store(true, std::memory_order_release);
+        g->exited.notify_all();
+    }
+#endif
 
     void drain_notification_nolock_() noexcept {
         std::uint64_t value = 0;
@@ -262,6 +338,7 @@ class ProgressSource {
     mutable std::mutex mtx_;
     std::uint64_t progress_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
+    bool exhausted_ = false;
 
     std::uint64_t armed_control_epoch_ = 0;
     bool armed_ = false;
@@ -271,6 +348,8 @@ class ProgressSource {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
+    std::atomic<PauseGate*> prerevalidate_pause_gate_{nullptr};
+    std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
 #endif
 };
 

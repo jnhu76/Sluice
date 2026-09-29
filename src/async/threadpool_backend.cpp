@@ -505,6 +505,10 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
 }
 
 std::size_t ThreadPoolBackend::poll() {
+    return poll_progress().completed;
+}
+
+AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
     std::size_t published = 0;
     for (;;) {
         detail::SlotHandle h{};
@@ -531,7 +535,15 @@ std::size_t ThreadPoolBackend::poll() {
         }
         ++published;
     }
-    return published;
+
+    AsyncBackend::ProgressPass pass;
+    pass.completed = published;
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        pass.immediate_work_remains = !publication_pending_.empty();
+    }
+    pass.accepted_work_remains = core_ != nullptr && core_->occupancy().outstanding != 0;
+    return pass;
 }
 
 void ThreadPoolBackend::signal_ready_progress() noexcept {

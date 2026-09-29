@@ -60,6 +60,7 @@ class ThreadPoolBackend : public AsyncBackend {
 
   public:
     std::size_t poll() override;
+    ProgressPass poll_progress() override;
 
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
