@@ -14,6 +14,8 @@
 #include <poll.h>
 #include <unistd.h>
 
+#include <liburing.h>
+
 #include <csignal>
 
 namespace {
@@ -31,6 +33,22 @@ bool notification_fd_readable(int fd) {
     return rc > 0 && (p.revents & POLLIN) != 0;
 }
 
+// Test-owned teardown record: the hook wraps the real unregister so the
+// assertions survive backend destruction and observe the real syscall result.
+struct TeardownRecord {
+    std::atomic<int> unregisters{0};
+    std::atomic<int> rc_failures{0};
+};
+
+int recording_unregister(void* context, ::io_uring* ring) noexcept {
+    auto* record = static_cast<TeardownRecord*>(context);
+    record->unregisters.fetch_add(1, std::memory_order_relaxed);
+    const int rc = ::io_uring_unregister_eventfd(ring);
+    if (rc != 0)
+        record->rc_failures.fetch_add(1, std::memory_order_relaxed);
+    return rc;
+}
+
 // A standalone backend performs no kernel registration: the notification
 // binding is installed at context attachment only.
 bool standalone_backend_registers_nothing() {
@@ -45,7 +63,11 @@ bool standalone_backend_registers_nothing() {
 // kernel ring exactly once, and the registered wiring carries a real kernel
 // completion to the context fd.
 bool attachment_registers_kernel_notification_once() {
-    auto backend = std::make_unique<UringAsyncBackend>();
+    TeardownRecord teardown;
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &teardown;
+    hooks.unregister_eventfd = &recording_unregister;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 8}, hooks);
     UringAsyncBackend* raw = backend.get();
     {
         AsyncIoContext ctx(std::move(backend));
@@ -81,8 +103,9 @@ bool attachment_registers_kernel_notification_once() {
         }
         // Dispatching accepted work is the driver's obligation; run the
         // submission pass, then the registered eventfd must carry the kernel
-        // completion to the context fd.
-        (void)ctx.poll_progress();
+        // completion to the context fd. The submitting pass can also be the
+        // servicing pass, so its delivery joins the wait's count.
+        const std::size_t driven = ctx.poll_progress().completed;
         bool woken = notification_fd_readable(ctx.progress_notification_fd());
         for (int i = 0; i < 20000 && !woken; ++i) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -90,13 +113,13 @@ bool attachment_registers_kernel_notification_once() {
         }
         const auto waited = ctx.wait_one(std::chrono::milliseconds{5000});
         ::close(fd);
-        if (!woken || !waited.has_value() || waited.value() != 1 || !c.ready())
+        if (!woken || !waited.has_value() || driven + waited.value() != 1 || !c.ready())
             return false;
         c.reset();
     }
     // Teardown order: unregister runs once while the ring still exists, before
     // ring exit, and the backend retires inside the context.
-    return raw->eventfd_unregistrations_for_test() == 1;
+    return teardown.unregisters.load() == 1 && teardown.rc_failures.load() == 0;
 }
 
 namespace {
@@ -135,15 +158,19 @@ bool forced_registration_failure_fails_context_construction() {
 // §22 narrow teardown evidence: registered → context teardown → unregister
 // before ring exit; no double registration, no dangling kernel registration.
 bool teardown_unregisters_before_ring_exit() {
-    auto backend = std::make_unique<UringAsyncBackend>();
+    TeardownRecord teardown;
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &teardown;
+    hooks.unregister_eventfd = &recording_unregister;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
     UringAsyncBackend* raw = backend.get();
+    unsigned registrations = 0;
     {
         AsyncIoContext ctx(std::move(backend));
-        if (raw->eventfd_registrations_for_test() != 1)
-            return false;
+        registrations = raw->eventfd_registrations_for_test();
     }
-    return raw->eventfd_registrations_for_test() == 1 &&
-           raw->eventfd_unregistrations_for_test() == 1;
+    return registrations == 1 && teardown.unregisters.load() == 1 &&
+           teardown.rc_failures.load() == 0;
 }
 
 }

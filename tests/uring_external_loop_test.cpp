@@ -23,7 +23,9 @@ using sluice::FileAccess;
 // An application-owned event loop: registration uses the context
 // notification fd with real poll(2); a readable fd is acknowledged through
 // the documented context operation and followed by bounded progress passes
-// until the pass reports no remaining immediate work.
+// until the pass reports no remaining immediate work. Deliveries are
+// accumulated across every pass the host runs — the submitting pass can be
+// the servicing pass when the kernel finishes inside its submission window.
 class ExternalLoopHost {
   public:
     explicit ExternalLoopHost(AsyncIoContext& ctx) : ctx_(ctx) {
@@ -69,8 +71,9 @@ class ExternalLoopHost {
 
     // PROG-01: dispatching a newly accepted request is itself a progress
     // obligation, so the host runs one bounded pass after submitting before
-    // it may park on the notification fd.
-    void drive_submission() { (void)ctx_.poll_progress(); }
+    // it may park on the notification fd. Returns the completions that pass
+    // already delivered.
+    std::size_t drive_submission() { return ctx_.poll_progress().completed; }
 
   private:
     AsyncIoContext& ctx_;
@@ -132,10 +135,11 @@ bool external_poll_loop_uring_w03() {
                          r1)
              .has_value())
         return false;
-    host.drive_submission();
+    std::size_t phase_a = host.drive_submission();
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
-    if (host.acknowledge_and_drive() != 1 || !r1.ready())
+    phase_a += host.acknowledge_and_drive();
+    if (phase_a != 1 || !r1.ready())
         return false;
     r1.reset();
     // A servicing pass is the first observer of the kernel completion
@@ -171,7 +175,7 @@ bool external_poll_loop_uring_w03() {
                           w)
              .has_value())
         return false;
-    host.drive_submission();
+    std::size_t batch = host.drive_submission();
 
     int settled_without_wake = 0;
     for (;;) {
@@ -179,12 +183,16 @@ bool external_poll_loop_uring_w03() {
             break;
         if (!host.wait_readable(std::chrono::milliseconds{5000}))
             return false;
-        if (host.acknowledge_and_drive() == 0) {
+        const std::size_t got = host.acknowledge_and_drive();
+        batch += got;
+        if (got == 0) {
             ++settled_without_wake;
             if (settled_without_wake > 8)
                 return false;
         }
     }
+    if (batch != 3)
+        return false;
     for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
     }
     if (host.acknowledge_and_drive() != 0)
@@ -235,9 +243,8 @@ bool kernel_completions_delivered_without_stranding() {
                  .has_value())
             return false;
     }
-    host.drive_submission();
+    std::size_t delivered = host.drive_submission();
 
-    std::size_t delivered = 0;
     int wakes = 0;
     while (delivered < static_cast<std::size_t>(kCoalesced)) {
         if (!host.wait_readable(std::chrono::milliseconds{2000}))
@@ -277,7 +284,8 @@ bool external_host_sees_userspace_publication_wake() {
         return false;
     if (!fd_readable(host.nfd()))
         return false;
-    host.drive_submission();
+    if (host.drive_submission() != 1)
+        return false;
     if (!zero.ready())
         return false;
     if (host.acknowledge_and_drive() != 0)
@@ -308,15 +316,16 @@ bool saturation_with_real_kernel_completion_preserves_wake() {
                          c)
              .has_value())
         return false;
-    host.drive_submission();
+    std::size_t delivered = host.drive_submission();
 
-    bool delivered = false;
-    for (int i = 0; i < 8 && !delivered; ++i) {
+    int rounds = 0;
+    while (delivered < 1 && rounds < 8) {
+        ++rounds;
         if (!host.wait_readable(std::chrono::milliseconds{2000}))
             return false;
-        delivered = host.acknowledge_and_drive() == 1;
+        delivered += host.acknowledge_and_drive();
     }
-    if (!delivered || !c.ready())
+    if (delivered != 1 || !c.ready())
         return false;
     c.reset();
     ::close(source);

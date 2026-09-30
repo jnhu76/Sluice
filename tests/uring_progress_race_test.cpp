@@ -589,6 +589,50 @@ int poison_submit_hook(void* context, ::io_uring* ring) noexcept {
 }
 }
 
+// H-interval (multi-driver): a peer pass can reap the CQE before the paused
+// owner's physical probe, consuming both the kernel notification and the CQ
+// state the probe reads. The peer's publication_pending_ transition signal is
+// the only remaining wake; the owner must return through it, never by
+// stranding to the deadline.
+bool k14_peer_pass_consuming_cqe_wakes_parked_owner() {
+    auto backend = std::make_unique<UringAsyncBackend>();
+    AsyncIoContext ctx(std::move(backend));
+    BlockedPipeRead read;
+    if (!read.arm(ctx, 4))
+        return false;
+
+    PauseGate gate;
+    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    std::atomic<int> prepark{0};
+    ctx.set_progress_prepark_counter_for_test(&prepark);
+
+    TimedWait driver;
+    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+
+    wait_gate_paused(gate);
+    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+
+    read.release_bytes(1);
+    if (!wait_notification_readable(ctx))
+        return false;
+    {
+        const auto pass = ctx.poll_progress();
+        if (pass.completed != 1)
+            return false;
+    }
+    if (read.completion.ready() == false)
+        return false;
+    resume_gate(gate);
+    owner.join();
+    ctx.set_progress_prepark_counter_for_test(nullptr);
+
+    const bool ok = driver.value.has_value() && driver.value.value() == 0 &&
+                    driver.elapsed_ms < 1000 && prepark.load() == 0;
+    read.completion.reset();
+    read.close_pipe();
+    return ok;
+}
+
 // §17 poison-vs-park: a backend poison transition created by another thread's
 // submit must wake a parked owner. With the two-entry SQ ring filled by two
 // accepted-but-undispatched submissions, the third submit hits the transport
@@ -695,6 +739,8 @@ int main() {
          u1_accepted_true_immediate_false_reports_and_parks},
         {"k13_cq_overflow_completions_are_not_stranded",
          k13_cq_overflow_completions_are_not_stranded},
+        {"k14_peer_pass_consuming_cqe_wakes_parked_owner",
+         k14_peer_pass_consuming_cqe_wakes_parked_owner},
         {"poison_transition_wakes_parked_owner", poison_transition_wakes_parked_owner},
     };
 
