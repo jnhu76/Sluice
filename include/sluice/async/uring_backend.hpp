@@ -76,6 +76,8 @@ class UringAsyncBackend : public AsyncBackend {
     bool signals_physical_progress() const noexcept override { return have_ring_; }
 
   private:
+    AsyncBackend::ProgressPass poll_progress() override;
+
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override;
 
@@ -112,6 +114,8 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t transport_ledger_size_for_test() const noexcept;
     std::size_t sq_ready_for_test() const noexcept;
     std::size_t live_control_sqes_for_test() const noexcept;
+    unsigned eventfd_registrations_for_test() const noexcept;
+    unsigned eventfd_unregistrations_for_test() const noexcept;
 
     void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept;
     std::optional<detail::RequestKey>
@@ -157,7 +161,9 @@ class UringAsyncBackend : public AsyncBackend {
         std::uint64_t offset = 0;
     };
 
-    void progress_port_attached() noexcept override;
+    bool progress_port_attached() noexcept override;
+
+    bool has_immediate_physical_work() const noexcept override;
 
     struct RouterEntry {
         enum class ControlState : std::uint8_t { none, prepared, submitted };
@@ -281,6 +287,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::unique_ptr<TransportLedger> transport_ledger_;
 
     bool have_ring_ = false;
+    bool eventfd_registered_ = false;
     std::optional<IoError> fatal_error_;
 
     mutable std::mutex dispatch_mtx_;
@@ -300,6 +307,9 @@ class UringAsyncBackend : public AsyncBackend {
 
     std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
     std::atomic<SubmitStageFailureInjection*> submit_stage_failure_injection_{nullptr};
+
+    std::atomic<unsigned> eventfd_registrations_{0};
+    std::atomic<unsigned> eventfd_unregistrations_{0};
 #endif
 #endif
 

@@ -37,6 +37,12 @@ class ProgressSource {
 
     enum class WakeReason : std::uint8_t { progress, interrupted };
 
+    // Nonblocking probe of backend-physical actionable work (kernel CQ state),
+    // run between the stale-readiness drain and the final revalidation. Kernel
+    // producers do not execute the userspace epoch protocol, so a notification
+    // consumed by the drain can only be recovered by this probe.
+    using PhysicalProbe = bool (*)(void*) noexcept;
+
     ProgressSource() {
         notification_fd_ = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
         if (notification_fd_ < 0) {
@@ -80,19 +86,24 @@ class ProgressSource {
     // Conditional park: sleeps only if no progress/control transition occurred
     // since `observed`. The epoch revalidation and the stale-readiness drain
     // share one mutex hold, so a signal racing after the check always leaves
-    // kernel readiness that wakes the poll below.
+    // kernel readiness that wakes the poll below. When `probe` is installed,
+    // it runs with the mutex released after the drain; a probe that reports
+    // physical work returns without parking, and the revalidation after it
+    // must never drain the notification fd again — readiness observed after
+    // the probe is what wakes the poll.
     WakeReason wait_if_unchanged(Token observed) noexcept {
-        return wait_if_unchanged(observed, std::chrono::nanoseconds::max());
+        return wait_if_unchanged(observed, std::chrono::nanoseconds::max(), nullptr, nullptr);
     }
 
-    WakeReason wait_if_unchanged(Token observed, std::chrono::nanoseconds max_park) noexcept {
+    WakeReason wait_if_unchanged(Token observed, std::chrono::nanoseconds max_park,
+                                 PhysicalProbe probe = nullptr,
+                                 void* probe_context = nullptr) noexcept {
         const bool bounded_park = max_park != std::chrono::nanoseconds::max();
         const auto park_deadline = bounded_park
                                        ? std::chrono::steady_clock::now() + max_park
                                        : std::chrono::steady_clock::time_point{};
 
         for (;;) {
-            int readiness_fd = -1;
             bool expired = false;
             int timeout_ms = -1;
             if (bounded_park) {
@@ -120,7 +131,6 @@ class ProgressSource {
 
             {
                 std::lock_guard<std::mutex> lk(mtx_);
-                readiness_fd = bound_readiness_fd_;
                 if (control_changed_nolock_(observed)) {
                     return WakeReason::interrupted;
                 }
@@ -139,23 +149,33 @@ class ProgressSource {
                 c->fetch_add(1, std::memory_order_relaxed);
                 c->notify_all();
             }
+#endif
+
+            if (probe != nullptr && probe(probe_context)) {
+                return WakeReason::progress;
+            }
+
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                if (control_changed_nolock_(observed)) {
+                    return WakeReason::interrupted;
+                }
+                if (progress_epoch_ != observed.progress ||
+                    progress_exhaustion_ != observed.progress_exhaustion) {
+                    return WakeReason::progress;
+                }
+            }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             pause_at_gate_(prepark_pause_gate_);
 #endif
 
-            struct pollfd pfds[2];
-            unsigned long nfds = 0;
-            pfds[nfds].fd = notification_fd_;
-            pfds[nfds].events = POLLIN;
-            pfds[nfds].revents = 0;
-            ++nfds;
-            if (readiness_fd >= 0) {
-                pfds[nfds].fd = readiness_fd;
-                pfds[nfds].events = POLLIN;
-                pfds[nfds].revents = 0;
-                ++nfds;
-            }
+            struct pollfd pfds[1];
+            pfds[0].fd = notification_fd_;
+            pfds[0].events = POLLIN;
+            pfds[0].revents = 0;
 
-            const int rc = ::poll(pfds, nfds, timeout_ms);
+            const int rc = ::poll(pfds, 1, timeout_ms);
             {
                 std::lock_guard<std::mutex> lk(mtx_);
                 if (rc < 0) {
@@ -163,16 +183,14 @@ class ProgressSource {
                         wait_domain_fail_fast_("poll(2)", errno);
                     }
                 } else {
-                    if ((pfds[0].revents & POLLNVAL) != 0 ||
-                        (nfds > 1 && (pfds[1].revents & POLLNVAL) != 0)) {
+                    if ((pfds[0].revents & POLLNVAL) != 0) {
                         std::fprintf(stderr,
                                      "sluice::async::detail::ProgressSource: parked wait observed "
                                      "a closed fd (contract violation)\n");
                         std::fflush(stderr);
                         std::terminate();
                     }
-                    if ((pfds[0].revents & POLLIN) != 0 ||
-                        (nfds > 1 && (pfds[1].revents & POLLIN) != 0)) {
+                    if ((pfds[0].revents & POLLIN) != 0) {
                         if (control_changed_nolock_(observed)) {
                             return WakeReason::interrupted;
                         }
@@ -231,14 +249,6 @@ class ProgressSource {
     }
 
     int notification_fd() const noexcept { return notification_fd_; }
-
-    void bind_physical_readiness(int fd) noexcept {
-        std::lock_guard<std::mutex> lk(mtx_);
-        if (bound_readiness_fd_ != -1) {
-            wait_domain_fail_fast_("bind_physical_readiness", EEXIST);
-        }
-        bound_readiness_fd_ = fd;
-    }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     void set_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
@@ -390,7 +400,6 @@ class ProgressSource {
     bool armed_ = false;
 
     int notification_fd_ = -1;
-    int bound_readiness_fd_ = -1;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
@@ -400,8 +409,9 @@ class ProgressSource {
 };
 
 // The minimum backend-facing capability: physical progress signaling and a
-// poll-only readiness-fd lend. It exposes no wait, acknowledgement, arming, or
-// owner-control operation, and it never lends the context notification fd.
+// one-shot kernel-notification registration grant. It exposes no wait,
+// acknowledgement, arming, owner-control operation, and never lends the
+// context notification fd itself.
 class BackendProgressPort {
   public:
     // An unattached port has no waiter domain: both operations are absent
@@ -412,10 +422,17 @@ class BackendProgressPort {
         }
     }
 
-    void bind_physical_readiness(int fd) noexcept {
-        if (source_ != nullptr) {
-            source_->bind_physical_readiness(fd);
+    // Attachment-time only: runs `install` once with the context notification
+    // fd so the backend can register it as a kernel notification target (e.g.
+    // io_uring_register_eventfd). The fd is borrowed for the call frame
+    // alone — registration-only; the backend must not read, write, close,
+    // dup, store, or otherwise retain it. Returns install's verdict.
+    bool register_notification_with_kernel(bool (*install)(void* context, int fd),
+                                           void* context) noexcept {
+        if (source_ == nullptr || install == nullptr) {
+            return false;
         }
+        return install(context, source_->notification_fd());
     }
 
   private:

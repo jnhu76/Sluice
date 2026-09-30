@@ -15,11 +15,15 @@ struct UringBackendSubmitTestHooks {
     using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
     using SubmitAndWaitFn = int (*)(void*, ::io_uring*, unsigned) noexcept;
     using BeforePoisonWaitFn = void (*)(void*) noexcept;
+    using RegisterEventfdFn = int (*)(void*, ::io_uring*, int) noexcept;
+    using UnregisterEventfdFn = int (*)(void*, ::io_uring*) noexcept;
 
     void* context = nullptr;
     SubmitFn submit = nullptr;
     SubmitAndWaitFn submit_and_wait = nullptr;
     BeforePoisonWaitFn before_poison_wait = nullptr;
+    RegisterEventfdFn register_eventfd = nullptr;
+    UnregisterEventfdFn unregister_eventfd = nullptr;
 };
 
 struct UringAsyncBackend::SubmitEntryPauseGate {
@@ -104,6 +108,14 @@ inline detail::RequestKey UringAsyncBackend::sink_last_key() const noexcept {
 
 inline void UringAsyncBackend::set_submit_entry_pause_gate(SubmitEntryPauseGate* gate) noexcept {
     submit_entry_gate_.store(gate, std::memory_order_release);
+}
+
+inline unsigned UringAsyncBackend::eventfd_registrations_for_test() const noexcept {
+    return eventfd_registrations_.load(std::memory_order_relaxed);
+}
+
+inline unsigned UringAsyncBackend::eventfd_unregistrations_for_test() const noexcept {
+    return eventfd_unregistrations_.load(std::memory_order_relaxed);
 }
 inline void
 UringAsyncBackend::set_pre_accept_commit_pause_gate(PreAcceptCommitPauseGate* gate) noexcept {

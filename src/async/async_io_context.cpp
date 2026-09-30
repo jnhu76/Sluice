@@ -357,6 +357,10 @@ void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
     }
 }
 
+bool AsyncIoContext::backend_has_immediate_physical_work_() noexcept {
+    return backend_ && backend_->has_immediate_physical_work();
+}
+
 Result<std::size_t> AsyncIoContext::wait_one() {
     return wait_one(std::chrono::nanoseconds::max());
 }
@@ -393,6 +397,9 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
         }
 
         detail::ProgressSource::WakeReason reason;
+        auto probe = [](void* self) noexcept -> bool {
+            return static_cast<AsyncIoContext*>(self)->backend_has_immediate_physical_work_();
+        };
         if (bounded_park) {
             auto remaining = park_deadline - std::chrono::steady_clock::now();
             if (remaining <= std::chrono::nanoseconds::zero()) {
@@ -401,13 +408,14 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
                 detail::ProgressSource::Token observed = token;
                 observed.control = invocation_start.control;
                 observed.control_exhaustion = invocation_start.control_exhaustion;
-                reason = progress_->wait_if_unchanged(observed, remaining);
+                reason = progress_->wait_if_unchanged(observed, remaining, probe, this);
             }
         } else {
             detail::ProgressSource::Token observed = token;
             observed.control = invocation_start.control;
             observed.control_exhaustion = invocation_start.control_exhaustion;
-            reason = progress_->wait_if_unchanged(observed);
+            reason = progress_->wait_if_unchanged(observed, std::chrono::nanoseconds::max(), probe,
+                                                  this);
         }
         if (reason == detail::ProgressSource::WakeReason::progress) {
             continue;

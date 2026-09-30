@@ -59,20 +59,16 @@ concept backend_has_no_wait_member =
     !requires(B b) { b.wait_one(); } && !requires { &B::wait_one_is_nonblocking; };
 static_assert(backend_has_no_wait_member<AsyncBackend>);
 
-bool child_dies_running(void (*scenario)()) {
-    const pid_t pid = ::fork();
-    if (pid < 0)
-        return false;
-    if (pid == 0) {
-        ::alarm(30);
-        scenario();
-        std::_Exit(0);
-    }
-    int status = 0;
-    if (::waitpid(pid, &status, 0) != pid)
-        return false;
-    return WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT;
-}
+// The C2-C convergence removed the poll-only readiness-fd lend: neither the
+// source nor the backend port exposes a readiness-fd binding operation.
+template <class S>
+concept progress_source_has_no_readiness_lend =
+    !requires(S s) { s.bind_physical_readiness(0); };
+static_assert(progress_source_has_no_readiness_lend<detail::ProgressSource>);
+
+template <class Port>
+concept port_has_no_readiness_lend = !requires(Port p) { p.bind_physical_readiness(0); };
+static_assert(port_has_no_readiness_lend<detail::BackendProgressPort>);
 
 bool notification_fd_readable(int fd) {
     if (fd < 0)
@@ -407,51 +403,6 @@ bool unattached_backend_control_ops_are_absent() {
     return true;
 }
 
-void bind_physical_readiness_twice_scenario() {
-    class DoubleBindBackend final : public AsyncBackend {
-      public:
-        void progress_port_attached() noexcept override {
-            fd_ = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-            progress_port_.bind_physical_readiness(fd_);
-            progress_port_.bind_physical_readiness(fd_);
-        }
-
-      private:
-        std::size_t poll() override { return 0; }
-        std::size_t outstanding() const noexcept override { return 0; }
-        std::size_t slot_capacity() const noexcept override { return 0; }
-        detail::PublicCancel cancel_identity(detail::RequestKey) override {
-            return detail::PublicCancel::not_found;
-        }
-        Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
-            return sluice::make_unexpected<detail::RequestKey>(
-                IoError{IoError::Code::not_supported});
-        }
-        Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
-            return sluice::make_unexpected<detail::RequestKey>(
-                IoError{IoError::Code::not_supported});
-        }
-        Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
-            return sluice::make_unexpected<detail::RequestKey>(
-                IoError{IoError::Code::not_supported});
-        }
-        Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
-            return sluice::make_unexpected<detail::RequestKey>(
-                IoError{IoError::Code::not_supported});
-        }
-
-        int fd_ = -1;
-    };
-
-    auto backend = std::make_unique<DoubleBindBackend>();
-    AsyncIoContext ctx(std::move(backend));
-    (void)ctx;
-}
-
-bool readiness_binding_is_one_shot() {
-    return child_dies_running(bind_physical_readiness_twice_scenario);
-}
-
 #if defined(SLUICE_HAS_LIBURING)
 bool uring_available() {
     UringAsyncBackend backend;
@@ -543,7 +494,6 @@ int main() {
         {"constructor_unwind_destroys_backend_before_progress_source",
          constructor_unwind_destroys_backend_before_progress_source},
         {"unattached_backend_control_ops_are_absent", unattached_backend_control_ops_are_absent},
-        {"readiness_binding_is_one_shot", readiness_binding_is_one_shot},
         {"uring_zero_op_signals_context_notification",
          uring_zero_op_signals_context_notification},
         {"uring_completion_wakes_parked_driver", uring_completion_wakes_parked_driver},
