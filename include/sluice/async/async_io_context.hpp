@@ -71,7 +71,23 @@ class AsyncBackend {
         progress_port_attached();
     }
 
+    // Authoritative result of one bounded nonblocking progress pass. The
+    // booleans are post-pass facts about backend state, not guesses derived
+    // from the completion count.
+    struct ProgressPass {
+        std::size_t completed = 0;
+        bool immediate_work_remains = false;
+        bool accepted_work_remains = false;
+    };
+
     virtual std::size_t poll() = 0;
+
+    virtual ProgressPass poll_progress() {
+        ProgressPass pass;
+        pass.completed = poll();
+        pass.accepted_work_remains = outstanding() != 0;
+        return pass;
+    }
 
     virtual void cancel(Completion<std::size_t>& c) { (void)c; }
     virtual void cancel(Completion<void>& c) { (void)c; }
@@ -210,6 +226,13 @@ class AsyncIoContext {
 
     std::size_t poll();
 
+    // One bounded nonblocking progress pass with an authoritative post-pass
+    // state report; the documented drive operation for external event-loop
+    // hosts: acknowledge notification, then poll_progress until neither
+    // completed work nor immediate work remains.
+    using ProgressPass = AsyncBackend::ProgressPass;
+    ProgressPass poll_progress();
+
     Result<std::size_t> wait_one();
 
     Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
@@ -266,6 +289,22 @@ class AsyncIoContext {
     detail::ProgressSource::Token progress_token_for_test() const noexcept;
 
     void set_progress_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
+
+    void set_progress_prerevalidate_pause_gate_for_test(
+        detail::ProgressSource::PauseGate* gate) noexcept;
+
+    void set_progress_prepark_pause_gate_for_test(
+        detail::ProgressSource::PauseGate* gate) noexcept;
+
+    void set_progress_epoch_for_test(std::uint64_t epoch) noexcept;
+
+    void set_control_epoch_for_test(std::uint64_t epoch) noexcept;
+
+    void set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept;
+
+    void saturate_progress_notification_for_test() noexcept;
+
+    bool progress_exhausted_for_test() const noexcept;
 #endif
 
   private:
@@ -276,6 +315,10 @@ class AsyncIoContext {
     std::unique_ptr<detail::ProgressSource> progress_;
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
+
+    // Exhaustion closes admission before the epoch domain can wrap; the
+    // source is a leaf and cannot reach the core itself.
+    void close_admission_on_progress_exhaustion_() noexcept;
 
     mutable std::mutex access_mtx_;
 };

@@ -40,7 +40,7 @@ using sluice::Result;
 template <class Port>
 concept port_has_no_wait_api =
     !requires(Port p, detail::ProgressSource::Token t) {
-        p.wait_for_change(t);
+        p.wait_if_unchanged(t);
         p.snapshot();
         p.interrupt();
         p.arm_committed_wait();

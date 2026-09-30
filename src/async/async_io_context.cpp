@@ -334,13 +334,27 @@ Result<RequestHandleState> AsyncIoContext::request_state(const RequestHandle& h)
 }
 
 std::size_t AsyncIoContext::poll() {
+    return poll_progress().completed;
+}
+
+AsyncBackend::ProgressPass AsyncIoContext::poll_progress() {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (stats_)
         ++stats_->poll_calls;
-    std::size_t n = backend_->poll();
+    AsyncBackend::ProgressPass pass;
+    if (!backend_)
+        return pass;
+    pass = backend_->poll_progress();
     if (stats_)
-        stats_->completed_ops += n;
-    return n;
+        stats_->completed_ops += pass.completed;
+    close_admission_on_progress_exhaustion_();
+    return pass;
+}
+
+void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
+    if (core_ && progress_ && progress_->exhausted()) {
+        core_->close_admission();
+    }
 }
 
 Result<std::size_t> AsyncIoContext::wait_one() {
@@ -362,29 +376,19 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
     }
 
     const detail::ProgressSource::Token invocation_start = progress_->consume_committed_wait();
-    const std::uint64_t control_baseline = invocation_start.control;
 
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
     const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
                                             : std::chrono::steady_clock::time_point{};
     for (;;) {
-        detail::ProgressSource::Token token = progress_->snapshot();
+        const detail::ProgressSource::Token token = progress_->snapshot();
 
-        token.control = control_baseline;
-        std::size_t n = 0;
-        std::size_t outstanding_now = 0;
-        {
-            std::lock_guard<std::mutex> lk(access_mtx_);
-            n = backend_->poll();
-            outstanding_now = backend_->outstanding();
-            if (n > 0 && stats_)
-                stats_->completed_ops += n;
-        }
-        if (n > 0) {
-            return Result<std::size_t>{n};
+        const AsyncBackend::ProgressPass pass = poll_progress();
+        if (pass.completed > 0) {
+            return Result<std::size_t>{pass.completed};
         }
 
-        if (outstanding_now == 0) {
+        if (!pass.immediate_work_remains && !pass.accepted_work_remains) {
             return Result<std::size_t>{0};
         }
 
@@ -394,24 +398,24 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             if (remaining <= std::chrono::nanoseconds::zero()) {
                 reason = detail::ProgressSource::WakeReason::interrupted;
             } else {
-                reason = progress_->wait_for_change(token, remaining);
+                detail::ProgressSource::Token observed = token;
+                observed.control = invocation_start.control;
+                observed.control_exhaustion = invocation_start.control_exhaustion;
+                reason = progress_->wait_if_unchanged(observed, remaining);
             }
         } else {
-            reason = progress_->wait_for_change(token);
+            detail::ProgressSource::Token observed = token;
+            observed.control = invocation_start.control;
+            observed.control_exhaustion = invocation_start.control_exhaustion;
+            reason = progress_->wait_if_unchanged(observed);
         }
         if (reason == detail::ProgressSource::WakeReason::progress) {
             continue;
         }
 
-        std::size_t final_n = 0;
-        {
-            std::lock_guard<std::mutex> lk(access_mtx_);
-            final_n = backend_->poll();
-            if (final_n > 0 && stats_)
-                stats_->completed_ops += final_n;
-        }
-        if (final_n > 0) {
-            return Result<std::size_t>{final_n};
+        const AsyncBackend::ProgressPass final_pass = poll_progress();
+        if (final_pass.completed > 0) {
+            return Result<std::size_t>{final_pass.completed};
         }
         return Result<std::size_t>{0};
     }
@@ -435,6 +439,48 @@ void AsyncIoContext::set_progress_prepark_counter_for_test(std::atomic<int>* cou
     if (progress_ != nullptr) {
         progress_->set_prepark_counter_for_test(counter);
     }
+}
+
+void AsyncIoContext::set_progress_prerevalidate_pause_gate_for_test(
+    detail::ProgressSource::PauseGate* gate) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_prerevalidate_pause_gate_for_test(gate);
+    }
+}
+
+void AsyncIoContext::set_progress_prepark_pause_gate_for_test(
+    detail::ProgressSource::PauseGate* gate) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_prepark_pause_gate_for_test(gate);
+    }
+}
+
+void AsyncIoContext::set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_progress_epoch_for_test(epoch);
+    }
+}
+
+void AsyncIoContext::set_control_epoch_for_test(std::uint64_t epoch) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_control_epoch_for_test(epoch);
+    }
+}
+
+void AsyncIoContext::set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_control_exhaustion_for_test(exhaustion);
+    }
+}
+
+void AsyncIoContext::saturate_progress_notification_for_test() noexcept {
+    if (progress_ != nullptr) {
+        progress_->saturate_notification_for_test();
+    }
+}
+
+bool AsyncIoContext::progress_exhausted_for_test() const noexcept {
+    return progress_ != nullptr && progress_->exhausted();
 }
 #endif
 
