@@ -62,6 +62,7 @@ class ProgressSource {
     Token arm_committed_wait() noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
         armed_control_epoch_ = control_epoch_;
+        armed_control_exhaustion_ = control_exhaustion_;
         armed_ = true;
         return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
     }
@@ -71,7 +72,7 @@ class ProgressSource {
         if (armed_) {
             armed_ = false;
             return Token{progress_epoch_, armed_control_epoch_, progress_exhaustion_,
-                         control_exhaustion_};
+                         armed_control_exhaustion_};
         }
         return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
     }
@@ -120,8 +121,7 @@ class ProgressSource {
             {
                 std::lock_guard<std::mutex> lk(mtx_);
                 readiness_fd = bound_readiness_fd_;
-                if (control_epoch_ != observed.control ||
-                    control_exhaustion_ != observed.control_exhaustion) {
+                if (control_changed_nolock_(observed)) {
                     return WakeReason::interrupted;
                 }
                 if (progress_epoch_ != observed.progress ||
@@ -173,8 +173,7 @@ class ProgressSource {
                     }
                     if ((pfds[0].revents & POLLIN) != 0 ||
                         (nfds > 1 && (pfds[1].revents & POLLIN) != 0)) {
-                        if (control_epoch_ != observed.control ||
-                            control_exhaustion_ != observed.control_exhaustion) {
+                        if (control_changed_nolock_(observed)) {
                             return WakeReason::interrupted;
                         }
                         return WakeReason::progress;
@@ -189,11 +188,14 @@ class ProgressSource {
             std::lock_guard<std::mutex> lk(mtx_);
             // Same saturation discipline as signal(): a frozen control epoch
             // must stay sticky and let the exhaustion sequence distinguish a
-            // fresh interrupt from the observed token.
-            if (control_epoch_ == std::numeric_limits<std::uint64_t>::max()) {
-                ++control_exhaustion_;
-            } else {
+            // fresh interrupt from the observed token. Once the exhaustion
+            // sequence is spent too, the pair freezes for good: it can no
+            // longer distinguish anything, so every wait on it must treat
+            // control as pending instead of parking on a reusable value.
+            if (control_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
                 ++control_epoch_;
+            } else if (control_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
+                ++control_exhaustion_;
             }
         }
         wake_notification_();
@@ -270,6 +272,11 @@ class ProgressSource {
         control_epoch_ = epoch;
     }
 
+    void set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        control_exhaustion_ = exhaustion;
+    }
+
     // Fills the eventfd counter in one write so the next signal observes the
     // EAGAIN (already-readable) branch deterministically.
     void saturate_notification_for_test() noexcept {
@@ -289,6 +296,25 @@ class ProgressSource {
 #endif
 
   private:
+    static constexpr std::uint64_t kMaxEpoch = std::numeric_limits<std::uint64_t>::max();
+
+    // A spent outer control domain freezes at the absorbing pair
+    // {max, max}; that value can no longer distinguish a fresh interrupt,
+    // so a wait observing it must never revalidate control as unchanged.
+    static bool control_domain_spent_(std::uint64_t epoch,
+                                      std::uint64_t exhaustion) noexcept {
+        return epoch == kMaxEpoch && exhaustion == kMaxEpoch;
+    }
+
+    bool control_changed_nolock_(const Token& observed) const noexcept {
+        if (control_domain_spent_(observed.control, observed.control_exhaustion) ||
+            control_domain_spent_(control_epoch_, control_exhaustion_)) {
+            return true;
+        }
+        return control_epoch_ != observed.control ||
+               control_exhaustion_ != observed.control_exhaustion;
+    }
+
     [[noreturn]] static void wait_domain_fail_fast_(const char* op, int err) noexcept {
         std::fprintf(stderr,
                      "sluice::async::detail::ProgressSource: %s failed with errno=%d "
@@ -360,6 +386,7 @@ class ProgressSource {
     std::uint64_t control_exhaustion_ = 0;
 
     std::uint64_t armed_control_epoch_ = 0;
+    std::uint64_t armed_control_exhaustion_ = 0;
     bool armed_ = false;
 
     int notification_fd_ = -1;

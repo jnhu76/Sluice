@@ -53,6 +53,19 @@ bool notification_fd_readable(int fd) {
     return rc > 0 && (p.revents & POLLIN) != 0;
 }
 
+// Readiness produced by a resumed worker lands asynchronously; a caller that
+// must observe it while holding a pause gate waits bounded instead of racing
+// one poll.
+bool wait_notification_readable(const AsyncIoContext& ctx) {
+    const int fd = ctx.progress_notification_fd();
+    for (int i = 0; i < 20000; ++i) {
+        if (notification_fd_readable(fd))
+            return true;
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
+    return notification_fd_readable(fd);
+}
+
 void wait_gate_paused(PauseGate& gate) {
     std::atomic<bool>& paused = gate.paused;
     bool seen = paused.load(std::memory_order_acquire);
@@ -602,7 +615,7 @@ bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
     read.release();
-    if (!notification_fd_readable(ctx.progress_notification_fd()))
+    if (!wait_notification_readable(ctx))
         return false;
     resume_gate(gate);
     driver.join();
@@ -650,6 +663,110 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+    return ok && final_r.has_value() && final_r.value() == 1 && read.completion.ready() &&
+           (read.completion.reset(), true);
+}
+
+// R16: a committed wait must carry the complete control freshness pair frozen
+// at arm time. A saturated interrupt that lands after the arm but before the
+// committed state is consumed changes the exhaustion half while the epoch half
+// stays frozen; a baseline mixing the armed epoch with a consume-time
+// exhaustion would revalidate that fresh interrupt as unchanged, drain its
+// readiness, and park the owner past it.
+bool r16_saturated_control_interrupt_between_arm_and_consume_is_observed() {
+    ThreadPoolBackend* raw = nullptr;
+    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    GatedWorkerRead read;
+    if (!read.arm(ctx, raw))
+        return false;
+
+    constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+    ctx.set_control_epoch_for_test(kMax);
+    ctx.set_control_exhaustion_for_test(7);
+
+    const bool ok = [&] {
+        ctx.arm_progress_wait_commit();
+
+        std::thread producer([&] { ctx.interrupt_progress_waiters(); });
+        producer.join();
+
+        const auto token = ctx.progress_token_for_test();
+        if (token.control != kMax || token.control_exhaustion != 8)
+            return false;
+        if (!notification_fd_readable(ctx.progress_notification_fd()))
+            return false;
+
+        std::atomic<int> prepark{0};
+        ctx.set_progress_prepark_counter_for_test(&prepark);
+        std::optional<std::size_t> result;
+        std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+        driver.join();
+        ctx.set_progress_prepark_counter_for_test(nullptr);
+
+        return result.has_value() && result.value() == 0 && prepark.load() == 0 &&
+               !read.completion.ready() &&
+               notification_fd_readable(ctx.progress_notification_fd());
+    }();
+
+    read.release();
+    const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+    return ok && final_r.has_value() && final_r.value() == 1 && read.completion.ready() &&
+           (read.completion.reset(), true);
+}
+
+// Once the outer control freshness domain is spent (saturated epoch and
+// saturated exhaustion), the pair freezes at its absorbing value: further
+// interrupts must not wrap it back onto an earlier token value, the state must
+// stay terminal, and a wait holding that value must never revalidate control
+// as unchanged, so an ordinary unchanged-token park is unreachable.
+bool control_outer_exhaustion_is_terminal_and_never_aliases() {
+    ThreadPoolBackend* raw = nullptr;
+    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    GatedWorkerRead read;
+    if (!read.arm(ctx, raw))
+        return false;
+
+    constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
+    ctx.set_control_epoch_for_test(kMax);
+    ctx.set_control_exhaustion_for_test(kMax - 1);
+
+    const bool ok = [&] {
+        ctx.interrupt_progress_waiters();
+        const auto entered = ctx.progress_token_for_test();
+        if (entered.control != kMax || entered.control_exhaustion != kMax)
+            return false;
+        if (!notification_fd_readable(ctx.progress_notification_fd()))
+            return false;
+
+        ctx.arm_progress_wait_commit();
+
+        for (int round = 0; round < 3; ++round) {
+            ctx.interrupt_progress_waiters();
+            const auto token = ctx.progress_token_for_test();
+            if (token.control != kMax || token.control_exhaustion != kMax)
+                return false;
+            if (!notification_fd_readable(ctx.progress_notification_fd()))
+                return false;
+
+            std::atomic<int> prepark{0};
+            ctx.set_progress_prepark_counter_for_test(&prepark);
+            const auto r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+            ctx.set_progress_prepark_counter_for_test(nullptr);
+            if (!r.has_value() || r.value() != 0 || prepark.load() != 0)
+                return false;
+            if (read.completion.ready())
+                return false;
+        }
+        return true;
+    }();
+
+    read.release();
+    std::optional<std::size_t> final_r;
+    for (int i = 0; i < 1000; ++i) {
+        final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+        if (final_r.has_value() && final_r.value() == 1)
+            break;
+    }
     return ok && final_r.has_value() && final_r.value() == 1 && read.completion.ready() &&
            (read.completion.reset(), true);
 }
@@ -829,6 +946,10 @@ int main() {
          r15_saturated_signal_between_pass_and_revalidation_is_not_drained},
         {"control_exhaustion_saturates_without_alias_and_wakes_interrupted",
          control_exhaustion_saturates_without_alias_and_wakes_interrupted},
+        {"r16_saturated_control_interrupt_between_arm_and_consume_is_observed",
+         r16_saturated_control_interrupt_between_arm_and_consume_is_observed},
+        {"control_outer_exhaustion_is_terminal_and_never_aliases",
+         control_outer_exhaustion_is_terminal_and_never_aliases},
         {"token_exhaustion_saturates_without_alias_and_closes_admission",
          token_exhaustion_saturates_without_alias_and_closes_admission},
         {"owner_parked_at_saturated_epoch_wakes_and_reparks",

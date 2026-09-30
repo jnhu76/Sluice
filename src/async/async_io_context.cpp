@@ -376,7 +376,6 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
     }
 
     const detail::ProgressSource::Token invocation_start = progress_->consume_committed_wait();
-    const std::uint64_t control_baseline = invocation_start.control;
 
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
     const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
@@ -400,12 +399,14 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
                 reason = detail::ProgressSource::WakeReason::interrupted;
             } else {
                 detail::ProgressSource::Token observed = token;
-                observed.control = control_baseline;
+                observed.control = invocation_start.control;
+                observed.control_exhaustion = invocation_start.control_exhaustion;
                 reason = progress_->wait_if_unchanged(observed, remaining);
             }
         } else {
             detail::ProgressSource::Token observed = token;
-            observed.control = control_baseline;
+            observed.control = invocation_start.control;
+            observed.control_exhaustion = invocation_start.control_exhaustion;
             reason = progress_->wait_if_unchanged(observed);
         }
         if (reason == detail::ProgressSource::WakeReason::progress) {
@@ -463,6 +464,12 @@ void AsyncIoContext::set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
 void AsyncIoContext::set_control_epoch_for_test(std::uint64_t epoch) noexcept {
     if (progress_ != nullptr) {
         progress_->set_control_epoch_for_test(epoch);
+    }
+}
+
+void AsyncIoContext::set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_control_exhaustion_for_test(exhaustion);
     }
 }
 
