@@ -340,9 +340,9 @@ bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
     t.check(submit_result.has_value() && submit_result->has_value(),
             "the submission itself succeeds");
 
-    t.check(raw->live_cookies_for_test() == 1 && raw->transport_ledger_size_for_test() == 1 &&
-                raw->sq_ready_for_test() == 1,
-            "the prepared SQE holds one cookie and one ledger entry before any submit");
+    t.check(raw->live_cookies_for_test() == 1 && raw->transport_ledger_size_for_test() == 0 &&
+                raw->sq_ready_for_test() == 0,
+            "the dispatch-time submit consumes the prepared entry and keeps its routing");
     (void)ctx.poll();
     t.check(raw->transport_ledger_size_for_test() == 0 && raw->live_cookies_for_test() == 1,
             "the submitted operation leaves the prepared ledger and keeps its routing");
@@ -916,12 +916,12 @@ bool post_accept_submit_failure_poison_converges(Tracker& t) {
     Completion<std::size_t> visible;
     auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, visible);
     t.check(first.has_value(), "the first request is accepted");
-    t.check(ctx.poll() >= 0, "the first poll makes the request kernel-visible");
+    t.check(ctx.poll() >= 0, "the first request reached the kernel at its dispatch");
 
     Completion<std::size_t> invisible;
     auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, invisible);
     t.check(second.has_value(), "the second request is accepted before the failure");
-    t.check(ctx.poll() >= 0, "the failing submit poisons the backend");
+    t.check(ctx.poll() >= 0, "the second acceptance's transport failure poisons the backend");
 
     for (int i = 0; i < 64 && !invisible.ready(); ++i)
         (void)ctx.poll();
@@ -978,7 +978,7 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
     Completion<std::size_t> b;
     auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, b);
     t.check(second.has_value(), "request B is accepted");
-    t.check(ctx.poll() >= 0, "the failing submit poisons the backend");
+    t.check(ctx.poll() >= 0, "B's dispatch-time transport failure poisons the backend");
 
     for (int i = 0; i < 64 && !b.ready(); ++i)
         (void)ctx.poll();

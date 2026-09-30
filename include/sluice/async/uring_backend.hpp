@@ -76,6 +76,8 @@ class UringAsyncBackend : public AsyncBackend {
     bool signals_physical_progress() const noexcept override { return have_ring_; }
 
   private:
+    AsyncBackend::ProgressPass poll_progress() override;
+
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override;
 
@@ -112,6 +114,8 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t transport_ledger_size_for_test() const noexcept;
     std::size_t sq_ready_for_test() const noexcept;
     std::size_t live_control_sqes_for_test() const noexcept;
+    unsigned eventfd_registrations_for_test() const noexcept;
+    unsigned eventfd_unregistrations_for_test() const noexcept;
 
     void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept;
     std::optional<detail::RequestKey>
@@ -157,7 +161,9 @@ class UringAsyncBackend : public AsyncBackend {
         std::uint64_t offset = 0;
     };
 
-    void progress_port_attached() noexcept override;
+    bool progress_port_attached() noexcept override;
+
+    bool has_immediate_physical_work() const noexcept override;
 
     struct RouterEntry {
         enum class ControlState : std::uint8_t { none, prepared, submitted };
@@ -231,6 +237,11 @@ class UringAsyncBackend : public AsyncBackend {
 
     bool dispatch_one_locked(detail::SlotHandle h) noexcept;
 
+    // Accepted work that has not reached the kernel: undispatched entries or
+    // prepared transport the last submit attempt did not consume. Poisoned
+    // (retired) ledger entries are not retryable work.
+    bool dispatch_retry_remains_locked_() const noexcept;
+
     int submit_transport_locked() noexcept;
 
     void account_transport_result_locked(int rc, bool had_pending_transport) noexcept;
@@ -281,6 +292,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::unique_ptr<TransportLedger> transport_ledger_;
 
     bool have_ring_ = false;
+    bool eventfd_registered_ = false;
     std::optional<IoError> fatal_error_;
 
     mutable std::mutex dispatch_mtx_;
@@ -291,6 +303,12 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<std::size_t> live_cookies_{0};
     std::atomic<std::size_t> live_control_sqes_{0};
 
+    // Mirrors the outcome of the last CQ-overflow flush attempt so the
+    // lock-free physical probe never claims serviceable overflow work that
+    // the flush just failed to service. Authoritative state stays fatal_error_
+    // under dispatch_mtx_.
+    std::atomic<bool> overflow_flush_serviceable_{true};
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     std::atomic<SubmitEntryPauseGate*> submit_entry_gate_{nullptr};
@@ -300,6 +318,9 @@ class UringAsyncBackend : public AsyncBackend {
 
     std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
     std::atomic<SubmitStageFailureInjection*> submit_stage_failure_injection_{nullptr};
+
+    std::atomic<unsigned> eventfd_registrations_{0};
+    std::atomic<unsigned> eventfd_unregistrations_{0};
 #endif
 #endif
 

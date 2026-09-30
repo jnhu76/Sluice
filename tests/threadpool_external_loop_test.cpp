@@ -25,7 +25,9 @@ using sluice::FileAccess;
 // An application-owned event loop: registration uses the context
 // notification fd with real poll(2); a readable fd is acknowledged through
 // the documented context operation and followed by bounded progress passes
-// until the pass reports no remaining immediate work.
+// that consume the full pass report. A dispatch retry obligation would
+// require a scheduled continuation instead of an fd-only wait; this
+// backend's passes never report one, so no retry schedule exists here.
 class ExternalLoopHost {
   public:
     explicit ExternalLoopHost(AsyncIoContext& ctx) : ctx_(ctx) {
@@ -60,8 +62,9 @@ class ExternalLoopHost {
     }
 
     // The documented wake handling: acknowledge stale readiness, then run
-    // bounded progress passes until neither completed work nor immediate work
-    // remains. Returns the number of public completions delivered.
+    // bounded progress passes until neither completed work nor immediate
+    // work remains. This backend cannot leave a dispatch retry obligation,
+    // so that pass field never alters the loop here.
     std::size_t acknowledge_and_drive() {
         ctx_.acknowledge_progress_notification();
         std::size_t delivered = 0;

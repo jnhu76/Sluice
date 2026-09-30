@@ -12,6 +12,15 @@ namespace sluice::async {
 
 namespace {
 
+// Retry cadence for a pass that left accepted transport outside the kernel
+// (retryable submit failure). PROG-02 allows parking only with a further pass
+// explicitly scheduled; the interval bounds the retry rate so a persistent
+// EAGAIN/EBUSY cannot busy-spin the owner.
+constexpr std::chrono::milliseconds kTransportRetryInterval{10};
+// Classification slack so a wake lands within one clock-granularity window of
+// its deadline is treated as that deadline's expiry, never as a control wake.
+constexpr std::chrono::milliseconds kDeadlineClassifySlack{1};
+
 std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::detail::FileOperation op) {
     return sluice::detail::rejection_of(sluice::detail::precheck_state_op(file.fd < 0, file.access, op));
 }
@@ -357,6 +366,10 @@ void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
     }
 }
 
+bool AsyncIoContext::backend_has_immediate_physical_work_() noexcept {
+    return backend_ && backend_->has_immediate_physical_work();
+}
+
 Result<std::size_t> AsyncIoContext::wait_one() {
     return wait_one(std::chrono::nanoseconds::max());
 }
@@ -388,28 +401,52 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             return Result<std::size_t>{pass.completed};
         }
 
-        if (!pass.immediate_work_remains && !pass.accepted_work_remains) {
+        if (!pass.immediate_work_remains && !pass.accepted_work_remains &&
+            !pass.dispatch_retry_remains) {
             return Result<std::size_t>{0};
         }
 
         detail::ProgressSource::WakeReason reason;
-        if (bounded_park) {
-            auto remaining = park_deadline - std::chrono::steady_clock::now();
-            if (remaining <= std::chrono::nanoseconds::zero()) {
-                reason = detail::ProgressSource::WakeReason::interrupted;
-            } else {
-                detail::ProgressSource::Token observed = token;
-                observed.control = invocation_start.control;
-                observed.control_exhaustion = invocation_start.control_exhaustion;
-                reason = progress_->wait_if_unchanged(observed, remaining);
+        auto probe = [](void* self) noexcept -> bool {
+            return static_cast<AsyncIoContext*>(self)->backend_has_immediate_physical_work_();
+        };
+
+        // A pass that left accepted transport outside the kernel schedules a
+        // further bounded pass instead of parking past the dispatch
+        // obligation; nothing will write the kernel eventfd for that work.
+        std::chrono::steady_clock::time_point pass_deadline = park_deadline;
+        bool timed_wait = bounded_park;
+        if (pass.dispatch_retry_remains) {
+            const auto retry_by = std::chrono::steady_clock::now() + kTransportRetryInterval;
+            if (!timed_wait || retry_by < pass_deadline) {
+                pass_deadline = retry_by;
+                timed_wait = true;
             }
+        }
+
+        detail::ProgressSource::Token observed = token;
+        observed.control = invocation_start.control;
+        observed.control_exhaustion = invocation_start.control_exhaustion;
+        if (!timed_wait) {
+            reason = progress_->wait_if_unchanged(observed, std::chrono::nanoseconds::max(), probe,
+                                                  this);
         } else {
-            detail::ProgressSource::Token observed = token;
-            observed.control = invocation_start.control;
-            observed.control_exhaustion = invocation_start.control_exhaustion;
-            reason = progress_->wait_if_unchanged(observed);
+            auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                pass_deadline - std::chrono::steady_clock::now());
+            if (remaining < std::chrono::nanoseconds::zero()) {
+                remaining = std::chrono::nanoseconds::zero();
+            }
+            reason = progress_->wait_if_unchanged(observed, remaining, probe, this);
         }
         if (reason == detail::ProgressSource::WakeReason::progress) {
+            continue;
+        }
+
+        // Interrupted: control, the caller deadline, or a retry-nap expiry.
+        const auto woke = std::chrono::steady_clock::now();
+        const bool nap_deadline = timed_wait && pass_deadline != park_deadline;
+        if (nap_deadline && woke + kDeadlineClassifySlack >= pass_deadline &&
+            (!bounded_park || woke + kDeadlineClassifySlack < park_deadline)) {
             continue;
         }
 

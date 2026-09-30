@@ -350,13 +350,63 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
 }
 
 #if defined(SLUICE_HAS_LIBURING)
-void UringAsyncBackend::progress_port_attached() noexcept {
-    if (have_ring_) {
-        // CQ readiness stays a backend-physical fact: the context park polls
-        // the lent ring fd read-only. Kernel eventfd registration convergence
-        // is C2-C.
-        progress_port_.bind_physical_readiness(ring_state_->ring.ring_fd);
+bool UringAsyncBackend::progress_port_attached() noexcept {
+    if (!have_ring_) {
+        return true;
     }
+    const bool installed = progress_port_.register_notification_with_kernel(
+        [](void* self, int fd) noexcept -> bool {
+            auto* backend = static_cast<UringAsyncBackend*>(self);
+            int rc = 0;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            backend->eventfd_registrations_.fetch_add(1, std::memory_order_relaxed);
+            if (backend->ring_state_->test_hooks.register_eventfd != nullptr) {
+                rc = backend->ring_state_->test_hooks.register_eventfd(
+                    backend->ring_state_->test_hooks.context, &backend->ring_state_->ring, fd);
+            } else {
+                rc = ::io_uring_register_eventfd(&backend->ring_state_->ring, fd);
+            }
+#else
+            rc = ::io_uring_register_eventfd(&backend->ring_state_->ring, fd);
+#endif
+            backend->eventfd_registered_ = rc == 0;
+            return rc == 0;
+        },
+        this);
+    return installed;
+}
+
+bool UringAsyncBackend::has_immediate_physical_work() const noexcept {
+    // CQ visibility follows the kernel's CQ publication protocol, not the
+    // eventfd; the overflow flag covers completions parked outside the ring.
+    // Overflow counts as actionable only while the flush can service it, or a
+    // failed flush turns every pass into an unparked spin.
+    if (!have_ring_)
+        return false;
+    if (::io_uring_cq_ready(&ring_state_->ring) > 0)
+        return true;
+#if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
+    return ::io_uring_cq_has_overflow(&ring_state_->ring);
+#else
+    return overflow_flush_serviceable_.load(std::memory_order_relaxed) &&
+           ::io_uring_cq_has_overflow(&ring_state_->ring);
+#endif
+}
+
+AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
+    ProgressPass pass;
+    pass.completed = poll();
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        pass.immediate_work_remains = !publication_pending_->empty();
+#if defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+        pass.dispatch_retry_remains = false;
+#else
+        pass.dispatch_retry_remains = dispatch_retry_remains_locked_();
+#endif
+    }
+    pass.accepted_work_remains = outstanding() != 0;
+    return pass;
 }
 #endif
 
@@ -383,6 +433,27 @@ UringAsyncBackend::~UringAsyncBackend() {
         }
     }
     if (have_ring_) {
+        if (eventfd_registered_) {
+            int rc = 0;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            eventfd_unregistrations_.fetch_add(1, std::memory_order_relaxed);
+            if (ring_state_->test_hooks.unregister_eventfd != nullptr) {
+                rc = ring_state_->test_hooks.unregister_eventfd(ring_state_->test_hooks.context,
+                                                                &ring_state_->ring);
+            } else {
+                rc = ::io_uring_unregister_eventfd(&ring_state_->ring);
+            }
+#else
+            rc = ::io_uring_unregister_eventfd(&ring_state_->ring);
+#endif
+            if (rc != 0) {
+                std::fprintf(stderr, "sluice::async::UringAsyncBackend: eventfd unregister "
+                                     "failed before ring exit (invariant violation)\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
+            eventfd_registered_ = false;
+        }
         ::io_uring_queue_exit(&ring_state_->ring);
         have_ring_ = false;
     }
@@ -533,6 +604,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp op, Comp
 void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
     bool injected_dispatch_failure = false;
     bool newly_poisoned = false;
+    bool unsubmitted_after_dispatch = false;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -567,10 +639,16 @@ void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
                 if (!dispatch_one_locked(front))
                     break;
             }
+            if (!fatal_error_.has_value())
+                (void)submit_transport_locked();
             newly_poisoned = !poisoned_before && fatal_error_.has_value();
         }
+#if !defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+        unsubmitted_after_dispatch =
+            !fatal_error_.has_value() && dispatch_retry_remains_locked_();
+#endif
     }
-    if (injected_dispatch_failure || newly_poisoned) {
+    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch) {
         signal_ready_progress();
     }
 }
@@ -648,6 +726,13 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     }
 
     return true;
+}
+
+bool UringAsyncBackend::dispatch_retry_remains_locked_() const noexcept {
+    if (!dispatch_->empty())
+        return true;
+    return transport_ledger_ != nullptr && !transport_ledger_->empty() &&
+           !transport_ledger_->all_class_a_recovery_retired();
 }
 
 int UringAsyncBackend::submit_transport_locked() noexcept {
@@ -912,6 +997,9 @@ void UringAsyncBackend::finalize_operation_terminal_(
     }
     publication_pending_->push_back(route.handle);
 #endif
+    // The pending transition must signal: a peer waiter can drain the kernel
+    // eventfd and miss the CQE to a concurrent reaper, leaving no later wake.
+    signal_ready_progress();
     if (route.control_state == RouterEntry::ControlState::none) {
         retire_router_entry_(router_index);
     }
@@ -995,21 +1083,53 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
     constexpr unsigned BATCH = 32;
     io_uring_cqe* cqes[BATCH];
     unsigned got = 0;
-    while ((got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH)) > 0) {
-        for (unsigned i = 0; i < got; ++i) {
-            io_uring_cqe* cqe = cqes[i];
+    const auto reap_visible_batch = [&]() noexcept {
+        while ((got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH)) > 0) {
+            for (unsigned i = 0; i < got; ++i) {
+                io_uring_cqe* cqe = cqes[i];
 
-            const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
-            const int res = cqe->res;
-            ::io_uring_cqe_seen(&ring_state_->ring, cqe);
+                const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
+                const int res = cqe->res;
+                ::io_uring_cqe_seen(&ring_state_->ring, cqe);
 
-            const bool is_op = (!is_control_cookie(user_data) && user_data != 0);
-            handle_one_cqe(user_data, res);
-            if (is_op)
-                ++non_control_observed;
+                const bool is_op = (!is_control_cookie(user_data) && user_data != 0);
+                handle_one_cqe(user_data, res);
+                if (is_op)
+                    ++non_control_observed;
+            }
+            if (got < BATCH)
+                break;
         }
-        if (got < BATCH)
-            break;
+    };
+    reap_visible_batch();
+    if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
+        // Completions parked in the kernel overflow list are invisible to the
+        // shared-memory peek until an enter flushes them into the ring; a
+        // probe that reports overflow work must be serviceable here. A failed
+        // flush is a health event: the overflow claim is retired and the
+        // backend poisons, so no pass can spin on unserviceable overflow.
+#if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
+        (void)::io_uring_get_events(&ring_state_->ring);
+#else
+        int flush_rc = 0;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        if (ring_state_->test_hooks.get_events != nullptr) {
+            flush_rc = ring_state_->test_hooks.get_events(ring_state_->test_hooks.context,
+                                                          &ring_state_->ring);
+        } else
+#endif
+        {
+            flush_rc = ::io_uring_get_events(&ring_state_->ring);
+        }
+        {
+            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+            overflow_flush_serviceable_.store(flush_rc >= 0, std::memory_order_relaxed);
+            if (flush_rc < 0) {
+                poison_and_recover_locked(IoError{IoError::Code::backend_error, -flush_rc});
+            }
+        }
+#endif
+        reap_visible_batch();
     }
     return non_control_observed;
 }
@@ -1103,9 +1223,6 @@ std::size_t UringAsyncBackend::poll() {
         ++published;
     }
 
-    if (published > 0) {
-        signal_ready_progress();
-    }
     return published;
 }
 

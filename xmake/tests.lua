@@ -325,6 +325,57 @@ do
                         R .. "tests/threadpool_external_loop_test.cpp")
 end
 
+-- C2-C (#397) io_uring readiness convergence evidence: kernel-style
+-- no-lost-wake race campaign, real-ring external-loop W-03 half, and the
+-- kernel eventfd registration lifecycle. Real ring required; registered only
+-- when the liburing build switch is on.
+if has_config("liburing") then
+    local function c2c_uring_progress_target(name, test_source, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_HAS_LIBURING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            add_links("uring")
+            add_files(test_source,
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/request_handle.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    c2c_uring_progress_target("uring_progress_race_test",
+                              R .. "tests/uring_progress_race_test.cpp")
+    c2c_uring_progress_target("uring_external_loop_test",
+                              R .. "tests/uring_external_loop_test.cpp")
+    c2c_uring_progress_target("uring_registration_lifecycle_test",
+                              R .. "tests/uring_registration_lifecycle_test.cpp")
+
+    -- C2-C corrective-round mutation builds. Each restores one abandoned
+    -- advertisement/health mechanism and must be killed by the named test of
+    -- the race suite; they are executed and recorded manually, never run as
+    -- regular tests.
+    c2c_uring_progress_target("uring_progress_race_mut_transport_retry_unadvertised",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED")
+    c2c_uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED")
+    c2c_uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
+                              R .. "tests/uring_external_loop_test.cpp",
+                              "SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
+end
+
 -- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as
 -- the ownership target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.

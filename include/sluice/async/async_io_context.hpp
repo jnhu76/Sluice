@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 
 namespace sluice::async {
 
@@ -65,10 +66,15 @@ class AsyncBackend {
     void attach_ready_sink(detail::SynchronousReadySink* sink) noexcept { routing_sink_ = sink; }
 
     // Installed exactly once by the AsyncIoContext constructor before the
-    // backend can produce any work. There is no rebind path.
-    void attach_progress_port(detail::BackendProgressPort port) noexcept {
+    // backend can produce any work. There is no rebind path. A backend that
+    // cannot install its required progress-notification binding fails the
+    // context construction.
+    void attach_progress_port(detail::BackendProgressPort port) {
         progress_port_ = port;
-        progress_port_attached();
+        if (!progress_port_attached()) {
+            throw std::runtime_error(
+                "sluice::async::AsyncBackend: progress notification binding install failed");
+        }
     }
 
     // Authoritative result of one bounded nonblocking progress pass. The
@@ -78,6 +84,10 @@ class AsyncBackend {
         std::size_t completed = 0;
         bool immediate_work_remains = false;
         bool accepted_work_remains = false;
+        // Accepted work whose transport has not reached the kernel; the owner
+        // owes a further bounded pass and must not idle-return or park past it
+        // without scheduling one.
+        bool dispatch_retry_remains = false;
     };
 
     virtual std::size_t poll() = 0;
@@ -105,6 +115,13 @@ class AsyncBackend {
   private:
     friend class AsyncIoContext;
     template <class T> friend class Request;
+
+    // Nonblocking probe of immediately actionable backend-physical work
+    // (kernel CQ state for io_uring). Kernel producers bypass the userspace
+    // progress epochs, so the park handshake needs this physical answer as
+    // its final actionable-work check. Producers that signal through the
+    // context source are covered by token revalidation and answer false.
+    virtual bool has_immediate_physical_work() const noexcept { return false; }
 
     // A null completion destination publishes through the core only; the
     // returned key is the accepted request identity in every accepting case.
@@ -142,9 +159,10 @@ class AsyncBackend {
     detail::BackendProgressPort progress_port_{};
 
     // Runs once after the context installs the progress port, before any work
-    // can exist. Backends may lend poll-only physical readiness here; they
-    // cannot replace, query, or unbind the port.
-    virtual void progress_port_attached() noexcept {}
+    // can exist. Backends install their kernel progress-notification binding
+    // here; false fails the context construction. They cannot replace, query,
+    // or unbind the port.
+    virtual bool progress_port_attached() noexcept { return true; }
 
     // Installed only by the AsyncIoContext constructor; backends never set
     // or clear it, and the backend retires before the core storage does.
@@ -228,8 +246,12 @@ class AsyncIoContext {
 
     // One bounded nonblocking progress pass with an authoritative post-pass
     // state report; the documented drive operation for external event-loop
-    // hosts: acknowledge notification, then poll_progress until neither
-    // completed work nor immediate work remains.
+    // hosts: acknowledge notification, then bounded passes. Keep passing
+    // while immediate_work_remains holds; when dispatch_retry_remains holds,
+    // schedule a future progress pass — that accepted transport produces no
+    // completion and no notification until a pass submits it, so an fd-only
+    // wait strands it. accepted_work_remains alone parks normally: that work
+    // waits for its kernel completion notification.
     using ProgressPass = AsyncBackend::ProgressPass;
     ProgressPass poll_progress();
 
@@ -319,6 +341,8 @@ class AsyncIoContext {
     // Exhaustion closes admission before the epoch domain can wrap; the
     // source is a leaf and cannot reach the core itself.
     void close_admission_on_progress_exhaustion_() noexcept;
+
+    bool backend_has_immediate_physical_work_() noexcept;
 
     mutable std::mutex access_mtx_;
 };
