@@ -453,7 +453,21 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     backend_wait_active_.store(false, std::memory_order_release);
                     ws->park_domain = WorkerState::ParkDomain::None;
 
-                    bool made_progress = wr.has_value() && wr.value() > 0;
+                    bool wait_drive_contended = false;
+                    bool made_progress = false;
+                    if (!wr.has_value()) {
+                        wait_drive_contended = wr.error().code == IoError::Code::invalid_state;
+                    } else {
+                        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+                        made_progress = wr.value().kind == WaitKind::progress &&
+                                        wr.value().completed > 0;
+                        // The elected driver observed the sticky control here;
+                        // without this retirement every later park would end
+                        // at the entry check and spin.
+                        if (wr.value().kind == WaitKind::control_interrupted) {
+                            ctx_.acknowledge_progress_control();
+                        }
+                    }
 
                     {
                         LockGuard lk(global_mtx_);
@@ -462,6 +476,11 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         (void)drain_routed_completion_waits_locked();
                         (void)wake_ready_flags_locked();
                         (void)pump_deadlines_locked();
+                    }
+
+                    if (wait_drive_contended) {
+                        // Another drive held the domain; this cycle re-runs.
+                        continue;
                     }
 
                     if (!made_progress) {
@@ -617,6 +636,9 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
 }
 
 bool Scheduler::drain_routed_completion_waits_locked() {
+    // A drive rejected here means a progress owner (e.g. a worker parked in
+    // wait_one) holds the domain; its own pass reaps what this would have,
+    // so skipping the pass cannot strand work.
     (void)ctx_.poll();
     bool woken = false;
     WaitRecord* head = nullptr;

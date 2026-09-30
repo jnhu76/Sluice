@@ -35,7 +35,28 @@ class ProgressSource {
         std::uint64_t control_exhaustion = 0;
     };
 
-    enum class WakeReason : std::uint8_t { progress, interrupted };
+    enum class WakeReason : std::uint8_t { progress, interrupted, deadline, failed };
+
+    // Epoch comparison alone cannot express "still pending" after a fresh
+    // token absorbs the interrupt's epoch movement; this flag keeps every
+    // later wait reporting control until acknowledge_control() retires it.
+    bool control_pending() const noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return control_pending_;
+    }
+
+    void acknowledge_control() noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        control_pending_ = false;
+    }
+
+    // Once set, no wait may park or report idle: the notification domain
+    // cannot distinguish silence from a lost wake, so every wait must observe
+    // the failure instead of a zero-completion report.
+    bool wait_health_failed() const noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return health_failed_;
+    }
 
     // Nonblocking probe of backend-physical actionable work (kernel CQ state),
     // run between the stale-readiness drain and the final revalidation. Kernel
@@ -104,6 +125,12 @@ class ProgressSource {
                                        : std::chrono::steady_clock::time_point{};
 
         for (;;) {
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                if (health_failed_) {
+                    return WakeReason::failed;
+                }
+            }
             bool expired = false;
             int timeout_ms = -1;
             if (bounded_park) {
@@ -139,7 +166,7 @@ class ProgressSource {
                     return WakeReason::progress;
                 }
                 if (expired) {
-                    return WakeReason::interrupted;
+                    return WakeReason::deadline;
                 }
                 drain_notification_nolock_();
             }
@@ -180,7 +207,12 @@ class ProgressSource {
                 std::lock_guard<std::mutex> lk(mtx_);
                 if (rc < 0) {
                     if (errno != EINTR) {
-                        wait_domain_fail_fast_("poll(2)", errno);
+                        // Silence and a lost wake are now indistinguishable, so
+                        // retrying could park forever; the failure stays sticky
+                        // for the owner to observe. POLLNVAL below keeps
+                        // fail-fast because it proves a lifetime violation.
+                        health_failed_ = true;
+                        return WakeReason::failed;
                     }
                 } else {
                     if ((pfds[0].revents & POLLNVAL) != 0) {
@@ -204,6 +236,9 @@ class ProgressSource {
     void interrupt() noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
+            // The bump still wakes parked waiters; stickiness lives in the
+            // flag, not the epoch.
+            control_pending_ = true;
             // Same saturation discipline as signal(): a frozen control epoch
             // must stay sticky and let the exhaustion sequence distinguish a
             // fresh interrupt from the observed token. Once the exhaustion
@@ -287,6 +322,13 @@ class ProgressSource {
         control_exhaustion_ = exhaustion;
     }
 
+    // Deterministic injection of a verdict whose production setter is a
+    // non-EINTR poll(2) failure inside the park.
+    void set_wait_health_failed_for_test() noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        health_failed_ = true;
+    }
+
     // Fills the eventfd counter in one write so the next signal observes the
     // EAGAIN (already-readable) branch deterministically.
     void saturate_notification_for_test() noexcept {
@@ -317,6 +359,9 @@ class ProgressSource {
     }
 
     bool control_changed_nolock_(const Token& observed) const noexcept {
+        if (control_pending_) {
+            return true;
+        }
         if (control_domain_spent_(observed.control, observed.control_exhaustion) ||
             control_domain_spent_(control_epoch_, control_exhaustion_)) {
             return true;
@@ -394,6 +439,9 @@ class ProgressSource {
     std::uint64_t control_epoch_ = 0;
     std::uint64_t progress_exhaustion_ = 0;
     std::uint64_t control_exhaustion_ = 0;
+
+    bool control_pending_ = false;
+    bool health_failed_ = false;
 
     std::uint64_t armed_control_epoch_ = 0;
     std::uint64_t armed_control_exhaustion_ = 0;

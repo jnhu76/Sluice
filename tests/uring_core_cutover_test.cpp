@@ -751,7 +751,7 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
             "the deferred ready event pins the slot with a core control ref");
 
     c.reset();
-    const std::size_t events = ctx.poll();
+    const std::size_t events = ctx.poll().value_or(0);
     t.check(events == 1, "the next poll delivers exactly the owed ready event");
     t.check(idle_and_whole(core.snapshot(), core),
             "the owed event's retirement reclaims the slot synchronously");
@@ -787,7 +787,7 @@ bool zero_op_event_survives_reset_before_poll(Tracker& t) {
     t.check(!refused.has_value() && refused.error().code == IoError::Code::would_block,
             "the pinned slot still refuses new admission");
 
-    t.check(ctx.poll() == 1, "the poll discharges exactly one ready event");
+    t.check(ctx.poll().value_or(0) == 1, "the poll discharges exactly one ready event");
     t.check(idle_and_whole(core.snapshot(), core),
             "the final pin retirement reclaims without new I/O");
 
@@ -916,12 +916,13 @@ bool post_accept_submit_failure_poison_converges(Tracker& t) {
     Completion<std::size_t> visible;
     auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, visible);
     t.check(first.has_value(), "the first request is accepted");
-    t.check(ctx.poll() >= 0, "the first request reached the kernel at its dispatch");
+    t.check(ctx.poll().has_value(), "the first request reached the kernel at its dispatch");
 
     Completion<std::size_t> invisible;
     auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, invisible);
     t.check(second.has_value(), "the second request is accepted before the failure");
-    t.check(ctx.poll() >= 0, "the second acceptance's transport failure poisons the backend");
+    t.check(ctx.poll().has_value(),
+            "the second acceptance's transport failure poisons the backend");
 
     for (int i = 0; i < 64 && !invisible.ready(); ++i)
         (void)ctx.poll();
@@ -978,7 +979,7 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
     Completion<std::size_t> b;
     auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, b);
     t.check(second.has_value(), "request B is accepted");
-    t.check(ctx.poll() >= 0, "B's dispatch-time transport failure poisons the backend");
+    t.check(ctx.poll().has_value(), "B's dispatch-time transport failure poisons the backend");
 
     for (int i = 0; i < 64 && !b.ready(); ++i)
         (void)ctx.poll();

@@ -17,7 +17,8 @@ Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
 
     while (!c.ready()) {
         auto pr = ctx.poll();
-        (void)pr;
+        if (!pr.has_value())
+            return make_unexpected<std::size_t>(pr.error());
     }
     return c.result();
 }
@@ -25,6 +26,9 @@ Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
 
 Result<std::size_t> read_all(AsyncIoContext& ctx, const NativeFileRef& file,
                              std::span<std::byte> dst, std::uint64_t offset) {
+    auto owner = ctx.claim_progress_owner();
+    if (!owner.has_value())
+        return make_unexpected<std::size_t>(owner.error());
     if (dst.empty())
         return std::size_t{0};
     Completion<std::size_t> c;
@@ -46,6 +50,9 @@ Result<std::size_t> read_all(AsyncIoContext& ctx, const NativeFileRef& file,
 
 Result<std::size_t> write_all(AsyncIoContext& ctx, const NativeFileRef& file,
                               std::span<const std::byte> src, std::uint64_t offset) {
+    auto owner = ctx.claim_progress_owner();
+    if (!owner.has_value())
+        return make_unexpected<std::size_t>(owner.error());
     if (src.empty())
         return std::size_t{0};
     Completion<std::size_t> c;
@@ -75,18 +82,26 @@ Result<void> sync_step(AsyncIoContext& ctx, Completion<void>& c, const NativeFil
     if (!sr.has_value())
         return sr;
     while (!c.ready()) {
-        (void)ctx.poll();
+        auto pr = ctx.poll();
+        if (!pr.has_value())
+            return make_unexpected<void>(pr.error());
     }
     return c.result();
 }
 }
 
 Result<void> sync_data_all(AsyncIoContext& ctx, const NativeFileRef& file) {
+    auto owner = ctx.claim_progress_owner();
+    if (!owner.has_value())
+        return make_unexpected<void>(owner.error());
     Completion<void> c;
     return sync_step(ctx, c, file, true);
 }
 
 Result<void> sync_all_all(AsyncIoContext& ctx, const NativeFileRef& file) {
+    auto owner = ctx.claim_progress_owner();
+    if (!owner.has_value())
+        return make_unexpected<void>(owner.error());
     Completion<void> c;
     return sync_step(ctx, c, file, false);
 }
