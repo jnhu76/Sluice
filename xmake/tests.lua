@@ -371,6 +371,9 @@ if has_config("liburing") then
     c2c_uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
                               R .. "tests/uring_progress_race_test.cpp",
                               "SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED")
+    c2c_uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
+                              R .. "tests/uring_external_loop_test.cpp",
+                              "SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
 end
 
 -- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as

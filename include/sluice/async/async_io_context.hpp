@@ -246,8 +246,12 @@ class AsyncIoContext {
 
     // One bounded nonblocking progress pass with an authoritative post-pass
     // state report; the documented drive operation for external event-loop
-    // hosts: acknowledge notification, then poll_progress until neither
-    // completed work nor immediate work remains.
+    // hosts: acknowledge notification, then bounded passes. Keep passing
+    // while immediate_work_remains holds; when dispatch_retry_remains holds,
+    // schedule a future progress pass — that accepted transport produces no
+    // completion and no notification until a pass submits it, so an fd-only
+    // wait strands it. accepted_work_remains alone parks normally: that work
+    // waits for its kernel completion notification.
     using ProgressPass = AsyncBackend::ProgressPass;
     ProgressPass poll_progress();
 
