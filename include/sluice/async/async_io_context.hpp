@@ -84,6 +84,10 @@ class AsyncBackend {
         std::size_t completed = 0;
         bool immediate_work_remains = false;
         bool accepted_work_remains = false;
+        // Accepted work whose transport has not reached the kernel; the owner
+        // owes a further bounded pass and must not idle-return or park past it
+        // without scheduling one.
+        bool dispatch_retry_remains = false;
     };
 
     virtual std::size_t poll() = 0;

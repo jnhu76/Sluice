@@ -17,6 +17,7 @@
 
 #include <liburing.h>
 
+#include <cerrno>
 #include <csignal>
 
 namespace {
@@ -634,12 +635,11 @@ bool k14_peer_pass_consuming_cqe_wakes_parked_owner() {
 }
 
 // §17 poison-vs-park: a backend poison transition created by another thread's
-// submit must wake a parked owner. With the two-entry SQ ring filled by two
-// accepted-but-undispatched submissions, the third submit hits the transport
-// from the submitting thread: the fatal result poisons the backend, the
-// poison path retires every kernel-invisible operation, and the source signal
-// must reach the parked owner. M-C5 removes the poison signal and the wake
-// arrives only at the deadline, hence the elapsed bound.
+// submit must wake a parked owner. The two pipe reads are already in the
+// kernel; the third acceptance's dispatch-time transport fails fatally on the
+// submitting thread, the poison path retires the kernel-invisible request,
+// and the source signal must reach the parked owner. M-C5 removes the poison
+// signal and the wake arrives only at the deadline, hence the elapsed bound.
 bool poison_transition_wakes_parked_owner() {
     PoisonSubmitState state;
     UringBackendSubmitTestHooks hooks;
@@ -648,8 +648,6 @@ bool poison_transition_wakes_parked_owner() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 2}, hooks);
     AsyncIoContext ctx(std::move(backend));
 
-    // Two pipe reads fill the SQ ring; the owner's first pass submits both
-    // into the kernel, where they block until the test writes the pipes.
     std::vector<BlockedPipeRead> blocked(2);
     for (auto& r : blocked) {
         if (!r.arm(ctx, 4))
@@ -664,18 +662,11 @@ bool poison_transition_wakes_parked_owner() {
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
-    // Two more submissions prepped from this thread exhaust the ring; the
-    // fifth submit must submit-and-fail at the transport from here.
-    std::vector<BlockedPipeRead> extra(2);
-    for (auto& r : extra) {
-        if (!r.arm(ctx, 4))
-            return false;
-    }
     Completion<std::size_t> poisoned;
     std::vector<std::byte> sink(4, std::byte{0});
     state.fail_next.store(true, std::memory_order_release);
     const bool poisoned_accepted =
-        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), sluice::FileAccess::read_only),
+        ctx.submit_read(ReadOp{NativeFileRef(blocked[0].r, sluice::FileAccess::read_only),
                                sink.data(), sink.size(), 0},
                         poisoned)
             .has_value();
@@ -689,7 +680,7 @@ bool poison_transition_wakes_parked_owner() {
     poisoned.reset();
 
     const bool ok = poisoned_accepted && poisoned_failed_with_backend_error &&
-                    driver.value.has_value() && driver.value.value() == 3 &&
+                    driver.value.has_value() && driver.value.value() == 1 &&
                     driver.elapsed_ms < 1000;
 
     // Retire the in-kernel reads so the context can be destroyed: the reap
@@ -709,6 +700,205 @@ bool poison_transition_wakes_parked_owner() {
     return ok && all_retired;
 }
 
+// U2/K15: an accepted request whose transport failed retryably (-EAGAIN)
+// produces no CQE and no kernel eventfd write; the owner must not park past
+// the unadvertised dispatch obligation. The bounded retry nap must resubmit
+// until the hook disarms, after which the request completes normally. M-C7
+// restores the retryable-return-with-no-advertisement behavior: the owner
+// parks at the full handshake, never retries, and the wait strands to the
+// deadline with value 0.
+struct EagainSubmitState {
+    std::atomic<bool> fail{false};
+    std::atomic<int> calls{0};
+};
+
+int eagain_submit_hook(void* context, ::io_uring* ring) noexcept {
+    auto* state = static_cast<EagainSubmitState*>(context);
+    state->calls.fetch_add(1, std::memory_order_relaxed);
+    if (state->fail.load(std::memory_order_acquire))
+        return -EAGAIN;
+    return ::io_uring_submit(ring);
+}
+
+bool u2_k15_retryable_submit_failure_does_not_strand_owner() {
+    EagainSubmitState state;
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &state;
+    hooks.submit = &eagain_submit_hook;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{}, hooks);
+    AsyncIoContext ctx(std::move(backend));
+
+    // Arm the retryable failure before the acceptance: the dispatch-time
+    // submit is the first transport attempt.
+    state.fail.store(true, std::memory_order_release);
+    BlockedPipeRead read;
+    if (!read.arm(ctx, 4))
+        return false;
+
+    std::thread fail_timer([&state] {
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+        state.fail.store(false, std::memory_order_release);
+    });
+
+    TimedWait driver;
+    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+
+    fail_timer.join();
+    read.release_bytes(1);
+    owner.join();
+
+    const bool ok = state.calls.load(std::memory_order_relaxed) >= 2 &&
+                    driver.value.has_value() && driver.value.value() == 1 &&
+                    driver.elapsed_ms < 1000 && read.completion.ready();
+    read.completion.reset();
+    read.close_pipe();
+    return ok;
+}
+
+// U2b: a request accepted by a peer while the owner is parked must reach the
+// kernel from the accepting thread's dispatch — the owner must never be the
+// only path that submits accepted work, or the request would wait for a
+// completion of an operation no pass dispatched (PROG-01). While the owner is
+// frozen at the park gate, the SQ must be empty after the peer's acceptance,
+// and both requests must complete once released. Against the pre-corrective
+// behavior the prepared SQE stayed in the ring (sq_ready != 0) and only an
+// unrelated completion would have driven it.
+bool u2b_accepted_dispatch_wakes_parked_owner() {
+    auto raw_backend = std::make_unique<UringAsyncBackend>();
+    auto* backend_ptr = raw_backend.get();
+    AsyncIoContext ctx(std::move(raw_backend));
+    BlockedPipeRead first;
+    if (!first.arm(ctx, 4))
+        return false;
+    if (ctx.poll_progress().completed != 0)
+        return false;
+
+    PauseGate gate;
+    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    TimedWait driver;
+    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    wait_gate_paused(gate);
+
+    BlockedPipeRead second;
+    if (!second.arm(ctx, 4))
+        return false;
+    const bool peer_acceptance_entered_kernel = backend_ptr->sq_ready_for_test() == 0;
+
+    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    first.release_bytes(1);
+    second.release_bytes(1);
+    resume_gate(gate);
+    owner.join();
+
+    bool all_ready = first.completion.ready() && second.completion.ready();
+    for (int i = 0; i < 2000 && !all_ready; ++i) {
+        (void)ctx.poll_progress();
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+        all_ready = first.completion.ready() && second.completion.ready();
+    }
+    const bool ok = peer_acceptance_entered_kernel && driver.value.has_value() &&
+                    driver.value.value() >= 1 && driver.elapsed_ms < 1000 && all_ready;
+    first.completion.reset();
+    first.close_pipe();
+    second.completion.reset();
+    second.close_pipe();
+    return ok;
+}
+
+// M-C8 oracle: a failing CQ-overflow flush must become an observable health
+// event, not a silently discarded no-op. The ring-visible CQE still completes
+// the first wait; the poison must then retire the serviceable-overflow claim
+// so waits stuck behind the unflushable overflow park instead of spinning,
+// new submissions must observe the backend health failure, and the reap path
+// must stay live so the real flush retires every read once the failure clears.
+struct FlushFailureState {
+    std::atomic<bool> fail{false};
+    std::atomic<int> calls{0};
+};
+
+int flush_failure_hook(void* context, ::io_uring* ring) noexcept {
+    auto* state = static_cast<FlushFailureState*>(context);
+    state->calls.fetch_add(1, std::memory_order_relaxed);
+    if (state->fail.load(std::memory_order_acquire))
+        return -EIO;
+    return ::io_uring_get_events(ring);
+}
+
+bool overflow_flush_failure_becomes_observable_health_event() {
+    FlushFailureState state;
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &state;
+    hooks.get_events = &flush_failure_hook;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 1}, hooks);
+    AsyncIoContext ctx(std::move(backend));
+
+    std::vector<BlockedPipeRead> reads(3);
+    for (auto& r : reads) {
+        if (!r.arm(ctx, 4))
+            return false;
+    }
+    if (ctx.poll_progress().completed != 0)
+        return false;
+
+    // Post every completion before any pass can reap: the CQ ring (twice the
+    // one-entry SQ) cannot hold all three, so the owner's first pass observes
+    // cq_has_overflow and must flush through the failing hook.
+    for (auto& r : reads)
+        r.release_bytes(1);
+    state.fail.store(true, std::memory_order_release);
+
+    TimedWait driver;
+    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    owner.join();
+
+    // The injected flush failure must be observed, must become a persistent
+    // backend health fact (new submissions are rejected), and must strand
+    // nothing: the pass still converges well inside the deadline and every
+    // in-flight read retires once the failure clears. The mutant that
+    // restores the discarded-return behavior records no flush attempt and no
+    // poison, failing both the attempt and health assertions.
+    const bool first_wait_ok = driver.value.has_value() && driver.value.value() >= 2 &&
+                               driver.elapsed_ms < 1000 &&
+                               state.calls.load(std::memory_order_relaxed) >= 1;
+
+    // The poisoned backend must reject new submissions outright. The probe
+    // reads a pre-written pipe byte, so the mutant that accepts it can retire
+    // the probe completion through the ordinary drain instead of aborting.
+    std::vector<std::byte> sink(4, std::byte{0});
+    int probe_fds[2];
+    if (::pipe(probe_fds) != 0)
+        return false;
+    const std::string one_byte(1, 'p');
+    const ssize_t probe_wrote = ::write(probe_fds[1], one_byte.data(), 1);
+    (void)probe_wrote;
+    Completion<std::size_t> probe;
+    const bool health_visible =
+        !ctx.submit_read(
+                 ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
+                        sink.size(), 0},
+                 probe)
+             .has_value();
+    for (int i = 0; !health_visible && i < 20000 && !probe.ready(); ++i) {
+        (void)ctx.poll_progress();
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    probe.reset();
+    ::close(probe_fds[0]);
+    ::close(probe_fds[1]);
+
+    state.fail.store(false, std::memory_order_release);
+    bool all_retired = true;
+    for (auto& r : reads) {
+        for (int i = 0; i < 20000 && !r.completion.ready(); ++i) {
+            (void)ctx.poll_progress();
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
+        all_retired = all_retired && r.completion.ready();
+        r.completion.reset();
+        r.close_pipe();
+    }
+    return first_wait_ok && health_visible && all_retired;
+}
 }
 
 int main() {
@@ -742,6 +932,11 @@ int main() {
         {"k14_peer_pass_consuming_cqe_wakes_parked_owner",
          k14_peer_pass_consuming_cqe_wakes_parked_owner},
         {"poison_transition_wakes_parked_owner", poison_transition_wakes_parked_owner},
+        {"u2_k15_retryable_submit_failure_does_not_strand_owner",
+         u2_k15_retryable_submit_failure_does_not_strand_owner},
+        {"u2b_accepted_dispatch_wakes_parked_owner", u2b_accepted_dispatch_wakes_parked_owner},
+        {"overflow_flush_failure_becomes_observable_health_event",
+         overflow_flush_failure_becomes_observable_health_event},
     };
 
     std::size_t passed = 0;

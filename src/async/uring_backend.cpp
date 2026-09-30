@@ -379,8 +379,18 @@ bool UringAsyncBackend::progress_port_attached() noexcept {
 bool UringAsyncBackend::has_immediate_physical_work() const noexcept {
     // CQ visibility follows the kernel's CQ publication protocol, not the
     // eventfd; the overflow flag covers completions parked outside the ring.
-    return have_ring_ &&
-           (::io_uring_cq_ready(&ring_state_->ring) > 0 || ::io_uring_cq_has_overflow(&ring_state_->ring));
+    // Overflow counts as actionable only while the flush can service it, or a
+    // failed flush turns every pass into an unparked spin.
+    if (!have_ring_)
+        return false;
+    if (::io_uring_cq_ready(&ring_state_->ring) > 0)
+        return true;
+#if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
+    return ::io_uring_cq_has_overflow(&ring_state_->ring);
+#else
+    return overflow_flush_serviceable_.load(std::memory_order_relaxed) &&
+           ::io_uring_cq_has_overflow(&ring_state_->ring);
+#endif
 }
 
 AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
@@ -389,6 +399,11 @@ AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         pass.immediate_work_remains = !publication_pending_->empty();
+#if defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+        pass.dispatch_retry_remains = false;
+#else
+        pass.dispatch_retry_remains = dispatch_retry_remains_locked_();
+#endif
     }
     pass.accepted_work_remains = outstanding() != 0;
     return pass;
@@ -589,6 +604,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp op, Comp
 void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
     bool injected_dispatch_failure = false;
     bool newly_poisoned = false;
+    bool unsubmitted_after_dispatch = false;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -623,10 +639,16 @@ void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
                 if (!dispatch_one_locked(front))
                     break;
             }
+            if (!fatal_error_.has_value())
+                (void)submit_transport_locked();
             newly_poisoned = !poisoned_before && fatal_error_.has_value();
         }
+#if !defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+        unsubmitted_after_dispatch =
+            !fatal_error_.has_value() && dispatch_retry_remains_locked_();
+#endif
     }
-    if (injected_dispatch_failure || newly_poisoned) {
+    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch) {
         signal_ready_progress();
     }
 }
@@ -704,6 +726,13 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     }
 
     return true;
+}
+
+bool UringAsyncBackend::dispatch_retry_remains_locked_() const noexcept {
+    if (!dispatch_->empty())
+        return true;
+    return transport_ledger_ != nullptr && !transport_ledger_->empty() &&
+           !transport_ledger_->all_class_a_recovery_retired();
 }
 
 int UringAsyncBackend::submit_transport_locked() noexcept {
@@ -1076,8 +1105,30 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
     if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
         // Completions parked in the kernel overflow list are invisible to the
         // shared-memory peek until an enter flushes them into the ring; a
-        // probe that reports overflow work must be serviceable here.
+        // probe that reports overflow work must be serviceable here. A failed
+        // flush is a health event: the overflow claim is retired and the
+        // backend poisons, so no pass can spin on unserviceable overflow.
+#if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
         (void)::io_uring_get_events(&ring_state_->ring);
+#else
+        int flush_rc = 0;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        if (ring_state_->test_hooks.get_events != nullptr) {
+            flush_rc = ring_state_->test_hooks.get_events(ring_state_->test_hooks.context,
+                                                          &ring_state_->ring);
+        } else
+#endif
+        {
+            flush_rc = ::io_uring_get_events(&ring_state_->ring);
+        }
+        {
+            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+            overflow_flush_serviceable_.store(flush_rc >= 0, std::memory_order_relaxed);
+            if (flush_rc < 0) {
+                poison_and_recover_locked(IoError{IoError::Code::backend_error, -flush_rc});
+            }
+        }
+#endif
         reap_visible_batch();
     }
     return non_control_observed;

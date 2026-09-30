@@ -14,6 +14,7 @@ namespace sluice::async {
 struct UringBackendSubmitTestHooks {
     using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
     using SubmitAndWaitFn = int (*)(void*, ::io_uring*, unsigned) noexcept;
+    using GetEventsFn = int (*)(void*, ::io_uring*) noexcept;
     using BeforePoisonWaitFn = void (*)(void*) noexcept;
     using RegisterEventfdFn = int (*)(void*, ::io_uring*, int) noexcept;
     using UnregisterEventfdFn = int (*)(void*, ::io_uring*) noexcept;
@@ -21,6 +22,7 @@ struct UringBackendSubmitTestHooks {
     void* context = nullptr;
     SubmitFn submit = nullptr;
     SubmitAndWaitFn submit_and_wait = nullptr;
+    GetEventsFn get_events = nullptr;
     BeforePoisonWaitFn before_poison_wait = nullptr;
     RegisterEventfdFn register_eventfd = nullptr;
     UnregisterEventfdFn unregister_eventfd = nullptr;
