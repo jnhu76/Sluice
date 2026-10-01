@@ -18,8 +18,6 @@ namespace sluice::async::detail {
 
 [[noreturn]] void async_context_progress_binding_fail_fast() noexcept;
 
-[[noreturn]] void async_progress_acknowledgement_fail_fast() noexcept;
-
 [[noreturn]] void context_identity_exhausted_fail_fast() noexcept;
 
 inline void require_evented_supported(bool supported) noexcept {

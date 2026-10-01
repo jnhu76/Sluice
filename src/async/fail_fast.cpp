@@ -65,18 +65,9 @@ namespace sluice::async::detail {
 
 [[noreturn]] void async_context_progress_binding_fail_fast() noexcept {
     std::fprintf(stderr,
-                 "sluice::async::AsyncIoContext: relocating or destroying a context with a live "
-                 "progress-owner capability or an undetached external notification registration "
-                 "is a contract violation\n");
-    std::fflush(stderr);
-    std::terminate();
-}
-
-[[noreturn]] void async_progress_acknowledgement_fail_fast() noexcept {
-    std::fprintf(stderr,
-                 "sluice::async::AsyncIoContext: notification acknowledgement outside the "
-                 "progress-owner authority or after registration detachment is a contract "
-                 "violation\n");
+                 "sluice::async::AsyncIoContext: tearing down a context with a live "
+                 "progress-owner handle, an active drive, or a live external notification "
+                 "registration is a contract violation\n");
     std::fflush(stderr);
     std::terminate();
 }

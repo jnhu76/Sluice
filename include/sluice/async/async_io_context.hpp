@@ -212,12 +212,10 @@ class AsyncBackend {
 
 class AsyncIoContext;
 
-// Context-owned progress-owner capability: move-only and thread-affine. At
-// most one live capability exists per context. While one is live, only the
-// thread that claimed it may drive progress; moving the capability never
-// changes that thread identity, so relocating the object to another thread
-// grants no driving authority there. The holder's destruction releases the
-// claim; the capability must not outlive its context.
+// Release handle for the context's fixed driving authority: claiming records
+// this thread as the context's progress owner; the handle's destruction or
+// move-assignment releases the claim and detaches the authority. At most one
+// live handle exists per context, and it must not outlive its context.
 class ProgressOwner {
   public:
     ProgressOwner(ProgressOwner&& other) noexcept;
@@ -232,7 +230,6 @@ class ProgressOwner {
     ProgressOwner() noexcept = default;
 
     AsyncIoContext* context_ = nullptr;
-    std::thread::id owner_thread_{};
 };
 
 class AsyncIoContext {
@@ -279,18 +276,19 @@ class AsyncIoContext {
     // wait strands it. accepted_work_remains alone parks normally: that work
     // waits for its kernel completion notification.
     //
-    // Progress driving is a single-owner domain: a call fails with
-    // invalid_state while another drive is active on this context, while a
-    // claimed ProgressOwner belongs to another thread, or when the context is
-    // inert (moved-from).
+    // Driving belongs to the context's fixed progress owner: the first drive
+    // or claim_progress_owner() on this thread attaches it, and a call fails
+    // with invalid_state from any other thread while attached, while another
+    // drive is active on this context, or when the context is inert
+    // (moved-from). A ProgressOwner release detaches so a later driver may
+    // attach.
     using ProgressPass = AsyncBackend::ProgressPass;
     Result<ProgressPass> poll_progress();
 
-    // Establishes this thread as the context's fixed progress owner for the
-    // capability's lifetime: exactly one live capability per context, and
-    // progress driving stays restricted to the claiming thread even after the
-    // object moves. Fails with invalid_state when a capability is already
-    // live or the context is inert.
+    // Records this thread as the context's fixed progress owner and returns
+    // the release handle. Fails with invalid_state when a handle is already
+    // live, when another thread holds the attached driving authority, or when
+    // the context is inert.
     Result<ProgressOwner> claim_progress_owner();
 
     // Owner-visible wait report. `progress` covers both a pass with
@@ -323,31 +321,24 @@ class AsyncIoContext {
 
     void interrupt_progress_waiters() noexcept;
 
-    // Retires the sticky control state; only the pinned progress owner may
-    // acknowledge when a ProgressOwner is live.
+    // Retires the control the owner last observed; control that arrived after
+    // that observation stays pending and keeps interrupting later waits.
     void acknowledge_progress_control();
-
-    // Whether sticky owner control is currently pending and will keep
-    // interrupting waits until acknowledged.
-    bool progress_control_pending() const noexcept;
-
-    void arm_progress_wait_commit() noexcept;
 
     // Borrows the context notification fd for external event-loop
     // registration. The borrow starts the context's external-notification
     // interest: the host must not close, independently drain, or repurpose
     // the fd; acknowledgement runs through acknowledge_progress_notification();
     // and the interest must be retired through detach_progress_host() before
-    // the context is moved or destroyed.
+    // the notification source is torn down. A retired borrow may be followed
+    // by a new one.
     int progress_notification_fd() noexcept;
 
     void acknowledge_progress_notification() noexcept;
 
     // Retires the external-notification interest and returns the borrowed fd
     // the host must drop from its event loop, or -1 when no interest was
-    // live. After detachment the context lends nothing and refuses further
-    // host acknowledgement; the host must not touch the notification source
-    // again. A detached registration grants no authority over any later
+    // live. The retired registration grants no authority over any later
     // context, including one reusing the numeric descriptor.
     int detach_progress_host() noexcept;
 
@@ -424,17 +415,21 @@ class AsyncIoContext {
 
     friend class ProgressOwner;
 
-    // Terminates if this context still carries a live progress binding: an
-    // active drive, a claimed owner, or an undetached external notification.
+    // Terminates if this context still carries a live progress binding that
+    // teardown must not discard: an active drive, a claimed owner, or a live
+    // external notification interest.
     void fail_fast_if_progress_binding_live_() noexcept;
 
-    enum class NotificationInterest : std::uint8_t { none, live, detached };
-
-    // Marks the drive domain active and reports whether the caller may drive
-    // now: rejected while another drive is active or while a claimed
-    // ProgressOwner belongs to another thread.
+    // Marks the drive domain active for the attached owner thread and reports
+    // whether the caller may drive now: rejected while another drive is
+    // active, while another thread holds the attached authority, or on an
+    // inert context. The first drive from an unattached context attaches the
+    // calling thread.
     bool drive_entry_admitted_() noexcept;
     void drive_exit_() noexcept;
+
+    // Detaches the driving authority; called only from ProgressOwner release.
+    void release_progress_owner_() noexcept;
 
     // One backend progress pass for a caller already holding the drive
     // domain; the public drive entry points gate before using this.
@@ -452,7 +447,7 @@ class AsyncIoContext {
     bool drive_active_ = false;
     bool owner_claimed_ = false;
     std::thread::id owner_thread_{};
-    NotificationInterest notification_interest_ = NotificationInterest::none;
+    bool notification_interest_live_ = false;
 };
 
 template <class T> Result<CancelDisposition> Request<T>::cancel() {

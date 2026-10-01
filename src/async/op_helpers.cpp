@@ -16,9 +16,9 @@ Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
         return make_unexpected<std::size_t>(sr.error());
 
     while (!c.ready()) {
-        auto pr = ctx.poll();
-        if (!pr.has_value())
-            return make_unexpected<std::size_t>(pr.error());
+        // The helper holds the claimed driving authority, so the pass cannot
+        // be rejected here.
+        (void)ctx.poll();
     }
     return c.result();
 }
@@ -26,11 +26,11 @@ Result<std::size_t> one_step(AsyncIoContext& ctx, Completion<std::size_t>& c,
 
 Result<std::size_t> read_all(AsyncIoContext& ctx, const NativeFileRef& file,
                              std::span<std::byte> dst, std::uint64_t offset) {
+    if (dst.empty())
+        return std::size_t{0};
     auto owner = ctx.claim_progress_owner();
     if (!owner.has_value())
         return make_unexpected<std::size_t>(owner.error());
-    if (dst.empty())
-        return std::size_t{0};
     Completion<std::size_t> c;
     std::size_t filled = 0;
     std::uint64_t off = offset;
@@ -50,11 +50,11 @@ Result<std::size_t> read_all(AsyncIoContext& ctx, const NativeFileRef& file,
 
 Result<std::size_t> write_all(AsyncIoContext& ctx, const NativeFileRef& file,
                               std::span<const std::byte> src, std::uint64_t offset) {
+    if (src.empty())
+        return std::size_t{0};
     auto owner = ctx.claim_progress_owner();
     if (!owner.has_value())
         return make_unexpected<std::size_t>(owner.error());
-    if (src.empty())
-        return std::size_t{0};
     Completion<std::size_t> c;
     std::size_t written = 0;
     std::uint64_t off = offset;
@@ -82,9 +82,7 @@ Result<void> sync_step(AsyncIoContext& ctx, Completion<void>& c, const NativeFil
     if (!sr.has_value())
         return sr;
     while (!c.ready()) {
-        auto pr = ctx.poll();
-        if (!pr.has_value())
-            return make_unexpected<void>(pr.error());
+        (void)ctx.poll();
     }
     return c.result();
 }

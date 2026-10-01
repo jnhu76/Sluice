@@ -357,6 +357,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             if (elected) {
 
                 bool phase_b_committed = false;
+                std::optional<ProgressOwner> elected_owner;
 
                 bool ready_flag_observation = false;
                 {
@@ -394,7 +395,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                                                  : WorkerState::ParkDomain::Scheduler);
 
                     if (ws->park_domain == WorkerState::ParkDomain::Backend) {
-                        ctx_.arm_progress_wait_commit();
+                        // The elected worker becomes the context's fixed
+                        // driver for this park: a foreign driver already
+                        // holding the authority backs the election out.
+                        auto claimed = ctx_.claim_progress_owner();
+                        if (!claimed.has_value()) {
+                            admission_ = AdmissionState::none;
+                            admission_owner_ = static_cast<unsigned>(-1);
+                            continue;
+                        }
+                        elected_owner = std::move(claimed).value();
                         backend_wait_active_.store(true, std::memory_order_release);
                     }
                 }
@@ -452,12 +462,10 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     auto wr = ctx_.wait_one(max_park);
                     backend_wait_active_.store(false, std::memory_order_release);
                     ws->park_domain = WorkerState::ParkDomain::None;
+                    elected_owner.reset();
 
-                    bool wait_drive_contended = false;
                     bool made_progress = false;
-                    if (!wr.has_value()) {
-                        wait_drive_contended = wr.error().code == IoError::Code::invalid_state;
-                    } else {
+                    if (wr.has_value()) {
                         using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
                         made_progress = wr.value().kind == WaitKind::progress &&
                                         wr.value().completed > 0;
@@ -476,11 +484,6 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         (void)drain_routed_completion_waits_locked();
                         (void)wake_ready_flags_locked();
                         (void)pump_deadlines_locked();
-                    }
-
-                    if (wait_drive_contended) {
-                        // Another drive held the domain; this cycle re-runs.
-                        continue;
                     }
 
                     if (!made_progress) {
@@ -636,10 +639,12 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
 }
 
 bool Scheduler::drain_routed_completion_waits_locked() {
-    // A drive rejected here means a progress owner (e.g. a worker parked in
-    // wait_one) holds the domain; its own pass reaps what this would have,
-    // so skipping the pass cannot strand work.
-    (void)ctx_.poll();
+    // The pass needs the driving authority: the parked elected driver holds
+    // it and its own passes reap what this would have, so skipping the pass
+    // cannot strand work.
+    if (auto owner = ctx_.claim_progress_owner(); owner.has_value()) {
+        (void)ctx_.poll();
+    }
     bool woken = false;
     WaitRecord* head = nullptr;
     {

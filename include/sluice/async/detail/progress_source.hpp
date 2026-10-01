@@ -30,24 +30,30 @@ class ProgressSource {
   public:
     struct Token {
         std::uint64_t progress = 0;
-        std::uint64_t control = 0;
         std::uint64_t progress_exhaustion = 0;
-        std::uint64_t control_exhaustion = 0;
     };
 
     enum class WakeReason : std::uint8_t { progress, interrupted, deadline, failed };
 
-    // Epoch comparison alone cannot express "still pending" after a fresh
-    // token absorbs the interrupt's epoch movement; this flag keeps every
-    // later wait reporting control until acknowledge_control() retires it.
-    bool control_pending() const noexcept {
+    // Observes unacknowledged control for the driver that is about to report
+    // it: the current control generation is recorded as observed so a later
+    // acknowledge_control() cannot retire control that arrived afterwards.
+    bool observe_pending_control() noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
-        return control_pending_;
+        if (!control_pending_nolock_()) {
+            return false;
+        }
+        observed_control_epoch_ = control_epoch_;
+        observed_control_exhaustion_ = control_exhaustion_;
+        return true;
     }
 
+    // Retires exactly the control generation the owner observed, never a
+    // later arrival: acknowledge copies observed into acknowledged.
     void acknowledge_control() noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
-        control_pending_ = false;
+        acknowledged_control_epoch_ = observed_control_epoch_;
+        acknowledged_control_exhaustion_ = observed_control_exhaustion_;
     }
 
     // Once set, no wait may park or report idle: the notification domain
@@ -83,25 +89,7 @@ class ProgressSource {
 
     Token snapshot() const noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
-        return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
-    }
-
-    Token arm_committed_wait() noexcept {
-        std::lock_guard<std::mutex> lk(mtx_);
-        armed_control_epoch_ = control_epoch_;
-        armed_control_exhaustion_ = control_exhaustion_;
-        armed_ = true;
-        return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
-    }
-
-    Token consume_committed_wait() noexcept {
-        std::lock_guard<std::mutex> lk(mtx_);
-        if (armed_) {
-            armed_ = false;
-            return Token{progress_epoch_, armed_control_epoch_, progress_exhaustion_,
-                         armed_control_exhaustion_};
-        }
-        return Token{progress_epoch_, control_epoch_, progress_exhaustion_, control_exhaustion_};
+        return Token{progress_epoch_, progress_exhaustion_};
     }
 
     // Conditional park: sleeps only if no progress/control transition occurred
@@ -158,7 +146,7 @@ class ProgressSource {
 
             {
                 std::lock_guard<std::mutex> lk(mtx_);
-                if (control_changed_nolock_(observed)) {
+                if (control_pending_nolock_()) {
                     return WakeReason::interrupted;
                 }
                 if (progress_epoch_ != observed.progress ||
@@ -184,7 +172,7 @@ class ProgressSource {
 
             {
                 std::lock_guard<std::mutex> lk(mtx_);
-                if (control_changed_nolock_(observed)) {
+                if (control_pending_nolock_()) {
                     return WakeReason::interrupted;
                 }
                 if (progress_epoch_ != observed.progress ||
@@ -223,7 +211,7 @@ class ProgressSource {
                         std::terminate();
                     }
                     if ((pfds[0].revents & POLLIN) != 0) {
-                        if (control_changed_nolock_(observed)) {
+                        if (control_pending_nolock_()) {
                             return WakeReason::interrupted;
                         }
                         return WakeReason::progress;
@@ -236,15 +224,14 @@ class ProgressSource {
     void interrupt() noexcept {
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            // The bump still wakes parked waiters; stickiness lives in the
-            // flag, not the epoch.
-            control_pending_ = true;
+            // The bump advances the control generation so a control that
+            // arrives between the owner's observation and its acknowledgement
+            // stays distinguishable; stickiness is the unacknowledged gap
+            // between the current and acknowledged generations.
             // Same saturation discipline as signal(): a frozen control epoch
-            // must stay sticky and let the exhaustion sequence distinguish a
-            // fresh interrupt from the observed token. Once the exhaustion
-            // sequence is spent too, the pair freezes for good: it can no
-            // longer distinguish anything, so every wait on it must treat
-            // control as pending instead of parking on a reusable value.
+            // lets the exhaustion sequence carry freshness. Once the pair is
+            // spent it can no longer distinguish anything, so every wait on
+            // it must treat control as pending instead of parking.
             if (control_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
                 ++control_epoch_;
             } else if (control_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
@@ -358,16 +345,12 @@ class ProgressSource {
         return epoch == kMaxEpoch && exhaustion == kMaxEpoch;
     }
 
-    bool control_changed_nolock_(const Token& observed) const noexcept {
-        if (control_pending_) {
+    bool control_pending_nolock_() const noexcept {
+        if (control_domain_spent_(control_epoch_, control_exhaustion_)) {
             return true;
         }
-        if (control_domain_spent_(observed.control, observed.control_exhaustion) ||
-            control_domain_spent_(control_epoch_, control_exhaustion_)) {
-            return true;
-        }
-        return control_epoch_ != observed.control ||
-               control_exhaustion_ != observed.control_exhaustion;
+        return control_epoch_ != acknowledged_control_epoch_ ||
+               control_exhaustion_ != acknowledged_control_exhaustion_;
     }
 
     [[noreturn]] static void wait_domain_fail_fast_(const char* op, int err) noexcept {
@@ -440,12 +423,16 @@ class ProgressSource {
     std::uint64_t progress_exhaustion_ = 0;
     std::uint64_t control_exhaustion_ = 0;
 
-    bool control_pending_ = false;
-    bool health_failed_ = false;
+    // Control generations: current (advanced by interrupt), observed (recorded
+    // when a wait reports control), acknowledged (advanced only by
+    // acknowledge_control copying observed). Unacknowledged control is the gap
+    // between current and acknowledged.
+    std::uint64_t observed_control_epoch_ = 0;
+    std::uint64_t observed_control_exhaustion_ = 0;
+    std::uint64_t acknowledged_control_epoch_ = 0;
+    std::uint64_t acknowledged_control_exhaustion_ = 0;
 
-    std::uint64_t armed_control_epoch_ = 0;
-    std::uint64_t armed_control_exhaustion_ = 0;
-    bool armed_ = false;
+    bool health_failed_ = false;
 
     int notification_fd_ = -1;
 

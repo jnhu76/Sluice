@@ -56,9 +56,13 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
     }
 
     std::optional<IoError> wait_err;
-    auto owner = ctx.claim_progress_owner();
-    if (!owner.has_value()) {
-        return make_unexpected<std::size_t>(owner.error());
+    std::optional<ProgressOwner> owner;
+    if (!any_ready && ctx.outstanding() > 0) {
+        auto claimed = ctx.claim_progress_owner();
+        if (!claimed.has_value()) {
+            return make_unexpected<std::size_t>(claimed.error());
+        }
+        owner = std::move(claimed).value();
     }
     while (!any_ready && ctx.outstanding() > 0) {
         auto wr = ctx.wait_one();
