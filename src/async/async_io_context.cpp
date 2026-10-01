@@ -463,7 +463,8 @@ AsyncBackend::ProgressPass AsyncIoContext::run_progress_pass_() {
     if (stats_)
         ++stats_->poll_calls;
     AsyncBackend::ProgressPass pass = backend_->poll_progress();
-    pass.health_failed = progress_->wait_health_failed();
+    pass.health_failed = pass.health_failed || core_->health_failed() ||
+                         progress_->wait_health_failed();
     if (stats_)
         stats_->completed_ops += pass.completed;
     close_admission_on_progress_exhaustion_();
@@ -512,10 +513,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     }
     DriveGuard guard(this);
 
-    if (progress_->wait_health_failed()) {
-        return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
-    }
-
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
     const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
                                             : std::chrono::steady_clock::time_point{};
@@ -525,6 +522,13 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
         const AsyncBackend::ProgressPass pass = run_progress_pass_();
         if (pass.completed > 0) {
             return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress, pass.completed};
+        }
+
+        // Sticky health reports only after a pass: the health verdict must
+        // not prevent the pass from publishing and retiring work that is
+        // already safely actionable.
+        if (pass.health_failed) {
+            return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
         }
 
         // A control outcome is the observation: the generation reported here
@@ -590,6 +594,9 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
                 if (final_pass.completed > 0) {
                     return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress,
                                                final_pass.completed};
+                }
+                if (final_pass.health_failed) {
+                    return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
                 }
                 return ProgressWaitOutcome{ProgressWaitOutcome::Kind::deadline_expired, 0};
             }
@@ -699,13 +706,9 @@ void AsyncIoContext::acknowledge_progress_notification() noexcept {
     }
 }
 
-int AsyncIoContext::detach_progress_host() noexcept {
+void AsyncIoContext::detach_progress_host() noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!notification_interest_live_) {
-        return -1;
-    }
     notification_interest_live_ = false;
-    return progress_->notification_fd();
 }
 
 void AsyncIoContext::cancel(Completion<std::size_t>& c) {

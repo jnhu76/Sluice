@@ -324,7 +324,10 @@ class AsyncIoContext {
     void interrupt_progress_waiters() noexcept;
 
     // Retires the control the owner last observed; control that arrived after
-    // that observation stays pending and keeps interrupting later waits.
+    // that observation stays pending and keeps interrupting later waits. The
+    // caller must be the context's attached progress owner: control
+    // acknowledgement is an owner action in the driver-wait family
+    // (THREAD-01), retiring control that owner's own wait outcome observed.
     void acknowledge_progress_control();
 
     // Borrows the context notification fd for external event-loop
@@ -338,11 +341,14 @@ class AsyncIoContext {
 
     void acknowledge_progress_notification() noexcept;
 
-    // Retires the external-notification interest and returns the borrowed fd
-    // the host must drop from its event loop, or -1 when no interest was
-    // live. The retired registration grants no authority over any later
-    // context, including one reusing the numeric descriptor.
-    int detach_progress_host() noexcept;
+    // Retires the external-notification interest. The host must call this
+    // only after it has already unregistered the fd from its event loop and
+    // retired every callback that might use the context: this operation
+    // acknowledges that the external registration authority is already gone,
+    // so the context never believes no binding exists while a loop still
+    // owns one. Idempotent; a retired interest may be followed by a new
+    // borrow.
+    void detach_progress_host() noexcept;
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);

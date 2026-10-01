@@ -379,18 +379,11 @@ bool UringAsyncBackend::progress_port_attached() noexcept {
 bool UringAsyncBackend::has_immediate_physical_work() const noexcept {
     // CQ visibility follows the kernel's CQ publication protocol, not the
     // eventfd; the overflow flag covers completions parked outside the ring.
-    // Overflow counts as actionable only while the flush can service it, or a
-    // failed flush turns every pass into an unparked spin.
     if (!have_ring_)
         return false;
     if (::io_uring_cq_ready(&ring_state_->ring) > 0)
         return true;
-#if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
     return ::io_uring_cq_has_overflow(&ring_state_->ring);
-#else
-    return overflow_flush_serviceable_.load(std::memory_order_relaxed) &&
-           ::io_uring_cq_has_overflow(&ring_state_->ring);
-#endif
 }
 
 AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
@@ -404,7 +397,13 @@ AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
 #else
         pass.dispatch_retry_remains = dispatch_retry_remains_locked_();
 #endif
+        // Sticky backend health under the same lock that owns fatal_error_;
+        // the context composes it with the core and wait-domain verdicts.
+        pass.health_failed = fatal_error_.has_value();
     }
+    // A capped pass can leave reaped-eligible CQ entries behind; that
+    // leftover is immediate work the next pass owes.
+    pass.immediate_work_remains = pass.immediate_work_remains || has_immediate_physical_work();
     pass.accepted_work_remains = outstanding() != 0;
     return pass;
 }
@@ -997,9 +996,6 @@ void UringAsyncBackend::finalize_operation_terminal_(
     }
     publication_pending_->push_back(route.handle);
 #endif
-    // The pending transition must signal: a peer waiter can drain the kernel
-    // eventfd and miss the CQE to a concurrent reaper, leaving no later wake.
-    signal_ready_progress();
     if (route.control_state == RouterEntry::ControlState::none) {
         retire_router_entry_(router_index);
     }
@@ -1083,9 +1079,18 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
     constexpr unsigned BATCH = 32;
     io_uring_cqe* cqes[BATCH];
     unsigned got = 0;
-    const auto reap_visible_batch = [&]() noexcept {
-        while ((got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH)) > 0) {
-            for (unsigned i = 0; i < got; ++i) {
+    // The pass boundary is the CQ state visible at entry: entries the kernel
+    // posts during the reap (or after an overflow flush) are the next pass's
+    // immediate work, reported through has_immediate_physical_work().
+    const auto reap_visible_bounded = [&](std::size_t bound) noexcept {
+        std::size_t reaped = 0;
+        while (reaped < bound) {
+            got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH);
+            if (got == 0)
+                break;
+            const std::size_t room = bound - reaped;
+            const unsigned take = static_cast<unsigned>(room < got ? room : got);
+            for (unsigned i = 0; i < take; ++i) {
                 io_uring_cqe* cqe = cqes[i];
 
                 const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
@@ -1097,17 +1102,17 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
                 if (is_op)
                     ++non_control_observed;
             }
+            reaped += take;
             if (got < BATCH)
                 break;
         }
     };
-    reap_visible_batch();
+    reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
     if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
         // Completions parked in the kernel overflow list are invisible to the
-        // shared-memory peek until an enter flushes them into the ring; a
-        // probe that reports overflow work must be serviceable here. A failed
-        // flush is a health event: the overflow claim is retired and the
-        // backend poisons, so no pass can spin on unserviceable overflow.
+        // shared-memory peek until an enter flushes them into the ring. A
+        // failed flush is a health event: the backend poisons, so every pass
+        // reports the failure instead of spinning on unserviceable overflow.
 #if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
         (void)::io_uring_get_events(&ring_state_->ring);
 #else
@@ -1121,15 +1126,12 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
         {
             flush_rc = ::io_uring_get_events(&ring_state_->ring);
         }
-        {
+        if (flush_rc < 0) {
             std::lock_guard<std::mutex> lk(dispatch_mtx_);
-            overflow_flush_serviceable_.store(flush_rc >= 0, std::memory_order_relaxed);
-            if (flush_rc < 0) {
-                poison_and_recover_locked(IoError{IoError::Code::backend_error, -flush_rc});
-            }
+            poison_and_recover_locked(IoError{IoError::Code::backend_error, -flush_rc});
         }
 #endif
-        reap_visible_batch();
+        reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
     }
     return non_control_observed;
 }
@@ -1197,7 +1199,14 @@ std::size_t UringAsyncBackend::poll() {
     (void)reap_cqes();
 
     std::size_t published = 0;
-    for (;;) {
+    std::size_t pass_bound = 0;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        pass_bound = publication_pending_->size();
+    }
+    // Same pass boundary as the reap: entries pushed during this pass are the
+    // next pass's immediate work.
+    for (std::size_t n = 0; n < pass_bound; ++n) {
         detail::SlotHandle h{};
         bool have = false;
         {

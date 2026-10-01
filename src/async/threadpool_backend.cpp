@@ -510,7 +510,15 @@ std::size_t ThreadPoolBackend::poll() {
 
 AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
     std::size_t published = 0;
-    for (;;) {
+    std::size_t pass_bound = 0;
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        pass_bound = publication_pending_.size();
+    }
+    // The entry snapshot is the pass boundary: completions a worker posts
+    // during this pass are the next pass's immediate work, reported honestly
+    // below, never absorbed into this invocation.
+    for (std::size_t n = 0; n < pass_bound; ++n) {
         detail::SlotHandle h{};
         bool have = false;
         {

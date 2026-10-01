@@ -916,6 +916,74 @@ bool coalesced_prearmed_signals_are_all_discoverable_in_one_pass() {
     return all_ready && !notification_fd_readable(ctx.progress_notification_fd());
 }
 
+// F1 oracle: one poll_progress invocation publishes at most the publication
+// work pending at its entry. Work a concurrent producer posts while the pass
+// is mid-publication (here the held worker completing a gated request,
+// observed through the progress token) stays for the next pass and is
+// reported as remaining immediate work.
+bool f1_publication_pass_is_entry_bounded() {
+    ThreadPoolBackend* raw = nullptr;
+    auto ctx = make_pool_context(8, 1, &raw);
+    HostInterest interest(ctx);
+
+    Completion<std::size_t> a;
+    std::vector<std::byte> a_buf(32, std::byte{0});
+    const int a_fd = temp_file_fd(std::string(64, 'x'));
+    if (a_fd < 0)
+        return false;
+    if (!ctx.submit_read(ReadOp{NativeFileRef(a_fd, sluice::FileAccess::read_only),
+                                 a_buf.data(), a_buf.size(), 0},
+                         a)
+             .has_value())
+        return false;
+    if (!wait_notification_readable(ctx))
+        return false;
+
+    GatedWorkerRead gated;
+    if (!gated.arm(ctx, raw))
+        return false;
+
+    ThreadPoolBackend::PublicationEpiloguePauseGate epilogue;
+    raw->set_publication_epilogue_pause_gate(&epilogue);
+
+    std::optional<AsyncBackend::ProgressPass> first;
+    std::thread driver([&] {
+        DriverClaim claim{ctx};
+        const auto r = ctx.poll_progress();
+        if (r.has_value())
+            first = r.value();
+    });
+    wait_threadpool_gate_paused(epilogue);
+    const bool a_published_at_pause = a.ready();
+
+    const auto token_before_release = ctx.progress_token_for_test();
+    gated.release();
+    while (ctx.progress_token_for_test().progress == token_before_release.progress)
+        std::this_thread::yield();
+
+    resume_threadpool_gate(epilogue);
+    driver.join();
+    raw->set_publication_epilogue_pause_gate(nullptr);
+
+    const bool first_ok = a_published_at_pause && first.has_value() &&
+                          first->completed == 1 && first->immediate_work_remains &&
+                          !first->health_failed;
+    if (!first_ok)
+        return false;
+    a.reset();
+    ::close(a_fd);
+
+    const auto second = ctx.poll_progress();
+    const bool second_ok = second.has_value() && second.value().completed == 1 &&
+                           gated.completion.ready() &&
+                           !second.value().immediate_work_remains &&
+                           !second.value().accepted_work_remains &&
+                           !second.value().health_failed;
+
+    gated.completion.reset();
+    return second_ok;
+}
+
 }
 
 int main() {
@@ -962,6 +1030,7 @@ int main() {
          saturated_notification_still_wakes_parked_owner},
         {"coalesced_prearmed_signals_are_all_discoverable_in_one_pass",
          coalesced_prearmed_signals_are_all_discoverable_in_one_pass},
+        {"f1_publication_pass_is_entry_bounded", f1_publication_pass_is_entry_bounded},
     };
 
     std::size_t passed = 0;

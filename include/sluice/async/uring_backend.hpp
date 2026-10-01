@@ -303,12 +303,6 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<std::size_t> live_cookies_{0};
     std::atomic<std::size_t> live_control_sqes_{0};
 
-    // Mirrors the outcome of the last CQ-overflow flush attempt so the
-    // lock-free physical probe never claims serviceable overflow work that
-    // the flush just failed to service. Authoritative state stays fatal_error_
-    // under dispatch_mtx_.
-    std::atomic<bool> overflow_flush_serviceable_{true};
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     std::atomic<SubmitEntryPauseGate*> submit_entry_gate_{nullptr};
