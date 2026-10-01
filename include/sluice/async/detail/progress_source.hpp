@@ -248,10 +248,10 @@ class ProgressSource {
             // epoch. Once frozen, the exhaustion sequence carries freshness;
             // a saturated signal that skipped it would be revalidated as
             // stale and its notification drained from a parked owner.
-            if (progress_epoch_ == std::numeric_limits<std::uint64_t>::max()) {
-                ++progress_exhaustion_;
-            } else {
+            if (progress_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
                 ++progress_epoch_;
+            } else if (progress_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
+                ++progress_exhaustion_;
             }
         }
         wake_notification_();

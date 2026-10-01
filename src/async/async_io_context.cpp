@@ -462,10 +462,8 @@ Result<std::size_t> AsyncIoContext::poll() {
 AsyncBackend::ProgressPass AsyncIoContext::run_progress_pass_() {
     if (stats_)
         ++stats_->poll_calls;
-    AsyncBackend::ProgressPass pass;
-    if (!backend_)
-        return pass;
-    pass = backend_->poll_progress();
+    AsyncBackend::ProgressPass pass = backend_->poll_progress();
+    pass.health_failed = progress_->wait_health_failed();
     if (stats_)
         stats_->completed_ops += pass.completed;
     close_admission_on_progress_exhaustion_();

@@ -833,6 +833,9 @@ bool injected_health_failure_is_sticky_and_distinguishable() {
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     ctx.set_wait_health_failed_for_test();
+    const auto sick_pass = ctx.poll_progress();
+    if (!sick_pass.has_value() || !sick_pass.value().health_failed)
+        return false;
     for (int round = 0; round < 3; ++round) {
         const auto r = ctx.wait_one(std::chrono::milliseconds{50});
         if (!r.has_value() || r.value().kind != WaitKind::health_failure)

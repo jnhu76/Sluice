@@ -43,8 +43,6 @@ concept port_has_no_wait_api =
         p.wait_if_unchanged(t);
         p.snapshot();
         p.interrupt();
-        p.arm_committed_wait();
-        p.consume_committed_wait();
         p.acknowledge_notification();
         p.notification_fd();
     };

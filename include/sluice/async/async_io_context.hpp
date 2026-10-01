@@ -89,6 +89,8 @@ class AsyncBackend {
         // owes a further bounded pass and must not idle-return or park past it
         // without scheduling one.
         bool dispatch_retry_remains = false;
+        // The context's sticky wait-health verdict at this pass.
+        bool health_failed = false;
     };
 
     virtual std::size_t poll() = 0;
