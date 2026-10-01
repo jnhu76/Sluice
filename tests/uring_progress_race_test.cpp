@@ -652,10 +652,10 @@ int poison_submit_hook(void* context, ::io_uring* ring) noexcept {
 }
 }
 
-// H-interval (multi-driver): a peer pass can reap the CQE before the paused
-// owner's physical probe, consuming both the kernel notification and the CQ
-// state the probe reads. The peer's publication_pending_ transition signal is
-// the only remaining wake; the owner must return through it, never by
+// H-interval (multi-driver): a peer pass attempted while the owner holds the
+// drive domain is rejected, not serialized. The peer consumed nothing — the
+// kernel notification and the CQ state survive — so the paused owner's own
+// physical probe discovers the completion once it resumes, never by
 // stranding to the deadline.
 bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     auto backend = std::make_unique<UringAsyncBackend>();

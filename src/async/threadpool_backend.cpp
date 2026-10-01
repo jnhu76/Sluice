@@ -49,8 +49,6 @@ void ThreadPoolBackend::BoundedHandleRing::push_back(detail::SlotHandle h) noexc
         pos -= capacity_;
     storage_[pos] = h;
     ++size_;
-    if (size_ > high_water_)
-        high_water_ = size_;
 }
 
 bool ThreadPoolBackend::BoundedHandleRing::pop_front(detail::SlotHandle& out) noexcept {
@@ -733,11 +731,6 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return dispatch_.size();
-}
-
-std::size_t ThreadPoolBackend::dispatch_high_water_mark() const {
-    std::lock_guard<std::mutex> lk(work_mtx_);
-    return dispatch_.high_water();
 }
 
 std::size_t ThreadPoolBackend::active_workers() const {

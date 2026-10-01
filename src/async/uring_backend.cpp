@@ -1,9 +1,5 @@
 #include <sluice/async/uring_backend.hpp>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-#include "tax0_ablation_seams.hpp"
-#endif
-
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/detail/uring_submit.hpp>
@@ -1074,8 +1070,7 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     finalize_operation_terminal_(entry, router_index, terminal);
 }
 
-std::size_t UringAsyncBackend::reap_cqes() noexcept {
-    std::size_t non_control_observed = 0;
+void UringAsyncBackend::reap_cqes() noexcept {
     constexpr unsigned BATCH = 32;
     io_uring_cqe* cqes[BATCH];
     unsigned got = 0;
@@ -1097,10 +1092,7 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
                 const int res = cqe->res;
                 ::io_uring_cqe_seen(&ring_state_->ring, cqe);
 
-                const bool is_op = (!is_control_cookie(user_data) && user_data != 0);
                 handle_one_cqe(user_data, res);
-                if (is_op)
-                    ++non_control_observed;
             }
             reaped += take;
             if (got < BATCH)
@@ -1133,7 +1125,6 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
 #endif
         reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
     }
-    return non_control_observed;
 }
 
 void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
@@ -1196,7 +1187,7 @@ std::size_t UringAsyncBackend::poll() {
             (void)submit_transport_locked();
     }
 
-    (void)reap_cqes();
+    reap_cqes();
 
     std::size_t published = 0;
     std::size_t pass_bound = 0;

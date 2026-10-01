@@ -248,7 +248,7 @@ class UringAsyncBackend : public AsyncBackend {
 
     void poison_and_recover_locked(IoError error) noexcept;
 
-    std::size_t reap_cqes() noexcept;
+    void reap_cqes() noexcept;
 
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 

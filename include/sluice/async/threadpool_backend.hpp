@@ -70,11 +70,9 @@ class ThreadPoolBackend : public AsyncBackend {
     void close_admission();
 
     std::size_t slot_capacity() const noexcept override { return capacity_; }
-    std::size_t configured_worker_count() const noexcept { return workers_.size(); }
 
     std::size_t dispatch_occupancy() const;
 
-    std::size_t dispatch_high_water_mark() const;
 
     std::size_t active_workers() const;
 
@@ -83,7 +81,6 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t workers_spawned_for_test() const noexcept;
     std::size_t active_workers_for_test() const;
     std::size_t dispatch_size_for_test() const;
-    std::size_t dispatch_high_water_for_test() const;
     std::uint64_t syscall_count_for_test() const noexcept;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<std::size_t>& c) const;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<void>& c) const;
@@ -151,8 +148,6 @@ class ThreadPoolBackend : public AsyncBackend {
             : storage_(capacity), capacity_(capacity) {}
         bool empty() const noexcept { return size_ == 0; }
         std::size_t size() const noexcept { return size_; }
-        std::size_t capacity() const noexcept { return capacity_; }
-        std::size_t high_water() const noexcept { return high_water_; }
 
         void push_back(detail::SlotHandle h) noexcept;
 
@@ -164,7 +159,6 @@ class ThreadPoolBackend : public AsyncBackend {
         std::vector<detail::SlotHandle> storage_;
         std::size_t head_ = 0;
         std::size_t size_ = 0;
-        std::size_t high_water_ = 0;
         std::size_t capacity_;
     };
 
