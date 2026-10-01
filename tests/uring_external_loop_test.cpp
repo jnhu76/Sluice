@@ -261,17 +261,24 @@ bool external_poll_loop_uring_w03() {
         return false;
 
     // Control wake with zero completions: the host acks, observes the sticky
-    // control, acknowledges it, and keeps serving later real work.
+    // control as a wait outcome, acknowledges it, and keeps serving later
+    // real work.
     ctx.interrupt_progress_waiters();
     if (!host.wait_and_service(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 0)
         return false;
-    if (!ctx.progress_control_pending())
-        return false;
-    ctx.acknowledge_progress_control();
-    if (ctx.progress_control_pending())
-        return false;
+    {
+        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+        const auto control = ctx.wait_one(std::chrono::milliseconds{100});
+        if (!control.has_value() || control.value().kind != WaitKind::control_interrupted)
+            return false;
+        ctx.acknowledge_progress_control();
+        const auto settled = ctx.wait_one(std::chrono::milliseconds{50});
+        if (!settled.has_value() || settled.value().kind != WaitKind::progress ||
+            settled.value().completed != 0)
+            return false;
+    }
     if (fd_readable(host.nfd()))
         return false;
 
@@ -330,9 +337,16 @@ bool external_poll_loop_uring_w03() {
     w.reset();
     ::close(source);
     ::close(sink);
-    // Shutdown order: settle first, then retire the registration.
+    // Shutdown order: all accepted work settled, only then does the host
+    // retire its registration and release the retained state. A retired
+    // registration is gone (a second detach has nothing to retire), but the
+    // context may lend the fd to a later host.
     const int retired = host.stop_and_detach();
-    return settled && retired >= 0 && ctx.progress_notification_fd() == -1;
+    if (!settled || retired < 0 || ctx.detach_progress_host() != -1)
+        return false;
+    const int relent = ctx.progress_notification_fd();
+    (void)ctx.detach_progress_host();
+    return relent == retired;
 }
 
 // Kernel completions are all discovered through the notification-fd wake

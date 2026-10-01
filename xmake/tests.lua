@@ -311,6 +311,7 @@ do
             add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
             add_files(test_source,
                       R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/op_helpers.cpp",
                       R .. "src/async/threadpool_backend.cpp",
                       R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",

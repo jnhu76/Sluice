@@ -1,5 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/op_helpers.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -195,17 +196,26 @@ bool external_poll_loop_threadpool_w03() {
         return false;
 
     // A control wake carries no completion; the host observes the sticky
-    // control, acknowledges it, and only then may later waits proceed.
+    // control as a wait outcome, acknowledges it, and only then may later
+    // waits proceed.
     ctx.interrupt_progress_waiters();
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 0)
         return false;
-    if (!ctx.progress_control_pending())
-        return false;
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+    {
+        const auto control = ctx.wait_one(std::chrono::milliseconds{100});
+        if (!control.has_value() || control.value().kind != WaitKind::control_interrupted)
+            return false;
+    }
     ctx.acknowledge_progress_control();
-    if (ctx.progress_control_pending())
-        return false;
+    {
+        const auto settled = ctx.wait_one(std::chrono::milliseconds{50});
+        if (!settled.has_value() || settled.value().kind != WaitKind::progress ||
+            settled.value().completed != 0)
+            return false;
+    }
     if (fd_readable(host.nfd()))
         return false;
 
@@ -293,9 +303,15 @@ bool external_poll_loop_threadpool_w03() {
     w.reset();
     late.reset();
     // Shutdown order: all accepted work settled, only then does the host
-    // retire its registration and release the retained state.
+    // retire its registration and release the retained state. A retired
+    // registration is gone (a second detach has nothing to retire), but the
+    // context may lend the fd to a later host.
     const int retired = host.stop_and_detach();
-    return settled && retired >= 0 && ctx.progress_notification_fd() == -1;
+    if (!settled || retired < 0 || ctx.detach_progress_host() != -1)
+        return false;
+    const int relent = ctx.progress_notification_fd();
+    (void)ctx.detach_progress_host();
+    return relent == retired;
 }
 
 // One readable event may stand for several signals: five coalesced zero-op
@@ -353,8 +369,12 @@ bool spurious_wake_is_harmless_and_completions_survive() {
         return false;
     if (host.acknowledge_and_drive() != 0)
         return false;
-    if (!ctx.progress_control_pending())
-        return false;
+    {
+        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+        const auto control = ctx.wait_one(std::chrono::milliseconds{100});
+        if (!control.has_value() || control.value().kind != WaitKind::control_interrupted)
+            return false;
+    }
     ctx.acknowledge_progress_control();
 
     std::vector<std::byte> buf(32, std::byte{0});
@@ -509,8 +529,6 @@ bool host_stop_settle_detach_retires_registration() {
     const int retired = host.stop_and_detach();
     if (retired != borrowed)
         return false;
-    if (ctx.progress_notification_fd() != -1)
-        return false;
     if (ctx.detach_progress_host() != -1)
         return false;
     return true;
@@ -532,8 +550,6 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
         if (!fd_readable(borrowed))
             return false;
         if (ctx.detach_progress_host() != borrowed)
-            return false;
-        if (ctx.progress_notification_fd() != -1)
             return false;
     }
     {
@@ -557,22 +573,6 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
     return reused_fd >= 0;
 }
 
-void scenario_ack_after_detach() {
-    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
-    (void)ctx.progress_notification_fd();
-    (void)ctx.detach_progress_host();
-    ctx.acknowledge_progress_notification();
-}
-
-void scenario_move_with_live_interest() {
-    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
-    (void)ctx.progress_notification_fd();
-    AsyncIoContext moved(std::move(ctx));
-    (void)moved;
-}
-
 void scenario_move_with_live_owner_capability() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     AsyncIoContext ctx(std::move(backend));
@@ -591,19 +591,26 @@ void scenario_destroy_with_live_owner_capability() {
         delete ctx;
         return;
     }
-    // The context dies while the owner capability is live; the owner's own
+    // The context dies while the owner handle is live; the handle's own
     // destructor would only release a claim on freed storage afterwards.
     delete ctx;
 }
 
+void scenario_destroy_with_live_interest() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    auto* ctx = new AsyncIoContext(std::move(backend));
+    (void)ctx->progress_notification_fd();
+    // The context dies while its notification fd is still registered with an
+    // external event loop: the registration was never retired.
+    delete ctx;
+}
+
 bool contract_violations_fail_fast() {
-    if (!child_dies_running(scenario_ack_after_detach))
-        return false;
-    if (!child_dies_running(scenario_move_with_live_interest))
-        return false;
     if (!child_dies_running(scenario_move_with_live_owner_capability))
         return false;
-    return child_dies_running(scenario_destroy_with_live_owner_capability);
+    if (!child_dies_running(scenario_destroy_with_live_owner_capability))
+        return false;
+    return child_dies_running(scenario_destroy_with_live_interest);
 }
 
 // A pinned context rejects every driving attempt from another thread while
@@ -670,35 +677,6 @@ bool host_readable_sleep(AsyncIoContext& ctx, std::chrono::milliseconds budget) 
     }
 }
 
-// Moving the owner capability never re-binds it to another thread: the
-// recorded owner thread stays the claiming thread, so the receiver of the
-// moved object gains no driving authority.
-bool moved_owner_capability_keeps_thread_affinity() {
-    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-    AsyncIoContext ctx(std::move(backend));
-    auto claimed = ctx.claim_progress_owner();
-    if (!claimed.has_value())
-        return false;
-
-    std::optional<ProgressOwner> relocated = std::move(claimed).value();
-
-    std::atomic<bool> foreign_rejected{false};
-    std::thread foreign([&] {
-        // The capability object now lives in this thread's variable, but the
-        // owning thread identity did not move with it.
-        const auto pass = ctx.poll_progress();
-        foreign_rejected.store(!pass.has_value(), std::memory_order_release);
-    });
-    foreign.join();
-    if (!foreign_rejected.load())
-        return false;
-
-    const auto pass = ctx.poll_progress();
-    const bool owner_still_drives = pass.has_value();
-    relocated.reset();
-    return owner_still_drives && !ctx.progress_control_pending();
-}
-
 // Deadline expiry is only a wait bound: it reports deadline_expired, leaves
 // the accepted request outstanding, and a later wait completes it.
 bool deadline_expiry_does_not_cancel_or_settle() {
@@ -728,8 +706,6 @@ bool deadline_expiry_does_not_cancel_or_settle() {
     if (first.value().completed != 0)
         return false;
     if (c.ready())
-        return false;
-    if (ctx.progress_control_pending())
         return false;
 
     raw->set_worker_claimed_pause_gate(nullptr);
@@ -792,8 +768,6 @@ bool control_before_wait_and_across_notification_ack_survives() {
 
     ctx.interrupt_progress_waiters();
     ctx.acknowledge_progress_notification();
-    if (!ctx.progress_control_pending())
-        return false;
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto r = ctx.wait_one(std::chrono::milliseconds{100});
@@ -809,6 +783,40 @@ bool control_before_wait_and_across_notification_ack_survives() {
         return false;
     owner.reset();
     ctx.detach_progress_host();
+    return true;
+}
+
+// The mandated sticky-control regression: acknowledging the control the owner
+// observed must not erase a control that arrived before the acknowledgement.
+bool acknowledging_observed_control_keeps_a_later_control() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    AsyncIoContext ctx(std::move(backend));
+    auto claimed = ctx.claim_progress_owner();
+    if (!claimed.has_value())
+        return false;
+    std::optional<ProgressOwner> owner = std::move(claimed).value();
+
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+
+    ctx.interrupt_progress_waiters();
+    const auto observed_a = ctx.wait_one(std::chrono::milliseconds{100});
+    if (!observed_a.has_value() || observed_a.value().kind != WaitKind::control_interrupted)
+        return false;
+
+    // B arrives before A is acknowledged.
+    ctx.interrupt_progress_waiters();
+
+    ctx.acknowledge_progress_control();
+    const auto observed_b = ctx.wait_one(std::chrono::milliseconds{100});
+    if (!observed_b.has_value() || observed_b.value().kind != WaitKind::control_interrupted)
+        return false;
+
+    ctx.acknowledge_progress_control();
+    const auto settled = ctx.wait_one(std::chrono::milliseconds{50});
+    if (!settled.has_value() || settled.value().kind != WaitKind::progress ||
+        settled.value().completed != 0)
+        return false;
+    owner.reset();
     return true;
 }
 
@@ -925,6 +933,78 @@ bool nested_drive_from_delivery_hook_is_rejected() {
     return ok;
 }
 
+// PROG-01: the first drive attaches a fixed owner. While attached, every
+// other thread's drive is rejected instead of silently succeeding, submission
+// from other threads stays legal, and a released claim lets the next driver
+// attach sequentially.
+bool first_drive_attaches_a_fixed_owner() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 2});
+    AsyncIoContext ctx(std::move(backend));
+
+    const auto self_pass = ctx.poll_progress();
+    if (!self_pass.has_value())
+        return false;
+
+    std::atomic<bool> foreign_drive_rejected{false};
+    std::atomic<bool> foreign_wait_rejected{false};
+    std::atomic<bool> foreign_submit_accepted{false};
+    std::thread foreign([&] {
+        const auto pass = ctx.poll_progress();
+        foreign_drive_rejected.store(!pass.has_value() &&
+                                         pass.error().code == sluice::IoError::Code::invalid_state,
+                                     std::memory_order_release);
+        const auto wr = ctx.wait_one(std::chrono::milliseconds{50});
+        foreign_wait_rejected.store(!wr.has_value() &&
+                                        wr.error().code == sluice::IoError::Code::invalid_state,
+                                    std::memory_order_release);
+        Completion<std::size_t> c;
+        foreign_submit_accepted.store(submit_zero_op(ctx, c), std::memory_order_release);
+        c.reset();
+    });
+    foreign.join();
+
+    if (!foreign_drive_rejected.load() || !foreign_wait_rejected.load() ||
+        !foreign_submit_accepted.load())
+        return false;
+
+    // The attached thread claims explicitly, and exactly one handle is live.
+    auto claimed = ctx.claim_progress_owner();
+    if (!claimed.has_value() || ctx.claim_progress_owner().has_value())
+        return false;
+    std::optional<ProgressOwner> owner = std::move(claimed).value();
+    const auto owner_pass = ctx.poll_progress();
+    if (!owner_pass.has_value() || owner_pass.value().completed != 1)
+        return false;
+
+    // Release detaches: another thread may attach as the next driver.
+    owner.reset();
+    std::atomic<bool> reattached{false};
+    std::thread next_driver([&] {
+        const auto pass = ctx.poll_progress();
+        reattached.store(pass.has_value(), std::memory_order_release);
+    });
+    next_driver.join();
+    return reattached.load();
+}
+
+// Zero-work helpers make no driving demand: an empty read_all/write_all
+// succeeds even while another thread holds the owner claim.
+bool zero_work_helpers_skip_owner_acquisition() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    AsyncIoContext ctx(std::move(backend));
+    auto claimed = ctx.claim_progress_owner();
+    if (!claimed.has_value())
+        return false;
+    std::optional<ProgressOwner> owner = std::move(claimed).value();
+
+    std::vector<std::byte> none;
+    const auto rd = read_all(ctx, NativeFileRef(0, FileAccess::read_only), none, 0);
+    const auto wr = write_all(ctx, NativeFileRef(1, FileAccess::write_only), none, 0);
+    const bool ok = rd.has_value() && rd.value() == 0 && wr.has_value() && wr.value() == 0;
+    owner.reset();
+    return ok;
+}
+
 }
 
 int main() {
@@ -948,19 +1028,21 @@ int main() {
          stale_detached_registration_cannot_authorize_a_new_context},
         {"contract_violations_fail_fast", contract_violations_fail_fast},
         {"pinned_context_rejects_foreign_drivers", pinned_context_rejects_foreign_drivers},
-        {"moved_owner_capability_keeps_thread_affinity",
-         moved_owner_capability_keeps_thread_affinity},
+        {"first_drive_attaches_a_fixed_owner", first_drive_attaches_a_fixed_owner},
         {"deadline_expiry_does_not_cancel_or_settle", deadline_expiry_does_not_cancel_or_settle},
         {"idle_and_control_outcomes_are_distinct_and_sticky",
          idle_and_control_outcomes_are_distinct_and_sticky},
         {"control_before_wait_and_across_notification_ack_survives",
          control_before_wait_and_across_notification_ack_survives},
+        {"acknowledging_observed_control_keeps_a_later_control",
+         acknowledging_observed_control_keeps_a_later_control},
         {"injected_health_failure_is_sticky_and_distinguishable",
          injected_health_failure_is_sticky_and_distinguishable},
         {"competing_concurrent_drives_cannot_both_succeed",
          competing_concurrent_drives_cannot_both_succeed},
         {"nested_drive_from_delivery_hook_is_rejected",
          nested_drive_from_delivery_hook_is_rejected},
+        {"zero_work_helpers_skip_owner_acquisition", zero_work_helpers_skip_owner_acquisition},
     };
 
     std::size_t passed = 0;

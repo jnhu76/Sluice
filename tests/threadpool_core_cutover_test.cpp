@@ -412,7 +412,13 @@ bool release_racing_the_publication_epilogue_reclaims_without_new_io(Tracker& t)
 
     while (raw->publication_pending_size_for_test() == 0)
         std::this_thread::yield();
-    std::thread publisher([&] { (void)ctx.poll(); });
+    // The publisher thread claims the driving attachment for its pass and
+    // releases it at thread exit so this thread may keep driving afterwards.
+    std::thread publisher([&] {
+        auto owner = ctx.claim_progress_owner();
+        if (owner.has_value())
+            (void)ctx.poll();
+    });
     wait_threadpool_gate_paused(gate);
 
     t.check(c.ready(), "the compatibility result is visible once the ready edge fires");

@@ -151,6 +151,18 @@ bool submit_zero_op(AsyncIoContext& ctx, Completion<std::size_t>& c) {
 
 using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
 
+// The parked waits run on a dedicated driver thread; claiming the driving
+// authority there keeps the owner fixed for that wait and releases it at
+// thread exit so the next driver (the calling thread or a later parked wait)
+// may attach sequentially.
+struct DriverClaim {
+    std::optional<ProgressOwner> owner;
+    explicit DriverClaim(AsyncIoContext& ctx) {
+        if (auto claimed = ctx.claim_progress_owner(); claimed.has_value())
+            owner = std::move(claimed).value();
+    }
+};
+
 // Drives the driver thread result into an optional outcome: nullopt means the
 // bounded wait was rejected instead of reporting an owner outcome.
 std::optional<AsyncIoContext::ProgressWaitOutcome> wait_one_value(AsyncIoContext& ctx,
@@ -206,7 +218,7 @@ bool r2_signal_between_token_and_ack_is_revalidation_caught() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
 
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
@@ -244,7 +256,7 @@ bool r3_signal_after_ack_wakes_poll_before_next_snapshot() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
 
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
@@ -281,7 +293,7 @@ bool r4_worker_completion_signal_before_final_recheck_is_caught() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
@@ -311,7 +323,7 @@ bool r5_postdrain_signal_readiness_persists_into_poll() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -350,7 +362,7 @@ bool r8_empty_pass_signal_immediately_before_poll_entry() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -387,7 +399,7 @@ bool r9_signal_while_blocked_in_poll_wakes_owner() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
@@ -415,7 +427,7 @@ bool r10_multiple_signals_coalesce_into_one_readiness() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -453,7 +465,7 @@ bool r11_spurious_wake_with_zero_completions_is_harmless() {
     PauseGate gate;
     ctx.set_progress_prepark_pause_gate_for_test(&gate);
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -481,11 +493,18 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
     Completion<std::size_t> zero;
     if (!submit_zero_op(ctx, zero))
         return false;
-    const auto drained = ctx.poll_progress();
-    if (!drained.has_value() || drained.value().completed != 1 || !zero.ready())
-        return false;
-    zero.reset();
-    if (!notification_fd_readable(ctx.progress_notification_fd()))
+    // The settling pass runs on this thread's driving attachment, which is
+    // released before the parked driver thread attaches as the next driver.
+    bool settled_zero = false;
+    bool stale_readable = false;
+    {
+        DriverClaim owner{ctx};
+        const auto drained = ctx.poll_progress();
+        settled_zero = drained.has_value() && drained.value().completed == 1 && zero.ready();
+        zero.reset();
+        stale_readable = notification_fd_readable(ctx.progress_notification_fd());
+    }
+    if (!settled_zero || !stale_readable)
         return false;
 
     GatedWorkerRead read;
@@ -496,16 +515,17 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
-    if (!wait_counter_reaches(prepark, 1))
-        return false;
-    const bool stale_drained_at_park = !notification_fd_readable(ctx.progress_notification_fd());
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    const bool reached = wait_counter_reaches(prepark, 1);
+    const bool stale_drained_at_park =
+        reached && !notification_fd_readable(ctx.progress_notification_fd());
 
     read.release();
     driver.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
-    const bool ok = stale_drained_at_park && is_progress(result, 1) && read.completion.ready();
+    const bool ok = reached && stale_drained_at_park && is_progress(result, 1) &&
+                    read.completion.ready();
     read.completion.reset();
     return ok;
 }
@@ -522,7 +542,7 @@ bool r12_control_wake_racing_park_boundary() {
     PauseGate pre_gate;
     ctx.set_progress_prerevalidate_pause_gate_for_test(&pre_gate);
     std::optional<AsyncIoContext::ProgressWaitOutcome> first;
-    std::thread driver1([&] { first = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver1([&] { DriverClaim owner{ctx}; first = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(pre_gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
     ctx.interrupt_progress_waiters();
@@ -538,7 +558,7 @@ bool r12_control_wake_racing_park_boundary() {
     PauseGate park_gate;
     ctx.set_progress_prepark_pause_gate_for_test(&park_gate);
     std::optional<AsyncIoContext::ProgressWaitOutcome> second;
-    std::thread driver2([&] { second = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver2([&] { DriverClaim owner{ctx}; second = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(park_gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
     ctx.interrupt_progress_waiters();
@@ -569,6 +589,7 @@ bool r13_delayed_reclaim_obligation_is_serviced_without_new_io() {
     ctx.set_progress_prepark_pause_gate_for_test(&gate);
     std::optional<AsyncIoContext::ProgressWaitOutcome> driver_result;
     std::thread driver([&] {
+        DriverClaim owner{ctx};
         driver_result = wait_one_value(ctx, std::chrono::milliseconds{8000});
     });
     wait_gate_paused(gate);
@@ -634,7 +655,7 @@ bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
@@ -657,6 +678,7 @@ bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
 bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    HostInterest interest(ctx);
     GatedWorkerRead read;
     if (!read.arm(ctx, raw))
         return false;
@@ -664,25 +686,35 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
     constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
     ctx.set_control_epoch_for_test(kMax);
 
+    // The injected epoch advance is itself an unacknowledged control
+    // generation: observe and retire it so the parked wait below tests the
+    // fresh interrupt, not the injected gap.
+    {
+        DriverClaim owner{ctx};
+        const auto settle = wait_one_value(ctx, std::chrono::milliseconds{100});
+        if (!is_control(settle))
+            return false;
+    }
+    ctx.acknowledge_progress_control();
+
     PauseGate gate;
     ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
     std::atomic<int> prepark{0};
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
     ctx.interrupt_progress_waiters();
-    const auto token = ctx.progress_token_for_test();
-    const bool no_wrap = token.control == kMax && token.control_exhaustion == 1;
+    const bool readable = notification_fd_readable(ctx.progress_notification_fd());
 
     resume_gate(gate);
     driver.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
-    const bool ok = no_wrap && is_control(result) && prepark.load() == 0 &&
+    const bool ok = readable && is_control(result) && prepark.load() == 0 &&
                     !read.completion.ready();
 
     read.release();
@@ -692,59 +724,10 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
            (read.completion.reset(), true);
 }
 
-// R16: a committed wait must carry the complete control freshness pair frozen
-// at arm time. A saturated interrupt that lands after the arm but before the
-// committed state is consumed changes the exhaustion half while the epoch half
-// stays frozen; a baseline mixing the armed epoch with a consume-time
-// exhaustion would revalidate that fresh interrupt as unchanged, drain its
-// readiness, and park the owner past it.
-bool r16_saturated_control_interrupt_between_arm_and_consume_is_observed() {
-    ThreadPoolBackend* raw = nullptr;
-    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
-    HostInterest interest(ctx);
-    GatedWorkerRead read;
-    if (!read.arm(ctx, raw))
-        return false;
-
-    constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
-    ctx.set_control_epoch_for_test(kMax);
-    ctx.set_control_exhaustion_for_test(7);
-
-    const bool ok = [&] {
-        ctx.arm_progress_wait_commit();
-
-        std::thread producer([&] { ctx.interrupt_progress_waiters(); });
-        producer.join();
-
-        const auto token = ctx.progress_token_for_test();
-        if (token.control != kMax || token.control_exhaustion != 8)
-            return false;
-        if (!notification_fd_readable(ctx.progress_notification_fd()))
-            return false;
-
-        std::atomic<int> prepark{0};
-        ctx.set_progress_prepark_counter_for_test(&prepark);
-        std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-        std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
-        driver.join();
-        ctx.set_progress_prepark_counter_for_test(nullptr);
-
-        return is_control(result) && prepark.load() == 0 && !read.completion.ready() &&
-               notification_fd_readable(ctx.progress_notification_fd());
-    }();
-
-    read.release();
-    ctx.acknowledge_progress_control();
-    const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
-}
-
 // Once the outer control freshness domain is spent (saturated epoch and
-// saturated exhaustion), the pair freezes at its absorbing value: further
-// interrupts must not wrap it back onto an earlier token value, the state must
-// stay terminal, and a wait holding that value must never revalidate control
-// as unchanged, so an ordinary unchanged-token park is unreachable.
+// saturated exhaustion), the generation pair freezes at its absorbing value:
+// further interrupts can no longer be distinguished, so every wait must treat
+// control as pending instead of parking on a reusable value.
 bool control_outer_exhaustion_is_terminal_and_never_aliases() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
@@ -759,19 +742,11 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
 
     const bool ok = [&] {
         ctx.interrupt_progress_waiters();
-        const auto entered = ctx.progress_token_for_test();
-        if (entered.control != kMax || entered.control_exhaustion != kMax)
-            return false;
         if (!notification_fd_readable(ctx.progress_notification_fd()))
             return false;
 
-        ctx.arm_progress_wait_commit();
-
         for (int round = 0; round < 3; ++round) {
             ctx.interrupt_progress_waiters();
-            const auto token = ctx.progress_token_for_test();
-            if (token.control != kMax || token.control_exhaustion != kMax)
-                return false;
             if (!notification_fd_readable(ctx.progress_notification_fd()))
                 return false;
 
@@ -856,7 +831,7 @@ bool owner_parked_at_saturated_epoch_wakes_and_reparks() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
@@ -891,7 +866,7 @@ bool saturated_notification_still_wakes_parked_owner() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread driver([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -977,8 +952,6 @@ int main() {
          r15_saturated_signal_between_pass_and_revalidation_is_not_drained},
         {"control_exhaustion_saturates_without_alias_and_wakes_interrupted",
          control_exhaustion_saturates_without_alias_and_wakes_interrupted},
-        {"r16_saturated_control_interrupt_between_arm_and_consume_is_observed",
-         r16_saturated_control_interrupt_between_arm_and_consume_is_observed},
         {"control_outer_exhaustion_is_terminal_and_never_aliases",
          control_outer_exhaustion_is_terminal_and_never_aliases},
         {"token_exhaustion_saturates_without_alias_and_closes_admission",

@@ -1030,7 +1030,10 @@ bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
     Completion<std::size_t> c;
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
     t.check(submitted.has_value(), "the read is accepted");
-    (void)ctx.poll();
+    {
+        auto claim = ctx.claim_progress_owner();
+        (void)ctx.poll();
+    }
     const auto cookie = live_cookie(made, 0);
     if (!cookie.has_value())
         return false;
@@ -1038,6 +1041,7 @@ bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
 
     std::atomic<bool> stop_driver{false};
     std::thread driver([&] {
+        auto claim = ctx.claim_progress_owner();
         while (!stop_driver.load(std::memory_order_acquire))
             (void)ctx.poll();
     });

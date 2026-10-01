@@ -120,6 +120,18 @@ struct BlockedPipeRead {
 
 using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
 
+// The parked waits run on a dedicated owner thread; claiming the driving
+// authority there keeps the owner fixed for that wait and releases it at
+// thread exit so the next driver (the calling thread or a later parked wait)
+// may attach sequentially.
+struct DriverClaim {
+    std::optional<ProgressOwner> owner;
+    explicit DriverClaim(AsyncIoContext& ctx) {
+        if (auto claimed = ctx.claim_progress_owner(); claimed.has_value())
+            owner = std::move(claimed).value();
+    }
+};
+
 std::optional<AsyncIoContext::ProgressWaitOutcome> wait_one_value(AsyncIoContext& ctx,
                                                                   std::chrono::nanoseconds bound) {
     const auto r = ctx.wait_one(bound);
@@ -172,7 +184,7 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
 
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
@@ -209,7 +221,7 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -252,7 +264,7 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -285,7 +297,7 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
@@ -321,7 +333,7 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -359,7 +371,7 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
@@ -383,8 +395,9 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
 }
 
 // K10a: a userspace control signal and a kernel CQ notification race on the
-// same eventfd while the owner is paused before revalidation; the control
-// revalidation wins the wake and the following pass still services the CQE.
+// same eventfd while the owner is paused before revalidation. The pass runs
+// before the control observation, so the wake reaps the CQE while the raced
+// control survives the reap and the next wait observes it.
 bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     auto backend = std::make_unique<UringAsyncBackend>();
     AsyncIoContext ctx(std::move(backend));
@@ -399,7 +412,7 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
@@ -411,22 +424,23 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     owner.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
-    // The coalesced wake reports the sticky control first; the owner
-    // acknowledges it and the next wait reaps the kernel completion.
-    const bool control_first = is_control(result) && prepark.load() == 0 &&
-                               !read.completion.ready();
-    ctx.acknowledge_progress_control();
-    const auto reaped = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    const bool ok = control_first && is_progress(reaped, 1) && read.completion.ready();
+    // The coalesced wake reaps the kernel completion (pass before control
+    // observation); the sticky control is not erased by that reap and the
+    // next wait observes it instead of parking.
+    const bool progress_first = is_progress(result, 1) && prepark.load() == 0 &&
+                                read.completion.ready();
+    read.completion.reset();
+    const auto observed = wait_one_value(ctx, std::chrono::milliseconds{8000});
+    const bool ok = progress_first && is_control(observed);
     read.completion.reset();
     read.close_pipe();
     return ok;
 }
 
 // K10b: the same race while the owner is paused immediately before poll(2);
-// the poll returns on the coalesced readiness, the control recheck selects the
-// interrupted outcome, and the final pass still reaps the CQE without
-// fabricating an extra completion.
+// the poll returns on the coalesced readiness, the wake re-runs the pass
+// first so the CQE is reaped, and the raced control is observed by the next
+// wait instead of being erased by the reap.
 bool k10b_control_signal_racing_kernel_cq_before_poll() {
     auto backend = std::make_unique<UringAsyncBackend>();
     AsyncIoContext ctx(std::move(backend));
@@ -441,7 +455,7 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -453,12 +467,14 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
     owner.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
-    // The control recheck selects the interrupted outcome before the pass can
-    // reap; after the acknowledgement the next wait services the CQE.
-    const bool control_first = is_control(result) && prepark.load() == 1;
-    ctx.acknowledge_progress_control();
-    const auto reaped = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    const bool ok = control_first && is_progress(reaped, 1) && read.completion.ready();
+    // The interrupted wake re-runs the pass first, reaping the CQE without
+    // fabricating an extra completion; the sticky control survives the reap
+    // and the next wait observes it instead of parking.
+    const bool progress_first = is_progress(result, 1) && prepark.load() == 1 &&
+                                read.completion.ready();
+    read.completion.reset();
+    const auto observed = wait_one_value(ctx, std::chrono::milliseconds{8000});
+    const bool ok = progress_first && is_control(observed);
     read.completion.reset();
     read.close_pipe();
     return ok;
@@ -482,7 +498,7 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
@@ -518,7 +534,7 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
@@ -549,15 +565,18 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
     if (!read.arm(ctx, 4))
         return false;
 
-    const auto pass = ctx.poll_progress();
-    if (!pass.has_value() || pass.value().completed != 0 ||
-        pass.value().immediate_work_remains || !pass.value().accepted_work_remains)
-        return false;
+    {
+        auto claim = ctx.claim_progress_owner();
+        const auto pass = ctx.poll_progress();
+        if (!pass.has_value() || pass.value().completed != 0 ||
+            pass.value().immediate_work_remains || !pass.value().accepted_work_remains)
+            return false;
+    }
 
     std::atomic<int> prepark{0};
     ctx.set_progress_prepark_counter_for_test(&prepark);
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
-    std::thread owner([&] { result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
@@ -589,7 +608,7 @@ bool k13_cq_overflow_completions_are_not_stranded() {
     PauseGate gate;
     ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
     std::optional<AsyncIoContext::ProgressWaitOutcome> owner_result;
-    std::thread owner([&] { owner_result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; owner_result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
@@ -652,7 +671,7 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
 
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
@@ -703,7 +722,7 @@ bool poison_transition_wakes_parked_owner() {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
@@ -786,7 +805,7 @@ bool u2_k15_retryable_submit_failure_does_not_strand_owner() {
     });
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
 
     fail_timer.join();
     read.release_bytes(1);
@@ -815,13 +834,16 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
     BlockedPipeRead first;
     if (!first.arm(ctx, 4))
         return false;
-    if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
-        return false;
+    {
+        auto claim = ctx.claim_progress_owner();
+        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+            return false;
+    }
 
     PauseGate gate;
     ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     wait_gate_paused(gate);
 
     BlockedPipeRead second;
@@ -884,8 +906,11 @@ bool overflow_flush_failure_becomes_observable_health_event() {
         if (!r.arm(ctx, 4))
             return false;
     }
-    if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
-        return false;
+    {
+        auto claim = ctx.claim_progress_owner();
+        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+            return false;
+    }
 
     // Post every completion before any pass can reap: the CQ ring (twice the
     // one-entry SQ) cannot hold all three, so the owner's first pass observes
@@ -895,7 +920,7 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     state.fail.store(true, std::memory_order_release);
 
     TimedWait driver;
-    std::thread owner([&] { driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     owner.join();
 
     // The injected flush failure must be observed, must become a persistent

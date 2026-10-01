@@ -104,7 +104,7 @@ bool context_owns_one_progress_source() {
     if (ctx.progress_notification_fd() < 0)
         return false;
     const auto token = ctx.progress_token_for_test();
-    if (token.progress != 0 || token.control != 0)
+    if (token.progress != 0)
         return false;
 
     std::vector<std::byte> buffer(4, std::byte{0});
