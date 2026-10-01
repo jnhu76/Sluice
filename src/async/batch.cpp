@@ -56,11 +56,31 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
     }
 
     std::optional<IoError> wait_err;
+    std::optional<ProgressOwner> owner;
+    if (!any_ready && ctx.outstanding() > 0) {
+        auto claimed = ctx.claim_progress_owner();
+        if (!claimed.has_value()) {
+            return make_unexpected<std::size_t>(claimed.error());
+        }
+        owner = std::move(claimed).value();
+    }
     while (!any_ready && ctx.outstanding() > 0) {
         auto wr = ctx.wait_one();
         if (!wr.has_value()) {
             wait_err = wr.error();
             break;
+        }
+        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+        if (wr.value().kind == WaitKind::health_failure) {
+            // The sticky health verdict ends the wait through the error
+            // channel, never as a zero-completion report.
+            wait_err = IoError{IoError::Code::backend_error};
+            break;
+        }
+        if (wr.value().kind == WaitKind::control_interrupted) {
+            // This driver observed the sticky control; retiring it lets the
+            // next wait park instead of reporting the same control forever.
+            ctx.acknowledge_progress_control();
         }
         for (auto& sp : slots_) {
             Slot& s = *sp;

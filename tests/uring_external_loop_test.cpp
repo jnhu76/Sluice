@@ -39,10 +39,23 @@ using sluice::FileAccess;
 class ExternalLoopHost {
   public:
     explicit ExternalLoopHost(AsyncIoContext& ctx) : ctx_(ctx) {
+        auto claimed = ctx.claim_progress_owner();
+        if (!claimed.has_value())
+            return;
+        owner_ = std::move(claimed).value();
         nfd_ = ctx.progress_notification_fd();
     }
 
     int nfd() const noexcept { return nfd_; }
+
+    // Stop driving and retire the external registration; the host must not
+    // touch the notification source afterwards.
+    int stop_and_detach() {
+        const int retired = ctx_.detach_progress_host();
+        nfd_ = -1;
+        owner_.reset();
+        return retired;
+    }
 
     bool retry_scheduled() const noexcept { return retry_deadline_.has_value(); }
     std::size_t delivered() const noexcept { return delivered_; }
@@ -115,10 +128,12 @@ class ExternalLoopHost {
     // the completions that pass already delivered.
     std::size_t drive_submission() {
         const auto pass = ctx_.poll_progress();
+        if (!pass.has_value())
+            return 0;
         ++passes_;
-        delivered_ += pass.completed;
-        reconcile_retry_schedule(pass);
-        return pass.completed;
+        delivered_ += pass.value().completed;
+        reconcile_retry_schedule(pass.value());
+        return pass.value().completed;
     }
 
   private:
@@ -143,10 +158,12 @@ class ExternalLoopHost {
     void drive_immediate() {
         for (int i = 0; i < 64; ++i) {
             const auto pass = ctx_.poll_progress();
+            if (!pass.has_value())
+                return;
             ++passes_;
-            delivered_ += pass.completed;
-            reconcile_retry_schedule(pass);
-            if (!pass.immediate_work_remains)
+            delivered_ += pass.value().completed;
+            reconcile_retry_schedule(pass.value());
+            if (!pass.value().immediate_work_remains)
                 return;
         }
     }
@@ -154,14 +171,17 @@ class ExternalLoopHost {
     void run_retry_pass() {
         retry_deadline_.reset();
         const auto pass = ctx_.poll_progress();
+        if (!pass.has_value())
+            return;
         ++passes_;
-        delivered_ += pass.completed;
-        reconcile_retry_schedule(pass);
-        if (pass.immediate_work_remains)
+        delivered_ += pass.value().completed;
+        reconcile_retry_schedule(pass.value());
+        if (pass.value().immediate_work_remains)
             drive_immediate();
     }
 
     AsyncIoContext& ctx_;
+    std::optional<ProgressOwner> owner_;
     int nfd_ = -1;
     std::optional<std::chrono::steady_clock::time_point> retry_deadline_;
     std::size_t delivered_ = 0;
@@ -240,13 +260,25 @@ bool external_poll_loop_uring_w03() {
     if (fd_readable(host.nfd()))
         return false;
 
-    // Control wake with zero completions: the host acks, drives an empty
-    // pass, and keeps serving later real work.
+    // Control wake with zero completions: the host acks, observes the sticky
+    // control as a wait outcome, acknowledges it, and keeps serving later
+    // real work.
     ctx.interrupt_progress_waiters();
     if (!host.wait_and_service(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 0)
         return false;
+    {
+        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+        const auto control = ctx.wait_one(std::chrono::milliseconds{100});
+        if (!control.has_value() || control.value().kind != WaitKind::control_interrupted)
+            return false;
+        ctx.acknowledge_progress_control();
+        const auto settled = ctx.wait_one(std::chrono::milliseconds{50});
+        if (!settled.has_value() || settled.value().kind != WaitKind::progress ||
+            settled.value().completed != 0)
+            return false;
+    }
     if (fd_readable(host.nfd()))
         return false;
 
@@ -299,13 +331,22 @@ bool external_poll_loop_uring_w03() {
     if (::poll(&p, 1, 150) != 0)
         return false;
 
-    const bool ok = r2.ready() && r3.ready() && w.ready();
+    const bool settled = r2.ready() && r3.ready() && w.ready();
     r2.reset();
     r3.reset();
     w.reset();
     ::close(source);
     ::close(sink);
-    return ok;
+    // Shutdown order: all accepted work settled, only then does the host
+    // retire its registration and release the retained state. A retired
+    // registration is gone (a second detach has nothing to retire), but the
+    // context may lend the fd to a later host.
+    const int retired = host.stop_and_detach();
+    if (!settled || retired < 0 || ctx.detach_progress_host() != -1)
+        return false;
+    const int relent = ctx.progress_notification_fd();
+    (void)ctx.detach_progress_host();
+    return relent == retired;
 }
 
 // Kernel completions are all discovered through the notification-fd wake
@@ -356,7 +397,7 @@ bool kernel_completions_delivered_without_stranding() {
         c.reset();
     }
     ::close(source);
-    return ok;
+    return ok && host.stop_and_detach() >= 0;
 }
 
 // A zero-length operation completes inline at submission with no kernel CQE;
@@ -384,7 +425,8 @@ bool external_host_sees_userspace_publication_wake() {
     if (host.acknowledge_and_drive() != 0)
         return false;
     zero.reset();
-    return !fd_readable(host.nfd());
+    const bool quiet = !fd_readable(host.nfd());
+    return quiet && host.stop_and_detach() >= 0;
 }
 
 // A saturated notification fd keeps asserting readiness across a real kernel
@@ -433,7 +475,8 @@ bool saturation_with_real_kernel_completion_preserves_wake() {
     p.fd = host.nfd();
     p.events = POLLIN;
     p.revents = 0;
-    return ::poll(&p, 1, 150) == 0;
+    const bool idle = ::poll(&p, 1, 150) == 0;
+    return idle && host.stop_and_detach() >= 0;
 }
 
 // A retryable transport failure persisting across the acceptance, the first
@@ -541,7 +584,7 @@ bool external_retryable_transport_does_not_strand() {
         return false;
     if (host.passes() != quiet_passes)
         return false;
-    return ok;
+    return ok && host.stop_and_detach() >= 0;
 }
 
 }

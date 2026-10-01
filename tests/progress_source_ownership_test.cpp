@@ -43,8 +43,6 @@ concept port_has_no_wait_api =
         p.wait_if_unchanged(t);
         p.snapshot();
         p.interrupt();
-        p.arm_committed_wait();
-        p.consume_committed_wait();
         p.acknowledge_notification();
         p.notification_fd();
     };
@@ -104,7 +102,7 @@ bool context_owns_one_progress_source() {
     if (ctx.progress_notification_fd() < 0)
         return false;
     const auto token = ctx.progress_token_for_test();
-    if (token.progress != 0 || token.control != 0)
+    if (token.progress != 0)
         return false;
 
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -127,10 +125,12 @@ bool context_owns_one_progress_source() {
         return false;
 
     const auto one = ctx.wait_one(std::chrono::milliseconds{2000});
-    if (!one.has_value() || one.value() != 1)
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+    if (!one.has_value() || one.value().kind != WaitKind::progress || one.value().completed != 1)
         return false;
     const bool ready = c.ready();
     c.reset();
+    ctx.detach_progress_host();
     return ready;
 }
 
@@ -169,7 +169,9 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
     if (ctx.has_bounded_split_wait_capability())
         return false;
     const auto r = ctx.wait_one(std::chrono::milliseconds{1});
-    return !r.has_value() && r.error().code == IoError::Code::not_supported;
+    const bool refused = !r.has_value() && r.error().code == IoError::Code::not_supported;
+    ctx.detach_progress_host();
+    return refused;
 }
 
 bool thread_pool_context_declares_physical_progress() {
@@ -204,14 +206,15 @@ bool move_construction_preserves_progress_responsibility() {
     std::atomic<int> prepark{0};
     moved.set_progress_prepark_counter_for_test(&prepark);
 
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     bool woke = false;
     std::size_t driven = 0;
     {
         std::thread driver([&] {
             auto r = moved.wait_one(std::chrono::milliseconds{5000});
-            if (r.has_value()) {
+            if (r.has_value() && r.value().kind == WaitKind::progress) {
                 woke = true;
-                driven = r.value();
+                driven = r.value().completed;
             }
         });
         for (int i = 0; i < 500000 && prepark.load(std::memory_order_acquire) < 1; ++i)
@@ -235,6 +238,7 @@ bool move_construction_preserves_progress_responsibility() {
     const bool ok = woke && driven == 1 && c.ready() &&
                     notification_fd_readable(moved.progress_notification_fd());
     c.reset();
+    moved.detach_progress_host();
     return ok;
 }
 
@@ -248,25 +252,30 @@ bool move_assignment_preserves_progress_responsibility() {
              .has_value())
         return false;
 
-    const int moved_source_fd = ctx.progress_notification_fd();
-
     AsyncIoContext target(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
     const int previous_fd = target.progress_notification_fd();
+    target.detach_progress_host();
     target = std::move(ctx);
 
-    if (target.progress_notification_fd() != moved_source_fd)
-        return false;
     if (ctx.progress_notification_fd() != -1)
+        return false;
+    const auto inert_wait = ctx.wait_one(std::chrono::milliseconds{1});
+    if (inert_wait.has_value() || inert_wait.error().code != IoError::Code::invalid_state)
+        return false;
+
+    // The moved-to context owns the submitted responsibility and the source
+    // notification source; its own source is gone with the move.
+    if (!notification_fd_readable(target.progress_notification_fd()))
         return false;
     if (target.progress_notification_fd() == previous_fd)
         return false;
-    if (!notification_fd_readable(target.progress_notification_fd()))
-        return false;
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto one = target.wait_one(std::chrono::milliseconds{2000});
-    if (!one.has_value() || one.value() != 1)
+    if (!one.has_value() || one.value().kind != WaitKind::progress || one.value().completed != 1)
         return false;
     const bool ready = c.ready();
     c.reset();
+    target.detach_progress_host();
     return ready;
 }
 
@@ -329,6 +338,7 @@ bool backend_destructor_runs_while_progress_source_lives() {
         AsyncIoContext ctx(std::move(backend));
         if (ctx.progress_notification_fd() < 0)
             return false;
+        ctx.detach_progress_host();
     }
     // The backend retired first; under sanitizers a ProgressSource destroyed
     // before the backend would surface as use-after-free in its signal.
@@ -428,11 +438,13 @@ bool uring_zero_op_signals_context_notification() {
     if (!notification_fd_readable(ctx.progress_notification_fd()))
         return false;
     ctx.acknowledge_progress_notification();
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto one = ctx.wait_one(std::chrono::milliseconds{2000});
-    if (!one.has_value() || one.value() != 1)
+    if (!one.has_value() || one.value().kind != WaitKind::progress || one.value().completed != 1)
         return false;
     const bool ready = c.ready();
     c.reset();
+    ctx.detach_progress_host();
     return ready;
 #else
     return true;
@@ -460,8 +472,9 @@ bool uring_completion_wakes_parked_driver() {
              .has_value())
         return false;
 
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto r = ctx.wait_one(std::chrono::milliseconds{5000});
-    if (!r.has_value() || r.value() != 1)
+    if (!r.has_value() || r.value().kind != WaitKind::progress || r.value().completed != 1)
         return false;
     const bool ready = c.ready();
     c.reset();

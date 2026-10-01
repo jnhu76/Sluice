@@ -63,6 +63,15 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void async_context_progress_binding_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::AsyncIoContext: relocating or destroying a context with a "
+                 "live progress binding (progress-owner handle, active drive, or live "
+                 "external notification registration) is a contract violation\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
 [[noreturn]] void context_identity_exhausted_fail_fast() noexcept {
     std::terminate();
 }

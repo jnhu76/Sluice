@@ -578,6 +578,7 @@ bool publication_inflight_window_keeps_the_request_nonterminal(Tracker& t) {
 
     std::atomic<bool> stop_driver{false};
     std::thread driver([&] {
+        auto claim = ctx.claim_progress_owner();
         while (!stop_driver.load(std::memory_order_acquire))
             (void)ctx.poll();
     });

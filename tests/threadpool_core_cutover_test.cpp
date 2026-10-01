@@ -319,7 +319,7 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
     t.check(slot0.has_value() && slot0->execution_claimed && slot0->execution_refs == 1 &&
                 !slot0->terminal_chosen,
             "the worker dequeue claimed execution and the borrow-touching ref is live");
-    t.check(!c.ready() && ctx.poll() == 0, "nothing publishes while execution is live");
+    t.check(!c.ready() && ctx.poll().value_or(0) == 0, "nothing publishes while execution is live");
 
     ctx.cancel(c);
     const auto after_cancel = core.observe_slot(SlotIndex{0});
@@ -366,7 +366,7 @@ bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
     const auto slot0 = core.observe_slot(SlotIndex{0});
     t.check(slot0.has_value() && slot0->execution_refs == 1 && !slot0->terminal_chosen,
             "the execution ref outlives the last physical buffer access");
-    t.check(!c.ready() && ctx.poll() == 0 && raw->publication_pending_size_for_test() == 0,
+    t.check(!c.ready() && ctx.poll().value_or(0) == 0 && raw->publication_pending_size_for_test() == 0,
             "no publication is queued while the borrow-touching ref is live");
 
     resume_threadpool_gate(gate);
@@ -412,7 +412,13 @@ bool release_racing_the_publication_epilogue_reclaims_without_new_io(Tracker& t)
 
     while (raw->publication_pending_size_for_test() == 0)
         std::this_thread::yield();
-    std::thread publisher([&] { (void)ctx.poll(); });
+    // The publisher thread claims the driving attachment for its pass and
+    // releases it at thread exit so this thread may keep driving afterwards.
+    std::thread publisher([&] {
+        auto owner = ctx.claim_progress_owner();
+        if (owner.has_value())
+            (void)ctx.poll();
+    });
     wait_threadpool_gate_paused(gate);
 
     t.check(c.ready(), "the compatibility result is visible once the ready edge fires");
@@ -526,7 +532,7 @@ bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
     t.check(raw->event_owed_for_test(0) && next.idle(),
             "the refused submission leaves the owed record untouched");
 
-    const std::size_t events = ctx.poll();
+    const std::size_t events = ctx.poll().value_or(0);
     t.check(events == 1, "the poll delivers exactly the owed event");
     t.check(!raw->event_owed_for_test(0), "the owed event is discharged");
     t.check(raw->sink_deliveries() == 1, "the ready event is delivered exactly once");

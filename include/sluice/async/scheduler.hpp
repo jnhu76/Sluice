@@ -601,7 +601,6 @@ class Scheduler {
         unsigned worker_id = 0;
         std::uint64_t epoch_at_commit = 0;
         std::uint64_t ready_generation = 0;
-        std::uint64_t control_generation = 0;
         std::size_t backend_outstanding = 0;
         std::size_t waiting_registered = 0;
         unsigned idle_workers = 0;

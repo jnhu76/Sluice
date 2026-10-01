@@ -9,6 +9,7 @@
 #include <sluice/result.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -79,18 +80,6 @@ bool scheduler_worker_parks_in_backend_domain(Scheduler& sched) {
         if (SchedulerTestAccess::worker_park_domain(sched, 0) == WorkerState::ParkDomain::Backend)
             return true;
         std::this_thread::yield();
-    }
-    return false;
-}
-
-bool scheduler_global_lock_becomes_held(Scheduler& sched) {
-    for (int i = 0; i < 500000; ++i) {
-        if (SchedulerTestAccess::try_lock_global_for_test(sched)) {
-            SchedulerTestAccess::unlock_global_for_test(sched);
-            std::this_thread::yield();
-            continue;
-        }
-        return true;
     }
     return false;
 }
@@ -591,19 +580,40 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
     t.check(suspended != nullptr, "the suspended completion is addressable");
 
     std::atomic<int> cancel_outcome{-1};
+    std::atomic<bool> cancel_completed{false};
     std::thread canceler([&] {
         auto canceled = sched.cancel_waiter(*suspended);
         cancel_outcome.store(canceled.has_value() ? (canceled.value() ? 1 : 0) : -1,
                              std::memory_order_release);
+        cancel_completed.store(true, std::memory_order_release);
     });
-    t.check(scheduler_global_lock_becomes_held(sched),
-            "the canceling thread enters the scheduler window");
+
+    // Hang watchdog only: the oracle is that the cancel completed while the
+    // delivery gate is still pinned below.
+    const auto cancel_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!cancel_completed.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < cancel_deadline) {
+        std::this_thread::yield();
+    }
+    const bool cancel_completed_while_pinned = cancel_completed.load(std::memory_order_acquire);
+    t.check(cancel_completed_while_pinned,
+            "the canceling thread completes while the delivery gate stays pinned");
+
+    if (cancel_completed_while_pinned) {
+        canceler.join();
+
+        t.check(cancel_outcome.load(std::memory_order_acquire) == 0,
+                "a cancel during the staged delivery window is refused");
+        t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 1,
+                "the refused cancel leaves the host wait record live");
+        t.check(slots_in_delivering_phase(core) == 1,
+                "the refused cancel leaves the observer claimed for delivery");
+    } else {
+        resume_gate(delivery_gate);
+        canceler.join();
+    }
 
     resume_gate(delivery_gate);
-    canceler.join();
-
-    t.check(cancel_outcome.load(std::memory_order_acquire) == 0,
-            "a cancel during the staged delivery window is refused");
 
     raw->set_worker_claimed_pause_gate(nullptr);
     raw->set_delivery_claimed_pause_gate(nullptr);

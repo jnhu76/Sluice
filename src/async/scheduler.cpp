@@ -357,6 +357,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
             if (elected) {
 
                 bool phase_b_committed = false;
+                std::optional<ProgressOwner> elected_owner;
 
                 bool ready_flag_observation = false;
                 {
@@ -394,7 +395,16 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                                                  : WorkerState::ParkDomain::Scheduler);
 
                     if (ws->park_domain == WorkerState::ParkDomain::Backend) {
-                        ctx_.arm_progress_wait_commit();
+                        // The elected worker becomes the context's fixed
+                        // driver for this park: a foreign driver already
+                        // holding the authority backs the election out.
+                        auto claimed = ctx_.claim_progress_owner();
+                        if (!claimed.has_value()) {
+                            admission_ = AdmissionState::none;
+                            admission_owner_ = static_cast<unsigned>(-1);
+                            continue;
+                        }
+                        elected_owner = std::move(claimed).value();
                         backend_wait_active_.store(true, std::memory_order_release);
                     }
                 }
@@ -452,8 +462,20 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     auto wr = ctx_.wait_one(max_park);
                     backend_wait_active_.store(false, std::memory_order_release);
                     ws->park_domain = WorkerState::ParkDomain::None;
+                    elected_owner.reset();
 
-                    bool made_progress = wr.has_value() && wr.value() > 0;
+                    bool made_progress = false;
+                    if (wr.has_value()) {
+                        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+                        made_progress = wr.value().kind == WaitKind::progress &&
+                                        wr.value().completed > 0;
+                        // The elected driver observed the sticky control here;
+                        // without this retirement every later park would end
+                        // at the entry check and spin.
+                        if (wr.value().kind == WaitKind::control_interrupted) {
+                            ctx_.acknowledge_progress_control();
+                        }
+                    }
 
                     {
                         LockGuard lk(global_mtx_);
@@ -617,7 +639,12 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
 }
 
 bool Scheduler::drain_routed_completion_waits_locked() {
-    (void)ctx_.poll();
+    // The pass needs the driving authority: the parked elected driver holds
+    // it and its own passes reap what this would have, so skipping the pass
+    // cannot strand work.
+    if (auto owner = ctx_.claim_progress_owner(); owner.has_value()) {
+        (void)ctx_.poll();
+    }
     bool woken = false;
     WaitRecord* head = nullptr;
     {

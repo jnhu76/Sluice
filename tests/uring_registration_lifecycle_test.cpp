@@ -105,7 +105,9 @@ bool attachment_registers_kernel_notification_once() {
         // submission pass, then the registered eventfd must carry the kernel
         // completion to the context fd. The submitting pass can also be the
         // servicing pass, so its delivery joins the wait's count.
-        const std::size_t driven = ctx.poll_progress().completed;
+        const auto driven_pass = ctx.poll_progress();
+        const std::size_t driven =
+            driven_pass.has_value() ? driven_pass.value().completed : 0;
         bool woken = notification_fd_readable(ctx.progress_notification_fd());
         for (int i = 0; i < 20000 && !woken; ++i) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -113,9 +115,15 @@ bool attachment_registers_kernel_notification_once() {
         }
         const auto waited = ctx.wait_one(std::chrono::milliseconds{5000});
         ::close(fd);
-        if (!woken || !waited.has_value() || driven + waited.value() != 1 || !c.ready())
+        using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+        const std::size_t waited_completed =
+            waited.has_value() && waited.value().kind == WaitKind::progress
+                ? waited.value().completed
+                : 0;
+        if (!woken || !waited.has_value() || driven + waited_completed != 1 || !c.ready())
             return false;
         c.reset();
+        ctx.detach_progress_host();
     }
     // Teardown order: unregister runs once while the ring still exists, before
     // ring exit, and the backend retires inside the context.

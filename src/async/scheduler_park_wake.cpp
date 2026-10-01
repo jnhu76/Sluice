@@ -123,7 +123,6 @@ void Scheduler::park_on_wake_source(WorkerState* ws, bool bounded_backend_observ
         }
         const detail::ProgressSource::Token forensics_tok = ctx_.progress_token_for_test();
         forensics_rec.ready_generation = forensics_tok.progress;
-        forensics_rec.control_generation = forensics_tok.control;
         forensics_rec.backend_outstanding = ctx_.outstanding();
     }
     forensics_rec.worker_id = ws->id;
@@ -271,12 +270,11 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
     const std::size_t outstanding = ctx_.outstanding();
 
     std::fprintf(stderr,
-                 "[park-forensics] wake_epoch=%llu token=(ready=%llu,ctrl=%llu) "
+                 "[park-forensics] wake_epoch=%llu token=(ready=%llu) "
                  "outstanding=%zu admission=%s idle_workers=%u terminate=%d "
                  "backend_wait_active=%d\n",
                  static_cast<unsigned long long>(wake_epoch_now),
-                 static_cast<unsigned long long>(tok.progress),
-                 static_cast<unsigned long long>(tok.control), outstanding, admission,
+                 static_cast<unsigned long long>(tok.progress), outstanding, admission,
                  idle_workers_.load(std::memory_order_acquire),
                  global_terminate_.load(std::memory_order_acquire) ? 1 : 0,
                  backend_wait_active_.load(std::memory_order_acquire) ? 1 : 0);
@@ -359,14 +357,13 @@ void Scheduler::dump_park_forensics_for_test(const char* tag) {
             const ParkLedgerRecord& r = park_ledger_[idx];
             std::fprintf(stderr,
                          "[park-forensics] ledger seq=%llu worker=%u "
-                         "epoch_at_commit=%llu ready=%llu ctrl=%llu "
+                         "epoch_at_commit=%llu ready=%llu "
                          "outstanding=%zu waiting=%zu classify=%s "
                          "classify_seq=%llu bounded=%d "
                          "idle=%u term=%d extwake=%d bwait=%d\n",
                          static_cast<unsigned long long>(r.park_seq), r.worker_id,
                          static_cast<unsigned long long>(r.epoch_at_commit),
                          static_cast<unsigned long long>(r.ready_generation),
-                         static_cast<unsigned long long>(r.control_generation),
                          r.backend_outstanding, r.waiting_registered,
                          (r.last_classify >= 0 && r.last_classify <= 3) ? kMwName[r.last_classify]
                                                                         : "?",

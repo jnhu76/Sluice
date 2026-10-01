@@ -407,13 +407,6 @@ struct Scheduler::AsyncTestAccess {
         return s.deferred_publications_.size();
     }
 
-    static bool try_lock_global_for_test(Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-        return s.global_mtx_.try_lock();
-    }
-    static void unlock_global_for_test(Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
-        s.global_mtx_.unlock();
-    }
-
     static bool queue_push_deferred_for_test(Scheduler& s, detail::QueuePort& port,
                                              detail::QueueItemLease& lease, WaitNode& node,
                                              QueueWaitCtx& ctx, FeDeferredRecord& record);

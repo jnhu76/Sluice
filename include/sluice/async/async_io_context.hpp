@@ -20,6 +20,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 
 namespace sluice::async {
 
@@ -88,6 +89,8 @@ class AsyncBackend {
         // owes a further bounded pass and must not idle-return or park past it
         // without scheduling one.
         bool dispatch_retry_remains = false;
+        // The context's sticky wait-health verdict at this pass.
+        bool health_failed = false;
     };
 
     virtual std::size_t poll() = 0;
@@ -209,6 +212,28 @@ class AsyncBackend {
     }
 };
 
+class AsyncIoContext;
+
+// Release handle for the context's fixed driving authority: claiming records
+// this thread as the context's progress owner; the handle's destruction or
+// move-assignment releases the claim and detaches the authority. At most one
+// live handle exists per context, and it must not outlive its context.
+class ProgressOwner {
+  public:
+    ProgressOwner(ProgressOwner&& other) noexcept;
+    ProgressOwner& operator=(ProgressOwner&& other) noexcept;
+    ~ProgressOwner();
+
+    ProgressOwner(const ProgressOwner&) = delete;
+    ProgressOwner& operator=(const ProgressOwner&) = delete;
+
+  private:
+    friend class AsyncIoContext;
+    ProgressOwner() noexcept = default;
+
+    AsyncIoContext* context_ = nullptr;
+};
+
 class AsyncIoContext {
   public:
     explicit AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats = nullptr);
@@ -242,22 +267,55 @@ class AsyncIoContext {
 
     Result<RequestHandleState> request_state(const RequestHandle& h) const;
 
-    std::size_t poll();
+    Result<std::size_t> poll();
 
-    // One bounded nonblocking progress pass with an authoritative post-pass
-    // state report; the documented drive operation for external event-loop
-    // hosts: acknowledge notification, then bounded passes. Keep passing
+    // One bounded nonblocking progress pass with the post-pass state report;
+    // the drive operation for external event-loop hosts: acknowledge
+    // notification, then bounded passes. Keep passing
     // while immediate_work_remains holds; when dispatch_retry_remains holds,
     // schedule a future progress pass — that accepted transport produces no
     // completion and no notification until a pass submits it, so an fd-only
     // wait strands it. accepted_work_remains alone parks normally: that work
     // waits for its kernel completion notification.
+    //
+    // Driving belongs to the context's fixed progress owner: the first drive
+    // or claim_progress_owner() on this thread attaches it, and a call fails
+    // with invalid_state from any other thread while attached, while another
+    // drive is active on this context, or when the context is inert
+    // (moved-from). A ProgressOwner release detaches so a later driver may
+    // attach.
     using ProgressPass = AsyncBackend::ProgressPass;
-    ProgressPass poll_progress();
+    Result<ProgressPass> poll_progress();
 
-    Result<std::size_t> wait_one();
+    // Records this thread as the context's fixed progress owner and returns
+    // the release handle. Fails with invalid_state when a handle is already
+    // live, when another thread holds the attached driving authority, or when
+    // the context is inert.
+    Result<ProgressOwner> claim_progress_owner();
 
-    Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
+    // Owner-visible wait report. `progress` covers both a pass with
+    // completions and the quiescent observation (completed == 0, no accepted
+    // work, nothing immediate, no retry owed). `control_interrupted` reports
+    // sticky owner control, which stays pending until
+    // acknowledge_progress_control() retires it. `deadline_expired` is only
+    // the elapsed wait bound — accepted I/O is untouched and never cancelled
+    // or settled by it. `health_failure` means the progress/wait machinery
+    // cannot continue safely and is never reported as a zero-completion
+    // result.
+    struct ProgressWaitOutcome {
+        enum class Kind : std::uint8_t {
+            progress,
+            control_interrupted,
+            deadline_expired,
+            health_failure,
+        };
+        Kind kind = Kind::progress;
+        std::size_t completed = 0;
+    };
+
+    Result<ProgressWaitOutcome> wait_one();
+
+    Result<ProgressWaitOutcome> wait_one(std::chrono::nanoseconds max_park);
 
     bool has_split_wait_capability() const noexcept;
 
@@ -265,15 +323,26 @@ class AsyncIoContext {
 
     void interrupt_progress_waiters() noexcept;
 
-    void arm_progress_wait_commit() noexcept;
+    // Retires the control the owner last observed; control that arrived after
+    // that observation stays pending and keeps interrupting later waits.
+    void acknowledge_progress_control();
 
     // Borrows the context notification fd for external event-loop
-    // registration. The host must not close, independently drain, or
-    // repurpose it; acknowledgement runs through
-    // acknowledge_progress_notification().
-    int progress_notification_fd() const noexcept;
+    // registration. The borrow starts the context's external-notification
+    // interest: the host must not close, independently drain, or repurpose
+    // the fd; acknowledgement runs through acknowledge_progress_notification();
+    // and the interest must be retired through detach_progress_host() before
+    // the notification source is torn down. A retired borrow may be followed
+    // by a new one.
+    int progress_notification_fd() noexcept;
 
     void acknowledge_progress_notification() noexcept;
+
+    // Retires the external-notification interest and returns the borrowed fd
+    // the host must drop from its event loop, or -1 when no interest was
+    // live. The retired registration grants no authority over any later
+    // context, including one reusing the numeric descriptor.
+    int detach_progress_host() noexcept;
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
@@ -324,6 +393,8 @@ class AsyncIoContext {
 
     void set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept;
 
+    void set_wait_health_failed_for_test() noexcept;
+
     void saturate_progress_notification_for_test() noexcept;
 
     bool progress_exhausted_for_test() const noexcept;
@@ -344,7 +415,41 @@ class AsyncIoContext {
 
     bool backend_has_immediate_physical_work_() noexcept;
 
+    friend class ProgressOwner;
+
+    // Terminates if this context still carries a live progress binding that
+    // teardown must not discard: an active drive, a claimed owner, or a live
+    // external notification interest.
+    void fail_fast_if_progress_binding_live_() noexcept;
+
+    // Marks the drive domain active for the attached owner thread and reports
+    // whether the caller may drive now: rejected while another drive is
+    // active, while another thread holds the attached authority, or on an
+    // inert context. The first drive from an unattached context attaches the
+    // calling thread.
+    bool drive_entry_admitted_() noexcept;
+    void drive_exit_() noexcept;
+
+    // Detaches the driving authority; called only from ProgressOwner release.
+    void release_progress_owner_() noexcept;
+
+    // One backend progress pass for a caller already holding the drive
+    // domain; the public drive entry points gate before using this.
+    AsyncBackend::ProgressPass run_progress_pass_();
+
+    struct DriveGuard {
+        AsyncIoContext* ctx;
+        explicit DriveGuard(AsyncIoContext* c) noexcept : ctx(c) {}
+        ~DriveGuard() noexcept { ctx->drive_exit_(); }
+        DriveGuard(const DriveGuard&) = delete;
+        DriveGuard& operator=(const DriveGuard&) = delete;
+    };
+
     mutable std::mutex access_mtx_;
+    bool drive_active_ = false;
+    bool owner_claimed_ = false;
+    std::thread::id owner_thread_{};
+    bool notification_interest_live_ = false;
 };
 
 template <class T> Result<CancelDisposition> Request<T>::cancel() {

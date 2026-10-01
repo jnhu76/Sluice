@@ -17,9 +17,6 @@ namespace {
 // explicitly scheduled; the interval bounds the retry rate so a persistent
 // EAGAIN/EBUSY cannot busy-spin the owner.
 constexpr std::chrono::milliseconds kTransportRetryInterval{10};
-// Classification slack so a wake lands within one clock-granularity window of
-// its deadline is treated as that deadline's expiry, never as a control wake.
-constexpr std::chrono::milliseconds kDeadlineClassifySlack{1};
 
 std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::detail::FileOperation op) {
     return sluice::detail::rejection_of(sluice::detail::precheck_state_op(file.fd < 0, file.access, op));
@@ -42,7 +39,34 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
     }
 }
 
+ProgressOwner::ProgressOwner(ProgressOwner&& other) noexcept : context_(other.context_) {
+    other.context_ = nullptr;
+}
+
+ProgressOwner& ProgressOwner::operator=(ProgressOwner&& other) noexcept {
+    if (this != &other) {
+        if (context_ != nullptr) {
+            context_->release_progress_owner_();
+            context_ = nullptr;
+        }
+        context_ = other.context_;
+        other.context_ = nullptr;
+    }
+    return *this;
+}
+
+ProgressOwner::~ProgressOwner() {
+    if (context_ != nullptr) {
+        context_->release_progress_owner_();
+        context_ = nullptr;
+    }
+}
+
 AsyncIoContext::~AsyncIoContext() {
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        fail_fast_if_progress_binding_live_();
+    }
     if (core_ && core_->occupancy().public_bindings != 0) {
         detail::async_context_outstanding_fail_fast();
     }
@@ -51,24 +75,109 @@ AsyncIoContext::~AsyncIoContext() {
     }
 }
 
-AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept
-    : core_(std::move(other.core_)), progress_(std::move(other.progress_)),
-      backend_(std::move(other.backend_)), stats_(other.stats_) {}
+AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept {
+    {
+        std::lock_guard<std::mutex> lk(other.access_mtx_);
+        // A live owner handle refers to the source object itself; the driving
+        // attachment without a handle and any live notification interest
+        // travel with the members they describe.
+        if (other.owner_claimed_) {
+            detail::async_context_progress_binding_fail_fast();
+        }
+    }
+    core_ = std::move(other.core_);
+    progress_ = std::move(other.progress_);
+    backend_ = std::move(other.backend_);
+    stats_ = other.stats_;
+    {
+        std::lock_guard<std::mutex> lk(other.access_mtx_);
+        owner_thread_ = other.owner_thread_;
+        notification_interest_live_ = other.notification_interest_live_;
+        other.owner_thread_ = std::thread::id{};
+        other.notification_interest_live_ = false;
+        other.stats_ = nullptr;
+    }
+}
 
 AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     if (this != &other) {
+        {
+            std::lock_guard<std::mutex> lk(access_mtx_);
+            fail_fast_if_progress_binding_live_();
+        }
         if (core_ && core_->occupancy().public_bindings != 0) {
             detail::async_context_outstanding_fail_fast();
         }
         if (backend_ && backend_->outstanding() != 0) {
             detail::async_context_outstanding_fail_fast();
         }
+        {
+            std::lock_guard<std::mutex> lk(other.access_mtx_);
+            if (other.owner_claimed_) {
+                detail::async_context_progress_binding_fail_fast();
+            }
+        }
         backend_ = std::move(other.backend_);
         core_ = std::move(other.core_);
         progress_ = std::move(other.progress_);
         stats_ = other.stats_;
+        {
+            std::lock_guard<std::mutex> lk(other.access_mtx_);
+            owner_thread_ = other.owner_thread_;
+            notification_interest_live_ = other.notification_interest_live_;
+            other.owner_thread_ = std::thread::id{};
+            other.notification_interest_live_ = false;
+            other.stats_ = nullptr;
+        }
     }
     return *this;
+}
+
+bool AsyncIoContext::drive_entry_admitted_() noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (drive_active_ || !backend_) {
+        return false;
+    }
+    if (owner_thread_ == std::thread::id{}) {
+        owner_thread_ = std::this_thread::get_id();
+    } else if (owner_thread_ != std::this_thread::get_id()) {
+        return false;
+    }
+    drive_active_ = true;
+    return true;
+}
+
+void AsyncIoContext::drive_exit_() noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    drive_active_ = false;
+}
+
+void AsyncIoContext::release_progress_owner_() noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    owner_claimed_ = false;
+    owner_thread_ = std::thread::id{};
+}
+
+void AsyncIoContext::fail_fast_if_progress_binding_live_() noexcept {
+    if (drive_active_ || owner_claimed_ || notification_interest_live_) {
+        detail::async_context_progress_binding_fail_fast();
+    }
+}
+
+Result<ProgressOwner> AsyncIoContext::claim_progress_owner() {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_ || owner_claimed_) {
+        return make_unexpected<ProgressOwner>(IoError{IoError::Code::invalid_state});
+    }
+    if (owner_thread_ == std::thread::id{}) {
+        owner_thread_ = std::this_thread::get_id();
+    } else if (owner_thread_ != std::this_thread::get_id()) {
+        return make_unexpected<ProgressOwner>(IoError{IoError::Code::invalid_state});
+    }
+    owner_claimed_ = true;
+    ProgressOwner owner;
+    owner.context_ = this;
+    return owner;
 }
 
 namespace detail {
@@ -342,22 +451,31 @@ Result<RequestHandleState> AsyncIoContext::request_state(const RequestHandle& h)
     return backend_->request_handle_state(h);
 }
 
-std::size_t AsyncIoContext::poll() {
-    return poll_progress().completed;
+Result<std::size_t> AsyncIoContext::poll() {
+    auto pass = poll_progress();
+    if (!pass.has_value()) {
+        return make_unexpected<std::size_t>(pass.error());
+    }
+    return pass.value().completed;
 }
 
-AsyncBackend::ProgressPass AsyncIoContext::poll_progress() {
-    std::lock_guard<std::mutex> lk(access_mtx_);
+AsyncBackend::ProgressPass AsyncIoContext::run_progress_pass_() {
     if (stats_)
         ++stats_->poll_calls;
-    AsyncBackend::ProgressPass pass;
-    if (!backend_)
-        return pass;
-    pass = backend_->poll_progress();
+    AsyncBackend::ProgressPass pass = backend_->poll_progress();
+    pass.health_failed = progress_->wait_health_failed();
     if (stats_)
         stats_->completed_ops += pass.completed;
     close_admission_on_progress_exhaustion_();
     return pass;
+}
+
+Result<AsyncIoContext::ProgressPass> AsyncIoContext::poll_progress() {
+    if (!drive_entry_admitted_()) {
+        return make_unexpected<ProgressPass>(IoError{IoError::Code::invalid_state});
+    }
+    DriveGuard guard(this);
+    return run_progress_pass_();
 }
 
 void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
@@ -370,16 +488,17 @@ bool AsyncIoContext::backend_has_immediate_physical_work_() noexcept {
     return backend_ && backend_->has_immediate_physical_work();
 }
 
-Result<std::size_t> AsyncIoContext::wait_one() {
+Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one() {
     return wait_one(std::chrono::nanoseconds::max());
 }
 
-Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) {
+Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
+    std::chrono::nanoseconds max_park) {
     if (backend_ == nullptr) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::invalid_state});
     }
     if (!backend_->signals_physical_progress()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::not_supported});
+        return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::not_supported});
     }
 
     {
@@ -388,7 +507,14 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             ++stats_->wait_calls;
     }
 
-    const detail::ProgressSource::Token invocation_start = progress_->consume_committed_wait();
+    if (!drive_entry_admitted_()) {
+        return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::invalid_state});
+    }
+    DriveGuard guard(this);
+
+    if (progress_->wait_health_failed()) {
+        return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
+    }
 
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
     const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
@@ -396,14 +522,22 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
     for (;;) {
         const detail::ProgressSource::Token token = progress_->snapshot();
 
-        const AsyncBackend::ProgressPass pass = poll_progress();
+        const AsyncBackend::ProgressPass pass = run_progress_pass_();
         if (pass.completed > 0) {
-            return Result<std::size_t>{pass.completed};
+            return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress, pass.completed};
+        }
+
+        // A control outcome is the observation: the generation reported here
+        // is what a later acknowledge_progress_control() retires. It follows
+        // the pass so reaped work still reports progress while control stays
+        // pending for the next wait.
+        if (progress_->observe_pending_control()) {
+            return ProgressWaitOutcome{ProgressWaitOutcome::Kind::control_interrupted, 0};
         }
 
         if (!pass.immediate_work_remains && !pass.accepted_work_remains &&
             !pass.dispatch_retry_remains) {
-            return Result<std::size_t>{0};
+            return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress, 0};
         }
 
         detail::ProgressSource::WakeReason reason;
@@ -424,11 +558,8 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             }
         }
 
-        detail::ProgressSource::Token observed = token;
-        observed.control = invocation_start.control;
-        observed.control_exhaustion = invocation_start.control_exhaustion;
         if (!timed_wait) {
-            reason = progress_->wait_if_unchanged(observed, std::chrono::nanoseconds::max(), probe,
+            reason = progress_->wait_if_unchanged(token, std::chrono::nanoseconds::max(), probe,
                                                   this);
         } else {
             auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -436,31 +567,48 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
             if (remaining < std::chrono::nanoseconds::zero()) {
                 remaining = std::chrono::nanoseconds::zero();
             }
-            reason = progress_->wait_if_unchanged(observed, remaining, probe, this);
-        }
-        if (reason == detail::ProgressSource::WakeReason::progress) {
-            continue;
+            reason = progress_->wait_if_unchanged(token, remaining, probe, this);
         }
 
-        // Interrupted: control, the caller deadline, or a retry-nap expiry.
-        const auto woke = std::chrono::steady_clock::now();
-        const bool nap_deadline = timed_wait && pass_deadline != park_deadline;
-        if (nap_deadline && woke + kDeadlineClassifySlack >= pass_deadline &&
-            (!bounded_park || woke + kDeadlineClassifySlack < park_deadline)) {
+        switch (reason) {
+        case detail::ProgressSource::WakeReason::progress:
             continue;
+        case detail::ProgressSource::WakeReason::interrupted:
+            // Unacknowledged control cannot shrink while this thread parks,
+            // so an interrupted wake is always a reportable control; the
+            // loop's next pass runs first and reports any completion.
+            continue;
+        case detail::ProgressSource::WakeReason::deadline:
+            // The dispatch-retry nap expiring is an internal scheduling event
+            // that only schedules another bounded pass; only the caller's own
+            // deadline produces deadline_expired.
+            if (timed_wait && pass_deadline != park_deadline) {
+                continue;
+            }
+            {
+                const AsyncBackend::ProgressPass final_pass = run_progress_pass_();
+                if (final_pass.completed > 0) {
+                    return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress,
+                                               final_pass.completed};
+                }
+                return ProgressWaitOutcome{ProgressWaitOutcome::Kind::deadline_expired, 0};
+            }
+        case detail::ProgressSource::WakeReason::failed:
+            return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
         }
-
-        const AsyncBackend::ProgressPass final_pass = poll_progress();
-        if (final_pass.completed > 0) {
-            return Result<std::size_t>{final_pass.completed};
-        }
-        return Result<std::size_t>{0};
     }
 }
 
 void AsyncIoContext::interrupt_progress_waiters() noexcept {
     if (progress_) {
         progress_->interrupt();
+    }
+}
+
+void AsyncIoContext::acknowledge_progress_control() {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (progress_ != nullptr) {
+        progress_->acknowledge_control();
     }
 }
 
@@ -510,6 +658,12 @@ void AsyncIoContext::set_control_exhaustion_for_test(std::uint64_t exhaustion) n
     }
 }
 
+void AsyncIoContext::set_wait_health_failed_for_test() noexcept {
+    if (progress_ != nullptr) {
+        progress_->set_wait_health_failed_for_test();
+    }
+}
+
 void AsyncIoContext::saturate_progress_notification_for_test() noexcept {
     if (progress_ != nullptr) {
         progress_->saturate_notification_for_test();
@@ -529,20 +683,29 @@ bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
     return has_split_wait_capability();
 }
 
-void AsyncIoContext::arm_progress_wait_commit() noexcept {
-    if (progress_) {
-        (void)progress_->arm_committed_wait();
+int AsyncIoContext::progress_notification_fd() noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (progress_ == nullptr) {
+        return -1;
     }
-}
-
-int AsyncIoContext::progress_notification_fd() const noexcept {
-    return progress_ ? progress_->notification_fd() : -1;
+    notification_interest_live_ = true;
+    return progress_->notification_fd();
 }
 
 void AsyncIoContext::acknowledge_progress_notification() noexcept {
-    if (progress_) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (progress_ != nullptr) {
         progress_->acknowledge_notification();
     }
+}
+
+int AsyncIoContext::detach_progress_host() noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!notification_interest_live_) {
+        return -1;
+    }
+    notification_interest_live_ = false;
+    return progress_->notification_fd();
 }
 
 void AsyncIoContext::cancel(Completion<std::size_t>& c) {
