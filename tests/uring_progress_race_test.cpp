@@ -1097,6 +1097,73 @@ bool f2_backend_poison_reaches_owner_health_verdict() {
     read.close_pipe();
     return ok;
 }
+
+template <class Gate> void wait_backend_gate_paused(Gate& gate) {
+    std::atomic<bool>& paused = gate.paused;
+    bool seen = paused.load(std::memory_order_acquire);
+    while (!seen) {
+        paused.wait(seen, std::memory_order_acquire);
+        seen = paused.load(std::memory_order_acquire);
+    }
+}
+
+template <class Gate> void resume_backend_gate(Gate& gate) noexcept {
+    gate.resume.store(true, std::memory_order_release);
+    gate.resume.notify_all();
+}
+
+// The delivery-record handoff under submit-concurrent-with-poll: the
+// submitting thread pauses between initializing the slot's delivery record
+// and binding it while the owner sweeps every slot repeatedly through the
+// backend pass. The paused window is exactly where an unsynchronized record
+// read/write would meet; after release the record must hand off whole —
+// nothing observed early, exactly one completion and one owed-event
+// delivery. Backend-level passes are the owner's sweep; the context entry
+// lock is held by the paused submitter, so a context-level drive would
+// serialize instead of racing.
+bool record_handoff_survives_submit_racing_owner_sweep() {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 1});
+    UringAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    HostInterest interest(ctx);
+
+    UringAsyncBackend::PreAcceptCommitPauseGate gate;
+    raw->set_pre_accept_commit_pause_gate(&gate);
+
+    Completion<std::size_t> zero;
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::atomic<bool> submit_ok{false};
+    std::thread submitter([&] {
+        submit_ok.store(
+            ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()),
+                                                sluice::FileAccess::read_only),
+                                   buffer.data(), 0, 0},
+                            zero)
+                .has_value(),
+            std::memory_order_release);
+    });
+    wait_backend_gate_paused(gate);
+
+    std::size_t completed_in_window = 0;
+    for (int i = 0; i < 64; ++i)
+        completed_in_window += raw->poll();
+    const bool window_clean = completed_in_window == 0 && !zero.ready();
+
+    raw->set_pre_accept_commit_pause_gate(nullptr);
+    resume_backend_gate(gate);
+
+    std::size_t delivered = 0;
+    for (int i = 0; i < 2000 && delivered == 0; ++i)
+        delivered += raw->poll();
+    submitter.join();
+    const std::size_t settle = raw->poll();
+
+    const bool result_ok = zero.ready() && zero.result().has_value() && zero.result().value() == 0;
+    const bool ok = window_clean && delivered == 1 && settle == 0 && result_ok &&
+                    submit_ok.load(std::memory_order_acquire);
+    zero.reset();
+    return ok;
+}
 }
 
 int main() {
@@ -1138,6 +1205,8 @@ int main() {
         {"f1_publication_pass_is_entry_bounded", f1_publication_pass_is_entry_bounded},
         {"f2_backend_poison_reaches_owner_health_verdict",
          f2_backend_poison_reaches_owner_health_verdict},
+        {"record_handoff_survives_submit_racing_owner_sweep",
+         record_handoff_survives_submit_racing_owner_sweep},
     };
 
     std::size_t passed = 0;

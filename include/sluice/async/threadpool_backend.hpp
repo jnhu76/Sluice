@@ -129,9 +129,11 @@ class ThreadPoolBackend : public AsyncBackend {
         std::uint64_t offset = 0;
     };
 
-    // Access to a delivery record is serialized by the owning context's
-    // access mutex: submit and the publication driver both enter through
-    // public context entry points, and workers never touch delivery records.
+    // Delivery records hand off under work_mtx_: submit initializes a slot
+    // and marks its owed event under the lock, the progress owner consumes
+    // under it, and publish_one's reads ride the publication_pending_ queue
+    // transitions already taken under it. Workers never touch delivery
+    // records, and completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
         void* completion = nullptr;
         void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;

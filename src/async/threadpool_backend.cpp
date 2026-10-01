@@ -240,13 +240,16 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
         PreparedBlockingOp{kind, op.file.fd, buffer_of(op), static_cast<std::size_t>(length),
                            offset};
 
-    DeliveryRecord& record = delivery_[h.slot.value];
-    record.completion = c;
-    record.publish = c != nullptr ? publish_thunk<Comp>()
-                                  : &ThreadPoolBackend::publish_request_ready;
-    record.kind = kind;
-    record.event_owed = false;
-    record.owed_key = {};
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        DeliveryRecord& record = delivery_[h.slot.value];
+        record.completion = c;
+        record.publish = c != nullptr ? publish_thunk<Comp>()
+                                      : &ThreadPoolBackend::publish_request_ready;
+        record.kind = kind;
+        record.event_owed = false;
+        record.owed_key = {};
+    }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -339,8 +342,11 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Sl
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
         detail::threadpool_core_handoff_fail_fast();
     }
-    record.event_owed = true;
-    record.owed_key = id;
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        record.event_owed = true;
+        record.owed_key = id;
+    }
     signal_ready_progress();
 }
 
@@ -351,6 +357,10 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
         threadpool_publication_invariant_fail_fast();
     }
     DeliveryRecord& record = delivery_[h.slot.value];
+    // kind is copied while publication_inflight still pins the slot: after
+    // complete_publication the slot may be reclaimed and re-initialized
+    // concurrently, so no record field may be read past that point.
+    const detail::OperationKind kind = record.kind;
     record.publish(record.completion, payload.outcome);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -359,7 +369,7 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
         threadpool_publication_invariant_fail_fast();
     }
-    deliver_event(payload.id, record.kind);
+    deliver_event(payload.id, kind);
 }
 
 void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
@@ -529,13 +539,19 @@ AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
         ++published;
     }
     for (std::uint32_t i = 0; i < capacity_; ++i) {
-        DeliveryRecord& record = delivery_[i];
-        if (!record.event_owed)
-            continue;
-        record.event_owed = false;
-        const detail::RequestKey owed = record.owed_key;
-        record.owed_key = {};
-        deliver_event(owed, record.kind);
+        detail::RequestKey owed{};
+        detail::OperationKind owed_kind = detail::OperationKind::read;
+        {
+            std::lock_guard<std::mutex> lk(work_mtx_);
+            DeliveryRecord& record = delivery_[i];
+            if (!record.event_owed)
+                continue;
+            record.event_owed = false;
+            owed = record.owed_key;
+            record.owed_key = {};
+            owed_kind = record.kind;
+        }
+        deliver_event(owed, owed_kind);
         if (core_->release_control(owed) != detail::ControlRelease::released) {
             detail::threadpool_core_handoff_fail_fast();
         }

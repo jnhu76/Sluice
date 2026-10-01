@@ -177,9 +177,11 @@ class UringAsyncBackend : public AsyncBackend {
         bool in_use = false;
     };
 
-    // Access to a delivery record is serialized by the owning context's
-    // access mutex: submit and the publication driver both enter through
-    // public context entry points, and CQE reaping holds the same access lock.
+    // Delivery records hand off under dispatch_mtx_: submit initializes a
+    // slot and marks its owed event under the lock, the progress owner
+    // consumes under it, and publish_one's reads ride the
+    // publication_pending_ queue transitions already taken under it.
+    // Completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
         void* completion = nullptr;
         void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;

@@ -97,6 +97,7 @@ inline std::size_t ThreadPoolBackend::publication_pending_size_for_test() const 
 }
 
 inline bool ThreadPoolBackend::event_owed_for_test(std::uint32_t slot) const noexcept {
+    std::lock_guard<std::mutex> lk(work_mtx_);
     return delivery_[slot].event_owed;
 }
 
