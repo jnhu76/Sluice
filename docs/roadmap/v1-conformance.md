@@ -1333,3 +1333,20 @@ the remaining P3 findings and suggestions:
 Re-validated at the correction head: gcc debug `--liburing=y` 56/56, clang ASan+UBSan
 focused 12/12, clang TSan concurrency 6/6, all 22 mutation binaries still killed;
 `scripts/check_cpp_comment_authority.py` and `git diff --check` clean.
+
+### C2-D #441 evidence re-anchor — staged-delivery cancel regression
+
+PR #440's release CI failed only `cancel_during_the_staged_delivery_window_completes_normally`
+at `b88ba040`, on the assertion "the canceling thread enters the scheduler window"; the
+semantic refusal assertion never failed. Issue #441 re-anchored that C1-era case; no
+production semantic changed.
+
+| Field | Content |
+|---|---|
+| Previous evidence mechanism | The C1-era host regression (C1-G row above) ordered cancel-before-drain with a delivery pause plus a canceler blocked behind the progress serialization while holding `Scheduler::global_mtx_`; the test probe waited until that lock was observed held. |
+| Why it expired | C2-D made progress ownership fixed (`poll_progress()` → owner admission → `DriveGuard` → `run_progress_pass_()`) and removed the whole-progress-pass `access_mtx_` serialization, so submit/cancel/query/observer paths stay concurrent (THREAD-01). A cancel inside an already-claimed delivery now completes immediately and is refused by the observer state machine (`delivering → delivery_in_progress`); the remaining `global_mtx_` hold is far too short for the probe to observe. The probe was an implementation lock-topology oracle, not the contract. |
+| New evidence mechanism | The delivery gate pins `ObserverPhase::delivering`, and the cancellation thread must complete while that gate is still pinned. The rewritten case proves: delivery pinned (`wait_registry_live_count == 1`, `slots_in_delivering_phase == 1`) → cancel completes before gate release (the 10 s deadline is a hang watchdog only, never the oracle) → refusal (`cancel_outcome == 0`) → wait record still live → observer still delivering → gate released → normal delivery, retirement and reclaim. This adds executable THREAD-01 concurrency evidence to the retained OBS-02 semantic obligation. |
+| Discrimination | `SLUICE_C1_MUTANT_CANCEL_DURING_DELIVERY_RETURNS` built into this host suite kills the case 5/5 (refusal plus both undisturbed-window assertions); a temporary local restoration of the old whole-pass `access_mtx_` serialization fails only the concurrent-completion assertion, 3/3, bounded at the watchdog with no hang; a temporary local `delivering → queued` perturbation on refusal fails the delivering-phase assertion deterministically. |
+| Evidence | gcc 15.2, Linux WSL2 kernel 6.18, `runtime_waiter_observer_test`, liburing off. Pre-fix at `b88ba040`: release 11/20 fail on this host (historical #441 record: 15/20), debug 1/60 fail, master `c0a3f04d` 0/20 — every observed failure was the removed lock probe; the refusal assertion never failed in any run. Post-fix: release 100/100 and debug 100/100 consecutive green. |
+| Authority contraction | Deleted `scheduler_global_lock_becomes_held()` and `Scheduler::AsyncTestAccess::try_lock_global_for_test`/`unlock_global_for_test`; repo-wide `rg` (including ignored build trees) reports zero occurrences. |
+| Non-change | No OBS semantic changed; no cancel semantic changed; no production lock was added; no RequestCore state-machine rule changed; the C1-G row above remains at its own baseline. Only the obsolete C1 lock-topology observation mechanism was retired and re-anchored to the C2-D authority boundary. |
