@@ -6,11 +6,6 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-#include "tax0_ablation_seams.hpp"
-#endif
-
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -190,11 +185,7 @@ template <class T> class Completion {
             detail::completion_authority_fail_fast();
         }
         storage_.set(std::move(res));
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        if (!detail::tax0_f02_skip_reap_seq())
-#endif
-            reap_seq_ = detail::next_reap_seq();
+        reap_seq_ = detail::next_reap_seq();
         state_.store(State::ready, std::memory_order::release);
     }
 
@@ -388,11 +379,7 @@ template <> class Completion<void> {
         } else {
             has_error_ = false;
         }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-        if (!detail::tax0_f02_skip_reap_seq())
-#endif
-            reap_seq_ = detail::next_reap_seq();
+        reap_seq_ = detail::next_reap_seq();
         state_.store(State::ready, std::memory_order::release);
     }
 

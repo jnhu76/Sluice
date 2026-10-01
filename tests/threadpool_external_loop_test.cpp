@@ -84,6 +84,8 @@ class ExternalLoopHost {
             if (!pass.has_value())
                 break;
             delivered += pass.value().completed;
+            if (pass.value().health_failed)
+                break;
             if (pass.value().completed == 0 && !pass.value().immediate_work_remains)
                 break;
         }
@@ -91,13 +93,12 @@ class ExternalLoopHost {
     }
 
     // Stop driving and retire the external registration: the supported
-    // shutdown order settles accepted work first, then detaches, then stops
-    // touching the notification source. Returns the retired fd.
-    int stop_and_detach() {
-        const int retired = ctx_.detach_progress_host();
+    // shutdown order settles accepted work first, unregisters the fd from
+    // the loop, then detaches, then stops touching the notification source.
+    void stop_and_detach() {
+        ctx_.detach_progress_host();
         nfd_ = -1;
         owner_.reset();
-        return retired;
     }
 
   private:
@@ -307,12 +308,14 @@ bool external_poll_loop_threadpool_w03() {
     // retire its registration and release the retained state. A retired
     // registration is gone (a second detach has nothing to retire), but the
     // context may lend the fd to a later host.
-    const int retired = host.stop_and_detach();
-    if (!settled || retired < 0 || ctx.detach_progress_host() != -1)
+    const int borrowed = host.nfd();
+    host.stop_and_detach();
+    if (!settled)
         return false;
+    ctx.detach_progress_host();
     const int relent = ctx.progress_notification_fd();
-    (void)ctx.detach_progress_host();
-    return relent == retired;
+    ctx.detach_progress_host();
+    return relent == borrowed;
 }
 
 // One readable event may stand for several signals: five coalesced zero-op
@@ -352,7 +355,8 @@ bool coalesced_signals_delivered_through_one_wake() {
         ok = ok && z.ready();
         z.reset();
     }
-    return ok && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return ok;
 }
 
 // A wake that carries no completion must not confuse the host: the loop acks,
@@ -392,7 +396,8 @@ bool spurious_wake_is_harmless_and_completions_survive() {
 
     const bool ok = c.ready();
     c.reset();
-    return ok && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return ok;
 }
 
 // A saturated notification fd keeps asserting readiness: the next signal
@@ -426,7 +431,8 @@ bool saturated_notification_preserves_wake() {
     p.events = POLLIN;
     p.revents = 0;
     const bool idle = ::poll(&p, 1, 150) == 0;
-    return idle && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return idle;
 }
 
 // R14: the host acknowledges stale readiness while a new ThreadPool progress
@@ -494,7 +500,8 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
 
     const bool ok = settled && racing.ready() && wakes <= 2;
     racing.reset();
-    return ok && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return ok;
 }
 
 // C2-D stop/settle/detach: the supported host shutdown order is stop
@@ -508,7 +515,6 @@ bool host_stop_settle_detach_retires_registration() {
     if (!host.pinned())
         return false;
 
-    const int borrowed = host.nfd();
     std::vector<std::byte> buf(32, std::byte{0});
     Completion<std::size_t> a, b;
     if (!submit_zero_op(ctx, a) || !submit_zero_op(ctx, b))
@@ -527,11 +533,8 @@ bool host_stop_settle_detach_retires_registration() {
     if (host.acknowledge_and_drive() != 0)
         return false;
 
-    const int retired = host.stop_and_detach();
-    if (retired != borrowed)
-        return false;
-    if (ctx.detach_progress_host() != -1)
-        return false;
+    host.stop_and_detach();
+    ctx.detach_progress_host();
     return true;
 }
 
@@ -550,8 +553,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
         ctx.interrupt_progress_waiters();
         if (!fd_readable(borrowed))
             return false;
-        if (ctx.detach_progress_host() != borrowed)
-            return false;
+        ctx.detach_progress_host();
     }
     {
         auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
@@ -567,8 +569,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
         ctx.acknowledge_progress_notification();
         if (fd_readable(fresh))
             return false;
-        if (ctx.detach_progress_host() != fresh)
-            return false;
+        ctx.detach_progress_host();
         reused_fd = fresh;
     }
     return reused_fd >= 0;

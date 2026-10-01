@@ -86,10 +86,6 @@ inline std::size_t ThreadPoolBackend::dispatch_size_for_test() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return dispatch_.size();
 }
-inline std::size_t ThreadPoolBackend::dispatch_high_water_for_test() const {
-    std::lock_guard<std::mutex> lk(work_mtx_);
-    return dispatch_.high_water();
-}
 
 inline std::uint64_t ThreadPoolBackend::syscall_count_for_test() const noexcept {
     return syscall_count_.load();
@@ -101,6 +97,7 @@ inline std::size_t ThreadPoolBackend::publication_pending_size_for_test() const 
 }
 
 inline bool ThreadPoolBackend::event_owed_for_test(std::uint32_t slot) const noexcept {
+    std::lock_guard<std::mutex> lk(work_mtx_);
     return delivery_[slot].event_owed;
 }
 

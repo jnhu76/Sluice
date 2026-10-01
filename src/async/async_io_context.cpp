@@ -180,11 +180,6 @@ Result<ProgressOwner> AsyncIoContext::claim_progress_owner() {
     return owner;
 }
 
-namespace detail {
-bool tax0_f01_gate_outstanding_eval() noexcept;
-}
-using detail::tax0_f01_gate_outstanding_eval;
-
 namespace {
 
 template <class T>
@@ -205,21 +200,6 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
         s->max_outstanding = cur;
 }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
-    if (tax0_f01_gate_outstanding_eval() && s == nullptr)
-        return;
-    update_max_outstanding(s, b.outstanding());
-}
-#else
-
-void tax0_f01_update_max_outstanding(AsyncStats* s, AsyncBackend& b) {
-    if (s == nullptr)
-        return;
-    update_max_outstanding(s, b.outstanding());
-}
-#endif
 }
 
 Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
@@ -230,7 +210,7 @@ Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) 
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_read(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<void>(r.error());
     return {};
@@ -243,7 +223,7 @@ Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_write(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<void>(r.error());
     return {};
@@ -256,7 +236,7 @@ Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_data(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<void>(r.error());
     return {};
@@ -269,7 +249,7 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
     std::lock_guard<std::mutex> lk(access_mtx_);
     auto r = backend_->submit_sync_all(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<void>(r.error());
     return {};
@@ -285,7 +265,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_read(op, nullptr);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<std::size_t>>(r.error());
     return Request<std::size_t>{core_.get(), backend_.get(), r.value()};
@@ -301,7 +281,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_write(op, nullptr);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<std::size_t>>(r.error());
     return Request<std::size_t>{core_.get(), backend_.get(), r.value()};
@@ -317,7 +297,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
         return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_sync_data(op, nullptr);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<void>>(r.error());
     return Request<void>{core_.get(), backend_.get(), r.value()};
@@ -333,7 +313,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
         return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_sync_all(op, nullptr);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<void>>(r.error());
     return Request<void>{core_.get(), backend_.get(), r.value()};
@@ -349,7 +329,7 @@ Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_read(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
@@ -364,7 +344,7 @@ Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completio
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_write(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
@@ -379,7 +359,7 @@ Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Co
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_data(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
@@ -394,7 +374,7 @@ Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Comp
         return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
     auto r = backend_->submit_sync_all(op, &c);
     tally_submit(stats_, r);
-    tax0_f01_update_max_outstanding(stats_, *backend_);
+    update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<RequestHandle>(r.error());
     return backend_->identity_of(c);
@@ -463,7 +443,8 @@ AsyncBackend::ProgressPass AsyncIoContext::run_progress_pass_() {
     if (stats_)
         ++stats_->poll_calls;
     AsyncBackend::ProgressPass pass = backend_->poll_progress();
-    pass.health_failed = progress_->wait_health_failed();
+    pass.health_failed = pass.health_failed || core_->health_failed() ||
+                         progress_->wait_health_failed();
     if (stats_)
         stats_->completed_ops += pass.completed;
     close_admission_on_progress_exhaustion_();
@@ -512,10 +493,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     }
     DriveGuard guard(this);
 
-    if (progress_->wait_health_failed()) {
-        return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
-    }
-
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
     const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
                                             : std::chrono::steady_clock::time_point{};
@@ -525,6 +502,13 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
         const AsyncBackend::ProgressPass pass = run_progress_pass_();
         if (pass.completed > 0) {
             return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress, pass.completed};
+        }
+
+        // Sticky health reports only after a pass: the health verdict must
+        // not prevent the pass from publishing and retiring work that is
+        // already safely actionable.
+        if (pass.health_failed) {
+            return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
         }
 
         // A control outcome is the observation: the generation reported here
@@ -590,6 +574,9 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
                 if (final_pass.completed > 0) {
                     return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress,
                                                final_pass.completed};
+                }
+                if (final_pass.health_failed) {
+                    return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
                 }
                 return ProgressWaitOutcome{ProgressWaitOutcome::Kind::deadline_expired, 0};
             }
@@ -699,13 +686,9 @@ void AsyncIoContext::acknowledge_progress_notification() noexcept {
     }
 }
 
-int AsyncIoContext::detach_progress_host() noexcept {
+void AsyncIoContext::detach_progress_host() noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!notification_interest_live_) {
-        return -1;
-    }
     notification_interest_live_ = false;
-    return progress_->notification_fd();
 }
 
 void AsyncIoContext::cancel(Completion<std::size_t>& c) {

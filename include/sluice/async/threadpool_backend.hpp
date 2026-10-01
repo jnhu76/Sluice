@@ -70,11 +70,9 @@ class ThreadPoolBackend : public AsyncBackend {
     void close_admission();
 
     std::size_t slot_capacity() const noexcept override { return capacity_; }
-    std::size_t configured_worker_count() const noexcept { return workers_.size(); }
 
     std::size_t dispatch_occupancy() const;
 
-    std::size_t dispatch_high_water_mark() const;
 
     std::size_t active_workers() const;
 
@@ -83,7 +81,6 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t workers_spawned_for_test() const noexcept;
     std::size_t active_workers_for_test() const;
     std::size_t dispatch_size_for_test() const;
-    std::size_t dispatch_high_water_for_test() const;
     std::uint64_t syscall_count_for_test() const noexcept;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<std::size_t>& c) const;
     std::optional<detail::RequestKey> request_key_for_test(const Completion<void>& c) const;
@@ -132,9 +129,11 @@ class ThreadPoolBackend : public AsyncBackend {
         std::uint64_t offset = 0;
     };
 
-    // Access to a delivery record is serialized by the owning context's
-    // access mutex: submit and the publication driver both enter through
-    // public context entry points, and workers never touch delivery records.
+    // Delivery records hand off under work_mtx_: submit initializes a slot
+    // and marks its owed event under the lock, the progress owner consumes
+    // under it, and publish_one's reads ride the publication_pending_ queue
+    // transitions already taken under it. Workers never touch delivery
+    // records, and completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
         void* completion = nullptr;
         void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;
@@ -151,8 +150,6 @@ class ThreadPoolBackend : public AsyncBackend {
             : storage_(capacity), capacity_(capacity) {}
         bool empty() const noexcept { return size_ == 0; }
         std::size_t size() const noexcept { return size_; }
-        std::size_t capacity() const noexcept { return capacity_; }
-        std::size_t high_water() const noexcept { return high_water_; }
 
         void push_back(detail::SlotHandle h) noexcept;
 
@@ -164,7 +161,6 @@ class ThreadPoolBackend : public AsyncBackend {
         std::vector<detail::SlotHandle> storage_;
         std::size_t head_ = 0;
         std::size_t size_ = 0;
-        std::size_t high_water_ = 0;
         std::size_t capacity_;
     };
 

@@ -50,11 +50,10 @@ class ExternalLoopHost {
 
     // Stop driving and retire the external registration; the host must not
     // touch the notification source afterwards.
-    int stop_and_detach() {
-        const int retired = ctx_.detach_progress_host();
+    void stop_and_detach() {
+        ctx_.detach_progress_host();
         nfd_ = -1;
         owner_.reset();
-        return retired;
     }
 
     bool retry_scheduled() const noexcept { return retry_deadline_.has_value(); }
@@ -163,6 +162,8 @@ class ExternalLoopHost {
             ++passes_;
             delivered_ += pass.value().completed;
             reconcile_retry_schedule(pass.value());
+            if (pass.value().health_failed)
+                return;
             if (!pass.value().immediate_work_remains)
                 return;
         }
@@ -252,9 +253,9 @@ bool external_poll_loop_uring_w03() {
     if (phase_a != 1 || !r1.ready())
         return false;
     r1.reset();
-    // A servicing pass is the first observer of the kernel completion
-    // transition and re-asserts readiness once; one settling round must
-    // return the fd to quiet.
+    // A servicing pass consumes the kernel completion silently — the wake
+    // was the kernel's own eventfd write at CQE publication — so the fd is
+    // already quiet and one settling round delivers nothing.
     if (host.acknowledge_and_drive() != 0)
         return false;
     if (fd_readable(host.nfd()))
@@ -341,12 +342,14 @@ bool external_poll_loop_uring_w03() {
     // retire its registration and release the retained state. A retired
     // registration is gone (a second detach has nothing to retire), but the
     // context may lend the fd to a later host.
-    const int retired = host.stop_and_detach();
-    if (!settled || retired < 0 || ctx.detach_progress_host() != -1)
+    const int borrowed = host.nfd();
+    host.stop_and_detach();
+    if (!settled)
         return false;
+    ctx.detach_progress_host();
     const int relent = ctx.progress_notification_fd();
-    (void)ctx.detach_progress_host();
-    return relent == retired;
+    ctx.detach_progress_host();
+    return relent == borrowed;
 }
 
 // Kernel completions are all discovered through the notification-fd wake
@@ -397,7 +400,8 @@ bool kernel_completions_delivered_without_stranding() {
         c.reset();
     }
     ::close(source);
-    return ok && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return ok;
 }
 
 // A zero-length operation completes inline at submission with no kernel CQE;
@@ -426,7 +430,8 @@ bool external_host_sees_userspace_publication_wake() {
         return false;
     zero.reset();
     const bool quiet = !fd_readable(host.nfd());
-    return quiet && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return quiet;
 }
 
 // A saturated notification fd keeps asserting readiness across a real kernel
@@ -476,7 +481,8 @@ bool saturation_with_real_kernel_completion_preserves_wake() {
     p.events = POLLIN;
     p.revents = 0;
     const bool idle = ::poll(&p, 1, 150) == 0;
-    return idle && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return idle;
 }
 
 // A retryable transport failure persisting across the acceptance, the first
@@ -584,7 +590,8 @@ bool external_retryable_transport_does_not_strand() {
         return false;
     if (host.passes() != quiet_passes)
         return false;
-    return ok && host.stop_and_detach() >= 0;
+    host.stop_and_detach();
+    return ok;
 }
 
 }

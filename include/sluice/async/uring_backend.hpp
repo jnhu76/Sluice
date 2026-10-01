@@ -177,9 +177,11 @@ class UringAsyncBackend : public AsyncBackend {
         bool in_use = false;
     };
 
-    // Access to a delivery record is serialized by the owning context's
-    // access mutex: submit and the publication driver both enter through
-    // public context entry points, and CQE reaping holds the same access lock.
+    // Delivery records hand off under dispatch_mtx_: submit initializes a
+    // slot and marks its owed event under the lock, the progress owner
+    // consumes under it, and publish_one's reads ride the
+    // publication_pending_ queue transitions already taken under it.
+    // Completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
         void* completion = nullptr;
         void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;
@@ -248,7 +250,7 @@ class UringAsyncBackend : public AsyncBackend {
 
     void poison_and_recover_locked(IoError error) noexcept;
 
-    std::size_t reap_cqes() noexcept;
+    void reap_cqes() noexcept;
 
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 
@@ -302,12 +304,6 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<std::uint64_t> submit_flushes_{0};
     std::atomic<std::size_t> live_cookies_{0};
     std::atomic<std::size_t> live_control_sqes_{0};
-
-    // Mirrors the outcome of the last CQ-overflow flush attempt so the
-    // lock-free physical probe never claims serviceable overflow work that
-    // the flush just failed to service. Authoritative state stays fatal_error_
-    // under dispatch_mtx_.
-    std::atomic<bool> overflow_flush_serviceable_{true};
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

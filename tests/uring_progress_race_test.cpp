@@ -652,10 +652,10 @@ int poison_submit_hook(void* context, ::io_uring* ring) noexcept {
 }
 }
 
-// H-interval (multi-driver): a peer pass can reap the CQE before the paused
-// owner's physical probe, consuming both the kernel notification and the CQ
-// state the probe reads. The peer's publication_pending_ transition signal is
-// the only remaining wake; the owner must return through it, never by
+// H-interval (multi-driver): a peer pass attempted while the owner holds the
+// drive domain is rejected, not serialized. The peer consumed nothing — the
+// kernel notification and the CQ state survive — so the paused owner's own
+// physical probe discovers the completion once it resumes, never by
 // stranding to the deadline.
 bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     auto backend = std::make_unique<UringAsyncBackend>();
@@ -876,10 +876,11 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
 
 // M-C8 oracle: a failing CQ-overflow flush must become an observable health
 // event, not a silently discarded no-op. The ring-visible CQE still completes
-// the first wait; the poison must then retire the serviceable-overflow claim
-// so waits stuck behind the unflushable overflow park instead of spinning,
-// new submissions must observe the backend health failure, and the reap path
-// must stay live so the real flush retires every read once the failure clears.
+// the first wait; the poison then makes every later pass report health so
+// waits behind the unflushable overflow return the health verdict instead of
+// parking or spinning, new submissions must observe the backend health
+// failure, and the reap path must stay live so the real flush retires every
+// read once the failure clears.
 struct FlushFailureState {
     std::atomic<bool> fail{false};
     std::atomic<int> calls{0};
@@ -972,6 +973,197 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     }
     return first_wait_ok && health_visible && all_retired;
 }
+
+// F1 oracle: one pass publishes at most the publication work pending at its
+// entry. Work a concurrent producer posts while the pass is mid-publication
+// (here a won-before-execution cancel of an undispatched entry, held
+// undispatched by a retryable submit failure saturating the SQ) stays for the
+// next pass and is reported as remaining immediate work.
+bool f1_publication_pass_is_entry_bounded() {
+    EagainSubmitState state;
+    state.fail.store(true, std::memory_order_release);
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &state;
+    hooks.submit = &eagain_submit_hook;
+    auto raw_backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 1}, hooks);
+    auto* backend_ptr = raw_backend.get();
+    AsyncIoContext ctx(std::move(raw_backend));
+    HostInterest interest(ctx);
+
+    BlockedPipeRead a;
+    BlockedPipeRead b;
+    BlockedPipeRead c;
+    if (!a.arm(ctx, 4) || !b.arm(ctx, 4) || !c.arm(ctx, 4))
+        return false;
+
+    {
+        auto claim = ctx.claim_progress_owner();
+        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+            return false;
+    }
+    ctx.cancel(c.completion);
+
+    UringAsyncBackend::PublicationEpiloguePauseGate epilogue;
+    backend_ptr->set_publication_epilogue_pause_gate(&epilogue);
+
+    std::optional<AsyncBackend::ProgressPass> first;
+    std::thread driver([&] {
+        DriverClaim claim{ctx};
+        const auto r = ctx.poll_progress();
+        if (r.has_value())
+            first = r.value();
+    });
+    while (!epilogue.paused.load(std::memory_order_acquire))
+        std::this_thread::yield();
+
+    const bool c_published_at_pause = c.completion.ready();
+    ctx.cancel(b.completion);
+
+    epilogue.resume.store(true, std::memory_order_release);
+    epilogue.resume.notify_all();
+    driver.join();
+    backend_ptr->set_publication_epilogue_pause_gate(nullptr);
+
+    const bool first_ok = c_published_at_pause && first.has_value() &&
+                          first.value().completed == 1 &&
+                          first->immediate_work_remains && !first->health_failed;
+    if (!first_ok)
+        return false;
+    c.completion.reset();
+    c.close_pipe();
+
+    const auto second = ctx.poll_progress();
+    const bool second_ok = second.has_value() && second.value().completed == 1 &&
+                           b.completion.ready() && !second.value().immediate_work_remains;
+
+    state.fail.store(false, std::memory_order_release);
+    a.release_bytes(1);
+    bool a_retired = false;
+    for (int i = 0; i < 20000 && !a_retired; ++i) {
+        const auto pass = ctx.poll_progress();
+        a_retired = pass.has_value() && a.completion.ready();
+        if (!a_retired)
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+
+    b.completion.reset();
+    b.close_pipe();
+    a.completion.reset();
+    a.close_pipe();
+    return second_ok && a_retired;
+}
+
+// F2 oracle: a backend transport poison is a sticky progress-machinery health
+// fact. The poisoned backend's retirement pass still reports the completions
+// it publishes (progress outranks health), the pass report exposes the health
+// verdict, and the next wait returns health_failure promptly instead of
+// parking behind work that will never complete.
+bool f2_backend_poison_reaches_owner_health_verdict() {
+    PoisonSubmitState state;
+    state.fail_next.store(true, std::memory_order_release);
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &state;
+    hooks.submit = &poison_submit_hook;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4}, hooks);
+    AsyncIoContext ctx(std::move(backend));
+    HostInterest interest(ctx);
+
+    BlockedPipeRead read;
+    if (!read.arm(ctx, 4))
+        return false;
+
+    TimedWait first;
+    std::thread owner([&] { DriverClaim claim{ctx}; first = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    owner.join();
+
+    bool pass_ok = false;
+    std::thread passer([&] {
+        DriverClaim claim{ctx};
+        const auto pass = ctx.poll_progress();
+        pass_ok = pass.has_value() && pass.value().health_failed &&
+                  !pass.value().accepted_work_remains && !pass.value().immediate_work_remains;
+    });
+    passer.join();
+
+    TimedWait second;
+    std::thread owner2([&] { DriverClaim claim{ctx}; second = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    owner2.join();
+
+    const bool ok = is_progress(first.value, 1) && first.elapsed_ms < 1000 &&
+                    read.completion.ready() && pass_ok &&
+                    second.value.has_value() &&
+                    second.value->kind == WaitKind::health_failure && second.elapsed_ms < 1000;
+    read.completion.reset();
+    read.close_pipe();
+    return ok;
+}
+
+template <class Gate> void wait_backend_gate_paused(Gate& gate) {
+    std::atomic<bool>& paused = gate.paused;
+    bool seen = paused.load(std::memory_order_acquire);
+    while (!seen) {
+        paused.wait(seen, std::memory_order_acquire);
+        seen = paused.load(std::memory_order_acquire);
+    }
+}
+
+template <class Gate> void resume_backend_gate(Gate& gate) noexcept {
+    gate.resume.store(true, std::memory_order_release);
+    gate.resume.notify_all();
+}
+
+// The delivery-record handoff under submit-concurrent-with-poll: the
+// submitting thread pauses between initializing the slot's delivery record
+// and binding it while the owner sweeps every slot repeatedly through the
+// backend pass. The paused window is exactly where an unsynchronized record
+// read/write would meet; after release the record must hand off whole —
+// nothing observed early, exactly one completion and one owed-event
+// delivery. Backend-level passes are the owner's sweep; the context entry
+// lock is held by the paused submitter, so a context-level drive would
+// serialize instead of racing.
+bool record_handoff_survives_submit_racing_owner_sweep() {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 1});
+    UringAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    HostInterest interest(ctx);
+
+    UringAsyncBackend::PreAcceptCommitPauseGate gate;
+    raw->set_pre_accept_commit_pause_gate(&gate);
+
+    Completion<std::size_t> zero;
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::atomic<bool> submit_ok{false};
+    std::thread submitter([&] {
+        submit_ok.store(
+            ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()),
+                                                sluice::FileAccess::read_only),
+                                   buffer.data(), 0, 0},
+                            zero)
+                .has_value(),
+            std::memory_order_release);
+    });
+    wait_backend_gate_paused(gate);
+
+    std::size_t completed_in_window = 0;
+    for (int i = 0; i < 64; ++i)
+        completed_in_window += raw->poll();
+    const bool window_clean = completed_in_window == 0 && !zero.ready();
+
+    raw->set_pre_accept_commit_pause_gate(nullptr);
+    resume_backend_gate(gate);
+
+    std::size_t delivered = 0;
+    for (int i = 0; i < 2000 && delivered == 0; ++i)
+        delivered += raw->poll();
+    submitter.join();
+    const std::size_t settle = raw->poll();
+
+    const bool result_ok = zero.ready() && zero.result().has_value() && zero.result().value() == 0;
+    const bool ok = window_clean && delivered == 1 && settle == 0 && result_ok &&
+                    submit_ok.load(std::memory_order_acquire);
+    zero.reset();
+    return ok;
+}
 }
 
 int main() {
@@ -1010,6 +1202,11 @@ int main() {
         {"u2b_accepted_dispatch_wakes_parked_owner", u2b_accepted_dispatch_wakes_parked_owner},
         {"overflow_flush_failure_becomes_observable_health_event",
          overflow_flush_failure_becomes_observable_health_event},
+        {"f1_publication_pass_is_entry_bounded", f1_publication_pass_is_entry_bounded},
+        {"f2_backend_poison_reaches_owner_health_verdict",
+         f2_backend_poison_reaches_owner_health_verdict},
+        {"record_handoff_survives_submit_racing_owner_sweep",
+         record_handoff_survives_submit_racing_owner_sweep},
     };
 
     std::size_t passed = 0;

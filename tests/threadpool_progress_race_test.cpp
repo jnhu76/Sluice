@@ -916,6 +916,126 @@ bool coalesced_prearmed_signals_are_all_discoverable_in_one_pass() {
     return all_ready && !notification_fd_readable(ctx.progress_notification_fd());
 }
 
+// F1 oracle: one poll_progress invocation publishes at most the publication
+// work pending at its entry. Work a concurrent producer posts while the pass
+// is mid-publication (here the held worker completing a gated request,
+// observed through the progress token) stays for the next pass and is
+// reported as remaining immediate work.
+bool f1_publication_pass_is_entry_bounded() {
+    ThreadPoolBackend* raw = nullptr;
+    auto ctx = make_pool_context(8, 1, &raw);
+    HostInterest interest(ctx);
+
+    Completion<std::size_t> a;
+    std::vector<std::byte> a_buf(32, std::byte{0});
+    const int a_fd = temp_file_fd(std::string(64, 'x'));
+    if (a_fd < 0)
+        return false;
+    if (!ctx.submit_read(ReadOp{NativeFileRef(a_fd, sluice::FileAccess::read_only),
+                                 a_buf.data(), a_buf.size(), 0},
+                         a)
+             .has_value())
+        return false;
+    if (!wait_notification_readable(ctx))
+        return false;
+
+    GatedWorkerRead gated;
+    if (!gated.arm(ctx, raw))
+        return false;
+
+    ThreadPoolBackend::PublicationEpiloguePauseGate epilogue;
+    raw->set_publication_epilogue_pause_gate(&epilogue);
+
+    std::optional<AsyncBackend::ProgressPass> first;
+    std::thread driver([&] {
+        DriverClaim claim{ctx};
+        const auto r = ctx.poll_progress();
+        if (r.has_value())
+            first = r.value();
+    });
+    wait_threadpool_gate_paused(epilogue);
+    const bool a_published_at_pause = a.ready();
+
+    const auto token_before_release = ctx.progress_token_for_test();
+    gated.release();
+    while (ctx.progress_token_for_test().progress == token_before_release.progress)
+        std::this_thread::yield();
+
+    resume_threadpool_gate(epilogue);
+    driver.join();
+    raw->set_publication_epilogue_pause_gate(nullptr);
+
+    const bool first_ok = a_published_at_pause && first.has_value() &&
+                          first->completed == 1 && first->immediate_work_remains &&
+                          !first->health_failed;
+    if (!first_ok)
+        return false;
+    a.reset();
+    ::close(a_fd);
+
+    const auto second = ctx.poll_progress();
+    const bool second_ok = second.has_value() && second.value().completed == 1 &&
+                           gated.completion.ready() &&
+                           !second.value().immediate_work_remains &&
+                           !second.value().accepted_work_remains &&
+                           !second.value().health_failed;
+
+    gated.completion.reset();
+    return second_ok;
+}
+
+// The delivery-record handoff under submit-concurrent-with-poll: the
+// submitting thread pauses between initializing the slot's delivery record
+// and binding it while the owner sweeps every slot repeatedly through the
+// backend pass. The paused window is exactly where an unsynchronized record
+// read/write would meet; after release the record must hand off whole —
+// nothing observed early, exactly one completion and one owed-event
+// delivery. Backend-level passes are the owner's sweep; the context entry
+// lock is held by the paused submitter, so a context-level drive would
+// serialize instead of racing.
+bool record_handoff_survives_submit_racing_owner_sweep() {
+    ThreadPoolBackend* raw = nullptr;
+    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    HostInterest interest(ctx);
+
+    ThreadPoolBackend::PreAcceptCommitPauseGate gate;
+    raw->set_pre_accept_commit_pause_gate(&gate);
+
+    Completion<std::size_t> zero;
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::atomic<bool> submit_ok{false};
+    std::thread submitter([&] {
+        submit_ok.store(
+            ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()),
+                                                sluice::FileAccess::read_only),
+                                   buffer.data(), 0, 0},
+                            zero)
+                .has_value(),
+            std::memory_order_release);
+    });
+    wait_threadpool_gate_paused(gate);
+
+    std::size_t completed_in_window = 0;
+    for (int i = 0; i < 64; ++i)
+        completed_in_window += raw->poll();
+    const bool window_clean = completed_in_window == 0 && !zero.ready();
+
+    raw->set_pre_accept_commit_pause_gate(nullptr);
+    resume_threadpool_gate(gate);
+
+    std::size_t delivered = 0;
+    for (int i = 0; i < 2000 && delivered == 0; ++i)
+        delivered += raw->poll();
+    submitter.join();
+    const std::size_t settle = raw->poll();
+
+    const bool result_ok = zero.ready() && zero.result().has_value() && zero.result().value() == 0;
+    const bool ok = window_clean && delivered == 1 && settle == 0 && result_ok &&
+                    submit_ok.load(std::memory_order_acquire);
+    zero.reset();
+    return ok;
+}
+
 }
 
 int main() {
@@ -962,6 +1082,9 @@ int main() {
          saturated_notification_still_wakes_parked_owner},
         {"coalesced_prearmed_signals_are_all_discoverable_in_one_pass",
          coalesced_prearmed_signals_are_all_discoverable_in_one_pass},
+        {"f1_publication_pass_is_entry_bounded", f1_publication_pass_is_entry_bounded},
+        {"record_handoff_survives_submit_racing_owner_sweep",
+         record_handoff_survives_submit_racing_owner_sweep},
     };
 
     std::size_t passed = 0;
