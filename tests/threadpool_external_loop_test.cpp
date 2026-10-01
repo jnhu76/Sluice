@@ -1,4 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/batch.hpp>
 #include <sluice/async/completion.hpp>
 #include <sluice/async/op_helpers.hpp>
 #include <sluice/async/threadpool_backend.hpp>
@@ -843,6 +844,64 @@ bool injected_health_failure_is_sticky_and_distinguishable() {
     return true;
 }
 
+// A batch wait stops on the sticky health verdict instead of spinning past
+// it: the failure surfaces through the error channel, never as a
+// zero-completion report, and the internally claimed owner is released so
+// the caller's own passes can retire the accepted work.
+bool batch_await_stops_on_health_failure() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+
+    const int fd = temp_file_fd(std::string(64, 'h'));
+    std::vector<std::byte> held_buf(32, std::byte{0});
+    std::vector<std::byte> batch_buf(32, std::byte{0});
+    Completion<std::size_t> held;
+    if (!ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only), held_buf.data(),
+                                held_buf.size(), 0},
+                         held)
+             .has_value())
+        return false;
+    while (!gate.paused.load(std::memory_order_acquire))
+        std::this_thread::yield();
+
+    Batch batch;
+    BatchOp op;
+    op.kind = BatchOp::Kind::read;
+    op.read = ReadOp{NativeFileRef(fd, FileAccess::read_only), batch_buf.data(), batch_buf.size(),
+                     32};
+    batch.add(op);
+
+    ctx.set_wait_health_failed_for_test();
+    const auto stopped = batch.await_one(ctx);
+    const bool surfaced_as_error =
+        !stopped.has_value() && stopped.error().code == sluice::IoError::Code::backend_error;
+
+    raw->set_worker_claimed_pause_gate(nullptr);
+    gate.resume.store(true, std::memory_order_release);
+    gate.resume.notify_all();
+
+    bool retired = false;
+    for (int i = 0; i < 2000 && !retired; ++i) {
+        (void)ctx.poll();
+        retired = held.ready() && ctx.outstanding() == 0;
+        if (!retired)
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    // Harvesting slot readiness is the batch protocol's own step: a call with
+    // nothing outstanding claims nothing and only collects completed slots.
+    const auto harvested = batch.await_one(ctx);
+    while (batch.next().has_value()) {
+    }
+
+    held.reset();
+    return surfaced_as_error && retired && harvested.has_value() && harvested.value() == 1 &&
+           batch.pending_count() == 0;
+}
+
 // Driving on an unpinned context is a single domain: a second concurrent
 // drive is rejected instead of serialized into accidental success.
 bool competing_concurrent_drives_cannot_both_succeed() {
@@ -1038,6 +1097,7 @@ int main() {
          acknowledging_observed_control_keeps_a_later_control},
         {"injected_health_failure_is_sticky_and_distinguishable",
          injected_health_failure_is_sticky_and_distinguishable},
+        {"batch_await_stops_on_health_failure", batch_await_stops_on_health_failure},
         {"competing_concurrent_drives_cannot_both_succeed",
          competing_concurrent_drives_cannot_both_succeed},
         {"nested_drive_from_delivery_hook_is_rejected",

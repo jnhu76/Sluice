@@ -71,6 +71,12 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
             break;
         }
         using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+        if (wr.value().kind == WaitKind::health_failure) {
+            // The sticky health verdict ends the wait through the error
+            // channel, never as a zero-completion report.
+            wait_err = IoError{IoError::Code::backend_error};
+            break;
+        }
         if (wr.value().kind == WaitKind::control_interrupted) {
             // This driver observed the sticky control; retiring it lets the
             // next wait park instead of reporting the same control forever.

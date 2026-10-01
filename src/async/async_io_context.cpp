@@ -598,7 +598,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
         case detail::ProgressSource::WakeReason::failed:
             return ProgressWaitOutcome{ProgressWaitOutcome::Kind::health_failure, 0};
         }
-        return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::invalid_state});
     }
 }
 
@@ -704,7 +703,7 @@ void AsyncIoContext::acknowledge_progress_notification() noexcept {
 
 int AsyncIoContext::detach_progress_host() noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!notification_interest_live_ || progress_ == nullptr) {
+    if (!notification_interest_live_) {
         return -1;
     }
     notification_interest_live_ = false;
