@@ -38,7 +38,7 @@ RequestScope::~RequestScope() {
     finished_ = true;
 #else
     if (!finished_) {
-        settle_and_release_();
+        (void)settle_and_release_();
     }
 #endif
 }
@@ -79,17 +79,7 @@ void RequestScope::request_cancel_(Slot& slot) noexcept {
     }
 }
 
-void RequestScope::request_discard_(Slot& slot) noexcept {
-    if (auto* request = std::get_if<Request<std::size_t>>(&slot.request)) {
-        request->discard();
-        return;
-    }
-    if (auto* request = std::get_if<Request<void>>(&slot.request)) {
-        request->discard();
-    }
-}
-
-void RequestScope::settle_and_release_() noexcept {
+Result<void> RequestScope::settle_and_release_() noexcept {
     if (policy_ == ScopeCleanupPolicy::cancel_then_drain) {
         for (std::size_t i = 0; i < capacity_; ++i) {
             Slot& slot = slots_[i];
@@ -141,13 +131,22 @@ void RequestScope::settle_and_release_() noexcept {
             detail::request_scope_settlement_health_fail_fast();
         }
     }
+    std::optional<IoError> failure;
     for (std::size_t i = 0; i < capacity_; ++i) {
         Slot& slot = slots_[i];
-        if (slot.state == Slot::State::owning && request_ready_(slot)) {
-            request_discard_(slot);
-            release_slot_(slot);
+        if (slot.state != Slot::State::owning || !request_ready_(slot)) {
+            continue;
+        }
+        if (std::get_if<Request<std::size_t>>(&slot.request) != nullptr) {
+            settle_ready_slot_<std::size_t>(slot, failure);
+        } else {
+            settle_ready_slot_<void>(slot, failure);
         }
     }
+    if (failure.has_value()) {
+        return make_unexpected<void>(*failure);
+    }
+    return {};
 }
 
 Result<ScopeTicket<std::size_t>> RequestScope::submit_read(ReadOp op) {
@@ -277,12 +276,18 @@ Result<ScopeWaitStatus> RequestScope::wait_for(const ScopeTicket<void>& ticket,
     return wait_for_slot_<void>(*slot, max_wait);
 }
 
-void RequestScope::finish() noexcept {
+Result<void> RequestScope::finish() noexcept {
     if (finished_) {
-        return;
+        return {};
     }
-    settle_and_release_();
+    Result<void> settled = settle_and_release_();
     finished_ = true;
+#if defined(SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR)
+    (void)settled;
+    return {};
+#else
+    return settled;
+#endif
 }
 
 }

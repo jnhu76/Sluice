@@ -60,7 +60,7 @@ class RequestScope {
     Result<ScopeWaitStatus> wait_for(const ScopeTicket<void>& ticket,
                                      std::chrono::nanoseconds max_wait) noexcept;
 
-    void finish() noexcept;
+    Result<void> finish() noexcept;
 
   private:
     struct Slot {
@@ -179,11 +179,22 @@ class RequestScope {
         }
     }
 
+    template <class T>
+    void settle_ready_slot_(Slot& slot, std::optional<IoError>& failure) noexcept {
+        const RequestObservation<T> observed =
+            std::get<slot_index_<T>()>(slot.request).take_result();
+        if (!failure.has_value() && !observed.result.has_value() &&
+            !(policy_ == ScopeCleanupPolicy::cancel_then_drain &&
+              observed.result.error().code == IoError::Code::canceled)) {
+            failure = observed.result.error();
+        }
+        release_slot_(slot);
+    }
+
     bool request_ready_(const Slot& slot) const noexcept;
     void request_cancel_(Slot& slot) noexcept;
-    void request_discard_(Slot& slot) noexcept;
 
-    void settle_and_release_() noexcept;
+    Result<void> settle_and_release_() noexcept;
 
     AsyncIoContext& ctx_;
     std::size_t capacity_;

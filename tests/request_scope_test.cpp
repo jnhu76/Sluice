@@ -293,7 +293,7 @@ bool submit_commits_accepted_responsibility(Tracker& t) {
         return false;
     t.check(core.snapshot().public_bindings == 2, "both accepted requests are tracked");
 
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()), "finish settled both tracked requests");
     auto gone = scope.take(ticket);
     t.check(gone.readiness == RequestReadiness::empty,
@@ -337,7 +337,7 @@ bool v18a_scope_capacity_exhaustion_rejects_before_submission(Tracker& t) {
     }
     t.check(buffer_untouched, "the rejected operation acquired no borrow and had no effect");
 
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()),
             "the single accepted request settled before the scope released its resources");
     auto retry = scope.submit_read(ReadOp{NativeFileRef{*file}, second.data(), 0, 0});
@@ -387,7 +387,7 @@ bool v18b_second_submission_rejection_keeps_first_owned(Tracker& t) {
         return false;
     t.check(core.snapshot().accepted_live == 2, "both accepted requests are tracked");
 
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()),
             "both tracked requests settled before the scope returned");
     return true;
@@ -425,7 +425,7 @@ bool take_consumes_and_releases_the_slot_for_reuse(Tracker& t) {
     auto stale = scope.take(first_ticket);
     t.check(stale.readiness == RequestReadiness::empty,
             "the consumed ticket cannot reach the reused slot");
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()), "the reused slot settled and reclaimed");
     return true;
 }
@@ -477,7 +477,7 @@ bool retained_ready_results_occupy_scope_capacity(Tracker& t) {
                 "the admitted request consumed its confirmed count");
     }
     (void)ctx.poll();
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()), "the retained-result pipeline reclaimed fully");
     return true;
 }
@@ -499,10 +499,10 @@ bool finish_is_idempotent_and_rejects_late_submissions(Tracker& t) {
         t.check(false, "the submission is accepted");
         return false;
     }
-    scope.finish();
+    t.check(scope.finish().has_value(), "the first finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()), "finish released every tracked binding");
-    scope.finish();
-    t.check(core_is_idle(core.snapshot()), "repeated finish is a documented no-op");
+    t.check(scope.finish().has_value(), "repeated finish is a documented no-op");
+    t.check(core_is_idle(core.snapshot()), "repeated finish stayed a no-op");
     auto late = scope.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), 4, 0});
     t.check(!late.has_value() && late.error().code == IoError::Code::invalid_state,
             "submissions after finish are rejected");
@@ -564,7 +564,7 @@ bool w02_tracer_bounded_pipeline(Tracker& t) {
                 "the durability request consumed successfully");
     }
 
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()), "the tracer pipeline settled without residue");
     return true;
 }
@@ -614,6 +614,66 @@ bool destructor_cleanup_uses_the_selected_policy(Tracker& t) {
     }
     t.check(core_is_idle(core.snapshot()),
             "cancel-then-drain destruction settled the accepted request before returning");
+    return true;
+}
+
+bool finish_reports_an_unconsumed_operation_error(Tracker& t) {
+    auto file = open_temp_file(t, "sluice d1 finish error\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+    RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+
+    const NativeFileRef unwritable{file->native_handle(), sluice::FileAccess::read_write};
+    std::vector<std::byte> source(4, std::byte{0xAB});
+    auto accepted = scope.submit_write(WriteOp{unwritable, source.data(), source.size(), 0});
+    t.check(accepted.has_value(), "the kernel-doomed write is accepted into the scope");
+    if (!accepted.has_value())
+        return false;
+
+    auto settled = scope.finish();
+    t.check(!settled.has_value() && settled.error().code == IoError::Code::backend_error,
+            "explicit finish reports the unconsumed operation error instead of "
+            "discarding it");
+    t.check(core_is_idle(core.snapshot()),
+            "error reporting retained no responsibility: every request is settled and "
+            "released");
+    auto late = scope.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+    t.check(!late.has_value() && late.error().code == IoError::Code::invalid_state,
+            "the reporting finish is still terminal for the scope");
+    return true;
+}
+
+bool destructor_cleanup_preserves_the_original_exception_and_still_releases(Tracker& t) {
+    auto file = open_temp_file(t, "sluice d1 unwind error\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    bool original_survived = false;
+    try {
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        const NativeFileRef unwritable{file->native_handle(), sluice::FileAccess::read_write};
+        std::vector<std::byte> source(4, std::byte{0xAB});
+        auto accepted =
+            scope.submit_write(WriteOp{unwritable, source.data(), source.size(), 0});
+        if (!accepted.has_value()) {
+            t.check(false, "the kernel-doomed write is accepted");
+            return false;
+        }
+        throw std::runtime_error("original");
+    } catch (const std::runtime_error& e) {
+        original_survived = std::strcmp(e.what(), "original") == 0;
+    }
+    t.check(original_survived, "destruction during unwinding preserved the original exception");
+    t.check(core_is_idle(core.snapshot()),
+            "the unwound scope still settled and released the failing operation");
     return true;
 }
 
@@ -759,7 +819,7 @@ bool v19_timeout_preserves_responsibility_until_cleanup(Tracker& t) {
         t.check(consumed.readiness == RequestReadiness::ready &&
                     consumed.result.has_value() && consumed.result.value() == 6,
                 "the result consumed after the deadline, never instead of settlement");
-        scope.finish();
+        t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
         t.check(core_is_idle(core.snapshot()), "the timed-out pipeline reclaimed fully");
     }
     raw->set_worker_claimed_pause_gate(nullptr);
@@ -804,7 +864,7 @@ bool wait_for_reports_sticky_control_interruption(Tracker& t) {
 
         resume_threadpool_gate(gate);
         wait_threadpool_gate_exited(gate);
-        scope.finish();
+        t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
         t.check(core_is_idle(ctx.context_core_for_test()->snapshot()),
                 "the interrupted pipeline still settled");
     }
@@ -860,7 +920,7 @@ bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
         t.check(consumed.readiness == RequestReadiness::ready && !consumed.result.has_value() &&
                     consumed.result.error().code == IoError::Code::canceled,
                 "the cancel win converged to a canceled terminal, not to the disposition");
-        scope.finish();
+        t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
         t.check(core_is_idle(core.snapshot()),
                 "the cancel-won request settled through publication");
     }
@@ -927,7 +987,7 @@ bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
                 std::_Exit(2);
             wait_threadpool_gate_paused(gate);
             ctx.set_wait_health_failed_for_test();
-            scope.finish();
+            (void)scope.finish();
             std::_Exit(0);
         }
     };
@@ -968,7 +1028,7 @@ bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
         scope.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
     t.check(probe.end() == 0, "the capacity rejection allocates nothing");
     t.check(!rejected.has_value(), "the exhausted scope rejected the probe submission");
-    scope.finish();
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
     t.check(core_is_idle(core.snapshot()), "the allocation probe pipeline reclaimed");
     return true;
 }
@@ -1005,6 +1065,10 @@ int main() {
          retained_ready_results_occupy_scope_capacity},
         {"finish_is_idempotent_and_rejects_late_submissions",
          finish_is_idempotent_and_rejects_late_submissions},
+        {"finish_reports_an_unconsumed_operation_error",
+         finish_reports_an_unconsumed_operation_error},
+        {"destructor_cleanup_preserves_the_original_exception_and_still_releases",
+         destructor_cleanup_preserves_the_original_exception_and_still_releases},
         {"w02_tracer_bounded_pipeline", w02_tracer_bounded_pipeline},
         {"destructor_settles_on_early_return_with_drain_policy",
          destructor_settles_on_early_return_with_drain_policy},
