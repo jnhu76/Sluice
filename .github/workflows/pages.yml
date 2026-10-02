@@ -1,0 +1,74 @@
+name: Deploy Sluice v1 architecture walkthrough
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'visuals/sluice-v1/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Stage static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp visuals/sluice-v1/index.html _site/index.html
+          touch _site/.nojekyll
+
+      - name: Static checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s _site/index.html
+          grep -q "DERIVED / NON-NORMATIVE" _site/index.html
+          grep -q "v1-r3" _site/index.html
+          grep -q "291c8ec54c33a09306720cda1e6ee217edda9030" _site/index.html
+          if grep -nE "TODO|FIXME|\{\{[A-Za-z_]+\}\}" _site/index.html; then
+            echo "unresolved template placeholder found" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import pathlib, re, subprocess, tempfile
+          html = pathlib.Path("_site/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+          assert scripts, "no inline <script> block found"
+          for i, js in enumerate(scripts):
+              p = pathlib.Path(tempfile.gettempdir()) / f"sluice-inline-{i}.js"
+              p.write_text(js, encoding="utf-8")
+              subprocess.run(["node", "--check", str(p)], check=True)
+          print(f"{len(scripts)} inline script block(s) parse OK")
+          PY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: validate
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

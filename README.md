@@ -21,6 +21,8 @@ changes the target contract.
 - [docs/README.md](docs/README.md) — documentation map: active records versus
   `docs/archive/` historical records.
 - [AGENTS.md](AGENTS.md) — repository working rules.
+- [Interactive v1 architecture walkthrough](visuals/sluice-v1/) — derived,
+  non-normative target-contract visualization; published to GitHub Pages.
 - [Current-code architecture snapshot](docs/archive/architecture/architecture.md) — dated historical
   implementation view, not a v1 target diagram.
 - [Retained research conclusions](research/RESULTS.md) — rationale and evidence.
