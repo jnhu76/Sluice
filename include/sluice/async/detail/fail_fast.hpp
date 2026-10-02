@@ -47,6 +47,10 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void request_binding_invariant_fail_fast() noexcept;
 
+[[noreturn]] void request_scope_settlement_driver_fail_fast() noexcept;
+
+[[noreturn]] void request_scope_settlement_health_fail_fast() noexcept;
+
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
 
 [[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept;

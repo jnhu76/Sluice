@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -108,9 +109,14 @@ class ProgressSource {
                                  PhysicalProbe probe = nullptr,
                                  void* probe_context = nullptr) noexcept {
         const bool bounded_park = max_park != std::chrono::nanoseconds::max();
-        const auto park_deadline = bounded_park
-                                       ? std::chrono::steady_clock::now() + max_park
-                                       : std::chrono::steady_clock::time_point{};
+        const auto now = std::chrono::steady_clock::now();
+        const auto park_deadline =
+            bounded_park
+                ? now + std::min(
+                            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                max_park),
+                            std::chrono::steady_clock::time_point::max() - now)
+                : std::chrono::steady_clock::time_point{};
 
         for (;;) {
             {

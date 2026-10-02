@@ -463,6 +463,71 @@ do
                           "SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
+-- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
+-- public request target: the target compiles its own copies of the async TUs it
+-- observes and links neither sluice_async nor the other seam builds.
+do
+    local function request_scope_target(name, test_source, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                test_source,
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/request_scope.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/request_handle.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING", "SLUICE_PUBLIC_REQUEST_URING")
+                add_links("uring")
+                table.insert(files, R .. "src/async/uring_backend.cpp")
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    request_scope_target("request_scope_test", R .. "tests/request_scope_test.cpp", false)
+    if has_config("liburing") then
+        request_scope_target("request_scope_uring_test",
+                             R .. "tests/request_scope_test.cpp", true)
+    end
+
+    -- D1 named mutation builds. Each flips one load-bearing RequestScope rule
+    -- and must be killed by the named failing scenario of the killer suite;
+    -- they are executed and recorded manually, never run as regular tests.
+    request_scope_target("request_scope_mut_reserve_after_accept",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT")
+    request_scope_target("request_scope_mut_commit_drops_request",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_COMMIT_DROPS_REQUEST")
+    request_scope_target("request_scope_mut_timeout_releases_slot",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT")
+    request_scope_target("request_scope_mut_destructor_skips_settle",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE")
+    request_scope_target("request_scope_mut_finish_swallows_error",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR")
+    request_scope_target("request_scope_mut_finish_cancels_cleanup",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_FINISH_CANCELS_CLEANUP")
+end
+
 -- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault
 -- injections are macro-guarded backend surface, so this target compiles its
 -- own copies of the async TUs and links neither sluice_async nor the other

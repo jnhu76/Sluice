@@ -121,6 +121,23 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void request_scope_settlement_driver_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::RequestScope: the owned driver rejected a settlement "
+                 "pass (contract violation or unreachable wait outcome)\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
+[[noreturn]] void request_scope_settlement_health_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::RequestScope: progress health failed while accepted "
+                 "scope work remains unsettled; failing fast instead of returning with "
+                 "live borrows\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept {
     std::terminate();
 }
