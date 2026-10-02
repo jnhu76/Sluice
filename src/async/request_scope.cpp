@@ -155,16 +155,25 @@ Result<ScopeTicket<std::size_t>> RequestScope::submit_read(ReadOp op) {
         return make_unexpected<ScopeTicket<std::size_t>>(
             IoError{IoError::Code::invalid_state});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
-    return commit_tracked_<std::size_t>(ctx_.submit_read(op));
-#else
     std::size_t index = 0;
     if (!reserve_slot_(index)) {
         return make_unexpected<ScopeTicket<std::size_t>>(
             IoError{IoError::Code::would_block});
     }
-    return commit_tracked_<std::size_t>(index, ctx_.submit_read(op));
+#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+    auto accepted = ctx_.submit_read(op);
+    Reservation guard{this, index};
+#else
+    Reservation guard{this, index};
+    auto accepted = ctx_.submit_read(op);
 #endif
+    if (!accepted.has_value()) {
+        return make_unexpected<ScopeTicket<std::size_t>>(accepted.error());
+    }
+    const RequestId id = accepted.value().id();
+    commit_<std::size_t>(index, std::move(accepted).value());
+    guard.committed = true;
+    return ScopeTicket<std::size_t>{id};
 }
 
 Result<ScopeTicket<std::size_t>> RequestScope::submit_write(WriteOp op) {
@@ -172,46 +181,73 @@ Result<ScopeTicket<std::size_t>> RequestScope::submit_write(WriteOp op) {
         return make_unexpected<ScopeTicket<std::size_t>>(
             IoError{IoError::Code::invalid_state});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
-    return commit_tracked_<std::size_t>(ctx_.submit_write(op));
-#else
     std::size_t index = 0;
     if (!reserve_slot_(index)) {
         return make_unexpected<ScopeTicket<std::size_t>>(
             IoError{IoError::Code::would_block});
     }
-    return commit_tracked_<std::size_t>(index, ctx_.submit_write(op));
+#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+    auto accepted = ctx_.submit_write(op);
+    Reservation guard{this, index};
+#else
+    Reservation guard{this, index};
+    auto accepted = ctx_.submit_write(op);
 #endif
+    if (!accepted.has_value()) {
+        return make_unexpected<ScopeTicket<std::size_t>>(accepted.error());
+    }
+    const RequestId id = accepted.value().id();
+    commit_<std::size_t>(index, std::move(accepted).value());
+    guard.committed = true;
+    return ScopeTicket<std::size_t>{id};
 }
 
 Result<ScopeTicket<void>> RequestScope::submit_sync_data(SyncDataOp op) {
     if (finished_) {
         return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::invalid_state});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
-    return commit_tracked_<void>(ctx_.submit_sync_data(op));
-#else
     std::size_t index = 0;
     if (!reserve_slot_(index)) {
         return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::would_block});
     }
-    return commit_tracked_<void>(index, ctx_.submit_sync_data(op));
+#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+    auto accepted = ctx_.submit_sync_data(op);
+    Reservation guard{this, index};
+#else
+    Reservation guard{this, index};
+    auto accepted = ctx_.submit_sync_data(op);
 #endif
+    if (!accepted.has_value()) {
+        return make_unexpected<ScopeTicket<void>>(accepted.error());
+    }
+    const RequestId id = accepted.value().id();
+    commit_<void>(index, std::move(accepted).value());
+    guard.committed = true;
+    return ScopeTicket<void>{id};
 }
 
 Result<ScopeTicket<void>> RequestScope::submit_sync_all(SyncAllOp op) {
     if (finished_) {
         return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::invalid_state});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
-    return commit_tracked_<void>(ctx_.submit_sync_all(op));
-#else
     std::size_t index = 0;
     if (!reserve_slot_(index)) {
         return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::would_block});
     }
-    return commit_tracked_<void>(index, ctx_.submit_sync_all(op));
+#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+    auto accepted = ctx_.submit_sync_all(op);
+    Reservation guard{this, index};
+#else
+    Reservation guard{this, index};
+    auto accepted = ctx_.submit_sync_all(op);
 #endif
+    if (!accepted.has_value()) {
+        return make_unexpected<ScopeTicket<void>>(accepted.error());
+    }
+    const RequestId id = accepted.value().id();
+    commit_<void>(index, std::move(accepted).value());
+    guard.committed = true;
+    return ScopeTicket<void>{id};
 }
 
 RequestObservation<std::size_t> RequestScope::take(

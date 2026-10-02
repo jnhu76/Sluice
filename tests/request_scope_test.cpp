@@ -660,6 +660,46 @@ bool v18c_exception_unwind_settles_and_preserves_the_exception(Tracker& t) {
 
 #if !defined(SLUICE_PUBLIC_REQUEST_URING)
 
+class ThrowingSubmitBackend final : public AsyncBackend {
+  public:
+    std::size_t poll() override {
+        return 0;
+    }
+
+    std::size_t outstanding() const noexcept override {
+        return 0;
+    }
+
+    bool signals_physical_progress() const noexcept override {
+        return true;
+    }
+
+  private:
+    std::size_t slot_capacity() const noexcept override {
+        return 4;
+    }
+
+    Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+        throw std::runtime_error("pre-accept submission throw");
+    }
+
+    Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+        throw std::runtime_error("pre-accept submission throw");
+    }
+
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+        throw std::runtime_error("pre-accept submission throw");
+    }
+
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+        throw std::runtime_error("pre-accept submission throw");
+    }
+
+    detail::PublicCancel cancel_identity(detail::RequestKey) override {
+        return detail::PublicCancel::not_found;
+    }
+};
+
 bool child_dies_running(void (*scenario)()) {
     const pid_t pid = ::fork();
     if (pid < 0)
@@ -828,6 +868,41 @@ bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
     return true;
 }
 
+bool pre_accept_throw_rolls_back_the_reservation(Tracker& t) {
+    auto file = open_temp_file(t, "sluice d1 throw\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThrowingSubmitBackend>();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+    RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    bool first_threw = false;
+    try {
+        (void)scope.submit_read(
+            ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+    } catch (const std::runtime_error&) {
+        first_threw = true;
+    }
+    t.check(first_threw, "the submission exception reaches the caller after the reservation");
+    t.check(ctx.outstanding() == 0 && core_is_idle(core.snapshot()),
+            "the thrown submission left no acceptance and no core residue");
+
+    bool second_reached_the_backend = false;
+    try {
+        (void)scope.submit_read(
+            ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+    } catch (const std::runtime_error&) {
+        second_reached_the_backend = true;
+    }
+    t.check(second_reached_the_backend,
+            "the reservation rolled back: a leaked slot would answer would_block before "
+            "the backend is reached again");
+    return true;
+}
+
 bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
     struct Scenario {
         static void run() {
@@ -938,6 +1013,8 @@ int main() {
         {"v18c_exception_unwind_settles_and_preserves_the_exception",
          v18c_exception_unwind_settles_and_preserves_the_exception},
 #if !defined(SLUICE_PUBLIC_REQUEST_URING)
+        {"pre_accept_throw_rolls_back_the_reservation",
+         pre_accept_throw_rolls_back_the_reservation},
         {"v19_timeout_preserves_responsibility_until_cleanup",
          v19_timeout_preserves_responsibility_until_cleanup},
         {"wait_for_reports_sticky_control_interruption",

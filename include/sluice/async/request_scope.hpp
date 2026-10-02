@@ -107,33 +107,6 @@ class RequestScope {
 #endif
     }
 
-    template <class T>
-    Result<ScopeTicket<T>>
-    commit_tracked_(std::size_t index, Result<Request<T>>&& accepted) {
-        Reservation guard{this, index};
-        if (!accepted.has_value()) {
-            return make_unexpected<ScopeTicket<T>>(accepted.error());
-        }
-        const RequestId id = accepted.value().id();
-        commit_<T>(index, std::move(accepted).value());
-        guard.committed = true;
-        return ScopeTicket<T>{id};
-    }
-
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
-    template <class T>
-    Result<ScopeTicket<T>> commit_tracked_(Result<Request<T>>&& accepted) {
-        if (!accepted.has_value()) {
-            return make_unexpected<ScopeTicket<T>>(accepted.error());
-        }
-        std::size_t index = 0;
-        if (!reserve_slot_(index)) {
-            return make_unexpected<ScopeTicket<T>>(IoError{IoError::Code::would_block});
-        }
-        return commit_tracked_<T>(index, std::move(accepted));
-    }
-#endif
-
     void release_slot_(Slot& slot) noexcept;
 
     template <class T>
