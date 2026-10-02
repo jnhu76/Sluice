@@ -749,16 +749,23 @@ InvDeadlineNoCancel ==
 (* Campaign A/C: the progress pair never reaches its absorbing terminal
    state from valid production initialization. Post-#444 structure: the
    only pre-fix unbounded producer (the per-call close_admission signal)
-   is gone -- a repeated close is a stuttering step -- and every
-   remaining bump consumes a finite resource: before the first
-   exhaustion-triggered owner pass, accepts enter only free slots and
-   slot reuse requires owner service (publication pins, owed pins,
-   retained transports), so request-source bumps <= 2C; after the pass
-   closes admission no new request is accepted and each outstanding
-   request, plus the one-shot poison, contributes at most one further
-   bump (<= C + 1). TOTAL <= 3C + 2 < MaxPE + MaxPX in every clean
-   configuration, independent of owner latency and of MaxFuel (the
-   ReachNoFuel run keeps plain Submit fuelless). *)
+   is gone -- a repeated close is a stuttering step. While pX = 0 the
+   request churn may be unbounded in count, but every bump lands in pE,
+   which saturates at MaxPE without reaching the pair; pX leaves 0 only
+   past that saturation, and the first pX bump licenses the owner's
+   next pass to close admission (the exhaustion-close rule). The
+   signals that can land after that first pX bump are bounded: the
+   still-open window admits at most the free-slot accepts and terminals
+   of the in-flight population (<= 2C, slot reuse needs owner service),
+   the close transition itself contributes one, and after admission
+   closes the outstanding requests plus the one-shot poison contribute
+   <= C + 1 -- so pX <= 3C + 2 while pE <= MaxPE. ReachNoFuel (C = 1,
+   MaxPX = 8 > 5) carries the fuel-independence claim with fuelless
+   plain Submit; the tiny original configurations additionally lean on
+   MaxFuel = 1, which is why that claim is NOT made from them.
+   Production: C is configuration-bounded, so 3C + 2 < UINT64_MAX and
+   the pair is unreachable for every valid configuration, independent
+   of owner latency. *)
 InvNoProgressTerminal == ~(pE = MaxPE /\ pX = MaxPX)
 
 (* Reachability campaign: the production-staged composition -- an ordinary
@@ -864,18 +871,22 @@ LControlObserved ==
 (*  Submit           a silent accept (normal dispatch is worker/kernel-   *)
 (*                   actionable only)                                     *)
 (*  SubmitTransport  retryable accept: retained transport + signal        *)
-(*  WorkerComplete   ThreadPool worker push / uring zero-op / cancel-won  *)
-(*                   push: publication owed + signal                      *)
+(*  WorkerComplete   ThreadPool worker push / cancel-won push:           *)
+(*                   publication owed + signal (zero-op publication is    *)
+(*                   ZeroOp below)                                        *)
 (*  KernelComplete   io_uring CQE publication: eventfd write, no epoch    *)
 (*  TransportGrant   a pass's kernel submit finally accepted (silent)     *)
 (*  ZeroOp           zero-op publication: owed control/reclaim + signal   *)
 (*  Interrupt        interrupt_progress_waiters()                         *)
 (*  EnvPoison        poison_and_recover_locked: fatal_error_ +            *)
 (*                   note_health_failure + signal                         *)
-(*  CloseAdmission   application close_admission()/request_stop: the      *)
-(*                   backend signals only on the core-reported open->     *)
-(*                   closed transition (#444); a repeated close is a      *)
-(*                   stuttering step                                      *)
+(*  CloseAdmission   the public close_admission() operation (backend/     *)
+(*                   context; THREAD-01-legal external call, no in-tree   *)
+(*                   production caller today -- an over-approximation,    *)
+(*                   sound for unreachability): signals only on the       *)
+(*                   core-reported open->closed transition (#444); a      *)
+(*                   repeated close is a stuttering step. request_stop    *)
+(*                   is one-shot control-domain and maps to Interrupt     *)
 (*  CloseAdmissionRepeat                                                             *)
 (*                   MUTANT (MutRepeatCloseSignals): restores the         *)
 (*                   pre-#444 backend shape -- close_admission() signaled *)
