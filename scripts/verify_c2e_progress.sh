@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # C2-E (Issue #397) TLA+ verification gate for the frozen A-D progress
-# protocol: formal/tla/ProgressSource.tla.
+# protocol, re-based on the #444 production corrective pass (the
+# transition-bound close_admission signal): formal/tla/ProgressSource.tla.
 #
 #   Campaign A -- safety / no-lost-wake:
 #     1. ProgressSourceSafety.cfg must complete cleanly under TypeOK,
 #        InvSafePark (S2/S8), InvControlGenOrder + InvControlSpentNeverParks
 #        (S4), InvNoFalseIdle (S5) and InvNoProgressTerminal (the finite
-#        image of the production capacity bound).
+#        image of the post-#444 structural bound: request-driven bumps
+#        <= 3C + 2, repeated close a stuttering step).
 #   Campaign A' -- mutants (the checks must bite):
 #     2. MutParkDrain  (park handshake drains without L4a/P3 revalidation)
 #        must violate InvSafePark.
@@ -26,14 +28,13 @@
 #     8. ExhTermControl (spent control domain: permanently pending, no
 #        ordinary park) must complete cleanly.
 #     9. ExhTermProgress (seam-placed progress absorbing pair {Max,Max})
-#        MUST VIOLATE InvSafePark. This is the recorded C2-E formal
-#        boundary finding: at the fully saturated progress pair a producer
-#        signal bumps nothing, the fused L4a drain can consume its fd
-#        freshness, and the owner parks past the unadvertised obligation
-#        (see the C2-E record in docs/roadmap/v1-conformance.md). The
-#        violation is the expected, recorded outcome; a clean run here
-#        means the production protocol changed and the record must be
-#        re-anchored.
+#        MUST VIOLATE InvSafePark. This is the local-safety boundary
+#        certificate: the representable internal state stays locally
+#        unsafe, while the corrected production transition system cannot
+#        reach it (see ReachClose* below and the C2-E records in
+#        docs/roadmap/v1-conformance.md). A clean run here means the
+#        boundary certificate no longer discriminates and the record must
+#        be re-anchored.
 #   Campaign C -- liveness (VERIFY-03 conditional):
 #    10. ProgressSourceLiveness.cfg (SpecFair: owner fairness, environment
 #        completion, transport dispatch permission) must complete cleanly
@@ -41,28 +42,34 @@
 #   Certificates (the mandated scenarios are reachable, not vacuous):
 #    11-14. CertSticky / CertSat / CertSpent / CertHost must each be
 #        violated (house must-be-reachable pattern).
-#   Campaign R -- reachability adjudication (see the C2-E reachability
-#   adjudication record in docs/roadmap/v1-conformance.md):
-#    15. ReachClose (normal Init + CloseRepeat, the C++ per-call
-#        close_admission signal) must VIOLATE InvNoProgressTerminal: the
-#        absorbing progress pair is reachable from production
-#        initialization through repeated close_admission calls alone.
-#    16. ReachClosePark (same) must VIOLATE InvSafePark: the composed
-#        no-lost-wake defect staged from normal Init (TLC's shortest
-#        trace exercises the poison facet of the same mechanism).
-#    17. ReachClosePub (same) must VIOLATE InvNoOrdinaryParkPastPublication:
-#        the production-staged composition -- accept, pump the pair via
-#        close signals, park, the completion's signal is a no-op at the
-#        frozen pair, the L4a drain consumes its fd write, ordinary park
-#        past the pending publication.
-#    18. ReachNoFuel (unbounded plain re-acceptance, one-shot close) must
-#        complete CLEANLY: InvNoProgressTerminal does not depend on
-#        MaxFuel for the request-driven signal sources; exhaustion-close
-#        plus the capacity images bound them.
+#   Campaign R -- post-#444 reachability re-adjudication (see the C2-E
+#   re-closure record in docs/roadmap/v1-conformance.md):
+#    15. ReachClose (normal Init, #444 semantics: repeated close = no
+#        signal) must complete CLEANLY: normal repeated close cannot pump
+#        the progress generation toward the absorbing pair.
+#    16. ReachClosePark must complete CLEANLY: the pre-fix terminal-pair
+#        park counterexample is no longer stageable under production
+#        semantics.
+#    17. ReachClosePub must complete CLEANLY: the pre-fix
+#        production-staged composition (Submit -> repeated CloseAdmission
+#        -> {Max,Max} -> WorkerComplete -> stale drain -> park past
+#        publication) has disappeared.
+#    18. ReachNoFuel (unbounded plain re-acceptance) must complete
+#        CLEANLY: InvNoProgressTerminal does not depend on MaxFuel for
+#        the request-driven signal sources; exhaustion-close plus the
+#        capacity images bound them.
 #    19. MutNoExhClose (unbounded re-acceptance + the pass never closes
 #        admission on exhaustion) must VIOLATE InvNoProgressTerminal: the
 #        exhaustion-close rule is the load-bearing production bound behind
 #        the request-source half of the argument.
+#   Campaign M -- the restored-pump discriminator (#444 evidence):
+#    20. MutRepeatCloseSignals (normal Init; the mutant restores exactly
+#        the removed pre-#444 edge: a close on an already-closed
+#        admission signals again) must VIOLATE InvNoProgressTerminal:
+#        the absorbing pair becomes reachable through the restored pump.
+#    21. MutRepeatCloseSignalsPark (same mutant) must VIOLATE
+#        InvSafePark: the same defect class as the ExhTermProgress
+#        certificate, staged from normal Init through the restored pump.
 #
 # TLC retrieval is pinned and checksummed exactly as scripts/verify_tla.sh;
 # the jar is never committed.
@@ -154,21 +161,22 @@ run_clean Host
 run_clean ExhNear
 run_clean ExhTermControl
 run_violate ExhTermProgress InvSafePark \
-    "RECORDED C2-E FORMAL BOUNDARY DEFECT: absorbing progress pair {Max,Max} + L4a drain consumes fd freshness -> park past unadvertised obligation (see docs/roadmap/v1-conformance.md C2-E)"
+    "LOCAL-SAFETY BOUNDARY CERTIFICATE: absorbing progress pair {Max,Max} + L4a drain consumes fd freshness -> park past unadvertised obligation (production cannot reach this state; see ReachClose* and docs/roadmap/v1-conformance.md C2-E)"
 run_clean Liveness
 run_violate CertSticky CertStickyControl "S4 mandated sticky scenario reachable"
 run_violate CertSat CertSatFreshness "V24 first-stage saturation freshness reachable"
 run_violate CertSpent CertSpentControlReports "spent control domain still reports control"
 run_violate CertHost CertHostLifecycle "host unregister-before-detach ordering reachable"
-run_violate ReachClose InvNoProgressTerminal \
-    "ADJUDICATION: absorbing progress pair reached from NORMAL Init via the C++ per-call close_admission signal (THREAD-01 idempotent concurrent close; PROG-04 wake-on-close)"
-run_violate ReachClosePark InvSafePark \
-    "ADJUDICATION: composed no-lost-wake defect staged from normal Init (no seam-placed initial state)"
-run_violate ReachClosePub InvNoOrdinaryParkPastPublication \
-    "ADJUDICATION: production-staged composition -- accept, close-pump to the absorbing pair, park, completion signal invisible, L4a drain consumes its fd write, ordinary park past pending publication"
+run_clean ReachClose
+run_clean ReachClosePark
+run_clean ReachClosePub
 run_clean ReachNoFuel
 run_violate MutNoExhClose InvNoProgressTerminal \
     "load-bearing bound: without exhaustion-closes-admission, unbounded re-acceptance churn reaches the absorbing pair"
+run_violate MutRepeatCloseSignals InvNoProgressTerminal \
+    "RESTORED-PUMP DISCRIMINATOR: the pre-#444 per-call close signal alone re-reaches the absorbing pair from normal Init -- #444 removed the actual pump"
+run_violate MutRepeatCloseSignalsPark InvSafePark \
+    "RESTORED-PUMP DISCRIMINATOR: the no-lost-wake composition staged from normal Init through the restored pump"
 
 echo
 echo "C2-E ProgressSource campaign: all expected outcomes reproduced."

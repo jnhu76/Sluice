@@ -4,8 +4,9 @@
 (* context-owned ProgressSource, the fixed progress owner's wait loop, and  *)
 (* the external-host notification binding, as one focused TLA+ model.      *)
 (*                                                                         *)
-(* Model follows C++. The implementation (master @ the C2 A-D corrective   *)
-(* pass, PR #442) is frozen; this module is its abstract protocol.         *)
+(* Model follows C++. The implementation (master @ the #444 production      *)
+(* corrective pass, the transition-bound close_admission signal) is         *)
+(* frozen; this module is its abstract protocol.                           *)
 (*                                                                         *)
 (* --------------------------------------------------------------------- *)
 (* Concrete -> model map (why the model needs it)                          *)
@@ -69,6 +70,9 @@
 (*    backend poison (+core note_health_failure closes admission)         *)
 (*      -> EnvPoison (physSick, adm:=FALSE, bump+fd)                      *)
 (*    application close_admission/request_stop -> CloseAdmission          *)
+(*      (the backend signals only on the core-reported open->closed       *)
+(*      transition; a repeated close on an already-closed admission has   *)
+(*      no observable protocol effect and is a stuttering step here)      *)
 (*    successful kernel submit            -> TransportGrant (silent)      *)
 (*    plain submit                         -> Submit (silent; the         *)
 (*      ThreadPool dispatch ring and the uring dispatch-time submit are   *)
@@ -130,16 +134,17 @@ CONSTANTS MaxPE,          \* progress epoch domain top (uint64 -> small)
           MutNoProbe,     \* mutant: physical probe blind to CQ state
           MutNoExhaustion,\* mutant: saturated epoch bumps nothing (the
                           \*   C2-B round-1 sticky-bool defect class)
-          CloseRepeat,    \* reachability campaign: models the C++ fact that
-                          \*   ThreadPoolBackend::close_admission() and
-                          \*   UringAsyncBackend::close_admission() call
+          MutRepeatCloseSignals,
+                          \* mutant restoring the pre-#444 production defect:
+                          \*   backend close_admission() signaled
                           \*   signal_ready_progress() on EVERY invocation,
-                          \*   with no admission-open guard (the core close
-                          \*   is idempotent; the signal is not). The base
-                          \*   CloseAdmission action below signals only
-                          \*   while admission is open; CloseAdmissionRepeat
-                          \*   adds the already-closed call. FALSE in every
-                          \*   pre-adjudication configuration
+                          \*   including calls on an already-closed admission
+                          \*   (the core close is idempotent; the old signal
+                          \*   was not). FALSE in every normal configuration;
+                          \*   TRUE only in the MutRepeatCloseSignals*
+                          \*   discrimination runs, which must reproduce the
+                          \*   reachable absorbing pair and its lost-wake
+                          \*   composition from normal Init
           UnboundedWorkload,
                           \* reachability campaign (MaxFuel audit): plain
                           \*   Submit no longer consumes submit fuel.
@@ -525,6 +530,11 @@ EnvPoison ==
                  acc, accT, cq, pub, owed, fuel, waitSick,
                  pc, tok, parkKind, hostPh, interest, torn, gWork, gDone>>
 
+(* Application close_admission(): the backend signals only on the
+   core-reported open->closed transition (the #444 shape). A repeated
+   close on an already-closed admission returns false and signals
+   nothing -- no observable protocol change, i.e. a stuttering step,
+   which [][Next]_vars admits without a dedicated action. *)
 CloseAdmission ==
   /\ adm
   /\ adm' = FALSE
@@ -534,16 +544,15 @@ CloseAdmission ==
                  acc, accT, cq, pub, owed, fuel, waitSick, physSick,
                  pc, tok, parkKind, hostPh, interest, torn, gWork, gDone>>
 
-(* Reachability campaign: close_admission() invoked while admission is
-   already closed. The C++ backends run core_->close_admission() (an
-   idempotent no-op here) and then signal_ready_progress() unconditionally,
-   so every such call is one more progress-epoch bump. THREAD-01 documents
-   close_admission as idempotent and concurrently invocable; PROG-04
-   requires it to wake the owner. This action has no admission, capacity,
-   fuel or owner precondition -- the production transition it mirrors has
-   none either. *)
+(* Load-bearing mutant: restores exactly the pre-#444 production defect
+   -- a close_admission() call on an already-closed admission still
+   bumped the progress epoch (unconditional backend signal), creating a
+   post-exhaustion progress producer that consumes no resource. Enabled
+   only by the MutRepeatCloseSignals discrimination runs, which must
+   reproduce the reachable absorbing pair and its no-lost-wake
+   composition from normal Init; no other semantics is altered. *)
 CloseAdmissionRepeat ==
-  /\ CloseRepeat
+  /\ MutRepeatCloseSignals
   /\ ~adm
   /\ BumpP
   /\ justRet' = "none"
@@ -738,12 +747,18 @@ InvDeadlineNoCancel ==
     (acc + accT + cq + pub + owed + gDone >= gWork)
 
 (* Campaign A/C: the progress pair never reaches its absorbing terminal
-   state. The reachable signal population is bounded by the submit fuel
-   (at most one signal per submission), one completion per accepted unit,
-   one admission close and one poison event; with MaxPE + MaxPX bumps
-   required for the terminal pair and fewer signals available than that,
-   the state is unreachable. This is the finite image of the production
-   capacity-bound argument (C2-B wrap bound). *)
+   state from valid production initialization. Post-#444 structure: the
+   only pre-fix unbounded producer (the per-call close_admission signal)
+   is gone -- a repeated close is a stuttering step -- and every
+   remaining bump consumes a finite resource: before the first
+   exhaustion-triggered owner pass, accepts enter only free slots and
+   slot reuse requires owner service (publication pins, owed pins,
+   retained transports), so request-source bumps <= 2C; after the pass
+   closes admission no new request is accepted and each outstanding
+   request, plus the one-shot poison, contributes at most one further
+   bump (<= C + 1). TOTAL <= 3C + 2 < MaxPE + MaxPX in every clean
+   configuration, independent of owner latency and of MaxFuel (the
+   ReachNoFuel run keeps plain Submit fuelless). *)
 InvNoProgressTerminal == ~(pE = MaxPE /\ pX = MaxPX)
 
 (* Reachability campaign: the production-staged composition -- an ordinary
@@ -857,14 +872,17 @@ LControlObserved ==
 (*  Interrupt        interrupt_progress_waiters()                         *)
 (*  EnvPoison        poison_and_recover_locked: fatal_error_ +            *)
 (*                   note_health_failure + signal                         *)
-(*  CloseAdmission   application close_admission()/request_stop + signal  *)
+(*  CloseAdmission   application close_admission()/request_stop: the      *)
+(*                   backend signals only on the core-reported open->     *)
+(*                   closed transition (#444); a repeated close is a      *)
+(*                   stuttering step                                      *)
 (*  CloseAdmissionRepeat                                                             *)
-(*                   close_admission() on an already-closed backend:      *)
-(*                   ThreadPoolBackend::close_admission (threadpool_      *)
-(*                   backend.cpp) and UringAsyncBackend::close_admission  *)
-(*                   (uring_backend.cpp) signal on every call; the        *)
-(*                   admission-open guard exists only on the core close.  *)
-(*                   Enabled by CloseRepeat (reachability campaign only)  *)
+(*                   MUTANT (MutRepeatCloseSignals): restores the         *)
+(*                   pre-#444 backend shape -- close_admission() signaled *)
+(*                   on every call, so already-closed calls pumped the    *)
+(*                   progress epoch with no new core fact. The            *)
+(*                   MutRepeatCloseSignals* runs must turn this back      *)
+(*                   into the reachable absorbing pair from normal Init   *)
 (*  UnboundedWorkload (constant)                                          *)
 (*                   MaxFuel audit: plain Submit consumes no fuel;        *)
 (*                   models the absence of a cumulative submission cap    *)
