@@ -5,6 +5,7 @@
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/file_semantics.hpp>
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -494,8 +495,13 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     DriveGuard guard(this);
 
     const bool bounded_park = max_park != std::chrono::nanoseconds::max();
-    const auto park_deadline = bounded_park ? std::chrono::steady_clock::now() + max_park
-                                            : std::chrono::steady_clock::time_point{};
+    const auto now = std::chrono::steady_clock::now();
+    const auto park_deadline =
+        bounded_park
+            ? now + std::min(std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                        max_park),
+                    std::chrono::steady_clock::time_point::max() - now)
+            : std::chrono::steady_clock::time_point{};
     for (;;) {
         const detail::ProgressSource::Token token = progress_->snapshot();
 

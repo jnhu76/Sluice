@@ -5,6 +5,7 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <chrono>
 #include <memory>
@@ -144,9 +145,13 @@ class RequestScope {
     template <class T>
     Result<ScopeWaitStatus> wait_for_slot_(Slot& slot,
                                            std::chrono::nanoseconds max_wait) noexcept {
+        using Clock = std::chrono::steady_clock;
         const bool bounded = max_wait != std::chrono::nanoseconds::max();
-        const auto deadline = bounded ? std::chrono::steady_clock::now() + max_wait
-                                      : std::chrono::steady_clock::time_point{};
+        const Clock::time_point now = Clock::now();
+        const Clock::time_point deadline =
+            bounded ? now + std::min(std::chrono::duration_cast<Clock::duration>(max_wait),
+                                     Clock::time_point::max() - now)
+                    : Clock::time_point{};
         for (;;) {
             if (std::get<slot_index_<T>()>(slot.request).ready()) {
                 return ScopeWaitStatus::ready;

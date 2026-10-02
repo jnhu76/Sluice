@@ -677,6 +677,51 @@ bool destructor_cleanup_preserves_the_original_exception_and_still_releases(Trac
     return true;
 }
 
+bool near_max_wait_bound_stays_well_defined(Tracker& t) {
+    auto file = open_temp_file(t, "short");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+    RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+
+    std::vector<std::byte> first(8, std::byte{0});
+    auto unbounded =
+        scope.submit_read(ReadOp{NativeFileRef{*file}, first.data(), first.size(), 0});
+    t.check(unbounded.has_value(), "the first read is accepted");
+    if (!unbounded.has_value())
+        return false;
+    auto exact_max = scope.wait_for(unbounded.value(), std::chrono::nanoseconds::max());
+    t.check(exact_max.has_value() && exact_max.value() == ScopeWaitStatus::ready,
+            "the exact-maximum bound waits without a deadline and reports publication");
+    auto first_result = scope.take(unbounded.value());
+    t.check(first_result.readiness == RequestReadiness::ready &&
+                first_result.result.has_value() && first_result.result.value() == 5,
+            "the unbounded wait consumed the real publication");
+
+    std::vector<std::byte> second(8, std::byte{0});
+    auto bounded =
+        scope.submit_read(ReadOp{NativeFileRef{*file}, second.data(), second.size(), 0});
+    t.check(bounded.has_value(), "the second read is accepted");
+    if (!bounded.has_value())
+        return false;
+    const auto near_max = std::chrono::nanoseconds::max() - std::chrono::nanoseconds{1};
+    auto waited = scope.wait_for(bounded.value(), near_max);
+    t.check(waited.has_value() && waited.value() == ScopeWaitStatus::ready,
+            "a near-maximum finite bound computes its deadline without overflow and "
+            "reports publication");
+    auto second_result = scope.take(bounded.value());
+    t.check(second_result.readiness == RequestReadiness::ready &&
+                second_result.result.has_value() && second_result.result.value() == 5,
+            "the near-max wait consumed the real publication");
+
+    t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
+    t.check(core_is_idle(core.snapshot()), "the near-max pipeline reclaimed fully");
+    return true;
+}
+
 bool v18c_exception_unwind_settles_and_preserves_the_exception(Tracker& t) {
     auto file = open_temp_file(t, "sluice d1 v18c\n");
     if (!file.has_value())
@@ -963,6 +1008,54 @@ bool pre_accept_throw_rolls_back_the_reservation(Tracker& t) {
     return true;
 }
 
+bool near_max_bound_waits_out_a_stalled_operation(Tracker& t) {
+    auto file = open_temp_file(t, "sluice d1 near max stall\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    {
+        Backend::WorkerClaimedPauseGate gate;
+        raw->set_worker_claimed_pause_gate(&gate);
+        GateGuard<Backend::WorkerClaimedPauseGate> guard{gate};
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+
+        std::vector<std::byte> buffer(6, std::byte{0});
+        auto ticket =
+            scope.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+        t.check(ticket.has_value(), "the gated request is accepted");
+        if (!ticket.has_value())
+            return false;
+        wait_threadpool_gate_paused(gate);
+
+        std::thread resumer([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            resume_threadpool_gate(gate);
+        });
+
+        const auto near_max = std::chrono::nanoseconds::max() - std::chrono::nanoseconds{1};
+        auto waited = scope.wait_for(ticket.value(), near_max);
+        resumer.join();
+        wait_threadpool_gate_exited(gate);
+        t.check(waited.has_value() && waited.value() == ScopeWaitStatus::ready,
+                "a near-maximum finite bound keeps waiting for a stalled operation "
+                "instead of overflowing into an instant timeout");
+        auto consumed = scope.take(ticket.value());
+        t.check(consumed.readiness == RequestReadiness::ready &&
+                    consumed.result.has_value() && consumed.result.value() == 6,
+                "the near-max wait acquired the stalled operation's publication");
+
+        t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
+        t.check(core_is_idle(core.snapshot()), "the stalled near-max pipeline reclaimed");
+    }
+    raw->set_worker_claimed_pause_gate(nullptr);
+    return true;
+}
+
 bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
     struct Scenario {
         static void run() {
@@ -1076,9 +1169,12 @@ int main() {
          destructor_cleanup_uses_the_selected_policy},
         {"v18c_exception_unwind_settles_and_preserves_the_exception",
          v18c_exception_unwind_settles_and_preserves_the_exception},
+        {"near_max_wait_bound_stays_well_defined", near_max_wait_bound_stays_well_defined},
 #if !defined(SLUICE_PUBLIC_REQUEST_URING)
         {"pre_accept_throw_rolls_back_the_reservation",
          pre_accept_throw_rolls_back_the_reservation},
+        {"near_max_bound_waits_out_a_stalled_operation",
+         near_max_bound_waits_out_a_stalled_operation},
         {"v19_timeout_preserves_responsibility_until_cleanup",
          v19_timeout_preserves_responsibility_until_cleanup},
         {"wait_for_reports_sticky_control_interruption",
