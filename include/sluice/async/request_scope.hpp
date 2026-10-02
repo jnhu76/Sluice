@@ -110,10 +110,10 @@ class RequestScope {
     template <class T>
     Result<ScopeTicket<T>>
     commit_tracked_(std::size_t index, Result<Request<T>>&& accepted) {
+        Reservation guard{this, index};
         if (!accepted.has_value()) {
             return make_unexpected<ScopeTicket<T>>(accepted.error());
         }
-        Reservation guard{this, index};
         const RequestId id = accepted.value().id();
         commit_<T>(index, std::move(accepted).value());
         guard.committed = true;

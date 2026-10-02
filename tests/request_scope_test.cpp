@@ -350,30 +350,46 @@ bool v18b_second_submission_rejection_keeps_first_owned(Tracker& t) {
     auto file = open_temp_file(t, "sluice d1 v18b\n");
     if (!file.has_value())
         return false;
+    auto rejected_source = open_temp_file(t, "sluice d1 v18b closed\n");
+    if (!rejected_source.has_value())
+        return false;
+    File closed = std::move(rejected_source.value());
+    const auto closed_close = closed.close();
+    if (!closed_close.has_value()) {
+        t.check(false, "the fixture close succeeds");
+        return false;
+    }
 
-    auto backend = make_backend(1);
+    auto backend = make_backend(2);
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
     RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
 
-    std::vector<std::byte> buffer(4, std::byte{0});
+    std::vector<std::byte> first_buffer(4, std::byte{0});
     auto first =
-        scope.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+        scope.submit_read(ReadOp{NativeFileRef{*file}, first_buffer.data(), first_buffer.size(), 0});
     t.check(first.has_value(), "the first submission is accepted");
     if (!first.has_value())
         return false;
 
-    std::vector<std::byte> second(4, std::byte{0});
-    auto second_rejected =
-        scope.submit_read(ReadOp{NativeFileRef{*file}, second.data(), second.size(), 0});
-    t.check(!second_rejected.has_value(),
-            "the second submission is rejected by the exhausted context");
+    auto second = scope.submit_read(ReadOp{NativeFileRef{closed}, first_buffer.data(), 4, 0});
+    t.check(!second.has_value() && second.error().code == IoError::Code::invalid_state,
+            "the second submission is rejected by the closed file after reservation");
     t.check(core.snapshot().accepted_live == 1 && core.snapshot().public_bindings == 1,
             "the scope still owns the first accepted request");
 
+    std::vector<std::byte> third_buffer(4, std::byte{0});
+    auto third =
+        scope.submit_read(ReadOp{NativeFileRef{*file}, third_buffer.data(), third_buffer.size(), 0});
+    t.check(third.has_value(),
+            "the rejected submission returned its reserved tracking slot");
+    if (!third.has_value())
+        return false;
+    t.check(core.snapshot().accepted_live == 2, "both accepted requests are tracked");
+
     scope.finish();
     t.check(core_is_idle(core.snapshot()),
-            "the first request settled before the scope returned");
+            "both tracked requests settled before the scope returned");
     return true;
 }
 

@@ -13,6 +13,10 @@ std::size_t RequestScope::require_capacity_(std::size_t capacity) {
 }
 
 ProgressOwner RequestScope::claim_owner_(AsyncIoContext& ctx) {
+    if (!ctx.has_split_wait_capability()) {
+        throw std::runtime_error(
+            "sluice::async::RequestScope: the context cannot drive the owned wait protocol");
+    }
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value()) {
         throw std::runtime_error(
