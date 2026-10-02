@@ -176,9 +176,13 @@ bool RequestCore::rollback(RequestReservation reservation) noexcept {
     return true;
 }
 
-void RequestCore::close_admission() noexcept {
+bool RequestCore::close_admission() noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (!admission_open_) {
+        return false;
+    }
     admission_open_ = false;
+    return true;
 }
 
 bool RequestCore::admission_open() const noexcept {
