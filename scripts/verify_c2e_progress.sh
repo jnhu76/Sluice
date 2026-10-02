@@ -41,6 +41,28 @@
 #   Certificates (the mandated scenarios are reachable, not vacuous):
 #    11-14. CertSticky / CertSat / CertSpent / CertHost must each be
 #        violated (house must-be-reachable pattern).
+#   Campaign R -- reachability adjudication (see the C2-E reachability
+#   adjudication record in docs/roadmap/v1-conformance.md):
+#    15. ReachClose (normal Init + CloseRepeat, the C++ per-call
+#        close_admission signal) must VIOLATE InvNoProgressTerminal: the
+#        absorbing progress pair is reachable from production
+#        initialization through repeated close_admission calls alone.
+#    16. ReachClosePark (same) must VIOLATE InvSafePark: the composed
+#        no-lost-wake defect staged from normal Init (TLC's shortest
+#        trace exercises the poison facet of the same mechanism).
+#    17. ReachClosePub (same) must VIOLATE InvNoOrdinaryParkPastPublication:
+#        the production-staged composition -- accept, pump the pair via
+#        close signals, park, the completion's signal is a no-op at the
+#        frozen pair, the L4a drain consumes its fd write, ordinary park
+#        past the pending publication.
+#    18. ReachNoFuel (unbounded plain re-acceptance, one-shot close) must
+#        complete CLEANLY: InvNoProgressTerminal does not depend on
+#        MaxFuel for the request-driven signal sources; exhaustion-close
+#        plus the capacity images bound them.
+#    19. MutNoExhClose (unbounded re-acceptance + the pass never closes
+#        admission on exhaustion) must VIOLATE InvNoProgressTerminal: the
+#        exhaustion-close rule is the load-bearing production bound behind
+#        the request-source half of the argument.
 #
 # TLC retrieval is pinned and checksummed exactly as scripts/verify_tla.sh;
 # the jar is never committed.
@@ -138,6 +160,15 @@ run_violate CertSticky CertStickyControl "S4 mandated sticky scenario reachable"
 run_violate CertSat CertSatFreshness "V24 first-stage saturation freshness reachable"
 run_violate CertSpent CertSpentControlReports "spent control domain still reports control"
 run_violate CertHost CertHostLifecycle "host unregister-before-detach ordering reachable"
+run_violate ReachClose InvNoProgressTerminal \
+    "ADJUDICATION: absorbing progress pair reached from NORMAL Init via the C++ per-call close_admission signal (THREAD-01 idempotent concurrent close; PROG-04 wake-on-close)"
+run_violate ReachClosePark InvSafePark \
+    "ADJUDICATION: composed no-lost-wake defect staged from normal Init (no seam-placed initial state)"
+run_violate ReachClosePub InvNoOrdinaryParkPastPublication \
+    "ADJUDICATION: production-staged composition -- accept, close-pump to the absorbing pair, park, completion signal invisible, L4a drain consumes its fd write, ordinary park past pending publication"
+run_clean ReachNoFuel
+run_violate MutNoExhClose InvNoProgressTerminal \
+    "load-bearing bound: without exhaustion-closes-admission, unbounded re-acceptance churn reaches the absorbing pair"
 
 echo
 echo "C2-E ProgressSource campaign: all expected outcomes reproduced."

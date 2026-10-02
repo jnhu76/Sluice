@@ -128,8 +128,37 @@ CONSTANTS MaxPE,          \* progress epoch domain top (uint64 -> small)
           MutParkDrain,   \* mutant: park handshake drains unvalidated
                           \*   (L4a and P3 revalidation both disabled)
           MutNoProbe,     \* mutant: physical probe blind to CQ state
-          MutNoExhaustion \* mutant: saturated epoch bumps nothing (the
+          MutNoExhaustion,\* mutant: saturated epoch bumps nothing (the
                           \*   C2-B round-1 sticky-bool defect class)
+          CloseRepeat,    \* reachability campaign: models the C++ fact that
+                          \*   ThreadPoolBackend::close_admission() and
+                          \*   UringAsyncBackend::close_admission() call
+                          \*   signal_ready_progress() on EVERY invocation,
+                          \*   with no admission-open guard (the core close
+                          \*   is idempotent; the signal is not). The base
+                          \*   CloseAdmission action below signals only
+                          \*   while admission is open; CloseAdmissionRepeat
+                          \*   adds the already-closed call. FALSE in every
+                          \*   pre-adjudication configuration
+          UnboundedWorkload,
+                          \* reachability campaign (MaxFuel audit): plain
+                          \*   Submit no longer consumes submit fuel.
+                          \*   Production has no cumulative submission cap:
+                          \*   accepts are bounded by slot capacity plus
+                          \*   owner publication service, which the model
+                          \*   images through acc/accT/pub/owed caps.
+                          \*   SubmitTransport and ZeroOp keep their fuel
+                          \*   consumption: their C++ counterparts consume a
+                          \*   physically bounded transport-ledger entry /
+                          \*   owed control pin per accept. FALSE in every
+                          \*   pre-adjudication configuration
+          NoExhClose      \* reachability mutant: the pass does not close
+                          \*   admission when the progress exhaustion
+                          \*   sequence is nonzero -- removes the production
+                          \*   bound that keeps request churn finite after
+                          \*   exhaustion begins (close_admission_on_
+                          \*   progress_exhaustion_). FALSE in every
+                          \*   pre-adjudication configuration
 
 VARIABLES pE, pX,         \* progress epoch / exhaustion (saturating pair)
           cE, cX,         \* control epoch / exhaustion (saturating pair)
@@ -226,7 +255,7 @@ OWTop ==
   /\ cq' = 0
   /\ pub' = 0
   /\ owed' = 0
-  /\ adm' = IF pX > 0 THEN FALSE ELSE adm
+  /\ adm' = IF pX > 0 /\ ~NoExhClose THEN FALSE ELSE adm
   /\ gDone' = IF DeadlineOn THEN gDone + cq + pub + owed ELSE 0
   /\ gWork' = IF ~DeadlineOn THEN 0
               ELSE IF pc = "idle" THEN acc + accT + cq + pub + owed
@@ -342,7 +371,7 @@ OFinalPass ==
   /\ cq' = 0
   /\ pub' = 0
   /\ owed' = 0
-  /\ adm' = IF pX > 0 THEN FALSE ELSE adm
+  /\ adm' = IF pX > 0 /\ ~NoExhClose THEN FALSE ELSE adm
   /\ gDone' = IF DeadlineOn THEN gDone + cq + pub + owed ELSE 0
   /\ justRet' = IF cq + pub + owed > 0 THEN "rN"
                 ELSE IF Sick THEN "rh"
@@ -370,7 +399,7 @@ ODrive ==
   /\ cq' = 0
   /\ pub' = 0
   /\ owed' = 0
-  /\ adm' = IF pX > 0 THEN FALSE ELSE adm
+  /\ adm' = IF pX > 0 /\ ~NoExhClose THEN FALSE ELSE adm
   /\ gDone' = IF DeadlineOn THEN gDone + cq + pub + owed ELSE 0
   /\ justRet' = "none"
   /\ UNCHANGED <<pE, pX, cE, cX, obsCE, obsCX, ackCE, ackCX, fd, acc, accT,
@@ -397,21 +426,27 @@ OAckControl ==
 (*************************************************************************)
 
 Submit ==
-  /\ fuel > 0
+  /\ (UnboundedWorkload \/ fuel > 0)
   /\ adm
   /\ acc + accT < MaxAcc
   /\ acc' = acc + 1
-  /\ fuel' = fuel - 1
+  /\ fuel' = IF UnboundedWorkload THEN fuel ELSE fuel - 1
   /\ justRet' = "none"
   /\ UNCHANGED <<pE, pX, cE, cX, obsCE, obsCX, ackCE, ackCX, fd,
                  accT, cq, pub, owed, adm, waitSick, physSick,
                  pc, tok, parkKind, hostPh, interest, torn, gWork, gDone>>
 
 (* Retryable transport failure at accept: accepted work outside the kernel
-   plus the retained-transport signal (V12 / U2b shape). *)
+   plus the retained-transport signal (V12 / U2b shape). The slot-capacity
+   guard matches Submit and the C++ acceptance transaction: a retained
+   transport occupies a slot until its kernel grant, so accept at full
+   occupancy is refused (BOUND-01/02). Unobservable in every
+   pre-adjudication configuration, where the fuel budget already excludes
+   the states it removes. *)
 SubmitTransport ==
   /\ fuel > 0
   /\ adm
+  /\ acc + accT < MaxAcc
   /\ accT < MaxAccT
   /\ accT' = accT + 1
   /\ fuel' = fuel - 1
@@ -499,6 +534,23 @@ CloseAdmission ==
                  acc, accT, cq, pub, owed, fuel, waitSick, physSick,
                  pc, tok, parkKind, hostPh, interest, torn, gWork, gDone>>
 
+(* Reachability campaign: close_admission() invoked while admission is
+   already closed. The C++ backends run core_->close_admission() (an
+   idempotent no-op here) and then signal_ready_progress() unconditionally,
+   so every such call is one more progress-epoch bump. THREAD-01 documents
+   close_admission as idempotent and concurrently invocable; PROG-04
+   requires it to wake the owner. This action has no admission, capacity,
+   fuel or owner precondition -- the production transition it mirrors has
+   none either. *)
+CloseAdmissionRepeat ==
+  /\ CloseRepeat
+  /\ ~adm
+  /\ BumpP
+  /\ justRet' = "none"
+  /\ UNCHANGED <<cE, cX, obsCE, obsCX, ackCE, ackCX,
+                 acc, accT, cq, pub, owed, fuel, adm, waitSick, physSick,
+                 pc, tok, parkKind, hostPh, interest, torn, gWork, gDone>>
+
 (*************************************************************************)
 (* External-host binding lifecycle (S9, W-03/PROG-03, V23 context side).  *)
 (* The host must unregister and retire its callbacks BEFORE the context   *)
@@ -576,6 +628,7 @@ OwnerStep ==
 EnvStep ==
   Submit \/ SubmitTransport \/ WorkerComplete \/ KernelComplete
   \/ TransportGrant \/ ZeroOp \/ Interrupt \/ EnvPoison \/ CloseAdmission
+  \/ CloseAdmissionRepeat
 
 HostStep == HostBorrow \/ HostUnregister \/ DetachHost \/ HostAck \/ CtxTeardown
 
@@ -693,6 +746,17 @@ InvDeadlineNoCancel ==
    capacity-bound argument (C2-B wrap bound). *)
 InvNoProgressTerminal == ~(pE = MaxPE /\ pX = MaxPX)
 
+(* Reachability campaign: the production-staged composition -- an ordinary
+   (unbounded) park with a completion's publication pending, no pending
+   fd readiness, and a token that can no longer change. The benign race
+   (completion arrives while parked, fd = TRUE) is excluded: that owner is
+   woken. The defect shape is the drained one: at the absorbing pair the
+   completion's signal bumped nothing, the L4a drain consumed its fd
+   write, and the handshake licensed an ordinary park past the
+   unadvertised obligation (PROG-02 clause 4). *)
+InvNoOrdinaryParkPastPublication ==
+  ~(pc = "park" /\ parkKind = "none" /\ pub > 0 /\ ~fd /\ ~ProgressChanged)
+
 (* S9: teardown only from a fully retired binding; interest exists only
    while a host registration is live. *)
 InvTornClean == torn => (~interest /\ hostPh = "hNone")
@@ -794,6 +858,22 @@ LControlObserved ==
 (*  EnvPoison        poison_and_recover_locked: fatal_error_ +            *)
 (*                   note_health_failure + signal                         *)
 (*  CloseAdmission   application close_admission()/request_stop + signal  *)
+(*  CloseAdmissionRepeat                                                             *)
+(*                   close_admission() on an already-closed backend:      *)
+(*                   ThreadPoolBackend::close_admission (threadpool_      *)
+(*                   backend.cpp) and UringAsyncBackend::close_admission  *)
+(*                   (uring_backend.cpp) signal on every call; the        *)
+(*                   admission-open guard exists only on the core close.  *)
+(*                   Enabled by CloseRepeat (reachability campaign only)  *)
+(*  UnboundedWorkload (constant)                                          *)
+(*                   MaxFuel audit: plain Submit consumes no fuel;        *)
+(*                   models the absence of a cumulative submission cap    *)
+(*                   in production (accepts bounded by capacity + owner   *)
+(*                   publication service, imaged by acc/accT/pub/owed)    *)
+(*  NoExhClose (constant)                                                            *)
+(*                   mutant removing close_admission_on_progress_        *)
+(*                   exhaustion_ from the pass: request churn would pump  *)
+(*                   the exhaustion sequence without bound               *)
 (*  HostBorrow       progress_notification_fd() marking interest live     *)
 (*  HostUnregister   the host's loop unregistration + callback retirement *)
 (*                   (precondition of detach, reversed F3 ordering)       *)
