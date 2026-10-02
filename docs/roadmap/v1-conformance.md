@@ -41,7 +41,7 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | Admission and slot lifecycle | REQ, BOUND | NOT_ASSESSED | V04–V05, V08–V09, V24, V26; executable model and failure injection. Substrate half: see the B1-1 review record (standalone protocol substrate with model+test evidence; production request paths unchanged). Context-ownership half: see the B1-A review record (context-owned core, one context identity domain with an executed exhaustion boundary; production request paths still unmigrated). Production ThreadPool half: see the B1-B review record (ThreadPool acceptance/identity/terminal/publication/release/reclaim governed by the context-owned RequestCore); production io_uring half: see the B1-C review record (the same authority for io_uring); the adoption seam collapsed into the backend interface contract at B1-D (see the B1-D review record). Public-acceptance half: see the B2 review record (the accepted identity flows to a returned public Request on both backends; pre-accept failure returns no Request, post-accept failure keeps it owned) |
 | Public Request and result lifetime | HANDLE, LIFE | NOT_ASSESSED | Move/consume/discard, retained results, release-build violation behavior. See the B2 review record for the public `Request<T>`/`RequestId` surface: consumption atomic with binding release, non-consuming observation, the empty/pending/published/consumed model, always-on destructor and context-lifetime diagnostics (release-build death evidence), retained-result capacity pinning, model consumption extension with killed mutants. Observer/progress/shutdown halves stay with #396/#397/#401; whole-row verdicts wait for independent final review |
 | Observer attachment and retirement | OBS | VERIFIED | V06–V08; attach/publication and cancel/delivery interleavings. Implemented and evidenced across C1-A..C1-G (backend-neutral core ownership, ordering oracles with named mutation kills, the five-phase delivery machine, the RuntimeTaskContext adapter with reserve-before-arm failure ordering, legacy-mechanism removal, declared L3 assumptions) and formally closed by the C1-H record (#433): the TLA+ `ObserverCore` model derived from the merged implementation proves the safety floor (at-most-once delivery per registration generation, cancel isolation, attach/publish atomicity, retirement finality, the episode pin) and conditional liveness L0/L1/L2/L4 under declared WF assumptions, with the five C++ mutation seams mirrored and killed. Standing limits by evidence class: publication happens-before visibility is argued by core-mutex serialization evidence (C1-B), not formal proof; external-host W-03 integration is #397's scope |
-| Progress and external integration | PROG, W-03 | NOT_ASSESSED | V10–V12, V23; both backends; no-busy-poll/no-lost-wake evidence. Stage records: C2-A authority cutover (#397, `C2_A_IMPLEMENTED_PENDING_REVIEW`) — IoContext owns the ProgressSource and backends hold only the narrow physical signaling/binding capability; C2-B ThreadPool no-lost-wake (#397, `C2_B_IMPLEMENTED_PENDING_REVIEW`) — ThreadPool owner loop follows the PROG-02 handshake with deterministic race evidence, the external `poll(2)` W-03 half, the token-exhaustion boundary with the final corrective pass (committed control freshness R16/M-B9, terminal outer exhaustion M-B10), and the #394 L5 progress half; io_uring convergence is C2-C, owner/outcomes/external-host lifetime C2-D, formal closure C2-E; the final A-D conformance+contraction pass (#397, `C2_AD_FINAL_PASS_PENDING_REVIEW`) closed the remaining gaps — entry-bounded passes (PROG-01), composed backend/core/wait-domain health reaching the pass report and `wait_one` health outcome (PROG-01/04), reversed external-registration detach acknowledgement (PROG-03/SHUT-04) — and contracted the out-of-matrix uring reap-side signal and the `overflow_flush_serviceable_` shadow (see the C2 A-D final record); the C2 A-D corrective pass closed the DeliveryRecord synchronization gap that final record left open (see the C2 A-D corrective pass record); the C2-E production corrective pass — ordered by the V24 reachability adjudication of the PR #443 formal campaign — bound the backend `close_admission` progress signal to the core-reported admission open→closed transition, removing the unbounded repeated-close progress producer (see the C2-E production corrective pass record) |
+| Progress and external integration | PROG, W-03 | VERIFIED | V10–V12, V23; both backends; no-busy-poll/no-lost-wake evidence. Stage records: C2-A authority cutover (#397, `C2_A_IMPLEMENTED_PENDING_REVIEW`) — IoContext owns the ProgressSource and backends hold only the narrow physical signaling/binding capability; C2-B ThreadPool no-lost-wake (#397, `C2_B_IMPLEMENTED_PENDING_REVIEW`) — ThreadPool owner loop follows the PROG-02 handshake with deterministic race evidence, the external `poll(2)` W-03 half, the token-exhaustion boundary with the final corrective pass (committed control freshness R16/M-B9, terminal outer exhaustion M-B10), and the #394 L5 progress half; io_uring convergence is C2-C, owner/outcomes/external-host lifetime C2-D, formal closure C2-E; the C2-E formal campaign (TLA+ `formal/tla/ProgressSource.tla`, all properties proved below the absorbing progress pair plus conditional liveness, but the V24 exhaustion mandate exposed a recorded boundary defect at the progress pair `{MAX,MAX}` — see the C2-E record and its reachability adjudication, which classified the pair production-reachable through the per-call `close_admission` progress signal); the final A-D conformance+contraction pass (#397, `C2_AD_FINAL_PASS_PENDING_REVIEW`) closed the remaining gaps — entry-bounded passes (PROG-01), composed backend/core/wait-domain health reaching the pass report and `wait_one` health outcome (PROG-01/04), reversed external-registration detach acknowledgement (PROG-03/SHUT-04) — and contracted the out-of-matrix uring reap-side signal and the `overflow_flush_serviceable_` shadow (see the C2 A-D final record); the C2 A-D corrective pass closed the DeliveryRecord synchronization gap that final record left open (see the C2 A-D corrective pass record); the C2-E production corrective pass — ordered by the V24 reachability adjudication of the PR #443 formal campaign — bound the backend `close_admission` progress signal to the core-reported admission open→closed transition, removing the unbounded repeated-close progress producer (see the C2-E production corrective pass record); the C2-E formal re-closure re-based the #443 campaign onto the corrected master and re-proved every reachable-state obligation, with the `MutRepeatCloseSignals` mutant restoring the removed pump as the discriminator (see the C2-E formal re-closure record). **VERIFIED** by the human final review plus the C2-E final amendment: every reachable-state obligation and the restored-pump discriminator proved on the corrected close semantics (Reviewer A `FORMAL_SOUND`, Reviewer B `NO_REACHABLE_PUMP_FOUND`), the post-exhaustion bound parameterized over the `SlotIndex` identity domain, and the real-system suites listed in the C2-E records; scope: verification at recorded evidence commits, not universal Linux correctness, and not the #401 shutdown closure |
 | Public threading and memory handoff | THREAD, REQ-04 | NOT_ASSESSED | API concurrency matrix, publication review, deterministic handoff and race instrumentation |
 | Cancel and effect reporting | CANCEL, ERR-02 | GAP | V13–V15, V19; unsupported/retryable/coalesced control behavior. A1 added reference rules but no request path represents an unaccounted remainder or preserves a count across a cancel |
 | ThreadPool profile | BACKEND, PROD-02 | GAP | Full required operation matrix; bounded workers; shared conformance; shutdown. A1 recorded zero-length dispatch, precedence ordering and effect reporting as open |
@@ -1401,6 +1401,219 @@ false since C2-D. No other A-D decision is revisited; C2-E is not started.
 | Build/test evidence | Linux WSL2 6.18.40.1, gcc 15.2.0, clang 21.1.8, liburing 2.14. gcc release `--liburing=y`: full registered suite 56/56 (race suites 21/21 and 20/20 with the new tests). gcc debug `--liburing=y` focused: both race suites, both external loops, both cutovers, runtime-waiter 5/5 (the #441 case green), progress ownership, registration lifecycle — all green. gcc release `--liburing=n`: ThreadPool-side set green (race, external loop, cutover, runtime-waiter, ownership, public request). clang ASan+UBSan: both race suites, both external loops, both cutovers, ownership — green, zero reports; `runtime_waiter_observer_test` aborts on the pre-existing first-case UAF recorded by the #441/A-D records (test seam reads the freed Scheduler after `join()`; this pass changes no scheduler or harness code; the suite is green unsanitized). clang TSan: both race suites (3× consecutive), both external loops, threadpool cutover — zero reports; `runtime_waiter_observer_test` runs all five cases green with exactly the two pre-existing heap-use-after-free warnings of that same test-seam defect, byte-identical with the production change reverted (verified), so no new finding is masked. `git diff --check` clean; `scripts/check_cpp_comment_authority.py .` clean |
 | Status | `C2_AD_CORRECTIVE_PASS_PENDING_REVIEW` — the DeliveryRecord limitation of the A-D final record is closed and THREAD-02's delivery-record handoff now conforms at implementation level; this is implementation conformance only, distinct from formal closure: C2-E (TLA+, V24 saturation/no-alias, V10/V11/V12/V23/V25) remains not started and still owns formal closure. C2 is not complete |
 
+## C2-E formal closure record — Issue #397, ProgressSource TLA+ campaign and the V24 boundary finding
+
+Stage C2-E is the formal-methods closure pass over the frozen C2-A/B/C/D
+implementation (PR #442, master @ `8be2ced5`; the reviewed A-D head
+`1b468fc8` is its parent). Model follows C++: no production line changed
+(`PRODUCTION_CPP_CHANGED=NO`). One focused model
+(`formal/tla/ProgressSource.tla`) plus thirteen configurations and the gate
+`scripts/verify_c2e_progress.sh` (pinned TLC 1.7.4, checksummed, never
+committed) formalize the context-owned ProgressSource, the fixed owner's
+wait loop, and the external-host binding lifecycle.
+
+The campaign's central result is a **split verdict**: every required
+property holds below the progress domain's absorbing saturation pair, and
+the exhaustion campaign (V24's explicit mandate) produces a counterexample
+exactly at that boundary — a recorded implementation defect of the frozen
+protocol's terminal-state design, gated behind 2^64 producer transitions.
+Per the C2-E mandate this finding stops the pass: recorded, not fixed;
+C2-E does not close.
+
+| Field | Content |
+|---|---|
+| MODEL_SHA | `formal/tla/ProgressSource.tla` sha256 `60a5e9009bed4b1ba90f26903d8ef6db8baca5fa3072edc0270e05b3bf0eef20` |
+| IMPLEMENTATION_BASE_SHA | `8be2ced54e03ef527a2fb5a41d1ae9c2cbb06985` (live master; PR #442 merge; reviewed head `1b468fc8` included) |
+| ROOT_REVISION | `b26ec910875ae7233081d42fe314b81155dbb9d6` |
+| TLC_VERSION | TLC2 2.19 of 08 August 2024 (rev 5a47802), tla2tools 1.7.4 pinned sha256 `936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88` |
+| CONFIGURATIONS | 13: Safety, MutParkDrain, MutNoProbe, MutNoExhaustion, Deadline, Host, ExhNear, ExhTermControl, ExhTermProgress, Liveness, CertSticky, CertSat, CertSpent, CertHost (Safety/Deadline/Host/ExhNear/ExhTermControl/Liveness complete cleanly; the three mutants and ExhTermProgress violate `InvSafePark`; the four certificates are violated — the house must-be-reachable pattern) |
+| STATE_COUNTS (generated / distinct / depth) | Safety 21784/4783/18 · MutParkDrain 1476/569/7 · MutNoProbe 1469/566/7 · MutNoExhaustion 1135/391/7 · Deadline 36006/8030/18 · Host 5115/993/14 · ExhNear 651/140/10 · ExhTermControl 1256/230/10 · ExhTermProgress 831/292/7 (violation trace) · Liveness 21856/4783/18 · CertSticky 5/3/2 · CertSat 6/4/2 · CertSpent 2/2/2 · CertHost 45/22/3 |
+| RUNTIME/RESOURCE_FACTS | Full campaign ≈ 35 s wall on WSL2 kernel 6.18.40.1 (java 25, `-XX:+UseParallelGC`); every configuration exhausts its finite state space — no timeout is a success oracle; TLC's fingerprint-collision estimate on the largest run ≤ 4.4E-12 |
+| INVARIANTS | `TypeOK`; `InvSafePark` (S2/S8: a parked owner without pending fd readiness may not sleep past userspace-drivable work, CQ state, control, health, an unscheduled dispatch-retry obligation, or an idle unbounded park); `InvControlGenOrder` + `InvControlSpentNeverParks` (S4); `InvNoFalseIdle` (S5); `InvDeadlineNoCancel` (S6, ghost-accounted); `InvNoProgressTerminal` (the finite image of the production capacity bound); `InvTornClean`/`InvInterestMatchesHost` (S9) |
+| TEMPORAL_PROPERTIES | `LObligationDrains` (L5/progress + S7), `LTransportDispatches` (retry fairness), `LAcceptedCompletes` (L1 environment half), `LParkWakes` (L2 no-lost-wake), `LControlObserved` (sticky control resolution: observation, acknowledgement catch-up, or the stronger health verdict) — all five hold under `SpecFair` |
+| FAIRNESS_ASSUMPTIONS | OWNER_FAIRNESS: `WF_vars` on the owner protocol points (OWTop/OL4a/OProbe/OP3/OWake/OTimerNap/OTimerCaller/OAckControl), including wait re-entry. BACKEND/ENV: `WF_vars(WorkerComplete \/ KernelComplete)` (accepted work the environment allows eventually completes) and `WF_vars(TransportGrant)` (the kernel eventually accepts a retained transport submit). Producer actions (Submit/Interrupt/EnvPoison/CloseAdmission) and the injected poll failure carry no fairness. No unconditional physical-I/O termination is claimed |
+| ENVIRONMENT_ASSUMPTIONS | Producer bump-then-fd-write is mutex-ordered (abstracted to one atomic step; the excluded interleaving is owner-sees-bump-and-returns, which never parks); kernel CQE publication writes the registered eventfd synchronously (kernel facts verified against the 6.12 source by C2-C, exercised on 6.18); fd readiness is level-triggered and lossless (eventfd saturation leaves readiness asserted); the pass is the atomic image of the entry-bounded C++ pass — the own-reap-precedes-publication-snapshot order at `UringAsyncBackend::poll` was verified in source before modelling |
+| MODEL↔CPP_MAPPING | Module header + per-action table in `formal/tla/ProgressSource.tla`: OWTop = the `wait_one` loop head (snapshot → `run_progress_pass_` → completed/health/control/quiescent/park precedence); OL4a = the fused mutex hold of `wait_if_unchanged` (health, control, token revalidation, deadline, stale drain); OProbe = `has_immediate_physical_work`; OP3 = the non-draining post-probe revalidation; OWake/OTimer* = `poll(2)` wake/nap/caller deadline; OFinalPass = the deadline branch's final pass; OPollFail = the sticky non-EINTR health verdict; ODrive = `poll_progress()` external drive; OAckControl = `acknowledge_progress_control()`; Submit/SubmitTransport/WorkerComplete/KernelComplete/TransportGrant/ZeroOp/Interrupt/EnvPoison/CloseAdmission = the audited signal-source census (silent accept, retained-transport signal, worker/zero-op/cancel push+signal, kernel eventfd write without epoch, silent dispatch grant, owed-reclaim signal, `interrupt_progress_waiters`, poison+`note_health_failure` closing admission, `close_admission` with signal); HostBorrow/HostUnregister/DetachHost/HostAck/CtxTeardown = `progress_notification_fd` interest marking, the reversed-F3 host unregistration precondition, `detach_progress_host`, the plain-drain acknowledgement, and the teardown fail-fast. BumpP/BumpC mirror `signal()`/`interrupt()` saturation including the absorbing pair |
+| REAL_SYSTEM_EVIDENCE (re-run at this head, gcc 15 release, WSL2 6.18) | `threadpool_progress_race_test` 20/20 and `uring_progress_race_test` 17/17 (V10/V11/V12 interleavings, token exhaustion, k-campaign, poison wake); `threadpool_external_loop_test` 5/5 and `uring_external_loop_test` 5/5 (real `poll(2)` W-03 loop, notification-fd discipline, stop/settle/detach ordering, retry schedule); `progress_source_ownership_test` 11/11 both variants (owner exclusivity/outcomes/moved-from); `uring_registration_lifecycle_test` 4/4 (registration/unregister pairing); `threadpool_core_cutover_test` 16/16; `uring_core_cutover_test` 21/21; `runtime_waiter_observer_test` 5/5 (the #441 re-anchored concurrent-cancel case) |
+| V24 BOUNDARY FINDING | `ExhTermProgress` violates `InvSafePark` with a 7-state trace: seam-placed absorbing pair `{MaxPE,MaxPX}` (the finite image of `{UINT64_MAX,UINT64_MAX}`) → `Submit` → `OWTop` (the pass closes admission via `close_admission_on_progress_exhaustion_`, park licensed on `accepted_work_remains`, token = the absorbing pair) → `WorkerComplete` (publication owed + `signal()`: at the absorbing pair the bump is a no-op, only the eventfd write remains) → `OL4a` (token revalidation sees the pair unchanged → the fused drain consumes the just-written fd readiness) → probe (no CQE: a userspace push) → `OP3` unchanged → unbounded park with publication work pending, admission closed, no accepted work, no future signal source. Concrete mapping: `wait_if_unchanged`'s mutex-held check finds `progress_epoch_/progress_exhaustion_` equal to the observed token, `drain_notification_nolock_()` consumes the producer's `wake_notification_()` write (legal interleaving: the producer releases `mtx_` before writing), and `poll(2)` parks — fd freshness was the only remaining carrier because the epoch pair cannot move. Violated: PROG-02 clause 4 (a relevant transition occurred between token and final check but the token cannot express it) and S9/L5-progress (sleeping past the unadvertised obligation; relief only via unrelated new work, which S7 forbids requiring). The control domain is NOT affected: `control_domain_spent_` makes a spent pair permanently pending, so no park is licensed — the missing progress-domain spent rule is the defect class. Production reachability: the absorbing pair needs 2^64 producer transitions; the C2-B population bound excludes it only under fair owner scheduling and a finite signal rate — an assumption, not a mechanism. Classification: REAL at the formal boundary (every step maps to a legal frozen-C++ transition; independently re-mapped step-for-step by the formal-soundness reviewer), not reachable by any bounded workload or fair schedule; deterministic C++ reproduction would require a `set_progress_exhaustion_for_test` seam this pass deliberately does not add. Per the C2-E mandate: STOP — recorded, not fixed; any repair (a progress-domain spent rule, or refusing unbounded parks while `exhausted()`) is a production design decision requiring separate authorization and root alignment |
+| SUBAGENT_REVIEWS | Formal-soundness reviewer: **FORMAL_SOUND** — 10/10 questions PASS; independently re-ran the full gate (all outcomes reproduce), re-derived the counterexample state-for-state, and re-mapped every trace step to the C++ (verdict: the trace IS a legal interleaving at `{MAX,MAX}`). Minimization reviewer: **NO_PROVEN_OPTIMIZATION** — ran five additional TLC ablations (`MutNoP3`, `MutNoL4aCheck`, `MutNoNap`, `MutAckCurrent`, `MutNoDrain`) in an isolated harness; the L4a and P3 revalidations are a 1-of-2 necessary pair (each individually model-redundant, jointly killed at the identical 569-state fingerprint; P3 deletion is additionally test-invisible and a syscall pessimization, L4a deletion breaks five deterministic race tests); the exhaustion sequence, probe, control generations, nap class, drain, spent-domain rule and admission closure are all load-bearing with named discriminators |
+| ADJUDICATION | Reviewer A findings: P2-1 dangling ledger anchor — ACCEPT, closed by this record; P3-2 `termP` seam-parity comment overstated — ACCEPT, reworded (no `set_progress_exhaustion_for_test` exists; the absorbing-pair init is a modeled placement); P3-3 `WF_vars(OPollFail)` masking hazard — ACCEPT, removed from `SpecFair` and the campaign re-run green; P3-4 imprecise CQ-observability wording — ACCEPT, reworded; P3-5 undocumented `HostAck` park-exclusion argument — ACCEPT, documented at the action. Reviewer B: all candidate verdicts ACCEPTED (no `OPTIMIZATION_CANDIDATE`); the `TransportGrant`-without-owner-guard fidelity caveat and the two MODEL-ONLY observations (loop-head health check, POLLIN control-first recheck — both dead-in-production by construction but without deletion discriminators) are recorded below as observations, not removal eligibility |
+| KNOWN_LIMITATIONS | (1) The external host's own event-loop drive is not a separate actor: the context-side binding lifecycle is modelled; the host-side poll discipline is carried by the external-loop suites. (2) Owner admission enforcement changes no protocol state; evidenced by the ownership suites, the model proves the protocol-level consequence. (3) `POLLNVAL` fail-fast, EINTR retries and clock arithmetic are out of scope. (4) The model is the union of both backends' producer behaviors (safety over the union implies safety over each). (5) `TransportGrant` has no owner pc-guard, so a `MutNoNap`-style ablation can pass liveness while the C++ retry (owner-only pass) would strand — recorded so the fidelity caveat is not mistaken for nap redundancy. (6) The uring kernel-registration pairing and the CQ-overflow half of the probe are not represented (model-only territory). (7) Domain sizes are finite images of uint64; the capacity arithmetic keeping the absorbing pair out of the clean configurations is stated in `InvNoProgressTerminal`'s comment and was re-derived by the reviewer |
+| Status | `C2_E_FOUND_IMPLEMENTATION_COUNTEREXAMPLE_PENDING_REVIEW` — the campaign is complete and reproducible (`bash scripts/verify_c2e_progress.sh`); all required properties are proved below the absorbing progress pair under explicit fairness; the V24 boundary mandate produced a recorded defect at that pair, so C2-E does not close, the C2 assessment row stays NOT_ASSESSED pending human review of the finding, and no V-status is converted beyond the evidence recorded here. No production C++ changed; #397 stays open |
+
+### C2-E reachability adjudication — Issue #397, is `{MAX,MAX}` production reachable?
+
+Adjudication pass over the C2-E record above, on the same frozen
+implementation (master @ `8be2ced5`, implementation sources last touched at
+`bb8fe8e6`; reviewed formal head `3be4d34c`; root revision `b26ec910`).
+`PRODUCTION_CPP_CHANGED=NO`. The original `ExhTermProgress` result is
+preserved unchanged above; this record adds its production-reachability
+classification. New model text is gated behind three constants
+(`CloseRepeat`, `UnboundedWorkload`, `NoExhClose`, all `FALSE` in every
+pre-adjudication configuration) plus one proof-oriented invariant; the full
+pre-existing 14-configuration gate re-ran at the amended model with every
+recorded outcome and state count reproduced identically.
+
+**Signal-source census at the frozen baseline** (every progress-epoch
+bumping site; kernel CQE eventfd writes carry no epoch and are excluded):
+ThreadPool worker completion (`threadpool_backend.cpp:467`, one per
+accepted request), zero-op inline publication (`:350` and
+`uring_backend.cpp:1153`, one per accepted zero-op), cancel
+`won_before_execution` (`:720`/`:1265`, once per request identity — core
+arbitration latches `terminal_chosen`, later attempts return
+`already_terminal`), uring retained-transport advertisement at accept
+(`:651`, one signal per accept even when the dispatch loop flushes many
+SQEs; `newly_poisoned` one-shot; the injected-dispatch-failure term is
+test-only), poison recovery walk (`:897`, one-shot — the
+`fatal_error_.has_value()` entry guard; `fatal_error_` is never cleared),
+and `close_admission()` (`threadpool_backend.cpp:775-780`,
+`uring_backend.cpp:1318-1325`): `core_->close_admission()` is an
+idempotent bare flag write, then `signal_ready_progress()` fires
+**unconditionally on every call** — no admission-open guard, no capacity,
+fuel or owner precondition. Retry outcomes are silent
+(`account_transport_result_locked`: `rc==0`/`EINTR`/`EAGAIN`/`EBUSY`
+return without signaling; only non-retryable errors poison), so no
+per-retry-attempt signal exists. Host operations
+(`acknowledge_progress_notification`, `poll_progress`, host ack/detach)
+never signal; `interrupt_progress_waiters` is control-domain;
+`close_admission_on_progress_exhaustion_` (`async_io_context.cpp:462`)
+calls the core directly without signaling; `ApplicationRuntime::
+request_stop` is one-shot-guarded and control-domain.
+
+**Request-driven bound (scheduling-independent).** Once
+`progress_exhaustion_ > 0`, every owner pass closes core admission; in the
+window before the first such pass, accepts go only into free slots, and
+slot reuse requires owner service on both backends (publication happens
+only in the owner's pass; the zero-op `event_owed` control pin holds the
+slot until the owner's owed sweep; retained transports hold theirs until
+an owner/acceptor submit succeeds). With C = slot capacity:
+`BOUND_BEFORE_OWNER_CLOSE <= 2C` (each request contributes at most an
+accept-time signal and one terminal signal, completion and cancel-won
+mutually exclusive), `BOUND_AFTER_ADMISSION_CLOSE <= C + 1` (outstanding
+requests each at most one terminal signal, plus the one-shot poison), so
+`TOTAL_POST_FIRST_EXHAUSTION_SIGNAL_BOUND <= 3C + 2 < UINT64_MAX` for
+every valid configuration — independent of owner latency. Ranking: Φ =
+outstanding requests + pending publications + owed pins + retained
+transports + unspent poison; every request-source signal consumes one Φ
+unit and no transition replenishes Φ once admission is closed.
+
+**The pump.** `close_admission()` on the backend is the one progress-domain
+producer that consumes nothing. THREAD-01 documents the operation as
+idempotent and concurrently invocable; PROG-04 requires each call to wake
+a potentially sleeping owner (the per-call signal is the root-mandated
+shape — a host-side "signal only on state change" guard would recreate the
+missed wake PROG-04 forbids). The operation is public on both public
+header classes; the live-attached-context invocation pattern (host retains
+the reference it constructed, then moves `unique_ptr` ownership into the
+context) is exercised in-tree (`threadpool_core_cutover_test.cpp:584`).
+A caller looping `close_admission()` executes one legal transition per
+iteration: 2·(2^64−1) calls reach `{MAX,MAX}` from any valid initial
+state — a finite legal trace with no seam, no undefined behavior and no
+contract violation; it needs no accepted request, no capacity and no
+owner involvement. The C2-B asymmetry argument ("control interrupts are
+externally callable with no request-capacity bound; progress is bounded by
+capacity") missed that `close_admission` is an externally-callable
+progress-domain signal with no capacity bound; this adjudication
+falsifies the ledger's earlier population-bound sentence at the C2-B
+record ("post-saturation progress signal population is bounded by
+accepted request capacity") — that bound holds only for the
+request-driven sources.
+
+**MaxFuel audit.** `INV_NO_PROGRESS_TERMINAL_DEPENDS_ON_MAXFUEL=NO` for
+the request-driven sources: `ReachNoFuel` (plain `Submit` consumes no
+fuel; `SubmitTransport`/`ZeroOp` keep fuel as the image of their
+physically bounded ledger-entry/owed-pin consumption) completes cleanly,
+and `MutNoExhClose` (the pass never closes admission on exhaustion)
+violates — the load-bearing bound is the exhaustion-close rule plus the
+capacity/pin gating, not the fuel. Two fidelity disclosures: (1) the
+pre-existing model's `CloseAdmission` action carries an `/\ adm` guard —
+one signal per admission-open period — which diverges from the C++
+per-call signal; the prior `InvNoProgressTerminal` clean runs rested
+partly on that divergence, and `CloseAdmissionRepeat` now encodes the
+C++ fact; (2) the campaign added the C++-faithful slot-capacity guard
+`acc + accT < MaxAcc` to `SubmitTransport` (accept requires a free slot,
+BOUND-01/02) — unobservable in every pre-adjudication configuration
+(their `MaxFuel <= 1` already excluded the removed states) and required
+for the fuelless runs' finiteness.
+
+**Reachability campaign** (`bash scripts/verify_c2e_progress.sh`,
+campaign R; TLC 1.7.4, same pinned jar; all from `InitMode = "std"`):
+
+| Config | Result | States generated / distinct / depth | Terminal reached |
+|---|---|---|---|
+| ReachClose | `InvNoProgressTerminal` VIOLATED | 452 / 209 / 5 | YES |
+| ReachClosePark | `InvSafePark` VIOLATED | 17461 / 4488 / 10 | YES |
+| ReachClosePub | `InvNoOrdinaryParkPastPublication` VIOLATED | 21719 / 5295 / 11 | YES |
+| ReachNoFuel | clean | 781351 / 161755 / 35 | NO |
+| MutNoExhClose | `InvNoProgressTerminal` VIOLATED | 875155 / 191459 / 26 | YES |
+
+`ReachClose` (5 states): `SubmitTransport` → `CloseAdmission` →
+`CloseAdmissionRepeat`×3 → `{MaxPE,MaxPX}`. `ReachClosePub` (11 states,
+the production-staged composition, mapping 1:1 to C++): `Submit` (the
+blocking read accepted) → `CloseAdmission` (epoch+1, admission closed) →
+`CloseAdmissionRepeat`×3 (epoch saturates, exhaustion pair completed) →
+`OWTop` (pass finds nothing actionable, accepted work remains, ordinary
+park licensed at the frozen token) → `WorkerComplete` (publication owed;
+its signal bumps nothing, only fd readiness) → `OL4a` (token unchanged,
+drain consumes that readiness) → `OProbe`/`OP3` (no CQ, userspace work)
+→ ordinary park past the pending publication. `ReachClosePark`'s shortest
+trace exercises the poison facet of the same mechanism (EnvPoison's
+signal invisible at the frozen pair, its fd write drained, park past
+health).
+
+**Reviewer verdicts.** `REVIEWER_A=REACHABLE_TRACE_FOUND` — independently
+verified every census site, the cancel one-shot arbitration, the silent
+retry outcomes, the owner-gated slot recycling and the request-source
+ranking; re-ran all four campaign configs itself (identical outcomes);
+confirmed the pump's contract legality (PROG-04's wake mandate makes the
+per-call signal the compliant shape) and the retained-reference pattern
+(in-tree precedent); found no additional pump; P3 severity note: ~2^64
+calls at nanosecond rate is decades and no production caller exists today
+— a contract-sanctioned theoretical trace, recorded as severity context,
+not a reachability argument (the adjudication standard forbids dismissing
+it on practicality). `REVIEWER_B=INFINITE_SIGNAL_SEQUENCE_FOUND`
+(blinded, launched without this adjudication's conclusions) —
+independently constructed the same repeating trace (`raw->close_admission()`
+loop on the live attached context), confirmed every other source bounded
+(residual post-exhaustion request-source bound ≤ C+1), and confirmed
+legality under THREAD-01/PROG-04. Both reviewers converged without
+contradiction; all findings adjudicated and recorded above.
+
+**Health-abstraction alignment (L4a).**
+`L4A_HEALTH_ABSTRACTION=TRACE_EQUIVALENT_FOR_CURRENT_HEALTH_SOURCES`: the
+model's `OL4a` observes `waitSick` inside the fused step while the C++
+checks `health_failed_` at the loop head before the fused section — but
+`health_failed_` has no external production writer (only the owner's own
+non-EINTR `poll(2)` failure inside the same loop, which returns
+immediately), so no interleaving distinguishes the two placements; the
+model's `OL4a` waitSick disjunct is in fact unreachable defensive text.
+A future external health setter (e.g. a progress-spent sticky-health fix)
+would break this equivalence and must participate in the stale-drain race
+discipline.
+
+**Adjudication.** The absorbing progress pair is reachable from valid
+production initialization through supported transitions: the C++-faithful
+close semantics (TLC-certified from `"std"` Init) plus the already-local
+`{MAX,MAX}` lost-wake behavior compose into a production-reachable V24
+defect. The C2-E `termP` finding is therefore reclassified from
+"boundary/assumption-bounded" to production-reachable:
+`LOCAL_COUNTEREXAMPLE` + `PRODUCTION_REACHABILITY = REACHABLE` (smallest
+concrete trace: the `ReachClosePub` sequence above, at 2^64 scale in the
+counting coordinates). Per the adjudication mandate: no production C++
+changed in this pass, no fix applied (any repair — a progress-domain
+spent rule mirroring `control_domain_spent_`, or refusing unbounded parks
+while exhausted, or bounding the close-signal side effect — is a
+production design decision requiring separate authorization and root
+alignment, and the health-setter caveat above applies to the
+sticky-health variant), PR #443 carries the amended campaign for review,
+#397 stays open, and the pass stops here for human review.
+
+| Field | Content |
+|---|---|
+| PR_HEAD_BEFORE | `3be4d34cb27b7ffb1cbb611a7d113b729202eb65` |
+| MODEL_SHA (amended) | `formal/tla/ProgressSource.tla` sha256 `2b4ab7653259423f568f386add376ab84522a091ac0b1bcf4f821a67981a5ac4` |
+| Verdict | `V24_TERMINAL_PROGRESS_REACHABLE_COUNTEREXAMPLE`; consequence for C2-E: `C2_E_FOUND_IMPLEMENTATION_COUNTEREXAMPLE` (stands, now on production-reachability evidence rather than the `termP` seam alone) |
+| Status | `C2_E_FOUND_IMPLEMENTATION_COUNTEREXAMPLE_PENDING_REVIEW` (unchanged label, strengthened basis; reachability adjudication complete; awaiting human review; no production C++ changed; #397 open; PR #443 not merged) |
 ## C2-E production corrective pass — Issue #397, transition-bound `close_admission` progress signal
 
 The production half of the corrective split ordered by the C2-E
@@ -1435,3 +1648,76 @@ gap.
 | Build/test evidence | Linux WSL2 6.18.40.1-microsoft-standard, gcc 15.2.0 (`/usr/bin/g++`), liburing 2.14 enabled (`xmake f -m <mode> --liburing=y`). gcc debug: full registered suite 56/56 via `xmake test -v` (includes both ownership flavors — 12 and 13 tests — and the 46-case protocol suite). gcc asan and gcc tsan, touched set: progress ownership 12/12 + 13/13, protocol 46/46, threadpool cutover 16/16, uring cutover 21/21, threadpool race 21/21, uring race 20/20 — green, zero reports. Mutant kills as above. `git diff --check` clean; `scripts/check_cpp_comment_authority.py .` clean |
 | Remaining limitations | No formal closure is claimed and no V-status converts here. The C2-E TLA+ campaign — including the `termP` boundary finding, which must keep failing because the absorbing pair stays locally unsafe while production safety comes from its unreachability — the `CloseAdmissionRepeat` reclassification to the load-bearing `MutRepeatCloseSignals` mutant, and the full re-run on fixed master belong to PR #443 rebased onto this change. The health abstraction (`L4A_HEALTH_ABSTRACTION` trace-equivalence note) is untouched, and any #401 shutdown-state upgrade owns its own future wake obligation |
 | Status | `C2_E_CLOSE_SIGNAL_CORRECTIVE_PASS_PENDING_REVIEW` — the production pump behind the adjudicated counterexample is removed with deterministic, mutation and sanitizer evidence; formal re-closure of C2-E stays with the #443 campaign to be rebased on this fix. C2 is not complete |
+## C2-E formal re-closure record — Issue #397, the reachable-state proof on the corrected close semantics
+
+The formal half of the corrective split, completing the interrupted C2-E
+campaign against the adopted production state. History preserved end to
+end: the original campaign recorded the `termP` local counterexample
+(`C2_E_FOUND_IMPLEMENTATION_COUNTEREXAMPLE`); the reachability
+adjudication proved the absorbing pair production-reachable through the
+per-call `close_admission` signal; #444 removed that pump; this pass
+re-based PR #443 onto the corrected master and re-proved every
+obligation over reachable states only. `PRODUCTION_CPP_CHANGED=NO`
+(`git diff 7bd1976f..5895bda9 -- 'src/' 'include/' 'apps/' 'xmake.lua'
+'xmake/' 'tests/'` is empty). Rebase record:
+`PR_HEAD_BEFORE=3be4d34c`, adjudication commit `45b4974a` preserved
+(backup ref `backup/397-c2-e-adjudication`), `LIVE_MASTER=7bd1976f`
+(the #444 merge), final model commit `5895bda9`.
+
+The central result is now a **three-part verdict**, not a split one:
+
+```text
+LOCAL_SAFETY_AT_TERMP            = FAIL (preserved certificate)
+PRODUCTION_REACHABILITY_OF_TERMP = UNREACHABLE (proved)
+MUT_REPEAT_CLOSE_RESTORATION     = REACHABLE AGAIN (mutant discriminator)
+```
+
+These do not contradict: the representation boundary remains locally
+unsafe by design evidence (the representation cannot express the
+unadvertised obligation, so a seam-placed `{MAX,MAX}` initial state
+violates `InvSafePark`), production safety arises from the
+unreachability of that state under the corrected transition system
+(#444 removed the only non-consuming producer), and the
+`MutRepeatCloseSignals` mutant restoring exactly the removed signal
+edge re-reaches the pair and its lost-wake composition from normal
+Init — so the unreachability proof rests on the actual pump removal,
+not on domain sizes or fuel.
+
+| Field | Content |
+|---|---|
+| MODEL_SHA | `formal/tla/ProgressSource.tla` sha256 `eac3ea9b1d7016df201fd6499655e7feaecc03f614d71fbee2c43c93a0aef4bd` (the reviewed state; the pre-review sha `042f7590...` differed only in the three comment hunks the adjudications ordered — see REVIEW_ADJUDICATION — and the full gate re-ran byte-identical after them: all 21 outcomes and final state counts unchanged); the human-review final amendment produced sha `2c4440ebaf075fbee0227abcb5171b9d756ae799af54ab65ef74a94ae5fc9a73` — again comment-only (the `C_eff` bound restatement ordered by the human P1 and the injectivity-premise expansion from the Reviewer-A re-check) with the full gate re-run count-identical on the final text |
+| IMPLEMENTATION_BASE_SHA | `7bd1976f49fabd0c938ecd655e2af3aa2e54c2e4` (live master; PR #444 merge). The old `8be2ced5` semantics is not modeled anywhere: the model's close semantics is the #444 shape — `CloseAdmission` signals only on the open→closed transition; a repeated close is a stuttering step (verdict `false`, no signal, no epoch move — exactly `RequestCore::close_admission()` returning `false` and the backend not signaling) |
+| CLOSE_SEMANTICS_MAPPING | `CloseAdmission` = `ThreadPoolBackend::close_admission`/`UringAsyncBackend::close_admission` signaling on the core-reported transition only (`threadpool_backend.cpp:782-784`, `uring_backend.cpp:1326-1329`); repeated-close stuttering = the `false` verdict path; `EnvPoison` keeps its own terminal wake (`poison_and_recover_locked` → `signal_ready_progress`, `uring_backend.cpp:897`) matching the #444 authority split; the owner-internal exhaustion close takes no extra wake (`close_admission_on_progress_exhaustion_` ignores the verdict, `async_io_context.cpp:462-466`) matching the pass effect `adm' = IF pX > 0 ... FALSE` with no bump. `CloseAdmissionRepeat` now exists only behind the `MutRepeatCloseSignals` constant and restores exactly the removed edge — no other state is touched by the mutant |
+| CONFIGURATIONS | 21: the original 14 (Safety, MutParkDrain, MutNoProbe, MutNoExhaustion, Deadline, Host, ExhNear, ExhTermControl, ExhTermProgress, Liveness, CertSticky, CertSat, CertSpent, CertHost) reproduce byte-identical outcomes and state counts at the amended model; the 5 reachability configs re-anchored to fixed semantics (ReachClose, ReachClosePark, ReachClosePub, ReachNoFuel, MutNoExhClose); 2 new restored-pump discriminators (MutRepeatCloseSignals, MutRepeatCloseSignalsPark) |
+| STATE_COUNTS (generated / distinct / depth) | Safety 21784/4783/18 · MutParkDrain 1476/569/7 · MutNoProbe 1469/566/7 · MutNoExhaustion 1135/391/7 · Deadline 36006/8030/18 · Host 5115/993/14 · ExhNear 651/140/10 · ExhTermControl 1256/230/10 · ExhTermProgress 831/292/7 (violation trace — the boundary certificate, still failing as required) · Liveness 21856/4783/18 · CertSticky 5/3/2 · CertSat 6/4/2 · CertSpent 2/2/2 · CertHost 45/22/3 · ReachClose clean 21784/4783/18 · ReachClosePark clean 21784/4783/18 · ReachClosePub clean 21784/4783/18 · ReachNoFuel clean 781351/161755/35 · MutNoExhClose 875155/191459/26 (violation) · MutRepeatCloseSignals 1292/506/6 (InvNoProgressTerminal violated) · MutRepeatCloseSignalsPark 27657/6909/11 (InvSafePark violated) |
+| V24 THREE-PART VERDICT | `PRODUCTION_TERMINAL_PAIR_REACHABLE=NO` (ReachClose/ReachClosePark/ReachClosePub all clean at the pre-fix-violating domain sizes; the corrected transition system cannot stage the counterexamples) · `MUT_REPEAT_CLOSE_TERMINAL_PAIR_REACHABLE=YES` (the mutant re-reaches `{MaxPE,MaxPX}` from normal `"std"` Init in 6 states and kills `InvSafePark` in 11) · `TERMP_LOCAL_SAFE_PARK=FAIL` (`ExhTermProgress` still violates `InvSafePark`; deliberately not repaired) |
+| POST_EXHAUSTION_BOUND | `PRE_CLOSE_BOUND <= 2C` (per accepted request: at most an accept-time signal — retained transport, zero-op owed pin, or dispatch-failure advertisement — plus one terminal signal; completion and cancel-won are mutually exclusive by core terminal arbitration) · `POST_CLOSE_BOUND <= C + 1` (after the owner's first exhaustion pass closes admission no new request is accepted; each outstanding request contributes at most one terminal signal; the one-shot poison adds one) · `TOTAL_BOUND <= 3*C_eff + 2 <= 3*2^32 + 2 < 2^34 << UINT64_MAX` for every valid configuration (C_eff = the maximum number of simultaneously live, distinct request identities able to produce a counted signal — exactly the C of the window accounting; every live obligation holds one uint32 `SlotIndex`, `request_key.hpp:15-18`, and simultaneously-live obligations hold pairwise-distinct values — bijection free-pool fill, single-token pop/push, retirement never re-pools — so `C_eff` is at most the `SlotIndex` domain size, `2^32`, by representation; BOUND-01 classifies identity-domain overflow as a setup error. An identity-domain bound, not a machine-RAM heuristic; restated per the human-review P1 — the previous "C = request slot capacity, configuration-bounded" justification did not entail the inequality) · `REPEATED_CLOSE_PROGRESS_BUMPS = 0`. Scheduling-independent: the bound counts resources, not owner latency; the fuel budget is not load-bearing |
+| IDENTITY_DOMAIN_DEBT | Raw `request_capacity` representability validation is **outside C2-E**: `UringConfig` already rejects `> UINT32_MAX` (`uring_backend.cpp:314-321`), but `RequestCore` (`request_core.cpp:14-20`) and `ThreadPoolBackend` (`threadpool_backend.cpp:92`) currently validate only nonzero, so an oversized `size_t` capacity on those paths would truncate the uint32 slot fill. The V24 bound neither claims nor needs that enforcement: it is conditioned on BOUND-01's validity rule and uses the effective distinct `SlotIndex` identity domain, not an unverified claim that arbitrary `size_t` configuration values are valid today. Enforcing the BOUND-01 setup rejection on every admission path is a separate conformance debt for its own slice |
+| SIGNAL_SOURCE_CENSUS (post-#444, every production epoch-bumping site) | ThreadPool worker completion (`threadpool_backend.cpp:467`, one per accepted request, publication pin) → `WorkerComplete` · zero-op inline publication (`threadpool_backend.cpp:350`, `uring_backend.cpp:1153`, one per accepted zero-op, owed pin) → `ZeroOp` · cancel `won_before_execution` (`threadpool_backend.cpp:720`, `uring_backend.cpp:1265`, once per request identity — `terminal_chosen` latches) → `WorkerComplete` shape · uring retained-transport advertisement (`uring_backend.cpp:651`, per accept with unsubmitted work; `newly_poisoned` one-shot; injected-dispatch-failure term test-only) → `SubmitTransport` · poison recovery walk (`uring_backend.cpp:897`, one-shot `fatal_error_` entry guard, never cleared) → `EnvPoison` · `close_admission()` (`threadpool_backend.cpp:782`, `uring_backend.cpp:1328`, transition-only post-#444) → `CloseAdmission`. Silent or non-progress: plain accept (worker/kernel-actionable), successful kernel submit (silent), kernel CQE publication (eventfd write, no epoch), retry outcomes `rc==0`/`EINTR`/`EAGAIN`/`EBUSY` (silent), host ack/poll/detach (no signal), `interrupt_progress_waiters` (control domain), `request_stop` (one-shot, control domain), `close_admission_on_progress_exhaustion_` (core call, no signal). Answer to the pump question: **NO supported path advances the progress generation without consuming a finite production resource** — re-audited from source at `7bd1976f`, not inherited from the pre-rebase adjudication |
+| MAXFUEL_AUDIT | `INV_NO_PROGRESS_TERMINAL_DEPENDS_ON_MAXFUEL=NO`: `ReachNoFuel` (plain `Submit` consumes no fuel; unbounded re-acceptance under the capacity images) completes cleanly at 161755 distinct states; `MutNoExhClose` (the exhaustion-close mutant) violates under the same unbounded workload — the load-bearing bound is exhaustion-closes-admission plus capacity/pin gating, not the fuel |
+| FAIRNESS_ASSUMPTIONS | `FAIRNESS_CHANGED_AFTER_444=NO` — `SpecFair` is byte-identical to the pre-rebase campaign (verified by diff: zero fairness-related changed lines). Owner WF on the protocol points, environment completion WF, transport-dispatch WF; producers and the injected poll failure carry no fairness. The unreachability proof needs no scheduling luck: the pump is removed mechanically |
+| REAL_SYSTEM_EVIDENCE (re-run at `5895bda9` on `7bd1976f`, gcc release `--liburing=y`, WSL2 6.18) | `request_core_protocol_test` 46/46 (the close_admission transition oracle) · `progress_source_ownership_test` 12/12 and `progress_source_ownership_uring_test` 13/13 (owner-level token+fd oracle in both flavors) · `threadpool_progress_race_test` 21/21 · `uring_progress_race_test` 20/20 · `threadpool_external_loop_test` 19/19 · `uring_external_loop_test` 5/5 · `uring_registration_lifecycle_test` 4/4 · `threadpool_core_cutover_test` 16/16 · `uring_core_cutover_test` 21/21 · `runtime_waiter_observer_test` 5/5 (the #441 staged-delivery regression) · close-admission mutant kills re-run: both `*_mut_close_admission_always_signals` builds exit 1 on the shared transition oracle |
+| HEALTH_ABSTRACTION | `L4A_HEALTH_ABSTRACTION=TRACE_EQUIVALENT_FOR_CURRENT_HEALTH_SOURCES` (unchanged): #444 touched no health writer (`health_failed_` writers remain `RequestCore::note_health_failure` and the ProgressSource-internal sticky sites; diff-verified), so the `OL4a` waitSick placement equivalence stands on the same argument as the adjudication; a future external health writer must participate in the stale-drain race discipline |
+| SCOPE_CONFIRMATION | #398/#399/#400/#401 unchanged; no root amendment; no `progress_domain_spent` rule added; no spent→health-failure or spent→never-park rule added; no new progress state, fairness assumption or defensive mechanism; the absorbing pair remains locally unsafe by design and production safety rests on its unreachability |
+| INDEPENDENT_REVIEWS | Reviewer A (formal soundness/non-vacuity): **FORMAL_SOUND** — independently re-ran the full 21-config gate (every outcome and final state count matched the ledger; depths spot-checked), verified the MODEL_SHA and the empty production diff, confirmed the close-semantics mapping exact (A1), unreachability from real resource bounds (A2), the mutant a faithful single-edge restoration (A3), `ExhTermProgress` still failing (A4), no race abstracted away by the re-closure diff (A5: the only semantic delta vs preserved head `45b4974a` is the constant rename), fairness byte-identical (A6), liveness non-vacuous with reachable antecedents (A7), mapping correct after #444 (A8). Reviewer B (adversarial reachability, run blinded and in parallel): **NO_REACHABLE_PUMP_FOUND** — independently re-enumerated every production epoch-bumping site (10 production sites + test-only sites, each with its pin/one-shot/latch economy), attempted eleven pump constructions (repeated close, request_stop/interrupts, repeated cancel with stale generations, repeated poison, transport retry, submit/reclaim slot-reuse churn, exhaustion-churn cutoff, zero-op churn without owner service, host ack, teardown/move, model-side MaxFuel defeat) — all failed on named guards (`admission_open_` latch, `terminal_chosen` arbitration, sticky `fatal_error_`, `reclaimable_`'s control_refs/publication_inflight conditions, monotone admission); re-ran the gate byte-identical; found no reverse omissions |
+| REVIEW_ADJUDICATION | Every finding P3, none blocking. A-P3-1 (`InvNoProgressTerminal` comment arithmetic: 2C + (C+1) ≠ 3C+2 as written, and the strict inequality fails at the tiny original configs) — ACCEPT, comment re-anchored: the bound is on the pX coordinate past pE saturation (window ≤ 2C + close 1 + post-close C+1), the fuel-independence claim is attributed to ReachNoFuel alone, and the tiny configs' MaxFuel=1 dependence is disclosed. A-P3-3/B-P3-1 (traceability row lumped `request_stop` with `close_admission`; B additionally established the backend close has no in-tree production caller) — ACCEPT, row fixed: `CloseAdmission` is the THREAD-01-legal public operation, an over-approximation sound for unreachability; `request_stop` maps to `Interrupt`. B-P3-5 (`WorkerComplete` row listed uring zero-op) — ACCEPT, taxonomy fixed. A-P3-2 (`SubmitTransport` capacity guard, adjudication-era, disclosed, inert on every pre-adjudication configuration) — ACCEPT as recorded, no change. A-P3-4 (ring-less uring close abstracted) — ACCEPT as recorded note (transition-removing, a fortiori). B-P3-2 (`ZeroOp`/`SubmitTransport` keep per-accept fuel under `UnboundedWorkload`) — ACCEPT as recorded note (the fuel is the image of a real per-accept physical resource: transport-ledger entry / owed control pin; the verdict rests on the fuelless paths). B-P3-3 (`HostAck` pc-guard) — ACCEPT as recorded (standing limitation; `HostAck` never bumps). B-P3-4 (uring cancel control-SQE lifecycle unmodeled) — ACCEPT as recorded note (bump-free, owner-service-dependent pin) |
+| Status | `C2_E_FORMAL_RECLOSURE_REVIEWED_PENDING_HUMAN_REVIEW` — the three-part verdict (termP locally unsafe / production pair unreachable / mutant restoration reachable) stands on independently re-executed evidence with the restored-pump discriminator; both reviewers' findings adjudicated (all P3, comment-level fixes applied and re-verified count-identical). Production safety rests on the pump's removal, not on a local repair of the absorbing pair. #397 stays open; PR #443 is not merged; final adoption is human review's. **Superseded by the C2-E final amendment**: the human review returned REQUEST_CHANGES (1 P1 formal bound, 1 P2 ledger row), both resolved — final status `C2_E_FORMALLY_CLOSED` (amendment record below) |
+
+## C2-E final amendment — human-review adjudication (Issue #397)
+
+The human final review accepted the C2-E method and the three-part
+verdict and returned `REQUEST_CHANGES` with one formal P1 and one
+closure P2. `PRODUCTION_CPP_CHANGED=NO` still holds: the amendment
+touches `formal/tla/ProgressSource.tla` comments, this ledger and the
+PR description only; the TLA transition system, constants and
+configurations are semantically untouched.
+
+| Field | Content |
+|---|---|
+| HUMAN_ADJUDICATION | `REQUEST_CHANGES` — P1: the previous production instantiation of the post-exhaustion bound ("C is configuration-bounded, so `3C + 2 < UINT64_MAX`") did not entail the inequality; a bounded C can still exceed the 64-bit domain. P2: the top-level PROG/W-03 row remained `NOT_ASSESSED` despite the recorded review chain |
+| P1_RESOLUTION | The bound is parameterized over `C_eff` = the maximum number of simultaneously live, distinct request identities able to produce a counted signal — exactly the C of the window accounting. Every live obligation holds one uint32 `SlotIndex` (`request_key.hpp:15-18`) and simultaneously-live obligations hold pairwise-distinct values (bijection fill, single-token pop/push, retirement never re-pools — `request_core.cpp:18/118/565`), so `C_eff` is at most the `SlotIndex` domain size, `2^32`, by representation; BOUND-01 excludes the identity-domain-overflow configurations from validity. Therefore `3*C_eff + 2 <= 3*2^32 + 2 < 2^34 << UINT64_MAX` for every valid configuration — an identity-domain bound, not a machine-RAM heuristic |
+| BOUND-01_DEBT | Recorded as `IDENTITY_DOMAIN_DEBT` in the re-closure record above: uring enforces the identity-domain bound today, the `RequestCore`/threadpool admission path does not; the V24 bound neither claims nor needs that enforcement |
+| REVIEWER_A_BOUND_RECHECK | **FORMAL_SOUND** — dispatched specifically on the parameterized bound; independently verified the uint32 representation, the one-token-per-slot pool discipline, BOUND-01's wording, the arithmetic (`3*2^32 + 2 = 12,884,901,890 < 2^34`), the comment-only diff (SANY clean, TLC re-runs byte-identical) and consistency with the surrounding window accounting. Findings: P2 (the model comment cited the ledger debt before this record existed, and the `POST_EXHAUSTION_BOUND` row still carried the superseded justification) — resolved by this very record; P3 (the injectivity premise was compressed into "by representation alone") — accepted, the premise is now spelled out in the model comment |
+| P2_RESOLUTION | The top-level PROG/W-03 row moved `NOT_ASSESSED` → `VERIFIED` on the strength of the recorded review chain (C2-A/B/C/D, final conformance, DeliveryRecord corrective, C2-E formal re-closure, #444, independent A/B reviews, human final review, this amendment); scope wording preserved — verification at named evidence commits, not universal Linux correctness, not the #401 shutdown closure; no other row moved |
+| GATE_RECHECK | `verify_c2e_progress.sh` re-run on the final model text (sha `2c4440ebaf075fbee0227abcb5171b9d756ae799af54ab65ef74a94ae5fc9a73`): all 21 outcomes reproduced with every generated/distinct state count identical to the STATE_COUNTS table above (programmatic comparison, `ALL_STATE_COUNTS_IDENTICAL=True`); the 10 clean runs and the 11 mandated violations — including both restored-pump discriminators — are unchanged |
+| Status | `C2_E_FORMALLY_CLOSED` — VERIFIED at named commits (implementation base `7bd1976f`, model sha `2c4440ebaf075fbee0227abcb5171b9d756ae799af54ab65ef74a94ae5fc9a73`); PR #443 carries this amendment. #397 stays open and PR #443 stays unmerged pending the reviewer's explicit approval; merge, the #397 closure summary and the issue close remain human actions |
