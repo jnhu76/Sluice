@@ -1103,6 +1103,29 @@ bool close_prevents_future_acceptance(Tracker& t) {
     return t.failures == 0;
 }
 
+bool close_admission_transitions_exactly_once(Tracker& t) {
+    RequestCore core = make_core(1);
+    FakePhysicalDriver driver(core);
+    t.check(core.admission_open(), "admission starts open");
+    t.check(driver.close_admission(), "the open-to-closed close reports the transition");
+    t.check(!core.admission_open(), "admission is closed after the first close");
+    for (int i = 0; i < 3; ++i) {
+        t.check(!driver.close_admission(), "a repeated close reports no new transition");
+    }
+    t.check(!core.admission_open(), "repeated closes leave admission closed");
+    ReserveAttempt refused = driver.reserve();
+    t.check(refused.status == ReserveStatus::admission_closed,
+            "repeated closes do not reopen acceptance");
+
+    RequestCore failed_core = make_core(1);
+    FakePhysicalDriver failed_driver(failed_core);
+    failed_driver.note_health_failure();
+    t.check(!failed_core.admission_open(), "health failure closes admission");
+    t.check(!failed_driver.close_admission(),
+            "a close after health failure reports no new transition");
+    return t.failures == 0;
+}
+
 bool accepted_set_remains_finite_and_observable(Tracker& t) {
     RequestCore core = make_core(3);
     FakePhysicalDriver driver(core);
@@ -1252,6 +1275,7 @@ int main() {
          cancel_during_delivery_is_distinguishable_and_delivery_completes},
         {"slot_reuse_clears_canonical_result", slot_reuse_clears_canonical_result},
         {"close_prevents_future_acceptance", close_prevents_future_acceptance},
+        {"close_admission_transitions_exactly_once", close_admission_transitions_exactly_once},
         {"accepted_set_remains_finite_and_observable", accepted_set_remains_finite_and_observable},
         {"snapshot_stays_consistent_through_a_lifecycle",
          snapshot_stays_consistent_through_a_lifecycle},

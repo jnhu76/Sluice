@@ -773,10 +773,16 @@ Result<RequestHandleState> ThreadPoolBackend::resolve_identity_state(
 }
 
 void ThreadPoolBackend::close_admission() {
+#if defined(SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
     if (core_ != nullptr) {
-        core_->close_admission();
+        (void)core_->close_admission();
     }
     signal_ready_progress();
+#else
+    if (core_ != nullptr && core_->close_admission()) {
+        signal_ready_progress();
+    }
+#endif
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

@@ -166,7 +166,7 @@ class RequestCore {
                          BorrowFacts borrow) noexcept;
     bool rollback(RequestReservation reservation) noexcept;
 
-    void close_admission() noexcept;
+    bool close_admission() noexcept;
     bool admission_open() const noexcept;
     void note_health_failure() noexcept;
     bool health_failed() const noexcept;

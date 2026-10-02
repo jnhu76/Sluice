@@ -136,7 +136,7 @@ class FakePhysicalDriver {
         return rolled;
     }
 
-    void close_admission() { core_.close_admission(); }
+    bool close_admission() { return core_.close_admission(); }
 
     void note_health_failure() { core_.note_health_failure(); }
 

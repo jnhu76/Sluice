@@ -264,7 +264,7 @@ end
 -- nor the other seam builds. The uring variant runs the same tests against the
 -- real-ring backend when liburing is available.
 do
-    local function progress_source_target(name, with_liburing)
+    local function progress_source_target(name, with_liburing, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -272,6 +272,9 @@ do
             add_deps("sluice_core")
             add_includedirs(R .. "include", R .. "src/async")
             add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
             local files = {
                 R .. "tests/progress_source_ownership_test.cpp",
                 R .. "src/async/async_io_context.cpp",
@@ -287,12 +290,25 @@ do
                 table.insert(files, R .. "src/async/uring_backend.cpp")
             end
             add_files(files)
-            add_tests(name)
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
     end
 
     progress_source_target("progress_source_ownership_test", false)
     if has_config("liburing") then
         progress_source_target("progress_source_ownership_uring_test", true)
+    end
+
+    -- C2-E corrective-round mutation builds. Each restores the pre-fix
+    -- unconditional close_admission progress signal and must be killed by the
+    -- transition-regression tests of the ownership suite; they are executed
+    -- and recorded manually, never run as regular tests.
+    progress_source_target("progress_source_mut_close_admission_always_signals", false,
+                           "SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
+    if has_config("liburing") then
+        progress_source_target("progress_source_uring_mut_close_admission_always_signals", true,
+                               "SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
     end
 end
 

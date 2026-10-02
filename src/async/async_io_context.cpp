@@ -461,7 +461,7 @@ Result<AsyncIoContext::ProgressPass> AsyncIoContext::poll_progress() {
 
 void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
     if (core_ && progress_ && progress_->exhausted()) {
-        core_->close_admission();
+        (void)core_->close_admission();
     }
 }
 

@@ -1318,10 +1318,16 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexc
 void UringAsyncBackend::close_admission() {
     if (!have_ring_)
         return;
+#if defined(SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
     if (core_ != nullptr) {
-        core_->close_admission();
+        (void)core_->close_admission();
     }
     signal_ready_progress();
+#else
+    if (core_ != nullptr && core_->close_admission()) {
+        signal_ready_progress();
+    }
+#endif
 }
 
 std::size_t UringAsyncBackend::outstanding() const noexcept {

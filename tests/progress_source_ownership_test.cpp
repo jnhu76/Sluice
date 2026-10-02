@@ -413,10 +413,69 @@ bool unattached_backend_control_ops_are_absent() {
     return true;
 }
 
+template <class Backend>
+bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
+                                                            AsyncIoContext& ctx) {
+    const auto before = ctx.progress_token_for_test();
+
+    raw->close_admission();
+    const auto first = ctx.progress_token_for_test();
+    if (first.progress != before.progress + 1 ||
+        first.progress_exhaustion != before.progress_exhaustion) {
+        return false;
+    }
+    if (!notification_fd_readable(ctx.progress_notification_fd())) {
+        return false;
+    }
+    ctx.acknowledge_progress_notification();
+    if (notification_fd_readable(ctx.progress_notification_fd())) {
+        return false;
+    }
+
+    raw->close_admission();
+    raw->close_admission();
+    const auto repeated = ctx.progress_token_for_test();
+    if (repeated.progress != first.progress ||
+        repeated.progress_exhaustion != first.progress_exhaustion) {
+        return false;
+    }
+    if (notification_fd_readable(ctx.progress_notification_fd())) {
+        return false;
+    }
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    Completion<std::size_t> c;
+    const auto submit =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               buffer.data(), 0, 0},
+                        c);
+    return !submit.has_value() && submit.error().code == IoError::Code::invalid_state;
+}
+
+bool threadpool_close_admission_signals_only_the_open_to_closed_transition() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    const bool ok = close_admission_signal_tracks_the_admission_transition(raw, ctx);
+    ctx.detach_progress_host();
+    return ok;
+}
+
 #if defined(SLUICE_HAS_LIBURING)
 bool uring_available() {
     UringAsyncBackend backend;
     return backend.available();
+}
+
+bool uring_close_admission_signals_only_the_open_to_closed_transition() {
+    if (!uring_available())
+        return true;
+    auto backend = std::make_unique<UringAsyncBackend>();
+    UringAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    const bool ok = close_admission_signal_tracks_the_admission_transition(raw, ctx);
+    ctx.detach_progress_host();
+    return ok;
 }
 #endif
 
@@ -507,6 +566,12 @@ int main() {
         {"constructor_unwind_destroys_backend_before_progress_source",
          constructor_unwind_destroys_backend_before_progress_source},
         {"unattached_backend_control_ops_are_absent", unattached_backend_control_ops_are_absent},
+        {"threadpool_close_admission_signals_only_the_open_to_closed_transition",
+         threadpool_close_admission_signals_only_the_open_to_closed_transition},
+#if defined(SLUICE_HAS_LIBURING)
+        {"uring_close_admission_signals_only_the_open_to_closed_transition",
+         uring_close_admission_signals_only_the_open_to_closed_transition},
+#endif
         {"uring_zero_op_signals_context_notification",
          uring_zero_op_signals_context_notification},
         {"uring_completion_wakes_parked_driver", uring_completion_wakes_parked_driver},
