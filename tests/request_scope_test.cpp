@@ -1056,6 +1056,191 @@ bool near_max_bound_waits_out_a_stalled_operation(Tracker& t) {
     return true;
 }
 
+bool explicit_finish_does_not_invoke_the_cleanup_cancel(Tracker& t) {
+    auto file = open_temp_file(t, "sluice");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    {
+        Backend::WorkerClaimedPauseGate gate;
+        raw->set_worker_claimed_pause_gate(&gate);
+        GateGuard<Backend::WorkerClaimedPauseGate> guard{gate};
+        RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
+
+        std::vector<std::byte> held(6, std::byte{0});
+        auto first =
+            scope.submit_read(ReadOp{NativeFileRef{*file}, held.data(), held.size(), 0});
+        t.check(first.has_value(), "the first read is accepted");
+        if (!first.has_value())
+            return false;
+        wait_threadpool_gate_paused(gate);
+
+        std::vector<std::byte> canary(6, std::byte{0xAA});
+        auto second =
+            scope.submit_read(ReadOp{NativeFileRef{*file}, canary.data(), canary.size(), 0});
+        t.check(second.has_value(), "the second read is accepted");
+        if (!second.has_value())
+            return false;
+        while (raw->dispatch_size_for_test() != 1)
+            std::this_thread::yield();
+
+        std::thread resumer([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            resume_threadpool_gate(gate);
+        });
+
+        auto settled = scope.finish();
+        resumer.join();
+        wait_threadpool_gate_exited(gate);
+
+        t.check(settled.has_value(),
+                "explicit finish under cancel_then_drain is a normal exit: the held "
+                "operation settles naturally instead of being canceled");
+        t.check(raw->syscall_count_for_test() == 2,
+                "both accepted operations executed; the dispatch-held read was not "
+                "canceled before execution");
+        t.check(std::memcmp(canary.data(), "sluice", 6) == 0,
+                "the second read's borrow acquired its publication");
+        t.check(core_is_idle(core.snapshot()), "the natural drain reclaimed fully");
+    }
+    raw->set_worker_claimed_pause_gate(nullptr);
+    return true;
+}
+
+bool destructor_cleanup_cancels_undispatched_work_before_execution(Tracker& t) {
+    auto file = open_temp_file(t, "sluice");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    std::vector<std::byte> held(6, std::byte{0});
+    std::vector<std::byte> canary(6, std::byte{0xAA});
+    {
+        Backend::WorkerClaimedPauseGate gate;
+        raw->set_worker_claimed_pause_gate(&gate);
+        GateGuard<Backend::WorkerClaimedPauseGate> guard{gate};
+        std::thread resumer;
+        {
+            RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
+
+            auto first =
+                scope.submit_read(ReadOp{NativeFileRef{*file}, held.data(), held.size(), 0});
+            t.check(first.has_value(), "the first read is accepted");
+            if (!first.has_value())
+                return false;
+            wait_threadpool_gate_paused(gate);
+
+            auto second = scope.submit_read(
+                ReadOp{NativeFileRef{*file}, canary.data(), canary.size(), 0});
+            t.check(second.has_value(), "the second read is accepted");
+            if (!second.has_value())
+                return false;
+            while (raw->dispatch_size_for_test() != 1)
+                std::this_thread::yield();
+
+            resumer = std::thread([&] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                resume_threadpool_gate(gate);
+            });
+        }
+        resumer.join();
+        wait_threadpool_gate_exited(gate);
+    }
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    t.check(raw->syscall_count_for_test() == 1,
+            "destruction canceled the dispatch-held operation before execution; only "
+            "the claimed read ever ran");
+    bool canary_untouched = true;
+    for (std::byte b : canary) {
+        if (b != std::byte{0xAA}) {
+            canary_untouched = false;
+        }
+    }
+    t.check(canary_untouched, "the canceled operation acquired no borrow and had no effect");
+    t.check(core_is_idle(core.snapshot()),
+            "cancel-then-drain destruction still settled every tracked request");
+    return true;
+}
+
+bool explicit_finish_reports_an_externally_canceled_terminal(Tracker& t) {
+    auto file = open_temp_file(t, "sluice");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+
+    {
+        Backend::WorkerClaimedPauseGate gate;
+        raw->set_worker_claimed_pause_gate(&gate);
+        GateGuard<Backend::WorkerClaimedPauseGate> guard{gate};
+        RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
+
+        std::vector<std::byte> held(6, std::byte{0});
+        auto first =
+            scope.submit_read(ReadOp{NativeFileRef{*file}, held.data(), held.size(), 0});
+        t.check(first.has_value(), "the first read is accepted");
+        if (!first.has_value())
+            return false;
+        wait_threadpool_gate_paused(gate);
+
+        std::vector<std::byte> canary(6, std::byte{0xAA});
+        auto second =
+            scope.submit_read(ReadOp{NativeFileRef{*file}, canary.data(), canary.size(), 0});
+        t.check(second.has_value(), "the second read is accepted");
+        if (!second.has_value())
+            return false;
+        while (raw->dispatch_size_for_test() != 1)
+            std::this_thread::yield();
+
+        const auto held_slot = core.observe_slot(SlotIndex{1});
+        t.check(held_slot.has_value(), "the dispatch-held request is observed in the core");
+        bool canceled_externally = false;
+        if (held_slot.has_value()) {
+            const RequestKey second_key{core.context(), SlotIndex{1}, held_slot->generation};
+            canceled_externally =
+                raw->cancel_key_for_test(second_key) == PublicCancel::won_before_execution;
+        }
+        t.check(canceled_externally, "the external control cancel wins before execution");
+        (void)ctx.poll();
+
+        std::thread resumer([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            resume_threadpool_gate(gate);
+        });
+
+        auto settled = scope.finish();
+        resumer.join();
+        wait_threadpool_gate_exited(gate);
+
+        t.check(!settled.has_value() && settled.error().code == IoError::Code::canceled,
+                "explicit finish reports an externally canceled terminal instead of "
+                "suppressing it through the construction policy");
+        bool canary_untouched = true;
+        for (std::byte b : canary) {
+            if (b != std::byte{0xAA}) {
+                canary_untouched = false;
+            }
+        }
+        t.check(canary_untouched, "the externally canceled operation had no effect");
+        t.check(core_is_idle(core.snapshot()), "the reporting finish reclaimed fully");
+    }
+    raw->set_worker_claimed_pause_gate(nullptr);
+    return true;
+}
+
 bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
     struct Scenario {
         static void run() {
@@ -1175,6 +1360,12 @@ int main() {
          pre_accept_throw_rolls_back_the_reservation},
         {"near_max_bound_waits_out_a_stalled_operation",
          near_max_bound_waits_out_a_stalled_operation},
+        {"explicit_finish_does_not_invoke_the_cleanup_cancel",
+         explicit_finish_does_not_invoke_the_cleanup_cancel},
+        {"destructor_cleanup_cancels_undispatched_work_before_execution",
+         destructor_cleanup_cancels_undispatched_work_before_execution},
+        {"explicit_finish_reports_an_externally_canceled_terminal",
+         explicit_finish_reports_an_externally_canceled_terminal},
         {"v19_timeout_preserves_responsibility_until_cleanup",
          v19_timeout_preserves_responsibility_until_cleanup},
         {"wait_for_reports_sticky_control_interruption",

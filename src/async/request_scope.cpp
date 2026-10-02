@@ -38,7 +38,7 @@ RequestScope::~RequestScope() {
     finished_ = true;
 #else
     if (!finished_) {
-        (void)settle_and_release_();
+        (void)settle_and_release_(policy_ == ScopeCleanupPolicy::cancel_then_drain);
     }
 #endif
 }
@@ -79,8 +79,8 @@ void RequestScope::request_cancel_(Slot& slot) noexcept {
     }
 }
 
-Result<void> RequestScope::settle_and_release_() noexcept {
-    if (policy_ == ScopeCleanupPolicy::cancel_then_drain) {
+Result<void> RequestScope::settle_and_release_(bool cancel_for_cleanup) noexcept {
+    if (cancel_for_cleanup) {
         for (std::size_t i = 0; i < capacity_; ++i) {
             Slot& slot = slots_[i];
             if (slot.state == Slot::State::owning && !request_ready_(slot)) {
@@ -280,7 +280,12 @@ Result<void> RequestScope::finish() noexcept {
     if (finished_) {
         return {};
     }
-    Result<void> settled = settle_and_release_();
+#if defined(SLUICE_D1_MUTANT_FINISH_CANCELS_CLEANUP)
+    Result<void> settled =
+        settle_and_release_(policy_ == ScopeCleanupPolicy::cancel_then_drain);
+#else
+    Result<void> settled = settle_and_release_(false);
+#endif
     finished_ = true;
 #if defined(SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR)
     (void)settled;

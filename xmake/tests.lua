@@ -523,6 +523,9 @@ do
     request_scope_target("request_scope_mut_finish_swallows_error",
                          R .. "tests/request_scope_test.cpp", false,
                          "SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR")
+    request_scope_target("request_scope_mut_finish_cancels_cleanup",
+                         R .. "tests/request_scope_test.cpp", false,
+                         "SLUICE_D1_MUTANT_FINISH_CANCELS_CLEANUP")
 end
 
 -- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault

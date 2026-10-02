@@ -188,9 +188,7 @@ class RequestScope {
     void settle_ready_slot_(Slot& slot, std::optional<IoError>& failure) noexcept {
         const RequestObservation<T> observed =
             std::get<slot_index_<T>()>(slot.request).take_result();
-        if (!failure.has_value() && !observed.result.has_value() &&
-            !(policy_ == ScopeCleanupPolicy::cancel_then_drain &&
-              observed.result.error().code == IoError::Code::canceled)) {
+        if (!failure.has_value() && !observed.result.has_value()) {
             failure = observed.result.error();
         }
         release_slot_(slot);
@@ -199,7 +197,7 @@ class RequestScope {
     bool request_ready_(const Slot& slot) const noexcept;
     void request_cancel_(Slot& slot) noexcept;
 
-    Result<void> settle_and_release_() noexcept;
+    Result<void> settle_and_release_(bool cancel_for_cleanup) noexcept;
 
     AsyncIoContext& ctx_;
     std::size_t capacity_;
