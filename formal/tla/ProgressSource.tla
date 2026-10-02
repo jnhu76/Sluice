@@ -763,9 +763,25 @@ InvDeadlineNoCancel ==
    MaxPX = 8 > 5) carries the fuel-independence claim with fuelless
    plain Submit; the tiny original configurations additionally lean on
    MaxFuel = 1, which is why that claim is NOT made from them.
-   Production: C is configuration-bounded, so 3C + 2 < UINT64_MAX and
-   the pair is unreachable for every valid configuration, independent
-   of owner latency. *)
+   Production: the C in this accounting is C_eff -- the maximum number
+   of simultaneously live, distinct request identities able to produce
+   a counted signal -- not the raw configured request_capacity. Every
+   counted signal belongs to one live identity (an accept or a
+   terminal; slot reuse needs owner service) or to the close
+   transition and the one-shot poison, which are counted separately.
+   Each live obligation holds one SlotIndex (uint32; request_key.hpp)
+   and simultaneously-live obligations hold pairwise-distinct values:
+   the free-slot pool is filled as a bijection over [0, capacity) and
+   a value returns to the pool only when its obligation retires, so at
+   most one live obligation exists per value. BOUND-01 makes
+   identity-domain overflow a setup error, so over valid
+   configurations C_eff <= |SlotIndex| = 2^32 by representation
+   alone: 3*C_eff + 2 <= 3*2^32 + 2 < 2^34 << UINT64_MAX. The pair is
+   therefore unreachable in any execution over valid configurations,
+   independent of owner latency. Enforcing that setup rejection on
+   every admission path is a separate debt recorded in the conformance
+   ledger; this is an identity-domain bound, not a claim that
+   arbitrary size_t configuration values are valid today. *)
 InvNoProgressTerminal == ~(pE = MaxPE /\ pX = MaxPX)
 
 (* Reachability campaign: the production-staged composition -- an ordinary
