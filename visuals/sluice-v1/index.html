@@ -772,6 +772,15 @@ body.diagram-fullscreen .fullscreen-scrim{ display:block; }
    canvas's root-level z-index and the fixed exit button win. */
 body.diagram-fullscreen main,
 body.diagram-fullscreen .controls{ position:static; z-index:auto; }
+/* Visibility (not just paint order): keyboard focus must not land on controls
+   hidden beneath the fullscreen overlay, and hidden controls must not be
+   activatable. The exit toggle stays visible and focusable. */
+body.diagram-fullscreen header,
+body.diagram-fullscreen .flowtabs,
+body.diagram-fullscreen .scenario-note{ visibility:hidden; }
+body.diagram-fullscreen .controls > *:not(.fullscreen-toggle){ visibility:hidden; }
+/* The fixed exit button occupies the top-right corner of the overlay. */
+.canvas.is-fullscreen .canvas-head{ padding-right:44px; }
 .canvas.is-fullscreen{
   position:fixed !important;
   inset:0 !important;
@@ -1087,7 +1096,7 @@ Generated from architecture-diagram-skill: v1.3.0 · 486ac078705c873012239124a07
 <span class="item"><span class="swatch" style="background:var(--c-embed)"></span>progress / observation</span></div>
 
   <!-- 3b. Theme toggle (dark/light). -->
-  <button class="theme-toggle" id="btnTheme" title="Toggle light/dark theme (T)" aria-label="Toggle theme">
+  <button class="theme-toggle" id="btnTheme" title="Toggle light/dark theme (T)" aria-label="Toggle theme" aria-pressed="false">
     <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
   </button>
@@ -2617,7 +2626,7 @@ const state = {
   step: 0,
   playing: false,
   timer: null,
-  stepMs: 3200
+  stepMs: 4000
 };
 
 /* Live check so we don't fire SMIL packet animation for reduced-motion users. */
@@ -2803,10 +2812,39 @@ function computeWireGeometry(sRect){
    so the drag path never re-queries the DOM. Index = step index; holes are undefined. */
 let wireEls = [];
 
+/* Node boxes are content-sized while rows sit at fixed fractions of the
+   stage height, so wrapped text at narrow widths can push rows past the
+   stage box or into the next row. Derive the stage height from the measured
+   node heights each time wires are (re)drawn instead of hand-tuning every
+   breakpoint × preset × fullscreen combination. */
+function fitStageHeight(){
+  if(stage.style.height){
+    stage.style.height = "";
+    void stage.offsetHeight;
+  }
+  const sr = stage.getBoundingClientRect();
+  const items = [];
+  nodes.forEach(n=>{
+    if(n.classList.contains("hidden")) return;
+    const r = n.getBoundingClientRect();
+    items.push({ f: (r.top - sr.top) / sr.height, h: r.height });
+  });
+  let needed = 0;
+  items.forEach(a=>{
+    let denom = 1 - a.f;
+    items.forEach(b=>{ if(b.f > a.f + 0.04) denom = Math.min(denom, b.f - a.f); });
+    if(denom < 0.08) return;
+    needed = Math.max(needed, a.h / denom);
+  });
+  needed = Math.ceil(needed + 12);
+  if(needed > sr.height) stage.style.height = needed + "px";
+}
+
 /* draw all wires for current flow (full rebuild) */
 function drawWires(){
   Array.from(svgWires.querySelectorAll(".wire, .packet, .wire-label")).forEach(el=>el.remove());
   wireEls = [];
+  fitStageHeight();
 
   const sRect = stage.getBoundingClientRect();
   svgWires.setAttribute("viewBox", `0 0 ${sRect.width} ${sRect.height}`);
@@ -2851,9 +2889,8 @@ function drawWires(){
     svgWires.appendChild(pkt);
 
     const m = document.createElementNS("http://www.w3.org/2000/svg","animateMotion");
-    m.setAttribute("dur","1.5s");
-    m.setAttribute("repeatCount","1");
-    m.setAttribute("fill","freeze");
+    m.setAttribute("dur","2s");
+    m.setAttribute("repeatCount","indefinite");
     m.setAttribute("begin","indefinite");
     m.setAttribute("path", g.d);
     pkt.appendChild(m);
@@ -2966,6 +3003,10 @@ function applyStep(){
   Array.from(svgWires.querySelectorAll(".wire, .wire-label, .packet")).forEach(el=>{
     const s = parseInt(el.dataset.step,10);
     el.classList.remove("active","preview","muted","run");
+    if(el.classList.contains("packet") && s !== state.step){
+      const m = el.querySelector("animateMotion");
+      if(m){ try{ m.endElement(); }catch(e){} }
+    }
     if(s === state.step){
       if(el.classList.contains("wire") || el.classList.contains("wire-label")) el.classList.add("active");
       if(el.classList.contains("packet")){
@@ -3152,12 +3193,14 @@ function toggleTheme(){
   document.body.classList.toggle("light");
   const isLight = document.body.classList.contains("light");
   try{ localStorage.setItem("sluice-v1-theme", isLight ? "light" : "dark"); }catch(e){}
+  btnTheme.setAttribute("aria-pressed", String(!isLight));
   /* No redraw needed: wire/packet/label colors resolve from live CSS variables,
      which re-evaluate automatically when the .light class flips :root. */
 }
 btnTheme.addEventListener("click", toggleTheme);
 try{
   document.body.classList.toggle("light", localStorage.getItem("sluice-v1-theme") !== "dark");
+  btnTheme.setAttribute("aria-pressed", String(!document.body.classList.contains("light")));
 }catch(e){}
 
 /* ─── text-size control ─────────────────────────────── */
@@ -3344,9 +3387,19 @@ function loadLayout(){
     if(!saved) return false;
     const positions = JSON.parse(saved);
     let applied = false;
+    const sr = stage.getBoundingClientRect();
     nodes.forEach(n=>{
       const p = positions[n.dataset.id];
-      if(p){ n.style.left = p.left; n.style.top = p.top; applied = true; }
+      if(!p) return;
+      const left = parseFloat(p.left), top = parseFloat(p.top);
+      if(isNaN(left) || isNaN(top)) return;
+      /* Percent tops were clamped against the stage size at drag time; node
+         heights differ at other viewport widths, so re-clamp on load. */
+      const maxLeft = Math.max(0, (sr.width  - n.offsetWidth  - 4) / sr.width  * 100);
+      const maxTop  = Math.max(0, (sr.height - n.offsetHeight - 4) / sr.height * 100);
+      n.style.left = Math.min(left, maxLeft) + "%";
+      n.style.top  = Math.min(top,  maxTop)  + "%";
+      applied = true;
     });
     return applied;
   }catch(e){ return false; }
