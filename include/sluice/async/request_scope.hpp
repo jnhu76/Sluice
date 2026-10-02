@@ -171,20 +171,25 @@ class RequestScope {
     template <class T>
     Result<ScopeWaitStatus> wait_for_slot_(Slot& slot,
                                            std::chrono::nanoseconds max_wait) noexcept {
-        const auto deadline = std::chrono::steady_clock::now() + max_wait;
+        const bool bounded = max_wait != std::chrono::nanoseconds::max();
+        const auto deadline = bounded ? std::chrono::steady_clock::now() + max_wait
+                                      : std::chrono::steady_clock::time_point{};
         for (;;) {
             if (std::get<slot_index_<T>()>(slot.request).ready()) {
                 return ScopeWaitStatus::ready;
             }
-            const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                deadline - std::chrono::steady_clock::now());
-            if (remaining.count() <= 0) {
+            if (bounded) {
+                const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    deadline - std::chrono::steady_clock::now());
+                if (remaining.count() <= 0) {
 #if defined(SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT)
-                release_slot_(slot);
+                    release_slot_(slot);
 #endif
-                return ScopeWaitStatus::timeout;
+                    return ScopeWaitStatus::timeout;
+                }
             }
-            auto woke = ctx_.wait_one(remaining);
+            auto woke = bounded ? ctx_.wait_one(deadline - std::chrono::steady_clock::now())
+                                : ctx_.wait_one();
             if (!woke.has_value()) {
                 return make_unexpected<ScopeWaitStatus>(woke.error());
             }
