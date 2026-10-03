@@ -96,10 +96,14 @@ class IoTaskContext {
 // `run` claims the context's progress owner for the whole call, drives every
 // admitted task to retirement, and releases the owner on every exit, after a
 // release pass that has observed and retired any pending control wake (other
-// threads may still submit context operations while the host drives); it
-// returns the first task error of that call, if any. Blocking file management
-// (open, explicit close, resize) is outside the task region: perform it on
-// the host thread outside `run`.
+// threads may still submit context operations while the host drives; an
+// unbounded external completion stream defers the release pass, so the
+// return latency is not bounded by a fixed wait count); it returns the first
+// task error of that call, if any. A health failure observed while driving,
+// including during the exit release pass, fails fast; a run() that exits on
+// a context error promises no release-pass control hygiene. Blocking file
+// management (open, explicit close, resize) is outside the task region:
+// perform it on the host thread outside `run`.
 //
 // `request_stop()` publishes the stop flag, requests the task stop token and
 // closes spawn admission. It neither cancels nor settles accepted requests

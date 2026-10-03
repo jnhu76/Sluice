@@ -580,7 +580,11 @@ Result<void> StackfulIoHost::run() {
     for (;;) {
         auto release_control = ctx_.wait_one(std::chrono::nanoseconds::zero());
         if (!release_control.has_value()) {
-            break;
+            return make_unexpected_void(release_control.error());
+        }
+        if (release_control.value().kind ==
+            AsyncIoContext::ProgressWaitOutcome::Kind::health_failure) {
+            detail::stackful_host_drive_health_fail_fast();
         }
         if (release_control.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress &&
             release_control.value().completed > 0) {

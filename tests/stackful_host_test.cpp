@@ -1944,6 +1944,100 @@ bool external_completion_preceding_control_does_not_leak_to_next_owner() {
            probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
 }
 
+bool zero_length_convenience_crosses_request_admission() {
+    const std::string path = make_temp_file("abcd");
+    auto open = File::open(path, writable());
+    ::unlink(path.c_str());
+    check(open.has_value(), "empty-admission open");
+    if (!open.has_value()) {
+        return false;
+    }
+    File rw = std::move(open).value();
+
+    OwnedBackend owned = make_threadpool(1);
+    AsyncStats stats;
+    AsyncIoContext ctx{std::move(owned.backend), &stats};
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "empty-admission host constructs");
+    if (!host_r.has_value()) {
+        return false;
+    }
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    std::vector<std::byte> empty_dst;
+    std::vector<std::byte> empty_src;
+    const auto unsett = [] {
+        return make_unexpected<CompositionOutcome>(
+            IoError{.code = IoError::Code::backend_error});
+    };
+    Result<CompositionOutcome> empty_read = unsett();
+    Result<CompositionOutcome> empty_write = unsett();
+    const std::uint64_t submits_before = stats.submit_calls;
+    check(host->spawn([&](IoTaskContext& task) {
+              empty_read = task.read_exact(NativeFileRef{rw}, empty_dst, 0);
+              empty_write = task.write_all(NativeFileRef{rw}, empty_src, 0);
+          }).has_value(),
+          "empty-admission task admitted");
+    check(host->run().has_value(), "empty-admission run settles");
+    const bool read_ok = empty_read.has_value() &&
+                         empty_read.value().end == CompositionEnd::complete &&
+                         empty_read.value().confirmed_bytes == 0;
+    const bool write_ok = empty_write.has_value() &&
+                          empty_write.value().end == CompositionEnd::complete &&
+                          empty_write.value().confirmed_bytes == 0;
+    check(read_ok, "empty-admission read completes as an admitted no-op");
+    check(write_ok, "empty-admission write completes as an admitted no-op");
+    check(stats.submit_calls == submits_before + 2,
+          "each zero-length convenience crosses exactly one request admission");
+    check(owned.raw->syscall_count_for_test() == 0,
+          "empty-admission rows dispatch no data syscall");
+    check(ctx.outstanding() == 0, "empty-admission nothing outstanding");
+    return read_ok && write_ok && stats.submit_calls == submits_before + 2 &&
+           owned.raw->syscall_count_for_test() == 0 && ctx.outstanding() == 0;
+}
+
+bool exit_window_health_failure_fails_fast() {
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        return false;
+    }
+    if (pid == 0) {
+        ::alarm(30);
+        const std::string path = make_temp_file("abcdefgh");
+        auto open = File::open(path);
+        ::unlink(path.c_str());
+        if (!open.has_value()) {
+            std::_Exit(0);
+        }
+        File src = std::move(open).value();
+        OwnedBackend owned = make_threadpool(1);
+        AsyncIoContext ctx{std::move(owned.backend)};
+        auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+        if (!host_r.has_value()) {
+            std::_Exit(0);
+        }
+        std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+        std::vector<std::byte> dst(8, std::byte{0});
+        (void)host->spawn([&](IoTaskContext& task) {
+            auto r = task.read(NativeFileRef{src}, dst, 0);
+            if (!r.has_value()) {
+                std::_Exit(0);
+            }
+            ctx.set_wait_health_failed_for_test();
+        });
+        auto run = host->run();
+        (void)run;
+        std::_Exit(0);
+    }
+    int status = 0;
+    if (::waitpid(pid, &status, 0) != pid) {
+        return false;
+    }
+    const bool aborted = WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT;
+    check(aborted, "exit-window health failure fails fast instead of returning success");
+    return aborted;
+}
+
 } // namespace
 
 int main() {
@@ -1993,6 +2087,9 @@ int main() {
          first_primitive_terminal_error_keeps_outcome_shape},
         {"external_completion_preceding_control_does_not_leak_to_next_owner",
          external_completion_preceding_control_does_not_leak_to_next_owner},
+        {"zero_length_convenience_crosses_request_admission",
+         zero_length_convenience_crosses_request_admission},
+        {"exit_window_health_failure_fails_fast", exit_window_health_failure_fails_fast},
     };
 
     for (const NamedTest& t : tests) {
