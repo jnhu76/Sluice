@@ -241,10 +241,19 @@ recoverable poison handling during host driving
 owns a recoverable form, same as D1).
 
 On the supported conforming driver path, `run()` returns after all spawned
-tasks retire (§2); that is the promised structured exit. The remaining
-`run()` error escapes (progress/wait infrastructure failures surfacing
-through `poll_progress`/`wait_one`) are contract-invalid or unreachable under
-conforming use, and no structured cleanup behavior is promised for them.
+tasks retire (§2); that is the promised structured exit. The exit performs a
+zero-duration wait that observes and retires any control left pending by a
+progress return: the wait path may reap a completion in the pass that follows
+a control wake and return progress without ever reporting the control
+(deliberate progress-first ordering), and an owner that stops waiting there
+would release with unacknowledged control — the exit observation closes that
+window and is the same owner discipline as the in-loop acknowledgement
+(both points are mutation-discriminated together). The remaining `run()`
+error escapes (progress/wait infrastructure failures surfacing through
+`poll_progress`/`wait_one`) are contract-invalid or unreachable under
+conforming use, no structured cleanup behavior is promised for them, and
+control hygiene on a failed `run()` stays with the #401 health/shutdown
+domain.
 
 ## 10. Blocking operation boundary and the composition conveniences
 
@@ -266,21 +275,39 @@ safe repeated primitive use under SEM-05 — as `IoTaskContext::read_exact` /
 - pure composition over the primitive host helpers: each step acquires,
   awaits and settles exactly one primitive request; no new low-level request
   kind, no new backend capability, no new RequestCore operation;
-- the loop advances buffer/offset by confirmed bytes only (never replays
-  confirmed bytes), stops on full completion, EOF before full
+- invocation-boundary validation first, structurally identical to the direct
+  forms: the shared data-operation oracle (`detail::precheck_data_op`) runs on
+  the file state, access, offset and length before anything is submitted, so
+  a closed file (`invalid_state`), illegal access (`invalid_argument`), an
+  invalid range (`invalid_argument`) or an already-stopped host (admission
+  rejection, `canceled`) rejects the whole invocation through the outer
+  `Result` error with nothing accepted — invocation rejection is never folded
+  into the composition outcome;
+- a zero-length invocation is a logical no-op that still crosses admission as
+  one zero-length primitive request: the root's request-path no-op rule (an
+  explicit request no-op still requires an open healthy context, compatible
+  resource provenance, operation support and one slot; once accepted it is
+  immediately published ready and never dispatches a data operation) decides
+  the empty case, so the convenience inherits the context's admission, health
+  and slot semantics instead of short-circuiting to completion, and completes
+  with zero confirmed bytes;
+- the public result contract is the direct forms' own
+  `Result<CompositionOutcome>`: the canonical payload
+  (`sluice::blocking::CompositionOutcome`) produced by the shared composition
+  rule (`detail::compose_progress`/`compose_error`), wrapped exactly as the
+  direct forms wrap it — payload and public result shape are both reused,
+  with no host-specific result type;
+- after the boundary, per-primitive failures stay in the outcome with the
+  confirmed prefix: the loop advances buffer/offset by confirmed bytes only
+  (never replays confirmed bytes), stops on full completion, EOF before full
   (read), zero write progress (write), primitive error, or an observed host
   stop at the next primitive boundary (that step's precheck rejects with
-  `canceled` before acceptance);
-- the result is the canonical composition outcome type
-  (`sluice::blocking::CompositionOutcome`) produced by the shared composition
-  rule (`detail::compose_progress`/`compose_error`), so the confirmed byte
-  count, the EOF-before-full / write-no-progress distinctions and the real
-  primitive error are reported exactly as on the direct path; a
-  stop-at-the-boundary rejection reports `canceled` through the
-  primitive-error arm with the confirmed prefix retained and the
-  composition's conservative `unknown` effect remainder (the shared rule's
-  primitive-error mapping; ERR-02 permits but does not require a known-zero
-  accounting there);
+  `canceled` before acceptance), reporting the confirmed byte count, the
+  EOF-before-full / write-no-progress distinctions and the real primitive
+  error exactly as on the direct path; a stop-at-the-boundary rejection
+  reports `canceled` through the primitive-error arm with the conservative
+  `unknown` effect remainder (the shared rule's primitive-error mapping;
+  ERR-02 permits but does not require a known-zero accounting there);
 - no atomicity promise, no rollback promise; one convenience call holds at
   most one owned `Request` at any instant and retains no unbounded state.
 
@@ -294,8 +321,9 @@ observation-setup failure eliminated by construction with mutation
 discrimination; deadline expiry returning the real terminal result without
 cancellation; exception during resumed processing; delivery/stop races with
 retirement); run-reuse evidence (a failed run leaves no error state for the
-next run); stop control-plane evidence (host stop plants no context control
-for the next owner); progress-owner composition evidence (second claim,
+next run); stop control-plane evidence (host stop plants no context control —
+observed directly as notification-fd readability at stop time, plus a clean
+next owner); progress-owner composition evidence (second claim,
 `RequestScope` on host context, re-claim after `run()`); bound evidence
 (capacity rejection, fixed stacks); the accepted-undispatched stop
 discriminator (a victim accepted while the only worker is occupied and still
@@ -304,14 +332,26 @@ mutant); the expired-deadline park bound (after expiry the driver parks
 unboundedly; the context's poll/wait counters stay orders of magnitude below
 any zero-duration spin — kills the expired-deadline-spin mutant); the
 external-control acknowledgement regression (control planted while the driver
-is committed to a park is observed and acknowledged; the next owner sees no
-stale control — kills the skip-control-ack mutant); nested-spawn evidence
+is committed to a park is either reported by the next wait or consumed by a
+progress return and retired at run exit; the next owner sees no stale control
+under both legal paths — kills the skip-control-ack mutant at both
+acknowledgement points, with the consumed-by-progress-return path forced
+deterministically by holding the driver at its prepark pause while the worker
+publishes); nested-spawn evidence
 (capacity-1 refusal with clean retirement, capacity-2 child admission and
 single execution); first-task-error selection evidence (execution order, not
 admission order and not last-wins); the composition-convenience evidence
 (full completion, EOF-before-full prefix, stop at the next acceptance
-boundary with the confirmed prefix, one physical operation per step);
-mutation kills M1–M12 (recorded in the v1 conformance ledger D2 entry);
+boundary with the confirmed prefix, one physical operation per step); the
+direct-vs-host invocation parity table (identical inputs through
+`blocking::read_exact_at`/`write_all_at` and the host conveniences across
+closed/illegal-access/invalid-range/empty/nonempty/full/EOF rows and both
+convenience directions — invocation rejection is distinguished from
+composition primitive failure, a stopped host rejects before acceptance, the
+zero-length rows complete with no data operation, and a backend error after
+a confirmed prefix keeps the prefix while its step never reaches the kernel —
+kills the empty-composition-precheck-bypass mutant);
+mutation kills M1–M13 (recorded in the v1 conformance ledger D2 entry);
 ASan/TSan including fiber switches; core-only probes unchanged.
 
 ## 12. Known limitations
