@@ -555,13 +555,13 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
     case detail::OperationKind::sync_data: {
         int rc = sluice::detail::retry_on_eintr([&] { return ::fdatasync(p.fd); });
         if (rc < 0)
-            return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+            return sluice::detail::IoOutcome::failure(sluice::from_errno_value(errno));
         return sluice::detail::IoOutcome::success();
     }
     case detail::OperationKind::sync_all: {
         int rc = sluice::detail::retry_on_eintr([&] { return ::fsync(p.fd); });
         if (rc < 0)
-            return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+            return sluice::detail::IoOutcome::failure(sluice::from_errno_value(errno));
         return sluice::detail::IoOutcome::success();
     }
     case detail::OperationKind::file_info:

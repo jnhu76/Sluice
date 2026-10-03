@@ -893,6 +893,48 @@ bool metadata_identity_agrees_across_backends(Tracker& t) {
     return true;
 }
 
+bool canceled_metadata_op_reports_the_canceled_terminal(Tracker& t) {
+    const std::string content = "sluice e1 canceled metadata";
+    const std::string path = make_temp_file(content);
+    if (path.empty()) {
+        t.check(false, "fixture created");
+        return false;
+    }
+    auto opened = File::open(path);
+    ::unlink(path.c_str());
+    if (!opened.has_value()) {
+        t.check(false, "fixture opens");
+        return false;
+    }
+    File file = std::move(opened).value();
+    HookedBackend made = HookedBackend::create(4, 8, /*advance=*/true);
+    RequestCore& core = *made.ctx->context_core_for_test();
+
+    auto submitted = made.ctx->submit_file_info(FileInfoOp{NativeFileRef{file}});
+    t.check(submitted.has_value(), "the to-be-canceled file_info is accepted");
+    if (!submitted.has_value())
+        return false;
+    Request<FileInfo> request = std::move(submitted).value();
+
+    const auto disposition = request.cancel();
+    t.check(disposition.has_value() && disposition.value() == CancelDisposition::requested,
+            "the cancel is requested against the claimed metadata op");
+    const std::uint64_t cookie = made.backend->peek_next_cookie_for_test() - 1;
+    (void)made.ctx->poll();
+    made.backend->inject_cqe_for_test(kControlTag | cookie, 0);
+    made.backend->inject_cqe_for_test(cookie, -ECANCELED);
+    while (!request.ready())
+        (void)made.ctx->poll();
+    const auto observed = request.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                observed.result.error().code == IoError::Code::canceled,
+            "a raced cancel of a metadata op reports the canceled terminal, not backend_error");
+    t.check(observed.effect == EffectReport{0, EffectCertainty::accounted},
+            "a canceled metadata op has no data effect");
+    t.check(core_is_idle(core.snapshot()), "the canceled metadata op reclaims completely");
+    return true;
+}
+
 bool sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced(Tracker& t) {
     Fixture fix = make_fixture("sluice e1 sticky intent conformance");
     if (!fix.ok()) {
@@ -1015,6 +1057,8 @@ int main() {
          success_wins_over_a_recorded_cancel_intent},
 #else
         {"metadata_identity_agrees_across_backends", metadata_identity_agrees_across_backends},
+        {"canceled_metadata_op_reports_the_canceled_terminal",
+         canceled_metadata_op_reports_the_canceled_terminal},
         {"sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced",
          sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced},
         {"success_and_cancel_converge_without_fabrication_under_the_fiction",

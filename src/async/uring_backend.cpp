@@ -1123,7 +1123,12 @@ void UringAsyncBackend::finalize_operation_terminal_(
         // and sync attempts have no data effect, so their failures stay
         // accounted zero.
         if (!is_byte_op) {
-            candidate.outcome = sluice::detail::IoOutcome::failure(terminal.error);
+            if (terminal_is_kernel_cancel(terminal.error)) {
+                candidate.outcome = sluice::detail::IoOutcome::failure(
+                    IoError{.code = IoError::Code::canceled, .os_errno = terminal.error.os_errno});
+            } else {
+                candidate.outcome = sluice::detail::IoOutcome::failure(terminal.error);
+            }
         } else if (terminal_is_kernel_cancel(terminal.error)) {
             candidate.outcome = sluice::detail::canceled_racing_in_flight_attempt(0);
         } else {
@@ -1246,17 +1251,21 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     } else if (is_byte_op) {
         terminal = detail::TerminalResult::ok_bytes(static_cast<std::uint64_t>(res));
     } else if (is_metadata_op) {
-        if ((prep.statx_buffer->stx_mask & STATX_SIZE) == 0 ||
+        if (res != 0 || (prep.statx_buffer->stx_mask & STATX_SIZE) == 0 ||
             (prep.statx_buffer->stx_mask & (STATX_TYPE | STATX_MODE)) == 0) {
             terminal = detail::TerminalResult::err(IoError{IoError::Code::backend_error});
         } else {
             metadata.kind = S_ISREG(prep.statx_buffer->stx_mode) ? sluice::FileKind::regular
                                                                  : sluice::FileKind::other;
             metadata.size = prep.statx_buffer->stx_size;
-            metadata.identity = sluice::FileIdentity{
-                static_cast<std::uint64_t>(
-                    ::makedev(prep.statx_buffer->stx_dev_major, prep.statx_buffer->stx_dev_minor)),
-                prep.statx_buffer->stx_ino};
+            // statx leaves unrequested-in-mask fields undefined; identity is
+            // published only when the kernel actually reported the inode.
+            if ((prep.statx_buffer->stx_mask & STATX_INO) != 0) {
+                metadata.identity = sluice::FileIdentity{
+                    static_cast<std::uint64_t>(::makedev(prep.statx_buffer->stx_dev_major,
+                                                         prep.statx_buffer->stx_dev_minor)),
+                    prep.statx_buffer->stx_ino};
+            }
             metadata_out = &metadata;
             terminal = detail::TerminalResult::ok_void();
         }
