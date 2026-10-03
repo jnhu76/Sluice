@@ -1,6 +1,7 @@
 #include <sluice/async/stackful_io_host.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/detail/file_semantics.hpp>
 
 #include <cstdio>
 #include <exception>
@@ -25,6 +26,57 @@ namespace {
     } catch (...) {
         return IoError{IoError::Code::backend_error, 0};
     }
+}
+
+blocking::EffectCertainty publish_certainty(sluice::detail::EffectCertainty certainty) noexcept {
+    return certainty == sluice::detail::EffectCertainty::accounted
+               ? blocking::EffectCertainty::accounted
+               : blocking::EffectCertainty::unknown;
+}
+
+blocking::CompositionOutcome
+compose_outcome(const sluice::detail::CompositionState& state) noexcept {
+    blocking::CompositionOutcome outcome;
+    outcome.confirmed_bytes = state.confirmed_bytes;
+    outcome.remaining = publish_certainty(sluice::detail::composition_effect_certainty(state));
+    switch (state.stop) {
+    case sluice::detail::CompositionStop::complete:
+        outcome.end = blocking::CompositionEnd::complete;
+        break;
+    case sluice::detail::CompositionStop::eof_before_full:
+        outcome.end = blocking::CompositionEnd::eof_before_full;
+        break;
+    case sluice::detail::CompositionStop::write_no_progress:
+        outcome.end = blocking::CompositionEnd::write_no_progress;
+        break;
+    case sluice::detail::CompositionStop::primitive_error:
+        outcome.end = blocking::CompositionEnd::primitive_error;
+        outcome.error = state.error;
+        break;
+    case sluice::detail::CompositionStop::impossible_count:
+        outcome.end = blocking::CompositionEnd::primitive_error;
+        outcome.error = IoError{.code = IoError::Code::invalid_state};
+        break;
+    }
+    return outcome;
+}
+
+// An accepted first step proves offset + total stays representable, so every
+// later offset advance lands inside the range that step validated.
+template <class Primitive>
+blocking::CompositionOutcome compose_host_steps(sluice::detail::CompositionKind kind,
+                                                std::size_t total, Primitive&& primitive) {
+    sluice::detail::CompositionState state;
+    while (!state.stopped && state.confirmed_bytes < total) {
+        const std::size_t confirmed = state.confirmed_bytes;
+        auto step = primitive(confirmed);
+        if (!step.has_value()) {
+            state = sluice::detail::compose_error(state, step.error());
+            break;
+        }
+        state = sluice::detail::compose_progress(kind, total, state, step.value());
+    }
+    return compose_outcome(state);
 }
 
 } // namespace
@@ -80,6 +132,23 @@ Result<void> IoTaskContext::sync_data_for(NativeFileRef file, std::chrono::nanos
 Result<void> IoTaskContext::sync_all_for(NativeFileRef file, std::chrono::nanoseconds wait) {
     return StackfulIoHost::await_request_<void>(
         *host_, [&] { return host_->ctx_.submit_sync_all(SyncAllOp{file}); }, true, wait);
+}
+
+blocking::CompositionOutcome IoTaskContext::read_exact(NativeFileRef file, std::span<std::byte> dst,
+                                                       std::uint64_t offset) {
+    return compose_host_steps(sluice::detail::CompositionKind::read_exact, dst.size(),
+                              [&](std::size_t confirmed) {
+                                  return read(file, dst.subspan(confirmed), offset + confirmed);
+                              });
+}
+
+blocking::CompositionOutcome IoTaskContext::write_all(NativeFileRef file,
+                                                      std::span<const std::byte> src,
+                                                      std::uint64_t offset) {
+    return compose_host_steps(sluice::detail::CompositionKind::write_all, src.size(),
+                              [&](std::size_t confirmed) {
+                                  return write(file, src.subspan(confirmed), offset + confirmed);
+                              });
 }
 
 StackfulIoHost::StackfulIoHost(AsyncIoContext& ctx, std::size_t task_capacity)
@@ -236,7 +305,15 @@ std::chrono::nanoseconds StackfulIoHost::next_park_() const noexcept {
             continue;
         }
         const AwaitLink& link = *slot.await_link;
-        if (!link.has_deadline || link.deadline <= now) {
+        if (!link.has_deadline) {
+            continue;
+        }
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_EXPIRED_DEADLINE_SPIN)
+        if (link.deadline <= now) {
+            return std::chrono::nanoseconds::zero();
+        }
+#endif
+        if (link.deadline <= now) {
             continue;
         }
         if (link.deadline < earliest) {
@@ -383,6 +460,19 @@ Result<void> StackfulIoHost::run() {
         }
 #endif
 
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_STOP_IMPLICIT_CANCEL)
+        if (stop_requested()) {
+            for (std::size_t i = 0; i < task_capacity_; ++i) {
+                TaskSlot& slot = slots_[i];
+                if (!slot.live || slot.await_link == nullptr) {
+                    continue;
+                }
+                AwaitLink& link = *slot.await_link;
+                link.cancel_fn(link.request);
+            }
+        }
+#endif
+
         const std::chrono::nanoseconds park = next_park_();
         auto woke = park == std::chrono::nanoseconds::max() ? ctx_.wait_one()
                                                             : ctx_.wait_one(park);
@@ -393,7 +483,9 @@ Result<void> StackfulIoHost::run() {
             detail::stackful_host_drive_health_fail_fast();
         }
         if (woke.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::control_interrupted) {
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_SKIP_CONTROL_ACK)
             ctx_.acknowledge_progress_control();
+#endif
         }
     }
 

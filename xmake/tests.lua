@@ -674,4 +674,10 @@ do
                          "SLUICE_STACKFUL_HOST_MUTANT_STALE_ERROR_RETAINED")
     stackful_host_target("stackful_host_mut_stop_interrupts_control",
                          "SLUICE_STACKFUL_HOST_MUTANT_STOP_INTERRUPTS_CONTROL")
+    stackful_host_target("stackful_host_mut_stop_implicit_cancel",
+                         "SLUICE_STACKFUL_HOST_MUTANT_STOP_IMPLICIT_CANCEL")
+    stackful_host_target("stackful_host_mut_expired_deadline_spin",
+                         "SLUICE_STACKFUL_HOST_MUTANT_EXPIRED_DEADLINE_SPIN")
+    stackful_host_target("stackful_host_mut_skip_control_ack",
+                         "SLUICE_STACKFUL_HOST_MUTANT_SKIP_CONTROL_ACK")
 end

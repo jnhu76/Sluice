@@ -5,6 +5,7 @@
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
+#include <sluice/blocking/file.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -50,6 +51,19 @@ class IoTaskContext {
     Result<void> sync_data_for(NativeFileRef file, std::chrono::nanoseconds wait);
     Result<void> sync_all_for(NativeFileRef file, std::chrono::nanoseconds wait);
 
+    // Exact/all composition over the primitive helpers above: repeated
+    // primitive calls advanced by confirmed bytes (never replayed), reporting
+    // the canonical composition outcome — the confirmed prefix next to a
+    // structured stop reason (complete, EOF before full, write made no
+    // progress, primitive error). An observed host stop ends the loop at the
+    // next primitive boundary: that helper then rejects with `canceled`
+    // before acceptance, reported like any primitive error with the
+    // confirmed prefix retained.
+    blocking::CompositionOutcome read_exact(NativeFileRef file, std::span<std::byte> dst,
+                                            std::uint64_t offset);
+    blocking::CompositionOutcome write_all(NativeFileRef file, std::span<const std::byte> src,
+                                           std::uint64_t offset);
+
   private:
     friend class StackfulIoHost;
 
@@ -79,6 +93,12 @@ class IoTaskContext {
 // and it touches nothing in the context's control plane: an accepted request
 // keeps its responsibility until its natural publication, and stop
 // convergence waits on that settlement.
+//
+// Admission linearizes at `spawn`'s acquire-load of the stop flag: a spawn
+// that observes stop=false may complete its slot commitment even if
+// `request_stop()` stores stop=true immediately afterwards — that admitted
+// task is part of the finite host set and is driven to retirement normally.
+// A spawn that observes stop=true admits no task.
 //
 // The `_for` forms bound only the driver's initial park window for that
 // await: on expiry the request keeps its responsibility — the host neither
@@ -112,6 +132,8 @@ class StackfulIoHost {
 
     std::size_t test_live_task_count() const noexcept { return live_tasks_; }
 
+    std::size_t test_ready_ring_size() const noexcept { return ring_size_; }
+
     std::size_t test_slots_with_await_link() const noexcept {
         std::size_t with_link = 0;
         for (std::size_t i = 0; i < task_capacity_; ++i) {
@@ -128,7 +150,8 @@ class StackfulIoHost {
 
     struct AwaitLink {
         bool (*ready_fn)(void* request) noexcept = nullptr;
-#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS) ||                                  \
+    defined(SLUICE_STACKFUL_HOST_MUTANT_STOP_IMPLICIT_CANCEL)
         void (*cancel_fn)(void* request) noexcept = nullptr;
 #endif
         void* request = nullptr;
@@ -209,7 +232,8 @@ Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, 
     AwaitLink link;
     link.request = &request;
     link.ready_fn = [](void* p) noexcept { return static_cast<Request<T>*>(p)->ready(); };
-#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS) ||                                  \
+    defined(SLUICE_STACKFUL_HOST_MUTANT_STOP_IMPLICIT_CANCEL)
     link.cancel_fn = [](void* p) noexcept { (void)static_cast<Request<T>*>(p)->cancel(); };
 #endif
     if (bounded) {
