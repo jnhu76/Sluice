@@ -668,4 +668,10 @@ do
     stackful_host_target("stackful_host_mut_await_stop_unsettled",
                          "SLUICE_D2_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED")
     stackful_host_target("stackful_host_mut_double_wake", "SLUICE_D2_MUTANT_DOUBLE_WAKE")
+    stackful_host_target("stackful_host_mut_deadline_cancels",
+                         "SLUICE_D2_MUTANT_DEADLINE_CANCELS")
+    stackful_host_target("stackful_host_mut_stale_error_retained",
+                         "SLUICE_D2_MUTANT_STALE_ERROR_RETAINED")
+    stackful_host_target("stackful_host_mut_stop_interrupts_control",
+                         "SLUICE_D2_MUTANT_STOP_INTERRUPTS_CONTROL")
 end

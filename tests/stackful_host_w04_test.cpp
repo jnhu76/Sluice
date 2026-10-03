@@ -98,8 +98,8 @@ struct OwnedBackend {
     ThreadPoolBackend* raw;
 };
 
-OwnedBackend make_threadpool() {
-    auto backend = std::make_unique<ThreadPoolBackend>();
+OwnedBackend make_threadpool(std::size_t worker_count = 4) {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{64, worker_count});
     ThreadPoolBackend* raw = backend.get();
     return OwnedBackend{std::move(backend), raw};
 }
@@ -287,9 +287,11 @@ bool h1_task_failure_while_other_io_outstanding() {
 }
 
 // H2: a task is suspended with an accepted Request; stop arrives while the
-// physical operation is claimed but not terminal. No stack destruction; the
-// responsibility is retained; settlement and retirement complete before the
-// host returns.
+// physical operation is claimed but not terminal. The request keeps its
+// responsibility: the host neither cancels nor settles it, the helper
+// returns the operation's real outcome, and the task observes the stop token
+// before retiring. No stack destruction; settlement and retirement complete
+// before the host returns.
 bool h2_stop_during_suspension_settles() {
     const std::string src_path = make_temp_file(std::string(64, 's'));
     auto src_open = File::open(src_path);
@@ -311,6 +313,7 @@ bool h2_stop_during_suspension_settles() {
 
     std::atomic<bool> task_saw_token{false};
     std::atomic<bool> task_got_terminal{false};
+    std::atomic<bool> real_outcome{false};
 
     std::thread stopper([&] {
         wait_gate_paused(gate);
@@ -322,11 +325,8 @@ bool h2_stop_during_suspension_settles() {
     check(host->spawn([&](IoTaskContext& task) {
               auto r = task.read(NativeFileRef{src}, buffer, 0);
               task_got_terminal = true;
-              if (task.token().is_requested()) {
-                  task_saw_token = true;
-              }
-              check(r.has_value() || r.error().code == IoError::Code::canceled,
-                    "h2 terminal outcome is honest");
+              task_saw_token = task.token().is_requested();
+              real_outcome = r.has_value() && r.value() == 64;
           }).has_value(),
           "h2 task admitted");
 
@@ -335,6 +335,7 @@ bool h2_stop_during_suspension_settles() {
     check(run.has_value(), "h2 run settles and returns after stop");
 
     check(task_got_terminal, "h2 suspended request reached a public terminal");
+    check(real_outcome, "h2 stop did not cancel the accepted request");
     check(task_saw_token, "h2 task observed the stop token");
     check(ctx.outstanding() == 0, "h2 nothing outstanding after settlement");
     check(host->test_live_task_count() == 0, "h2 task storage retired");
@@ -344,7 +345,7 @@ bool h2_stop_during_suspension_settles() {
     auto after = host->spawn([](IoTaskContext&) {});
     check(!after.has_value() && after.error().code == IoError::Code::canceled,
           "h2 spawn admission closed after stop");
-    return task_got_terminal && task_saw_token;
+    return task_got_terminal && task_saw_token && real_outcome;
 }
 
 // H3 arm: the wake/observation state is reserved for the task's whole
@@ -395,20 +396,28 @@ bool h3_await_state_reserved_before_suspension() {
     return saw_reserved_link && a_settled;
 }
 
-// H4: a wait deadline expires while the physical operation is still claimed.
-// The deadline bounds initial waiting only: the helper initiates best-effort
-// cancel and settles before returning the honest terminal outcome.
-bool h4_wait_timeout_settles_before_return() {
+// H4: a wait deadline expires while the awaited operation is still queued
+// undispatched behind a claimed worker. The deadline bounds the driver's
+// initial park window only: it neither cancels nor settles the request, and
+// the helper returns the operation's real terminal result once the queued
+// operation runs. The one-worker pool plus the occupier task makes the
+// discriminator deterministic: a reinstated expiry-cancel would win before
+// execution and return canceled instead of the data asserted below.
+bool h4_deadline_expiry_does_not_cancel() {
     const std::string src_path = make_temp_file(std::string(48, 't'));
+    const std::string occ_path = make_temp_file(std::string(8, 'o'));
     auto src_open = File::open(src_path);
+    auto occ_open = File::open(occ_path);
     ::unlink(src_path.c_str());
-    check(src_open.has_value(), "h4 open");
-    if (!src_open.has_value()) {
+    ::unlink(occ_path.c_str());
+    check(src_open.has_value() && occ_open.has_value(), "h4 opens");
+    if (!src_open.has_value() || !occ_open.has_value()) {
         return false;
     }
     File src = std::move(src_open).value();
+    File occ = std::move(occ_open).value();
 
-    OwnedBackend owned = make_threadpool();
+    OwnedBackend owned = make_threadpool(1);
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     owned.raw->set_worker_claimed_pause_gate(&gate);
     AsyncIoContext ctx{std::move(owned.backend)};
@@ -417,34 +426,43 @@ bool h4_wait_timeout_settles_before_return() {
     check(host_r.has_value(), "h4 host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
+    std::atomic<bool> occupier_done{false};
     std::atomic<bool> got_terminal{false};
-    std::atomic<bool> honest_outcome{false};
+    std::atomic<bool> real_outcome{false};
 
     // Orders the gate release after the 50ms wait deadline has fired; it
     // inflates no retry and gates no assertion.
     std::thread releaser([&] {
+        wait_gate_paused(gate);
         std::this_thread::sleep_for(std::chrono::milliseconds(150));
         resume_gate(gate);
     });
 
+    check(host->spawn([&](IoTaskContext& task) {
+              std::vector<std::byte> scratch(8, std::byte{0});
+              auto r = task.read(NativeFileRef{occ}, scratch, 0);
+              occupier_done = r.has_value() && r.value() == 8;
+          }).has_value(),
+          "h4 occupier task admitted");
+
     std::vector<std::byte> buffer(48, std::byte{0});
     check(host->spawn([&](IoTaskContext& task) {
-              auto r = task.read_for(NativeFileRef{src}, buffer, 0, std::chrono::milliseconds(50));
+              auto r = task.read_for(NativeFileRef{src}, buffer, 0,
+                                     std::chrono::milliseconds(50));
               got_terminal = true;
-              honest_outcome = (r.has_value() && r.value() == 48) ||
-                               (!r.has_value() && r.error().code == IoError::Code::canceled);
+              real_outcome = r.has_value() && r.value() == 48;
           }).has_value(),
           "h4 task admitted");
 
     auto run = host->run();
     releaser.join();
-    check(run.has_value(), "h4 run settles after deadline");
-
+    check(run.has_value(), "h4 run settles after the deadline");
+    check(occupier_done, "h4 occupier read settled");
     check(got_terminal, "h4 helper returned a terminal outcome, not a timeout escape");
-    check(honest_outcome, "h4 outcome is honest data or honest cancel");
+    check(real_outcome, "h4 deadline expiry did not cancel: real result returned");
     check(ctx.outstanding() == 0, "h4 nothing outstanding after settlement");
-    check(host->test_live_task_count() == 0, "h4 task retired");
-    return got_terminal && honest_outcome;
+    check(host->test_live_task_count() == 0, "h4 tasks retired");
+    return got_terminal && real_outcome && occupier_done;
 }
 
 // H5: the request publishes, the fiber resumes, the task consumes the result
@@ -486,8 +504,9 @@ bool h5_exception_during_resumed_processing() {
 }
 
 // H6: the physical outcome exists but publication is paused; stop races the
-// publication/retirement boundary. Exactly one terminal is observed, the task
-// body runs exactly once, and nothing touches retired storage.
+// publication/retirement boundary. The request keeps its responsibility —
+// the already-computed outcome publishes unchanged — the task body runs
+// exactly once, and nothing touches retired storage.
 bool h6_stop_races_publication_and_retirement() {
     const std::string src_path = make_temp_file(std::string(24, 'r'));
     auto src_open = File::open(src_path);
@@ -508,7 +527,7 @@ bool h6_stop_races_publication_and_retirement() {
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
     std::atomic<int> body_entries{0};
-    std::atomic<bool> honest_terminal{false};
+    std::atomic<bool> real_terminal{false};
     std::vector<std::byte> buffer(24, std::byte{0});
 
     std::thread stopper([&] {
@@ -520,8 +539,7 @@ bool h6_stop_races_publication_and_retirement() {
     check(host->spawn([&](IoTaskContext& task) {
               ++body_entries;
               auto r = task.read(NativeFileRef{src}, buffer, 0);
-              honest_terminal = (r.has_value() && r.value() == 24) ||
-                                (!r.has_value() && r.error().code == IoError::Code::canceled);
+              real_terminal = r.has_value() && r.value() == 24;
           }).has_value(),
           "h6 task admitted");
 
@@ -529,11 +547,11 @@ bool h6_stop_races_publication_and_retirement() {
     stopper.join();
     check(run.has_value(), "h6 run settles after the race");
     check(body_entries == 1, "h6 task body entered exactly once");
-    check(honest_terminal, "h6 honest terminal under the stop race");
+    check(real_terminal, "h6 real outcome published under the stop race");
     check(ctx.outstanding() == 0, "h6 nothing outstanding");
     check(host->test_live_task_count() == 0, "h6 task retired once");
     check(host->test_slots_with_await_link() == 0, "h6 no delivery touches retired storage");
-    return body_entries == 1 && honest_terminal;
+    return body_entries == 1 && real_terminal;
 }
 
 // The host is the context's only driver: an external owner blocks run()
@@ -782,6 +800,72 @@ bool await_after_stop_rejects_before_acceptance() {
     return rejected_before_acceptance;
 }
 
+// A failed run must not poison the next run: the first-error accumulator is
+// per-run state, reset at each successful run entry before any task executes.
+bool run_failure_does_not_poison_the_next_run() {
+    AsyncIoContext ctx{std::make_unique<ThreadPoolBackend>()};
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "run-reuse host constructs");
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    check(host->spawn([](IoTaskContext&) {
+              throw std::runtime_error("first run failure");
+          }).has_value(),
+          "run-reuse failing task admitted");
+    auto run1 = host->run();
+    check(!run1.has_value() && run1.error().code == IoError::Code::backend_error,
+          "run-reuse run1 reports its own task error");
+
+    std::atomic<bool> second_ran{false};
+    check(host->spawn([&](IoTaskContext&) { second_ran = true; }).has_value(),
+          "run-reuse run2 task admitted");
+    auto run2 = host->run();
+    check(second_ran, "run-reuse run2 task executed");
+    check(run2.has_value(), "run-reuse run2 succeeds: run1's error does not persist");
+    return run2.has_value() && second_ran;
+}
+
+// Host stop must not write the context's control plane: a stop that lands
+// while the driver is executing a task (so the run never waits) leaves no
+// unacknowledged control behind for the next progress owner.
+bool host_stop_does_not_plant_context_control() {
+    OwnedBackend owned = make_threadpool();
+    AsyncIoContext ctx{std::move(owned.backend)};
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "control-plane host constructs");
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    std::atomic<bool> task_started{false};
+    std::atomic<bool> release_task{false};
+    std::thread stopper([&] {
+        task_started.wait(false, std::memory_order_acquire);
+        host->request_stop();
+        release_task.store(true, std::memory_order_release);
+        release_task.notify_all();
+    });
+
+    check(host->spawn([&](IoTaskContext&) {
+              task_started.store(true, std::memory_order_release);
+              task_started.notify_all();
+              release_task.wait(false, std::memory_order_acquire);
+          }).has_value(),
+          "control-plane task admitted");
+
+    auto run = host->run();
+    stopper.join();
+    check(run.has_value(), "control-plane run settles after stop");
+
+    auto owner = ctx.claim_progress_owner();
+    check(owner.has_value(), "control-plane owner reclaimable after run");
+    auto wait = ctx.wait_one();
+    check(wait.has_value(), "control-plane wait_one succeeds after the stopped run");
+    check(wait.has_value() &&
+              wait.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress,
+          "control-plane: no stale control from the host stop reaches the next owner");
+    return wait.has_value() &&
+           wait.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
+}
+
 } // namespace
 
 int main() {
@@ -797,7 +881,7 @@ int main() {
         {"h1_task_failure_while_other_io_outstanding", h1_task_failure_while_other_io_outstanding},
         {"h2_stop_during_suspension_settles", h2_stop_during_suspension_settles},
         {"h3_await_state_reserved_before_suspension", h3_await_state_reserved_before_suspension},
-        {"h4_wait_timeout_settles_before_return", h4_wait_timeout_settles_before_return},
+        {"h4_deadline_expiry_does_not_cancel", h4_deadline_expiry_does_not_cancel},
         {"h5_exception_during_resumed_processing", h5_exception_during_resumed_processing},
         {"h6_stop_races_publication_and_retirement", h6_stop_races_publication_and_retirement},
         {"progress_owner_composition", progress_owner_composition},
@@ -807,6 +891,8 @@ int main() {
         {"destroying_host_with_live_task_fails_fast", destroying_host_with_live_task_fails_fast},
         {"nested_run_from_a_task_rejected", nested_run_from_a_task_rejected},
         {"await_after_stop_rejects_before_acceptance", await_after_stop_rejects_before_acceptance},
+        {"run_failure_does_not_poison_the_next_run", run_failure_does_not_poison_the_next_run},
+        {"host_stop_does_not_plant_context_control", host_stop_does_not_plant_context_control},
     };
 
     for (const NamedTest& t : tests) {
