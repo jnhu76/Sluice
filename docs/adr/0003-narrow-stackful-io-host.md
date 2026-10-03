@@ -108,12 +108,27 @@ is the caller's own code.
   therefore does not wake a parked driver: convergence waits on the accepted
   operations' own terminal states, and a request that never reaches a
   terminal defers `run()` exit indefinitely (no bounded-stop promise; §9/§12).
+- Stop-versus-spawn linearization: `spawn()`'s acquire-load of the stop flag
+  is the task-admission decision point. A spawn that observes stop=false may
+  complete its slot commitment even if `request_stop()` stores stop=true
+  immediately afterwards; that admitted task is part of the finite host set
+  and is driven to retirement normally. A spawn that observes stop=true
+  admits no task. No synchronization beyond that load/store pair is added:
+  the race is explicitly linearized at the admission decision, not closed.
+- The await precheck's stop rejection returns `IoError::Code::canceled`
+  before any acceptance. This is a host admission-stop rejection reported
+  through the existing error code — no operation was accepted, so the code
+  is admission-flavored rather than an operation result; the global error
+  model is not redesigned here (out of #399 scope).
 
 ## 5. The await protocol (host completed-return helper)
 
 `IoTaskContext` exposes completed-return operations over the four admitted
 request kinds — `read` / `write` / `sync_data` / `sync_all`, each with an
-optional-deadline form. One call owns at most one `Request<T>`. The
+optional-deadline form — plus the two composition conveniences of §10
+(`read_exact` / `write_all`). One call owns at most one `Request<T>` at any
+instant, the composition loops included: each convenience step acquires and
+settles exactly one primitive request before the next step begins. The
 `IoTaskContext&` is valid only inside the task body invocation that received
 it; tasks must not retain it past return:
 
@@ -225,14 +240,49 @@ recoverable poison handling during host driving
 (health failure during `run()` fails fast — the documented boundary until #401
 owns a recoverable form, same as D1).
 
-## 10. Blocking operation boundary
+On the supported conforming driver path, `run()` returns after all spawned
+tasks retire (§2); that is the promised structured exit. The remaining
+`run()` error escapes (progress/wait infrastructure failures surfacing
+through `poll_progress`/`wait_one`) are contract-invalid or unreachable under
+conforming use, and no structured cleanup behavior is promised for them.
+
+## 10. Blocking operation boundary and the composition conveniences
 
 `File::open`, explicit close and `resize` are **outside the supported task
 region**: the host offers no task-facing form of them and documents that they
 must be performed by the application on the host thread outside `run()` or
-before/after task execution (W-04 second arm). The task surface is exactly the
-four admitted request operations. `file_info`/`size` request forms stay with
-the #400 operation matrix.
+before/after task execution (W-04 second arm). The task surface is the four
+admitted request operations plus the two composition conveniences below.
+`file_info`/`size` request forms stay with the #400 operation matrix.
+
+SEM-01 adjudication: the root's operation-matrix row for
+`read_exact` / `write_all` composition requires them as "direct and supported
+host conveniences" while deferring any new compound low-level request. Since
+D2-0 ships the host as supported, the conveniences are required host surface,
+not optional. They are implemented exactly as that row's basis prescribes —
+safe repeated primitive use under SEM-05 — as `IoTaskContext::read_exact` /
+`IoTaskContext::write_all`:
+
+- pure composition over the primitive host helpers: each step acquires,
+  awaits and settles exactly one primitive request; no new low-level request
+  kind, no new backend capability, no new RequestCore operation;
+- the loop advances buffer/offset by confirmed bytes only (never replays
+  confirmed bytes), stops on full completion, EOF before full
+  (read), zero write progress (write), primitive error, or an observed host
+  stop at the next primitive boundary (that step's precheck rejects with
+  `canceled` before acceptance);
+- the result is the canonical composition outcome type
+  (`sluice::blocking::CompositionOutcome`) produced by the shared composition
+  rule (`detail::compose_progress`/`compose_error`), so the confirmed byte
+  count, the EOF-before-full / write-no-progress distinctions and the real
+  primitive error are reported exactly as on the direct path; a
+  stop-at-the-boundary rejection reports `canceled` through the
+  primitive-error arm with the confirmed prefix retained and the
+  composition's conservative `unknown` effect remainder (the shared rule's
+  primitive-error mapping; ERR-02 permits but does not require a known-zero
+  accounting there);
+- no atomicity promise, no rollback promise; one convenience call holds at
+  most one owned `Request` at any instant and retains no unbounded state.
 
 ## 11. Validation obligations
 
@@ -247,9 +297,22 @@ retirement); run-reuse evidence (a failed run leaves no error state for the
 next run); stop control-plane evidence (host stop plants no context control
 for the next owner); progress-owner composition evidence (second claim,
 `RequestScope` on host context, re-claim after `run()`); bound evidence
-(capacity rejection, fixed stacks); mutation kills M1–M9 (recorded in the
-v1 conformance ledger D2 entry); ASan/TSan including fiber switches;
-core-only probes unchanged.
+(capacity rejection, fixed stacks); the accepted-undispatched stop
+discriminator (a victim accepted while the only worker is occupied and still
+queued when stop lands must execute naturally — kills the stop-implicit-cancel
+mutant); the expired-deadline park bound (after expiry the driver parks
+unboundedly; the context's poll/wait counters stay orders of magnitude below
+any zero-duration spin — kills the expired-deadline-spin mutant); the
+external-control acknowledgement regression (control planted while the driver
+is committed to a park is observed and acknowledged; the next owner sees no
+stale control — kills the skip-control-ack mutant); nested-spawn evidence
+(capacity-1 refusal with clean retirement, capacity-2 child admission and
+single execution); first-task-error selection evidence (execution order, not
+admission order and not last-wins); the composition-convenience evidence
+(full completion, EOF-before-full prefix, stop at the next acceptance
+boundary with the confirmed prefix, one physical operation per step);
+mutation kills M1–M12 (recorded in the v1 conformance ledger D2 entry);
+ASan/TSan including fiber switches; core-only probes unchanged.
 
 ## 12. Known limitations
 
@@ -263,3 +326,10 @@ HOST-01); deadline forms bound the driver's initial park window only and
 never cancel (CANCEL-02, PROG-04); a non-positive wait provides no effective
 bound; health failure during `run()` fails fast rather than returning an
 error result.
+
+Contraction debt recorded for #402, deliberately not redesigned here: the
+`stop_requested_` atomic, the host-level `CancelToken` and the public
+`stop_requested()` readout represent overlapping stop projections (one
+authority, one task-visible projection, one convenience readout); the
+task-visible read-only stop projection is functional as-is, and no
+speculative bool-view abstraction is added in this slice.
