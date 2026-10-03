@@ -253,7 +253,12 @@ linearization point: either it observed no control pending, or it observed
 the control (the latest generation, atomically) and acknowledged it; control
 arriving after that observation belongs to the next owner. This is the same
 owner discipline as the in-loop acknowledgement (both points are
-mutation-discriminated together). The remaining `run()` error escapes
+mutation-discriminated together). The release pass holds the main loop's
+failure arms: a health outcome observed there fails fast (the final reap
+pass can hide fresh sticky health behind a progress-first return, so the
+exit pass is where such an event must surface), and a `wait_one` error
+propagates through the result instead of releasing the owner on a swallowed
+failure. The remaining `run()` error escapes
 (progress/wait infrastructure failures surfacing through
 `poll_progress`/`wait_one`) are contract-invalid or unreachable under
 conforming use, no structured cleanup behavior is promised for them, and
