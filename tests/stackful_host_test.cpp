@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -26,6 +27,7 @@
 #include <vector>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -36,6 +38,7 @@ namespace {
 using namespace sluice::async;
 using sluice::AsyncStats;
 using sluice::blocking::CompositionEnd;
+using sluice::blocking::CompositionOutcome;
 using sluice::File;
 using sluice::FileAccess;
 using sluice::FileOpen;
@@ -829,8 +832,10 @@ bool run_failure_does_not_poison_the_next_run() {
 }
 
 // Host stop must not write the context's control plane: a stop that lands
-// while the driver is executing a task (so the run never waits) leaves no
-// unacknowledged control behind for the next progress owner.
+// while the driver is executing a task (so the run never waits) plants
+// nothing in the notification domain, and no unacknowledged control is left
+// for the next progress owner. Readability of the borrowed notification fd
+// at stop time is the direct observation of a planted control.
 bool host_stop_does_not_plant_context_control() {
     OwnedBackend owned = make_threadpool();
     AsyncIoContext ctx{std::move(owned.backend)};
@@ -840,9 +845,18 @@ bool host_stop_does_not_plant_context_control() {
 
     std::atomic<bool> task_started{false};
     std::atomic<bool> release_task{false};
+    std::atomic<bool> stop_wrote_notification{false};
     std::thread stopper([&] {
         task_started.wait(false, std::memory_order_acquire);
         host->request_stop();
+        struct pollfd pfd;
+        pfd.fd = ctx.progress_notification_fd();
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        const int readable = ::poll(&pfd, 1, 0);
+        stop_wrote_notification.store(readable == 1 && (pfd.revents & POLLIN) != 0,
+                                      std::memory_order_release);
+        ctx.detach_progress_host();
         release_task.store(true, std::memory_order_release);
         release_task.notify_all();
     });
@@ -857,6 +871,8 @@ bool host_stop_does_not_plant_context_control() {
     auto run = host->run();
     stopper.join();
     check(run.has_value(), "control-plane run settles after stop");
+    check(!stop_wrote_notification.load(std::memory_order_acquire),
+          "control-plane: host stop writes nothing to the notification domain");
 
     auto owner = ctx.claim_progress_owner();
     check(owner.has_value(), "control-plane owner reclaimable after run");
@@ -865,7 +881,7 @@ bool host_stop_does_not_plant_context_control() {
     check(wait.has_value() &&
               wait.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress,
           "control-plane: no stale control from the host stop reaches the next owner");
-    return wait.has_value() &&
+    return !stop_wrote_notification.load(std::memory_order_acquire) && wait.has_value() &&
            wait.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
 }
 
@@ -1018,9 +1034,10 @@ bool expired_deadline_parks_instead_of_spinning() {
 // context's progress owner: observed, acknowledged, and not left behind.
 // The worker-claimed pause holds the task's operation; the prepark pause
 // proves the driver committed to a park with the notification fd drained,
-// so the control planted next cannot be missed and cannot be overtaken by
-// the release. A host that skips the acknowledgement leaves the control
-// sticky for the next owner, which the post-run new-owner wait observes
+// so the control planted next cannot be missed. Two legal completions exist
+// — the next wait reports the control, or a reaped completion returns
+// progress first and the control is retired at run exit — and both must
+// leave the next owner clean, which the post-run new-owner wait observes
 // directly.
 bool external_control_acknowledged_before_next_owner() {
     const std::string src_path = make_temp_file(std::string(32, 'c'));
@@ -1076,6 +1093,71 @@ bool external_control_acknowledged_before_next_owner() {
     check(probe.has_value() &&
               probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress,
           "control-ack: no stale control reaches the next owner");
+    return run.has_value() && real_outcome && probe.has_value() &&
+           probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
+}
+
+// The wait path may reap a completion in the pass that follows a control
+// wake and return progress without ever reporting the control. Holding the
+// driver at its prepark pause while the worker publishes forces exactly
+// that interleaving — the pass after the control wake reaps the published
+// completion first — so the run-exit observation is the only thing standing
+// between that control and the next owner.
+bool control_consumed_by_progress_return_is_retired_at_exit() {
+    const std::string src_path = make_temp_file(std::string(32, 'k'));
+    auto src_open = File::open(src_path);
+    ::unlink(src_path.c_str());
+    check(src_open.has_value(), "exit-control open");
+    if (!src_open.has_value()) {
+        return false;
+    }
+    File src = std::move(src_open).value();
+
+    OwnedBackend owned = make_threadpool(1);
+    ThreadPoolBackend::WorkerClaimedPauseGate claimed_gate;
+    owned.raw->set_worker_claimed_pause_gate(&claimed_gate);
+    detail::ProgressSource::PauseGate prepark_gate;
+    AsyncIoContext ctx{std::move(owned.backend)};
+    ctx.set_progress_prepark_pause_gate_for_test(&prepark_gate);
+
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "exit-control host constructs");
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    std::atomic<bool> real_outcome{false};
+    std::vector<std::byte> buffer(32, std::byte{0});
+    check(host->spawn([&](IoTaskContext& task) {
+              auto r = task.read(NativeFileRef{src}, buffer, 0);
+              real_outcome = r.has_value() && r.value() == 32;
+          }).has_value(),
+          "exit-control task admitted");
+
+    std::thread controller([&] {
+        wait_gate_paused(claimed_gate);
+        wait_gate_paused(prepark_gate);
+        ctx.interrupt_progress_waiters();
+        const std::uint64_t progress_before = ctx.progress_token_for_test().progress;
+        resume_gate(claimed_gate);
+        while (ctx.progress_token_for_test().progress == progress_before) {
+            std::this_thread::yield();
+        }
+        resume_gate(prepark_gate);
+    });
+
+    auto run = host->run();
+    controller.join();
+
+    check(run.has_value(), "exit-control run settles");
+    check(real_outcome, "exit-control task settled on its real result");
+    check(ctx.outstanding() == 0, "exit-control nothing outstanding");
+    check(host->test_live_task_count() == 0, "exit-control tasks retired");
+
+    auto owner = ctx.claim_progress_owner();
+    check(owner.has_value(), "exit-control next owner claims the context");
+    auto probe = ctx.wait_one();
+    check(probe.has_value() &&
+              probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress,
+          "exit-control: control consumed by a progress return is retired at exit");
     return run.has_value() && real_outcome && probe.has_value() &&
            probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
 }
@@ -1276,8 +1358,9 @@ bool host_composition_reports_canonical_outcomes() {
         std::vector<std::byte> dst(8, std::byte{0});
         check(host->spawn([&](IoTaskContext& task) {
                   auto composed = task.read_exact(NativeFileRef{src}, dst, 0);
-                  full_ok = composed.complete() && composed.confirmed_bytes == 8 &&
-                            dst[0] == std::byte{'a'} && dst[7] == std::byte{'h'};
+                  full_ok = composed.has_value() && composed.value().complete() &&
+                            composed.value().confirmed_bytes == 8 && dst[0] == std::byte{'a'} &&
+                            dst[7] == std::byte{'h'};
               }).has_value(),
               "composition full-read task admitted");
         check(host->run().has_value(), "composition full-read run succeeds");
@@ -1305,8 +1388,9 @@ bool host_composition_reports_canonical_outcomes() {
         std::vector<std::byte> dst(16, std::byte{0});
         check(host->spawn([&](IoTaskContext& task) {
                   auto composed = task.read_exact(NativeFileRef{src}, dst, 0);
-                  eof_ok = composed.end == CompositionEnd::eof_before_full &&
-                           composed.confirmed_bytes == 5 && dst[4] == std::byte{'e'};
+                  eof_ok = composed.has_value() &&
+                           composed.value().end == CompositionEnd::eof_before_full &&
+                           composed.value().confirmed_bytes == 5 && dst[4] == std::byte{'e'};
               }).has_value(),
               "composition eof-read task admitted");
         check(host->run().has_value(), "composition eof-read run succeeds");
@@ -1339,7 +1423,8 @@ bool host_composition_reports_canonical_outcomes() {
                   auto composed =
                       task.write_all(NativeFileRef{dst_file},
                                      std::span<const std::byte>(src.data(), src.size()), 0);
-                  write_ok = composed.complete() && composed.confirmed_bytes == payload.size();
+                  write_ok = composed.has_value() && composed.value().complete() &&
+                             composed.value().confirmed_bytes == payload.size();
               }).has_value(),
               "composition write task admitted");
         check(host->run().has_value(), "composition write run succeeds");
@@ -1385,10 +1470,11 @@ bool host_composition_stops_at_new_acceptance_under_stop() {
     std::vector<std::byte> dst(48, std::byte{0});
     check(host->spawn([&](IoTaskContext& task) {
               auto composed = task.read_exact(NativeFileRef{src}, dst, 0);
-              stop_outcome_ok = composed.end == CompositionEnd::primitive_error &&
-                                composed.error.has_value() &&
-                                composed.error->code == IoError::Code::canceled &&
-                                composed.confirmed_bytes == 24;
+              stop_outcome_ok = composed.has_value() &&
+                                composed.value().end == CompositionEnd::primitive_error &&
+                                composed.value().error.has_value() &&
+                                composed.value().error->code == IoError::Code::canceled &&
+                                composed.value().confirmed_bytes == 24;
           }).has_value(),
           "composition stop task admitted");
 
@@ -1401,6 +1487,259 @@ bool host_composition_stops_at_new_acceptance_under_stop() {
     check(ctx.outstanding() == 0, "composition stop nothing outstanding");
     check(host->test_live_task_count() == 0, "composition stop tasks retired");
     return run.has_value() && stop_outcome_ok && owned.raw->syscall_count_for_test() == 1;
+}
+
+bool same_composition_result(const Result<CompositionOutcome>& direct,
+                             const Result<CompositionOutcome>& host_result) {
+    if (direct.has_value() != host_result.has_value()) {
+        return false;
+    }
+    if (!direct.has_value()) {
+        return direct.error().code == host_result.error().code;
+    }
+    const CompositionOutcome& a = direct.value();
+    const CompositionOutcome& b = host_result.value();
+    return a.confirmed_bytes == b.confirmed_bytes && a.end == b.end &&
+           a.remaining == b.remaining && a.error.has_value() == b.error.has_value() &&
+           (!a.error.has_value() || a.error->code == b.error->code);
+}
+
+// The host exact/all conveniences refine the canonical direct invocation
+// semantics at their boundary: whole-invocation rejections (closed file,
+// illegal access, invalid range, stopped host) surface as outer result
+// errors with nothing accepted and no kernel operation, matching the direct
+// forms called with identical inputs. A zero-length invocation still crosses
+// admission as one no-op request and completes without a data operation.
+// Failures inside an established composition stay in the outcome with the
+// confirmed prefix — including a backend error after a confirmed step, whose
+// request never reached the kernel.
+bool host_convenience_parity_with_direct_invocation_semantics() {
+    {
+        const std::string read_path = make_temp_file("abcdefgh");
+        const std::string short_path = make_temp_file("abcde");
+        const std::string closed_path = make_temp_file("xy");
+        const std::string write_only_path = make_temp_file("zz");
+        const std::string rw_path = make_temp_file("");
+        auto read_open = File::open(read_path);
+        auto short_open = File::open(short_path);
+        auto closed_open = File::open(closed_path);
+        FileOpen write_only_mode;
+        write_only_mode.access = FileAccess::write_only;
+        auto write_only_open = File::open(write_only_path, write_only_mode);
+        auto rw_open = File::open(rw_path, writable());
+        ::unlink(read_path.c_str());
+        ::unlink(short_path.c_str());
+        ::unlink(closed_path.c_str());
+        ::unlink(write_only_path.c_str());
+        ::unlink(rw_path.c_str());
+        const bool opens_ok = read_open.has_value() && short_open.has_value() &&
+                              closed_open.has_value() && write_only_open.has_value() &&
+                              rw_open.has_value();
+        check(opens_ok, "parity opens");
+        if (!opens_ok) {
+            return false;
+        }
+        File read_file = std::move(read_open).value();
+        File short_file = std::move(short_open).value();
+        File closed_file = std::move(closed_open).value();
+        (void)closed_file.close();
+        File write_only_file = std::move(write_only_open).value();
+        File rw_file = std::move(rw_open).value();
+
+        std::vector<std::byte> empty_dst;
+        std::vector<std::byte> empty_src;
+        std::vector<std::byte> dst8(8, std::byte{0});
+        std::vector<std::byte> src8(8, std::byte{'s'});
+        std::vector<std::byte> full_dst(8, std::byte{0});
+        std::vector<std::byte> eof_dst(16, std::byte{0});
+        const std::uint64_t invalid_offset = std::numeric_limits<std::uint64_t>::max();
+
+        const Result<CompositionOutcome> d_closed_empty =
+            sluice::blocking::read_exact_at(closed_file, 0, empty_dst);
+        const Result<CompositionOutcome> d_write_only_empty =
+            sluice::blocking::read_exact_at(write_only_file, 0, empty_dst);
+        const Result<CompositionOutcome> d_closed_nonempty =
+            sluice::blocking::read_exact_at(closed_file, 0, dst8);
+        const Result<CompositionOutcome> d_write_only_nonempty =
+            sluice::blocking::read_exact_at(write_only_file, 0, dst8);
+        const Result<CompositionOutcome> d_range_invalid =
+            sluice::blocking::read_exact_at(read_file, invalid_offset, dst8);
+        const Result<CompositionOutcome> d_read_only_empty_write =
+            sluice::blocking::write_all_at(read_file, 0, empty_src);
+        const Result<CompositionOutcome> d_read_only_nonempty_write =
+            sluice::blocking::write_all_at(read_file, 0, src8);
+        const Result<CompositionOutcome> d_valid_empty_read =
+            sluice::blocking::read_exact_at(read_file, 0, empty_dst);
+        const Result<CompositionOutcome> d_valid_empty_write =
+            sluice::blocking::write_all_at(rw_file, 0, empty_src);
+        const Result<CompositionOutcome> d_full =
+            sluice::blocking::read_exact_at(read_file, 0, full_dst);
+        const Result<CompositionOutcome> d_eof =
+            sluice::blocking::read_exact_at(short_file, 0, eof_dst);
+
+        OwnedBackend owned = make_threadpool();
+        AsyncIoContext ctx{std::move(owned.backend)};
+        auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+        check(host_r.has_value(), "parity host constructs");
+        std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+        const auto unset = [] {
+            return make_unexpected<CompositionOutcome>(
+                IoError{.code = IoError::Code::backend_error});
+        };
+        Result<CompositionOutcome> h_closed_empty = unset(), h_write_only_empty = unset(),
+                                    h_closed_nonempty = unset(),
+                                    h_write_only_nonempty = unset(),
+                                    h_range_invalid = unset(),
+                                    h_read_only_empty_write = unset(),
+                                    h_read_only_nonempty_write = unset(),
+                                    h_valid_empty_read = unset(),
+                                    h_valid_empty_write = unset(), h_full = unset(),
+                                    h_eof = unset();
+        check(host->spawn([&](IoTaskContext& task) {
+                  h_closed_empty = task.read_exact(NativeFileRef{closed_file}, empty_dst, 0);
+                  h_write_only_empty =
+                      task.read_exact(NativeFileRef{write_only_file}, empty_dst, 0);
+                  h_closed_nonempty = task.read_exact(NativeFileRef{closed_file}, dst8, 0);
+                  h_write_only_nonempty =
+                      task.read_exact(NativeFileRef{write_only_file}, dst8, 0);
+                  h_range_invalid =
+                      task.read_exact(NativeFileRef{read_file}, dst8, invalid_offset);
+                  h_read_only_empty_write = task.write_all(NativeFileRef{read_file}, empty_src, 0);
+                  h_read_only_nonempty_write =
+                      task.write_all(NativeFileRef{read_file}, src8, 0);
+                  h_valid_empty_read = task.read_exact(NativeFileRef{read_file}, empty_dst, 0);
+                  h_valid_empty_write = task.write_all(NativeFileRef{rw_file}, empty_src, 0);
+                  h_full = task.read_exact(NativeFileRef{read_file}, full_dst, 0);
+                  h_eof = task.read_exact(NativeFileRef{short_file}, eof_dst, 0);
+              }).has_value(),
+              "parity task admitted");
+        check(host->run().has_value(), "parity run settles");
+
+        bool parity_ok = true;
+        const auto verify = [&](const char* label, const Result<CompositionOutcome>& direct,
+                                const Result<CompositionOutcome>& host_result) {
+            const bool ok = same_composition_result(direct, host_result);
+            check(ok, label);
+            parity_ok = parity_ok && ok;
+        };
+        verify("parity closed + empty read", d_closed_empty, h_closed_empty);
+        verify("parity illegal access + empty read", d_write_only_empty, h_write_only_empty);
+        verify("parity closed + nonempty read", d_closed_nonempty, h_closed_nonempty);
+        verify("parity illegal access + nonempty read", d_write_only_nonempty,
+               h_write_only_nonempty);
+        verify("parity invalid range nonempty read", d_range_invalid, h_range_invalid);
+        verify("parity read-only + empty write", d_read_only_empty_write,
+               h_read_only_empty_write);
+        verify("parity read-only + nonempty write", d_read_only_nonempty_write,
+               h_read_only_nonempty_write);
+        verify("parity valid + empty read", d_valid_empty_read, h_valid_empty_read);
+        verify("parity valid + empty write", d_valid_empty_write, h_valid_empty_write);
+        verify("parity full read", d_full, h_full);
+        verify("parity EOF before full", d_eof, h_eof);
+        const bool content_ok = h_full.has_value() && full_dst[0] == std::byte{'a'} &&
+                                full_dst[7] == std::byte{'h'};
+        check(content_ok, "parity full read payload");
+        check(owned.raw->syscall_count_for_test() == 3,
+              "parity rows ran exactly the full and EOF data operations");
+        check(ctx.outstanding() == 0, "parity nothing outstanding");
+        check(host->test_live_task_count() == 0, "parity tasks retired");
+        if (!parity_ok || !content_ok) {
+            return false;
+        }
+    }
+    {
+        const std::string path = make_temp_file("abcdefgh");
+        auto open = File::open(path);
+        ::unlink(path.c_str());
+        check(open.has_value(), "parity stopped open");
+        if (!open.has_value()) {
+            return false;
+        }
+        File src = std::move(open).value();
+
+        AsyncIoContext ctx{std::make_unique<ThreadPoolBackend>()};
+        auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+        std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+        std::vector<std::byte> empty_dst;
+        std::vector<std::byte> dst8(8, std::byte{0});
+        const Result<CompositionOutcome> stopped_unset = make_unexpected<CompositionOutcome>(
+            IoError{.code = IoError::Code::backend_error});
+        Result<CompositionOutcome> stopped_empty = stopped_unset;
+        Result<CompositionOutcome> stopped_nonempty = stopped_unset;
+        check(host->spawn([&](IoTaskContext& task) {
+                  stopped_empty = task.read_exact(NativeFileRef{src}, empty_dst, 0);
+                  stopped_nonempty = task.read_exact(NativeFileRef{src}, dst8, 0);
+              }).has_value(),
+              "parity stopped task admitted");
+        host->request_stop();
+        check(host->run().has_value(), "parity stopped run settles");
+        const bool stopped_ok =
+            !stopped_empty.has_value() &&
+            stopped_empty.error().code == IoError::Code::canceled &&
+            !stopped_nonempty.has_value() &&
+            stopped_nonempty.error().code == IoError::Code::canceled;
+        check(stopped_ok, "stopped host rejects a composition invocation before acceptance");
+        check(ctx.outstanding() == 0, "parity stopped nothing outstanding");
+        if (!stopped_ok) {
+            return false;
+        }
+    }
+    {
+        const std::string path = make_temp_file(std::string(24, 'q'));
+        auto open = File::open(path);
+        ::unlink(path.c_str());
+        check(open.has_value(), "parity fault open");
+        if (!open.has_value()) {
+            return false;
+        }
+        File src = std::move(open).value();
+
+        OwnedBackend owned = make_threadpool();
+        ThreadPoolBackend::WorkerClaimedPauseGate worker_gate;
+        owned.raw->set_worker_claimed_pause_gate(&worker_gate);
+        ThreadPoolBackend::AcceptedPreDispatchPauseGate accept_gate;
+        ThreadPoolBackend::DispatchFailureInjection injection;
+        AsyncIoContext ctx{std::move(owned.backend)};
+        auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+        check(host_r.has_value(), "parity fault host constructs");
+        std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+        std::thread choreography([&] {
+            wait_gate_paused(worker_gate);
+            owned.raw->set_accepted_pre_dispatch_pause_gate(&accept_gate);
+            owned.raw->set_dispatch_failure_injection(&injection);
+            injection.armed.store(true, std::memory_order_release);
+            resume_gate(worker_gate);
+            wait_gate_paused(accept_gate);
+            resume_gate(accept_gate);
+        });
+
+        std::atomic<bool> fault_ok{false};
+        std::vector<std::byte> dst(48, std::byte{0});
+        check(host->spawn([&](IoTaskContext& task) {
+                  auto composed = task.read_exact(NativeFileRef{src}, dst, 0);
+                  fault_ok = composed.has_value() &&
+                             composed.value().end == CompositionEnd::primitive_error &&
+                             composed.value().error.has_value() &&
+                             composed.value().error->code == IoError::Code::backend_error &&
+                             composed.value().confirmed_bytes == 24;
+              }).has_value(),
+              "parity fault task admitted");
+
+        auto run = host->run();
+        choreography.join();
+        check(run.has_value(), "parity fault run settles");
+        check(fault_ok, "primitive failure after a confirmed prefix keeps the prefix");
+        check(injection.fired.load(std::memory_order_acquire) == 1,
+              "dispatch failure injected exactly once");
+        check(owned.raw->syscall_count_for_test() == 1, "failed step never reached the kernel");
+        check(ctx.outstanding() == 0, "parity fault nothing outstanding");
+        return run.has_value() && fault_ok &&
+               injection.fired.load(std::memory_order_acquire) == 1 &&
+               owned.raw->syscall_count_for_test() == 1;
+    }
 }
 
 } // namespace
@@ -1435,6 +1774,8 @@ int main() {
         {"expired_deadline_parks_instead_of_spinning", expired_deadline_parks_instead_of_spinning},
         {"external_control_acknowledged_before_next_owner",
          external_control_acknowledged_before_next_owner},
+        {"control_consumed_by_progress_return_is_retired_at_exit",
+         control_consumed_by_progress_return_is_retired_at_exit},
         {"nested_spawn_bounded_by_capacity", nested_spawn_bounded_by_capacity},
         {"first_task_error_selected_by_execution_order",
          first_task_error_selected_by_execution_order},
@@ -1442,6 +1783,8 @@ int main() {
          host_composition_reports_canonical_outcomes},
         {"host_composition_stops_at_new_acceptance_under_stop",
          host_composition_stops_at_new_acceptance_under_stop},
+        {"host_convenience_parity_with_direct_invocation_semantics",
+         host_convenience_parity_with_direct_invocation_semantics},
     };
 
     for (const NamedTest& t : tests) {
