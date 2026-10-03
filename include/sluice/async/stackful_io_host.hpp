@@ -52,17 +52,24 @@ class IoTaskContext {
     Result<void> sync_all_for(NativeFileRef file, std::chrono::nanoseconds wait);
 
     // Exact/all composition over the primitive helpers above: repeated
-    // primitive calls advanced by confirmed bytes (never replayed), reporting
-    // the canonical composition outcome — the confirmed prefix next to a
-    // structured stop reason (complete, EOF before full, write made no
-    // progress, primitive error). An observed host stop ends the loop at the
-    // next primitive boundary: that helper then rejects with `canceled`
-    // before acceptance, reported like any primitive error with the
-    // confirmed prefix retained.
-    blocking::CompositionOutcome read_exact(NativeFileRef file, std::span<std::byte> dst,
-                                            std::uint64_t offset);
-    blocking::CompositionOutcome write_all(NativeFileRef file, std::span<const std::byte> src,
-                                           std::uint64_t offset);
+    // primitive calls advanced by confirmed bytes (never replayed). The
+    // invocation is validated first, like the direct forms: a closed file,
+    // illegal access, an invalid range or an already-stopped host rejects
+    // the whole call through the outer result, before anything is accepted.
+    // A zero-length invocation is a logical no-op that still crosses
+    // admission as one no-op request — inheriting the context's admission
+    // and slot rules — and completes without a data operation. Once
+    // composing, a primitive failure stops the loop and is reported in the
+    // outcome with the confirmed prefix retained, next to a structured stop
+    // reason (complete, EOF before full, write made no progress, primitive
+    // error); a host stop observed mid-composition rejects the next
+    // primitive boundary with `canceled` before acceptance, reported like
+    // any primitive error.
+    Result<blocking::CompositionOutcome> read_exact(NativeFileRef file, std::span<std::byte> dst,
+                                                    std::uint64_t offset);
+    Result<blocking::CompositionOutcome> write_all(NativeFileRef file,
+                                                   std::span<const std::byte> src,
+                                                   std::uint64_t offset);
 
   private:
     friend class StackfulIoHost;

@@ -79,6 +79,40 @@ blocking::CompositionOutcome compose_host_steps(sluice::detail::CompositionKind 
     return compose_outcome(state);
 }
 
+template <class Span, class Primitive>
+Result<blocking::CompositionOutcome> compose_host_invocation(
+    NativeFileRef file, std::uint64_t offset, Span buffer,
+    sluice::detail::FileOperation operation, bool host_stopped, Primitive&& primitive) {
+    [[maybe_unused]] const sluice::detail::DataOpVerdict verdict =
+        sluice::detail::precheck_data_op(
+            {file.fd < 0, file.access, operation, offset, buffer.size()});
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_EMPTY_COMPOSITION_BYPASSES_PRECHECK)
+    if (const auto rejection = sluice::detail::rejection_of(verdict); rejection.has_value()) {
+        return make_unexpected<blocking::CompositionOutcome>(*rejection);
+    }
+    if (verdict == sluice::detail::DataOpVerdict::execute && buffer.data() == nullptr) {
+        return make_unexpected<blocking::CompositionOutcome>(
+            IoError{.code = IoError::Code::invalid_argument});
+    }
+    if (host_stopped) {
+        return make_unexpected<blocking::CompositionOutcome>(IoError{.code = IoError::Code::canceled});
+    }
+    if (verdict == sluice::detail::DataOpVerdict::complete_empty) {
+        const auto no_op = primitive(0);
+        if (!no_op.has_value()) {
+            return make_unexpected<blocking::CompositionOutcome>(no_op.error());
+        }
+        return blocking::CompositionOutcome{};
+    }
+#endif
+    const sluice::detail::CompositionKind kind =
+        operation == sluice::detail::FileOperation::read
+            ? sluice::detail::CompositionKind::read_exact
+            : sluice::detail::CompositionKind::write_all;
+    return compose_host_steps(kind, buffer.size(),
+                              [&](std::size_t confirmed) { return primitive(confirmed); });
+}
+
 } // namespace
 
 Result<std::size_t> IoTaskContext::read(NativeFileRef file, std::span<std::byte> dst,
@@ -134,21 +168,20 @@ Result<void> IoTaskContext::sync_all_for(NativeFileRef file, std::chrono::nanose
         *host_, [&] { return host_->ctx_.submit_sync_all(SyncAllOp{file}); }, true, wait);
 }
 
-blocking::CompositionOutcome IoTaskContext::read_exact(NativeFileRef file, std::span<std::byte> dst,
-                                                       std::uint64_t offset) {
-    return compose_host_steps(sluice::detail::CompositionKind::read_exact, dst.size(),
-                              [&](std::size_t confirmed) {
-                                  return read(file, dst.subspan(confirmed), offset + confirmed);
-                              });
+Result<blocking::CompositionOutcome> IoTaskContext::read_exact(NativeFileRef file,
+                                                               std::span<std::byte> dst,
+                                                               std::uint64_t offset) {
+    return compose_host_invocation(
+        file, offset, dst, sluice::detail::FileOperation::read, host_->stop_requested(),
+        [&](std::size_t confirmed) { return read(file, dst.subspan(confirmed), offset + confirmed); });
 }
 
-blocking::CompositionOutcome IoTaskContext::write_all(NativeFileRef file,
-                                                      std::span<const std::byte> src,
-                                                      std::uint64_t offset) {
-    return compose_host_steps(sluice::detail::CompositionKind::write_all, src.size(),
-                              [&](std::size_t confirmed) {
-                                  return write(file, src.subspan(confirmed), offset + confirmed);
-                              });
+Result<blocking::CompositionOutcome> IoTaskContext::write_all(NativeFileRef file,
+                                                              std::span<const std::byte> src,
+                                                              std::uint64_t offset) {
+    return compose_host_invocation(
+        file, offset, src, sluice::detail::FileOperation::write, host_->stop_requested(),
+        [&](std::size_t confirmed) { return write(file, src.subspan(confirmed), offset + confirmed); });
 }
 
 StackfulIoHost::StackfulIoHost(AsyncIoContext& ctx, std::size_t task_capacity)
@@ -487,6 +520,17 @@ Result<void> StackfulIoHost::run() {
             ctx_.acknowledge_progress_control();
 #endif
         }
+    }
+
+    // A progress return can consume a control wake without reporting it; the
+    // owner must still observe and retire that control before releasing.
+    auto release_control = ctx_.wait_one(std::chrono::nanoseconds::zero());
+    if (release_control.has_value() &&
+        release_control.value().kind ==
+            AsyncIoContext::ProgressWaitOutcome::Kind::control_interrupted) {
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_SKIP_CONTROL_ACK)
+        ctx_.acknowledge_progress_control();
+#endif
     }
 
     if (first_task_error_set_) {

@@ -680,4 +680,6 @@ do
                          "SLUICE_STACKFUL_HOST_MUTANT_EXPIRED_DEADLINE_SPIN")
     stackful_host_target("stackful_host_mut_skip_control_ack",
                          "SLUICE_STACKFUL_HOST_MUTANT_SKIP_CONTROL_ACK")
+    stackful_host_target("stackful_host_mut_empty_precheck_bypass",
+                         "SLUICE_STACKFUL_HOST_MUTANT_EMPTY_COMPOSITION_BYPASSES_PRECHECK")
 end
