@@ -49,7 +49,7 @@ void check(bool ok, const char* label) {
 }
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_d2_host_XXXXXX";
+    char path[] = "/tmp/sluice_host_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0) {
         return {};
@@ -104,22 +104,22 @@ OwnedBackend make_threadpool(std::size_t worker_count = 4) {
     return OwnedBackend{std::move(backend), raw};
 }
 
-// The sequential-looking W-04 body: fill a buffer from one file through
-// repeated primitive awaits, then write it to another file and sync.
-struct W04CopyBody {
+// The sequential pipeline body: fill a buffer from one file through repeated
+// primitive awaits, then write it to another file and sync.
+struct PipelineCopyBody {
     File* src;
     File* dst;
     std::vector<std::byte> buffer;
     std::size_t copied = 0;
     bool sync_done = false;
 
-    W04CopyBody(File* s, File* d, std::size_t chunk) : src(s), dst(d), buffer(chunk) {}
+    PipelineCopyBody(File* s, File* d, std::size_t chunk) : src(s), dst(d), buffer(chunk) {}
 
     void operator()(IoTaskContext& task) {
         std::uint64_t offset = 0;
         for (;;) {
             auto r = task.read(NativeFileRef{*src}, buffer, offset);
-            check(r.has_value(), "w04 read completes");
+            check(r.has_value(), "tracer read completes");
             if (!r.has_value()) {
                 return;
             }
@@ -132,7 +132,7 @@ struct W04CopyBody {
                                     std::span<const std::byte>(buffer.data() + written,
                                                                r.value() - written),
                                     offset + written);
-                check(w.has_value(), "w04 write completes");
+                check(w.has_value(), "tracer write completes");
                 if (!w.has_value()) {
                     return;
                 }
@@ -142,12 +142,12 @@ struct W04CopyBody {
             copied += r.value();
         }
         auto s = task.sync_data(NativeFileRef{*dst});
-        check(s.has_value(), "w04 sync completes");
+        check(s.has_value(), "tracer sync completes");
         sync_done = s.has_value();
     }
 };
 
-bool w04_tracer_threadpool() {
+bool pipeline_tracer_threadpool() {
     const std::string payload(7000, 'x');
     const std::string src_path = make_temp_file(payload);
     const std::string dst_path = make_temp_file("");
@@ -171,23 +171,23 @@ bool w04_tracer_threadpool() {
     }
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
-    W04CopyBody body(&src, &dst, 512);
+    PipelineCopyBody body(&src, &dst, 512);
     check(host->spawn([&body](IoTaskContext& task) { body(task); }).has_value(),
-          "w04 task admitted");
+          "tracer task admitted");
 
     auto run = host->run();
-    check(run.has_value(), "w04 run succeeds");
-    check(body.copied == payload.size(), "w04 copied byte count");
-    check(body.sync_done, "w04 sync performed");
-    check(host->test_live_task_count() == 0, "w04 no live tasks after run");
-    check(host->test_slots_with_await_link() == 0, "w04 no await links after run");
-    check(ctx.outstanding() == 0, "w04 no outstanding requests after run");
+    check(run.has_value(), "tracer run succeeds");
+    check(body.copied == payload.size(), "tracer copied byte count");
+    check(body.sync_done, "tracer sync performed");
+    check(host->test_live_task_count() == 0, "tracer no live tasks after run");
+    check(host->test_slots_with_await_link() == 0, "tracer no await links after run");
+    check(ctx.outstanding() == 0, "tracer no outstanding requests after run");
 
     auto reclaim = ctx.claim_progress_owner();
-    check(reclaim.has_value(), "w04 progress owner released after run");
+    check(reclaim.has_value(), "tracer progress owner released after run");
 
     const bool content_ok = open_fd_content_is(dst.native_handle(), payload);
-    check(content_ok, "w04 destination content");
+    check(content_ok, "tracer destination content");
     return body.copied == payload.size() && body.sync_done && content_ok;
 }
 
@@ -198,9 +198,9 @@ bool uring_backend_available() {
     return probe.available();
 }
 
-bool w04_tracer_uring() {
+bool pipeline_tracer_uring() {
     if (!uring_backend_available()) {
-        std::printf("NOT RUN: w04_tracer_uring (io_uring unavailable)\n");
+        std::printf("NOT RUN: pipeline_tracer_uring (io_uring unavailable)\n");
         return true;
     }
     const std::string payload(3000, 'u');
@@ -225,7 +225,7 @@ bool w04_tracer_uring() {
     }
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
-    W04CopyBody body(&src, &dst, 256);
+    PipelineCopyBody body(&src, &dst, 256);
     check(host->spawn([&body](IoTaskContext& task) { body(task); }).has_value(),
           "uring task admitted");
     auto run = host->run();
@@ -239,17 +239,18 @@ bool w04_tracer_uring() {
 
 #endif
 
-// H1: task A owns accepted I/O and suspends; task B fails. B's cleanup
-// completes, A remains valid and settles, the host stays coherent. B drives
-// the pause-gate release itself, so no external scheduling enters the trace.
-bool h1_task_failure_while_other_io_outstanding() {
+// One task owns accepted I/O and suspends; another task fails. The failing
+// task's cleanup completes, the suspended task remains valid and settles,
+// the host stays coherent. The failing task drives the pause-gate release
+// itself, so no external scheduling enters the trace.
+bool task_failure_while_other_io_outstanding() {
     const std::string src_path = make_temp_file(std::string(200, 'a'));
     const std::string dst_path = make_temp_file("");
     auto src_open = File::open(src_path);
     auto dst_open = File::open(dst_path, writable());
     ::unlink(src_path.c_str());
     ::unlink(dst_path.c_str());
-    check(src_open.has_value() && dst_open.has_value(), "h1 opens");
+    check(src_open.has_value() && dst_open.has_value(), "pipeline opens");
     if (!src_open.has_value() || !dst_open.has_value()) {
         return false;
     }
@@ -262,41 +263,41 @@ bool h1_task_failure_while_other_io_outstanding() {
     AsyncIoContext ctx{std::move(owned.backend)};
 
     auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
-    check(host_r.has_value(), "h1 host constructs");
+    check(host_r.has_value(), "host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
-    W04CopyBody body_a(&src, &dst, 64);
+    PipelineCopyBody body_a(&src, &dst, 64);
     check(host->spawn([&](IoTaskContext& task) { body_a(task); }).has_value(),
-          "h1 task A admitted");
+          "copy task admitted");
 
     check(host->spawn([&](IoTaskContext&) {
               wait_gate_paused(gate);
               resume_gate(gate);
               throw std::system_error(ENOENT, std::generic_category());
           }).has_value(),
-          "h1 task B admitted");
+          "failing task admitted");
 
     auto run = host->run();
-    check(!run.has_value(), "h1 run reports the task error");
-    check(run.error().code == IoError::Code::not_found, "h1 error maps ENOENT to not_found");
-    check(body_a.copied == 200, "h1 task A still settles and completes");
-    check(ctx.outstanding() == 0, "h1 no outstanding after run");
-    check(host->test_live_task_count() == 0, "h1 no live tasks");
-    check(host->test_slots_with_await_link() == 0, "h1 no await links");
+    check(!run.has_value(), "run reports the task error");
+    check(run.error().code == IoError::Code::not_found, "error maps ENOENT to not_found");
+    check(body_a.copied == 200, "copy task still settles and completes");
+    check(ctx.outstanding() == 0, "nothing outstanding after run");
+    check(host->test_live_task_count() == 0, "no live tasks");
+    check(host->test_slots_with_await_link() == 0, "no await links");
     return body_a.copied == 200 && run.error().code == IoError::Code::not_found;
 }
 
-// H2: a task is suspended with an accepted Request; stop arrives while the
+// A task is suspended with an accepted Request; stop arrives while the
 // physical operation is claimed but not terminal. The request keeps its
 // responsibility: the host neither cancels nor settles it, the helper
 // returns the operation's real outcome, and the task observes the stop token
 // before retiring. No stack destruction; settlement and retirement complete
 // before the host returns.
-bool h2_stop_during_suspension_settles() {
+bool stop_during_suspension_settles() {
     const std::string src_path = make_temp_file(std::string(64, 's'));
     auto src_open = File::open(src_path);
     ::unlink(src_path.c_str());
-    check(src_open.has_value(), "h2 open");
+    check(src_open.has_value(), "stop-settlement open");
     if (!src_open.has_value()) {
         return false;
     }
@@ -308,7 +309,7 @@ bool h2_stop_during_suspension_settles() {
     AsyncIoContext ctx{std::move(owned.backend)};
 
     auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
-    check(host_r.has_value(), "h2 host constructs");
+    check(host_r.has_value(), "host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
     std::atomic<bool> task_saw_token{false};
@@ -328,36 +329,35 @@ bool h2_stop_during_suspension_settles() {
               task_saw_token = task.token().is_requested();
               real_outcome = r.has_value() && r.value() == 64;
           }).has_value(),
-          "h2 task admitted");
+          "task admitted");
 
     auto run = host->run();
     stopper.join();
-    check(run.has_value(), "h2 run settles and returns after stop");
+    check(run.has_value(), "run settles and returns after stop");
 
-    check(task_got_terminal, "h2 suspended request reached a public terminal");
-    check(real_outcome, "h2 stop did not cancel the accepted request");
-    check(task_saw_token, "h2 task observed the stop token");
-    check(ctx.outstanding() == 0, "h2 nothing outstanding after settlement");
-    check(host->test_live_task_count() == 0, "h2 task storage retired");
-    check(host->test_slots_with_await_link() == 0, "h2 await link retired with the task");
-    check(host->stop_requested(), "h2 host stop is observable");
+    check(task_got_terminal, "suspended request reached a public terminal");
+    check(real_outcome, "stop did not cancel the accepted request");
+    check(task_saw_token, "task observed the stop token");
+    check(ctx.outstanding() == 0, "nothing outstanding after settlement");
+    check(host->test_live_task_count() == 0, "task storage retired");
+    check(host->test_slots_with_await_link() == 0, "await link retired with the task");
+    check(host->stop_requested(), "host stop is observable");
 
     auto after = host->spawn([](IoTaskContext&) {});
     check(!after.has_value() && after.error().code == IoError::Code::canceled,
-          "h2 spawn admission closed after stop");
+          "spawn admission closed after stop");
     return task_got_terminal && task_saw_token && real_outcome;
 }
 
-// H3 arm: the wake/observation state is reserved for the task's whole
-// lifetime, so no observation-setup step exists between acceptance and
-// suspension. A sibling task observes the reservation while the first task
-// is suspended; the drop-responsibility arms are discriminated by the
-// M4/M5 mutation builds.
-bool h3_await_state_reserved_before_suspension() {
+// The wake/observation state is reserved for the task's whole lifetime, so
+// no observation-setup step exists between acceptance and suspension. A
+// sibling task observes the reservation while the first task is suspended;
+// the drop-responsibility arms are discriminated by the mutation builds.
+bool await_state_reserved_before_suspension() {
     const std::string src_path = make_temp_file(std::string(32, 'h'));
     auto src_open = File::open(src_path);
     ::unlink(src_path.c_str());
-    check(src_open.has_value(), "h3 open");
+    check(src_open.has_value(), "reservation open");
     if (!src_open.has_value()) {
         return false;
     }
@@ -369,7 +369,7 @@ bool h3_await_state_reserved_before_suspension() {
     AsyncIoContext ctx{std::move(owned.backend)};
 
     auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
-    check(host_r.has_value(), "h3 host constructs");
+    check(host_r.has_value(), "host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
     std::atomic<bool> saw_reserved_link{false};
@@ -380,37 +380,37 @@ bool h3_await_state_reserved_before_suspension() {
               auto r = task.read(NativeFileRef{src}, buffer, 0);
               a_settled = r.has_value() && r.value() == 32;
           }).has_value(),
-          "h3 task A admitted");
+          "reading task admitted");
 
     check(host->spawn([&](IoTaskContext&) {
               saw_reserved_link = host->test_slots_with_await_link() == 1;
               resume_gate(gate);
           }).has_value(),
-          "h3 task B admitted");
+          "sibling task admitted");
 
     auto run = host->run();
-    check(run.has_value(), "h3 run succeeds");
-    check(saw_reserved_link, "h3 sibling observes the reserved await state");
-    check(a_settled, "h3 gated read settles with data");
-    check(ctx.outstanding() == 0, "h3 nothing outstanding");
+    check(run.has_value(), "run succeeds");
+    check(saw_reserved_link, "sibling observes the reserved await state");
+    check(a_settled, "gated read settles with data");
+    check(ctx.outstanding() == 0, "nothing outstanding");
     return saw_reserved_link && a_settled;
 }
 
-// H4: a wait deadline expires while the awaited operation is still queued
+// A wait deadline expires while the awaited operation is still queued
 // undispatched behind a claimed worker. The deadline bounds the driver's
 // initial park window only: it neither cancels nor settles the request, and
 // the helper returns the operation's real terminal result once the queued
 // operation runs. The one-worker pool plus the occupier task makes the
 // discriminator deterministic: a reinstated expiry-cancel would win before
 // execution and return canceled instead of the data asserted below.
-bool h4_deadline_expiry_does_not_cancel() {
+bool deadline_expiry_does_not_cancel() {
     const std::string src_path = make_temp_file(std::string(48, 't'));
     const std::string occ_path = make_temp_file(std::string(8, 'o'));
     auto src_open = File::open(src_path);
     auto occ_open = File::open(occ_path);
     ::unlink(src_path.c_str());
     ::unlink(occ_path.c_str());
-    check(src_open.has_value() && occ_open.has_value(), "h4 opens");
+    check(src_open.has_value() && occ_open.has_value(), "deadline opens");
     if (!src_open.has_value() || !occ_open.has_value()) {
         return false;
     }
@@ -423,7 +423,7 @@ bool h4_deadline_expiry_does_not_cancel() {
     AsyncIoContext ctx{std::move(owned.backend)};
 
     auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
-    check(host_r.has_value(), "h4 host constructs");
+    check(host_r.has_value(), "host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
     std::atomic<bool> occupier_done{false};
@@ -443,7 +443,7 @@ bool h4_deadline_expiry_does_not_cancel() {
               auto r = task.read(NativeFileRef{occ}, scratch, 0);
               occupier_done = r.has_value() && r.value() == 8;
           }).has_value(),
-          "h4 occupier task admitted");
+          "occupier task admitted");
 
     std::vector<std::byte> buffer(48, std::byte{0});
     check(host->spawn([&](IoTaskContext& task) {
@@ -452,27 +452,27 @@ bool h4_deadline_expiry_does_not_cancel() {
               got_terminal = true;
               real_outcome = r.has_value() && r.value() == 48;
           }).has_value(),
-          "h4 task admitted");
+          "deadline task admitted");
 
     auto run = host->run();
     releaser.join();
-    check(run.has_value(), "h4 run settles after the deadline");
-    check(occupier_done, "h4 occupier read settled");
-    check(got_terminal, "h4 helper returned a terminal outcome, not a timeout escape");
-    check(real_outcome, "h4 deadline expiry did not cancel: real result returned");
-    check(ctx.outstanding() == 0, "h4 nothing outstanding after settlement");
-    check(host->test_live_task_count() == 0, "h4 tasks retired");
+    check(run.has_value(), "run settles after the deadline");
+    check(occupier_done, "occupier read settled");
+    check(got_terminal, "helper returned a terminal outcome, not a timeout escape");
+    check(real_outcome, "deadline expiry did not cancel: real result returned");
+    check(ctx.outstanding() == 0, "nothing outstanding after settlement");
+    check(host->test_live_task_count() == 0, "tasks retired");
     return got_terminal && real_outcome && occupier_done;
 }
 
-// H5: the request publishes, the fiber resumes, the task consumes the result
+// The request publishes, the fiber resumes, the task consumes the result
 // and then throws. The original exception is preserved and reaches the run
 // boundary; the consumed request leaves nothing outstanding.
-bool h5_exception_during_resumed_processing() {
+bool exception_during_resumed_processing() {
     const std::string src_path = make_temp_file(std::string(16, 'e'));
     auto src_open = File::open(src_path);
     ::unlink(src_path.c_str());
-    check(src_open.has_value(), "h5 open");
+    check(src_open.has_value(), "resumed-throw open");
     if (!src_open.has_value()) {
         return false;
     }
@@ -480,7 +480,7 @@ bool h5_exception_during_resumed_processing() {
 
     AsyncIoContext ctx{std::make_unique<ThreadPoolBackend>()};
     auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
-    check(host_r.has_value(), "h5 host constructs");
+    check(host_r.has_value(), "host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
     std::atomic<bool> consumed_before_throw{false};
@@ -489,29 +489,29 @@ bool h5_exception_during_resumed_processing() {
     check(host->spawn([&](IoTaskContext& task) {
               auto r = task.read(NativeFileRef{src}, buffer, 0);
               consumed_before_throw = r.has_value() && r.value() == 16;
-              throw std::runtime_error("h5 resumed-processing failure");
+              throw std::runtime_error("resumed-processing failure");
           }).has_value(),
-          "h5 task admitted");
+          "task admitted");
 
     auto run = host->run();
-    check(!run.has_value(), "h5 task error reaches the run boundary");
+    check(!run.has_value(), "task error reaches the run boundary");
     check(run.error().code == IoError::Code::backend_error,
-          "h5 original exception maps unchanged (runtime_error -> backend_error)");
-    check(consumed_before_throw, "h5 result consumed before the exception");
-    check(ctx.outstanding() == 0, "h5 nothing outstanding");
-    check(host->test_slots_with_await_link() == 0, "h5 await state retired");
+          "original exception maps unchanged (runtime_error -> backend_error)");
+    check(consumed_before_throw, "result consumed before the exception");
+    check(ctx.outstanding() == 0, "nothing outstanding");
+    check(host->test_slots_with_await_link() == 0, "await state retired");
     return consumed_before_throw && run.error().code == IoError::Code::backend_error;
 }
 
-// H6: the physical outcome exists but publication is paused; stop races the
+// The physical outcome exists but publication is paused; stop races the
 // publication/retirement boundary. The request keeps its responsibility —
 // the already-computed outcome publishes unchanged — the task body runs
 // exactly once, and nothing touches retired storage.
-bool h6_stop_races_publication_and_retirement() {
+bool stop_races_publication_and_retirement() {
     const std::string src_path = make_temp_file(std::string(24, 'r'));
     auto src_open = File::open(src_path);
     ::unlink(src_path.c_str());
-    check(src_open.has_value(), "h6 open");
+    check(src_open.has_value(), "stop-race open");
     if (!src_open.has_value()) {
         return false;
     }
@@ -523,7 +523,7 @@ bool h6_stop_races_publication_and_retirement() {
     AsyncIoContext ctx{std::move(owned.backend)};
 
     auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
-    check(host_r.has_value(), "h6 host constructs");
+    check(host_r.has_value(), "host constructs");
     std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
 
     std::atomic<int> body_entries{0};
@@ -541,16 +541,16 @@ bool h6_stop_races_publication_and_retirement() {
               auto r = task.read(NativeFileRef{src}, buffer, 0);
               real_terminal = r.has_value() && r.value() == 24;
           }).has_value(),
-          "h6 task admitted");
+          "task admitted");
 
     auto run = host->run();
     stopper.join();
-    check(run.has_value(), "h6 run settles after the race");
-    check(body_entries == 1, "h6 task body entered exactly once");
-    check(real_terminal, "h6 real outcome published under the stop race");
-    check(ctx.outstanding() == 0, "h6 nothing outstanding");
-    check(host->test_live_task_count() == 0, "h6 task retired once");
-    check(host->test_slots_with_await_link() == 0, "h6 no delivery touches retired storage");
+    check(run.has_value(), "run settles after the race");
+    check(body_entries == 1, "task body entered exactly once");
+    check(real_terminal, "real outcome published under the stop race");
+    check(ctx.outstanding() == 0, "nothing outstanding");
+    check(host->test_live_task_count() == 0, "task retired once");
+    check(host->test_slots_with_await_link() == 0, "no delivery touches retired storage");
     return body_entries == 1 && real_terminal;
 }
 
@@ -874,16 +874,16 @@ int main() {
         bool (*fn)();
     };
     const NamedTest tests[] = {
-        {"w04_tracer_threadpool", w04_tracer_threadpool},
+        {"pipeline_tracer_threadpool", pipeline_tracer_threadpool},
 #if defined(SLUICE_HAS_LIBURING)
-        {"w04_tracer_uring", w04_tracer_uring},
+        {"pipeline_tracer_uring", pipeline_tracer_uring},
 #endif
-        {"h1_task_failure_while_other_io_outstanding", h1_task_failure_while_other_io_outstanding},
-        {"h2_stop_during_suspension_settles", h2_stop_during_suspension_settles},
-        {"h3_await_state_reserved_before_suspension", h3_await_state_reserved_before_suspension},
-        {"h4_deadline_expiry_does_not_cancel", h4_deadline_expiry_does_not_cancel},
-        {"h5_exception_during_resumed_processing", h5_exception_during_resumed_processing},
-        {"h6_stop_races_publication_and_retirement", h6_stop_races_publication_and_retirement},
+        {"task_failure_while_other_io_outstanding", task_failure_while_other_io_outstanding},
+        {"stop_during_suspension_settles", stop_during_suspension_settles},
+        {"await_state_reserved_before_suspension", await_state_reserved_before_suspension},
+        {"deadline_expiry_does_not_cancel", deadline_expiry_does_not_cancel},
+        {"exception_during_resumed_processing", exception_during_resumed_processing},
+        {"stop_races_publication_and_retirement", stop_races_publication_and_retirement},
         {"progress_owner_composition", progress_owner_composition},
         {"bounds_task_capacity_rejects", bounds_task_capacity_rejects},
         {"invalid_configuration_rejected", invalid_configuration_rejected},
@@ -905,6 +905,6 @@ int main() {
         std::fprintf(stderr, "FAIL: %d assertion(s)\n", g_failures);
         return 1;
     }
-    std::printf("stackful_host_w04_test: all cases passed\n");
+    std::printf("stackful_host_test: all cases passed\n");
     return 0;
 }

@@ -627,10 +627,10 @@ do
         add_tests("runtime_waiter_observer_test")
 end
 
--- D2 (#399) narrow stackful host: W-04 tracer, the HOST-03 failure matrix,
--- progress-owner composition and bound evidence. Same self-contained seam
--- topology as the C1-D target above (own copy of the async TUs with the
--- internal-testing define; never linked with the production library).
+-- Narrow stackful host: pipeline tracer, failure-path cases, progress-owner
+-- composition and bound evidence. Same self-contained seam topology as the
+-- runtime_waiter_observer_test target above (own copy of the async TUs with
+-- the internal-testing define; never linked with the production library).
 do
     local function stackful_host_target(name, extra_define)
         target(name)
@@ -647,7 +647,7 @@ do
                 add_defines("SLUICE_HAS_LIBURING")
                 add_links("uring")
             end
-            add_files(R .. "tests/stackful_host_w04_test.cpp",
+            add_files(R .. "tests/stackful_host_test.cpp",
                       R .. "src/async/*.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -656,22 +656,22 @@ do
             end
     end
 
-    stackful_host_target("stackful_host_w04_test", nil)
+    stackful_host_target("stackful_host_test", nil)
 
-    -- D2 named mutation builds; executed manually, never regular tests.
-    stackful_host_target("stackful_host_mut_second_owner", "SLUICE_D2_MUTANT_SECOND_OWNER_ALLOWED")
-    stackful_host_target("stackful_host_mut_wake_retired", "SLUICE_D2_MUTANT_WAKE_RETIRED_TASK")
+    -- Named mutation builds; executed manually, never regular tests.
+    stackful_host_target("stackful_host_mut_second_owner", "SLUICE_STACKFUL_HOST_MUTANT_SECOND_OWNER_ALLOWED")
+    stackful_host_target("stackful_host_mut_wake_retired", "SLUICE_STACKFUL_HOST_MUTANT_WAKE_RETIRED_TASK")
     stackful_host_target("stackful_host_mut_task_error_swallowed",
-                         "SLUICE_D2_MUTANT_TASK_ERROR_SWALLOWED")
+                         "SLUICE_STACKFUL_HOST_MUTANT_TASK_ERROR_SWALLOWED")
     stackful_host_target("stackful_host_mut_stop_returns_unsettled",
-                         "SLUICE_D2_MUTANT_STOP_RETURNS_UNSETTLED")
+                         "SLUICE_STACKFUL_HOST_MUTANT_STOP_RETURNS_UNSETTLED")
     stackful_host_target("stackful_host_mut_await_stop_unsettled",
-                         "SLUICE_D2_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED")
-    stackful_host_target("stackful_host_mut_double_wake", "SLUICE_D2_MUTANT_DOUBLE_WAKE")
+                         "SLUICE_STACKFUL_HOST_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED")
+    stackful_host_target("stackful_host_mut_double_wake", "SLUICE_STACKFUL_HOST_MUTANT_DOUBLE_WAKE")
     stackful_host_target("stackful_host_mut_deadline_cancels",
-                         "SLUICE_D2_MUTANT_DEADLINE_CANCELS")
+                         "SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS")
     stackful_host_target("stackful_host_mut_stale_error_retained",
-                         "SLUICE_D2_MUTANT_STALE_ERROR_RETAINED")
+                         "SLUICE_STACKFUL_HOST_MUTANT_STALE_ERROR_RETAINED")
     stackful_host_target("stackful_host_mut_stop_interrupts_control",
-                         "SLUICE_D2_MUTANT_STOP_INTERRUPTS_CONTROL")
+                         "SLUICE_STACKFUL_HOST_MUTANT_STOP_INTERRUPTS_CONTROL")
 end

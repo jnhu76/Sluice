@@ -152,13 +152,13 @@ void StackfulIoHost::task_entry_bridge_(fiber_ctx::Switch* resumed_by, void* use
         try {
             entry(task);
         } catch (...) {
-#if !defined(SLUICE_D2_MUTANT_TASK_ERROR_SWALLOWED)
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_TASK_ERROR_SWALLOWED)
             host.record_task_error_(map_current_exception_to_task_error());
 #endif
         }
     }
 
-#if !defined(SLUICE_D2_MUTANT_WAKE_RETIRED_TASK)
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_WAKE_RETIRED_TASK)
     slot.await_link = nullptr;
 #endif
     slot.fiber.make_done();
@@ -190,7 +190,7 @@ void StackfulIoHost::suspend_current_(AwaitLink& link) {
     s.old = &slot.fiber.ctx;
     s.new_ = &driver_ctx_;
     (void)fiber_ctx::context_switch(&s);
-#if !defined(SLUICE_D2_MUTANT_WAKE_RETIRED_TASK)
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_WAKE_RETIRED_TASK)
     slot.await_link = nullptr;
 #endif
 }
@@ -198,7 +198,7 @@ void StackfulIoHost::suspend_current_(AwaitLink& link) {
 void StackfulIoHost::wake_suspended_ready_() {
     for (std::size_t i = 0; i < task_capacity_; ++i) {
         TaskSlot& slot = slots_[i];
-#if defined(SLUICE_D2_MUTANT_WAKE_RETIRED_TASK)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_WAKE_RETIRED_TASK)
         if (slot.await_link == nullptr) {
             continue;
         }
@@ -216,7 +216,7 @@ void StackfulIoHost::wake_suspended_ready_() {
         }
         ready_ring_[(ring_head_ + ring_size_) % task_capacity_] = i;
         ++ring_size_;
-#if defined(SLUICE_D2_MUTANT_DOUBLE_WAKE)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_DOUBLE_WAKE)
         ready_ring_[(ring_head_ + ring_size_) % task_capacity_] = i;
         ++ring_size_;
 #endif
@@ -299,7 +299,7 @@ Result<void> StackfulIoHost::spawn(std::function<void(IoTaskContext&)> task) {
 void StackfulIoHost::request_stop() noexcept {
     stop_requested_.store(true, std::memory_order_release);
     stop_token_.request();
-#if defined(SLUICE_D2_MUTANT_STOP_INTERRUPTS_CONTROL)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_STOP_INTERRUPTS_CONTROL)
     ctx_.interrupt_progress_waiters();
 #endif
 }
@@ -309,14 +309,14 @@ Result<void> StackfulIoHost::run() {
         return make_unexpected_void(IoError{IoError::Code::invalid_state});
     }
 
-#if !defined(SLUICE_D2_MUTANT_SECOND_OWNER_ALLOWED)
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_SECOND_OWNER_ALLOWED)
     auto owner = ctx_.claim_progress_owner();
     if (!owner.has_value()) {
         return make_unexpected_void(owner.error());
     }
 #endif
 
-#if !defined(SLUICE_D2_MUTANT_STALE_ERROR_RETAINED)
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_STALE_ERROR_RETAINED)
     first_task_error_set_ = false;
     first_task_error_ = {};
 #endif
@@ -349,7 +349,7 @@ Result<void> StackfulIoHost::run() {
             break;
         }
 
-#if defined(SLUICE_D2_MUTANT_STOP_RETURNS_UNSETTLED)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_STOP_RETURNS_UNSETTLED)
         if (stop_requested()) {
             break;
         }
@@ -368,7 +368,7 @@ Result<void> StackfulIoHost::run() {
             continue;
         }
 
-#if defined(SLUICE_D2_MUTANT_DEADLINE_CANCELS)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS)
         for (std::size_t i = 0; i < task_capacity_; ++i) {
             TaskSlot& slot = slots_[i];
             if (!slot.live || slot.await_link == nullptr) {

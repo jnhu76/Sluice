@@ -128,7 +128,7 @@ class StackfulIoHost {
 
     struct AwaitLink {
         bool (*ready_fn)(void* request) noexcept = nullptr;
-#if defined(SLUICE_D2_MUTANT_DEADLINE_CANCELS)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS)
         void (*cancel_fn)(void* request) noexcept = nullptr;
 #endif
         void* request = nullptr;
@@ -191,7 +191,7 @@ template <class T, class Submit>
 Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, bool bounded,
                                          std::chrono::nanoseconds wait) {
     static_assert(std::is_nothrow_move_constructible_v<Request<T>>);
-#if !defined(SLUICE_D2_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED)
+#if !defined(SLUICE_STACKFUL_HOST_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED)
     if (host.stop_requested()) {
         return make_unexpected<T>(IoError{IoError::Code::canceled});
     }
@@ -201,7 +201,7 @@ Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, 
         return make_unexpected<T>(submitted.error());
     }
     Request<T> request = std::move(submitted.value());
-#if defined(SLUICE_D2_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED)
     if (host.stop_requested()) {
         return make_unexpected<T>(IoError{IoError::Code::canceled});
     }
@@ -209,7 +209,7 @@ Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, 
     AwaitLink link;
     link.request = &request;
     link.ready_fn = [](void* p) noexcept { return static_cast<Request<T>*>(p)->ready(); };
-#if defined(SLUICE_D2_MUTANT_DEADLINE_CANCELS)
+#if defined(SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS)
     link.cancel_fn = [](void* p) noexcept { (void)static_cast<Request<T>*>(p)->cancel(); };
 #endif
     if (bounded) {
