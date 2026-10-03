@@ -626,3 +626,46 @@ do
                   R .. "src/async/detail/request_core.cpp")
         add_tests("runtime_waiter_observer_test")
 end
+
+-- D2 (#399) narrow stackful host: W-04 tracer, the HOST-03 failure matrix,
+-- progress-owner composition and bound evidence. Same self-contained seam
+-- topology as the C1-D target above (own copy of the async TUs with the
+-- internal-testing define; never linked with the production library).
+do
+    local function stackful_host_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            if has_config("liburing") then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+            end
+            add_files(R .. "tests/stackful_host_w04_test.cpp",
+                      R .. "src/async/*.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    stackful_host_target("stackful_host_w04_test", nil)
+
+    -- D2 named mutation builds; executed manually, never regular tests.
+    stackful_host_target("stackful_host_mut_second_owner", "SLUICE_D2_MUTANT_SECOND_OWNER_ALLOWED")
+    stackful_host_target("stackful_host_mut_wake_retired", "SLUICE_D2_MUTANT_WAKE_RETIRED_TASK")
+    stackful_host_target("stackful_host_mut_task_error_swallowed",
+                         "SLUICE_D2_MUTANT_TASK_ERROR_SWALLOWED")
+    stackful_host_target("stackful_host_mut_stop_returns_unsettled",
+                         "SLUICE_D2_MUTANT_STOP_RETURNS_UNSETTLED")
+    stackful_host_target("stackful_host_mut_await_stop_unsettled",
+                         "SLUICE_D2_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED")
+    stackful_host_target("stackful_host_mut_double_wake", "SLUICE_D2_MUTANT_DOUBLE_WAKE")
+end
